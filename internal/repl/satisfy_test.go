@@ -1,6 +1,9 @@
 package repl
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // TestSatisfyVerdicts checks the entry point an anonymous satisfaction assertion
 // is reached through: the element that states it, or the whole session.
@@ -56,4 +59,24 @@ func TestRepeatedSatisfyKeepsItsSubject(t *testing.T) {
 	wants(t, run(t, s, "%satisfy Landing::analysisContext"), first)
 	wants(t, run(t, s, "%satisfy Landing::analysisContext"), first)
 	wants(t, run(t, s, "%slots Landing::slowLander"), "verticalSpeed")
+}
+
+// TestSatisfyQuotesInnerNames checks that the prose naming an assertion quotes
+// each inner name the notation needs quotes for, the way every other name the
+// prompt prints is quoted.
+func TestSatisfyQuotesInnerNames(t *testing.T) {
+	s := loadFixture(t, "testdata/satisfy_quoted.sysml")
+	out := run(t, s, "%satisfy")
+	wants(t, out,
+		"✓ satisfy 'the touchdown' by 'slow craft' holds (on 'Landing Site'::'slow craft' ID: 1)",
+		"✗ satisfy 'the touchdown' by 'fast craft' fails",
+		"✓ not satisfy 'the touchdown' by 'fast craft' holds",
+	)
+	rejects(t, out, "satisfy the touchdown by slow craft")
+	// The verdict a caller outside the prompt reads is named the same way.
+	for _, v := range s.CheckSatisfy("") {
+		if strings.Contains(v.Subject, "the touchdown by") {
+			t.Errorf("verdict subject %q is unquoted", v.Subject)
+		}
+	}
 }

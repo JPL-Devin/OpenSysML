@@ -290,13 +290,12 @@ func (p *Parser) parseDirectionParameter() ast.Node {
 		}
 	}
 
-	// Optional name (can be anonymous: "in item;")
+	// Optional name (can be anonymous: "in item;"). A keyword here names the
+	// parameter, as the stdlib's `in 'type': Anything;` does; `ordered`/`nonunique`
+	// follow a nameless parameter instead, so they stop the name.
 	var ident ast.Identification
-	// Skip name if next token is relationship operator, value assignment, or semicolon
-	isRelationshipNext := p.at(lexer.Colon) || p.at(lexer.ColonGt) || p.at(lexer.ColonGtGt) ||
-		p.at(lexer.ColonColonGt) || p.at(lexer.ColonEq)
-	if p.atName() && !isRelationshipNext && !p.at(lexer.Eq) && !p.at(lexer.Semicolon) {
-		ident = p.parseIdentification()
+	if p.atNameOrKeyword() {
+		ident = p.parseIdentificationStopping("ordered", "nonunique")
 	}
 
 	// Optional multiplicity before relationships (e.g., name[mult]: Type)

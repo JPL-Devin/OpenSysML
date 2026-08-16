@@ -1,0 +1,11 @@
+{
+  "type": "state",
+  "events": [
+    {"signal": "advance", "args": null}
+  ],
+  "finalState": "Step2",
+  "stateVisits": ["start", "Working", "Step1", "Working", "Step2"],
+  "outputs": {
+    "log": {"type": "Integer", "value": 1342915}
+  }
+}

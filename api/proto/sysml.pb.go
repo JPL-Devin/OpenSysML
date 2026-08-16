@@ -1286,6 +1286,9 @@ type EvaluateRequest struct {
 	ModelHash       string                 `protobuf:"bytes,1,opt,name=model_hash,json=modelHash,proto3" json:"model_hash,omitempty"`                     // from ParseFile response
 	Expression      string                 `protobuf:"bytes,2,opt,name=expression,proto3" json:"expression,omitempty"`                                    // SysML expression string (e.g., "2 + 2")
 	ContextSymbolId string                 `protobuf:"bytes,3,opt,name=context_symbol_id,json=contextSymbolId,proto3" json:"context_symbol_id,omitempty"` // optional: symbol FQN for context scope
+	// optional: FQN to instantiate and evaluate against, so a feature reads that
+	// object's value rather than the declared default (as %eval after %instantiate)
+	SubjectSymbolId string `protobuf:"bytes,4,opt,name=subject_symbol_id,json=subjectSymbolId,proto3" json:"subject_symbol_id,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -1337,6 +1340,13 @@ func (x *EvaluateRequest) GetExpression() string {
 func (x *EvaluateRequest) GetContextSymbolId() string {
 	if x != nil {
 		return x.ContextSymbolId
+	}
+	return ""
+}
+
+func (x *EvaluateRequest) GetSubjectSymbolId() string {
+	if x != nil {
+		return x.SubjectSymbolId
 	}
 	return ""
 }
@@ -3852,14 +3862,15 @@ const file_sysml_proto_rawDesc = "" +
 	"model_hash\x18\x01 \x01(\tR\tmodelHash\"`\n" +
 	"\x13DiagnosticsResponse\x123\n" +
 	"\vdiagnostics\x18\x01 \x03(\v2\x11.sysml.DiagnosticR\vdiagnostics\x12\x14\n" +
-	"\x05error\x18\x02 \x01(\tR\x05error\"|\n" +
+	"\x05error\x18\x02 \x01(\tR\x05error\"\xa8\x01\n" +
 	"\x0fEvaluateRequest\x12\x1d\n" +
 	"\n" +
 	"model_hash\x18\x01 \x01(\tR\tmodelHash\x12\x1e\n" +
 	"\n" +
 	"expression\x18\x02 \x01(\tR\n" +
 	"expression\x12*\n" +
-	"\x11context_symbol_id\x18\x03 \x01(\tR\x0fcontextSymbolId\"\x83\x01\n" +
+	"\x11context_symbol_id\x18\x03 \x01(\tR\x0fcontextSymbolId\x12*\n" +
+	"\x11subject_symbol_id\x18\x04 \x01(\tR\x0fsubjectSymbolId\"\x83\x01\n" +
 	"\x10EvaluateResponse\x12$\n" +
 	"\x06result\x18\x01 \x01(\v2\f.sysml.ValueR\x06result\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error\x123\n" +

@@ -42,6 +42,32 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 - A condition whose evaluation could not be carried out is worded as undecided
   (`? … could not be evaluated`) and names why, keeping exit 2, where it used to
   print a failure while exiting 2.
+- A submission the parser cannot close — an unterminated body, block comment or
+  quoted name, typed or in a loaded file — no longer absorbs the submissions
+  after it: it is reported, kept in the buffer for `%list` and `%save`, and
+  masked out of the text the session analyzes, so the next declaration parses
+  and resolves as it would have before the bad one.
+- A loaded file's syntax errors are printed the way a typed submission's are,
+  against that file and its own line numbering, and count as errors for
+  `HasErrors`, so a non-interactive run over a broken file fails instead of
+  reporting nothing.
+- An expression whose subject is reached through a declaration is evaluated on
+  the object in effect for it, so `%eval Spec::c` honors a redefinition made on
+  a nested object; two objects carrying the feature are still refused rather
+  than chosen between.
+- Two loaded files that open the same package are told apart explicitly: each
+  opening stays a declaration of its own, both openings' members resolve
+  qualified, and the load says to qualify a reference across them. Re-typing a
+  package at the prompt still folds into the package already in the session.
+- `%view <name>` is implemented, listing what a view exposes — its own `expose`
+  relationships and the protected ones of the views it specializes — and the
+  views nested in it; asking it of an element that is no view says so.
+- The qualified names offered for an unresolved name are ranked and capped:
+  what the session declares before the library, a package's member before a name
+  nested in another element, and at most three, where an unresolved `length`
+  used to list every same-named library member including function parameters.
+- A `%satisfy` verdict quotes the inner names of the assertion it reports, so a
+  requirement or subject whose name the notation quotes reads back as written.
 
 ### `sysml` command line
 

@@ -75,7 +75,10 @@ func (s *Session) LoadFileSummary(path string) ([]string, error) {
 		return nil, readError(name, err)
 	}
 	res := s.submit(name, string(data))
-	return append(append([]string(nil), res.Notices...), renderSummary(res.ownMembers())...), nil
+	// The analysis is reported once every file is in, but a file that does not
+	// parse is a finding about that file alone and is reported with it.
+	lines := renderSyntax(res, s.verbosity)
+	return append(append(lines, res.Notices...), renderSummary(res.ownMembers())...), nil
 }
 
 // DiagnosticLines reports the analysis of everything submitted so far as the
@@ -107,9 +110,12 @@ func (s *Session) DiagnosticLines() []string {
 	return out
 }
 
-// Diagnostics reports the analysis of everything submitted so far.
+// Diagnostics reports the analysis of everything submitted so far, including the
+// syntax errors of a submission masked out of the buffer for not closing its own
+// text: a load whose file does not parse says why, and HasErrors is true, which is
+// what a non-interactive run exits on.
 func (s *Session) Diagnostics() []passes.Diagnostic {
-	return s.ws.Diagnostics(docName)
+	return s.diagnostics()
 }
 
 // HasErrors reports whether analysis found something that stops the model from

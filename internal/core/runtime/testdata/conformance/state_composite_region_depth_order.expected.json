@@ -1,0 +1,11 @@
+{
+  "type": "state",
+  "events": [
+    {"signal": "Tick", "args": null}
+  ],
+  "finalState": "d2+l2+deep",
+  "stateVisits": ["start", "Working", "lstart", "rstart", "l1", "deep", "dstart", "d1", "l2", "d2"],
+  "outputs": {
+    "log": {"type": "Integer", "value": 12}
+  }
+}

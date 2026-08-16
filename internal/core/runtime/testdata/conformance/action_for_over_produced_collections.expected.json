@@ -4,7 +4,6 @@
 		"ranged": {"type": "Integer", "value": 6},
 		"filtered": {"type": "Integer", "value": 5},
 		"returned": {"type": "Integer", "value": 5},
-		"scalar": {"type": "Integer", "value": 7},
 		"empties": {"type": "Integer", "value": 0},
 		"descended": {"type": "Integer", "value": 0}
 	}

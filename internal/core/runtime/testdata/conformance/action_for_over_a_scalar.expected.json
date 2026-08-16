@@ -1,0 +1,4 @@
+{
+	"type": "action",
+	"error": "'for' iterates a collection, and an Integer is not one"
+}

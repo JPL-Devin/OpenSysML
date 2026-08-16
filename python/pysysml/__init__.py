@@ -1,5 +1,6 @@
 """pysysml - Python client library for Systemica SysML v2 parser."""
 
+import warnings
 from importlib.metadata import PackageNotFoundError, version as _distribution_version
 
 from pysysml._version import VERSION as _declared_version
@@ -10,7 +11,13 @@ from pysysml.diagnostic import Diagnostic
 from pysysml.enumeration import EnumLiteral
 from pysysml.instance import Instance
 from pysysml.typed import TypedObject
-from pysysml.typefacts import Multiplicity, Specialization, SymbolFacts, TypeFacts
+from pysysml.typefacts import (
+    AttributeFacts,
+    Multiplicity,
+    Specialization,
+    SymbolFacts,
+    TypeFacts,
+)
 from pysysml.capabilities import MissingCapabilityError, ServerInfo
 from pysysml.verdict import CalcResult, Verdict
 from pysysml.query import QueryElement, QueryError
@@ -30,6 +37,7 @@ from pysysml.errors import (
 __all__ = [
     "Connection", "Model", "Symbol", "Diagnostic", "EnumLiteral", "Instance",
     "TypedObject", "TypeFacts", "Multiplicity", "Specialization", "SymbolFacts",
+    "AttributeFacts",
     "ServerInfo",
     "Conversion", "FORMAT_SYSML", "FORMAT_TURTLE", "format_of_path",
     "Verdict", "CalcResult",
@@ -43,7 +51,8 @@ __all__ = [
     "TypeMismatchError", "UnsupportedOperationError", "UnsupportedValueError",
     "WrongKindError",
     "load", "connect", "convert",
-    "eval", "instantiate",
+    # "eval" is deprecated in favour of "evaluate", so it is not exported.
+    "evaluate", "instantiate",
     "DEFAULT_PORT", "split_target",
     "__version__"
 ]
@@ -195,8 +204,8 @@ def convert(to_format, file_path=None, content=None, model_hash=None,
     )
 
 
-def eval(expression, file_path=None, model_hash=None, context_symbol_id=None,
-         host='localhost', port=None):
+def evaluate(expression, file_path=None, model_hash=None, context_symbol_id=None,
+             host='localhost', port=None, subject=None):
     """Evaluate a SysML expression (module-level convenience).
 
     A model in hand has :meth:`Model.eval`, which needs neither the hash nor the
@@ -209,6 +218,10 @@ def eval(expression, file_path=None, model_hash=None, context_symbol_id=None,
         context_symbol_id (str, optional): Context for evaluation
         host (str): Service hostname, or a ``host:port`` address
         port (int, optional): Service port (default: 50051)
+        subject (str, optional): FQN of a part/usage to instantiate and evaluate
+            against, so a feature reads that object's value rather than the
+            declared default. Last, so a positional call written before it
+            still binds the address it meant
         
     Returns:
         Evaluated value
@@ -220,7 +233,7 @@ def eval(expression, file_path=None, model_hash=None, context_symbol_id=None,
         
     Example:
         >>> import pysysml
-        >>> result = pysysml.eval("2 + 2", file_path="test.sysml")
+        >>> result = pysysml.evaluate("2 + 2", file_path="test.sysml")
         >>> print(result)  # 4
     """
     conn = _get_default_connection(host, port)
@@ -236,7 +249,26 @@ def eval(expression, file_path=None, model_hash=None, context_symbol_id=None,
         model = conn.load(file_path)
         model_hash = model.hash
     
-    return conn.eval(expression, model_hash, context_symbol_id)
+    return conn.eval(
+        expression,
+        model_hash,
+        context_symbol_id=context_symbol_id,
+        subject_symbol_id=subject,
+    )
+
+
+def eval(*args, **kwargs):
+    """Deprecated name for :func:`evaluate`, which does not shadow the built-in.
+
+    Same arguments and result; slated for removal in 1.0.0.
+    """
+    warnings.warn(
+        "pysysml.eval is deprecated and will be removed in 1.0.0; "
+        "use pysysml.evaluate, which does not shadow the built-in eval",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return evaluate(*args, **kwargs)
 
 
 def instantiate(symbol_id, file_path=None, model_hash=None, host='localhost',

@@ -37,6 +37,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("state_cross_region_transitions_ping_pong", testStateCrossRegionTransitionsPingPong)
 	t.Run("sourceless_accept_at_top_level", testSourcelessAcceptAtTopLevel)
 	t.Run("calc_unbound_parameter", testCalcUnboundParameter)
+	t.Run("calc_unbound_keyword_named_parameter", testCalcUnboundKeywordNamedParameter)
 	t.Run("calc_too_many_arguments", testCalcTooManyArguments)
 	t.Run("calc_unknown_named_argument", testCalcUnknownNamedArgument)
 	t.Run("calc_without_result", testCalcWithoutResult)
@@ -91,6 +92,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("block_flow_of_unexecutable_member", testBlockFlowOfUnexecutableMember)
 	t.Run("non_terminating_loop_performing_an_action", testNonTerminatingLoopPerformingAnAction)
 	t.Run("for_over_a_value_no_expression_makes_iterable", testForOverAValueNoExpressionMakesIterable)
+	t.Run("for_over_a_scalar", testForOverAScalar)
 	t.Run("statement_directly_in_an_action_body", testStatementDirectlyInAnActionBody)
 	t.Run("flow_end_naming_no_node", testFlowEndNamingNoNode)
 	t.Run("flow_naming_no_pin", testFlowNamingNoPin)
@@ -121,6 +123,10 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("behavior_performing_an_action_and_stating_a_body", testBehaviorPerformingAnActionAndStatingABody)
 	t.Run("qualified_assignment_target_in_a_state_effect", testQualifiedAssignmentTargetInAStateEffect)
 	t.Run("call_of_unhandled_operation", testCallOfUnhandledOperation)
+	t.Run("signal_no_level_of_a_composite_state_accepts", testSignalNoLevelOfACompositeStateAccepts)
+	t.Run("stale_composite_timer_in_a_region", testStaleCompositeTimerInARegion)
+	t.Run("composite_self_transition_with_no_substate_to_re_enter", testCompositeSelfTransitionWithNoSubstateToReEnter)
+	t.Run("exit_of_nested_regions_with_a_history_pseudostate", testExitOfNestedRegionsWithAHistoryPseudostate)
 	t.Run("call_argument_of_wrong_type", testCallArgumentOfWrongType)
 	t.Run("perform_of_missing_action", testPerformOfMissingAction)
 	t.Run("perform_reference_cycle", testPerformReferenceCycle)
@@ -437,7 +443,14 @@ func testNumericLibraryCallThatHasNoValue(t *testing.T) {
 		{"ComplexFunctions::'/'(ys, (0.0, 0.0))", ErrDivisionByZero},
 		{"ComplexFunctions::re(xs)", ErrTypeMismatch},
 		{"ComplexFunctions::ToString(ys)", ErrUnevaluableLibraryFunction},
-		{"SequenceFunctions::includingAt(xs, 9, 2)", ErrUnevaluableLibraryFunction},
+		// includingAt inserts before a position of 1..size+1, so an index past the
+		// end of the sequence names no insertion point and is reported rather than
+		// appending or dropping the values.
+		{"SequenceFunctions::includingAt(xs, 9, 5)", ErrIndexOutOfRange},
+		{"SequenceFunctions::includingAt(xs, 9, 0)", ErrIndexOutOfRange},
+		{"SequenceFunctions::includingAt((), 9, 2)", ErrIndexOutOfRange},
+		{"SequenceFunctions::includingAt(xs, 9, 1.5)", ErrTypeMismatch},
+		{"SequenceFunctions::includingAt(xs, 9)", ErrCalcArity},
 	} {
 		got, err := evalCollectionExpr(t, tt.expr)
 		if !errors.Is(err, tt.want) {
@@ -464,6 +477,7 @@ func testStringOperandOfTheWrongKind(t *testing.T) {
 		{`StringFunctions::Length(1)`, ErrTypeMismatch},
 		{`StringFunctions::Length(xs)`, ErrTypeMismatch},
 		{`StringFunctions::Substring("abc", 1, 9)`, ErrIndexOutOfRange},
+		{`StringFunctions::Substring("héllo", 1, 6)`, ErrIndexOutOfRange},
 		{`StringFunctions::Substring("abc", 0, 2)`, ErrIndexOutOfRange},
 		{`StringFunctions::Substring("abc", "1", 2)`, ErrTypeMismatch},
 		{`StringFunctions::Substring("abc", 1)`, ErrCalcArity},
@@ -1378,6 +1392,152 @@ func testCallOfUnhandledOperation(t *testing.T) {
 	}
 }
 
+// testSignalNoLevelOfACompositeStateAccepts: a signal neither the active substate
+// nor any composite state enclosing it accepts is dropped by run-to-completion,
+// so walking outward for a trigger ends in the machine standing still rather than
+// erroring or hanging.
+func testSignalNoLevelOfACompositeStateAccepts(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			initial init;
+			state outer {
+				state middle {
+					state inner;
+					state other;
+					transition inner to other accept step;
+				}
+				state recovered;
+				transition middle to recovered accept abort;
+			}
+			state stopped;
+			init then inner;
+			transition outer to stopped accept shutdown;
+		}
+	}`)
+	exec.SendSignal("unknown", nil)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run to completion: %v", err)
+	}
+	current, ok := exec.CurrentState().(*ast.StateNode)
+	if !ok || current.Name != "inner" {
+		t.Errorf("expected the unaccepted signal to leave the machine in inner, got %v", exec.CurrentState())
+	}
+}
+
+// testCompositeSelfTransitionWithNoSubstateToReEnter: a composite state that
+// declares no starting substate is re-entered by its own self-transition without
+// erroring or hanging, and stays active with no substate of its own.
+func testCompositeSelfTransitionWithNoSubstateToReEnter(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			initial init;
+			state Working {
+				state Step1;
+			}
+			init then Working::Step1;
+			transition Working to Working accept restart;
+		}
+	}`)
+	exec.SendSignal("restart", nil)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run to completion: %v", err)
+	}
+	current, ok := exec.CurrentState().(*ast.StateNode)
+	if !ok || current.Name != "Working" {
+		t.Errorf("expected the re-entered composite state to be active, got %v", exec.CurrentState())
+	}
+}
+
+// testStaleCompositeTimerInARegion: a time trigger on a composite state inside an
+// orthogonal region whose composite is left before the timer expires is dropped,
+// leaving the sibling region where it was rather than erroring or hanging.
+func testStaleCompositeTimerInARegion(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			initial init;
+			state working {
+				region left {
+					initial lstart;
+					state grouping {
+						state step1;
+						accept after 5 then late;
+					}
+					state moved;
+					state late;
+					transition lstart to step1;
+					transition grouping to moved accept skip;
+				}
+				region right {
+					initial rstart;
+					state watching;
+					then rstart watching;
+				}
+			}
+			init then working;
+		}
+	}`)
+	exec.SendSignal("skip", nil)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run to completion: %v", err)
+	}
+	active := make(map[string]bool)
+	for _, state := range exec.ActiveStates() {
+		active[state.Name] = true
+	}
+	if !active["moved"] || !active["watching"] || active["late"] {
+		t.Errorf("expected the stale composite timer to leave moved and watching active, got %v", active)
+	}
+}
+
+// testExitOfNestedRegionsWithAHistoryPseudostate: leaving a composite state whose
+// region holds another composite with a region of its own, then returning through a
+// deep history, restores the recorded configuration rather than erroring or hanging.
+func testExitOfNestedRegionsWithAHistoryPseudostate(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			initial init;
+			state outer {
+				region left {
+					initial lstart;
+					state grouping {
+						region inner {
+							initial gstart;
+							state g1;
+							state g2;
+							transition gstart to g1;
+							transition g1 to g2 accept advance;
+						}
+					}
+					transition lstart to grouping;
+				}
+				region right {
+					initial rstart;
+					state watching;
+					transition rstart to watching;
+				}
+				deep history resume;
+			}
+			state away;
+			init then outer;
+			transition outer to away accept leave;
+			transition away to resume accept back;
+		}
+	}`)
+	for _, signal := range []string{"advance", "leave", "back"} {
+		exec.SendSignal(signal, nil)
+		if err := exec.RunToCompletion(); err != nil {
+			t.Fatalf("run to completion after %s: %v", signal, err)
+		}
+	}
+	active := make(map[string]bool)
+	for _, state := range exec.ActiveStates() {
+		active[state.Name] = true
+	}
+	if !active["g2"] || !active["watching"] {
+		t.Errorf("expected the deep history to restore g2 and watching, got %v", active)
+	}
+}
+
 // testCallArgumentOfWrongType: an argument the guard cannot compare reports
 // rather than firing or dropping the transition on a wrong comparison.
 func testCallArgumentOfWrongType(t *testing.T) {
@@ -2103,6 +2263,35 @@ func testCalcUnboundParameter(t *testing.T) {
 	// Invoke with only 1 argument (missing y)
 	xVal := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 3}}
 	result, err := ctx.InvokeCalc(sym, []Value{xVal}, rootScope)
+	if err == nil {
+		t.Fatalf("expected an unbound parameter error, calc returned %+v", result)
+	}
+	if !errors.Is(err, ErrUnboundParameter) {
+		t.Errorf("expected ErrUnboundParameter, got: %v", err)
+	}
+}
+
+// testCalcUnboundKeywordNamedParameter: a parameter named with a keyword is a
+// parameter like any other, so leaving it unbound reports, never panics.
+func testCalcUnboundKeywordNamedParameter(t *testing.T) {
+	src := `
+		package test {
+			calc classify {
+				in 'type': Integer;
+				in 'state': Integer;
+				return 'type' + 'state';
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "classify", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("classify calc not found")
+	}
+
+	arg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 3}}
+	result, err := ctx.InvokeCalc(sym, []Value{arg}, rootScope)
 	if err == nil {
 		t.Fatalf("expected an unbound parameter error, calc returned %+v", result)
 	}
@@ -3051,6 +3240,46 @@ func testForOverAValueNoExpressionMakesIterable(t *testing.T) {
 		if !strings.Contains(err.Error(), describeValue(value)) {
 			t.Errorf("error does not name the value: %v", err)
 		}
+	}
+}
+
+// testForOverAScalar: a `for` whose input is a scalar fails with a typed error
+// rather than iterating once over the coercion elementsOf would make of it.
+func testForOverAScalar(t *testing.T) {
+	src := `
+		package test {
+			action counter {
+				attribute single : Integer = 7;
+				attribute visited : Integer = 0;
+				first start;
+				action iterate {
+					for s in single {
+						assign visited := visited + 1;
+					}
+				}
+				done end;
+				then start iterate;
+				then iterate end;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "counter", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action counter not found")
+	}
+
+	result, err := ctx.ExecuteAction(sym)
+	if err == nil {
+		t.Fatalf("the action completed with %v, want a typed error", result)
+	}
+	if !errors.Is(err, ErrTypeMismatch) {
+		t.Errorf("execution failed with %v, want ErrTypeMismatch", err)
+	}
+	if !strings.Contains(err.Error(), "an Integer is not one") {
+		t.Errorf("error does not name the value it was given: %v", err)
 	}
 }
 

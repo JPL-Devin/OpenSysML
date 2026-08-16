@@ -80,6 +80,27 @@ it (`note: replaced package …`) rather than adding to it. Edit the file and lo
 completes paths after `%load` and `%save`, and completes meta-commands and symbol names
 everywhere else.
 
+A file whose text the parser cannot read is reported the way a typed declaration is — the same
+diagnostic, pointing into the file at its own line — and nothing of it enters the session, so the
+next submission is parsed against what was there before the load. In the non-interactive path the
+diagnostics of a load are errors, so a script loading a broken file fails rather than continuing
+against an empty session.
+
+Two loaded files that both open `package P` declare two packages of that name, and the load says
+so:
+
+```
+sysml> %load a.sysml b.sysml
+note: P is opened by more than one loaded file; each opening stays a declaration of its own, so a
+member of one is not visible unqualified in the other — qualify it (P::member)
+```
+
+Each file keeps its own identity — that is what makes re-loading one of them replace only its own
+contribution — so the two openings cannot be one namespace without a file's edit silently deleting
+the other file's members. Both openings' members are declared and reachable qualified
+(`P::Wheel`, `P::Axle`); an unqualified reference across the two does not resolve. Re-typing a
+package at the prompt is unaffected: it still folds into the package already in the session.
+
 ## Finding what a build offers
 
 `%search` looks a substring up across the declared and library symbols with the kind of each,
@@ -89,7 +110,13 @@ whether an expression will evaluate before writing a model around it.
 ```
 sysml> %search Vehicle
 sysml> %builtins
+sysml> %view Demo::summary
 ```
+
+`%view <name>` reports what a view exposes and the views nested in it. A name the session cannot
+find is offered the qualified names it is known under, nearest scope first — what the session
+itself declares before the library, and a package's member before a name nested inside another
+element — and at most three of them.
 
 ## Where an expression is evaluated
 

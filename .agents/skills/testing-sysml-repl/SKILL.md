@@ -52,8 +52,11 @@ in `cmd/sysml/main.go`: walk every mode and assert the status, since a `return` 
   … allocations over … collections, … MiB taken from the OS`). Prove the split with
   `>out 2>err` and `cat` both — a memstats line on stdout would break `-convert -o /dev/stdout`
   and JSON reporting.
-- It fires for the interactive REPL too, after `goodbye`, because it runs in the deferred stop.
-  This is the cheapest check that the profile flush survives the REPL path.
+- It fires for the interactive REPL too, after the session ends, because it runs in the deferred
+  stop. This is the cheapest check that the profile flush survives the REPL path.
+  **Leave the REPL with Ctrl-D, not by typing `goodbye`** — at b3f16e4 `goodbye` at the `sysml>`
+  prompt is parsed as model text and answers `1:1: error: expected a namespace member` (and, over a
+  pipe, makes the whole run exit 2), so a transcript that types it looks like a failure.
 - Heap profiles are written at end of run, when the model is already unreachable, so read them as
   `go tool pprof -top -sample_index=alloc_space <file>` (plain `-top` shows inuse_space and looks
   almost empty). Expect `parser.(*Parser).fill` / `parseUsage` and `symbols.*` at the top.
@@ -1077,7 +1080,7 @@ Client API shapes that are easy to get wrong:
 
 - `Model.find(name)` returns **one `Symbol` or `None`**, not a list — iterating it raises
   `TypeError: 'Symbol' object is not iterable`. Use `.id` (FQN), `.name`, `.kind`.
-- `pysysml.instantiate(fqn, file_path=...)` and `pysysml.eval(expr, file_path=..., context_symbol_id=...)`
+- `pysysml.instantiate(fqn, file_path=...)` and `pysysml.evaluate(expr, file_path=..., context_symbol_id=...)`
   each take *exactly one* of `file_path` / `model_hash`.
 - `Instance.get_slot(name)` returns the raw protobuf `SlotValue`. Read it as
   `sv.materialized` and `sv.value.WhichOneof('kind')` → `real_value` / `int_value` / `instance_id` /
@@ -1096,7 +1099,7 @@ What the slot kinds mean (`ValueToProto`, `convert.go`):
   attributes (`attribute a = b + 1.0; attribute b = a + 1.0;`) — expect
   `slot Loop.a: slot Loop.b: cyclic slot dependency: Loop.a`, promptly, raised as `SlotError` by
   the client, and prove the service is still alive afterwards with a follow-up
-  `pysysml.eval('1 + 1', ...)`.
+  `pysysml.evaluate('1 + 1', ...)`.
 - A nested `part engine : Engine;` still marshals as bare `instance_id=N`, but
   `InstantiateResponse.instances` carries every instance reachable from the root, so Python
   expands the child too (`inst.engine.power`). An id is only resolvable against the response that
@@ -1280,6 +1283,76 @@ verify_requirement / verify_satisfaction / satisfied / calc`. Testing them from 
   step the pauses on camera. Never type `clear` at such a pause — it is consumed as the Enter for
   the *next* section and you lose that section from the screen; use Konsole's `shift+PageUp`
   scrollback to recover it.
+
+## Enumeration literals: runtime value and gRPC wire form (PRs #197, #208)
+
+A literal's identity is its **declaration**, so nothing in this area should ever be tested by
+comparing rendered text. The two flavors behave differently and both need a case: a plain literal
+(`enum def Color { red; green; blue; }`) is its own value and crosses the wire as an
+`EnumLiteral`, while a literal of an enumeration that specializes a scalar
+(`enum def GradePoints :> ScalarValues::Real { A = 4.0; }`) evaluates to the **declared scalar**,
+so `eval("D::GradePoints::A")` must be the float `4.0`, not an `EnumLiteral`. A literal can also own
+attributes (`Level { low { :>> n = 1; } high { :>> n = 9; } }`), read as `eval("D::Level::high.n")`
+→ `9`.
+
+- **Stale-binary trap (costs an hour if missed).** `pysysml` auto-start runs
+  `~/.pysysml/bin/sysml-grpc` and otherwise *downloads a release*, which lacks new capabilities.
+  Always `make build-grpc && cp bin/sysml-grpc ~/.pysysml/bin/` first and prove it on camera with
+  `./bin/sysml-grpc --version` (prints `commit: <sha>`) plus `ls -l` on both paths. Capability check:
+  `conn.server_info()` must list `enum_values`
+  (`['convert','enum_values','query','type_facts','verification']`).
+- **Wire field numbers are shared real estate.** `api/proto/sysml.proto` has
+  `Quantity quantity = 8;` and `EnumLiteral enum_literal = 9;` — the enum arm moved from 8 to 9 when
+  `main`'s quantity support landed. After any merge that touches the `Value` oneof, re-run both
+  arms *on the same part* (one `part def` with `attribute c : Color = Color::red;` **and**
+  `attribute mass = 1500.0 [SI::kg];`): a field-number mismatch shows up as `None`/`unsupported`,
+  not as an exception. `python/tests/test_wire_compat.py` pins the numbers at unit level.
+- **Incoming values go through one converter.** `ProtoToValueIn(pv, idx, sem)` in
+  `internal/grpc/convert.go` dispatches the quantity and literal arms and recurses into sequences;
+  it is called from `internal/grpc/service.go` (action inputs) and `internal/grpc/verify.go` (calc
+  arguments). The error wording is layer-specific and worth asserting verbatim:
+  calc → `calc argument could not be read: …`, action → `input "c" could not be read: …`.
+- **Identity is `literal_id` alone** (`python/pysysml/enumeration.py` marks `enumeration_id` and
+  `name` `compare=False`). Comparing two *wire-populated* literals passes even when this is broken,
+  so always include the bare-vs-populated cases: with `bare = EnumLiteral("D::Color::red")` and the
+  slot value, assert `bare == car.c`, `hash(bare) == hash(car.c)`,
+  `len({bare, car.c}) == 1`, `{car.c: "R"}[bare]` and `{bare: "R2"}[car.c]` both resolve, while
+  `bare != EnumLiteral("D::Color::green")` and `len({bare, green}) == 2`. The broken shape reads
+  `False False 2`. Also send a bare literal *to* the server (`calc IsRed([EnumLiteral(
+  "D::Color::red")])` → `True`) — a description-free literal must still resolve against the index.
+- **Type, not text.** Assert `isinstance(car.c, pysysml.EnumLiteral)` **and**
+  `car.c != "Color::red"`; a string-shaped decode passes every `str()`-based check.
+- **Input round-trips need a real executable action.** An `action def` whose body is only `in`/`out`
+  parameters is not executable (`initialize action: no initial node found`). Use
+  `action Classify { attribute c : Color = Color::green; attribute isRed : Boolean = false;
+  first start; action inner { assign isRed := c == Color::red; } done end; then start inner;
+  then inner end; }` and pass `inputs={"c": red}` — the in-model default being *green* is what
+  proves the input actually bound.
+- **Adversarial wire ids** (run on both the calc and action path): `D::Color::mauve` →
+  `… D::Color::mauve is not an enumeration literal of this model`; empty `literal_id` →
+  `enumeration literal: literal_id names no declaration`; a valid but non-literal FQN `D::Car` →
+  `… D::Car is not an enumeration literal of this model`. Through `eval` the typed runtime error
+  appears instead: `not a literal of the enumeration: mauve is not a literal of Color (literals:
+  red, green, blue)`. Finish with `eval("1 + 1")` → `2` to prove the service survived. Carried over
+  from #197 and still true: a *bare* REPL `%eval D::Color::purple` never reaches `ErrNotALiteral`,
+  it answers `unresolved reference … did you mean <stdlib name>?`.
+- **Quantities: received but not sendable from the public client.** `connection._python_to_value`
+  has no `Quantity` arm (bool/int/float/str/None/Instance/EnumLiteral/list only), so a quantity
+  *input* can only be exercised by building a `sysml_pb2.Value(quantity=…)` and calling the stub on
+  the same channel. That asymmetry is `main`'s, not the enum PR's — report it as "found, not fixed"
+  rather than a defect. **Trap:** do not fabricate the `unit_term`; naming `SI::kg` as a base factor
+  yields the false-looking `incommensurable units: cannot express SI::kg (1000·SI::gram) in SI::kg
+  (SI::kilogram)`. Echo back the reduction the service itself reported
+  (`car.mass.unit` → `scale_num=1000.0`, `factors=(UnitFactor('SI::gram', 1.0),)`).
+- **Codegen and REPL cross-checks.** `python -m pysysml.generate` must emit
+  `def c(self) -> _t.EnumLiteral: return _t.slot(self, "c", _t.as_enum_literal)` and, for the
+  quantity slot, `_t.Quantity` / `_t.as_quantity`; then read both off a live instance
+  (`Car.from_instance(conn.instantiate("D::Car")).c`) so a wrong decoder raises `TypeMismatchError`
+  instead of passing silently. In the REPL, `%slots` prints `name = value`, i.e.
+  `c = Color::red`, `palette = [Color::red, Color::green, Color::blue]`, `mass = 1500.00 [SI::kg]` —
+  requests often phrase it as `c: Color::red`, which is the same thing.
+- **Set membership** is only observable through `->includes`/`union`; no REPL syntax builds a `Set`,
+  and a sequence literal keeps duplicates by design.
 
 ## Typed codegen (`python -m pysysml.generate`, Tier 2)
 
@@ -2205,6 +2278,55 @@ number rather than quoting the table.
   `WorkspaceEdit` whose `newText` actually fixes the file. A missing-semicolon fix needs a fixture
   the parser recovers with a fix on — `action def A { first start }` yields `Insert ';'`; a plain
   attribute declaration yields a diagnostic with no fix.
+
+## Subject-aware `Evaluate`, attribute metadata and generated classes (Track P, PR #218)
+
+- **`pandas` is not installed by the blueprint but `Symbol.to_dataframe()` needs it.** If
+  `to_dataframe()` raises `ModuleNotFoundError: No module named 'pandas'`, run
+  `$HOME/pv/bin/pip install pandas -q` first — the failure is environmental, not a product defect.
+- **Subject evaluation is the difference between the *declared default* and the *object's slot*.**
+  A fixture that distinguishes them is mandatory: `part def Vehicle { attribute mass = 1500.0; }`,
+  `part def Sedan :> Vehicle { attribute :>> mass = 1200.0; }`, `part sedan : Sedan;`. Then
+  `m.eval('mass', context_symbol_id='Demo::Vehicle')` must be `1500.0` while
+  `m.eval('mass', subject='Demo::sedan')` must be `1200.0`. Without the redefinition both paths
+  return the same number and the test proves nothing.
+  - On `Model` the kwarg is `subject=`; on `Connection.eval` it is `subject_symbol_id=` and the
+    model hash comes **second**. Module-level `pysysml.evaluate` also takes `subject=`; the
+    deprecated `pysysml.eval` forwards to it and warns `DeprecationWarning`.
+  - A `subject=` plus an explicit `context_symbol_id=` still reads the object, and derived slots
+    (`attribute doubled = mass * 2.0`) follow the object too.
+  - A *definition* as subject is accepted (it is instantiated and reads its own redefinition), and an
+    unrelated subject (e.g. an attribute) is tolerated rather than rejected — record those as
+    observed behavior, not failures. An unknown FQN gives `ExecutionError: subject not found: <fqn>`.
+  - A subject with a cyclic slot raises `ExecutionError: ... cyclic slot dependency: <feature>` and
+    the service must still answer afterwards — always follow such a case with `m.eval('1+1') == 2`.
+- **Cross-checking against the REPL needs fully-qualified expressions.** `%eval mass` on a model with
+  several `mass` features fails with `symbol "mass" is ambiguous`, whereas gRPC `subject=` resolves
+  the unqualified name inside the subject's scope. Use `%instantiate Demo::sedan` then
+  `%eval Demo::sedan::mass` / `%slots Demo::sedan` to compare; that is a surface divergence in name
+  resolution, not a wrong value. Drive it non-interactively with
+  `printf '%%load …\n%%instantiate …\n%%eval …\n%%quit\n' | ./bin/sysml`.
+- **Attribute metadata checks worth making**: own attributes come before inherited ones; a
+  redefinition masks the attribute it redefines (`Sedan.mass` = 1200.0, not two `mass` rows);
+  `attributes()` ids point at the *declaring* supertype (`Demo::Vehicle::name`); a **non-constant**
+  default such as `mass * 2.0` must report `value=None` rather than a guessed number; a quantity
+  default `120.0 [kg]` reports value and `unit='kg'` separately; an element with no attributes yields
+  `[]` and an empty DataFrame that still has all 8 columns
+  (`name,kind,id,type,multiplicity,value,unit,inherited`).
+- **Stdlib elements themselves are not reachable through `Model.find`/`m['ISQ::MassValue']` (returns
+  `None`)**, so "attributes of a stdlib element" can only be covered indirectly: declare
+  `attribute m : ISQBase::MassValue = 3.0 [kg];` in your own model and assert the *resolved* type
+  string `ISQBase::MassValue`.
+- **Generated classes**: `python -m pysysml.generate model.sysml -o out.py` then actually `import` the
+  module — an MRO bug only surfaces at import as
+  `TypeError: Cannot create a consistent method resolution order`. Assert `cls.__mro__` names against
+  the model (include multiple supertypes and a diamond), that a `:>>`/`subsets` feature inherits the
+  type/multiplicity it does not restate (`String[0..*]` → `-> list[str]`), and that any base Python
+  cannot linearize, or that has no generated class, is dropped **with a comment** such as
+  `# specializes G2::Hybrid, left out: Python cannot linearize it with the bases above` /
+  `# specializes ISQBase::MassValue, which has no generated class`.
+- **Quantity results carry the scalar on `Quantity.magnitude`, not `.value`** — a probe using `.value`
+  reports a false failure even when the runtime is correct.
 
 ## Symbol *kind* changes: `%search` is the only REPL probe (PR #210)
 

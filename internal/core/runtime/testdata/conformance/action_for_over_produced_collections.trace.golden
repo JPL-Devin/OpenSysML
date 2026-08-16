@@ -72,13 +72,6 @@ stmt for c
         eval feature returned -> 2
         eval feature c -> 3
       eval operator + -> 5
-stmt for s
-  eval feature single -> 7
-  iteration 1
-    stmt assign scalar
-        eval feature scalar -> 0
-        eval feature s -> 7
-      eval operator + -> 7
 stmt for e
   eval feature nothing -> ()
 stmt for d
