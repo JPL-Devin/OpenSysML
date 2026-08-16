@@ -47,8 +47,11 @@ func (s *Session) mergeSubmission(src string, root *ast.RootNamespace, comments 
 	for i, sn := range s.snippets {
 		// Only what the prompt typed in an earlier submission merges: a loaded
 		// file keeps its identity, so re-typing its package supersedes it, and
-		// two snippets of one submission are both part of that submission.
-		if sn.origin != "" || sn.gen == s.version {
+		// two snippets of one submission are both part of that submission. A
+		// masked submission is not merged into either: its text is not analyzed,
+		// so folding it in would put what the parser could not read back into the
+		// buffer.
+		if sn.origin != "" || sn.gen == s.version || sn.open {
 			continue
 		}
 		oldDecl, ok := namedNamespace(sn.src, newDecl.name)

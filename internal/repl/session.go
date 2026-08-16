@@ -497,6 +497,20 @@ func parseDiagnostics(p *parser.Parser) []passes.Diagnostic {
 	return out
 }
 
+// maskedSpans locates the masked submissions in the buffer, so a finding of
+// theirs is not read as having stopped the deeper checks from running.
+func (s *Session) maskedSpans() []source.Span {
+	var out []source.Span
+	acc := 0
+	for _, sn := range s.snippets {
+		if sn.open {
+			out = append(out, source.Span{Offset: acc, Len: len(sn.src)})
+		}
+		acc += len(sn.src) + 1 // the newline joined() writes between snippets
+	}
+	return out
+}
+
 // openDiagnostics reports the findings of the masked submissions, located in the
 // session buffer so every surface places them in the file they came from.
 func (s *Session) openDiagnostics() []passes.Diagnostic {
@@ -675,6 +689,7 @@ func (s *Session) submitFiles(files []SourceFile) Result {
 		Offset:  offset,
 		Origins: s.origins(),
 		own:     own,
+		masked:  s.maskedSpans(),
 		Notices: notices,
 	}
 	res.Blocked = s.blockedBy(res)

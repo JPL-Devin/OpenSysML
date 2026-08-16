@@ -222,6 +222,43 @@ func TestOpenSubmissionEchoesItsOwnLine(t *testing.T) {
 	}
 }
 
+// Re-typing a namespace does not fold a masked submission back into the buffer:
+// the text the parser could not read stays out of it, so later declarations are
+// still declared where they were typed.
+func TestRetypingANamespaceDoesNotMergeAMaskedSubmission(t *testing.T) {
+	s := NewSession()
+	s.Submit("package P { part def A; }\npackage Q {")
+	s.Submit("package P { part def B; }")
+	s.Submit("package Later { part def C; }")
+
+	for _, sn := range s.snippets {
+		if !sn.open && strings.Contains(sn.src, "package Q {") {
+			t.Fatalf("the masked submission was merged back into the buffer: %q", sn.src)
+		}
+	}
+	if _, _, err := s.lookupSymbol("Later::C"); err != nil {
+		t.Errorf("Later::C did not resolve after the namespace was re-typed: %v", err)
+	}
+}
+
+// A masked submission gated no validation tier, so it is not reported as the
+// reason the deeper checks may not have run over a later clean submission.
+func TestMaskedSubmissionIsNotReportedAsBlockingTheChecks(t *testing.T) {
+	s := NewSession()
+	s.Submit("/* oops")
+	res := s.Submit("package Clean { part def A; }")
+
+	if note := res.Blocked.note(); note != "" {
+		t.Errorf("a masked submission should block nothing: %s", note)
+	}
+	// A real error elsewhere in the buffer is still named.
+	s.Submit("package Bad { part a : Missing; }")
+	res = s.Submit("package Also { part def B; }")
+	if res.Blocked.note() == "" {
+		t.Error("the unresolved reference in the buffer should still be named as blocking")
+	}
+}
+
 // A masked submission's warnings stay warnings, with the code the parser gave
 // them, as they would in any file the workspace analyzes.
 func TestOpenSubmissionKeepsWarningSeverity(t *testing.T) {
