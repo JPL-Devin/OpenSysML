@@ -368,3 +368,49 @@ func leadsTo(graph *StateGraph, source, target ast.Node) bool {
 	}
 	return false
 }
+
+// A machine lowered without a scope tree is indexed on its own, and that index
+// is descended per region: a succession names its own region's same-named state.
+func TestScopelessLoweringNamesTheRegionLocalState(t *testing.T) {
+	graph, err := ToStateGraph(stateUsageIn(t, `
+		package test {
+			state Machine {
+				state both {
+					region left {
+						initial li;
+						state idle;
+						state done;
+						li then idle;
+						idle then done;
+					}
+					region right {
+						initial ri;
+						state idle;
+						state ready;
+						ri then idle;
+						idle then ready;
+					}
+				}
+			}
+		}
+	`), nil)
+	if err != nil {
+		t.Fatalf("ToStateGraph: %v", err)
+	}
+
+	for _, region := range graph.CompositeStates[stateNamed(graph, "both")] {
+		for state, owner := range graph.RegionOf {
+			if owner != region || state.Name != "idle" {
+				continue
+			}
+			transitions := graph.Transitions[state]
+			if len(transitions) != 1 {
+				t.Fatalf("transitions out of %s's idle = %d, want its own", region.Name, len(transitions))
+			}
+			target, ok := transitions[0].Target.(*ast.StateNode)
+			if !ok || graph.RegionOf[target] != region {
+				t.Fatalf("%s's idle leads outside its region, to %v", region.Name, transitions[0].Target)
+			}
+		}
+	}
+}

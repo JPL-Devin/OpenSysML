@@ -227,6 +227,29 @@ func TestJunctionWithOutgoingTransitionIsLegal(t *testing.T) {
 }`)
 }
 
+// Sibling regions may declare same-named junctions, so a dead end is reported by
+// the declaration it is: one region's `pick then …` says nothing about the other's.
+func TestDeadEndJunctionIsReportedBesideASameNamedOneThatRoutes(t *testing.T) {
+	wantOneError(t, `package test {
+	state def M {
+		state both {
+			region left {
+				state lidle;
+				state ldone;
+				junction pick;
+				lidle then pick;
+				pick then ldone;
+			}
+			region right {
+				state ridle;
+				junction pick;
+				ridle then pick;
+			}
+		}
+	}
+}`, CodeNoOutgoingTransition, "junction pick has no outgoing transition")
+}
+
 // A succession is an outgoing transition too, so a junction one leaves is legal.
 func TestJunctionLeftBySuccessionIsLegal(t *testing.T) {
 	wantClean(t, `package test {

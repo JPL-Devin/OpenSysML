@@ -131,7 +131,7 @@ func ToStateGraphWithEndpoints(stateMachineDecl ast.Node, scope *symbols.Scope, 
 	// resolver, one that has a tree names its endpoints from that tree alone.
 	switch {
 	case scope == nil:
-		endpoints = localEndpoints(stateMachineDecl)
+		endpoints, scope = localEndpoints(stateMachineDecl)
 	case endpoints == nil:
 		endpoints = scopeEndpoints{machine: scope}
 	}

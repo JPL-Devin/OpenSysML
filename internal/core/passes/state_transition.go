@@ -50,10 +50,10 @@ type transitionChecker struct {
 // machine holds what checking one state machine needs: the vertices it owns,
 // those its transitions leave, and its routing pseudostates in source order.
 type machine struct {
-	vertices    map[ast.Node]bool
-	sources     map[ast.Node]bool
-	sourceNames map[string]bool
-	routing     []*ast.PseudostateNode
+	vertices   map[ast.Node]bool
+	sources    map[ast.Node]bool
+	unresolved map[string]bool
+	routing    []*ast.PseudostateNode
 }
 
 // findMachines walks the document for state machine declarations. A state inside
@@ -93,14 +93,14 @@ func (c *transitionChecker) checkMachine(decl ast.Node, scope *symbols.Scope) {
 		return
 	}
 	m := &machine{
-		vertices:    vertices,
-		sources:     map[ast.Node]bool{},
-		sourceNames: map[string]bool{},
+		vertices:   vertices,
+		sources:    map[ast.Node]bool{},
+		unresolved: map[string]bool{},
 	}
 	c.walkBody(m, scope, declMembers(decl))
 
 	for _, ps := range m.routing {
-		if m.sources[ps] || m.sourceNames[ps.Name] {
+		if m.sources[ps] || m.unresolved[ps.Name] {
 			continue
 		}
 		c.report(ps.Span(), CodeNoOutgoingTransition, fmt.Sprintf(
@@ -119,24 +119,21 @@ func (c *transitionChecker) walkBody(m *machine, scope *symbols.Scope, members [
 			// A sourceless `accept … then` takes the state it is written in as its
 			// source (SysML 7.19.3), which names a vertex by construction.
 			if n.Source != nil {
-				m.markSource(c.checkEndpoint(m, scope, n.Source, false))
+				m.markLeft(c.checkEndpoint(m, scope, n.Source, false), n.Source)
 			}
 			c.checkEndpoint(m, scope, n.Target, true)
 		case *ast.SuccessionEdge:
 			// `off then busy;`, whose source is elided by the `entry; then off;` form.
 			if n.Source != nil {
-				m.markSource(c.checkEndpoint(m, scope, n.Source, false))
-				m.markName(n.Source)
+				m.markLeft(c.checkEndpoint(m, scope, n.Source, false), n.Source)
 			}
 			c.checkEndpoint(m, scope, n.Target, true)
 		case *ast.TransitionEdge:
-			m.markSource(c.checkEndpoint(m, scope, n.Source, false))
-			m.markName(n.Source)
+			m.markLeft(c.checkEndpoint(m, scope, n.Source, false), n.Source)
 			c.checkEndpoint(m, scope, n.Target, true)
 		case *ast.InitialNode:
 			// The marker's `then` is its one outgoing transition.
 			if n.Successor != nil {
-				m.sourceNames[n.Name] = true
 				c.checkEndpoint(m, scope, n.Successor, true)
 			}
 		case *ast.PseudostateNode:
@@ -158,8 +155,7 @@ func (c *transitionChecker) walkBody(m *machine, scope *symbols.Scope, members [
 				// `a then b;`, written as a connector whose two ends name vertices.
 				if len(n.ConnectorEnds) == 2 {
 					source := connectorEndName(n.ConnectorEnds[0])
-					m.markSource(c.checkEndpoint(m, scope, source, false))
-					m.markName(source)
+					m.markLeft(c.checkEndpoint(m, scope, source, false), source)
 					c.checkEndpoint(m, scope, connectorEndName(n.ConnectorEnds[1]), true)
 				}
 			}
@@ -199,20 +195,18 @@ func (c *transitionChecker) report(span source.Span, code, message string) {
 	})
 }
 
-// markSource records the vertex a transition leaves.
-func (m *machine) markSource(decl ast.Node) {
+// markLeft records the vertex a transition leaves by declaration, so sibling
+// regions declaring same-named pseudostates do not mask each other's dead ends.
+// An endpoint naming no vertex is recorded by name instead: what it meant to
+// leave is unknown, and reporting that as a dead end would be a false positive.
+func (m *machine) markLeft(decl ast.Node, qn *ast.QualifiedName) {
 	if decl != nil {
 		m.sources[decl] = true
-	}
-}
-
-// markName records by name the vertex an edge leaves, which is all a succession
-// states, so a pseudostate a succession leaves is not reported as dangling.
-func (m *machine) markName(qn *ast.QualifiedName) {
-	if qn == nil || len(qn.Parts) == 0 {
 		return
 	}
-	m.sourceNames[qn.Parts[len(qn.Parts)-1].Text] = true
+	if qn != nil && len(qn.Parts) > 0 {
+		m.unresolved[qn.Parts[len(qn.Parts)-1].Text] = true
+	}
 }
 
 // isMarker reports whether decl is a `first`/`then` marker rather than a state
