@@ -142,8 +142,8 @@ func TestToStateGraph_HistoryAndPointNotation(t *testing.T) {
 		"outOf":         ast.PseudostateExit,
 	}
 	for name, kind := range want {
-		ps, ok := graph.Pseudostates[name]
-		if !ok {
+		ps := pseudostateNamed(graph, name)
+		if ps == nil {
 			t.Errorf("pseudostate %q is not in the graph", name)
 			continue
 		}

@@ -168,9 +168,10 @@ generalization edge in `specializations` — `extractMetadata` exported only the
 of a definition and the first typing of a usage, which cannot express multiple supertypes or tell
 subsetting from redefinition. Known limitations are listed in `python/README.md`; the load-bearing
 ones are that a quantity slot is typed `object` because the wire `Value` has no
-magnitude-and-unit form (the same reason `ValueToProto` reports one as unsupported), that only
-structural usages become properties, and that `subsets`/`redefines` are reported but do not
-become base classes.
+magnitude-and-unit form (the same reason `ValueToProto` reports one as unsupported), and that only
+structural usages become properties. `specializes`, `subsets` and `redefines` each produce the
+corresponding Python base class; an edge Python cannot linearize is named in a comment on the
+class rather than dropped silently.
 
 ## P4 — smaller Python-side items, all recorded in `docs/project/spec-compliance.md`
 
@@ -178,12 +179,15 @@ become base classes.
   **Done:** the spawner writes the service's pid *and* process start time (plus its own), and a
   pid is trusted only while `psutil.Process(pid).create_time()` still matches; a reused pid or a
   lookalike cmdline is a stale record, cleaned up and never signalled.
-- ~~`pysysml.eval` and `pysysml.RuntimeError` shadow builtins.~~
-  **Done:** the module-level function is `pysysml.evaluate` and the error class is
-  `pysysml.ExecutionError`; both old names resolve to the new object through `__getattr__` with a
-  `DeprecationWarning` and are gone from `__all__`, so a star-import shadows neither built-in.
-- `SymbolToProto.Attributes` is always empty (`convert.go:40`), so `Symbol.attributes()` and
-  `to_dataframe()` under-report.
+- ~~`pysysml.eval` and `pysysml.RuntimeError` shadow builtins.~~ **Done:** the module-level function
+  is `pysysml.evaluate` and the error class is `pysysml.ExecutionError`; both old names resolve to
+  the new object through `__getattr__` with a `DeprecationWarning` and are out of `__all__`, so a
+  star-import shadows neither built-in. Removal in 1.0.0.
+- ~~`SymbolToProto.Attributes` is always empty (`convert.go:40`), so `Symbol.attributes()` and
+  `to_dataframe()` under-report.~~ **Done:** the service reports each symbol's own and inherited
+  attributes with resolved type, multiplicity, unit and constant default, behind the
+  `symbol_attributes` capability; redefinitions mask the inherited name and a non-constant
+  default is omitted rather than guessed.
 - ~~The download verifies a checksum served from the same origin as the binary, which detects
   corruption but not a compromised release; a pinned hash per version would be stronger.~~
   **Done:** `PINNED_SHA256` in `binary.py` pins every asset's SHA-256 per release, generated from
@@ -191,10 +195,13 @@ become base classes.
   refused rather than falling back to the sidecar, unless
   `$PYSYSML_ALLOW_UNPINNED_DOWNLOAD=<owner/repo>` (or `=1`) accepts same-origin trust
   explicitly, for the repository it names.
-- `Model.eval` takes a scope, not a subject, so an expression cannot be evaluated against an
+- ~~`Model.eval` takes a scope, not a subject, so an expression cannot be evaluated against an
   object the way `%eval` does after `%instantiate`: `verify_constraint` takes a subject, `eval`
   does not, and a caller reads the declared default instead. Carrying the subject to
-  `Evaluate` is a service-side change as well as a client one.
+  `Evaluate` is a service-side change as well as a client one.~~ **Done:** `EvaluateRequest`
+  carries `subject_symbol_id`, the service instantiates and binds it as the REPL does after
+  `%instantiate`, and `Model.eval(expr, subject=…)` reads that object's values behind the
+  `evaluate_subject` capability; a call without a subject is unchanged.
 
 ---
 
@@ -299,8 +306,10 @@ Both residual items are closed by the unit-resolution work; see `docs/project/sp
 - **Transition endpoint names** are resolved at lowering, not at the name-resolution tier, so a
   misspelled endpoint surfaces late. Error timing is part of the contract (AGENTS.md §4):
   moving it is the point of the task, and the affected tests must be updated deliberately.
-- **Dangling transition detection is lenient.** UML 2.5.1 §14.2.3.9 wants exactly one source
-  and one target vertex. Hard cases to name in the prompt: a target in a sibling orthogonal
+- **Dangling transition detection is lenient.** `TransitionUsage::source : ActionUsage[1..1]`
+  and `::target : ActionUsage[1..1]` (stdlib `Systems Library/SysML.sysml`), and KerML
+  `TransitionPerformance::transitionLinkSource: Performance[1]`, want exactly one source and
+  one target vertex. Hard cases to name in the prompt: a target in a sibling orthogonal
   region (legal), in an unrelated machine (illegal), an entry/exit point on a composite state
   (legal), a target resolving to a non-vertex (illegal), the sourceless `accept … then` form
   (legal), a junction chain terminating nowhere (illegal, and not a cycle).

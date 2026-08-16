@@ -1,0 +1,7 @@
+{
+  "type": "state",
+  "finalState": "lidle+rtarget",
+  "outputs": {
+    "crossed": {"type": "Integer", "value": 1}
+  }
+}

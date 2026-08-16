@@ -10,7 +10,13 @@ from pysysml.diagnostic import Diagnostic
 from pysysml.enumeration import EnumLiteral
 from pysysml.instance import Instance
 from pysysml.typed import TypedObject
-from pysysml.typefacts import Multiplicity, Specialization, SymbolFacts, TypeFacts
+from pysysml.typefacts import (
+    AttributeFacts,
+    Multiplicity,
+    Specialization,
+    SymbolFacts,
+    TypeFacts,
+)
 from pysysml.capabilities import MissingCapabilityError, ServerInfo
 from pysysml.verdict import CalcResult, Verdict
 from pysysml.query import QueryElement, QueryError
@@ -30,6 +36,7 @@ from pysysml.errors import (
 __all__ = [
     "Connection", "Model", "Symbol", "Diagnostic", "EnumLiteral", "Instance",
     "TypedObject", "TypeFacts", "Multiplicity", "Specialization", "SymbolFacts",
+    "AttributeFacts",
     "ServerInfo",
     "Conversion", "FORMAT_SYSML", "FORMAT_TURTLE", "format_of_path",
     "Verdict", "CalcResult",
@@ -44,6 +51,7 @@ __all__ = [
     "UnsupportedOperationError", "UnsupportedValueError",
     "WrongKindError",
     "load", "connect", "convert",
+    # "eval" is deprecated in favour of "evaluate", so it is not exported.
     "evaluate", "instantiate",
     "DEFAULT_PORT", "split_target",
     "__version__"
@@ -194,7 +202,7 @@ def convert(to_format, file_path=None, content=None, model_hash=None,
 
 
 def evaluate(expression, file_path=None, model_hash=None, context_symbol_id=None,
-             host='localhost', port=None):
+             host='localhost', port=None, subject=None):
     """Evaluate a SysML expression (module-level convenience).
 
     A model in hand has :meth:`Model.eval`, which needs neither the hash nor the
@@ -207,6 +215,10 @@ def evaluate(expression, file_path=None, model_hash=None, context_symbol_id=None
         context_symbol_id (str, optional): Context for evaluation
         host (str): Service hostname, or a ``host:port`` address
         port (int, optional): Service port (default: 50051)
+        subject (str, optional): FQN of a part/usage to instantiate and evaluate
+            against, so a feature reads that object's value rather than the
+            declared default. Last, so a positional call written before it
+            still binds the address it meant
         
     Returns:
         Evaluated value
@@ -234,7 +246,12 @@ def evaluate(expression, file_path=None, model_hash=None, context_symbol_id=None
         model = conn.load(file_path)
         model_hash = model.hash
     
-    return conn.eval(expression, model_hash, context_symbol_id)
+    return conn.eval(
+        expression,
+        model_hash,
+        context_symbol_id=context_symbol_id,
+        subject_symbol_id=subject,
+    )
 
 
 def instantiate(symbol_id, file_path=None, model_hash=None, host='localhost',

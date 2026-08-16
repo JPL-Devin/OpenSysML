@@ -273,28 +273,38 @@ class Model:
 
         return None
 
-    def eval(self, expression, context_symbol_id=None):
+    def eval(self, expression, context_symbol_id=None, subject=None):
         """Evaluate a SysML expression against this model.
 
         Args:
             expression (str): SysML expression (e.g., "1 + 1")
             context_symbol_id (str, optional): FQN of the symbol whose scope the
                 expression's names resolve in
+            subject (str, optional): FQN of a part/usage to instantiate and
+                evaluate against, as ``%eval`` does after ``%instantiate``, so a
+                feature reads that object's value rather than the declared
+                default. Without a context the subject also names the scope.
 
         Returns:
             The evaluated value, as a Python value
 
         Raises:
-            ExecutionError: If the expression could not be evaluated
+            ExecutionError: If the expression could not be evaluated, or the
+                subject is unknown or could not be instantiated
             ModelNotFoundError: If the service no longer holds this model
             UnsupportedValueError: If the result cannot be represented on the wire
 
         Example:
             >>> model.eval("1 + 1")
             2
+            >>> model.eval("mass", subject="Demo::car")
+            1600.0
         """
         return self._client.eval(
-            expression, self._hash, context_symbol_id=context_symbol_id
+            expression,
+            self._hash,
+            context_symbol_id=context_symbol_id,
+            subject_symbol_id=subject,
         )
 
     def instantiate(self, symbol_id):

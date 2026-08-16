@@ -8,6 +8,8 @@ exercised over synthetic symbol trees.
 from dataclasses import dataclass, field
 from typing import Optional, Tuple
 
+from pysysml.values import value_to_python
+
 
 @dataclass(frozen=True)
 class TypeFacts:
@@ -104,6 +106,34 @@ class Specialization:
 
 
 @dataclass(frozen=True)
+class AttributeFacts:
+    """One attribute an element has, own or inherited, as the service resolves it."""
+
+    name: str
+    type: str = ""
+    """FQN of the resolved type, else the type as written, else the library scalar."""
+
+    value: object = None
+    """Default value, when it is a model-level constant; None when there is none."""
+
+    unit: str = ""
+    """Unit the default value is written in; empty when it carries none."""
+
+    @classmethod
+    def from_pb(cls, pb_attribute) -> "AttributeFacts":
+        """Build from an ``AttributeInfo`` protobuf message."""
+        value = None
+        if pb_attribute.HasField("value"):
+            value = value_to_python(pb_attribute.value)
+        return cls(
+            name=pb_attribute.name,
+            type=pb_attribute.type,
+            value=value,
+            unit=pb_attribute.unit,
+        )
+
+
+@dataclass(frozen=True)
 class SymbolFacts:
     """Everything code generation needs about one symbol."""
 
@@ -113,3 +143,4 @@ class SymbolFacts:
     type: Optional[TypeFacts] = None
     multiplicity: Optional[Multiplicity] = None
     specializations: Tuple[Specialization, ...] = field(default_factory=tuple)
+    attributes: Tuple[AttributeFacts, ...] = field(default_factory=tuple)
