@@ -37,6 +37,8 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("calc_symbol_is_not_a_calc", testCalcSymbolIsNotACalc)
 	t.Run("calc_direct_recursion", testCalcDirectRecursion)
 	t.Run("calc_mutual_recursion", testCalcMutualRecursion)
+	t.Run("calc_recursion_spends_step_budget", testCalcRecursionSpendsStepBudget)
+	t.Run("calc_recursion_at_depth_ceiling", testCalcRecursionAtDepthCeiling)
 	t.Run("calc_non_terminating_loop", testCalcNonTerminatingLoop)
 	t.Run("calc_body_never_returns", testCalcBodyNeverReturns)
 	t.Run("calc_send_is_rejected", testCalcSendIsRejected)
@@ -1877,8 +1879,9 @@ func testCalcSymbolIsNotACalc(t *testing.T) {
 	}
 }
 
-// testCalcDirectRecursion: a calc that invokes itself unconditionally must be
-// stopped by the nesting bound instead of exhausting the stack.
+// testCalcDirectRecursion: a calc that invokes itself unconditionally never
+// terminates, so the run's calc depth budget must report it instead of the
+// process exhausting its stack.
 func testCalcDirectRecursion(t *testing.T) {
 	src := `
 		package test {
@@ -1888,11 +1891,11 @@ func testCalcDirectRecursion(t *testing.T) {
 			}
 		}
 	`
-	assertCalcRecursionBounded(t, src, "countdown")
+	assertCalcRecursionBounded(t, src, "countdown", ErrCalcRecursionLimit)
 }
 
-// testCalcMutualRecursion: the bound is on nesting depth, so a cycle through
-// another calc is caught the same way as direct self-invocation.
+// testCalcMutualRecursion: the budget is spent by nesting, so a cycle through
+// another calc is reported the same way direct self-invocation is.
 func testCalcMutualRecursion(t *testing.T) {
 	src := `
 		package test {
@@ -1907,16 +1910,60 @@ func testCalcMutualRecursion(t *testing.T) {
 			}
 		}
 	`
-	assertCalcRecursionBounded(t, src, "ping")
+	assertCalcRecursionBounded(t, src, "ping", ErrCalcRecursionLimit)
 }
 
-// assertCalcRecursionBounded invokes calcName and requires a recursion-limit
+// testCalcRecursionSpendsStepBudget: the two bounds are independent, so a
+// recursion whose evaluations run out first is reported by the step budget
+// rather than running on until the depth bound.
+func testCalcRecursionSpendsStepBudget(t *testing.T) {
+	src := `
+		package test {
+			calc grow {
+				in n: Integer;
+				return : Integer = n + grow(n + 1);
+			}
+		}
+	`
+	assertCalcRecursionBounded(t, src, "grow", ErrStepLimitExceeded, func(ctx *Context) {
+		// Room to recurse far deeper than the evaluations allow.
+		ctx.maxCalcDepth = MaxCalcDepthCeiling
+		ctx.maxSteps = 500
+	})
+}
+
+// testCalcRecursionAtDepthCeiling: the highest depth budget a run may be given
+// must still be reported rather than reached by exhausting the stack, which
+// would be fatal.
+func testCalcRecursionAtDepthCeiling(t *testing.T) {
+	src := `
+		package test {
+			calc deep {
+				in n: Integer;
+				attribute acc : Integer = (n + 1) * (n + 2) - n * n;
+				return : Integer = acc + deep(n + 1);
+			}
+		}
+	`
+	assertCalcRecursionBounded(t, src, "deep", ErrCalcRecursionLimit, func(ctx *Context) {
+		ctx.maxCalcDepth = MaxCalcDepthCeiling
+	})
+}
+
+// assertCalcRecursionBounded invokes calcName and requires the given budget
 // error promptly: the invocation runs on its own goroutine so a hang fails the
-// case instead of stalling the suite until the package timeout.
-func assertCalcRecursionBounded(t *testing.T, src, calcName string) {
+// case instead of stalling the suite until the package timeout, and a panic in
+// it fails the case rather than the package.
+func assertCalcRecursionBounded(t *testing.T, src, calcName string, want error, budgets ...func(*Context)) {
 	t.Helper()
 
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	// The default step budget, so a recursion bounded by depth reaches that bound
+	// rather than running out of evaluations first.
+	ctx.maxSteps = DefaultMaxSteps
+	for _, set := range budgets {
+		set(ctx)
+	}
 	rootScope := idx.DocumentRoot("<test>")
 	sym := findSymbolByName(rootScope, calcName, ast.DefCalc)
 	if sym == nil {
@@ -1925,6 +1972,11 @@ func assertCalcRecursionBounded(t *testing.T, src, calcName string) {
 
 	done := make(chan error, 1)
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				done <- fmt.Errorf("calc %s panicked: %v", calcName, r)
+			}
+		}()
 		arg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 10}}
 		_, err := ctx.InvokeCalc(sym, []Value{arg}, rootScope)
 		done <- err
@@ -1935,10 +1987,10 @@ func assertCalcRecursionBounded(t *testing.T, src, calcName string) {
 		if err == nil {
 			t.Fatalf("expected recursive calc %s to be bounded, it returned a value", calcName)
 		}
-		if !errors.Is(err, ErrCalcRecursionLimit) {
-			t.Errorf("expected ErrCalcRecursionLimit, got: %v", err)
+		if !errors.Is(err, want) {
+			t.Errorf("expected %v, got: %v", want, err)
 		}
-	case <-time.After(10 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatalf("recursive calc %s did not terminate", calcName)
 	}
 }
@@ -3224,11 +3276,14 @@ func testCalcNonBooleanCondition(t *testing.T) {
 // returns the error the read reports, on its own goroutine so a body that never
 // terminates fails the case instead of stalling the suite. maxSteps bounds the
 // run.
-func calcUsageOutputInSource(t *testing.T, src, usageName, output string, maxSteps int64) error {
+func calcUsageOutputInSource(t *testing.T, src, usageName, output string, maxSteps int64, budgets ...func(*Context)) error {
 	t.Helper()
 
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
 	ctx.maxSteps = maxSteps
+	for _, set := range budgets {
+		set(ctx)
+	}
 	rootScope := idx.DocumentRoot("<test>")
 	sym := findSymbolByName(rootScope, usageName, ast.DefCalc)
 	if sym == nil {
@@ -3579,7 +3634,8 @@ func testNestedCalcUsageSelfCycle(t *testing.T) {
 }
 
 // testNestedCalcUsageRecursionDepth: a calc whose nested usage is of itself
-// never bottoms out, so the nesting limit reports it instead of hanging.
+// never bottoms out, so the depth budget reports it instead of hanging. A usage
+// frame costs far more than an invocation, so the case states a shallow budget.
 func testNestedCalcUsageRecursionDepth(t *testing.T) {
 	src := `
 		package test {
@@ -3592,7 +3648,8 @@ func testNestedCalcUsageRecursionDepth(t *testing.T) {
 			calc c : Down { in n = 3; }
 		}
 	`
-	err := calcUsageOutputInSource(t, src, "c", "a", 1000000)
+	err := calcUsageOutputInSource(t, src, "c", "a", 1000000,
+		func(ctx *Context) { ctx.maxCalcDepth = nestingProbeDepth })
 	if !errors.Is(err, ErrCalcRecursionLimit) {
 		t.Errorf("expected ErrCalcRecursionLimit, got: %v", err)
 	}

@@ -614,6 +614,7 @@ func (s *Session) doBudget() []string {
 		fmt.Sprintf("  state events         %-10d %s", b.MaxStateEvents, runtime.MaxStateEventsEnvVar),
 		fmt.Sprintf("  do activity steps    %-10d %s", b.MaxDoSteps, runtime.MaxDoStepsEnvVar),
 		fmt.Sprintf("  collection elements  %-10d %s", b.MaxElements, runtime.MaxElementsEnvVar),
+		fmt.Sprintf("  nested calc depth    %-10d %s", b.MaxCalcDepth, runtime.MaxCalcDepthEnvVar),
 	}
 }
 

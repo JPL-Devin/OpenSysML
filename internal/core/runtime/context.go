@@ -77,9 +77,10 @@ type Context struct {
 	// bounding recursion across nested action executors.
 	actionDepth int
 
-	// calcDepth is the number of calc invocations currently on the stack,
-	// bounding recursion across nested calc evaluations.
-	calcDepth int
+	// calcDepth is the number of calc invocations currently on the stack, which
+	// maxCalcDepth bounds, so a recursion evaluates while it stays within it.
+	calcDepth    int
+	maxCalcDepth int64
 
 	// runDepth is the number of runs currently under way, so the step counter is
 	// reset per run rather than accumulated over the context's whole life.
@@ -148,6 +149,7 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		maxStateEvents: DefaultMaxStateEvents,
 		maxDoSteps:     DefaultMaxDoSteps,
 		maxElements:    DefaultMaxElements,
+		maxCalcDepth:   DefaultMaxCalcDepth,
 
 		occurrences:      make(map[*symbols.Symbol]int64),
 		variantObjects:   make(map[variantObject]int64),
