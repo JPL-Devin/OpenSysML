@@ -163,6 +163,56 @@ func TestCrossRegionTransitionIntoInactiveCompositeRecordsTheEnteredState(t *tes
 	}
 }
 
+// A source active in a region nested deeper than its target's region leaves its own
+// region set up to the level the two regions share: the source state and the
+// composite state holding its region exit, the target region's old state exits, and
+// the composite state owning both regions stays active.
+func TestCrossRegionTransitionFromDeeperRegionExitsUpToTheSharedLevel(t *testing.T) {
+	exec := runStateMachine(t, "Machine", `package P {
+	state Machine {
+		attribute lidleExits : Integer = 0;
+		attribute deepExits : Integer = 0;
+		attribute wrapperExits : Integer = 0;
+
+		initial init;
+		state running {
+			region left {
+				initial ls;
+				state lidle { exit { lidleExits = lidleExits + 1; } }
+				state lstate;
+				then ls lidle;
+			}
+			region right {
+				initial rs;
+				state wrapper {
+					exit { wrapperExits = wrapperExits + 1; }
+
+					region inner {
+						initial is;
+						state ideep { exit { deepExits = deepExits + 1; } }
+						then is ideep;
+						transition ideep to lstate if lidleExits == 0;
+					}
+				}
+				then rs wrapper;
+			}
+		}
+
+		init then running;
+	}
+}`)
+
+	assertRegionConfig(t, exec, map[string]string{"left": "lstate"})
+	if got := countVisits(exec.stateVisits, "running"); got != 1 {
+		t.Errorf("running entered %d times, want 1 (the composite state owning both regions stays active)", got)
+	}
+	for _, name := range []string{"lidleExits", "deepExits", "wrapperExits"} {
+		if got := intValue(t, exec.stateData, name); got != 1 {
+			t.Errorf("%s = %d, want 1", name, got)
+		}
+	}
+}
+
 // Exiting a state exits its subperformances, so a transition out of a nested
 // non-orthogonal state still exits every state up to the endpoints' least common
 // ancestor.

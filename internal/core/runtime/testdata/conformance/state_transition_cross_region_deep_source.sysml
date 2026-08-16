@@ -1,0 +1,43 @@
+// A transition out of a region nested deeper than its target's region leaves the
+// source's region set up to the level the two share — the source state and the
+// composite state holding its region exit — and the target's region exits the
+// state it was running instead of keeping it beside the target.
+package Test {
+	state def TransitionCrossRegionDeepSource {
+		attribute lidleExits : Integer = 0;
+		attribute deepExits : Integer = 0;
+		attribute wrapperExits : Integer = 0;
+		attribute runningEntries : Integer = 0;
+
+		initial start;
+		state running {
+			entry { runningEntries = runningEntries + 1; }
+
+			region left {
+				initial ls;
+				state lidle { exit { lidleExits = lidleExits + 1; } }
+				state lstate;
+
+				then ls lidle;
+			}
+			region right {
+				initial rs;
+				state wrapper {
+					exit { wrapperExits = wrapperExits + 1; }
+
+					region inner {
+						initial is;
+						state ideep { exit { deepExits = deepExits + 1; } }
+
+						then is ideep;
+						transition ideep to lstate if lidleExits == 0;
+					}
+				}
+
+				then rs wrapper;
+			}
+		}
+
+		start then running;
+	}
+}

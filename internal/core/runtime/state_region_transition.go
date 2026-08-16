@@ -196,13 +196,32 @@ func (e *StateExecutor) fireTransitionInRegion(region *ast.StateRegion, trans *l
 		return fmt.Errorf("transition out of region %s has no target state", region.Name)
 	}
 
+	source := e.activeConfig.regionStates[region]
 	if e.regionContains(region, target) {
-		return e.moveBetweenRegions(region, region, trans, target)
+		return e.moveBetweenRegions(region, region, source, trans, target)
 	}
-	if sibling := e.siblingRegionContaining(region, target); sibling != nil {
-		return e.moveBetweenRegions(region, e.innermostActiveRegion(sibling, target), trans, target)
+	if exit, sibling := e.concurrentRegionsFor(region, target); sibling != nil {
+		return e.moveBetweenRegions(exit, e.innermostActiveRegion(sibling, target), source, trans, target)
 	}
 	return e.leaveRegion(region, trans, target)
+}
+
+// concurrentRegionsFor finds the level at which target lies in a region concurrent
+// with region: it returns the region on the source side at that level — the one to
+// leave, which is region itself or an enclosing one — and the region holding target.
+// Both are nil when target lies outside every enclosing region set.
+func (e *StateExecutor) concurrentRegionsFor(region *ast.StateRegion, target *ast.StateNode) (*ast.StateRegion, *ast.StateRegion) {
+	for current := region; current != nil; {
+		if sibling := e.siblingRegionContaining(current, target); sibling != nil {
+			return current, sibling
+		}
+		owner := e.graph.RegionOwner[current]
+		if owner == nil {
+			return nil, nil
+		}
+		current = e.graph.RegionOf[owner]
+	}
+	return nil, nil
 }
 
 // siblingRegionContaining returns the region concurrent with region — another of
@@ -248,15 +267,18 @@ func (e *StateExecutor) regionUnder(state, target *ast.StateNode) *ast.StateRegi
 	return nil
 }
 
-// moveBetweenRegions moves sourceRegion's active state to a target in
-// targetRegion, which is either sourceRegion itself or a region concurrent with
-// it. KerML's StateTransitionPerformance orders only
+// moveBetweenRegions moves sourceRegion's active state — source, or a state
+// nested below it — to a target in targetRegion, which is either sourceRegion
+// itself or a region concurrent with it. KerML's StateTransitionPerformance orders only
 // `guard then transitionLinkSource.exit`, so the state owning the regions is
 // neither exited nor re-entered and the regions holding neither endpoint keep
 // their active states.
-func (e *StateExecutor) moveBetweenRegions(sourceRegion, targetRegion *ast.StateRegion, trans *lower.Transition, target *ast.StateNode) error {
-	source := e.activeConfig.regionStates[sourceRegion]
-
+func (e *StateExecutor) moveBetweenRegions(
+	sourceRegion, targetRegion *ast.StateRegion,
+	source *ast.StateNode,
+	trans *lower.Transition,
+	target *ast.StateNode,
+) error {
 	// Entering the target replaces its region's active state, so that region is
 	// left only down to the deepest state it keeps active — its own boundary when
 	// it shares none with the target. The state owning the region stays active.
