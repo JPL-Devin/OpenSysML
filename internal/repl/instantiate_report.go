@@ -8,8 +8,9 @@ type InstantiationReport struct {
 	// were read: a default whose value count does not conform to the feature's
 	// multiplicity is one.
 	SlotErrors []string
-	// Bounded is true when materialization stopped at its budget, so the slots it
-	// did not reach were not checked rather than found clean.
+	// Bounded is true when materialization stopped short — at its budget, or at
+	// nesting it does not descend into — so the slots it did not reach were not
+	// checked rather than found clean.
 	Bounded bool
 }
 
@@ -42,5 +43,7 @@ func (s *Session) InstantiateReport(name string) (InstantiationReport, error) {
 		report.SlotErrors = append(report.SlotErrors, slotErr.Error())
 	}
 	report.Bounded = bounded
+	// The steps reading those slots are this object's, not the next command's.
+	report.Lines = append(report.Lines, s.drainTrace()...)
 	return report, nil
 }
