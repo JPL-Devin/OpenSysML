@@ -185,6 +185,75 @@ func TestOneEventTakesOneTransitionPerActiveLeaf(t *testing.T) {
 	assertCurrentState(t, exec, "Done")
 }
 
+// A change condition on a composite state is watched while a substate is active.
+// Polling is the driver of change triggers, so the test polls directly.
+func TestChangeConditionOnACompositeStateFiresWhileASubstateIsActive(t *testing.T) {
+	exec := stateExecutorForSource(t, "sm", `package test {
+		state sm {
+			attribute ready : Boolean = false;
+
+			initial start;
+			state Working {
+				state Step1;
+				accept when ready then Done;
+			}
+			state Done;
+			start then Step1;
+		}
+	}`)
+
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if err := exec.pollChangeEvents(); err != nil {
+		t.Fatalf("poll: %v", err)
+	}
+	assertCurrentState(t, exec, "Step1")
+
+	exec.stateData["ready"] = boolValue(true)
+	if err := exec.pollChangeEvents(); err != nil {
+		t.Fatalf("poll: %v", err)
+	}
+	assertCurrentState(t, exec, "Done")
+}
+
+// An enabled transition inside one region does not suppress the transition an
+// enclosing state offers a concurrent region: only the state a fired transition
+// left is disabled for this event.
+func TestOneRegionsInnerTransitionLeavesAConcurrentRegionsOwnTransition(t *testing.T) {
+	exec := stateExecutorForSource(t, "sm", `package test {
+		state sm {
+			initial start;
+			state Working {
+				region left {
+					initial lstart;
+					state l1;
+					state l2;
+
+					then lstart l1;
+					transition l1 to l2 accept e;
+				}
+
+				region right {
+					initial rstart;
+					state r1;
+					state r2;
+
+					then rstart r1;
+					transition r1 to r2 accept e;
+				}
+			}
+			start then Working;
+		}
+	}`)
+
+	exec.SendSignal("e", nil)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	assertVisits(t, exec.stateVisits, "start", "Working", "lstart", "rstart", "l1", "r1", "l2", "r2")
+}
+
 func assertCurrentState(t *testing.T, exec *StateExecutor, want string) {
 	t.Helper()
 	current, _ := exec.CurrentState().(*ast.StateNode)
