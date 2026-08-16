@@ -71,6 +71,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("duplicate_objects_of_one_declaration", testDuplicateObjectsOfOneDeclaration)
 	t.Run("duplicate_objects_holding_a_plain_part", testDuplicateObjectsHoldingAPlainPart)
 	t.Run("nested_part_held_with_a_multiplicity", testNestedPartHeldWithAMultiplicity)
+	t.Run("part_nested_inside_a_repeated_part", testPartNestedInsideARepeatedPart)
 	t.Run("requirement_feature_without_a_value", testRequirementFeatureWithoutAValue)
 	t.Run("requirement_features_valued_from_each_other", testRequirementFeaturesValuedFromEachOther)
 	t.Run("step_budget_exceeded", testStepBudgetExceeded)
@@ -2106,6 +2107,44 @@ func testNestedPartHeldWithAMultiplicity(t *testing.T) {
 	}
 	if satisfied {
 		t.Error("satisfied = true, want the wheels' 99.0 to violate the constraint")
+	}
+}
+
+// testPartNestedInsideARepeatedPart: the declaration a check names may sit
+// deeper inside the part a multiplicity repeated, and the objects reached along
+// one declaration path are still one subject rather than an ambiguity.
+func testPartNestedInsideARepeatedPart(t *testing.T) {
+	src := `
+		package test {
+			part def Bolt {
+				attribute torque = 99.0;
+				constraint tight { torque < 10.0 }
+			}
+			part def Wheel {
+				part bolt : Bolt;
+			}
+			part def Car {
+				part wheels : Wheel[4];
+			}
+			part car : Car;
+		}
+	`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	rootScope := idx.DocumentRoot("<test>")
+	if _, err := ctx.Instantiate(memberPath(t, rootScope, "test", "car")); err != nil {
+		t.Fatalf("instantiate car: %v", err)
+	}
+	tight := memberPath(t, rootScope, "test", "Bolt", "tight")
+	satisfied, err := ctx.EvaluateConstraint(tight, tight.OwnerScope)
+	if err != nil && !errors.Is(err, ErrViolated) {
+		t.Fatalf("EvaluateConstraint: %v", err)
+	}
+	if satisfied {
+		t.Error("satisfied = true, want the bolts' 99.0 to violate the constraint")
 	}
 }
 
