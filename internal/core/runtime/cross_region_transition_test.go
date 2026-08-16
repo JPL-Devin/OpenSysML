@@ -213,6 +213,53 @@ func TestCrossRegionTransitionFromDeeperRegionExitsUpToTheSharedLevel(t *testing
 	}
 }
 
+// The state owning the source's region may be a substate rather than a state of a
+// region: the concurrent region holding the target is still found, so it exits the
+// state it was running instead of keeping it beside the target.
+func TestCrossRegionTransitionFromARegionOwnedByASubstate(t *testing.T) {
+	exec := runStateMachine(t, "Machine", `package P {
+	state Machine {
+		attribute lidleExits : Integer = 0;
+		attribute midExits : Integer = 0;
+
+		initial init;
+		state running {
+			region left {
+				initial ls;
+				state lidle { exit { lidleExits = lidleExits + 1; } }
+				state lstate;
+				then ls lidle;
+			}
+			region right {
+				initial rs;
+				state wrapper {
+					state mid {
+						exit { midExits = midExits + 1; }
+
+						region inner {
+							initial is;
+							state ideep;
+							then is ideep;
+							transition ideep to lstate if lidleExits == 0;
+						}
+					}
+				}
+				then rs mid;
+			}
+		}
+
+		init then running;
+	}
+}`)
+
+	assertRegionConfig(t, exec, map[string]string{"left": "lstate"})
+	for _, name := range []string{"lidleExits", "midExits"} {
+		if got := intValue(t, exec.stateData, name); got != 1 {
+			t.Errorf("%s = %d, want 1", name, got)
+		}
+	}
+}
+
 // Exiting a state exits its subperformances, so a transition out of a nested
 // non-orthogonal state still exits every state up to the endpoints' least common
 // ancestor.

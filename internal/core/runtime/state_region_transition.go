@@ -219,9 +219,20 @@ func (e *StateExecutor) concurrentRegionsFor(region *ast.StateRegion, target *as
 		if owner == nil {
 			return nil, nil
 		}
-		current = e.graph.RegionOf[owner]
+		current = e.enclosingRegion(owner)
 	}
 	return nil, nil
+}
+
+// enclosingRegion returns the region state is declared in, or the one declaring
+// its nearest ancestor when state is a substate, and nil when neither is in one.
+func (e *StateExecutor) enclosingRegion(state *ast.StateNode) *ast.StateRegion {
+	for current := state; current != nil; current = e.graph.ParentState[current] {
+		if region := e.graph.RegionOf[current]; region != nil {
+			return region
+		}
+	}
+	return nil
 }
 
 // siblingRegionContaining returns the region concurrent with region — another of

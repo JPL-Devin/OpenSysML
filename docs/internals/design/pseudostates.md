@@ -395,7 +395,8 @@ state def RegionChoice {
   neither endpoint keep the states they were in, entry behaviors included. A
   target nested inside a composite state the target region is already running
   moves that inner region (`innermostActiveRegion`); a source nested deeper than
-  the target's region leaves its region set up to the level the two share.
+  the target's region leaves its region set up to the level the two share, which
+  `enclosingRegion` finds even when the region's owning state is a substate.
 - **`leaveRegion`** handles a branch ending outside every enclosing region set.
   The least common ancestor is then above the region set, so the whole set is
   left: every region is exited in declaration order — recording its
