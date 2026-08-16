@@ -333,6 +333,10 @@ var (
 	// unit can be rebuilt from the reduction naming it.
 	ErrUnknownBaseUnit = errors.New("unknown base unit")
 
+	// ErrNotAMeasurementUnit reports a reduction naming a symbol that is not a
+	// measurement unit, which nothing is measured in.
+	ErrNotAMeasurementUnit = errors.New("not a measurement unit")
+
 	// ErrUnitScaleUnusable reports a unit reduction whose scale is zero or
 	// undefined, which no magnitude can be converted through.
 	ErrUnitScaleUnusable = errors.New("unit scale is not a usable ratio")
@@ -343,19 +347,20 @@ var (
 )
 
 // ProtoToValueIn converts a protobuf Value to a runtime.Value in the model idx
-// describes, resolving a quantity's base units by name. Inverse of ValueToProto.
-func ProtoToValueIn(pv *pb.Value, idx *symbols.Index) (runtime.Value, error) {
+// and sem describe, resolving a quantity's base units against them. Inverse of
+// ValueToProto.
+func ProtoToValueIn(pv *pb.Value, idx *symbols.Index, sem *semantics.Model) (runtime.Value, error) {
 	if pv == nil {
 		return runtime.Value{Kind: runtime.ValNull}, nil
 	}
 	switch k := pv.GetKind().(type) {
 	case *pb.Value_Quantity:
-		return ProtoToQuantity(k.Quantity, idx)
+		return ProtoToQuantity(k.Quantity, idx, sem)
 	case *pb.Value_Sequence:
 		seq := runtime.NewSequence()
 		if k.Sequence != nil {
 			for _, elem := range k.Sequence.Elements {
-				val, err := ProtoToValueIn(elem, idx)
+				val, err := ProtoToValueIn(elem, idx, sem)
 				if err != nil {
 					return runtime.Value{}, err
 				}
@@ -370,17 +375,17 @@ func ProtoToValueIn(pv *pb.Value, idx *symbols.Index) (runtime.Value, error) {
 
 // ProtoToQuantity rebuilds a quantity from the wire: the magnitude as sent, in
 // the unit as written, over the base units idx resolves its reduction to.
-func ProtoToQuantity(pq *pb.Quantity, idx *symbols.Index) (runtime.Value, error) {
+func ProtoToQuantity(pq *pb.Quantity, idx *symbols.Index, sem *semantics.Model) (runtime.Value, error) {
 	if pq == nil {
 		return runtime.Value{Kind: runtime.ValNull}, nil
 	}
-	if idx == nil && len(pq.GetUnitTerm().GetFactors()) > 0 {
+	if (idx == nil || sem == nil) && len(pq.GetUnitTerm().GetFactors()) > 0 {
 		return runtime.Value{}, fmt.Errorf("%w: %s", ErrQuantityNeedsIndex, pq.GetUnit())
 	}
 	if pq.GetUnitTerm() == nil && pq.GetUnit() != "" {
 		return runtime.Value{}, fmt.Errorf("%w: %s", ErrUnitNotReduced, pq.GetUnit())
 	}
-	term, err := protoToUnitTerm(pq.GetUnitTerm(), idx)
+	term, err := protoToUnitTerm(pq.GetUnitTerm(), idx, sem)
 	if err != nil {
 		return runtime.Value{}, err
 	}
@@ -400,9 +405,10 @@ func ProtoToQuantity(pq *pb.Quantity, idx *symbols.Index) (runtime.Value, error)
 }
 
 // protoToUnitTerm rebuilds a unit's reduction, normalized so a term sent in any
-// factor order is commensurable with the same unit derived in the model. A base
-// unit the model does not declare uniquely is an error, not a factor over no symbol.
-func protoToUnitTerm(pt *pb.UnitTerm, idx *symbols.Index) (semantics.UnitTerm, error) {
+// factor order is commensurable with the same unit derived in the model. A name
+// the model does not declare uniquely as a measurement unit is an error, not a
+// factor over whatever symbol it happened to resolve to.
+func protoToUnitTerm(pt *pb.UnitTerm, idx *symbols.Index, sem *semantics.Model) (semantics.UnitTerm, error) {
 	if pt == nil {
 		// A magnitude sent under no unit at all: dimension one.
 		return semantics.UnitTerm{Scale: semantics.UnitScale(1)}, nil
@@ -413,9 +419,17 @@ func protoToUnitTerm(pt *pb.UnitTerm, idx *symbols.Index) (semantics.UnitTerm, e
 	}
 	term := semantics.UnitTerm{Scale: scale}
 	for _, f := range pt.GetFactors() {
+		// An empty name is a lookup of the document root, so it is rejected here
+		// rather than resolved to a symbol that measures nothing.
+		if f.GetUnitId() == "" {
+			return semantics.UnitTerm{}, fmt.Errorf("%w: unit factor names no unit", ErrUnknownBaseUnit)
+		}
 		matches := idx.LookupQualified(f.GetUnitId())
 		if len(matches) != 1 {
 			return semantics.UnitTerm{}, fmt.Errorf("%w: %s", ErrUnknownBaseUnit, f.GetUnitId())
+		}
+		if !sem.IsMeasurementUnit(matches[0]) {
+			return semantics.UnitTerm{}, fmt.Errorf("%w: %s", ErrNotAMeasurementUnit, f.GetUnitId())
 		}
 		term.Factors = append(term.Factors, semantics.UnitFactor{
 			Unit:     matches[0],

@@ -1141,8 +1141,9 @@ the `@type` mapping and the comparison choices.
   response that carried it; there is no RPC that fetches an instance by id later
 - a quantity crosses in both directions: every outbound path reads one, and an
   `ExecuteAction` input or `EvaluateCalc` argument carrying one is decoded against the
-  model's index (`ProtoToValueIn`), so an unresolvable unit is reported rather than bound
-  as an unusable value. The Python client has no quantity *encoder* yet, so a caller
+  model's index (`ProtoToValueIn`), so a unit that does not resolve — or resolves to
+  something that is not a measurement unit — is reported rather than bound as an
+  unusable value. The Python client has no quantity *encoder* yet, so a caller
   cannot send one until that lands with the rest of the Python API surface
 
 These are documented for transparency; none block production use.

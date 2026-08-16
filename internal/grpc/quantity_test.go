@@ -34,9 +34,9 @@ package P {
 }
 `
 
-// mustQuantityModel parses quantityModel and returns the service, the model hash
-// and the index the model's names resolve against.
-func mustQuantityModel(t *testing.T) (*Service, string, *symbols.Index) {
+// mustQuantityModel parses quantityModel and returns the service, the model hash,
+// the index the model's names resolve against and the semantics over it.
+func mustQuantityModel(t *testing.T) (*Service, string, *symbols.Index, *semantics.Model) {
 	t.Helper()
 
 	srv := mustNewService(t, 4)
@@ -56,7 +56,7 @@ func mustQuantityModel(t *testing.T) (*Service, string, *symbols.Index) {
 	if !ok {
 		t.Fatal("parsed model is not cached")
 	}
-	return srv, resp.ModelHash, cached.Index
+	return srv, resp.ModelHash, cached.Index, NewSymbolContext(cached.Index).Semantics
 }
 
 // mustEvaluateQuantity evaluates expr and returns the quantity it produced.
@@ -83,7 +83,7 @@ func mustEvaluateQuantity(t *testing.T, srv *Service, modelHash, expr string) *p
 // TestQuantityCrossesTheWire pins what a quantity carries: the magnitude in the
 // unit written, never reduced, plus the reduction that makes it comparable.
 func TestQuantityCrossesTheWire(t *testing.T) {
-	srv, modelHash, _ := mustQuantityModel(t)
+	srv, modelHash, _, _ := mustQuantityModel(t)
 
 	tests := []struct {
 		expr       string
@@ -130,7 +130,7 @@ func TestQuantityCrossesTheWire(t *testing.T) {
 // and comes back is the same quantity, unit included — same magnitude, same unit
 // as written, and a reduction over the very base-unit symbols it left with.
 func TestQuantityRoundTrip(t *testing.T) {
-	srv, modelHash, idx := mustQuantityModel(t)
+	srv, modelHash, idx, sem := mustQuantityModel(t)
 
 	for _, expr := range []string{
 		"5.0 [SI::kg]",
@@ -142,7 +142,7 @@ func TestQuantityRoundTrip(t *testing.T) {
 		t.Run(expr, func(t *testing.T) {
 			sent := mustEvaluateQuantity(t, srv, modelHash, expr)
 
-			val, err := ProtoToValueIn(&pb.Value{Kind: &pb.Value_Quantity{Quantity: sent}}, idx)
+			val, err := ProtoToValueIn(&pb.Value{Kind: &pb.Value_Quantity{Quantity: sent}}, idx, sem)
 			if err != nil {
 				t.Fatalf("ProtoToValueIn: %v", err)
 			}
@@ -161,7 +161,7 @@ func TestQuantityRoundTrip(t *testing.T) {
 				t.Errorf("reduction = %q, want %q",
 					describeUnitTerm(back.GetUnitTerm()), describeUnitTerm(sent.GetUnitTerm()))
 			}
-			if !val.Quantity.Unit.Term.Commensurable(mustUnitTerm(t, sent, idx)) {
+			if !val.Quantity.Unit.Term.Commensurable(mustUnitTerm(t, sent, idx, sem)) {
 				t.Error("round-tripped quantity is not commensurable with the one sent")
 			}
 		})
@@ -170,10 +170,10 @@ func TestQuantityRoundTrip(t *testing.T) {
 
 // mustUnitTerm rebuilds the unit term of sent, for comparing a round-trip
 // against a second, independent reconstruction.
-func mustUnitTerm(t *testing.T, sent *pb.Quantity, idx *symbols.Index) semantics.UnitTerm {
+func mustUnitTerm(t *testing.T, sent *pb.Quantity, idx *symbols.Index, sem *semantics.Model) semantics.UnitTerm {
 	t.Helper()
 
-	val, err := ProtoToQuantity(sent, idx)
+	val, err := ProtoToQuantity(sent, idx, sem)
 	if err != nil {
 		t.Fatalf("ProtoToQuantity: %v", err)
 	}
@@ -184,7 +184,7 @@ func mustUnitTerm(t *testing.T, sent *pb.Quantity, idx *symbols.Index) semantics
 // any order, a base unit repeated, an exponent that cancels — is commensurable
 // with the same unit the model derives, which compares factors element-wise.
 func TestQuantityFromWireIsNormalized(t *testing.T) {
-	srv, modelHash, idx := mustQuantityModel(t)
+	srv, modelHash, idx, sem := mustQuantityModel(t)
 	derived := mustEvaluateQuantity(t, srv, modelHash, "10.0 [SI::m] / 2.0 [SI::s]")
 
 	byHand := &pb.Quantity{
@@ -198,11 +198,11 @@ func TestQuantityFromWireIsNormalized(t *testing.T) {
 		}},
 	}
 
-	val, err := ProtoToQuantity(byHand, idx)
+	val, err := ProtoToQuantity(byHand, idx, sem)
 	if err != nil {
 		t.Fatalf("ProtoToQuantity: %v", err)
 	}
-	if !val.Quantity.Unit.Term.Commensurable(mustUnitTerm(t, derived, idx)) {
+	if !val.Quantity.Unit.Term.Commensurable(mustUnitTerm(t, derived, idx, sem)) {
 		t.Errorf("reduction = %s, want it commensurable with %s",
 			val.Quantity.Unit.Term, describeUnitTerm(derived.GetUnitTerm()))
 	}
@@ -211,10 +211,10 @@ func TestQuantityFromWireIsNormalized(t *testing.T) {
 // TestQuantityFromWireNeedsTheModel pins the two ways a quantity cannot be read
 // back: without the model's symbols, and over a base unit it does not declare.
 func TestQuantityFromWireNeedsTheModel(t *testing.T) {
-	srv, modelHash, idx := mustQuantityModel(t)
+	srv, modelHash, idx, sem := mustQuantityModel(t)
 	sent := mustEvaluateQuantity(t, srv, modelHash, "5.0 [SI::kg]")
 
-	if _, err := ProtoToQuantity(sent, nil); !errors.Is(err, ErrQuantityNeedsIndex) {
+	if _, err := ProtoToQuantity(sent, nil, nil); !errors.Is(err, ErrQuantityNeedsIndex) {
 		t.Errorf("without an index: err = %v, want ErrQuantityNeedsIndex", err)
 	}
 
@@ -223,7 +223,7 @@ func TestQuantityFromWireNeedsTheModel(t *testing.T) {
 		Unit:      "Made::up",
 		UnitTerm:  &pb.UnitTerm{ScaleNum: 1, ScaleDen: 1, Factors: []*pb.UnitFactor{{UnitId: "Made::up", Exponent: 1}}},
 	}
-	if _, err := ProtoToQuantity(unknown, idx); !errors.Is(err, ErrUnknownBaseUnit) {
+	if _, err := ProtoToQuantity(unknown, idx, sem); !errors.Is(err, ErrUnknownBaseUnit) {
 		t.Errorf("over an undeclared base unit: err = %v, want ErrUnknownBaseUnit", err)
 	}
 
@@ -233,22 +233,49 @@ func TestQuantityFromWireNeedsTheModel(t *testing.T) {
 			Unit:      "SI::m",
 			UnitTerm:  scale,
 		}
-		if _, err := ProtoToQuantity(unusable, idx); !errors.Is(err, ErrUnitScaleUnusable) {
+		if _, err := ProtoToQuantity(unusable, idx, sem); !errors.Is(err, ErrUnitScaleUnusable) {
 			t.Errorf("over scale %g/%g: err = %v, want ErrUnitScaleUnusable",
 				scale.ScaleNum, scale.ScaleDen, err)
 		}
 	}
 
 	noMagnitude := &pb.Quantity{Unit: "SI::kg"}
-	if _, err := ProtoToQuantity(noMagnitude, idx); err == nil {
+	if _, err := ProtoToQuantity(noMagnitude, idx, sem); err == nil {
 		t.Error("a quantity with no magnitude must be reported, not read as zero")
+	}
+}
+
+// TestQuantityOverSomethingThatIsNotAUnit pins that a reduction is only accepted
+// over measurement units: a name resolving to a part, or to nothing at all, is
+// rejected rather than measured in.
+func TestQuantityOverSomethingThatIsNotAUnit(t *testing.T) {
+	_, _, idx, sem := mustQuantityModel(t)
+
+	overAPart := &pb.Quantity{
+		Magnitude: &pb.Quantity_RealMagnitude{RealMagnitude: 1},
+		Unit:      "P::Car",
+		UnitTerm:  &pb.UnitTerm{ScaleNum: 1, ScaleDen: 1, Factors: []*pb.UnitFactor{{UnitId: "P::Car", Exponent: 1}}},
+	}
+	if _, err := ProtoToQuantity(overAPart, idx, sem); !errors.Is(err, ErrNotAMeasurementUnit) {
+		t.Errorf("over a part: err = %v, want ErrNotAMeasurementUnit", err)
+	}
+
+	// An empty name is a lookup of the document root, which would otherwise
+	// resolve to exactly one symbol and pass as a base unit.
+	unnamed := &pb.Quantity{
+		Magnitude: &pb.Quantity_RealMagnitude{RealMagnitude: 1},
+		Unit:      "made up",
+		UnitTerm:  &pb.UnitTerm{ScaleNum: 1, ScaleDen: 1, Factors: []*pb.UnitFactor{{Exponent: 1}}},
+	}
+	if _, err := ProtoToQuantity(unnamed, idx, sem); !errors.Is(err, ErrUnknownBaseUnit) {
+		t.Errorf("over an unnamed factor: err = %v, want ErrUnknownBaseUnit", err)
 	}
 }
 
 // TestQuantitySlotsAndNestedQuantities drives Instantiate: every quantity slot
 // of a part, and the quantity inside the part it holds, cross as quantities.
 func TestQuantitySlotsAndNestedQuantities(t *testing.T) {
-	srv, modelHash, _ := mustQuantityModel(t)
+	srv, modelHash, _, _ := mustQuantityModel(t)
 
 	resp, err := srv.Instantiate(context.Background(), &pb.InstantiateRequest{
 		ModelHash: modelHash,
@@ -308,19 +335,19 @@ func TestQuantitySlotsAndNestedQuantities(t *testing.T) {
 // TestQuantityWithoutItsReduction pins that a named unit sent with no reduction
 // is rejected: dimension one would make it commensurable with a bare number.
 func TestQuantityWithoutItsReduction(t *testing.T) {
-	_, _, idx := mustQuantityModel(t)
+	_, _, idx, sem := mustQuantityModel(t)
 
 	unreduced := &pb.Quantity{
 		Magnitude: &pb.Quantity_RealMagnitude{RealMagnitude: 5},
 		Unit:      "Furlongs::furlong",
 	}
-	if _, err := ProtoToQuantity(unreduced, idx); !errors.Is(err, ErrUnitNotReduced) {
+	if _, err := ProtoToQuantity(unreduced, idx, sem); !errors.Is(err, ErrUnitNotReduced) {
 		t.Errorf("error = %v, want %v", err, ErrUnitNotReduced)
 	}
 
 	// A magnitude under no unit at all is dimension one, which is what it says.
 	dimensionless := &pb.Quantity{Magnitude: &pb.Quantity_RealMagnitude{RealMagnitude: 5}}
-	val, err := ProtoToQuantity(dimensionless, idx)
+	val, err := ProtoToQuantity(dimensionless, idx, sem)
 	if err != nil {
 		t.Fatalf("ProtoToQuantity: %v", err)
 	}

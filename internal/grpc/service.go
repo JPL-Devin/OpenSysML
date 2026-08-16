@@ -353,7 +353,7 @@ func (s *Service) ExecuteAction(ctx context.Context, req *pb.ExecuteActionReques
 	if len(req.Inputs) > 0 {
 		inputs = make(map[string]runtime.Value, len(req.Inputs))
 		for name, pv := range req.Inputs {
-			val, cerr := ProtoToValueIn(pv, cached.Index)
+			val, cerr := ProtoToValueIn(pv, cached.Index, semModel)
 			if cerr != nil {
 				return &pb.ExecuteActionResponse{
 					Error: fmt.Sprintf("input %q could not be read: %v", name, cerr),
