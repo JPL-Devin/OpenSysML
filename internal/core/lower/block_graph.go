@@ -113,7 +113,8 @@ func lowerBlockFlow(members []ast.Node, scope *symbols.Scope, nodeBody bool) *Ac
 		graph.Bodies[run] = append(graph.Bodies[run], stmt)
 	}
 
-	graph.Connections = lowerConnections(members, OwnerBehavior)
+	// A block states no connections of its own: a connector written among its
+	// members stays a statement, reported when reached.
 	if len(graph.Nodes) > 0 {
 		graph.Initial = graph.Nodes[0]
 	}
