@@ -142,8 +142,11 @@ def test_element_type_quantity_is_a_quantity_naming_its_unit():
     assert mapped.decoder == "_t.as_quantity"
     assert "kg" in mapped.comment
 
-    unitless = element_type(TypeFacts(primitive="Real", quantity=True), {})
-    assert unitless.annotation == "_t.Quantity"
+    # A quantity value type says nothing about what was written for it: such a
+    # slot may hold a plain number or a structured value.
+    no_unit = element_type(TypeFacts(primitive="Real", quantity=True), {})
+    assert no_unit.annotation == "object"
+    assert no_unit.decoder == "_t.as_object"
 
 
 def test_element_type_unresolved_and_untyped():

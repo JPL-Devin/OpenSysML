@@ -336,6 +336,10 @@ var (
 	// ErrUnitScaleUnusable reports a unit reduction whose scale is zero or
 	// undefined, which no magnitude can be converted through.
 	ErrUnitScaleUnusable = errors.New("unit scale is not a usable ratio")
+
+	// ErrUnitNotReduced reports a named unit sent without its reduction, over
+	// which alone commensurability is decided.
+	ErrUnitNotReduced = errors.New("unit carries no reduction to base units")
 )
 
 // ProtoToValueIn converts a protobuf Value to a runtime.Value in the model idx
@@ -373,6 +377,9 @@ func ProtoToQuantity(pq *pb.Quantity, idx *symbols.Index) (runtime.Value, error)
 	if idx == nil && len(pq.GetUnitTerm().GetFactors()) > 0 {
 		return runtime.Value{}, fmt.Errorf("%w: %s", ErrQuantityNeedsIndex, pq.GetUnit())
 	}
+	if pq.GetUnitTerm() == nil && pq.GetUnit() != "" {
+		return runtime.Value{}, fmt.Errorf("%w: %s", ErrUnitNotReduced, pq.GetUnit())
+	}
 	term, err := protoToUnitTerm(pq.GetUnitTerm(), idx)
 	if err != nil {
 		return runtime.Value{}, err
@@ -397,7 +404,7 @@ func ProtoToQuantity(pq *pb.Quantity, idx *symbols.Index) (runtime.Value, error)
 // unit the model does not declare uniquely is an error, not a factor over no symbol.
 func protoToUnitTerm(pt *pb.UnitTerm, idx *symbols.Index) (semantics.UnitTerm, error) {
 	if pt == nil {
-		// A unit the service could not reduce; dimension one describes no base unit.
+		// A magnitude sent under no unit at all: dimension one.
 		return semantics.UnitTerm{Scale: semantics.UnitScale(1)}, nil
 	}
 	scale := semantics.Scale{Num: pt.GetScaleNum(), Den: pt.GetScaleDen()}

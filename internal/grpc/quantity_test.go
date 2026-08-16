@@ -305,6 +305,30 @@ func TestQuantitySlotsAndNestedQuantities(t *testing.T) {
 	}
 }
 
+// TestQuantityWithoutItsReduction pins that a named unit sent with no reduction
+// is rejected: dimension one would make it commensurable with a bare number.
+func TestQuantityWithoutItsReduction(t *testing.T) {
+	_, _, idx := mustQuantityModel(t)
+
+	unreduced := &pb.Quantity{
+		Magnitude: &pb.Quantity_RealMagnitude{RealMagnitude: 5},
+		Unit:      "Furlongs::furlong",
+	}
+	if _, err := ProtoToQuantity(unreduced, idx); !errors.Is(err, ErrUnitNotReduced) {
+		t.Errorf("error = %v, want %v", err, ErrUnitNotReduced)
+	}
+
+	// A magnitude under no unit at all is dimension one, which is what it says.
+	dimensionless := &pb.Quantity{Magnitude: &pb.Quantity_RealMagnitude{RealMagnitude: 5}}
+	val, err := ProtoToQuantity(dimensionless, idx)
+	if err != nil {
+		t.Fatalf("ProtoToQuantity: %v", err)
+	}
+	if len(val.Quantity.Unit.Term.Factors) != 0 {
+		t.Errorf("factors = %v, want none", val.Quantity.Unit.Term.Factors)
+	}
+}
+
 // TestQuantityAsAnActionInput drives ExecuteAction with a quantity input: it is
 // decoded against the model, and one that cannot be read is reported by name.
 func TestQuantityAsAnActionInput(t *testing.T) {

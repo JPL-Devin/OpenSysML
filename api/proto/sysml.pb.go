@@ -2780,7 +2780,8 @@ type Quantity struct {
 	// one never written down, described by unit_term alone.
 	Unit string `protobuf:"bytes,3,opt,name=unit,proto3" json:"unit,omitempty"`
 	// What the unit reduces to, which decides commensurability and conversion.
-	// Absent for a unit whose reduction the service could not derive.
+	// Required wherever `unit` names one: a named unit sent without its reduction
+	// is rejected rather than read as dimension one.
 	UnitTerm      *UnitTerm `protobuf:"bytes,4,opt,name=unit_term,json=unitTerm,proto3" json:"unit_term,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

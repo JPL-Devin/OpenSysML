@@ -428,7 +428,8 @@ message Quantity {
   // one never written down, described by unit_term alone.
   string unit = 3;
   // What the unit reduces to, which decides commensurability and conversion.
-  // Absent for a unit whose reduction the service could not derive.
+  // Required wherever `unit` names one: a named unit sent without its reduction
+  // is rejected rather than read as dimension one.
   UnitTerm unit_term = 4;
 }
 
