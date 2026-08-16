@@ -92,6 +92,12 @@ This directory contains behavioral execution conformance tests. Each test consis
 
 - `bindings`: variable bindings for constraint evaluation
 - `satisfied`: boolean, whether constraint is satisfied
+- `evaluate`: qualified name of the constraint to evaluate, for a case declaring
+  more than one. Omit to search the model for the first one.
+- `instantiate`: qualified name of an object to materialize before evaluating,
+  for a case whose contract is the subject the runtime picks — a condition of a
+  nested definition is about the object redefining that nested feature. Omit for
+  a case about the declaration.
 
 ### For Requirements (`EvaluateRequirement`)
 

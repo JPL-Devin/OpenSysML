@@ -66,6 +66,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("collection_spends_the_element_budget", testCollectionSpendsTheElementBudget)
 	t.Run("usage_read_through_a_part_without_an_output", testUsageReadThroughAPartWithoutAnOutput)
 	t.Run("constraint_missing_feature", testConstraintMissingFeature)
+	t.Run("nested_condition_subject_is_ambiguous", testNestedConditionSubjectIsAmbiguous)
 	t.Run("requirement_feature_without_a_value", testRequirementFeatureWithoutAValue)
 	t.Run("requirement_features_valued_from_each_other", testRequirementFeaturesValuedFromEachOther)
 	t.Run("step_budget_exceeded", testStepBudgetExceeded)
@@ -1899,6 +1900,48 @@ func testConstraintMissingFeature(t *testing.T) {
 	}
 
 	t.Log("EvaluateConstraint returned true (missing feature tolerated)")
+}
+
+// testNestedConditionSubjectIsAmbiguous: two objects redefining the same nested
+// feature differently make the subject of a check a question, reported as
+// ErrAmbiguousSubject rather than answered from whichever object is found first.
+func testNestedConditionSubjectIsAmbiguous(t *testing.T) {
+	src := `
+		package test {
+			part def Leaf {
+				attribute value = 1.0;
+				constraint small { value < 10.0 }
+			}
+			part def Top {
+				part leaf : Leaf;
+			}
+			part slow : Top {
+				part :>> leaf { attribute :>> value = 2.0; }
+			}
+			part fast : Top {
+				part :>> leaf { attribute :>> value = 99.0; }
+			}
+		}
+	`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	rootScope := idx.DocumentRoot("<test>")
+	for _, name := range []string{"slow", "fast"} {
+		if _, err := ctx.Instantiate(memberPath(t, rootScope, "test", name)); err != nil {
+			t.Fatalf("instantiate %s: %v", name, err)
+		}
+	}
+	small := memberPath(t, rootScope, "test", "Leaf", "small")
+	satisfied, err := ctx.EvaluateConstraint(small, small.OwnerScope)
+	if !errors.Is(err, ErrAmbiguousSubject) {
+		t.Fatalf("satisfied = %t, err = %v, want ErrAmbiguousSubject", satisfied, err)
+	}
+	if satisfied {
+		t.Error("an ambiguous subject is no verdict")
+	}
 }
 
 // testRequirementFeatureWithoutAValue: a condition naming a feature the

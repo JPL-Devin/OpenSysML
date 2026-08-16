@@ -1,13 +1,19 @@
 package runtime
 
 import (
+	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
+
+// ErrAmbiguousSubject is returned when more than one object carries the checked
+// element, so which one the verdict would be about is a question, not an answer.
+var ErrAmbiguousSubject = errors.New("ambiguous subject")
 
 // condition is one boolean check a constraint or requirement states, with the
 // scope its expression resolves names in. A condition states either an
@@ -129,6 +135,10 @@ func (ctx *Context) evaluateConditions(check conditionCheck, conds []condition) 
 		return false, fmt.Errorf("%s %s: %w", check.kind, check.name(), ErrNoConditions)
 	}
 	features := ctx.conditionFeatures(check.sym)
+	self, err := ctx.conditionSubject(check.sym, check.self)
+	if err != nil {
+		return false, fmt.Errorf("%s %s: %w", check.kind, check.name(), err)
+	}
 	// One check is one evaluation: its conditions share what a calc usage they
 	// read answers, and the next check reads it again.
 	activation, endStep := ctx.beginStep()
@@ -136,7 +146,7 @@ func (ctx *Context) evaluateConditions(check conditionCheck, conds []condition) 
 	required := false
 	for _, cond := range conds {
 		required = required || cond.required
-		holds, err := ctx.conditionHolds(activation, cond, features, check.self, check.bindings)
+		holds, err := ctx.conditionHolds(activation, cond, features, self, check.bindings)
 		if err != nil {
 			return false, fmt.Errorf("%s %s: %s evaluation failed: %w", check.kind, check.name(), check.what, err)
 		}
@@ -158,6 +168,163 @@ func (ctx *Context) evaluateConditions(check conditionCheck, conds []condition) 
 		return false, &ViolationError{Kind: check.kind, Element: check.name(), What: check.what, Condition: negatedText(conds)}
 	}
 	return true, nil
+}
+
+// conditionSubject is the object a check is about: the one supplied when it
+// carries the checked element, else the single object of this runtime that does.
+// A nested object counts, since a redefinition on an object gives a nested
+// feature values of its own; no such object leaves the check about the
+// declaration.
+func (ctx *Context) conditionSubject(sym *symbols.Symbol, self *Instance) (*Instance, error) {
+	owner := declaringType(sym)
+	if owner == nil {
+		return self, nil
+	}
+	roots := []*Instance{self}
+	if self == nil {
+		roots = ctx.rootInstances()
+	} else if ctx.model.Conforms(self.Type, owner) {
+		return self, nil
+	}
+	carriers := ctx.carriersUnder(roots, owner)
+	switch len(carriers) {
+	case 0:
+		return self, nil
+	case 1:
+		return carriers[0], nil
+	}
+	return nil, fmt.Errorf("%w: %s is carried by %s: check it on one of them",
+		ErrAmbiguousSubject, sym.Name, strings.Join(objectLabels(carriers), ", "))
+}
+
+// declaringType is the type whose objects carry sym, nil when sym is declared
+// somewhere that has no objects — a package, a library namespace.
+func declaringType(sym *symbols.Symbol) *symbols.Symbol {
+	if sym == nil || sym.OwnerScope == nil {
+		return nil
+	}
+	owner := sym.OwnerScope.Owner()
+	if owner == nil {
+		return nil
+	}
+	switch owner.Decl.(type) {
+	case *ast.Definition, *ast.Usage:
+		return owner
+	}
+	return nil
+}
+
+// rootInstances returns the objects this runtime holds that materialize a
+// declaration of their own, in identity order: an object of a nested feature is
+// reached through the object holding it, and one a value expression materialized
+// to read through is an occurrence of nothing.
+func (ctx *Context) rootInstances() []*Instance {
+	out := make([]*Instance, 0, len(ctx.instances))
+	for _, inst := range ctx.instances {
+		if inst == nil || declaringType(inst.Type) != nil {
+			continue
+		}
+		out = append(out, inst)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
+}
+
+// carriersUnder returns the objects reachable from roots whose type carries the
+// features owner declares, roots included, in identity order.
+func (ctx *Context) carriersUnder(roots []*Instance, owner *symbols.Symbol) []*Instance {
+	var out []*Instance
+	seen := make(map[int64]bool, len(roots))
+	for queue := roots; len(queue) > 0; queue = queue[1:] {
+		inst := queue[0]
+		if inst == nil || seen[inst.ID] {
+			continue
+		}
+		seen[inst.ID] = true
+		if ctx.model.Conforms(inst.Type, owner) {
+			out = append(out, inst)
+		}
+		queue = append(queue, ctx.nestedObjects(inst)...)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
+}
+
+// nestedObjects returns the objects the object-valued features of inst hold,
+// materializing a lazy one as reading its slot does. A slot that cannot be read
+// yields no object: one that is not there is no subject either.
+func (ctx *Context) nestedObjects(inst *Instance) []*Instance {
+	features := ctx.FeaturesOf(inst.Type)
+	var out []*Instance
+	for i := range features {
+		feat := &features[i]
+		if feat.Name == "" || !holdsObjects(feat) {
+			continue
+		}
+		slot, err := inst.GetSlot(ctx, feat.Name)
+		if err != nil || slot == nil {
+			continue
+		}
+		for _, id := range heldObjects(slot.HeldValue()) {
+			if child, ok := ctx.instances[id]; ok {
+				out = append(out, child)
+			}
+		}
+	}
+	return out
+}
+
+// holdsObjects reports whether a feature holds objects rather than values: a
+// nested part has features and conditions of its own, an attribute has neither.
+func holdsObjects(feat *EffectiveFeature) bool {
+	if feat.Symbol == nil {
+		return false
+	}
+	usage, ok := feat.Symbol.Decl.(*ast.Usage)
+	if !ok {
+		return false
+	}
+	switch usage.Kind {
+	case ast.UsagePart, ast.UsageItem, ast.UsageOccurrence, ast.UsageIndividual, ast.UsagePort:
+		return true
+	}
+	return false
+}
+
+// heldObjects returns the identities a slot value denotes, a collection's
+// elements included.
+func heldObjects(val Value) []int64 {
+	if id, ok := val.Object(); ok {
+		return []int64{id}
+	}
+	var elements []Value
+	switch {
+	case val.Kind == ValSequence && val.Sequence != nil:
+		elements = val.Sequence.Elements()
+	case val.Kind == ValSet && val.Set != nil:
+		elements = val.Set.Elements()
+	}
+	var out []int64
+	for _, element := range elements {
+		if id, ok := element.Object(); ok {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+// objectLabels names objects as a diagnostic can quote them: their type and
+// identity, since an object of a nested part has no name of its own.
+func objectLabels(instances []*Instance) []string {
+	out := make([]string, 0, len(instances))
+	for _, inst := range instances {
+		name := "object"
+		if inst.Type != nil && inst.Type.Name != "" {
+			name = inst.Type.Name
+		}
+		out = append(out, fmt.Sprintf("%s #%d", name, inst.ID))
+	}
+	return out
 }
 
 // conditionHolds evaluates one condition: an expression, or a group that holds
