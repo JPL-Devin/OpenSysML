@@ -145,6 +145,20 @@ func TestStreamsAndStatus(t *testing.T) {
 		stderr:   []string{"sysml: unknown format \"nosuchformat\""},
 		emptyOut: true,
 	}, {
+		name:   "a model that asserts no satisfaction leaves the check undecided",
+		model:  warningModel,
+		args:   []string{"-satisfy"},
+		status: exitUnevaluable,
+		stderr: []string{"sysml: no satisfaction assertion in the session"},
+		absent: []string{"sysml: error:", "error: no satisfaction assertion"},
+	}, {
+		name:   "an element that asserts no satisfaction is reported the same way",
+		model:  checkModel,
+		args:   []string{"-satisfy=Rover::Battery"},
+		status: exitUnevaluable,
+		stderr: []string{"sysml: no satisfaction assertion in Rover::Battery"},
+		absent: []string{"sysml: error:", "error: no satisfaction assertion"},
+	}, {
 		name:      "the help asked for is a result on stdout",
 		model:     checkModel,
 		args:      []string{"-h"},

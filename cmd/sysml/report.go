@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/repl"
@@ -17,18 +18,52 @@ const (
 	promptPrefix  = "error: "
 )
 
-// asCommandProblem restates the lines of a check that could not be made in the
-// command's prefix. A line locating a finding in the source
-// (`model.sysml:1:42: error: …`) is about the model, and keeps its own shape.
+// locatesSource matches a line that locates a finding in the model source, as
+// `model.sysml:1:42: …` does. tracePrefix marks a step of the run the prompt
+// recorded, which states nothing about the check.
+var locatesSource = regexp.MustCompile(`^[^\s:]+:\d+:\d+: `)
+
+const tracePrefix = "[trace] "
+
+// asCommandProblem states a check that could not be made under the command's
+// prefix, in place of the prompt's, whether or not the prompt gave it one. A line
+// locating a finding in the source, and the lines of a run that stopped, keep
+// their own shape.
 func asCommandProblem(lines []string) []string {
 	out := make([]string, 0, len(lines))
+	restated := false
 	for _, line := range lines {
 		if rest, ok := strings.CutPrefix(line, promptPrefix); ok {
-			line = commandPrefix + rest
+			line, restated = commandPrefix+rest, true
 		}
 		out = append(out, line)
 	}
+	if i := loneStatement(out); !restated && i >= 0 {
+		out[i] = commandPrefix + out[i]
+	}
 	return out
+}
+
+// loneStatement is where a verdict states its outcome in a single line of its
+// own, or -1 when its lines are a run's own output instead.
+func loneStatement(lines []string) int {
+	found := -1
+	for i, line := range lines {
+		if strings.HasPrefix(line, tracePrefix) {
+			continue
+		}
+		if found >= 0 || locatesSource.MatchString(line) {
+			return -1
+		}
+		found = i
+	}
+	return found
+}
+
+// asCommandFailure states a failure under the command's prefix, in place of the
+// prompt's when the failure is already phrased the way the prompt phrases it.
+func asCommandFailure(message string) string {
+	return commandPrefix + strings.TrimPrefix(message, promptPrefix)
 }
 
 // reporter collects what a check mode run decided and reports it, either as the
@@ -140,7 +175,7 @@ func (r *reporter) problem(lines []string) {
 func (r *reporter) failed(message string) {
 	r.report.Errors = append(r.report.Errors, message)
 	if !r.json {
-		fmt.Fprintln(r.err, commandPrefix+message)
+		fmt.Fprintln(r.err, asCommandFailure(message))
 	}
 }
 

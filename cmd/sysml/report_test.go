@@ -10,7 +10,7 @@ import (
 
 // TestUndecidedVerdictTakesTheCommandPrefix checks the boundary the command
 // reports a verdict through: whatever the prompt renders a check it could not
-// make as, the command reports it under its own prefix, on stderr.
+// make as, the command reports it under its own prefix once, on stderr.
 func TestUndecidedVerdictTakesTheCommandPrefix(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -29,9 +29,25 @@ func TestUndecidedVerdictTakesTheCommandPrefix(t *testing.T) {
 		lines: []string{"model.sysml:1:42: error: unresolved reference: Nope"},
 		want:  []string{"model.sysml:1:42: error: unresolved reference: Nope"},
 	}, {
-		name:  "a line that says error of something else is not a prefix",
+		name:  "a line that says error of something else keeps saying it",
 		lines: []string{"the error: state was never reached"},
-		want:  []string{"the error: state was never reached"},
+		want:  []string{"sysml: the error: state was never reached"},
+	}, {
+		name:  "a check the prompt states with no prefix still takes the command's",
+		lines: []string{"no satisfaction assertion in the session"},
+		want:  []string{"sysml: no satisfaction assertion in the session"},
+	}, {
+		name:  "the same check phrased as the prompt phrases it reads the same",
+		lines: []string{"error: no satisfaction assertion in the session"},
+		want:  []string{"sysml: no satisfaction assertion in the session"},
+	}, {
+		name:  "what a run printed before it stopped is not restated",
+		lines: []string{"✓ action Mission::Descend started", "error: action stopped at Falling without completing"},
+		want:  []string{"✓ action Mission::Descend started", "sysml: action stopped at Falling without completing"},
+	}, {
+		name:  "a trace of the run does not make its statement one line among many",
+		lines: []string{"[trace] step 1: Descend", "no satisfaction assertion in the session"},
+		want:  []string{"[trace] step 1: Descend", "sysml: no satisfaction assertion in the session"},
 	}}
 
 	for _, tc := range cases {
