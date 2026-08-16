@@ -447,17 +447,20 @@ func (e *StateExecutor) recallDeferredEvents() {
 // the innermost enabled transition priority: an enclosing state's transition is
 // suppressed once a transition inside it fired for this event, while orthogonal
 // regions still react independently.
+// Run-to-completion bounds a dispatch: only the leaves active when it began are
+// offered the event, each taking at most one transition.
 func (e *StateExecutor) broadcastEvent(event *Event) (bool, error) {
 	consumed := false
 	var fired []*ast.StateNode
 	offered := make(map[*ast.StateNode]bool)
+	reacted := make(map[*ast.StateNode]bool)
+	leaves := e.activeLeaves()
 
-	for depth := e.deepestActiveDepth(); depth >= 0; depth-- {
+	for depth := deepestDepth(e.parentChains(leaves)); depth >= 0; depth-- {
 		// A leaf may be left by another leaf's reaction to this event, and must not
-		// react once it has been: the configuration is read again at each depth and
-		// each leaf is checked again before it is offered the event.
-		for _, leaf := range e.activeLeaves() {
-			if !e.isActive(leaf) {
+		// react once it has been, so each leaf is checked again at every depth.
+		for _, leaf := range leaves {
+			if reacted[leaf] || !e.isActive(leaf) {
 				continue
 			}
 			source := ancestorAtDepth(e.getParentChain(leaf), depth)
@@ -472,12 +475,15 @@ func (e *StateExecutor) broadcastEvent(event *Event) (bool, error) {
 			if trans == nil {
 				continue
 			}
-			// Run-to-completion: one transition per active leaf per event.
 			if err := e.fireFrom(source, trans); err != nil {
 				return consumed, fmt.Errorf("fire transition out of %s: %w", source.Name, err)
 			}
 			fired = append(fired, source)
+			reacted[leaf] = true
 			consumed = true
+			if e.state == StateCompleted {
+				return consumed, nil
+			}
 		}
 	}
 	return consumed, nil
@@ -497,12 +503,21 @@ func (e *StateExecutor) activeLeaves() []*ast.StateNode {
 	return leaves
 }
 
-// deepestActiveDepth returns the nesting depth of the deepest active leaf, zero
-// when nothing is active.
-func (e *StateExecutor) deepestActiveDepth() int {
+// parentChains returns the parent chain of each state, innermost first.
+func (e *StateExecutor) parentChains(states []*ast.StateNode) [][]*ast.StateNode {
+	chains := make([][]*ast.StateNode, 0, len(states))
+	for _, state := range states {
+		chains = append(chains, e.getParentChain(state))
+	}
+	return chains
+}
+
+// deepestDepth returns the nesting depth of the deepest of the given parent
+// chains, zero when there are none.
+func deepestDepth(chains [][]*ast.StateNode) int {
 	deepest := 0
-	for _, leaf := range e.activeLeaves() {
-		if depth := len(e.getParentChain(leaf)) - 1; depth > deepest {
+	for _, chain := range chains {
+		if depth := len(chain) - 1; depth > deepest {
 			deepest = depth
 		}
 	}

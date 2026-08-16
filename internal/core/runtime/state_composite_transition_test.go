@@ -148,6 +148,43 @@ func TestEventNoLevelAcceptsLeavesTheConfigurationAlone(t *testing.T) {
 	}
 }
 
+// Run-to-completion: a state entered while an event is dispatched does not react
+// to that same event, even when it accepts it and lies outside the state that
+// just moved.
+func TestOneEventTakesOneTransitionPerActiveLeaf(t *testing.T) {
+	source := `package test {
+		state sm {
+			initial start;
+			state Working {
+				state Step1;
+			}
+			state Idle;
+			state Done;
+			start then Working::Step1;
+			transition Step1 to Idle accept e;
+			transition Idle to Done accept e;
+		}
+	}`
+
+	exec := stateExecutorForSource(t, "sm", source)
+	exec.SendSignal("e", nil)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	assertCurrentState(t, exec, "Idle")
+	if containsState(exec.stateVisits, "Done") {
+		t.Errorf("one event took two transitions, visits: %v", exec.stateVisits)
+	}
+
+	exec = stateExecutorForSource(t, "sm", source)
+	exec.SendSignal("e", nil)
+	exec.SendSignal("e", nil)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	assertCurrentState(t, exec, "Done")
+}
+
 func assertCurrentState(t *testing.T, exec *StateExecutor, want string) {
 	t.Helper()
 	current, _ := exec.CurrentState().(*ast.StateNode)
