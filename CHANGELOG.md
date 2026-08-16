@@ -70,6 +70,9 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 - `Model` gained `instantiate`, `execute_action` and `execute_state`, so every
   call taking a model hash is reachable on the model it is about. `pysysml`
   0.2.0 carries these.
+- `ChecksumMismatchError` is exported from `pysysml`, where it was reachable
+  only as `pysysml.errors.ChecksumMismatchError` while every other documented
+  exception was on the package.
 
 ### Documentation
 

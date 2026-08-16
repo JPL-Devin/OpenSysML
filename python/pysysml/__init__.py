@@ -17,7 +17,8 @@ from pysysml.conversion import (
     FORMAT_SYSML, FORMAT_TURTLE, Conversion, format_of_path,
 )
 from pysysml.errors import (
-    PySysMLError, ConnectionError, ConversionError, ExecutionError,
+    PySysMLError, ChecksumMismatchError, ConnectionError, ConversionError,
+    ExecutionError,
     InstanceTypeError, InvalidRequestError, ModelError,
     ModelFileNotFoundError, ModelNotFoundError, ServiceError,
     ServiceTimeoutError, SlotError, StaleServiceError, SymbolNotFoundError,
@@ -32,7 +33,8 @@ __all__ = [
     "Conversion", "FORMAT_SYSML", "FORMAT_TURTLE", "format_of_path",
     "Verdict", "CalcResult",
     "QueryElement", "QueryError",
-    "PySysMLError", "ConnectionError", "ConversionError", "ExecutionError",
+    "PySysMLError", "ChecksumMismatchError", "ConnectionError",
+    "ConversionError", "ExecutionError",
     "InstanceTypeError", "InvalidRequestError", "MissingCapabilityError",
     "ModelError", "ModelFileNotFoundError", "ModelNotFoundError",
     "ServiceError", "ServiceTimeoutError", "SlotError", "StaleServiceError",
