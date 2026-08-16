@@ -1,0 +1,141 @@
+package runtime
+
+import "testing"
+
+// A transition between two regions of one composite state exits its source only:
+// KerML StateTransitionPerformance orders `guard then transitionLinkSource.exit`,
+// so the composite state and the regions holding neither endpoint are untouched.
+func TestCrossRegionTransitionExitsSourceOnly(t *testing.T) {
+	exec := runStateMachine(t, "Machine", `package P {
+	state Machine {
+		attribute crossed : Integer = 0;
+		attribute sourceExits : Integer = 0;
+		attribute otherExits : Integer = 0;
+		attribute otherEntries : Integer = 0;
+		attribute runningExits : Integer = 0;
+
+		initial init;
+		state running {
+			exit { runningExits = runningExits + 1; }
+
+			region left {
+				initial ls;
+				state lidle { exit { sourceExits = sourceExits + 1; } }
+				then ls lidle;
+				transition lidle to rtarget if crossed == 0;
+			}
+			region right {
+				initial rs;
+				state ridle;
+				state rtarget { entry { crossed = crossed + 1; } }
+				then rs ridle;
+			}
+			region other {
+				initial os;
+				state oidle {
+					entry { otherEntries = otherEntries + 1; }
+					exit { otherExits = otherExits + 1; }
+				}
+				then os oidle;
+			}
+		}
+
+		init then running;
+	}
+}`)
+
+	assertRegionConfig(t, exec, map[string]string{"right": "rtarget", "other": "oidle"})
+	if got := countVisits(exec.stateVisits, "running"); got != 1 {
+		t.Errorf("running entered %d times, want 1 (the composite state is not re-entered)", got)
+	}
+	for name, want := range map[string]int64{
+		"crossed":      1,
+		"sourceExits":  1,
+		"otherEntries": 1,
+		"otherExits":   0,
+		"runningExits": 0,
+	} {
+		if got := intValue(t, exec.stateData, name); got != want {
+			t.Errorf("%s = %d, want %d", name, got, want)
+		}
+	}
+}
+
+// Exiting a state exits its subperformances, so a transition out of a nested
+// non-orthogonal state still exits every state up to the endpoints' least common
+// ancestor.
+func TestNestedTransitionExitsUpToTheLCA(t *testing.T) {
+	exec := runStateMachine(t, "Machine", `package P {
+	state Machine {
+		attribute innerExits : Integer = 0;
+		attribute outerExits : Integer = 0;
+
+		initial init;
+		state outer {
+			exit { outerExits = outerExits + 1; }
+
+			state inner { exit { innerExits = innerExits + 1; } }
+		}
+		state done;
+
+		init then inner;
+		transition inner to done;
+	}
+}`)
+
+	if len(exec.activeConfig.regionStates) != 0 {
+		t.Errorf("regions still active: %v", regionConfig(exec))
+	}
+	if got := exec.getCurrentState(); got == nil || got.Name != "done" {
+		t.Fatalf("current state = %v, want done", got)
+	}
+	for _, name := range []string{"innerExits", "outerExits"} {
+		if got := intValue(t, exec.stateData, name); got != 1 {
+			t.Errorf("%s = %d, want 1 (the nested state and its parent are both exited)", name, got)
+		}
+	}
+}
+
+// A transition out of a region whose target lies outside the composite state
+// still leaves the whole region set, sibling regions included.
+func TestTransitionOutOfCompositeStateExitsEveryRegion(t *testing.T) {
+	exec := runStateMachine(t, "Machine", `package P {
+	state Machine {
+		attribute leftExits : Integer = 0;
+		attribute rightExits : Integer = 0;
+		attribute runningExits : Integer = 0;
+
+		initial init;
+		state running {
+			exit { runningExits = runningExits + 1; }
+
+			region left {
+				initial ls;
+				state lidle { exit { leftExits = leftExits + 1; } }
+				then ls lidle;
+				transition lidle to done;
+			}
+			region right {
+				initial rs;
+				state ridle { exit { rightExits = rightExits + 1; } }
+				then rs ridle;
+			}
+		}
+		state done;
+
+		init then running;
+	}
+}`)
+
+	if len(exec.activeConfig.regionStates) != 0 {
+		t.Errorf("regions still active: %v", regionConfig(exec))
+	}
+	if got := exec.getCurrentState(); got == nil || got.Name != "done" {
+		t.Fatalf("current state = %v, want done", got)
+	}
+	for _, name := range []string{"leftExits", "rightExits", "runningExits"} {
+		if got := intValue(t, exec.stateData, name); got != 1 {
+			t.Errorf("%s = %d, want 1", name, got)
+		}
+	}
+}

@@ -32,6 +32,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("state_transition_endpoint_never_resolved", testStateTransitionEndpointNeverResolved)
 	t.Run("state_transition_without_a_target", testStateTransitionWithoutATarget)
 	t.Run("state_transition_effect_reads_an_unknown_feature", testStateTransitionEffectReadsAnUnknownFeature)
+	t.Run("state_cross_region_transitions_ping_pong", testStateCrossRegionTransitionsPingPong)
 	t.Run("sourceless_accept_at_top_level", testSourcelessAcceptAtTopLevel)
 	t.Run("calc_unbound_parameter", testCalcUnboundParameter)
 	t.Run("calc_too_many_arguments", testCalcTooManyArguments)
@@ -1030,6 +1031,49 @@ func testStateTransitionWithoutATarget(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "names no target") {
 		t.Errorf("expected a missing-target error, got: %v", err)
+	}
+}
+
+// testStateCrossRegionTransitionsPingPong: guardless successions crossing back
+// and forth between two regions never settle, so the event budget bounds the run
+// with a typed error instead of hanging.
+func testStateCrossRegionTransitionsPingPong(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			initial init;
+			state running {
+				region left {
+					initial ls;
+					state lidle;
+					then ls lidle;
+					transition lidle to rtarget;
+				}
+				region right {
+					initial rs;
+					state ridle;
+					state rtarget;
+					then rs ridle;
+					transition rtarget to lidle;
+				}
+			}
+			init then running;
+		}
+	}`)
+	exec.ctx.maxStateEvents = 50
+
+	done := make(chan error, 1)
+	go func() { done <- exec.RunToCompletion() }()
+	var err error
+	select {
+	case err = <-done:
+	case <-time.After(30 * time.Second):
+		t.Fatal("run to completion hangs on successions crossing between regions")
+	}
+	if err == nil {
+		t.Fatal("expected a budget error for cross-region successions that never settle")
+	}
+	if !strings.Contains(err.Error(), MaxStateEventsEnvVar) {
+		t.Errorf("error %q does not name %s", err, MaxStateEventsEnvVar)
 	}
 }
 

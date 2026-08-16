@@ -180,10 +180,10 @@ func TestRegionPseudostateLeavingEveryRegion(t *testing.T) {
 	}
 }
 
-// A branch into a sibling region of the same composite state re-enters that
-// state, so the regions the branch does not name restart at their initial
-// states: the transition's least common ancestor is above the whole region set.
-func TestRegionPseudostateIntoSiblingRegionRestartsRegions(t *testing.T) {
+// A branch into a sibling region of the same composite state exits its source
+// only — KerML StateTransitionPerformance orders `guard then
+// transitionLinkSource.exit` — so the state owning the regions is not re-entered.
+func TestRegionPseudostateIntoSiblingRegionExitsSourceOnly(t *testing.T) {
 	exec := runStateMachine(t, "Machine", `package P {
 	state Machine {
 		attribute x : Integer = 1;
@@ -210,12 +210,12 @@ func TestRegionPseudostateIntoSiblingRegionRestartsRegions(t *testing.T) {
 	}
 }`)
 
-	assertRegionConfig(t, exec, map[string]string{"left": "lstart", "right": "rtarget"})
-	if got := countVisits(exec.stateVisits, "running"); got != 2 {
-		t.Errorf("running entered %d times, want 2 (re-entered by the cross-region transition)", got)
+	assertRegionConfig(t, exec, map[string]string{"right": "rtarget"})
+	if got := countVisits(exec.stateVisits, "running"); got != 1 {
+		t.Errorf("running entered %d times, want 1 (the composite state is not re-entered)", got)
 	}
-	if got := countVisits(exec.stateVisits, "lstart"); got != 2 {
-		t.Errorf("lstart entered %d times, want 2 (its region restarts at its initial state)", got)
+	if got := countVisits(exec.stateVisits, "lstart"); got != 1 {
+		t.Errorf("lstart entered %d times, want 1 (the source region does not restart)", got)
 	}
 }
 
