@@ -4,6 +4,9 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/Open-MBEE/Systemica/internal/core/ast"
 )
 
 // TestUnimplementedOperatorReportsWhy requires an operator the runtime does not
@@ -21,5 +24,128 @@ func TestUnimplementedOperatorReportsWhy(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "runtime type") {
 		t.Fatalf("InvokeCalc: %v does not say what classification would need", err)
+	}
+}
+
+// strValue is a String runtime value, the representation of a string literal.
+func strValue(s string) Value { return Value{Kind: ValString, Str: s} }
+
+// evalStringExpr evaluates expr against string-valued attributes, on its own
+// goroutine so an evaluation that neither answers nor fails fails the test.
+func evalStringExpr(t *testing.T, expr string) (Value, error) {
+	t.Helper()
+	src := `
+package test {
+	attribute s = "abc";
+	attribute empty = "";
+	attribute accented = "héllo";
+	attribute three = 3;
+	attribute result = ` + expr + `;
+}`
+	model, resolver, root := parseAndBuildModel(t, src)
+	pkg, ok := root.LookupLocal("test")
+	if !ok || pkg == nil || pkg.Scope == nil {
+		t.Fatal("package test has no scope")
+	}
+	sym, ok := pkg.Scope.LookupLocal("result")
+	if !ok || sym == nil {
+		t.Fatal("attribute result not found")
+	}
+	decl, ok := sym.Decl.(*ast.Usage)
+	if !ok {
+		t.Fatalf("result declares %T, want a usage", sym.Decl)
+	}
+	ec := NewEvalContext(NewContext(model, resolver, 10000), pkg.Scope)
+
+	type outcome struct {
+		value Value
+		err   error
+	}
+	done := make(chan outcome, 1)
+	go func() {
+		got, err := ec.Eval(decl.Value)
+		done <- outcome{got, err}
+	}()
+	select {
+	case got := <-done:
+		return got.value, got.err
+	case <-time.After(10 * time.Second):
+		t.Fatalf("%s did not terminate", expr)
+		return Value{}, nil
+	}
+}
+
+// TestStringOperators pins the operators StringFunctions declares: '+'
+// concatenates, the four comparisons order strings by their characters, and
+// '==' specializes DataFunctions::'==', which answers for any pair of values.
+func TestStringOperators(t *testing.T) {
+	tests := []struct {
+		expr string
+		want Value
+	}{
+		{`s + "d"`, strValue("abcd")},
+		{`s + empty`, strValue("abc")},
+		{`empty + empty`, strValue("")},
+		{`accented + "!"`, strValue("héllo!")},
+		{`s + "d" + "e"`, strValue("abcde")},
+		{`s < "b"`, boolValue(true)},
+		{`s < "abc"`, boolValue(false)},
+		{`s <= "abc"`, boolValue(true)},
+		{`s > "abb"`, boolValue(true)},
+		{`s >= "abd"`, boolValue(false)},
+		{`empty < s`, boolValue(true)},
+		// A multi-byte character orders by its code point, above every ASCII one.
+		{`accented > "hello"`, boolValue(true)},
+		{`s == "abc"`, boolValue(true)},
+		{`s == "abd"`, boolValue(false)},
+		{`s != "abd"`, boolValue(true)},
+		// '==' is DataFunctions' equality over any values, so a String and an
+		// Integer are unequal rather than an error, and neither is coerced.
+		{`s == three`, boolValue(false)},
+		{`s != three`, boolValue(true)},
+		// Equality of strings is by characters, which is what a sequence
+		// membership test asks of them.
+		{`("a", "b")->includes("b")`, boolValue(true)},
+		{`("a", "b")->includes("c")`, boolValue(false)},
+		{`("a", "b")->equals(("a", "b"))`, boolValue(true)},
+		{`StringFunctions::'+'(s, "d")`, strValue("abcd")},
+		{`StringFunctions::'<'(s, "b")`, boolValue(true)},
+		{`StringFunctions::'>='(s, "abc")`, boolValue(true)},
+		{`StringFunctions::'=='(s, "abc")`, boolValue(true)},
+		{`StringFunctions::ToString(s)`, strValue("abc")},
+	}
+	for _, tt := range tests {
+		got, err := evalStringExpr(t, tt.expr)
+		if err != nil {
+			t.Errorf("%s: %v", tt.expr, err)
+			continue
+		}
+		if !valueEqual(got, tt.want) {
+			t.Errorf("%s = %v, want %v", tt.expr, got, tt.want)
+		}
+	}
+}
+
+// TestStringOperatorErrors pins that a string is not coerced: an operator the
+// library declares over two Strings reports an operand of another type.
+func TestStringOperatorErrors(t *testing.T) {
+	tests := []string{
+		`s + three`,
+		`three + s`,
+		`s < three`,
+		`three < s`,
+		`s <= three`,
+		`s > three`,
+		`s >= three`,
+		`s - "a"`,
+		`s * "a"`,
+		`StringFunctions::'+'(s, three)`,
+		`StringFunctions::'<'(three, s)`,
+	}
+	for _, expr := range tests {
+		got, err := evalStringExpr(t, expr)
+		if !errors.Is(err, ErrTypeMismatch) {
+			t.Errorf("%s = %v, %v, want ErrTypeMismatch", expr, got, err)
+		}
 	}
 }

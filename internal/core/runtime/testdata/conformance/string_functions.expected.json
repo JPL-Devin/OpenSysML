@@ -1,0 +1,8 @@
+{
+  "libraries": true,
+  "type": "calc",
+  "inputs": [
+    {"type": "String", "value": "héllo"}
+  ],
+  "result": {"type": "String", "value": "hé"}
+}
