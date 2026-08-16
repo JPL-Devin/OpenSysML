@@ -656,6 +656,14 @@ func runConstraintConformance(t *testing.T, ctx *Context, idx *symbols.Index, pa
 	rootScope := idx.DocumentRoot(path)
 	constraintSym := namedOrFoundSymbol(t, idx, expected.Evaluate, rootScope, ast.DefConstraint, ast.UsageConstraint)
 
+	// An object the case materializes first is what the check is about, for a
+	// case whose contract is the subject the runtime picks.
+	if expected.Instantiate != "" {
+		if _, err := ctx.Instantiate(oneSymbol(t, idx, expected.Instantiate)); err != nil {
+			t.Fatalf("instantiate %s: %v", expected.Instantiate, err)
+		}
+	}
+
 	// Apply bindings to context (if any)
 	if expected.Bindings != nil {
 		// Bindings need to be added to scope or instance

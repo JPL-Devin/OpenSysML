@@ -118,8 +118,13 @@ top-level one is. `instantiate` names an instance case's type the same way.
 
 - `bindings`: variable bindings for constraint evaluation
 - `satisfied`: boolean, whether constraint is satisfied
-- `evaluate`: qualified path of the constraint to evaluate (see
+- `evaluate`: qualified path of the constraint to evaluate, for a case declaring
+  more than one. Omit to search the model for the first one (see
   [Entry Points](#entry-points))
+- `instantiate`: qualified name of an object to materialize before evaluating,
+  for a case whose contract is the subject the runtime picks — a condition of a
+  nested definition is about the object redefining that nested feature. Omit for
+  a case about the declaration.
 
 ### For Requirements (`EvaluateRequirement`)
 
