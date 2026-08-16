@@ -106,8 +106,8 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   shows the instantiated value.
 - A `calc` body written without `return` is not expression-type-checked, so no
   static dimensional warning is reported inside it.
-- Submitting any declaration to the REPL ends an active `%action` or `%state`
-  debugging session.
+- Submitting a declaration the debugger depends on ends an active `%action` or
+  `%state` session; a submission that changes something else carries it over.
 
 ## 0.0.7 — 2026-08-15
 
