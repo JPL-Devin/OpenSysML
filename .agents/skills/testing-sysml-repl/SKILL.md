@@ -2347,3 +2347,63 @@ Discriminators that separate a working string runtime from a broken one:
   Note that a calc whose body assigns to a `return acc` feature returns no value when *invoked from
   another calc's expression* (`calculation returned no value`), so compute the length inside the
   same body rather than wrapping the loop calc in another one.
+
+## Runtime budgets, and `calc` recursion in particular (PR #198)
+
+Every budget in `internal/core/runtime/budget.go` is reachable from the CLI as an env var and is
+listed by `%budget` in the REPL — that meta-command is the cheapest proof a new bound was wired
+into `internal/repl/meta.go`. `SYSML_MAX_CALC_DEPTH` (default 10000) bounds nested `calc`
+invocations, i.e. recursion depth, and is the only budget with a **ceiling** (25000).
+
+Four distinct surfaces to assert for any budget change, since they fail independently:
+
+1. **Under the bound the run must succeed with the right number**, not merely "not error".
+   `%calc P::sumTo 5000` → `= 12502500`. Deep-but-terminating recursion is fast (~0.3 s), so a
+   long pause is itself a signal.
+2. **Over the bound: a typed error, promptly, with a sane exit status.** Both
+   `%calc P::spin 1` in the REPL and `./bin/sysml m.sysml -eval 'P::spin(1)'` (exit **2**, wall
+   time well under a second). Wrap in `timeout` so a hang shows as exit 124, and read the output
+   for `fatal error: stack overflow` — a Go runtime crash rather than a reported error is the
+   failure mode the budget exists to prevent. Follow the REPL error with `%eval 1 + 1` → `= 2` to
+   show the session survived.
+3. **A low value must refuse input that otherwise evaluates** (`SYSML_MAX_CALC_DEPTH=50` on a
+   200-deep recursion). Without this contrast the env var could be ignored entirely and the test
+   would still look green.
+4. **Invalid/out-of-range values are refused at startup**, before any model work, naming the
+   variable: `=abc` → `is not an integer … (default 10000)`; `=30000` → `must be at most 25000 …`.
+   Also assert the ceiling value itself (`=25000`) is *accepted* — an off-by-one in the comparison
+   is otherwise invisible. Both refusals exit 2 and print no evaluation output.
+
+Budget interactions matter: under `SYSML_MAX_STEPS=100` a runaway recursion must report the *step*
+limit, not the depth limit. Whichever budget is spent first wins, so a change that reorders the
+checks shows up here and nowhere else.
+
+### Fixture notes for recursive `calc` models
+
+- Bare `Integer`/`Boolean` do **not** resolve in a hand-written file (the conformance harness
+  supplies the imports). Start the package with `private import ScalarValues::*;` or every line
+  errors with `unresolved reference: Integer — did you mean ScalarValues::Integer?`.
+- A recursive calc is just `calc f { in n : Integer; return : Integer = if n <= 1 ? 1 else n * f(n - 1); }`.
+  An **implicit-result** body drops `return :` and ends in a bare expression:
+  `calc f { in n : Integer; if n <= 1 ? 1 else n * f(n - 1) }`. Both must be exercised — they take
+  different paths in `passes/typecheck.go` (`checkBehaviorMember`) and only the explicit one was
+  type-checked before #198.
+- Adversarial shapes worth having in one file: a non-recursive calc *usage* nested inside a
+  recursive calc; recursion through a calc named like a library function (`max`); mutual recursion
+  (`isEven`/`isOdd`, whose result for an odd argument is `false`).
+- **There is no `%check` command.** To evaluate an `assert constraint` whose body calls a recursive
+  calc, use `%instantiate <DefName>` then `%slots <DefName>` — note both take the **def** name, not
+  the usage (`%slots P::w` answers `no instance of "P::w"`). A satisfied constraint renders
+  `deepOK: <constraint: satisfied>`; a runaway one renders per-slot as
+  `spinny: <constraint: not evaluated: … calc recursion limit exceeded …>` and the session survives.
+
+### Type diagnostics on implicit-result bodies
+
+`-validate` is the surface: an implicit result is typed like any expression, so
+`calc def C { in n : Integer; n + "one" }` must report
+`error: operator '+' is not defined for Integer and String` (exit 2) and an incommensurable pair
+(`ISQ::LengthValue` + `ISQ::DurationValue`) must report
+`warning: operator '+' combines incommensurable quantities: … (dimension L) and … (dimension T)`
+(exit 0). Always pair these with a **clean** implicit-result body (`n + 1` → `no errors`) — a pass
+that over-reports would look identical otherwise. Because the pre-fix binary printed `no errors`
+for all three, the contrast binary from the parent commit is what makes this evidence conclusive.
