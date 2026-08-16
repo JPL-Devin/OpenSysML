@@ -110,6 +110,11 @@ func (sc *SymbolContext) inheritedValue(sym *symbols.Symbol, depth int) (*pb.Val
 		if value, unit := sc.attributeValue(target); value != nil {
 			return value, unit
 		}
+		// A target stating a non-constant default has none to pass on, and does
+		// not fall back to what it itself redefines.
+		if writesValue(target) {
+			continue
+		}
 		if value, unit := sc.inheritedValue(target, depth+1); value != nil {
 			return value, unit
 		}

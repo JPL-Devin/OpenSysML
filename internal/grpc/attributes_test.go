@@ -109,6 +109,29 @@ package Demo {
 	}
 }
 
+// TestAnIntermediateNonConstantDefaultStopsTheChainWalk verifies an attribute
+// writing no value takes the nearest stated default, not one an intermediate
+// declaration already replaced with a computed default.
+func TestAnIntermediateNonConstantDefaultStopsTheChainWalk(t *testing.T) {
+	get := parseForFacts(t, `
+package Demo {
+    part def Base {
+        attribute mass : ScalarValues::Real = 1000.0;
+    }
+    part def Mid :> Base {
+        attribute wheels : ScalarValues::Integer = 4;
+        attribute :>> mass = wheels * 2;
+    }
+    part def Leaf :> Mid {
+        attribute :>> mass;
+    }
+}
+`)
+	if value := byName(get("Demo::Leaf").Attributes)["mass"].Value; value != nil {
+		t.Errorf("Leaf mass reports %v; Mid replaced that default with a computed one", value)
+	}
+}
+
 // TestAttributesOfAnElementWithNoneIsEmpty verifies an element with no
 // attributes reports none rather than something inherited from elsewhere.
 func TestAttributesOfAnElementWithNoneIsEmpty(t *testing.T) {

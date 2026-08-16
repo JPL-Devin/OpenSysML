@@ -1208,7 +1208,9 @@ the `@type` mapping and the comparison choices.
   `envelopingShapes`, `mRefs`)
 
 **Go gRPC layer:**
-- convert.go:40 - SymbolToProto.Attributes always empty (semantic layer not ready)
+- `SymbolInfo.attributes` reports only defaults that fold to a model-level
+  constant; one written as a feature reference or a call is reported absent
+  rather than guessed (`internal/grpc/attributes.go`)
 - `metadata["type"]`/`metadata["specializes"]` still report only the first edge, kept
   for compatibility; `specializations` is the complete list
 - runtime instances are request-local, so an id is resolvable only against the
