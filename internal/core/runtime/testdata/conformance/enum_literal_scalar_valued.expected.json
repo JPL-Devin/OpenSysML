@@ -1,0 +1,13 @@
+{
+  "type": "instance",
+  "instantiate": "test::Report",
+  "libraries": true,
+  "slots": {
+    "best": {"type": "Real", "value": 4.0},
+    "margin": {"type": "Real", "value": 1.0},
+    "passing": {"type": "Boolean", "value": true},
+    "paint": {"type": "EnumLiteral", "value": "PaintColor::white"},
+    "inherited": {"type": "EnumLiteral", "value": "Color::red"},
+    "inheritedIsItsOwn": {"type": "Boolean", "value": true}
+  }
+}

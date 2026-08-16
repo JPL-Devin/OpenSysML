@@ -36,6 +36,8 @@ func describeOperand(val Value) string {
 		return "a quantity"
 	case ValVariant:
 		return "a variant"
+	case ValEnumLiteral:
+		return "the enumeration literal " + val.LiteralText()
 	}
 	return "a value"
 }
