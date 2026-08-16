@@ -579,9 +579,9 @@ echoes it, `%clear` resets it, and `%verbosity quiet|normal|debug` sets how much
 - **Flags before files**: `sysml -e "x" model.sysml`, never `sysml model.sysml -e "x"`.
 - **A blank line submits.** While typing a multi-line declaration in a brace continuation (`...>`),
   do not leave an empty line in the middle of it.
-- **A new declaration drops the instances.** Anything you declare resets the session's derived state,
-  so `%instances` goes back to `(no instances created)` and `%slots` has nothing to show until you
-  `%instantiate` again. An in-progress `%action`/`%state` debugging session does keep running.
+- **A declaration only drops what it changed.** An object and an in-progress `%action`/`%state`
+  session survive a submission that does not touch what they were built from; redeclaring the
+  namespace they came from drops them, with a note naming the submission that ended them.
 - **`clear` is not a REPL command.** At the `sysml> ` prompt it is parsed as SysML and leaves an
   unresolved session error that is then reported under later commands. `%clear` is the command.
 - **`-convert … -to ttl` covers structure.** A model with `calc` result members or state substates is
