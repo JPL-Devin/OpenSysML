@@ -332,8 +332,11 @@ state body.
 **History** (`ast.PseudostateShallowHistory`, `ast.PseudostateDeepHistory`) is
 owned by the composite state it restores — `lower.StateGraph.PseudostateOwner`
 records that ownership — and re-enters the configuration that state was last left
-in. `exitState` records the configuration on the way out, per composite state: the
-substate that was active, and the active state of each orthogonal region.
+in. The configuration is recorded on the way out — the substate that was active by
+`exitState`, and the active state of each orthogonal region by `recordRegionHistory`
+as that region is left, whether by `exitState`, `leaveRegion` or `exitRegionTo`. A
+region left with no active state has its record dropped (`forgetRegionHistory`),
+since there is nothing to restore.
 
 `fireHistoryTransition` reads that record before leaving the source
 configuration, since a transition out of the owner's own substates would
