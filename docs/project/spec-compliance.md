@@ -1,6 +1,6 @@
 # SysML v2 Specification Compliance
 
-**Purpose:** Document implementation coverage of SysML v2 / KerML / UML 2.5.1 behavioral semantics.
+**Purpose:** Document implementation coverage of SysML v2 / KerML behavioral semantics. UML 2.5.1 is cited only as reference semantics for a Systemica extension the SysML v2 notation has no production for and the bundled KerML semantic library (`internal/core/libs/stdlib/`) no performance for.
 
 **Related:** [`TESTING.md`](../internals/testing.md) (test contracts), [`ARCHITECTURE.md`](../internals/architecture.md) (runtime architecture)
 
@@ -94,7 +94,7 @@
 - Nested action invocation in entry/do/exit/effect behaviors
 - Run-to-completion semantics
 - Event queue management
-- Dangling transition detection (⚠️ lenient)
+- Dangling transition detection (a transition names one source and one target vertex of its own machine; a routing pseudostate with no transition out of it reports)
 - State visits tracking
 - Multi-region event broadcasting
 - History pseudostates: shallow and deep restoration (`history` / `shallow history` / `deep history <name>;`)
@@ -134,7 +134,7 @@
 
 Each row documents one behavioral semantic feature:
 
-- **Semantic Rule**: UML 2.5.1 / KerML / SysML v2 spec reference
+- **Semantic Rule**: the governing reference — the SysML v2 metamodel or the bundled KerML semantic library, and UML 2.5.1 only where neither has the concept
 - **Implementation**: File:function implementing the semantics
 - **Test Case**: Conformance/robustness test(s) exercising the feature
 - **Status**: 
@@ -343,7 +343,7 @@ and no golden AST fixture of their own. `calc_defaults_and_invocation.sysml`
 
 ⚠️ A requirement feature that carries no value of its own is read from the satisfying object's feature of that name, which is how a requirement stated over the values it checks (`attribute verticalSpeed;` compared against a limit) reaches a verdict from `by`. The spec supplies a subject's values to a requirement through the subject parameter (`subject lander : Lander;` then `lander.verticalSpeed`) or an explicit binding, not by matching names, so this fallback — the same one `%requirement` applies on an instance — is an approximation, and a requirement whose unbound feature happens to share a name with an unrelated feature of the subject would be checked against it. A requirement whose value comes from neither its own binding nor the subject (the lunar lander model's `actualVerticalSpeed`, produced by an analysis) still has no value to check and reports `ErrNoValue`.
 
-### Action (UML 2.5.1 §16 Activities)
+### Action (SysML v2 Actions — `Systems Library/Actions.sysml`, over KerML `Performances`)
 
 | Semantic Rule | Implementation | Test Case | Status |
 |--------------|----------------|-----------|--------|
@@ -393,7 +393,7 @@ and no golden AST fixture of their own. `calc_defaults_and_invocation.sysml`
 | Deadlock detection | `action_executor.go:72` Step | `action_executor_test.go:TestActionExecutor_Deadlock_JoinStarvation` | ✅ Faithful |
 | Step budget enforcement | `context.go` incrementStep; budget configured by `SYSML_MAX_STEPS` (`budget.go` `BudgetsFromEnv`) | `robustness_test.go:testStepBudgetExceeded`, `budget_test.go:TestRaisedBudgetRunsLongerLoop` | ✅ Faithful (the reported limit is the effective one, and names the variable that raises it) |
 
-### State Machine (UML 2.5.1 §14 StateMachines)
+### State Machine (SysML v2 States — `Systems Library/States.sysml`, over KerML `StatePerformances`)
 
 | Semantic Rule | Implementation | Test Case | Status |
 |--------------|----------------|-----------|--------|
@@ -416,7 +416,7 @@ and no golden AST fixture of their own. `calc_defaults_and_invocation.sysml`
 | An event reaches only the regions still active when it is dispatched | `state_executor.go` broadcastEvent | `state_deferred_test.go:TestExitedNestedRegionDoesNotReactToTheSameEvent` | ✅ Faithful |
 | Deferral by an ancestor state and across orthogonal regions | `state_executor.go` defersEvent | `state_deferred_test.go:TestCompositeStateDefersForItsSubstates`, `TestDeferralSpansOrthogonalRegions` | ✅ Faithful |
 | Deferring a non-dispatchable trigger reports | `lower/state_graph.go` collectDeferred | `robustness_test.go:defer_of_non_deferrable_trigger` | ✅ Faithful |
-| A transition's source and target name vertices of the machine they are written in, resolved by the name-resolution tier so a misspelled endpoint reports with the other name diagnostics rather than when the machine is lowered | `resolve/transition.go` `(*Resolver).ResolveEndpoint` (reported from `resolve/document.go` TransitionMember), consumed by `lower/state_graph.go` `(*StateGraph).vertex` via `lower.Endpoints` | `resolve/transition_test.go:TestResolveEndpointsThatNameVertices` (sibling, nested, sibling region, entry/exit point, sourceless `accept ... then`), `:TestResolveEndpointMisspelledIsReportedWithASuggestion`, `:TestResolveEndpointNotAVertexIsReported`, `:TestEndpointLookupForLoweringReportsNothing`, `state_transition_endpoint_qualified.sysml` conformance, `robustness_test.go:state_transition_endpoint_misspelled`, `:state_transition_endpoint_never_resolved` | ⚠️ Approximate (a qualified endpoint resolves like any other name; an unqualified one, and one whose owners name only some of the scopes between, fall back to the first vertex of the machine whose name path ends in it, in declaration order, which is what the notation's leniency allows and what two vertices of the same name in sibling regions are told apart by only when the endpoint qualifies them. An endpoint naming no vertex leaves its edge out of the graph rather than failing the lowering, so a machine whose model was never resolved — the REPL and the gRPC handlers build a fresh resolver — still runs; making it strict belongs to the dangling-transition item) |
+| A transition's source and target name vertices of the machine they are written in, resolved by the name-resolution tier so a misspelled endpoint reports with the other name diagnostics rather than when the machine is lowered | `resolve/transition.go` `(*Resolver).ResolveEndpoint` (reported from `resolve/document.go` TransitionMember), consumed by `lower/state_graph.go` `(*StateGraph).vertex` via `lower.Endpoints` | `resolve/transition_test.go:TestResolveEndpointsThatNameVertices` (sibling, nested, sibling region, entry/exit point, sourceless `accept ... then`), `:TestResolveEndpointMisspelledIsReportedWithASuggestion`, `:TestResolveEndpointNotAVertexIsReported`, `:TestEndpointLookupForLoweringReportsNothing`, `state_transition_endpoint_qualified.sysml` conformance, `robustness_test.go:state_transition_endpoint_misspelled`, `:state_transition_endpoint_never_resolved` | ⚠️ Approximate (a qualified endpoint resolves like any other name; an unqualified one, and one whose owners name only some of the scopes between, fall back to the first vertex of the machine whose name path ends in it, in declaration order, which is what the notation's leniency allows and what two vertices of the same name in sibling regions are told apart by only when the endpoint qualifies them. An endpoint naming no vertex leaves its edge out of the graph rather than failing the lowering, so a machine whose model was never resolved — the REPL and the gRPC handlers build a fresh resolver — still runs; an endpoint that resolves but names no vertex of this machine is reported by the state transition check, see the dangling-transition rows) |
 | Transition firing | `state_executor.go:535` fireTransition | `state_transition_effect.sysml` | ✅ Faithful |
 | Transition guard evaluation | `state_executor.go:218` scheduleTransitionsForState | `state_choice_pseudostate.sysml` | ✅ Faithful |
 | Transition effect actions, whether written as a statement (`do assign x := 1`) or as a performed action (`do perform Bump`) | `lower/state_behavior.go` `LowerBehaviors` (the membership a performed action is contributed through is unwrapped and each behavior is lowered to statements); `state_executor.go:535` fireTransition → `state_statements.go` `executeBehavior` | `state_transition_effect.sysml`, `state_transition_effect_perform.sysml` conformance | ✅ Faithful |
@@ -432,6 +432,9 @@ and no golden AST fixture of their own. `calc_defaults_and_invocation.sysml`
 | Hierarchical substates | `state_executor.go:131` getParentChain, `:147` getLCA | `state_orthogonal_regions.sysml` | ✅ Faithful |
 | Orthogonal regions | `state_executor.go` broadcastEvent, `state_region_transition.go` fireTransitionInRegion; region order from `lower.StateGraph.TopRegions` and `CompositeStates` | `state_orthogonal_regions.sysml`, `region_pseudostate_test.go:TestRegionPseudostateExitOrderIsDeterministic` | ✅ Faithful |
 | Choice pseudostates | `state_region_transition.go` pseudostateBranch (guards in declaration order) | `state_choice_pseudostate.sysml`, `state_region_choice.sysml` | ✅ Faithful |
+| A succession (`a then b;`, `initial s; s then a;`) names its endpoints the way a transition does, so it reaches a nested, region-local or qualified vertex, and a pseudostate as well as a state | `lower/state_graph.go` `collectTransitions` (UsageSuccession, SuccessionEdge and InitialNode cases) → `(*StateGraph).endpointVertex`/`endpointState`, over the same `lower.Endpoints` a transition's endpoints resolve through | `lower/state_graph_nested_test.go:TestSuccessionReachesAPseudostate`, `:TestSuccessionQualifiedTargetNamesTheVertexItQualifies`, `:TestToStateGraph_EntrySuccessionNamesInitialState` | ✅ Faithful (previously matched the endpoint's last name segment against a flat state list, which reached no pseudostate and could bind a same-named vertex of another state) |
+| Two regions may declare same-named pseudostates, and each is a vertex of its own | `lower/state_graph.go` `StateGraph.Pseudostates` (declaration-ordered slice, not keyed by name), `addPseudostate` | `lower/state_graph_nested_test.go:TestSameNamedPseudostatesInSiblingRegionsAreBothCollected` | ✅ Faithful |
+| A transition whose endpoints are in two different regions of one composite state | `state_executor.go:147` getLCA, `state_region_transition.go` fireTransitionInRegion | `runtime/testdata/conformance/state_transition_sibling_region.sysml` (guarded, so it settles), `lower/state_graph_nested_test.go:TestSameNamedPseudostatesInSiblingRegionsAreBothCollected` | ⚠️ Approximate: the executor exits and re-enters the composite state (the UML reading, from the endpoints' LCA), so the source region restarts at its initial vertex. KerML `StatePerformances::StateTransitionPerformance` only orders `guard then transitionLinkSource.exit`, and the sibling region's performance is a concurrent subperformance that stays active, which reads as exit-the-source-only. A *guardless* cross-region edge therefore re-enables itself and runs to the event budget. Not changed here: `state_executor.go` composite-state firing is being reworked in a sibling PR |
 | Junction pseudostates | `state_region_transition.go` pseudostateBranch | `state_junction_pseudostate.sysml` | ✅ Faithful (evaluated when entered, like a choice, rather than statically before the incoming transition) |
 | Fork pseudostates (bypass targeted regions' initial states) | `state_executor.go:706` fireForkTransition, `:1028` enterStateInto | `state_fork_join.sysml` golden, `state_fork_join_pseudostate.trace.golden`, `fork_join_test.go:TestForkBypassesTargetedRegionInitials` | ✅ Faithful |
 | Join pseudostates | `state_executor.go:782` fireJoinTransition, `:827` joinSources (declaration order) | `pseudostate_test.go:TestJoinWaitsForEveryBranch`, `fork_join_test.go:TestForkJoinVisitOrderIsDeterministic` | ✅ Faithful |
@@ -446,7 +449,9 @@ and no golden AST fixture of their own. `calc_defaults_and_invocation.sysml`
 | Run-to-completion semantics | `state_executor.go:288` processNextEvent | `state_executor_test.go:TestStateRunToCompletion` | ✅ Faithful |
 | Event queue management | `state_executor.go:1127` EventQueue | `state_executor_test.go` | ✅ Faithful |
 | Deterministic dispatch order | `executor_common.go` eventHeap.Less (time, then arrival), `state_executor.go` orderedActiveRegions (region declaration order) | `state_call_trigger_regions.sysml` | ✅ Faithful |
-| Dangling transition detection | `robustness_test.go:testStateDanglingTransition` (lenient) | `robustness_test.go:testStateDanglingTransition` | ⚠️ Approximate |
+| A transition names exactly one source and one target vertex, both of the machine it is written in (`TransitionUsage::source: ActionUsage[1..1]`, `::target: ActionUsage[1..1]` in the SysML v2 metamodel bundled as `stdlib/Systems Library/SysML.sysml`; KerML `TransitionPerformances::TransitionPerformance` takes one `transitionLinkSource: Performance[1]` and one `transitionLink: HappensBefore[0..1]`) | `passes/state_transition.go` `StateTransitionPass.Run` → `(*transitionChecker).checkEndpoint`, over the vertices `lower/vertices.go` `VertexDecls` collects with the lowering's own `collectVertices`; `lower/state_graph.go` `(*StateGraph).vertex` keeps the typed construction error as the backstop | `passes/state_transition_test.go:TestTransitionTargetInSiblingRegionIsLegal`, `:TestTransitionTargetInSiblingRegionKeywordIsLegal`, `:TestTransitionTargetInUnrelatedMachineIsIllegal`, `:TestSuccessionTargetInUnrelatedMachineIsIllegal`, `:TestTransitionToEntryPointIsLegal`, `:TestTransitionTargetResolvingToNonVertexIsIllegal`, `:TestSourcelessAcceptTransitionIsLegal`, `:TestTransitionToFirstMarkerIsIllegal`, `:TestTransitionToFinalStateIsLegal`, `:TestStateUsageMachineIsChecked`, `conformance/state_transition_sibling_region.sysml`, `robustness_test.go:state_transition_endpoint_in_another_machine`, `:state_transition_endpoint_naming_a_first_marker` | ✅ Faithful (a vertex of a sibling orthogonal region, an entry/exit point of a composite state and the sourceless `accept … then` form are legal; a vertex of another machine, a `first`/`then` marker named as a target and an endpoint resolving to a non-vertex are reported — the last of them by endpoint resolution, which owns it. A marker named as a *source* is left to lowering: see the row below) |
+| A routing pseudostate has a transition out of it, so a transition reaching it does not terminate nowhere (SysML v2 has no pseudostate notation or semantics; `choice`/`junction`/`fork`/`join` are the documented Systemica extension of `docs/reference/grammar/README.md`, whose reference semantics is UML 2.5.1 §15.7.18) | `passes/state_transition.go` `(*transitionChecker).checkMachine`, `routingPseudostate` | `passes/state_transition_test.go:TestJunctionChainTerminatingNowhereIsIllegal`, `:TestJunctionWithOutgoingTransitionIsLegal`, `:TestJunctionLeftBySuccessionIsLegal`, `robustness_test.go:state_junction_without_an_outgoing_transition` | ✅ Faithful (choice, junction, fork and join only; a history, entry or exit point is excluded, since what it resumes or delegates to need not be written as a transition out of it. The chain reaching such a pseudostate is acyclic, so `state_region_transition.go` cycle detection does not find it) |
+| A `first`/`then` marker named as a transition's *source* | not checked; `lower/state_graph.go` `(*StateGraph).vertex` reports it as a construction error | `model/transition_first_test.go:TestTransitionFirstStart` (pins the marker source as clean at check time) | ⚠️ Approximate (whether `first start then off;` beside `transition t1 first start … then off;` declares a second transition out of one initial pseudostate — illegal under UML 2.5.1 §15.7.18 — or names the same one twice is a reading of SysML v2 §7.19.3 this PR does not settle; the existing test pins it clean, so only lowering reports it) |
 | Completion transitions | `state_executor.go:218` scheduleTransitionsForState nil trigger | `state_simple.sysml` | ✅ Faithful |
 | A transition written in the standard `first`/`accept`/`then` form, with the trigger on a line of its own, and with a name of its own (SysML.xtext `TransitionUsage`) | `parser/behavior.go` `parseTransitionMember`/`parseTransitionTail`; `lower/state_graph.go` `Transition.Name`; `runtime/state_executor.go` `transitionDescription` (the name is what a diagnostic about the transition reports) | `parse/behavior_exhibit_state_body.golden`, `parse/state_transition_variants.golden`, `conformance/state_transition_accept_via_port.sysml`, `negative_test.go:transition_trigger_no_target`, `:transition_two_triggers`, `:transition_two_targets`, `:transition_do_without_action` | ✅ Faithful |
 | `accept … via <port>` on a transition (SysML.xtext `AcceptParameterPart`) | `parser/behavior.go` `parseTransitionTail`; `lower/state_graph.go` `Transition.Via`; `runtime/state_executor.go` `matchesEvent`/`acceptsSignal`/`deliverPendingSignal` | `conformance/state_transition_accept_via_port.sysml` | ✅ Faithful (a transition naming a port fires only for an occurrence routed to that port; one naming none takes an addressed message, as before) |
@@ -778,7 +783,7 @@ semantics layer over the conjugation parity of the typing/specialization chain.
   subsetting inherits them to.
 - Conjugation is not a runtime concept here: nothing is executed differently for
   a conjugated port, because ports carry no transfer semantics in the runtime
-  yet (see "Major UML/SysML Features Not Implemented").
+  yet (see "Major Features Not Implemented").
 - A `snapshot`/`timeslice` portion is recorded on the usage and resolves like any
   occurrence usage, but the runtime does not relate a portion to the occurrence
   it is a portion of, and no time ordering between portions is derived.
@@ -897,7 +902,7 @@ are tracked here):
 | Scalar type inference for a bare feature reference (`passes/typecheck_expr.go` `infer`) | A condition that is a plain name — `while total { … }`, `total : Integer` — infers Unknown, so `checkBoolean` passes it and the executor reports it (`runtime/action_statements.go` `evalCondition`) instead. Once a feature reference infers its declared scalar type, this becomes a typecheck error like the literal and operator cases, and the runtime check goes back to being unreachable. |
 | Specialization edges in the library index (`libs/loader.go` `recordEntries` drops `Supers`) | `implicitUsageBases` maps each usage kind to its stdlib base *definition* because the base *feature* the spec has usages subset would be a dead end for member lookup. With the edges recorded, the map should name the base feature the spec names. |
 
-### Major UML/SysML Features Not Implemented
+### Major Features Not Implemented (UML-referenced; no SysML v2 notation or KerML performance)
 
 **Activity Diagrams (Advanced):**
 - Interruptible regions
@@ -934,7 +939,6 @@ are tracked here):
 **Intentionally Unspecified (No Normative Semantics):**
 - Verification verdict evaluation (VerdictKind/PassIf) - SysML v2 §9.3.2: "evaluation... intentionally not specified normatively"
 - Variability/variation selection - SysML v2 §9.4: "Selection of variants is not specified normatively" — Systemica selects the variant a variation usage is bound to (`attribute :>> cut = cut::cutIdeal;`) and errors on an unselected, unknown, or multiply-selected variation; see the Variation and Variant map
-- Streaming pin behavior - UML 2.5.1 §16.2.4: "Specific streaming behavior is tool-dependent"
 - View/viewpoint rendering - SysML v2 §10.2: "rendering semantics intentionally left to tools"
 - Allocation execution - SysML v2 §9.2.4: syntax defined, execution semantics not normative
 
@@ -985,7 +989,7 @@ See [`TESTING.md`](../internals/testing.md) for complete test contract details.
 
 **Test Counts** (re-counted from the checked-in fixtures and from `-v` runs):
 - Execution conformance cases: 215 (all passing)
-- gRPC conformance cases: 8 (all passing)
+- gRPC conformance cases: 13 (all passing)
 - Robustness subtests: 151 (all passing)
 - Golden AST fixtures: 82
 - Golden execution traces: 69
@@ -1074,13 +1078,13 @@ guaranteed to be interpreted identically by an unrelated SysML RDF tool.
 
 | RPC | Implementation | Status | Tests |
 |-----|---------------|--------|-------|
-| GetServerInfo | service.go `Service.GetServerInfo`, capability names in `Capabilities()` | ✅ Faithful — reports the build version (informational; a source build reports `dev`) and the capabilities this build supports by name, currently `type_facts`, `convert` and `query`. A capability is added, never renamed or dropped with its behaviour intact, so a client requires one instead of comparing versions; a service predating this RPC answers `UNIMPLEMENTED`, which the client reads as supporting no capability | service_test.go:TestGetServerInfo, `TestGetServerInfoTypeFactsCapabilityIsHonest`, python/tests/test_capabilities.py |
+| GetServerInfo | service.go `Service.GetServerInfo`, capability names in `Capabilities()` | ✅ Faithful — reports the build version (informational; a source build reports `dev`) and the capabilities this build supports by name, currently `type_facts`, `convert`, `verification`, `query`, `enum_values`, `evaluate_subject` and `symbol_attributes`. A capability is added, never renamed or dropped with its behaviour intact, so a client requires one instead of comparing versions; a service predating this RPC answers `UNIMPLEMENTED`, which the client reads as supporting no capability | service_test.go:TestGetServerInfo, `TestGetServerInfoTypeFactsCapabilityIsHonest`, python/tests/test_capabilities.py |
 | ParseFile | service.go `Service.ParseFile` (parser + passes.Analyze + stdlib load) | ✅ Faithful — the cache is keyed by the file name and content the service read, so repeated parses of an unchanged source hit it whatever the request's (ignored) `content_hash` says, a hash disagreeing with its content cannot serve another model, and identical content read under two names keeps a record each, since their diagnostics name different files | runtime_test.go:TestParseFile_*, service_test.go:`TestParseFileCachesByContentRead`, service_test.go:`TestParseFileCachesPerFileName`, every conformance case |
 | Convert | export.go `Service.Convert`, conversion in `internal/core/export` | ✅ Faithful for what Systemica writes — SysML/KerML notation and RDF Turtle, from a loaded model named by its `model_hash`, a path the service opens, or inline content, with the format names `sysml -convert` takes and canonical names reported back. A `model_hash` converts the source that parse read, so a file edited since then does not change what is written, and a model evicted from the cache is `NOT_FOUND` rather than converted as something else; a `file_path` is read afresh, for a caller who does want the file as it stands. Notation to notation is source-preserving (comments and layout survive); a graph direction returns an equivalent model, not identical bytes, and drops comments, per docs/reference/rdf-mapping.md. A conversion that cannot be written faithfully returns `error` plus the diagnostics rather than partial output, and `tolerate_syntax_errors` is honored for notation to notation only, since a graph built from an unparsed declaration would lose it silently | export_test.go:TestConvert*, `TestConvertModelHashConvertsWhatWasParsed`, `TestConvertUncachedModelHashIsNotFound`, python/tests/test_conversion.py |
 | Query | query.go `Service.Query` (SysML v2 API & Services `Query`) | ✅ Faithful to the standard's query model, ⚠️ approximate on three `@type` names — see the construct map below | query_test.go:TestQuery*, python/tests/test_query.py |
-| GetSymbol | service.go:126-145; static type facts in typefacts.go (`SymbolInfo.type_info`, `.multiplicity`, `.specializations`) computed by a per-model resolver + semantics context cached on the model and locked for the duration of a conversion | ✅ Faithful — reports the declared and resolved type, the library scalar it reduces to, quantity/unit, the declared multiplicity, and *every* generalization edge (`specializes`, `subsets`, `redefines`, `typing`) in declaration order; an unresolved name is reported unresolved rather than guessed | service_test.go:TestGetSymbol_*, typefacts_test.go:TestTypeInfo*, `TestSpecializations*`, `TestMultiplicity*`, `TestSymbolContextConcurrentConversion` |
+| GetSymbol | service.go:126-145; static type facts in typefacts.go (`SymbolInfo.type_info`, `.multiplicity`, `.specializations`) computed by a per-model resolver + semantics context cached on the model and locked for the duration of a conversion | ✅ Faithful — reports the declared and resolved type, the library scalar it reduces to, quantity/unit, the declared multiplicity, and *every* generalization edge (`specializes`, `subsets`, `redefines`, `typing`) in declaration order; an unresolved name is reported unresolved rather than guessed. `SymbolInfo.attributes` carries the attributes the element actually has — own and inherited, in that order, a redefinition masking what it redefines — each with the resolved type, unit and constant default the service resolves (following `specializes`/`subsets`/`redefines` for what a declaration leaves out); a default that is not constant is reported as absent rather than guessed. Advertised as the `symbol_attributes` capability, since an older service reports an empty set, which cannot be told from an element with no attributes | service_test.go:TestGetSymbol_*, typefacts_test.go:TestTypeInfo*, `TestSpecializations*`, `TestMultiplicity*`, `TestSymbolContextConcurrentConversion`, attributes_test.go, conformance `symbol_attributes`, python/tests/test_symbol.py |
 | GetDiagnostics | service.go:148-169 (parser + semantic) | ✅ Faithful | runtime_test.go (implicit) |
-| Evaluate | service.go:172-227 | ✅ Faithful | runtime_test.go:TestEvaluate_*, conformance `evaluate_arithmetic` |
+| Evaluate | service.go `Service.Evaluate` | ✅ Faithful — evaluates in a lexical scope (`context_symbol_id`) and, with `subject_symbol_id`, against an instantiated object, the way `%eval` does after `%instantiate`: a feature then reads that object's slot rather than the declared default, and the subject's own scope resolves inherited features when no context is named. A subject that is not a symbol, or that cannot be instantiated, is reported in-band rather than evaluated as something else; no subject leaves the existing behaviour unchanged. Advertised as the `evaluate_subject` capability, which a client requires before sending a subject, since a service predating it drops the field and answers with the declared default | runtime_test.go:TestEvaluate_*, `TestEvaluateWithSubject*`, conformance `evaluate_arithmetic`, `evaluate_subject_slot`, `evaluate_no_subject_default`, `evaluate_subject_not_found`, python/tests/test_model_surface_integration.py |
 | Instantiate | service.go (slots read through `Instance.GetSlot`, so a derived default is evaluated against the instance; `InstanceGraphToProto` in convert.go returns every instance reachable from the root in `InstantiateResponse.instances`) | ✅ Faithful — a composite slot still marshals as the child's id, and that child is carried in the same response, so a nested object is reachable over gRPC without a follow-up RPC; expansion is bounded at depth 8 and stops at a type already on the path, as `%slots` bounds it, so a self-referential part cannot instantiate forever | runtime_test.go:TestInstantiate_*, instance_graph_test.go:TestInstantiate_ReturnsNestedInstances, `_ReturnsDeepNestedInstances`, `_CollectionOfInstances`, `_SlotErrorReported`, `_SelfReferentialPartTerminates`, `_MutuallyRecursivePartsTerminate`, conformance `instantiate_part`, `instantiate_derived_slot` |
 | ExecuteAction | service.go:265-312 | ✅ Faithful | runtime_test.go:TestExecuteAction_*, conformance `execute_action_inputs`, `execute_action_no_initial` |
 | ExecuteState | service.go:315-355 | ✅ Faithful | runtime_test.go:TestExecuteState_*, conformance `execute_state_transitions` |
@@ -1166,9 +1170,13 @@ the `@type` mapping and the comparison choices.
 - a nested body over a value the *redefined* declaration wrote (`part def Ring { attribute cost : Cost = template; }` re-opened as `part r : Ring { attribute :>> cost { attribute :>> v = 11.0; } }`) reads the inherited value and drops the body's restatements: a value takes precedence over instantiation regardless of which declaration wrote it, so the innermost body does not govern. Pre-existing; a body over a feature that has no inherited value materializes correctly
 
 **Python bindings:**
-- generated typed classes (`pysysml.generate`) cover structural usages only; `subsets`
-  and `redefines` are exported as facts but do not become Python base classes, and
-  redefinition narrowing is not checked
+- generated typed classes (`pysysml.generate`) cover structural usages only: behavioral
+  and connector usages are not instance slots, so no property is emitted for them.
+  `specializes`, `subsets` and `redefines` all become Python base classes, in declaration
+  order, and a redefining feature takes the type and multiplicity it does not restate from
+  what it redefines; a base another declared base already specializes is left implicit,
+  and a base order that linearizes no way at all keeps the bases it can and records what
+  it left out as a comment, rather than emitting a module that fails to import. Redefinition narrowing is still not checked
 - `TypedObject.from_instance` rejects an instance whose type another generated class
   describes, and accepts a generated subclass of the expected one; it accepts a type
   no generated class describes, because `Instantiate` on a usage reports the usage's
@@ -1216,7 +1224,9 @@ the `@type` mapping and the comparison choices.
   `envelopingShapes`, `mRefs`)
 
 **Go gRPC layer:**
-- convert.go:40 - SymbolToProto.Attributes always empty (semantic layer not ready)
+- `SymbolInfo.attributes` reports only defaults that fold to a model-level
+  constant; one written as a feature reference or a call is reported absent
+  rather than guessed (`internal/grpc/attributes.go`)
 - `metadata["type"]`/`metadata["specializes"]` still report only the first edge, kept
   for compatibility; `specializations` is the complete list
 - runtime instances are request-local, so an id is resolvable only against the
@@ -1229,3 +1239,15 @@ the `@type` mapping and the comparison choices.
   cannot send one until that lands with the rest of the Python API surface
 
 These are documented for transparency; none block production use.
+
+---
+
+## Language Server (`internal/lsp`, `cmd/sysml-lsp`)
+
+**Standard:** LSP 3.17 § Lifecycle Messages. **Reference:** docs/reference/api.md § `internal/lsp`.
+
+| Rule | Implementation (file:function) | Tests | Status |
+|---|---|---|---|
+| The server is started by an editor over stdin/stdout, and a client that names the transport on the command line (`--stdio`, as `TransportKind.stdio` sends) is served rather than rejected | `cmd/sysml-lsp/main.go` `run` (explicit `stdio` flag; Go's `flag` accepts `-stdio` and `--stdio`) | `cmd/sysml-lsp/lifecycle_test.go:TestStdioTransportServesTheLifecycle` (both spellings, built binary over pipes), `cmd/sysml-lsp/main_test.go:TestCommandLine` | ✅ Faithful — the flag is a documented no-op because stdio is the only transport; every *other* unknown flag still exits 2 with usage, so a typo is not swallowed |
+| `shutdown` is answered, and afterwards every request but `exit` is answered `InvalidRequest` (`-32600`); a non-`exit` notification is dropped | `internal/lsp/lifecycle.go` `Server.Shutdown`, `Server.lifecycleHandler` (wraps the handler chain on the read loop, ahead of async dispatch) | `internal/lsp/lifecycle_test.go:TestAfterShutdownOnlyExitIsServed`, `:TestNotificationAfterShutdownIsDropped`, `cmd/sysml-lsp/lifecycle_test.go:TestRequestAfterShutdownIsInvalidRequest` | ✅ Faithful |
+| `exit` ends the process: status 0 after a preceding `shutdown`, 1 otherwise | `internal/lsp/lifecycle.go` `Server.Exit`, `Server.ExitCode`; `internal/lsp/server.go` `Server.Run` (returns on the exit signal and closes the connection itself); `cmd/sysml-lsp/main.go` `serve` | `internal/lsp/lifecycle_test.go:TestExitEndsTheSessionWithTheStatusLSPRequires`, `cmd/sysml-lsp/lifecycle_test.go:TestExitAfterShutdownEndsTheProcess`, `:TestExitWithoutShutdownIsNonzero`, `:TestClosedStreamEndsTheProcess` | ✅ Faithful — `Run` returns rather than being killed from a handler, so the process leaves no server behind per editor window |

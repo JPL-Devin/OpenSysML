@@ -1,0 +1,9 @@
+{
+	"rpc": "Evaluate",
+	"expression": "mass * 2",
+	"context_symbol_id": "demo::Car",
+	"expected_result": {
+		"kind": "real_value",
+		"value": 3000.0
+	}
+}

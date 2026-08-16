@@ -3,6 +3,7 @@ package lsp
 import (
 	"context"
 
+	"go.lsp.dev/jsonrpc2"
 	"go.lsp.dev/protocol"
 )
 
@@ -45,17 +46,72 @@ func (s *Server) Initialized(ctx context.Context, params *protocol.InitializedPa
 	return nil
 }
 
-// Shutdown prepares the server for exit.
+// Shutdown prepares the server for exit: the session stays readable, but only
+// the exit notification is still answered (LSP 3.17 §Shutdown Request).
 func (s *Server) Shutdown(ctx context.Context) error {
-	s.shutdownDone = true
+	s.markShutdown()
 	return nil
 }
 
-// Exit terminates the server process. Per LSP spec, exit notification ends the process.
+// markShutdown records that the client asked for a shutdown.
+func (s *Server) markShutdown() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.shutdownReceived = true
+}
+
+// Exit ends the session. It records the status the process owes its client and
+// releases Run, which owns the stream, rather than closing it from under the
+// read loop that dispatched this notification.
 func (s *Server) Exit(ctx context.Context) error {
-	// Close the jsonrpc2 connection to trigger graceful shutdown
-	if s.conn != nil {
-		return s.conn.Close()
-	}
+	s.mu.Lock()
+	s.exitReceived = true
+	s.mu.Unlock()
+	s.exitOnce.Do(func() { close(s.exited) })
 	return nil
+}
+
+// ExitCode is the process status LSP 3.17 asks of a served session: 0 when exit
+// followed a shutdown request, 1 when exit arrived without one. A session the
+// client ended by closing the stream instead served to its end, so it is 0.
+func (s *Server) ExitCode() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.exitReceived && !s.shutdownReceived {
+		return 1
+	}
+	return 0
+}
+
+// shutdownRequested reports whether a shutdown request has been served.
+func (s *Server) shutdownRequested() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.shutdownReceived
+}
+
+// lifecycleHandler enforces the shutdown/exit half of the lifecycle. It runs on
+// the read loop, ahead of the asynchronous dispatch, so that what arrives after
+// a shutdown is judged against the state the client saw when it sent it: a
+// request is answered InvalidRequest, a notification other than exit is dropped,
+// and exit ends the session.
+func (s *Server) lifecycleHandler(inner jsonrpc2.Handler) jsonrpc2.Handler {
+	return func(ctx context.Context, reply jsonrpc2.Replier, req jsonrpc2.Request) error {
+		switch req.Method() {
+		case protocol.MethodExit:
+			return reply(ctx, nil, s.Exit(ctx))
+		case protocol.MethodShutdown:
+			// Recorded here, not in the handler: the asynchronous dispatch could
+			// otherwise run after the next message has been judged.
+			s.markShutdown()
+			return inner(ctx, reply, req)
+		}
+		if !s.shutdownRequested() {
+			return inner(ctx, reply, req)
+		}
+		if _, isRequest := req.(*jsonrpc2.Call); isRequest {
+			return reply(ctx, nil, jsonrpc2.ErrInvalidRequest)
+		}
+		return reply(ctx, nil, nil)
+	}
 }

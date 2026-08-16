@@ -8,11 +8,12 @@ import (
 )
 
 // DefaultRegistry returns the default pass registry: syntax, name resolution,
-// type checking, and semantic constraints.
+// state transitions, type checking, and semantic constraints.
 func DefaultRegistry() *Registry {
 	reg := NewRegistry()
 	reg.Register(SyntaxPass{})
 	reg.Register(NameResolutionPass{})
+	reg.Register(StateTransitionPass{})
 	reg.Register(TypeCheckPass{})
 	reg.Register(ElementFilterPass{})
 	reg.Register(ConstraintPass{})

@@ -1,0 +1,6 @@
+{
+	"rpc": "Evaluate",
+	"expression": "mass",
+	"subject_symbol_id": "demo::missing",
+	"expected_error": "subject not found: demo::missing"
+}

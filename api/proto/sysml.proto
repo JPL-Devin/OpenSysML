@@ -229,6 +229,9 @@ message EvaluateRequest {
   string model_hash = 1;        // from ParseFile response
   string expression = 2;         // SysML expression string (e.g., "2 + 2")
   string context_symbol_id = 3; // optional: symbol FQN for context scope
+  // optional: FQN to instantiate and evaluate against, so a feature reads that
+  // object's value rather than the declared default (as %eval after %instantiate)
+  string subject_symbol_id = 4;
 }
 
 // EvaluateResponse contains evaluation result
