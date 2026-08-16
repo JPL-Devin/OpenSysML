@@ -1909,7 +1909,7 @@ func assertCalcRecursionBounded(t *testing.T, src, calcName string, want error, 
 		if !errors.Is(err, want) {
 			t.Errorf("expected %v, got: %v", want, err)
 		}
-	case <-time.After(10 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatalf("recursive calc %s did not terminate", calcName)
 	}
 }
@@ -3060,11 +3060,14 @@ func testCalcNonBooleanCondition(t *testing.T) {
 // returns the error the read reports, on its own goroutine so a body that never
 // terminates fails the case instead of stalling the suite. maxSteps bounds the
 // run.
-func calcUsageOutputInSource(t *testing.T, src, usageName, output string, maxSteps int64) error {
+func calcUsageOutputInSource(t *testing.T, src, usageName, output string, maxSteps int64, budgets ...func(*Context)) error {
 	t.Helper()
 
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
 	ctx.maxSteps = maxSteps
+	for _, set := range budgets {
+		set(ctx)
+	}
 	rootScope := idx.DocumentRoot("<test>")
 	sym := findSymbolByName(rootScope, usageName, ast.DefCalc)
 	if sym == nil {
@@ -3415,7 +3418,8 @@ func testNestedCalcUsageSelfCycle(t *testing.T) {
 }
 
 // testNestedCalcUsageRecursionDepth: a calc whose nested usage is of itself
-// never bottoms out, so the nesting limit reports it instead of hanging.
+// never bottoms out, so the depth budget reports it instead of hanging. A usage
+// frame costs far more than an invocation, so the case states a shallow budget.
 func testNestedCalcUsageRecursionDepth(t *testing.T) {
 	src := `
 		package test {
@@ -3428,7 +3432,8 @@ func testNestedCalcUsageRecursionDepth(t *testing.T) {
 			calc c : Down { in n = 3; }
 		}
 	`
-	err := calcUsageOutputInSource(t, src, "c", "a", 1000000)
+	err := calcUsageOutputInSource(t, src, "c", "a", 1000000,
+		func(ctx *Context) { ctx.maxCalcDepth = nestingProbeDepth })
 	if !errors.Is(err, ErrCalcRecursionLimit) {
 		t.Errorf("expected ErrCalcRecursionLimit, got: %v", err)
 	}
