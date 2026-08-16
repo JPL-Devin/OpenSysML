@@ -36,10 +36,15 @@ const CapabilityVerification = "verification"
 // SysML v2 API & Services Query over a parsed model.
 const CapabilityQuery = "query"
 
+// CapabilityEnumValues names the capability of carrying an enumeration literal
+// as Value.enum_literal, rather than reporting it as an unsupported null.
+const CapabilityEnumValues = "enum_values"
+
 // capabilities is what this build supports, in report order. A capability is
 // only ever added: renaming or dropping one breaks clients that require it.
 var capabilities = []string{
 	CapabilityTypeFacts, CapabilityConvert, CapabilityVerification, CapabilityQuery,
+	CapabilityEnumValues,
 }
 
 // Capabilities returns the capability names this build of the service reports.
@@ -284,7 +289,7 @@ func (s *Service) Evaluate(ctx context.Context, req *pb.EvaluateRequest) (*pb.Ev
 	}
 
 	return &pb.EvaluateResponse{
-		Result: ValueToProto(result),
+		Result: ValueToProto(result, cached.Index),
 	}, nil
 }
 
@@ -352,7 +357,13 @@ func (s *Service) ExecuteAction(ctx context.Context, req *pb.ExecuteActionReques
 	if len(req.Inputs) > 0 {
 		inputs = make(map[string]runtime.Value, len(req.Inputs))
 		for name, pv := range req.Inputs {
-			inputs[name] = ProtoToValue(pv)
+			val, err := ProtoToValue(pv, cached.Index)
+			if err != nil {
+				return &pb.ExecuteActionResponse{
+					Error: fmt.Sprintf("input %s: %v", name, err),
+				}, nil
+			}
+			inputs[name] = val
 		}
 	}
 
@@ -367,7 +378,7 @@ func (s *Service) ExecuteAction(ctx context.Context, req *pb.ExecuteActionReques
 	// Convert outputs to protobuf
 	pbOutputs := make(map[string]*pb.Value)
 	for name, val := range outputs {
-		pbOutputs[name] = ValueToProto(val)
+		pbOutputs[name] = ValueToProto(val, cached.Index)
 	}
 
 	return &pb.ExecuteActionResponse{
@@ -409,7 +420,7 @@ func (s *Service) ExecuteState(ctx context.Context, req *pb.ExecuteStateRequest)
 	// Convert final context to protobuf
 	pbContext := make(map[string]*pb.Value)
 	for name, val := range finalContext {
-		pbContext[name] = ValueToProto(val)
+		pbContext[name] = ValueToProto(val, cached.Index)
 	}
 
 	return &pb.ExecuteStateResponse{

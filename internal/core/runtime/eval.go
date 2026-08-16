@@ -586,7 +586,7 @@ func (ec *EvalContext) chainOverElements(value Value, parts []ast.NameSegment, f
 func (ec *EvalContext) enumLiteralValue(sym *symbols.Symbol) (Value, error) {
 	value := semantics.LiteralValue(sym)
 	if value == nil {
-		return enumLiteral(sym), nil
+		return NewEnumLiteral(sym), nil
 	}
 	val, err := ec.evalIn(declScope(sym)).Eval(value)
 	if err != nil {

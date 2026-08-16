@@ -261,3 +261,38 @@ def test_generated_classes_read_a_live_instance(tmp_path):
     vehicle = demo_types.Vehicle.from_instance(inst)
     assert vehicle.mass == 1500.0
     assert vehicle.engine.power == 300.0
+
+
+def test_generated_class_reads_an_enum_typed_slot(tmp_path):
+    """An enum-typed feature is generated as the literal it holds, not as a class."""
+    from pysysml import Connection, EnumLiteral
+    from pysysml.capabilities import CAPABILITY_ENUM_VALUES
+
+    source = textwrap.dedent(
+        """
+        package D {
+            enum def Color { red; green; blue; }
+            part def Car { attribute c : Color = Color::red; }
+        }
+        """
+    )
+    with Connection() as conn:
+        model = conn.load_from_content(source)
+        rendered = generate_source(model, source)
+        instance = conn.instantiate("D::Car", model.hash)
+        sends_literals = conn.server_info().has(CAPABILITY_ENUM_VALUES)
+
+    assert "def c(self) -> _t.EnumLiteral:" in rendered
+    assert "_t.as_enum_literal" in rendered
+
+    if not sends_literals:
+        pytest.skip("the service in use sends no enumeration literal to decode")
+
+    module_path = tmp_path / "enum_types.py"
+    module_path.write_text(rendered)
+    spec = importlib.util.spec_from_file_location("enum_types", module_path)
+    enum_types = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(enum_types)
+
+    car = enum_types.Car.from_instance(instance)
+    assert car.c == EnumLiteral("D::Color::red", "D::Color", "Color::red")

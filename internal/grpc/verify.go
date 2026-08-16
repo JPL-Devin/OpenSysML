@@ -284,8 +284,12 @@ func (s *Service) EvaluateCalc(ctx context.Context, req *pb.EvaluateCalcRequest)
 	}
 
 	args := make([]runtime.Value, 0, len(req.Arguments))
-	for _, arg := range req.Arguments {
-		args = append(args, ProtoToValue(arg))
+	for i, arg := range req.Arguments {
+		val, cerr := ProtoToValue(arg, v.cached.Index)
+		if cerr != nil {
+			return &pb.EvaluateCalcResponse{Error: fmt.Sprintf("argument %d: %v", i+1, cerr)}, nil
+		}
+		args = append(args, val)
 	}
 
 	result, err := v.runtime.InvokeCalc(sym, args, v.declaringScope(sym))
@@ -295,7 +299,7 @@ func (s *Service) EvaluateCalc(ctx context.Context, req *pb.EvaluateCalcRequest)
 			FailureReason: failureReason(err),
 		}, nil
 	}
-	return &pb.EvaluateCalcResponse{Result: ValueToProto(result)}, nil
+	return &pb.EvaluateCalcResponse{Result: ValueToProto(result, v.cached.Index)}, nil
 }
 
 // calcUsageOutputs evaluates a calc usage from its own member values. It reports
@@ -317,7 +321,7 @@ func (v *verifyContext) calcUsageOutputs(sym *symbols.Symbol) ([]*pb.CalcOutput,
 	for _, out := range outputs {
 		pbOutputs = append(pbOutputs, &pb.CalcOutput{
 			Name:  out.Name,
-			Value: ValueToProto(out.Value),
+			Value: ValueToProto(out.Value, v.cached.Index),
 		})
 	}
 	return pbOutputs, true, nil

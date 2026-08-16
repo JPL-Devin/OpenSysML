@@ -22,6 +22,7 @@ from pysysml.capabilities import (
 )
 from pysysml.conversion import Conversion
 from pysysml.diagnostic import Diagnostic
+from pysysml.enumeration import EnumLiteral
 from pysysml.errors import (
     ChecksumMismatchError,
     ConnectionError,
@@ -951,6 +952,12 @@ class Connection:
             return sysml_pb2.Value(null="")
         elif isinstance(py_value, Instance):
             return sysml_pb2.Value(instance_id=py_value.id)
+        elif isinstance(py_value, EnumLiteral):
+            return sysml_pb2.Value(enum_literal=sysml_pb2.EnumLiteral(
+                literal_id=py_value.literal_id,
+                enumeration_id=py_value.enumeration_id,
+                name=py_value.name,
+            ))
         elif isinstance(py_value, list):
             elements = [self._python_to_value(v) for v in py_value]
             return sysml_pb2.Value(sequence=sysml_pb2.ValueSequence(elements=elements))

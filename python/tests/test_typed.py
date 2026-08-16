@@ -227,3 +227,13 @@ def test_nested_slot_of_the_wrong_type_is_rejected():
     with pytest.raises(InstanceTypeError):
         nested_view = Vehicle.from_instance(nested)
         nested_view.engine
+
+
+def test_as_enum_literal_decodes_a_literal_and_rejects_its_rendering():
+    """An enumeration slot holds the literal itself, not the text of it."""
+    from pysysml import EnumLiteral
+
+    red = EnumLiteral("D::Color::red", "D::Color", "Color::red")
+    assert _t.as_enum_literal("c", red) is red
+    with pytest.raises(TypeMismatchError):
+        _t.as_enum_literal("c", "Color::red")

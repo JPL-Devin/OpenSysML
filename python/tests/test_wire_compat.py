@@ -214,3 +214,23 @@ def test_unknown_verification_fields_survive_an_older_reader():
     older = sysml_pb2.ServerInfoRequest()
     older.ParseFromString(payload)
     assert older.SerializeToString() == payload
+
+
+def test_enum_literal_is_an_added_value_arm():
+    """The literal arm is new field 8, so it displaces no existing value kind."""
+    fields = sysml_pb2.Value.DESCRIPTOR.fields_by_name
+    assert fields["enum_literal"].number == 8
+
+    value = sysml_pb2.Value(enum_literal=sysml_pb2.EnumLiteral(
+        literal_id="D::Color::red", enumeration_id="D::Color", name="Color::red",
+    ))
+    payload = value.SerializeToString()
+
+    again = sysml_pb2.Value()
+    again.ParseFromString(payload)
+    assert again == value
+
+    # A client whose schema predates the arm keeps the bytes intact.
+    older = sysml_pb2.ServerInfoRequest()
+    older.ParseFromString(payload)
+    assert older.SerializeToString() == payload
