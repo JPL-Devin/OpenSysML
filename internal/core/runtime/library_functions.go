@@ -848,6 +848,48 @@ func checkedNumeric(v semantics.Value) (semantics.Value, error) {
 	return realResult(v.Real)
 }
 
+// elementArith applies an arithmetic operator to two numeric elements, reporting
+// a result outside the range of its kind rather than wrapping or infinite.
+func elementArith(name string, op ast.OperatorKind, a, b semantics.Value) (semantics.Value, error) {
+	if a.Kind == semantics.ValInt && b.Kind == semantics.ValInt {
+		result, ok := intArith(op, a.Int, b.Int)
+		if !ok {
+			return semantics.Value{}, fmt.Errorf(
+				"%w: function %s has a result outside the Integer range",
+				semantics.ErrArithmeticOverflow, name,
+			)
+		}
+		return semantics.Value{Kind: semantics.ValInt, Int: result}, nil
+	}
+	res, ok := semantics.EvalBinary(op, a, b)
+	if !ok {
+		return semantics.Value{}, fmt.Errorf(
+			"%w: function %s cannot combine its arguments", ErrTypeMismatch, name,
+		)
+	}
+	return checkedNumeric(res)
+}
+
+// intArith is Integer addition, subtraction and multiplication, reporting a
+// result the int64 arithmetic would wrap.
+func intArith(op ast.OperatorKind, a, b int64) (int64, bool) {
+	switch op {
+	case ast.OpAdd:
+		result := a + b
+		return result, (b <= 0 || result > a) && (b >= 0 || result < a)
+	case ast.OpSub:
+		result := a - b
+		return result, (b >= 0 || result > a) && (b <= 0 || result < a)
+	case ast.OpMul:
+		result := a * b
+		if a == 0 {
+			return 0, true
+		}
+		return result, result/a == b && !(a == -1 && b == math.MinInt64)
+	}
+	return 0, false
+}
+
 // realVector builds a vector of Reals, reporting an element that is not a finite
 // Real rather than carrying an infinity into it.
 func (ctx *Context) realVector(components []float64) (Value, error) {
@@ -902,12 +944,9 @@ func combineElements(name string, op ast.OperatorKind, v, w []semantics.Value) (
 	}
 	out := make([]semantics.Value, len(v))
 	for i := range v {
-		res, ok := semantics.EvalBinary(op, v[i], w[i])
-		if !ok {
-			return nil, fmt.Errorf(
-				"%w: function %s cannot combine element %d of its arguments",
-				ErrTypeMismatch, name, i+1,
-			)
+		res, err := elementArith(name, op, v[i], w[i])
+		if err != nil {
+			return nil, err
 		}
 		out[i] = res
 	}
@@ -1055,12 +1094,9 @@ func scaleVector(name string, ctx *Context, scalar Value, scalarParam string, ve
 	}
 	scaled := make([]semantics.Value, len(elements))
 	for i, elem := range elements {
-		res, ok := semantics.EvalBinary(ast.OpMul, x, elem)
-		if !ok {
-			return Value{}, fmt.Errorf(
-				"%w: function %s cannot scale element %d of %q",
-				ErrTypeMismatch, name, i+1, vectorParam,
-			)
+		res, err := elementArith(name, ast.OpMul, x, elem)
+		if err != nil {
+			return Value{}, err
 		}
 		scaled[i] = res
 	}
@@ -1105,13 +1141,10 @@ func vectorInner(name string, _ *Context, args []Value) (Value, error) {
 		return Value{}, err
 	}
 	sum := semantics.Value{Kind: semantics.ValInt}
-	for i, product := range products {
-		next, ok := semantics.EvalBinary(ast.OpAdd, sum, product)
-		if !ok {
-			return Value{}, fmt.Errorf(
-				"%w: function %s cannot add product %d of its arguments",
-				ErrTypeMismatch, name, i+1,
-			)
+	for _, product := range products {
+		next, err := elementArith(name, ast.OpAdd, sum, product)
+		if err != nil {
+			return Value{}, err
 		}
 		sum = next
 	}
