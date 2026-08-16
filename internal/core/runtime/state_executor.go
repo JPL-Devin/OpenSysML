@@ -889,6 +889,32 @@ func (e *StateExecutor) recordHistory(state *ast.StateNode) *historyRecord {
 	return record
 }
 
+// recordRegionHistory remembers the state a region was left in, so a history
+// pseudostate of the state owning the region restores it.
+func (e *StateExecutor) recordRegionHistory(region *ast.StateRegion, state *ast.StateNode) {
+	owner := e.graph.RegionOwner[region]
+	if owner == nil {
+		return
+	}
+	record := e.recordHistory(owner)
+	if record.regions == nil {
+		record.regions = make(map[*ast.StateRegion]*ast.StateNode)
+	}
+	record.regions[region] = state
+}
+
+// forgetRegionHistory drops a region's recorded state, for a region left with no
+// active state at all: there is nothing for a history pseudostate to restore.
+func (e *StateExecutor) forgetRegionHistory(region *ast.StateRegion) {
+	owner := e.graph.RegionOwner[region]
+	if owner == nil {
+		return
+	}
+	if record := e.history[owner]; record != nil {
+		delete(record.regions, region)
+	}
+}
+
 // fireHistoryTransition takes a transition into a history pseudostate: the
 // composite state that owns it is re-entered in the configuration it was last
 // left in. Before the state has ever been exited there is nothing to restore, so
@@ -1669,8 +1695,8 @@ func (e *StateExecutor) exitState(state *ast.StateNode) error {
 
 	// Remember the configuration being left, so a history pseudostate owned by
 	// this state or by its parent can restore it.
-	if len(active) > 0 {
-		e.recordHistory(state).regions = active
+	for region, regionState := range active {
+		e.recordRegionHistory(region, regionState)
 	}
 	if parent := e.graph.ParentState[state]; parent != nil {
 		e.recordHistory(parent).child = state

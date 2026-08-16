@@ -339,6 +339,10 @@ func (e *StateExecutor) exitRegionTo(region *ast.StateRegion, stop *ast.StateNod
 		return nil
 	}
 	delete(e.activeConfig.regionStates, region)
+	if stop == nil {
+		// The region keeps no active state, so it has none to restore either.
+		e.forgetRegionHistory(region)
+	}
 	for current := active; current != nil && current != stop && e.regionContains(region, current); current = e.graph.ParentState[current] {
 		if err := e.exitState(current); err != nil {
 			return fmt.Errorf("exit state: %w", err)
@@ -365,8 +369,10 @@ func (e *StateExecutor) leaveRegion(region *ast.StateRegion, trans *lower.Transi
 	lca := e.getLCA(owner, target)
 	for current := owner; current != nil && current != lca; current = e.graph.ParentState[current] {
 		// Clear the entry of the region declaring current first: an enclosing state
-		// exited below would otherwise exit current a second time through it.
-		if declaring := e.graph.RegionOf[current]; e.activeConfig.regionStates[declaring] == current {
+		// exited below would otherwise exit current a second time through it. The
+		// state the region is left in is recorded here instead, for history.
+		if declaring := e.graph.RegionOf[current]; declaring != nil && e.activeConfig.regionStates[declaring] == current {
+			e.recordRegionHistory(declaring, current)
 			delete(e.activeConfig.regionStates, declaring)
 		}
 		if err := e.exitState(current); err != nil {
