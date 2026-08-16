@@ -129,16 +129,14 @@ func (c conditionCheck) name() string {
 }
 
 // evaluateConditions evaluates conds in order and reports whether every required
-// one holds, or — for a negated element — whether one of them fails.
+// one holds, or — for a negated element — whether one of them fails. check.self
+// is the subject already, as checkSubject resolved it.
 func (ctx *Context) evaluateConditions(check conditionCheck, conds []condition) (bool, error) {
 	if len(conds) == 0 {
 		return false, fmt.Errorf("%s %s: %w", check.kind, check.name(), ErrNoConditions)
 	}
 	features := ctx.conditionFeatures(check.sym)
-	self, err := ctx.conditionSubject(check.sym, check.self)
-	if err != nil {
-		return false, fmt.Errorf("%s %s: %w", check.kind, check.name(), err)
-	}
+	self := check.self
 	// One check is one evaluation: its conditions share what a calc usage they
 	// read answers, and the next check reads it again.
 	activation, endStep := ctx.beginStep()
@@ -195,6 +193,17 @@ func (ctx *Context) conditionSubject(sym *symbols.Symbol, self *Instance) (*Inst
 	}
 	return nil, fmt.Errorf("%w: %s is carried by %s: check it on one of them",
 		ErrAmbiguousSubject, sym.Name, strings.Join(ctx.objectLabels(carriers), ", "))
+}
+
+// checkSubject resolves the object a check is about before its bindings are
+// evaluated, so the bindings and the conditions read one object. An ambiguity is
+// named after the checked element, as a verdict is.
+func (ctx *Context) checkSubject(kind, element string, sym *symbols.Symbol, self *Instance) (*Instance, error) {
+	subject, err := ctx.conditionSubject(sym, self)
+	if err != nil {
+		return nil, fmt.Errorf("%s %s: %w", kind, element, err)
+	}
+	return subject, nil
 }
 
 // declaringType is the type whose objects carry sym, nil when sym is declared
