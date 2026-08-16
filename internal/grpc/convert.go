@@ -333,8 +333,8 @@ var (
 	// unit can be rebuilt from the reduction naming it.
 	ErrUnknownBaseUnit = errors.New("unknown base unit")
 
-	// ErrUnitScaleUnusable reports a unit reduction whose scale has no
-	// denominator, which no magnitude can be converted through.
+	// ErrUnitScaleUnusable reports a unit reduction whose scale is zero or
+	// undefined, which no magnitude can be converted through.
 	ErrUnitScaleUnusable = errors.New("unit scale is not a usable ratio")
 )
 
@@ -400,10 +400,11 @@ func protoToUnitTerm(pt *pb.UnitTerm, idx *symbols.Index) (semantics.UnitTerm, e
 		// A unit the service could not reduce; dimension one describes no base unit.
 		return semantics.UnitTerm{Scale: semantics.UnitScale(1)}, nil
 	}
-	if pt.GetScaleDen() == 0 {
-		return semantics.UnitTerm{}, fmt.Errorf("%w: %g/%g", ErrUnitScaleUnusable, pt.GetScaleNum(), pt.GetScaleDen())
+	scale := semantics.Scale{Num: pt.GetScaleNum(), Den: pt.GetScaleDen()}
+	if scale.IsZero() {
+		return semantics.UnitTerm{}, fmt.Errorf("%w: %g/%g", ErrUnitScaleUnusable, scale.Num, scale.Den)
 	}
-	term := semantics.UnitTerm{Scale: semantics.Scale{Num: pt.GetScaleNum(), Den: pt.GetScaleDen()}}
+	term := semantics.UnitTerm{Scale: scale}
 	for _, f := range pt.GetFactors() {
 		matches := idx.LookupQualified(f.GetUnitId())
 		if len(matches) != 1 {
