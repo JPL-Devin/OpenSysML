@@ -2580,6 +2580,13 @@ func testPartsSubsettingOneCollection(t *testing.T) {
 	if satisfied {
 		t.Error("an ambiguous subject is no verdict")
 	}
+	// The two objects reached through one collection are told apart by the
+	// declaration each materializes, not by the feature holding both.
+	for _, want := range []string{"(small)", "(large)"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not name a carrier %q", err, want)
+		}
+	}
 }
 
 // testRequirementFeatureWithoutAValue: a condition naming a feature the

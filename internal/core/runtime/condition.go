@@ -427,15 +427,30 @@ func (ctx *Context) carrierLabels(carriers []carrier) []string {
 			name = def.Name
 		}
 		label := fmt.Sprintf("%s #%d", name, inst.ID)
-		switch {
-		case c.features != "":
-			label += " (" + c.features + ")"
-		case inst.Type != nil && inst.Type.Name != "" && inst.Type.Name != name:
-			label += " (" + inst.Type.Name + ")"
+		if path := carrierPath(c, name); path != "" {
+			label += " (" + path + ")"
 		}
 		out = append(out, label)
 	}
 	return out
+}
+
+// carrierPath names a carrier apart from its siblings: the features walked to
+// it, ending in the declaration it materializes — which differs from the feature
+// holding it when a collection gathers objects of several declarations.
+func carrierPath(c carrier, definition string) string {
+	decl := ""
+	if c.instance.Type != nil && c.instance.Type.Name != definition {
+		decl = c.instance.Type.Name
+	}
+	if c.features == "" {
+		return decl
+	}
+	walked := strings.Split(c.features, "::")
+	if decl != "" && walked[len(walked)-1] != decl {
+		walked[len(walked)-1] = decl
+	}
+	return strings.Join(walked, "::")
 }
 
 // definitionOf is the definition objects of sym are objects of: sym itself when
