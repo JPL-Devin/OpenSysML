@@ -171,6 +171,46 @@ func TestSendReachesEnclosingPartPortsWithoutAnInstance(t *testing.T) {
 	assertIntOutput(t, outputs, "got", 4)
 }
 
+// A state, a region and a transition are not what performs a behavior, so the
+// search for the performing part passes through them: a send written in a state
+// machine reaches the enclosing part's ports as one written in an action does.
+func TestSendFromAStateMachineReachesEnclosingPartPorts(t *testing.T) {
+	bodies := map[string]string{
+		"state entry": `
+			state waiting { entry { send Ping() via src; } }
+			start then waiting;
+			transition first waiting accept Ping via dst do assign got := 1 then done;`,
+		"transition effect": `
+			state waiting;
+			state sent;
+			start then waiting;
+			transition go first waiting do send Ping() via src then sent;
+			transition first sent accept Ping via dst do assign got := 1 then done;`,
+	}
+	for name, body := range bodies {
+		t.Run(name, func(t *testing.T) {
+			idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package P {
+				item def Ping;
+				part node {
+					port src;
+					port dst;
+					connect src to dst;
+					state radio {
+						attribute got : Integer = 0;
+						initial start;
+						final done;`+body+`
+					}
+				}
+			}`))
+			outputs, err := ctx.ExecuteState(oneSymbol(t, idx, "P::node::radio"))
+			if err != nil {
+				t.Fatalf("execute state machine: %v", err)
+			}
+			assertIntOutput(t, outputs, "got", 1)
+		})
+	}
+}
+
 // A connector may join a port of the performing part to a port of the behavior
 // itself, and routing must see both ends: the part's end is reached through the
 // performer, the behavior's through its own body.

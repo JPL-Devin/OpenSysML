@@ -166,36 +166,3 @@ func FeaturePath(node ast.Node) string {
 	}
 	return ast.SimpleName(node)
 }
-
-// PeerPorts returns the ends connected to port, across every connection it
-// participates in, in declaration order and without duplicates. A port is never
-// its own peer, so a connection joining a port to itself yields nothing.
-func PeerPorts(conns []Connection, port string) []string {
-	if port == "" {
-		return nil
-	}
-	var peers []string
-	seen := map[string]bool{port: true}
-	for _, conn := range conns {
-		if !contains(conn.Ends, port) {
-			continue
-		}
-		for _, end := range conn.Ends {
-			if seen[end] {
-				continue
-			}
-			seen[end] = true
-			peers = append(peers, end)
-		}
-	}
-	return peers
-}
-
-func contains(names []string, want string) bool {
-	for _, name := range names {
-		if name == want {
-			return true
-		}
-	}
-	return false
-}

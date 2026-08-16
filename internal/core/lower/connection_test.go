@@ -1,6 +1,7 @@
 package lower
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
@@ -22,12 +23,12 @@ func TestLowerConnectionsFromActionBody(t *testing.T) {
 	if len(graph.Connections) != 1 {
 		t.Fatalf("Connections = %v, want one connection", graph.Connections)
 	}
-	if got := PeerPorts(graph.Connections, "outPort"); len(got) != 1 || got[0] != "inPort" {
-		t.Errorf("PeerPorts(outPort) = %v, want [inPort]", got)
+	if got := peerPorts(graph.Connections, "outPort"); len(got) != 1 || got[0] != "inPort" {
+		t.Errorf("peerPorts(outPort) = %v, want [inPort]", got)
 	}
 	// A connection joins its ends without a direction, so routing works either way.
-	if got := PeerPorts(graph.Connections, "inPort"); len(got) != 1 || got[0] != "outPort" {
-		t.Errorf("PeerPorts(inPort) = %v, want [outPort]", got)
+	if got := peerPorts(graph.Connections, "inPort"); len(got) != 1 || got[0] != "outPort" {
+		t.Errorf("peerPorts(inPort) = %v, want [outPort]", got)
 	}
 }
 
@@ -53,12 +54,12 @@ func TestLowerNaryConnectionKeepsEveryEnd(t *testing.T) {
 		t.Fatalf("lowered ends = %v, want four", got)
 	}
 	for _, port := range []string{"p1", "p2", "p3", "p4"} {
-		peers := PeerPorts(graph.Connections, port)
+		peers := peerPorts(graph.Connections, port)
 		if len(peers) != 3 {
-			t.Errorf("PeerPorts(%s) = %v, want the other three ends", port, peers)
+			t.Errorf("peerPorts(%s) = %v, want the other three ends", port, peers)
 		}
-		if contains(peers, port) {
-			t.Errorf("PeerPorts(%s) = %v, an end is not its own peer", port, peers)
+		if slices.Contains(peers, port) {
+			t.Errorf("peerPorts(%s) = %v, an end is not its own peer", port, peers)
 		}
 	}
 }
@@ -81,8 +82,8 @@ func TestLowerConnectionEndsThatDeclareTheirOwnName(t *testing.T) {
 	if len(graph.Connections) != 1 {
 		t.Fatalf("Connections = %v, want one connection", graph.Connections)
 	}
-	if got := PeerPorts(graph.Connections, "outPort"); len(got) != 1 || got[0] != "inPort" {
-		t.Errorf("PeerPorts(outPort) = %v, want [inPort]", got)
+	if got := peerPorts(graph.Connections, "outPort"); len(got) != 1 || got[0] != "inPort" {
+		t.Errorf("peerPorts(outPort) = %v, want [inPort]", got)
 	}
 }
 
@@ -145,15 +146,15 @@ func TestLowerAcceptRecordsViaPort(t *testing.T) {
 
 func TestPeerPortsIgnoresUnconnectedAndSelf(t *testing.T) {
 	conns := []Connection{{Ends: []string{"a", "b"}}, {Ends: []string{"a", "a"}}}
-	if got := PeerPorts(conns, "lonely"); got != nil {
-		t.Errorf("PeerPorts(lonely) = %v, want nothing", got)
+	if got := peerPorts(conns, "lonely"); got != nil {
+		t.Errorf("peerPorts(lonely) = %v, want nothing", got)
 	}
 	// A port joined to itself reaches nobody but itself, which is not a peer.
-	if got := PeerPorts(conns, "a"); len(got) != 1 || got[0] != "b" {
-		t.Errorf("PeerPorts(a) = %v, want [b]", got)
+	if got := peerPorts(conns, "a"); len(got) != 1 || got[0] != "b" {
+		t.Errorf("peerPorts(a) = %v, want [b]", got)
 	}
-	if got := PeerPorts(nil, "a"); got != nil {
-		t.Errorf("PeerPorts with no connections = %v, want nothing", got)
+	if got := peerPorts(nil, "a"); got != nil {
+		t.Errorf("peerPorts with no connections = %v, want nothing", got)
 	}
 }
 
@@ -163,14 +164,14 @@ func TestPeerPortsSpansMultiEndAndMultipleConnections(t *testing.T) {
 		{Ends: []string{"hub", "extra"}},
 		{Ends: []string{"hub", "left"}},
 	}
-	got := PeerPorts(conns, "hub")
+	got := peerPorts(conns, "hub")
 	want := []string{"left", "right", "extra"}
 	if len(got) != len(want) {
-		t.Fatalf("PeerPorts(hub) = %v, want %v", got, want)
+		t.Fatalf("peerPorts(hub) = %v, want %v", got, want)
 	}
 	for i, name := range want {
 		if got[i] != name {
-			t.Fatalf("PeerPorts(hub) = %v, want %v", got, want)
+			t.Fatalf("peerPorts(hub) = %v, want %v", got, want)
 		}
 	}
 }
@@ -196,8 +197,8 @@ func TestLowerAnonymousNaryConnectionKeepsEveryEnd(t *testing.T) {
 		t.Fatalf("lowered ends = %v, want three", got)
 	}
 	for _, port := range []string{"p1", "p2", "p3"} {
-		if peers := PeerPorts(graph.Connections, port); len(peers) != 2 {
-			t.Errorf("PeerPorts(%s) = %v, want the other two ends", port, peers)
+		if peers := peerPorts(graph.Connections, port); len(peers) != 2 {
+			t.Errorf("peerPorts(%s) = %v, want the other two ends", port, peers)
 		}
 	}
 }
@@ -275,11 +276,11 @@ func TestLowerConnectionEndFollowsAFeatureChain(t *testing.T) {
 	if len(graph.Connections) != 1 {
 		t.Fatalf("Connections = %v, want one connection", graph.Connections)
 	}
-	if got := PeerPorts(graph.Connections, "sensor.out"); len(got) != 1 || got[0] != "inPort" {
-		t.Errorf("PeerPorts(sensor.out) = %v, want [inPort]", got)
+	if got := peerPorts(graph.Connections, "sensor.out"); len(got) != 1 || got[0] != "inPort" {
+		t.Errorf("peerPorts(sensor.out) = %v, want [inPort]", got)
 	}
-	if got := PeerPorts(graph.Connections, "out"); got != nil {
-		t.Errorf("PeerPorts(out) = %v, want nothing: the end names sensor.out", got)
+	if got := peerPorts(graph.Connections, "out"); got != nil {
+		t.Errorf("peerPorts(out) = %v, want nothing: the end names sensor.out", got)
 	}
 }
 
@@ -332,8 +333,8 @@ func TestLowerObjectConnectionsAreOwnedByTheObject(t *testing.T) {
 	if conns[1].Variation != "link" || conns[1].Variant != "direct" {
 		t.Errorf("connection = %+v, want variation link variant direct", conns[1])
 	}
-	if got := PeerPorts(conns[2:], "outPort"); len(got) != 1 || got[0] != "bypass" {
-		t.Errorf("PeerPorts(outPort) over the indirect variant = %v, want [bypass]", got)
+	if got := peerPorts(conns[2:], "outPort"); len(got) != 1 || got[0] != "bypass" {
+		t.Errorf("peerPorts(outPort) over the indirect variant = %v, want [bypass]", got)
 	}
 }
 
@@ -360,4 +361,27 @@ func usageOrDefFor(t *testing.T, src string) ast.Node {
 	}
 	t.Fatalf("no definition or usage in %q", src)
 	return nil
+}
+
+// peerPorts returns the ends connected to port, in declaration order and
+// without duplicates. A port is never its own peer.
+func peerPorts(conns []Connection, port string) []string {
+	if port == "" {
+		return nil
+	}
+	var peers []string
+	seen := map[string]bool{port: true}
+	for _, conn := range conns {
+		if !slices.Contains(conn.Ends, port) {
+			continue
+		}
+		for _, end := range conn.Ends {
+			if seen[end] {
+				continue
+			}
+			seen[end] = true
+			peers = append(peers, end)
+		}
+	}
+	return peers
 }

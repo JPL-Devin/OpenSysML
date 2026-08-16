@@ -63,8 +63,8 @@ func (ctx *Context) performerConnections(self *Instance, scope *symbols.Scope) [
 
 // enclosingPart returns the symbol of the nearest part-like declaration a
 // behavior is nested in — the part that performs it — or nil when the behavior
-// is not declared in one. A behavior nested in another behavior is reached
-// through its own body, so the search passes through it.
+// is not declared in one. Anything else it is nested in — a state, a region, a
+// transition, another behavior, a package — is passed through.
 func enclosingPart(scope *symbols.Scope) *symbols.Symbol {
 	for s := scope; s != nil; s = s.Parent() {
 		owner := s.Owner()
@@ -80,8 +80,6 @@ func enclosingPart(scope *symbols.Scope) *symbols.Symbol {
 			if structuralDefinition(decl.Kind) {
 				return owner
 			}
-		default:
-			return nil
 		}
 	}
 	return nil
