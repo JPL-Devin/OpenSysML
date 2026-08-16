@@ -2,6 +2,11 @@
 
 import pytest
 from unittest.mock import Mock
+from pysysml.capabilities import (
+    CAPABILITY_SYMBOL_ATTRIBUTES,
+    MissingCapabilityError,
+    ServerInfo,
+)
 from pysysml.symbol import Symbol
 from pysysml.proto import sysml_pb2
 
@@ -283,7 +288,11 @@ class TestSymbolAttributeFacts:
     for an element that has attributes."""
 
     def _car(self, mock_client):
-        """Build a Car symbol as the service reports it: one own attribute, one
+        """Wrap the reported Car as a Symbol."""
+        return Symbol(self._car_info(mock_client), mock_client, "model_abc123")
+
+    def _car_info(self, mock_client):
+        """Build a Car as the service reports it: one own attribute, one
         inherited from Base, each with resolved type and default value."""
         base_info = sysml_pb2.SymbolInfo(
             id="Demo::Base",
@@ -352,7 +361,7 @@ class TestSymbolAttributeFacts:
                 sysml_pb2.AttributeInfo(name="derived", type="ScalarValues::Real"),
             ],
         )
-        return Symbol(car_info, mock_client, "model_abc123")
+        return car_info
 
     def test_attribute_facts_reports_type_value_and_unit(self):
         """attribute_facts() carries the facts the service resolved, not an empty list."""
@@ -386,7 +395,7 @@ class TestSymbolAttributeFacts:
     def test_attributes_of_a_typed_usage_come_from_its_type(self):
         """A usage written as `part car : Car` has the attributes Car declares."""
         mock_client = Mock()
-        car = self._car(mock_client)
+        car_info = self._car_info(mock_client)
         usage_info = sysml_pb2.SymbolInfo(
             id="Demo::car",
             name="car",
@@ -399,11 +408,11 @@ class TestSymbolAttributeFacts:
                     target_kind="partDef",
                 ),
             ],
-            attributes=list(car._pb.attributes),
+            attributes=list(car_info.attributes),
         )
         symbols = mock_client.get_symbol.side_effect
         mock_client.get_symbol.side_effect = (
-            lambda _hash, symbol_id: car._pb if symbol_id == "Demo::Car"
+            lambda _hash, symbol_id: car_info if symbol_id == "Demo::Car"
             else symbols(_hash, symbol_id)
         )
 
@@ -436,6 +445,25 @@ class TestSymbolAttributeFacts:
         label = frame[frame["name"] == "label"].iloc[0]
         assert label["value"] == "base"
         assert label["inherited"]
+
+    def test_attribute_facts_name_a_service_that_cannot_resolve_them(self):
+        """An older service's empty set is reported as a missing capability, not as none."""
+        mock_client = Mock()
+        mock_client.server_info.return_value = ServerInfo(
+            version="v0.0.1", capabilities=frozenset({"type_facts"}),
+            answered=True, origin="an old sysml-grpc",
+        )
+        car = self._car(mock_client)
+
+        with pytest.raises(MissingCapabilityError) as excinfo:
+            car.attribute_facts()
+        assert excinfo.value.capability == CAPABILITY_SYMBOL_ATTRIBUTES
+
+        with pytest.raises(MissingCapabilityError):
+            car.to_dataframe()
+
+        # Navigation that does not depend on the resolved set keeps working.
+        assert [child.name for child in car.children()] == ["mass", "engine"]
 
     def test_to_dataframe_of_a_symbol_with_no_members(self):
         """An element with no members still has the full column set."""

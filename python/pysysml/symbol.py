@@ -2,6 +2,11 @@
 
 from typing import List, Optional, TYPE_CHECKING
 
+from pysysml.capabilities import (
+    CAPABILITY_SYMBOL_ATTRIBUTES,
+    require,
+    upgrade_remedy,
+)
 from pysysml.typefacts import (
     AttributeFacts,
     Multiplicity,
@@ -112,11 +117,36 @@ class Symbol:
         This is the attribute set the service resolved, so unlike
         :meth:`attributes` it needs no further RPC and reports each attribute's
         default value.
+
+        Raises:
+            MissingCapabilityError: The service does not report
+                ``symbol_attributes``, so it answers with an empty set that
+                cannot be told from an element having no attributes.
         """
+        self._require_resolved_attributes()
+        return self._attribute_facts()
+
+    def _attribute_facts(self) -> List[AttributeFacts]:
+        """Return the attribute facts the service reported, whatever they are."""
         return [AttributeFacts.from_pb(attr) for attr in self._pb.attributes]
 
+    def _require_resolved_attributes(self) -> None:
+        """Name a service whose attribute set is empty because it predates the feature."""
+        if self._client is None:
+            return
+        require(
+            self._client.server_info(),
+            CAPABILITY_SYMBOL_ATTRIBUTES,
+            upgrade_remedy(CAPABILITY_SYMBOL_ATTRIBUTES),
+        )
+
     def facts(self) -> SymbolFacts:
-        """Return this symbol's static facts, detached from the protobuf message."""
+        """Return this symbol's static facts, detached from the protobuf message.
+
+        ``attributes`` carries what the service reported, which is nothing from
+        one predating the attribute set; :meth:`attribute_facts` names such a
+        service instead.
+        """
         return SymbolFacts(
             id=self.id,
             name=self.name,
@@ -124,7 +154,7 @@ class Symbol:
             type=self.type_facts,
             multiplicity=self.multiplicity,
             specializations=tuple(self.specializations),
-            attributes=tuple(self.attribute_facts()),
+            attributes=tuple(self._attribute_facts()),
         )
 
     def children(self) -> List["Symbol"]:
@@ -242,7 +272,10 @@ class Symbol:
 
         Raises:
             ImportError: If pandas is not installed
+            MissingCapabilityError: The service does not report
+                ``symbol_attributes``, so no default could be reported
         """
+        self._require_resolved_attributes()
         try:
             import pandas as pd
         except ImportError:
