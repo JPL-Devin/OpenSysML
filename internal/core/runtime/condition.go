@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
@@ -282,23 +283,22 @@ func (ctx *Context) heldObjectIDs() map[int64]bool {
 
 // carriersUnder returns the objects reachable from roots whose type carries the
 // features owner declares, roots included, in identity order. A declaration is
-// descended into once per path, so composition naming its own kind — a part
-// typed by its enclosing definition, a reference back to an ancestor — is a
-// finite search rather than an endless supply of new objects. One object stands
-// for each declaration, so a part held with a multiplicity is one candidate.
+// descended into once per path, so recursive composition is a finite search, and
+// one object stands for each declaration path, so objects a multiplicity
+// repeated are one candidate however deep the named declaration sits in them.
 func (ctx *Context) carriersUnder(roots []*Instance, owner *symbols.Symbol) []*Instance {
 	var out []*Instance
 	seen := make(map[int64]bool, len(roots))
-	declared := make(map[occurrenceOf]bool)
+	declared := make(map[string]bool)
 	path := make(map[*symbols.Symbol]bool)
-	var descend func(inst *Instance, held occurrenceOf)
-	descend = func(inst *Instance, held occurrenceOf) {
+	var descend func(inst *Instance, occurrence string)
+	descend = func(inst *Instance, occurrence string) {
 		if inst == nil || seen[inst.ID] {
 			return
 		}
 		seen[inst.ID] = true
-		if ctx.model.Conforms(inst.Type, owner) && !declared[held] {
-			declared[held] = true
+		if ctx.model.Conforms(inst.Type, owner) && !declared[occurrence] {
+			declared[occurrence] = true
 			out = append(out, inst)
 		}
 		if inst.Type != nil {
@@ -309,22 +309,14 @@ func (ctx *Context) carriersUnder(roots []*Instance, owner *symbols.Symbol) []*I
 			defer delete(path, inst.Type)
 		}
 		for _, child := range ctx.nestedObjects(inst) {
-			descend(child.instance, occurrenceOf{holder: inst.ID, feature: child.feature})
+			descend(child.instance, occurrence+"::"+child.feature)
 		}
 	}
 	for _, root := range roots {
-		descend(root, occurrenceOf{holder: root.ID})
+		descend(root, strconv.FormatInt(root.ID, 10))
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out
-}
-
-// occurrenceOf identifies the declaration an object occurs as: the feature of the
-// object holding it. The objects a multiplicity materialized into one slot are
-// occurrences of one declaration, so they are one candidate subject.
-type occurrenceOf struct {
-	holder  int64
-	feature string
 }
 
 // heldObject is an object a feature of another object holds, named by that
