@@ -199,6 +199,52 @@ func TestTypedMultiValuedDefaultHoldsItsContents(t *testing.T) {
 	}
 }
 
+// A composite multi-valued part given a default holds the very objects the
+// default names, rather than fresh anonymous objects of its type.
+func TestCompositeMultiValuedDefaultHoldsTheNamedObjects(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `
+		package test {
+			private import ScalarValues::Real;
+			part def Sub { attribute volume : Real; }
+			part def Bay {
+				part left : Sub { attribute :>> volume = 2.0; }
+				part right : Sub { attribute :>> volume = 3.5; }
+				part stowed : Sub[2] = (left, right);
+			}
+			part bay : Bay;
+		}
+	`))
+	matches := idx.LookupQualified("test::bay")
+	if len(matches) != 1 {
+		t.Fatalf("test::bay: %d matching symbols, want 1", len(matches))
+	}
+	inst, err := ctx.Instantiate(matches[0])
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	var want []int64
+	for _, name := range []string{"left", "right"} {
+		slot, err := inst.GetSlot(ctx, name)
+		if err != nil {
+			t.Fatalf("GetSlot(%s): %v", name, err)
+		}
+		want = append(want, slot.Value.Instance)
+	}
+	slot, err := inst.GetSlot(ctx, "stowed")
+	if err != nil {
+		t.Fatalf("GetSlot(stowed): %v", err)
+	}
+	elements := elementsOf(slot.HeldValue())
+	if len(elements) != 2 {
+		t.Fatalf("stowed holds %d element(s), want 2", len(elements))
+	}
+	for i, el := range elements {
+		if el.Kind != ValInstance || el.Instance != want[i] {
+			t.Errorf("stowed[%d] = %v, want instance %d", i, el, want[i])
+		}
+	}
+}
+
 // A nested part usage with a body of its own is an object shaped by that body:
 // what it redeclares must win over what its type declares.
 func TestNestedUsageBodyOverridesItsType(t *testing.T) {
@@ -294,4 +340,26 @@ func nestedReal(t *testing.T, ctx *Context, inst *Instance, slotName, nestedName
 		t.Fatalf("GetSlot(%q) failed: %v", nestedName, err)
 	}
 	return nestedSlot.Value.Const.Real
+}
+
+// A default that is no value at all holds nothing, so what the multiplicity
+// check counted is what the slot stores.
+func TestNullDefaultHoldsNoElements(t *testing.T) {
+	model, resolver, root := parseAndBuildModel(t, `
+		part def Rig {
+			attribute nothing[0..*] = null;
+		}
+	`)
+	ctx := NewContext(model, resolver, 1000)
+	inst, err := ctx.Instantiate(resolveSymbol(t, root, "Rig"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	slot, err := inst.GetSlot(ctx, "nothing")
+	if err != nil {
+		t.Fatalf("GetSlot: %v", err)
+	}
+	if elements := elementsOf(slot.HeldValue()); len(elements) != 0 {
+		t.Errorf("nothing holds %v, want no elements", elements)
+	}
 }
