@@ -2043,3 +2043,48 @@ number rather than quoting the table.
   `WorkspaceEdit` whose `newText` actually fixes the file. A missing-semicolon fix needs a fixture
   the parser recovers with a fix on — `action def A { first start }` yields `Insert ';'`; a plain
   attribute declaration yields a diagnostic with no fix.
+
+## pysysml service ownership and the require-service gate (PR #204)
+
+Ownership is the claim worth testing by hand, because pytest can pass while the invariant is
+broken. Three probes, each with a state dir of its own so nothing collides:
+
+```bash
+PY=~/pysysml-venv/bin/python          # ls -d /home/ubuntu/*venv* if it is missing
+cp bin/sysml-grpc ~/.pysysml/bin/     # what CI does; otherwise ensure_binary downloads
+PORT=$($PY -c 'import socket;s=socket.socket();s.bind(("localhost",0));print(s.getsockname()[1])')
+```
+
+- **Foreign service:** start `bin/sysml-grpc -port $PORT` from the shell, then in one
+  `PYSYSML_STATE_DIR=/tmp/stateN` python process `Connection(port=P, auto_start=False)`,
+  `pysysml.connect(port=P)` (the adopt path) and a connection left open at exit. Expect the
+  shell's pid to still be alive and the state dir to hold **only** `sysml-grpc-<port>.lock` — a
+  `sysml-grpc-<port>.pid` for a service pysysml did not spawn is the bug.
+- **Own service:** `pysysml.connect(port=<free>)` writes
+  `{"pid","create_time","port","owner_pid","owner_create_time"}`; assert `create_time` equals
+  `psutil.Process(pid).create_time()` and `owner_pid == os.getpid()`. Two connections must keep it
+  alive when the first closes, and the last close (or plain interpreter exit, via `atexit`) must
+  stop it and delete the `.pid`.
+- **Pid spoof:** `bash -c 'exec -a "sysml-grpc -port P (decoy)" sleep 600'` plus a hand-written
+  pidfile naming that pid with a `create_time` off by a few hundred seconds. The decoy must survive
+  and the record must be replaced/removed. The old cmdline-substring scheme killed it, so this is
+  the one probe that distinguishes the schemes.
+- Use `conn.load(path)` (not `load_model`) for a real RPC that proves the connection talked to the
+  service rather than failing early.
+
+Suite counts at PR #204 (`cd python && $PY -m pytest tests/ -q`): **407 passed / 13 skipped** with
+no service; **417 passed / 3 skipped** with a service on 50051 and `PYSYSML_REQUIRE_SERVICE=1`, the
+3 remaining skips being mypy-not-installed and a manual-binary-cache case, never a service skip.
+With `PYSYSML_REQUIRE_SERVICE=1` and no service, collection must **error** (exit 2,
+"none answers on localhost:50051"), never skip. A whole run must leave an operator-started service
+on 50051 with the same pid.
+
+`python/scripts/pin_release_checksums.py --check` hits the GitHub releases API for every pinned
+asset and dies with `HTTP Error 403: rate limit exceeded` once the unauthenticated budget is spent;
+it reads `$GITHUB_TOKEN`. Set it without putting the token on camera:
+`read -rs GITHUB_TOKEN; export GITHUB_TOKEN`. Careful with `--version <tag> --write`: it edits
+`python/pysysml/binary.py`, so `git checkout python/pysysml/binary.py` afterwards. For the
+"release publishes no assets" refusal use an old tag (`v0.0.4`) — v0.0.5..v0.0.8 all publish
+binaries now. The unpinned-download refusal is testable offline-ish with
+`HOME=/tmp/fakehome $PY -c "...ensure_binary(version='v0.0.8')"`, which keeps the real
+`~/.pysysml/bin` cache intact.
