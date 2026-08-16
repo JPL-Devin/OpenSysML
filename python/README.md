@@ -57,8 +57,9 @@ trust explicitly, with a warning.
 At release time, after the service binaries are published and final:
 
 ```bash
-python scripts/pin_release_checksums.py --version v0.0.8 --write
-git commit -am 'chore(python): pin release digests for v0.0.8'
+export GITHUB_TOKEN=...            # the release API rate-limits unauthenticated calls
+python scripts/pin_release_checksums.py --version v0.0.9 --write
+git commit -am 'chore(python): pin release digests for v0.0.9'
 ```
 
 The script downloads every `sysml-grpc-*` asset of that release, hashes what it
