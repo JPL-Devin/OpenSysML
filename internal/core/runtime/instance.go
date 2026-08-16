@@ -168,7 +168,7 @@ func isOccurrenceUsage(sym *symbols.Symbol) bool {
 // occursOnce reports whether a usage names at most one occurrence; several
 // occurrences are a collection rather than one object to read features from.
 func (ctx *Context) occursOnce(sym *symbols.Symbol) bool {
-	mult := ctx.extractMultiplicity(sym)
+	mult, _ := ctx.extractMultiplicity(sym)
 	return !mult.Upper.Infinite && mult.Upper.Value <= 1
 }
 
@@ -177,6 +177,24 @@ func (ctx *Context) occursOnce(sym *symbols.Symbol) bool {
 // separately.
 func isScalarFeature(feat *EffectiveFeature) bool {
 	return !feat.Multiplicity.Upper.Infinite && feat.Multiplicity.Upper.Value <= 1
+}
+
+// checkDefaultCount reports a default whose element count does not conform to
+// the multiplicity the feature states. A conforming default is merged as
+// written; a non-conforming one is neither broadcast nor padded, since that
+// would invent values the model does not state. The count of an expression's
+// result is only known here, so this is where such a default is reported; a
+// count the type tier can see statically is reported there (passes.checkValueCount).
+func (ctx *Context) checkDefaultCount(inst *Instance, slot *Slot, name string, val Value) error {
+	// 1..1 assumed rather than stated is no declared bound to hold a default to.
+	if !slot.Feature.MultiplicityStated {
+		return nil
+	}
+	count := int64(len(elementsOf(val)))
+	if msg := slot.Feature.Multiplicity.CountViolation(count); msg != "" {
+		return fmt.Errorf("slot %s.%s: %w: %s", inst.Type.Name, name, ErrMultiplicityViolation, msg)
+	}
+	return nil
 }
 
 // GetSlot retrieves the slot for the named feature, materializing it lazily
@@ -221,32 +239,31 @@ func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 
 	// A default that did not constant-fold is a derived value: evaluate it
 	// against this instance, so that it sees the sibling slots it refers to.
-	if slot.Feature.DefaultValue != nil && isScalarFeature(slot.Feature) {
-		val, err := ctx.evalSlotDefault(inst, slot, name)
-		if err != nil {
-			return nil, err
-		}
-		slot.Value = val
-		slot.Materialized = true
-		return slot, nil
-	}
-
-	// A multi-valued feature given a default holds that default's contents; a
-	// single value written there is the collection's one element.
+	// The feature holds what the default states, once that conforms to the
+	// feature's multiplicity.
 	if slot.Feature.DefaultValue != nil {
 		val, err := ctx.evalSlotDefault(inst, slot, name)
 		if err != nil {
 			return nil, err
 		}
-		if val.Kind != ValSequence && val.Kind != ValSet {
-			if err := ctx.chargeElements(1); err != nil {
-				return nil, err
-			}
-			seq := NewSequence()
-			seq.Append(val)
-			val = Value{Kind: ValSequence, Sequence: seq}
+		if err := ctx.checkDefaultCount(inst, slot, name, val); err != nil {
+			return nil, err
 		}
-		slot.Values = val
+		if isScalarFeature(slot.Feature) {
+			slot.Value = val
+		} else {
+			// A multi-valued feature holds a collection, so a single value
+			// stated as its default is that collection's one element.
+			if val.Kind != ValSequence && val.Kind != ValSet {
+				if err := ctx.chargeElements(1); err != nil {
+					return nil, err
+				}
+				seq := NewSequence()
+				seq.Append(val)
+				val = Value{Kind: ValSequence, Sequence: seq}
+			}
+			slot.Values = val
+		}
 		slot.Materialized = true
 		return slot, nil
 	}

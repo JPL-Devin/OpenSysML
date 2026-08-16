@@ -1,0 +1,12 @@
+{
+	"type": "instance",
+	"libraries": true,
+	"instantiate": "test::ranges",
+	"slots": {
+		"exact": {"type": "Sequence", "elements": [{"type": "Real", "value": 1.0}, {"type": "Real", "value": 2.0}, {"type": "Real", "value": 3.0}]},
+		"star": {"type": "Sequence", "elements": [{"type": "Real", "value": 1.0}, {"type": "Real", "value": 2.0}]},
+		"empty": {"type": "Sequence", "elements": []},
+		"plus": {"type": "Sequence", "elements": [{"type": "Real", "value": 5.0}]},
+		"masses": {"type": "Sequence", "elements": [{"type": "Quantity", "value": 1.0, "unit": "kg"}, {"type": "Quantity", "value": 2.0, "unit": "kg"}]}
+	}
+}

@@ -100,3 +100,29 @@ func TestMultiplicityNoneWhenAbsent(t *testing.T) {
 		t.Fatalf("expected no multiplicity for bare usage")
 	}
 }
+
+// CountViolation is the shared wording for a count against a multiplicity: an
+// unbounded or unknown bound admits any count, either side of a stated one does
+// not.
+func TestRangeCountViolation(t *testing.T) {
+	known := func(v int64) Bound { return Bound{Value: v, Known: true} }
+	for _, tc := range []struct {
+		name  string
+		r     Range
+		count int64
+		want  string
+	}{
+		{"exact conforms", Range{known(3), known(3)}, 3, ""},
+		{"too few", Range{known(3), known(3)}, 1, "1 value(s) bound to a feature with multiplicity lower bound 3"},
+		{"too many", Range{known(3), known(3)}, 4, "4 value(s) bound to a feature with multiplicity upper bound 3"},
+		{"none against a lower bound", Range{known(1), known(3)}, 0, "0 value(s) bound to a feature with multiplicity lower bound 1"},
+		{"unbounded upper admits any count", Range{known(0), Bound{Infinite: true, Known: true}}, 7, ""},
+		{"one or more admits one", Range{known(1), Bound{Infinite: true, Known: true}}, 1, ""},
+		{"one or more rejects none", Range{known(1), Bound{Infinite: true, Known: true}}, 0, "0 value(s) bound to a feature with multiplicity lower bound 1"},
+		{"unknown bounds admit any count", Range{}, 5, ""},
+	} {
+		if got := tc.r.CountViolation(tc.count); got != tc.want {
+			t.Errorf("%s: CountViolation(%d) = %q, want %q", tc.name, tc.count, got, tc.want)
+		}
+	}
+}

@@ -87,6 +87,22 @@ func TestValueTooFewValuesForLowerBound(t *testing.T) {
 		"1 value(s) bound to a feature with multiplicity lower bound 2")
 }
 
+// An empty collection is a count of zero, which a nonzero lower bound rejects.
+func TestValueEmptyCollectionForLowerBound(t *testing.T) {
+	wantOneValueDiag(t,
+		`package P { attribute xs : ScalarValues::Integer[1..3] = (); }`,
+		"0 value(s) bound to a feature with multiplicity lower bound 1")
+}
+
+// A redefining feature that states no multiplicity of its own is bound by the
+// one it inherits (KerML 1.0 §7.3.4.5), so a default it adds is checked there.
+func TestValueCountAgainstRedefinedMultiplicity(t *testing.T) {
+	wantOneValueDiag(t, `package P {
+		part def Base { attribute xs : ScalarValues::Integer[3]; }
+		part def Derived :> Base { attribute :>> xs = (1, 2); }
+	}`, "2 value(s) bound to a feature with multiplicity lower bound 3")
+}
+
 func TestValueSingleValueForRangeOK(t *testing.T) {
 	wantNoValueDiags(t, `package P {
 		attribute opt : ScalarValues::Integer[0..1] = 7;
