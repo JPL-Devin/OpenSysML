@@ -160,6 +160,20 @@ func (r *reporter) finding(message string) {
 	}
 }
 
+// warn records something about the run that is no model error and decides no
+// check — a check that was bounded rather than completed.
+func (r *reporter) warn(message string) {
+	r.report.Diagnostics = append(r.report.Diagnostics, diagnostic{
+		Severity: "warning",
+		Message:  message,
+		Pass:     "runtime",
+		Code:     "runtime.materialize.bounded",
+	})
+	if !r.json {
+		fmt.Fprintln(r.err, "warning: "+message)
+	}
+}
+
 // clean reports whether the run has found nothing wrong with the model so far.
 func (r *reporter) clean() bool {
 	return r.findings == 0 && len(r.report.Errors) == 0

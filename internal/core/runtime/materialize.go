@@ -2,44 +2,61 @@ package runtime
 
 import "github.com/Open-MBEE/Systemica/internal/core/symbols"
 
-// maxMaterializeDepth bounds how deep a materialization walk descends into the
-// objects an object holds, as a slot listing is bounded.
-const maxMaterializeDepth = 8
+const (
+	// maxMaterializeDepth bounds how deep a materialization walk descends into the
+	// objects an object holds, as a slot listing is bounded.
+	maxMaterializeDepth = 8
+	// maxMaterializeBudget bounds the walk as a whole, charged per slot read and
+	// per object a slot holds: nesting multiplies, and reading a slot materializes
+	// the objects it holds, so breadth costs objects rather than only time.
+	maxMaterializeBudget = 1000
+)
 
 // MaterializationErrors reads every slot of an object, and of the objects its
 // slots hold, and returns what materializing them reported, in the order the
 // slots were read. Slots are lazy, so a default that does not conform to its
 // feature's multiplicity is only found by reading it: a caller reporting on an
 // object it created calls this rather than leaving those diagnostics to whoever
-// reads a slot next.
-func (ctx *Context) MaterializationErrors(inst *Instance) []error {
+// reads a slot next. bounded is true when the walk spent its budget before
+// every slot was read, so what it did not reach is unreported rather than clean.
+func (ctx *Context) MaterializationErrors(inst *Instance) (errs []error, bounded bool) {
 	if inst == nil {
-		return nil
+		return nil, false
 	}
 	w := &materializeWalk{
 		ctx:     ctx,
 		onPath:  map[*symbols.Symbol]bool{inst.Type: true},
 		visited: map[int64]bool{inst.ID: true},
+		read:    map[*Slot]bool{},
+		budget:  maxMaterializeBudget,
 	}
 	w.walk(inst, 0)
-	return w.errs
+	return w.errs, w.bounded
 }
 
 // materializeWalk reads an object graph under the bounds a slot listing uses:
 // onPath holds the types being expanded above the current one, since a part
-// containing its own kind materializes a fresh object per descent, and depth
-// bounds the descent itself. visited keeps an object two features hold from
-// being reported twice.
+// containing its own kind materializes a fresh object per descent; depth bounds
+// the descent and budget the walk as a whole. visited keeps an object two
+// features hold from being reported twice, and read the one slot a feature and
+// the feature redefining it share.
 type materializeWalk struct {
 	ctx     *Context
 	onPath  map[*symbols.Symbol]bool
 	visited map[int64]bool
+	read    map[*Slot]bool
+	budget  int
+	bounded bool
 	errs    []error
 }
 
 func (w *materializeWalk) walk(inst *Instance, depth int) {
 	features := w.ctx.FeaturesOf(inst.Type)
 	for i := range features {
+		if w.budget <= 0 {
+			w.bounded = true
+			return
+		}
 		feat := &features[i]
 		// A constraint or requirement a part carries holds a verdict about the
 		// object rather than a value, so there is nothing to materialize.
@@ -49,19 +66,34 @@ func (w *materializeWalk) walk(inst *Instance, depth int) {
 		if held := w.ctx.CompositeTypeOf(feat); held != nil && (depth >= maxMaterializeDepth || w.onPath[held]) {
 			continue
 		}
+		// A redefinition names the redefined feature again, and the two names read
+		// one slot, so reading it once reports what it holds once.
+		if shared := inst.Slots[feat.Name]; shared != nil {
+			if w.read[shared] {
+				continue
+			}
+			w.read[shared] = true
+		}
+		w.budget--
 		slot, err := inst.GetSlot(w.ctx, feat.Name)
 		if err != nil {
 			w.errs = append(w.errs, err)
 			continue
 		}
-		for _, nested := range heldInstances(w.ctx, slot) {
-			if w.visited[nested.ID] {
+		nested := heldInstances(w.ctx, slot)
+		w.budget -= len(nested)
+		for _, held := range nested {
+			if w.budget <= 0 {
+				w.bounded = true
+				return
+			}
+			if w.visited[held.ID] {
 				continue
 			}
-			w.visited[nested.ID] = true
-			w.onPath[nested.Type] = true
-			w.walk(nested, depth+1)
-			delete(w.onPath, nested.Type)
+			w.visited[held.ID] = true
+			w.onPath[held.Type] = true
+			w.walk(held, depth+1)
+			delete(w.onPath, held.Type)
 		}
 	}
 }

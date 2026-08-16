@@ -8,6 +8,9 @@ type InstantiationReport struct {
 	// were read: a default whose value count does not conform to the feature's
 	// multiplicity is one.
 	SlotErrors []string
+	// Bounded is true when materialization stopped at its budget, so the slots it
+	// did not reach were not checked rather than found clean.
+	Bounded bool
 }
 
 // InstantiateReport creates the named object and materializes its slots, so a
@@ -34,8 +37,10 @@ func (s *Session) InstantiateReport(name string) (InstantiationReport, error) {
 	if err != nil {
 		return report, err
 	}
-	for _, slotErr := range ctx.MaterializationErrors(inst) {
+	slotErrs, bounded := ctx.MaterializationErrors(inst)
+	for _, slotErr := range slotErrs {
 		report.SlotErrors = append(report.SlotErrors, slotErr.Error())
 	}
+	report.Bounded = bounded
 	return report, nil
 }

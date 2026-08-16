@@ -197,13 +197,11 @@ func (ctx *Context) declaredType(featureSym *symbols.Symbol) *symbols.Symbol {
 	return nil
 }
 
-// extractMultiplicity returns the multiplicity a feature declares. stated is
-// false when it declares none and the assumed 1..1 governs it.
+// extractMultiplicity returns the multiplicity governing a feature. stated is
+// false when it declares none and the assumed 1..1 governs it instead.
 func (ctx *Context) extractMultiplicity(featureSym *symbols.Symbol) (r semantics.Range, stated bool) {
-	if mult, ok := ctx.model.MultiplicityOf(featureSym); ok {
-		return mult, true
-	}
-	return semantics.AssumedRange(), false
+	_, stated = ctx.model.MultiplicityOf(featureSym)
+	return ctx.model.EffectiveMultiplicityOf(featureSym), stated
 }
 
 // extractDefaultValue returns the default-value expression for a feature (nil if none).

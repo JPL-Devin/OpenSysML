@@ -18,6 +18,8 @@ func TestCheckReportsMaterializationDiagnostics(t *testing.T) {
 		object string
 		status int
 		want   []string
+		// once is a diagnostic the report must carry exactly one of.
+		once string
 	}{
 		{
 			name: "a conforming default is materialized and the model reported clean",
@@ -63,6 +65,36 @@ func TestCheckReportsMaterializationDiagnostics(t *testing.T) {
 			status: 2,
 			want:   []string{"slot craft.volumes", "2 value(s) bound to a feature with multiplicity upper bound 1"},
 		},
+		{
+			name: "a redefined feature and the feature it redefines read one slot, reported once",
+			model: `package M {
+    private import ScalarValues::Real;
+    part def Base { attribute mass : Real; }
+    part def Craft :> Base { attribute grossMass :>> mass = (1.0, 2.0); }
+    part craft : Craft;
+}
+`,
+			object: "M::craft",
+			status: 2,
+			want:   []string{"2 value(s) bound to a feature with multiplicity upper bound 1"},
+			once:   "multiplicity violation",
+		},
+		{
+			name: "a wide model bounds the check rather than materializing without end",
+			model: `package M {
+    private import ScalarValues::Real;
+    part def Leaf { attribute v : Real = 1.0; }
+    part def L3 { part leaves : Leaf[100]; }
+    part def L2 { part inner : L3[100]; }
+    part def L1 { part inner : L2[100]; }
+    part def Craft { part inner : L1[100]; }
+    part craft : Craft;
+}
+`,
+			object: "M::craft",
+			status: 0,
+			want:   []string{"materialization stopped at its budget"},
+		},
 	}
 
 	for _, tc := range cases {
@@ -76,6 +108,11 @@ func TestCheckReportsMaterializationDiagnostics(t *testing.T) {
 			// findings of a run that decided nothing are reported.
 			if tc.status != 0 && strings.Contains(got.stdout, "multiplicity") {
 				t.Errorf("a diagnostic was reported on stdout:\n%s", got.stdout)
+			}
+			if tc.once != "" {
+				if n := strings.Count(got.output(), tc.once); n != 1 {
+					t.Errorf("%q reported %d times, want once:\n%s", tc.once, n, got.output())
+				}
 			}
 		})
 	}

@@ -192,6 +192,7 @@ func runChecks(files []string, exprs []string, c checks) int {
 	// one can be. Creating it materializes its slots, so a default that does not
 	// conform to its feature's multiplicity is a diagnostic of this run rather
 	// than one left to whoever reads the slot next.
+	bounded := false
 	for _, name := range c.instantiate {
 		report, err := sess.InstantiateReport(name)
 		if err != nil {
@@ -202,15 +203,24 @@ func runChecks(files []string, exprs []string, c checks) int {
 		for _, slotErr := range report.SlotErrors {
 			rep.finding(slotErr)
 		}
+		// Materializing a wide model costs an object per value, so the check is
+		// bounded; what it did not reach is unchecked rather than clean.
+		if report.Bounded {
+			bounded = true
+			rep.warn(fmt.Sprintf("%s: materialization stopped at its budget; not every slot was checked", name))
+		}
 	}
 
 	// The model is only reported clean once the objects asked for were created:
 	// what materializing them found is a diagnostic about the model, so a run
 	// that produced one must not also report that there were none.
 	if c.validate {
-		if rep.clean() {
+		switch {
+		case rep.clean() && bounded:
+			rep.info([]string{fmt.Sprintf("✓ %s: no errors in the slots checked", namedModels(files))})
+		case rep.clean():
 			rep.info([]string{fmt.Sprintf("✓ %s: no errors", namedModels(files))})
-		} else {
+		default:
 			rep.failed(fmt.Sprintf("%s did not materialize cleanly", namedModels(files)))
 		}
 	}
