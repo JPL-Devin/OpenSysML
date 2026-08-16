@@ -275,18 +275,21 @@ func (ctx *Context) heldObjectIDs() map[int64]bool {
 // features owner declares, roots included, in identity order. A declaration is
 // descended into once per path, so composition naming its own kind — a part
 // typed by its enclosing definition, a reference back to an ancestor — is a
-// finite search rather than an endless supply of new objects.
+// finite search rather than an endless supply of new objects. One object stands
+// for each declaration, so a part held with a multiplicity is one candidate.
 func (ctx *Context) carriersUnder(roots []*Instance, owner *symbols.Symbol) []*Instance {
 	var out []*Instance
 	seen := make(map[int64]bool, len(roots))
+	declared := make(map[occurrenceOf]bool)
 	path := make(map[*symbols.Symbol]bool)
-	var descend func(inst *Instance)
-	descend = func(inst *Instance) {
+	var descend func(inst *Instance, held occurrenceOf)
+	descend = func(inst *Instance, held occurrenceOf) {
 		if inst == nil || seen[inst.ID] {
 			return
 		}
 		seen[inst.ID] = true
-		if ctx.model.Conforms(inst.Type, owner) {
+		if ctx.model.Conforms(inst.Type, owner) && !declared[held] {
+			declared[held] = true
 			out = append(out, inst)
 		}
 		if inst.Type != nil {
@@ -297,22 +300,37 @@ func (ctx *Context) carriersUnder(roots []*Instance, owner *symbols.Symbol) []*I
 			defer delete(path, inst.Type)
 		}
 		for _, child := range ctx.nestedObjects(inst) {
-			descend(child)
+			descend(child.instance, occurrenceOf{holder: inst.ID, feature: child.feature})
 		}
 	}
 	for _, root := range roots {
-		descend(root)
+		descend(root, occurrenceOf{holder: root.ID})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out
 }
 
+// occurrenceOf identifies the declaration an object occurs as: the feature of the
+// object holding it. The objects a multiplicity materialized into one slot are
+// occurrences of one declaration, so they are one candidate subject.
+type occurrenceOf struct {
+	holder  int64
+	feature string
+}
+
+// heldObject is an object a feature of another object holds, named by that
+// feature.
+type heldObject struct {
+	feature  string
+	instance *Instance
+}
+
 // nestedObjects returns the objects the object-valued features of inst hold,
 // materializing a lazy one as reading its slot does. A slot that cannot be read
 // yields no object: one that is not there is no subject either.
-func (ctx *Context) nestedObjects(inst *Instance) []*Instance {
+func (ctx *Context) nestedObjects(inst *Instance) []heldObject {
 	features := ctx.FeaturesOf(inst.Type)
-	var out []*Instance
+	var out []heldObject
 	for i := range features {
 		feat := &features[i]
 		if feat.Name == "" || !holdsObjects(feat) {
@@ -324,7 +342,7 @@ func (ctx *Context) nestedObjects(inst *Instance) []*Instance {
 		}
 		for _, id := range heldObjects(slot.HeldValue()) {
 			if child, ok := ctx.instances[id]; ok {
-				out = append(out, child)
+				out = append(out, heldObject{feature: feat.Name, instance: child})
 			}
 		}
 	}
