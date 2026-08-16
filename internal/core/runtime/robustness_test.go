@@ -28,6 +28,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("decision_no_satisfied_guard", testDecisionNoSatisfiedGuard)
 	t.Run("state_dangling_transition", testStateDanglingTransition)
 	t.Run("state_transition_endpoint_misspelled", testStateTransitionEndpointMisspelled)
+	t.Run("state_transition_endpoint_in_another_machine", testStateTransitionEndpointInAnotherMachine)
 	t.Run("state_transition_without_a_target", testStateTransitionWithoutATarget)
 	t.Run("state_transition_effect_reads_an_unknown_feature", testStateTransitionEffectReadsAnUnknownFeature)
 	t.Run("sourceless_accept_at_top_level", testSourcelessAcceptAtTopLevel)
@@ -802,6 +803,49 @@ func testStateTransitionEndpointMisspelled(t *testing.T) {
 	}
 	if got := exec.getCurrentState(); got == nil || got.Name != "busy" {
 		t.Errorf("expected the machine to halt in 'busy', got %v", got)
+	}
+}
+
+// testStateTransitionEndpointInAnotherMachine: an endpoint naming a state of a
+// different machine resolves, so no name diagnostic reports it; lowering must
+// report it rather than drop the edge, since nothing else would.
+func testStateTransitionEndpointInAnotherMachine(t *testing.T) {
+	src := `package test {
+		state Other {
+			initial start;
+			state running;
+			start then running;
+		}
+		state Machine {
+			initial init;
+			state busy;
+			init then busy;
+			transition busy to Other::running;
+		}
+	}`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	ctx.resolver.ResolveDocument("<test>", file)
+
+	for _, diag := range ctx.resolver.Diagnostics {
+		if strings.Contains(diag.Message, "running") {
+			t.Fatalf("the endpoint resolves, so name resolution reports nothing: %v", diag)
+		}
+	}
+
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Machine", ast.DefState)
+	if sym == nil {
+		t.Fatal("Machine not found")
+	}
+	_, err := newStateExecutor(ctx, sym, nil)
+	if err == nil {
+		t.Fatal("expected an error for an endpoint that is not a vertex of this machine")
+	}
+	if !strings.Contains(err.Error(), "not a vertex of this state machine") {
+		t.Errorf("expected the error to say the endpoint is not a vertex of this machine, got %v", err)
 	}
 }
 

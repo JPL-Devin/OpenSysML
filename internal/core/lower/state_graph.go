@@ -2,6 +2,7 @@ package lower
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
@@ -37,6 +38,11 @@ type StateGraph struct {
 
 	// endpoints resolves what a transition endpoint names.
 	endpoints Endpoints
+
+	// endpointsReported is true when endpoints is the name-resolution tier's own
+	// resolver, whose diagnostics reach the user, so lowering need not report an
+	// endpoint it rejected.
+	endpointsReported bool
 
 	// States in the machine (flat list, includes nested)
 	States []*ast.StateNode
@@ -125,26 +131,28 @@ func ToStateGraph(stateMachineDecl ast.Node, scope *symbols.Scope) (*StateGraph,
 // ToStateGraphWithEndpoints lowers a state machine, building its transitions
 // from the endpoints the name-resolution tier already resolved.
 func ToStateGraphWithEndpoints(stateMachineDecl ast.Node, scope *symbols.Scope, endpoints Endpoints) (*StateGraph, error) {
-	if endpoints == nil || scope == nil {
+	reported := endpoints != nil && scope != nil
+	if !reported {
 		endpoints = localEndpoints(stateMachineDecl)
 	}
 	graph := &StateGraph{
-		Scope:            scope,
-		vertexOf:         make(map[ast.Node]ast.Node),
-		endpoints:        endpoints,
-		StateScopes:      make(map[*ast.StateNode]*symbols.Scope),
-		Behaviors:        make(map[*ast.StateNode]*StateBehaviors),
-		declOf:           make(map[*ast.StateNode]ast.Node),
-		States:           make([]*ast.StateNode, 0),
-		Pseudostates:     make(map[string]*ast.PseudostateNode),
-		PseudostateOwner: make(map[*ast.PseudostateNode]*ast.StateNode),
-		Transitions:      make(map[ast.Node][]*Transition),
-		CompositeStates:  make(map[*ast.StateNode][]*ast.StateRegion),
-		RegionInitials:   make(map[*ast.StateRegion]*ast.StateNode),
-		ParentState:      make(map[*ast.StateNode]*ast.StateNode),
-		RegionOwner:      make(map[*ast.StateRegion]*ast.StateNode),
-		RegionOf:         make(map[*ast.StateNode]*ast.StateRegion),
-		Deferred:         make(map[*ast.StateNode][]ast.Node),
+		Scope:             scope,
+		vertexOf:          make(map[ast.Node]ast.Node),
+		endpoints:         endpoints,
+		endpointsReported: reported,
+		StateScopes:       make(map[*ast.StateNode]*symbols.Scope),
+		Behaviors:         make(map[*ast.StateNode]*StateBehaviors),
+		declOf:            make(map[*ast.StateNode]ast.Node),
+		States:            make([]*ast.StateNode, 0),
+		Pseudostates:      make(map[string]*ast.PseudostateNode),
+		PseudostateOwner:  make(map[*ast.PseudostateNode]*ast.StateNode),
+		Transitions:       make(map[ast.Node][]*Transition),
+		CompositeStates:   make(map[*ast.StateNode][]*ast.StateRegion),
+		RegionInitials:    make(map[*ast.StateRegion]*ast.StateNode),
+		ParentState:       make(map[*ast.StateNode]*ast.StateNode),
+		RegionOwner:       make(map[*ast.StateRegion]*ast.StateNode),
+		RegionOf:          make(map[*ast.StateNode]*ast.StateRegion),
+		Deferred:          make(map[*ast.StateNode][]ast.Node),
 	}
 
 	// Extract members
@@ -516,29 +524,46 @@ func (g *StateGraph) addPseudostate(ps *ast.PseudostateNode) {
 }
 
 // vertex is the graph node a transition endpoint names: name resolution says
-// which declaration it reaches, and lowering collected a vertex from that.
-func (g *StateGraph) vertex(scope *symbols.Scope, qn *ast.QualifiedName) (ast.Node, bool) {
+// which declaration it reaches, and lowering collected a vertex from that. A nil
+// node with a nil error is an endpoint the name-resolution tier already reported;
+// every other failure is an error, since nothing else reports it.
+func (g *StateGraph) vertex(scope *symbols.Scope, qn *ast.QualifiedName) (ast.Node, error) {
 	if qn == nil {
-		return nil, false
+		return nil, fmt.Errorf("transition endpoint names nothing")
 	}
 	decl, ok := g.endpoints.Endpoint(scope, qn)
 	if !ok {
-		return nil, false
+		if g.endpointsReported {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("transition endpoint %s names no state or pseudostate", endpointText(qn))
 	}
 	node, ok := g.vertexOf[decl]
-	return node, ok
+	if !ok {
+		return nil, fmt.Errorf("transition endpoint %s names a %T that is not a vertex of this state machine", endpointText(qn), decl)
+	}
+	return node, nil
+}
+
+// endpointText renders an endpoint name for an error message.
+func endpointText(qn *ast.QualifiedName) string {
+	parts := make([]string, 0, len(qn.Parts))
+	for _, p := range qn.Parts {
+		parts = append(parts, p.Text)
+	}
+	return strings.Join(parts, "::")
 }
 
 // lowerTransitionEdge converts a TransitionEdge (legacy) to a Transition. No
 // document declares such an edge, so an endpoint naming no vertex reports here.
 // scope is the scope the edge was declared in.
 func lowerTransitionEdge(graph *StateGraph, edge *ast.TransitionEdge, scope *symbols.Scope) (*Transition, error) {
-	source, ok := graph.vertex(scope, edge.Source)
-	if !ok {
+	source, err := graph.vertex(scope, edge.Source)
+	if err != nil || source == nil {
 		return nil, fmt.Errorf("transition edge references undefined source state %v", edge.Source)
 	}
-	target, ok := graph.vertex(scope, edge.Target)
-	if !ok {
+	target, err := graph.vertex(scope, edge.Target)
+	if err != nil || target == nil {
 		return nil, fmt.Errorf("transition edge references undefined target state %v", edge.Target)
 	}
 
@@ -570,9 +595,9 @@ func lowerTransitionMember(graph *StateGraph, member *ast.TransitionMember, cont
 		}
 		source = vertex
 	} else {
-		vertex, ok := graph.vertex(scope, member.Source)
-		if !ok {
-			return nil, nil
+		vertex, err := graph.vertex(scope, member.Source)
+		if err != nil || vertex == nil {
+			return nil, err
 		}
 		source = vertex
 	}
@@ -582,9 +607,9 @@ func lowerTransitionMember(graph *StateGraph, member *ast.TransitionMember, cont
 		return nil, fmt.Errorf("transition %s names no target", orAnonymous(member.Name))
 	}
 
-	target, ok := graph.vertex(scope, member.Target)
-	if !ok {
-		return nil, nil
+	target, err := graph.vertex(scope, member.Target)
+	if err != nil || target == nil {
+		return nil, err
 	}
 
 	// A trigger's parameters are members of a scope of the transition's own, which

@@ -1,6 +1,7 @@
 package lower
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
@@ -93,5 +94,26 @@ func TestToStateGraph_TopLevelPseudostateHasNoOwner(t *testing.T) {
 	}
 	if owner, ok := graph.PseudostateOwner[pick]; ok {
 		t.Errorf("PseudostateOwner[pick] = %v, want no owner", owner)
+	}
+}
+
+// Lowered without the name-resolution tier's resolver, nothing else reports an
+// endpoint that names no vertex, so lowering reports it here.
+func TestToStateGraph_EndpointNamingNoVertexIsReportedWithoutAResolver(t *testing.T) {
+	_, err := ToStateGraph(stateUsageIn(t, `
+		package test {
+			state Machine {
+				initial start;
+				state busy;
+				start then busy;
+				transition busy to nowhere;
+			}
+		}
+	`), nil)
+	if err == nil {
+		t.Fatal("expected an error for an endpoint naming no vertex")
+	}
+	if got := err.Error(); !strings.Contains(got, "nowhere") {
+		t.Errorf("expected the error to name the endpoint, got %q", got)
 	}
 }
