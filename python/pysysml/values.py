@@ -150,7 +150,8 @@ class Quantity:
         """Build from a ``Quantity`` protobuf message.
 
         Raises:
-            UnsupportedValueError: If the message carries no magnitude.
+            UnsupportedValueError: If the message carries no magnitude, or names a
+                unit without the reduction commensurability is decided over.
         """
         which = pb_quantity.WhichOneof('magnitude')
         if which == 'int_magnitude':
@@ -161,8 +162,15 @@ class Quantity:
             raise UnsupportedValueError(
                 f"quantity in [{pb_quantity.unit}] carries no magnitude"
             )
-        term = pb_quantity.unit_term if pb_quantity.HasField('unit_term') else None
-        return cls(magnitude, Unit.from_pb(pb_quantity.unit, term))
+        if not pb_quantity.HasField('unit_term'):
+            # Dimension one is what an unnamed unit means, not what an unreduced
+            # one means; the service rejects the latter and so does the client.
+            if pb_quantity.unit:
+                raise UnsupportedValueError(
+                    f"quantity in [{pb_quantity.unit}] carries no reduction to base units"
+                )
+            return cls(magnitude, Unit())
+        return cls(magnitude, Unit.from_pb(pb_quantity.unit, pb_quantity.unit_term))
 
     def base_magnitude(self) -> float:
         """The magnitude over the base units the unit reduces to."""

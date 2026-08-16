@@ -89,6 +89,19 @@ def test_a_quantity_with_no_magnitude_is_reported():
         value_to_python(value)
 
 
+def test_a_named_unit_with_no_reduction_is_reported():
+    """Reading an unreduced unit as dimension one would relate it to a bare count."""
+    named = sysml_pb2.Value(
+        quantity=sysml_pb2.Quantity(unit="Furlongs::furlong", real_magnitude=5.0)
+    )
+    with pytest.raises(UnsupportedValueError, match="no reduction to base units"):
+        value_to_python(named)
+
+    # A magnitude under no unit at all is dimension one, which is what it means.
+    unnamed = value_to_python(sysml_pb2.Value(quantity=sysml_pb2.Quantity(real_magnitude=5.0)))
+    assert unnamed.unit.dimensionless
+
+
 def test_a_quantity_slot_reads_off_an_instance():
     """The slot path returns the quantity, which is the whole point of the wire form."""
     pb_inst = sysml_pb2.Instance(
