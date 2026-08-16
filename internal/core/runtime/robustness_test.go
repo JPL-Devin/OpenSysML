@@ -69,6 +69,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("nested_condition_subject_is_ambiguous", testNestedConditionSubjectIsAmbiguous)
 	t.Run("recursive_composition_subject_search", testRecursiveCompositionSubjectSearch)
 	t.Run("duplicate_objects_of_one_declaration", testDuplicateObjectsOfOneDeclaration)
+	t.Run("duplicate_objects_holding_a_plain_part", testDuplicateObjectsHoldingAPlainPart)
 	t.Run("requirement_feature_without_a_value", testRequirementFeatureWithoutAValue)
 	t.Run("requirement_features_valued_from_each_other", testRequirementFeaturesValuedFromEachOther)
 	t.Run("step_budget_exceeded", testStepBudgetExceeded)
@@ -2031,6 +2032,44 @@ func testDuplicateObjectsOfOneDeclaration(t *testing.T) {
 	}
 	if satisfied {
 		t.Error("satisfied = true, want the object's 99.0 to violate the constraint")
+	}
+}
+
+// testDuplicateObjectsHoldingAPlainPart: a nested part typed by a definition
+// rather than by a body of its own is reached through its holder, so what two
+// materializations of that holder leave behind is no ambiguous subject.
+func testDuplicateObjectsHoldingAPlainPart(t *testing.T) {
+	src := `
+		package test {
+			part def Leaf {
+				attribute value = 99.0;
+				constraint small { value < 10.0 }
+			}
+			part def Top {
+				part leaf : Leaf;
+			}
+			part o : Top;
+		}
+	`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	rootScope := idx.DocumentRoot("<test>")
+	obj := memberPath(t, rootScope, "test", "o")
+	small := memberPath(t, rootScope, "test", "Leaf", "small")
+	for range 2 {
+		if _, err := ctx.Instantiate(obj); err != nil {
+			t.Fatalf("instantiate o: %v", err)
+		}
+		satisfied, err := ctx.EvaluateConstraint(small, small.OwnerScope)
+		if err != nil && !errors.Is(err, ErrViolated) {
+			t.Fatalf("EvaluateConstraint: %v", err)
+		}
+		if satisfied {
+			t.Error("satisfied = true, want the object's 99.0 to violate the constraint")
+		}
 	}
 }
 
