@@ -1139,10 +1139,10 @@ the `@type` mapping and the comparison choices.
   for compatibility; `specializations` is the complete list
 - runtime instances are request-local, so an id is resolvable only against the
   response that carried it; there is no RPC that fetches an instance by id later
-- a quantity is read from every outbound path, but an `ExecuteAction` input carrying
-  one binds `ValInvalid`: `service.go` decodes inputs with the context-free
-  `ProtoToValue`, which has no `*symbols.Index` to resolve the reduction's base units
-  against. `ProtoToValueIn` is the index-aware decoder that reports why (`EvaluateCalc`
-  uses it); the input path is migrated with the rest of the Python API surface
+- a quantity crosses in both directions: every outbound path reads one, and an
+  `ExecuteAction` input or `EvaluateCalc` argument carrying one is decoded against the
+  model's index (`ProtoToValueIn`), so an unresolvable unit is reported rather than bound
+  as an unusable value. The Python client has no quantity *encoder* yet, so a caller
+  cannot send one until that lands with the rest of the Python API surface
 
 These are documented for transparency; none block production use.

@@ -347,12 +347,19 @@ func (s *Service) ExecuteAction(ctx context.Context, req *pb.ExecuteActionReques
 	semModel := semantics.NewModel(resolver)
 	runtimeCtx := s.newRuntime(semModel, resolver)
 
-	// Convert inputs from req.Inputs into runtime values for parameter binding.
+	// Converted against the model's index, so a quantity input keeps the base
+	// units it is commensurable with instead of binding an unusable value.
 	var inputs map[string]runtime.Value
 	if len(req.Inputs) > 0 {
 		inputs = make(map[string]runtime.Value, len(req.Inputs))
 		for name, pv := range req.Inputs {
-			inputs[name] = ProtoToValue(pv)
+			val, cerr := ProtoToValueIn(pv, cached.Index)
+			if cerr != nil {
+				return &pb.ExecuteActionResponse{
+					Error: fmt.Sprintf("input %q could not be read: %v", name, cerr),
+				}, nil
+			}
+			inputs[name] = val
 		}
 	}
 

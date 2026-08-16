@@ -418,16 +418,6 @@ func protoToUnitTerm(pt *pb.UnitTerm, idx *symbols.Index) (semantics.UnitTerm, e
 	return term.Normalized(), nil
 }
 
-// ProtoToValue converts a protobuf Value with no model to resolve names against,
-// so a quantity arrives invalid; a caller holding one uses ProtoToValueIn.
-func ProtoToValue(pv *pb.Value) runtime.Value {
-	val, err := ProtoToValueIn(pv, nil)
-	if err != nil {
-		return runtime.Value{Kind: runtime.ValInvalid}
-	}
-	return val
-}
-
 // protoToScalar converts the arms of Value that name no symbol and hold no
 // nested value.
 func protoToScalar(pv *pb.Value) runtime.Value {

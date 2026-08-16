@@ -3,6 +3,7 @@ package grpc
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	pb "github.com/Open-MBEE/Systemica/api/proto"
@@ -301,6 +302,74 @@ func TestQuantitySlotsAndNestedQuantities(t *testing.T) {
 	wantPower := "300 [SI::W] = 1000/1·SI::gram·SI::metre^2·SI::second^-3"
 	if got := describeQuantity(engine.Slots["power"].GetValue().GetQuantity()); got != wantPower {
 		t.Errorf("nested slot power = %q, want %q", got, wantPower)
+	}
+}
+
+// TestQuantityAsAnActionInput drives ExecuteAction with a quantity input: it is
+// decoded against the model, and one that cannot be read is reported by name.
+func TestQuantityAsAnActionInput(t *testing.T) {
+	srv := mustNewService(t, 4)
+	content := `
+package A {
+	import ScalarValues::*;
+
+	action heavier {
+		attribute mass : ISQ::MassValue = 1.0 [SI::kg];
+		first start;
+		action inner {
+			assign mass := mass + 1.0 [SI::kg];
+		}
+		done end;
+		then start inner;
+		then inner end;
+	}
+}
+`
+	parseResp, err := srv.ParseFile(context.Background(), &pb.ParseFileRequest{
+		Source:      &pb.ParseFileRequest_Content{Content: content},
+		ContentHash: "quantity-action-input",
+	})
+	if err != nil {
+		t.Fatalf("ParseFile: %v", err)
+	}
+	for _, diag := range parseResp.Diagnostics {
+		if diag.Severity == "error" {
+			t.Fatalf("model has a diagnostic error: %s", diag.Message)
+		}
+	}
+
+	sent := mustEvaluateQuantity(t, srv, parseResp.ModelHash, "5.0 [SI::kg]")
+	resp, err := srv.ExecuteAction(context.Background(), &pb.ExecuteActionRequest{
+		ModelHash:      parseResp.ModelHash,
+		ActionSymbolId: "A::heavier",
+		Inputs:         map[string]*pb.Value{"mass": {Kind: &pb.Value_Quantity{Quantity: sent}}},
+	})
+	if err != nil {
+		t.Fatalf("ExecuteAction: %v", err)
+	}
+	if resp.Error != "" {
+		t.Fatalf("ExecuteAction: %s", resp.Error)
+	}
+	want := "6 [SI::kg] = 1000/1·SI::gram"
+	if got := describeQuantity(resp.Outputs["mass"].GetQuantity()); got != want {
+		t.Errorf("output mass = %q, want %q", got, want)
+	}
+
+	unreadable := &pb.Quantity{
+		Magnitude: &pb.Quantity_RealMagnitude{RealMagnitude: 5},
+		Unit:      "Made::up",
+		UnitTerm:  &pb.UnitTerm{ScaleNum: 1, ScaleDen: 1, Factors: []*pb.UnitFactor{{UnitId: "Made::up", Exponent: 1}}},
+	}
+	bad, err := srv.ExecuteAction(context.Background(), &pb.ExecuteActionRequest{
+		ModelHash:      parseResp.ModelHash,
+		ActionSymbolId: "A::heavier",
+		Inputs:         map[string]*pb.Value{"mass": {Kind: &pb.Value_Quantity{Quantity: unreadable}}},
+	})
+	if err != nil {
+		t.Fatalf("ExecuteAction: %v", err)
+	}
+	if !strings.Contains(bad.Error, "mass") || !strings.Contains(bad.Error, "unknown base unit") {
+		t.Errorf("error = %q, want it to name the input and the unknown base unit", bad.Error)
 	}
 }
 
