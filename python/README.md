@@ -51,8 +51,9 @@ pins the SHA-256 of every asset of a release. The `.sha256` served beside a
 binary comes from whoever served the binary, so it detects corruption but not a
 republished release; a pinned digest is independent of that origin. A download
 with no pin fails with a message naming the version, rather than falling back to
-the served checksum — `$PYSYSML_ALLOW_UNPINNED_DOWNLOAD=1` accepts same-origin
-trust explicitly, with a warning.
+the served checksum — `$PYSYSML_ALLOW_UNPINNED_DOWNLOAD=<owner/repo>` (or `=1` for
+any repository) accepts same-origin trust explicitly for what it names, with a
+warning.
 
 At release time, after the service binaries are published and final:
 

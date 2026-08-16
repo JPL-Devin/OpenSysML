@@ -56,8 +56,9 @@ PINNED_SHA256 = {
     },
 }
 
-#: Set to accept a download this release of pysysml pins no digest for, which is
-#: same-origin trust: the checksum then comes from whoever served the binary.
+#: Set to the repository whose unpinned downloads may be accepted (`1` for any),
+#: which is same-origin trust: the checksum then comes from whoever served the
+#: binary.
 ALLOW_UNPINNED_ENV = 'PYSYSML_ALLOW_UNPINNED_DOWNLOAD'
 
 
@@ -85,9 +86,23 @@ def pinned_digest(version, asset, github_repo=None):
     return PINNED_SHA256.get(repo, {}).get(version, {}).get(asset)
 
 
-def unpinned_downloads_allowed():
-    """Whether a download with no pinned digest may fall back to same-origin trust."""
-    return os.environ.get(ALLOW_UNPINNED_ENV, '').strip().lower() not in ('', '0', 'false', 'no')
+def unpinned_downloads_allowed(github_repo=None):
+    """Whether an unpinned download from a repository may fall back to same-origin trust.
+
+    Args:
+        github_repo (str, optional): GitHub repository (owner/repo)
+
+    Returns:
+        bool: True when the variable is set to '1' (any repository) or names this one
+    """
+    allowed = os.environ.get(ALLOW_UNPINNED_ENV, '').strip()
+    if allowed.lower() in ('', '0', 'false', 'no'):
+        return False
+    if allowed.lower() in ('1', 'true', 'yes'):
+        return True
+    repo = github_repo or default_github_repo()
+    # Naming repositories keeps the trust with the fork it is granted for.
+    return repo in [named.strip() for named in allowed.split(',')]
 
 
 def expected_digest(version, asset, served_digest, github_repo=None):
@@ -110,13 +125,14 @@ def expected_digest(version, asset, served_digest, github_repo=None):
     repo = github_repo or default_github_repo()
     pinned = pinned_digest(version, asset, repo)
     if pinned is None:
-        if not unpinned_downloads_allowed():
+        if not unpinned_downloads_allowed(repo):
             raise ChecksumMismatchError(
                 f"pysysml pins no SHA-256 digest for {asset} of {version} of {repo}, so "
                 f"the only checksum available is the one served beside the binary, which "
                 f"a compromised release would serve too. Upgrade pysysml to a release "
                 f"that pins {version}, ask for a pinned release with version=, or accept "
-                f"same-origin trust by setting ${ALLOW_UNPINNED_ENV}=1.",
+                f"same-origin trust for this repository by setting "
+                f"${ALLOW_UNPINNED_ENV}={repo} (or =1 for any repository).",
                 unpinned=True,
             )
         warnings.warn(

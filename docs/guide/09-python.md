@@ -54,9 +54,10 @@ the `.sha256` served beside the binary: the sidecar comes from whoever served th
 binary, so it catches corruption but not a republished release. A release this
 `pysysml` pins no digest for is refused, naming the version, and keeps a working
 cached binary rather than trusting the served checksum; `export
-PYSYSML_ALLOW_UNPINNED_DOWNLOAD=1` accepts same-origin trust explicitly, with a
-warning. `PYSYSML_STATE_DIR` moves the state directory (`~/.pysysml`) holding the
-binary cache and the service records.
+PYSYSML_ALLOW_UNPINNED_DOWNLOAD=<owner/repo>` (or `=1` for any repository, which a
+fork's releases do not need) accepts same-origin trust explicitly for the repository
+it names, with a warning. `PYSYSML_STATE_DIR` moves the state directory
+(`~/.pysysml`) holding the binary cache and the service records.
 
 The published releases up to v0.0.4 carry the `sysml`/`sysml-lsp` archives only;
 `sysml-grpc` binaries are published from the next release onward, so until then

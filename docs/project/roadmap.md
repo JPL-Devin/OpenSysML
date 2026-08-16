@@ -186,7 +186,8 @@ become base classes.
   **Done:** `PINNED_SHA256` in `binary.py` pins every asset's SHA-256 per release, generated from
   the published assets by `python/scripts/pin_release_checksums.py`; an unpinned release is
   refused rather than falling back to the sidecar, unless
-  `$PYSYSML_ALLOW_UNPINNED_DOWNLOAD=1` accepts same-origin trust explicitly.
+  `$PYSYSML_ALLOW_UNPINNED_DOWNLOAD=<owner/repo>` (or `=1`) accepts same-origin trust
+  explicitly, for the repository it names.
 - `Model.eval` takes a scope, not a subject, so an expression cannot be evaluated against an
   object the way `%eval` does after `%instantiate`: `verify_constraint` takes a subject, `eval`
   does not, and a caller reads the declared default instead. Carrying the subject to

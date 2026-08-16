@@ -1114,8 +1114,8 @@ the `@type` mapping and the comparison choices.
 - __init__.py:11-16 - Shadows builtins (RuntimeError, eval)
 - a downloaded binary is verified against the digest `binary.py:PINNED_SHA256` pins for its
   release, independent of the origin that served it; a version with no pin fails rather than
-  falling back to the served `.sha256`, unless `$PYSYSML_ALLOW_UNPINNED_DOWNLOAD=1` accepts
-  same-origin trust. A pysysml release pins only service releases published before it, so a
+  falling back to the served `.sha256`, unless `$PYSYSML_ALLOW_UNPINNED_DOWNLOAD` names that
+  repository (or is `1`) and accepts same-origin trust. A pysysml release pins only service releases published before it, so a
   newer service needs a newer pysysml or that opt-in
   (`scripts/pin_release_checksums.py`, python/tests/test_binary.py)
 
