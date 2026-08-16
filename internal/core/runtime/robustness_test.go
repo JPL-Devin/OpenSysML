@@ -71,6 +71,13 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("collection_spends_the_element_budget", testCollectionSpendsTheElementBudget)
 	t.Run("usage_read_through_a_part_without_an_output", testUsageReadThroughAPartWithoutAnOutput)
 	t.Run("constraint_missing_feature", testConstraintMissingFeature)
+	t.Run("nested_condition_subject_is_ambiguous", testNestedConditionSubjectIsAmbiguous)
+	t.Run("recursive_composition_subject_search", testRecursiveCompositionSubjectSearch)
+	t.Run("duplicate_objects_of_one_declaration", testDuplicateObjectsOfOneDeclaration)
+	t.Run("duplicate_objects_holding_a_plain_part", testDuplicateObjectsHoldingAPlainPart)
+	t.Run("nested_part_held_with_a_multiplicity", testNestedPartHeldWithAMultiplicity)
+	t.Run("part_nested_inside_a_repeated_part", testPartNestedInsideARepeatedPart)
+	t.Run("parts_subsetting_one_collection", testPartsSubsettingOneCollection)
 	t.Run("requirement_feature_without_a_value", testRequirementFeatureWithoutAValue)
 	t.Run("requirement_features_valued_from_each_other", testRequirementFeaturesValuedFromEachOther)
 	t.Run("step_budget_exceeded", testStepBudgetExceeded)
@@ -2252,6 +2259,288 @@ func testConstraintMissingFeature(t *testing.T) {
 	}
 
 	t.Log("EvaluateConstraint returned true (missing feature tolerated)")
+}
+
+// testNestedConditionSubjectIsAmbiguous: two objects redefining the same nested
+// feature differently make the subject of a check a question, reported as
+// ErrAmbiguousSubject rather than answered from whichever object is found first.
+func testNestedConditionSubjectIsAmbiguous(t *testing.T) {
+	src := `
+		package test {
+			part def Leaf {
+				attribute value = 1.0;
+				constraint small { value < 10.0 }
+			}
+			part def Top {
+				part leaf : Leaf;
+			}
+			part slow : Top {
+				part :>> leaf { attribute :>> value = 2.0; }
+			}
+			part fast : Top {
+				part :>> leaf { attribute :>> value = 99.0; }
+			}
+		}
+	`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	rootScope := idx.DocumentRoot("<test>")
+	for _, name := range []string{"slow", "fast"} {
+		if _, err := ctx.Instantiate(memberPath(t, rootScope, "test", name)); err != nil {
+			t.Fatalf("instantiate %s: %v", name, err)
+		}
+	}
+	small := memberPath(t, rootScope, "test", "Leaf", "small")
+	satisfied, err := ctx.EvaluateConstraint(small, small.OwnerScope)
+	if !errors.Is(err, ErrAmbiguousSubject) {
+		t.Fatalf("satisfied = %t, err = %v, want ErrAmbiguousSubject", satisfied, err)
+	}
+	if satisfied {
+		t.Error("an ambiguous subject is no verdict")
+	}
+}
+
+// testRecursiveCompositionSubjectSearch: searching for the object a check is
+// about does not walk a design containing its own kind forever; it answers about
+// the declaration, since no object of the checked type is there.
+func testRecursiveCompositionSubjectSearch(t *testing.T) {
+	src := `
+		package test {
+			part def Leaf {
+				attribute value = 1.0;
+				constraint small { value < 10.0 }
+			}
+			part def Node {
+				part next : Node;
+			}
+			part root : Node;
+		}
+	`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	rootScope := idx.DocumentRoot("<test>")
+	if _, err := ctx.Instantiate(memberPath(t, rootScope, "test", "root")); err != nil {
+		t.Fatalf("instantiate root: %v", err)
+	}
+	small := memberPath(t, rootScope, "test", "Leaf", "small")
+	done := make(chan struct{})
+	var satisfied bool
+	var err error
+	go func() {
+		defer close(done)
+		satisfied, err = ctx.EvaluateConstraint(small, small.OwnerScope)
+	}()
+	select {
+	case <-done:
+	case <-time.After(20 * time.Second):
+		t.Fatal("the subject search did not terminate on recursive composition")
+	}
+	if err != nil {
+		t.Fatalf("EvaluateConstraint: %v", err)
+	}
+	if !satisfied {
+		t.Error("satisfied = false, want the declaration's answer")
+	}
+	if len(ctx.instances) > 1000 {
+		t.Errorf("%d objects materialized: the search is not bounded", len(ctx.instances))
+	}
+}
+
+// testDuplicateObjectsOfOneDeclaration: materializing the same declaration twice
+// is one object as far as a check is concerned, not an ambiguous subject.
+func testDuplicateObjectsOfOneDeclaration(t *testing.T) {
+	src := `
+		package test {
+			part def Leaf {
+				attribute value = 1.0;
+				constraint small { value < 10.0 }
+			}
+			part def Top {
+				part leaf : Leaf;
+			}
+			part o : Top {
+				part :>> leaf { attribute :>> value = 99.0; }
+			}
+		}
+	`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	rootScope := idx.DocumentRoot("<test>")
+	obj := memberPath(t, rootScope, "test", "o")
+	for range 2 {
+		if _, err := ctx.Instantiate(obj); err != nil {
+			t.Fatalf("instantiate o: %v", err)
+		}
+	}
+	small := memberPath(t, rootScope, "test", "Leaf", "small")
+	satisfied, err := ctx.EvaluateConstraint(small, small.OwnerScope)
+	if err != nil && !errors.Is(err, ErrViolated) {
+		t.Fatalf("EvaluateConstraint: %v", err)
+	}
+	if satisfied {
+		t.Error("satisfied = true, want the object's 99.0 to violate the constraint")
+	}
+}
+
+// testDuplicateObjectsHoldingAPlainPart: a nested part typed by a definition
+// rather than by a body of its own is reached through its holder, so what two
+// materializations of that holder leave behind is no ambiguous subject.
+func testDuplicateObjectsHoldingAPlainPart(t *testing.T) {
+	src := `
+		package test {
+			part def Leaf {
+				attribute value = 99.0;
+				constraint small { value < 10.0 }
+			}
+			part def Top {
+				part leaf : Leaf;
+			}
+			part o : Top;
+		}
+	`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	rootScope := idx.DocumentRoot("<test>")
+	obj := memberPath(t, rootScope, "test", "o")
+	small := memberPath(t, rootScope, "test", "Leaf", "small")
+	for range 2 {
+		if _, err := ctx.Instantiate(obj); err != nil {
+			t.Fatalf("instantiate o: %v", err)
+		}
+		satisfied, err := ctx.EvaluateConstraint(small, small.OwnerScope)
+		if err != nil && !errors.Is(err, ErrViolated) {
+			t.Fatalf("EvaluateConstraint: %v", err)
+		}
+		if satisfied {
+			t.Error("satisfied = true, want the object's 99.0 to violate the constraint")
+		}
+	}
+}
+
+// testNestedPartHeldWithAMultiplicity: the objects one slot materializes for a
+// multiplicity are occurrences of one declaration, so a check answers a verdict
+// rather than calling its subject ambiguous.
+func testNestedPartHeldWithAMultiplicity(t *testing.T) {
+	src := `
+		package test {
+			part def Wheel {
+				attribute pressure = 99.0;
+				constraint inflated { pressure < 10.0 }
+			}
+			part def Car {
+				part wheels : Wheel[4];
+			}
+			part car : Car;
+		}
+	`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	rootScope := idx.DocumentRoot("<test>")
+	if _, err := ctx.Instantiate(memberPath(t, rootScope, "test", "car")); err != nil {
+		t.Fatalf("instantiate car: %v", err)
+	}
+	inflated := memberPath(t, rootScope, "test", "Wheel", "inflated")
+	satisfied, err := ctx.EvaluateConstraint(inflated, inflated.OwnerScope)
+	if err != nil && !errors.Is(err, ErrViolated) {
+		t.Fatalf("EvaluateConstraint: %v", err)
+	}
+	if satisfied {
+		t.Error("satisfied = true, want the wheels' 99.0 to violate the constraint")
+	}
+}
+
+// testPartNestedInsideARepeatedPart: the declaration a check names may sit
+// deeper inside the part a multiplicity repeated, and the objects reached along
+// one declaration path are still one subject rather than an ambiguity.
+func testPartNestedInsideARepeatedPart(t *testing.T) {
+	src := `
+		package test {
+			part def Bolt {
+				attribute torque = 99.0;
+				constraint tight { torque < 10.0 }
+			}
+			part def Wheel {
+				part bolt : Bolt;
+			}
+			part def Car {
+				part wheels : Wheel[4];
+			}
+			part car : Car;
+		}
+	`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	rootScope := idx.DocumentRoot("<test>")
+	if _, err := ctx.Instantiate(memberPath(t, rootScope, "test", "car")); err != nil {
+		t.Fatalf("instantiate car: %v", err)
+	}
+	tight := memberPath(t, rootScope, "test", "Bolt", "tight")
+	satisfied, err := ctx.EvaluateConstraint(tight, tight.OwnerScope)
+	if err != nil && !errors.Is(err, ErrViolated) {
+		t.Fatalf("EvaluateConstraint: %v", err)
+	}
+	if satisfied {
+		t.Error("satisfied = true, want the bolts' 99.0 to violate the constraint")
+	}
+}
+
+// testPartsSubsettingOneCollection: two declarations feeding one collection are
+// two subjects, not repetitions of the collection, so the check reports the
+// ambiguity rather than answering from whichever it reached first.
+func testPartsSubsettingOneCollection(t *testing.T) {
+	src := `
+		package test {
+			part def Component {
+				attribute v = 1.0;
+				constraint ok { v < 10.0 }
+			}
+			part def Assembly {
+				part subsystem : Component[*];
+				part small : Component :> subsystem {
+					attribute :>> v = 5.0;
+				}
+				part large : Component :> subsystem {
+					attribute :>> v = 99.0;
+				}
+			}
+			part assembly : Assembly;
+		}
+	`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	rootScope := idx.DocumentRoot("<test>")
+	if _, err := ctx.Instantiate(memberPath(t, rootScope, "test", "assembly")); err != nil {
+		t.Fatalf("instantiate assembly: %v", err)
+	}
+	ok := memberPath(t, rootScope, "test", "Component", "ok")
+	satisfied, err := ctx.EvaluateConstraint(ok, ok.OwnerScope)
+	if !errors.Is(err, ErrAmbiguousSubject) {
+		t.Fatalf("satisfied = %t, err = %v, want ErrAmbiguousSubject", satisfied, err)
+	}
+	if satisfied {
+		t.Error("an ambiguous subject is no verdict")
+	}
 }
 
 // testRequirementFeatureWithoutAValue: a condition naming a feature the
