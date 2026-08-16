@@ -326,6 +326,25 @@ class TestOwnershipOfASpawnedService:
         _wait_gone(started)
         assert not os.path.exists(_get_pidfile_path(own_service))
 
+    def test_closing_a_connection_to_a_crashed_service_spares_its_replacement(
+        self, own_service
+    ):
+        """A reference taken on a dead service is not a reference on the new one."""
+        crashed = pysysml.connect(port=own_service, auto_start=True)
+        service = psutil.Process(self._recorded_pid(own_service))
+        service.kill()
+        _wait_gone(service)
+
+        restarted_conn = pysysml.connect(port=own_service, auto_start=True)
+        restarted = psutil.Process(self._recorded_pid(own_service))
+        crashed.close()
+        assert restarted.is_running()
+        assert restarted_conn.server_info() is not None
+
+        restarted_conn.close()
+        _wait_gone(restarted)
+        assert not restarted.is_running()
+
 
 def _kill_if_running(pid):
     """Stop a service a failing test left behind, so the port is not held."""

@@ -351,8 +351,10 @@ class Connection:
         # Refined by _ensure_service, which knows how it was reached.
         self._origin = f"service at {self._address} (not started by this client)"
         self._server_info = None
-        # Only connections that took a reference may release one on close.
+        # Only connections that took a reference may release one on close, and
+        # only against the service identity it was taken on.
         self._holds_refcount = False
+        self._referenced_service = None
         self._version = version or os.environ.get('PYSYSML_GRPC_VERSION') or None
         self._required_capabilities = frozenset(require_capabilities or ())
         self._resolved_release = _UNRESOLVED
@@ -1151,6 +1153,7 @@ class Connection:
             return
         owned['refs'] += 1
         self._holds_refcount = True
+        self._referenced_service = (owned['pid'], owned['create_time'])
         atexit.register(self._cleanup_service)
 
     def _adopt_running_service(self):
@@ -1447,7 +1450,9 @@ class Connection:
 
         key = _service_key(self.port)
         owned = _OWNED_SERVICES.get(key)
-        if owned is None:
+        # A service that crashed is replaced under the same key, and a reference
+        # taken on the one that died is not a reference on its replacement.
+        if owned is None or (owned['pid'], owned['create_time']) != self._referenced_service:
             return
         owned['refs'] -= 1
         if owned['refs'] > 0:

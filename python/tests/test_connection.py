@@ -347,6 +347,7 @@ def test_cleanup_service_releases_one_reference_of_a_service_still_in_use():
         with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
             conn = Connection(auto_start=False)
             conn._holds_refcount = True
+            conn._referenced_service = (12345, 1.0)
             key = _service_key(conn.port)
             _OWNED_SERVICES[key] = {'pid': 12345, 'create_time': 1.0, 'refs': 2}
 
