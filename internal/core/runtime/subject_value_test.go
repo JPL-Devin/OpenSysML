@@ -247,6 +247,34 @@ func TestSubjectOfANestedDefinition(t *testing.T) {
 	}
 }
 
+// An object materialized straight from a nested usage is held by nothing, so it
+// is a subject in its own right rather than something to reach through a holder.
+func TestSubjectOfADirectlyInstantiatedNestedUsage(t *testing.T) {
+	src := `package test {
+	part def Leaf {
+		attribute value : Real = 1.0;
+		constraint small { value < 10.0 }
+	}
+	part def Top {
+		part leaf : Leaf {
+			attribute :>> value = 99.0;
+		}
+	}
+}`
+	ctx, pkg := nestedSubjectFixture(t, src)
+	if _, err := ctx.Instantiate(memberPath(t, pkg, "Top", "leaf")); err != nil {
+		t.Fatalf("instantiate Top::leaf: %v", err)
+	}
+	small := memberPath(t, pkg, "Leaf", "small")
+	satisfied, err := ctx.EvaluateConstraint(small, small.OwnerScope)
+	if err != nil && !errors.Is(err, ErrViolated) {
+		t.Fatalf("small on the nested usage's object: %v", err)
+	}
+	if satisfied {
+		t.Error("satisfied = true, want the object's 99.0 to violate it")
+	}
+}
+
 // Two objects redefining the same nested feature differently make the subject a
 // question, which is reported rather than answered from either of them.
 func TestNestedSubjectAmbiguous(t *testing.T) {

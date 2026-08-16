@@ -224,9 +224,8 @@ func declaringType(sym *symbols.Symbol) *symbols.Symbol {
 	return nil
 }
 
-// nestedFeature reports whether sym is a feature a type declares, whose objects
-// are reached through the object holding them. A definition nested in another is
-// not one: nothing holds it, objects materialize it in their own right.
+// nestedFeature reports whether sym is a feature a type declares. A definition
+// nested in another is not one: objects materialize it in their own right.
 func nestedFeature(sym *symbols.Symbol) bool {
 	if sym == nil {
 		return false
@@ -237,17 +236,23 @@ func nestedFeature(sym *symbols.Symbol) bool {
 	return declaringType(sym) != nil
 }
 
-// rootInstances returns the objects this runtime holds that materialize a
-// declaration of their own, in identity order: an object of a nested feature is
-// reached through the object holding it, and one a value expression materialized
-// to read through is an occurrence of nothing. One declaration materialized twice
-// is one object here — the latest — since two occurrences of the same
-// declaration are no question about which one is meant.
+// readThrough reports whether inst is the object a value expression materialized
+// to read a declaration through, which is an occurrence of nothing.
+func (ctx *Context) readThrough(inst *Instance) bool {
+	id, ok := ctx.occurrences[inst.Type]
+	return ok && id == inst.ID
+}
+
+// rootInstances returns the objects this runtime holds that stand on their own,
+// in identity order: an object a slot holds is reached through its holder, and one
+// materialized to read a nested declaration through is an occurrence of nothing,
+// while an object a caller asked for is a root whatever it materializes. One
+// declaration materialized twice is one object here, the latest.
 func (ctx *Context) rootInstances() []*Instance {
 	held := ctx.heldObjectIDs()
 	latest := make(map[*symbols.Symbol]*Instance, len(ctx.instances))
 	for _, inst := range ctx.instances {
-		if inst == nil || nestedFeature(inst.Type) || held[inst.ID] {
+		if inst == nil || held[inst.ID] || (nestedFeature(inst.Type) && ctx.readThrough(inst)) {
 			continue
 		}
 		if kept, ok := latest[inst.Type]; ok && kept.ID > inst.ID {
@@ -289,7 +294,7 @@ func (ctx *Context) heldObjectIDs() map[int64]bool {
 func (ctx *Context) carriersUnder(roots []*Instance, owner *symbols.Symbol) []*Instance {
 	var out []*Instance
 	seen := make(map[int64]bool, len(roots))
-	declared := make(map[occurrenceOf]bool)
+	declared := make(map[carrierOccurrence]bool)
 	path := make(map[*symbols.Symbol]bool)
 	var descend func(inst *Instance, through string)
 	descend = func(inst *Instance, through string) {
@@ -297,7 +302,7 @@ func (ctx *Context) carriersUnder(roots []*Instance, owner *symbols.Symbol) []*I
 			return
 		}
 		seen[inst.ID] = true
-		occurrence := occurrenceOf{through: through, decl: inst.Type}
+		occurrence := carrierOccurrence{through: through, decl: inst.Type}
 		if ctx.model.Conforms(inst.Type, owner) && !declared[occurrence] {
 			declared[occurrence] = true
 			out = append(out, inst)
@@ -320,11 +325,11 @@ func (ctx *Context) carriersUnder(roots []*Instance, owner *symbols.Symbol) []*I
 	return out
 }
 
-// occurrenceOf identifies the declaration an object occurs as: the features
+// carrierOccurrence identifies the declaration an object occurs as: the features
 // walked through to reach it and the declaration it materializes. Objects a
 // multiplicity repeated share both, while ones a collection gathers from
 // different declarations — the features subsetting it — do not.
-type occurrenceOf struct {
+type carrierOccurrence struct {
 	through string
 	decl    *symbols.Symbol
 }
