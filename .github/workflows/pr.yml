@@ -156,8 +156,31 @@ jobs:
           pip install -e .
           pip install pytest pytest-mock
 
+      # The integration tests need a service to talk to; without one they skip,
+      # which exercises nothing, so one runs here for the rest of the job.
+      - name: Start sysml-grpc service
+        run: |
+          chmod +x ~/.pysysml/bin/sysml-grpc
+          nohup ~/.pysysml/bin/sysml-grpc -port 50051 > /tmp/sysml-grpc.log 2>&1 &
+          python3 - <<'PY'
+          import socket, sys, time
+
+          for _ in range(30):
+              with socket.socket() as probe:
+                  probe.settimeout(1)
+                  if probe.connect_ex(("localhost", 50051)) == 0:
+                      print("sysml-grpc is listening on 50051")
+                      sys.exit(0)
+              time.sleep(1)
+          sys.exit("sysml-grpc never listened on 50051")
+          PY
+
+      # PYSYSML_REQUIRE_SERVICE turns "no service, so skip" into a failure: a
+      # service is provided here, so its absence is the bug, not a pass.
       - name: Run Python tests
         working-directory: python
+        env:
+          PYSYSML_REQUIRE_SERVICE: 1
         run: pytest tests/ -v
 
       - name: Verify import

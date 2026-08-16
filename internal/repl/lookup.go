@@ -23,7 +23,15 @@ import (
 // fully-qualified name the symbol was found under, which is what instances are
 // keyed by so the spelling used to create one need not be the spelling used to
 // inspect it.
+//
+// The name is taken in the notation, so a segment quoted because it holds a
+// space or is a keyword ('My Pkg'::Car) denotes what the index registers it as.
 func (s *Session) lookupSymbol(name string) (*symbols.Symbol, string, error) {
+	// A name the notation reads is resolved by the text it names; anything else is
+	// looked up as typed, so the failure reported is about what was typed.
+	if plain, ok := plainName(name); ok {
+		name = plain
+	}
 	doc := s.ws.Document(docName)
 	var docScope *symbols.Scope
 	if doc != nil {
@@ -80,22 +88,32 @@ func (s *Session) lookupSymbol(name string) (*symbols.Symbol, string, error) {
 }
 
 // owningInstance returns the object a fully-qualified name belongs to: the
-// longest instantiated prefix, then the remaining segments walked through that
-// instance's slots, since a nested part is an object of its own. The second
-// result is the found object's FQN, for reporting.
+// object its qualifier names, since the last segment is the feature read from
+// it. The second result is the found object's FQN, for reporting.
 func (s *Session) owningInstance(fqn string) (*runtime.Instance, string) {
 	segments := strings.Split(fqn, "::")
 	if len(segments) < 2 {
 		return nil, ""
 	}
-	owner := segments[:len(segments)-1]
-	for i := len(owner); i > 0; i-- {
-		key := strings.Join(owner[:i], "::")
+	return s.objectNamed(strings.Join(segments[:len(segments)-1], "::"))
+}
+
+// objectNamed returns the object a fully-qualified name denotes: the one
+// materialized under it, or the longest instantiated prefix with the remaining
+// segments walked through that instance's slots, since a nested part is an
+// object of its own. The second result is the found object's FQN, for reporting.
+func (s *Session) objectNamed(fqn string) (*runtime.Instance, string) {
+	if fqn == "" {
+		return nil, ""
+	}
+	segments := strings.Split(fqn, "::")
+	for i := len(segments); i > 0; i-- {
+		key := strings.Join(segments[:i], "::")
 		inst, ok := s.instances[key]
 		if !ok {
 			continue
 		}
-		return s.walkSlots(inst, key, owner[i:])
+		return s.walkSlots(inst, key, segments[i:])
 	}
 	return nil, ""
 }
@@ -210,14 +228,14 @@ func ambiguousError(name string, matches []*symbols.Symbol, idx *symbols.Index) 
 	fqns := make([]string, 0, len(matches))
 	seen := make(map[string]bool, len(matches))
 	for _, sym := range matches {
-		fqn := idx.GetFQN(sym)
+		fqn := notationName(idx.GetFQN(sym))
 		if !seen[fqn] {
 			seen[fqn] = true
 			fqns = append(fqns, fqn)
 		}
 	}
 	sort.Strings(fqns)
-	return &AmbiguousNameError{Name: name, FQNs: fqns}
+	return &AmbiguousNameError{Name: notationName(name), FQNs: fqns}
 }
 
 // collectInScopeTree returns every symbol named name in scope or a nested

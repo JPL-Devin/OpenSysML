@@ -44,7 +44,16 @@ class ChecksumMismatchError(ConnectionError):
     A :class:`ConnectionError`, since the service cannot be started, but its own
     class so that a possibly tampered download is never handled as a transport
     failure and answered from whatever was cached before.
+
+    Attributes:
+        unpinned (bool): True when the refusal is only that this pysysml pins no
+            digest for the release, so nothing contradicts anything and a
+            working cached binary may still be used
     """
+
+    def __init__(self, message, code=None, unpinned=False):
+        super().__init__(message, code=code)
+        self.unpinned = unpinned
 
 
 class StaleServiceError(ConnectionError):

@@ -3,6 +3,10 @@
 Every command `sysml` answers at the prompt. The session model behind them — what a submission
 replaces, what it drops — is [guide chapter 4](../guide/04-repl.md).
 
+Every command taking a `<name>` accepts the quoted spelling the notation writes, including a
+quoted segment holding a space and one in the middle of a chain: `%instantiate 'My Pkg'::Car`,
+`%slots Top::'My Pkg'::Car`.
+
 | Command | Description |
 |---------|-------------|
 | `%help` | Show help message |
@@ -20,7 +24,8 @@ replaces, what it drops — is [guide chapter 4](../guide/04-repl.md).
 | `%instantiate <name>` | Create instance from part definition |
 | `%slots <name>` | Show instance slots and values |
 | `%instances` | List all created instances |
-| `%eval <expr>` | Evaluate expression |
+| `%eval <expr>` | Evaluate expression, in the last namespace the session declared |
+| `%eval in <name> : <expr>` | Evaluate expression in the named element's own namespace, or — when an object was materialized under that name — on that object, so a feature reads its slot. The separator is the first `:` outside a quoted name that is not part of a `::`, so `%eval in Demo : Vehicle::mass` works |
 | **Behavioral Execution** | |
 | `%calc <name> [args...]` | Invoke calculation with arguments |
 | `%constraint <name>` | Evaluate constraint (assert/assume) |

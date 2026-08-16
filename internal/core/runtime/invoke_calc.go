@@ -9,11 +9,6 @@ import (
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
-// maxCalcNestingDepth bounds how deep calc-in-calc invocation may go. A calc
-// that reaches itself, directly or through a cycle, would otherwise recurse
-// until the process ran out of stack rather than reporting the model error.
-const maxCalcNestingDepth = 32
-
 // calcParameter is one input parameter of a calc, in positional order.
 type calcParameter struct {
 	Name    string          // parameter name arguments bind to
@@ -246,14 +241,13 @@ func (ctx *Context) invokeCalcShape(shape *calcShape, args calcArgs, callerScope
 	return result, nil
 }
 
-// enterCalc counts one calc evaluation onto the stack, refusing to go deeper
-// than maxCalcNestingDepth so a recursive calc reports a typed error rather than
-// exhausting the stack. The returned function takes it back off.
+// enterCalc spends one of the run's calc depth budget, so a recursion evaluates
+// while it terminates within the budget. The returned function takes it back off.
 func (ctx *Context) enterCalc(name string) (func(), error) {
-	if ctx.calcDepth >= maxCalcNestingDepth {
+	if int64(ctx.calcDepth) >= ctx.maxCalcDepth {
 		return nil, fmt.Errorf(
-			"%w: calc %s nested more than %d deep (recursive calc?)",
-			ErrCalcRecursionLimit, name, maxCalcNestingDepth,
+			"%w: calc %s nested %d deep (unbounded recursion?; raise %s to allow more)",
+			ErrCalcRecursionLimit, name, ctx.maxCalcDepth, MaxCalcDepthEnvVar,
 		)
 	}
 	ctx.calcDepth++

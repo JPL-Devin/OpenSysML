@@ -51,6 +51,11 @@ type ActionGraph struct {
 	// Connections are the connectors declared in the action body, which is how
 	// a `send ... via <port>` finds the ports it reaches.
 	Connections []Connection
+
+	// StatementRuns marks the nodes of a block's own flow that stand for a run of
+	// statements rather than for an action node (block_graph.go). Such a node is
+	// keyed by the first statement of the run, whose name names no step.
+	StatementRuns map[ast.Node]bool
 }
 
 // Statement is one lowered statement in an action node's body. Statements are
@@ -63,9 +68,10 @@ type Statement interface {
 // Send is a lowered send statement. Message stays an expression because its
 // value is only known at execution time.
 //
-// Target is the simple name the send addressed, empty for a broadcast. IsVia
-// records that the name is a port of the sender rather than a receiver, in which
-// case the message goes to whatever the graph's Connections join that port to.
+// Target is the name the send addressed, empty for a broadcast. IsVia records
+// that the name is a port of the sender rather than a receiver, in which case it
+// is the whole path the port was written as and the message goes to whatever the
+// graph's Connections join that port to.
 type Send struct {
 	Message ast.Node
 	Target  string
@@ -121,6 +127,12 @@ type Block struct {
 	// Scope is the block's own scope, which its declarations, and a loop's
 	// condition, resolve in.
 	Scope *symbols.Scope
+	// Graph is the block's own token flow, present where a member of the block is
+	// an action node rather than a statement — a nested action declaration, a
+	// `perform` — which only a flow of its own executes with the succession
+	// semantics it has (block_graph.go). Statements is empty for such a block: the
+	// statements are the bodies of the flow's nodes.
+	Graph *ActionGraph
 }
 
 // A block is a statement in its own right: the anonymous action usage a loop or
@@ -330,7 +342,7 @@ func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, err
 		}
 	}
 
-	graph.Connections = lowerConnections(members, OwnerBehavior)
+	graph.Connections = lowerConnections(members, OwnerBehavior, scope)
 	graph.Attributes = lowerAttributes(members)
 
 	// `first a then b;` names the node the flow starts at rather than declaring an
@@ -487,9 +499,15 @@ func lowerBody(graph *ActionGraph, node *ast.Usage, scope *symbols.Scope) {
 func lowerStatement(member ast.Node, scope *symbols.Scope) Statement {
 	switch m := member.(type) {
 	case *ast.SendStatement:
+		// A `via` target names a port of the sender, which a nested port names
+		// through its owner (`via p.q`); a receiver is named by one name.
+		target := ast.SimpleName(m.Target)
+		if m.IsVia {
+			target = FeaturePath(m.Target)
+		}
 		return Send{
 			Message: m.Message,
-			Target:  ast.SimpleName(m.Target),
+			Target:  target,
 			IsVia:   m.IsVia,
 			Scope:   scope,
 		}
@@ -561,6 +579,9 @@ func lowerStatement(member ast.Node, scope *symbols.Scope) Statement {
 // is the node the block belongs to, which is the element that owns the block's
 // body-local namespace, and scope is the namespace it owns.
 func lowerBlock(owner ast.Node, members []ast.Node, scope *symbols.Scope) Block {
+	if blockNeedsFlow(members) {
+		return Block{Node: owner, Scope: scope, Graph: lowerBlockFlow(members, scope, false)}
+	}
 	block := Block{Node: owner, Scope: scope}
 	for _, member := range members {
 		actual := unwrapMembership(member)
@@ -603,13 +624,14 @@ func usageDescription(u *ast.Usage) string {
 
 // acceptPort returns the port an accept action routes through
 // (`action r accept msg : T via p`), which the parser records as a reference
-// relationship on the accept action, or "" when it named none.
+// relationship on the accept action, or "" when it named none. The port is the
+// whole path it was written as, so a nested one is the port it names.
 func acceptPort(node *ast.Usage) string {
 	for _, rel := range node.Relationships {
 		if rel == nil || rel.Kind != ast.RelVia {
 			continue
 		}
-		if name := ast.SimpleName(rel.Target); name != "" {
+		if name := FeaturePath(rel.Target); name != "" {
 			return name
 		}
 	}

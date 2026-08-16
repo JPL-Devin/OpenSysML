@@ -59,6 +59,11 @@ func TestErrorMessages(t *testing.T) {
 	})
 
 	t.Run("recursion_collapses_to_a_frame_count", func(t *testing.T) {
+		// A shallow depth budget, so the bound the message is about is the one
+		// this recursion reaches first.
+		defer func(was int64) { ctx.maxCalcDepth = was }(ctx.maxCalcDepth)
+		ctx.maxCalcDepth = 8
+
 		arg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 10}}
 		_, err := ctx.InvokeCalc(countdown, []Value{arg}, rootScope)
 		if err == nil {

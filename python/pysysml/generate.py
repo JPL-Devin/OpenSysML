@@ -212,13 +212,14 @@ def element_type(type_facts: Optional[TypeFacts], names: Dict[str, str]) -> Pyth
     if type_facts is None:
         return PythonType("object", "_t.as_object", "untyped feature")
 
+    # A value written with a unit is a magnitude and that unit, whatever library
+    # scalar the magnitude reduces to, so it is typed before the primitive below.
+    if type_facts.quantity and type_facts.unit:
+        return PythonType("_t.Quantity", "_t.as_quantity", f"quantity in [{type_facts.unit}]")
     if type_facts.quantity:
-        unit = type_facts.unit or "unknown unit"
-        return PythonType(
-            "object",
-            "_t.as_object",
-            f"quantity in [{unit}]; the wire format carries no magnitude-and-unit value",
-        )
+        # A quantity value type constrains the type, not what is written for it:
+        # a plain number and a structured value both arrive here.
+        return PythonType("object", "_t.as_object", "quantity value type, no unit written")
 
     # A definition reducing to a library scalar holds that scalar, not an
     # instance, even when it has a generated class of its own.

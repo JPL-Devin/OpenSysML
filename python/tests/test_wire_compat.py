@@ -217,9 +217,10 @@ def test_unknown_verification_fields_survive_an_older_reader():
 
 
 def test_enum_literal_is_an_added_value_arm():
-    """The literal arm is new field 8, so it displaces no existing value kind."""
+    """The literal arm is new field 9, so it displaces no existing value kind."""
     fields = sysml_pb2.Value.DESCRIPTOR.fields_by_name
-    assert fields["enum_literal"].number == 8
+    assert fields["enum_literal"].number == 9
+    assert fields["quantity"].number == 8
 
     value = sysml_pb2.Value(enum_literal=sysml_pb2.EnumLiteral(
         literal_id="D::Color::red", enumeration_id="D::Color", name="Color::red",

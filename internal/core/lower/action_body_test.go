@@ -174,8 +174,9 @@ func TestActionBodyLoopAndConditionalLowering(t *testing.T) {
 	}
 }
 
-// A body member that is not an executable statement is lowered to Unsupported
-// rather than dropped, so reaching it reports a diagnostic.
+// A body member that is neither an executable statement nor a node of the
+// block's own flow is lowered to Unsupported rather than dropped, so reaching it
+// reports a diagnostic.
 func TestActionBodyUnexecutableMemberIsLowered(t *testing.T) {
 	graph := actionGraphFor(t, `
 		action test {
@@ -183,7 +184,7 @@ func TestActionBodyUnexecutableMemberIsLowered(t *testing.T) {
 			first start;
 			action driver {
 				while total < 5 {
-					action inner;
+					part inner;
 				}
 			}
 			done end;

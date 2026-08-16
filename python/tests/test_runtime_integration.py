@@ -1,7 +1,12 @@
-"""Integration tests for runtime operations against real service."""
+"""Integration tests for runtime operations against real service.
+
+Without a service they skip, as a developer with no binary wants; with
+$PYSYSML_REQUIRE_SERVICE set, as CI sets it, an absent service fails instead.
+"""
 import pytest
 from pysysml import Connection
 from pysysml.errors import ExecutionError
+from tests.service_gate import skip_or_fail_without_service
 
 @pytest.mark.integration
 class TestRuntimeIntegration:
@@ -21,10 +26,14 @@ class TestRuntimeIntegration:
             if e.code() == grpc.StatusCode.NOT_FOUND:
                 return  # Service is healthy, self.conn already set
             self.conn = None  # Failed, clear for teardown safety
-            pytest.skip("sysml-grpc service not running")
-        except Exception:
+            skip_or_fail_without_service(
+                f"the sysml-grpc service on localhost:50051 answered {e.code()}"
+            )
+        except Exception as e:
             self.conn = None  # Failed, clear for teardown safety
-            pytest.skip("sysml-grpc service not running")
+            skip_or_fail_without_service(
+                f"no sysml-grpc service could be reached on localhost:50051 ({e})"
+            )
     
     def teardown_method(self):
         """Clean up connection after each test."""

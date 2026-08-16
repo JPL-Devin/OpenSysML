@@ -1,6 +1,11 @@
 package lower
 
-import "github.com/Open-MBEE/Systemica/internal/core/ast"
+import (
+	"strings"
+
+	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+)
 
 // ConnectionOwner is what a lowered connection belongs to, which decides whose
 // selection governs it when it is a variant's: a behavior activation, or the
@@ -23,18 +28,24 @@ const (
 // variant is the one selected, so it carries the variation it belongs to, its
 // own name, and what owns it: routing must ask what that owner bound the
 // variation to before delivering through it (SysML v2 §7.20).
+//
+// An end keeps the whole path it was written as (`sensor.out`, `p.q`), so a
+// nested port is joined as itself and not as a same-named port elsewhere; Scope
+// is where those paths resolve, which is what routing asks to learn the
+// direction an end's flow features carry.
 type Connection struct {
 	Ends      []string
 	Variation string          // variation point the connection is a variant of, empty when it is not
 	Variant   string          // name of the variant declaring it, empty when it is not one
 	Owner     ConnectionOwner // what declares it, whose selection governs a variant's connection
+	Scope     *symbols.Scope  // scope the end paths resolve in, nil when unknown
 }
 
 // ToObjectConnections lowers the connectors declared in the body of a type an
 // object is of. A `send … via p` of a behavior an object performs routes through
 // the object's connections as well as through the behavior's own, and it is that
 // object's selection that realizes a variant's connection among them.
-func ToObjectConnections(decl ast.Node) []Connection {
+func ToObjectConnections(decl ast.Node, scope *symbols.Scope) []Connection {
 	var members []ast.Node
 	switch n := decl.(type) {
 	case *ast.Usage:
@@ -44,14 +55,14 @@ func ToObjectConnections(decl ast.Node) []Connection {
 	default:
 		return nil
 	}
-	return lowerConnections(members, OwnerObject)
+	return lowerConnections(members, OwnerObject, scope)
 }
 
 // lowerConnections extracts the connectors declared among members, in
 // declaration order. Usages that are connector-shaped but declare fewer than
 // two ends join nothing and are dropped: the constraint pass reports them, and
 // carrying them would only make routing check the same thing again.
-func lowerConnections(members []ast.Node, owner ConnectionOwner) []Connection {
+func lowerConnections(members []ast.Node, owner ConnectionOwner, scope *symbols.Scope) []Connection {
 	var out []Connection
 	for _, member := range members {
 		u, isUsage := unwrapMembership(member).(*ast.Usage)
@@ -61,10 +72,10 @@ func lowerConnections(members []ast.Node, owner ConnectionOwner) []Connection {
 		// A variation point declares no ends of its own: the connections are the
 		// ones its variants declare, of which a selection realizes one.
 		if u.IsVariation {
-			out = append(out, lowerVariantConnections(u, owner)...)
+			out = append(out, lowerVariantConnections(u, owner, scope)...)
 			continue
 		}
-		if conn, ok := lowerConnection(u, owner); ok {
+		if conn, ok := lowerConnection(u, owner, scope); ok {
 			out = append(out, conn)
 		}
 	}
@@ -73,7 +84,7 @@ func lowerConnections(members []ast.Node, owner ConnectionOwner) []Connection {
 
 // lowerConnection extracts the ends of one connector usage. A usage joining
 // fewer than two ends joins nothing and is dropped.
-func lowerConnection(u *ast.Usage, owner ConnectionOwner) (Connection, bool) {
+func lowerConnection(u *ast.Usage, owner ConnectionOwner, scope *symbols.Scope) (Connection, bool) {
 	ends := make([]string, 0, len(u.ConnectorEnds))
 	for _, end := range u.ConnectorEnds {
 		if name := endName(end); name != "" {
@@ -83,13 +94,13 @@ func lowerConnection(u *ast.Usage, owner ConnectionOwner) (Connection, bool) {
 	if len(ends) < 2 {
 		return Connection{}, false
 	}
-	return Connection{Ends: ends, Owner: owner}, true
+	return Connection{Ends: ends, Owner: owner, Scope: scope}, true
 }
 
 // lowerVariantConnections extracts the connections the variants of a variation
 // connector declare, each tagged with the variation and variant it came from so
 // routing can honor the selection.
-func lowerVariantConnections(variation *ast.Usage, owner ConnectionOwner) []Connection {
+func lowerVariantConnections(variation *ast.Usage, owner ConnectionOwner, scope *symbols.Scope) []Connection {
 	name := variation.Ident.Name
 	var out []Connection
 	for _, member := range variation.Members {
@@ -97,7 +108,7 @@ func lowerVariantConnections(variation *ast.Usage, owner ConnectionOwner) []Conn
 		if !isUsage || !u.IsVariant || !connectorKind(u.Kind) {
 			continue
 		}
-		conn, ok := lowerConnection(u, owner)
+		conn, ok := lowerConnection(u, owner, scope)
 		if !ok {
 			continue
 		}
@@ -118,49 +129,40 @@ func connectorKind(k ast.UsageKind) bool {
 	return false
 }
 
-// endName names the feature an end attaches to. A chain (`sensor.out`) attaches
-// to its last segment, which is the port itself. An end that declares its own
-// name (`bead references t.bead`) attaches to what it reference-subsets.
+// endName names the feature an end attaches to, as the whole path it was written
+// as: a chain (`sensor.out`) keeps every segment, since the port it names is
+// that one and not another named `out`. An end that declares its own name
+// (`bead references t.bead`) attaches to what it reference-subsets.
 func endName(end *ast.ConnectorEnd) string {
 	if end == nil {
 		return ""
 	}
-	target := end.AttachedTarget()
-	if chain, isChain := target.(*ast.FeatureChainExpr); isChain {
-		return ast.SimpleName(chain.Member)
-	}
-	return ast.SimpleName(target)
+	return FeaturePath(end.AttachedTarget())
 }
 
-// PeerPorts returns the ends connected to port, across every connection it
-// participates in, in declaration order and without duplicates. A port is never
-// its own peer, so a connection joining a port to itself yields nothing.
-func PeerPorts(conns []Connection, port string) []string {
-	if port == "" {
-		return nil
-	}
-	var peers []string
-	seen := map[string]bool{port: true}
-	for _, conn := range conns {
-		if !contains(conn.Ends, port) {
-			continue
+// FeaturePath renders the feature a node names as a dotted path, so a nested
+// port keeps every segment it was written with. It returns "" for a node that
+// names no feature.
+func FeaturePath(node ast.Node) string {
+	switch n := node.(type) {
+	case nil:
+		return ""
+	case *ast.FeatureChainExpr:
+		base, member := FeaturePath(n.Operand), ast.SimpleName(n.Member)
+		if base == "" || member == "" {
+			return ""
 		}
-		for _, end := range conn.Ends {
-			if seen[end] {
-				continue
+		return base + "." + member
+	}
+	if qname := ast.AsQualifiedName(node); qname != nil {
+		parts := make([]string, 0, len(qname.Parts))
+		for _, part := range qname.Parts {
+			if part.Text == "" {
+				return ""
 			}
-			seen[end] = true
-			peers = append(peers, end)
+			parts = append(parts, part.Text)
 		}
+		return strings.Join(parts, ".")
 	}
-	return peers
-}
-
-func contains(names []string, want string) bool {
-	for _, name := range names {
-		if name == want {
-			return true
-		}
-	}
-	return false
+	return ast.SimpleName(node)
 }

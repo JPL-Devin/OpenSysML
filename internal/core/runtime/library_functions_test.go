@@ -3,6 +3,7 @@ package runtime
 import (
 	"errors"
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/Systemica/internal/core/libs"
@@ -379,4 +380,637 @@ func lookupOne(t *testing.T, idx *symbols.Index, fqn string) *symbols.Symbol {
 		t.Fatalf("LookupQualified(%q) returned %d symbols, want 1", fqn, len(syms))
 	}
 	return syms[0]
+}
+
+// vectorValues is the elements of a vector result, which is the sequence of its
+// elements.
+func vectorValues(t *testing.T, val Value) []semantics.Value {
+	t.Helper()
+	if val.Kind != ValSequence {
+		t.Fatalf("result is %s, want a vector (a sequence of its elements)", val.Kind)
+	}
+	out := make([]semantics.Value, 0, val.Sequence.Size())
+	for _, elem := range val.Sequence.Elements() {
+		if elem.Kind != ValConst {
+			t.Fatalf("vector element is %s, want a constant", elem.Kind)
+		}
+		out = append(out, elem.Const)
+	}
+	return out
+}
+
+func realConsts(reals ...float64) []semantics.Value {
+	out := make([]semantics.Value, len(reals))
+	for i, x := range reals {
+		out[i] = semantics.Value{Kind: semantics.ValReal, Real: x}
+	}
+	return out
+}
+
+func intConsts(ints ...int64) []semantics.Value {
+	out := make([]semantics.Value, len(ints))
+	for i, n := range ints {
+		out[i] = semantics.Value{Kind: semantics.ValInt, Int: n}
+	}
+	return out
+}
+
+// vec is a vector argument: the sequence of its elements.
+func vec(elements ...Value) Value { return sequenceOf(elements) }
+
+func realVec(reals ...float64) Value {
+	elements := make([]Value, len(reals))
+	for i, x := range reals {
+		elements[i] = constReal(x)
+	}
+	return vec(elements...)
+}
+
+// A vector is the sequence of its elements, and the operations VectorFunctions
+// declares abstractly over VectorValue compute for every vector this runtime
+// represents, so the abstract name and its Cartesian specialization agree.
+func TestVectorFunctionValues(t *testing.T) {
+	cases := []struct {
+		fn   string
+		args []Value
+		want []semantics.Value
+	}{
+		{"VectorFunctions::VectorOf", []Value{vec(constInt(1), constInt(2))}, intConsts(1, 2)},
+		{"VectorFunctions::VectorOf", []Value{constInt(3)}, intConsts(3)},
+		{"VectorFunctions::CartesianVectorOf", []Value{vec(constInt(1), constReal(2.5))}, realConsts(1, 2.5)},
+		{"VectorFunctions::CartesianVectorOf", []Value{nullValue()}, nil},
+		{"VectorFunctions::CartesianThreeVectorOf", []Value{realVec(1, 2, 3)}, realConsts(1, 2, 3)},
+		// '+' and '-' keep the elements' kind, as the declaration over
+		// NumericalValue does; the Cartesian specializations are Real.
+		{"VectorFunctions::+", []Value{vec(constInt(1), constInt(2)), vec(constInt(3), constInt(4))}, intConsts(4, 6)},
+		{"VectorFunctions::cartesian+", []Value{realVec(1, 2), realVec(3, 4)}, realConsts(4, 6)},
+		{"VectorFunctions::-", []Value{vec(constInt(1), constInt(2)), vec(constInt(4), constInt(4))}, intConsts(-3, -2)},
+		{"VectorFunctions::cartesian-", []Value{realVec(1, 2), realVec(0.5, 0.5)}, realConsts(0.5, 1.5)},
+		{"VectorFunctions::scalarVectorMult", []Value{constInt(2), vec(constInt(1), constInt(2))}, intConsts(2, 4)},
+		{"VectorFunctions::*", []Value{constReal(0.5), realVec(1, 2)}, realConsts(0.5, 1)},
+		{"VectorFunctions::vectorScalarMult", []Value{realVec(1, 2), constReal(3)}, realConsts(3, 6)},
+		{"VectorFunctions::cartesianVectorScalarMult", []Value{realVec(1, 2), constReal(3)}, realConsts(3, 6)},
+		// The library defines the quotient as the product with 1.0 / x, whose
+		// rounding a division does not carry: 1.0 / 3.0 * 3.0 is 0.9999999999999998.
+		{"VectorFunctions::vectorScalarDiv", []Value{realVec(3, 6), constReal(3)}, realConsts(1, 2)},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.fn, func(t *testing.T) {
+			got, err := applyLibrary(t, tc.fn, tc.args...)
+			if err != nil {
+				t.Fatalf("%s = error %v", tc.fn, err)
+			}
+			elements := vectorValues(t, got)
+			if len(elements) != len(tc.want) {
+				t.Fatalf("%s = %v, want %v", tc.fn, elements, tc.want)
+			}
+			for i := range elements {
+				if elements[i] != tc.want[i] {
+					t.Fatalf("%s = %v, want %v", tc.fn, elements, tc.want)
+				}
+			}
+		})
+	}
+}
+
+// The scalar-valued vector operations: the inner product keeps the elements'
+// kind, the norm and the angle are Reals.
+func TestVectorFunctionScalarValues(t *testing.T) {
+	cases := []struct {
+		fn   string
+		args []Value
+		want semantics.Value
+	}{
+		{"VectorFunctions::inner", []Value{vec(constInt(1), constInt(2)), vec(constInt(3), constInt(4))}, semantics.Value{Kind: semantics.ValInt, Int: 11}},
+		{"VectorFunctions::cartesianInner", []Value{realVec(1, 2), realVec(3, 4)}, semantics.Value{Kind: semantics.ValReal, Real: 11}},
+		{"VectorFunctions::norm", []Value{realVec(3, 4)}, semantics.Value{Kind: semantics.ValReal, Real: 5}},
+		{"VectorFunctions::cartesianNorm", []Value{realVec(3, 4)}, semantics.Value{Kind: semantics.ValReal, Real: 5}},
+		{"VectorFunctions::angle", []Value{realVec(1, 0), realVec(0, 1)}, semantics.Value{Kind: semantics.ValReal, Real: math.Pi / 2}},
+		// Two parallel vectors: the cosine rounds to just above 1.0, where the
+		// arc cosine has no value, and the angle is 0.
+		{"VectorFunctions::cartesianAngle", []Value{realVec(1, 2, 3), realVec(2, 4, 6)}, semantics.Value{Kind: semantics.ValReal, Real: 0}},
+		{"VectorFunctions::isZeroVector", []Value{realVec(0, 0)}, semantics.Value{Kind: semantics.ValBool, Bool: true}},
+		{"VectorFunctions::isZeroVector", []Value{realVec(0, 1)}, semantics.Value{Kind: semantics.ValBool, Bool: false}},
+		{"VectorFunctions::isCartesianZeroVector", []Value{realVec(0, 0, 0)}, semantics.Value{Kind: semantics.ValBool, Bool: true}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.fn, func(t *testing.T) {
+			got, err := applyLibrary(t, tc.fn, tc.args...)
+			if err != nil {
+				t.Fatalf("%s = error %v", tc.fn, err)
+			}
+			if got.Kind != ValConst || got.Const != tc.want {
+				t.Fatalf("%s = %+v, want %+v", tc.fn, got, tc.want)
+			}
+		})
+	}
+}
+
+// A Complex is the (re, im) pair rect constructs, and a Real is a Complex with a
+// zero imaginary part (ScalarValues declares Real :> Complex), so both bind to a
+// Complex parameter.
+func TestComplexFunctionValues(t *testing.T) {
+	cases := []struct {
+		fn   string
+		args []Value
+		want []semantics.Value
+	}{
+		{"ComplexFunctions::rect", []Value{constReal(1), constReal(2)}, realConsts(1, 2)},
+		{"ComplexFunctions::rect", []Value{constInt(1), constInt(2)}, realConsts(1, 2)},
+		{"ComplexFunctions::polar", []Value{constReal(2), constReal(0)}, realConsts(2, 0)},
+		{"ComplexFunctions::+", []Value{realVec(1, 2), realVec(3, 4)}, realConsts(4, 6)},
+		{"ComplexFunctions::+", []Value{realVec(1, 2), constReal(3)}, realConsts(4, 2)},
+		{"ComplexFunctions::-", []Value{realVec(1, 2), realVec(3, 4)}, realConsts(-2, -2)},
+		{"ComplexFunctions::*", []Value{realVec(0, 1), realVec(0, 1)}, realConsts(-1, 0)},
+		{"ComplexFunctions::*", []Value{realVec(1, 2), constReal(2)}, realConsts(2, 4)},
+		{"ComplexFunctions::/", []Value{realVec(-1, 0), realVec(0, 1)}, realConsts(0, 1)},
+		{"ComplexFunctions::**", []Value{realVec(0, 1), constInt(2)}, realConsts(-1, 0)},
+		{"ComplexFunctions::^", []Value{constReal(2), constInt(3)}, realConsts(8, 0)},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.fn, func(t *testing.T) {
+			got, err := applyLibrary(t, tc.fn, tc.args...)
+			if err != nil {
+				t.Fatalf("%s = error %v", tc.fn, err)
+			}
+			elements := vectorValues(t, got)
+			if len(elements) != len(tc.want) {
+				t.Fatalf("%s = %v, want %v", tc.fn, elements, tc.want)
+			}
+			// The products and quotients of a Complex round, so compare the parts
+			// as Reals rather than bit for bit.
+			for i := range elements {
+				if math.Abs(asReal(elements[i])-asReal(tc.want[i])) > 1e-12 {
+					t.Fatalf("%s = %v, want %v", tc.fn, elements, tc.want)
+				}
+			}
+		})
+	}
+}
+
+func TestComplexFunctionScalarValues(t *testing.T) {
+	cases := []struct {
+		fn   string
+		args []Value
+		want semantics.Value
+	}{
+		{"ComplexFunctions::re", []Value{realVec(1, 2)}, semantics.Value{Kind: semantics.ValReal, Real: 1}},
+		{"ComplexFunctions::im", []Value{realVec(1, 2)}, semantics.Value{Kind: semantics.ValReal, Real: 2}},
+		{"ComplexFunctions::im", []Value{constReal(1)}, semantics.Value{Kind: semantics.ValReal, Real: 0}},
+		{"ComplexFunctions::abs", []Value{realVec(3, 4)}, semantics.Value{Kind: semantics.ValReal, Real: 5}},
+		{"ComplexFunctions::arg", []Value{realVec(0, 1)}, semantics.Value{Kind: semantics.ValReal, Real: math.Pi / 2}},
+		{"ComplexFunctions::isZero", []Value{realVec(0, 0)}, semantics.Value{Kind: semantics.ValBool, Bool: true}},
+		{"ComplexFunctions::isZero", []Value{constInt(0)}, semantics.Value{Kind: semantics.ValBool, Bool: true}},
+		{"ComplexFunctions::isUnit", []Value{realVec(1, 0)}, semantics.Value{Kind: semantics.ValBool, Bool: true}},
+		{"ComplexFunctions::isUnit", []Value{realVec(1, 1)}, semantics.Value{Kind: semantics.ValBool, Bool: false}},
+		// A Real and the pair with a zero imaginary part are the same Complex.
+		{"ComplexFunctions::==", []Value{constReal(2), realVec(2, 0)}, semantics.Value{Kind: semantics.ValBool, Bool: true}},
+		{"ComplexFunctions::==", []Value{realVec(2, 1), realVec(2, 0)}, semantics.Value{Kind: semantics.ValBool, Bool: false}},
+		// Both operands are declared [0..1]: two empty operands are equal.
+		{"ComplexFunctions::==", []Value{nullValue(), nullValue()}, semantics.Value{Kind: semantics.ValBool, Bool: true}},
+		{"ComplexFunctions::==", []Value{constReal(0), nullValue()}, semantics.Value{Kind: semantics.ValBool, Bool: false}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.fn, func(t *testing.T) {
+			got, err := applyLibrary(t, tc.fn, tc.args...)
+			if err != nil {
+				t.Fatalf("%s = error %v", tc.fn, err)
+			}
+			if got.Kind != ValConst || got.Const != tc.want {
+				t.Fatalf("%s = %+v, want %+v", tc.fn, got, tc.want)
+			}
+		})
+	}
+}
+
+// TrigFunctions::deg and ::rad convert with the pi the feature seam supplies,
+// which is what their library bodies read.
+func TestTrigDegreesAndRadians(t *testing.T) {
+	got, err := applyLibrary(t, "TrigFunctions::deg", constReal(math.Pi))
+	if err != nil || got.Const.Real != 180 {
+		t.Fatalf("deg(pi) = %+v, %v; want 180.0", got, err)
+	}
+	got, err = applyLibrary(t, "TrigFunctions::rad", constReal(180))
+	if err != nil || got.Const.Real != math.Pi {
+		t.Fatalf("rad(180.0) = %+v, %v; want pi", got, err)
+	}
+	got, err = applyLibrary(t, "TrigFunctions::rad", constInt(0))
+	if err != nil || got.Const.Real != 0 {
+		t.Fatalf("rad(0) = %+v, %v; want 0.0", got, err)
+	}
+}
+
+// The library declares the second operand of '+' and '-' [0..1]: with one
+// argument, '+' is that value and '-' is its inverse.
+func TestLibraryFunctionOptionalOperand(t *testing.T) {
+	got, err := applyLibrary(t, "VectorFunctions::cartesian+", realVec(1, 2))
+	if err != nil {
+		t.Fatalf("cartesian+((1.0, 2.0)) = error %v", err)
+	}
+	if elements := vectorValues(t, got); len(elements) != 2 || elements[0].Real != 1 || elements[1].Real != 2 {
+		t.Fatalf("cartesian+((1.0, 2.0)) = %v, want (1.0, 2.0)", got)
+	}
+
+	got, err = applyLibrary(t, "VectorFunctions::-", vec(constInt(1), constInt(-2)))
+	if err != nil {
+		t.Fatalf("-((1, -2)) = error %v", err)
+	}
+	if elements := vectorValues(t, got); len(elements) != 2 || elements[0].Int != -1 || elements[1].Int != 2 {
+		t.Fatalf("-((1, -2)) = %v, want (-1, 2)", got)
+	}
+
+	got, err = applyLibrary(t, "ComplexFunctions::-", realVec(1, 2))
+	if err != nil {
+		t.Fatalf("-(1.0 + 2.0i) = error %v", err)
+	}
+	if elements := vectorValues(t, got); len(elements) != 2 || elements[0].Real != -1 || elements[1].Real != -2 {
+		t.Fatalf("-(1.0 + 2.0i) = %v, want -1.0 - 2.0i", got)
+	}
+
+	// A required operand is still required: '*' declares both [1].
+	if _, err := applyLibrary(t, "ComplexFunctions::*", realVec(1, 2)); !errors.Is(err, ErrCalcArity) {
+		t.Fatalf("*(1.0 + 2.0i) error = %v, want %v", err, ErrCalcArity)
+	}
+}
+
+// An empty collection written for the optional operand is the same no value as
+// null, so the call answers as the one-argument form rather than reporting.
+func TestLibraryFunctionEmptyOptionalOperand(t *testing.T) {
+	got, err := applyLibrary(t, "VectorFunctions::cartesian+", realVec(1, 2), vec())
+	if err != nil {
+		t.Fatalf("cartesian+((1.0, 2.0), ()) = error %v", err)
+	}
+	if elements := vectorValues(t, got); len(elements) != 2 || elements[0].Real != 1 || elements[1].Real != 2 {
+		t.Fatalf("cartesian+((1.0, 2.0), ()) = %v, want (1.0, 2.0)", got)
+	}
+
+	got, err = applyLibrary(t, "VectorFunctions::cartesian-", realVec(1, 2), vec())
+	if err != nil {
+		t.Fatalf("cartesian-((1.0, 2.0), ()) = error %v", err)
+	}
+	if elements := vectorValues(t, got); len(elements) != 2 || elements[0].Real != -1 || elements[1].Real != -2 {
+		t.Fatalf("cartesian-((1.0, 2.0), ()) = %v, want (-1.0, -2.0)", got)
+	}
+
+	got, err = applyLibrary(t, "ComplexFunctions::+", realVec(1, 2), vec())
+	if err != nil {
+		t.Fatalf("+(1.0 + 2.0i, ()) = error %v", err)
+	}
+	if elements := vectorValues(t, got); len(elements) != 2 || elements[0].Real != 1 || elements[1].Real != 2 {
+		t.Fatalf("+(1.0 + 2.0i, ()) = %v, want 1.0 + 2.0i", got)
+	}
+
+	for _, tc := range []struct {
+		args []Value
+		want bool
+	}{
+		{[]Value{vec(), vec()}, true},
+		{[]Value{vec(), nullValue()}, true},
+		{[]Value{realVec(1, 2), vec()}, false},
+	} {
+		got, err := applyLibrary(t, "ComplexFunctions::==", tc.args...)
+		if err != nil || got.Kind != ValConst || got.Const.Bool != tc.want {
+			t.Errorf("==(%v) = (%v, %v), want %v", tc.args, got, err, tc.want)
+		}
+	}
+}
+
+// A named argument binds to the parameter name the vendored vector and Complex
+// signatures declare, whichever order the call names them in.
+func TestVectorAndComplexNamedArguments(t *testing.T) {
+	fn, _ := libraryFunctionByName("VectorFunctions::scalarVectorMult")
+	got, err := fn.invoke(libCtx(t), calcArgs{named: map[string]Value{"v": realVec(1, 2), "x": constReal(3)}})
+	if err != nil {
+		t.Fatalf("scalarVectorMult(v = (1.0, 2.0), x = 3.0) = error %v", err)
+	}
+	if elements := vectorValues(t, got); len(elements) != 2 || elements[0].Real != 3 || elements[1].Real != 6 {
+		t.Fatalf("scalarVectorMult(v = (1.0, 2.0), x = 3.0) = %v, want (3.0, 6.0)", got)
+	}
+
+	fn, _ = libraryFunctionByName("ComplexFunctions::rect")
+	got, err = fn.invoke(libCtx(t), calcArgs{named: map[string]Value{"im": constReal(2), "re": constReal(1)}})
+	if err != nil {
+		t.Fatalf("rect(im = 2.0, re = 1.0) = error %v", err)
+	}
+	if elements := vectorValues(t, got); len(elements) != 2 || elements[0].Real != 1 || elements[1].Real != 2 {
+		t.Fatalf("rect(im = 2.0, re = 1.0) = %v, want 1.0 + 2.0i", got)
+	}
+
+	// An omitted optional parameter binds empty, so naming only `v` is a call
+	// with one argument rather than an unknown-parameter error.
+	fn, _ = libraryFunctionByName("VectorFunctions::+")
+	if _, err := fn.invoke(libCtx(t), calcArgs{named: map[string]Value{"v": realVec(1, 2)}}); err != nil {
+		t.Fatalf("+(v = (1.0, 2.0)) = error %v", err)
+	}
+	if _, err := fn.invoke(libCtx(t), calcArgs{named: map[string]Value{"u": realVec(1, 2)}}); !errors.Is(err, ErrUnknownParameter) {
+		t.Fatalf("+(u = (1.0, 2.0)) error = %v, want %v", err, ErrUnknownParameter)
+	}
+}
+
+// A name no parameter of the signature carries is reported, rather than absorbed
+// by an optional parameter the call then leaves empty — which would answer the
+// call as if the argument had not been written.
+func TestVectorAndComplexUnknownNamedArgument(t *testing.T) {
+	for _, tt := range []struct {
+		fn    string
+		named map[string]Value
+	}{
+		{"VectorFunctions::+", map[string]Value{"v": realVec(1, 2), "zz": realVec(3, 4)}},
+		{"VectorFunctions::cartesian+", map[string]Value{"v": realVec(1, 2), "zz": realVec(3, 4)}},
+		{"VectorFunctions::-", map[string]Value{"v": realVec(1, 2), "zz": realVec(3, 4)}},
+		{"ComplexFunctions::+", map[string]Value{"x": realVec(1, 2), "zz": realVec(3, 4)}},
+		{"ComplexFunctions::-", map[string]Value{"x": realVec(1, 2), "zz": realVec(3, 4)}},
+		{"ComplexFunctions::==", map[string]Value{"zz": constReal(1)}},
+		{"ComplexFunctions::==", map[string]Value{"x": realVec(1, 2), "zz": realVec(1, 2)}},
+	} {
+		fn, ok := libraryFunctionByName(tt.fn)
+		if !ok {
+			t.Fatalf("%s is not registered", tt.fn)
+		}
+		got, err := fn.invoke(libCtx(t), calcArgs{named: tt.named})
+		if !errors.Is(err, ErrUnknownParameter) {
+			t.Errorf("%s with an unknown name = (%v, %v), want %v", tt.fn, got, err, ErrUnknownParameter)
+		}
+	}
+}
+
+func TestVectorAndComplexFunctionErrors(t *testing.T) {
+	cases := []struct {
+		name string
+		fn   string
+		args []Value
+		want error
+	}{
+		{"vectors of unequal dimension", "VectorFunctions::cartesian+", []Value{realVec(1, 2), realVec(1, 2, 3)}, ErrTypeMismatch},
+		{"inner product of unequal dimensions", "VectorFunctions::inner", []Value{realVec(1), realVec(1, 2)}, ErrTypeMismatch},
+		{"angle of unequal dimensions", "VectorFunctions::angle", []Value{realVec(1), realVec(1, 2)}, ErrTypeMismatch},
+		{"a string element", "VectorFunctions::norm", []Value{vec(constReal(1), Value{Kind: ValString, Str: "2"})}, ErrTypeMismatch},
+		{"a boolean element", "VectorFunctions::isZeroVector", []Value{vec(boolValue(true))}, ErrTypeMismatch},
+		{"a vector where a scalar is declared", "VectorFunctions::scalarVectorMult", []Value{realVec(1, 2), realVec(1, 2)}, ErrTypeMismatch},
+		{"no components", "VectorFunctions::VectorOf", []Value{nullValue()}, ErrMultiplicityViolation},
+		{"two components of a three-vector", "VectorFunctions::CartesianThreeVectorOf", []Value{realVec(1, 2)}, ErrMultiplicityViolation},
+		{"division of a vector by zero", "VectorFunctions::vectorScalarDiv", []Value{realVec(1, 2), constReal(0)}, ErrDivisionByZero},
+		{"the angle to a zero vector", "VectorFunctions::angle", []Value{realVec(0, 0), realVec(1, 0)}, semantics.ErrArithmeticDomain},
+		{"a norm beyond the Real range", "VectorFunctions::norm", []Value{realVec(1e200, 1e200)}, semantics.ErrArithmeticOverflow},
+		{"a sum beyond the Real range", "VectorFunctions::cartesian+", []Value{realVec(1e308, 1), realVec(1e308, 1)}, semantics.ErrArithmeticOverflow},
+		{"a difference beyond the Real range", "VectorFunctions::cartesian-", []Value{realVec(1e308, 1), realVec(-1e308, 1)}, semantics.ErrArithmeticOverflow},
+		{"a scaled element beyond the Real range", "VectorFunctions::scalarVectorMult", []Value{constReal(1e300), realVec(1e300)}, semantics.ErrArithmeticOverflow},
+		{"an inner product beyond the Real range", "VectorFunctions::cartesianInner", []Value{realVec(1e200), realVec(1e200)}, semantics.ErrArithmeticOverflow},
+		{"an Integer sum beyond the Integer range", "VectorFunctions::+", []Value{vec(constInt(math.MaxInt64)), vec(constInt(1))}, semantics.ErrArithmeticOverflow},
+		{"an Integer difference beyond the Integer range", "VectorFunctions::-", []Value{vec(constInt(math.MinInt64)), vec(constInt(1))}, semantics.ErrArithmeticOverflow},
+		{"the negation of the least Integer", "VectorFunctions::-", []Value{vec(constInt(math.MinInt64))}, semantics.ErrArithmeticOverflow},
+		{"an Integer scaling beyond the Integer range", "VectorFunctions::scalarVectorMult", []Value{constInt(2), vec(constInt(math.MaxInt64))}, semantics.ErrArithmeticOverflow},
+		{"an Integer inner product beyond the Integer range", "VectorFunctions::inner", []Value{vec(constInt(math.MaxInt64), constInt(1)), vec(constInt(1), constInt(1))}, semantics.ErrArithmeticOverflow},
+		{"three parts of a Complex", "ComplexFunctions::re", []Value{realVec(1, 2, 3)}, ErrTypeMismatch},
+		{"an empty Complex", "ComplexFunctions::abs", []Value{nullValue()}, ErrTypeMismatch},
+		{"a string part of a Complex", "ComplexFunctions::im", []Value{vec(constReal(1), Value{Kind: ValString, Str: "2"})}, ErrTypeMismatch},
+		{"a vector where rect declares a Real", "ComplexFunctions::rect", []Value{realVec(1, 2), constReal(0)}, ErrTypeMismatch},
+		{"the argument of zero", "ComplexFunctions::arg", []Value{realVec(0, 0)}, semantics.ErrArithmeticDomain},
+		{"division of a Complex by zero", "ComplexFunctions::/", []Value{realVec(1, 2), realVec(0, 0)}, ErrDivisionByZero},
+		{"zero to a negative power", "ComplexFunctions::**", []Value{constReal(0), constReal(-1)}, semantics.ErrArithmeticDomain},
+		{"a power beyond the Real range", "ComplexFunctions::**", []Value{constReal(1e200), constReal(2)}, semantics.ErrArithmeticOverflow},
+		{"too many arguments to a vector constructor", "VectorFunctions::CartesianVectorOf", []Value{realVec(1), realVec(2)}, ErrCalcArity},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := applyLibrary(t, tc.fn, tc.args...)
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("%s = %+v, %v; want error %v", tc.fn, got, err, tc.want)
+			}
+		})
+	}
+}
+
+// A declaration this runtime has no representation for the values of reports
+// itself by name rather than computing something else.
+func TestUnevaluableLibraryFunctionsNameThemselves(t *testing.T) {
+	unevaluable := []struct {
+		fn   string
+		args []Value
+	}{
+		{"VectorFunctions::sum", []Value{realVec(1, 2, 3)}},
+		{"VectorFunctions::sum0", []Value{realVec(1, 2, 3), realVec(0, 0, 0)}},
+		{"ComplexFunctions::sum", []Value{realVec(1, 2)}},
+		{"ComplexFunctions::product", []Value{realVec(1, 2)}},
+		{"ComplexFunctions::ToString", []Value{realVec(1, 2)}},
+		{"ComplexFunctions::ToComplex", []Value{{Kind: ValString, Str: "1.0"}}},
+		{"SequenceFunctions::includingAt", []Value{vec(constInt(1), constInt(2)), constInt(9), constInt(2)}},
+	}
+
+	for _, tc := range unevaluable {
+		t.Run(tc.fn, func(t *testing.T) {
+			_, err := applyLibrary(t, tc.fn, tc.args...)
+			if !errors.Is(err, ErrUnevaluableLibraryFunction) {
+				t.Fatalf("%s error = %v, want %v", tc.fn, err, ErrUnevaluableLibraryFunction)
+			}
+			if !strings.Contains(err.Error(), tc.fn) {
+				t.Fatalf("%s error %q does not name the function", tc.fn, err)
+			}
+		})
+	}
+}
+
+// The vendored declarations these implementations are registered against cannot
+// drift from the registry: every function VectorFunctions, ComplexFunctions,
+// SequenceFunctions and TrigFunctions declare is either implemented here with
+// the declared parameter names in the declared order, or implemented as a
+// built-in over collections (builtins.go), which takes its arguments
+// positionally.
+func TestVendoredFunctionsAreAllDispatchable(t *testing.T) {
+	packages := map[string]string{
+		"VectorFunctions":   "Kernel Libraries/Kernel Function Library/VectorFunctions.kerml",
+		"ComplexFunctions":  "Kernel Libraries/Kernel Function Library/ComplexFunctions.kerml",
+		"SequenceFunctions": "Kernel Libraries/Kernel Function Library/SequenceFunctions.kerml",
+		"TrigFunctions":     "Kernel Libraries/Kernel Function Library/TrigFunctions.kerml",
+	}
+
+	for pkg, path := range packages {
+		t.Run(pkg, func(t *testing.T) {
+			data, err := libs.DefaultSource().Read(path)
+			if err != nil {
+				t.Fatalf("Read(%q): %v", path, err)
+			}
+			p := parser.New(source.New(path, data))
+			file := p.ParseFile()
+			if len(p.Diagnostics) > 0 {
+				t.Fatalf("%s has %d parse diagnostics, want 0: %v", path, len(p.Diagnostics), p.Diagnostics)
+			}
+			idx := symbols.NewIndex()
+			idx.AddDocument(path, file)
+			resolver := resolve.New(idx)
+			ctx := NewContext(semantics.NewModel(resolver), resolver, 10000)
+
+			for _, sym := range idx.LookupDirectChildren(pkg) {
+				if !isCalcSymbol(sym) {
+					continue
+				}
+				fqn := ctx.qualifiedSymbolName(sym)
+				fn, ok := libraryFunctionByName(fqn)
+				if !ok {
+					if _, isBuiltin := builtins[fqn]; !isBuiltin {
+						t.Errorf("%s is declared in %s and is not dispatchable", fqn, path)
+					}
+					continue
+				}
+				var params []string
+				for _, param := range calcParameters(ctx.calcChain(sym)) {
+					params = append(params, param.Name)
+				}
+				if len(params) != len(fn.params) {
+					t.Errorf("%s declares %v, implementation takes %v", fqn, params, fn.params)
+					continue
+				}
+				for i, name := range params {
+					if fn.params[i] != name {
+						t.Errorf("%s parameter %d is %q, implementation names it %q", fqn, i, name, fn.params[i])
+					}
+				}
+			}
+		})
+	}
+}
+
+// libraryContextForSource indexes src as a library document, which is what the
+// feature-value seam answers for.
+func libraryContextForSource(t *testing.T, src string) (*Context, *symbols.Index) {
+	t.Helper()
+	file := parser.New(source.New("lib.kerml", []byte(src))).ParseFile()
+	idx := symbols.NewIndex()
+	idx.AddDocument("lib.kerml", file)
+	idx.MarkLibrary("lib.kerml")
+	resolver := resolve.New(idx)
+	return NewContext(semantics.NewModel(resolver), resolver, 10000), idx
+}
+
+// The library declares `feature pi : Real` with no value, so its value comes from
+// the seam.
+func TestLibraryFeatureValue(t *testing.T) {
+	ctx, idx := libraryContextForSource(t, `package TrigFunctions {
+	feature pi : Real;
+}`)
+	sym := lookupOne(t, idx, "TrigFunctions::pi")
+
+	got, ok, err := ctx.libraryFeatureValue(sym)
+	if err != nil || !ok {
+		t.Fatalf("libraryFeatureValue(TrigFunctions::pi) = %+v, %v, %v", got, ok, err)
+	}
+	if got.Kind != ValConst || got.Const.Real != math.Pi {
+		t.Fatalf("TrigFunctions::pi = %+v, want %v", got, math.Pi)
+	}
+}
+
+// A library symbol restored from the library index cache carries no declaration,
+// and the seam answers for it with the same value: a feature's value does not
+// depend on whether the cache was warm.
+func TestLibraryFeatureValueFromACachedSymbol(t *testing.T) {
+	idx := symbols.NewIndex()
+	idx.AddRecords("lib", []symbols.RecordEntry{
+		{FQN: "TrigFunctions", Kind: symbols.SymbolPackage},
+		{FQN: "TrigFunctions::pi", Kind: symbols.SymbolAttributeUsage},
+	})
+	idx.MarkLibrary("lib")
+	resolver := resolve.New(idx)
+	ctx := NewContext(semantics.NewModel(resolver), resolver, 10000)
+
+	got, ok, err := ctx.libraryFeatureValue(lookupOne(t, idx, "TrigFunctions::pi"))
+	if err != nil || !ok || got.Const.Real != math.Pi {
+		t.Fatalf("cached TrigFunctions::pi = %+v, %v, %v; want pi", got, ok, err)
+	}
+}
+
+// The seam is keyed by the resolved symbol and answers for a library declaration
+// only, so a model that declares its own feature of the same name keeps its own
+// value — name resolution decides, as it does for every other name.
+func TestLibraryFeatureValueLeavesAModelsOwnFeatureAlone(t *testing.T) {
+	ctx, idx := contextForSource(t, `package TrigFunctions {
+	feature pi : Real = 3.0;
+}`)
+	if _, ok, _ := ctx.libraryFeatureValue(lookupOne(t, idx, "TrigFunctions::pi")); ok {
+		t.Fatalf("the seam supplied a value for a model's own feature")
+	}
+}
+
+// A library feature this runtime has no representation for the value of reports
+// itself, rather than a value of another shape.
+func TestLibraryFeatureValueUnrepresentable(t *testing.T) {
+	ctx, idx := libraryContextForSource(t, `package VectorFunctions {
+	feature cartesianZeroVector : Real[3];
+	feature cartesian3DZeroVector : Real[3];
+}`)
+
+	if _, _, err := ctx.libraryFeatureValue(lookupOne(t, idx, "VectorFunctions::cartesianZeroVector")); !errors.Is(err, ErrUnevaluableLibraryFunction) {
+		t.Fatalf("cartesianZeroVector error = %v, want %v", err, ErrUnevaluableLibraryFunction)
+	}
+
+	// The three-dimensional zero vector does have a representation, and every
+	// read builds its own sequence: no reader can change another's value.
+	first, ok, err := ctx.libraryFeatureValue(lookupOne(t, idx, "VectorFunctions::cartesian3DZeroVector"))
+	if err != nil || !ok {
+		t.Fatalf("cartesian3DZeroVector = %+v, %v, %v", first, ok, err)
+	}
+	if elements := vectorValues(t, first); len(elements) != 3 || elements[0].Real != 0 {
+		t.Fatalf("cartesian3DZeroVector = %v, want (0.0, 0.0, 0.0)", first)
+	}
+	second, _, _ := ctx.libraryFeatureValue(lookupOne(t, idx, "VectorFunctions::cartesian3DZeroVector"))
+	if first.Sequence == second.Sequence {
+		t.Fatalf("two reads of cartesian3DZeroVector share one sequence")
+	}
+}
+
+// Every feature the seam supplies is named by its fully-qualified name, which is
+// how a model that imports no part of the libraries reads one.
+func TestLibraryFeatureByName(t *testing.T) {
+	for _, fqn := range []string{"TrigFunctions::pi", "ComplexFunctions::i", "VectorFunctions::cartesian3DZeroVector"} {
+		feature, ok := libraryFeatureByName(fqn)
+		if !ok {
+			t.Fatalf("no library feature %s registered", fqn)
+		}
+		if _, err := feature.value(libCtx(t)); err != nil {
+			t.Fatalf("%s = error %v", fqn, err)
+		}
+	}
+	if _, ok := libraryFeatureByName("TrigFunctions::tau"); ok {
+		t.Fatalf("TrigFunctions::tau is not a library feature")
+	}
+}
+
+// ComplexFunctions declares `feature i: Complex[1] = rect(0.0, 1.0)`, which the
+// seam supplies as that pair.
+func TestLibraryFeatureImaginaryUnit(t *testing.T) {
+	feature, ok := libraryFeatureByName("ComplexFunctions::i")
+	if !ok {
+		t.Fatal("no library feature ComplexFunctions::i registered")
+	}
+	got, err := feature.value(libCtx(t))
+	if err != nil {
+		t.Fatalf("ComplexFunctions::i = error %v", err)
+	}
+	elements := vectorValues(t, got)
+	if len(elements) != 2 || elements[0].Real != 0 || elements[1].Real != 1 {
+		t.Fatalf("ComplexFunctions::i = %v, want 0.0 + 1.0i", got)
+	}
+}
+
+// A library function is answered by its built-in even where the vendored
+// declaration carries a body: the body is not there to evaluate when the library
+// index cache is warm, so dispatch must not depend on it.
+func TestLibraryFunctionAnswersALibraryDeclarationWithABody(t *testing.T) {
+	ctx, idx := libraryContextForSource(t, `package TrigFunctions {
+	feature pi : Real;
+	function deg { in theta_rad : Real[1]; return : Real[1] = theta_rad * 180 / pi; }
+}`)
+	sym := lookupOne(t, idx, "TrigFunctions::deg")
+
+	if _, ok := ctx.libraryFunctionFor(sym); !ok {
+		t.Fatalf("the library's own deg did not dispatch to its built-in implementation")
+	}
+	got, err := ctx.InvokeCalc(sym, []Value{constReal(math.Pi)}, nil)
+	if err != nil || got.Const.Real != 180 {
+		t.Fatalf("InvokeCalc(TrigFunctions::deg, pi) = %+v, %v; want 180.0", got, err)
+	}
 }

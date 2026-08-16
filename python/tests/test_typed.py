@@ -166,6 +166,18 @@ def sports_car_instance():
     return Instance(pb, {5: pb})
 
 
+def test_as_quantity_decodes_a_quantity_and_rejects_a_bare_number():
+    """A quantity slot decodes to a Quantity; a unitless value is a mismatch."""
+    from pysysml.values import Unit
+
+    quantity = _t.Quantity(5.0, Unit(text="SI::kg"))
+
+    assert _t.as_quantity("mass", quantity) is quantity
+    with pytest.raises(TypeMismatchError) as excinfo:
+        _t.as_quantity("mass", 5.0)
+    assert excinfo.value.expected == "Quantity"
+
+
 def test_the_type_errors_are_reachable_from_the_package():
     """A caller catches these the documented way, through the package namespace."""
     import pysysml

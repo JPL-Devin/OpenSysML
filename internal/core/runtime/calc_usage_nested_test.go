@@ -13,7 +13,21 @@ import (
 func nestedUsageOutputs(t *testing.T, src, usageName string) []CalcOutputValue {
 	t.Helper()
 
+	return nestedUsageOutputsAtDepth(t, src, usageName, DefaultMaxCalcDepth)
+}
+
+// nestingProbeDepth is the calc depth budget the cases about that bound run
+// under, so such a case states a model the size of the bound rather than of the
+// default, which a terminating recursion is sized for.
+const nestingProbeDepth = 32
+
+// nestedUsageOutputsAtDepth is nestedUsageOutputs under a stated calc depth
+// budget.
+func nestedUsageOutputsAtDepth(t *testing.T, src, usageName string, maxCalcDepth int64) []CalcOutputValue {
+	t.Helper()
+
 	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	ctx.maxCalcDepth = maxCalcDepth
 	sym := findSymbolByName(idx.DocumentRoot("<test>"), usageName, ast.DefCalc)
 	if sym == nil {
 		t.Fatalf("calc usage %s not found", usageName)
@@ -279,14 +293,14 @@ func TestNestedCalcUsageInheritedDefaultOfRedeclaredInput(t *testing.T) {
 func TestNestedCalcUsageDepthCountedOnce(t *testing.T) {
 	var b strings.Builder
 	b.WriteString("package test {\n\tcalc def C0 { out r = 1; }\n")
-	for i := 1; i <= maxCalcNestingDepth-8; i++ {
+	for i := 1; i <= nestingProbeDepth-8; i++ {
 		fmt.Fprintf(&b, "\tcalc def C%d { out r = C%d() + 1; }\n", i, i-1)
 	}
-	fmt.Fprintf(&b, "\tcalc def Top { calc deep : C%d; out d = deep.r; }\n", maxCalcNestingDepth-8)
+	fmt.Fprintf(&b, "\tcalc def Top { calc deep : C%d; out d = deep.r; }\n", nestingProbeDepth-8)
 	b.WriteString("\tcalc top : Top;\n}")
 
-	outputs := nestedUsageOutputs(t, b.String(), "top")
-	wantInt(t, outputs, "d", int64(maxCalcNestingDepth-7))
+	outputs := nestedUsageOutputsAtDepth(t, b.String(), "top", nestingProbeDepth)
+	wantInt(t, outputs, "d", int64(nestingProbeDepth-7))
 }
 
 // A chain of outputs of one calc naming each other is evaluated within that one
@@ -294,15 +308,16 @@ func TestNestedCalcUsageDepthCountedOnce(t *testing.T) {
 func TestCalcOutputChainIsNotNesting(t *testing.T) {
 	var b strings.Builder
 	b.WriteString("package test {\n\tcalc def Chain {\n\t\tout o0 = 1;\n")
-	for i := 1; i <= maxCalcNestingDepth+8; i++ {
+	for i := 1; i <= nestingProbeDepth+8; i++ {
 		fmt.Fprintf(&b, "\t\tout o%d = o%d + 1;\n", i, i-1)
 	}
 	fmt.Fprintf(&b, "\t}\n\tcalc ch : Chain;\n}")
 
 	// Read the last output alone, so the whole chain is evaluated on demand
 	// rather than one output at a time.
-	last := fmt.Sprintf("o%d", maxCalcNestingDepth+8)
+	last := fmt.Sprintf("o%d", nestingProbeDepth+8)
 	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, b.String()))
+	ctx.maxCalcDepth = nestingProbeDepth
 	sym := findSymbolByName(idx.DocumentRoot("<test>"), "ch", ast.DefCalc)
 	if sym == nil {
 		t.Fatal("calc usage ch not found")
@@ -311,7 +326,7 @@ func TestCalcOutputChainIsNotNesting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reading %s: %v", last, err)
 	}
-	if want := int64(maxCalcNestingDepth + 9); value.Kind != ValConst || value.Const.Int != want {
+	if want := int64(nestingProbeDepth + 9); value.Kind != ValConst || value.Const.Int != want {
 		t.Errorf("%s = %s, want %d", last, FormatTraceValue(value), want)
 	}
 }

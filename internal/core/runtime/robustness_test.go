@@ -37,6 +37,8 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("calc_symbol_is_not_a_calc", testCalcSymbolIsNotACalc)
 	t.Run("calc_direct_recursion", testCalcDirectRecursion)
 	t.Run("calc_mutual_recursion", testCalcMutualRecursion)
+	t.Run("calc_recursion_spends_step_budget", testCalcRecursionSpendsStepBudget)
+	t.Run("calc_recursion_at_depth_ceiling", testCalcRecursionAtDepthCeiling)
 	t.Run("calc_non_terminating_loop", testCalcNonTerminatingLoop)
 	t.Run("calc_body_never_returns", testCalcBodyNeverReturns)
 	t.Run("calc_send_is_rejected", testCalcSendIsRejected)
@@ -69,13 +71,18 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("requirement_feature_without_a_value", testRequirementFeatureWithoutAValue)
 	t.Run("requirement_features_valued_from_each_other", testRequirementFeaturesValuedFromEachOther)
 	t.Run("step_budget_exceeded", testStepBudgetExceeded)
+	t.Run("eval_on_an_instance_spends_the_step_budget", testEvalOnAnInstanceSpendsTheStepBudget)
 	t.Run("non_terminating_loop_exhausts_step_budget", testNonTerminatingLoopExhaustsStepBudget)
 	t.Run("loop_body_declaration_does_not_leak", testLoopBodyDeclarationDoesNotLeak)
 	t.Run("loop_body_of_unexecutable_statement", testLoopBodyOfUnexecutableStatement)
+	t.Run("block_flow_of_unexecutable_member", testBlockFlowOfUnexecutableMember)
+	t.Run("non_terminating_loop_performing_an_action", testNonTerminatingLoopPerformingAnAction)
+	t.Run("for_over_a_value_no_expression_makes_iterable", testForOverAValueNoExpressionMakesIterable)
 	t.Run("statement_directly_in_an_action_body", testStatementDirectlyInAnActionBody)
 	t.Run("flow_end_naming_no_node", testFlowEndNamingNoNode)
 	t.Run("flow_naming_no_pin", testFlowNamingNoPin)
 	t.Run("accept_payload_without_a_value", testAcceptPayloadWithoutAValue)
+	t.Run("accept_payload_read_before_it_is_bound", testAcceptPayloadReadBeforeItIsBound)
 	t.Run("flow_from_a_node_that_produced_nothing", testFlowFromANodeThatProducedNothing)
 	t.Run("action_accept_time_trigger", testActionAcceptTimeTrigger)
 	t.Run("action_accept_non_boolean_change_trigger", testActionAcceptNonBooleanChangeTrigger)
@@ -123,6 +130,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("derived_slot_over_missing_feature", testDerivedSlotOverMissingFeature)
 	t.Run("sequence_index_names_no_position", testSequenceIndexNamesNoPosition)
 	t.Run("collection_operand_of_the_wrong_kind", testCollectionOperandOfTheWrongKind)
+	t.Run("numeric_library_call_that_has_no_value", testNumericLibraryCallThatHasNoValue)
 	t.Run("collection_body_of_the_wrong_arity", testCollectionBodyOfTheWrongArity)
 	t.Run("select_predicate_is_not_a_condition", testSelectPredicateIsNotACondition)
 	t.Run("collection_operation_step_budget", testCollectionOperationStepBudget)
@@ -355,6 +363,34 @@ func testSequenceIndexNamesNoPosition(t *testing.T) {
 		{"()#(1)", ErrIndexOutOfRange},
 		{"xs#(1.5)", ErrTypeMismatch},
 		{"xs#(ys)", ErrTypeMismatch},
+	} {
+		got, err := evalCollectionExpr(t, tt.expr)
+		if !errors.Is(err, tt.want) {
+			t.Errorf("%s = (%v, %v), want %v", tt.expr, got, err, tt.want)
+		}
+	}
+}
+
+// testNumericLibraryCallThatHasNoValue: a vector, Complex or sequence library
+// declaration that cannot answer reports itself — a malformed argument by kind or
+// dimension, an undefined result, or a declaration this runtime has no
+// representation for the values of — rather than computing something else.
+func testNumericLibraryCallThatHasNoValue(t *testing.T) {
+	for _, tt := range []struct {
+		expr string
+		want error
+	}{
+		{"VectorFunctions::cartesianInner(xs, ys)", ErrTypeMismatch},
+		{"VectorFunctions::'cartesian+'(xs, ys)", ErrTypeMismatch},
+		{"VectorFunctions::cartesianNorm(flags)", ErrTypeMismatch},
+		{"VectorFunctions::cartesianAngle(xs, (0.0, 0.0, 0.0))", semantics.ErrArithmeticDomain},
+		{"VectorFunctions::vectorScalarDiv(xs, 0)", ErrDivisionByZero},
+		{"VectorFunctions::cartesianInner(xs)", ErrCalcArity},
+		{"VectorFunctions::sum(xs)", ErrUnevaluableLibraryFunction},
+		{"ComplexFunctions::'/'(ys, (0.0, 0.0))", ErrDivisionByZero},
+		{"ComplexFunctions::re(xs)", ErrTypeMismatch},
+		{"ComplexFunctions::ToString(ys)", ErrUnevaluableLibraryFunction},
+		{"SequenceFunctions::includingAt(xs, 9, 2)", ErrUnevaluableLibraryFunction},
 	} {
 		got, err := evalCollectionExpr(t, tt.expr)
 		if !errors.Is(err, tt.want) {
@@ -1090,8 +1126,8 @@ func testHistoryWithoutRecordOrDefault(t *testing.T) {
 }
 
 // testSendViaUnconnectedPort: a port with no connection reaches no one, so the
-// accept waiting on the message suspends forever — which must be reported as a
-// deadlock rather than hanging or binding nothing.
+// send itself is undeliverable — which must be reported where it was written
+// rather than left for the accept waiting on it to time out as a deadlock.
 func testSendViaUnconnectedPort(t *testing.T) {
 	_, err := executeActionSource(t, "pipeline", `package P {
 		action pipeline {
@@ -1109,8 +1145,8 @@ func testSendViaUnconnectedPort(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error: nothing connects outPort to inPort")
 	}
-	if !errors.Is(err, ErrAcceptDeadlock) {
-		t.Errorf("expected ErrAcceptDeadlock, got: %v", err)
+	if !errors.Is(err, ErrUnroutableSend) {
+		t.Errorf("expected ErrUnroutableSend, got: %v", err)
 	}
 }
 
@@ -1844,8 +1880,9 @@ func testCalcSymbolIsNotACalc(t *testing.T) {
 	}
 }
 
-// testCalcDirectRecursion: a calc that invokes itself unconditionally must be
-// stopped by the nesting bound instead of exhausting the stack.
+// testCalcDirectRecursion: a calc that invokes itself unconditionally never
+// terminates, so the run's calc depth budget must report it instead of the
+// process exhausting its stack.
 func testCalcDirectRecursion(t *testing.T) {
 	src := `
 		package test {
@@ -1855,11 +1892,11 @@ func testCalcDirectRecursion(t *testing.T) {
 			}
 		}
 	`
-	assertCalcRecursionBounded(t, src, "countdown")
+	assertCalcRecursionBounded(t, src, "countdown", ErrCalcRecursionLimit)
 }
 
-// testCalcMutualRecursion: the bound is on nesting depth, so a cycle through
-// another calc is caught the same way as direct self-invocation.
+// testCalcMutualRecursion: the budget is spent by nesting, so a cycle through
+// another calc is reported the same way direct self-invocation is.
 func testCalcMutualRecursion(t *testing.T) {
 	src := `
 		package test {
@@ -1874,16 +1911,60 @@ func testCalcMutualRecursion(t *testing.T) {
 			}
 		}
 	`
-	assertCalcRecursionBounded(t, src, "ping")
+	assertCalcRecursionBounded(t, src, "ping", ErrCalcRecursionLimit)
 }
 
-// assertCalcRecursionBounded invokes calcName and requires a recursion-limit
+// testCalcRecursionSpendsStepBudget: the two bounds are independent, so a
+// recursion whose evaluations run out first is reported by the step budget
+// rather than running on until the depth bound.
+func testCalcRecursionSpendsStepBudget(t *testing.T) {
+	src := `
+		package test {
+			calc grow {
+				in n: Integer;
+				return : Integer = n + grow(n + 1);
+			}
+		}
+	`
+	assertCalcRecursionBounded(t, src, "grow", ErrStepLimitExceeded, func(ctx *Context) {
+		// Room to recurse far deeper than the evaluations allow.
+		ctx.maxCalcDepth = MaxCalcDepthCeiling
+		ctx.maxSteps = 500
+	})
+}
+
+// testCalcRecursionAtDepthCeiling: the highest depth budget a run may be given
+// must still be reported rather than reached by exhausting the stack, which
+// would be fatal.
+func testCalcRecursionAtDepthCeiling(t *testing.T) {
+	src := `
+		package test {
+			calc deep {
+				in n: Integer;
+				attribute acc : Integer = (n + 1) * (n + 2) - n * n;
+				return : Integer = acc + deep(n + 1);
+			}
+		}
+	`
+	assertCalcRecursionBounded(t, src, "deep", ErrCalcRecursionLimit, func(ctx *Context) {
+		ctx.maxCalcDepth = MaxCalcDepthCeiling
+	})
+}
+
+// assertCalcRecursionBounded invokes calcName and requires the given budget
 // error promptly: the invocation runs on its own goroutine so a hang fails the
-// case instead of stalling the suite until the package timeout.
-func assertCalcRecursionBounded(t *testing.T, src, calcName string) {
+// case instead of stalling the suite until the package timeout, and a panic in
+// it fails the case rather than the package.
+func assertCalcRecursionBounded(t *testing.T, src, calcName string, want error, budgets ...func(*Context)) {
 	t.Helper()
 
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	// The default step budget, so a recursion bounded by depth reaches that bound
+	// rather than running out of evaluations first.
+	ctx.maxSteps = DefaultMaxSteps
+	for _, set := range budgets {
+		set(ctx)
+	}
 	rootScope := idx.DocumentRoot("<test>")
 	sym := findSymbolByName(rootScope, calcName, ast.DefCalc)
 	if sym == nil {
@@ -1892,6 +1973,11 @@ func assertCalcRecursionBounded(t *testing.T, src, calcName string) {
 
 	done := make(chan error, 1)
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				done <- fmt.Errorf("calc %s panicked: %v", calcName, r)
+			}
+		}()
 		arg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 10}}
 		_, err := ctx.InvokeCalc(sym, []Value{arg}, rootScope)
 		done <- err
@@ -1902,10 +1988,10 @@ func assertCalcRecursionBounded(t *testing.T, src, calcName string) {
 		if err == nil {
 			t.Fatalf("expected recursive calc %s to be bounded, it returned a value", calcName)
 		}
-		if !errors.Is(err, ErrCalcRecursionLimit) {
-			t.Errorf("expected ErrCalcRecursionLimit, got: %v", err)
+		if !errors.Is(err, want) {
+			t.Errorf("expected %v, got: %v", want, err)
 		}
-	case <-time.After(10 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatalf("recursive calc %s did not terminate", calcName)
 	}
 }
@@ -2055,6 +2141,56 @@ func testStepBudgetExceeded(t *testing.T) {
 	}
 }
 
+// testEvalOnAnInstanceSpendsTheStepBudget: an expression evaluated against an
+// instance is one run, so reading a slot inside it does not start a run of its
+// own and reset the counter; an expression longer than the budget is refused.
+func testEvalOnAnInstanceSpendsTheStepBudget(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
+		package test {
+			part def Car { attribute m = 5.0; }
+		}
+	`))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "Car", ast.DefPart)
+	if sym == nil {
+		t.Fatal("part def Car not found")
+	}
+	inst, err := ctx.Instantiate(sym)
+	if err != nil {
+		t.Fatalf("instantiating Car: %v", err)
+	}
+
+	// Nested to the right, so the slot read - which brackets a run of its own when
+	// the evaluation is not already one - is reached on the second step.
+	expr := "m"
+	for i := 0; i < 60; i++ {
+		expr = "m + (" + expr + ")"
+	}
+	node := parser.New(source.New("<e>", []byte(expr))).ParseExpression()
+	if node == nil {
+		t.Fatal("the expression did not parse")
+	}
+
+	ctx.maxSteps = 6
+	got, err := ctx.EvalWithScopeOn(node, sym.Scope, inst)
+	if err == nil {
+		t.Fatalf("expected the step budget to bound the evaluation, got %v", got)
+	}
+	if !errors.Is(err, ErrStepLimitExceeded) {
+		t.Errorf("expected ErrStepLimitExceeded, got: %v", err)
+	}
+
+	// The budget bounds one run, not the session: a short expression is answered
+	// however many ran before it.
+	ctx.maxSteps = 20
+	short := parser.New(source.New("<e>", []byte("m + m"))).ParseExpression()
+	for i := 0; i < 5; i++ {
+		if _, err := ctx.EvalWithScopeOn(short, sym.Scope, inst); err != nil {
+			t.Fatalf("evaluation %d of m + m under a fresh run: %v", i+1, err)
+		}
+	}
+}
+
 // testNonTerminatingLoopExhaustsStepBudget: a loop whose condition never fails
 // spends a step per iteration, so it ends the execution with
 // ErrStepLimitExceeded instead of hanging whoever drove it (a REPL or the LSP).
@@ -2158,7 +2294,7 @@ func testLoopBodyOfUnexecutableStatement(t *testing.T) {
 				first start;
 				action accumulate {
 					while total < 3 {
-						action inner;
+						part inner;
 						assign total := total + 1;
 					}
 				}
@@ -2182,6 +2318,117 @@ func testLoopBodyOfUnexecutableStatement(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "not executable") {
 		t.Errorf("error does not name the unexecutable member: %v", err)
+	}
+}
+
+// testBlockFlowOfUnexecutableMember: a member outside the semantics a block's own
+// flow gives its members is still reported when reached, even in a block that
+// does state a flow because a nested action is declared beside it.
+func testBlockFlowOfUnexecutableMember(t *testing.T) {
+	src := `
+		package test {
+			action counter {
+				attribute total : Integer = 0;
+				first start;
+				action accumulate {
+					while total < 3 {
+						action bump {
+							assign total := total + 1;
+						}
+						part inner;
+					}
+				}
+				done end;
+				then start accumulate;
+				then accumulate end;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "counter", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action counter not found")
+	}
+
+	_, err := ctx.ExecuteAction(sym)
+	if err == nil {
+		t.Fatal("expected the unexecutable member of the block's flow to be reported")
+	}
+	if !strings.Contains(err.Error(), "not executable") {
+		t.Errorf("error does not name the unexecutable member: %v", err)
+	}
+}
+
+// testNonTerminatingLoopPerformingAnAction: a loop whose body performs an action
+// as a node of the block's own flow still spends a step per iteration, so it
+// ends with ErrStepLimitExceeded rather than performing forever.
+func testNonTerminatingLoopPerformingAnAction(t *testing.T) {
+	src := `
+		package test {
+			action spinner {
+				attribute total : Integer = 0;
+				first start;
+				action spin {
+					while total >= 0 {
+						perform bump;
+						assign total := total + 1;
+					}
+				}
+				done end;
+				then start spin;
+				then spin end;
+			}
+
+			action bump {
+				out spun : Integer;
+				first begin;
+				action run {
+					assign spun := 1;
+				}
+				done finish;
+				then begin run;
+				then run finish;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+
+	ctx.maxSteps = 40
+	ctx.steps = 0
+
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "spinner", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action spinner not found")
+	}
+
+	_, err := ctx.ExecuteAction(sym)
+	if err == nil {
+		t.Fatal("expected the step budget to be exceeded, the action completed")
+	}
+	if !errors.Is(err, ErrStepLimitExceeded) {
+		t.Errorf("expected ErrStepLimitExceeded, got: %v", err)
+	}
+}
+
+// testForOverAValueNoExpressionMakesIterable: a value that states a computation
+// rather than a collection is no collection in any order, so a `for` over it
+// fails with a typed error naming it.
+func testForOverAValueNoExpressionMakesIterable(t *testing.T) {
+	for _, value := range []Value{{Kind: ValExpr}, {Kind: ValInvalid}} {
+		elements, err := forElements(value)
+		if err == nil {
+			t.Errorf("forElements(%s) = %v, want a typed error", describeValue(value), elements)
+			continue
+		}
+		if !errors.Is(err, ErrTypeMismatch) {
+			t.Errorf("forElements(%s) failed with %v, want ErrTypeMismatch", describeValue(value), err)
+		}
+		if !strings.Contains(err.Error(), describeValue(value)) {
+			t.Errorf("error does not name the value: %v", err)
+		}
 	}
 }
 
@@ -2318,6 +2565,30 @@ func testAcceptPayloadWithoutAValue(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "Ping") {
 		t.Errorf("error does not name the accepted signal: %v", err)
+	}
+}
+
+// testAcceptPayloadReadBeforeItIsBound: the payload is a declaration of the body
+// wherever the body resolves, so a node running before the accept binds it
+// resolves the name and finds no value — reported, not read as an empty value.
+func testAcceptPayloadReadBeforeItIsBound(t *testing.T) {
+	_, err := executeActionSource(t, "pipeline", `package P {
+		action pipeline {
+			attribute seen : Integer = 0;
+			first start;
+			action reader { assign seen := msg; }
+			action waiter accept msg : Integer;
+			done end;
+			then start reader;
+			then reader waiter;
+			then waiter end;
+		}
+	}`)
+	if !errors.Is(err, ErrUnresolvedReference) {
+		t.Fatalf("err = %v; want ErrUnresolvedReference", err)
+	}
+	if !strings.Contains(err.Error(), "msg") {
+		t.Errorf("error does not name the payload: %v", err)
 	}
 }
 
@@ -3056,11 +3327,14 @@ func testCalcNonBooleanCondition(t *testing.T) {
 // returns the error the read reports, on its own goroutine so a body that never
 // terminates fails the case instead of stalling the suite. maxSteps bounds the
 // run.
-func calcUsageOutputInSource(t *testing.T, src, usageName, output string, maxSteps int64) error {
+func calcUsageOutputInSource(t *testing.T, src, usageName, output string, maxSteps int64, budgets ...func(*Context)) error {
 	t.Helper()
 
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
 	ctx.maxSteps = maxSteps
+	for _, set := range budgets {
+		set(ctx)
+	}
 	rootScope := idx.DocumentRoot("<test>")
 	sym := findSymbolByName(rootScope, usageName, ast.DefCalc)
 	if sym == nil {
@@ -3411,7 +3685,8 @@ func testNestedCalcUsageSelfCycle(t *testing.T) {
 }
 
 // testNestedCalcUsageRecursionDepth: a calc whose nested usage is of itself
-// never bottoms out, so the nesting limit reports it instead of hanging.
+// never bottoms out, so the depth budget reports it instead of hanging. A usage
+// frame costs far more than an invocation, so the case states a shallow budget.
 func testNestedCalcUsageRecursionDepth(t *testing.T) {
 	src := `
 		package test {
@@ -3424,7 +3699,8 @@ func testNestedCalcUsageRecursionDepth(t *testing.T) {
 			calc c : Down { in n = 3; }
 		}
 	`
-	err := calcUsageOutputInSource(t, src, "c", "a", 1000000)
+	err := calcUsageOutputInSource(t, src, "c", "a", 1000000,
+		func(ctx *Context) { ctx.maxCalcDepth = nestingProbeDepth })
 	if !errors.Is(err, ErrCalcRecursionLimit) {
 		t.Errorf("expected ErrCalcRecursionLimit, got: %v", err)
 	}

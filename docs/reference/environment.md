@@ -11,6 +11,7 @@ into a reported error instead of a hang.
 | `SYSML_MAX_EVENTS` | `1000000` | Events one state machine run may dispatch, and the events one `%advance` drains |
 | `SYSML_MAX_DO_STEPS` | `5000000` | Do-activity actions one state machine run may perform, and the ones one `%advance` drains |
 | `SYSML_MAX_ELEMENTS` | `1000000` | Collection elements one evaluation may hold — the bound on the memory a run holds rather than on the work it does |
+| `SYSML_MAX_CALC_DEPTH` | `10000` (ceiling `25000`) | Nested `calc` invocations one run may hold on the stack, which is what a recursion spends |
 
 Each budget is what turns a non-terminating run into a reported error instead of
 a hang. They count incommensurable things — expression evaluations, action token
@@ -45,6 +46,20 @@ error: evaluation failed: collection element limit exceeded
 Because it bounds memory and not work, the count is what a statement's evaluation
 holds: a loop building a ten-element collection a million times never approaches
 it, while a single `1..2000000` exceeds it at once.
+
+`SYSML_MAX_CALC_DEPTH` reads as stack rather than as work: a recursive calculation
+evaluates to its result as long as it terminates within the depth, and one that
+does not terminate is reported instead of exhausting the stack:
+
+```
+error: calc recursion limit exceeded: calc P::spin nested 10000 deep
+(unbounded recursion?; raise SYSML_MAX_CALC_DEPTH to allow more)
+```
+
+A nested invocation costs ~10 KB of stack, so this is the one budget with a
+ceiling: a value above 25000 is refused, because past it the goroutine stack
+limit — a fatal error rather than a reported one — would be reached before the
+budget was. A recursion needing more depth than that wants an iterative body.
 
 The evaluation step budget:
 

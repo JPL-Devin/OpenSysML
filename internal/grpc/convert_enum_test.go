@@ -56,9 +56,9 @@ func TestEnumLiteralRoundTrip(t *testing.T) {
 	idx, red := enumWireIndex(t, "D::Color::red")
 	original := runtime.NewEnumLiteral(red)
 
-	back, err := ProtoToValue(ValueToProto(original, idx), idx)
+	back, err := ProtoToValueIn(ValueToProto(original, idx), idx, nil)
 	if err != nil {
-		t.Fatalf("ProtoToValue: %v", err)
+		t.Fatalf("ProtoToValueIn: %v", err)
 	}
 	if back.Kind != runtime.ValEnumLiteral {
 		t.Fatalf("Kind: got %v, want ValEnumLiteral", back.Kind)
@@ -82,9 +82,9 @@ func TestEnumLiteralRoundTripInSequence(t *testing.T) {
 	seq.Append(runtime.NewEnumLiteral(red))
 	seq.Append(runtime.NewEnumLiteral(green[0]))
 
-	back, err := ProtoToValue(ValueToProto(runtime.Value{Kind: runtime.ValSequence, Sequence: seq}, idx), idx)
+	back, err := ProtoToValueIn(ValueToProto(runtime.Value{Kind: runtime.ValSequence, Sequence: seq}, idx), idx, nil)
 	if err != nil {
-		t.Fatalf("ProtoToValue: %v", err)
+		t.Fatalf("ProtoToValueIn: %v", err)
 	}
 	elems := back.Sequence.Elements()
 	if len(elems) != 2 {
@@ -108,14 +108,14 @@ func TestEnumLiteralUnresolvedIsAnError(t *testing.T) {
 	}
 	for name, lit := range cases {
 		pv := &pb.Value{Kind: &pb.Value_EnumLiteral{EnumLiteral: lit}}
-		if _, err := ProtoToValue(pv, idx); err == nil {
+		if _, err := ProtoToValueIn(pv, idx, nil); err == nil {
 			t.Errorf("%s: got no error, want one", name)
 		}
 	}
 
 	// Without a model there is nothing to resolve against, which is an error too.
 	pv := &pb.Value{Kind: &pb.Value_EnumLiteral{EnumLiteral: &pb.EnumLiteral{LiteralId: "D::Color::red"}}}
-	if _, err := ProtoToValue(pv, nil); err == nil || !strings.Contains(err.Error(), "no model") {
+	if _, err := ProtoToValueIn(pv, nil, nil); err == nil || !strings.Contains(err.Error(), "no model") {
 		t.Errorf("no index: got %v, want a no-model error", err)
 	}
 }
