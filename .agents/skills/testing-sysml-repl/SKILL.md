@@ -2576,3 +2576,86 @@ binaries now. The unpinned-download refusal is testable offline-ish with
 `HOME=/tmp/fakehome $PY -c "...ensure_binary(version='v9.9.9')"`, which keeps the real
 `~/.pysysml/bin` cache intact; the opt-in out of it is per repository
 (`PYSYSML_ALLOW_UNPINNED_DOWNLOAD=<owner/repo>`, or `=1` for any).
+
+## Quantities on the wire: `Value.quantity` and the Python `Quantity` (PR #200)
+
+Once the service can marshal `runtime.ValQuantity`, a quantity slot no longer reads as
+`SlotError: slot 'm': unsupported: quantity value` but as `pysysml.values.Quantity`. The
+highest-value evidence is the **parent-commit contrast** (build `/tmp/old-sysml-grpc` from the
+commit before the change, swap it into `~/.pysysml/bin/sysml-grpc`, clear
+`~/.pysysml/sysml-grpc.{pid,refcount}`, run the same script): the old service raises the SlotError
+while a plain `ScalarValues::Real` slot still reads `2.0`, so the frame proves the delta.
+
+What to assert on the decoded value, and why each one distinguishes working from broken:
+
+- **The magnitude must stay in the unit written.** `5.4 [SI::km/SI::h]` must decode as magnitude
+  `5.4` with `unit.text == "SI::km/SI::h"` and `scale_num/scale_den == 5.0/18.0`; a reduction done
+  behind the caller's back shows up as `1.5`. `in_unit(Unit(text="m/s", factors=(m^1, s^-1)))`
+  must be **exactly** `1.5` — a float-sloppy conversion gives `1.4999999999999998`.
+- **Integer and Real stay apart:** `3 [SI::m]` → `isinstance(magnitude, int)`.
+- Base units are reported by **FQN of the base unit**, not the written unit: `SI::kg` reduces to
+  `1000/1·SI::gram`, `SI::W` to `1000·SI::gram·SI::metre^2·SI::second^-3`. Assert
+  `unit.exponents()`, which is order-independent.
+- A **dimensionless** ratio (`3.0 [SI::m] / 1.5 [SI::m]`) does not arrive as a quantity at all — the
+  runtime reduces it to a plain `float`. Don't write a test that requires a `Quantity` there.
+- An exponent survives: `(2.0 [SI::m])**2` → magnitude `4.0`, `unit.text == "(SI::m)**2"`,
+  `SI::metre` exponent `2.0`.
+- Quantities also come back from `conn.eval("5.4 [SI::km/SI::h]", hash, context_symbol_id=pkg)`,
+  from a nested child (`inst.engine.power`), inside sequences (`LengthValue[3]` → `list[Quantity]`),
+  and on a `verify_constraint` verdict — filter `verdict.instances` on `verdict.instance_id` and
+  read the slot off that instance.
+- Comparison semantics worth pinning: `1 [SI::km] == 1000.0 [SI::m]` is True and the two hash
+  alike; ordering/adding incommensurable units raises `IncommensurableUnitsError` naming both
+  reductions (`cannot order a quantity in [SI::km] and one in [SI::kg]: … 1000·SI::metre …
+  1000·SI::gram`); ordering against a bare `float` raises `TypeError`, while `q == 5.0` is just
+  `False`.
+
+**Inbound (client → service) is a different code path.** `Connection._python_to_value` has no
+`Quantity` arm, so a quantity argument cannot be sent through `conn.calc(...)` — build the request
+proto by hand and send it on the client's stub (still the real service over gRPC):
+
+```python
+q = sysml_pb2.Quantity(real_magnitude=2.0, unit="SI::m",
+    unit_term=sysml_pb2.UnitTerm(scale_num=1.0, scale_den=1.0,
+        factors=[sysml_pb2.UnitFactor(unit_id="SI::metre", exponent=1.0)]))
+c._stub.EvaluateCalc(sysml_pb2.EvaluateCalcRequest(model_hash=m.hash,
+    symbol_id="q2::Double", arguments=[sysml_pb2.Value(quantity=q)]))
+```
+
+Only the paths that decode with the model's `symbols.Index` work. `EvaluateCalc` does, and returns
+typed errors worth asserting verbatim (`calc argument could not be read: unknown base unit:
+SI::nope` / `unit scale is not a usable ratio: 1/0` / `quantity in "SI::m" carries no magnitude`,
+all with `FAILURE_REASON_EVALUATION`, and the service stays alive). `ExecuteAction` (in
+`internal/grpc/service.go`) decodes its `inputs` map the same index-aware way, so a quantity input
+binds (`ExecuteActionRequest(inputs={"mass": Value(quantity=q)})` on an action whose `in mass :
+ISQ::MassValue` body does `assign heavier := mass + 1.0 [SI::kg]` returns `6 [SI::kg]`), and a
+malformed one comes back as `ExecuteActionResponse.Error` = `input "<name>" could not be read:
+<err>` with **zero** outputs rather than a bound `ValInvalid`. If you ever see outputs coming back
+`null: "unsupported"` for a quantity input, that call site has regressed to a context-free decoder.
+Worth checking cheaply: a commensurable-but-different unit (`2000 [SI::g]`), an un-normalized
+reduction (`SI::gram^2 · SI::gram^-1`, which the service re-normalizes), and a bad quantity nested
+inside a `ValueSequence` input (the error still names the top-level input). Traps: the field is
+`action_symbol_id`, not `symbol_id`, and an action **usage** (`action showIt : Show;`) reports
+`no initial node found`, so execute the **def** that carries the body.
+
+### Generated typed classes and mypy
+
+`pysysml-generate <model> -o out.py` (or `python -m pysysml.generate`) types a quantity property
+`-> _t.Quantity` with `_t.slot(self, "x", _t.as_quantity)`. Only slots with a **declared** quantity
+type get it: an untyped derived attribute (`attribute derivedSpeed = 10.0 [SI::m] / 2.0 [SI::s];`)
+has no type facts and still generates `-> object` / `_t.as_object`, even though the runtime value is
+a `Quantity`. Don't read that as a bug in the quantity typing.
+
+To make mypy actually enforce it, **set `MYPYPATH` to the repo's `python/` directory** — without it
+mypy cannot resolve the editable-installed `pysysml`, silently treats `_t.Quantity` as `Any` and
+reports *no* errors on obvious misuse (a false pass that looks like a passing test):
+
+```bash
+cd /tmp/qw && MYPYPATH=/home/ubuntu/repos/Systemica/python \
+  $HOME/pv/bin/python -m mypy --no-incremental --no-error-summary --follow-imports=silent misuse.py
+# -> Unsupported operand types for + ("Quantity" and "float")  [operator]
+# -> Incompatible types in assignment (expression has type "Quantity", variable has type "float")
+```
+
+`mypy` must be present in the same venv as `pysysml` ($HOME/pv here); otherwise the typed-codegen
+tests skip rather than fail.
