@@ -107,7 +107,8 @@ func TestToStateGraph_TopLevelPseudostateHasNoOwner(t *testing.T) {
 
 // An endpoint naming no vertex leaves its edge out of the graph rather than
 // failing the lowering: the name-resolution tier reports the name, and a machine
-// missing one edge still runs (UML 2.5.1 14.2.3.9 leniency).
+// missing one edge still runs: leniency about `TransitionUsage::source`/`::target
+// : ActionUsage[1..1]` (stdlib `Systems Library/SysML.sysml`).
 func TestToStateGraph_EndpointNamingNoVertexLeavesTheEdgeOut(t *testing.T) {
 	machine := stateUsageIn(t, `
 		package test {

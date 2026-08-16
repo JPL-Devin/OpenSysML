@@ -66,7 +66,8 @@ func (e *StateExecutor) pseudostateTarget(ps *ast.PseudostateNode) (*ast.StateNo
 
 // pseudostateBranch returns the outgoing transition a pseudostate routes along:
 // the first whose guard is satisfied, in declaration order, an unguarded one
-// being UML's else branch.
+// being the default branch. Exactly one succession is taken, as KerML
+// `DecisionPerformance::outgoingHBLink: HappensBefore[1]` requires.
 func (e *StateExecutor) pseudostateBranch(ps *ast.PseudostateNode) (*lower.Transition, error) {
 	outgoing := e.graph.Transitions[ps]
 	if len(outgoing) == 0 {
@@ -249,10 +250,10 @@ func (e *StateExecutor) moveWithinRegion(region *ast.StateRegion, trans *lower.T
 }
 
 // leaveRegion takes a transition whose target lies outside the orthogonal region
-// its source is active in. UML's least common ancestor for such a transition is
-// the region containing the composite state that owns the region set, so the
-// whole set is left: every sibling region is exited — recording its
-// configuration for history — before the target is entered.
+// its source is active in. UML is the reference for regions (no SysML v2 notation):
+// its least common ancestor is the region containing the composite state that owns
+// the region set, so the whole set is left: every sibling region is exited —
+// recording its configuration for history — before the target is entered.
 func (e *StateExecutor) leaveRegion(region *ast.StateRegion, trans *lower.Transition, target *ast.StateNode) error {
 	source := e.activeConfig.regionStates[region]
 	owner := e.graph.RegionOwner[region]

@@ -296,8 +296,10 @@ Both residual items are closed by the unit-resolution work; see `docs/project/sp
 - **Transition endpoint names** are resolved at lowering, not at the name-resolution tier, so a
   misspelled endpoint surfaces late. Error timing is part of the contract (AGENTS.md §4):
   moving it is the point of the task, and the affected tests must be updated deliberately.
-- **Dangling transition detection is lenient.** UML 2.5.1 §14.2.3.9 wants exactly one source
-  and one target vertex. Hard cases to name in the prompt: a target in a sibling orthogonal
+- **Dangling transition detection is lenient.** `TransitionUsage::source : ActionUsage[1..1]`
+  and `::target : ActionUsage[1..1]` (stdlib `Systems Library/SysML.sysml`), and KerML
+  `TransitionPerformance::transitionLinkSource: Performance[1]`, want exactly one source and
+  one target vertex. Hard cases to name in the prompt: a target in a sibling orthogonal
   region (legal), in an unrelated machine (illegal), an entry/exit point on a composite state
   (legal), a target resolving to a non-vertex (illegal), the sourceless `accept … then` form
   (legal), a junction chain terminating nowhere (illegal, and not a cycle).
