@@ -1097,11 +1097,13 @@ PYSYSML_GRPC_VERSION=v0.0.7 python -c '...connect(port=50099)...'   # -> StaleSe
   client was built is checked at the first call of *any* kind, so assert it through `conn.load(...)`
   and not only through `conn.server_info()`.
 - `pysysml` has **no module-level `load_from_content`**; use `conn.load_from_content(...)`.
-- Lifecycle state lives in `~/.pysysml/sysml-grpc.{pid,refcount,lock}`. Reset a clean auto-start
-  state with `pkill -x sysml-grpc; rm -f ~/.pysysml/sysml-grpc.pid ~/.pysysml/sysml-grpc.refcount`
+- Lifecycle state is per-port: `~/.pysysml/sysml-grpc-<port>.pid` (a JSON ownership record whose
+  `refs` is the in-process holder count) and `~/.pysysml/sysml-grpc-<port>.lock`. There is no
+  `sysml-grpc.refcount` file. Reset a clean auto-start state with
+  `pkill -x sysml-grpc; rm -f ~/.pysysml/sysml-grpc-50051.pid ~/.pysysml/sysml-grpc-50051.lock`
   (`-x`, never `-f`, which matches your own shell — see the pkill trap below).
   Refcount behaviour worth asserting both within one process (two `connect()`s) and across two
-  processes: 1 → 2 → 1, service still serving the remaining holder, and pidfile/refcount removed
+  processes: 1 → 2 → 1, service still serving the remaining holder, and the pidfile removed
   only when the last one closes.
 - The known-failing pair with a service on :50051
   (`test_integration.py::…::test_load_nonexistent_file_real_server`,
@@ -1181,7 +1183,7 @@ Liveness check: after `test_lifecycle` runs, `pgrep -af sysml-grpc` still lists 
 zombie, so it lies. Use `ss -ltn | grep 50051` to decide whether a service is really listening.
 `pkill -9 -f sysml-grpc` matches your own shell's command line — use `pkill -9 -x sysml-grpc`.
 A full-suite run stops even a service another process owns, leaving a stale
-`~/.pysysml/sysml-grpc.{pid,refcount}`; clear them before the next liveness test.
+`~/.pysysml/sysml-grpc-<port>.pid`; clear it before the next liveness test.
 To hold a service alive for a whole test run, keep a client process open, e.g.
 `(setsid python -c "import pysysml,time; pysysml.connect(); time.sleep(300)" &)` — a plain
 backgrounded `python -c` from a non-tty shell may exit before it prints, so verify the port.
@@ -2360,6 +2362,24 @@ number rather than quoting the table.
   `# specializes ISQBase::MassValue, which has no generated class`.
 - **Quantity results carry the scalar on `Quantity.magnitude`, not `.value`** — a probe using `.value`
   reports a false failure even when the runtime is correct.
+- **A stale `~/.pysysml/bin/sysml-grpc` silently blocks the subject/attribute surface.** These features
+  are capability-gated (`evaluate_subject`, `symbol_attributes` in `pysysml/capabilities.py`), so a
+  service built before they landed makes `conn.eval(..., subject_symbol_id=…)` /
+  `attribute_facts()` / `to_dataframe()` raise `MissingCapabilityError` instead of answering — which
+  looks like a client bug. Always reinstall the binary before testing a merge:
+  `make build-grpc && pkill -x sysml-grpc && rm -f ~/.pysysml/sysml-grpc-50051.pid ~/.pysysml/sysml-grpc-50051.lock && cp bin/sysml-grpc ~/.pysysml/bin/`
+  (the `cp` fails with `Text file busy` while the old one still runs), then assert
+  `sorted(conn.server_info().capabilities)` contains both names before trusting any result.
+- **The auto-started service dies with the session that started it.** After an interactive
+  `pysysml` REPL exits, `PYSYSML_REQUIRE_SERVICE=1 pytest tests/` aborts during collection with
+  `$PYSYSML_REQUIRE_SERVICE is set … but none answers on localhost:50051`. Start one yourself first:
+  `nohup ~/.pysysml/bin/sysml-grpc -port 50051 >/tmp/svc.log 2>&1 &`.
+- **`PINNED_SHA256` is nested `repo -> version -> asset`.** To exercise the *contradicted* digest arm
+  you must inject the key for the repository actually in use, e.g.
+  `binary.PINNED_SHA256['Open-MBEE/Systemica'] = {'v0.0.8': {'sysml-grpc-linux-amd64': 'de'*32}}`
+  (`DEFAULT_GITHUB_REPO`, looked up case-sensitively, so the spelling must match exactly);
+  a mis-cased, flat or `in`-substring patch leaves the pin absent and you silently re-test the *unpinned* arm
+  (`UnpinnedReleaseError` + kept cache) while believing you tested the contradiction.
 
 ## Symbol *kind* changes: `%search` is the only REPL probe (PR #210)
 
