@@ -639,8 +639,6 @@ var unimplementedOperators = map[ast.OperatorKind]string{
 	ast.OpBitNot:  "bitwise complement is declared by no function library the runtime applies",
 	ast.OpHasType: "classification needs the runtime type of a value, which values do not carry yet",
 	ast.OpIsType:  "classification needs the runtime type of a value, which values do not carry yet",
-	ast.OpAt:      "classification needs the runtime type of a value, which values do not carry yet",
-	ast.OpMetaAt:  "metadata classification needs the metadata of a value at runtime",
 	ast.OpAs:      "a cast needs the runtime type of a value, which values do not carry yet",
 	ast.OpMeta:    "metadata access is evaluated from a MetadataAccessExpression, not this operator",
 	ast.OpAll:     "'all' needs the extent of a type, which the runtime does not enumerate",
@@ -676,12 +674,105 @@ func (ec *EvalContext) evalOperator(n *ast.OperatorExpr) (Value, error) {
 		return ec.evalUnary(n)
 	case ast.OpRange:
 		return ec.evalRange(n)
+	case ast.OpAt, ast.OpMetaAt:
+		return ec.evalClassification(n)
 	default:
 		if why, ok := unimplementedOperators[n.Operator]; ok {
 			return Value{}, fmt.Errorf("%w: '%s': %s", ErrUnsupportedOperator, n.Operator, why)
 		}
 		return Value{}, fmt.Errorf("%w: '%s'", ErrUnsupportedOperator, n.Operator)
 	}
+}
+
+// evalClassification evaluates `@T` (metadata T annotates the subject) and `@@T`
+// (the subject's own metaclass conforms to T) through the semantic model, so the
+// verdict is the one an element filter writing the same test reaches.
+func (ec *EvalContext) evalClassification(n *ast.OperatorExpr) (Value, error) {
+	elem, err := ec.classifiedElement(n)
+	if err != nil {
+		return Value{}, err
+	}
+	classified, err := ec.ctx.model.EvalClassification(ec.scope, n, elem)
+	if err != nil {
+		return Value{}, err
+	}
+	return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValBool, Bool: classified}}, nil
+}
+
+// classifiedElement is the element a classification's subject denotes, since
+// metadata annotates elements and not values: the object being evaluated for an
+// implicit subject or `self`, the element a name names, else what its value
+// denotes.
+func (ec *EvalContext) classifiedElement(n *ast.OperatorExpr) (*symbols.Symbol, error) {
+	if len(n.Operands) > 1 {
+		return nil, semantics.UnevaluableClassification(
+			fmt.Sprintf("`%s` classifies one subject, and %d were given", n.Operator, len(n.Operands)), n.Span())
+	}
+	if len(n.Operands) == 0 || isSelfName(n.Operands[0]) {
+		if ec.self == nil {
+			return nil, semantics.UnevaluableClassification(
+				fmt.Sprintf("`%s` leaves its subject implicit and no object is being evaluated", n.Operator), n.Span())
+		}
+		return ec.self.Type, nil
+	}
+	subject := n.Operands[0]
+	// A name is the element it names: what `p @ Safety` classifies is the
+	// declaration p, the same element a filter condition would be judged for.
+	if qn := subjectName(subject); qn != nil {
+		if sym, ok := ec.ctx.resolver.ResolveQualified(ec.scope, qn); ok && sym != nil {
+			return sym, nil
+		}
+	}
+	val, err := ec.Eval(subject)
+	if err != nil {
+		return nil, err
+	}
+	elem, ok := ec.elementDenotedBy(val)
+	if !ok {
+		return nil, semantics.UnevaluableClassification(
+			fmt.Sprintf("a %s denotes no element to classify", val.Kind), subject.Span())
+	}
+	return elem, nil
+}
+
+// elementDenotedBy is the element a value stands for: the classifier an object
+// was materialized from, the variant a variation was bound to, or the literal an
+// enumeration value is. Every other value is a datum, which nothing annotates.
+func (ec *EvalContext) elementDenotedBy(val Value) (*symbols.Symbol, bool) {
+	switch val.Kind {
+	case ValInstance:
+		inst, ok := ec.ctx.instances[val.Instance]
+		if !ok || inst.Type == nil {
+			return nil, false
+		}
+		return inst.Type, true
+	case ValVariant:
+		return val.Variant, val.Variant != nil
+	case ValEnumLiteral:
+		return val.Literal, val.Literal != nil
+	default:
+		return nil, false
+	}
+}
+
+// subjectName is the qualified name a classification's subject is written as, or
+// nil for a subject that is no name.
+func subjectName(n ast.Node) *ast.QualifiedName {
+	switch subject := n.(type) {
+	case *ast.FeatureReference:
+		return subject.Name
+	case *ast.QualifiedName:
+		return subject
+	default:
+		return nil
+	}
+}
+
+// isSelfName reports whether a subject is written as `self`, which names the
+// object being evaluated — the same subject the notation leaves out.
+func isSelfName(n ast.Node) bool {
+	qn := subjectName(n)
+	return qn != nil && len(qn.Parts) == 1 && qn.Parts[0].Text == "self"
 }
 
 // evalConditional evaluates `if c ? a else b`, evaluating only the branch the

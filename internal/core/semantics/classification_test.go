@@ -1,0 +1,142 @@
+package semantics
+
+import (
+	"errors"
+	"testing"
+
+	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/parser"
+	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+)
+
+// classificationOf parses cond as a classification written at the document root
+// of src, the way a value evaluator hands one over.
+func classificationOf(t *testing.T, src, cond string) (*Model, *ast.OperatorExpr, *symbols.Scope) {
+	t.Helper()
+	m, root := buildModel(t, src)
+	p := parser.New(source.New("<classification>", []byte(cond)))
+	expr := p.ParseExpression()
+	if len(p.Diagnostics) != 0 {
+		t.Fatalf("failed to parse %q: %v", cond, p.Diagnostics)
+	}
+	op, ok := expr.(*ast.OperatorExpr)
+	if !ok {
+		t.Fatalf("%q parsed as %T, want an operator expression", cond, expr)
+	}
+	return m, op, root
+}
+
+// TestClassificationAgreesWithAFilterVerdict is the agreement this feature rests
+// on: `@`/`@@` decided for a subject at runtime answers what the same condition
+// decides as an element filter at name-resolution time.
+func TestClassificationAgreesWithAFilterVerdict(t *testing.T) {
+	const src = metadataModel + `
+		metadata def Safety2 :> Safety;
+		#Safety2 part def Harness;
+		part def SeatBeltKind :> Belt;
+	`
+	conds := []string{"@Safety", "@CrashSafety", "@Comfort", "@@Safety", "@Safety2"}
+	names := []string{"Belt", "seatBelt", "airBag", "radio", "keylessEntry", "Harness", "SeatBeltKind", "Safety"}
+	for _, cond := range conds {
+		for _, name := range names {
+			m, op, root := classificationOf(t, src, cond)
+			f := symbols.ElementFilter{Expr: op, Scope: root, Span: op.Span()}
+			elem := sym(t, root, name)
+
+			atFilter, filterErr := m.EvalElementFilter(f, elem)
+			atRuntime, runtimeErr := m.EvalClassification(root, op, elem)
+			if (filterErr == nil) != (runtimeErr == nil) {
+				t.Fatalf("%q for %s: filter err=%v, evaluator err=%v", cond, name, filterErr, runtimeErr)
+			}
+			if filterErr == nil && atFilter != atRuntime {
+				t.Fatalf("%q for %s: filter says %v, evaluator says %v", cond, name, atFilter, atRuntime)
+			}
+		}
+	}
+}
+
+// `@` holds for an annotation whose metadata type specializes the classifying
+// one, which is how a classification reaches an annotation through inheritance.
+func TestClassificationThroughAnAnnotationSubtype(t *testing.T) {
+	m, op, root := classificationOf(t, metadataModel, "@Safety")
+	got, err := m.EvalClassification(root, op, sym(t, root, "airBag"))
+	if err != nil || !got {
+		t.Fatalf("airBag is annotated CrashSafety :> Safety, so `@Safety` should hold: %v err=%v", got, err)
+	}
+}
+
+// A specializing element does not carry its supertype's metadata: an annotation
+// is stated about one element (KerML 8.4.4), so specialization does not copy it.
+func TestClassificationIsNotInheritedByASubtype(t *testing.T) {
+	const src = metadataModel + "\npart def SeatBeltKind :> Belt;"
+	m, op, root := classificationOf(t, src, "@Safety")
+	got, err := m.EvalClassification(root, op, sym(t, root, "SeatBeltKind"))
+	if err != nil || got {
+		t.Fatalf("`@Safety` should not hold for a subtype of an annotated type: %v err=%v", got, err)
+	}
+}
+
+// `@` also holds for the element's own metaclass, and `@@` holds for that alone:
+// metadata stated about an element is not what the element is.
+func TestClassificationMetaclassVersusAnnotation(t *testing.T) {
+	const src = `
+		metadata def Safety;
+		metadata def PartDefinition;
+		#Safety part def Belt;
+	`
+	for _, tc := range []struct {
+		cond string
+		want bool
+	}{
+		{"@Safety", true},
+		{"@@Safety", false},
+		{"@PartDefinition", true},
+		{"@@PartDefinition", true},
+	} {
+		m, op, root := classificationOf(t, src, tc.cond)
+		got, err := m.EvalClassification(root, op, sym(t, root, "Belt"))
+		if err != nil {
+			t.Fatalf("%q: unexpected error %v", tc.cond, err)
+		}
+		if got != tc.want {
+			t.Errorf("%q for Belt = %v, want %v", tc.cond, got, tc.want)
+		}
+	}
+}
+
+// A classification the model cannot judge — a metadata type that does not
+// resolve — is reported, never answered false.
+func TestClassificationOutsideTheEvaluableSubset(t *testing.T) {
+	m, op, root := classificationOf(t, metadataModel, "@Nonexistent")
+	got, err := m.EvalClassification(root, op, sym(t, root, "Belt"))
+	if !errors.Is(err, ErrFilterUnevaluable) {
+		t.Fatalf("an unresolved metadata type should report ErrFilterUnevaluable, got %v err=%v", got, err)
+	}
+}
+
+// A subject that denotes no element is reported the same way, so a caller cannot
+// mistake "cannot judge" for "does not hold".
+func TestClassificationWithoutAnElement(t *testing.T) {
+	m, op, root := classificationOf(t, metadataModel, "@Safety")
+	if _, err := m.EvalClassification(root, op, nil); !errors.Is(err, ErrFilterUnevaluable) {
+		t.Fatalf("classifying no element should report ErrFilterUnevaluable, got %v", err)
+	}
+	if _, err := m.EvalClassification(root, nil, sym(t, root, "Belt")); !errors.Is(err, ErrFilterUnevaluable) {
+		t.Fatalf("classifying without a condition should report ErrFilterUnevaluable, got %v", err)
+	}
+}
+
+// A classification writes its subject explicitly at runtime, which a filter
+// condition rejects — the same node is judged for the candidate either way.
+func TestClassificationWithAnExplicitSubjectIsNotAFilterCondition(t *testing.T) {
+	m, op, root := classificationOf(t, metadataModel, "seatBelt @ Safety")
+	f := symbols.ElementFilter{Expr: op, Scope: root, Span: op.Span()}
+	if _, err := m.EvalElementFilter(f, sym(t, root, "seatBelt")); !errors.Is(err, ErrFilterUnevaluable) {
+		t.Fatalf("a filter condition takes no left operand, want ErrFilterUnevaluable, got %v", err)
+	}
+	got, err := m.EvalClassification(root, op, sym(t, root, "seatBelt"))
+	if err != nil || !got {
+		t.Fatalf("the evaluator supplies the subject, so `seatBelt @ Safety` should hold: %v err=%v", got, err)
+	}
+}

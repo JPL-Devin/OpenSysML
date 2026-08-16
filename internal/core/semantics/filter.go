@@ -206,13 +206,20 @@ func (m *Model) compileOperator(scope *symbols.Scope, e *ast.OperatorExpr) *symb
 // says the same thing, and anything else names another element, which a filter
 // condition cannot reach.
 func (m *Model) compileClassification(scope *symbols.Scope, e *ast.OperatorExpr) *symbols.FilterPredicate {
+	if len(e.Operands) > 1 || (len(e.Operands) == 1 && !isSelfReference(e.Operands[0])) {
+		return unsupported(spanOf(e), fmt.Sprintf("`%s` in a filter condition classifies the element being filtered, so it takes no left operand", e.Operator))
+	}
+	return m.classificationPredicate(scope, e)
+}
+
+// classificationPredicate compiles the test `@T`/`@@T` states, leaving the
+// element it is evaluated for to the caller: a filter condition supplies the
+// candidate, and the value evaluator the element its subject denotes.
+func (m *Model) classificationPredicate(scope *symbols.Scope, e *ast.OperatorExpr) *symbols.FilterPredicate {
 	span := spanOf(e)
 	op := symbols.FilterClassify
 	if e.Operator == ast.OpMetaAt {
 		op = symbols.FilterMetaClassify
-	}
-	if len(e.Operands) > 1 || (len(e.Operands) == 1 && !isSelfReference(e.Operands[0])) {
-		return unsupported(span, fmt.Sprintf("`%s` in a filter condition classifies the element being filtered, so it takes no left operand", e.Operator))
 	}
 	if e.TypeRef == nil {
 		return unsupported(span, fmt.Sprintf("`%s` names no type", e.Operator))
@@ -222,6 +229,41 @@ func (m *Model) compileClassification(scope *symbols.Scope, e *ast.OperatorExpr)
 		return unsupported(span, fmt.Sprintf("the metadata type %s does not resolve", qnText(e.TypeRef)))
 	}
 	return &symbols.FilterPredicate{Op: op, TypeFQN: typeFQN, Span: span}
+}
+
+// EvalClassification evaluates the classification `@T`/`@@T` that e writes
+// against one element, for a caller that has settled which element the subject
+// denotes — the runtime value evaluator, whose `@` has a subject expression a
+// filter condition has no equivalent of. e's operand is not looked at here.
+//
+// The type is resolved and the verdict decided by the same code a filter
+// condition is compiled and run with, so a classification cannot answer one way
+// in a filter and another in an expression. A condition outside the evaluable
+// subset — a type that does not resolve — is a *FilterError wrapping
+// ErrFilterUnevaluable, as it is at the model level.
+func (m *Model) EvalClassification(scope *symbols.Scope, e *ast.OperatorExpr, elem *symbols.Symbol) (bool, error) {
+	if e == nil {
+		return false, &FilterError{Err: ErrFilterUnevaluable, Reason: "there is no classification to evaluate"}
+	}
+	if elem == nil {
+		return false, UnevaluableClassification("there is no element to classify", spanOf(e))
+	}
+	pred := m.classificationPredicate(scope, e)
+	val, err := m.evalPredicate(pred, elem)
+	if err != nil {
+		return false, err
+	}
+	if val.Kind != symbols.FilterValueBool {
+		return false, &FilterError{Err: ErrFilterNotBoolean, Reason: describeValueKind(val.Kind), Span: pred.Span}
+	}
+	return val.Bool, nil
+}
+
+// UnevaluableClassification reports a classification whose subject the caller
+// could not settle — an expression denoting no element — as the same
+// ErrFilterUnevaluable a filter condition outside the evaluable subset reports.
+func UnevaluableClassification(reason string, span source.Span) error {
+	return &FilterError{Err: ErrFilterUnevaluable, Reason: reason, Span: span}
 }
 
 // compileFeatureChain compiles the value of a feature of an annotation of the
