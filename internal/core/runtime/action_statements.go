@@ -36,8 +36,7 @@ func (h *actionStmtHost) send(ec *EvalContext, s lower.Send) error {
 	if err != nil {
 		return err
 	}
-	h.exec.ctx.post(h.exec.graph.Connections, msg, s, h.exec.self)
-	return nil
+	return h.exec.ctx.post(h.exec.graph.Connections, msg, s, h.exec.self)
 }
 
 // assignOuter writes a name the body's blocks do not declare to the action's

@@ -1,0 +1,281 @@
+package runtime
+
+import (
+	"errors"
+	"strings"
+	"testing"
+
+	"github.com/Open-MBEE/Systemica/internal/core/lower"
+)
+
+// executePerformedAction executes the action named by action, performed by an
+// instance of the part named by owner: the shape of a behavior a part performs.
+func executePerformedAction(t *testing.T, src, owner, action string) (map[string]Value, error) {
+	t.Helper()
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	self, err := ctx.Instantiate(oneSymbol(t, idx, owner))
+	if err != nil {
+		t.Fatalf("instantiate %s: %v", owner, err)
+	}
+	return ctx.ExecuteActionPerformedBy(oneSymbol(t, idx, action), self, nil)
+}
+
+const directedPorts = "\n\tport def Chan { out attribute v : Integer; }\n"
+
+// A message traverses an end that can receive it: the conjugated `~Chan` end
+// sees the definition's `out` feature as `in`, so a send through the plain end
+// arrives there (SysML v2 §7.12.2, §7.15).
+func TestSendReachesTheConjugatedEndOfAConnection(t *testing.T) {
+	outputs, err := executeActionSource(t, "ship", `package P {`+directedPorts+`
+		action ship {
+			attribute got : Integer = 0;
+			port src : Chan;
+			port dst : ~Chan;
+			connect src to dst;
+			first start;
+			action sender { send 11 via src; }
+			action reader accept n : Integer via dst { assign got := n; }
+			done end;
+			then start sender;
+			then sender reader;
+			then reader end;
+		}
+	}`)
+	if err != nil {
+		t.Fatalf("execute action: %v", err)
+	}
+	assertIntOutput(t, outputs, "got", 11)
+}
+
+// The direction of a port's flow features decides what a send may traverse, so a
+// send into an end that only carries outward is reported where it was written
+// rather than delivered: `dst` is joined only to `src`, whose feature is `out`.
+func TestSendIntoAnOutboundOnlyEndIsATypedError(t *testing.T) {
+	_, err := executeActionSource(t, "ship", `package P {`+directedPorts+`
+		action ship {
+			port src : Chan;
+			port dst : ~Chan;
+			connect src to dst;
+			first start;
+			action sender { send 11 via dst; }
+			done end;
+			then start sender;
+			then sender end;
+		}
+	}`)
+	if !errors.Is(err, ErrUnroutableSend) {
+		t.Fatalf("expected ErrUnroutableSend, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "src") {
+		t.Errorf("expected the refusing end in the message, got: %v", err)
+	}
+}
+
+// A port a connector joins nothing to reaches no one, which the send reports
+// rather than dropping the message silently.
+func TestSendThroughAnUnjoinedPortIsATypedError(t *testing.T) {
+	_, err := executeActionSource(t, "ship", `package P {
+		action ship {
+			port lonely;
+			first start;
+			action sender { send 42 via lonely; }
+			done end;
+			then start sender;
+			then sender end;
+		}
+	}`)
+	if !errors.Is(err, ErrUnroutableSend) {
+		t.Fatalf("expected ErrUnroutableSend, got: %v", err)
+	}
+}
+
+// A nested port is joined as the path it was written with, so a message routed
+// through `p.q` reaches the end joined to `p.q` and not one joined to another
+// port named `q` (SysML v2 §7.12).
+func TestSendReachesANestedPortByItsPath(t *testing.T) {
+	outputs, err := executeActionSource(t, "ship", `package P {
+		action ship {
+			attribute got : Integer = 0;
+			port p { port q; }
+			port other { port q; }
+			port sink;
+			connect p.q to sink;
+			first start;
+			action sender { send 7 via p.q; }
+			action reader accept n : Integer via sink { assign got := n; }
+			done end;
+			then start sender;
+			then sender reader;
+			then reader end;
+		}
+	}`)
+	if err != nil {
+		t.Fatalf("execute action: %v", err)
+	}
+	assertIntOutput(t, outputs, "got", 7)
+}
+
+// A behavior reaches the ports of the part performing it, which is the normal
+// shape of a model: the connector and both its ends are declared on the part,
+// and the action only sends through them (SysML v2 §7.16).
+func TestSendReachesThePortsOfThePerformingPart(t *testing.T) {
+	outputs, err := executePerformedAction(t, `package P {
+		part def Node {
+			port src;
+			port dst;
+			connect src to dst;
+		}
+		part node : Node {
+			action ship {
+				attribute got : Integer = 0;
+				first start;
+				action sender { send 3 via src; }
+				action reader accept n : Integer via dst { assign got := n; }
+				done end;
+				then start sender;
+				then sender reader;
+				then reader end;
+			}
+		}
+	}`, "P::node", "P::node::ship")
+	if err != nil {
+		t.Fatalf("execute action: %v", err)
+	}
+	assertIntOutput(t, outputs, "got", 3)
+}
+
+// The part a behavior is declared in performs it by owning it, so its ports are
+// reachable even when no instance was created to perform the behavior.
+func TestSendReachesEnclosingPartPortsWithoutAnInstance(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package P {
+		part node {
+			port src;
+			port dst;
+			connect src to dst;
+			action ship {
+				attribute got : Integer = 0;
+				first start;
+				action sender { send 4 via src; }
+				action reader accept n : Integer via dst { assign got := n; }
+				done end;
+				then start sender;
+				then sender reader;
+				then reader end;
+			}
+		}
+	}`))
+	outputs, err := ctx.ExecuteAction(oneSymbol(t, idx, "P::node::ship"))
+	if err != nil {
+		t.Fatalf("execute action: %v", err)
+	}
+	assertIntOutput(t, outputs, "got", 4)
+}
+
+// A state, a region and a transition are not what performs a behavior, so the
+// search for the performing part passes through them: a send written in a state
+// machine reaches the enclosing part's ports as one written in an action does.
+func TestSendFromAStateMachineReachesEnclosingPartPorts(t *testing.T) {
+	bodies := map[string]string{
+		"state entry": `
+			state waiting { entry { send Ping() via src; } }
+			start then waiting;
+			transition first waiting accept Ping via dst do assign got := 1 then done;`,
+		"transition effect": `
+			state waiting;
+			state sent;
+			start then waiting;
+			transition go first waiting do send Ping() via src then sent;
+			transition first sent accept Ping via dst do assign got := 1 then done;`,
+	}
+	for name, body := range bodies {
+		t.Run(name, func(t *testing.T) {
+			idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package P {
+				item def Ping;
+				part node {
+					port src;
+					port dst;
+					connect src to dst;
+					state radio {
+						attribute got : Integer = 0;
+						initial start;
+						final done;`+body+`
+					}
+				}
+			}`))
+			outputs, err := ctx.ExecuteState(oneSymbol(t, idx, "P::node::radio"))
+			if err != nil {
+				t.Fatalf("execute state machine: %v", err)
+			}
+			assertIntOutput(t, outputs, "got", 1)
+		})
+	}
+}
+
+// A connector may join a port of the performing part to a port of the behavior
+// itself, and routing must see both ends: the part's end is reached through the
+// performer, the behavior's through its own body.
+func TestSendCrossesFromAPartPortToABehaviorPort(t *testing.T) {
+	outputs, err := executePerformedAction(t, `package P {
+		part def Node { port src; }
+		part node : Node {
+			action ship {
+				attribute got : Integer = 0;
+				port local;
+				connect src to local;
+				first start;
+				action sender { send 5 via src; }
+				action reader accept n : Integer via local { assign got := n; }
+				done end;
+				then start sender;
+				then sender reader;
+				then reader end;
+			}
+		}
+	}`, "P::node", "P::node::ship")
+	if err != nil {
+		t.Fatalf("execute action: %v", err)
+	}
+	assertIntOutput(t, outputs, "got", 5)
+}
+
+// An interface usage joins its ends the way a connection does, so a message
+// routes over an interface-typed connection between two conjugate ports
+// (SysML v2 §7.12.3).
+func TestSendRoutesOverAnInterfaceTypedConnection(t *testing.T) {
+	outputs, err := executeActionSource(t, "ship", `package P {`+directedPorts+`
+		interface def Link {
+			end port from : Chan;
+			end port to : ~Chan;
+		}
+		action ship {
+			attribute got : Integer = 0;
+			port src : Chan;
+			port dst : ~Chan;
+			interface link : Link connect src to dst;
+			first start;
+			action sender { send 13 via src; }
+			action reader accept n : Integer via dst { assign got := n; }
+			done end;
+			then start sender;
+			then sender reader;
+			then reader end;
+		}
+	}`)
+	if err != nil {
+		t.Fatalf("execute action: %v", err)
+	}
+	assertIntOutput(t, outputs, "got", 13)
+}
+
+// A port declaring no flow features constrains no direction, so it receives
+// whatever reaches it in either direction (see also TestSendViaPortRoutesInEitherDirection).
+func TestUndirectedPortsReceiveInEitherDirection(t *testing.T) {
+	_, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package P { }`))
+	conns := []lower.Connection{{Ends: []string{"a", "b"}}}
+	for _, from := range []string{"a", "b"} {
+		receiving, outbound := ctx.receivingEnds(conns, from)
+		if len(receiving) != 1 || len(outbound) != 0 {
+			t.Errorf("from %s: receiving = %v, outbound = %v, want one receiving end", from, receiving, outbound)
+		}
+	}
+}
