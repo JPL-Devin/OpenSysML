@@ -2007,3 +2007,39 @@ Cheap false-positive sweep, worth running for any diagnostic-adding pass:
 for f in $(find examples testdata -name '*.sysml'); do ./bin/sysml -validate "$f" 2>&1 \
   | grep 'incommensurable quantities'; done   # expect no output (403 files, ~90 s)
 ```
+
+## Verifying hand-written release notes against built binaries
+
+When asked whether release notes are honest, judge each sentence separately and re-measure every
+number rather than quoting the table.
+
+- **Transcripts are layout-sensitive.** A quoted diagnostic like `model.sysml:6:9: warning: …` is
+  reproducible only if the fixture puts the offending expression on that exact line/column. Put the
+  comparison on its own line at the quoted column (`constraint c {` on the line above) and copy the
+  fixture to the quoted file name (`/tmp/model.sysml`) before deciding a transcript is wrong.
+- **Model sweeps: quote your loop.** `examples/sysml-v2-training/*` directory names contain spaces,
+  so `for f in $(find examples -name '*.sysml')` word-splits and inflates the count (395 tokens for
+  110 files) while every conversion fails on the broken path. Always use
+  `while IFS= read -r f; do … done < <(find examples -name '*.sysml' | sort)`.
+- **Round-trip claims need a validity control.** Many training files do not validate standalone
+  (their dependencies live in sibling files), so a ttl→sysml re-validation failure is not proof that
+  the round trip is lossy. Measure three numbers: converted, converted-and-original-validates, and
+  round-tripped. Over the 120 `.sysml` + `.kerml` models under `examples/` at 0.0.8 that is
+  71 / 44 / 44 (65 / 38 / 38 counting the 110 `.sysml` files alone — state the denominator, since
+  the published limitation counts both languages).
+- **Counted rows go stale fast, and the Python row depends on the environment.** With no service
+  listening (what CI does) `pytest python/tests/ -q` is 369 passed / 26 skipped at 0.0.8; with a
+  service already listening the integration tests run instead of skipping *and* two lifecycle tests
+  fail by design, because they assert this client owns the service it started. Measure the row the
+  no-service way and say so. `go test -race -count=1 ./...` was 3,682 pass / 5 skip / 3,687 total.
+- **Error-class claims: check the export path.** A class can exist in `pysysml.errors` and be absent
+  from the package surface — `hasattr(pysysml, name)` is the check, and
+  `TestPackageSurface` in `python/tests/test_errors.py` now locks every exception in
+  `errors.__all__` onto `pysysml`.
+- **LSP capability claims** are cheap to check with a framed JSON-RPC driver: assert
+  `semanticTokensProvider` has `full: true`, `range: true` and no `delta` key anywhere, that
+  `range` returns strictly fewer tokens than `full`, that `semanticTokens/full/delta` answers
+  `-32601` and the server still serves a later request, and that each code action carries a
+  `WorkspaceEdit` whose `newText` actually fixes the file. A missing-semicolon fix needs a fixture
+  the parser recovers with a fix on — `action def A { first start }` yields `Insert ';'`; a plain
+  attribute declaration yields a diagnostic with no fix.

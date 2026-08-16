@@ -1,12 +1,13 @@
 # Systemica — Roadmap
 
-Baseline: `main` @ `6e46500`, verified locally on 2026-08-15 with Go 1.25.13.
+Baseline: `main` @ `b1e2900`, verified locally on 2026-08-15 with Go 1.25.13.
 Read `AGENTS.md` first; it governs everything below.
 
 0.0.7 is released from `Open-MBEE/Systemica`, carrying `sysml`, `sysml-lsp` and `sysml-grpc`
-archives. `main` since carries the nine post-0.0.7 fixes listed under Unreleased in
-`CHANGELOG.md` and is release-ready. Everything in "Release follow-through" is maintainer- or
-account-gated; everything after it is ordinary engineering work.
+archives. `main` since carries the nine post-0.0.7 fixes, the documentation reorganization and
+the release-publishing fix, all listed under 0.0.8 in `CHANGELOG.md`, which is cut and awaiting
+its tag. Everything in "Release follow-through" is maintainer- or account-gated; everything
+after it is ordinary engineering work.
 
 ## Where the repository stands
 
