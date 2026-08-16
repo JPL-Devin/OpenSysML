@@ -227,11 +227,13 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		}
 		r.walkMembers(states, d.States)
 	case *ast.TransitionMember:
-		// Source and target name states, which the state machine's own scope
-		// need not contain (a transition may cross into a region), so they are
-		// left to the lowering layer; the payload expressions are checkable.
+		// Source and target name vertices of the enclosing machine: resolved here,
+		// so a misspelled endpoint reports with the other name diagnostics rather
+		// than at lowering, which consumes what this resolved.
 		// The guard and effect resolve against the parameters the transition's
 		// call trigger declares, which live in a scope of their own.
+		r.ResolveEndpoint(scope, d.Source)
+		r.ResolveEndpoint(scope, d.Target)
 		r.resolveTrigger(scope, d.Trigger)
 		body := symbols.TriggerScope(scope, d)
 		r.resolveExpr(body, d.Guard)
