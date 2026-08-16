@@ -244,8 +244,9 @@ func visibilityToString(v ast.Visibility) string {
 	}
 }
 
-// ValueToProto converts runtime.Value to protobuf Value.
-func ValueToProto(val runtime.Value) *pb.Value {
+// ValueToProto converts runtime.Value to protobuf Value. An enumeration literal
+// is named by its declaration, which idx supplies the qualified name of.
+func ValueToProto(val runtime.Value, idx *symbols.Index) *pb.Value {
 	switch val.Kind {
 	case runtime.ValConst:
 		// Map semantics.Value to protobuf based on type
@@ -272,7 +273,7 @@ func ValueToProto(val runtime.Value) *pb.Value {
 		var pbElements []*pb.Value
 		if val.Sequence != nil {
 			for _, elem := range val.Sequence.Elements() {
-				pbElements = append(pbElements, ValueToProto(elem))
+				pbElements = append(pbElements, ValueToProto(elem, idx))
 			}
 		}
 		return &pb.Value{Kind: &pb.Value_Sequence{Sequence: &pb.ValueSequence{Elements: pbElements}}}
@@ -289,9 +290,31 @@ func ValueToProto(val runtime.Value) *pb.Value {
 			return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported: quantity with a non-numeric magnitude"}}
 		}
 		return &pb.Value{Kind: &pb.Value_Quantity{Quantity: pq}}
+	case runtime.ValEnumLiteral:
+		lit := enumLiteralToProto(val, idx)
+		if lit == nil {
+			return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported: unresolved enumeration literal"}}
+		}
+		return &pb.Value{Kind: &pb.Value_EnumLiteral{EnumLiteral: lit}}
 	default:
 		return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported"}}
 	}
+}
+
+// enumLiteralToProto names a literal by the declaration it is, which is its
+// identity, and by the enumeration declaring it. Nil for an unresolved literal.
+func enumLiteralToProto(val runtime.Value, idx *symbols.Index) *pb.EnumLiteral {
+	if val.Literal == nil {
+		return nil
+	}
+	lit := &pb.EnumLiteral{
+		LiteralId: idx.GetFQN(val.Literal),
+		Name:      val.LiteralText(),
+	}
+	if enum := semantics.EnumerationOwning(val.Literal); enum != nil {
+		lit.EnumerationId = idx.GetFQN(enum)
+	}
+	return lit
 }
 
 // QuantityToProto marshals a quantity: the magnitude in the unit written, plus
@@ -357,6 +380,8 @@ func ProtoToValueIn(pv *pb.Value, idx *symbols.Index, sem *semantics.Model) (run
 	switch k := pv.GetKind().(type) {
 	case *pb.Value_Quantity:
 		return ProtoToQuantity(k.Quantity, idx, sem)
+	case *pb.Value_EnumLiteral:
+		return enumLiteralFromProto(k.EnumLiteral, idx)
 	case *pb.Value_Sequence:
 		seq := runtime.NewSequence()
 		if k.Sequence != nil {
@@ -438,6 +463,23 @@ func protoToUnitTerm(pt *pb.UnitTerm, idx *symbols.Index, sem *semantics.Model) 
 		})
 	}
 	return term.Normalized(), nil
+}
+
+// enumLiteralFromProto resolves a literal against the model, since a literal is
+// the declaration it names: one the model does not declare has no identity here.
+func enumLiteralFromProto(lit *pb.EnumLiteral, idx *symbols.Index) (runtime.Value, error) {
+	if lit == nil || lit.GetLiteralId() == "" {
+		return runtime.Value{}, fmt.Errorf("enumeration literal: literal_id names no declaration")
+	}
+	if idx == nil {
+		return runtime.Value{}, fmt.Errorf("enumeration literal %s: no model to resolve it against", lit.GetLiteralId())
+	}
+	for _, sym := range idx.LookupQualified(lit.GetLiteralId()) {
+		if semantics.EnumerationOwning(sym) != nil {
+			return runtime.NewEnumLiteral(sym), nil
+		}
+	}
+	return runtime.Value{}, fmt.Errorf("%s is not an enumeration literal of this model", lit.GetLiteralId())
 }
 
 // protoToScalar converts the arms of Value that name no symbol and hold no
@@ -581,11 +623,11 @@ func InstanceToProto(rt *runtime.Context, inst *runtime.Instance, idx *symbols.I
 			// Scalar slot. An unmaterialized one holds no value; marshalling it
 			// anyway would report the empty value as an unsupported null.
 			if slot.Materialized {
-				pbSlot.Value = ValueToProto(slot.Value)
+				pbSlot.Value = ValueToProto(slot.Value, idx)
 			}
 		} else {
 			for _, elem := range collectionElements(slot.Values) {
-				pbSlot.Values = append(pbSlot.Values, ValueToProto(elem))
+				pbSlot.Values = append(pbSlot.Values, ValueToProto(elem, idx))
 			}
 		}
 

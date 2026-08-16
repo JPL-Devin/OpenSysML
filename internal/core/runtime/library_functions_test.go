@@ -786,6 +786,124 @@ func TestVectorAndComplexFunctionErrors(t *testing.T) {
 	}
 }
 
+// TestStringFunctionValues pins StringFunctions: Length counts characters (one
+// per Unicode code point, not per byte) and Substring takes 1-based inclusive
+// character positions.
+func TestStringFunctionValues(t *testing.T) {
+	cases := []struct {
+		fn   string
+		args []Value
+		want Value
+	}{
+		{"StringFunctions::+", []Value{strValue("ab"), strValue("cd")}, strValue("abcd")},
+		{"StringFunctions::+", []Value{strValue(""), strValue("")}, strValue("")},
+		{"StringFunctions::Length", []Value{strValue("abc")}, integerValue(3)},
+		{"StringFunctions::Length", []Value{strValue("")}, integerValue(0)},
+		// "héllo" is 6 bytes and 5 characters; Length answers characters.
+		{"StringFunctions::Length", []Value{strValue("héllo")}, integerValue(5)},
+		{"StringFunctions::Length", []Value{strValue("日本語")}, integerValue(3)},
+		{"StringFunctions::Substring", []Value{strValue("abc"), constInt(1), constInt(1)}, strValue("a")},
+		{"StringFunctions::Substring", []Value{strValue("abc"), constInt(2), constInt(3)}, strValue("bc")},
+		{"StringFunctions::Substring", []Value{strValue("abc"), constInt(1), constInt(3)}, strValue("abc")},
+		// An upper below lower selects no character, as
+		// SequenceFunctions::subsequence answers nothing for such a range.
+		{"StringFunctions::Substring", []Value{strValue("abc"), constInt(2), constInt(1)}, strValue("")},
+		{"StringFunctions::Substring", []Value{strValue(""), constInt(1), constInt(0)}, strValue("")},
+		{"StringFunctions::Substring", []Value{strValue("héllo"), constInt(2), constInt(3)}, strValue("él")},
+		{"StringFunctions::<", []Value{strValue("abc"), strValue("b")}, boolValue(true)},
+		{"StringFunctions::<", []Value{strValue("abc"), strValue("abc")}, boolValue(false)},
+		{"StringFunctions::<=", []Value{strValue("abc"), strValue("abc")}, boolValue(true)},
+		{"StringFunctions::>", []Value{strValue("abc"), strValue("abb")}, boolValue(true)},
+		{"StringFunctions::>=", []Value{strValue("abc"), strValue("abd")}, boolValue(false)},
+		{"StringFunctions::==", []Value{strValue("abc"), strValue("abc")}, boolValue(true)},
+		{"StringFunctions::==", []Value{strValue("abc"), strValue("abd")}, boolValue(false)},
+		// '==' declares String[0..1], so an omitted operand is a value it has an
+		// answer for: two of them are equal, one of them is not equal to a string.
+		{"StringFunctions::==", []Value{nullValue(), nullValue()}, boolValue(true)},
+		{"StringFunctions::==", []Value{strValue(""), nullValue()}, boolValue(false)},
+		{"StringFunctions::ToString", []Value{strValue("héllo")}, strValue("héllo")},
+	}
+
+	for _, tc := range cases {
+		got, err := applyLibrary(t, tc.fn, tc.args...)
+		if err != nil {
+			t.Errorf("%s%v = error %v", tc.fn, tc.args, err)
+			continue
+		}
+		if !valueEqual(got, tc.want) {
+			t.Errorf("%s%v = %+v, want %+v", tc.fn, tc.args, got, tc.want)
+		}
+	}
+}
+
+// TestStringFunctionErrors pins the reports of StringFunctions: a position
+// naming no character, and an argument of another type, which is reported rather
+// than rendered as a string.
+func TestStringFunctionErrors(t *testing.T) {
+	cases := []struct {
+		name string
+		fn   string
+		args []Value
+		want error
+	}{
+		{"substring below the first character", "StringFunctions::Substring",
+			[]Value{strValue("abc"), constInt(0), constInt(2)}, ErrIndexOutOfRange},
+		{"substring past the last character", "StringFunctions::Substring",
+			[]Value{strValue("abc"), constInt(1), constInt(9)}, ErrIndexOutOfRange},
+		// The bound is in characters: "héllo" has 5, though it is 6 bytes.
+		{"substring past the last character of a multi-byte string", "StringFunctions::Substring",
+			[]Value{strValue("héllo"), constInt(1), constInt(6)}, ErrIndexOutOfRange},
+		{"substring of an empty string", "StringFunctions::Substring",
+			[]Value{strValue(""), constInt(1), constInt(1)}, ErrIndexOutOfRange},
+		{"length of a number", "StringFunctions::Length",
+			[]Value{constInt(3)}, ErrTypeMismatch},
+		{"concatenation with a number", "StringFunctions::+",
+			[]Value{strValue("abc"), constInt(3)}, ErrTypeMismatch},
+		{"comparison against a number", "StringFunctions::<",
+			[]Value{strValue("abc"), constInt(3)}, ErrTypeMismatch},
+		{"equality against a number", "StringFunctions::==",
+			[]Value{strValue("abc"), constInt(3)}, ErrTypeMismatch},
+		{"substring at a non-integer position", "StringFunctions::Substring",
+			[]Value{strValue("abc"), strValue("a"), constInt(2)}, ErrTypeMismatch},
+		{"substring of a collection", "StringFunctions::Substring",
+			[]Value{vec(strValue("a")), constInt(1), constInt(1)}, ErrTypeMismatch},
+		{"length without an argument", "StringFunctions::Length", nil, ErrCalcArity},
+		{"concatenation of three strings", "StringFunctions::+",
+			[]Value{strValue("a"), strValue("b"), strValue("c")}, ErrCalcArity},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := applyLibrary(t, tc.fn, tc.args...)
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("%s%v = %+v, %v; want error %v", tc.fn, tc.args, got, err, tc.want)
+			}
+			if !strings.Contains(err.Error(), tc.fn) {
+				t.Fatalf("%s error %q does not name the function", tc.fn, err)
+			}
+		})
+	}
+}
+
+// A named argument binds to the parameter names StringFunctions declares.
+func TestStringFunctionNamedArguments(t *testing.T) {
+	fn, ok := libraryFunctionByName("StringFunctions::Substring")
+	if !ok {
+		t.Fatal("StringFunctions::Substring is not registered")
+	}
+	got, err := fn.invoke(libCtx(t), calcArgs{named: map[string]Value{
+		"upper": constInt(3),
+		"x":     {Kind: ValString, Str: "abcd"},
+		"lower": constInt(2),
+	}})
+	if err != nil {
+		t.Fatalf("Substring(x = \"abcd\", lower = 2, upper = 3) = error %v", err)
+	}
+	if !valueEqual(got, Value{Kind: ValString, Str: "bc"}) {
+		t.Fatalf("Substring(x = \"abcd\", lower = 2, upper = 3) = %+v, want \"bc\"", got)
+	}
+}
+
 // A declaration this runtime has no representation for the values of reports
 // itself by name rather than computing something else.
 func TestUnevaluableLibraryFunctionsNameThemselves(t *testing.T) {
@@ -827,6 +945,7 @@ func TestVendoredFunctionsAreAllDispatchable(t *testing.T) {
 		"ComplexFunctions":  "Kernel Libraries/Kernel Function Library/ComplexFunctions.kerml",
 		"SequenceFunctions": "Kernel Libraries/Kernel Function Library/SequenceFunctions.kerml",
 		"TrigFunctions":     "Kernel Libraries/Kernel Function Library/TrigFunctions.kerml",
+		"StringFunctions":   "Kernel Libraries/Kernel Function Library/StringFunctions.kerml",
 	}
 
 	for pkg, path := range packages {

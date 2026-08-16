@@ -86,7 +86,12 @@ func newStateExecutor(ctx *Context, stateMachine *symbols.Symbol, self *Instance
 
 	// Lower to StateGraph, in the scope the machine's body was written in, so
 	// that everything the graph carries is evaluated where it was declared.
-	graph, err := lower.ToStateGraph(stateMachine.Decl, declScope(stateMachine))
+	// Endpoints come from the name-resolution tier, which reported on them already.
+	var endpoints lower.Endpoints
+	if ctx.resolver != nil {
+		endpoints = ctx.resolver
+	}
+	graph, err := lower.ToStateGraphWithEndpoints(stateMachine.Decl, declScope(stateMachine), endpoints)
 	if err != nil {
 		return nil, fmt.Errorf("lower state machine: %w", err)
 	}

@@ -412,7 +412,20 @@ message Value {
     ValueSequence sequence = 6;
     string null = 7;            // marker for null (empty string)
     Quantity quantity = 8;      // magnitude and the unit it is expressed in
+    EnumLiteral enum_literal = 9;
   }
+}
+
+// EnumLiteral is one literal of an enumeration definition. A literal is its own
+// identity, so it travels as the declaration it names rather than as a number
+// or a string: two values are the same literal exactly when `literal_id` is.
+message EnumLiteral {
+  // FQN of the literal's declaration ("D::Color::red"). Its identity.
+  string literal_id = 1;
+  // FQN of the enumeration definition declaring it ("D::Color").
+  string enumeration_id = 2;
+  // The literal as a reader writes it ("Color::red").
+  string name = 3;
 }
 
 message ValueSequence {
@@ -492,6 +505,8 @@ message ServerInfoResponse {
   //                  questions the REPL's %constraint, %requirement, %satisfy
   //                  and %calc answer.
   //   "query"      - the Query RPC evaluates a SysML v2 API & Services Query.
+  //   "enum_values" - a Value carries an enumeration literal as enum_literal,
+  //                  rather than reporting it as an unsupported null.
   repeated string capabilities = 2;
 }
 

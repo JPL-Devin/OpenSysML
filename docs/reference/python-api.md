@@ -142,6 +142,7 @@ declared raises `TypeMismatchError` rather than returning a wrongly typed value.
 | `Boolean` | `bool` |
 | `String` | `str` |
 | usage typed by a definition that reduces to a library scalar (`attribute def Celsius :> Real`) | that scalar (`float`) |
+| usage typed by an `enum def` | `EnumLiteral`, the identity of the literal held |
 | usage typed by any other definition in the model | that definition's generated class |
 | multiplicity `1`, `1..1`, or undeclared | `X` |
 | multiplicity `0..1` | `X \| None` |
@@ -167,8 +168,9 @@ dodge one.
   type, which Python does not check against the base property.
 - **Multiple inheritance.** Emitted in declaration order; a SysML hierarchy whose
   Python equivalent has no consistent MRO produces a module that fails to import.
-- **Generics and enumerations.** No generic parameters, and an `enumDef` becomes a
-  plain class rather than a Python `Enum`.
+- **Generics and enumerations.** No generic parameters. An `enumDef` becomes a plain
+  class rather than a Python `Enum`; a usage typed by it is `EnumLiteral`, which
+  carries the literal's declaration identity but does not enumerate its siblings.
 - **Name collisions.** Two definitions with the same simple name both get
   path-qualified class names (`A_Thing`, `B_Thing`). A feature named like a member
   `TypedObject` provides (`instance`, `from_instance`, `sysml_id`) gets a trailing

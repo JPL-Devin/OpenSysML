@@ -141,6 +141,32 @@ class TestRuntimeIntegration:
             inst.a
         assert isinstance(inst.slots["a"], SlotError)
 
+    def test_enum_typed_slot_and_eval_return_the_literal(self):
+        """An enumeration literal reaches the client as the literal it is."""
+        from pysysml import EnumLiteral
+
+        src = '''
+        package D {
+            enum def Color { red; green; blue; }
+            part def Car {
+                attribute c : Color = Color::red;
+            }
+        }
+        '''
+        model = self.conn.load_from_content(src)
+
+        car = self.conn.instantiate("D::Car", model.hash)
+        red = EnumLiteral("D::Color::red", "D::Color", "Color::red")
+        assert car.c == red
+        assert self.conn.eval("D::Color::red", model.hash) == red
+        assert self.conn.eval("D::Color::green", model.hash) != red
+
+    def test_service_reports_the_enum_values_capability(self):
+        """The wire form is a contract, so the service says it honours it."""
+        from pysysml.capabilities import CAPABILITY_ENUM_VALUES
+
+        assert self.conn.server_info().has(CAPABILITY_ENUM_VALUES)
+
     def test_symbol_attributes_and_parts(self):
         """Symbol filtering works against the kinds the service really emits."""
         src = '''

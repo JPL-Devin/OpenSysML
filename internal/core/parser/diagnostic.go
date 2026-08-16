@@ -22,4 +22,6 @@ type Diagnostic struct {
 // Warning codes.
 const (
 	codeReservedKeywordName = "reserved-keyword-name"
+	// codeAmbiguousModifierKind marks `<modifier> <kind>` with no name after it.
+	codeAmbiguousModifierKind = "ambiguous-modifier-kind"
 )

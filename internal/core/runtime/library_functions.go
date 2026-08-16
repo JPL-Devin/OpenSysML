@@ -7,6 +7,7 @@ import (
 	"math/cmplx"
 	"slices"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
@@ -113,6 +114,7 @@ func init() {
 
 	registerVectorFunctions()
 	registerComplexFunctions()
+	registerStringFunctions()
 
 	// includingAt, the one SequenceFunctions declaration left unevaluated: its
 	// vendored body drops the element at index, while the addAt behavior that
@@ -178,6 +180,10 @@ func init() {
 		"re":                     "ComplexFunctions::re",
 		"im":                     "ComplexFunctions::im",
 		"arg":                    "ComplexFunctions::arg",
+
+		// StringFunctions: the two names no other function library declares.
+		"Length":    "StringFunctions::Length",
+		"Substring": "StringFunctions::Substring",
 	})
 }
 
@@ -247,6 +253,20 @@ func registerComplexFunctions() {
 		"no string notation for a Complex value is defined")
 	registerUnevaluable("ComplexFunctions::ToComplex", []string{"x"}, 1,
 		"no string notation for a Complex value is defined")
+}
+
+// registerStringFunctions registers every function StringFunctions declares:
+// '+', the four comparisons, '==', Length, Substring and ToString.
+func registerStringFunctions() {
+	registerValueFunction("StringFunctions::+", []string{"x", "y"}, 2, stringConcat)
+	registerValueFunction("StringFunctions::Length", []string{"x"}, 1, stringLength)
+	registerValueFunction("StringFunctions::Substring", []string{"x", "lower", "upper"}, 3, stringSubstring)
+	registerValueFunction("StringFunctions::<", []string{"x", "y"}, 2, stringOrdering(ast.OpLt))
+	registerValueFunction("StringFunctions::>", []string{"x", "y"}, 2, stringOrdering(ast.OpGt))
+	registerValueFunction("StringFunctions::<=", []string{"x", "y"}, 2, stringOrdering(ast.OpLe))
+	registerValueFunction("StringFunctions::>=", []string{"x", "y"}, 2, stringOrdering(ast.OpGe))
+	registerValueFunction("StringFunctions::==", []string{"x", "y"}, 0, stringEquals)
+	registerValueFunction("StringFunctions::ToString", []string{"x"}, 1, stringToString)
 }
 
 // registerLibraryFunction adds one implementation over scalar numeric
@@ -1438,4 +1458,147 @@ func complexOperands(name string, args []Value) (x, y complex128, given bool, er
 		return 0, 0, false, err
 	}
 	return x, y, true, nil
+}
+
+// concatStrings is StringFunctions::'+': the characters of x then those of y.
+func concatStrings(x, y string) Value {
+	return Value{Kind: ValString, Str: x + y}
+}
+
+// compareStrings applies one of StringFunctions' comparisons. UTF-8 orders bytes
+// as it orders code points, so Go's own comparison is character order.
+func compareStrings(op ast.OperatorKind, x, y string) (bool, error) {
+	switch op {
+	case ast.OpLt:
+		return x < y, nil
+	case ast.OpLe:
+		return x <= y, nil
+	case ast.OpGt:
+		return x > y, nil
+	case ast.OpGe:
+		return x >= y, nil
+	}
+	return false, fmt.Errorf("%w: '%s' does not order two strings", ErrUnsupportedOperator, op)
+}
+
+// stringArg reads a String argument, reporting another kind rather than
+// rendering it as a string.
+func stringArg(name, param string, val Value) (string, error) {
+	if val.Kind != ValString {
+		return "", fmt.Errorf(
+			"%w: function %s parameter %q requires a string value, got %s",
+			ErrTypeMismatch, name, param, describeOperand(val),
+		)
+	}
+	return val.Str, nil
+}
+
+// stringPositionArg reads an Integer position argument of Substring.
+func stringPositionArg(name, param string, val Value) (int64, error) {
+	if val.Kind != ValConst || val.Const.Kind != semantics.ValInt {
+		return 0, fmt.Errorf(
+			"%w: function %s parameter %q requires an Integer value, got %s",
+			ErrTypeMismatch, name, param, describeOperand(val),
+		)
+	}
+	return val.Const.Int, nil
+}
+
+// stringConcat is StringFunctions::'+', which declares both operands String[1].
+func stringConcat(name string, _ *Context, args []Value) (Value, error) {
+	x, y, err := stringPair(name, args)
+	if err != nil {
+		return Value{}, err
+	}
+	return concatStrings(x, y), nil
+}
+
+// stringLength is StringFunctions::Length: characters of x, one per Unicode code
+// point, so a multi-byte character counts once.
+func stringLength(name string, _ *Context, args []Value) (Value, error) {
+	x, err := stringArg(name, "x", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	count := int64(utf8.RuneCountInString(x))
+	return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: count}}, nil
+}
+
+// stringSubstring is StringFunctions::Substring: characters lower to upper
+// inclusive, 1-based, bounded as SequenceFunctions::subsequence is.
+func stringSubstring(name string, _ *Context, args []Value) (Value, error) {
+	x, err := stringArg(name, "x", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	lower, err := stringPositionArg(name, "lower", args[1])
+	if err != nil {
+		return Value{}, err
+	}
+	upper, err := stringPositionArg(name, "upper", args[2])
+	if err != nil {
+		return Value{}, err
+	}
+	chars := []rune(x)
+	if lower < 1 {
+		return Value{}, fmt.Errorf("%w: function %s lower %d is outside 1..%d",
+			ErrIndexOutOfRange, name, lower, len(chars))
+	}
+	if lower > upper {
+		return Value{Kind: ValString}, nil
+	}
+	if upper > int64(len(chars)) {
+		return Value{}, fmt.Errorf("%w: function %s upper %d is outside 1..%d",
+			ErrIndexOutOfRange, name, upper, len(chars))
+	}
+	return Value{Kind: ValString, Str: string(chars[lower-1 : upper])}, nil
+}
+
+// stringOrdering is one of StringFunctions' comparisons over two String[1].
+func stringOrdering(op ast.OperatorKind) libraryApply {
+	return func(name string, _ *Context, args []Value) (Value, error) {
+		x, y, err := stringPair(name, args)
+		if err != nil {
+			return Value{}, err
+		}
+		ordered, err := compareStrings(op, x, y)
+		if err != nil {
+			return Value{}, err
+		}
+		return boolValue(ordered), nil
+	}
+}
+
+// stringEquals is StringFunctions::'==', whose operands are String[0..1]: two
+// empty operands are equal, an empty one and a string are not.
+func stringEquals(name string, _ *Context, args []Value) (Value, error) {
+	xGiven, yGiven := !argumentOmitted(args[0]), !argumentOmitted(args[1])
+	if !xGiven || !yGiven {
+		return boolValue(xGiven == yGiven), nil
+	}
+	x, y, err := stringPair(name, args)
+	if err != nil {
+		return Value{}, err
+	}
+	return boolValue(x == y), nil
+}
+
+// stringToString is StringFunctions::ToString, whose vendored body is `x`.
+func stringToString(name string, _ *Context, args []Value) (Value, error) {
+	x, err := stringArg(name, "x", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	return Value{Kind: ValString, Str: x}, nil
+}
+
+// stringPair reads the two String operands x and y.
+func stringPair(name string, args []Value) (x, y string, err error) {
+	if x, err = stringArg(name, "x", args[0]); err != nil {
+		return "", "", err
+	}
+	if y, err = stringArg(name, "y", args[1]); err != nil {
+		return "", "", err
+	}
+	return x, y, nil
 }
