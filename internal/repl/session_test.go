@@ -259,15 +259,22 @@ func TestMergeKeepsCommentsAboveTheDeclaration(t *testing.T) {
 	}
 }
 
-// Even a re-declaration that does not parse says what it dropped: it is the
-// silent-loss case in miniature.
-func TestUnparseableRedeclarationStillNamesWhatItLost(t *testing.T) {
+// A re-declaration that leaves its body open drops nothing: it is not accepted
+// into the buffer at all, so what it would have replaced is still declared and
+// the submission is reported as the syntax error it is.
+func TestUnparseableRedeclarationDropsNothing(t *testing.T) {
 	s := NewSession()
 	s.Submit("package P { part def A; }")
 	res := s.Submit("package P { part def B;")
 
-	if !hasNotice(res, "part def A no longer declared") {
-		t.Errorf("notices = %v, want the lost member named", res.Notices)
+	if len(res.Notices) != 0 {
+		t.Errorf("notices = %v, want nothing lost", res.Notices)
+	}
+	if !hasSyntaxError(res) {
+		t.Errorf("diagnostics = %v, want the syntax error reported", res.Diagnostics)
+	}
+	if _, _, err := s.lookupSymbol("P::A"); err != nil {
+		t.Errorf("P::A should still be declared: %v", err)
 	}
 }
 

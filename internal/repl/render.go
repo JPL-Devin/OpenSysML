@@ -34,6 +34,10 @@ type Result struct {
 	// already in the buffer, which is not one tail region. Empty for a
 	// submission appended whole, where everything from Offset on is its own.
 	own []source.Span
+
+	// masked locates the submissions kept out of the analyzed buffer, whose
+	// findings gated no validation tier.
+	masked []source.Span
 }
 
 // Origin locates one file of a submission in the buffer, so a diagnostic is
@@ -344,6 +348,22 @@ func renderSplit(r Result, v Verbosity) (found, declared []string) {
 	return found, append(renderSummary(r.ownMembers()), r.Notices...)
 }
 
+// renderSyntax renders the syntax errors of this submission, which are about the
+// text just read rather than about the analysis of the model as a whole: a load
+// that defers the analysis still says why a file could not be read.
+func renderSyntax(r Result, v Verbosity) []string {
+	var diags []passes.Diagnostic
+	for _, d := range scopedDiagnostics(r, v) {
+		if d.Source == "syntax" {
+			diags = append(diags, d)
+		}
+	}
+	if len(diags) == 0 {
+		return nil
+	}
+	return renderDiagnostics(diags, r.Source, r.diagLocation, false)
+}
+
 // scopedDiagnostics keeps the diagnostics of this submission that the verbosity
 // admits: errors always, warnings and below only above quiet.
 func scopedDiagnostics(r Result, v Verbosity) []passes.Diagnostic {
@@ -442,7 +462,7 @@ func (n *blockerNote) record(key string) {
 func (r Result) analysisBlocked() *blocker {
 	var first *blocker
 	for _, d := range r.Diagnostics {
-		if d.Severity != passes.SeverityError || r.mine(d.Span) {
+		if d.Severity != passes.SeverityError || r.mine(d.Span) || r.isMasked(d.Span) {
 			continue
 		}
 		if first != nil {
@@ -452,6 +472,19 @@ func (r Result) analysisBlocked() *blocker {
 		first = &blocker{offset: d.Span.Offset, line: r.lineOf(d.Span.Offset), message: d.Message}
 	}
 	return first
+}
+
+// isMasked reports whether a span falls in a submission that was kept out of
+// the analyzed buffer, so its errors blocked nothing.
+func (r Result) isMasked(span source.Span) bool {
+	for _, m := range r.masked {
+		// End() included: a submission that does not close its own text is
+		// reported at its end as often as inside it.
+		if span.Offset >= m.Offset && span.Offset <= m.End() {
+			return true
+		}
+	}
+	return false
 }
 
 func hasError(diags []passes.Diagnostic) bool {

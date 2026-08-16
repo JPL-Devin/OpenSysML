@@ -47,8 +47,11 @@ func (s *Session) mergeSubmission(src string, root *ast.RootNamespace, comments 
 	for i, sn := range s.snippets {
 		// Only what the prompt typed in an earlier submission merges: a loaded
 		// file keeps its identity, so re-typing its package supersedes it, and
-		// two snippets of one submission are both part of that submission.
-		if sn.origin != "" || sn.gen == s.version {
+		// two snippets of one submission are both part of that submission. A
+		// masked submission is not merged into either: its text is not analyzed,
+		// so folding it in would put what the parser could not read back into the
+		// buffer.
+		if sn.origin != "" || sn.gen == s.version || sn.open {
 			continue
 		}
 		oldDecl, ok := namedNamespace(sn.src, newDecl.name)
@@ -73,6 +76,63 @@ func (s *Session) mergeSubmission(src string, root *ast.RootNamespace, comments 
 	return "", nil, dropReport{}, false
 }
 
+// reopenedNamespaces reports the namespaces a loaded file opens that another
+// loaded file already opened. Two files that open `package P` declare two
+// packages of that name rather than one shared package — KerML gives a package
+// no way to be reopened — so the load says so instead of leaving the user with
+// unresolved references between them.
+func (s *Session) reopenedNamespaces(key string, root *ast.RootNamespace) []dropReport {
+	if root == nil {
+		return nil
+	}
+	var opened []string
+	wanted := make(map[string]bool)
+	for _, m := range root.Members {
+		name := memberName(m)
+		if name == "" || wanted[name] {
+			continue
+		}
+		if _, hasBody := bodyMembers(m); !hasBody {
+			continue
+		}
+		wanted[name] = true
+		opened = append(opened, name)
+	}
+	if len(wanted) == 0 {
+		return nil
+	}
+	// A snippet is parsed only when its recorded names say it could open one of
+	// these, and then once for all of them, so a directory load stays linear.
+	reopened := make(map[string]bool, len(wanted))
+	for _, sn := range s.snippets {
+		if sn.origin == "" || sn.key == key || sn.open || len(reopened) == len(wanted) {
+			continue
+		}
+		var shared []string
+		for _, name := range sn.names {
+			if wanted[name] && !reopened[name] {
+				shared = append(shared, name)
+			}
+		}
+		if len(shared) == 0 {
+			continue
+		}
+		snRoot := parser.New(source.New(docName, []byte(sn.src))).ParseFile()
+		for _, name := range shared {
+			if _, ok := namedNamespaceIn(sn.src, snRoot, name); ok {
+				reopened[name] = true
+			}
+		}
+	}
+	var out []dropReport
+	for _, name := range opened {
+		if reopened[name] {
+			out = append(out, dropReport{reopened: name})
+		}
+	}
+	return out
+}
+
 // soleNamespace returns the namespace declaration a submission consists of. A
 // submission declaring more than one thing is replaced wholesale, since its text
 // cannot be split between snippets without losing what sits between them.
@@ -87,7 +147,11 @@ func soleNamespace(src string, root *ast.RootNamespace) (nsDecl, bool) {
 // accepted snippet. It reports false unless exactly one member declares that
 // name, so an ambiguous snippet keeps the replacement behavior.
 func namedNamespace(src, name string) (nsDecl, bool) {
-	root := parser.New(source.New(docName, []byte(src))).ParseFile()
+	return namedNamespaceIn(src, parser.New(source.New(docName, []byte(src))).ParseFile(), name)
+}
+
+// namedNamespaceIn is namedNamespace over a parse the caller already has.
+func namedNamespaceIn(src string, root *ast.RootNamespace, name string) (nsDecl, bool) {
 	if root == nil {
 		return nsDecl{}, false
 	}
