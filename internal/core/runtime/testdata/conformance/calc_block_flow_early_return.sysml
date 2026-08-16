@@ -2,6 +2,8 @@
 // calc, so the flow of the block, the loop around it and the body all stop: the
 // second iteration returns 2 and the third never runs.
 package test {
+	private import ScalarValues::*;
+
 	calc firstAbove {
 		attribute seen : Integer = 0;
 		for i in 1..3 {

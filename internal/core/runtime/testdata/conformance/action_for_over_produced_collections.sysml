@@ -6,6 +6,7 @@
 // descending range — is iterated not at all.
 package test {
 	private import ScalarValues::*;
+	private import ControlFunctions::*;
 
 	calc def Above {
 		in n : Integer;
