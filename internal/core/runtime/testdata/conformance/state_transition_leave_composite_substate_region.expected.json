@@ -1,0 +1,10 @@
+{
+  "type": "state",
+  "finalState": "outside",
+  "outputs": {
+    "midExits": {"type": "Integer", "value": 1},
+    "wrapperExits": {"type": "Integer", "value": 1},
+    "deepExits": {"type": "Integer", "value": 1},
+    "lidleExits": {"type": "Integer", "value": 1}
+  }
+}

@@ -338,3 +338,57 @@ func TestTransitionOutOfCompositeStateExitsEveryRegion(t *testing.T) {
 		}
 	}
 }
+
+// A region's active state can be nested below the state the region declares, so
+// leaving the composite state must exit each state on the way out exactly once.
+func TestTransitionOutOfCompositeStateExitsNestedStatesOnce(t *testing.T) {
+	exec := runStateMachine(t, "Machine", `package P {
+	state Machine {
+		attribute midExits : Integer = 0;
+		attribute wrapperExits : Integer = 0;
+		attribute deepExits : Integer = 0;
+
+		initial init;
+		state running {
+			region left {
+				initial ls;
+				state lidle;
+				then ls lidle;
+			}
+			region right {
+				initial rs;
+				state wrapper {
+					exit { wrapperExits = wrapperExits + 1; }
+
+					state mid {
+						exit { midExits = midExits + 1; }
+
+						region inner {
+							initial is;
+							state ideep { exit { deepExits = deepExits + 1; } }
+							then is ideep;
+							transition ideep to done if midExits == 0;
+						}
+					}
+				}
+				then rs mid;
+			}
+		}
+		state done;
+
+		init then running;
+	}
+}`)
+
+	if len(exec.activeConfig.regionStates) != 0 {
+		t.Errorf("regions still active: %v", regionConfig(exec))
+	}
+	if got := exec.getCurrentState(); got == nil || got.Name != "done" {
+		t.Fatalf("current state = %v, want done", got)
+	}
+	for _, name := range []string{"midExits", "wrapperExits", "deepExits"} {
+		if got := intValue(t, exec.stateData, name); got != 1 {
+			t.Errorf("%s = %d, want 1 (exited exactly once)", name, got)
+		}
+	}
+}

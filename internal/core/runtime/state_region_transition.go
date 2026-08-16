@@ -235,6 +235,16 @@ func (e *StateExecutor) enclosingRegion(state *ast.StateNode) *ast.StateRegion {
 	return nil
 }
 
+// isBelowOrEqual reports whether state is ancestor itself or nested below it.
+func (e *StateExecutor) isBelowOrEqual(state, ancestor *ast.StateNode) bool {
+	for current := state; current != nil; current = e.graph.ParentState[current] {
+		if current == ancestor {
+			return true
+		}
+	}
+	return false
+}
+
 // siblingRegionContaining returns the region concurrent with region — another of
 // the same composite state's regions, or another of the machine's own — that
 // contains state, and nil when state lies outside that region set.
@@ -379,12 +389,13 @@ func (e *StateExecutor) leaveRegion(region *ast.StateRegion, trans *lower.Transi
 	// its subperformances.
 	lca := e.getLCA(owner, target)
 	for current := owner; current != nil && current != lca; current = e.graph.ParentState[current] {
-		// Clear the entry of the region declaring current first: an enclosing state
-		// exited below would otherwise exit current a second time through it. The
-		// state the region is left in is recorded here instead, for history.
-		if declaring := e.graph.RegionOf[current]; declaring != nil && e.activeConfig.regionStates[declaring] == current {
-			e.recordRegionHistory(declaring, current)
-			delete(e.activeConfig.regionStates, declaring)
+		// Clear the region current is active in first — a region's active state may
+		// be nested below current — or an enclosing state exits current again.
+		if declaring := e.enclosingRegion(current); declaring != nil {
+			if active, isActive := e.activeConfig.regionStates[declaring]; isActive && e.isBelowOrEqual(active, current) {
+				e.recordRegionHistory(declaring, active)
+				delete(e.activeConfig.regionStates, declaring)
+			}
 		}
 		if err := e.exitState(current); err != nil {
 			return fmt.Errorf("exit state: %w", err)
