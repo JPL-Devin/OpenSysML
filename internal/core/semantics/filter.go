@@ -206,13 +206,20 @@ func (m *Model) compileOperator(scope *symbols.Scope, e *ast.OperatorExpr) *symb
 // says the same thing, and anything else names another element, which a filter
 // condition cannot reach.
 func (m *Model) compileClassification(scope *symbols.Scope, e *ast.OperatorExpr) *symbols.FilterPredicate {
+	if len(e.Operands) > 1 || (len(e.Operands) == 1 && !isSelfReference(e.Operands[0])) {
+		return unsupported(spanOf(e), fmt.Sprintf("`%s` in a filter condition classifies the element being filtered, so it takes no left operand", e.Operator))
+	}
+	return m.classificationPredicate(scope, e)
+}
+
+// classificationPredicate compiles the test `@T`/`@@T` states, leaving the
+// element it is evaluated for to the caller: a filter condition supplies the
+// candidate, and the value evaluator the element its subject denotes.
+func (m *Model) classificationPredicate(scope *symbols.Scope, e *ast.OperatorExpr) *symbols.FilterPredicate {
 	span := spanOf(e)
 	op := symbols.FilterClassify
 	if e.Operator == ast.OpMetaAt {
 		op = symbols.FilterMetaClassify
-	}
-	if len(e.Operands) > 1 || (len(e.Operands) == 1 && !isSelfReference(e.Operands[0])) {
-		return unsupported(span, fmt.Sprintf("`%s` in a filter condition classifies the element being filtered, so it takes no left operand", e.Operator))
 	}
 	if e.TypeRef == nil {
 		return unsupported(span, fmt.Sprintf("`%s` names no type", e.Operator))
@@ -222,6 +229,41 @@ func (m *Model) compileClassification(scope *symbols.Scope, e *ast.OperatorExpr)
 		return unsupported(span, fmt.Sprintf("the metadata type %s does not resolve", qnText(e.TypeRef)))
 	}
 	return &symbols.FilterPredicate{Op: op, TypeFQN: typeFQN, Span: span}
+}
+
+// EvalClassification evaluates the classification `@T`/`@@T` that e writes
+// against one element, for a caller that has settled which element the subject
+// denotes — the runtime value evaluator, whose `@` has a subject expression a
+// filter condition has no equivalent of. e's operand is not looked at here.
+//
+// The type is resolved and the verdict decided by the same code a filter
+// condition is compiled and run with, so a classification cannot answer one way
+// in a filter and another in an expression. A condition outside the evaluable
+// subset — a type that does not resolve — is a *FilterError wrapping
+// ErrFilterUnevaluable, as it is at the model level.
+func (m *Model) EvalClassification(scope *symbols.Scope, e *ast.OperatorExpr, elem *symbols.Symbol) (bool, error) {
+	if e == nil {
+		return false, &FilterError{Err: ErrFilterUnevaluable, Reason: "there is no classification to evaluate"}
+	}
+	if elem == nil {
+		return false, UnevaluableClassification("there is no element to classify", spanOf(e))
+	}
+	pred := m.classificationPredicate(scope, e)
+	val, err := m.evalPredicate(pred, m.indexedElement(elem))
+	if err != nil {
+		return false, err
+	}
+	if val.Kind != symbols.FilterValueBool {
+		return false, &FilterError{Err: ErrFilterNotBoolean, Reason: describeValueKind(val.Kind), Span: pred.Span}
+	}
+	return val.Bool, nil
+}
+
+// UnevaluableClassification reports a classification whose subject the caller
+// could not settle — an expression denoting no element — as the same
+// ErrFilterUnevaluable a filter condition outside the evaluable subset reports.
+func UnevaluableClassification(reason string, span source.Span) error {
+	return &FilterError{Err: ErrFilterUnevaluable, Reason: reason, Span: span}
 }
 
 // compileFeatureChain compiles the value of a feature of an annotation of the
@@ -506,7 +548,7 @@ func (m *Model) metaclassConforms(cand *symbols.Symbol, typeFQN string) bool {
 		return false
 	}
 	if typ := m.symbolByFQN(typeFQN); typ != nil {
-		return m.Conforms(meta, typ)
+		return m.Conforms(meta, typ) || m.conformsByName(meta, typeFQN)
 	}
 	// The metaclass library is not loaded, so conformance can only be judged on
 	// the name the candidate's metaclass has.
@@ -518,17 +560,54 @@ func (m *Model) metaclassConforms(cand *symbols.Symbol, typeFQN string) bool {
 // indexed, and by qualified name otherwise, which is what a restored library's
 // annotation — recorded as the name of its type — allows.
 func (m *Model) annotationConforms(a annotation, typ *symbols.Symbol, typeFQN string) bool {
-	if a.typ != nil && typ != nil {
-		return m.Conforms(a.typ, typ)
+	if a.typ != nil && typ != nil && m.Conforms(a.typ, typ) {
+		return true
 	}
 	if a.typFQN != "" && a.typFQN == typeFQN {
 		return true
 	}
-	if a.typ != nil && typeFQN != "" {
-		for _, sup := range append([]*symbols.Symbol{a.typ}, m.AllSupertypes(a.typ)...) {
-			if m.fqnOf(sup) == typeFQN {
-				return true
-			}
+	return a.typ != nil && m.conformsByName(a.typ, typeFQN)
+}
+
+// indexedElement returns the symbol the index holds for sym's element, which is
+// the one its annotations are recorded against across index generations. A
+// body-local declaration is not indexed and bears an unqualified name, so it is
+// judged as itself rather than as a namesake of it.
+func (m *Model) indexedElement(sym *symbols.Symbol) *symbols.Symbol {
+	if sym == nil || bodyLocalSymbol(sym) {
+		return sym
+	}
+	if indexed := m.symbolByFQN(m.fqnOf(sym)); indexed != nil && indexed.Kind == sym.Kind {
+		return indexed
+	}
+	return sym
+}
+
+// bodyLocalSymbol reports whether sym is declared inside a body, whose names
+// exist only within it.
+func bodyLocalSymbol(sym *symbols.Symbol) bool {
+	for scope := sym.OwnerScope; scope != nil; scope = scope.Parent() {
+		if scope.BodyLocal() {
+			return true
+		}
+	}
+	return false
+}
+
+// conformsByName reports whether sym or a supertype of it carries the qualified
+// name typeFQN. A workspace that reindexes holds one element as more than one
+// symbol across generations, and a name identifies one element (symbolByFQN
+// answers nothing for an ambiguous one), so the name decides what identity cannot.
+func (m *Model) conformsByName(sym *symbols.Symbol, typeFQN string) bool {
+	if sym == nil || typeFQN == "" {
+		return false
+	}
+	if m.fqnOf(sym) == typeFQN {
+		return true
+	}
+	for _, sup := range m.AllSupertypes(sym) {
+		if m.fqnOf(sup) == typeFQN {
+			return true
 		}
 	}
 	return false

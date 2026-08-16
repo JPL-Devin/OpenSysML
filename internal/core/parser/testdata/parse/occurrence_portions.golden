@@ -16,7 +16,7 @@
       (Membership visibility="default"
         (Definition kind="individual" abstract=false variation=false name="Serial"))
       (Membership visibility="default"
-        (Usage kind="attribute" name="serial" ref=false direction="none" composite=false derived=false ordered=false nonunique=false individual=true
+        (Usage kind="individual" name="serial" ref=false direction="none" composite=false derived=false ordered=false nonunique=false individual=true
           (Relationship kind="typing" target=Serial
             (*ast.QualifiedName))
           (Membership visibility="default"
@@ -26,6 +26,6 @@
       (Membership visibility="default"
         (Definition kind="action" abstract=false variation=false name="Mission"
           (Membership visibility="default"
-            (Usage kind="part" name="crew" ref=false direction="in" composite=false derived=false ordered=false nonunique=false individual=true
+            (Usage kind="individual" name="crew" ref=false direction="in" composite=false derived=false ordered=false nonunique=false individual=true
               (Relationship kind="typing" target=Serial
                 (*ast.QualifiedName)))))))))

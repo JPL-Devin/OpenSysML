@@ -1,0 +1,8 @@
+{
+  "libraries": true,
+  "type": "calc",
+  "inputs": [
+    {"type": "String", "value": "Ada"}
+  ],
+  "result": {"type": "String", "value": "Hello, Ada!"}
+}

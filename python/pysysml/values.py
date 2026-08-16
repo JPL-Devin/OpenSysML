@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from typing import Dict, Tuple, Union
 
+from pysysml.enumeration import EnumLiteral
 from pysysml.errors import PySysMLError, SlotError, UnsupportedValueError
 
 #: What a quantity's magnitude can be: the service keeps Integer and Real apart.
@@ -290,8 +291,8 @@ def value_to_python(pb_value, resolve_instance=None):
             when omitted, instance references are returned as their integer id.
 
     Returns:
-        int, float, bool, str, list, None, a :class:`Quantity`, or the resolved
-        instance object.
+        int, float, bool, str, list, None, a :class:`Quantity`, an
+        :class:`~pysysml.enumeration.EnumLiteral`, or the resolved instance object.
 
     Raises:
         UnsupportedValueError: If the service reported the value as unsupported.
@@ -313,6 +314,9 @@ def value_to_python(pb_value, resolve_instance=None):
         return resolve_instance(pb_value.instance_id)
     if kind == 'sequence':
         return [value_to_python(v, resolve_instance) for v in pb_value.sequence.elements]
+    if kind == 'enum_literal':
+        lit = pb_value.enum_literal
+        return EnumLiteral(lit.literal_id, lit.enumeration_id, lit.name)
     if kind == 'null':
         # A non-empty null carries the reason the value could not be sent.
         if pb_value.null:

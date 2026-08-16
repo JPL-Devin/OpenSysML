@@ -162,6 +162,118 @@ func (r *Resolver) AdmittedTopLevel(doc string, bindings []symbols.RootBinding) 
 	return kept
 }
 
+// ImportedElements enumerates the elements imp surfaces into scope, with the
+// same admission a lookup through imp makes: the import's filter clause and the
+// `filter` members of the declaring namespace (see importAdmits).
+func (r *Resolver) ImportedElements(scope *symbols.Scope, imp *ast.Import) []*symbols.Symbol {
+	if scope == nil || imp == nil || imp.Imported == nil || len(imp.Imported.Parts) == 0 {
+		return nil
+	}
+	target, ok := r.ResolveQualified(scope, imp.Imported)
+	if !ok || target == nil {
+		return nil
+	}
+	admit := r.importAdmits(scope, imp)
+	out := &elementList{seen: map[*symbols.Symbol]bool{}}
+	if imp.Kind == ast.ImportMembership {
+		// `import P::x` surfaces x itself; the recursive form adds its subtree.
+		if admit(target) {
+			out.add(target)
+		}
+	} else {
+		r.appendNamespaceMembers(out, scope, target, imp, admit)
+	}
+	if imp.IsRecursive {
+		r.appendSubtree(out, scope, target, imp, admit, map[*symbols.Symbol]bool{})
+	}
+	return out.elems
+}
+
+// appendNamespaceMembers adds the members of target a namespace import surfaces.
+func (r *Resolver) appendNamespaceMembers(out *elementList, scope *symbols.Scope, target *symbols.Symbol, imp *ast.Import, admit func(*symbols.Symbol) bool) {
+	for _, sym := range r.namespaceChildren(scope, target, imp) {
+		if visibleThroughImport(imp, sym) && admit(sym) {
+			out.add(sym)
+		}
+	}
+}
+
+// namespaceChildren lists the members of target an import reaches, the declared
+// ones first and then the ones only the index holds — wildcard imports and
+// restored libraries populate the index rather than a scope. Reachability under
+// the name is decided here; visibility and element filters are not.
+func (r *Resolver) namespaceChildren(scope *symbols.Scope, target *symbols.Symbol, imp *ast.Import) []*symbols.Symbol {
+	children := &elementList{seen: map[*symbols.Symbol]bool{}}
+	if target.Scope != nil {
+		for _, sym := range target.Scope.Members() {
+			children.add(sym)
+		}
+	}
+	if r.idx == nil {
+		return children.elems
+	}
+	prefix := r.indexedNameOf(target)
+	var indexed []*symbols.Symbol
+	if importAllowsPrivate(imp) {
+		indexed = r.idx.LookupDirectChildren(prefix)
+	} else {
+		indexed = r.idx.LookupDirectChildrenFrom(prefix, r.ReferringNamespaceFQN(scope))
+	}
+	for _, sym := range indexed {
+		if r.admitsUnderName("", r.ReferringNamespaceFQN(scope), prefix+"::"+localNameOf(sym), sym) {
+			children.add(sym)
+		}
+	}
+	return children.elems
+}
+
+// indexedNameOf is the qualified name the index keys target's children under. A
+// symbol declared in a document carries its local name, so the nesting has to
+// come from the index.
+func (r *Resolver) indexedNameOf(target *symbols.Symbol) string {
+	if r.idx == nil {
+		return target.Name
+	}
+	if fqn := withoutEmptySegments(r.idx.GetFQN(target)); fqn != "" {
+		return fqn
+	}
+	return target.Name
+}
+
+// appendSubtree adds the descendants of target a recursive import surfaces. The
+// walk descends into every member, admitted or not: a lookup through the import
+// reaches a nested element whatever its namespace was judged to be, so filtering
+// the descent would hide elements the import surfaces (see lookupInSubtree).
+func (r *Resolver) appendSubtree(out *elementList, scope *symbols.Scope, target *symbols.Symbol, imp *ast.Import, admit func(*symbols.Symbol) bool, seen map[*symbols.Symbol]bool) {
+	if target == nil || seen[target] || (target.Scope != nil && target.Scope.BodyLocal()) {
+		return
+	}
+	seen[target] = true
+	children := r.namespaceChildren(scope, target, imp)
+	for _, sym := range children {
+		if visibleThroughImport(imp, sym) && admit(sym) {
+			out.add(sym)
+		}
+	}
+	for _, sym := range children {
+		r.appendSubtree(out, scope, sym, imp, admit, seen)
+	}
+}
+
+// elementList collects elements in the order they were surfaced, once each.
+type elementList struct {
+	elems []*symbols.Symbol
+	seen  map[*symbols.Symbol]bool
+}
+
+func (l *elementList) add(sym *symbols.Symbol) {
+	if sym == nil || l.seen[sym] {
+		return
+	}
+	l.seen[sym] = true
+	l.elems = append(l.elems, sym)
+}
+
 // localNameOf is the last segment of sym's name, i.e. the name it is a member under.
 func localNameOf(sym *symbols.Symbol) string {
 	if i := strings.LastIndex(sym.Name, "::"); i >= 0 {

@@ -10,6 +10,7 @@ returning a wrongly typed value.
 
 from typing import Callable, ClassVar, List, Optional, Set, TypeVar
 
+from pysysml.enumeration import EnumLiteral
 from pysysml.errors import InstanceTypeError, TypeMismatchError
 from pysysml.instance import Instance
 from pysysml.values import Quantity
@@ -166,6 +167,13 @@ def as_quantity(feature_name: str, value: object) -> Quantity:
     if isinstance(value, Quantity):
         return value
     raise _mismatch(feature_name, "Quantity", value)
+
+
+def as_enum_literal(feature_name: str, value: object) -> EnumLiteral:
+    """Decode an enumeration-typed slot, which holds a literal rather than an instance."""
+    if isinstance(value, EnumLiteral):
+        return value
+    raise _mismatch(feature_name, "EnumLiteral", value)
 
 
 def as_object(feature_name: str, value: object) -> object:

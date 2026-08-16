@@ -7,6 +7,7 @@ from pysysml.connection import Connection, DEFAULT_PORT, split_target
 from pysysml.model import Model
 from pysysml.symbol import Symbol
 from pysysml.diagnostic import Diagnostic
+from pysysml.enumeration import EnumLiteral
 from pysysml.instance import Instance
 from pysysml.typed import TypedObject
 from pysysml.typefacts import Multiplicity, Specialization, SymbolFacts, TypeFacts
@@ -27,7 +28,7 @@ from pysysml.errors import (
 )
 
 __all__ = [
-    "Connection", "Model", "Symbol", "Diagnostic", "Instance",
+    "Connection", "Model", "Symbol", "Diagnostic", "EnumLiteral", "Instance",
     "TypedObject", "TypeFacts", "Multiplicity", "Specialization", "SymbolFacts",
     "ServerInfo",
     "Conversion", "FORMAT_SYSML", "FORMAT_TURTLE", "format_of_path",
