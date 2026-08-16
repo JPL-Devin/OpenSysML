@@ -43,6 +43,18 @@ def test_literal_identity_is_the_declaration():
     assert len({same, other, value_to_python(sysml_pb2.Value(enum_literal=RED))}) == 2
 
 
+def test_the_declaration_alone_identifies_a_literal():
+    """The description is not part of the identity, so a bare id is the same value."""
+    populated = value_to_python(sysml_pb2.Value(enum_literal=RED))
+    bare = EnumLiteral(RED.literal_id)
+
+    assert bare == populated
+    assert hash(bare) == hash(populated)
+    assert len({bare, populated}) == 1
+    assert {bare: "R"}[populated] == "R"
+    assert bare != EnumLiteral(GREEN.literal_id)
+
+
 def test_a_sequence_of_literals_keeps_them():
     seq = sysml_pb2.Value(sequence=sysml_pb2.ValueSequence(elements=[
         sysml_pb2.Value(enum_literal=RED),
