@@ -366,22 +366,11 @@ func runStateConformance(t *testing.T, ctx *Context, idx *symbols.Index, path st
 	}
 }
 
-// runOneStatePerformance runs one performance of a state machine, by self or by no
-// object, and validates it against the outcome expected of that performance.
-func runOneStatePerformance(t *testing.T, ctx *Context, stateSym *symbols.Symbol, self *Instance, expected ExpectedOutcome) {
-	// Create executor manually to inject events
-	exec, err := newStateExecutor(ctx, stateSym, self)
-	if err != nil {
-		t.Fatalf("create state executor: %v", err)
-	}
-
-	// Initialize (enters initial state)
-	if err := exec.initialize(); err != nil {
-		t.Fatalf("initialize state machine: %v", err)
-	}
-
-	// Inject events from schema
-	for _, event := range expected.Events {
+// injectEvents queues the events a case declares onto an executor, for the
+// conformance and trace harnesses to drive the same performance.
+func injectEvents(t *testing.T, exec *StateExecutor, events []ExpectedEvent) {
+	t.Helper()
+	for _, event := range events {
 		args := make(map[string]Value, len(event.Args))
 		for name, val := range event.Args {
 			args[name] = expectedToRuntimeValue(t, val)
@@ -397,6 +386,23 @@ func runOneStatePerformance(t *testing.T, ctx *Context, stateSym *symbols.Symbol
 			t.Fatalf("event declares neither a signal nor a call")
 		}
 	}
+}
+
+// runOneStatePerformance runs one performance of a state machine, by self or by
+// no object, and validates it against the outcome expected of that performance.
+func runOneStatePerformance(t *testing.T, ctx *Context, stateSym *symbols.Symbol, self *Instance, expected ExpectedOutcome) {
+	// Create executor manually to inject events
+	exec, err := newStateExecutor(ctx, stateSym, self)
+	if err != nil {
+		t.Fatalf("create state executor: %v", err)
+	}
+
+	// Initialize (enters initial state)
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize state machine: %v", err)
+	}
+
+	injectEvents(t, exec, expected.Events)
 
 	// Process events until completion or suspension, through the executor's own
 	// loop: a harness-local copy drifts from the semantics under test.

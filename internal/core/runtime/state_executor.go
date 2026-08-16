@@ -437,52 +437,137 @@ func (e *StateExecutor) recallDeferredEvents() {
 	e.deferred = retained
 }
 
-// broadcastEvent sends an event to all active regions (or single state if no
-// regions), reporting whether any of them consumed it. An event no region
-// consumed is either deferred or dropped by the caller, so "a transition fired"
-// and "nothing happened" must not look alike here.
+// broadcastEvent offers an event to the active configuration, reporting whether
+// any transition consumed it. An event nothing consumed is either deferred or
+// dropped by the caller, so "a transition fired" and "nothing happened" must not
+// look alike here.
+//
+// A transition out of a composite state is enabled while any of its substates is
+// active, so matching walks outward from every active leaf. Depth ordering gives
+// the innermost enabled transition priority: an enclosing state's transition is
+// suppressed once a transition inside it fired for this event, while orthogonal
+// regions still react independently.
 func (e *StateExecutor) broadcastEvent(event *Event) (bool, error) {
-	// If in composite state with regions, broadcast to all
-	if len(e.activeConfig.regionStates) > 0 {
-		// Broadcast the event to each region independently, in declaration order.
-		// A region may be left by another region's reaction, so its active state is
-		// read again here rather than snapshotted.
-		consumed := false
-		for _, region := range e.orderedActiveRegions() {
-			regionState, stillActive := e.activeConfig.regionStates[region]
-			if !stillActive {
+	consumed := false
+	var fired []*ast.StateNode
+	offered := make(map[*ast.StateNode]bool)
+
+	for depth := e.deepestActiveDepth(); depth >= 0; depth-- {
+		// A leaf may be left by another leaf's reaction to this event, and must not
+		// react once it has been: the configuration is read again at each depth and
+		// each leaf is checked again before it is offered the event.
+		for _, leaf := range e.activeLeaves() {
+			if !e.isActive(leaf) {
 				continue
 			}
-			trans, err := e.enabledTransition(regionState, event)
+			source := ancestorAtDepth(e.getParentChain(leaf), depth)
+			if source == nil || offered[source] || e.enclosesFiredTransition(fired, source) {
+				continue
+			}
+			offered[source] = true
+			trans, err := e.enabledTransition(source, event)
 			if err != nil {
-				return consumed, fmt.Errorf("region %s: %w", region.Name, err)
+				return consumed, fmt.Errorf("state %s: %w", source.Name, err)
 			}
 			if trans == nil {
 				continue
 			}
-			// Run-to-completion: one transition per region per event.
-			if err := e.fireTransitionInRegion(region, trans); err != nil {
-				return consumed, fmt.Errorf("fire transition in region %s: %w", region.Name, err)
+			// Run-to-completion: one transition per active leaf per event.
+			if err := e.fireFrom(source, trans); err != nil {
+				return consumed, fmt.Errorf("fire transition out of %s: %w", source.Name, err)
 			}
+			fired = append(fired, source)
 			consumed = true
 		}
-		return consumed, nil
 	}
+	return consumed, nil
+}
 
-	// Simple state (no regions) - existing logic
-	currentState := e.getCurrentState()
-	if currentState == nil {
-		return false, nil // No active state
+// activeLeaves returns the innermost active states, in region declaration order.
+// A state owning an active orthogonal region is not a leaf: the event is offered
+// to that region's active state, and reaches the owner walking outward.
+func (e *StateExecutor) activeLeaves() []*ast.StateNode {
+	states := e.activeStates()
+	leaves := make([]*ast.StateNode, 0, len(states))
+	for _, state := range states {
+		if !e.enclosesActiveRegion(state) {
+			leaves = append(leaves, state)
+		}
 	}
+	return leaves
+}
 
-	trans, err := e.enabledTransition(currentState, event)
-	if err != nil || trans == nil {
-		return false, err
+// deepestActiveDepth returns the nesting depth of the deepest active leaf, zero
+// when nothing is active.
+func (e *StateExecutor) deepestActiveDepth() int {
+	deepest := 0
+	for _, leaf := range e.activeLeaves() {
+		if depth := len(e.getParentChain(leaf)) - 1; depth > deepest {
+			deepest = depth
+		}
 	}
-	if err := e.fireTransition(trans); err != nil {
-		return false, err
+	return deepest
+}
+
+// ancestorAtDepth returns the state at the given nesting depth on a parent
+// chain, which runs from a leaf outward, or nil when the chain is shallower.
+func ancestorAtDepth(chain []*ast.StateNode, depth int) *ast.StateNode {
+	index := len(chain) - 1 - depth
+	if index < 0 || index >= len(chain) {
+		return nil
 	}
-	return true, nil
+	return chain[index]
+}
+
+// enclosesFiredTransition reports whether a transition out of a state nested
+// inside this one already fired for the event being dispatched, which disables
+// the enclosing state's transitions for it.
+func (e *StateExecutor) enclosesFiredTransition(fired []*ast.StateNode, state *ast.StateNode) bool {
+	for _, source := range fired {
+		for _, ancestor := range e.getParentChain(source)[1:] {
+			if ancestor == state {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// fireFrom takes a transition whose source is the given active state, which is
+// either the active leaf or a composite state enclosing it. A source lying in an
+// active orthogonal region moves that region; one outside every active region
+// moves the machine's single active hierarchy.
+func (e *StateExecutor) fireFrom(source *ast.StateNode, trans *lower.Transition) error {
+	if region := e.activeRegionOf(source); region != nil {
+		return e.fireTransitionInRegion(region, trans)
+	}
+	return e.fireTransition(trans)
+}
+
+// activeRegionOf returns the innermost active orthogonal region the state is
+// declared in, or nil when it lies outside every active region.
+func (e *StateExecutor) activeRegionOf(state *ast.StateNode) *ast.StateRegion {
+	for _, ancestor := range e.getParentChain(state) {
+		region, inRegion := e.graph.RegionOf[ancestor]
+		if !inRegion {
+			continue
+		}
+		if _, active := e.activeConfig.regionStates[region]; active {
+			return region
+		}
+	}
+	return nil
+}
+
+// enclosesActiveRegion reports whether the state owns an orthogonal region that
+// is currently active.
+func (e *StateExecutor) enclosesActiveRegion(state *ast.StateNode) bool {
+	for _, region := range e.graph.CompositeStates[state] {
+		if _, active := e.activeConfig.regionStates[region]; active {
+			return true
+		}
+	}
+	return false
 }
 
 // enabledTransition returns the first transition out of state that this event
@@ -1442,25 +1527,36 @@ func (e *StateExecutor) hasPendingSignal() bool {
 	return false
 }
 
-// acceptsSignal reports whether any transition out of the active configuration
-// is triggered by this message's signal.
+// acceptsSignal reports whether any transition out of the active configuration,
+// or out of a composite state enclosing it, is triggered by this signal.
 func (e *StateExecutor) acceptsSignal(msg Message) bool {
-	for _, state := range e.activeStates() {
-		for _, trans := range e.graph.Transitions[state] {
-			accept, ok := trans.Trigger.(*ast.AcceptEvent)
-			if !ok {
-				continue
-			}
-			if !msg.arrivedAt(trans.Via) || !msg.reachedObject(objectID(e.self)) {
-				continue
-			}
-			signal := ast.SimpleName(accept.SignalType)
-			if signal == "" {
-				signal = ast.SimpleName(accept.Subsets)
-			}
-			if signal != "" && msg.carriesSignal(signal) {
+	for _, leaf := range e.activeStates() {
+		for _, state := range e.getParentChain(leaf) {
+			if e.acceptsSignalFrom(state, msg) {
 				return true
 			}
+		}
+	}
+	return false
+}
+
+// acceptsSignalFrom reports whether a transition out of one state is triggered
+// by this message's signal.
+func (e *StateExecutor) acceptsSignalFrom(state *ast.StateNode, msg Message) bool {
+	for _, trans := range e.graph.Transitions[state] {
+		accept, ok := trans.Trigger.(*ast.AcceptEvent)
+		if !ok {
+			continue
+		}
+		if !msg.arrivedAt(trans.Via) || !msg.reachedObject(objectID(e.self)) {
+			continue
+		}
+		signal := ast.SimpleName(accept.SignalType)
+		if signal == "" {
+			signal = ast.SimpleName(accept.Subsets)
+		}
+		if signal != "" && msg.carriesSignal(signal) {
+			return true
 		}
 	}
 	return false

@@ -111,6 +111,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("behavior_performing_an_action_and_stating_a_body", testBehaviorPerformingAnActionAndStatingABody)
 	t.Run("qualified_assignment_target_in_a_state_effect", testQualifiedAssignmentTargetInAStateEffect)
 	t.Run("call_of_unhandled_operation", testCallOfUnhandledOperation)
+	t.Run("signal_no_level_of_a_composite_state_accepts", testSignalNoLevelOfACompositeStateAccepts)
 	t.Run("call_argument_of_wrong_type", testCallArgumentOfWrongType)
 	t.Run("perform_of_missing_action", testPerformOfMissingAction)
 	t.Run("perform_reference_cycle", testPerformReferenceCycle)
@@ -1254,6 +1255,38 @@ func testCallOfUnhandledOperation(t *testing.T) {
 	current, ok := exec.CurrentState().(*ast.StateNode)
 	if !ok || current.Name != "waiting" {
 		t.Errorf("expected the unhandled call to leave the machine in waiting, got %v", exec.CurrentState())
+	}
+}
+
+// testSignalNoLevelOfACompositeStateAccepts: a signal neither the active substate
+// nor any composite state enclosing it accepts is dropped by run-to-completion,
+// so walking outward for a trigger ends in the machine standing still rather than
+// erroring or hanging.
+func testSignalNoLevelOfACompositeStateAccepts(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			initial init;
+			state outer {
+				state middle {
+					state inner;
+					state other;
+					transition inner to other accept step;
+				}
+				state recovered;
+				transition middle to recovered accept abort;
+			}
+			state stopped;
+			init then inner;
+			transition outer to stopped accept shutdown;
+		}
+	}`)
+	exec.SendSignal("unknown", nil)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run to completion: %v", err)
+	}
+	current, ok := exec.CurrentState().(*ast.StateNode)
+	if !ok || current.Name != "inner" {
+		t.Errorf("expected the unaccepted signal to leave the machine in inner, got %v", exec.CurrentState())
 	}
 }
 
