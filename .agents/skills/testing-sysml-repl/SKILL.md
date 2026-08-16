@@ -2066,13 +2066,13 @@ Consequences worth checking on every change here:
 - `sysml m.sysml -instantiate X -validate` prints `no errors` and exits **0** even when every
   default in the model violates its multiplicity, because `-instantiate` creates the object without
   materializing its slots. Do not use it as the "does the runtime check fire" probe.
-- **The two tiers can disagree, and nested collection literals are where they do.** `exactCount`
-  counts top-level elements without flattening while the evaluator flattens, so
-  `attribute nested : Real[4] = ((1.0, 2.0), (3.0, 4.0));` is a static error ("2 value(s) … lower
-  bound 4") yet materializes fine as `[1.00, 2.00, 3.00, 4.00]`, and
-  `attribute two : Real[2] = (src, src);` (with `src : Real[3]`) passes statically but errors at
-  runtime with "6 value(s) … upper bound 2". Include both shapes in any regression fixture and
-  expect the mismatch until `exactCount` learns to flatten.
+- **The two tiers can disagree, and a collection holding a reference is where they do.** `exactCount`
+  flattens nested collection literals just as binding does, so
+  `attribute nested : Real[4] = ((1.0, 2.0), (3.0, 4.0));` counts 4 statically and materializes as
+  `[1.00, 2.00, 3.00, 4.00]` with no diagnostic; but a collection whose elements are references has
+  no statically known count, so `attribute two : Real[2] = (src, src);` (with `src : Real[3]`)
+  passes statically and errors at runtime with "6 value(s) … upper bound 2". Include both shapes in
+  any regression fixture.
 - A feature that declares **no** multiplicity is deliberately not held to the assumed `1..1`
   (`EffectiveFeature.MultiplicityStated`), so `attribute anyN = both.volume;` over a `[0..*]`
   sibling must show `[2.00, 3.50]` with no diagnostic. A test asserting an error there is wrong.
