@@ -92,9 +92,12 @@ type ExpectedOutcome struct {
 	// Constraint/Requirement fields
 	Bindings  map[string]ExpectedValue `json:"bindings,omitempty"`
 	Satisfied *bool                    `json:"satisfied,omitempty"`
-	// Evaluate names the element to evaluate, for a case that declares more than
-	// one — a usage and the definition it is typed by. Empty searches the model.
+	// Evaluate names the element to execute or evaluate: a qualified path
+	// ("test::p::a") also reaches one nested in a part. Empty searches the model.
 	Evaluate string `json:"evaluate,omitempty"`
+	// Trace opts a case into a golden trace it does not carry yet, so
+	// -update-traces writes one. A case already carrying a golden needs no opt-in.
+	Trace bool `json:"trace,omitempty"`
 
 	// Satisfy fields: the verdict expected of each satisfaction assertion the
 	// case states, keyed by the assertion as written ("satisfy r by p"), since
@@ -282,14 +285,56 @@ func diagnosticProblems(got []parser.Diagnostic, want []string) []string {
 	return problems
 }
 
+// TestMain gives the package a primed library cache of its own, so a case sees
+// the restored symbol shape whatever the machine's cache holds or runs first.
+func TestMain(m *testing.M) {
+	dir, err := os.MkdirTemp("", "systemica-runtime-libs")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "library cache directory: %v\n", err)
+		os.Exit(1)
+	}
+	if err := os.Setenv("XDG_CACHE_HOME", dir); err != nil {
+		fmt.Fprintf(os.Stderr, "library cache directory: %v\n", err)
+		os.Exit(1)
+	}
+	if err := primeLibraryCache(); err != nil {
+		fmt.Fprintf(os.Stderr, "prime library cache: %v\n", err)
+		os.Exit(1)
+	}
+	code := m.Run()
+	_ = os.RemoveAll(dir)
+	os.Exit(code)
+}
+
+// primeLibraryCache parses the standard library once and caches its records,
+// persisting only once every file is indexed and its imports are expanded.
+func primeLibraryCache() error {
+	src := libs.DefaultSource()
+	cache, err := libs.NewCache()
+	if err != nil {
+		return err
+	}
+	loader := libs.NewLoader(src, cache)
+	idx := symbols.NewIndex()
+	for _, name := range src.List() {
+		if err := loader.Load(name, idx); err != nil {
+			return fmt.Errorf("load library %s: %w", name, err)
+		}
+	}
+	idx.ExpandWildcardImports()
+	loader.Persist(idx)
+	return nil
+}
+
 // loadLibraries loads the standard library into idx, for a case that names its
-// elements.
+// elements. The cache TestMain primed makes every load a hit, so what a case
+// sees does not depend on what ran before it.
 func loadLibraries(t *testing.T, idx *symbols.Index) {
 	t.Helper()
 	src := libs.DefaultSource()
 	cache, err := libs.NewCache()
 	if err != nil {
-		cache = nil
+		t.Fatalf("library cache: %v", err)
 	}
 	loader := libs.NewLoader(src, cache)
 	for _, name := range src.List() {
@@ -299,11 +344,28 @@ func loadLibraries(t *testing.T, idx *symbols.Index) {
 	}
 }
 
+// A loaded library is restored from cache, the shape that knows a symbol's
+// qualified name — a parsed one reports a shadowed unit as `metre`, not `SI::metre`.
+func TestLoadLibrariesRestoresCachedRecords(t *testing.T) {
+	idx := symbols.NewIndex()
+	loadLibraries(t, idx)
+
+	matches := idx.LookupQualified("SI::metre")
+	if len(matches) != 1 {
+		t.Fatalf("SI::metre matched %d symbols, want 1", len(matches))
+	}
+	if decl := matches[0].Decl; decl != nil {
+		t.Errorf("SI::metre carries the declaration %T, want a record restored from cache", decl)
+	}
+	if name := matches[0].Name; name != "SI::metre" {
+		t.Errorf("SI::metre is named %q, want its qualified name", name)
+	}
+}
+
 // runActionConformance executes action and validates outputs
 func runActionConformance(t *testing.T, ctx *Context, idx *symbols.Index, path string, expected ExpectedOutcome) {
-	// Find action definition/usage in root scope
 	rootScope := idx.DocumentRoot(path)
-	actionSym := findBehavioralSymbol(t, rootScope, ast.DefAction, ast.UsageAction)
+	actionSym := namedOrFoundSymbol(t, idx, expected.Evaluate, rootScope, ast.DefAction, ast.UsageAction)
 
 	// Execute action
 	outputs, err := ctx.ExecuteAction(actionSym)
@@ -870,8 +932,8 @@ func findBehavioralSymbol(t *testing.T, scope *symbols.Scope, defKind ast.Defini
 	return sym
 }
 
-// namedOrFoundSymbol returns the symbol the case names, or searches the model
-// when it names none.
+// namedOrFoundSymbol returns the symbol the case names by qualified path, which
+// reaches a nested element, or searches the model when it names none.
 func namedOrFoundSymbol(t *testing.T, idx *symbols.Index, fqn string, scope *symbols.Scope, defKind ast.DefinitionKind, usageKind ast.UsageKind) *symbols.Symbol {
 	if fqn == "" {
 		return findBehavioralSymbol(t, scope, defKind, usageKind)
@@ -880,7 +942,33 @@ func namedOrFoundSymbol(t *testing.T, idx *symbols.Index, fqn string, scope *sym
 	if len(matches) != 1 {
 		t.Fatalf("evaluate %q: %d matching symbols, want 1", fqn, len(matches))
 	}
+	if !behavioralKind(matches[0], defKind, usageKind) {
+		t.Fatalf("evaluate %q: names a %T, want a %v/%v", fqn, matches[0].Decl, defKind, usageKind)
+	}
 	return matches[0]
+}
+
+// namedSymbol returns the one symbol of the asked-for kind that a qualified path
+// names, or nil.
+func namedSymbol(idx *symbols.Index, fqn string, defKind ast.DefinitionKind, usageKind ast.UsageKind) *symbols.Symbol {
+	matches := idx.LookupQualified(fqn)
+	if len(matches) != 1 || !behavioralKind(matches[0], defKind, usageKind) {
+		return nil
+	}
+	return matches[0]
+}
+
+// behavioralKind reports whether a symbol declares the definition or usage kind
+// an entry point asks for.
+func behavioralKind(sym *symbols.Symbol, defKind ast.DefinitionKind, usageKind ast.UsageKind) bool {
+	switch decl := sym.Decl.(type) {
+	case *ast.Definition:
+		return decl.Kind == defKind
+	case *ast.Usage:
+		return decl.Kind == usageKind
+	default:
+		return false
+	}
 }
 
 // lookupBehavioralSymbol is findBehavioralSymbol for callers that probe several

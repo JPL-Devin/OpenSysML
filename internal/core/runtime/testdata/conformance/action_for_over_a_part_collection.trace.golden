@@ -1,0 +1,36 @@
+step 1: token 1@accumulate
+stmt for s
+      eval literal 1.0 -> 1.0
+      eval literal 2.0 -> 2.0
+      eval literal 3.5 -> 3.5
+    eval sequence of 3 -> (1.0, 2.0, 3.5)
+  eval feature steps -> (1.0, 2.0, 3.5)
+  iteration 1
+    stmt assign total
+        eval feature total -> 0.0
+        eval feature s -> 1.0
+      eval operator + -> 1.0
+    stmt assign visited
+        eval feature visited -> 0
+        eval literal 1 -> 1
+      eval operator + -> 1
+  iteration 2
+    stmt assign total
+        eval feature total -> 1.0
+        eval feature s -> 2.0
+      eval operator + -> 3.0
+    stmt assign visited
+        eval feature visited -> 1
+        eval literal 1 -> 1
+      eval operator + -> 2
+  iteration 3
+    stmt assign total
+        eval feature total -> 3.0
+        eval feature s -> 3.5
+      eval operator + -> 6.5
+    stmt assign visited
+        eval feature visited -> 2
+        eval literal 1 -> 1
+      eval operator + -> 3
+step 2: token 1@end
+step 3: no active tokens
