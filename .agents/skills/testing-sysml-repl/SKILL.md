@@ -1721,6 +1721,75 @@ on `main`; the "old" shapes double as A/B canaries against the parent commit.
   `engagementRingCost`/`ringCost` `= 500.00`, `diamondCost = 550.00`, and
   `engagementRingToBandConstraint: <constraint: satisfied>`.
 
+## Port routing: direction, conjugation and connector end paths (PR #195)
+
+Routing a `send … via p` is only observable through an `accept` that either receives or does not, so
+every fixture needs **both** a sender node and a reader node writing an attribute, e.g.
+`action reader accept n : Integer via dst { assign got := n; }` — then `%continue` prints
+`Results: got = <n>` / `n = <n>`. A model with no reader completes either way and proves nothing.
+
+- **Drive it with `%load <file>` + `%action <name>` + `%continue`** (or `%state <m>` + `%advance 1` +
+  `%current` for a transition `accept … via p`). Put `import ScalarValues::*;` in every fixture,
+  otherwise the load is noisy with `unresolved reference: Integer — did you mean
+  ScalarValues::Integer?` (harmless, but it costs screen space on camera).
+- **The two performer paths are different code and both need a run:** `%action Pkg::Part::ship`
+  (no object → connectors of the *nearest enclosing part*) and `%instantiate <part usage>` followed
+  by `%action Pkg::Part::ship <usage>` (object → connectors of the object's *type*). Same model, same
+  expected value; a regression in either one is invisible if you only run one.
+- **Direction/conjugation shape:** `port def Chan { out attribute v : Integer; }` with
+  `port src : Chan; port dst : ~Chan; connect src to dst;`. `send via src` delivers; `send via dst`
+  must fail with
+  `error: execution failed: send reaches no receiving port: port "dst" is joined only to outbound
+  ends (src)`. The mirror shape with an `in` feature (`port def Ctrl { in attribute c; }`,
+  `cin : Ctrl`, `cout : ~Ctrl`) must fail on `send via cin` — worth running, because it catches a
+  conjugation applied in only one direction.
+- **A port with no flow features is undirected** (receives either way) and an `inout` feature also
+  receives — assert a *successful* delivery for both, otherwise an over-strict direction check looks
+  like a pass.
+- **Nested-path routing needs a decoy to be a real test.** Declare `port p { port q; }` *and*
+  `port other { port q; }`, `connect p.q to sink`. Two runs: `send via p.q` → reader gets the value;
+  `send via other.q` → `port "other.q" is joined to no port that can receive it` **and** the reader's
+  attribute stays at its initial value. Without the decoy the test passes on a build that routes by
+  bare last segment.
+- **Contrast binary is very cheap here and worth it** (`git worktree add /tmp/old<sha> <sha>`): on the
+  pre-fix commit the direction fixture *completes silently* (message delivered nowhere, no error) and
+  the nested/part-level fixtures end in `accept deadlock in action ship: nothing can post the awaited
+  message (…)`. Those two failure shapes are the proof that the new run means something.
+- **`connect a, b, c;` is a parse error** (`expected 'to' between connector ends`); the n-ary form is
+  `connect (a, b, c);`. If a multi-end routing test "fails" with `joined to no port that can receive
+  it`, check the load diagnostics first — the connector may never have lowered.
+- `connect a to a;` (self-connection) reports `port "a" is joined to no port that can receive it` (the
+  sending port is excluded from its own receivers), and an end naming a nonexistent feature
+  (`connect a to nosuchthing;`) is *deliberately* treated as able to receive, so the action completes
+  with no error and no panic. Assert both — they are the "must not crash" cases.
+
+### Routing from a state machine declared inside a part (PR #195 follow-up, 8cffc9e)
+
+`send … via p` inside a `state machine` nested in a `part def` has to walk out through state,
+region and transition scopes to reach the part's `connect`. Testing it needs shapes the REPL will
+actually descend into:
+
+- **Fixture shape:** `part def Radio { port src : PingPort; port dst : PingPort; connect src to dst;
+  state machine { attribute received : Integer = 0; … } }` with `port def PingPort { in item ping :
+  Ping; }`. Assert on `%current`'s `State data:` block (`received = <n>`), and drive with
+  `%state <Pkg>::<Part>::machine` — a bare `%state Radio::machine` fails with
+  `unresolved reference`, the name must be fully qualified (or just `machine` if it is the only one).
+- **Cover both send sites**: a state entry (`state waiting { entry send Ping() via src; }`) *and* a
+  transition effect (`transition go first waiting do send Ping() via src then sent;`). At the
+  pre-fix commit the entry form can already work while the **transition effect** fails with
+  `error: event processing failed: transition effect: send reaches no receiving port: port "src" is
+  joined to no port that can receive it` — so the transition-effect case is the discriminating one.
+- **Nesting: `initial`/`then` inside a composite state does not descend** in this build — a
+  `state outer { initial s0; state a { entry … } s0 then a; }` machine stays in `outer` and the inner
+  entry never runs (reproducible with no part/ports involved, so it is a pre-existing state-machine
+  limitation, not routing). Use the **entry-succession form instead**, which does descend and shows a
+  `State stack (active configuration): 0. outer / 1. a` in `%current`:
+  `state machine { entry; then outer; state outer { entry; then a; state a { entry send … via src; } … } }`
+  A `region main { initial start; … }` wrapper also works with plain `initial`.
+- **Add a negative for over-reach:** a machine at package level with an unconnected port, and a
+  second part with its own `connect ox to oy`. The send must still fail with the typed error — if the
+  scope walk goes too far it could pick up the unrelated part's connectors.
+
 ## Driving a state machine and its transition effects on camera
 
 - **`-e` is not a file flag.** `sysml -e <expr> [file]` evaluates an expression; to load a model
