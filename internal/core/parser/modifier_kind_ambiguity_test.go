@@ -67,6 +67,10 @@ func TestUnambiguousModifiedUsagesDoNotWarn(t *testing.T) {
 		"snapshot part sp : Vehicle;",
 		"part : Vehicle;",
 		"timeslice item ts : Integer;",
+		// `frame` and `render` name the declaration here, as the Kernel Semantic
+		// Library writes them, so they are not read as a kind at all.
+		"ref frame : SpatialFrame[1];",
+		"ref render : Rendering;",
 	}
 	for _, input := range unambiguous {
 		t.Run(input, func(t *testing.T) {

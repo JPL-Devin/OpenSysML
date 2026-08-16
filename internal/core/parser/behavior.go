@@ -200,6 +200,28 @@ func (p *Parser) isDirectionKeyword() bool {
 	return kw == "in" || kw == "out" || kw == "inout"
 }
 
+// parameterKindKeywords are the kind keywords a directed parameter may state; any
+// other keyword there names the parameter instead.
+var parameterKindKeywords = map[string]ast.UsageKind{
+	"item":       ast.UsageItem,
+	"feature":    ast.UsagePart,
+	"port":       ast.UsagePort,
+	"part":       ast.UsagePart,
+	"attribute":  ast.UsageAttribute,
+	"occurrence": ast.UsageOccurrence,
+	"action":     ast.UsageAction,
+}
+
+// parameterKindKeyword reports whether parseDirectionParameter reads the token as
+// the parameter's kind.
+func parameterKindKeyword(t lexer.Token) bool {
+	if t.Kind != lexer.Keyword {
+		return false
+	}
+	_, ok := parameterKindKeywords[t.KeywordID]
+	return ok
+}
+
 // parseDirectionParameter parses: <direction> [ref] [<kind>] [<name>] [: <type>] [= <value>];
 // Examples: in item scene; out feature x; in ref item x : Foo = bar; in item; in target;
 // Kind keyword is optional - defaults to generic feature
@@ -252,7 +274,7 @@ func (p *Parser) parseDirectionParameter() ast.Node {
 		portion:      portion,
 		isEvent:      isEvent,
 	}
-	p.warnAmbiguousModifierKind(mods)
+	p.warnAmbiguousModifierKind(mods, parameterKindKeyword)
 
 	// A parameter's kind keyword is optional; a lone occurrence modifier declares the
 	// kind, and with no keyword at all the parameter is a generic feature.
@@ -260,36 +282,12 @@ func (p *Parser) parseDirectionParameter() ast.Node {
 	if k, kw := modifierImpliedKind(mods); kw != "" {
 		kind = k
 	}
+	// Any other keyword is left as the parameter's name (kind stays default).
 	if p.at(lexer.Keyword) {
-		kindKeyword := p.peek().KeywordID
-		recognized := false
-		switch kindKeyword {
-		case "item":
-			kind = ast.UsageItem
-			recognized = true
-		case "feature":
-			kind = ast.UsagePart
-			recognized = true
-		case "port":
-			kind = ast.UsagePort
-			recognized = true
-		case "part":
-			kind = ast.UsagePart
-			recognized = true
-		case "attribute":
-			kind = ast.UsageAttribute
-			recognized = true
-		case "occurrence":
-			kind = ast.UsageOccurrence
-			recognized = true
-		case "action":
-			kind = ast.UsageAction
-			recognized = true
-		}
-		if recognized {
+		if k, ok := parameterKindKeywords[p.peek().KeywordID]; ok {
+			kind = k
 			p.advance() // consume kind keyword
 		}
-		// If not recognized, leave it as name (kind stays default)
 	}
 
 	// Optional name (can be anonymous: "in item;")
@@ -1081,11 +1079,8 @@ func (p *Parser) parseForAction(tok lexer.Token) ast.Node {
 
 	// The loop variable is a usage declaration (SysML.xtext ForVariableDeclaration), so
 	// a keyword may name it — `in` excepted, since it ends the declaration.
-	var variable ast.Identification
-	if !p.atKeyword("in") {
-		variable = p.parseIdentification()
-	}
-	if variable.Name == "" {
+	variable := p.parseIdentificationStopping("in")
+	if variable.Name == "" && variable.ShortName == "" {
 		p.error(p.peek().Span, "expected variable name after 'for'")
 		en := &ast.ErrorNode{Message: "expected variable name"}
 		en.NodeSpan = p.spanFrom(start)

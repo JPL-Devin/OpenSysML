@@ -48,6 +48,21 @@ func TestForLoopVariableMayBeKeyword(t *testing.T) {
 	}
 }
 
+// A ForVariableDeclaration is a UsageDeclaration, whose Identification admits a
+// short name with no name after it.
+func TestForLoopVariableMayBeShortNameOnly(t *testing.T) {
+	loop := parseForLoop(t, "for <v> in c { action inner; }")
+	if loop.Variable.ShortName != "v" {
+		t.Errorf("short name = %q, want %q", loop.Variable.ShortName, "v")
+	}
+	if loop.Variable.Name != "" {
+		t.Errorf("name = %q, want empty", loop.Variable.Name)
+	}
+	if loop.Collection == nil {
+		t.Error("collection not parsed")
+	}
+}
+
 // A keyword used as a name is still reported, so the author learns the quoted
 // spelling is the well-formed one.
 func TestForLoopKeywordVariableWarns(t *testing.T) {

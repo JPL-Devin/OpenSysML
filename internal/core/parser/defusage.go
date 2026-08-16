@@ -356,6 +356,19 @@ func isKindKeyword(t lexer.Token) bool {
 	return isDef || isUsage
 }
 
+// declarationKindKeyword reports whether parseDefUsage reads this token as the kind
+// of the declaration rather than as its name: `frame` and `render` name the
+// declaration unless they introduce their member form.
+func (p *Parser) declarationKindKeyword(t lexer.Token) bool {
+	if !isKindKeyword(t) {
+		return false
+	}
+	if kw := t.KeywordID; kw == "frame" || kw == "render" {
+		return p.atMemberKeywordUsedAsKeyword(kw)
+	}
+	return true
+}
+
 // namesDeclaration reports whether a kind keyword followed by this token is the
 // name of the declaration rather than its kind. A declaration that ends there
 // (`;`), opens a body (`{`) or is typed (`:`) has nothing else to take its name
@@ -581,13 +594,15 @@ func modifierImpliedKind(mods featureMods) (ast.UsageKind, string) {
 }
 
 // warnAmbiguousModifierKind reports `individual part : Vehicle` and its kin, where
-// the kind keyword sits where a name would and so leaves the usage unnamed.
-func (p *Parser) warnAmbiguousModifierKind(mods featureMods) {
+// the kind keyword sits where a name would and so leaves the usage unnamed. isKind
+// reports which keywords the caller reads as a kind, since a keyword it reads as a
+// name is not ambiguous at all.
+func (p *Parser) warnAmbiguousModifierKind(mods featureMods, isKind func(lexer.Token) bool) {
 	if !mods.isIndividual && !mods.isReference && !mods.isEvent && mods.portion == ast.PortionNone {
 		return
 	}
 	t := p.peek()
-	if !isKindKeyword(t) || !namesDeclaration(p.peekN(1)) {
+	if !isKind(t) || !namesDeclaration(p.peekN(1)) {
 		return
 	}
 	p.warn(t.Span, "'"+t.KeywordID+"' is read as the kind of this usage, which is therefore unnamed; "+
@@ -652,7 +667,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		}
 	}
 
-	p.warnAmbiguousModifierKind(mods)
+	p.warnAmbiguousModifierKind(mods, p.declarationKindKeyword)
 
 	// Two-word `use case` kind keyword.
 	if p.atUseCase() {
