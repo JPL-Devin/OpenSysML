@@ -72,6 +72,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("duplicate_objects_holding_a_plain_part", testDuplicateObjectsHoldingAPlainPart)
 	t.Run("nested_part_held_with_a_multiplicity", testNestedPartHeldWithAMultiplicity)
 	t.Run("part_nested_inside_a_repeated_part", testPartNestedInsideARepeatedPart)
+	t.Run("parts_subsetting_one_collection", testPartsSubsettingOneCollection)
 	t.Run("requirement_feature_without_a_value", testRequirementFeatureWithoutAValue)
 	t.Run("requirement_features_valued_from_each_other", testRequirementFeaturesValuedFromEachOther)
 	t.Run("step_budget_exceeded", testStepBudgetExceeded)
@@ -2145,6 +2146,47 @@ func testPartNestedInsideARepeatedPart(t *testing.T) {
 	}
 	if satisfied {
 		t.Error("satisfied = true, want the bolts' 99.0 to violate the constraint")
+	}
+}
+
+// testPartsSubsettingOneCollection: two declarations feeding one collection are
+// two subjects, not repetitions of the collection, so the check reports the
+// ambiguity rather than answering from whichever it reached first.
+func testPartsSubsettingOneCollection(t *testing.T) {
+	src := `
+		package test {
+			part def Component {
+				attribute v = 1.0;
+				constraint ok { v < 10.0 }
+			}
+			part def Assembly {
+				part subsystem : Component[*];
+				part small : Component :> subsystem {
+					attribute :>> v = 5.0;
+				}
+				part large : Component :> subsystem {
+					attribute :>> v = 99.0;
+				}
+			}
+			part assembly : Assembly;
+		}
+	`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	rootScope := idx.DocumentRoot("<test>")
+	if _, err := ctx.Instantiate(memberPath(t, rootScope, "test", "assembly")); err != nil {
+		t.Fatalf("instantiate assembly: %v", err)
+	}
+	ok := memberPath(t, rootScope, "test", "Component", "ok")
+	satisfied, err := ctx.EvaluateConstraint(ok, ok.OwnerScope)
+	if !errors.Is(err, ErrAmbiguousSubject) {
+		t.Fatalf("satisfied = %t, err = %v, want ErrAmbiguousSubject", satisfied, err)
+	}
+	if satisfied {
+		t.Error("an ambiguous subject is no verdict")
 	}
 }
 

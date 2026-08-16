@@ -275,19 +275,20 @@ func (ctx *Context) heldObjectIDs() map[int64]bool {
 // carriersUnder returns the objects reachable from roots whose type carries the
 // features owner declares, roots included, in identity order. A declaration is
 // descended into once per path, so recursive composition is a finite search, and
-// one object stands for each declaration path, so objects a multiplicity
+// one object stands for each declaration reached, so objects a multiplicity
 // repeated are one candidate however deep the named declaration sits in them.
 func (ctx *Context) carriersUnder(roots []*Instance, owner *symbols.Symbol) []*Instance {
 	var out []*Instance
 	seen := make(map[int64]bool, len(roots))
-	declared := make(map[string]bool)
+	declared := make(map[occurrenceOf]bool)
 	path := make(map[*symbols.Symbol]bool)
-	var descend func(inst *Instance, occurrence string)
-	descend = func(inst *Instance, occurrence string) {
+	var descend func(inst *Instance, through string)
+	descend = func(inst *Instance, through string) {
 		if inst == nil || seen[inst.ID] {
 			return
 		}
 		seen[inst.ID] = true
+		occurrence := occurrenceOf{through: through, decl: inst.Type}
 		if ctx.model.Conforms(inst.Type, owner) && !declared[occurrence] {
 			declared[occurrence] = true
 			out = append(out, inst)
@@ -300,7 +301,7 @@ func (ctx *Context) carriersUnder(roots []*Instance, owner *symbols.Symbol) []*I
 			defer delete(path, inst.Type)
 		}
 		for _, child := range ctx.nestedObjects(inst) {
-			descend(child.instance, occurrence+"::"+child.feature)
+			descend(child.instance, through+"::"+child.feature)
 		}
 	}
 	for _, root := range roots {
@@ -308,6 +309,15 @@ func (ctx *Context) carriersUnder(roots []*Instance, owner *symbols.Symbol) []*I
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out
+}
+
+// occurrenceOf identifies the declaration an object occurs as: the features
+// walked through to reach it and the declaration it materializes. Objects a
+// multiplicity repeated share both, while ones a collection gathers from
+// different declarations — the features subsetting it — do not.
+type occurrenceOf struct {
+	through string
+	decl    *symbols.Symbol
 }
 
 // heldObject is an object a feature of another object holds, named by that
