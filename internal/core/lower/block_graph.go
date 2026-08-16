@@ -70,11 +70,9 @@ func outsideBlockFlow(member ast.Node) bool {
 	}
 }
 
-// lowerBlockFlow lowers a block to the flow its members state: one node per
-// action node, one node per run of plain statements between them, and one
-// succession from each node to the node declared after it. scope is the block's
-// own namespace, and nodeBody says the members are a nested action's own, so a
-// parameter among them is the node's rather than a statement of a loop or branch.
+// lowerBlockFlow lowers a block to the flow its members state: a node per action
+// node, a node per run of plain statements, a succession in declaration order.
+// nodeBody says the members are a nested action's own, so a parameter is its own.
 func lowerBlockFlow(members []ast.Node, scope *symbols.Scope, nodeBody bool) *ActionGraph {
 	graph := &ActionGraph{
 		Scope:     scope,
@@ -162,10 +160,9 @@ func nestedActionBlock(node *ast.Usage, scope *symbols.Scope) Block {
 	return block
 }
 
-// blockMemberStatement lowers a member of a block's flow that is a statement
-// rather than an action node, and reports whether it states a step at all. Only a
-// nested action's own parameter is lowered as one: a result written in a loop
-// body or a branch returns from the behavior around it, as it always did.
+// blockMemberStatement lowers a member of a block's flow that is a statement, and
+// reports whether it states a step. Only a nested action's own parameter is
+// lowered as one; every other member is the statement it is in any body.
 func blockMemberStatement(member ast.Node, scope *symbols.Scope, nodeBody bool) (Statement, bool) {
 	if usage, ok := member.(*ast.Usage); ok && nodeBody {
 		if stmt, isParam := parameterStatement(usage, scope); isParam {
