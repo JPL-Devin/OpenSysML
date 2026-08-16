@@ -52,8 +52,11 @@ in `cmd/sysml/main.go`: walk every mode and assert the status, since a `return` 
   … allocations over … collections, … MiB taken from the OS`). Prove the split with
   `>out 2>err` and `cat` both — a memstats line on stdout would break `-convert -o /dev/stdout`
   and JSON reporting.
-- It fires for the interactive REPL too, after `goodbye`, because it runs in the deferred stop.
-  This is the cheapest check that the profile flush survives the REPL path.
+- It fires for the interactive REPL too, after the session ends, because it runs in the deferred
+  stop. This is the cheapest check that the profile flush survives the REPL path.
+  **Leave the REPL with Ctrl-D, not by typing `goodbye`** — at b3f16e4 `goodbye` at the `sysml>`
+  prompt is parsed as model text and answers `1:1: error: expected a namespace member` (and, over a
+  pipe, makes the whole run exit 2), so a transcript that types it looks like a failure.
 - Heap profiles are written at end of run, when the model is already unreachable, so read them as
   `go tool pprof -top -sample_index=alloc_space <file>` (plain `-top` shows inuse_space and looks
   almost empty). Expect `parser.(*Parser).fill` / `parseUsage` and `symbols.*` at the top.
