@@ -4,7 +4,7 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Cutting a release
 is described in [docs/project/releasing.md](docs/project/releasing.md).
 
-## Unreleased
+## 0.0.8 — 2026-08-15
 
 ### Diagnostics
 
@@ -68,7 +68,29 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   remedy instead of a `MissingCapabilityError` on the first newer call. It is
   stopped only when this client started it and no other client holds it.
 - `Model` gained `instantiate`, `execute_action` and `execute_state`, so every
-  call taking a model hash is reachable on the model it is about.
+  call taking a model hash is reachable on the model it is about. `pysysml`
+  0.2.0 carries these.
+
+### Documentation
+
+- The pages are organized by what a reader is doing rather than by the feature
+  that landed: a numbered handbook under `docs/guide/`, looked-up material under
+  `docs/reference/`, design and internals under `docs/internals/`, and status
+  under `docs/project/`. `QUICKSTART.md` and `RDF_INTEROP.md` are split into the
+  chapters they were, the guide content stranded in `examples/*.md` and
+  `python/README.md` is folded in, and the paths the released README linked leave
+  pointers behind. `scripts/check-doc-links.py` gates every relative link and
+  heading anchor in CI.
+
+### Release automation
+
+- Release assets are published with `ghr -replace` rather than `-delete`, which
+  is an alias of `-recreate`: it deleted the release *and* its tag ref and
+  recreated it empty, wiping hand-written release notes, title and the
+  prerelease/latest flags on every re-run of the workflow for a tag.
+- The Homebrew tap updates itself from a scheduled workflow in
+  `Open-MBEE/homebrew-tap`, reading the latest release's `SHA256SUMS.txt`, with
+  `scripts/render-homebrew-formula.sh` left as the manual fallback.
 
 ### Known limitations
 
