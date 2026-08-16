@@ -309,6 +309,51 @@ func TestGuardBlockedChangeConditionDoesNotSilenceTheOtherRegions(t *testing.T) 
 	}
 }
 
+// A condition satisfying an inner and an enclosing transition at once resolves the
+// way the equivalent signal does: the inner one wins and the composite stays.
+func TestChangeConditionTakesTheInnermostTransitionOnly(t *testing.T) {
+	exec := stateExecutorForSource(t, "sm", `package test {
+		state sm {
+			attribute ready : Boolean = false;
+
+			initial start;
+			state Working {
+				region left {
+					initial lstart;
+					state l1;
+					state l2;
+					transition lstart to l1;
+					transition l1 to l2 accept when ready;
+				}
+				region right {
+					initial rstart;
+					state r1;
+					transition rstart to r1;
+				}
+				accept when ready then Done;
+			}
+			state Done;
+			start then Working;
+		}
+	}`)
+
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	exec.stateData["ready"] = boolValue(true)
+	if err := exec.pollChangeEvents(); err != nil {
+		t.Fatalf("poll: %v", err)
+	}
+
+	active := make(map[string]bool)
+	for _, state := range exec.ActiveStates() {
+		active[state.Name] = true
+	}
+	if active["Done"] || !active["l2"] || !active["r1"] {
+		t.Errorf("expected the inner transition to win and Working to stay active in l2 | r1, got %v", active)
+	}
+}
+
 // An enabled transition inside one region does not suppress the transition an
 // enclosing state offers a concurrent region: only the state a fired transition
 // left is disabled for this event.
