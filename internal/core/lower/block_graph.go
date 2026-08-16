@@ -11,6 +11,19 @@ import (
 // declaration order, each succeeded by the next, a maximal run of plain
 // statements being one step.
 
+// Steps returns the statements the block runs, wherever they live: its statement
+// list, or the bodies of the nodes of its own token flow, in declaration order.
+func (block Block) Steps() []Statement {
+	if block.Graph == nil {
+		return block.Statements
+	}
+	steps := make([]Statement, 0, len(block.Graph.Nodes))
+	for _, node := range block.Graph.Nodes {
+		steps = append(steps, block.Graph.Bodies[node]...)
+	}
+	return steps
+}
+
 // blockNeedsFlow reports whether a block's members make it a token flow of its
 // own: some member is an action node, and none states a flow only an action body
 // declares.

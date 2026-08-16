@@ -105,21 +105,10 @@ func Returns(stmts []Statement) bool {
 	return false
 }
 
-// blockReturns reports whether a block returns a value on some path, in its
-// statements or in the bodies of the nodes of its own token flow.
+// blockReturns reports whether a block returns a value on some path, wherever
+// its statements live.
 func blockReturns(block Block) bool {
-	if Returns(block.Statements) {
-		return true
-	}
-	if block.Graph == nil {
-		return false
-	}
-	for _, body := range block.Graph.Bodies {
-		if Returns(body) {
-			return true
-		}
-	}
-	return false
+	return Returns(block.Steps())
 }
 
 // isExpressionNode reports whether a body member is an expression rather than a
