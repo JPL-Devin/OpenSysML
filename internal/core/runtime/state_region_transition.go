@@ -285,8 +285,11 @@ func (e *StateExecutor) moveBetweenRegions(sourceRegion, targetRegion *ast.State
 	}
 
 	enter, branches := e.entryPlan(keep, target)
+	// The region's active state is the deepest state on the path to target that the
+	// region itself declares, which is a composite state above target when the
+	// target is nested inside one.
 	leaf := target
-	if branch, ok := branches[targetRegion]; ok {
+	if branch, ok := e.branchesTo(nil, target)[targetRegion]; ok {
 		leaf = branch
 	}
 	// The region's own entry is recorded before entering, so a state entered
@@ -339,6 +342,11 @@ func (e *StateExecutor) leaveRegion(region *ast.StateRegion, trans *lower.Transi
 	// its subperformances.
 	lca := e.getLCA(owner, target)
 	for current := owner; current != nil && current != lca; current = e.graph.ParentState[current] {
+		// Clear the entry of the region declaring current first: an enclosing state
+		// exited below would otherwise exit current a second time through it.
+		if declaring := e.graph.RegionOf[current]; e.activeConfig.regionStates[declaring] == current {
+			delete(e.activeConfig.regionStates, declaring)
+		}
 		if err := e.exitState(current); err != nil {
 			return fmt.Errorf("exit state: %w", err)
 		}

@@ -114,6 +114,55 @@ func TestCrossRegionTransitionIntoNestedTargetExitsTheAbandonedState(t *testing.
 	}
 }
 
+// A region whose cross-region target is nested inside a composite state it is not
+// running records that composite state as its active one, so the target is not
+// claimed by two regions at once and is exited once when the machine leaves.
+func TestCrossRegionTransitionIntoInactiveCompositeRecordsTheEnteredState(t *testing.T) {
+	exec := runStateMachine(t, "Machine", `package P {
+	state Machine {
+		attribute crossed : Integer = 0;
+		attribute rtargetExits : Integer = 0;
+
+		initial init;
+		state running {
+			region left {
+				initial ls;
+				state lidle;
+				then ls lidle;
+				transition lidle to rtarget if crossed == 0;
+			}
+			region right {
+				initial rs;
+				state ridle;
+				state wrapper {
+					region inner {
+						initial is;
+						state istart;
+						state rtarget {
+							entry { crossed = crossed + 1; }
+							exit { rtargetExits = rtargetExits + 1; }
+						}
+						then is istart;
+					}
+				}
+				then rs ridle;
+			}
+		}
+		state done;
+
+		init then running;
+		transition rtarget to done if crossed == 1;
+	}
+}`)
+
+	if got := exec.getCurrentState(); got == nil || got.Name != "done" {
+		t.Fatalf("current state = %v, want done", got)
+	}
+	if got := intValue(t, exec.stateData, "rtargetExits"); got != 1 {
+		t.Errorf("rtargetExits = %d, want 1 (the target is exited once, not through two regions)", got)
+	}
+}
+
 // Exiting a state exits its subperformances, so a transition out of a nested
 // non-orthogonal state still exits every state up to the endpoints' least common
 // ancestor.
