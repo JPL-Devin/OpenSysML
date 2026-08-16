@@ -933,6 +933,9 @@ func testStateTransitionEndpointInAnotherMachine(t *testing.T) {
 	if !strings.Contains(err.Error(), "not a vertex of this state machine") {
 		t.Errorf("expected the error to say the endpoint is not a vertex of this machine, got %v", err)
 	}
+	if strings.Contains(err.Error(), "*ast.") {
+		t.Errorf("the message a modeller reads names a Go type: %v", err)
+	}
 }
 
 // testStateTransitionWithoutATarget: a transition with no target names no edge,

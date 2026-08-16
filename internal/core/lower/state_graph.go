@@ -535,9 +535,25 @@ func (g *StateGraph) vertex(scope *symbols.Scope, qn *ast.QualifiedName) (ast.No
 	}
 	node, ok := g.vertexOf[decl]
 	if !ok {
-		return nil, fmt.Errorf("transition endpoint %s names a %T that is not a vertex of this state machine", endpointText(qn), decl)
+		return nil, fmt.Errorf("transition endpoint %s names a %s that is not a vertex of this state machine", endpointText(qn), vertexKind(decl))
 	}
 	return node, nil
+}
+
+// vertexKind names what an endpoint reached in modelling terms, for a message a
+// modeller reads.
+func vertexKind(decl ast.Node) string {
+	switch decl.(type) {
+	case *ast.StateNode, *ast.SubstateMember, *ast.Usage:
+		return "state"
+	case *ast.PseudostateNode:
+		return "pseudostate"
+	case *ast.InitialNode:
+		return "start marker"
+	case *ast.FinalNode:
+		return "end marker"
+	}
+	return "element"
 }
 
 // endpointText renders an endpoint name for an error message.
