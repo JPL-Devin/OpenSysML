@@ -86,8 +86,12 @@ class Unit:
         return not self.factors
 
     def exponents(self) -> Dict[str, float]:
-        """The reduction as base unit → exponent, which is order-independent."""
-        return {factor.unit_id: factor.exponent for factor in self.factors}
+        """The reduction as base unit → exponent, order-independent: repeated
+        base units summed and cancelled ones dropped, as the service reduces."""
+        totals: Dict[str, float] = {}
+        for factor in self.factors:
+            totals[factor.unit_id] = totals.get(factor.unit_id, 0.0) + factor.exponent
+        return {unit_id: exp for unit_id, exp in totals.items() if exp != 0}
 
     def commensurable(self, other: "Unit") -> bool:
         """Whether a magnitude in this unit converts into ``other``."""

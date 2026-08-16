@@ -392,8 +392,9 @@ func ProtoToQuantity(pq *pb.Quantity, idx *symbols.Index) (runtime.Value, error)
 	return runtime.Value{Kind: runtime.ValQuantity, Quantity: quantity}, nil
 }
 
-// protoToUnitTerm rebuilds a unit's reduction. A base unit the model does not
-// declare uniquely is an error, not a factor over no symbol.
+// protoToUnitTerm rebuilds a unit's reduction, normalized so a term sent in any
+// factor order is commensurable with the same unit derived in the model. A base
+// unit the model does not declare uniquely is an error, not a factor over no symbol.
 func protoToUnitTerm(pt *pb.UnitTerm, idx *symbols.Index) (semantics.UnitTerm, error) {
 	if pt == nil {
 		// A unit the service could not reduce; dimension one describes no base unit.
@@ -413,7 +414,7 @@ func protoToUnitTerm(pt *pb.UnitTerm, idx *symbols.Index) (semantics.UnitTerm, e
 			Exponent: f.GetExponent(),
 		})
 	}
-	return term, nil
+	return term.Normalized(), nil
 }
 
 // ProtoToValue converts a protobuf Value with no model to resolve names against,

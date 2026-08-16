@@ -149,6 +149,17 @@ def test_commensurable_quantities_compare_over_their_reduction():
     assert hash(kmh) == hash(ms)
 
 
+def test_a_reduction_compares_whatever_order_its_factors_arrive_in():
+    """Commensurability is over base unit → exponent, not the order sent."""
+    reversed_factors = (("SI::second", -1.0), ("SI::metre", 1.0))
+    cancelling = (("SI::metre", 2.0), ("SI::metre", -1.0), ("SI::second", -1.0))
+
+    speed = Quantity(1.5, unit("SI::m/SI::s", METRE_PER_SECOND))
+
+    assert speed == Quantity(1.5, unit("m/s", reversed_factors))
+    assert speed == Quantity(1.5, unit("m/s", cancelling))
+
+
 def test_a_converted_magnitude_stays_exact():
     """The conversion applies as one ratio, so 5.4 km/h is 1.5 m/s and not 1.4999…"""
     kmh = Quantity(5.4, unit("SI::km/SI::h", METRE_PER_SECOND, 5.0, 18.0))

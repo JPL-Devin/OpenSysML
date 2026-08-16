@@ -179,6 +179,34 @@ func mustUnitTerm(t *testing.T, sent *pb.Quantity, idx *symbols.Index) semantics
 	return val.Quantity.Unit.Term
 }
 
+// TestQuantityFromWireIsNormalized pins that a hand-built reduction — factors in
+// any order, a base unit repeated, an exponent that cancels — is commensurable
+// with the same unit the model derives, which compares factors element-wise.
+func TestQuantityFromWireIsNormalized(t *testing.T) {
+	srv, modelHash, idx := mustQuantityModel(t)
+	derived := mustEvaluateQuantity(t, srv, modelHash, "10.0 [SI::m] / 2.0 [SI::s]")
+
+	byHand := &pb.Quantity{
+		Magnitude: &pb.Quantity_RealMagnitude{RealMagnitude: 5},
+		Unit:      "SI::m/SI::s",
+		UnitTerm: &pb.UnitTerm{ScaleNum: 1, ScaleDen: 1, Factors: []*pb.UnitFactor{
+			{UnitId: "SI::second", Exponent: -1},
+			{UnitId: "SI::gram", Exponent: 0},
+			{UnitId: "SI::metre", Exponent: 2},
+			{UnitId: "SI::metre", Exponent: -1},
+		}},
+	}
+
+	val, err := ProtoToQuantity(byHand, idx)
+	if err != nil {
+		t.Fatalf("ProtoToQuantity: %v", err)
+	}
+	if !val.Quantity.Unit.Term.Commensurable(mustUnitTerm(t, derived, idx)) {
+		t.Errorf("reduction = %s, want it commensurable with %s",
+			val.Quantity.Unit.Term, describeUnitTerm(derived.GetUnitTerm()))
+	}
+}
+
 // TestQuantityFromWireNeedsTheModel pins the two ways a quantity cannot be read
 // back: without the model's symbols, and over a base unit it does not declare.
 func TestQuantityFromWireNeedsTheModel(t *testing.T) {
