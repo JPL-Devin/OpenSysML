@@ -421,6 +421,59 @@ class TestSymbolAttributeFacts:
         assert [attr.name for attr in usage.attributes()] == ["mass", "label"]
         assert usage.get_attr("mass").id == "Demo::Car::mass"
 
+    def test_to_dataframe_does_not_lend_a_value_to_a_same_named_member(self):
+        """A member of another kind sharing an attribute's name carries no value."""
+        pd = pytest.importorskip("pandas")
+        mock_client = Mock()
+        base_info = sysml_pb2.SymbolInfo(
+            id="Demo::Base",
+            name="Base",
+            kind="partDef",
+            child_ids=["Demo::Base::mass"],
+            attributes=[
+                sysml_pb2.AttributeInfo(
+                    name="mass",
+                    type="ScalarValues::Real",
+                    value=sysml_pb2.Value(real_value=1000.0),
+                ),
+            ],
+        )
+        symbols = {
+            "Demo::Base": base_info,
+            "Demo::Base::mass": sysml_pb2.SymbolInfo(
+                id="Demo::Base::mass", name="mass", kind="attributeUsage"
+            ),
+            # A part usage of the same simple name as the inherited attribute.
+            "Demo::Car::mass": sysml_pb2.SymbolInfo(
+                id="Demo::Car::mass", name="mass", kind="partUsage"
+            ),
+        }
+        mock_client.get_symbol.side_effect = lambda _hash, symbol_id: symbols.get(symbol_id)
+        car = Symbol(
+            sysml_pb2.SymbolInfo(
+                id="Demo::Car",
+                name="Car",
+                kind="partDef",
+                child_ids=["Demo::Car::mass"],
+                specializations=[
+                    sysml_pb2.Specialization(
+                        kind="specializes", declared="Base", target_id="Demo::Base"
+                    ),
+                ],
+                attributes=list(base_info.attributes),
+            ),
+            mock_client,
+            "model_abc123",
+        )
+
+        frame = car.to_dataframe()
+
+        part = frame[frame["id"] == "Demo::Car::mass"].iloc[0]
+        assert pd.isna(part["value"])
+        assert pd.isna(part["unit"])
+        attribute = frame[frame["id"] == "Demo::Base::mass"].iloc[0]
+        assert attribute["value"] == 1000.0
+
     def test_to_dataframe_reports_attribute_facts(self):
         """to_dataframe() reports each member's type, multiplicity, value and unit."""
         pd = pytest.importorskip("pandas")

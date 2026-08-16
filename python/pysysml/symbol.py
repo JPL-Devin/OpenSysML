@@ -284,24 +284,29 @@ class Symbol:
                 "Install with: pip install pandas"
             )
 
+        attributes = self.attributes()
         rows = list(self.children())
         child_ids = {child.id for child in rows}
-        inherited_ids = {attr.id for attr in self.attributes() if attr.id not in child_ids}
-        rows += [attr for attr in self.attributes() if attr.id in inherited_ids]
+        inherited_ids = {attr.id for attr in attributes if attr.id not in child_ids}
+        rows += [attr for attr in attributes if attr.id in inherited_ids]
 
         columns = ['name', 'kind', 'id', 'type', 'multiplicity', 'value', 'unit', 'inherited']
         if not rows:
             return pd.DataFrame(columns=columns)
 
-        facts = {attr.name: attr for attr in self.attribute_facts()}
+        # Facts are named, so they are keyed by the attribute id that bears the
+        # name: a member of another kind sharing it is not that attribute.
+        by_name = {attr.name: attr for attr in self.attribute_facts()}
+        attribute_names = {attr.id: attr.name for attr in attributes}
+        row_facts = [by_name.get(attribute_names.get(row.id, "")) for row in rows]
         data = {
             'name': [row.name for row in rows],
             'kind': [row.kind for row in rows],
             'id': [row.id for row in rows],
-            'type': [_type_text(row, facts.get(row.name)) for row in rows],
+            'type': [_type_text(row, facts) for row, facts in zip(rows, row_facts)],
             'multiplicity': [_multiplicity_text(row) for row in rows],
-            'value': [facts[row.name].value if row.name in facts else None for row in rows],
-            'unit': [facts[row.name].unit or None if row.name in facts else None for row in rows],
+            'value': [facts.value if facts else None for facts in row_facts],
+            'unit': [(facts.unit or None) if facts else None for facts in row_facts],
             'inherited': [row.id in inherited_ids for row in rows],
         }
 
