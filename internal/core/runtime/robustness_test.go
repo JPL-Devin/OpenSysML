@@ -67,6 +67,8 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("usage_read_through_a_part_without_an_output", testUsageReadThroughAPartWithoutAnOutput)
 	t.Run("constraint_missing_feature", testConstraintMissingFeature)
 	t.Run("nested_condition_subject_is_ambiguous", testNestedConditionSubjectIsAmbiguous)
+	t.Run("recursive_composition_subject_search", testRecursiveCompositionSubjectSearch)
+	t.Run("duplicate_objects_of_one_declaration", testDuplicateObjectsOfOneDeclaration)
 	t.Run("requirement_feature_without_a_value", testRequirementFeatureWithoutAValue)
 	t.Run("requirement_features_valued_from_each_other", testRequirementFeaturesValuedFromEachOther)
 	t.Run("step_budget_exceeded", testStepBudgetExceeded)
@@ -1941,6 +1943,94 @@ func testNestedConditionSubjectIsAmbiguous(t *testing.T) {
 	}
 	if satisfied {
 		t.Error("an ambiguous subject is no verdict")
+	}
+}
+
+// testRecursiveCompositionSubjectSearch: searching for the object a check is
+// about does not walk a design containing its own kind forever; it answers about
+// the declaration, since no object of the checked type is there.
+func testRecursiveCompositionSubjectSearch(t *testing.T) {
+	src := `
+		package test {
+			part def Leaf {
+				attribute value = 1.0;
+				constraint small { value < 10.0 }
+			}
+			part def Node {
+				part next : Node;
+			}
+			part root : Node;
+		}
+	`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	rootScope := idx.DocumentRoot("<test>")
+	if _, err := ctx.Instantiate(memberPath(t, rootScope, "test", "root")); err != nil {
+		t.Fatalf("instantiate root: %v", err)
+	}
+	small := memberPath(t, rootScope, "test", "Leaf", "small")
+	done := make(chan struct{})
+	var satisfied bool
+	var err error
+	go func() {
+		defer close(done)
+		satisfied, err = ctx.EvaluateConstraint(small, small.OwnerScope)
+	}()
+	select {
+	case <-done:
+	case <-time.After(20 * time.Second):
+		t.Fatal("the subject search did not terminate on recursive composition")
+	}
+	if err != nil {
+		t.Fatalf("EvaluateConstraint: %v", err)
+	}
+	if !satisfied {
+		t.Error("satisfied = false, want the declaration's answer")
+	}
+	if len(ctx.instances) > 1000 {
+		t.Errorf("%d objects materialized: the search is not bounded", len(ctx.instances))
+	}
+}
+
+// testDuplicateObjectsOfOneDeclaration: materializing the same declaration twice
+// is one object as far as a check is concerned, not an ambiguous subject.
+func testDuplicateObjectsOfOneDeclaration(t *testing.T) {
+	src := `
+		package test {
+			part def Leaf {
+				attribute value = 1.0;
+				constraint small { value < 10.0 }
+			}
+			part def Top {
+				part leaf : Leaf;
+			}
+			part o : Top {
+				part :>> leaf { attribute :>> value = 99.0; }
+			}
+		}
+	`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	rootScope := idx.DocumentRoot("<test>")
+	obj := memberPath(t, rootScope, "test", "o")
+	for range 2 {
+		if _, err := ctx.Instantiate(obj); err != nil {
+			t.Fatalf("instantiate o: %v", err)
+		}
+	}
+	small := memberPath(t, rootScope, "test", "Leaf", "small")
+	satisfied, err := ctx.EvaluateConstraint(small, small.OwnerScope)
+	if err != nil && !errors.Is(err, ErrViolated) {
+		t.Fatalf("EvaluateConstraint: %v", err)
+	}
+	if satisfied {
+		t.Error("satisfied = true, want the object's 99.0 to violate the constraint")
 	}
 }
 

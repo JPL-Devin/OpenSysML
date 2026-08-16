@@ -217,13 +217,22 @@ func declaringType(sym *symbols.Symbol) *symbols.Symbol {
 // rootInstances returns the objects this runtime holds that materialize a
 // declaration of their own, in identity order: an object of a nested feature is
 // reached through the object holding it, and one a value expression materialized
-// to read through is an occurrence of nothing.
+// to read through is an occurrence of nothing. One declaration materialized twice
+// is one object here — the latest — since two occurrences of the same
+// declaration are no question about which one is meant.
 func (ctx *Context) rootInstances() []*Instance {
-	out := make([]*Instance, 0, len(ctx.instances))
+	latest := make(map[*symbols.Symbol]*Instance, len(ctx.instances))
 	for _, inst := range ctx.instances {
 		if inst == nil || declaringType(inst.Type) != nil {
 			continue
 		}
+		if held, ok := latest[inst.Type]; ok && held.ID > inst.ID {
+			continue
+		}
+		latest[inst.Type] = inst
+	}
+	out := make([]*Instance, 0, len(latest))
+	for _, inst := range latest {
 		out = append(out, inst)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
@@ -231,20 +240,36 @@ func (ctx *Context) rootInstances() []*Instance {
 }
 
 // carriersUnder returns the objects reachable from roots whose type carries the
-// features owner declares, roots included, in identity order.
+// features owner declares, roots included, in identity order. A declaration is
+// descended into once per path, so composition naming its own kind — a part
+// typed by its enclosing definition, a reference back to an ancestor — is a
+// finite search rather than an endless supply of new objects.
 func (ctx *Context) carriersUnder(roots []*Instance, owner *symbols.Symbol) []*Instance {
 	var out []*Instance
 	seen := make(map[int64]bool, len(roots))
-	for queue := roots; len(queue) > 0; queue = queue[1:] {
-		inst := queue[0]
+	path := make(map[*symbols.Symbol]bool)
+	var descend func(inst *Instance)
+	descend = func(inst *Instance) {
 		if inst == nil || seen[inst.ID] {
-			continue
+			return
 		}
 		seen[inst.ID] = true
 		if ctx.model.Conforms(inst.Type, owner) {
 			out = append(out, inst)
 		}
-		queue = append(queue, ctx.nestedObjects(inst)...)
+		if inst.Type != nil {
+			if path[inst.Type] {
+				return
+			}
+			path[inst.Type] = true
+			defer delete(path, inst.Type)
+		}
+		for _, child := range ctx.nestedObjects(inst) {
+			descend(child)
+		}
+	}
+	for _, root := range roots {
+		descend(root)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out
