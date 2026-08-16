@@ -243,12 +243,13 @@ func nestedFeature(sym *symbols.Symbol) bool {
 // is one object here — the latest — since two occurrences of the same
 // declaration are no question about which one is meant.
 func (ctx *Context) rootInstances() []*Instance {
+	held := ctx.heldObjectIDs()
 	latest := make(map[*symbols.Symbol]*Instance, len(ctx.instances))
 	for _, inst := range ctx.instances {
-		if inst == nil || nestedFeature(inst.Type) {
+		if inst == nil || nestedFeature(inst.Type) || held[inst.ID] {
 			continue
 		}
-		if held, ok := latest[inst.Type]; ok && held.ID > inst.ID {
+		if kept, ok := latest[inst.Type]; ok && kept.ID > inst.ID {
 			continue
 		}
 		latest[inst.Type] = inst
@@ -259,6 +260,24 @@ func (ctx *Context) rootInstances() []*Instance {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out
+}
+
+// heldObjectIDs returns the identities a slot of another object already holds, so
+// an object reached through its holder is no root of its own. Slots are read as
+// they stand, since materializing one is the search that asked for these.
+func (ctx *Context) heldObjectIDs() map[int64]bool {
+	held := make(map[int64]bool)
+	for _, inst := range ctx.instances {
+		if inst == nil {
+			continue
+		}
+		for _, slot := range inst.Slots {
+			for _, id := range heldObjects(slot.HeldValue()) {
+				held[id] = true
+			}
+		}
+	}
+	return held
 }
 
 // carriersUnder returns the objects reachable from roots whose type carries the
