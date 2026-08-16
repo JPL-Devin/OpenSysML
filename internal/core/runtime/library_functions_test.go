@@ -669,6 +669,33 @@ func TestVectorAndComplexNamedArguments(t *testing.T) {
 	}
 }
 
+// A name no parameter of the signature carries is reported, rather than absorbed
+// by an optional parameter the call then leaves empty — which would answer the
+// call as if the argument had not been written.
+func TestVectorAndComplexUnknownNamedArgument(t *testing.T) {
+	for _, tt := range []struct {
+		fn    string
+		named map[string]Value
+	}{
+		{"VectorFunctions::+", map[string]Value{"v": realVec(1, 2), "zz": realVec(3, 4)}},
+		{"VectorFunctions::cartesian+", map[string]Value{"v": realVec(1, 2), "zz": realVec(3, 4)}},
+		{"VectorFunctions::-", map[string]Value{"v": realVec(1, 2), "zz": realVec(3, 4)}},
+		{"ComplexFunctions::+", map[string]Value{"x": realVec(1, 2), "zz": realVec(3, 4)}},
+		{"ComplexFunctions::-", map[string]Value{"x": realVec(1, 2), "zz": realVec(3, 4)}},
+		{"ComplexFunctions::==", map[string]Value{"zz": constReal(1)}},
+		{"ComplexFunctions::==", map[string]Value{"x": realVec(1, 2), "zz": realVec(1, 2)}},
+	} {
+		fn, ok := libraryFunctionByName(tt.fn)
+		if !ok {
+			t.Fatalf("%s is not registered", tt.fn)
+		}
+		got, err := fn.invoke(libCtx(t), calcArgs{named: tt.named})
+		if !errors.Is(err, ErrUnknownParameter) {
+			t.Errorf("%s with an unknown name = (%v, %v), want %v", tt.fn, got, err, ErrUnknownParameter)
+		}
+	}
+}
+
 func TestVectorAndComplexFunctionErrors(t *testing.T) {
 	cases := []struct {
 		name string

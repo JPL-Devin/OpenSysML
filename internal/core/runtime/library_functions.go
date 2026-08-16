@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 	"math/cmplx"
+	"slices"
+	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
@@ -395,6 +397,10 @@ func (fn *libraryFunction) bindAndApply(ctx *Context, args calcArgs) (Value, err
 		)
 	}
 
+	if err := fn.checkNamedArguments(args); err != nil {
+		return Value{}, err
+	}
+
 	values := make([]Value, len(fn.params))
 	for i, param := range fn.params {
 		arg, err := fn.argumentFor(i, param, args)
@@ -407,6 +413,34 @@ func (fn *libraryFunction) bindAndApply(ctx *Context, args calcArgs) (Value, err
 		}
 	}
 	return fn.apply(fn.name, ctx, values)
+}
+
+// checkNamedArguments rejects an argument named for a parameter the signature
+// does not declare, which an omitted optional parameter would otherwise absorb.
+func (fn *libraryFunction) checkNamedArguments(args calcArgs) error {
+	unknown := make([]string, 0, len(args.named))
+	for name := range args.named {
+		if !slices.Contains(fn.params, name) {
+			unknown = append(unknown, name)
+		}
+	}
+	if len(unknown) == 0 {
+		return nil
+	}
+	slices.Sort(unknown)
+	return fmt.Errorf(
+		"%w: function %s has no input parameter %q (expected %s)",
+		ErrUnknownParameter, fn.name, unknown[0], fn.parameterList(),
+	)
+}
+
+// parameterList renders the declared parameter names for an error message.
+func (fn *libraryFunction) parameterList() string {
+	quoted := make([]string, len(fn.params))
+	for i, param := range fn.params {
+		quoted[i] = fmt.Sprintf("%q", param)
+	}
+	return strings.Join(quoted, ", ")
 }
 
 // argumentFor returns the argument bound to the i-th declared parameter: the
