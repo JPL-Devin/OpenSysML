@@ -2327,6 +2327,23 @@ number rather than quoting the table.
   `# specializes ISQBase::MassValue, which has no generated class`.
 - **Quantity results carry the scalar on `Quantity.magnitude`, not `.value`** — a probe using `.value`
   reports a false failure even when the runtime is correct.
+- **A stale `~/.pysysml/bin/sysml-grpc` silently blocks the subject/attribute surface.** These features
+  are capability-gated (`evaluate_subject`, `symbol_attributes` in `pysysml/capabilities.py`), so a
+  service built before they landed makes `conn.eval(..., subject_symbol_id=…)` /
+  `attribute_facts()` / `to_dataframe()` raise `MissingCapabilityError` instead of answering — which
+  looks like a client bug. Always reinstall the binary before testing a merge:
+  `make build-grpc && pkill -x sysml-grpc && rm -f ~/.pysysml/sysml-grpc.pid ~/.pysysml/sysml-grpc.refcount && cp bin/sysml-grpc ~/.pysysml/bin/`
+  (the `cp` fails with `Text file busy` while the old one still runs), then assert
+  `sorted(conn.server_info().capabilities)` contains both names before trusting any result.
+- **The auto-started service dies with the session that started it.** After an interactive
+  `pysysml` REPL exits, `PYSYSML_REQUIRE_SERVICE=1 pytest tests/` aborts during collection with
+  `$PYSYSML_REQUIRE_SERVICE is set … but none answers on localhost:50051`. Start one yourself first:
+  `nohup ~/.pysysml/bin/sysml-grpc -port 50051 >/tmp/svc.log 2>&1 &`.
+- **`PINNED_SHA256` is nested `repo -> version -> asset`.** To exercise the *contradicted* digest arm
+  you must inject the key for the repository actually in use, e.g.
+  `binary.PINNED_SHA256['open-mbee/Systemica'] = {'v0.0.8': {'sysml-grpc-linux-amd64': 'de'*32}}`;
+  a flat/`in`-substring patch leaves the pin absent and you silently re-test the *unpinned* arm
+  (`UnpinnedReleaseError` + kept cache) while believing you tested the contradiction.
 
 ## Symbol *kind* changes: `%search` is the only REPL probe (PR #210)
 
