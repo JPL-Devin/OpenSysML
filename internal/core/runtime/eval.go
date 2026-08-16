@@ -197,6 +197,15 @@ func (ctx *Context) EvalWithScope(node ast.Node, scope *symbols.Scope) (Value, e
 	return ec.Eval(node)
 }
 
+// EvalWithScopeOn evaluates an expression against a concrete instance, so a
+// feature it names reads that object's slot. It brackets one run, as
+// EvalWithScope does, which is what bounds the evaluation by the step budget.
+func (ctx *Context) EvalWithScopeOn(node ast.Node, scope *symbols.Scope, self *Instance) (Value, error) {
+	defer ctx.beginRun()()
+
+	return NewEvalContextIn(ctx, scope, self).Eval(node)
+}
+
 // evalLiteralInteger evaluates an integer literal.
 func (ec *EvalContext) evalLiteralInteger(n *ast.LiteralInteger) (Value, error) {
 	val, _ := strconv.ParseInt(n.Value, 10, 64)

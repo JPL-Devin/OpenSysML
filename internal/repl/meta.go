@@ -418,7 +418,7 @@ func (s *Session) evalIn(name, expr string) ([]string, error) {
 		return nil, fmt.Errorf("%s names no namespace to evaluate in", notationName(fqn))
 	}
 	if inst, owner := s.objectNamed(fqn); inst != nil {
-		val, err := runtime.NewEvalContextIn(ctx, scope, inst).Eval(node)
+		val, err := ctx.EvalWithScopeOn(node, scope, inst)
 		if err != nil {
 			return nil, evalError(expr, err, len(exprPrefix))
 		}

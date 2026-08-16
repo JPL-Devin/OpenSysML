@@ -69,6 +69,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("requirement_feature_without_a_value", testRequirementFeatureWithoutAValue)
 	t.Run("requirement_features_valued_from_each_other", testRequirementFeaturesValuedFromEachOther)
 	t.Run("step_budget_exceeded", testStepBudgetExceeded)
+	t.Run("eval_on_an_instance_spends_the_step_budget", testEvalOnAnInstanceSpendsTheStepBudget)
 	t.Run("non_terminating_loop_exhausts_step_budget", testNonTerminatingLoopExhaustsStepBudget)
 	t.Run("loop_body_declaration_does_not_leak", testLoopBodyDeclarationDoesNotLeak)
 	t.Run("loop_body_of_unexecutable_statement", testLoopBodyOfUnexecutableStatement)
@@ -2004,6 +2005,56 @@ func testStepBudgetExceeded(t *testing.T) {
 	}
 	if !errors.Is(err, ErrStepLimitExceeded) {
 		t.Errorf("expected ErrStepLimitExceeded, got: %v", err)
+	}
+}
+
+// testEvalOnAnInstanceSpendsTheStepBudget: an expression evaluated against an
+// instance is one run, so reading a slot inside it does not start a run of its
+// own and reset the counter; an expression longer than the budget is refused.
+func testEvalOnAnInstanceSpendsTheStepBudget(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
+		package test {
+			part def Car { attribute m = 5.0; }
+		}
+	`))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "Car", ast.DefPart)
+	if sym == nil {
+		t.Fatal("part def Car not found")
+	}
+	inst, err := ctx.Instantiate(sym)
+	if err != nil {
+		t.Fatalf("instantiating Car: %v", err)
+	}
+
+	// Nested to the right, so the slot read - which brackets a run of its own when
+	// the evaluation is not already one - is reached on the second step.
+	expr := "m"
+	for i := 0; i < 60; i++ {
+		expr = "m + (" + expr + ")"
+	}
+	node := parser.New(source.New("<e>", []byte(expr))).ParseExpression()
+	if node == nil {
+		t.Fatal("the expression did not parse")
+	}
+
+	ctx.maxSteps = 6
+	got, err := ctx.EvalWithScopeOn(node, sym.Scope, inst)
+	if err == nil {
+		t.Fatalf("expected the step budget to bound the evaluation, got %v", got)
+	}
+	if !errors.Is(err, ErrStepLimitExceeded) {
+		t.Errorf("expected ErrStepLimitExceeded, got: %v", err)
+	}
+
+	// The budget bounds one run, not the session: a short expression is answered
+	// however many ran before it.
+	ctx.maxSteps = 20
+	short := parser.New(source.New("<e>", []byte("m + m"))).ParseExpression()
+	for i := 0; i < 5; i++ {
+		if _, err := ctx.EvalWithScopeOn(short, sym.Scope, inst); err != nil {
+			t.Fatalf("evaluation %d of m + m under a fresh run: %v", i+1, err)
+		}
 	}
 }
 

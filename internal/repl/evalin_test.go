@@ -3,6 +3,8 @@ package repl
 import (
 	"strings"
 	"testing"
+
+	"github.com/Open-MBEE/Systemica/internal/core/runtime"
 )
 
 // joinLines is a command's output as one string, to assert fragments against.
@@ -108,4 +110,26 @@ func TestEvalInFailuresAreTypedNotPanics(t *testing.T) {
 // %help documents the form, which is how a user finds it.
 func TestHelpDocumentsPinnedEval(t *testing.T) {
 	wants(t, joinLines(helpText()), "%eval", "in <name> :")
+}
+
+// A pinned evaluation is one run, so the step budget bounds it as it bounds an
+// unpinned one: a slot read inside it does not reset the counter.
+func TestEvalInInstanceIsBoundedByTheStepBudget(t *testing.T) {
+	s := loadFixture(t, "testdata/vehicle_package.sysml")
+	budgets := runtime.DefaultBudgets()
+	budgets.MaxSteps = 6
+	if err := s.SetBudgets(budgets); err != nil {
+		t.Fatalf("setting budgets: %v", err)
+	}
+	run(t, s, "%instantiate Demo::Vehicle")
+
+	// Nested to the right, so the slot read is reached on the second step, long
+	// before the budget runs out.
+	expr := "mass"
+	for i := 0; i < 60; i++ {
+		expr = "mass + (" + expr + ")"
+	}
+	wants(t, run(t, s, "%eval in Demo::Vehicle : "+expr), "step limit exceeded")
+	// The budget bounds one run, not the session.
+	wants(t, run(t, s, "%eval in Demo::Vehicle : mass + 1.0"), "= 1501")
 }
