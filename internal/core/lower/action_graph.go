@@ -573,7 +573,7 @@ func lowerStatement(member ast.Node, scope *symbols.Scope) Statement {
 // body-local namespace, and scope is the namespace it owns.
 func lowerBlock(owner ast.Node, members []ast.Node, scope *symbols.Scope) Block {
 	if blockNeedsFlow(members) {
-		return Block{Node: owner, Scope: scope, Graph: lowerBlockFlow(members, scope)}
+		return Block{Node: owner, Scope: scope, Graph: lowerBlockFlow(members, scope, false)}
 	}
 	block := Block{Node: owner, Scope: scope}
 	for _, member := range members {
