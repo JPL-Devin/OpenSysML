@@ -43,6 +43,7 @@ func failureReason(err error) pb.FailureReason {
 type verifyContext struct {
 	cached  *CachedModel
 	runtime *runtime.Context
+	sem     *semantics.Model
 }
 
 // newVerifyContext looks the model up and builds a runtime over it, the same way
@@ -54,7 +55,7 @@ func (s *Service) newVerifyContext(modelHash string) (*verifyContext, error) {
 	}
 	resolver := resolve.New(cached.Index)
 	semModel := semantics.NewModel(resolver)
-	return &verifyContext{cached: cached, runtime: s.newRuntime(semModel, resolver)}, nil
+	return &verifyContext{cached: cached, runtime: s.newRuntime(semModel, resolver), sem: semModel}, nil
 }
 
 // lookup resolves an FQN to the symbol it names.
@@ -283,9 +284,18 @@ func (s *Service) EvaluateCalc(ctx context.Context, req *pb.EvaluateCalcRequest)
 		}
 	}
 
+	// Converted against the model's index, so a quantity argument keeps the base
+	// units it is commensurable with instead of arriving as an unusable value.
 	args := make([]runtime.Value, 0, len(req.Arguments))
 	for _, arg := range req.Arguments {
-		args = append(args, ProtoToValue(arg))
+		val, cerr := ProtoToValueIn(arg, v.cached.Index, v.sem)
+		if cerr != nil {
+			return &pb.EvaluateCalcResponse{
+				Error:         fmt.Sprintf("calc argument could not be read: %v", cerr),
+				FailureReason: failureReason(cerr),
+			}, nil
+		}
+		args = append(args, val)
 	}
 
 	result, err := v.runtime.InvokeCalc(sym, args, v.declaringScope(sym))

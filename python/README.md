@@ -16,7 +16,7 @@ print(model.eval("1 + 2 * 3"))                     # 7
 
 vehicle = model["Vehicle"]                         # by short name or FQN
 inst = model.instantiate("Demo::Vehicle")
-inst.mass                                          # 1500.0
+inst.mass                                          # 1500.0 [kg] — a Quantity
 
 model.verify_satisfaction()                        # every assert satisfy … by …
 model.save("model.ttl")                            # RDF Turtle

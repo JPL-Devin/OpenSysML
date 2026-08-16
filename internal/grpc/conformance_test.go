@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -358,11 +359,52 @@ func describeValue(v *pb.Value) (string, interface{}) {
 		return "instance_id", k.InstanceId
 	case *pb.Value_Sequence:
 		return "sequence", k.Sequence
+	case *pb.Value_Quantity:
+		return "quantity", describeQuantity(k.Quantity)
 	case *pb.Value_Null:
 		return "null", nil
 	default:
 		return "unset", nil
 	}
+}
+
+// describeQuantity renders a quantity as "<magnitude> [<unit as written>] =
+// <reduction>", which is every part of it a fixture needs to pin.
+func describeQuantity(q *pb.Quantity) string {
+	if q == nil {
+		return ""
+	}
+	magnitude := "unset"
+	switch m := q.GetMagnitude().(type) {
+	case *pb.Quantity_IntMagnitude:
+		magnitude = strconv.FormatInt(m.IntMagnitude, 10)
+	case *pb.Quantity_RealMagnitude:
+		magnitude = strconv.FormatFloat(m.RealMagnitude, 'g', -1, 64)
+	}
+	return fmt.Sprintf("%s [%s] = %s", magnitude, q.GetUnit(), describeUnitTerm(q.GetUnitTerm()))
+}
+
+// describeUnitTerm renders a unit's reduction as "1000/3600·SI::m·SI::s^-1",
+// leaving a scale of one and an exponent of one implicit.
+func describeUnitTerm(term *pb.UnitTerm) string {
+	if term == nil {
+		return "absent"
+	}
+	var parts []string
+	if term.GetScaleNum() != term.GetScaleDen() {
+		parts = append(parts, fmt.Sprintf("%g/%g", term.GetScaleNum(), term.GetScaleDen()))
+	}
+	for _, factor := range term.GetFactors() {
+		if factor.GetExponent() == 1 {
+			parts = append(parts, factor.GetUnitId())
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("%s^%g", factor.GetUnitId(), factor.GetExponent()))
+	}
+	if len(parts) == 0 {
+		return "1"
+	}
+	return strings.Join(parts, "·")
 }
 
 func mustFloat(t *testing.T, ev expectedValue) float64 {

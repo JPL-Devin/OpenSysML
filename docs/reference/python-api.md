@@ -157,10 +157,6 @@ dodge one.
 
 ### Known limitations
 
-- **Quantities.** A value with a measurement unit (`attribute mass = 1500.0 [kg]`)
-  is typed `object` and its docstring names the unit. The wire format has no
-  magnitude-and-unit value, so the slot itself is reported as unsupported at
-  runtime — this is a service limitation, not a codegen one.
 - **Behavioral and connector usages.** Only structural usages (attribute, part,
   item, occurrence, individual, port, enum) become properties. Action, state,
   calc, constraint, requirement, connection, flow, interface, allocation and case
