@@ -68,7 +68,9 @@ it describes, and rewrites the table in place. `--check` re-hashes the assets of
 every pinned release and fails on any disagreement, catching a release
 republished with another binary. A pysysml release therefore pins the service
 releases published before it; asking for a newer one needs a newer pysysml (or
-the explicit opt-in above).
+the explicit opt-in above), and leaves an already-downloaded binary serving
+rather than refusing to start — only a digest that *contradicts* a pin is
+treated as tampering and refuses to fall back.
 
 ## Version
 

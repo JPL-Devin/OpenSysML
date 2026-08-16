@@ -1226,12 +1226,15 @@ class Connection:
 
         Stopping a service to start the same build gains nothing, so a
         replacement that cannot differ is reported instead of made. A download
-        failing its checksum is raised, never read as "the same build".
+        failing its checksum is raised, never read as "the same build"; a
+        release this pysysml pins nothing for is only a build it cannot get.
         """
         try:
             ensure_binary(version=self._version)
-        except ChecksumMismatchError:
-            raise
+        except ChecksumMismatchError as e:
+            if not e.unpinned:
+                raise
+            return False
         except PySysMLError:
             return False
         return cached_release() == required

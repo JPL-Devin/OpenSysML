@@ -116,7 +116,8 @@ def expected_digest(version, asset, served_digest, github_repo=None):
                 f"the only checksum available is the one served beside the binary, which "
                 f"a compromised release would serve too. Upgrade pysysml to a release "
                 f"that pins {version}, ask for a pinned release with version=, or accept "
-                f"same-origin trust by setting ${ALLOW_UNPINNED_ENV}=1."
+                f"same-origin trust by setting ${ALLOW_UNPINNED_ENV}=1.",
+                unpinned=True,
             )
         warnings.warn(
             f"pysysml pins no digest for {asset} of {version} of {repo}; verifying it "
@@ -420,20 +421,6 @@ def download_binary(version='latest', github_repo=None):
         raise ConnectionError(f"Failed to download binary from {binary_url}: {e}")
 
 
-def pinned_release_assets(version, github_repo=None):
-    """Asset names pinned for a release, for a release check to compare against.
-
-    Args:
-        version (str): Release tag, resolved (never 'latest')
-        github_repo (str, optional): GitHub repository (owner/repo)
-
-    Returns:
-        frozenset[str]: Asset names with a pinned digest, empty when unpinned
-    """
-    repo = github_repo or default_github_repo()
-    return frozenset(PINNED_SHA256.get(repo, {}).get(version, {}))
-
-
 def verify_checksum(binary_path, expected_sha256):
     """Verify SHA-256 checksum of binary file.
     
@@ -507,9 +494,17 @@ def ensure_binary(force_download=False, version=None, github_repo=None):
     # Download binary with explicit version
     try:
         return download_binary(version=version, github_repo=github_repo)
-    except ChecksumMismatchError:
-        # A download that may have been tampered with is not a reason to fall back.
-        raise
+    except ChecksumMismatchError as e:
+        # A download that may have been tampered with is not a reason to fall back;
+        # a release this pysysml simply pins nothing for contradicts nothing.
+        if not e.unpinned or cached is None:
+            raise
+        warnings.warn(
+            f"Keeping the cached sysml-grpc at {cached}: {version} was not downloaded "
+            f"({e}). It may be an older release than asked for.",
+            stacklevel=2,
+        )
+        return cached
     except ConnectionError as e:
         if cached is None:
             raise

@@ -541,3 +541,31 @@ class TestPinnedDigests:
             with pytest.raises(ChecksumMismatchError, match='pins no SHA-256 digest'):
                 download_binary(version='v9.9.9')
         assert urlopen.call_count == 1  # the sidecar only; no binary was fetched
+
+    def test_a_missing_pin_is_told_apart_from_a_contradicted_one(self, pins):
+        """Only a contradiction is evidence of tampering, so only it is unrecoverable."""
+        with pytest.raises(ChecksumMismatchError) as missing:
+            expected_digest('v9.9.9', 'sysml-grpc-linux-amd64', 'ab' * 32)
+        assert missing.value.unpinned
+
+        pins('cd' * 32, 'v9.9.8')
+        with pytest.raises(ChecksumMismatchError) as contradicted:
+            expected_digest('v9.9.8', 'sysml-grpc-linux-amd64', 'ef' * 32)
+        assert not contradicted.value.unpinned
+
+    def test_an_unpinned_release_keeps_a_working_cache(self, cache):
+        """A release newer than this pysysml is a build it cannot get, not a tampered one."""
+        binary_path = cache(version='v0.0.5')
+        with patch('pysysml.binary.download_binary',
+                   side_effect=ChecksumMismatchError('pins no SHA-256 digest', unpinned=True)):
+            with pytest.warns(UserWarning, match='Keeping the cached sysml-grpc'):
+                assert ensure_binary(version='v9.9.9') == binary_path
+
+        assert cached_release() == 'v0.0.5'
+
+    def test_an_unpinned_release_with_no_cache_is_still_refused(self, cache):
+        """Nothing to fall back to leaves the refusal, with its own explanation."""
+        with patch('pysysml.binary.download_binary',
+                   side_effect=ChecksumMismatchError('pins no SHA-256 digest', unpinned=True)):
+            with pytest.raises(ChecksumMismatchError, match='pins no SHA-256 digest'):
+                ensure_binary(version='v9.9.9')
