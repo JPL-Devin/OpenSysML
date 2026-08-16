@@ -457,8 +457,10 @@ An action token that reaches an `accept` with no matching message **parks** inst
 - Satisfiable: `internal/core/runtime/testdata/conformance/action_send_accept.sysml`
   (`%action communicator`) — `%break counter` pauses on the accept node, and resuming completes with
   `number = 50` / `n = 50` (the typed accept skips the String and takes the Integer). Loading these
-  fixtures prints a tier-2 `unresolved reference: n` diagnostic for the `assign` that reads the
-  accepted parameter; the runtime still binds it, so don't mistake that for a new failure.
+  fixtures used to print a tier-2 `unresolved reference: n` diagnostic for the `assign` that reads
+  the accepted parameter while the runtime bound it anyway; **PR #196 fixed that**, so on current
+  revisions loading them must be clean. Seeing that diagnostic again is a regression of the
+  accept-payload scope contribution, not harness noise.
 - Unsatisfiable: write a one-accept action with nothing sending to it. `%step` → `State: Waiting`,
   and `%continue` must return a typed
   `accept deadlock in action <name>: nothing can post the awaited message (...)` — **never** hang.
@@ -466,6 +468,42 @@ An action token that reaches an `accept` with no matching message **parks** inst
   `no active action session`.
 
 Always run these under `timeout` when driving over a pipe; a hang is the failure mode to catch.
+
+### An accept node's payload as a body-scoped name (PR #196)
+
+`internal/core/resolve/accept_payload.go` contributes `action r accept msg : T;`'s payload to the
+**body** the accept node is declared in, so sibling nodes read it by simple name. Test it on both
+surfaces — `bin/sysml -validate f.sysml` for the diagnostic and
+`printf '%%load f\n%%action <n>\n%%continue\n%%quit\n' | timeout 30 ./bin/sysml` for the value —
+because check-clean alone never proves the runtime bound anything.
+
+- The A/B against a parent-commit binary is what makes this convincing: the same model gives
+  `error: unresolved reference: msg — did you mean test::communicator::receiver::msg?` (exit 2) on
+  the old binary and `✓ … no errors` on the new one. Payload names must be **non-keyword** —
+  `accept first : Integer` is parsed as an initial node and derails the whole graph with
+  `action has multiple initial nodes`; `first`, `after`, `then` are all reserved.
+- Positive shapes worth one run each, with the numbers a correct build gives (send value in
+  parens): later sibling reads `msg + 1` (42 → `seen = 43`); nested `if msg > 5` + `while` in a
+  sibling node (7 → `total = 21`); two accepts binding `alpha`/`beta` (11, 30 → `sum = 41`);
+  reader declared textually **before** the accept but sequenced after it (4 → `seen = 5`).
+- **Shadowing is the case only a value can catch.** A package-level `attribute msg : Integer = 1;`
+  keeps the model check-clean on *both* binaries, so assert `seen = 9` (the sent payload) and not
+  `1`. Note a *body*-level `attribute msg = 111` in the same action is a weak probe: the accept
+  writes the same value slot, so `seen = 9` either way — prefer the package-level form.
+- Negatives that must stay `unresolved reference: msg` at exit 2, and each exercises a different
+  guard: a misspelling in the same body (now gains `— did you mean msg?`); a **sibling** action's
+  node in the same package; a package-level `attribute` initializer; a wildcard
+  `import src::communicator::*` into another package; and a `part def` body declaring an action
+  node with the accept (`sharesBodyFeatureSpace` rejects a part — this one is easy to forget).
+- A node that executes **before** the accept binds must fail, not read stale data:
+  `error: execution failed: eval assignment RHS: unresolved reference: msg` in ~0.1 s, with
+  `%tokens` afterwards still showing `Token 1 @ <node>` (session survives).
+- A **qualified** `receiver::msg` reference resolves at check time and then fails the run with
+  `usage receiver::msg has no value` — identical on both binaries, i.e. pre-existing rather than a
+  regression of this change. Always A/B it before reporting it as a defect.
+- Cheap corpus gate for a resolve change: loop `internal/core/runtime/testdata/conformance/*.sysml`
+  and `examples/*.sysml` comparing `grep -c 'error:'` counts new vs old binary and print only files
+  where new > old (~1 min).
 
 ## Standard SysML v2 behavioral notation (flows, triggers, sends, transition effects)
 
@@ -2099,6 +2137,49 @@ number rather than quoting the table.
   the parser recovers with a fix on — `action def A { first start }` yields `Insert ';'`; a plain
   attribute declaration yields a diagnostic with no fix.
 
+## Symbol *kind* changes: `%search` is the only REPL probe (PR #210)
+
+When a change moves a declaration from one `symbols.SymbolKind` to another (modifier-driven usage
+kinds, KerML classifier classification, `classifyUsage` edits), `-validate` proves nothing: a model
+can be clean on both revisions while every kind is wrong. The probe is the REPL's
+`%search <prefix>`, which prints `<fqn>  <kind>` from `sym.Kind.String()`
+(`internal/repl/discover.go`, names in `internal/core/symbols/symbol.go`):
+
+```bash
+printf '%%load /tmp/m.sysml\n%%search Pkg::\n%%quit\n' | timeout 30 ./bin/sysml -quiet
+```
+
+- **Always search a `Pkg::` prefix, not a bare word.** `%search Observe` matched ~20 stdlib symbols
+  (ISQLight, VerificationCases) and truncated with `(9 more; narrow the search)`, burying the
+  model's own symbols. The trailing `::` also drops the package row itself.
+- `%list` only echoes the submitted source text and `renderMember` never reaches action-body
+  parameters, so it cannot show a parameter's kind. There is no `%kind`/`%hover` in the REPL.
+- **Anonymous usages are invisible to `%search`** (no name to index). To show that
+  `individual part : Vehicle;` or `in snapshot ;` still built something, use
+  `./bin/sysml <m> -convert sysml -o /dev/stdout` and assert the member round-trips
+  (`in snapshot;`, `in event;`, `in;`).
+- Warning-only changes need the **exit code** asserted explicitly: `-validate` prints warnings and
+  still ends `✓ no errors` with exit 0, so `echo "exit=$?"` is the difference between "warning" and
+  "error" in the recording. Count them with `-validate f 2>&1 | grep -c 'reserved keyword'`.
+- The A/B main binary is essential here: on `main` the same fixture printed
+  `attributeUsage`/`partUsage` for `individual i : V` and `in snapshot atStart : Flight`, which is
+  the only visible difference between fixed and broken.
+
+Pre-existing traps worth not re-reporting as regressions:
+
+- A bare `event e : O;` **declaration** reports `error: unresolved reference: e — did you mean
+  Demo::e?` on every revision — `event <name>` is read as naming an existing occurrence. Use
+  `occurrence takeoff : Flight; event takeoff;` for a clean fixture; the symbol is still built as
+  `occurrenceUsage`.
+- Fixtures using `Real`/`Integer` need `private import ScalarValues::*;` or `-validate` fails with
+  `unresolved reference: Real` and masks the kind assertions.
+- **Run the suite with a cold library index when you change classification.** The on-disk index
+  (`$XDG_CACHE_HOME/sysml-ls/libs`) caches stdlib symbol kinds, so a warm cache keeps returning the
+  old kinds and `go test ./...` passes locally while CI fails. Gate with
+  `export XDG_CACHE_HOME=$(mktemp -d) && go test -count=1 ./...`; this is how PR #210's
+  `function` → `kermlType` regression (every `IntegerFunctions` operator stopped being a calc,
+  `internal/repl/discover_test.go` pinned `ScalarValues::Integer attributeDef`) stayed hidden.
+
 ## Multiplicity of a feature's default value (PR #199, Track A / A2)
 
 A default bound to a feature is checked against the feature's multiplicity in **two independent
@@ -2152,3 +2233,48 @@ ones — comparing IDs is the only way to tell "held the objects the default nam
 Two gotchas when recording this area in Konsole: the REPL does **not** expand shell variables, so
 `%load $CONF/x.sysml` fails with a path error — type full relative paths; and `part derived : …`
 draws a `"derived" is a reserved keyword` warning that is unrelated to the defaults under test.
+
+## String values and StringFunctions (PR #211)
+
+A model that declares `String`/`Integer`/`Boolean` attributes needs `import ScalarValues::*;` —
+without it every type annotation reports `unresolved reference: String — did you mean
+ScalarValues::String?` and `-validate` exits 2 before any string behavior runs, which looks like a
+feature failure but is a fixture bug. Add `import StringFunctions::*;` to call `Length`/`Substring`
+unqualified inside a model (the REPL's `-e` mode resolves those two unqualified with no import,
+because they are aliased in `library_functions.go`'s unqualified map; the other StringFunctions
+names always need the `StringFunctions::` prefix).
+
+Discriminators that separate a working string runtime from a broken one:
+
+- **Characters, not bytes.** `Length("héllo")` is 5 (6 bytes), `Length("日本語")` is 3 (9 bytes),
+  `Substring("héllo", 2, 3)` is `"él"`. A byte-based implementation answers 6/9 or returns mojibake,
+  so always use a non-ASCII fixture — an ASCII-only test passes either way.
+- **Substring is 1-based and inclusive**, with `lower > upper` returning `""` rather than erroring,
+  while `lower < 1` or `upper > Length` gives `sequence index out of range: function
+  StringFunctions::Substring lower 0 is outside 1..5` and exit 2.
+- **The `==` split is deliberate**: `"a" == 3` evaluates to `false` (it specializes
+  `DataFunctions::'=='`), while the explicit `StringFunctions::'=='("a", 3)` is a type mismatch.
+  Test both; only one of them being right is the likely regression.
+- A string against an Integer/quantity/sequence must say
+  `type mismatch: operator '<' is not defined for a string and a quantity` (naming both types).
+
+### Driving these cases through a GUI terminal
+
+- **xdotool cannot type CJK into Konsole** — `type` with `日本語` silently delivers nothing, so
+  `Length("日本語")` arrives as `Length("")` and answers 0, which reads as a failure in the video.
+  Latin-1 accents (`héllo`, `naïve`) do type fine. Put any CJK (and any quoted-operator name such as
+  `StringFunctions::'=='`, which shell quoting mangles when typed inline) into a small
+  `/tmp/*.sh` written from a tool shell, then `cat` it and `bash` it on camera — the `cat` shows the
+  reviewer exactly what ran.
+- At the `sysml>` prompt a bare expression like `("a","b")->includes("b")` is parsed as a
+  declaration (`1:1: error: expected a namespace member`). Prefix expressions with `%eval`.
+- `%slots <PartDefName>` (not the part usage path) is what follows `%instantiate <PartDefName>`;
+  `%slots Msg::g` reports `no instance of "Msg::g"`.
+- **Escapes are stored raw**, so `Length("a\"b")` is 4 and the value renders as `"a\\\"b"`. This is
+  pre-existing lexer behavior (identical on the parent commit) — verify against a contrast binary
+  before reporting it as a string-runtime defect.
+- A 512 KiB string built by doubling inside a `for` loop (`acc = acc + acc` ×16, then
+  `Length(acc)` → 524288) completes in seconds; use it as the cheap no-hang/no-quadratic check.
+  Note that a calc whose body assigns to a `return acc` feature returns no value when *invoked from
+  another calc's expression* (`calculation returned no value`), so compute the length inside the
+  same body rather than wrapping the loop calc in another one.
