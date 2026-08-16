@@ -25,6 +25,21 @@ const nestedSatisfySrc = `package test {
 	assert satisfy Inner::lim by big;
 }`
 
+// ownConditionsSatisfySrc states a satisfaction that declares its own require
+// condition rather than referencing a requirement, on a definition an object
+// redefines.
+const ownConditionsSatisfySrc = `package test {
+	part def Box {
+		attribute size = 1.0;
+		satisfy requirement fits {
+			require size < 10.0;
+		}
+	}
+	part big : Box {
+		attribute :>> size = 99.0;
+	}
+}`
+
 // A check reports the object it was evaluated against, which for a condition
 // reached through a nested redefinition is the nested object rather than the one
 // supplied — so a caller can label the verdict with the object it answers about.
@@ -94,5 +109,26 @@ func TestSatisfactionRoutesThroughTheSubjectRule(t *testing.T) {
 	lim := memberPath(t, pkg, "Inner", "lim")
 	if _, err := ctx.EvaluateRequirementOn(lim, lim.OwnerScope, big); !errors.Is(err, ErrViolated) {
 		t.Errorf("requirement on big: err = %v, want the same violation the assertion reports", err)
+	}
+}
+
+// An assertion stating its own conditions routes through the subject rule too,
+// so it answers about the object carrying it rather than about the declaration.
+func TestSatisfactionOfItsOwnConditionsRoutesThroughTheSubjectRule(t *testing.T) {
+	ctx, pkg := nestedSubjectFixture(t, ownConditionsSatisfySrc)
+	big, err := ctx.Instantiate(memberPath(t, pkg, "big"))
+	if err != nil {
+		t.Fatalf("instantiate big: %v", err)
+	}
+	assertions := ctx.SatisfyAssertionsIn(pkg)
+	if len(assertions) != 1 {
+		t.Fatalf("assertions = %d, want the one Box states", len(assertions))
+	}
+	result, err := ctx.CheckSatisfactionOn(assertions[0], nil)
+	if !errors.Is(err, ErrViolated) {
+		t.Fatalf("satisfaction: holds = %t, err = %v, want the object's redefined size to violate it", result.Holds, err)
+	}
+	if result.Subject == nil || result.Subject.ID != big.ID {
+		t.Errorf("subject = %v, want the object big #%d that carries the assertion", result.Subject, big.ID)
 	}
 }

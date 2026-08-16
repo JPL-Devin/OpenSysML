@@ -206,14 +206,18 @@ func (ctx *Context) CheckSatisfactionOn(a *SatisfyAssertion, subject *Instance) 
 	// The requirement being satisfied chooses the object its conditions read the
 	// same way `%requirement` does, so an object holding the carrier nested
 	// answers about that nested object rather than about the declaration.
-	var reached carrier // the object resolved to, named by where it was reached from
-	if a.Requirement != nil {
-		resolved, err := ctx.checkSubject("satisfaction", a.Text(), a.Requirement, subject)
-		if err != nil {
-			return CheckResult{}, err
-		}
-		subject, reached = resolved.instance, resolved
+	// An assertion stating its own conditions has no requirement to resolve
+	// against, so it resolves against itself.
+	carrying := a.Requirement
+	if carrying == nil {
+		carrying = target
 	}
+	resolved, err := ctx.checkSubject("satisfaction", a.Text(), carrying, subject)
+	if err != nil {
+		return CheckResult{}, err
+	}
+	reached := resolved // the object resolved to, named by where it was reached from
+	subject = resolved.instance
 
 	scope := target.OwnerScope
 	members := ctx.chainMembers(target, scope)
