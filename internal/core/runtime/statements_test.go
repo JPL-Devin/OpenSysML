@@ -3,11 +3,12 @@ package runtime
 import (
 	"errors"
 	"testing"
+
+	"github.com/Open-MBEE/Systemica/internal/core/semantics"
 )
 
 // A `for` visits a sequence in the order the expression that built it produced,
-// a set in the order its canonical rendering sorts in, and a single value as the
-// one element it is.
+// and a set in the order its canonical rendering sorts in.
 func TestForElementsOrder(t *testing.T) {
 	set := NewSet()
 	for _, n := range []int64{30, 4, 100, 4} {
@@ -18,12 +19,11 @@ func TestForElementsOrder(t *testing.T) {
 		value Value
 		want  []int64
 	}{
-		"a sequence keeps its own order":    {sequenceOf([]Value{integerValue(3), integerValue(1), integerValue(2)}), []int64{3, 1, 2}},
-		"an empty sequence visits nothing":  {sequenceOf(nil), nil},
-		"a set sorts by its rendering":      {Value{Kind: ValSet, Set: set}, []int64{100, 30, 4}},
-		"an empty set visits nothing":       {Value{Kind: ValSet, Set: NewSet()}, nil},
-		"a single value is its one element": {integerValue(7), []int64{7}},
-		"null visits nothing":               {nullValue(), nil},
+		"a sequence keeps its own order":   {sequenceOf([]Value{integerValue(3), integerValue(1), integerValue(2)}), []int64{3, 1, 2}},
+		"an empty sequence visits nothing": {sequenceOf(nil), nil},
+		"a set sorts by its rendering":     {Value{Kind: ValSet, Set: set}, []int64{100, 30, 4}},
+		"an empty set visits nothing":      {Value{Kind: ValSet, Set: NewSet()}, nil},
+		"null visits nothing":              {nullValue(), nil},
 	}
 
 	for name, tc := range cases {
@@ -40,10 +40,34 @@ func TestForElementsOrder(t *testing.T) {
 	}
 }
 
-// A value stating a computation rather than a collection is no collection in any
-// order, so a `for` over it is reported with the kind it has.
+// A `for` input that is not a collection is reported with the kind it has, and
+// is never read as the one-element collection elementsOf coerces it to.
 func TestForElementsRejectsANonCollection(t *testing.T) {
-	if _, err := forElements(Value{Kind: ValExpr}); !errors.Is(err, ErrTypeMismatch) {
-		t.Errorf("forElements over an expression failed with %v, want ErrTypeMismatch", err)
+	cases := map[string]Value{
+		"an integer":       integerValue(7),
+		"a real":           Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 2.5}},
+		"a boolean":        boolValue(true),
+		"a string":         Value{Kind: ValString, Str: "xs"},
+		"an expression":    Value{Kind: ValExpr},
+		"an invalid value": Value{Kind: ValInvalid},
+	}
+	for name, value := range cases {
+		t.Run(name, func(t *testing.T) {
+			elements, err := forElements(value)
+			if err == nil {
+				t.Fatalf("forElements visited %v, want a typed error", elements)
+			}
+			if !errors.Is(err, ErrTypeMismatch) {
+				t.Errorf("forElements failed with %v, want ErrTypeMismatch", err)
+			}
+		})
+	}
+}
+
+// elementsOf keeps coercing a scalar to the one-element collection KerML reads
+// it as: only `for` is strict, so the general readers are unchanged.
+func TestElementsOfStillCoercesAScalar(t *testing.T) {
+	if got := len(elementsOf(integerValue(7))); got != 1 {
+		t.Errorf("elementsOf(7) holds %d elements, want 1", got)
 	}
 }

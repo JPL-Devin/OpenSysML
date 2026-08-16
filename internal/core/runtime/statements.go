@@ -487,12 +487,18 @@ func stmtLabel(stmt lower.Statement) string {
 
 // forElements returns the elements a `for` loop visits, in visiting order: a
 // sequence in the order the expression built it (a range ascending, a filter as
-// the collection it filtered), a set in the order its canonical rendering sorts
-// in since a set carries no order of its own, and a single value as the
-// one-element collection KerML reads it as. A value stating a computation
-// rather than a collection is reported.
+// the collection it filtered), and a set in the order its canonical rendering
+// sorts in since a set carries no order of its own. A `for` input that is not a
+// collection is reported rather than read as the one-element collection
+// elementsOf coerces it to: iterating a scalar is a modelling error, and a
+// single silent iteration hides it.
 func forElements(value Value) ([]Value, error) {
 	switch value.Kind {
+	case ValSequence:
+		if value.Sequence == nil {
+			return nil, nil
+		}
+		return value.Sequence.Elements(), nil
 	case ValSet:
 		if value.Set == nil {
 			return nil, nil
@@ -502,11 +508,13 @@ func forElements(value Value) ([]Value, error) {
 			return FormatTraceValue(elements[i]) < FormatTraceValue(elements[j])
 		})
 		return elements, nil
-	case ValExpr, ValInvalid:
+	case ValNull:
+		// An absent value holds no elements, which is the empty collection: zero
+		// iterations, not an error.
+		return nil, nil
+	default:
 		return nil, fmt.Errorf("%w: 'for' iterates a collection, and %s is not one",
 			ErrTypeMismatch, describeValue(value))
-	default:
-		return elementsOf(value), nil
 	}
 }
 

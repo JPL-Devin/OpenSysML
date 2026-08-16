@@ -6,6 +6,28 @@ This directory contains behavioral execution conformance tests. Each test consis
 2. **`<case>.expected.json`** - Expected execution outcome
 3. **`<case>.trace.golden`** - Optional ordered execution trace (see [Golden Traces](#golden-traces))
 
+## Entry Points
+
+A case is driven through one behavior. Without `evaluate` the harness searches
+the document for the first action, state, calc, constraint or requirement it
+declares — which only reaches an element declared by the document's own packages,
+not one nested deeper. A case whose subject is nested — `part p { action a { … } }`
+— names it by qualified path instead, and the named element must be of the kind
+the case's `type` asks for:
+
+```json
+{
+  "type": "action",
+  "evaluate": "test::p::a",
+  "outputs": {"total": {"type": "Real", "value": 6.5}}
+}
+```
+
+The path is the element's fully-qualified name, `::`-separated from the outermost
+package down through every owner, and must name exactly one element. It selects
+the entry behavior for the golden trace too, so a nested behavior is traced as a
+top-level one is. `instantiate` names an instance case's type the same way.
+
 ## Schema Format
 
 ### For Actions (`ExecuteAction`)
@@ -23,6 +45,7 @@ This directory contains behavioral execution conformance tests. Each test consis
 
 - `outputs`: map of output parameter names to their final values
 - `tokenCount`: number of tokens processed (optional, for regression detection)
+- `evaluate`: qualified path of the action to execute (see [Entry Points](#entry-points))
 - `error`: text the execution must fail with, for a case whose contract is a
   diagnostic rather than a result — a loop that never terminates must end with
   the step budget's error. Set it instead of `outputs`; a case without it must
@@ -52,6 +75,8 @@ This directory contains behavioral execution conformance tests. Each test consis
   machines.
 - `finalState`: qualified name of final reached state
 - `stateVisits`: ordered list of states visited (optional, for golden trace verification)
+- `evaluate`: qualified path of the state machine to execute (see
+  [Entry Points](#entry-points))
 - `outputs`: map of state machine outputs
 - `performers`: objects that each perform the machine, for a case whose contract
   depends on which object performs it (two objects selecting different variants
@@ -76,6 +101,7 @@ This directory contains behavioral execution conformance tests. Each test consis
 
 - `inputs`: ordered list of input arguments
 - `result`: returned value
+- `evaluate`: qualified path of the calc to invoke (see [Entry Points](#entry-points))
 
 ### For Constraints (`EvaluateConstraint`)
 
@@ -92,6 +118,8 @@ This directory contains behavioral execution conformance tests. Each test consis
 
 - `bindings`: variable bindings for constraint evaluation
 - `satisfied`: boolean, whether constraint is satisfied
+- `evaluate`: qualified path of the constraint to evaluate (see
+  [Entry Points](#entry-points))
 
 ### For Requirements (`EvaluateRequirement`)
 
@@ -241,13 +269,20 @@ exit calc test::scale -> 12    # or `-> error: <typed error>`
 
 Entries are canonical, never positions or addresses: parameters bind in
 declaration order (inherited parameters first, at the position the declaring calc
-gives them), and an unordered value such as a set renders sorted. Regenerate with
-`go test ./internal/core/runtime/ -run TestExecutionTrace -update-traces` and
-review every diff — a reordered entry is a behavior change, not noise.
+gives them), and an unordered value such as a set renders sorted.
 
-Only cases that have a golden are trace-checked. State cases that broadcast an
-event over orthogonal regions have no order-stable trace yet, so they carry no
-golden rather than a flaky one.
+`go test ./internal/core/runtime -run TestExecutionTrace -update-traces`
+regenerates every golden the harness owns in one run, so an intentional ordering
+change needs no hand-editing; review every diff — a reordered entry is a
+behavior change, not noise. A no-op run rewrites the same bytes and leaves
+`git status` clean.
+
+The harness owns a golden for a case that already carries one, and for a case
+whose expectation sets `"trace": true`, which is how a new case asks for one to
+be written. Every owned case must execute and produce a trace: an update run
+reports one that does not rather than leaving a stale golden behind. State cases
+that broadcast an event over orthogonal regions have no order-stable trace yet,
+so they neither carry a golden nor opt in.
 
 ## Known Failures
 

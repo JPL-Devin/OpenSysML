@@ -1,5 +1,6 @@
 {
 	"type": "action",
+	"evaluate": "test::owner::byPkgRef",
 	"outputs": {
 		"r": {"type": "Real", "value": 8.0}
 	}
