@@ -84,6 +84,31 @@ func TestAttributesCarryResolvedFacts(t *testing.T) {
 	}
 }
 
+// TestARedefinitionWithANonConstantDefaultReportsNoValue verifies a
+// redefinition that states a default the service cannot fold reports none,
+// rather than the number it redefined and no longer states.
+func TestARedefinitionWithANonConstantDefaultReportsNoValue(t *testing.T) {
+	get := parseForFacts(t, `
+package Demo {
+    part def Base {
+        attribute mass : ScalarValues::Real = 1000.0;
+    }
+    part def Car :> Base {
+        attribute wheels : ScalarValues::Integer = 4;
+        attribute :>> mass = wheels * 2;
+    }
+}
+`)
+	attrs := byName(get("Demo::Car").Attributes)
+	if value := attrs["mass"].Value; value != nil {
+		t.Errorf("redefined mass reports %v; the model states a computed default, not %v",
+			value, value)
+	}
+	if attrs["mass"].Type == "" {
+		t.Error("redefined mass reports no type; the redefined one's still applies")
+	}
+}
+
 // TestAttributesOfAnElementWithNoneIsEmpty verifies an element with no
 // attributes reports none rather than something inherited from elsewhere.
 func TestAttributesOfAnElementWithNoneIsEmpty(t *testing.T) {

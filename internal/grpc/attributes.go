@@ -44,7 +44,9 @@ func (sc *SymbolContext) attributeInfoOf(sym *symbols.Symbol) *pb.AttributeInfo 
 	}
 
 	value, unit := sc.attributeValue(sym)
-	if value == nil && unit == "" {
+	// Only a declaration writing no value at all takes one from what it
+	// redefines; one writing a non-constant value has none, not the base's.
+	if !writesValue(sym) {
 		value, unit = sc.inheritedValue(sym, 0)
 	}
 	info.Value = value
@@ -152,6 +154,13 @@ func (sc *SymbolContext) attributeValue(sym *symbols.Symbol) (*pb.Value, string)
 		return nil, unit
 	}
 	return ValueToProto(runtime.Value{Kind: runtime.ValConst, Const: val}), unit
+}
+
+// writesValue reports whether an attribute's declaration states a default of
+// its own, constant or not.
+func writesValue(sym *symbols.Symbol) bool {
+	decl, ok := sym.Decl.(*ast.Usage)
+	return ok && decl.Value != nil
 }
 
 // unquote strips the quotes a string literal keeps in its raw text.
