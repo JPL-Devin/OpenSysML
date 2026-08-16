@@ -142,6 +142,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("valued_feature_restated_in_a_body", testValuedFeatureRestatedInABody)
 	t.Run("multiplicity_infinite_lower_bound", testMultiplicityInfiniteLowerBound)
 	t.Run("multiplicity_lower_bound_too_large", testMultiplicityLowerBoundTooLarge)
+	t.Run("default_not_conforming_to_multiplicity", testDefaultNotConformingToMultiplicity)
 	t.Run("feature_chain_through_an_unset_slot", testFeatureChainThroughAnUnsetSlot)
 	t.Run("feature_chain_spends_the_element_budget", testFeatureChainSpendsTheElementBudget)
 	t.Run("mutually_subsetting_features", testMutuallySubsettingFeatures)
@@ -190,6 +191,51 @@ func testMultiplicityLowerBoundTooLarge(t *testing.T) {
 	}
 	if len(ctx.instances) > 100 {
 		t.Errorf("materialized %d instances before reporting the bound", len(ctx.instances))
+	}
+}
+
+// testDefaultNotConformingToMultiplicity: a default whose element count is
+// outside the feature's multiplicity is reported, rather than broadcast to fill
+// the lower bound, truncated to the upper one, or dropped.
+func testDefaultNotConformingToMultiplicity(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		decl string
+	}{
+		{"one value against three", "attribute xs : Real[3] = 1.0;"},
+		{"four values against three", "attribute xs : Real[3] = (1.0, 2.0, 3.0, 4.0);"},
+		{"no values against one or more", "attribute xs : Real[1..3] = ();"},
+		{"an expression producing too few", "attribute m : Real = 1.0; attribute xs : Real[2] = m;"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			inst, ctx := instantiateHolder(t, `
+				package test {
+					private import ScalarValues::Real;
+					part def Holder { `+tc.decl+` }
+				}
+			`)
+			done := make(chan error, 1)
+			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						done <- fmt.Errorf("panic: %v", r)
+					}
+				}()
+				_, err := inst.GetSlot(ctx, "xs")
+				done <- err
+			}()
+			select {
+			case err := <-done:
+				if err == nil {
+					t.Fatal("want a multiplicity violation, got a materialized slot")
+				}
+				if !errors.Is(err, ErrMultiplicityViolation) {
+					t.Errorf("expected ErrMultiplicityViolation, got: %v", err)
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("materializing the default did not terminate")
+			}
+		})
 	}
 }
 
