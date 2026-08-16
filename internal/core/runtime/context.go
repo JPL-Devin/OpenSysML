@@ -420,13 +420,14 @@ func (ctx *Context) CheckConstraintOn(sym *symbols.Symbol, scope *symbols.Scope,
 		self:    subject.instance,
 		negated: negatedDecl(sym),
 	}, conds)
-	return checkResultOf(holds, subject), err
+	return ctx.checkResultOf(holds, subject), err
 }
 
 // CheckResult is the outcome of one check: whether it holds, the object its
 // conditions were evaluated against — nil when they were evaluated against the
 // declaration because no object carries the checked element — and, for a nested
-// subject, the object the search started from plus the features walked from it,
+// subject, the object the search started from plus the features walked from it —
+// ending in the declaration the object materializes, as an ambiguity names it —
 // which are how a caller names an object holding no name of its own.
 type CheckResult struct {
 	Holds       bool
@@ -436,12 +437,12 @@ type CheckResult struct {
 }
 
 // checkResultOf reports a verdict about the object a check resolved to.
-func checkResultOf(holds bool, subject carrier) CheckResult {
+func (ctx *Context) checkResultOf(holds bool, subject carrier) CheckResult {
 	return CheckResult{
 		Holds:       holds,
 		Subject:     subject.instance,
 		SubjectRoot: subject.root,
-		SubjectPath: subject.features,
+		SubjectPath: ctx.carrierFeatures(subject),
 	}
 }
 
@@ -591,7 +592,7 @@ func (ctx *Context) CheckRequirementOn(sym *symbols.Symbol, scope *symbols.Scope
 	reqBindings, err := ctx.memberBindings(sym, sym.Name, members, subject.instance, nil)
 
 	if err != nil {
-		return checkResultOf(false, subject), err
+		return ctx.checkResultOf(false, subject), err
 	}
 
 	// Second pass: evaluate the assumed and required conditions.
@@ -604,7 +605,7 @@ func (ctx *Context) CheckRequirementOn(sym *symbols.Symbol, scope *symbols.Scope
 		bindings: reqBindings,
 		negated:  negatedDecl(sym),
 	}, conds)
-	return checkResultOf(holds, subject), err
+	return ctx.checkResultOf(holds, subject), err
 }
 
 // ExecuteAction executes an action definition/usage to completion.

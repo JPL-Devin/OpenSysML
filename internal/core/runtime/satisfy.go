@@ -228,7 +228,7 @@ func (ctx *Context) CheckSatisfactionOn(a *SatisfyAssertion, subject *Instance) 
 	// are when the requirement is evaluated directly.
 	bindings, err := ctx.memberBindings(target, a.Text(), members, subject, subject)
 	if err != nil {
-		return satisfactionResult(false, subject, reached), err
+		return ctx.satisfactionResult(false, subject, reached), err
 	}
 
 	conds := conditionsOf(members)
@@ -244,17 +244,17 @@ func (ctx *Context) CheckSatisfactionOn(a *SatisfyAssertion, subject *Instance) 
 		bindings: bindings,
 		negated:  a.Negated,
 	}, conds)
-	return satisfactionResult(holds, subject, reached), err
+	return ctx.satisfactionResult(holds, subject, reached), err
 }
 
 // satisfactionResult reports a verdict about subject, naming where a resolved
 // nested one was reached from. An assertion whose requirement resolved nothing
 // is still about the object `by` supplied.
-func satisfactionResult(holds bool, subject *Instance, reached carrier) CheckResult {
+func (ctx *Context) satisfactionResult(holds bool, subject *Instance, reached carrier) CheckResult {
 	if reached.instance == nil {
 		return CheckResult{Holds: holds, Subject: subject, SubjectRoot: subject}
 	}
-	return checkResultOf(holds, reached)
+	return ctx.checkResultOf(holds, reached)
 }
 
 // SatisfySubject returns an object of the feature a satisfaction assertion names

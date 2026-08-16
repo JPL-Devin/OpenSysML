@@ -40,6 +40,44 @@ const ownConditionsSatisfySrc = `package test {
 	}
 }`
 
+// subsettingSubjectSrc reaches the object of one declaration through the
+// collection it subsets, so the feature walked to it is the collection's.
+const subsettingSubjectSrc = `package test {
+	part def Component {
+		attribute v = 1.0;
+		constraint ok { v < 10.0 }
+	}
+	part def Assembly {
+		part subsystem : Component[*];
+		part small : Component :> subsystem {
+			attribute :>> v = 99.0;
+		}
+	}
+	part assembly : Assembly;
+}`
+
+// The features reported for a nested subject end in the declaration the object
+// materializes, so an object reached through a collection is named by its own
+// declaration rather than by the collection gathering it.
+func TestReportedFeaturesEndInTheDeclaration(t *testing.T) {
+	ctx, pkg := nestedSubjectFixture(t, subsettingSubjectSrc)
+	assembly, err := ctx.Instantiate(memberPath(t, pkg, "assembly"))
+	if err != nil {
+		t.Fatalf("instantiate assembly: %v", err)
+	}
+	ok := memberPath(t, pkg, "Component", "ok")
+	result, err := ctx.CheckConstraintOn(ok, ok.OwnerScope, assembly)
+	if err != nil && !errors.Is(err, ErrViolated) {
+		t.Fatalf("ok on assembly: %v", err)
+	}
+	if result.Holds {
+		t.Error("ok on assembly: holds = true, want the subsetting object's 99 to violate it")
+	}
+	if result.SubjectPath != "small" {
+		t.Errorf("subject path = %q, want the declaration %q rather than the collection it subsets", result.SubjectPath, "small")
+	}
+}
+
 // A check reports the object it was evaluated against, which for a condition
 // reached through a nested redefinition is the nested object rather than the one
 // supplied — so a caller can label the verdict with the object it answers about.

@@ -453,6 +453,19 @@ func carrierPath(c carrier, definition string) string {
 	return strings.Join(walked, "::")
 }
 
+// carrierFeatures is the feature path to a nested carrier as a caller can quote
+// it, corrected the way carrierLabels names an ambiguity's carriers.
+func (ctx *Context) carrierFeatures(c carrier) string {
+	if c.features == "" || c.instance == nil {
+		return ""
+	}
+	name := "object"
+	if def := ctx.definitionOf(c.instance.Type); def != nil && def.Name != "" {
+		name = def.Name
+	}
+	return carrierPath(c, name)
+}
+
 // definitionOf is the definition objects of sym are objects of: sym itself when
 // it declares one, else the nearest definition it specializes.
 func (ctx *Context) definitionOf(sym *symbols.Symbol) *symbols.Symbol {
