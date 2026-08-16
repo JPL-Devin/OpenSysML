@@ -2043,3 +2043,57 @@ number rather than quoting the table.
   `WorkspaceEdit` whose `newText` actually fixes the file. A missing-semicolon fix needs a fixture
   the parser recovers with a fix on — `action def A { first start }` yields `Insert ';'`; a plain
   attribute declaration yields a diagnostic with no fix.
+
+## Multiplicity of a feature's default value (PR #199, Track A / A2)
+
+A default bound to a feature is checked against the feature's multiplicity in **two independent
+tiers**, and testing one proves nothing about the other:
+
+- **Static (type tier)**: `sysml <m> -validate` reports counts it can see in the source, from
+  `passes.checkValueCount` over `exactCount(u.Value)`. Wording:
+  `N value(s) bound to a feature with multiplicity lower|upper bound M`, exit **2** with
+  `did not analyse cleanly; no check was made`.
+- **Runtime**: `Context.checkDefaultCount` fires only when the slot is **materialized**, i.e. when
+  something reads it. Wording adds a prefix:
+  `slot <Type>.<name>: multiplicity violation: N value(s) bound to …`.
+
+Consequences worth checking on every change here:
+
+- `%slots <instance>` renders a bad slot inline as `name: <error: slot …>` and the REPL still
+  **exits 0** — a violation is not a session error. For an exit status you need a run that reads the
+  slot, e.g. `sysml m.sysml -instantiate test::bad -eval 'test::bad.few'` → exit **2** with
+  `evaluation failed: slot bad.few: multiplicity violation: …`.
+- `sysml m.sysml -instantiate X -validate` prints `no errors` and exits **0** even when every
+  default in the model violates its multiplicity, because `-instantiate` creates the object without
+  materializing its slots. Do not use it as the "does the runtime check fire" probe.
+- **The two tiers can disagree, and nested collection literals are where they do.** `exactCount`
+  counts top-level elements without flattening while the evaluator flattens, so
+  `attribute nested : Real[4] = ((1.0, 2.0), (3.0, 4.0));` is a static error ("2 value(s) … lower
+  bound 4") yet materializes fine as `[1.00, 2.00, 3.00, 4.00]`, and
+  `attribute two : Real[2] = (src, src);` (with `src : Real[3]`) passes statically but errors at
+  runtime with "6 value(s) … upper bound 2". Include both shapes in any regression fixture and
+  expect the mismatch until `exactCount` learns to flatten.
+- A feature that declares **no** multiplicity is deliberately not held to the assumed `1..1`
+  (`EffectiveFeature.MultiplicityStated`), so `attribute anyN = both.volume;` over a `[0..*]`
+  sibling must show `[2.00, 3.50]` with no diagnostic. A test asserting an error there is wrong.
+- Multiplicity is inherited through `:>>` when the redefinition does not restate it, in both tiers:
+  `part def Base { attribute xs : Real[2]; }` + `attribute :>> xs = (1.0, 2.0, 3.0);` must
+  `-validate` as an error (exit 2) — this is the cheapest static probe of that path, and it is
+  clean on any build predating the fix.
+
+Fixtures live in `internal/core/runtime/testdata/conformance/multiplicity_default_*.sysml`
+(merged / composite / nonconforming / redefinition). Drive them over a pipe to discover values:
+
+```bash
+printf '%%load internal/core/runtime/testdata/conformance/multiplicity_default_merged.sysml\n%%instantiate test::ranges\n%%slots test::ranges\n%%quit\n' | timeout 60 ./bin/sysml
+```
+
+Expected: `exact = [1.00, 2.00, 3.00]`, `star = [1.00, 2.00]`, `empty = []`, `plus = [5.00]`,
+`masses = [1.00 [kg], 2.00 [kg]]` (units survive), and in the composite fixture
+`stowed = [Instance(ID: 2), Instance(ID: 3)]` reusing **left/right's own IDs** rather than fresh
+ones — comparing IDs is the only way to tell "held the objects the default names" from
+"instantiated two new ones".
+
+Two gotchas when recording this area in Konsole: the REPL does **not** expand shell variables, so
+`%load $CONF/x.sysml` fails with a path error — type full relative paths; and `part derived : …`
+draws a `"derived" is a reserved keyword` warning that is unrelated to the defaults under test.
