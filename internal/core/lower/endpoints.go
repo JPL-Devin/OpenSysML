@@ -14,16 +14,18 @@ type Endpoints interface {
 	Endpoint(scope *symbols.Scope, qn *ast.QualifiedName) (decl ast.Node, ok bool)
 }
 
-// machineEndpoints resolves every endpoint of one machine from that machine's
-// own scope, indexed on its own: a machine lowered without the scope tree its
-// endpoints were written in has no other scope to name them from.
+// machineEndpoints resolves the endpoints of one machine through a resolver over
+// an index of that machine, from the scope each endpoint was written in.
 type machineEndpoints struct {
 	resolver *resolve.Resolver
 	scope    *symbols.Scope
 }
 
-func (m machineEndpoints) Endpoint(_ *symbols.Scope, qn *ast.QualifiedName) (ast.Node, bool) {
-	return m.resolver.Endpoint(m.scope, qn)
+func (m machineEndpoints) Endpoint(scope *symbols.Scope, qn *ast.QualifiedName) (ast.Node, bool) {
+	if scope == nil {
+		scope = m.scope
+	}
+	return m.resolver.Endpoint(scope, qn)
 }
 
 // scopeEndpoints resolves an endpoint from the caller's own scope tree, for a
@@ -37,9 +39,10 @@ func (s scopeEndpoints) Endpoint(scope *symbols.Scope, qn *ast.QualifiedName) (a
 	return resolve.VertexInScope(scope, qn)
 }
 
-// localEndpoints indexes a machine no document declares — a hand-built one in a
-// unit test — and resolves its endpoints against that, from the machine's body.
-func localEndpoints(decl ast.Node) Endpoints {
+// localEndpoints indexes a machine no scope tree holds — a hand-built one in a
+// unit test — and returns its endpoints plus the machine body scope of that
+// index, which lowering descends so a region names its own vertices.
+func localEndpoints(decl ast.Node) (Endpoints, *symbols.Scope) {
 	root := &ast.RootNamespace{Members: []ast.Node{decl}}
 	idx := symbols.NewIndexFromDoc("<lowered>", root)
 	scope := idx.DocumentRoot("<lowered>")
@@ -48,5 +51,5 @@ func localEndpoints(decl ast.Node) Endpoints {
 			scope = body
 		}
 	}
-	return machineEndpoints{resolver: resolve.New(idx), scope: scope}
+	return machineEndpoints{resolver: resolve.New(idx), scope: scope}, scope
 }

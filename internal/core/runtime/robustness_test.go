@@ -30,10 +30,13 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("state_transition_endpoint_misspelled", testStateTransitionEndpointMisspelled)
 	t.Run("state_transition_endpoint_in_another_machine", testStateTransitionEndpointInAnotherMachine)
 	t.Run("state_transition_endpoint_never_resolved", testStateTransitionEndpointNeverResolved)
+	t.Run("state_transition_endpoint_naming_a_first_marker", testStateTransitionEndpointNamingAFirstMarker)
+	t.Run("state_junction_without_an_outgoing_transition", testStateJunctionWithoutAnOutgoingTransition)
 	t.Run("state_transition_without_a_target", testStateTransitionWithoutATarget)
 	t.Run("state_transition_effect_reads_an_unknown_feature", testStateTransitionEffectReadsAnUnknownFeature)
 	t.Run("sourceless_accept_at_top_level", testSourcelessAcceptAtTopLevel)
 	t.Run("calc_unbound_parameter", testCalcUnboundParameter)
+	t.Run("calc_unbound_keyword_named_parameter", testCalcUnboundKeywordNamedParameter)
 	t.Run("calc_too_many_arguments", testCalcTooManyArguments)
 	t.Run("calc_unknown_named_argument", testCalcUnknownNamedArgument)
 	t.Run("calc_without_result", testCalcWithoutResult)
@@ -71,6 +74,13 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("collection_spends_the_element_budget", testCollectionSpendsTheElementBudget)
 	t.Run("usage_read_through_a_part_without_an_output", testUsageReadThroughAPartWithoutAnOutput)
 	t.Run("constraint_missing_feature", testConstraintMissingFeature)
+	t.Run("nested_condition_subject_is_ambiguous", testNestedConditionSubjectIsAmbiguous)
+	t.Run("recursive_composition_subject_search", testRecursiveCompositionSubjectSearch)
+	t.Run("duplicate_objects_of_one_declaration", testDuplicateObjectsOfOneDeclaration)
+	t.Run("duplicate_objects_holding_a_plain_part", testDuplicateObjectsHoldingAPlainPart)
+	t.Run("nested_part_held_with_a_multiplicity", testNestedPartHeldWithAMultiplicity)
+	t.Run("part_nested_inside_a_repeated_part", testPartNestedInsideARepeatedPart)
+	t.Run("parts_subsetting_one_collection", testPartsSubsettingOneCollection)
 	t.Run("requirement_feature_without_a_value", testRequirementFeatureWithoutAValue)
 	t.Run("requirement_features_valued_from_each_other", testRequirementFeaturesValuedFromEachOther)
 	t.Run("step_budget_exceeded", testStepBudgetExceeded)
@@ -464,7 +474,14 @@ func testNumericLibraryCallThatHasNoValue(t *testing.T) {
 		{"ComplexFunctions::'/'(ys, (0.0, 0.0))", ErrDivisionByZero},
 		{"ComplexFunctions::re(xs)", ErrTypeMismatch},
 		{"ComplexFunctions::ToString(ys)", ErrUnevaluableLibraryFunction},
-		{"SequenceFunctions::includingAt(xs, 9, 2)", ErrUnevaluableLibraryFunction},
+		// includingAt inserts before a position of 1..size+1, so an index past the
+		// end of the sequence names no insertion point and is reported rather than
+		// appending or dropping the values.
+		{"SequenceFunctions::includingAt(xs, 9, 5)", ErrIndexOutOfRange},
+		{"SequenceFunctions::includingAt(xs, 9, 0)", ErrIndexOutOfRange},
+		{"SequenceFunctions::includingAt((), 9, 2)", ErrIndexOutOfRange},
+		{"SequenceFunctions::includingAt(xs, 9, 1.5)", ErrTypeMismatch},
+		{"SequenceFunctions::includingAt(xs, 9)", ErrCalcArity},
 	} {
 		got, err := evalCollectionExpr(t, tt.expr)
 		if !errors.Is(err, tt.want) {
@@ -491,6 +508,7 @@ func testStringOperandOfTheWrongKind(t *testing.T) {
 		{`StringFunctions::Length(1)`, ErrTypeMismatch},
 		{`StringFunctions::Length(xs)`, ErrTypeMismatch},
 		{`StringFunctions::Substring("abc", 1, 9)`, ErrIndexOutOfRange},
+		{`StringFunctions::Substring("héllo", 1, 6)`, ErrIndexOutOfRange},
 		{`StringFunctions::Substring("abc", 0, 2)`, ErrIndexOutOfRange},
 		{`StringFunctions::Substring("abc", "1", 2)`, ErrTypeMismatch},
 		{`StringFunctions::Substring("abc", 1)`, ErrCalcArity},
@@ -993,8 +1011,9 @@ func testStateTransitionEndpointNeverResolved(t *testing.T) {
 }
 
 // testStateTransitionEndpointInAnotherMachine: an endpoint naming a state of a
-// different machine resolves, so no name diagnostic reports it; lowering must
-// report it rather than drop the edge, since nothing else would.
+// different machine resolves, so no name diagnostic reports it; the state
+// transition check reports it, and lowering backstops the check with a typed
+// error rather than dropping the edge.
 func testStateTransitionEndpointInAnotherMachine(t *testing.T) {
 	src := `package test {
 		state Other {
@@ -1035,6 +1054,73 @@ func testStateTransitionEndpointInAnotherMachine(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "*ast.") {
 		t.Errorf("the message a modeller reads names a Go type: %v", err)
+	}
+}
+
+// testStateTransitionEndpointNamingAFirstMarker: a `first m then x` marker is no
+// vertex, so an endpoint naming one is reported by the state transition check and
+// backstopped here with a typed error rather than a panic.
+func testStateTransitionEndpointNamingAFirstMarker(t *testing.T) {
+	src := `package test {
+		state Machine {
+			initial init;
+			state busy;
+			state other;
+			first marker then other;
+			init then busy;
+			transition busy to marker;
+		}
+	}`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Machine", ast.DefState)
+	if sym == nil {
+		t.Fatal("Machine not found")
+	}
+	_, err := newStateExecutor(ctx, sym, nil)
+	if err == nil {
+		t.Fatal("expected an error for an endpoint naming a marker rather than a vertex")
+	}
+	if !strings.Contains(err.Error(), "not a vertex of this state machine") {
+		t.Errorf("expected the error to say the endpoint is not a vertex, got %v", err)
+	}
+	if strings.Contains(err.Error(), "*ast.") {
+		t.Errorf("the message a modeller reads names a Go type: %v", err)
+	}
+}
+
+// testStateJunctionWithoutAnOutgoingTransition: a junction no transition leaves
+// routes a transition reaching it nowhere, which the state transition check
+// reports; reaching it at run time errors rather than panicking or hanging.
+func testStateJunctionWithoutAnOutgoingTransition(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			initial init;
+			state busy;
+			junction stuck;
+			init then busy;
+			transition busy to stuck;
+		}
+	}`)
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- exec.RunToCompletion() }()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("expected an error for a junction no transition leaves")
+		}
+		if !strings.Contains(err.Error(), "junction stuck has no outgoing transitions") {
+			t.Errorf("expected the error to name the junction, got %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("RunToCompletion hung on a junction no transition leaves")
 	}
 }
 
@@ -2027,6 +2113,35 @@ func testCalcUnboundParameter(t *testing.T) {
 	}
 }
 
+// testCalcUnboundKeywordNamedParameter: a parameter named with a keyword is a
+// parameter like any other, so leaving it unbound reports, never panics.
+func testCalcUnboundKeywordNamedParameter(t *testing.T) {
+	src := `
+		package test {
+			calc classify {
+				in 'type': Integer;
+				in 'state': Integer;
+				return 'type' + 'state';
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "classify", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("classify calc not found")
+	}
+
+	arg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 3}}
+	result, err := ctx.InvokeCalc(sym, []Value{arg}, rootScope)
+	if err == nil {
+		t.Fatalf("expected an unbound parameter error, calc returned %+v", result)
+	}
+	if !errors.Is(err, ErrUnboundParameter) {
+		t.Errorf("expected ErrUnboundParameter, got: %v", err)
+	}
+}
+
 // testCalcTooManyArguments: more arguments than parameters has no binding, so it
 // reports an arity error instead of dropping the extras.
 func testCalcTooManyArguments(t *testing.T) {
@@ -2289,6 +2404,288 @@ func testConstraintMissingFeature(t *testing.T) {
 	}
 
 	t.Log("EvaluateConstraint returned true (missing feature tolerated)")
+}
+
+// testNestedConditionSubjectIsAmbiguous: two objects redefining the same nested
+// feature differently make the subject of a check a question, reported as
+// ErrAmbiguousSubject rather than answered from whichever object is found first.
+func testNestedConditionSubjectIsAmbiguous(t *testing.T) {
+	src := `
+		package test {
+			part def Leaf {
+				attribute value = 1.0;
+				constraint small { value < 10.0 }
+			}
+			part def Top {
+				part leaf : Leaf;
+			}
+			part slow : Top {
+				part :>> leaf { attribute :>> value = 2.0; }
+			}
+			part fast : Top {
+				part :>> leaf { attribute :>> value = 99.0; }
+			}
+		}
+	`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	rootScope := idx.DocumentRoot("<test>")
+	for _, name := range []string{"slow", "fast"} {
+		if _, err := ctx.Instantiate(memberPath(t, rootScope, "test", name)); err != nil {
+			t.Fatalf("instantiate %s: %v", name, err)
+		}
+	}
+	small := memberPath(t, rootScope, "test", "Leaf", "small")
+	satisfied, err := ctx.EvaluateConstraint(small, small.OwnerScope)
+	if !errors.Is(err, ErrAmbiguousSubject) {
+		t.Fatalf("satisfied = %t, err = %v, want ErrAmbiguousSubject", satisfied, err)
+	}
+	if satisfied {
+		t.Error("an ambiguous subject is no verdict")
+	}
+}
+
+// testRecursiveCompositionSubjectSearch: searching for the object a check is
+// about does not walk a design containing its own kind forever; it answers about
+// the declaration, since no object of the checked type is there.
+func testRecursiveCompositionSubjectSearch(t *testing.T) {
+	src := `
+		package test {
+			part def Leaf {
+				attribute value = 1.0;
+				constraint small { value < 10.0 }
+			}
+			part def Node {
+				part next : Node;
+			}
+			part root : Node;
+		}
+	`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	rootScope := idx.DocumentRoot("<test>")
+	if _, err := ctx.Instantiate(memberPath(t, rootScope, "test", "root")); err != nil {
+		t.Fatalf("instantiate root: %v", err)
+	}
+	small := memberPath(t, rootScope, "test", "Leaf", "small")
+	done := make(chan struct{})
+	var satisfied bool
+	var err error
+	go func() {
+		defer close(done)
+		satisfied, err = ctx.EvaluateConstraint(small, small.OwnerScope)
+	}()
+	select {
+	case <-done:
+	case <-time.After(20 * time.Second):
+		t.Fatal("the subject search did not terminate on recursive composition")
+	}
+	if err != nil {
+		t.Fatalf("EvaluateConstraint: %v", err)
+	}
+	if !satisfied {
+		t.Error("satisfied = false, want the declaration's answer")
+	}
+	if len(ctx.instances) > 1000 {
+		t.Errorf("%d objects materialized: the search is not bounded", len(ctx.instances))
+	}
+}
+
+// testDuplicateObjectsOfOneDeclaration: materializing the same declaration twice
+// is one object as far as a check is concerned, not an ambiguous subject.
+func testDuplicateObjectsOfOneDeclaration(t *testing.T) {
+	src := `
+		package test {
+			part def Leaf {
+				attribute value = 1.0;
+				constraint small { value < 10.0 }
+			}
+			part def Top {
+				part leaf : Leaf;
+			}
+			part o : Top {
+				part :>> leaf { attribute :>> value = 99.0; }
+			}
+		}
+	`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	rootScope := idx.DocumentRoot("<test>")
+	obj := memberPath(t, rootScope, "test", "o")
+	for range 2 {
+		if _, err := ctx.Instantiate(obj); err != nil {
+			t.Fatalf("instantiate o: %v", err)
+		}
+	}
+	small := memberPath(t, rootScope, "test", "Leaf", "small")
+	satisfied, err := ctx.EvaluateConstraint(small, small.OwnerScope)
+	if err != nil && !errors.Is(err, ErrViolated) {
+		t.Fatalf("EvaluateConstraint: %v", err)
+	}
+	if satisfied {
+		t.Error("satisfied = true, want the object's 99.0 to violate the constraint")
+	}
+}
+
+// testDuplicateObjectsHoldingAPlainPart: a nested part typed by a definition
+// rather than by a body of its own is reached through its holder, so what two
+// materializations of that holder leave behind is no ambiguous subject.
+func testDuplicateObjectsHoldingAPlainPart(t *testing.T) {
+	src := `
+		package test {
+			part def Leaf {
+				attribute value = 99.0;
+				constraint small { value < 10.0 }
+			}
+			part def Top {
+				part leaf : Leaf;
+			}
+			part o : Top;
+		}
+	`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	rootScope := idx.DocumentRoot("<test>")
+	obj := memberPath(t, rootScope, "test", "o")
+	small := memberPath(t, rootScope, "test", "Leaf", "small")
+	for range 2 {
+		if _, err := ctx.Instantiate(obj); err != nil {
+			t.Fatalf("instantiate o: %v", err)
+		}
+		satisfied, err := ctx.EvaluateConstraint(small, small.OwnerScope)
+		if err != nil && !errors.Is(err, ErrViolated) {
+			t.Fatalf("EvaluateConstraint: %v", err)
+		}
+		if satisfied {
+			t.Error("satisfied = true, want the object's 99.0 to violate the constraint")
+		}
+	}
+}
+
+// testNestedPartHeldWithAMultiplicity: the objects one slot materializes for a
+// multiplicity are occurrences of one declaration, so a check answers a verdict
+// rather than calling its subject ambiguous.
+func testNestedPartHeldWithAMultiplicity(t *testing.T) {
+	src := `
+		package test {
+			part def Wheel {
+				attribute pressure = 99.0;
+				constraint inflated { pressure < 10.0 }
+			}
+			part def Car {
+				part wheels : Wheel[4];
+			}
+			part car : Car;
+		}
+	`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	rootScope := idx.DocumentRoot("<test>")
+	if _, err := ctx.Instantiate(memberPath(t, rootScope, "test", "car")); err != nil {
+		t.Fatalf("instantiate car: %v", err)
+	}
+	inflated := memberPath(t, rootScope, "test", "Wheel", "inflated")
+	satisfied, err := ctx.EvaluateConstraint(inflated, inflated.OwnerScope)
+	if err != nil && !errors.Is(err, ErrViolated) {
+		t.Fatalf("EvaluateConstraint: %v", err)
+	}
+	if satisfied {
+		t.Error("satisfied = true, want the wheels' 99.0 to violate the constraint")
+	}
+}
+
+// testPartNestedInsideARepeatedPart: the declaration a check names may sit
+// deeper inside the part a multiplicity repeated, and the objects reached along
+// one declaration path are still one subject rather than an ambiguity.
+func testPartNestedInsideARepeatedPart(t *testing.T) {
+	src := `
+		package test {
+			part def Bolt {
+				attribute torque = 99.0;
+				constraint tight { torque < 10.0 }
+			}
+			part def Wheel {
+				part bolt : Bolt;
+			}
+			part def Car {
+				part wheels : Wheel[4];
+			}
+			part car : Car;
+		}
+	`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	rootScope := idx.DocumentRoot("<test>")
+	if _, err := ctx.Instantiate(memberPath(t, rootScope, "test", "car")); err != nil {
+		t.Fatalf("instantiate car: %v", err)
+	}
+	tight := memberPath(t, rootScope, "test", "Bolt", "tight")
+	satisfied, err := ctx.EvaluateConstraint(tight, tight.OwnerScope)
+	if err != nil && !errors.Is(err, ErrViolated) {
+		t.Fatalf("EvaluateConstraint: %v", err)
+	}
+	if satisfied {
+		t.Error("satisfied = true, want the bolts' 99.0 to violate the constraint")
+	}
+}
+
+// testPartsSubsettingOneCollection: two declarations feeding one collection are
+// two subjects, not repetitions of the collection, so the check reports the
+// ambiguity rather than answering from whichever it reached first.
+func testPartsSubsettingOneCollection(t *testing.T) {
+	src := `
+		package test {
+			part def Component {
+				attribute v = 1.0;
+				constraint ok { v < 10.0 }
+			}
+			part def Assembly {
+				part subsystem : Component[*];
+				part small : Component :> subsystem {
+					attribute :>> v = 5.0;
+				}
+				part large : Component :> subsystem {
+					attribute :>> v = 99.0;
+				}
+			}
+			part assembly : Assembly;
+		}
+	`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	rootScope := idx.DocumentRoot("<test>")
+	if _, err := ctx.Instantiate(memberPath(t, rootScope, "test", "assembly")); err != nil {
+		t.Fatalf("instantiate assembly: %v", err)
+	}
+	ok := memberPath(t, rootScope, "test", "Component", "ok")
+	satisfied, err := ctx.EvaluateConstraint(ok, ok.OwnerScope)
+	if !errors.Is(err, ErrAmbiguousSubject) {
+		t.Fatalf("satisfied = %t, err = %v, want ErrAmbiguousSubject", satisfied, err)
+	}
+	if satisfied {
+		t.Error("an ambiguous subject is no verdict")
+	}
 }
 
 // testRequirementFeatureWithoutAValue: a condition naming a feature the

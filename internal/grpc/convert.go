@@ -59,8 +59,9 @@ func SymbolToProtoIn(sym *symbols.Symbol, sc *SymbolContext) *pb.SymbolInfo {
 	info.Multiplicity = sc.multiplicityOf(sym)
 	info.Specializations = sc.specializationsOf(sym)
 
-	// Attributes populated later when semantic layer ready
-	info.Attributes = []*pb.AttributeInfo{}
+	// The attributes the element has, own and inherited, with their resolved
+	// types and constant default values.
+	info.Attributes = sc.attributesOf(sym)
 
 	return info
 }

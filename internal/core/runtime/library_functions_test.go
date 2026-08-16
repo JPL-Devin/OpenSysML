@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/libs"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/resolve"
@@ -917,7 +918,6 @@ func TestUnevaluableLibraryFunctionsNameThemselves(t *testing.T) {
 		{"ComplexFunctions::product", []Value{realVec(1, 2)}},
 		{"ComplexFunctions::ToString", []Value{realVec(1, 2)}},
 		{"ComplexFunctions::ToComplex", []Value{{Kind: ValString, Str: "1.0"}}},
-		{"SequenceFunctions::includingAt", []Value{vec(constInt(1), constInt(2)), constInt(9), constInt(2)}},
 	}
 
 	for _, tc := range unevaluable {
@@ -991,6 +991,44 @@ func TestVendoredFunctionsAreAllDispatchable(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A model reads a library feature by name even where the library index cache
+// restored the symbol without a declaration to evaluate.
+func TestLibraryFeatureNameReadFromACachedSymbol(t *testing.T) {
+	root := parser.New(source.New("test.sysml", []byte(`package test {
+	attribute twoPi = 2 * TrigFunctions::pi;
+}`))).ParseFile()
+	idx := symbols.NewIndex()
+	idx.AddDocument("test.sysml", root)
+	idx.AddRecords("lib", []symbols.RecordEntry{
+		{FQN: "TrigFunctions", Kind: symbols.SymbolPackage},
+		{FQN: "TrigFunctions::pi", Kind: symbols.SymbolAttributeUsage},
+	})
+	idx.MarkLibrary("lib")
+	resolver := resolve.New(idx)
+
+	pkg, ok := idx.DocumentRoot("test.sysml").LookupLocal("test")
+	if !ok || pkg == nil || pkg.Scope == nil {
+		t.Fatal("package test not found")
+	}
+	sym, ok := pkg.Scope.LookupLocal("twoPi")
+	if !ok || sym == nil {
+		t.Fatal("attribute twoPi not found")
+	}
+	decl, ok := sym.Decl.(*ast.Usage)
+	if !ok || decl.Value == nil {
+		t.Fatalf("twoPi declares %T with no value", sym.Decl)
+	}
+
+	ctx := NewContext(semantics.NewModel(resolver), resolver, 10000)
+	got, err := NewEvalContext(ctx, pkg.Scope).Eval(decl.Value)
+	if err != nil {
+		t.Fatalf("2 * TrigFunctions::pi = error %v", err)
+	}
+	if got.Kind != ValConst || got.Const.Real != 2*math.Pi {
+		t.Fatalf("2 * TrigFunctions::pi = %+v, want %v", got, 2*math.Pi)
 	}
 }
 

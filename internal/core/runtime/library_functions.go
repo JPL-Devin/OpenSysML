@@ -116,15 +116,6 @@ func init() {
 	registerComplexFunctions()
 	registerStringFunctions()
 
-	// includingAt, the one SequenceFunctions declaration left unevaluated: its
-	// vendored body drops the element at index, while the addAt behavior that
-	// calls it documents an insertion keeping it (see spec-compliance.md).
-	registerUnevaluable(
-		"SequenceFunctions::includingAt", []string{"seq", "values", "index"}, 3,
-		"its vendored body drops the element at index while addAt documents an insertion that keeps it; "+
-			"the reading is not settled here (docs/project/spec-compliance.md)",
-	)
-
 	// SystemicaMathFunctions is the non-normative Systemica extension library
 	// (internal/core/libs/stdlib/Systemica Libraries/SystemicaMathFunctions.kerml),
 	// which declares the exponential, logarithmic and two-argument arctangent
@@ -1541,14 +1532,14 @@ func stringSubstring(name string, _ *Context, args []Value) (Value, error) {
 	}
 	chars := []rune(x)
 	if lower < 1 {
-		return Value{}, fmt.Errorf("%w: function %s lower %d is outside 1..%d",
+		return Value{}, fmt.Errorf("%w: function %s lower character %d is outside 1..%d",
 			ErrIndexOutOfRange, name, lower, len(chars))
 	}
 	if lower > upper {
 		return Value{Kind: ValString}, nil
 	}
 	if upper > int64(len(chars)) {
-		return Value{}, fmt.Errorf("%w: function %s upper %d is outside 1..%d",
+		return Value{}, fmt.Errorf("%w: function %s upper character %d is outside 1..%d",
 			ErrIndexOutOfRange, name, upper, len(chars))
 	}
 	return Value{Kind: ValString, Str: string(chars[lower-1 : upper])}, nil

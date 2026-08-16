@@ -35,7 +35,7 @@ func TestCommandLine(t *testing.T) {
 		name:   "the help asked for is a result on stdout",
 		args:   []string{"-h"},
 		status: exitServed,
-		stdout: []string{"Usage: sysml-lsp [options]", "-version"},
+		stdout: []string{"Usage: sysml-lsp [options]", "-version", "-stdio"},
 	}, {
 		name:   "a flag that is not defined is reported with the usage",
 		args:   []string{"-nosuchflag"},

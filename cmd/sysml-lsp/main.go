@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"os"
 
 	"github.com/Open-MBEE/Systemica/internal/core/model"
@@ -21,10 +22,12 @@ var (
 	GoVersion = "unknown"
 )
 
-// Exit statuses: 0 for the protocol served to its end, 2 for a command line the
-// server cannot act on, as for sysml.
+// Exit statuses: 0 for the protocol served to its end, 1 for a session that ended
+// without one (an exit with no shutdown, or a protocol error), 2 for a command
+// line the server cannot act on, as for sysml.
 const (
 	exitServed      = 0
+	exitProtocol    = 1
 	exitUnservable  = 2
 	commandPrefix   = "sysml-lsp: "
 	protocolMessage = "the protocol is spoken over stdin/stdout, so an editor starts this server rather than a shell"
@@ -52,7 +55,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 	fs.Usage = func() { printUsage(fs.Output(), fs) }
 
 	// -h/-help are defined here so that help asked for is a result on stdout.
+	// -stdio names the only transport this server has: the standard language
+	// clients pass it, so it is accepted and documented rather than rejected.
 	var showVersion, showHelp bool
+	fs.Bool("stdio", false, "Serve over stdin/stdout (the only transport; accepted for clients that name it)")
 	fs.BoolVar(&showVersion, "version", false, "Show version information")
 	fs.BoolVar(&showVersion, "v", false, "Show version (shorthand)")
 	fs.BoolVar(&showHelp, "help", false, "Show this help and exit")
@@ -96,20 +102,22 @@ func printUsage(w io.Writer, fs *flag.FlagSet) {
 	fmt.Fprintf(w, "\nWith no options, %s.\n", protocolMessage)
 }
 
-// serve speaks the protocol over stdin/stdout until the client ends it.
+// serve speaks the protocol over stdin/stdout until the client ends it, and
+// reports the status the session earned: the one the client's exit notification
+// asks for, or 1 for a session that ended in a protocol error.
 func serve(stderr io.Writer) int {
 	ws := model.NewWorkspace()
 	srv := lsp.NewServer(ws)
 	err := srv.Run(context.Background(), stdio{})
-
-	// LSP spec: Exit after Shutdown should return 0, Exit without Shutdown
-	// should return 1. The exit code is handled by Exit() calling conn.Close().
-	if err != nil {
-		// Ignore "file already closed" from clean exit
-		if !errors.Is(err, os.ErrClosed) && err.Error() != "failed reading header line: read /dev/stdin: file already closed" {
-			fmt.Fprintf(stderr, "%s%v\n", commandPrefix, err)
-			return 1
-		}
+	if err != nil && !endedWithTheStream(err) {
+		fmt.Fprintf(stderr, "%s%v\n", commandPrefix, err)
+		return exitProtocol
 	}
-	return exitServed
+	return srv.ExitCode()
+}
+
+// endedWithTheStream reports whether err is only the client's end of the stream:
+// a client that closes it rather than exiting has still been served to its end.
+func endedWithTheStream(err error) bool {
+	return errors.Is(err, io.EOF) || errors.Is(err, os.ErrClosed) || errors.Is(err, net.ErrClosed)
 }

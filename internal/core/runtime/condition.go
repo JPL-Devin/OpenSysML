@@ -1,13 +1,20 @@
 package runtime
 
 import (
+	"errors"
 	"fmt"
+	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
+
+// ErrAmbiguousSubject is returned when more than one object carries the checked
+// element, so which one the verdict would be about is a question, not an answer.
+var ErrAmbiguousSubject = errors.New("ambiguous subject")
 
 // condition is one boolean check a constraint or requirement states, with the
 // scope its expression resolves names in. A condition states either an
@@ -129,6 +136,10 @@ func (ctx *Context) evaluateConditions(check conditionCheck, conds []condition) 
 		return false, fmt.Errorf("%s %s: %w", check.kind, check.name(), ErrNoConditions)
 	}
 	features := ctx.conditionFeatures(check.sym)
+	self, err := ctx.conditionSubject(check.sym, check.self)
+	if err != nil {
+		return false, fmt.Errorf("%s %s: %w", check.kind, check.name(), err)
+	}
 	// One check is one evaluation: its conditions share what a calc usage they
 	// read answers, and the next check reads it again.
 	activation, endStep := ctx.beginStep()
@@ -136,7 +147,7 @@ func (ctx *Context) evaluateConditions(check conditionCheck, conds []condition) 
 	required := false
 	for _, cond := range conds {
 		required = required || cond.required
-		holds, err := ctx.conditionHolds(activation, cond, features, check.self, check.bindings)
+		holds, err := ctx.conditionHolds(activation, cond, features, self, check.bindings)
 		if err != nil {
 			return false, fmt.Errorf("%s %s: %s evaluation failed: %w", check.kind, check.name(), check.what, err)
 		}
@@ -158,6 +169,267 @@ func (ctx *Context) evaluateConditions(check conditionCheck, conds []condition) 
 		return false, &ViolationError{Kind: check.kind, Element: check.name(), What: check.what, Condition: negatedText(conds)}
 	}
 	return true, nil
+}
+
+// conditionSubject is the object a check is about: the one supplied when it
+// carries the checked element, else the single object of this runtime that does.
+// A nested object counts, since a redefinition on an object gives a nested
+// feature values of its own; no such object leaves the check about the
+// declaration.
+func (ctx *Context) conditionSubject(sym *symbols.Symbol, self *Instance) (*Instance, error) {
+	owner := declaringType(sym)
+	if owner == nil {
+		return self, nil
+	}
+	roots := []*Instance{self}
+	if self == nil {
+		roots = ctx.rootInstances()
+	} else if ctx.model.Conforms(self.Type, owner) {
+		return self, nil
+	}
+	carriers := ctx.carriersUnder(roots, owner)
+	switch len(carriers) {
+	case 0:
+		return self, nil
+	case 1:
+		return carriers[0], nil
+	}
+	return nil, fmt.Errorf("%w: %s is carried by %s: check it on one of them",
+		ErrAmbiguousSubject, sym.Name, strings.Join(ctx.objectLabels(carriers), ", "))
+}
+
+// declaringType is the type whose objects carry sym, nil when sym is declared
+// somewhere that has no objects — a package, a library namespace.
+func declaringType(sym *symbols.Symbol) *symbols.Symbol {
+	if sym == nil || sym.OwnerScope == nil {
+		return nil
+	}
+	owner := sym.OwnerScope.Owner()
+	if owner == nil {
+		return nil
+	}
+	switch owner.Decl.(type) {
+	case *ast.Definition, *ast.Usage:
+		return owner
+	}
+	return nil
+}
+
+// nestedFeature reports whether sym is a feature a type declares. A definition
+// nested in another is not one: objects materialize it in their own right.
+func nestedFeature(sym *symbols.Symbol) bool {
+	if sym == nil {
+		return false
+	}
+	if _, ok := sym.Decl.(*ast.Usage); !ok {
+		return false
+	}
+	return declaringType(sym) != nil
+}
+
+// readThrough reports whether inst is the object a value expression materialized
+// to read a declaration through, which is an occurrence of nothing.
+func (ctx *Context) readThrough(inst *Instance) bool {
+	id, ok := ctx.occurrences[inst.Type]
+	return ok && id == inst.ID
+}
+
+// rootInstances returns the objects this runtime holds that stand on their own,
+// in identity order: an object a slot holds is reached through its holder, and one
+// materialized to read a nested declaration through is an occurrence of nothing,
+// while an object a caller asked for is a root whatever it materializes. One
+// declaration materialized twice is one object here, the latest.
+func (ctx *Context) rootInstances() []*Instance {
+	held := ctx.heldObjectIDs()
+	latest := make(map[*symbols.Symbol]*Instance, len(ctx.instances))
+	for _, inst := range ctx.instances {
+		if inst == nil || held[inst.ID] || (nestedFeature(inst.Type) && ctx.readThrough(inst)) {
+			continue
+		}
+		if kept, ok := latest[inst.Type]; ok && kept.ID > inst.ID {
+			continue
+		}
+		latest[inst.Type] = inst
+	}
+	out := make([]*Instance, 0, len(latest))
+	for _, inst := range latest {
+		out = append(out, inst)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
+}
+
+// heldObjectIDs returns the identities a slot of another object already holds, so
+// an object reached through its holder is no root of its own. Slots are read as
+// they stand, since materializing one is the search that asked for these.
+func (ctx *Context) heldObjectIDs() map[int64]bool {
+	held := make(map[int64]bool)
+	for _, inst := range ctx.instances {
+		if inst == nil {
+			continue
+		}
+		for _, slot := range inst.Slots {
+			for _, id := range heldObjects(slot.HeldValue()) {
+				held[id] = true
+			}
+		}
+	}
+	return held
+}
+
+// carriersUnder returns the objects reachable from roots whose type carries the
+// features owner declares, roots included, in identity order. A declaration is
+// descended into once per path, so recursive composition is a finite search, and
+// one object stands for each declaration reached, so objects a multiplicity
+// repeated are one candidate however deep the named declaration sits in them.
+func (ctx *Context) carriersUnder(roots []*Instance, owner *symbols.Symbol) []*Instance {
+	var out []*Instance
+	seen := make(map[int64]bool, len(roots))
+	declared := make(map[carrierOccurrence]bool)
+	path := make(map[*symbols.Symbol]bool)
+	var descend func(inst *Instance, through string)
+	descend = func(inst *Instance, through string) {
+		if inst == nil || seen[inst.ID] {
+			return
+		}
+		seen[inst.ID] = true
+		occurrence := carrierOccurrence{through: through, decl: inst.Type}
+		if ctx.model.Conforms(inst.Type, owner) && !declared[occurrence] {
+			declared[occurrence] = true
+			out = append(out, inst)
+		}
+		if inst.Type != nil {
+			if path[inst.Type] {
+				return
+			}
+			path[inst.Type] = true
+			defer delete(path, inst.Type)
+		}
+		for _, child := range ctx.nestedObjects(inst) {
+			descend(child.instance, through+"::"+child.feature)
+		}
+	}
+	for _, root := range roots {
+		descend(root, strconv.FormatInt(root.ID, 10))
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
+}
+
+// carrierOccurrence identifies the declaration an object occurs as: the features
+// walked through to reach it and the declaration it materializes. Objects a
+// multiplicity repeated share both, while ones a collection gathers from
+// different declarations — the features subsetting it — do not.
+type carrierOccurrence struct {
+	through string
+	decl    *symbols.Symbol
+}
+
+// heldObject is an object a feature of another object holds, named by that
+// feature.
+type heldObject struct {
+	feature  string
+	instance *Instance
+}
+
+// nestedObjects returns the objects the object-valued features of inst hold,
+// materializing a lazy one as reading its slot does. A slot that cannot be read
+// yields no object: one that is not there is no subject either.
+func (ctx *Context) nestedObjects(inst *Instance) []heldObject {
+	features := ctx.FeaturesOf(inst.Type)
+	var out []heldObject
+	for i := range features {
+		feat := &features[i]
+		if feat.Name == "" || !holdsObjects(feat) {
+			continue
+		}
+		slot, err := inst.GetSlot(ctx, feat.Name)
+		if err != nil || slot == nil {
+			continue
+		}
+		for _, id := range heldObjects(slot.HeldValue()) {
+			if child, ok := ctx.instances[id]; ok {
+				out = append(out, heldObject{feature: feat.Name, instance: child})
+			}
+		}
+	}
+	return out
+}
+
+// holdsObjects reports whether a feature holds objects rather than values: a
+// nested part has features and conditions of its own, an attribute has neither.
+func holdsObjects(feat *EffectiveFeature) bool {
+	if feat.Symbol == nil {
+		return false
+	}
+	usage, ok := feat.Symbol.Decl.(*ast.Usage)
+	if !ok {
+		return false
+	}
+	switch usage.Kind {
+	case ast.UsagePart, ast.UsageItem, ast.UsageOccurrence, ast.UsageIndividual, ast.UsagePort:
+		return true
+	}
+	return false
+}
+
+// heldObjects returns the identities a slot value denotes, a collection's
+// elements included.
+func heldObjects(val Value) []int64 {
+	if id, ok := val.Object(); ok {
+		return []int64{id}
+	}
+	var elements []Value
+	switch {
+	case val.Kind == ValSequence && val.Sequence != nil:
+		elements = val.Sequence.Elements()
+	case val.Kind == ValSet && val.Set != nil:
+		elements = val.Set.Elements()
+	}
+	var out []int64
+	for _, element := range elements {
+		if id, ok := element.Object(); ok {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+// objectLabels names objects as a diagnostic can quote them: the definition each
+// is an object of and its identity, so two objects of one definition are named
+// alike whether they materialize it directly or through a usage — whose name is
+// added, since an object of a nested part has no name of its own.
+func (ctx *Context) objectLabels(instances []*Instance) []string {
+	out := make([]string, 0, len(instances))
+	for _, inst := range instances {
+		name := "object"
+		if def := ctx.definitionOf(inst.Type); def != nil && def.Name != "" {
+			name = def.Name
+		}
+		label := fmt.Sprintf("%s #%d", name, inst.ID)
+		if inst.Type != nil && inst.Type.Name != "" && inst.Type.Name != name {
+			label += " (" + inst.Type.Name + ")"
+		}
+		out = append(out, label)
+	}
+	return out
+}
+
+// definitionOf is the definition objects of sym are objects of: sym itself when
+// it declares one, else the nearest definition it specializes.
+func (ctx *Context) definitionOf(sym *symbols.Symbol) *symbols.Symbol {
+	if sym == nil {
+		return nil
+	}
+	if _, ok := sym.Decl.(*ast.Definition); ok {
+		return sym
+	}
+	for _, super := range ctx.model.AllSupertypes(sym) {
+		if _, ok := super.Decl.(*ast.Definition); ok {
+			return super
+		}
+	}
+	return sym
 }
 
 // conditionHolds evaluates one condition: an expression, or a group that holds

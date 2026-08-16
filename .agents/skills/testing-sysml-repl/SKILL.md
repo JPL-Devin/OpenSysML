@@ -457,8 +457,10 @@ An action token that reaches an `accept` with no matching message **parks** inst
 - Satisfiable: `internal/core/runtime/testdata/conformance/action_send_accept.sysml`
   (`%action communicator`) — `%break counter` pauses on the accept node, and resuming completes with
   `number = 50` / `n = 50` (the typed accept skips the String and takes the Integer). Loading these
-  fixtures prints a tier-2 `unresolved reference: n` diagnostic for the `assign` that reads the
-  accepted parameter; the runtime still binds it, so don't mistake that for a new failure.
+  fixtures used to print a tier-2 `unresolved reference: n` diagnostic for the `assign` that reads
+  the accepted parameter while the runtime bound it anyway; **PR #196 fixed that**, so on current
+  revisions loading them must be clean. Seeing that diagnostic again is a regression of the
+  accept-payload scope contribution, not harness noise.
 - Unsatisfiable: write a one-accept action with nothing sending to it. `%step` → `State: Waiting`,
   and `%continue` must return a typed
   `accept deadlock in action <name>: nothing can post the awaited message (...)` — **never** hang.
@@ -466,6 +468,42 @@ An action token that reaches an `accept` with no matching message **parks** inst
   `no active action session`.
 
 Always run these under `timeout` when driving over a pipe; a hang is the failure mode to catch.
+
+### An accept node's payload as a body-scoped name (PR #196)
+
+`internal/core/resolve/accept_payload.go` contributes `action r accept msg : T;`'s payload to the
+**body** the accept node is declared in, so sibling nodes read it by simple name. Test it on both
+surfaces — `bin/sysml -validate f.sysml` for the diagnostic and
+`printf '%%load f\n%%action <n>\n%%continue\n%%quit\n' | timeout 30 ./bin/sysml` for the value —
+because check-clean alone never proves the runtime bound anything.
+
+- The A/B against a parent-commit binary is what makes this convincing: the same model gives
+  `error: unresolved reference: msg — did you mean test::communicator::receiver::msg?` (exit 2) on
+  the old binary and `✓ … no errors` on the new one. Payload names must be **non-keyword** —
+  `accept first : Integer` is parsed as an initial node and derails the whole graph with
+  `action has multiple initial nodes`; `first`, `after`, `then` are all reserved.
+- Positive shapes worth one run each, with the numbers a correct build gives (send value in
+  parens): later sibling reads `msg + 1` (42 → `seen = 43`); nested `if msg > 5` + `while` in a
+  sibling node (7 → `total = 21`); two accepts binding `alpha`/`beta` (11, 30 → `sum = 41`);
+  reader declared textually **before** the accept but sequenced after it (4 → `seen = 5`).
+- **Shadowing is the case only a value can catch.** A package-level `attribute msg : Integer = 1;`
+  keeps the model check-clean on *both* binaries, so assert `seen = 9` (the sent payload) and not
+  `1`. Note a *body*-level `attribute msg = 111` in the same action is a weak probe: the accept
+  writes the same value slot, so `seen = 9` either way — prefer the package-level form.
+- Negatives that must stay `unresolved reference: msg` at exit 2, and each exercises a different
+  guard: a misspelling in the same body (now gains `— did you mean msg?`); a **sibling** action's
+  node in the same package; a package-level `attribute` initializer; a wildcard
+  `import src::communicator::*` into another package; and a `part def` body declaring an action
+  node with the accept (`sharesBodyFeatureSpace` rejects a part — this one is easy to forget).
+- A node that executes **before** the accept binds must fail, not read stale data:
+  `error: execution failed: eval assignment RHS: unresolved reference: msg` in ~0.1 s, with
+  `%tokens` afterwards still showing `Token 1 @ <node>` (session survives).
+- A **qualified** `receiver::msg` reference resolves at check time and then fails the run with
+  `usage receiver::msg has no value` — identical on both binaries, i.e. pre-existing rather than a
+  regression of this change. Always A/B it before reporting it as a defect.
+- Cheap corpus gate for a resolve change: loop `internal/core/runtime/testdata/conformance/*.sysml`
+  and `examples/*.sysml` comparing `grep -c 'error:'` counts new vs old binary and print only files
+  where new > old (~1 min).
 
 ## Standard SysML v2 behavioral notation (flows, triggers, sends, transition effects)
 
@@ -1039,7 +1077,7 @@ Client API shapes that are easy to get wrong:
 
 - `Model.find(name)` returns **one `Symbol` or `None`**, not a list — iterating it raises
   `TypeError: 'Symbol' object is not iterable`. Use `.id` (FQN), `.name`, `.kind`.
-- `pysysml.instantiate(fqn, file_path=...)` and `pysysml.eval(expr, file_path=..., context_symbol_id=...)`
+- `pysysml.instantiate(fqn, file_path=...)` and `pysysml.evaluate(expr, file_path=..., context_symbol_id=...)`
   each take *exactly one* of `file_path` / `model_hash`.
 - `Instance.get_slot(name)` returns the raw protobuf `SlotValue`. Read it as
   `sv.materialized` and `sv.value.WhichOneof('kind')` → `real_value` / `int_value` / `instance_id` /
@@ -1058,7 +1096,7 @@ What the slot kinds mean (`ValueToProto`, `convert.go`):
   attributes (`attribute a = b + 1.0; attribute b = a + 1.0;`) — expect
   `slot Loop.a: slot Loop.b: cyclic slot dependency: Loop.a`, promptly, raised as `SlotError` by
   the client, and prove the service is still alive afterwards with a follow-up
-  `pysysml.eval('1 + 1', ...)`.
+  `pysysml.evaluate('1 + 1', ...)`.
 - A nested `part engine : Engine;` still marshals as bare `instance_id=N`, but
   `InstantiateResponse.instances` carries every instance reachable from the root, so Python
   expands the child too (`inst.engine.power`). An id is only resolvable against the response that
@@ -1776,6 +1814,75 @@ on `main`; the "old" shapes double as A/B canaries against the parent commit.
   `engagementRingCost`/`ringCost` `= 500.00`, `diamondCost = 550.00`, and
   `engagementRingToBandConstraint: <constraint: satisfied>`.
 
+## Port routing: direction, conjugation and connector end paths (PR #195)
+
+Routing a `send … via p` is only observable through an `accept` that either receives or does not, so
+every fixture needs **both** a sender node and a reader node writing an attribute, e.g.
+`action reader accept n : Integer via dst { assign got := n; }` — then `%continue` prints
+`Results: got = <n>` / `n = <n>`. A model with no reader completes either way and proves nothing.
+
+- **Drive it with `%load <file>` + `%action <name>` + `%continue`** (or `%state <m>` + `%advance 1` +
+  `%current` for a transition `accept … via p`). Put `import ScalarValues::*;` in every fixture,
+  otherwise the load is noisy with `unresolved reference: Integer — did you mean
+  ScalarValues::Integer?` (harmless, but it costs screen space on camera).
+- **The two performer paths are different code and both need a run:** `%action Pkg::Part::ship`
+  (no object → connectors of the *nearest enclosing part*) and `%instantiate <part usage>` followed
+  by `%action Pkg::Part::ship <usage>` (object → connectors of the object's *type*). Same model, same
+  expected value; a regression in either one is invisible if you only run one.
+- **Direction/conjugation shape:** `port def Chan { out attribute v : Integer; }` with
+  `port src : Chan; port dst : ~Chan; connect src to dst;`. `send via src` delivers; `send via dst`
+  must fail with
+  `error: execution failed: send reaches no receiving port: port "dst" is joined only to outbound
+  ends (src)`. The mirror shape with an `in` feature (`port def Ctrl { in attribute c; }`,
+  `cin : Ctrl`, `cout : ~Ctrl`) must fail on `send via cin` — worth running, because it catches a
+  conjugation applied in only one direction.
+- **A port with no flow features is undirected** (receives either way) and an `inout` feature also
+  receives — assert a *successful* delivery for both, otherwise an over-strict direction check looks
+  like a pass.
+- **Nested-path routing needs a decoy to be a real test.** Declare `port p { port q; }` *and*
+  `port other { port q; }`, `connect p.q to sink`. Two runs: `send via p.q` → reader gets the value;
+  `send via other.q` → `port "other.q" is joined to no port that can receive it` **and** the reader's
+  attribute stays at its initial value. Without the decoy the test passes on a build that routes by
+  bare last segment.
+- **Contrast binary is very cheap here and worth it** (`git worktree add /tmp/old<sha> <sha>`): on the
+  pre-fix commit the direction fixture *completes silently* (message delivered nowhere, no error) and
+  the nested/part-level fixtures end in `accept deadlock in action ship: nothing can post the awaited
+  message (…)`. Those two failure shapes are the proof that the new run means something.
+- **`connect a, b, c;` is a parse error** (`expected 'to' between connector ends`); the n-ary form is
+  `connect (a, b, c);`. If a multi-end routing test "fails" with `joined to no port that can receive
+  it`, check the load diagnostics first — the connector may never have lowered.
+- `connect a to a;` (self-connection) reports `port "a" is joined to no port that can receive it` (the
+  sending port is excluded from its own receivers), and an end naming a nonexistent feature
+  (`connect a to nosuchthing;`) is *deliberately* treated as able to receive, so the action completes
+  with no error and no panic. Assert both — they are the "must not crash" cases.
+
+### Routing from a state machine declared inside a part (PR #195 follow-up, 8cffc9e)
+
+`send … via p` inside a `state machine` nested in a `part def` has to walk out through state,
+region and transition scopes to reach the part's `connect`. Testing it needs shapes the REPL will
+actually descend into:
+
+- **Fixture shape:** `part def Radio { port src : PingPort; port dst : PingPort; connect src to dst;
+  state machine { attribute received : Integer = 0; … } }` with `port def PingPort { in item ping :
+  Ping; }`. Assert on `%current`'s `State data:` block (`received = <n>`), and drive with
+  `%state <Pkg>::<Part>::machine` — a bare `%state Radio::machine` fails with
+  `unresolved reference`, the name must be fully qualified (or just `machine` if it is the only one).
+- **Cover both send sites**: a state entry (`state waiting { entry send Ping() via src; }`) *and* a
+  transition effect (`transition go first waiting do send Ping() via src then sent;`). At the
+  pre-fix commit the entry form can already work while the **transition effect** fails with
+  `error: event processing failed: transition effect: send reaches no receiving port: port "src" is
+  joined to no port that can receive it` — so the transition-effect case is the discriminating one.
+- **Nesting: `initial`/`then` inside a composite state does not descend** in this build — a
+  `state outer { initial s0; state a { entry … } s0 then a; }` machine stays in `outer` and the inner
+  entry never runs (reproducible with no part/ports involved, so it is a pre-existing state-machine
+  limitation, not routing). Use the **entry-succession form instead**, which does descend and shows a
+  `State stack (active configuration): 0. outer / 1. a` in `%current`:
+  `state machine { entry; then outer; state outer { entry; then a; state a { entry send … via src; } … } }`
+  A `region main { initial start; … }` wrapper also works with plain `initial`.
+- **Add a negative for over-reach:** a machine at package level with an unconnected port, and a
+  second part with its own `connect ox to oy`. The send must still fail with the typed error — if the
+  scope walk goes too far it could pick up the unrelated part's connectors.
+
 ## Driving a state machine and its transition effects on camera
 
 - **`-e` is not a file flag.** `sysml -e <expr> [file]` evaluates an expression; to load a model
@@ -2083,10 +2190,10 @@ number rather than quoting the table.
   71 / 44 / 44 (65 / 38 / 38 counting the 110 `.sysml` files alone — state the denominator, since
   the published limitation counts both languages).
 - **Counted rows go stale fast, and the Python row depends on the environment.** With no service
-  listening (what CI does) `pytest python/tests/ -q` is 369 passed / 26 skipped at 0.0.8; with a
-  service already listening the integration tests run instead of skipping *and* two lifecycle tests
-  fail by design, because they assert this client owns the service it started. Measure the row the
-  no-service way and say so. `go test -race -count=1 ./...` was 3,682 pass / 5 skip / 3,687 total.
+  listening `pytest python/tests/ -q` was 369 passed / 26 skipped at 0.0.8; with a service already
+  listening the integration tests run instead of skipping (since PR #204 nothing fails either way,
+  and CI now starts a service). Say which way a row was measured. `go test -race -count=1 ./...`
+  was 3,682 pass / 5 skip / 3,687 total.
 - **Error-class claims: check the export path.** A class can exist in `pysysml.errors` and be absent
   from the package surface — `hasattr(pysysml, name)` is the check, and
   `TestPackageSurface` in `python/tests/test_errors.py` now locks every exception in
@@ -2098,6 +2205,98 @@ number rather than quoting the table.
   `WorkspaceEdit` whose `newText` actually fixes the file. A missing-semicolon fix needs a fixture
   the parser recovers with a fix on — `action def A { first start }` yields `Insert ';'`; a plain
   attribute declaration yields a diagnostic with no fix.
+
+## Subject-aware `Evaluate`, attribute metadata and generated classes (Track P, PR #218)
+
+- **`pandas` is not installed by the blueprint but `Symbol.to_dataframe()` needs it.** If
+  `to_dataframe()` raises `ModuleNotFoundError: No module named 'pandas'`, run
+  `$HOME/pv/bin/pip install pandas -q` first — the failure is environmental, not a product defect.
+- **Subject evaluation is the difference between the *declared default* and the *object's slot*.**
+  A fixture that distinguishes them is mandatory: `part def Vehicle { attribute mass = 1500.0; }`,
+  `part def Sedan :> Vehicle { attribute :>> mass = 1200.0; }`, `part sedan : Sedan;`. Then
+  `m.eval('mass', context_symbol_id='Demo::Vehicle')` must be `1500.0` while
+  `m.eval('mass', subject='Demo::sedan')` must be `1200.0`. Without the redefinition both paths
+  return the same number and the test proves nothing.
+  - On `Model` the kwarg is `subject=`; on `Connection.eval` it is `subject_symbol_id=` and the
+    model hash comes **second**. Module-level `pysysml.evaluate` also takes `subject=`; the
+    deprecated `pysysml.eval` forwards to it and warns `DeprecationWarning`.
+  - A `subject=` plus an explicit `context_symbol_id=` still reads the object, and derived slots
+    (`attribute doubled = mass * 2.0`) follow the object too.
+  - A *definition* as subject is accepted (it is instantiated and reads its own redefinition), and an
+    unrelated subject (e.g. an attribute) is tolerated rather than rejected — record those as
+    observed behavior, not failures. An unknown FQN gives `ExecutionError: subject not found: <fqn>`.
+  - A subject with a cyclic slot raises `ExecutionError: ... cyclic slot dependency: <feature>` and
+    the service must still answer afterwards — always follow such a case with `m.eval('1+1') == 2`.
+- **Cross-checking against the REPL needs fully-qualified expressions.** `%eval mass` on a model with
+  several `mass` features fails with `symbol "mass" is ambiguous`, whereas gRPC `subject=` resolves
+  the unqualified name inside the subject's scope. Use `%instantiate Demo::sedan` then
+  `%eval Demo::sedan::mass` / `%slots Demo::sedan` to compare; that is a surface divergence in name
+  resolution, not a wrong value. Drive it non-interactively with
+  `printf '%%load …\n%%instantiate …\n%%eval …\n%%quit\n' | ./bin/sysml`.
+- **Attribute metadata checks worth making**: own attributes come before inherited ones; a
+  redefinition masks the attribute it redefines (`Sedan.mass` = 1200.0, not two `mass` rows);
+  `attributes()` ids point at the *declaring* supertype (`Demo::Vehicle::name`); a **non-constant**
+  default such as `mass * 2.0` must report `value=None` rather than a guessed number; a quantity
+  default `120.0 [kg]` reports value and `unit='kg'` separately; an element with no attributes yields
+  `[]` and an empty DataFrame that still has all 8 columns
+  (`name,kind,id,type,multiplicity,value,unit,inherited`).
+- **Stdlib elements themselves are not reachable through `Model.find`/`m['ISQ::MassValue']` (returns
+  `None`)**, so "attributes of a stdlib element" can only be covered indirectly: declare
+  `attribute m : ISQBase::MassValue = 3.0 [kg];` in your own model and assert the *resolved* type
+  string `ISQBase::MassValue`.
+- **Generated classes**: `python -m pysysml.generate model.sysml -o out.py` then actually `import` the
+  module — an MRO bug only surfaces at import as
+  `TypeError: Cannot create a consistent method resolution order`. Assert `cls.__mro__` names against
+  the model (include multiple supertypes and a diamond), that a `:>>`/`subsets` feature inherits the
+  type/multiplicity it does not restate (`String[0..*]` → `-> list[str]`), and that any base Python
+  cannot linearize, or that has no generated class, is dropped **with a comment** such as
+  `# specializes G2::Hybrid, left out: Python cannot linearize it with the bases above` /
+  `# specializes ISQBase::MassValue, which has no generated class`.
+- **Quantity results carry the scalar on `Quantity.magnitude`, not `.value`** — a probe using `.value`
+  reports a false failure even when the runtime is correct.
+
+## Symbol *kind* changes: `%search` is the only REPL probe (PR #210)
+
+When a change moves a declaration from one `symbols.SymbolKind` to another (modifier-driven usage
+kinds, KerML classifier classification, `classifyUsage` edits), `-validate` proves nothing: a model
+can be clean on both revisions while every kind is wrong. The probe is the REPL's
+`%search <prefix>`, which prints `<fqn>  <kind>` from `sym.Kind.String()`
+(`internal/repl/discover.go`, names in `internal/core/symbols/symbol.go`):
+
+```bash
+printf '%%load /tmp/m.sysml\n%%search Pkg::\n%%quit\n' | timeout 30 ./bin/sysml -quiet
+```
+
+- **Always search a `Pkg::` prefix, not a bare word.** `%search Observe` matched ~20 stdlib symbols
+  (ISQLight, VerificationCases) and truncated with `(9 more; narrow the search)`, burying the
+  model's own symbols. The trailing `::` also drops the package row itself.
+- `%list` only echoes the submitted source text and `renderMember` never reaches action-body
+  parameters, so it cannot show a parameter's kind. There is no `%kind`/`%hover` in the REPL.
+- **Anonymous usages are invisible to `%search`** (no name to index). To show that
+  `individual part : Vehicle;` or `in snapshot ;` still built something, use
+  `./bin/sysml <m> -convert sysml -o /dev/stdout` and assert the member round-trips
+  (`in snapshot;`, `in event;`, `in;`).
+- Warning-only changes need the **exit code** asserted explicitly: `-validate` prints warnings and
+  still ends `✓ no errors` with exit 0, so `echo "exit=$?"` is the difference between "warning" and
+  "error" in the recording. Count them with `-validate f 2>&1 | grep -c 'reserved keyword'`.
+- The A/B main binary is essential here: on `main` the same fixture printed
+  `attributeUsage`/`partUsage` for `individual i : V` and `in snapshot atStart : Flight`, which is
+  the only visible difference between fixed and broken.
+
+Pre-existing traps worth not re-reporting as regressions:
+
+- A bare `event e : O;` **declaration** reports `error: unresolved reference: e — did you mean
+  Demo::e?` on every revision — `event <name>` is read as naming an existing occurrence. Use
+  `occurrence takeoff : Flight; event takeoff;` for a clean fixture; the symbol is still built as
+  `occurrenceUsage`.
+- Fixtures using `Real`/`Integer` need `private import ScalarValues::*;` or `-validate` fails with
+  `unresolved reference: Real` and masks the kind assertions.
+- **Run the suite with a cold library index when you change classification.** The on-disk index
+  (`$XDG_CACHE_HOME/sysml-ls/libs`) caches stdlib symbol kinds, so a warm cache keeps returning the
+  old kinds and `go test ./...` passes locally while CI fails. Gate with
+  `export XDG_CACHE_HOME=$(mktemp -d) && go test -count=1 ./...`; this is how PR #210's
+  `function` → `kermlType` regression (every `IntegerFunctions` operator stopped being a calc,
+  `internal/repl/discover_test.go` pinned `ScalarValues::Integer attributeDef`) stayed hidden.
 
 ## Multiplicity of a feature's default value (PR #199, Track A / A2)
 
@@ -2152,3 +2351,155 @@ ones — comparing IDs is the only way to tell "held the objects the default nam
 Two gotchas when recording this area in Konsole: the REPL does **not** expand shell variables, so
 `%load $CONF/x.sysml` fails with a path error — type full relative paths; and `part derived : …`
 draws a `"derived" is a reserved keyword` warning that is unrelated to the defaults under test.
+
+## String values and StringFunctions (PR #211)
+
+A model that declares `String`/`Integer`/`Boolean` attributes needs `import ScalarValues::*;` —
+without it every type annotation reports `unresolved reference: String — did you mean
+ScalarValues::String?` and `-validate` exits 2 before any string behavior runs, which looks like a
+feature failure but is a fixture bug. Add `import StringFunctions::*;` to call `Length`/`Substring`
+unqualified inside a model (the REPL's `-e` mode resolves those two unqualified with no import,
+because they are aliased in `library_functions.go`'s unqualified map; the other StringFunctions
+names always need the `StringFunctions::` prefix).
+
+Discriminators that separate a working string runtime from a broken one:
+
+- **Characters, not bytes.** `Length("héllo")` is 5 (6 bytes), `Length("日本語")` is 3 (9 bytes),
+  `Substring("héllo", 2, 3)` is `"él"`. A byte-based implementation answers 6/9 or returns mojibake,
+  so always use a non-ASCII fixture — an ASCII-only test passes either way.
+- **Substring is 1-based and inclusive**, with `lower > upper` returning `""` rather than erroring,
+  while `lower < 1` or `upper > Length` gives `sequence index out of range: function
+  StringFunctions::Substring lower 0 is outside 1..5` and exit 2.
+- **The `==` split is deliberate**: `"a" == 3` evaluates to `false` (it specializes
+  `DataFunctions::'=='`), while the explicit `StringFunctions::'=='("a", 3)` is a type mismatch.
+  Test both; only one of them being right is the likely regression.
+- A string against an Integer/quantity/sequence must say
+  `type mismatch: operator '<' is not defined for a string and a quantity` (naming both types).
+
+### Driving these cases through a GUI terminal
+
+- **xdotool cannot type CJK into Konsole** — `type` with `日本語` silently delivers nothing, so
+  `Length("日本語")` arrives as `Length("")` and answers 0, which reads as a failure in the video.
+  Latin-1 accents (`héllo`, `naïve`) do type fine. Put any CJK (and any quoted-operator name such as
+  `StringFunctions::'=='`, which shell quoting mangles when typed inline) into a small
+  `/tmp/*.sh` written from a tool shell, then `cat` it and `bash` it on camera — the `cat` shows the
+  reviewer exactly what ran.
+- At the `sysml>` prompt a bare expression like `("a","b")->includes("b")` is parsed as a
+  declaration (`1:1: error: expected a namespace member`). Prefix expressions with `%eval`.
+- `%slots <PartDefName>` (not the part usage path) is what follows `%instantiate <PartDefName>`;
+  `%slots Msg::g` reports `no instance of "Msg::g"`.
+- **Escapes are stored raw**, so `Length("a\"b")` is 4 and the value renders as `"a\\\"b"`. This is
+  pre-existing lexer behavior (identical on the parent commit) — verify against a contrast binary
+  before reporting it as a string-runtime defect.
+- A 512 KiB string built by doubling inside a `for` loop (`acc = acc + acc` ×16, then
+  `Length(acc)` → 524288) completes in seconds; use it as the cheap no-hang/no-quadratic check.
+  Note that a calc whose body assigns to a `return acc` feature returns no value when *invoked from
+  another calc's expression* (`calculation returned no value`), so compute the length inside the
+  same body rather than wrapping the loop calc in another one.
+
+## Runtime budgets, and `calc` recursion in particular (PR #198)
+
+Every budget in `internal/core/runtime/budget.go` is reachable from the CLI as an env var and is
+listed by `%budget` in the REPL — that meta-command is the cheapest proof a new bound was wired
+into `internal/repl/meta.go`. `SYSML_MAX_CALC_DEPTH` (default 10000) bounds nested `calc`
+invocations, i.e. recursion depth, and is the only budget with a **ceiling** (25000).
+
+Four distinct surfaces to assert for any budget change, since they fail independently:
+
+1. **Under the bound the run must succeed with the right number**, not merely "not error".
+   `%calc P::sumTo 5000` → `= 12502500`. Deep-but-terminating recursion is fast (~0.3 s), so a
+   long pause is itself a signal.
+2. **Over the bound: a typed error, promptly, with a sane exit status.** Both
+   `%calc P::spin 1` in the REPL and `./bin/sysml m.sysml -eval 'P::spin(1)'` (exit **2**, wall
+   time well under a second). Wrap in `timeout` so a hang shows as exit 124, and read the output
+   for `fatal error: stack overflow` — a Go runtime crash rather than a reported error is the
+   failure mode the budget exists to prevent. Follow the REPL error with `%eval 1 + 1` → `= 2` to
+   show the session survived.
+3. **A low value must refuse input that otherwise evaluates** (`SYSML_MAX_CALC_DEPTH=50` on a
+   200-deep recursion). Without this contrast the env var could be ignored entirely and the test
+   would still look green.
+4. **Invalid/out-of-range values are refused at startup**, before any model work, naming the
+   variable: `=abc` → `is not an integer … (default 10000)`; `=30000` → `must be at most 25000 …`.
+   Also assert the ceiling value itself (`=25000`) is *accepted* — an off-by-one in the comparison
+   is otherwise invisible. Both refusals exit 2 and print no evaluation output.
+
+Budget interactions matter: under `SYSML_MAX_STEPS=100` a runaway recursion must report the *step*
+limit, not the depth limit. Whichever budget is spent first wins, so a change that reorders the
+checks shows up here and nowhere else.
+
+### Fixture notes for recursive `calc` models
+
+- Bare `Integer`/`Boolean` do **not** resolve in a hand-written file (the conformance harness
+  supplies the imports). Start the package with `private import ScalarValues::*;` or every line
+  errors with `unresolved reference: Integer — did you mean ScalarValues::Integer?`.
+- A recursive calc is just `calc f { in n : Integer; return : Integer = if n <= 1 ? 1 else n * f(n - 1); }`.
+  An **implicit-result** body drops `return :` and ends in a bare expression:
+  `calc f { in n : Integer; if n <= 1 ? 1 else n * f(n - 1) }`. Both must be exercised — they take
+  different paths in `passes/typecheck.go` (`checkBehaviorMember`) and only the explicit one was
+  type-checked before #198.
+- Adversarial shapes worth having in one file: a non-recursive calc *usage* nested inside a
+  recursive calc; recursion through a calc named like a library function (`max`); mutual recursion
+  (`isEven`/`isOdd`, whose result for an odd argument is `false`).
+- **There is no `%check` command.** To evaluate an `assert constraint` whose body calls a recursive
+  calc, use `%instantiate <DefName>` then `%slots <DefName>` — note both take the **def** name, not
+  the usage (`%slots P::w` answers `no instance of "P::w"`). A satisfied constraint renders
+  `deepOK: <constraint: satisfied>`; a runaway one renders per-slot as
+  `spinny: <constraint: not evaluated: … calc recursion limit exceeded …>` and the session survives.
+
+### Type diagnostics on implicit-result bodies
+
+`-validate` is the surface: an implicit result is typed like any expression, so
+`calc def C { in n : Integer; n + "one" }` must report
+`error: operator '+' is not defined for Integer and String` (exit 2) and an incommensurable pair
+(`ISQ::LengthValue` + `ISQ::DurationValue`) must report
+`warning: operator '+' combines incommensurable quantities: … (dimension L) and … (dimension T)`
+(exit 0). Always pair these with a **clean** implicit-result body (`n + 1` → `no errors`) — a pass
+that over-reports would look identical otherwise. Because the pre-fix binary printed `no errors`
+for all three, the contrast binary from the parent commit is what makes this evidence conclusive.
+
+## pysysml service ownership and the require-service gate (PR #204)
+
+Ownership is the claim worth testing by hand, because pytest can pass while the invariant is
+broken. Three probes, each with a state dir of its own so nothing collides:
+
+```bash
+PY=~/pysysml-venv/bin/python          # ls -d /home/ubuntu/*venv* if it is missing
+cp bin/sysml-grpc ~/.pysysml/bin/     # what CI does; otherwise ensure_binary downloads
+PORT=$($PY -c 'import socket;s=socket.socket();s.bind(("localhost",0));print(s.getsockname()[1])')
+```
+
+- **Foreign service:** start `bin/sysml-grpc -port $PORT` from the shell, then in one
+  `PYSYSML_STATE_DIR=/tmp/stateN` python process `Connection(port=P, auto_start=False)`,
+  `pysysml.connect(port=P)` (the adopt path) and a connection left open at exit. Expect the
+  shell's pid to still be alive and the state dir to hold **only** `sysml-grpc-<port>.lock` — a
+  `sysml-grpc-<port>.pid` for a service pysysml did not spawn is the bug.
+- **Own service:** `pysysml.connect(port=<free>)` writes
+  `{"pid","create_time","port","owner_pid","owner_create_time"}`; assert `create_time` equals
+  `psutil.Process(pid).create_time()` and `owner_pid == os.getpid()`. Two connections must keep it
+  alive when the first closes, and the last close (or plain interpreter exit, via `atexit`) must
+  stop it and delete the `.pid`.
+- **Pid spoof:** `bash -c 'exec -a "sysml-grpc -port P (decoy)" sleep 600'` plus a hand-written
+  pidfile naming that pid with a `create_time` off by a few hundred seconds. The decoy must survive
+  and the record must be replaced/removed. The old cmdline-substring scheme killed it, so this is
+  the one probe that distinguishes the schemes.
+- Use `conn.load(path)` (not `load_model`) for a real RPC that proves the connection talked to the
+  service rather than failing early.
+
+Suite counts as PR #204 merged (`cd python && $PY -m pytest tests/ -q`): **413 passed / 13 skipped**
+with no service; **423 passed / 3 skipped** with a service on 50051 and
+`PYSYSML_REQUIRE_SERVICE=1`, the
+3 remaining skips being mypy-not-installed and a manual-binary-cache case, never a service skip.
+With `PYSYSML_REQUIRE_SERVICE=1` and no service, collection must **error** (exit 2,
+"none answers on localhost:50051"), never skip. A whole run must leave an operator-started service
+on 50051 with the same pid.
+
+`python/scripts/pin_release_checksums.py --check` hits the GitHub releases API for every pinned
+asset and dies with `HTTP Error 403: rate limit exceeded` once the unauthenticated budget is spent;
+it reads `$GITHUB_TOKEN`. Set it without putting the token on camera:
+`read -rs GITHUB_TOKEN; export GITHUB_TOKEN`. Careful with `--version <tag> --write`: it edits
+`python/pysysml/binary.py`, so `git checkout python/pysysml/binary.py` afterwards. For the
+"release publishes no assets" refusal use an old tag (`v0.0.4`) — v0.0.5..v0.0.8 all publish
+binaries now. The unpinned-download refusal is testable offline-ish with
+`HOME=/tmp/fakehome $PY -c "...ensure_binary(version='v9.9.9')"`, which keeps the real
+`~/.pysysml/bin` cache intact; the opt-in out of it is per repository
+(`PYSYSML_ALLOW_UNPINNED_DOWNLOAD=<owner/repo>`, or `=1` for any).
