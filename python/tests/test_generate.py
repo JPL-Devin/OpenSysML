@@ -354,14 +354,15 @@ def test_render_module_keeps_multiple_supertypes_in_declaration_order():
     assert "class Hybrid(Vehicle, Electric):" in source
 
 
-def test_render_module_drops_a_base_python_cannot_linearize():
-    """An order Python has no MRO for keeps the module importable and says what it left out."""
+def test_render_module_keeps_the_base_that_implies_the_other():
+    """A base a sibling base already specializes is left implicit, not dropped for it."""
     vehicle = definition("Demo::Vehicle")
     electric = definition(
         "Demo::Electric",
         specializations=[Specialization(kind="specializes", declared="Vehicle", target_id="Demo::Vehicle")],
     )
-    # Vehicle before Electric is unlinearizable: Electric is already a Vehicle.
+    # Vehicle before Electric is unlinearizable as written: Electric is already a
+    # Vehicle, so Electric alone preserves both relationships and its members.
     hybrid = definition(
         "Demo::Hybrid",
         specializations=[
@@ -370,11 +371,47 @@ def test_render_module_drops_a_base_python_cannot_linearize():
         ],
     )
     source = render_module([hybrid, electric, vehicle])
-    assert "class Hybrid(Vehicle):" in source
-    assert "# specializes Demo::Electric, left out: Python cannot linearize it" in source
+    assert "class Hybrid(Electric):" in source
+    assert "left out" not in source
     namespace: dict = {}
     exec(compile(source, "demo_types.py", "exec"), namespace)
-    assert namespace["Hybrid"].__mro__[1] is namespace["Vehicle"]
+    assert issubclass(namespace["Hybrid"], namespace["Electric"])
+    assert issubclass(namespace["Hybrid"], namespace["Vehicle"])
+
+
+def test_render_module_drops_a_base_python_cannot_linearize():
+    """An order Python has no MRO for keeps the module importable and says what it left out."""
+    left = definition("Demo::Left")
+    right = definition("Demo::Right")
+    # Opposite base orders have no common linearization, and neither implies the
+    # other, so one edge cannot be expressed in Python at all.
+    one = definition(
+        "Demo::One",
+        specializations=[
+            Specialization(kind="specializes", declared="Left", target_id="Demo::Left"),
+            Specialization(kind="specializes", declared="Right", target_id="Demo::Right"),
+        ],
+    )
+    two = definition(
+        "Demo::Two",
+        specializations=[
+            Specialization(kind="specializes", declared="Right", target_id="Demo::Right"),
+            Specialization(kind="specializes", declared="Left", target_id="Demo::Left"),
+        ],
+    )
+    both = definition(
+        "Demo::Both",
+        specializations=[
+            Specialization(kind="specializes", declared="One", target_id="Demo::One"),
+            Specialization(kind="specializes", declared="Two", target_id="Demo::Two"),
+        ],
+    )
+    source = render_module([both, one, two, left, right])
+    assert "class Both(One):" in source
+    assert "# specializes Demo::Two, left out: Python cannot linearize it" in source
+    namespace: dict = {}
+    exec(compile(source, "demo_types.py", "exec"), namespace)
+    assert namespace["Both"].__mro__[1] is namespace["One"]
 
 
 def test_collect_definitions_takes_type_and_multiplicity_from_a_redefinition():

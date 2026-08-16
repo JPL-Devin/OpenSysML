@@ -106,14 +106,17 @@ apart is the members, not the bases:
 
 With **multiple supertypes**, bases are emitted in declaration order, a target
 named twice appearing once, and Python resolves members left to right by its
-usual MRO. A model can ask for an order Python has no MRO for (a base that is
-already a base of an earlier base); rather than emit a module that fails to
-import, the generator keeps the bases it can linearize and records what it left
-out as a comment on the class, naming the edge:
+usual MRO. A base another declared base already specializes is left implicit —
+`Hybrid :> Vehicle, Electric` where `Electric :> Vehicle` emits
+`class Hybrid(Electric)`, which Python can linearize and which keeps both
+relationships and `Electric`'s properties. Where no order linearizes at all
+(two bases specializing a shared pair in opposite orders), rather than emit a
+module that fails to import, the generator keeps the bases it can and records
+what it left out as a comment on the class, naming the edge:
 
 ```python
-class Hybrid(Vehicle):
-    # specializes Demo::Electric, left out: Python cannot linearize it with the bases above
+class Both(One):
+    # specializes Demo::Two, left out: Python cannot linearize it with the bases above
 ```
 
 A base outside the generated model is reported the same way. Both are the model's

@@ -427,9 +427,11 @@ def _base_plan(definitions: Sequence[Definition]) -> Dict[str, Tuple[Tuple[str, 
     for definition in _in_dependency_order(definitions):
         kept: List[str] = []
         dropped: List[str] = []
-        for base_id in definition.base_ids:
-            if base_id not in generated or base_id not in linearizations:
-                continue
+        declared = [
+            base_id for base_id in definition.base_ids
+            if base_id in generated and base_id in linearizations
+        ]
+        for base_id in _without_implied(declared, linearizations):
             if _linearize(definition.id, kept + [base_id], linearizations) is None:
                 dropped.append(base_id)
             else:
@@ -439,6 +441,24 @@ def _base_plan(definitions: Sequence[Definition]) -> Dict[str, Tuple[Tuple[str, 
         ]
         plan[definition.id] = (tuple(kept), tuple(dropped))
     return plan
+
+
+def _without_implied(
+    bases: Sequence[str], linearizations: Dict[str, List[str]]
+) -> List[str]:
+    """Drop each base another one already specializes, keeping declaration order.
+
+    Naming both is what Python cannot linearize, and the more specific base
+    carries the general one's members, so nothing is lost by leaving it out.
+    """
+    unique = list(dict.fromkeys(bases))
+    return [
+        base_id for base_id in unique
+        if not any(
+            base_id in linearizations[other][1:]
+            for other in unique if other != base_id
+        )
+    ]
 
 
 def _linearize(

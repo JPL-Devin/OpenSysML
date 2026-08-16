@@ -1158,9 +1158,9 @@ the `@type` mapping and the comparison choices.
   and connector usages are not instance slots, so no property is emitted for them.
   `specializes`, `subsets` and `redefines` all become Python base classes, in declaration
   order, and a redefining feature takes the type and multiplicity it does not restate from
-  what it redefines; a base order Python cannot linearize keeps the bases it can and
-  records what it left out as a comment, rather than emitting a module that fails to
-  import. Redefinition narrowing is still not checked
+  what it redefines; a base another declared base already specializes is left implicit,
+  and a base order that linearizes no way at all keeps the bases it can and records what
+  it left out as a comment, rather than emitting a module that fails to import. Redefinition narrowing is still not checked
 - `TypedObject.from_instance` rejects an instance whose type another generated class
   describes, and accepts a generated subclass of the expected one; it accepts a type
   no generated class describes, because `Instantiate` on a usage reports the usage's

@@ -203,7 +203,7 @@ def convert(to_format, file_path=None, content=None, model_hash=None,
 
 
 def eval(expression, file_path=None, model_hash=None, context_symbol_id=None,
-         subject=None, host='localhost', port=None):
+         host='localhost', port=None, subject=None):
     """Evaluate a SysML expression (module-level convenience).
 
     A model in hand has :meth:`Model.eval`, which needs neither the hash nor the
@@ -214,11 +214,12 @@ def eval(expression, file_path=None, model_hash=None, context_symbol_id=None,
         file_path (str, optional): Parse this file first, get model_hash
         model_hash (str, optional): Use existing model hash
         context_symbol_id (str, optional): Context for evaluation
-        subject (str, optional): FQN of a part/usage to instantiate and evaluate
-            against, so a feature reads that object's value rather than the
-            declared default
         host (str): Service hostname, or a ``host:port`` address
         port (int, optional): Service port (default: 50051)
+        subject (str, optional): FQN of a part/usage to instantiate and evaluate
+            against, so a feature reads that object's value rather than the
+            declared default. Last, so a positional call written before it
+            still binds the address it meant
         
     Returns:
         Evaluated value
