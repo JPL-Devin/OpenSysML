@@ -47,9 +47,10 @@ type snippet struct {
 	own []source.Span
 	// open marks a submission that left a brace, comment or quoted name open, so
 	// it absorbs the text after it. Such a snippet is kept for %list and %save but
-	// masked out of the analyzed buffer, and diags carries what its own parse found.
+	// masked out of the analyzed buffer, and diags carries what its own parse
+	// found, mapped as the workspace maps a document's.
 	open  bool
-	diags []parser.Diagnostic
+	diags []passes.Diagnostic
 }
 
 // Session accumulates submissions into a single implicit <repl> document.
@@ -259,7 +260,7 @@ func (s *Session) acceptFrom(origin, src string) (drops []dropReport) {
 			key:    key,
 			gen:    s.version,
 			open:   true,
-			diags:  append(append([]parser.Diagnostic(nil), p.Diagnostics...), p.Warnings...),
+			diags:  parseDiagnostics(p),
 		})
 		return drops
 	}
@@ -469,8 +470,35 @@ func (s *Session) text() string {
 	return strings.Join(parts, "\n")
 }
 
-// openDiagnostics reports the syntax findings of the masked submissions, located
-// in the session buffer so every surface places them in the file they came from.
+// parseDiagnostics maps a parse of one submission the way the workspace maps a
+// document's: its errors carry the syntax code, its warnings their own.
+func parseDiagnostics(p *parser.Parser) []passes.Diagnostic {
+	out := make([]passes.Diagnostic, 0, len(p.Diagnostics)+len(p.Warnings))
+	for _, d := range p.Diagnostics {
+		out = append(out, passes.Diagnostic{
+			Severity: passes.SeverityError,
+			Span:     d.Span,
+			Message:  d.Message,
+			Code:     "syntax",
+			Source:   "syntax",
+			Fixes:    d.Fixes,
+		})
+	}
+	for _, w := range p.Warnings {
+		out = append(out, passes.Diagnostic{
+			Severity: passes.SeverityWarning,
+			Span:     w.Span,
+			Message:  w.Message,
+			Code:     w.Code,
+			Source:   "syntax",
+			Fixes:    w.Fixes,
+		})
+	}
+	return out
+}
+
+// openDiagnostics reports the findings of the masked submissions, located in the
+// session buffer so every surface places them in the file they came from.
 func (s *Session) openDiagnostics() []passes.Diagnostic {
 	var out []passes.Diagnostic
 	acc := 0
@@ -478,14 +506,7 @@ func (s *Session) openDiagnostics() []passes.Diagnostic {
 		if sn.open {
 			for _, d := range sn.diags {
 				d.Span.Offset += acc
-				out = append(out, passes.Diagnostic{
-					Severity: passes.SeverityError,
-					Span:     d.Span,
-					Message:  d.Message,
-					Code:     "syntax",
-					Source:   "syntax",
-					Fixes:    d.Fixes,
-				})
+				out = append(out, d)
 			}
 		}
 		acc += len(sn.src) + 1 // the newline joined() writes between snippets
@@ -494,9 +515,9 @@ func (s *Session) openDiagnostics() []passes.Diagnostic {
 }
 
 // diagnostics reports the analysis of the buffer together with the syntax errors
-// of the submissions masked out of it. A masked submission failed the syntax
-// tier, so the deeper tiers are not reported over it: what they would say about
-// a document missing those declarations is about the recovery, not the model.
+// of the submissions masked out of it. The masked text is blanked rather than
+// removed, so what the analysis finds is about the submissions that did parse
+// and is reported as it stands.
 func (s *Session) diagnostics() []passes.Diagnostic {
 	analyzed := s.ws.Diagnostics(docName)
 	open := s.openDiagnostics()
@@ -504,11 +525,7 @@ func (s *Session) diagnostics() []passes.Diagnostic {
 		return analyzed
 	}
 	out := make([]passes.Diagnostic, 0, len(analyzed)+len(open))
-	for _, d := range analyzed {
-		if d.Source == "syntax" {
-			out = append(out, d)
-		}
-	}
+	out = append(out, analyzed...)
 	out = append(out, open...)
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Span.Offset < out[j].Span.Offset })
 	return out

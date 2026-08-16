@@ -177,6 +177,49 @@ func TestOpenTypedSubmissionKeepsTheBuffer(t *testing.T) {
 	}
 }
 
+// A masked submission is not allowed to silence the rest of the session: what
+// the deeper tiers find in the submissions that did parse is still reported.
+func TestOpenSubmissionKeepsReportingTheRestOfTheBuffer(t *testing.T) {
+	s := NewSession()
+	s.Submit("/* oops")
+	res := s.Submit("package P { part a : Missing; }")
+
+	if !strings.Contains(strings.Join(renderDiagnostics(res.Diagnostics, res.Source, res.diagLocation, false), "\n"), "unresolved reference") {
+		t.Errorf("the unresolved reference should still be reported: %v", res.Diagnostics)
+	}
+	var syntax, deeper int
+	for _, d := range s.Diagnostics() {
+		if d.Source == "syntax" {
+			syntax++
+			continue
+		}
+		deeper++
+	}
+	if syntax == 0 || deeper == 0 {
+		t.Errorf("diagnostics = %d syntax, %d deeper; want both", syntax, deeper)
+	}
+}
+
+// A masked submission's warnings stay warnings, with the code the parser gave
+// them, as they would in any file the workspace analyzes.
+func TestOpenSubmissionKeepsWarningSeverity(t *testing.T) {
+	s := NewSession()
+	res := s.Submit("package Open { part def in\n")
+
+	var warned bool
+	for _, d := range res.Diagnostics {
+		if d.Severity == passes.SeverityWarning && d.Code != "syntax" {
+			warned = true
+		}
+	}
+	if !warned {
+		t.Errorf("the reserved-name warning should survive masking as a warning: %+v", res.Diagnostics)
+	}
+	if !hasSyntaxError(res) {
+		t.Errorf("the unreadable submission should still be an error: %+v", res.Diagnostics)
+	}
+}
+
 // Robustness: input the parser cannot read is answered with a typed error rather
 // than a panic or a hang, whichever surface it reaches.
 func TestOpenSubmissionSurfacesStayTyped(t *testing.T) {

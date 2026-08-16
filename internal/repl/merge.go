@@ -82,23 +82,49 @@ func (s *Session) reopenedNamespaces(key string, root *ast.RootNamespace) []drop
 	if root == nil {
 		return nil
 	}
-	var out []dropReport
+	var opened []string
+	wanted := make(map[string]bool)
 	for _, m := range root.Members {
 		name := memberName(m)
-		if name == "" {
+		if name == "" || wanted[name] {
 			continue
 		}
 		if _, hasBody := bodyMembers(m); !hasBody {
 			continue
 		}
-		for _, sn := range s.snippets {
-			if sn.origin == "" || sn.key == key || sn.open {
-				continue
+		wanted[name] = true
+		opened = append(opened, name)
+	}
+	if len(wanted) == 0 {
+		return nil
+	}
+	// A snippet is parsed only when its recorded names say it could open one of
+	// these, and then once for all of them, so a directory load stays linear.
+	reopened := make(map[string]bool, len(wanted))
+	for _, sn := range s.snippets {
+		if sn.origin == "" || sn.key == key || sn.open || len(reopened) == len(wanted) {
+			continue
+		}
+		var shared []string
+		for _, name := range sn.names {
+			if wanted[name] && !reopened[name] {
+				shared = append(shared, name)
 			}
-			if _, ok := namedNamespace(sn.src, name); ok {
-				out = append(out, dropReport{reopened: name})
-				break
+		}
+		if len(shared) == 0 {
+			continue
+		}
+		snRoot := parser.New(source.New(docName, []byte(sn.src))).ParseFile()
+		for _, name := range shared {
+			if _, ok := namedNamespaceIn(sn.src, snRoot, name); ok {
+				reopened[name] = true
 			}
+		}
+	}
+	var out []dropReport
+	for _, name := range opened {
+		if reopened[name] {
+			out = append(out, dropReport{reopened: name})
 		}
 	}
 	return out
@@ -118,7 +144,11 @@ func soleNamespace(src string, root *ast.RootNamespace) (nsDecl, bool) {
 // accepted snippet. It reports false unless exactly one member declares that
 // name, so an ambiguous snippet keeps the replacement behavior.
 func namedNamespace(src, name string) (nsDecl, bool) {
-	root := parser.New(source.New(docName, []byte(src))).ParseFile()
+	return namedNamespaceIn(src, parser.New(source.New(docName, []byte(src))).ParseFile(), name)
+}
+
+// namedNamespaceIn is namedNamespace over a parse the caller already has.
+func namedNamespaceIn(src string, root *ast.RootNamespace, name string) (nsDecl, bool) {
 	if root == nil {
 		return nsDecl{}, false
 	}
