@@ -150,6 +150,8 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("multiplicity_on_a_connector", testMultiplicityOnAConnector)
 	t.Run("connector_attached_to_itself", testConnectorAttachedToItself)
 	t.Run("mutually_attached_connectors", testMutuallyAttachedConnectors)
+	t.Run("enumeration_name_that_is_not_a_literal", testEnumerationNameThatIsNotALiteral)
+	t.Run("chain_through_a_literal_without_that_attribute", testChainThroughALiteralWithoutThatAttribute)
 }
 
 // testMultiplicityInfiniteLowerBound: `[*..*]` requires unboundedly many objects,
@@ -4054,5 +4056,43 @@ func testUsageReadThroughAPartWithoutAnOutput(t *testing.T) {
 	}
 	if err != nil && !strings.Contains(err.Error(), "a, b") {
 		t.Errorf("error should name the outputs to read, got: %v", err)
+	}
+}
+
+// testEnumerationNameThatIsNotALiteral: a name qualified by an enumeration
+// designates one of its literals, so one it does not declare is reported with
+// the literals it does, never answered as an empty value.
+func testEnumerationNameThatIsNotALiteral(t *testing.T) {
+	src := `
+	package test {
+		enum def Color { red; green; blue; }
+		part def Car { attribute c : Color = Color::purple; }
+	}`
+	got, err := variationSlotInSource(t, src, "test::Car", "c")
+	if !errors.Is(err, ErrNotALiteral) {
+		t.Fatalf("c = (%v, %v), want ErrNotALiteral", got, err)
+	}
+	for _, name := range []string{"purple", "red", "green", "blue"} {
+		if !strings.Contains(err.Error(), name) {
+			t.Errorf("error %q does not name %s", err, name)
+		}
+	}
+}
+
+// testChainThroughALiteralWithoutThatAttribute: a literal carries only the
+// features it declares, so reading another one off it is reported rather than
+// materializing an empty slot.
+func testChainThroughALiteralWithoutThatAttribute(t *testing.T) {
+	src := `
+	package test {
+		enum def Level { low { attribute n = 1; } high { attribute n = 9; } }
+		part def Sensor { attribute missing = Level::low.label; }
+	}`
+	got, err := variationSlotInSource(t, src, "test::Sensor", "missing")
+	if err == nil {
+		t.Fatalf("missing = %v, want an error naming the unknown member", got)
+	}
+	if !strings.Contains(err.Error(), "label") {
+		t.Errorf("error %q does not name the unknown member", err)
 	}
 }

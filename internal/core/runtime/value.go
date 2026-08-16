@@ -19,9 +19,10 @@ const (
 	ValInstance
 	ValSequence
 	ValSet
-	ValExpr     // wraps unevaluated AST node for delayed evaluation (e.g., BodyExpr for select/collect)
-	ValQuantity // a magnitude and the measurement unit it is expressed in
-	ValVariant  // the variant selected for a variation, and the object it materializes
+	ValExpr        // wraps unevaluated AST node for delayed evaluation (e.g., BodyExpr for select/collect)
+	ValQuantity    // a magnitude and the measurement unit it is expressed in
+	ValVariant     // the variant selected for a variation, and the object it materializes
+	ValEnumLiteral // one literal of an enumeration definition, identified by itself
 )
 
 // String names the kind, so diagnostics quoting it read as more than an index.
@@ -45,6 +46,8 @@ func (k ValueKind) String() string {
 		return "quantity"
 	case ValVariant:
 		return "variant"
+	case ValEnumLiteral:
+		return "enumeration literal"
 	default:
 		return "invalid"
 	}
@@ -63,6 +66,28 @@ type Value struct {
 	// Variant is the variant a variation was bound to (ValVariant). Instance
 	// holds the object materialized for it, 0 when it materializes none.
 	Variant *symbols.Symbol
+	// Literal is the enumeration literal the value is (ValEnumLiteral). A literal
+	// is its own identity: two values are the same literal exactly when they name
+	// the same declaration.
+	Literal *symbols.Symbol
+}
+
+// enumLiteral is the value an enumeration literal that declares no value of its
+// own evaluates to: the identity of that literal.
+func enumLiteral(sym *symbols.Symbol) Value {
+	return Value{Kind: ValEnumLiteral, Literal: sym}
+}
+
+// LiteralText renders an enumeration literal as it is written, qualified by the
+// enumeration it is a literal of: `Color::red`.
+func (v Value) LiteralText() string {
+	if v.Literal == nil {
+		return "<unknown enumeration literal>"
+	}
+	if enum := semantics.EnumerationOwning(v.Literal); enum != nil {
+		return enum.Name + "::" + v.Literal.Name
+	}
+	return v.Literal.Name
 }
 
 // Object returns the object a value denotes: an instance, or the object a
