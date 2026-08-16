@@ -1,0 +1,13 @@
+{
+  "libraries": true,
+  "type": "calc",
+  "inputs": [
+    {"type": "Integer", "value": 9}
+  ],
+  "result": {"type": "Sequence", "elements": [
+    {"type": "Integer", "value": 1},
+    {"type": "Integer", "value": 2},
+    {"type": "Integer", "value": 3},
+    {"type": "Integer", "value": 9}
+  ]}
+}

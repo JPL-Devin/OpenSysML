@@ -170,11 +170,10 @@ var (
 	// hand back and is read through a calc usage's output features instead.
 	ErrAmbiguousResult = errors.New("calculation has no single result")
 
-	// ErrIndexOutOfRange is returned when a sequence index names no position of
-	// the sequence it indexes. Sequence indices are 1-based (KerML
-	// SequenceFunctions::'#' takes `index: Positive[1]`), so 0 is out of range
-	// as much as size+1 is.
-	ErrIndexOutOfRange = errors.New("sequence index out of range")
+	// ErrIndexOutOfRange is returned when an index names no position of the
+	// sequence or string it indexes; indices are 1-based, so 0 is out of range
+	// as much as size+1 is, and each operation names what it indexed.
+	ErrIndexOutOfRange = errors.New("index out of range")
 
 	// ErrBodyArity is returned when the body expression a collection operation
 	// is given declares a number of parameters the operation cannot call it

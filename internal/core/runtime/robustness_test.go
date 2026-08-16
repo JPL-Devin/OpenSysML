@@ -427,7 +427,14 @@ func testNumericLibraryCallThatHasNoValue(t *testing.T) {
 		{"ComplexFunctions::'/'(ys, (0.0, 0.0))", ErrDivisionByZero},
 		{"ComplexFunctions::re(xs)", ErrTypeMismatch},
 		{"ComplexFunctions::ToString(ys)", ErrUnevaluableLibraryFunction},
-		{"SequenceFunctions::includingAt(xs, 9, 2)", ErrUnevaluableLibraryFunction},
+		// includingAt inserts before a position of 1..size+1, so an index past the
+		// end of the sequence names no insertion point and is reported rather than
+		// appending or dropping the values.
+		{"SequenceFunctions::includingAt(xs, 9, 5)", ErrIndexOutOfRange},
+		{"SequenceFunctions::includingAt(xs, 9, 0)", ErrIndexOutOfRange},
+		{"SequenceFunctions::includingAt((), 9, 2)", ErrIndexOutOfRange},
+		{"SequenceFunctions::includingAt(xs, 9, 1.5)", ErrTypeMismatch},
+		{"SequenceFunctions::includingAt(xs, 9)", ErrCalcArity},
 	} {
 		got, err := evalCollectionExpr(t, tt.expr)
 		if !errors.Is(err, tt.want) {
@@ -454,6 +461,7 @@ func testStringOperandOfTheWrongKind(t *testing.T) {
 		{`StringFunctions::Length(1)`, ErrTypeMismatch},
 		{`StringFunctions::Length(xs)`, ErrTypeMismatch},
 		{`StringFunctions::Substring("abc", 1, 9)`, ErrIndexOutOfRange},
+		{`StringFunctions::Substring("héllo", 1, 6)`, ErrIndexOutOfRange},
 		{`StringFunctions::Substring("abc", 0, 2)`, ErrIndexOutOfRange},
 		{`StringFunctions::Substring("abc", "1", 2)`, ErrTypeMismatch},
 		{`StringFunctions::Substring("abc", 1)`, ErrCalcArity},
