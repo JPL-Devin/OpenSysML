@@ -107,15 +107,26 @@ func (ec *exprChecker) effectiveRange(scope *symbols.Scope, u *ast.Usage, depth 
 }
 
 // exactCount returns how many values a bound expression produces, and whether
-// that is statically known. A collection literal contributes its elements and a
-// literal contributes one; anything else (a feature reference, an invocation)
-// may itself be multi-valued, so its count is unknown.
+// that is statically known. A literal contributes one value and a collection
+// literal the values of its elements; anything else (a feature reference, an
+// invocation) may itself be multi-valued, so its count is unknown — as is that
+// of a collection holding one.
 func exactCount(value ast.Node) (int64, bool) {
 	if value == nil {
 		return 0, false
 	}
+	// Binding flattens a collection into the values its elements produce, so a
+	// nested literal contributes its own elements rather than one value.
 	if seq, ok := value.(*ast.SequenceExpr); ok {
-		return int64(len(seq.Elements)), true
+		var total int64
+		for _, element := range seq.Elements {
+			n, ok := exactCount(element)
+			if !ok {
+				return 0, false
+			}
+			total += n
+		}
+		return total, true
 	}
 	if literalPrimType(value) != semantics.PrimUnknown {
 		return 1, true

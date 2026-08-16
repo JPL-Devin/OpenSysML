@@ -164,3 +164,21 @@ func TestValueTypeNameNotShadowedByOwnMembers(t *testing.T) {
 		part v : Vehicle = t;
 	}`)
 }
+
+// Binding flattens a nested collection literal, so its elements are counted the
+// way the runtime materializes them.
+func TestValueNestedCollectionCountsItsElements(t *testing.T) {
+	wantNoValueDiags(t, `package P { attribute xs : ScalarValues::Integer[4] = ((1, 2), (3, 4)); }`)
+	wantOneValueDiag(t,
+		`package P { attribute xs : ScalarValues::Integer[3] = ((1, 2), (3, 4)); }`,
+		"4 value(s) bound to a feature with multiplicity upper bound 3")
+}
+
+// A collection element that is a reference may itself hold several values, so
+// the count is left to the runtime rather than guessed at one per element.
+func TestValueCollectionOfReferencesIsNotCountedStatically(t *testing.T) {
+	wantNoValueDiags(t, `package P {
+		attribute src : ScalarValues::Integer[3] = (1, 2, 3);
+		attribute xs : ScalarValues::Integer[2] = (src, src);
+	}`)
+}

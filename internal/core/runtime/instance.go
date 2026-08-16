@@ -253,14 +253,15 @@ func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 			slot.Value = val
 		} else {
 			// A multi-valued feature holds a collection, so a single value
-			// stated as its default is that collection's one element.
+			// stated as its default is that collection's one element, and a
+			// default that is no value at all holds nothing: the elements
+			// stored are the ones counted above.
 			if val.Kind != ValSequence && val.Kind != ValSet {
-				if err := ctx.chargeElements(1); err != nil {
+				elements := elementsOf(val)
+				if err := ctx.chargeElements(int64(len(elements))); err != nil {
 					return nil, err
 				}
-				seq := NewSequence()
-				seq.Append(val)
-				val = Value{Kind: ValSequence, Sequence: seq}
+				val = sequenceOf(elements)
 			}
 			slot.Values = val
 		}

@@ -341,3 +341,25 @@ func nestedReal(t *testing.T, ctx *Context, inst *Instance, slotName, nestedName
 	}
 	return nestedSlot.Value.Const.Real
 }
+
+// A default that is no value at all holds nothing, so what the multiplicity
+// check counted is what the slot stores.
+func TestNullDefaultHoldsNoElements(t *testing.T) {
+	model, resolver, root := parseAndBuildModel(t, `
+		part def Rig {
+			attribute nothing[0..*] = null;
+		}
+	`)
+	ctx := NewContext(model, resolver, 1000)
+	inst, err := ctx.Instantiate(resolveSymbol(t, root, "Rig"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	slot, err := inst.GetSlot(ctx, "nothing")
+	if err != nil {
+		t.Fatalf("GetSlot: %v", err)
+	}
+	if elements := elementsOf(slot.HeldValue()); len(elements) != 0 {
+		t.Errorf("nothing holds %v, want no elements", elements)
+	}
+}
