@@ -1,0 +1,21 @@
+enter calc test::scaledSum
+  bind x = 2.0 [argument]
+  stmt return
+          eval literal 1.0 -> 1.0
+          eval literal 2.0 -> 2.0
+        eval sequence of 2 -> (1.0, 2.0)
+          eval literal 3.0 -> 3.0
+          eval literal 4.0 -> 4.0
+        eval sequence of 2 -> (3.0, 4.0)
+        enter calc VectorFunctions::cartesian+
+          bind v = (1.0, 2.0) [argument]
+          bind w = (3.0, 4.0) [argument]
+        exit calc VectorFunctions::cartesian+ -> (4.0, 6.0)
+      eval invoke VectorFunctions::cartesian+ -> (4.0, 6.0)
+      eval feature x -> 2.0
+      enter calc VectorFunctions::cartesianVectorScalarMult
+        bind v = (4.0, 6.0) [argument]
+        bind x = 2.0 [argument]
+      exit calc VectorFunctions::cartesianVectorScalarMult -> (8.0, 12.0)
+    eval invoke VectorFunctions::cartesianVectorScalarMult -> (8.0, 12.0)
+exit calc test::scaledSum -> (8.0, 12.0)

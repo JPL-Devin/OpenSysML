@@ -1,25 +1,52 @@
 package runtime
 
 import (
+	"errors"
 	"fmt"
 	"math"
+	"math/cmplx"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
+// ErrUnevaluableLibraryFunction is returned for a function library declaration
+// this runtime has no representation for the values of. It names the function,
+// so a model is told which declaration it is rather than answered wrongly.
+var ErrUnevaluableLibraryFunction = errors.New("library function is not evaluable")
+
+// noVectorCollection and noComplexCollection are why the aggregations over a
+// collection of vectors or of Complex values are not evaluable: a sequence of
+// them flattens, losing the grouping the aggregation sums over.
+const (
+	noVectorCollection = "a collection of vectors has no representation: " +
+		"a sequence of vectors flattens into one sequence of elements"
+	noComplexCollection = "a collection of Complex values cannot be told from one Complex value: " +
+		"both are a sequence of Reals"
+)
+
+// libraryPi is the value of TrigFunctions::pi. The library fixes it by an
+// invariant rather than a value (round(pi * 1E20) == 314159265358979323846.0),
+// 21 significant digits, of which a Real carries the nearest float64.
+const libraryPi = math.Pi
+
 // libraryFunction is the built-in implementation of a function library
-// declaration that carries no body: one of the vendored OMG Kernel Function
-// Library, or one of the non-normative Systemica extension library. Its name is
-// the fully-qualified name dispatch matches, and its parameters carry the names
-// and the order the declared signature gives, so a named argument binds to the
-// parameter the library names.
+// declaration. Its name is the fully-qualified name dispatch matches, and its
+// parameters carry the names and order the declared signature gives.
 type libraryFunction struct {
 	name   string
 	params []string
-	apply  func(args []semantics.Value) (semantics.Value, error)
+	// required is how many leading parameters the signature declares [1]; the
+	// rest are declared [0..1] and bind null where a call omits them.
+	required int
+	apply    libraryApply
 }
+
+// libraryApply computes one library function. It is passed the name it was
+// dispatched under, so an implementation shared by several declarations reports
+// the one the model called.
+type libraryApply func(name string, ctx *Context, args []Value) (Value, error)
 
 // libraryFunctions maps a function's fully-qualified name to its
 // implementation. Dispatch is by qualified name, so a user-declared calc of the
@@ -76,6 +103,24 @@ func init() {
 	registerLibraryFunction("TrigFunctions::arccos", []string{"x"}, realUnary(math.Acos))
 	registerLibraryFunction("TrigFunctions::arctan", []string{"x"}, realUnary(math.Atan))
 
+	// `deg` and `rad` carry bodies in the library — theta * 180 / pi and
+	// theta * pi / 180 — whose only unknown is TrigFunctions::pi, which the
+	// feature-value seam below supplies. These compute the same conversion.
+	registerLibraryFunction("TrigFunctions::deg", []string{"theta_rad"}, degreesFromRadians)
+	registerLibraryFunction("TrigFunctions::rad", []string{"theta_deg"}, radiansFromDegrees)
+
+	registerVectorFunctions()
+	registerComplexFunctions()
+
+	// includingAt, the one SequenceFunctions declaration left unevaluated: its
+	// vendored body drops the element at index, while the addAt behavior that
+	// calls it documents an insertion keeping it (see spec-compliance.md).
+	registerUnevaluable(
+		"SequenceFunctions::includingAt", []string{"seq", "values", "index"}, 3,
+		"its vendored body drops the element at index while addAt documents an insertion that keeps it; "+
+			"the reading is not settled here (docs/project/spec-compliance.md)",
+	)
+
 	// SystemicaMathFunctions is the non-normative Systemica extension library
 	// (internal/core/libs/stdlib/Systemica Libraries/SystemicaMathFunctions.kerml),
 	// which declares the exponential, logarithmic and two-argument arctangent
@@ -108,12 +153,143 @@ func init() {
 		"ln":     "SystemicaMathFunctions::ln",
 		"log":    "SystemicaMathFunctions::log",
 		"atan2":  "SystemicaMathFunctions::atan2",
+
+		"deg": "TrigFunctions::deg",
+		"rad": "TrigFunctions::rad",
+
+		// VectorFunctions and ComplexFunctions: the names only one of the two
+		// packages declares, each mapped to the declaration that computes it for
+		// every vector or Complex this runtime represents.
+		"VectorOf":               "VectorFunctions::VectorOf",
+		"CartesianVectorOf":      "VectorFunctions::CartesianVectorOf",
+		"CartesianThreeVectorOf": "VectorFunctions::CartesianThreeVectorOf",
+		"isZeroVector":           "VectorFunctions::isZeroVector",
+		"isCartesianZeroVector":  "VectorFunctions::isCartesianZeroVector",
+		"scalarVectorMult":       "VectorFunctions::scalarVectorMult",
+		"vectorScalarMult":       "VectorFunctions::vectorScalarMult",
+		"vectorScalarDiv":        "VectorFunctions::vectorScalarDiv",
+		"inner":                  "VectorFunctions::inner",
+		"norm":                   "VectorFunctions::norm",
+		"angle":                  "VectorFunctions::angle",
+		"rect":                   "ComplexFunctions::rect",
+		"polar":                  "ComplexFunctions::polar",
+		"re":                     "ComplexFunctions::re",
+		"im":                     "ComplexFunctions::im",
+		"arg":                    "ComplexFunctions::arg",
 	})
 }
 
-// registerLibraryFunction adds one implementation to the registry.
+// registerVectorFunctions registers VectorFunctions (Kernel Function Library).
+// A vector is the sequence of its elements, which is what the library's own
+// NumericalVectorValue is: `elements` with a `dimension` equal to their number.
+// The abstract declarations over VectorValue and their Cartesian specializations
+// compute alike over that representation, so both are registered.
+func registerVectorFunctions() {
+	registerValueFunction("VectorFunctions::isZeroVector", []string{"v"}, 1, vectorIsZero)
+	registerValueFunction("VectorFunctions::isCartesianZeroVector", []string{"v"}, 1, vectorIsZero)
+	registerValueFunction("VectorFunctions::+", []string{"v", "w"}, 1, vectorAdd)
+	registerValueFunction("VectorFunctions::cartesian+", []string{"v", "w"}, 1, vectorAdd)
+	registerValueFunction("VectorFunctions::-", []string{"v", "w"}, 1, vectorSubtract)
+	registerValueFunction("VectorFunctions::cartesian-", []string{"v", "w"}, 1, vectorSubtract)
+	registerValueFunction("VectorFunctions::VectorOf", []string{"components"}, 1, vectorOf)
+	registerValueFunction("VectorFunctions::CartesianVectorOf", []string{"components"}, 1, cartesianVectorOf)
+	registerValueFunction("VectorFunctions::CartesianThreeVectorOf", []string{"components"}, 1, cartesianThreeVectorOf)
+	registerValueFunction("VectorFunctions::inner", []string{"v", "w"}, 2, vectorInner)
+	registerValueFunction("VectorFunctions::cartesianInner", []string{"v", "w"}, 2, vectorInner)
+	registerValueFunction("VectorFunctions::norm", []string{"v"}, 1, vectorNorm)
+	registerValueFunction("VectorFunctions::cartesianNorm", []string{"v"}, 1, vectorNorm)
+	registerValueFunction("VectorFunctions::angle", []string{"v", "w"}, 2, vectorAngle)
+	registerValueFunction("VectorFunctions::cartesianAngle", []string{"v", "w"}, 2, vectorAngle)
+
+	// scalarVectorMult takes the scalar first and vectorScalarMult the vector,
+	// and the library aliases '*' for the former.
+	registerValueFunction("VectorFunctions::scalarVectorMult", []string{"x", "v"}, 2, scalarVectorMult)
+	registerValueFunction("VectorFunctions::*", []string{"x", "v"}, 2, scalarVectorMult)
+	registerValueFunction("VectorFunctions::cartesianScalarVectorMult", []string{"x", "v"}, 2, scalarVectorMult)
+	registerValueFunction("VectorFunctions::vectorScalarMult", []string{"v", "x"}, 2, vectorScalarMult)
+	registerValueFunction("VectorFunctions::cartesianVectorScalarMult", []string{"v", "x"}, 2, vectorScalarMult)
+	registerValueFunction("VectorFunctions::vectorScalarDiv", []string{"v", "x"}, 2, vectorScalarDiv)
+
+	registerUnevaluable("VectorFunctions::sum0", []string{"coll", "zero"}, 2, noVectorCollection)
+	registerUnevaluable("VectorFunctions::sum", []string{"coll"}, 1, noVectorCollection)
+}
+
+// registerComplexFunctions registers ComplexFunctions (Kernel Function Library).
+// A Complex is the (re, im) pair `rect` constructs, and a Real is a Complex with
+// a zero imaginary part (ScalarValues declares Real :> Complex), so both bind to
+// a Complex parameter.
+func registerComplexFunctions() {
+	registerValueFunction("ComplexFunctions::rect", []string{"re", "im"}, 2, complexRect)
+	registerValueFunction("ComplexFunctions::polar", []string{"abs", "arg"}, 2, complexPolar)
+	registerValueFunction("ComplexFunctions::re", []string{"x"}, 1, complexRealPart)
+	registerValueFunction("ComplexFunctions::im", []string{"x"}, 1, complexImagPart)
+	registerValueFunction("ComplexFunctions::isZero", []string{"x"}, 1, complexIsZero)
+	registerValueFunction("ComplexFunctions::isUnit", []string{"x"}, 1, complexIsUnit)
+	registerValueFunction("ComplexFunctions::abs", []string{"x"}, 1, complexModulus)
+	registerValueFunction("ComplexFunctions::arg", []string{"x"}, 1, complexArgument)
+	registerValueFunction("ComplexFunctions::+", []string{"x", "y"}, 1, complexAdd)
+	registerValueFunction("ComplexFunctions::-", []string{"x", "y"}, 1, complexSubtract)
+	registerValueFunction("ComplexFunctions::*", []string{"x", "y"}, 2, complexMultiply)
+	registerValueFunction("ComplexFunctions::/", []string{"x", "y"}, 2, complexDivide)
+	registerValueFunction("ComplexFunctions::**", []string{"x", "y"}, 2, complexPower)
+	registerValueFunction("ComplexFunctions::^", []string{"x", "y"}, 2, complexPower)
+	registerValueFunction("ComplexFunctions::==", []string{"x", "y"}, 0, complexEquals)
+
+	registerUnevaluable("ComplexFunctions::sum", []string{"collection"}, 1, noComplexCollection)
+	registerUnevaluable("ComplexFunctions::product", []string{"collection"}, 1, noComplexCollection)
+
+	// The two string conversions of a Complex: this runtime has no notation for
+	// one, and inventing a rendering would make ToComplex(ToString(x)) a value
+	// nothing else in the library agrees on.
+	registerUnevaluable("ComplexFunctions::ToString", []string{"x"}, 1,
+		"no string notation for a Complex value is defined")
+	registerUnevaluable("ComplexFunctions::ToComplex", []string{"x"}, 1,
+		"no string notation for a Complex value is defined")
+}
+
+// registerLibraryFunction adds one implementation over scalar numeric
+// arguments, which is what most of the numeric library declares.
 func registerLibraryFunction(name string, params []string, apply func([]semantics.Value) (semantics.Value, error)) {
-	libraryFunctions[name] = &libraryFunction{name: name, params: params, apply: apply}
+	registerValueFunction(name, params, len(params), numericScalars(params, apply))
+}
+
+// registerValueFunction adds one implementation over runtime values, for the
+// declarations whose parameters or results are not scalars: a vector, a Complex,
+// or a parameter the signature declares [0..1].
+func registerValueFunction(name string, params []string, required int, apply libraryApply) {
+	libraryFunctions[name] = &libraryFunction{name: name, params: params, required: required, apply: apply}
+}
+
+// registerUnevaluable registers a declaration this runtime cannot evaluate, so
+// that a call to it is reported by name with the reason rather than resolving to
+// a library body that computes something else or to no declaration at all.
+func registerUnevaluable(name string, params []string, required int, reason string) {
+	registerValueFunction(name, params, required, func(called string, _ *Context, _ []Value) (Value, error) {
+		return Value{}, fmt.Errorf("%w: %s: %s", ErrUnevaluableLibraryFunction, called, reason)
+	})
+}
+
+// numericScalars adapts an implementation over scalar numeric values: every
+// parameter of such a declaration is one number, so a collection, a string or an
+// instance does not conform to it.
+func numericScalars(params []string, apply func([]semantics.Value) (semantics.Value, error)) libraryApply {
+	return func(name string, _ *Context, args []Value) (Value, error) {
+		values := make([]semantics.Value, len(args))
+		for i, arg := range args {
+			if arg.Kind != ValConst || !arg.Const.IsNumeric() {
+				return Value{}, fmt.Errorf(
+					"%w: function %s parameter %q requires a numeric value",
+					ErrTypeMismatch, name, params[i],
+				)
+			}
+			values[i] = arg.Const
+		}
+		result, err := apply(values)
+		if err != nil {
+			return Value{}, fmt.Errorf("function %s: %w", name, err)
+		}
+		return Value{Kind: ValConst, Const: result}, nil
+	}
 }
 
 // registerLocalNames records which declaration each unqualified name denotes.
@@ -150,9 +326,7 @@ func unresolvedLibraryFunction(qn *ast.QualifiedName, written string) (*libraryF
 }
 
 // libraryFunctionFor returns the built-in implementation of sym when sym is a
-// function library declaration the library gives no body to evaluate. A
-// declaration that does carry a body is evaluated from that body, so a model
-// that declares its own calc of the same name is never routed here.
+// function library declaration this runtime implements.
 func (ctx *Context) libraryFunctionFor(sym *symbols.Symbol) (*libraryFunction, bool) {
 	// A declaration that is not a function is not one of these, whatever it is
 	// named. A cached library symbol carries a kind and no Decl.
@@ -160,10 +334,31 @@ func (ctx *Context) libraryFunctionFor(sym *symbols.Symbol) (*libraryFunction, b
 		return nil, false
 	}
 	fn, ok := libraryFunctions[ctx.qualifiedSymbolName(sym)]
-	if !ok || ctx.hasCalcBody(sym) {
+	if !ok {
+		return nil, false
+	}
+	// A library declaration is answered by its built-in even where it carries a
+	// body: a warm library cache restores symbols without their AST, so
+	// evaluating the body would make the result depend on the cache.
+	if ctx.libraryDeclared(sym) {
+		return fn, true
+	}
+	// Outside the libraries the name is the model's own: a calc that carries a
+	// body is evaluated from that body and never routed here.
+	if ctx.hasCalcBody(sym) {
 		return nil, false
 	}
 	return fn, true
+}
+
+// libraryDeclared reports whether sym was declared by one of the library
+// documents rather than by the model under evaluation.
+func (ctx *Context) libraryDeclared(sym *symbols.Symbol) bool {
+	if ctx == nil || ctx.resolver == nil {
+		return false
+	}
+	idx := ctx.resolver.Index()
+	return idx != nil && idx.Library(sym)
 }
 
 // invoke binds args to the declared parameters and applies the function,
@@ -185,63 +380,64 @@ func (fn *libraryFunction) invoke(ctx *Context, args calcArgs) (Value, error) {
 }
 
 // bindAndApply resolves each declared parameter to an argument and applies the
-// function. Every library parameter has multiplicity [1] and no default, so the
-// argument count must match exactly.
+// function. A parameter the signature declares [1] must be given an argument; a
+// parameter it declares [0..1] binds null where the call omits it, which is how
+// the library's own one-argument `'+'` and `'-'` are called.
 func (fn *libraryFunction) bindAndApply(ctx *Context, args calcArgs) (Value, error) {
 	if len(args.positional) > 0 && len(args.named) > 0 {
 		return Value{}, fmt.Errorf("%w: function %s takes either positional or named arguments", ErrCalcArity, fn.name)
 	}
-	if len(args.positional) > 0 && len(args.positional) != len(fn.params) {
+	given := len(args.positional) + len(args.named)
+	if given < fn.required || given > len(fn.params) {
 		return Value{}, fmt.Errorf(
-			"%w: function %s takes %d argument(s), got %d",
-			ErrCalcArity, fn.name, len(fn.params), len(args.positional),
-		)
-	}
-	if len(args.named) > 0 && len(args.named) != len(fn.params) {
-		return Value{}, fmt.Errorf(
-			"%w: function %s takes %d argument(s), got %d",
-			ErrCalcArity, fn.name, len(fn.params), len(args.named),
-		)
-	}
-	if len(args.positional) == 0 && len(args.named) == 0 && len(fn.params) > 0 {
-		return Value{}, fmt.Errorf(
-			"%w: function %s takes %d argument(s), got 0",
-			ErrCalcArity, fn.name, len(fn.params),
+			"%w: function %s takes %s argument(s), got %d",
+			ErrCalcArity, fn.name, fn.arity(), given,
 		)
 	}
 
-	values := make([]semantics.Value, len(fn.params))
+	values := make([]Value, len(fn.params))
 	for i, param := range fn.params {
-		var arg Value
-		if len(args.positional) > 0 {
-			arg = args.positional[i]
-		} else {
-			bound, ok := args.named[param]
-			if !ok {
-				return Value{}, fmt.Errorf(
-					"%w: function %s has no input parameter matching the arguments given (expected %q)",
-					ErrUnknownParameter, fn.name, param,
-				)
-			}
-			arg = bound
+		arg, err := fn.argumentFor(i, param, args)
+		if err != nil {
+			return Value{}, err
 		}
-		if arg.Kind != ValConst || !arg.Const.IsNumeric() {
-			return Value{}, fmt.Errorf(
-				"%w: function %s parameter %q requires a numeric value",
-				ErrTypeMismatch, fn.name, param,
-			)
-		}
-		values[i] = arg.Const
+		values[i] = arg
 		if ctx.trace != nil {
 			ctx.trace.RecordCalcBind(param, arg, "argument")
 		}
 	}
+	return fn.apply(fn.name, ctx, values)
+}
 
-	result, err := fn.apply(values)
-	if err != nil {
-		return Value{}, fmt.Errorf("function %s: %w", fn.name, err)
+// argumentFor returns the argument bound to the i-th declared parameter: the
+// positional argument in that place, the named argument the library's own
+// parameter name matches, or null for an omitted [0..1] parameter.
+func (fn *libraryFunction) argumentFor(i int, param string, args calcArgs) (Value, error) {
+	if len(args.named) > 0 {
+		if bound, ok := args.named[param]; ok {
+			return bound, nil
+		}
+		if i < fn.required {
+			return Value{}, fmt.Errorf(
+				"%w: function %s has no input parameter matching the arguments given (expected %q)",
+				ErrUnknownParameter, fn.name, param,
+			)
+		}
+		return nullValue(), nil
 	}
-	return Value{Kind: ValConst, Const: result}, nil
+	if i < len(args.positional) {
+		return args.positional[i], nil
+	}
+	return nullValue(), nil
+}
+
+// arity reports the argument count the signature accepts, as one number or as
+// the range an optional parameter opens.
+func (fn *libraryFunction) arity() string {
+	if fn.required == len(fn.params) {
+		return fmt.Sprintf("%d", fn.required)
+	}
+	return fmt.Sprintf("%d..%d", fn.required, len(fn.params))
 }
 
 // realUnary adapts a one-argument function over the reals: the argument widens
@@ -474,4 +670,681 @@ func integerResult(x float64) (semantics.Value, error) {
 		return semantics.Value{}, fmt.Errorf("%w: %v exceeds the Integer range", semantics.ErrArithmeticOverflow, x)
 	}
 	return semantics.Value{Kind: semantics.ValInt, Int: int64(x)}, nil
+}
+
+// libraryFeature is the value this runtime supplies for one library feature: a
+// named constant a library declares and gives no evaluable value of its own,
+// which function dispatch cannot answer because a feature is not a call.
+type libraryFeature struct {
+	name  string
+	value func(ctx *Context) (Value, error)
+}
+
+// libraryFeatures maps a feature's fully-qualified name to its value. The value
+// is recomputed per read, so no two readers share a sequence and no value
+// depends on whether the library index cache was warm.
+var libraryFeatures = map[string]*libraryFeature{}
+
+func init() {
+	registerLibraryFeature("TrigFunctions::pi", func(*Context) (Value, error) {
+		return checkedReal(libraryPi)
+	})
+
+	// ComplexFunctions::i = rect(0.0, 1.0), the imaginary unit.
+	registerLibraryFeature("ComplexFunctions::i", func(ctx *Context) (Value, error) {
+		return ctx.complexValue(complex(0, 1))
+	})
+
+	// cartesian3DZeroVector = cartesianZeroVector#(3). cartesianZeroVector itself
+	// is the 1-, 2- and 3-dimensional zero vectors as one feature of three
+	// vectors, which has no representation here.
+	registerLibraryFeature("VectorFunctions::cartesian3DZeroVector", func(ctx *Context) (Value, error) {
+		return ctx.realVector([]float64{0, 0, 0})
+	})
+	registerLibraryFeature("VectorFunctions::cartesianZeroVector", func(*Context) (Value, error) {
+		return Value{}, fmt.Errorf(
+			"%w: VectorFunctions::cartesianZeroVector: %s",
+			ErrUnevaluableLibraryFunction, noVectorCollection,
+		)
+	})
+}
+
+// registerLibraryFeature adds one feature value to the seam.
+func registerLibraryFeature(name string, value func(ctx *Context) (Value, error)) {
+	libraryFeatures[name] = &libraryFeature{name: name, value: value}
+}
+
+// libraryFeatureValue returns the value the seam supplies for sym. It is keyed by
+// the resolved symbol and answers for a library declaration only, so ordinary
+// name resolution decides and a model's own feature keeps its own value.
+func (ctx *Context) libraryFeatureValue(sym *symbols.Symbol) (Value, bool, error) {
+	if sym == nil || !ctx.libraryDeclared(sym) {
+		return Value{}, false, nil
+	}
+	feature, ok := libraryFeatures[ctx.qualifiedSymbolName(sym)]
+	if !ok {
+		return Value{}, false, nil
+	}
+	val, err := feature.value(ctx)
+	if err != nil {
+		return Value{}, true, err
+	}
+	return val, true, nil
+}
+
+// libraryFeatureByName returns the seam's entry for a fully-qualified feature
+// name, which is how a name that resolves to no declaration — a model that
+// imports no part of the libraries — reads a library constant.
+func libraryFeatureByName(fqn string) (*libraryFeature, bool) {
+	feature, ok := libraryFeatures[fqn]
+	return feature, ok
+}
+
+// degreesFromRadians is TrigFunctions::deg, whose library body is
+// `theta_rad * 180 / pi` over the pi the feature seam supplies.
+func degreesFromRadians(args []semantics.Value) (semantics.Value, error) {
+	return realResult(asReal(args[0]) * 180 / libraryPi)
+}
+
+// radiansFromDegrees is TrigFunctions::rad, `theta_deg * pi / 180`.
+func radiansFromDegrees(args []semantics.Value) (semantics.Value, error) {
+	return realResult(asReal(args[0]) * libraryPi / 180)
+}
+
+// ---------------------------------------------------------------------------
+// VectorFunctions.
+// ---------------------------------------------------------------------------
+
+// vectorElements views a vector argument as the sequence of its elements, which
+// is what VectorValues declares a NumericalVectorValue to be: a sequence is that
+// vector, one number the one-dimensional vector of it, and null the empty vector.
+func vectorElements(name, param string, val Value) ([]semantics.Value, error) {
+	elements := elementsOf(val)
+	out := make([]semantics.Value, len(elements))
+	for i, elem := range elements {
+		if elem.Kind != ValConst || !elem.Const.IsNumeric() {
+			return nil, fmt.Errorf(
+				"%w: function %s parameter %q requires a vector of numeric values, element %d is %s",
+				ErrTypeMismatch, name, param, i+1, describeValue(elem),
+			)
+		}
+		out[i] = elem.Const
+	}
+	return out, nil
+}
+
+// realElements is vectorElements widened to Real, for the CartesianVectorValue
+// operations, whose elements the library declares Real.
+func realElements(name, param string, val Value) ([]float64, error) {
+	elements, err := vectorElements(name, param, val)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]float64, len(elements))
+	for i, elem := range elements {
+		out[i] = asReal(elem)
+	}
+	return out, nil
+}
+
+// vectorValue builds a vector from its elements, charging them against the run's
+// element budget as any other materialized collection.
+func (ctx *Context) vectorValue(elements []semantics.Value) (Value, error) {
+	if err := ctx.chargeElements(int64(len(elements))); err != nil {
+		return Value{}, err
+	}
+	out := make([]Value, len(elements))
+	for i, elem := range elements {
+		out[i] = Value{Kind: ValConst, Const: elem}
+	}
+	return sequenceOf(out), nil
+}
+
+// realVector builds a vector of Reals, reporting an element that is not a finite
+// Real rather than carrying an infinity into it.
+func (ctx *Context) realVector(components []float64) (Value, error) {
+	elements := make([]semantics.Value, len(components))
+	for i, x := range components {
+		elem, err := realResult(x)
+		if err != nil {
+			return Value{}, err
+		}
+		elements[i] = elem
+	}
+	return ctx.vectorValue(elements)
+}
+
+// checkedReal wraps a computed Real as a runtime value, reporting a result that
+// is not a finite number.
+func checkedReal(x float64) (Value, error) {
+	res, err := realResult(x)
+	if err != nil {
+		return Value{}, err
+	}
+	return Value{Kind: ValConst, Const: res}, nil
+}
+
+// scalarArg reads a scalar numeric argument: the NumericalValue a scalar-vector
+// product or a Complex component is declared as.
+func scalarArg(name, param string, val Value) (semantics.Value, error) {
+	if val.Kind != ValConst || !val.Const.IsNumeric() {
+		return semantics.Value{}, fmt.Errorf(
+			"%w: function %s parameter %q requires a numeric value",
+			ErrTypeMismatch, name, param,
+		)
+	}
+	return val.Const, nil
+}
+
+// combineElements applies an arithmetic operator elementwise to two vectors of
+// equal dimension, keeping the elements' kind as the library's declaration over
+// NumericalValue does: two Integer vectors give an Integer vector.
+func combineElements(name string, op ast.OperatorKind, v, w []semantics.Value) ([]semantics.Value, error) {
+	if len(v) != len(w) {
+		return nil, fmt.Errorf(
+			"%w: function %s requires vectors of equal dimension, got %d and %d",
+			ErrTypeMismatch, name, len(v), len(w),
+		)
+	}
+	out := make([]semantics.Value, len(v))
+	for i := range v {
+		res, ok := semantics.EvalBinary(op, v[i], w[i])
+		if !ok {
+			return nil, fmt.Errorf(
+				"%w: function %s cannot combine element %d of its arguments",
+				ErrTypeMismatch, name, i+1,
+			)
+		}
+		out[i] = res
+	}
+	return out, nil
+}
+
+// zeroLike is the zero of a numeric value's kind, which negation subtracts from.
+func zeroLike(v semantics.Value) semantics.Value {
+	if v.Kind == semantics.ValInt {
+		return semantics.Value{Kind: semantics.ValInt}
+	}
+	return semantics.Value{Kind: semantics.ValReal}
+}
+
+// vectorIsZero is isZeroVector and its Cartesian specialization: a zero vector
+// is one whose every element is zero.
+func vectorIsZero(name string, _ *Context, args []Value) (Value, error) {
+	elements, err := vectorElements(name, "v", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	for _, elem := range elements {
+		if asReal(elem) != 0 {
+			return boolValue(false), nil
+		}
+	}
+	return boolValue(true), nil
+}
+
+// vectorAdd is VectorFunctions::'+' and 'cartesian+': the sum of two vectors of
+// equal dimension, or, given one argument, that vector.
+func vectorAdd(name string, ctx *Context, args []Value) (Value, error) {
+	v, err := vectorElements(name, "v", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	if args[1].Kind == ValNull {
+		return ctx.vectorValue(v)
+	}
+	w, err := vectorElements(name, "w", args[1])
+	if err != nil {
+		return Value{}, err
+	}
+	sum, err := combineElements(name, ast.OpAdd, v, w)
+	if err != nil {
+		return Value{}, err
+	}
+	return ctx.vectorValue(sum)
+}
+
+// vectorSubtract is VectorFunctions::'-' and 'cartesian-': the difference of two
+// vectors of equal dimension, or, given one argument, the vector that added to it
+// gives the zero vector.
+func vectorSubtract(name string, ctx *Context, args []Value) (Value, error) {
+	v, err := vectorElements(name, "v", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	if args[1].Kind == ValNull {
+		zeros := make([]semantics.Value, len(v))
+		for i, elem := range v {
+			zeros[i] = zeroLike(elem)
+		}
+		negated, err := combineElements(name, ast.OpSub, zeros, v)
+		if err != nil {
+			return Value{}, err
+		}
+		return ctx.vectorValue(negated)
+	}
+	w, err := vectorElements(name, "w", args[1])
+	if err != nil {
+		return Value{}, err
+	}
+	difference, err := combineElements(name, ast.OpSub, v, w)
+	if err != nil {
+		return Value{}, err
+	}
+	return ctx.vectorValue(difference)
+}
+
+// vectorOf is VectorFunctions::VectorOf, the NumericalVectorValue of a non-empty
+// list of components, whose kind it keeps.
+func vectorOf(name string, ctx *Context, args []Value) (Value, error) {
+	components, err := vectorElements(name, "components", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	if len(components) == 0 {
+		return Value{}, fmt.Errorf(
+			"%w: function %s requires at least one component (components: NumericalValue[1..*])",
+			ErrMultiplicityViolation, name,
+		)
+	}
+	return ctx.vectorValue(components)
+}
+
+// cartesianVectorOf is VectorFunctions::CartesianVectorOf, whose components the
+// library declares Real, so an Integer component widens.
+func cartesianVectorOf(name string, ctx *Context, args []Value) (Value, error) {
+	components, err := realElements(name, "components", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	return ctx.realVector(components)
+}
+
+// cartesianThreeVectorOf is VectorFunctions::CartesianThreeVectorOf, which
+// declares its components Real[3].
+func cartesianThreeVectorOf(name string, ctx *Context, args []Value) (Value, error) {
+	components, err := realElements(name, "components", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	if len(components) != 3 {
+		return Value{}, fmt.Errorf(
+			"%w: function %s requires 3 components (components: Real[3]), got %d",
+			ErrMultiplicityViolation, name, len(components),
+		)
+	}
+	return ctx.realVector(components)
+}
+
+// scalarVectorMult is the scalar product with the scalar first, which the library
+// also aliases as VectorFunctions::'*'.
+func scalarVectorMult(name string, ctx *Context, args []Value) (Value, error) {
+	return scaleVector(name, ctx, args[0], "x", args[1], "v")
+}
+
+// vectorScalarMult is the same product with the vector first, which the library
+// defines as scalarVectorMult(x, v).
+func vectorScalarMult(name string, ctx *Context, args []Value) (Value, error) {
+	return scaleVector(name, ctx, args[1], "x", args[0], "v")
+}
+
+// scaleVector multiplies every element of a vector by a scalar, keeping the
+// elements' kind.
+func scaleVector(name string, ctx *Context, scalar Value, scalarParam string, vector Value, vectorParam string) (Value, error) {
+	x, err := scalarArg(name, scalarParam, scalar)
+	if err != nil {
+		return Value{}, err
+	}
+	elements, err := vectorElements(name, vectorParam, vector)
+	if err != nil {
+		return Value{}, err
+	}
+	scaled := make([]semantics.Value, len(elements))
+	for i, elem := range elements {
+		res, ok := semantics.EvalBinary(ast.OpMul, x, elem)
+		if !ok {
+			return Value{}, fmt.Errorf(
+				"%w: function %s cannot scale element %d of %q",
+				ErrTypeMismatch, name, i+1, vectorParam,
+			)
+		}
+		scaled[i] = res
+	}
+	return ctx.vectorValue(scaled)
+}
+
+// vectorScalarDiv is VectorFunctions::vectorScalarDiv. The library defines it as
+// scalarVectorMult(1.0 / x, v); dividing each element is the same quotient
+// without the reciprocal's rounding.
+func vectorScalarDiv(name string, ctx *Context, args []Value) (Value, error) {
+	elements, err := vectorElements(name, "v", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	x, err := scalarArg(name, "x", args[1])
+	if err != nil {
+		return Value{}, err
+	}
+	if asReal(x) == 0 {
+		return Value{}, fmt.Errorf("%w: function %s divides by zero", ErrDivisionByZero, name)
+	}
+	quotients := make([]float64, len(elements))
+	for i, elem := range elements {
+		quotients[i] = asReal(elem) / asReal(x)
+	}
+	return ctx.realVector(quotients)
+}
+
+// vectorInner is the inner product of two vectors of equal dimension, keeping the
+// elements' kind: two Integer vectors have an Integer inner product.
+func vectorInner(name string, _ *Context, args []Value) (Value, error) {
+	v, err := vectorElements(name, "v", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	w, err := vectorElements(name, "w", args[1])
+	if err != nil {
+		return Value{}, err
+	}
+	products, err := combineElements(name, ast.OpMul, v, w)
+	if err != nil {
+		return Value{}, err
+	}
+	sum := semantics.Value{Kind: semantics.ValInt}
+	for i, product := range products {
+		next, ok := semantics.EvalBinary(ast.OpAdd, sum, product)
+		if !ok {
+			return Value{}, fmt.Errorf(
+				"%w: function %s cannot add product %d of its arguments",
+				ErrTypeMismatch, name, i+1,
+			)
+		}
+		sum = next
+	}
+	return Value{Kind: ValConst, Const: sum}, nil
+}
+
+// vectorNorm is the norm (magnitude) of a vector, the square root of its inner
+// product with itself.
+func vectorNorm(name string, _ *Context, args []Value) (Value, error) {
+	elements, err := realElements(name, "v", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	return checkedReal(euclideanNorm(elements))
+}
+
+// euclideanNorm is the square root of the sum of the squares.
+func euclideanNorm(elements []float64) float64 {
+	sum := 0.0
+	for _, x := range elements {
+		sum += x * x
+	}
+	return math.Sqrt(sum)
+}
+
+// vectorAngle is the angle between two vectors of equal dimension,
+// arccos(inner(v, w) / (norm(v) * norm(w))). A zero vector points nowhere, so
+// there is no angle to it.
+func vectorAngle(name string, _ *Context, args []Value) (Value, error) {
+	v, err := realElements(name, "v", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	w, err := realElements(name, "w", args[1])
+	if err != nil {
+		return Value{}, err
+	}
+	if len(v) != len(w) {
+		return Value{}, fmt.Errorf(
+			"%w: function %s requires vectors of equal dimension, got %d and %d",
+			ErrTypeMismatch, name, len(v), len(w),
+		)
+	}
+	normV, normW := euclideanNorm(v), euclideanNorm(w)
+	if normV == 0 || normW == 0 {
+		return Value{}, fmt.Errorf(
+			"%w: function %s has no angle to a zero vector",
+			semantics.ErrArithmeticDomain, name,
+		)
+	}
+	inner := 0.0
+	for i := range v {
+		inner += v[i] * w[i]
+	}
+	// Rounding can carry the cosine of two parallel vectors just outside
+	// [-1.0, 1.0], where the arc cosine has no value; the angle there is 0 or pi.
+	cosine := math.Max(-1, math.Min(1, inner/(normV*normW)))
+	return checkedReal(math.Acos(cosine))
+}
+
+// ---------------------------------------------------------------------------
+// ComplexFunctions.
+// ---------------------------------------------------------------------------
+
+// asComplex reads a Complex argument: the (re, im) pair rect constructs, or a
+// Real, which ScalarValues declares a Complex (Real :> Complex) with a zero
+// imaginary part.
+func asComplex(name, param string, val Value) (complex128, error) {
+	elements := elementsOf(val)
+	if len(elements) == 0 || len(elements) > 2 {
+		return 0, fmt.Errorf(
+			"%w: function %s parameter %q requires a Complex value: a Real, or the (re, im) pair rect returns, got %d elements",
+			ErrTypeMismatch, name, param, len(elements),
+		)
+	}
+	var parts [2]float64
+	for i, elem := range elements {
+		if elem.Kind != ValConst || !elem.Const.IsNumeric() {
+			return 0, fmt.Errorf(
+				"%w: function %s parameter %q requires a Complex value, element %d is %s",
+				ErrTypeMismatch, name, param, i+1, describeValue(elem),
+			)
+		}
+		parts[i] = asReal(elem.Const)
+	}
+	return complex(parts[0], parts[1]), nil
+}
+
+// complexValue is the (re, im) pair a Complex result carries.
+func (ctx *Context) complexValue(z complex128) (Value, error) {
+	return ctx.realVector([]float64{real(z), imag(z)})
+}
+
+// complexRect is ComplexFunctions::rect, the Complex with the given real and
+// imaginary parts.
+func complexRect(name string, ctx *Context, args []Value) (Value, error) {
+	re, err := scalarArg(name, "re", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	im, err := scalarArg(name, "im", args[1])
+	if err != nil {
+		return Value{}, err
+	}
+	return ctx.complexValue(complex(asReal(re), asReal(im)))
+}
+
+// complexPolar is ComplexFunctions::polar, the Complex with the given modulus
+// and argument.
+func complexPolar(name string, ctx *Context, args []Value) (Value, error) {
+	abs, err := scalarArg(name, "abs", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	arg, err := scalarArg(name, "arg", args[1])
+	if err != nil {
+		return Value{}, err
+	}
+	return ctx.complexValue(cmplx.Rect(asReal(abs), asReal(arg)))
+}
+
+// complexRealPart is ComplexFunctions::re.
+func complexRealPart(name string, _ *Context, args []Value) (Value, error) {
+	z, err := asComplex(name, "x", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	return checkedReal(real(z))
+}
+
+// complexImagPart is ComplexFunctions::im.
+func complexImagPart(name string, _ *Context, args []Value) (Value, error) {
+	z, err := asComplex(name, "x", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	return checkedReal(imag(z))
+}
+
+// complexIsZero is ComplexFunctions::isZero, `re(x) == 0.0 and im(x) == 0.0`.
+func complexIsZero(name string, _ *Context, args []Value) (Value, error) {
+	z, err := asComplex(name, "x", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	return boolValue(z == 0), nil
+}
+
+// complexIsUnit is ComplexFunctions::isUnit, `re(x) == 1.0 and im(x) == 0.0`.
+func complexIsUnit(name string, _ *Context, args []Value) (Value, error) {
+	z, err := asComplex(name, "x", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	return boolValue(z == 1), nil
+}
+
+// complexModulus is ComplexFunctions::abs, the distance from the origin.
+func complexModulus(name string, _ *Context, args []Value) (Value, error) {
+	z, err := asComplex(name, "x", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	return checkedReal(cmplx.Abs(z))
+}
+
+// complexArgument is ComplexFunctions::arg, the angle to the point. The origin
+// has no angle, which is reported rather than answered 0.
+func complexArgument(name string, _ *Context, args []Value) (Value, error) {
+	z, err := asComplex(name, "x", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	if z == 0 {
+		return Value{}, fmt.Errorf(
+			"%w: function %s has no argument for 0.0 + 0.0i",
+			semantics.ErrArithmeticDomain, name,
+		)
+	}
+	return checkedReal(cmplx.Phase(z))
+}
+
+// complexAdd is ComplexFunctions::'+', whose second operand the library declares
+// [0..1]: given one argument it is that value.
+func complexAdd(name string, ctx *Context, args []Value) (Value, error) {
+	x, y, given, err := complexOperands(name, args)
+	if err != nil {
+		return Value{}, err
+	}
+	if !given {
+		return ctx.complexValue(x)
+	}
+	return ctx.complexValue(x + y)
+}
+
+// complexSubtract is ComplexFunctions::'-': given one argument, the value that
+// added to it gives zero.
+func complexSubtract(name string, ctx *Context, args []Value) (Value, error) {
+	x, y, given, err := complexOperands(name, args)
+	if err != nil {
+		return Value{}, err
+	}
+	if !given {
+		return ctx.complexValue(-x)
+	}
+	return ctx.complexValue(x - y)
+}
+
+// complexMultiply is ComplexFunctions::'*'.
+func complexMultiply(name string, ctx *Context, args []Value) (Value, error) {
+	x, y, err := complexPair(name, args)
+	if err != nil {
+		return Value{}, err
+	}
+	return ctx.complexValue(x * y)
+}
+
+// complexDivide is ComplexFunctions::'/'.
+func complexDivide(name string, ctx *Context, args []Value) (Value, error) {
+	x, y, err := complexPair(name, args)
+	if err != nil {
+		return Value{}, err
+	}
+	if y == 0 {
+		return Value{}, fmt.Errorf("%w: function %s divides by zero", ErrDivisionByZero, name)
+	}
+	return ctx.complexValue(x / y)
+}
+
+// complexPower is ComplexFunctions::'**' and its '^' synonym.
+func complexPower(name string, ctx *Context, args []Value) (Value, error) {
+	x, y, err := complexPair(name, args)
+	if err != nil {
+		return Value{}, err
+	}
+	if x == 0 && real(y) <= 0 {
+		return Value{}, fmt.Errorf(
+			"%w: function %s has no value for 0.0 to the power %v",
+			semantics.ErrArithmeticDomain, name, y,
+		)
+	}
+	return ctx.complexValue(cmplx.Pow(x, y))
+}
+
+// complexEquals is ComplexFunctions::'==', which declares both operands [0..1]:
+// two empty operands are equal, an empty one and a value are not.
+func complexEquals(name string, _ *Context, args []Value) (Value, error) {
+	xGiven, yGiven := args[0].Kind != ValNull, args[1].Kind != ValNull
+	if !xGiven || !yGiven {
+		return boolValue(xGiven == yGiven), nil
+	}
+	x, err := asComplex(name, "x", args[0])
+	if err != nil {
+		return Value{}, err
+	}
+	y, err := asComplex(name, "y", args[1])
+	if err != nil {
+		return Value{}, err
+	}
+	return boolValue(x == y), nil
+}
+
+// complexPair reads the two operands of a Complex arithmetic function that
+// declares both [1].
+func complexPair(name string, args []Value) (x, y complex128, err error) {
+	if x, err = asComplex(name, "x", args[0]); err != nil {
+		return 0, 0, err
+	}
+	if y, err = asComplex(name, "y", args[1]); err != nil {
+		return 0, 0, err
+	}
+	return x, y, nil
+}
+
+// complexOperands reads the operands of '+' and '-', whose second operand the
+// library declares [0..1], reporting whether it was given.
+func complexOperands(name string, args []Value) (x, y complex128, given bool, err error) {
+	x, err = asComplex(name, "x", args[0])
+	if err != nil {
+		return 0, 0, false, err
+	}
+	if args[1].Kind == ValNull {
+		return x, 0, false, nil
+	}
+	y, err = asComplex(name, "y", args[1])
+	if err != nil {
+		return 0, 0, false, err
+	}
+	return x, y, true, nil
 }

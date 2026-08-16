@@ -123,6 +123,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("derived_slot_over_missing_feature", testDerivedSlotOverMissingFeature)
 	t.Run("sequence_index_names_no_position", testSequenceIndexNamesNoPosition)
 	t.Run("collection_operand_of_the_wrong_kind", testCollectionOperandOfTheWrongKind)
+	t.Run("numeric_library_call_that_has_no_value", testNumericLibraryCallThatHasNoValue)
 	t.Run("collection_body_of_the_wrong_arity", testCollectionBodyOfTheWrongArity)
 	t.Run("select_predicate_is_not_a_condition", testSelectPredicateIsNotACondition)
 	t.Run("collection_operation_step_budget", testCollectionOperationStepBudget)
@@ -307,6 +308,34 @@ func testSequenceIndexNamesNoPosition(t *testing.T) {
 		{"()#(1)", ErrIndexOutOfRange},
 		{"xs#(1.5)", ErrTypeMismatch},
 		{"xs#(ys)", ErrTypeMismatch},
+	} {
+		got, err := evalCollectionExpr(t, tt.expr)
+		if !errors.Is(err, tt.want) {
+			t.Errorf("%s = (%v, %v), want %v", tt.expr, got, err, tt.want)
+		}
+	}
+}
+
+// testNumericLibraryCallThatHasNoValue: a vector, Complex or sequence library
+// declaration that cannot answer reports itself — a malformed argument by kind or
+// dimension, an undefined result, or a declaration this runtime has no
+// representation for the values of — rather than computing something else.
+func testNumericLibraryCallThatHasNoValue(t *testing.T) {
+	for _, tt := range []struct {
+		expr string
+		want error
+	}{
+		{"VectorFunctions::cartesianInner(xs, ys)", ErrTypeMismatch},
+		{"VectorFunctions::'cartesian+'(xs, ys)", ErrTypeMismatch},
+		{"VectorFunctions::cartesianNorm(flags)", ErrTypeMismatch},
+		{"VectorFunctions::cartesianAngle(xs, (0.0, 0.0, 0.0))", semantics.ErrArithmeticDomain},
+		{"VectorFunctions::vectorScalarDiv(xs, 0)", ErrDivisionByZero},
+		{"VectorFunctions::cartesianInner(xs)", ErrCalcArity},
+		{"VectorFunctions::sum(xs)", ErrUnevaluableLibraryFunction},
+		{"ComplexFunctions::'/'(ys, (0.0, 0.0))", ErrDivisionByZero},
+		{"ComplexFunctions::re(xs)", ErrTypeMismatch},
+		{"ComplexFunctions::ToString(ys)", ErrUnevaluableLibraryFunction},
+		{"SequenceFunctions::includingAt(xs, 9, 2)", ErrUnevaluableLibraryFunction},
 	} {
 		got, err := evalCollectionExpr(t, tt.expr)
 		if !errors.Is(err, tt.want) {
