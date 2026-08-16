@@ -1,0 +1,49 @@
+step 1: token 1@iterate
+stmt for i
+    eval literal 1 -> 1
+    eval literal 3 -> 3
+  eval operator .. -> (1, 2, 3)
+  iteration 1
+    stmt node Bump
+      stmt perform
+step 1: token 1@compute
+        stmt assign doubled
+            eval feature i -> 1
+            eval literal 2 -> 2
+          eval operator * -> 2
+step 2: token 1@end
+step 3: no active tokens
+    stmt assign total
+        eval feature total -> 0
+        eval feature doubled -> 2
+      eval operator + -> 2
+  iteration 2
+    stmt node Bump
+      stmt perform
+step 1: token 1@compute
+        stmt assign doubled
+            eval feature i -> 2
+            eval literal 2 -> 2
+          eval operator * -> 4
+step 2: token 1@end
+step 3: no active tokens
+    stmt assign total
+        eval feature total -> 2
+        eval feature doubled -> 4
+      eval operator + -> 6
+  iteration 3
+    stmt node Bump
+      stmt perform
+step 1: token 1@compute
+        stmt assign doubled
+            eval feature i -> 3
+            eval literal 2 -> 2
+          eval operator * -> 6
+step 2: token 1@end
+step 3: no active tokens
+    stmt assign total
+        eval feature total -> 6
+        eval feature doubled -> 6
+      eval operator + -> 12
+step 2: token 1@end
+step 3: no active tokens

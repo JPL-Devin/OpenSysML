@@ -1,0 +1,7 @@
+{
+	"type": "action",
+	"outputs": {
+		"sum": {"type": "Integer", "value": 63},
+		"scaled": {"type": "Integer", "value": 30}
+	}
+}

@@ -1,0 +1,64 @@
+step 1: token 1@iterate
+stmt for i
+    eval literal 1 -> 1
+    eval literal 3 -> 3
+  eval operator .. -> (1, 2, 3)
+  iteration 1
+    stmt assign sum
+        eval feature sum -> 0
+        eval literal 1 -> 1
+      eval operator + -> 1
+    stmt node step
+      stmt action body
+        stmt declare factor
+          eval literal 10 -> 10
+        stmt assign scaled
+            eval feature i -> 1
+            eval feature factor -> 10
+          eval operator * -> 10
+        stmt node inner
+          stmt action body
+            stmt assign sum
+                eval feature sum -> 1
+                eval feature scaled -> 10
+              eval operator + -> 11
+  iteration 2
+    stmt assign sum
+        eval feature sum -> 11
+        eval literal 1 -> 1
+      eval operator + -> 12
+    stmt node step
+      stmt action body
+        stmt declare factor
+          eval literal 10 -> 10
+        stmt assign scaled
+            eval feature i -> 2
+            eval feature factor -> 10
+          eval operator * -> 20
+        stmt node inner
+          stmt action body
+            stmt assign sum
+                eval feature sum -> 12
+                eval feature scaled -> 20
+              eval operator + -> 32
+  iteration 3
+    stmt assign sum
+        eval feature sum -> 32
+        eval literal 1 -> 1
+      eval operator + -> 33
+    stmt node step
+      stmt action body
+        stmt declare factor
+          eval literal 10 -> 10
+        stmt assign scaled
+            eval feature i -> 3
+            eval feature factor -> 10
+          eval operator * -> 30
+        stmt node inner
+          stmt action body
+            stmt assign sum
+                eval feature sum -> 33
+                eval feature scaled -> 30
+              eval operator + -> 63
+step 2: token 1@end
+step 3: no active tokens

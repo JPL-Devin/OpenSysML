@@ -86,20 +86,37 @@ func Returns(stmts []Statement) bool {
 		case Return:
 			return true
 		case If:
-			if Returns(s.Then.Statements) {
+			if blockReturns(s.Then) {
 				return true
 			}
-			if s.Else != nil && Returns(s.Else.Statements) {
+			if s.Else != nil && blockReturns(*s.Else) {
 				return true
 			}
 		case Loop:
-			if Returns(s.Body.Statements) {
+			if blockReturns(s.Body) {
 				return true
 			}
 		case Block:
-			if Returns(s.Statements) {
+			if blockReturns(s) {
 				return true
 			}
+		}
+	}
+	return false
+}
+
+// blockReturns reports whether a block returns a value on some path, in its
+// statements or in the bodies of the nodes of its own token flow.
+func blockReturns(block Block) bool {
+	if Returns(block.Statements) {
+		return true
+	}
+	if block.Graph == nil {
+		return false
+	}
+	for _, body := range block.Graph.Bodies {
+		if Returns(body) {
+			return true
 		}
 	}
 	return false

@@ -1,0 +1,89 @@
+step 1: token 1@iterate
+stmt for i
+    eval literal 1 -> 1
+    eval literal 3 -> 3
+  eval operator .. -> (1, 2, 3)
+  iteration 1
+    stmt assign ranged
+        eval feature ranged -> 0
+        eval feature i -> 1
+      eval operator + -> 1
+  iteration 2
+    stmt assign ranged
+        eval feature ranged -> 1
+        eval feature i -> 2
+      eval operator + -> 3
+  iteration 3
+    stmt assign ranged
+        eval feature ranged -> 3
+        eval feature i -> 3
+      eval operator + -> 6
+stmt for x
+    eval feature xs -> (1, 2, 3)
+    eval body -> expr(body)
+      eval feature y -> 1
+      eval literal 1 -> 1
+    eval operator > -> false
+      eval feature y -> 2
+      eval literal 1 -> 1
+    eval operator > -> true
+      eval feature y -> 3
+      eval literal 1 -> 1
+    eval operator > -> true
+  eval invoke select -> (2, 3)
+  iteration 1
+    stmt assign filtered
+        eval feature filtered -> 0
+        eval feature x -> 2
+      eval operator + -> 2
+  iteration 2
+    stmt assign filtered
+        eval feature filtered -> 2
+        eval feature x -> 3
+      eval operator + -> 5
+stmt for c
+    eval literal 3 -> 3
+    enter calc test::Above
+      bind n = 3 [argument]
+      stmt return
+            eval literal 1 -> 1
+            eval feature n -> 3
+          eval operator .. -> (1, 2, 3)
+          eval body -> expr(body)
+            eval feature i -> 1
+            eval literal 1 -> 1
+          eval operator > -> false
+            eval feature i -> 2
+            eval literal 1 -> 1
+          eval operator > -> true
+            eval feature i -> 3
+            eval literal 1 -> 1
+          eval operator > -> true
+        eval invoke select -> (2, 3)
+    exit calc test::Above -> (2, 3)
+  eval invoke Above -> (2, 3)
+  iteration 1
+    stmt assign returned
+        eval feature returned -> 0
+        eval feature c -> 2
+      eval operator + -> 2
+  iteration 2
+    stmt assign returned
+        eval feature returned -> 2
+        eval feature c -> 3
+      eval operator + -> 5
+stmt for s
+  eval feature single -> 7
+  iteration 1
+    stmt assign scalar
+        eval feature scalar -> 0
+        eval feature s -> 7
+      eval operator + -> 7
+stmt for e
+  eval feature nothing -> ()
+stmt for d
+    eval literal 3 -> 3
+    eval literal 1 -> 1
+  eval operator .. -> ()
+step 2: token 1@end
+step 3: no active tokens
