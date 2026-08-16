@@ -38,7 +38,33 @@ Two properties of the session model are worth knowing before a long session:
   running. What is dropped is reported as a `note:` line saying what to re-run.
 
 `%list` shows the session's declarations, `%clear` resets it, and `%save` writes it out
-([chapter 7](07-saving-and-rdf.md)).
+([chapter 7](07-saving-and-rdf.md)). `%clear` replaces every declaration, so nothing it held can be
+proved to still exist: it reports what it took, and the next command that would have used it says why
+it is gone.
+
+```
+sysml> %clear
+session cleared
+note: 1 instance was dropped because the session was reset; re-run %instantiate
+sysml> %instances
+(no instances created; 1 instance was dropped when the session was reset — re-run %instantiate)
+```
+
+## A name that needs quotes
+
+A name the notation has to quote — one containing a space, a keyword used as a name, punctuation —
+is written to a command exactly as it is written in a model, quotes included, and a quoted segment
+can sit anywhere in the chain:
+
+```
+sysml> package 'My Pkg' { part def Car { attribute m = 5.0; } }
+sysml> %instantiate 'My Pkg'::Car
+sysml> %slots 'My Pkg'::Car
+sysml> %eval 'My Pkg'::Car::m
+```
+
+The unquoted spelling of a name that does not need quoting is unchanged. Commands report a name back
+quoted the same way, so a name from `%search` can be typed into the next command as it appears.
 
 ## Loading files
 
@@ -65,11 +91,31 @@ sysml> %search Vehicle
 sysml> %builtins
 ```
 
+## Where an expression is evaluated
+
+`%eval <expression>` evaluates in the namespace the session is working in — the last one it declared
+— so a scratch package typed later moves it. Name a context to pin it instead:
+
+```
+sysml> %eval in Demo::Vehicle : mass * 2
+✓ mass * 2 (in Demo::Vehicle)
+  = 3000.00
+sysml> %instantiate Demo::Vehicle
+sysml> %eval in Demo::Vehicle : mass * 2
+✓ mass * 2 (on Demo::Vehicle ID: 1)
+  = 3000.00
+```
+
+The pinned name may be an element, whose namespace the expression then reads, or a name an object
+was materialized under, whose slots it reads — the same values an unpinned `%eval` reads after
+`%instantiate`. The `:` separates the context from the expression; `::` inside the name is not a
+separator.
+
 ## Asking questions
 
 | To ask | Use | Chapter |
 |--------|-----|---------|
-| what an expression is worth | `%eval` | [5](05-checking.md) |
+| what an expression is worth | `%eval`, `%eval in … : …` | [5](05-checking.md) |
 | what an object's slots hold | `%instantiate`, `%slots`, `%instances` | [5](05-checking.md) |
 | whether a check holds | `%constraint`, `%requirement`, `%satisfy`, `%calc` | [5](05-checking.md) |
 | what a behavior does, step by step | `%action`, `%state`, `%step`, `%tokens`, `%advance` | [6](06-behavior.md) |

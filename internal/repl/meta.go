@@ -26,27 +26,42 @@ func isMeta(line string) bool {
 }
 
 // parseArgs splits a command line into arguments, handling quoted strings.
-// This allows file paths and expressions with spaces to be properly parsed.
+// A double-quoted string is one argument with its quotes removed, which is how a
+// file path holding spaces is written; a SysML single-quoted name is one
+// argument with its quotes kept, since the quotes are part of the notation the
+// name is then parsed as ('My Pkg'::Car).
 // Example: `%load "path with spaces/file.sysml"` -> ["%load", "path with spaces/file.sysml"]
 func parseArgs(line string) []string {
 	var args []string
 	var current strings.Builder
-	inQuote := false
+	inQuote := false // inside a "…" string
+	inName := false  // inside a '…' unrestricted name
 	escaped := false
 
-	for _, r := range line {
+	runes := []rune(line)
+	for i, r := range runes {
 		switch {
 		case escaped:
 			// Previous char was backslash - add this char literally
 			current.WriteRune(r)
 			escaped = false
 		case r == '\\':
-			// Escape next character
+			// Inside a name the backslash is the notation's own escape, so it stays
+			// with the character it escapes.
+			if inName {
+				current.WriteRune(r)
+			}
 			escaped = true
-		case r == '"':
+		case r == '"' && !inName:
 			// Toggle quote mode
 			inQuote = !inQuote
-		case (r == ' ' || r == '\t') && !inQuote:
+		case r == '\'' && !inQuote && inName:
+			inName = false
+			current.WriteRune(r)
+		case r == '\'' && !inQuote && opensName(current.String(), runes[i+1:]):
+			inName = true
+			current.WriteRune(r)
+		case (r == ' ' || r == '\t') && !inQuote && !inName:
 			// Whitespace outside quotes - end current arg
 			if current.Len() > 0 {
 				args = append(args, current.String())
@@ -64,6 +79,22 @@ func parseArgs(line string) []string {
 	}
 
 	return args
+}
+
+// opensName reports whether a single quote begins an unrestricted name rather
+// than being an apostrophe in ordinary text. A name starts an argument or follows
+// a `::` qualifier and is closed later on the line; anything else — a path like
+// o'brien/model.sysml — leaves the rest of the line split as it was.
+func opensName(sofar string, rest []rune) bool {
+	if sofar != "" && !strings.HasSuffix(sofar, "::") {
+		return false
+	}
+	for i, r := range rest {
+		if r == '\'' && (i == 0 || rest[i-1] != '\\') {
+			return true
+		}
+	}
+	return false
 }
 
 // metaCommand is one prompt command. The table below is what the help text,
@@ -92,7 +123,7 @@ var metaCommandTable = []metaCommand{
 	{group: "Library discovery:", name: "%builtins", desc: "list the library functions this build implements directly"},
 
 	{group: "Runtime commands:", name: "%instantiate", args: "<name>", desc: "create an instance of a part def"},
-	{group: "Runtime commands:", name: "%eval", args: "<expr>", desc: "evaluate an expression"},
+	{group: "Runtime commands:", name: "%eval", args: "[in <name> :] <expr>", desc: "evaluate an expression, in the named element or object when one is named"},
 	{group: "Runtime commands:", name: "%slots", args: "<name>", desc: "show instance slots and values"},
 	{group: "Runtime commands:", name: "%instances", desc: "list all instantiated objects"},
 
@@ -174,13 +205,12 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 		}
 		return decls, false, nil
 	case "%clear":
-		s.clear()
-		return []string{"session cleared"}, false, nil
+		return append([]string{"session cleared"}, s.clear()...), false, nil
 	case "%load":
 		if len(fields) < 2 {
 			return []string{"usage: %load <file|dir|glob>..."}, false, nil
 		}
-		lines, lerr := s.loadPaths(fields[1:])
+		lines, lerr := s.loadPaths(pathArgs(fields[1:]))
 		if lerr != nil {
 			return nil, false, lerr
 		}
@@ -189,7 +219,7 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 		if len(fields) < 2 {
 			return []string{"usage: %save <file.sysml|file.ttl>"}, false, nil
 		}
-		return s.doSave(fields[1])
+		return s.doSave(nameText(fields[1]))
 	case "%verbosity":
 		if len(fields) < 2 {
 			return []string{fmt.Sprintf("verbosity: %s", s.verbosity)}, false, nil
@@ -218,7 +248,7 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 		if len(fields) < 2 {
 			return []string{"usage: %search <substring>"}, false, nil
 		}
-		return s.doSearch(fields[1])
+		return s.doSearch(nameText(fields[1]))
 	case "%builtins":
 		return s.doBuiltins()
 	case "%quit", "%exit":
@@ -230,10 +260,10 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 		return s.doInstantiate(fields[1])
 	case "%eval":
 		if len(fields) < 2 {
-			return []string{"usage: %eval <expression>"}, false, nil
+			return []string{evalUsage}, false, nil
 		}
-		expr := strings.TrimPrefix(line, "%eval")
-		return s.doEval(strings.TrimSpace(expr))
+		tail := strings.TrimPrefix(strings.TrimSpace(line), "%eval")
+		return s.doEvalLine(strings.TrimSpace(tail))
 	case "%slots":
 		if len(fields) < 2 {
 			return []string{"usage: %slots <name>"}, false, nil
@@ -275,7 +305,7 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 		if len(fields) < 2 {
 			return []string{"usage: %break <node>"}, false, nil
 		}
-		return s.doBreak(fields[1])
+		return s.doBreak(nameText(fields[1]))
 	case "%stop":
 		return s.doStop()
 	// State machine debugging
@@ -311,6 +341,155 @@ func (s *Session) doInstantiate(name string) ([]string, bool, error) {
 		return []string{"error: " + err.Error()}, false, nil
 	}
 	return lines, false, nil
+}
+
+// evalUsage is what %eval accepts: an expression, optionally pinned to the
+// context it is evaluated in.
+const evalUsage = "usage: %eval [in <qualified-name> :] <expression>"
+
+// doEvalLine carries out %eval, in the context the line pins when it names one.
+func (s *Session) doEvalLine(tail string) ([]string, bool, error) {
+	rest, pinned := cutWord(tail, "in")
+	if !pinned {
+		// `in` alone is the pinned form with everything it needs left out.
+		if strings.TrimSpace(tail) == "in" {
+			return []string{evalUsage}, false, nil
+		}
+		return s.doEval(tail)
+	}
+	// `in` is a keyword, so it cannot start an expression: a tail beginning with
+	// it is the pinned form, malformed or not.
+	name, expr, ok := splitPinnedContext(rest)
+	if !ok {
+		return []string{evalUsage}, false, nil
+	}
+	lines, err := s.evalIn(name, expr)
+	if err != nil {
+		return []string{"error: " + err.Error()}, false, nil
+	}
+	return lines, false, nil
+}
+
+// cutWord removes a leading word from text, reporting whether it was there.
+func cutWord(text, word string) (string, bool) {
+	rest, ok := strings.CutPrefix(text, word)
+	if !ok || rest == "" || !(rest[0] == ' ' || rest[0] == '\t') {
+		return text, false
+	}
+	return strings.TrimSpace(rest), true
+}
+
+// splitPinnedContext reads `<qualified-name> : <expression>`, the tail of a
+// pinned %eval. The separator is the first `:` outside a quoted name that is not
+// part of a `::` qualifier.
+func splitPinnedContext(tail string) (name, expr string, ok bool) {
+	at := contextSeparator(tail)
+	if at < 0 {
+		return "", "", false
+	}
+	name = strings.TrimSpace(tail[:at])
+	expr = strings.TrimSpace(tail[at+1:])
+	return name, expr, name != "" && expr != ""
+}
+
+// contextSeparator locates the `:` that separates a pinned context from the
+// expression, or -1 for a tail that states none.
+func contextSeparator(tail string) int {
+	inName, escaped := false, false
+	for i := 0; i < len(tail); i++ {
+		switch {
+		case escaped:
+			escaped = false
+		case tail[i] == '\\':
+			escaped = true
+		case tail[i] == '\'':
+			inName = !inName
+		case inName || tail[i] != ':':
+		case i+1 < len(tail) && tail[i+1] == ':':
+			i++ // a qualifier, not the separator
+		default:
+			return i
+		}
+	}
+	return -1
+}
+
+// evalIn evaluates an expression in the context the command pinned: the object
+// materialized under that name, whose slots it then reads as `%eval` does after
+// `%instantiate`, or else the named element's own namespace.
+func (s *Session) evalIn(name, expr string) ([]string, error) {
+	sym, fqn, lerr := s.lookupSymbol(name)
+	if lerr != nil {
+		return nil, lerr
+	}
+	ctx, err := s.getOrCreateRuntime()
+	if err != nil {
+		return nil, err
+	}
+	node, diags := parseExprAlone(expr)
+	if len(diags) > 0 {
+		return nil, exprError(expr, diags[0].Message, diags[0].Span, len(exprPrefix))
+	}
+	if node == nil {
+		return nil, errors.New("could not parse expression")
+	}
+	scope := contextScope(sym, s.ws.Document(docName))
+	if scope == nil {
+		return nil, fmt.Errorf("%s names no namespace to evaluate in", notationName(fqn))
+	}
+	if inst, owner := s.objectNamed(fqn); inst != nil {
+		val, err := ctx.EvalWithScopeOn(node, scope, inst)
+		if err != nil {
+			return nil, evalError(expr, err, len(exprPrefix))
+		}
+		return []string{
+			fmt.Sprintf("✓ %s%s", expr, onInstance(inst, owner)),
+			fmt.Sprintf("  = %s", formatValue(val)),
+		}, nil
+	}
+	val, err := ctx.EvalWithScope(node, scope)
+	if err != nil {
+		return nil, evalError(expr, err, len(exprPrefix))
+	}
+	return []string{
+		fmt.Sprintf("✓ %s (in %s)", expr, notationName(fqn)),
+		fmt.Sprintf("  = %s", formatValue(val)),
+	}, nil
+}
+
+// contextScope is the namespace a pinned context evaluates in: the element's own
+// scope, so its members are named without qualification, else the scope it was
+// declared in.
+func contextScope(sym *symbols.Symbol, doc *model.Document) *symbols.Scope {
+	switch {
+	case sym == nil:
+		return nil
+	case sym.Scope != nil:
+		return sym.Scope
+	case doc == nil:
+		return nil
+	default:
+		return declaringScope(sym, doc.Scope)
+	}
+}
+
+// pathArgs is a command's path arguments with any notation quoting removed, so
+// a path holding a space can be written as a quoted name too.
+func pathArgs(args []string) []string {
+	out := make([]string, 0, len(args))
+	for _, arg := range args {
+		out = append(out, nameText(arg))
+	}
+	return out
+}
+
+// nameText is the text a quoted argument names, for a command matching a name
+// rather than resolving one: the quotes are notation, not part of the name.
+func nameText(arg string) string {
+	if plain, ok := plainName(arg); ok {
+		return plain
+	}
+	return arg
 }
 
 // doEval evaluates an expression.
@@ -667,35 +846,37 @@ func isLiteralAnswerError(err error) bool {
 	return false
 }
 
-// isSymbolReference reports whether expr names a symbol — a single identifier
-// or a qualified name like Demo::Vehicle::mass — rather than a compound
-// expression.
+// isSymbolReference reports whether expr names a symbol — a single identifier,
+// a quoted name or a qualified name like Demo::Vehicle::mass — rather than a
+// compound expression. The notation itself decides: a name is what the parser
+// reads the whole of expr as.
 func isSymbolReference(expr string) bool {
-	expr = strings.TrimSpace(expr)
-	if len(expr) == 0 {
-		return false
-	}
-	// Simple heuristic: no spaces, operators, or parens
-	for _, ch := range expr {
-		if ch == ' ' || ch == '+' || ch == '-' || ch == '*' || ch == '/' ||
-			ch == '(' || ch == ')' || ch == '.' {
-			return false
-		}
-	}
-	// A ':' is only meaningful here as part of the '::' qualifier separator.
-	return !strings.Contains(strings.ReplaceAll(expr, "::", ""), ":")
+	_, ok := plainName(expr)
+	return ok
 }
 
 // doSlots shows instance slots.
 func (s *Session) doSlots(name string) ([]string, bool, error) {
 	_, fqn, lerr := s.lookupSymbol(name)
 	if lerr != nil {
-		return []string{"error: " + lerr.Error()}, false, nil
+		out := []string{"error: " + lerr.Error()}
+		// The declaration may be gone with the objects materialized from it, which a
+		// bare unresolved reference does not explain.
+		if note := s.lost.lostNote(); note != "" {
+			out = append(out, note)
+		}
+		return out, false, nil
 	}
 
 	inst, ok := s.instances[fqn]
 	if !ok {
-		return []string{fmt.Sprintf("error: no instance of %q (use %%instantiate first)", fqn)}, false, nil
+		out := []string{fmt.Sprintf("error: no instance of %q (use %%instantiate first)", notationName(fqn))}
+		// The object may have been there and gone, which is a different answer from
+		// one never created.
+		if note := s.lost.lostNote(); note != "" {
+			out = append(out, note)
+		}
+		return out, false, nil
 	}
 
 	ctx, err := s.getOrCreateRuntime()
@@ -704,7 +885,7 @@ func (s *Session) doSlots(name string) ([]string, bool, error) {
 	}
 
 	lines := []string{
-		fmt.Sprintf("Instance: %s (ID: %d)", fqn, inst.ID),
+		fmt.Sprintf("Instance: %s (ID: %d)", notationName(fqn), inst.ID),
 		"Slots:",
 	}
 	w := &slotWalk{ctx: ctx, onPath: map[*symbols.Symbol]bool{inst.Type: true}, budget: maxSlotLines}
@@ -906,7 +1087,7 @@ func featureVerdict(ctx *runtime.Context, feat *runtime.EffectiveFeature, inst *
 // doInstances lists all instantiated objects.
 func (s *Session) doInstances() ([]string, bool, error) {
 	if len(s.instances) == 0 {
-		if note := instancesGoneNote(s.lostInstances, s.lostAt); note != "" {
+		if note := s.lost.goneNote(); note != "" {
 			return []string{note}, false, nil
 		}
 		return []string{"(no instances created)"}, false, nil
@@ -919,11 +1100,11 @@ func (s *Session) doInstances() ([]string, bool, error) {
 	slices.Sort(names)
 	lines := []string{"Instances:"}
 	for _, name := range names {
-		lines = append(lines, fmt.Sprintf("  %s (ID: %d)", name, s.instances[name].ID))
+		lines = append(lines, fmt.Sprintf("  %s (ID: %d)", notationName(name), s.instances[name].ID))
 	}
 	// Some of what the session materialized may be gone even though the rest
 	// survived, which the list would otherwise not say.
-	if note := instancesPartlyGoneNote(s.lostInstances, s.lostAt); note != "" {
+	if note := s.lost.partlyGoneNote(); note != "" {
 		lines = append(lines, note)
 	}
 	return lines, false, nil
@@ -1105,7 +1286,7 @@ func (s *Session) calcUsageOutputs(ctx *runtime.Context, sym *symbols.Symbol, ca
 // list, accepting the invocation form `Fall(a, b)` as well as a bare name
 // followed by arguments.
 func splitCalcArgs(tail string) (name, argText string) {
-	cut := strings.IndexAny(tail, " \t(")
+	cut := indexOutsideName(tail, " \t(")
 	if cut < 0 {
 		return tail, ""
 	}
@@ -1114,6 +1295,25 @@ func splitCalcArgs(tail string) (name, argText string) {
 		return name, rest[1 : len(rest)-1]
 	}
 	return name, rest
+}
+
+// indexOutsideName is the first index in text of one of chars that is not
+// inside a quoted name, so a name's own space does not end it.
+func indexOutsideName(text, chars string) int {
+	inName, escaped := false, false
+	for i, r := range text {
+		switch {
+		case escaped:
+			escaped = false
+		case r == '\\':
+			escaped = true
+		case r == '\'':
+			inName = !inName
+		case !inName && strings.ContainsRune(chars, r):
+			return i
+		}
+	}
+	return -1
 }
 
 // closesAtEnd reports whether text is one parenthesized group: its opening
@@ -1208,7 +1408,7 @@ func splitTopLevel(text string) [][]string {
 	var groups [][]string
 	var frags []string
 	var frag strings.Builder
-	depth, quoted := 0, false
+	depth, quoted, named := 0, false, false
 
 	flushFrag := func() {
 		if frag.Len() > 0 {
@@ -1222,8 +1422,15 @@ func splitTopLevel(text string) [][]string {
 			if r == '"' {
 				quoted = false
 			}
+		case named:
+			// A quoted name is one fragment, space and comma included.
+			if r == '\'' {
+				named = false
+			}
 		case r == '"':
 			quoted = true
+		case r == '\'':
+			named = true
 		case r == '(' || r == '[':
 			depth++
 		case r == ')' || r == ']':
@@ -1248,15 +1455,21 @@ func splitTopLevel(text string) [][]string {
 // binding is the argument's own: an `=` nested in a call, in a bracket or in a
 // string belongs to that expression.
 func isNamedArgument(text string) bool {
-	depth, quoted := 0, false
+	depth, quoted, named := 0, false, false
 	for i, r := range text {
 		switch {
 		case quoted:
 			if r == '"' {
 				quoted = false
 			}
+		case named:
+			if r == '\'' {
+				named = false
+			}
 		case r == '"':
 			quoted = true
+		case r == '\'':
+			named = true
 		case r == '(' || r == '[':
 			depth++
 		case r == ')' || r == ']':
@@ -1362,12 +1575,13 @@ func verdictDetail(what string, err error) string {
 }
 
 // onInstance renders the " (on <owner> ID: n)" suffix that marks a result as
-// being about one object rather than about declared defaults.
+// being about one object rather than about declared defaults. The owner is
+// spelled as the notation writes it, so it can be typed back.
 func onInstance(inst *runtime.Instance, owner string) string {
 	if inst == nil {
 		return ""
 	}
-	return fmt.Sprintf(" (on %s ID: %d)", owner, inst.ID)
+	return fmt.Sprintf(" (on %s ID: %d)", notationName(owner), inst.ID)
 }
 
 // doRequirement evaluates a requirement definition.
@@ -1455,7 +1669,7 @@ func (s *Session) performingObject(args []string) (*runtime.Instance, string, er
 	}
 	inst, ok := s.instances[fqn]
 	if !ok {
-		return nil, "", fmt.Errorf("no instance of %q (use %%instantiate first)", fqn)
+		return nil, "", fmt.Errorf("no instance of %q (use %%instantiate first)", notationName(fqn))
 	}
 	return inst, fqn, nil
 }
