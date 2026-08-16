@@ -503,9 +503,11 @@ type dispatchCandidate struct {
 // dispatched: a transition out of a composite state is enabled while any of its
 // substates is active, so the walk goes outward from the leaf and stops at the
 // innermost enabled transition. A false guard does not consume the event, so the
-// walk carries on past it.
+// walk carries on past it. Leaves in sibling regions of one composite state
+// select the same transition out of it, which the event still takes only once.
 func (e *StateExecutor) selectTransitions(event *Event) ([]dispatchCandidate, error) {
 	var candidates []dispatchCandidate
+	selected := make(map[*lower.Transition]bool)
 	for _, leaf := range e.activeLeaves() {
 		for _, source := range e.getParentChain(leaf) {
 			trans, err := e.enabledTransition(source, event)
@@ -515,7 +517,10 @@ func (e *StateExecutor) selectTransitions(event *Event) ([]dispatchCandidate, er
 			if trans == nil {
 				continue
 			}
-			candidates = append(candidates, dispatchCandidate{leaf: leaf, source: source, trans: trans})
+			if !selected[trans] {
+				selected[trans] = true
+				candidates = append(candidates, dispatchCandidate{leaf: leaf, source: source, trans: trans})
+			}
 			break
 		}
 	}

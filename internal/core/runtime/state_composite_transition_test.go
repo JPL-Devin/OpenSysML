@@ -185,6 +185,40 @@ func TestOneEventTakesOneTransitionPerActiveLeaf(t *testing.T) {
 	assertCurrentState(t, exec, "Done")
 }
 
+// Every leaf inside a composite state selects the same transition out of it, and
+// one event still takes that transition once: a self-transition re-enters the
+// regions rather than running its effect once per region.
+func TestOneEventTakesACompositesTransitionOnce(t *testing.T) {
+	exec := stateExecutorForSource(t, "sm", `package test {
+		state sm {
+			attribute log : Integer = 0;
+
+			initial start;
+			state Working {
+				region left {
+					initial lstart;
+					state l1;
+					then lstart l1;
+				}
+				region right {
+					initial rstart;
+					state r1;
+					then rstart r1;
+				}
+			}
+			start then Working;
+			transition Working to Working accept restart do assign log := log + 1;
+		}
+	}`)
+	exec.SendSignal("restart", nil)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if got := exec.StateData()["log"]; got.Const.Int != 1 {
+		t.Errorf("one event ran the composite's effect %v times, want 1", got.Const.Int)
+	}
+}
+
 // A change condition on a composite state is watched while a substate is active.
 // Polling is the driver of change triggers, so the test polls directly.
 func TestChangeConditionOnACompositeStateFiresWhileASubstateIsActive(t *testing.T) {
