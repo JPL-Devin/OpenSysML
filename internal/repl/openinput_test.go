@@ -200,6 +200,28 @@ func TestOpenSubmissionKeepsReportingTheRestOfTheBuffer(t *testing.T) {
 	}
 }
 
+// The report for a masked submission quotes the line it is about: masking is for
+// the analysis, not for what the user is shown.
+func TestOpenSubmissionEchoesItsOwnLine(t *testing.T) {
+	s := NewSession()
+	res := s.Submit("package P { part x = ; }\n/* open")
+
+	out := strings.Join(renderResult(res, VerbosityNormal), "\n")
+	for _, want := range []string{"package P { part x = ; }", "/* open"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the report does not echo %q:\n%s", want, out)
+		}
+	}
+	bad := tempFile(t, "bad.sysml", "package Broken { part x = ;\n")
+	lines, err := s.LoadFileSummary(bad)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(lines, "\n"); !strings.Contains(got, "package Broken { part x = ;") {
+		t.Errorf("the load does not echo the offending line:\n%s", got)
+	}
+}
+
 // A masked submission's warnings stay warnings, with the code the parser gave
 // them, as they would in any file the workspace analyzes.
 func TestOpenSubmissionKeepsWarningSeverity(t *testing.T) {

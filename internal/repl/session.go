@@ -669,11 +669,13 @@ func (s *Session) submitFiles(files []SourceFile) Result {
 		Members:     members,
 		Declared:    declared,
 		Diagnostics: diags,
-		Source:      joined,
-		Offset:      offset,
-		Origins:     s.origins(),
-		own:         own,
-		Notices:     notices,
+		// The unmasked buffer: masking is byte for byte, so offsets still land
+		// where they did, and a diagnostic echoes the line it is about.
+		Source:  s.text(),
+		Offset:  offset,
+		Origins: s.origins(),
+		own:     own,
+		Notices: notices,
 	}
 	res.Blocked = s.blockedBy(res)
 	return res
