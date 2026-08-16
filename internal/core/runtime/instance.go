@@ -180,16 +180,13 @@ func isScalarFeature(feat *EffectiveFeature) bool {
 }
 
 // checkDefaultCount reports a default whose element count does not conform to
-// the multiplicity the feature states. A conforming default is merged as
-// written; a non-conforming one is neither broadcast nor padded, since that
-// would invent values the model does not state. The count of an expression's
-// result is only known here, so this is where such a default is reported; a
-// count the type tier can see statically is reported there (passes.checkValueCount).
+// the multiplicity governing the feature, which is the assumed 1..1 for a
+// feature that declares none. A conforming default is merged as written; a
+// non-conforming one is neither broadcast nor padded, since that would invent
+// values the model does not state. The count of an expression's result is only
+// known here, so this is where such a default is reported; a count the type tier
+// can see statically is reported there (passes.checkValueCount).
 func (ctx *Context) checkDefaultCount(inst *Instance, slot *Slot, name string, val Value) error {
-	// 1..1 assumed rather than stated is no declared bound to hold a default to.
-	if !slot.Feature.MultiplicityStated {
-		return nil
-	}
 	count := int64(len(elementsOf(val)))
 	if msg := slot.Feature.Multiplicity.CountViolation(count); msg != "" {
 		return fmt.Errorf("slot %s.%s: %w: %s", inst.Type.Name, name, ErrMultiplicityViolation, msg)

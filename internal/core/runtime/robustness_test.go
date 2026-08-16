@@ -155,6 +155,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("multiplicity_infinite_lower_bound", testMultiplicityInfiniteLowerBound)
 	t.Run("multiplicity_lower_bound_too_large", testMultiplicityLowerBoundTooLarge)
 	t.Run("default_not_conforming_to_multiplicity", testDefaultNotConformingToMultiplicity)
+	t.Run("default_against_an_undeclared_multiplicity", testDefaultAgainstAnUndeclaredMultiplicity)
 	t.Run("feature_chain_through_an_unset_slot", testFeatureChainThroughAnUnsetSlot)
 	t.Run("feature_chain_spends_the_element_budget", testFeatureChainSpendsTheElementBudget)
 	t.Run("mutually_subsetting_features", testMutuallySubsettingFeatures)
@@ -281,6 +282,42 @@ func testDefaultNotConformingToMultiplicity(t *testing.T) {
 				}
 			case <-time.After(5 * time.Second):
 				t.Fatal("materializing the default did not terminate")
+			}
+		})
+	}
+}
+
+// testDefaultAgainstAnUndeclaredMultiplicity: a feature that declares no
+// multiplicity holds exactly one value, so a default of any other number of
+// values is reported rather than held under an unconstrained bound.
+func testDefaultAgainstAnUndeclaredMultiplicity(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		decl     string
+		reported bool
+	}{
+		{"one value", "attribute xs : Real = 1.0;", false},
+		{"one value of an untyped feature", "attribute xs = 1.0;", false},
+		{"two values", "attribute xs : Real = (1.0, 2.0);", true},
+		{"two values of an untyped feature", "attribute xs = (1.0, 2.0);", true},
+		{"no values", "attribute xs : Real = ();", true},
+		{"an expression producing two", "attribute m : Real[2] = (1.0, 2.0); attribute xs : Real = m;", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			inst, ctx := instantiateHolder(t, `
+				package test {
+					private import ScalarValues::Real;
+					part def Holder { `+tc.decl+` }
+				}
+			`)
+			_, err := inst.GetSlot(ctx, "xs")
+			switch {
+			case tc.reported && err == nil:
+				t.Fatalf("%s was held, want a multiplicity violation", tc.decl)
+			case tc.reported && !errors.Is(err, ErrMultiplicityViolation):
+				t.Errorf("expected ErrMultiplicityViolation, got: %v", err)
+			case !tc.reported && err != nil:
+				t.Errorf("%s was reported: %v", tc.decl, err)
 			}
 		})
 	}
