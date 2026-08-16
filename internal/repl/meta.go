@@ -38,7 +38,8 @@ func parseArgs(line string) []string {
 	inName := false  // inside a '…' unrestricted name
 	escaped := false
 
-	for _, r := range line {
+	runes := []rune(line)
+	for i, r := range runes {
 		switch {
 		case escaped:
 			// Previous char was backslash - add this char literally
@@ -54,8 +55,11 @@ func parseArgs(line string) []string {
 		case r == '"' && !inName:
 			// Toggle quote mode
 			inQuote = !inQuote
-		case r == '\'' && !inQuote:
-			inName = !inName
+		case r == '\'' && !inQuote && inName:
+			inName = false
+			current.WriteRune(r)
+		case r == '\'' && !inQuote && opensName(current.String(), runes[i+1:]):
+			inName = true
 			current.WriteRune(r)
 		case (r == ' ' || r == '\t') && !inQuote && !inName:
 			// Whitespace outside quotes - end current arg
@@ -75,6 +79,22 @@ func parseArgs(line string) []string {
 	}
 
 	return args
+}
+
+// opensName reports whether a single quote begins an unrestricted name rather
+// than being an apostrophe in ordinary text. A name starts an argument or follows
+// a `::` qualifier and is closed later on the line; anything else — a path like
+// o'brien/model.sysml — leaves the rest of the line split as it was.
+func opensName(sofar string, rest []rune) bool {
+	if sofar != "" && !strings.HasSuffix(sofar, "::") {
+		return false
+	}
+	for i, r := range rest {
+		if r == '\'' && (i == 0 || rest[i-1] != '\\') {
+			return true
+		}
+	}
+	return false
 }
 
 // metaCommand is one prompt command. The table below is what the help text,

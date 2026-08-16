@@ -78,6 +78,12 @@ func TestParseArgsKeepsQuotedNamesWhole(t *testing.T) {
 		{"%action 'My Pkg'::'run it' 'My Pkg'::Car", []string{"%action", "'My Pkg'::'run it'", "'My Pkg'::Car"}},
 		{`%load "dir with space/model.sysml"`, []string{"%load", "dir with space/model.sysml"}},
 		{"%load 'dir with space/model.sysml'", []string{"%load", "'dir with space/model.sysml'"}},
+		// An apostrophe in ordinary text opens nothing, so the arguments after it
+		// are still separate arguments.
+		{"%load ~/o'brien/a.sysml b.sysml", []string{"%load", "~/o'brien/a.sysml", "b.sysml"}},
+		{"%load a.sysml ~/o'brien/b.sysml", []string{"%load", "a.sysml", "~/o'brien/b.sysml"}},
+		// Nor does a quote the line never closes.
+		{"%instantiate 'My Pkg::Car other", []string{"%instantiate", "'My", "Pkg::Car", "other"}},
 	} {
 		got := parseArgs(tc.line)
 		if strings.Join(got, "\x00") != strings.Join(tc.want, "\x00") {
