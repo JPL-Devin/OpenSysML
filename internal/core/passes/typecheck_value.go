@@ -55,36 +55,78 @@ func literalPrimType(value ast.Node) semantics.PrimType {
 	return semantics.PrimUnknown
 }
 
-// checkValueCount checks a bound value's element count against the feature's
-// declared multiplicity.
-func (ec *exprChecker) checkValueCount(u *ast.Usage) {
+// checkValueCount checks a bound value's element count against the multiplicity
+// governing the feature.
+func (ec *exprChecker) checkValueCount(scope *symbols.Scope, u *ast.Usage) {
 	count, known := exactCount(u.Value)
 	if !known {
 		return
 	}
-	r, ok := ec.model.RangeOf(u.Multiplicity)
+	r, ok := ec.effectiveRange(scope, u, 0)
 	if !ok {
 		return
 	}
-	if r.Upper.Known && !r.Upper.Infinite && count > r.Upper.Value {
-		ec.errorf(u.Value.Span(), "%d value(s) bound to a feature with multiplicity upper bound %d", count, r.Upper.Value)
-		return
-	}
-	if r.Lower.Known && !r.Lower.Infinite && count < r.Lower.Value {
-		ec.errorf(u.Value.Span(), "%d value(s) bound to a feature with multiplicity lower bound %d", count, r.Lower.Value)
+	if msg := r.CountViolation(count); msg != "" {
+		ec.errorf(u.Value.Span(), "%s", msg)
 	}
 }
 
+// maxRedefinitionDepth bounds the redefinition chain the effective multiplicity
+// is looked up along, so a cyclic chain terminates.
+const maxRedefinitionDepth = 32
+
+// effectiveRange returns the multiplicity governing a usage: the one it
+// declares, or the one it inherits from the feature it redefines
+// (KerML 1.0 §7.3.4.5).
+func (ec *exprChecker) effectiveRange(scope *symbols.Scope, u *ast.Usage, depth int) (semantics.Range, bool) {
+	if r, ok := ec.model.RangeOf(u.Multiplicity); ok {
+		return r, true
+	}
+	if depth >= maxRedefinitionDepth {
+		return semantics.Range{}, false
+	}
+	for _, rel := range u.Relationships {
+		if rel == nil || rel.Kind != ast.RelRedefines || rel.Target == nil {
+			continue
+		}
+		// The redefining declaration may carry the redefined feature's name, so
+		// the target is resolved with the declaration's own bindings hidden.
+		target, ok := ec.resolver.ResolveReferenceTarget(scope, u, rel.Target)
+		if !ok || target == nil {
+			continue
+		}
+		tu, isUsage := target.Decl.(*ast.Usage)
+		if !isUsage || tu == u {
+			continue
+		}
+		if r, ok := ec.effectiveRange(target.OwnerScope, tu, depth+1); ok {
+			return r, true
+		}
+	}
+	return semantics.Range{}, false
+}
+
 // exactCount returns how many values a bound expression produces, and whether
-// that is statically known. A collection literal contributes its elements and a
-// literal contributes one; anything else (a feature reference, an invocation)
-// may itself be multi-valued, so its count is unknown.
+// that is statically known. A literal contributes one value and a collection
+// literal the values of its elements; anything else (a feature reference, an
+// invocation) may itself be multi-valued, so its count is unknown — as is that
+// of a collection holding one.
 func exactCount(value ast.Node) (int64, bool) {
 	if value == nil {
 		return 0, false
 	}
+	// Binding flattens a collection into the values its elements produce, so a
+	// nested literal contributes its own elements rather than one value.
 	if seq, ok := value.(*ast.SequenceExpr); ok {
-		return int64(len(seq.Elements)), true
+		var total int64
+		for _, element := range seq.Elements {
+			n, ok := exactCount(element)
+			if !ok {
+				return 0, false
+			}
+			total += n
+		}
+		return total, true
 	}
 	if literalPrimType(value) != semantics.PrimUnknown {
 		return 1, true

@@ -1,6 +1,8 @@
 package semantics
 
 import (
+	"fmt"
+
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
@@ -81,6 +83,20 @@ func (m *Model) MultiplicityOf(sym *symbols.Symbol) (Range, bool) {
 		return Range{}, false
 	}
 	return m.multiplicityRange(u.Multiplicity)
+}
+
+// CountViolation returns why count values do not conform to the range, phrased
+// for a diagnostic, or "" when they conform or a bound is not evaluable. It is
+// the one wording for a count against a multiplicity, shared by the static
+// check on a bound value and the runtime check on a materialized default.
+func (r Range) CountViolation(count int64) string {
+	if r.Upper.Known && !r.Upper.Infinite && count > r.Upper.Value {
+		return fmt.Sprintf("%d value(s) bound to a feature with multiplicity upper bound %d", count, r.Upper.Value)
+	}
+	if r.Lower.Known && !r.Lower.Infinite && count < r.Lower.Value {
+		return fmt.Sprintf("%d value(s) bound to a feature with multiplicity lower bound %d", count, r.Lower.Value)
+	}
+	return ""
 }
 
 // LowerLeUpper reports whether a range's lower bound does not exceed its upper

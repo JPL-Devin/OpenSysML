@@ -6,6 +6,21 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ## 0.0.8 — 2026-08-15
 
+### Language and semantics
+
+- A multi-valued feature that is both typed and given a default holds the
+  default's values rather than an instantiation of its type: `attribute xs :
+  Real[3] = (1.0, 2.0, 3.0);` materializes those three elements, a
+  `part`-typed collection holds the very objects its default names, an
+  expression default holds what the expression produced, and a quantity keeps
+  its unit. A default whose element count does not conform to the declared
+  multiplicity — one value against `[3]`, four against `[3]`, `()` against
+  `[1..3]` — is a multiplicity violation, reported statically where the count is
+  a literal one and when the slot materializes where only evaluating the
+  expression knows it, rather than broadcast, padded or silently dropped. A
+  feature whose multiplicity a redefinition does not restate is bound by the one
+  it redefines. This was the second known limitation listed for 0.0.4 and 0.0.5.
+
 ### Diagnostics
 
 - A comparison or sum of quantities whose dimensions are both statically
@@ -106,8 +121,8 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   shows the instantiated value.
 - A `calc` body written without `return` is not expression-type-checked, so no
   static dimensional warning is reported inside it.
-- Submitting any declaration to the REPL ends an active `%action` or `%state`
-  debugging session.
+- Submitting a declaration the debugger depends on ends an active `%action` or
+  `%state` session; a submission that changes something else carries it over.
 
 ## 0.0.7 — 2026-08-15
 
@@ -612,7 +627,8 @@ are listed here rather than under a heading of their own.
   earlier snippet rather than merging into it, so adding a member to a package by
   re-typing the package drops the members left out of the new text.
 - A multi-valued feature that is both typed and given a default takes the typed
-  instantiation; the default is not merged into it (as in 0.0.4).
+  instantiation; the default is not merged into it (as in 0.0.4). *(Fixed after
+  this release; see 0.0.8.)*
 - An attribute declared with a type but no value (`attribute diameter : Real;`)
   instantiates as an object of that type rather than an unset value, so `%slots`
   shows `diameter = Instance(ID: n)` with `(no features)` under it.
@@ -701,4 +717,5 @@ The first tagged release.
   conditions it inherits from its definition. *(Fixed after this release; see
   0.0.5.)*
 - A multi-valued feature that is both typed and given a default takes the typed
-  instantiation; the default is not merged into it.
+  instantiation; the default is not merged into it. *(Fixed after this release;
+  see 0.0.8.)*

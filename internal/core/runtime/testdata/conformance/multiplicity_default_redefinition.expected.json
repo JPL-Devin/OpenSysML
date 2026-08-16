@@ -1,0 +1,9 @@
+{
+	"type": "instance",
+	"instantiate": "test::derived",
+	"slots": {
+		"bare": {"type": "Sequence", "elements": [{"type": "Real", "value": 7.0}, {"type": "Real", "value": 8.0}, {"type": "Real", "value": 9.0}]},
+		"kept": {"type": "Sequence", "elements": [{"type": "Real", "value": 1.0}, {"type": "Real", "value": 2.0}]},
+		"valued": {"type": "Sequence", "elements": [{"type": "Real", "value": 1.0}, {"type": "Real", "value": 2.0}]}
+	}
+}
