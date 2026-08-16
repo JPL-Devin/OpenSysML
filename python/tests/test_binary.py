@@ -26,7 +26,7 @@ from pysysml.binary import (
     write_metadata,
     ensure_binary
 )
-from pysysml.errors import ChecksumMismatchError
+from pysysml.errors import ChecksumMismatchError, UnpinnedReleaseError
 from pysysml.errors import ConnectionError as PySysMLConnectionError
 
 
@@ -564,20 +564,41 @@ class TestPinnedDigests:
 
     def test_a_missing_pin_is_told_apart_from_a_contradicted_one(self, pins):
         """Only a contradiction is evidence of tampering, so only it is unrecoverable."""
-        with pytest.raises(ChecksumMismatchError) as missing:
+        with pytest.raises(UnpinnedReleaseError) as missing:
             expected_digest('v9.9.9', 'sysml-grpc-linux-amd64', 'ab' * 32)
         assert missing.value.unpinned
 
         pins('cd' * 32, 'v9.9.8')
         with pytest.raises(ChecksumMismatchError) as contradicted:
             expected_digest('v9.9.8', 'sysml-grpc-linux-amd64', 'ef' * 32)
+        assert not isinstance(contradicted.value, UnpinnedReleaseError)
         assert not contradicted.value.unpinned
+
+    def test_the_unpinned_refusal_is_its_own_class_inside_the_old_one(self):
+        """An except clause written against the old base still catches it."""
+        assert issubclass(UnpinnedReleaseError, ChecksumMismatchError)
+        assert issubclass(UnpinnedReleaseError, PySysMLConnectionError)
+        with pytest.raises(ChecksumMismatchError):
+            raise UnpinnedReleaseError('pins no SHA-256 digest')
+        assert UnpinnedReleaseError('x').unpinned
+        assert not ChecksumMismatchError('x').unpinned
+
+    def test_no_pin_raises_the_unpinned_class_rather_than_a_mismatch(self):
+        """Nothing contradicts anything, so the cause reported is the real one."""
+        with pytest.raises(UnpinnedReleaseError, match='pins no SHA-256 digest'):
+            expected_digest('v9.9.9', 'sysml-grpc-linux-amd64', 'ab' * 32)
+
+    def test_a_contradicted_pin_is_not_the_unpinned_class(self, pins):
+        pins('cd' * 32, 'v9.9.7')
+        with pytest.raises(ChecksumMismatchError, match='but pysysml pins') as exc:
+            expected_digest('v9.9.7', 'sysml-grpc-linux-amd64', 'ef' * 32)
+        assert type(exc.value) is ChecksumMismatchError
 
     def test_an_unpinned_release_keeps_a_working_cache(self, cache):
         """A release newer than this pysysml is a build it cannot get, not a tampered one."""
         binary_path = cache(version='v0.0.5')
         with patch('pysysml.binary.download_binary',
-                   side_effect=ChecksumMismatchError('pins no SHA-256 digest', unpinned=True)):
+                   side_effect=UnpinnedReleaseError('pins no SHA-256 digest')):
             with pytest.warns(UserWarning, match='Keeping the cached sysml-grpc'):
                 assert ensure_binary(version='v9.9.9') == binary_path
 
@@ -586,6 +607,6 @@ class TestPinnedDigests:
     def test_an_unpinned_release_with_no_cache_is_still_refused(self, cache):
         """Nothing to fall back to leaves the refusal, with its own explanation."""
         with patch('pysysml.binary.download_binary',
-                   side_effect=ChecksumMismatchError('pins no SHA-256 digest', unpinned=True)):
+                   side_effect=UnpinnedReleaseError('pins no SHA-256 digest')):
             with pytest.raises(ChecksumMismatchError, match='pins no SHA-256 digest'):
                 ensure_binary(version='v9.9.9')

@@ -8,6 +8,7 @@ A digest committed here is independent of the serving origin.
 Run once per release of the service binaries, after the release is published and
 its assets are final:
 
+    export GITHUB_TOKEN=...   # must be able to read the repository's releases
     python scripts/pin_release_checksums.py --version v0.0.8 --write
     git commit -am 'chore(python): pin release digests for v0.0.8'
 
@@ -37,6 +38,37 @@ NETWORK_TIMEOUT = 60
 
 class PinError(Exception):
     """A release whose digests cannot be pinned as published."""
+
+
+class MissingTokenError(PinError):
+    """No GitHub token in the environment, so no release can be read."""
+
+
+#: Env vars a token is read from, in order; the release workflow sets GITHUB_TOKEN.
+TOKEN_ENV_VARS = ("GITHUB_TOKEN", "GH_TOKEN")
+
+
+def github_token():
+    """The token release API calls are authenticated with.
+
+    Returns:
+        str: The token
+
+    Raises:
+        MissingTokenError: If no token is set in the environment
+    """
+    for name in TOKEN_ENV_VARS:
+        token = os.environ.get(name)
+        if token:
+            return token
+    raise MissingTokenError(
+        f"no GitHub token: set ${TOKEN_ENV_VARS[0]} (or ${TOKEN_ENV_VARS[1]}) to a "
+        f"token that can read this repository's releases \u2014 the 'public_repo' "
+        f"scope for a classic token, or 'Contents: read' for a fine-grained one. "
+        f"Unauthenticated calls to the releases API are rate-limited per address "
+        f"and fail as an opaque HTTP 403; see 'Pinned release digests' in "
+        f"docs/project/releasing.md."
+    )
 
 
 def pinned_table(binary_file=None):
@@ -76,13 +108,12 @@ def release_assets(repo, version):
         dict: asset name -> browser download URL, service binaries only
 
     Raises:
+        MissingTokenError: If no GitHub token is set in the environment
         PinError: If the release cannot be read or publishes no binaries
     """
     url = f"https://api.github.com/repos/{repo}/releases/tags/{version}"
     request = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json"})
-    token = os.environ.get("GITHUB_TOKEN")
-    if token:
-        request.add_header("Authorization", f"Bearer {token}")
+    request.add_header("Authorization", f"Bearer {github_token()}")
     try:
         with urllib.request.urlopen(request, timeout=NETWORK_TIMEOUT) as response:
             release = json.load(response)

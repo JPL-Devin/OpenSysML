@@ -372,6 +372,46 @@ jobs:
             (cd grpc && for f in sysml-grpc-*; do sha256sum "$f" > "$f.sha256"; done)
             cat SHA256SUMS.txt
       
+      # An artifact whose version disagrees with its tag looks identical on the
+      # release page. The host-platform builds are asked what they report; the
+      # cross-compiled ones cannot run here, so they are checked for the version
+      # string the ldflags should have written into them.
+      - run:
+          name: Verify the built artifacts report the tag
+          command: |
+            if [ -z "${CIRCLE_TAG}" ]; then
+              echo "Error: CIRCLE_TAG is empty; this job only runs on a tag"
+              exit 1
+            fi
+            status=0
+            fail() {
+              echo "Error: $1 does not carry the tag ${CIRCLE_TAG} it is being"
+              echo "released as: $2. The version ldflags (see the Makefile's"
+              echo "LDFLAGS) did not reach this build; nothing was published."
+              status=1
+            }
+            for binary in dist/sysml-linux-amd64 dist/sysml-lsp-linux-amd64 \
+                          dist/grpc/sysml-grpc-linux-amd64; do
+              reported="$("$binary" --version 2>&1 | head -n 1)"
+              case " $reported " in
+                *" ${CIRCLE_TAG} "*) echo "ok: $binary reports ${CIRCLE_TAG}" ;;
+                *) fail "$binary" "it reports '${reported}'" ;;
+              esac
+            done
+            for binary in dist/sysml-* dist/grpc/sysml-grpc-*; do
+              case "$binary" in
+                *.tar.gz|*.zip|*.sha256) continue ;;
+                dist/sysml-linux-amd64|dist/sysml-lsp-linux-amd64) continue ;;
+                dist/grpc/sysml-grpc-linux-amd64) continue ;;
+              esac
+              if grep -qa -- "${CIRCLE_TAG}" "$binary"; then
+                echo "ok: $binary carries ${CIRCLE_TAG}"
+              else
+                fail "$binary" "the version string is absent from the binary"
+              fi
+            done
+            exit $status
+
       - store_artifacts:
           path: dist/
           destination: release-binaries

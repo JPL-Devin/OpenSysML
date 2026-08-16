@@ -4,6 +4,48 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Cutting a release
 is described in [docs/project/releasing.md](docs/project/releasing.md).
 
+## Unreleased
+
+### Python client (`pysysml`)
+
+- A quantity can be *sent*, not only read: a `pysysml.values.Quantity` is
+  accepted wherever a value is — an action input, a calc argument, an element of
+  a sequence — and crosses as `Value.quantity` with its magnitude in the kind it
+  was written in, the unit as written and the reduced unit term, so a quantity
+  read from the service round-trips through an evaluation with both magnitude and
+  unit preserved. A unit named without the reduction commensurability is decided
+  over is refused before anything is sent, rather than compared by bare
+  magnitude.
+- The two names that shadowed builtins are renamed: `pysysml.eval` is
+  `pysysml.evaluate` and `pysysml.RuntimeError` is `pysysml.ExecutionError`. Each
+  old name still resolves to the same object with a `DeprecationWarning` and is
+  gone from `__all__`, so existing snippets keep working while a star-import
+  shadows neither builtin. The `Model.eval` and `Connection.eval` methods are
+  unchanged.
+- A release this `pysysml` pins no digest for raises the new
+  `UnpinnedReleaseError` instead of `ChecksumMismatchError`, which named the
+  wrong cause. It subclasses `ChecksumMismatchError`, so an `except` clause
+  written before it existed still catches it, and only it may be answered from a
+  cached binary — a contradicted digest still never is.
+- `pysysml.__version__` reports the declaration shipped beside the module, so an
+  editable install whose checkout bumped `VERSION` after `pip install -e` no
+  longer reports the version it had at install time. The version tests locate the
+  installed package through the install's own PEP 610 record, which for an
+  editable install is the checkout rather than a site-packages path holding no
+  `pysysml/`.
+- The generated protobuf stubs ship type annotations (`sysml_pb2.pyi`, generated
+  by `make python-proto`), so `mypy` no longer reports the message classes and
+  enum constants as undefined.
+
+### Release process
+
+- `build-release` fails a release whose built artifacts do not report the tag
+  they were cut from, before anything is stored or published.
+- `python/scripts/pin_release_checksums.py` fails with a typed
+  `MissingTokenError` naming `GITHUB_TOKEN`/`GH_TOKEN` when neither is set,
+  instead of an opaque rate-limited HTTP 403 from an unauthenticated request; the
+  scope it needs is documented in the release runbook.
+
 ## 0.0.8 — 2026-08-15
 
 ### Language and semantics

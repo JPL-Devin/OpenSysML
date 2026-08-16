@@ -1,10 +1,11 @@
-"""Conversion of protobuf Value/SlotValue messages into Python values."""
+"""Conversion between protobuf Value/SlotValue messages and Python values."""
 
 from dataclasses import dataclass
 from typing import Dict, Tuple, Union
 
 from pysysml.enumeration import EnumLiteral
 from pysysml.errors import PySysMLError, SlotError, UnsupportedValueError
+from pysysml.proto import sysml_pb2
 
 #: What a quantity's magnitude can be: the service keeps Integer and Real apart.
 Magnitude = Union[int, float]
@@ -79,6 +80,30 @@ class Unit:
                 UnitFactor(factor.unit_id, factor.exponent)
                 for factor in pb_unit_term.factors
             ),
+        )
+
+    def to_pb(self) -> "sysml_pb2.UnitTerm":
+        """The reduction as a ``UnitTerm`` message, for a quantity being sent."""
+        return sysml_pb2.UnitTerm(
+            scale_num=self.scale_num,
+            scale_den=self.scale_den,
+            factors=[
+                sysml_pb2.UnitFactor(unit_id=factor.unit_id, exponent=factor.exponent)
+                for factor in self.factors
+            ],
+        )
+
+    @property
+    def reduced(self) -> bool:
+        """Whether the unit carries the reduction commensurability is decided over.
+
+        A unit named with no reduction at all is unreduced; an unnamed one means
+        dimension one, which is a reduction.
+        """
+        return bool(
+            not self.text
+            or self.factors
+            or (self.scale_num, self.scale_den) != (1.0, 1.0)
         )
 
     @property
@@ -172,6 +197,32 @@ class Quantity:
                 )
             return cls(magnitude, Unit())
         return cls(magnitude, Unit.from_pb(pb_quantity.unit, pb_quantity.unit_term))
+
+    def to_pb(self) -> "sysml_pb2.Quantity":
+        """Encode as a ``Quantity`` message, magnitude and unit as written.
+
+        Raises:
+            UnsupportedValueError: If the magnitude is neither an Integer nor a
+                Real, or the unit is named without its reduction — the service
+                decides commensurability over the reduction and rejects a unit
+                sent without one.
+        """
+        if isinstance(self.magnitude, bool) or not isinstance(self.magnitude, (int, float)):
+            raise UnsupportedValueError(
+                f"quantity magnitude {self.magnitude!r} is neither an Integer nor a Real"
+            )
+        if not self.unit.reduced:
+            raise UnsupportedValueError(
+                f"quantity in [{self.unit.text}] carries no reduction to base units, "
+                f"so the service cannot tell what it measures: build it from a unit "
+                f"the service sent, or from one the model declares"
+            )
+        pb_quantity = sysml_pb2.Quantity(unit=self.unit.text, unit_term=self.unit.to_pb())
+        if isinstance(self.magnitude, int):
+            pb_quantity.int_magnitude = self.magnitude
+        else:
+            pb_quantity.real_magnitude = self.magnitude
+        return pb_quantity
 
     def base_magnitude(self) -> float:
         """The magnitude over the base units the unit reduces to."""

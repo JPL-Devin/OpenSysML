@@ -178,7 +178,10 @@ become base classes.
   **Done:** the spawner writes the service's pid *and* process start time (plus its own), and a
   pid is trusted only while `psutil.Process(pid).create_time()` still matches; a reused pid or a
   lookalike cmdline is a stale record, cleaned up and never signalled.
-- `pysysml.eval` and `pysysml.RuntimeError` shadow builtins.
+- ~~`pysysml.eval` and `pysysml.RuntimeError` shadow builtins.~~
+  **Done:** the module-level function is `pysysml.evaluate` and the error class is
+  `pysysml.ExecutionError`; both old names resolve to the new object through `__getattr__` with a
+  `DeprecationWarning` and are gone from `__all__`, so a star-import shadows neither built-in.
 - `SymbolToProto.Attributes` is always empty (`convert.go:40`), so `Symbol.attributes()` and
   `to_dataframe()` under-report.
 - ~~The download verifies a checksum served from the same origin as the binary, which detects
