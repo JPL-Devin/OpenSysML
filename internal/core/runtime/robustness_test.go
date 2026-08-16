@@ -72,6 +72,9 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("non_terminating_loop_exhausts_step_budget", testNonTerminatingLoopExhaustsStepBudget)
 	t.Run("loop_body_declaration_does_not_leak", testLoopBodyDeclarationDoesNotLeak)
 	t.Run("loop_body_of_unexecutable_statement", testLoopBodyOfUnexecutableStatement)
+	t.Run("block_flow_of_unexecutable_member", testBlockFlowOfUnexecutableMember)
+	t.Run("non_terminating_loop_performing_an_action", testNonTerminatingLoopPerformingAnAction)
+	t.Run("for_over_a_value_no_expression_makes_iterable", testForOverAValueNoExpressionMakesIterable)
 	t.Run("statement_directly_in_an_action_body", testStatementDirectlyInAnActionBody)
 	t.Run("flow_end_naming_no_node", testFlowEndNamingNoNode)
 	t.Run("flow_naming_no_pin", testFlowNamingNoPin)
@@ -2188,7 +2191,7 @@ func testLoopBodyOfUnexecutableStatement(t *testing.T) {
 				first start;
 				action accumulate {
 					while total < 3 {
-						action inner;
+						part inner;
 						assign total := total + 1;
 					}
 				}
@@ -2212,6 +2215,117 @@ func testLoopBodyOfUnexecutableStatement(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "not executable") {
 		t.Errorf("error does not name the unexecutable member: %v", err)
+	}
+}
+
+// testBlockFlowOfUnexecutableMember: a member outside the semantics a block's own
+// flow gives its members is still reported when reached, even in a block that
+// does state a flow because a nested action is declared beside it.
+func testBlockFlowOfUnexecutableMember(t *testing.T) {
+	src := `
+		package test {
+			action counter {
+				attribute total : Integer = 0;
+				first start;
+				action accumulate {
+					while total < 3 {
+						action bump {
+							assign total := total + 1;
+						}
+						part inner;
+					}
+				}
+				done end;
+				then start accumulate;
+				then accumulate end;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "counter", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action counter not found")
+	}
+
+	_, err := ctx.ExecuteAction(sym)
+	if err == nil {
+		t.Fatal("expected the unexecutable member of the block's flow to be reported")
+	}
+	if !strings.Contains(err.Error(), "not executable") {
+		t.Errorf("error does not name the unexecutable member: %v", err)
+	}
+}
+
+// testNonTerminatingLoopPerformingAnAction: a loop whose body performs an action
+// as a node of the block's own flow still spends a step per iteration, so it
+// ends with ErrStepLimitExceeded rather than performing forever.
+func testNonTerminatingLoopPerformingAnAction(t *testing.T) {
+	src := `
+		package test {
+			action spinner {
+				attribute total : Integer = 0;
+				first start;
+				action spin {
+					while total >= 0 {
+						perform bump;
+						assign total := total + 1;
+					}
+				}
+				done end;
+				then start spin;
+				then spin end;
+			}
+
+			action bump {
+				out spun : Integer;
+				first begin;
+				action run {
+					assign spun := 1;
+				}
+				done finish;
+				then begin run;
+				then run finish;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+
+	ctx.maxSteps = 40
+	ctx.steps = 0
+
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "spinner", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action spinner not found")
+	}
+
+	_, err := ctx.ExecuteAction(sym)
+	if err == nil {
+		t.Fatal("expected the step budget to be exceeded, the action completed")
+	}
+	if !errors.Is(err, ErrStepLimitExceeded) {
+		t.Errorf("expected ErrStepLimitExceeded, got: %v", err)
+	}
+}
+
+// testForOverAValueNoExpressionMakesIterable: a value that states a computation
+// rather than a collection is no collection in any order, so a `for` over it
+// fails with a typed error naming it.
+func testForOverAValueNoExpressionMakesIterable(t *testing.T) {
+	for _, value := range []Value{{Kind: ValExpr}, {Kind: ValInvalid}} {
+		elements, err := forElements(value)
+		if err == nil {
+			t.Errorf("forElements(%s) = %v, want a typed error", describeValue(value), elements)
+			continue
+		}
+		if !errors.Is(err, ErrTypeMismatch) {
+			t.Errorf("forElements(%s) failed with %v, want ErrTypeMismatch", describeValue(value), err)
+		}
+		if !strings.Contains(err.Error(), describeValue(value)) {
+			t.Errorf("error does not name the value: %v", err)
+		}
 	}
 }
 

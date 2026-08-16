@@ -51,6 +51,11 @@ type ActionGraph struct {
 	// Connections are the connectors declared in the action body, which is how
 	// a `send ... via <port>` finds the ports it reaches.
 	Connections []Connection
+
+	// StatementRuns marks the nodes of a block's own flow that stand for a run of
+	// statements rather than for an action node (block_graph.go). Such a node is
+	// keyed by the first statement of the run, whose name names no step.
+	StatementRuns map[ast.Node]bool
 }
 
 // Statement is one lowered statement in an action node's body. Statements are
@@ -122,6 +127,12 @@ type Block struct {
 	// Scope is the block's own scope, which its declarations, and a loop's
 	// condition, resolve in.
 	Scope *symbols.Scope
+	// Graph is the block's own token flow, present where a member of the block is
+	// an action node rather than a statement — a nested action declaration, a
+	// `perform` — which only a flow of its own executes with the succession
+	// semantics it has (block_graph.go). Statements is empty for such a block: the
+	// statements are the bodies of the flow's nodes.
+	Graph *ActionGraph
 }
 
 // A block is a statement in its own right: the anonymous action usage a loop or
@@ -568,6 +579,9 @@ func lowerStatement(member ast.Node, scope *symbols.Scope) Statement {
 // is the node the block belongs to, which is the element that owns the block's
 // body-local namespace, and scope is the namespace it owns.
 func lowerBlock(owner ast.Node, members []ast.Node, scope *symbols.Scope) Block {
+	if blockNeedsFlow(members) {
+		return Block{Node: owner, Scope: scope, Graph: lowerBlockFlow(members, scope, false)}
+	}
 	block := Block{Node: owner, Scope: scope}
 	for _, member := range members {
 		actual := unwrapMembership(member)
