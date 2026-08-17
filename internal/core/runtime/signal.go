@@ -157,7 +157,11 @@ func (ctx *Context) resolveAddress(send lower.Send, self *Instance) (messageAddr
 		return ctx.namedAddress(send, self)
 	}
 	segments := strings.Split(send.Target, ".")
-	if addr, ok := ctx.featureAddress(send.Scope, self, segments); ok {
+	addr, ok, err := ctx.featureAddress(send.Scope, self, segments)
+	if err != nil {
+		return messageAddress{}, err
+	}
+	if ok {
 		return addr, nil
 	}
 	if sym, ok := ctx.portSymbol(send.Scope, send.Target); ok &&
@@ -186,7 +190,11 @@ func (ctx *Context) namedAddress(send lower.Send, self *Instance) (messageAddres
 		return messageAddress{Port: name, Object: objectID(self)}, nil
 	}
 	if own {
-		if addr, ok := ctx.featureAddress(send.Scope, self, []string{name}); ok {
+		addr, ok, err := ctx.featureAddress(send.Scope, self, []string{name})
+		if err != nil {
+			return messageAddress{}, err
+		}
+		if ok {
 			return addr, nil
 		}
 	} else if resolved {
@@ -199,43 +207,45 @@ func (ctx *Context) namedAddress(send lower.Send, self *Instance) (messageAddres
 
 // featureAddress walks a target through the instance graph from the object its
 // first segment belongs to, reporting no address where a segment names no
-// feature, or one that is neither a port nor an occurrence to descend into.
-func (ctx *Context) featureAddress(scope *symbols.Scope, self *Instance, segments []string) (messageAddress, bool) {
-	owner, rest, ok := ctx.addressOwner(scope, self, segments)
-	if !ok {
-		return messageAddress{}, false
+// feature, or one that is neither a port nor an occurrence to descend into. A
+// failure to read an object of the graph is that failure, not a bad address.
+func (ctx *Context) featureAddress(scope *symbols.Scope, self *Instance, segments []string) (messageAddress, bool, error) {
+	owner, rest, ok, err := ctx.addressOwner(scope, self, segments)
+	if err != nil || !ok {
+		return messageAddress{}, false, err
 	}
 	for i, segment := range rest {
 		slot, held := owner.Slots[segment]
 		if !held {
-			return messageAddress{}, false
+			return messageAddress{}, false, nil
 		}
 		if isPortFeature(slot.Feature) {
-			return messageAddress{Port: strings.Join(rest[i:], "."), Object: owner.ID}, true
+			return messageAddress{Port: strings.Join(rest[i:], "."), Object: owner.ID}, true, nil
 		}
 		// A behavior of an object is a receiving node of it, addressed by name.
 		if i == len(rest)-1 && isBehaviorFeature(slot.Feature) {
-			return messageAddress{Name: segment, Object: owner.ID}, true
+			return messageAddress{Name: segment, Object: owner.ID}, true, nil
 		}
-		if owner, ok = ctx.slotObject(owner, segment); !ok {
-			return messageAddress{}, false
+		owner, ok, err = ctx.slotObject(owner, segment)
+		if err != nil || !ok {
+			return messageAddress{}, false, err
 		}
 	}
-	return messageAddress{Object: owner.ID}, true
+	return messageAddress{Object: owner.ID}, true, nil
 }
 
 // addressOwner answers which object a target's leading segments belong to: the
 // sending object where the first names one of its features, else the occurrence
 // the shortest prefix names in the send's scope — a prefix rather than one name,
 // since a namespace qualifies the occurrence in `P::alpha.inPort`.
-func (ctx *Context) addressOwner(scope *symbols.Scope, self *Instance, segments []string) (*Instance, []string, bool) {
+func (ctx *Context) addressOwner(scope *symbols.Scope, self *Instance, segments []string) (*Instance, []string, bool, error) {
 	if self != nil {
 		if _, held := self.Slots[segments[0]]; held {
-			return self, segments, true
+			return self, segments, true, nil
 		}
 	}
 	if scope == nil || ctx.resolver == nil {
-		return nil, nil, false
+		return nil, nil, false, nil
 	}
 	for n := 1; n <= len(segments); n++ {
 		sym, ok := ctx.pathSymbol(scope, segments[:n])
@@ -243,15 +253,17 @@ func (ctx *Context) addressOwner(scope *symbols.Scope, self *Instance, segments 
 			continue
 		}
 		if self != nil && self.Type == sym {
-			return self, segments[n:], true
+			return self, segments[n:], true, nil
 		}
+		// A target that names an object this run cannot build fails as that, rather
+		// than being reported as an address naming nothing.
 		inst, err := ctx.occurrenceOf(sym)
 		if err != nil {
-			return nil, nil, false
+			return nil, nil, false, err
 		}
-		return inst, segments[n:], true
+		return inst, segments[n:], true, nil
 	}
-	return nil, nil, false
+	return nil, nil, false, nil
 }
 
 // ownPortPath reports whether a port path names a port of the sending behavior
@@ -266,14 +278,18 @@ func (ctx *Context) ownPortPath(scope *symbols.Scope, segments []string) bool {
 }
 
 // slotObject reads the object a feature of inst holds, materializing it, and
-// reports whether the feature holds one at all.
-func (ctx *Context) slotObject(inst *Instance, name string) (*Instance, bool) {
+// reports whether the feature holds one at all. A slot that cannot be read is
+// that failure rather than a feature holding no object.
+func (ctx *Context) slotObject(inst *Instance, name string) (*Instance, bool, error) {
 	slot, err := inst.GetSlot(ctx, name)
-	if err != nil || slot == nil || slot.Value.Kind != ValInstance {
-		return nil, false
+	if err != nil {
+		return nil, false, err
+	}
+	if slot == nil || slot.Value.Kind != ValInstance {
+		return nil, false, nil
 	}
 	held, ok := ctx.instances[slot.Value.Instance]
-	return held, ok
+	return held, ok, nil
 }
 
 // isPortFeature reports whether a feature is a port, where an address stops: the

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/lower"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/resolve"
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
@@ -115,6 +116,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("send_via_unconnected_port", testSendViaUnconnectedPort)
 	t.Run("send_addressed_to_an_unreachable_target", testSendAddressedToAnUnreachableTarget)
 	t.Run("send_addressed_through_several_occurrences", testSendAddressedThroughSeveralOccurrences)
+	t.Run("send_addressed_to_an_object_that_cannot_be_built", testSendAddressedToAnObjectThatCannotBeBuilt)
 	t.Run("accept_deadlock_never_satisfied", testAcceptDeadlockNeverSatisfied)
 	t.Run("accept_deadlock_reports_every_waiting_accept", testAcceptDeadlockReportsEveryWaitingAccept)
 	t.Run("history_outside_composite_state", testHistoryOutsideCompositeState)
@@ -1782,6 +1784,49 @@ func testSendAddressedThroughSeveralOccurrences(t *testing.T) {
 	}
 	if !errors.Is(err, ErrUnroutableSend) {
 		t.Errorf("expected ErrUnroutableSend, got: %v", err)
+	}
+}
+
+// testSendAddressedToAnObjectThatCannotBeBuilt: locating an addressee can fail
+// on its own terms — an exhausted budget, or a slot the walk cannot read — and
+// each must be reported as that rather than as an address naming no port.
+func testSendAddressedToAnObjectThatCannotBeBuilt(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
+		package test {
+			port def PingPort { in item ping : Integer; }
+			part def Node {
+				port inPort : PingPort;
+				attribute a = b + 1.0;
+				attribute b = a + 1.0;
+				action listen { first start; done end; then start end; }
+			}
+			part alpha : Node;
+		}
+	`))
+	scope := declScope(oneSymbol(t, idx, "test::Node::listen"))
+
+	ctx.maxSteps = 0
+	send := lower.Send{Target: "alpha.inPort", TargetPath: true, Scope: scope}
+	err := ctx.post(nil, Message{SignalType: "Integer"}, send, nil)
+	if !errors.Is(err, ErrStepLimitExceeded) {
+		t.Errorf("budget exhausted while building alpha: %v, want ErrStepLimitExceeded", err)
+	}
+	if errors.Is(err, ErrUnroutableSend) {
+		t.Errorf("an exhausted budget was reported as a bad address: %v", err)
+	}
+
+	ctx.maxSteps = DefaultMaxSteps
+	alpha := instanceOfUsage(t, ctx, idx, "test::alpha")
+	send = lower.Send{Target: "a.inPort", TargetPath: true, Scope: scope}
+	err = ctx.post(nil, Message{SignalType: "Integer"}, send, alpha)
+	if !errors.Is(err, ErrCyclicSlot) {
+		t.Errorf("walking through a cyclic derived slot: %v, want ErrCyclicSlot", err)
+	}
+	if errors.Is(err, ErrUnroutableSend) {
+		t.Errorf("an unreadable slot was reported as a bad address: %v", err)
+	}
+	if len(ctx.PendingMessages()) != 0 {
+		t.Errorf("a send that never found its addressee posted %+v", ctx.PendingMessages())
 	}
 }
 

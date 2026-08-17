@@ -703,7 +703,10 @@ func TestAddressedSendDescendsToNestedPort(t *testing.T) {
 	if err := ctx.post(nil, Message{SignalType: "Ping"}, send, alpha); err != nil {
 		t.Fatalf("post: %v", err)
 	}
-	inner, ok := ctx.slotObject(alpha, "inner")
+	inner, ok, err := ctx.slotObject(alpha, "inner")
+	if err != nil {
+		t.Fatalf("alpha.inner: %v", err)
+	}
 	if !ok {
 		t.Fatal("part inner materialized no object")
 	}
@@ -841,6 +844,33 @@ func TestAddressedSendThroughNamespaceQualifiedPathReachesObject(t *testing.T) {
 	got := ctx.PendingMessages()[0]
 	if got.Port != "inPort" || got.Object != alpha.ID {
 		t.Errorf("addressed test::alpha.inPort delivered as %+v, want port inPort of object %d", got, alpha.ID)
+	}
+}
+
+// A run that cannot build the object a target names fails as that: an exhausted
+// budget is not an address naming nothing.
+func TestAddressedSendReportsWhyTheObjectCouldNotBeBuilt(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
+		item def Ping;
+		port def PingPort { in item ping : Ping; }
+		part def Node {
+			port inPort : PingPort;
+			action listen { first start; done end; then start end; }
+		}
+		part alpha : Node;
+	}`))
+	send := lower.Send{
+		Target:     "alpha.inPort",
+		TargetPath: true,
+		Scope:      declScope(oneSymbol(t, idx, "test::Node::listen")),
+	}
+	ctx.maxSteps = 0
+	err := ctx.post(nil, Message{SignalType: "Ping"}, send, nil)
+	if !errors.Is(err, ErrStepLimitExceeded) {
+		t.Fatalf("post to alpha.inPort: %v, want ErrStepLimitExceeded", err)
+	}
+	if errors.Is(err, ErrUnroutableSend) {
+		t.Errorf("an exhausted budget was reported as a bad address: %v", err)
 	}
 }
 
