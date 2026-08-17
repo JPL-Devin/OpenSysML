@@ -48,6 +48,21 @@ func TestThatChainsThroughTheFeaturingType(t *testing.T) {
 			want: "unresolved member: zzz",
 		},
 		{
+			name: "a chain of two members resolves through the featuring type",
+			src: `package T { private import ScalarValues::*;
+				part def Inner { attribute q : Real = 1.0; }
+				part def P { part i : Inner; }
+				part p : P { attribute b : Real = that.i.q; } }`,
+		},
+		{
+			name: "the last member of a chain of two is checked",
+			src: `package T { private import ScalarValues::*;
+				part def Inner { attribute q : Real = 1.0; }
+				part def P { part i : Inner; }
+				part p : P { attribute b : Real = that.i.zzz; } }`,
+			want: "unresolved member: zzz",
+		},
+		{
 			name: "the base usage contributes `that` to usages only",
 			src: `package T { private import ScalarValues::*;
 				attribute c : Real = that.a; }`,

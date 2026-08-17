@@ -1011,6 +1011,9 @@ func (r *Resolver) getOperandSymbol(scope *symbols.Scope, e ast.Node) *symbols.S
 		r.resolveFeatureChain(scope, v)
 		// Get the operand's symbol, then lookup member
 		operandSym := r.getOperandSymbol(scope, v.Operand)
+		if featuring := r.featuringOf(scope, operandSym); featuring != nil {
+			operandSym = featuring
+		}
 		if operandSym == nil || operandSym.Scope == nil {
 			return nil
 		}
@@ -1043,6 +1046,9 @@ const baseThatFQN = "Base::things::that"
 // written. It is nil for any other operand, and where no usage encloses the
 // expression — `that` is typed Anything, which has no members of its own.
 func (r *Resolver) featuringOf(scope *symbols.Scope, operand *symbols.Symbol) *symbols.Symbol {
+	if operand == nil {
+		return nil
+	}
 	if operand.Name != baseThatFQN && r.registeredFQN(operand) != baseThatFQN {
 		return nil
 	}
