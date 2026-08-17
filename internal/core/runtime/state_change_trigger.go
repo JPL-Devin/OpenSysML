@@ -78,10 +78,14 @@ func (e *StateExecutor) pollChangeEvents() (bool, error) {
 			continue
 		}
 		// The edge is latched before it is taken: an effect that leaves the
-		// condition true must not enable the same edge again.
+		// condition true must not enable the same edge again, and the exit this
+		// firing causes must not re-arm the edge that caused it.
 		e.changeFired[candidate.trans] = true
+		e.firingChange = candidate.trans
 		fired = true
-		if err := e.fireFrom(candidate.source, candidate.trans); err != nil {
+		err = e.fireFrom(candidate.source, candidate.trans)
+		e.firingChange = nil
+		if err != nil {
 			return fired, fmt.Errorf("fire transition out of %s: %w", candidate.source.Name, err)
 		}
 		if e.state == StateCompleted {

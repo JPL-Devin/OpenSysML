@@ -67,6 +67,10 @@ type StateExecutor struct {
 	// condition that has stayed true, so an unchanged one does not re-fire.
 	changeFired map[*lower.Transition]bool
 
+	// firingChange is the change-triggered transition being taken, whose latch the
+	// state entries it causes must leave alone.
+	firingChange *lower.Transition
+
 	// changeWaits are the change conditions the last poll found could not fire,
 	// telling a machine waiting on one from a quiesced machine.
 	changeWaits []changeWait
@@ -1862,6 +1866,16 @@ func (e *StateExecutor) enterStateInto(state *ast.StateNode, branches map[*ast.S
 		return nil
 	}
 
+	// A state's change watches are created fresh for each activation, so a
+	// condition that stayed true while the state was inactive is a rising edge
+	// again. The transition being taken keeps its latch: the entry it caused must
+	// not enable it again.
+	for _, trans := range e.graph.Transitions[state] {
+		if trans != e.firingChange {
+			delete(e.changeFired, trans)
+		}
+	}
+
 	// Track state visit
 	e.stateVisits = append(e.stateVisits, state.Name)
 
@@ -1939,13 +1953,11 @@ func (e *StateExecutor) exitState(state *ast.StateNode) error {
 		return nil
 	}
 
-	// A state's timers and change watches are destroyed when it is left: the event
-	// a timer already queued is withdrawn, so re-entering the state times a fresh
-	// interval and watches its conditions rise again.
+	// A state's timers are destroyed when it is left: the event one already queued
+	// is withdrawn, so re-entering the state times a fresh interval.
 	timed := make(map[*lower.Transition]bool)
 	for _, trans := range e.graph.Transitions[state] {
 		delete(e.timerScheduled, trans)
-		delete(e.changeFired, trans)
 		if _, isTime := trans.Trigger.(*ast.TimeEvent); isTime {
 			timed[trans] = true
 		}

@@ -218,6 +218,46 @@ func TestChangeTriggerPollingKeepsEventBudget(t *testing.T) {
 	}
 }
 
+// A self-transition on a composite state leaves and re-enters it, and that exit
+// must not re-arm the edge that caused it: the condition stays true, so the edge
+// is taken once rather than spinning until the budget aborts. It fires again once
+// the condition has fallen and risen.
+func TestChangeTriggerOnACompositeSelfTransitionFiresOnce(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			attribute ready : Boolean = true;
+			attribute laps : Integer = 0;
+			initial start;
+			state Working {
+				initial w0;
+				state inner;
+				transition w0 to inner;
+			}
+			start then Working;
+			transition Working to Working accept when ready do assign laps := laps + 1;
+		}
+	}`)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if laps := exec.stateData["laps"]; laps.Kind != ValConst || laps.Const.Int != 1 {
+		t.Fatalf("laps = %v, want 1: the re-entry re-armed the edge that caused it", laps)
+	}
+
+	// The condition falling and rising again is a new edge, so it fires once more.
+	exec.stateData["ready"] = boolValue(false)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("lower condition: %v", err)
+	}
+	exec.stateData["ready"] = boolValue(true)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("raise condition: %v", err)
+	}
+	if laps := exec.stateData["laps"]; laps.Kind != ValConst || laps.Const.Int != 2 {
+		t.Errorf("laps = %v, want 2: the risen condition did not fire again", laps)
+	}
+}
+
 // A change watch belongs to an activation of its state: leaving and re-entering
 // the state arms it again, even though its condition never went false.
 func TestChangeTriggerRearmsOnStateExit(t *testing.T) {
