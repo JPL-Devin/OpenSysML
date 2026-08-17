@@ -52,8 +52,9 @@ func TestSMTSymbol(t *testing.T) {
 		"":             "||",
 		"pipe|name":    "|pipe!pname|",
 		`back\slash`:   "|back!bslash|",
-		"bang!name":    "bang!name",
+		"bang!name":    "|bang!!name|",
 		"bang!name x":  "|bang!!name x|",
+		"pipe!pname":   "|pipe!!pname|",
 		"pipe!pname x": "|pipe!!pname x|",
 	}
 	for name, want := range cases {
@@ -61,8 +62,16 @@ func TestSMTSymbol(t *testing.T) {
 			t.Errorf("%q writes as %s, want %s", name, got, want)
 		}
 	}
-	if smtSymbol("pipe|name x") == smtSymbol("pipe!pname x") {
-		t.Error("two names write as the same symbol")
+	// Quoting is only lexical, so an escaped name must not be left unquoted:
+	// |pipe!pname| and pipe!pname would be one symbol.
+	for _, pair := range [][2]string{
+		{"pipe|name x", "pipe!pname x"},
+		{"pipe|name", "pipe!pname"},
+		{`back\slash`, "back!bslash"},
+	} {
+		if smtSymbol(pair[0]) == smtSymbol(pair[1]) {
+			t.Errorf("%q and %q write as the same symbol", pair[0], pair[1])
+		}
 	}
 }
 

@@ -90,11 +90,12 @@ func Translate(ctx *runtime.Context, subject Subject, conds []runtime.Condition)
 		return nil, fmt.Errorf("%s %s: %w", subject.Kind, subject.Name, ErrNoConditions)
 	}
 	t := &translator{
-		ctx:     ctx,
-		model:   ctx.Model(),
-		subject: subject,
-		vars:    map[string]*Var{},
-		sorts:   map[string]Sort{},
+		ctx:      ctx,
+		model:    ctx.Model(),
+		subject:  subject,
+		features: effectiveFeatures(ctx, subject.Symbol),
+		vars:     map[string]*Var{},
+		sorts:    map[string]Sort{},
 	}
 	if err := t.translate(conds); err != nil {
 		return nil, err
@@ -110,6 +111,10 @@ type translator struct {
 	model   *semantics.Model
 	subject Subject
 
+	// features are the features a condition may name, as the evaluator sees them:
+	// a redefinition masks what it redefines, so both read one value.
+	features map[string]*symbols.Symbol
+
 	vars    map[string]*Var
 	sorts   map[string]Sort
 	domains []Assertion
@@ -119,6 +124,23 @@ type translator struct {
 
 	condLabel string
 	condFile  string
+}
+
+// effectiveFeatures maps the name a condition may use to the feature it reads,
+// from the same flattened schema the evaluator resolves a name through.
+func effectiveFeatures(ctx *runtime.Context, sym *symbols.Symbol) map[string]*symbols.Symbol {
+	features := ctx.FeaturesOf(sym)
+	if len(features) == 0 {
+		return nil
+	}
+	out := make(map[string]*symbols.Symbol, len(features))
+	for _, feat := range features {
+		if feat.Name == "" || feat.Symbol == nil {
+			continue
+		}
+		out[feat.Name] = feat.Symbol
+	}
+	return out
 }
 
 // translate builds an assertion per condition, in the order the evaluator checks

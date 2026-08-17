@@ -401,6 +401,52 @@ func TestFeatureChainGrounds(t *testing.T) {
 	}
 }
 
+// TestChainThroughACollectionRefuses: a chain reading through a feature holding
+// many values reads one value per element, which no single variable stands for.
+func TestChainThroughACollectionRefuses(t *testing.T) {
+	refused := refusal(t, `
+		package test {
+			private import ScalarValues::Real;
+			part def Tank { attribute pressure : Real; }
+			constraint def C {
+				in tanks : Tank[*];
+				assert constraint { tanks.pressure < 3.0 }
+			}
+		}
+	`, "test::C")
+	if !strings.Contains(refused.Error(), "more than one value") {
+		t.Errorf("refusal is %q, want it to name the multiplicity", refused.Error())
+	}
+}
+
+// TestRedefinedFeatureIsOneVariable: a subtype redefining a feature reads the
+// value the supertype's conditions read, so both constrain one variable — the
+// evaluator resolves the name through one masked feature.
+func TestRedefinedFeatureIsOneVariable(t *testing.T) {
+	q := constraintQuery(t, `
+		package test {
+			private import ScalarValues::Integer;
+			constraint def Base {
+				in level : Integer;
+				assert constraint { level >= 5 }
+			}
+			constraint def C :> Base {
+				in :>> level;
+				assert constraint { level <= 3 }
+			}
+		}
+	`, "test::C")
+	if len(q.Vars) != 1 {
+		t.Fatalf("declared %d variables, want the redefined feature once:\n%s", len(q.Vars), Script(q))
+	}
+	name := q.Vars[0].Name
+	for i, a := range q.Assertions {
+		if !strings.Contains(writeTerm(a.Term), smtSymbol(name)) {
+			t.Errorf("assertion %d is %s, want it to read %s", i, writeTerm(a.Term), name)
+		}
+	}
+}
+
 // TestEnumerationIsAFiniteSort: an enumeration-typed feature ranges over the
 // literals its definition declares, encoded as a datatype rather than a number.
 func TestEnumerationIsAFiniteSort(t *testing.T) {

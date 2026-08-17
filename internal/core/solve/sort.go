@@ -69,11 +69,11 @@ func smtSymbol(name string) string {
 	if name == "" {
 		return "||"
 	}
-	if simpleSymbol.MatchString(name) {
+	// '|' and '\' are escaped through '!' before quoting is decided, since quoting
+	// is only lexical: |a!pb| and a!pb would otherwise be one symbol.
+	replaced := strings.NewReplacer("!", "!!", "|", "!p", "\\", "!b").Replace(name)
+	if replaced == name && simpleSymbol.MatchString(name) {
 		return name
 	}
-	// A quoted symbol may hold anything but '|' and '\', so those are escaped
-	// through '!' — reversibly, so two names never become one symbol.
-	replaced := strings.NewReplacer("!", "!!", "|", "!p", "\\", "!b").Replace(name)
 	return "|" + replaced + "|"
 }

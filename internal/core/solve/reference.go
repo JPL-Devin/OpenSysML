@@ -60,14 +60,18 @@ func nameSegments(qn *ast.QualifiedName) ([]string, bool) {
 }
 
 // resolvePath resolves the names a reference steps through, the same way the
-// evaluator resolves them: the first in scope, each further one as a member or a
+// evaluator resolves them: the first as an effective feature of the element the
+// conditions are stated by, else in scope, each further one as a member or a
 // variant of what the previous named.
 func (t *translator) resolvePath(node ast.Node, scope *symbols.Scope, segments []string) ([]*symbols.Symbol, error) {
 	if scope == nil {
 		return nil, t.refuse(node, "reference `"+joinPath(segments)+"`", "it is written in no scope")
 	}
 	resolver := t.ctx.Resolver()
-	sym, ok := resolver.LookupName(scope, segments[0])
+	sym, ok := t.features[segments[0]]
+	if !ok {
+		sym, ok = resolver.LookupName(scope, segments[0])
+	}
 	if !ok {
 		// A qualified name may name a package member or a library element.
 		if whole, found := resolver.ResolveQualified(scope, qualifiedName(segments)); found {
@@ -156,8 +160,15 @@ func (t *translator) variableOf(
 	if target.Kind == symbols.SymbolCalcUsage {
 		return nil, t.refuse(node, written, "a calc's result is computed rather than encoded")
 	}
-	if multiplicity := t.model.EffectiveMultiplicityOf(target); !singleValued(multiplicity) {
-		return nil, t.refuse(node, written, "it may hold more than one value")
+	// Every step a chain reads through must hold one value, since a variable
+	// stands for one: `a.pressure` reads a pressure per `a` when `a` holds many.
+	for _, step := range chain {
+		if !featureDecl(step) {
+			continue
+		}
+		if !singleValued(t.model.EffectiveMultiplicityOf(step)) {
+			return nil, t.refuse(node, written, "it may hold more than one value")
+		}
 	}
 	sort, dimension, err := t.sortOf(node, scope, target, written)
 	if err != nil {
