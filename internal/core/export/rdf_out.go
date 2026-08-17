@@ -623,12 +623,21 @@ func (e *encoder) wroteKindKeyword(n *ast.Usage) bool {
 	return true
 }
 
-// withoutComments replaces each `//` and `/* */` comment with a space, leaving
-// the words the source states outside a quoted name untouched.
+// withoutComments replaces each of the three comment shapes the lexer scans —
+// `//* */`, `//` and `/* */` — with a space, leaving quoted names untouched.
 func withoutComments(text string) string {
 	var kept strings.Builder
 	for at := 0; at < len(text); {
 		switch {
+		case strings.HasPrefix(text[at:], "//*"):
+			// A `//* … */` note runs to its terminator, not to the line end.
+			end := strings.Index(text[at+3:], "*/")
+			if end < 0 {
+				kept.WriteByte(' ')
+				return kept.String()
+			}
+			kept.WriteByte(' ')
+			at += end + 5
 		case strings.HasPrefix(text[at:], "//"):
 			end := strings.IndexByte(text[at:], '\n')
 			if end < 0 {

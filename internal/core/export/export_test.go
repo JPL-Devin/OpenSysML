@@ -310,6 +310,7 @@ func TestCommentedKindKeywordIsNotWrittenBack(t *testing.T) {
 	for _, tt := range []struct{ src, want string }{
 		{"package P {\n\tpart p {\n\t\tin /* attribute */ x : Real;\n\t}\n}", "in x : Real;"},
 		{"package P {\n\tpart p {\n\t\tout // attribute\n\t\t\ty : Real;\n\t}\n}", "out y : Real;"},
+		{"package P {\n\tpart p {\n\t\tin //* a note\n\t\t\tattribute */ w : Real;\n\t}\n}", "in w : Real;"},
 		{"package P {\n\tpart p {\n\t\tin attribute z : Real;\n\t}\n}", "in attribute z : Real;"},
 	} {
 		turtle, err := export.Convert("m.sysml", []byte(tt.src), export.FormatSysML, export.FormatTurtle)
