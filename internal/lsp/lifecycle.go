@@ -7,13 +7,18 @@ import (
 	"go.lsp.dev/protocol"
 )
 
-// Initialize advertises the server capabilities this plan implements.
+// Initialize advertises the server capabilities this plan implements and records
+// the session's folders, scanned later so the handshake is not delayed.
 func (s *Server) Initialize(ctx context.Context, params *protocol.InitializeParams) (*protocol.InitializeResult, error) {
+	s.setFolders(initializeFolders(params))
 	return &protocol.InitializeResult{
 		Capabilities: protocol.ServerCapabilities{
 			TextDocumentSync: &protocol.TextDocumentSyncOptions{
 				OpenClose: true,
 				Change:    protocol.TextDocumentSyncKindIncremental,
+				// Without this a client sends no didSave, so the save-time
+				// cross-document refresh would never run.
+				Save: &protocol.SaveOptions{IncludeText: false},
 			},
 			HoverProvider:           true,
 			DefinitionProvider:      true,
@@ -33,6 +38,13 @@ func (s *Server) Initialize(ctx context.Context, params *protocol.InitializePara
 			CodeActionProvider: &protocol.CodeActionOptions{
 				CodeActionKinds: []protocol.CodeActionKind{protocol.QuickFix},
 			},
+			// Folders added mid-session are only indexed if the client reports them.
+			Workspace: &protocol.ServerCapabilitiesWorkspace{
+				WorkspaceFolders: &protocol.ServerCapabilitiesWorkspaceFolders{
+					Supported:           true,
+					ChangeNotifications: true,
+				},
+			},
 		},
 		ServerInfo: &protocol.ServerInfo{
 			Name:    "sysml-lsp",
@@ -41,8 +53,10 @@ func (s *Server) Initialize(ctx context.Context, params *protocol.InitializePara
 	}, nil
 }
 
-// Initialized is a no-op notification acknowledgement.
+// Initialized indexes the session's folders, so cross-file names resolve without
+// the editor having opened every file.
 func (s *Server) Initialized(ctx context.Context, params *protocol.InitializedParams) error {
+	s.loadFolders(ctx)
 	return nil
 }
 

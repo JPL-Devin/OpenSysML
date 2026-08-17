@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"time"
 
 	"go.lsp.dev/jsonrpc2"
 	"go.lsp.dev/protocol"
@@ -26,14 +27,31 @@ type Server struct {
 	exited   chan struct{}
 	exitOnce sync.Once
 
+	// crossDoc coalesces the sweep that republishes the other open documents, so
+	// a burst of keystrokes costs one pass over them instead of one per change.
+	crossDoc *model.Debouncer
+
+	// pubMu serializes analyze-and-send, so the sweep's timer goroutine and a
+	// notification handler cannot deliver one document's diagnostics out of order.
+	pubMu sync.Mutex
+
 	mu               sync.Mutex
 	shutdownReceived bool
 	exitReceived     bool
+	folders          []string
 }
+
+// crossDocRefreshWindow is how long an edit burst has to settle before the
+// other open documents are re-analyzed.
+const crossDocRefreshWindow = 200 * time.Millisecond
 
 // NewServer returns a Server bound to ws.
 func NewServer(ws *model.Workspace) *Server {
-	return &Server{ws: ws, exited: make(chan struct{})}
+	return &Server{
+		ws:       ws,
+		exited:   make(chan struct{}),
+		crossDoc: model.NewDebouncer(crossDocRefreshWindow),
+	}
 }
 
 // Run wires the server to a stdio-style stream and blocks until the connection
