@@ -262,6 +262,41 @@ with identical diagnostics. What a model resolves against is pinned by test rath
 `TestPooledIndexMatchesFreshlyBuiltIndex` compares diagnostics and every qualified lookup of a
 pooled index against one built on the request path.
 
+## P6 — pysysml was read-only: a change could not be persisted — done
+
+Nothing in the Python surface could change a model. No RPC accepted one, no `pysysml` object was
+mutable, and the only writing path (`Convert`) re-emits the source it parsed, so the loop a
+modeling script wants — read a value, compute, write it back — ended at "read".
+
+Landed as a **source-level edit**, not a model-mutation API: `ApplyEdits`
+(`internal/core/edit`, `internal/grpc/edit.go`, capability `apply_edits`) rewrites bytes of the
+source a model was parsed from, at the spans the parse recorded, and re-parses and re-analyses the
+result before returning it. The AST stays immutable and nothing is reformatted, so a file comes
+back with its comments, blank lines and indentation byte-identical outside the edited spans:
+
+```python
+model = pysysml.load("spacecraft.sysml")
+edit = model.edit()
+edit.set_value("Demo::sc::unitMass", "1050.0[SI::kg]")
+edit.apply().save("spacecraft.sysml")
+```
+
+Two operations, targeted by the id a read reports (`Symbol.id`): set a feature's value (replacing
+an existing `= <expr>`, or adding one before the `;`), and rename a declaration. Every refusal is
+typed and carries the diagnostics behind it (`EditError` and its subclasses in Python; `EditFailure`
+on the wire), and a refusal returns no content — the service does not hand out notation its own
+parser cannot read back.
+
+**Known limitations, by design and recorded in `docs/project/spec-compliance.md`
+§ Source-Preserving Model Editing:** a rename rewrites the declaration's name token only, so a
+rename whose element is referenced anywhere is *refused* — naming the namespaces the references
+are made from — rather than leaving the model unresolvable; and no element is created or deleted,
+since there is no AST printer and a model assembled client-side has no source to preserve. Both
+remain open: reference-rewriting renames need the reference spans a rename would have to update
+(the resolver already collects them, so the work is deciding what counts as a reference *worth*
+rewriting — an import, an alias, a redefinition — not finding them), and creation needs a printer
+for new elements spliced into existing source, which is a separate feature.
+
 ---
 
 # Track A — runtime and semantic gaps

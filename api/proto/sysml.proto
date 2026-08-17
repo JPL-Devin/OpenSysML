@@ -31,6 +31,13 @@ service SysMLService {
   // rather than only read it. Reported as the "convert" capability.
   rpc Convert(ConvertRequest) returns (ConvertResponse);
 
+  // Apply edits to a parsed model's own source and return the edited notation,
+  // so a client can change a model and write it back with its comments and
+  // layout intact. Edits are byte ranges the service locates from the parsed
+  // spans, and the result is re-parsed and validated before it is returned.
+  // Reported as the "apply_edits" capability.
+  rpc ApplyEdits(ApplyEditsRequest) returns (ApplyEditsResponse);
+
   // Verification: the answers the REPL's %constraint, %requirement, %satisfy
   // and %calc give, so "does this model satisfy its requirements?" can be asked
   // by a script. Each evaluates the same runtime paths the prompt does and
@@ -345,6 +352,90 @@ message ConvertResponse {
   string experimental_notice = 7;
 }
 
+// ApplyEditsRequest asks for a model's source with edits applied to it. The
+// source edited is the one parse read, named by its hash, so an edit is applied
+// to the model that was inspected.
+message ApplyEditsRequest {
+  string model_hash = 1;  // from ParseFile response
+  // Edits to apply, all of them or none. Empty is rejected: it names no edit,
+  // and answering with the unedited source would look like one was made.
+  repeated EditOperation operations = 2;
+}
+
+// EditOperation is one change to make. Only the two source-preserving forms
+// exist: setting a feature's value and renaming a declaration.
+message EditOperation {
+  oneof operation {
+    SetValueEdit set_value = 1;
+    RenameEdit rename = 2;
+  }
+}
+
+// SetValueEdit sets the value of a feature that already exists, replacing the
+// expression of its `= <expr>` or adding one before the declaration's `;`.
+message SetValueEdit {
+  // Element to edit, named as SymbolInfo.id names it ("Demo::sc::unitMass").
+  string target = 1;
+  // New value in SysML notation ("1050.0[SI::kg]", "\"m1\"", "true", "mass * 2").
+  // It must parse as an expression and resolve in the feature's own scope.
+  string value = 2;
+}
+
+// RenameEdit rewrites the name token of a declaration. References to the
+// element are not updated: a rename of an element referenced anywhere is
+// refused, naming the referring elements, rather than leaving a broken model.
+message RenameEdit {
+  string target = 1;    // element to rename, as SymbolInfo.id names it
+  string new_name = 2;  // new declared name; must lex as an identifier
+}
+
+// ApplyEditsResponse carries the edited source, or says why nothing was edited.
+message ApplyEditsResponse {
+  // The edited notation, byte-identical to the source outside the edited spans.
+  // Empty when the edits were refused, so a refusal never writes a file.
+  string content = 1;
+  // What each operation changed, in request order.
+  repeated AppliedEdit applied = 2;
+  string error = 3;  // non-empty if the edits were refused; content is unset
+  // Which kind of refusal `error` reports, so a client acts on the kind rather
+  // than on the message text.
+  EditFailure failure = 4;
+  // Diagnostics behind a refusal: the parse errors of an unreadable new value,
+  // or the errors the edited source was found to have.
+  repeated Diagnostic diagnostics = 5;
+  // Where the references to a declaration whose rename was refused are made:
+  // the FQN of each referring namespace.
+  repeated string referring_elements = 6;
+}
+
+// AppliedEdit is one byte range of the original source that an operation
+// replaced, so a client can report or locate what changed.
+message AppliedEdit {
+  // Index of the operation in the request, so an answer maps back to its ask.
+  int32 operation_index = 1;
+  string target = 2;    // element edited, as the request named it
+  int32 offset = 3;     // byte offset in the original source
+  int32 length = 4;     // bytes replaced; zero for text inserted
+  string old_text = 5;  // what was there, empty for an insertion
+  string new_text = 6;  // what was written
+}
+
+// EditFailure says why edits were refused. Every refusal is one of these: an
+// edit is never silently dropped.
+enum EditFailure {
+  EDIT_FAILURE_UNSPECIFIED = 0;       // no failure
+  EDIT_FAILURE_NO_OPERATIONS = 1;     // the request named no edit
+  EDIT_FAILURE_UNKNOWN_TARGET = 2;    // no element of that name in the model
+  EDIT_FAILURE_AMBIGUOUS_TARGET = 3;  // the name denotes several declarations
+  EDIT_FAILURE_NOT_VALUED = 4;        // the element can carry no value
+  EDIT_FAILURE_INVALID_VALUE = 5;     // the new value does not parse as an expression
+  EDIT_FAILURE_INVALID_NAME = 6;      // the new name does not lex as an identifier
+  EDIT_FAILURE_NOT_NAMED = 7;         // the element declares no name to rewrite
+  EDIT_FAILURE_RENAME_REFERENCED = 8; // references to the element would break
+  EDIT_FAILURE_OVERLAPPING_EDITS = 9; // two edits cover the same bytes
+  EDIT_FAILURE_RESULT_INVALID = 10;   // the edited source has errors the original had not
+}
+
 // SymbolInfo represents any SysML element
 message SymbolInfo {
   string id = 1;             // Unique identifier (fully qualified name)
@@ -522,6 +613,8 @@ message ServerInfoResponse {
   //   "unset_value" - a valueless feature of a value type is reported as
   //                  Value.unset, rather than as the empty object it
   //                  materializes.
+  //   "apply_edits" - the ApplyEdits RPC edits a parsed model's own source,
+  //                  preserving everything the edit did not touch.
   repeated string capabilities = 2;
 }
 

@@ -14,6 +14,20 @@ class FailureReason(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     FAILURE_REASON_WRONG_KIND: _ClassVar[FailureReason]
     FAILURE_REASON_AMBIGUOUS_SUBJECT: _ClassVar[FailureReason]
 
+class EditFailure(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    EDIT_FAILURE_UNSPECIFIED: _ClassVar[EditFailure]
+    EDIT_FAILURE_NO_OPERATIONS: _ClassVar[EditFailure]
+    EDIT_FAILURE_UNKNOWN_TARGET: _ClassVar[EditFailure]
+    EDIT_FAILURE_AMBIGUOUS_TARGET: _ClassVar[EditFailure]
+    EDIT_FAILURE_NOT_VALUED: _ClassVar[EditFailure]
+    EDIT_FAILURE_INVALID_VALUE: _ClassVar[EditFailure]
+    EDIT_FAILURE_INVALID_NAME: _ClassVar[EditFailure]
+    EDIT_FAILURE_NOT_NAMED: _ClassVar[EditFailure]
+    EDIT_FAILURE_RENAME_REFERENCED: _ClassVar[EditFailure]
+    EDIT_FAILURE_OVERLAPPING_EDITS: _ClassVar[EditFailure]
+    EDIT_FAILURE_RESULT_INVALID: _ClassVar[EditFailure]
+
 class PrimitiveOperator(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     PRIMITIVE_OPERATOR_UNSPECIFIED: _ClassVar[PrimitiveOperator]
@@ -30,6 +44,17 @@ FAILURE_REASON_UNSPECIFIED: FailureReason
 FAILURE_REASON_EVALUATION: FailureReason
 FAILURE_REASON_WRONG_KIND: FailureReason
 FAILURE_REASON_AMBIGUOUS_SUBJECT: FailureReason
+EDIT_FAILURE_UNSPECIFIED: EditFailure
+EDIT_FAILURE_NO_OPERATIONS: EditFailure
+EDIT_FAILURE_UNKNOWN_TARGET: EditFailure
+EDIT_FAILURE_AMBIGUOUS_TARGET: EditFailure
+EDIT_FAILURE_NOT_VALUED: EditFailure
+EDIT_FAILURE_INVALID_VALUE: EditFailure
+EDIT_FAILURE_INVALID_NAME: EditFailure
+EDIT_FAILURE_NOT_NAMED: EditFailure
+EDIT_FAILURE_RENAME_REFERENCED: EditFailure
+EDIT_FAILURE_OVERLAPPING_EDITS: EditFailure
+EDIT_FAILURE_RESULT_INVALID: EditFailure
 PRIMITIVE_OPERATOR_UNSPECIFIED: PrimitiveOperator
 PRIMITIVE_OPERATOR_EQUAL: PrimitiveOperator
 PRIMITIVE_OPERATOR_GREATER: PrimitiveOperator
@@ -379,6 +404,70 @@ class ConvertResponse(_message.Message):
     experimental: bool
     experimental_notice: str
     def __init__(self, content: _Optional[str] = ..., from_format: _Optional[str] = ..., to_format: _Optional[str] = ..., error: _Optional[str] = ..., diagnostics: _Optional[_Iterable[_Union[Diagnostic, _Mapping]]] = ..., experimental: _Optional[bool] = ..., experimental_notice: _Optional[str] = ...) -> None: ...
+
+class ApplyEditsRequest(_message.Message):
+    __slots__ = ("model_hash", "operations")
+    MODEL_HASH_FIELD_NUMBER: _ClassVar[int]
+    OPERATIONS_FIELD_NUMBER: _ClassVar[int]
+    model_hash: str
+    operations: _containers.RepeatedCompositeFieldContainer[EditOperation]
+    def __init__(self, model_hash: _Optional[str] = ..., operations: _Optional[_Iterable[_Union[EditOperation, _Mapping]]] = ...) -> None: ...
+
+class EditOperation(_message.Message):
+    __slots__ = ("set_value", "rename")
+    SET_VALUE_FIELD_NUMBER: _ClassVar[int]
+    RENAME_FIELD_NUMBER: _ClassVar[int]
+    set_value: SetValueEdit
+    rename: RenameEdit
+    def __init__(self, set_value: _Optional[_Union[SetValueEdit, _Mapping]] = ..., rename: _Optional[_Union[RenameEdit, _Mapping]] = ...) -> None: ...
+
+class SetValueEdit(_message.Message):
+    __slots__ = ("target", "value")
+    TARGET_FIELD_NUMBER: _ClassVar[int]
+    VALUE_FIELD_NUMBER: _ClassVar[int]
+    target: str
+    value: str
+    def __init__(self, target: _Optional[str] = ..., value: _Optional[str] = ...) -> None: ...
+
+class RenameEdit(_message.Message):
+    __slots__ = ("target", "new_name")
+    TARGET_FIELD_NUMBER: _ClassVar[int]
+    NEW_NAME_FIELD_NUMBER: _ClassVar[int]
+    target: str
+    new_name: str
+    def __init__(self, target: _Optional[str] = ..., new_name: _Optional[str] = ...) -> None: ...
+
+class ApplyEditsResponse(_message.Message):
+    __slots__ = ("content", "applied", "error", "failure", "diagnostics", "referring_elements")
+    CONTENT_FIELD_NUMBER: _ClassVar[int]
+    APPLIED_FIELD_NUMBER: _ClassVar[int]
+    ERROR_FIELD_NUMBER: _ClassVar[int]
+    FAILURE_FIELD_NUMBER: _ClassVar[int]
+    DIAGNOSTICS_FIELD_NUMBER: _ClassVar[int]
+    REFERRING_ELEMENTS_FIELD_NUMBER: _ClassVar[int]
+    content: str
+    applied: _containers.RepeatedCompositeFieldContainer[AppliedEdit]
+    error: str
+    failure: EditFailure
+    diagnostics: _containers.RepeatedCompositeFieldContainer[Diagnostic]
+    referring_elements: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, content: _Optional[str] = ..., applied: _Optional[_Iterable[_Union[AppliedEdit, _Mapping]]] = ..., error: _Optional[str] = ..., failure: _Optional[_Union[EditFailure, str]] = ..., diagnostics: _Optional[_Iterable[_Union[Diagnostic, _Mapping]]] = ..., referring_elements: _Optional[_Iterable[str]] = ...) -> None: ...
+
+class AppliedEdit(_message.Message):
+    __slots__ = ("operation_index", "target", "offset", "length", "old_text", "new_text")
+    OPERATION_INDEX_FIELD_NUMBER: _ClassVar[int]
+    TARGET_FIELD_NUMBER: _ClassVar[int]
+    OFFSET_FIELD_NUMBER: _ClassVar[int]
+    LENGTH_FIELD_NUMBER: _ClassVar[int]
+    OLD_TEXT_FIELD_NUMBER: _ClassVar[int]
+    NEW_TEXT_FIELD_NUMBER: _ClassVar[int]
+    operation_index: int
+    target: str
+    offset: int
+    length: int
+    old_text: str
+    new_text: str
+    def __init__(self, operation_index: _Optional[int] = ..., target: _Optional[str] = ..., offset: _Optional[int] = ..., length: _Optional[int] = ..., old_text: _Optional[str] = ..., new_text: _Optional[str] = ...) -> None: ...
 
 class SymbolInfo(_message.Message):
     __slots__ = ("id", "name", "kind", "metadata", "child_ids", "attributes", "type_info", "multiplicity", "specializations")

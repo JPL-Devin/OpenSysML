@@ -55,12 +55,16 @@ const CapabilitySymbolAttributes = "symbol_attributes"
 // a value type as Value.unset, rather than as the empty object it materializes.
 const CapabilityUnsetValue = "unset_value"
 
+// CapabilityApplyEdits names the capability of the ApplyEdits RPC, which edits
+// a parsed model's own source, preserving everything the edit did not touch.
+const CapabilityApplyEdits = "apply_edits"
+
 // capabilities is what this build supports, in report order. A capability is
 // only ever added: renaming or dropping one breaks clients that require it.
 var capabilities = []string{
 	CapabilityTypeFacts, CapabilityConvert, CapabilityVerification, CapabilityQuery,
 	CapabilityEnumValues, CapabilityEvaluateSubject, CapabilitySymbolAttributes,
-	CapabilityUnsetValue,
+	CapabilityUnsetValue, CapabilityApplyEdits,
 }
 
 // Capabilities returns the capability names this build of the service reports.

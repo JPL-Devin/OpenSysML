@@ -444,6 +444,98 @@ conversion warns either way. Silence the warning with
 `warnings.simplefilter("ignore", pysysml.ExperimentalFeatureWarning)`, which no
 stable feature uses.
 
+## Changing a model and writing it back
+
+A loaded model can be edited in place — the value of a feature set, a declaration
+renamed — and written back with its comments, blank lines and indentation intact.
+The edit is described, not typed out: the client sends operations naming elements
+by the same ids a read reports, and the service applies them to the source it
+parsed.
+
+```python
+model = pysysml.load("spacecraft.sysml")
+
+edit = model.edit()
+edit.set_value("Demo::sc::unitMass", "1050.0[SI::kg]")
+edit.rename("Demo::sc::margin", "massMargin")
+
+result = edit.apply()             # re-parsed and validated service-side
+result.save("spacecraft.sysml")   # every byte outside an edited span unchanged
+```
+
+`model.edit()` returns an `Editor`. `set_value(target, value)` replaces an
+existing `= <expr>` on a feature, or adds one before the terminating `;` when the
+feature has none; `value` is SysML notation for one expression — `"1050.0[SI::kg]"`,
+`'"flight-2"'`, `"true"`, `"unitMass * count"`. `rename(target, new_name)` rewrites
+a declaration's name token. A target is a symbol id (its FQN, as `Symbol.id`
+reports it) or a `Symbol` itself, so an element found by a read is edited by
+handing it back. Both calls return the editor, so operations chain, and `len(edit)`
+counts them.
+
+`apply()` sends the operations in one call and returns an `EditResult`, which *is*
+a `Conversion`: `str(result)` is the edited notation, `result.save(path)` and
+`result.write(path)` write it. `result.applied` lists what changed, as
+`AppliedEdit(operation_index, target, offset, length, old_text, new_text)` in
+source order — `length == 0` marks a value added to a feature that had none.
+
+How the edit is made, and what that buys:
+
+- **Spans, not search.** The value expression and the name token are located
+  through the parsed model's own spans, so a comment or a string that happens to
+  contain the same text is never touched.
+- **Bytes are spliced, nothing is reformatted.** Edits apply right-to-left by
+  offset in one pass, and every byte outside an edited span is byte-identical to
+  the source the service parsed. Nothing is re-indented or re-wrapped.
+- **The result is read back before it is returned.** The edited source is
+  re-lexed, re-parsed and re-analysed. An edit that would introduce a syntax or
+  name-resolution error is refused with the diagnostics that say why, and no
+  content comes back — the service never hands out a file its parser cannot read.
+  Errors the model already had are not held against the edit: only what the edit
+  introduces refuses it.
+
+Every refusal is a typed error, never a silent no-op:
+
+| Situation | Error |
+| --- | --- |
+| No operation was added to the editor | `NoEditsError` |
+| No such element, an ambiguous name, or an element that cannot carry a value or a name | `EditTargetError` |
+| A new value that does not parse as one expression, or a new name that is not an identifier | `InvalidEditError` |
+| A rename of an element that is referenced | `RenameReferencedError` |
+| Two operations that would edit overlapping bytes | `OverlappingEditsError` |
+| The edited model does not read back cleanly — a value naming something that does not resolve, say | `EditResultError` |
+
+All of them are `EditError`, which carries `failure` (the refusal kind),
+`diagnostics`, and `referring_elements` for a refused rename. An
+`EditResultError`'s diagnostics are spanned against the edited text.
+`referring_elements` names each namespace a reference is made from, so it says
+where to look rather than which expression is at fault.
+
+```python
+try:
+    model.edit().rename("Demo::SC", "Spacecraft").apply()
+except pysysml.RenameReferencedError as refused:
+    print(refused.referring_elements)   # ['Demo::SC', 'Demo::sc']
+```
+
+Known limitations, by design:
+
+- **A rename does not update references.** It rewrites the declaration's name
+  token; a rename whose element is referenced anywhere is refused rather than
+  leaving the model unresolvable. Rename an element nothing refers to, or make
+  the reference edits yourself.
+- **Elements are not created or deleted**, and a model is not built from Python:
+  editing changes the source of a model that already says what it says.
+- An editor is applied **once** — it describes an edit of the model it was made
+  from, so applying it twice raises `RuntimeError`. Load the saved file and edit
+  that.
+- The parsed source lives in the service's bounded cache, so a model evicted
+  since it was loaded raises `ModelNotFoundError` rather than editing something
+  else; load it again.
+
+Editing is negotiated the way conversion is: a service too old to report the
+`apply_edits` capability raises `MissingCapabilityError` naming the upgrade,
+before any call is made.
+
 ## Querying a model the standard's way
 
 `model.query(...)` runs the query the **SysML v2 API & Services** standard

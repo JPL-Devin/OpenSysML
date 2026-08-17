@@ -1,0 +1,456 @@
+package edit
+
+import (
+	"bytes"
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/Open-MBEE/Systemica/internal/core/libs"
+	"github.com/Open-MBEE/Systemica/internal/core/parser"
+	"github.com/Open-MBEE/Systemica/internal/core/passes"
+	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+)
+
+// libraryIndex builds an index holding the standard library and no document, as
+// the service does, so a fixture resolves ISQ and SI the way a real model does.
+func libraryIndex(t *testing.T) *symbols.Index {
+	t.Helper()
+	idx := symbols.NewIndex()
+	src := libs.DefaultSource()
+	cache, _ := libs.NewCache()
+	loader := libs.NewLoader(src, cache)
+	for _, name := range src.List() {
+		if err := loader.Load(name, idx); err != nil {
+			t.Fatalf("load standard library %s: %v", name, err)
+		}
+	}
+	idx.ExpandWildcardImports()
+	return idx
+}
+
+// load parses a fixture the way the service parses a model, and returns it ready
+// to edit.
+func load(t *testing.T, fixture string) Model {
+	t.Helper()
+	content, err := os.ReadFile(filepath.Join("testdata", fixture))
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+	return loadContent(t, fixture, string(content))
+}
+
+func loadContent(t *testing.T, name, content string) Model {
+	t.Helper()
+	sf := source.New(name, []byte(content))
+	p := parser.New(sf)
+	root := p.ParseFile()
+	idx := libraryIndex(t)
+	idx.AddDocument(name, root)
+	var sem []passes.Diagnostic
+	if len(p.Diagnostics) == 0 {
+		sem = passes.Analyze(name, root, nil, idx)
+	}
+	return Model{
+		Source:     sf,
+		Root:       root,
+		Index:      idx,
+		ParseDiags: p.Diagnostics,
+		SemDiags:   sem,
+		NewIndex:   func() *symbols.Index { return libraryIndex(t) },
+	}
+}
+
+// requireClean fails when a fixture does not start out valid: a test about what
+// an edit introduced says nothing if the original was already broken.
+func requireClean(t *testing.T, m Model) {
+	t.Helper()
+	if len(m.ParseDiags) > 0 {
+		t.Fatalf("fixture does not parse: %v", m.ParseDiags)
+	}
+	for _, d := range m.SemDiags {
+		if d.Severity == passes.SeverityError {
+			t.Fatalf("fixture is not valid: %s at %v", d.Message, d.Span)
+		}
+	}
+}
+
+// applyOne applies a single operation and returns the edited content.
+func applyOne(t *testing.T, m Model, op Operation) *Result {
+	t.Helper()
+	res, err := Apply(m, []Operation{op})
+	if err != nil {
+		t.Fatalf("Apply(%v): %v", op, err)
+	}
+	return res
+}
+
+// assertOnlySpanChanged checks that every byte outside the applied ranges is the
+// byte the original had there.
+func assertOnlySpanChanged(t *testing.T, m Model, res *Result) {
+	t.Helper()
+	want := m.Source.Bytes()
+	got := res.Content
+	// Rebuild the original from the result by undoing each applied edit, which
+	// only succeeds if nothing else moved.
+	rebuilt := got
+	for i := len(res.Applied) - 1; i >= 0; i-- {
+		a := res.Applied[i]
+		shift := 0
+		for _, other := range res.Applied {
+			if other.Span.Offset < a.Span.Offset {
+				shift += len(other.NewText) - other.Span.Len
+			}
+		}
+		at := a.Span.Offset + shift
+		if at+len(a.NewText) > len(rebuilt) || string(rebuilt[at:at+len(a.NewText)]) != a.NewText {
+			t.Fatalf("applied edit %d is not at offset %d of the result", i, at)
+		}
+		rebuilt = append(append(append([]byte{}, rebuilt[:at]...), a.OldText...), rebuilt[at+len(a.NewText):]...)
+	}
+	if !bytes.Equal(rebuilt, want) {
+		t.Fatalf("bytes outside the edited spans changed:\n--- original\n%s\n--- undone\n%s", want, rebuilt)
+	}
+}
+
+// editError returns the *Error a refusal carries.
+func editError(t *testing.T, err error) *Error {
+	t.Helper()
+	if err == nil {
+		t.Fatal("expected a refusal, got none")
+	}
+	var e *Error
+	if !errors.As(err, &e) {
+		t.Fatalf("error %v is not an *edit.Error", err)
+	}
+	return e
+}
+
+func TestSetValueReplacesOnlyTheValueSpan(t *testing.T) {
+	m := load(t, "spacecraft.sysml")
+	requireClean(t, m)
+
+	res := applyOne(t, m, SetValue("Demo::SC::unitMass", "1050.0[SI::kg]"))
+
+	if !strings.Contains(string(res.Content), "attribute unitMass : ISQ::MassValue = 1050.0[SI::kg];") {
+		t.Fatalf("value not set:\n%s", res.Content)
+	}
+	if strings.Contains(string(res.Content), "1000.0[SI::kg]") {
+		t.Fatalf("old value still present:\n%s", res.Content)
+	}
+	assertOnlySpanChanged(t, m, res)
+
+	if len(res.Applied) != 1 {
+		t.Fatalf("applied %d edits, want 1", len(res.Applied))
+	}
+	a := res.Applied[0]
+	if a.OldText != "1000.0[SI::kg]" || a.NewText != "1050.0[SI::kg]" || a.Target != "Demo::SC::unitMass" {
+		t.Fatalf("applied edit reports %+v", a)
+	}
+
+	// The edited model parses with the diagnostics the original had.
+	after := loadContent(t, "spacecraft.sysml", string(res.Content))
+	requireClean(t, after)
+}
+
+func TestSetValuePreservesCommentsAndBlankLines(t *testing.T) {
+	m := load(t, "spacecraft.sysml")
+	requireClean(t, m)
+
+	res := applyOne(t, m, SetValue("Demo::SC::unitMass", "1050.0[SI::kg]"))
+
+	for _, want := range []string{
+		"// Spacecraft mass model.\n",
+		"\t/*\n\t * The spacecraft, with its mass properties.\n\t */\n",
+		"\t\t// dry mass, as a quantity with a unit\n",
+		"\n\t\tattribute label : ScalarValues::String = \"flight-1\";\n",
+	} {
+		if !strings.Contains(string(res.Content), want) {
+			t.Fatalf("edited source lost %q:\n%s", want, res.Content)
+		}
+	}
+}
+
+func TestSetValueAddsValueToValuelessFeature(t *testing.T) {
+	m := load(t, "spacecraft.sysml")
+	requireClean(t, m)
+
+	res := applyOne(t, m, SetValue("Demo::SC::margin", "50.0[SI::kg]"))
+
+	if !strings.Contains(string(res.Content), "attribute margin : ISQ::MassValue = 50.0[SI::kg];") {
+		t.Fatalf("value not added:\n%s", res.Content)
+	}
+	assertOnlySpanChanged(t, m, res)
+	if a := res.Applied[0]; a.Span.Len != 0 || a.OldText != "" {
+		t.Fatalf("adding a value should be an insertion, got %+v", a)
+	}
+	requireClean(t, loadContent(t, "spacecraft.sysml", string(res.Content)))
+}
+
+func TestSetValueKinds(t *testing.T) {
+	cases := []struct {
+		name   string
+		target string
+		value  string
+		want   string
+	}{
+		{"quantity", "Demo::SC::unitMass", "2.5[SI::kg]", "attribute unitMass : ISQ::MassValue = 2.5[SI::kg];"},
+		{"string", "Demo::SC::label", `"flight-2"`, `attribute label : ScalarValues::String = "flight-2";`},
+		{"boolean", "Demo::SC::active", "false", "attribute active : ScalarValues::Boolean = false;"},
+		{"feature reference", "Demo::SC::total", "unitMass", "attribute total : ISQ::MassValue = unitMass;"},
+		{"expression", "Demo::SC::total", "unitMass + margin", "attribute total : ISQ::MassValue = unitMass + margin;"},
+		{"nested deeply", "Demo::SC::avionics::board::count", "4", "attribute count : ScalarValues::Integer = 4;"},
+		{"through redefines", "Demo::sc::unitMass", "1300.0[SI::kg]", "attribute redefines unitMass = 1300.0[SI::kg];"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := load(t, "spacecraft.sysml")
+			requireClean(t, m)
+			res := applyOne(t, m, SetValue(tc.target, tc.value))
+			if !strings.Contains(string(res.Content), tc.want) {
+				t.Fatalf("want %q in:\n%s", tc.want, res.Content)
+			}
+			assertOnlySpanChanged(t, m, res)
+			requireClean(t, loadContent(t, "spacecraft.sysml", string(res.Content)))
+		})
+	}
+}
+
+func TestApplyManyEditsInOnePass(t *testing.T) {
+	m := load(t, "spacecraft.sysml")
+	requireClean(t, m)
+
+	res, err := Apply(m, []Operation{
+		SetValue("Demo::SC::unitMass", "1050.0[SI::kg]"),
+		SetValue("Demo::SC::margin", "10.0[SI::kg]"),
+		SetValue("Demo::sc::unitMass", "1400.0[SI::kg]"),
+	})
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	for _, want := range []string{
+		"attribute unitMass : ISQ::MassValue = 1050.0[SI::kg];",
+		"attribute margin : ISQ::MassValue = 10.0[SI::kg];",
+		"attribute redefines unitMass = 1400.0[SI::kg];",
+	} {
+		if !strings.Contains(string(res.Content), want) {
+			t.Fatalf("want %q in:\n%s", want, res.Content)
+		}
+	}
+	assertOnlySpanChanged(t, m, res)
+	if len(res.Applied) != 3 {
+		t.Fatalf("applied %d edits, want 3", len(res.Applied))
+	}
+	for i, a := range res.Applied {
+		if a.OperationIndex != i {
+			t.Fatalf("applied[%d] reports operation %d", i, a.OperationIndex)
+		}
+	}
+	requireClean(t, loadContent(t, "spacecraft.sysml", string(res.Content)))
+}
+
+func TestRenameRewritesTheNameTokenOnly(t *testing.T) {
+	m := load(t, "spacecraft.sysml")
+	requireClean(t, m)
+
+	res := applyOne(t, m, Rename("Demo::SC::avionics::board::count", "boardCount"))
+
+	if !strings.Contains(string(res.Content), "attribute boardCount : ScalarValues::Integer = 2;") {
+		t.Fatalf("name not rewritten:\n%s", res.Content)
+	}
+	assertOnlySpanChanged(t, m, res)
+	requireClean(t, loadContent(t, "spacecraft.sysml", string(res.Content)))
+}
+
+func TestRenameRefusedWhenReferenced(t *testing.T) {
+	m := load(t, "spacecraft.sysml")
+	requireClean(t, m)
+
+	_, err := Apply(m, []Operation{Rename("Demo::SC::unitMass", "dryMass")})
+	e := editError(t, err)
+	if e.Failure != FailureRenameReferenced {
+		t.Fatalf("failure is %s, want rename-referenced: %s", e.Failure, e.Message)
+	}
+	if len(e.Referring) == 0 {
+		t.Fatalf("refusal names no referring element: %s", e.Message)
+	}
+	// The refusal names the namespaces the references are made from: the value
+	// expression of SC::total, and sc's redefinition of the feature.
+	for _, want := range []string{"Demo::SC", "Demo::sc"} {
+		found := false
+		for _, got := range e.Referring {
+			if got == want {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("referring elements %v do not include %s", e.Referring, want)
+		}
+	}
+}
+
+func TestRefusals(t *testing.T) {
+	cases := []struct {
+		name    string
+		ops     []Operation
+		failure Failure
+		message string
+	}{
+		{
+			name:    "no operations",
+			ops:     nil,
+			failure: FailureNoOperations,
+		},
+		{
+			name:    "unknown target",
+			ops:     []Operation{SetValue("Demo::SC::nothing", "1")},
+			failure: FailureUnknownTarget,
+			message: "no element named",
+		},
+		{
+			name:    "target outside this source",
+			ops:     []Operation{SetValue("ScalarValues::String", "1")},
+			failure: FailureUnknownTarget,
+			message: "not in this model's source",
+		},
+		{
+			name:    "target carries no value",
+			ops:     []Operation{SetValue("Demo::SC", "1")},
+			failure: FailureNotValued,
+		},
+		{
+			name:    "value does not parse",
+			ops:     []Operation{SetValue("Demo::SC::unitMass", "1050.0[SI::kg")},
+			failure: FailureInvalidValue,
+		},
+		{
+			name:    "value is not one expression",
+			ops:     []Operation{SetValue("Demo::SC::unitMass", "1050.0 kg")},
+			failure: FailureInvalidValue,
+		},
+		{
+			name:    "value is empty",
+			ops:     []Operation{SetValue("Demo::SC::unitMass", "   ")},
+			failure: FailureInvalidValue,
+		},
+		{
+			name:    "value names nothing",
+			ops:     []Operation{SetValue("Demo::SC::total", "missingFeature")},
+			failure: FailureResultInvalid,
+		},
+		{
+			name: "overlapping edits",
+			ops: []Operation{
+				SetValue("Demo::SC::unitMass", "1050.0[SI::kg]"),
+				SetValue("Demo::SC::unitMass", "1100.0[SI::kg]"),
+			},
+			failure: FailureOverlappingEdits,
+		},
+		{
+			name:    "no declared name to rename",
+			ops:     []Operation{Rename("Demo::sc::unitMass", "dryMass")},
+			failure: FailureNotNamed,
+		},
+		{
+			name:    "new name is not an identifier",
+			ops:     []Operation{Rename("Demo::SC::avionics::board::count", "2count")},
+			failure: FailureInvalidName,
+		},
+		{
+			name:    "new name is a keyword",
+			ops:     []Operation{Rename("Demo::SC::avionics::board::count", "part")},
+			failure: FailureInvalidName,
+		},
+		{
+			name:    "new name is empty",
+			ops:     []Operation{Rename("Demo::SC::avionics::board::count", "")},
+			failure: FailureInvalidName,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := load(t, "spacecraft.sysml")
+			requireClean(t, m)
+			res, err := Apply(m, tc.ops)
+			if res != nil {
+				t.Fatalf("refused edit returned content:\n%s", res.Content)
+			}
+			e := editError(t, err)
+			if e.Failure != tc.failure {
+				t.Fatalf("failure is %s (%s), want %s", e.Failure, e.Message, tc.failure)
+			}
+			if tc.message != "" && !strings.Contains(e.Message, tc.message) {
+				t.Fatalf("message %q does not mention %q", e.Message, tc.message)
+			}
+		})
+	}
+}
+
+func TestRefusedEditLeavesNothingApplied(t *testing.T) {
+	m := load(t, "spacecraft.sysml")
+	requireClean(t, m)
+
+	res, err := Apply(m, []Operation{
+		SetValue("Demo::SC::unitMass", "1050.0[SI::kg]"),
+		SetValue("Demo::SC::nothing", "1"),
+	})
+	if res != nil {
+		t.Fatalf("a refused request returned content:\n%s", res.Content)
+	}
+	if e := editError(t, err); e.Failure != FailureUnknownTarget {
+		t.Fatalf("failure is %s, want unknown-target", e.Failure)
+	}
+	if !bytes.Contains(m.Source.Bytes(), []byte("1000.0[SI::kg]")) {
+		t.Fatal("the model's own source was modified")
+	}
+}
+
+func TestResultInvalidCarriesDiagnostics(t *testing.T) {
+	m := load(t, "spacecraft.sysml")
+	requireClean(t, m)
+
+	_, err := Apply(m, []Operation{SetValue("Demo::SC::total", "missingFeature")})
+	e := editError(t, err)
+	if e.Failure != FailureResultInvalid {
+		t.Fatalf("failure is %s, want result-invalid", e.Failure)
+	}
+	if len(e.Diagnostics) == 0 {
+		t.Fatalf("refusal carries no diagnostics: %s", e.Message)
+	}
+}
+
+// A model that already has errors is still editable: only the errors an edit
+// introduces refuse it.
+func TestPreExistingErrorsDoNotRefuseAnEdit(t *testing.T) {
+	m := loadContent(t, "broken.sysml", "package Demo {\n\tattribute x : ISQ::MassValue = 1.0[SI::kg];\n\tattribute y : Missing::Type;\n}\n")
+	if len(m.ParseDiags) > 0 {
+		t.Fatalf("fixture does not parse: %v", m.ParseDiags)
+	}
+	if len(errorsOnly(m.SemDiags)) == 0 {
+		t.Fatal("fixture was expected to carry a name-resolution error")
+	}
+
+	res := applyOne(t, m, SetValue("Demo::x", "2.0[SI::kg]"))
+	if !strings.Contains(string(res.Content), "= 2.0[SI::kg];") {
+		t.Fatalf("value not set:\n%s", res.Content)
+	}
+}
+
+func TestSemanticValidationSkippedWithoutIndexSource(t *testing.T) {
+	m := load(t, "spacecraft.sysml")
+	requireClean(t, m)
+	m.NewIndex = nil
+
+	// Without a library index the edited notation can only be checked for
+	// syntax, so a name that resolves to nothing is not refused here.
+	if _, err := Apply(m, []Operation{SetValue("Demo::SC::total", "missingFeature")}); err != nil {
+		t.Fatalf("syntax-only validation refused a parsable value: %v", err)
+	}
+	// A value that does not parse is still refused.
+	if _, err := Apply(m, []Operation{SetValue("Demo::SC::total", "1 +")}); err == nil {
+		t.Fatal("unparsable value was accepted")
+	}
+}
