@@ -122,8 +122,9 @@
 - 165 runtime robustness cases (deadlock, an accept payload read by a node that runs before the accept binds it, a default whose element count does not conform to its feature's multiplicity, a calc output the body never assigns or only a branch that did not run would assign, an output bound both by its declaration and by an assignment or by two assignments, empty entry/do/exit bodies, a do body that never finishes, a behavior both performing an action and stating a body, an assignment to a qualified target, a body-local usage typed by something that is not a calc, a body-local declaration with no execution, a range bound that is not an Integer, a range spending the step budget, a collection spending the element budget, a chain through a part stopping at a calc usage, an index naming no position, a collection operand of the wrong kind, a collection body of the wrong arity, a `select` predicate that is not a condition, a collection operation spending the step budget, a non-terminating loop, a calc usage leaving an input unbound, reading an output it does not declare or one with no value, a usage nested in a calc leaving an input unbound, reading an output it does not declare, an input default naming only itself, a nested usage chain reaching the recursion limit or spending the step budget, outputs valued from each other, a usage typed by something that is not a calc, a usage body spending the step budget, an invocation of a calc that computes several outputs and designates no result, a non-terminating calc loop, a calc body that never returns, a send or a `terminate` inside a calc, an assignment outside a calc body, a non-Boolean calc condition, a body-local declaration that must not leak, a body member that is not executable, a statement written directly among an action's members, accept suspension that can never end, guards, budgets, sourceless accept, fork/join misuse, pseudostate dead ends and cycles, non-numeric time trigger, misaddressed send, accept of an unsent type, send through an unconnected port, history misuse, non-deferrable deferred trigger, non-terminating do behavior, calc binding/arity/recursion failures, unhandled call, call argument of the wrong type, missing and cyclic `perform` references, a library function outside its domain or with the wrong arity, an extension library function outside its domain, exponentiation beyond the Integer range, a flow end that names no action node, a flow from a node that produced no value, a time-triggered accept with no clock, a non-Boolean change trigger, a variation with no variant selected, a selection that is not one of a variation's variants, two variants selected at once, a variation read through its declaration, a chain through an unselected variation part, two variation points selecting one variant without an owning object, a `variant` declared outside a variation, a variant under a redefined variation, a deep chain of redefinitions, conflicting redefinitions at several levels, one feature valued under two of its names, a feature both valued and restated in a body, a flow that names no feature to carry, an accepted message carrying no single value to bind, a transition that names no target, a transition endpoint that names nothing, a transition endpoint naming a state of a different machine, a transition endpoint lowered with no name-resolution pass, whose edge is left out, a connector end naming no reachable feature, a connector holding more than one object, a connector attached to itself or to one that names it back)
 - 429 runtime test functions (`grep -c '^func Test' internal/core/runtime/*_test.go`), the conformance, trace and robustness gates above among them
 - 86 golden AST fixtures (including the implicitly typed connector forms and the standard behavioral notation — a named flow with `from`, accept trigger expressions, an accept subsetting an event, sends, a succession to a loop with `until`, `then done`, a decision `else` branch, a bodied `exhibit state`, a transition with its trigger on its own line, a qualified namespace-level succession — body-local calc usages and ranges, the three loop forms, pseudostate, timed-trigger, call-trigger, calc default/invocation, calc statement bodies and n-ary connector-end parsing tests)
-- 98 golden execution traces (entry/do/exit ordering of inline action bodies and a do body run to its end inside one round, the standard loop `until` with `then done`, a decision's guarded and `else` branches, a named flow carrying a value between action nodes, an accept with a `when` trigger, an accept subsetting an event, a send invocation through a port, a transition accepting through a port, loop and conditional bodies, one calc usage body run feeding several output reads, a usage whose outputs are read either side of an assignment to what its input named, a usage nested in a calc read for two of its outputs, calc statement bodies and their loop iterations, fork/join branch ordering, region entry/exit ordering, do behavior interleaving across orthogonal regions, send/accept, an accept parked until its message arrives, a payload read by a node declared before the accept that binds it, calc and constraint evaluation, library function invocation)
+- 98 golden execution traces (action×33, calc×30, state×26, constraint×4, string×4, accept×1 — entry/do/exit ordering of inline action bodies and a do body run to its end inside one round, the standard loop `until` with `then done`, a decision's guarded and `else` branches, a named flow carrying a value between action nodes, an accept with a `when` trigger, an accept subsetting an event, a send invocation through a port, a transition accepting through a port, loop and conditional bodies, one calc usage body run feeding several output reads, a usage whose outputs are read either side of an assignment to what its input named, a usage nested in a calc read for two of its outputs, calc statement bodies and their loop iterations, fork/join branch ordering, region entry/exit ordering, do behavior interleaving across orthogonal regions, send/accept, an accept parked until its message arrives, a payload read by a node declared before the accept that binds it, calc and constraint evaluation, library function invocation)
 - 129 negative parser subtests
+- 14 gRPC conformance cases and 8 gRPC robustness cases (`internal/grpc/testdata/conformance/`, `internal/grpc/robustness_test.go`)
 - 4,447 tests and subtests, of which 4,440 pass and 7 skip (`go test -race -count=1 -v ./...`; 2,351 top-level `Test` functions). The skips are unimplemented-expression and requirement-subject cases that skip themselves.
 
 ---
@@ -990,8 +991,8 @@ are tracked here):
 | `eval.go` | Expression evaluation (operators, literals, features) | ~758 |
 | `value.go` | Runtime value representation (ValConst, ValString, ValInstance) | ~150 |
 | `trace.go` | Deterministic execution and calc-evaluation trace recording, canonical value rendering | ~290 |
-| `conformance_test.go` | Conformance gate (215 cases) | ~480 |
-| `robustness_test.go` | Failure-mode tests (151 subtests) | ~830 |
+| `conformance_test.go` | Conformance gate | ~480 |
+| `robustness_test.go` | Failure-mode tests | ~830 |
 | `trace_test.go` | Golden trace test infrastructure | ~200 |
 | `trace_calc_test.go` | Trace determinism and canonical rendering unit tests | ~180 |
 
@@ -1015,29 +1016,13 @@ are tracked here):
 
 See [`TESTING.md`](../internals/testing.md) for complete test contract details.
 
-**Test Counts** (re-counted from the checked-in fixtures and from `-v` runs):
-- Execution conformance cases: 215 (all passing)
-- gRPC conformance cases: 13 (all passing)
-- Robustness subtests: 151 (all passing)
-- Golden AST fixtures: 82
-- Golden execution traces: 69
-- Negative parser subtests: 127
-
-**Coverage by Feature Type** (execution conformance cases, by fixture prefix, 215 total):
-- Calc: 56 conformance + 25 golden traces (includes unary, coercion, qualified-name, body-local usages, statement bodies, KerML library and Systemica extension library function evaluation)
-- Action: 50 conformance + 28 golden traces
-- State: 41 conformance + 12 golden traces
-- Requirement: 12 conformance
-- Instance: 9 conformance (`instance_derived_slots`, `instance_constraint_binding`, `instance_inherited_constraint`, `instance_library_function_default`, `instance_nested_usage_body`, `instance_unnamed_redefinition` among them)
-- Unit and quantity: 7 conformance
-- Constraint: 7 conformance + 4 golden traces
-- Multiplicity: 5 conformance (`multiplicity_default_merged`, `multiplicity_default_composite`, `multiplicity_default_nonconforming`, `multiplicity_default_redefinition`, `multiplicity_unbounded_single_bound`)
-- Satisfy: 5 conformance; variation: 5; redefinition: 5; variant: 3; feature chains: 3; ball-and-chain: 3
-- One each of accept (`accept_then_transition`), attribute, connector and cubesat
+**Test counts:** stated once, in the Test Coverage list near the top of this document — the
+per-prefix conformance breakdown and the trace, fixture, negative and robustness figures are all
+there, and every other page links here rather than restating them (CONTRIBUTING.md).
 
 **Quality Gates:**
 - Parser: 95/95 stdlib files clean (94 vendored OMG, 1 Systemica extension)
-- Execution conformance: 215/215 cases passing
+- Execution conformance: every case passing, with `known_failures.txt` empty
 - Training examples: 98/100 clean (2 files / 4 errors, both pinned OMG source bugs, gated by `internal/core/model/testdata/training_examples_expected.txt`)
 - No regressions: All tests pass on every commit
 
