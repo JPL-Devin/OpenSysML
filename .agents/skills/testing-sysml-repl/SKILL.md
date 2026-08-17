@@ -1114,12 +1114,15 @@ machinery. Two traps cost real time:
   after `Shutting down gracefully...` / `gRPC server stopped`. `pgrep -x sysml-grpc` (never `-f`)
   before and after is the leak check.
 
-Python interpreter trap on this box: `python3` may be a venv whose `bin/python` is a *broken*
-pyenv symlink (`pyvenv.cfg` says 3.12 while `python -V` reports the system 3.10, and the editable
-install lands in `lib/python3.12/site-packages` where 3.10 never looks — `import pysysml` fails
-right after a successful `pip install -e python/`). Build the throwaway venv off an explicit real
-interpreter (`/usr/bin/python3.10 -m venv /home/ubuntu/pv`) and verify
-`<venv>/bin/python -c 'import pysysml'` before blaming the client.
+<a id="venv-trap"></a>
+**Python interpreter trap on this box** (bites every pysysml section below): whatever `python3`
+resolves to in a tool shell may be another project's venv, and a venv built from it gets a
+mismatched `sys.path` — `pyvenv.cfg` naming one minor version while `bin/python` runs another, so
+the editable install lands in a `site-packages` the interpreter never searches and `import pysysml`
+(or `import grpc`) fails right after a *successful* `pip install -e python/`. Always build the venv
+from an explicit real interpreter (`/home/ubuntu/.pyenv/versions/3.12.8/bin/python3.12 -m venv ~/pv`,
+or `/usr/bin/python3.10`) and verify `<venv>/bin/python -c 'import pysysml'` before blaming the
+client. `$HOME/pv` is created by the blueprint, so prefer reusing it.
 
 ### Service lifecycle, the stale-service check and `require_capabilities` (PR #181)
 
@@ -1401,12 +1404,8 @@ generalizes to any service-side perf change:
   `Perf::Engine`, `1+1 == 2` and the full `execute_action` dict), and `-cache-size 5` with 8 distinct
   models loaded (the 3 oldest hashes raise `ModelNotFoundError`, the 5 newest still evaluate) — an
   index handed to a model that is later evicted must not disturb the models still cached.
-- Interpreter trap: `$HOME/pv` is created by the blueprint, but if it is missing, do **not** build it
-  with whatever `python3` resolves to in a tool shell — on this box that can be another project's
-  venv interpreter, and the resulting venv has a broken `sys.path` (site-packages under
-  `lib/python3.10` while `pyvenv.cfg` says 3.12), so `import grpc` fails right after a successful
-  `pip install`. Use an explicit real interpreter, e.g.
-  `/home/ubuntu/.pyenv/versions/3.12.8/bin/python3.12 -m venv ~/pv`, then `pip install -e python/`.
+- Interpreter trap: see [the venv trap](#venv-trap) above before blaming `import grpc`/`import
+  pysysml` on the change under test.
 
 ### The `Query` RPC / `model.query(...)` (SysML v2 API & Services, PR #155)
 
