@@ -33,7 +33,11 @@ Full gate green: `gofmt -l .` empty, `go build ./...`, `go vet ./...`,
 | Golden AST fixtures | 86 |
 | Negative parser subtests | 129 |
 
-Statement coverage, measured with `go test -cover ./...` at the baseline commit:
+Statement coverage, measured with `go test -cover ./...` at the baseline commit. It counts only
+each package's own tests, which understates a package consumed by others: `internal/core/ast`
+is at 85.7% and `internal/core/semantics` at 83.9% measured with `-coverpkg` over the whole
+suite, and `cmd/sysml-grpc` is gated by a process lifecycle test whose child process
+contributes no profile at all (Track C).
 
 | Package | Coverage | Package | Coverage |
 |---|---|---|---|
@@ -42,11 +46,11 @@ Statement coverage, measured with `go test -cover ./...` at the baseline commit:
 | `internal/core/suggest` | 92.6% | `internal/core/symbols` | 71.3% |
 | `internal/core/source` | 90.9% | `cmd/sysml-lsp` | 71.1% |
 | `internal/grpc` | 89.9% | `internal/core/lower` | 63.9% |
-| `internal/repl` | 89.3% | `internal/core/resolve` | 56.3% |
-| `internal/core/export` | 89.0% | `internal/core/semantics` | 54.8% |
+| `internal/repl` | 89.3% | `internal/core/resolve` | 77.9% |
+| `internal/core/export` | 89.0% | `internal/core/semantics` | 57.3% |
 | `internal/core/rdf` | 86.7% | `cmd/sysml` | 24.7% |
 | `internal/core/lexer` | 85.5% | `internal/core/ast` | 20.9% |
-| `internal/core/runtime` | 85.0% | `cmd/sysml-grpc` | 0% |
+| `internal/core/runtime` | 85.0% | `cmd/sysml-grpc` | 18.3% |
 | `internal/core/passes` | 84.9% | | |
 | `internal/core/libs` | 84.4% | | |
 | `internal/lsp` | 81.5% | | |
@@ -690,20 +694,46 @@ symbol ID written either way, so `Instantiate`, `GetSymbol`, `Evaluate`, `Execut
 
 ---
 
-# Track C — test coverage where it is thin
+# Track C — test coverage where it is thin — done
 
-Ordered by what a bug there would cost:
+The three bullets, with what closed them:
 
-- **`cmd/` is still the thinnest, but less so.** `cmd/sysml` is 24.7% (was 6.4%) and
-  `cmd/sysml-lsp` 71.1% (was 0%) after the 0.0.8 batch drove both binaries as processes — the
-  LSP lifecycle work brought a start/exchange/`shutdown`/`exit` smoke test with it.
-  **`cmd/sysml-grpc` is still 0%** and is a published artifact, so its smoke test is the one
-  genuinely missing: start it, exchange one RPC, shut it down.
-- **`internal/core/semantics` at 54.8% and `internal/core/resolve` at 56.3%** are the lowest of
-  the semantic packages while carrying the most subtle rules (feature chains, redefinition,
-  aliases, cached targets).
-- **`internal/core/ast` at 20.9%** is mostly declarations, so the number is misleading; check
-  what is actually uncovered before writing tests for their own sake.
+- **`cmd/sysml-grpc` had no gate at all and is a published artifact — closed.** 0% → 18.3%.
+  `cmd/sysml-grpc/lifecycle_test.go` builds the binary once and drives it as a process the way
+  the LSP smoke test does: an ephemeral `-port 0`, readiness taken from the server's own
+  listening line rather than a sleep, a real `GetServerInfo` → `ParseFile` → `Instantiate`
+  exchange over the `internal/grpc` conformance fixture, then `SIGTERM`, exit status 0 and no
+  leaked process. The failure lifecycle a user hits is covered too: an unknown flag, an occupied
+  port, an invalid cache size and a missing model each exit non-zero with a typed message rather
+  than hanging, and shutdown is asserted with a client connection still open. The reported
+  percentage counts only the two in-process helpers (`server_test.go`), since a child process
+  contributes nothing to the parent test binary's profile — the lifecycle itself is gated by the
+  assertions, not by the number.
+- **`internal/core/resolve` 56.3% → 77.9% and `internal/core/semantics` 54.8% → 57.3%.** The
+  tests went to the subtle rules rather than to the percentage: a redefinition target found two
+  supertypes up, redeclaration-versus-redefinition name conflicts, requirement parameters,
+  reference collection and its resolution kinds, what an import actually surfaces through a
+  filtered and a re-exporting route, and — on both the parsed and the cache-restored index — the
+  same resolution answers for inherited features, feature chains, aliases and conformance
+  (`resolve/cached_index_test.go`, `semantics/cached_library_test.go`), plus namespace-filter
+  classification and annotation facts across the cache, and multiplicity bounds that are not
+  evaluable. The semantics number moves least because its statements are largely reached from
+  upstream package tests, not from its own: measured with `-coverpkg` over the whole suite the
+  package is at 83.9%, and what remains uncovered there is scattered error branches rather than
+  rules (`annotations.go`, `filter.go`, `units.go` diagnostics paths).
+- **`internal/core/ast` stays at 20.9%, deliberately.** The number is misleading, as suspected:
+  the 27 functions with no package-local coverage are accessors and formatting helpers
+  (`DeclaredName`, `SimpleName`, `EffectiveName`, `AsQualifiedName`, `ReferencedTarget`, the
+  `dump.go` writers, trivia accessors), and over the whole suite the package is at 85.7% —
+  they are exercised by the parser, resolver and REPL tests that consume them. Tests written
+  against them here would restate their bodies, so none were added.
+
+Two production defects the new tests found are recorded as skipped tests naming them, not
+worked around: a cache-restored library feature loses its declared multiplicity (`libs`
+`symRecord` persists none, so it takes the assumed `1..1`), and a same-named subsetting target
+(`part wheel :> wheel;`) resolves to the subsetting feature itself rather than to the inherited
+feature. Both live outside the files this track owns; the fixes belong with `internal/core/libs`
+and `resolve.resolveSpecialization` respectively.
 
 ---
 
@@ -821,8 +851,9 @@ Tracks A, B and P are closed, so what is left reorders:
 
 1. **R1** (tag), then **R2**/**R3**/**R5** as the account access appears. R1 gates the rest of
    the release section, and R2 is what makes Track P's work reachable by a user.
-2. **Track C** next: `cmd/` is the thinnest coverage in the tree and now the only track whose
-   work is purely additive, so it parallelizes freely.
+2. **Track C** is done: `cmd/sysml-grpc` now has the process lifecycle gate it lacked, and the
+   resolver and semantics rules that were tested only on the parsed index are tested on the
+   cache-restored one as well.
 3. **Track D** is independent of the rest and can run whenever. Take **D3** before **D1**/**D2**:
    it is the cheapest, and it is what would show whether the Flexo interop claim actually holds
    before more work is layered on the mapping. **D4** is done; what it left behind — a succession
