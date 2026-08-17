@@ -1111,7 +1111,9 @@ func (idx *Index) LookupQualifiedFrom(fqn, fromFQN string) []*Symbol {
 		return syms
 	}
 	hidden := idx.hidden[fqn]
-	if len(hidden) > 0 && !withinNamespace(fromFQN, namespaceOf(fqn)) {
+	// A root-level name belongs to the importing document's own root namespace, so
+	// a private import of it is answered per document by ReexportVisible, not here.
+	if len(hidden) > 0 && namespaceOf(fqn) != "" && !withinNamespace(fromFQN, namespaceOf(fqn)) {
 		visible := make([]*Symbol, 0, len(syms))
 		for _, sym := range syms {
 			if !hidden[sym] {

@@ -97,8 +97,8 @@ func TestCodeActionImportsResolvableFQN(t *testing.T) {
 		t.Fatalf("no import fix in %v", titles)
 	}
 	// The import goes on its own line above the member that needed it, keeping
-	// that member's indentation.
-	if got := apply(t, src, edit(t, imp, file)); got != "package P {\n    import ScalarValues::*;\n    attribute x : Integer;\n}\n" {
+	// that member's indentation, and is explicitly private.
+	if got := apply(t, src, edit(t, imp, file)); got != "package P {\n    private import ScalarValues::*;\n    attribute x : Integer;\n}\n" {
 		t.Errorf("imported =\n%s", got)
 	}
 }
