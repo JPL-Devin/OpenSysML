@@ -617,6 +617,39 @@ to prove the session survived — `%tokens` still shows the token parked at the 
 `action node <n>: type mismatch: 'for' iterates a collection, and expression is not one` after it —
 and only for a value that states a *computation* (a body expression). See the next section.
 
+### `for` over a scalar is a typed error (PR #231)
+
+Since PR #231 `forElements` (`internal/core/runtime/statements.go`) only iterates a **sequence** or a
+**set**; `null` iterates zero times, and *everything else* — Integer, Real, Boolean, String, an
+expression — is `type mismatch: 'for' iterates a collection, and <describeValue> is not one`. Exact
+texts observed on `bin/sysml`, worth asserting verbatim:
+
+| input | message |
+|---|---|
+| scalar `Integer` / nested `for` whose inner input is scalar | `error: execution failed: action node <n>: type mismatch: 'for' iterates a collection, and an Integer is not one` |
+| `Boolean` | `… and a Boolean is not one` |
+| `String` | `… and string is not one` (no article — `describeValue` renders it lowercase) |
+| the same `for` in a **calc** body | `error: calc invocation failed: calc <fqn>: calculation body: type mismatch: 'for' iterates a collection, and an Integer is not one` |
+| attribute declared with **no value** (`attribute missing : Integer;`) | `error: execution failed: eval 'for' collection: unresolved reference: missing` — the loop input never reaches `forElements`, so do not expect the new wording here |
+
+Testing notes for this class of change:
+
+- The pre-fix contrast is the convincing frame: build the parent commit into `/tmp/old-sysml` and the
+  same model **completes** with the counter at `1` (and the scalar calc answers `4` instead of
+  erroring) — a silent single iteration, which is exactly what a broken build looks like.
+- Zero-iteration inputs must still *complete*: give the fixture an `assign marker := 1;` **after** the
+  loops so the `Results:` block proves execution continued (`emptyVisited = 0`, `nullVisited = 0`,
+  `marker = 1`), not just that nothing errored. `attribute absent : Integer[0..1] = null;` is the way
+  to get a `ValNull` loop input.
+- Check the strictness did **not** leak into `elementsOf` (collection operators, multiplicity):
+  `%eval SequenceFunctions::size(7)` → `= 1`, `%eval 7->size()` → `= 1`,
+  `%eval SequenceFunctions::isEmpty(7)` → `= false`.
+- `%calc` takes **positional** arguments only: `%calc P::C 4`. `%calc P::C n=4` answers
+  `error: named arguments are not supported here; pass arguments positionally`.
+- An entry action nested inside a part is reachable by its qualified path (`%action test::p::a`), which
+  is the REPL twin of the conformance harness's qualified `"evaluate": "test::p::a"`.
+- After every failing case, run `%eval 1+1` → `= 2` to prove the session survived.
+
 ### Block token flows: nested actions and `perform` in a loop body / `if` branch (PR #202)
 
 Before PR #202 a loop body or `if` branch containing an **action node** (a nested `action`
@@ -1064,11 +1097,13 @@ PYSYSML_GRPC_VERSION=v0.0.7 python -c '...connect(port=50099)...'   # -> StaleSe
   client was built is checked at the first call of *any* kind, so assert it through `conn.load(...)`
   and not only through `conn.server_info()`.
 - `pysysml` has **no module-level `load_from_content`**; use `conn.load_from_content(...)`.
-- Lifecycle state lives in `~/.pysysml/sysml-grpc.{pid,refcount,lock}`. Reset a clean auto-start
-  state with `pkill -x sysml-grpc; rm -f ~/.pysysml/sysml-grpc.pid ~/.pysysml/sysml-grpc.refcount`
+- Lifecycle state is per-port: `~/.pysysml/sysml-grpc-<port>.pid` (a JSON ownership record whose
+  `refs` is the in-process holder count) and `~/.pysysml/sysml-grpc-<port>.lock`. There is no
+  `sysml-grpc.refcount` file. Reset a clean auto-start state with
+  `pkill -x sysml-grpc; rm -f ~/.pysysml/sysml-grpc-50051.pid ~/.pysysml/sysml-grpc-50051.lock`
   (`-x`, never `-f`, which matches your own shell — see the pkill trap below).
   Refcount behaviour worth asserting both within one process (two `connect()`s) and across two
-  processes: 1 → 2 → 1, service still serving the remaining holder, and pidfile/refcount removed
+  processes: 1 → 2 → 1, service still serving the remaining holder, and the pidfile removed
   only when the last one closes.
 - The known-failing pair with a service on :50051
   (`test_integration.py::…::test_load_nonexistent_file_real_server`,
@@ -1148,7 +1183,7 @@ Liveness check: after `test_lifecycle` runs, `pgrep -af sysml-grpc` still lists 
 zombie, so it lies. Use `ss -ltn | grep 50051` to decide whether a service is really listening.
 `pkill -9 -f sysml-grpc` matches your own shell's command line — use `pkill -9 -x sysml-grpc`.
 A full-suite run stops even a service another process owns, leaving a stale
-`~/.pysysml/sysml-grpc.{pid,refcount}`; clear them before the next liveness test.
+`~/.pysysml/sysml-grpc-<port>.pid`; clear it before the next liveness test.
 To hold a service alive for a whole test run, keep a client process open, e.g.
 `(setsid python -c "import pysysml,time; pysysml.connect(); time.sleep(300)" &)` — a plain
 backgrounded `python -c` from a non-tty shell may exit before it prints, so verify the port.
@@ -2127,6 +2162,40 @@ object whose type conforms to the type declaring the condition, else declared de
   commit, so it is pre-existing, not a regression — but it reads as a contradiction and may be
   worth flagging). Also `%eval A::b::c` (skipping the def segment) is `unresolved reference` in
   both revisions; the resolvable spellings are `A::Outer::b::c` and `A::Inner::c`.
+- **The nested-subject blind spot above was fixed (PRs #206/#219/#236).** Now `%constraint`,
+  `%requirement` and `%satisfy` evaluate the nested object and *name* it: with
+  `part o : Outer { part :>> b { attribute :>> c = 50.0; } }`,
+  `%constraint A::Inner::small` answers `✗ Constraint A::Inner::small failed (on A::o::b ID: 2)` —
+  `<session-held root>::<feature path>`, matching the `b = Instance(ID: 2)` line of `%slots A::o`.
+  Assert the *whole* suffix: a build that regressed to the outer holder still prints a `✗`, and the
+  pre-#236 binary prints the same `✗` line with **no suffix at all**, so ✓/✗ alone proves nothing.
+  Ordinary (non-nested) checks keep labelling the object handed in (`(on A::w ID: 3)`), and a
+  no-object run still prints no suffix.
+  - Such a label is **descriptive, not addressable**: `%slots A::o::b` answers
+    `error: no instance of "A::o::b"` and `%instances` lists only `A::o`. Worth reporting whenever
+    label spelling changes, and a good adversarial step after any "name the subject" PR.
+  - Multiplicity-materialized subjects read `(on A::car::wheels ID: 2)` in the REPL while gRPC still
+    reports the *definition* (`instance_type_id 'A::Bolt'`/`'A::Wheel'`) — the two surfaces disagree
+    by design so far; check both rather than assuming one from the other.
+- **Ambiguity carrier labels: check every fixture shape, they regress independently.** The message is
+  `ambiguous subject: <cond> is carried by <Def> #<id> (<feature path>), …`. Three shapes worth
+  running together, because a change that improves one can flatten another:
+  `front`/`rear` nested parts → `Bolt #4 (front::bolt), Bolt #5 (rear::bolt)` (pre-#236 both read
+  `(bolt)`); subsetting into a shared collection (`part subsystem : Component[*]` fed by
+  `part small : Component :> subsystem` / `large`) → at `658076e9` `Component #2 (small),
+  Component #3 (large)` but at #236 both read `(subsystem)`, because the label now shows the
+  features *walked* (the collection slot) rather than the declaration materialized; recursive
+  containment → `Leaf #2 (leaf), Leaf #5 (next::leaf)`. Always time the recursive/mutual fixtures
+  (`time ./bin/sysml recursive.sysml < cmds`, ~0.22 s) whenever the occurrence key changes.
+- **gRPC classifies an ambiguity since PR #236:** `FailureReason.FAILURE_REASON_AMBIGUOUS_SUBJECT`
+  (enum 3, `api/proto/sysml.proto`). pysysml exposes **no public property** for it — read
+  `verdict._pb.failure_reason` and name it with
+  `from pysysml.proto import sysml_pb2 as pb; pb.FailureReason.Name(...)`; `Verdict` has no
+  `failure_reason` attribute and `connection._failure_of` maps only `WRONG_KIND`, so a client
+  wanting to branch on ambiguity today reaches into a private field. An ordinary violated condition
+  comes back `holds=False` with `FAILURE_REASON_UNSPECIFIED` (0), i.e. "plain violation" is the unset
+  value — assert the ambiguous *and* the violated case in the same run so a hard-coded reason cannot
+  pass both.
 - `-instantiate` objects are created **before** `-e` expressions since PR #180, so
   `sysml -instantiate P::hot -e P::Sensor::reading m.sysml` prints the instance line first and
   answers `140.00 (on P::hot ID: 1)`; the parent binary answered `0.00`. Any change to
@@ -2327,6 +2396,24 @@ number rather than quoting the table.
   `# specializes ISQBase::MassValue, which has no generated class`.
 - **Quantity results carry the scalar on `Quantity.magnitude`, not `.value`** — a probe using `.value`
   reports a false failure even when the runtime is correct.
+- **A stale `~/.pysysml/bin/sysml-grpc` silently blocks the subject/attribute surface.** These features
+  are capability-gated (`evaluate_subject`, `symbol_attributes` in `pysysml/capabilities.py`), so a
+  service built before they landed makes `conn.eval(..., subject_symbol_id=…)` /
+  `attribute_facts()` / `to_dataframe()` raise `MissingCapabilityError` instead of answering — which
+  looks like a client bug. Always reinstall the binary before testing a merge:
+  `make build-grpc && pkill -x sysml-grpc && rm -f ~/.pysysml/sysml-grpc-50051.pid ~/.pysysml/sysml-grpc-50051.lock && cp bin/sysml-grpc ~/.pysysml/bin/`
+  (the `cp` fails with `Text file busy` while the old one still runs), then assert
+  `sorted(conn.server_info().capabilities)` contains both names before trusting any result.
+- **The auto-started service dies with the session that started it.** After an interactive
+  `pysysml` REPL exits, `PYSYSML_REQUIRE_SERVICE=1 pytest tests/` aborts during collection with
+  `$PYSYSML_REQUIRE_SERVICE is set … but none answers on localhost:50051`. Start one yourself first:
+  `nohup ~/.pysysml/bin/sysml-grpc -port 50051 >/tmp/svc.log 2>&1 &`.
+- **`PINNED_SHA256` is nested `repo -> version -> asset`.** To exercise the *contradicted* digest arm
+  you must inject the key for the repository actually in use, e.g.
+  `binary.PINNED_SHA256['Open-MBEE/Systemica'] = {'v0.0.8': {'sysml-grpc-linux-amd64': 'de'*32}}`
+  (`DEFAULT_GITHUB_REPO`, looked up case-sensitively, so the spelling must match exactly);
+  a mis-cased, flat or `in`-substring patch leaves the pin absent and you silently re-test the *unpinned* arm
+  (`UnpinnedReleaseError` + kept cache) while believing you tested the contradiction.
 
 ## Symbol *kind* changes: `%search` is the only REPL probe (PR #210)
 
@@ -2566,6 +2653,125 @@ With `PYSYSML_REQUIRE_SERVICE=1` and no service, collection must **error** (exit
 "none answers on localhost:50051"), never skip. A whole run must leave an operator-started service
 on 50051 with the same pid.
 
+## Orthogonal regions and cross-region transitions (`internal/core/runtime/state_region_transition.go`)
+
+A transition whose source and target sit in different orthogonal regions of the same composite
+state must exit only its source side, not the enclosing composite. The REPL surfaces needed to
+see that at all:
+
+- **`%trace on` is the only surface that shows exit/entry order.** `%current` shows the resulting
+  configuration; only the trace distinguishes "exited the source" from "exited and re-entered the
+  whole composite". Turn it on *before* the `%advance` that fires the transition, and assert on the
+  absence of lines too (`no exit: <composite>`, no second `enter: <composite>`).
+- **`%current` prints one active state per active region**, joined by ` | `, and each name is the
+  state the region itself **declares** — a composite (`wrapper`), not the nested target inside it.
+  So `wrapper | rtarget` is the correct shape for a target nested one level deep, and a **repeated
+  name (`rtarget | rtarget`) is a bug signal**, not a rendering quirk: it means an outer region
+  recorded a state it does not declare. Do not dismiss duplicates as legitimate.
+- An emptied source region simply disappears from the list, so "the source region has no active
+  state" is asserted by its absence.
+- **Counter attributes, not state names, are the discriminator.** Give every state on the path an
+  `entry`/`exit` action incrementing its own counter (`wrapperExits`, `runningEntries`, …) and read
+  them from `%current`'s "State data". Exactly-once claims (`exit ran once`, `composite entered
+  once`) are unprovable from the configuration alone, and double-exit bugs are invisible without
+  them.
+- **Always build a contrast binary and run the same model through both** (recipe earlier in this
+  file). Cross-region models are easy to write so that they pass on the broken build too; the
+  contrast run is what proves the model is adversarial. **Pick the contrast commit by where the
+  defect lives:** the parent commit for a regression introduced by the PR, but `origin/main` when the
+  bug is pre-existing — a main-based contrast additionally proves the PR fixes a shipped defect
+  rather than one of its own making. Useful discriminating values seen historically: a pre-fix build
+  re-enters the composite forever and dies at the event budget; a build with the wrong recorded
+  active state prints a duplicated name; a build missing the widened concurrency test leaves the
+  target region's old state running (`<state>Exits = 0`) and prints it alongside the target
+  (`lstate | mid`); a build with the old `leaveRegion` clearing rule runs the same exit actions twice
+  (`midExits = 2`, `wrapperExits = 2`).
+
+Shapes worth covering, in increasing order of subtlety — each has broken independently:
+
+1. plain sibling-region target (`state_transition_cross_region.sysml`);
+2. a third sibling region that must keep its state (`..._third_region.sysml`);
+3. target nested one and two levels under a composite the target region is **already running**
+   (`..._nested_target.sysml`) — the abandoned inner state must exit;
+4. target nested under a composite that is **not** active there (`..._inactive_wrapper.sysml`);
+5. target region running a **different** composite, whose nested regions must be torn down;
+6. **source nested deeper than the target's region** (`..._deep_source.sysml`) — the source side
+   must be exited up to the shared region-set level (`exit: ideep` → `exit: wrapper`) while the
+   composite is untouched;
+7. outward exit past the composite, and a nested non-orthogonal move that must still stop at the
+   LCA (regressions for the `leaveRegion` / `getLCA` paths);
+8. **a region whose owning state is a plain substate** — the single highest-value shape, because it
+   broke the dispatch walk and the exit walk independently, in consecutive commits. Write it as
+   `region right { initial rs; state wrapper { state mid { region inner { … state ideep … } } }
+   then rs mid; }`: `mid` is declared directly in `wrapper`'s body, so it is **not** in
+   `graph.RegionOf`, and `then rs mid;` is what makes the inner region active. Any outward walk
+   written as `RegionOf[RegionOwner[…]]` returns nil here and silently takes a wrong branch, and any
+   "clear the region only when its entry is exactly this state" rule misses that `regionStates[right]`
+   is `mid`, a *descendant* of the `wrapper` being exited. Cover both directions from `ideep`: a
+   cross-region target (sibling region keeps a stale state → `lstate | mid`, `lidleExits = 0`) and a
+   target **outside** the whole composite (`mid`/`wrapper` exit actions run twice). The shipped
+   fixtures are `..._cross_region_substate_owner.sysml` and
+   `state_transition_leave_composite_substate_region.sysml`;
+9. ping-pong: two cross-region transitions targeting each other must stop with the typed
+   `Stopped at the event budget (N events; raise SYSML_MAX_EVENTS to allow more)`, never hang or
+   panic. Run the REPL as `SYSML_MAX_EVENTS=2000 ./bin/sysml` so the stop takes a second, and
+   follow it with `%eval 1+1` → `= 2` to show the session survived.
+
+**History interacts with region bookkeeping — always test it, with a control model.** A `deep
+history resume;` vertex inside a composite with orthogonal regions is the natural victim of any
+change to how a region records its active state: at ca7f3a89 the restore entered the region's
+*initial pseudostate* instead of the recorded composite, so the inner region restarted and the deep
+state was lost. To attribute such a failure correctly, write a control model with **no cross-region
+transition at all** (region reaches a nested state, machine leaves the composite, history resumes)
+and run it on both binaries — that separates "the cross-region path broke history" from "history is
+broken for any composite-in-a-region". Shallow history legitimately restarts the inner region, so
+only the deep variant discriminates. Read the restore in `%trace on`: `enter: <region initial
+pseudostate>` in place of `enter: <recorded state>` is the signature. Cover the **plain
+non-orthogonal** nesting too (one region, `first -> second`, `second::inner` running `a -> b`): it
+broke separately from the orthogonal case and its signature is an *inconsistent* `%current` such as
+`first | b`, where the outer region records a state whose inner region holds a descendant of a
+different one. Any change to `leaveRegion`/`exitState` bookkeeping can move history even when it
+looks like a pure exit-ordering fix, so re-run `restarts = 1` (shipped
+`state_deep_history_region_composite.sysml`) plus a control model whose restored configuration is
+visible (`lidle | wrapper | deepState`) as part of every such pass.
+
+**Write history/nesting models with an explicit `region <name> { … }` wrapper.** Substates declared
+directly in a state body (`state outer { state first; state second; }`) did not start in a history
+model — the machine stalled at `outer` and no transition fired — so a model written that way looks
+like a runtime failure when it is really an authoring shape the engine does not drive. Declare
+`state outer { region only { initial os; state first; … then os first; } }` instead. Note the
+exception exercised deliberately by shape 8 above: a substate *owning* a region
+(`state mid { region inner { … } }`) does run, provided the enclosing region's initial transition
+names it (`then rs mid;`).
+
+### Engine limitations that constrain how these models can be written
+
+All reproduce on several commits (not caused by any one PR), but they silently make a test vacuous:
+
+- **A transition whose source is a composite state never fires.** Put the "later trigger" that
+  leaves a composite on a nested **leaf** state instead; it exercises the same `leaveRegion` path.
+- **A timer declared directly on a composite state entered by a cross-region move is never
+  scheduled.** Use `%events` to confirm what is actually queued before trusting a `%advance`; leaf
+  timers are scheduled correctly.
+- **A guard-only transition is not re-evaluated for regions other than the one where the event
+  occurred**, so "a timer in region C flips a flag that fires a guarded transition in region A"
+  never happens. Drive each region with its own timed transition.
+- Stale-reaction probes are still the best evidence that an abandoned state is really gone: give it
+  `accept after N then boom` where `boom` sets a counter, advance past N, and assert the counter is
+  still 0 — a state left running in a region reacts and flips it.
+
+Practical notes for a recorded pass: shipped conformance fixtures under
+`internal/core/runtime/testdata/conformance/` emit harmless
+`unresolved reference: Integer — did you mean ScalarValues::Integer?` diagnostics (they omit the
+`ScalarValues::*` import); the runtime still executes and the `.expected.json` next to each fixture
+is the cheapest source of expected counter values. `/tmp` is wiped between sessions, so adversarial
+models and contrast binaries must be recreated each run — and when you recreate a model, **re-derive
+its state-def name from the file** (`grep -n 'state def' /tmp/…/model.sysml`) instead of trusting a
+name written in a previous run's plan: a rebuilt model can end up with a different name, and
+`%state Adv::WrongName` just reports `unresolved reference`, which is easy to misread as a runtime
+bug mid-recording. Typing `clear` at the `sysml>` prompt is parsed as SysML and errors — `%quit`
+first, then clear at the shell (this also rules out `clear; %load …` as a one-liner).
+
 `python/scripts/pin_release_checksums.py --check` hits the GitHub releases API for every pinned
 asset and dies with `HTTP Error 403: rate limit exceeded` once the unauthenticated budget is spent;
 it reads `$GITHUB_TOKEN`. Set it without putting the token on camera:
@@ -2576,3 +2782,302 @@ binaries now. The unpinned-download refusal is testable offline-ish with
 `HOME=/tmp/fakehome $PY -c "...ensure_binary(version='v9.9.9')"`, which keeps the real
 `~/.pysysml/bin` cache intact; the opt-in out of it is per repository
 (`PYSYSML_ALLOW_UNPINNED_DOWNLOAD=<owner/repo>`, or `=1` for any).
+
+## Quantities on the wire: `Value.quantity` and the Python `Quantity` (PR #200)
+
+Once the service can marshal `runtime.ValQuantity`, a quantity slot no longer reads as
+`SlotError: slot 'm': unsupported: quantity value` but as `pysysml.values.Quantity`. The
+highest-value evidence is the **parent-commit contrast** (build `/tmp/old-sysml-grpc` from the
+commit before the change, swap it into `~/.pysysml/bin/sysml-grpc`, clear
+`~/.pysysml/sysml-grpc.{pid,refcount}`, run the same script): the old service raises the SlotError
+while a plain `ScalarValues::Real` slot still reads `2.0`, so the frame proves the delta.
+
+What to assert on the decoded value, and why each one distinguishes working from broken:
+
+- **The magnitude must stay in the unit written.** `5.4 [SI::km/SI::h]` must decode as magnitude
+  `5.4` with `unit.text == "SI::km/SI::h"` and `scale_num/scale_den == 5.0/18.0`; a reduction done
+  behind the caller's back shows up as `1.5`. `in_unit(Unit(text="m/s", factors=(m^1, s^-1)))`
+  must be **exactly** `1.5` — a float-sloppy conversion gives `1.4999999999999998`.
+- **Integer and Real stay apart:** `3 [SI::m]` → `isinstance(magnitude, int)`.
+- Base units are reported by **FQN of the base unit**, not the written unit: `SI::kg` reduces to
+  `1000/1·SI::gram`, `SI::W` to `1000·SI::gram·SI::metre^2·SI::second^-3`. Assert
+  `unit.exponents()`, which is order-independent.
+- A **dimensionless** ratio (`3.0 [SI::m] / 1.5 [SI::m]`) does not arrive as a quantity at all — the
+  runtime reduces it to a plain `float`. Don't write a test that requires a `Quantity` there.
+- An exponent survives: `(2.0 [SI::m])**2` → magnitude `4.0`, `unit.text == "(SI::m)**2"`,
+  `SI::metre` exponent `2.0`.
+- Quantities also come back from `conn.eval("5.4 [SI::km/SI::h]", hash, context_symbol_id=pkg)`,
+  from a nested child (`inst.engine.power`), inside sequences (`LengthValue[3]` → `list[Quantity]`),
+  and on a `verify_constraint` verdict — filter `verdict.instances` on `verdict.instance_id` and
+  read the slot off that instance.
+- Comparison semantics worth pinning: `1 [SI::km] == 1000.0 [SI::m]` is True and the two hash
+  alike; ordering/adding incommensurable units raises `IncommensurableUnitsError` naming both
+  reductions (`cannot order a quantity in [SI::km] and one in [SI::kg]: … 1000·SI::metre …
+  1000·SI::gram`); ordering against a bare `float` raises `TypeError`, while `q == 5.0` is just
+  `False`.
+
+**Inbound (client → service) is a different code path.** `Connection._python_to_value` has no
+`Quantity` arm, so a quantity argument cannot be sent through `conn.calc(...)` — build the request
+proto by hand and send it on the client's stub (still the real service over gRPC):
+
+```python
+q = sysml_pb2.Quantity(real_magnitude=2.0, unit="SI::m",
+    unit_term=sysml_pb2.UnitTerm(scale_num=1.0, scale_den=1.0,
+        factors=[sysml_pb2.UnitFactor(unit_id="SI::metre", exponent=1.0)]))
+c._stub.EvaluateCalc(sysml_pb2.EvaluateCalcRequest(model_hash=m.hash,
+    symbol_id="q2::Double", arguments=[sysml_pb2.Value(quantity=q)]))
+```
+
+Only the paths that decode with the model's `symbols.Index` work. `EvaluateCalc` does, and returns
+typed errors worth asserting verbatim (`calc argument could not be read: unknown base unit:
+SI::nope` / `unit scale is not a usable ratio: 1/0` / `quantity in "SI::m" carries no magnitude`,
+all with `FAILURE_REASON_EVALUATION`, and the service stays alive). `ExecuteAction` (in
+`internal/grpc/service.go`) decodes its `inputs` map the same index-aware way, so a quantity input
+binds (`ExecuteActionRequest(inputs={"mass": Value(quantity=q)})` on an action whose `in mass :
+ISQ::MassValue` body does `assign heavier := mass + 1.0 [SI::kg]` returns `6 [SI::kg]`), and a
+malformed one comes back as `ExecuteActionResponse.Error` = `input "<name>" could not be read:
+<err>` with **zero** outputs rather than a bound `ValInvalid`. If you ever see outputs coming back
+`null: "unsupported"` for a quantity input, that call site has regressed to a context-free decoder.
+Worth checking cheaply: a commensurable-but-different unit (`2000 [SI::g]`), an un-normalized
+reduction (`SI::gram^2 · SI::gram^-1`, which the service re-normalizes), and a bad quantity nested
+inside a `ValueSequence` input (the error still names the top-level input). Traps: the field is
+`action_symbol_id`, not `symbol_id`, and an action **usage** (`action showIt : Show;`) reports
+`no initial node found`, so execute the **def** that carries the body.
+
+### Generated typed classes and mypy
+
+`pysysml-generate <model> -o out.py` (or `python -m pysysml.generate`) types a quantity property
+`-> _t.Quantity` with `_t.slot(self, "x", _t.as_quantity)`. Only slots with a **declared** quantity
+type get it: an untyped derived attribute (`attribute derivedSpeed = 10.0 [SI::m] / 2.0 [SI::s];`)
+has no type facts and still generates `-> object` / `_t.as_object`, even though the runtime value is
+a `Quantity`. Don't read that as a bug in the quantity typing.
+
+To make mypy actually enforce it, **set `MYPYPATH` to the repo's `python/` directory** — without it
+mypy cannot resolve the editable-installed `pysysml`, silently treats `_t.Quantity` as `Any` and
+reports *no* errors on obvious misuse (a false pass that looks like a passing test):
+
+```bash
+cd /tmp/qw && MYPYPATH=/home/ubuntu/repos/Systemica/python \
+  $HOME/pv/bin/python -m mypy --no-incremental --no-error-summary --follow-imports=silent misuse.py
+# -> Unsupported operand types for + ("Quantity" and "float")  [operator]
+# -> Incompatible types in assignment (expression has type "Quantity", variable has type "float")
+```
+
+`mypy` must be present in the same venv as `pysysml` ($HOME/pv here); otherwise the typed-codegen
+tests skip rather than fail.
+
+## The evaluate/eval split and generated-base planning (PR #218)
+
+- **Since the rename, `pysysml.evaluate` is the real module-level evaluator and `pysysml.eval` is a
+  forwarder that emits `DeprecationWarning` and is out of `pysysml.__all__`.** Test both sides:
+  `evaluate(...)` must produce **zero** DeprecationWarnings (catch them with
+  `warnings.catch_warnings(record=True)` + `simplefilter("always")`), `eval(...)` must return the
+  identical value and warn exactly once with a message naming `pysysml.evaluate`, and
+  `from pysysml import *` must bind `evaluate` but not `eval`. `subject` is the **last** parameter of
+  `evaluate` precisely so a pre-rename positional call
+  `eval(expr, None, hash, None, host, port)` still binds host/port — prove that argument really is the
+  host by also calling it with a bogus address (`"203.0.113.9", 59999`) and requiring a
+  `ConnectionError`; that call takes ~30-60s to time out, so give the runner a generous timeout.
+- **`pysysml.errors.RuntimeError` is a warn-on-access alias of `ExecutionError`** served by the module
+  `__getattr__` and absent from `errors.__all__`. Check it by *catching a real failure* with it
+  (`except pysysml.errors.RuntimeError` around a cyclic-slot eval), not just by identity.
+- **`generate.py` elides a base that another declared base already specializes, silently and by design**
+  (`_without_implied`): `part def Backwards :> Vehicle, Hybrid` where `Hybrid :> Vehicle` emits
+  `class Backwards(Hybrid):` with **no** comment, because `Vehicle` is still in the MRO. Only a base the
+  class genuinely does not inherit gets `# … left out: Python cannot linearize it with the bases above`.
+  To exercise the comment path you need a real C3 conflict, e.g. `X :> A, B`, `Y :> B, A`, `M :> X, Y`
+  → `class M(X):` plus the `left out` note. Asserting the comment on a merely redundant base is a
+  false negative.
+
+## State-machine transition endpoint checking (PR #225 class)
+
+The check that a transition names a vertex of *its own* machine (and that a routing pseudostate is
+left by something) is a **name-resolution-tier pass**, so it is fully observable from
+`./bin/sysml -validate <f>` — no execution needed. Codes: `endpoint-not-of-machine`,
+`no-outgoing-transition`; messages are
+`transition endpoint <as written> names a <state|pseudostate|start marker|end marker|element> that
+is not a vertex of this state machine` and
+`<kind> <name> has no outgoing transition, so a transition reaching it terminates nowhere`.
+
+Because the pre-fix binary reports **nothing** for these models, the parent-commit contrast binary
+(see the worktree recipe above) is the strongest single frame: old = `✓ no errors` exit 0,
+new = error + `did not analyse cleanly` exit 2 on identical input.
+
+Fixture shapes that actually discriminate (all one-liners; `state def` and `state` usage both work):
+
+- Illegal, target of another machine: two `state def`s in one package, `transition busy to
+  Other::running;` → reported at the endpoint's column.
+- Illegal, marker as target: `first begin then off;` plus `transition on to begin;` → the message
+  says **"start marker"**, which is how you tell `VertexKind` is being consulted.
+- Illegal, dangling routing pseudostate: `junction route;` + `transition busy to route;` and no
+  transition out → reported at the `junction` declaration, not at the transition.
+
+False-positive traps to always include as *legal* rows, since each exercises a different branch:
+
+- A transition into a **sibling orthogonal region** (`transition lidle to rtarget;` across
+  `region left` / `region right`) — legal per UML §14.2.3.9.
+  `internal/core/runtime/testdata/conformance/state_transition_sibling_region.sysml` is the shipped
+  one; run it with `%state TransitionSiblingRegion` + `%advance 1` → `Current state: lidle | rtarget`
+  and `crossed = 1`.
+- `entry point into;` / `exit point outOf;` as endpoints (`state_entry_exit_points.sysml`).
+- A sourceless `accept after 5 then <s>;` written *inside* a state (source is implicit).
+- `first start then off;` with no `initial`.
+- A junction left by a **succession** (`route then finishedUp;`) rather than a `transition`, and a
+  `fork`/`join` reached by one — the pass tracks succession sources *by name*, so a regression here
+  shows up as a bogus `no-outgoing-transition`.
+- Two states with the **same name** in sibling regions (both `idle`) — must stay clean.
+
+Cheap whole-repo false-positive sweep (~40 s, 83 models at 11d0ed72, expect `differing: 0`):
+
+```bash
+for f in $(grep -rl 'state def\|state .*{' --include=*.sysml examples \
+             internal/core/runtime/testdata/conformance testdata | sort); do
+  a=$(./bin/sysml -validate "$f" 2>&1; echo $?); b=$(/tmp/old-sysml -validate "$f" 2>&1; echo $?)
+  [ "$a" != "$b" ] && echo "DIFFERS: $f"
+done
+```
+
+Error-timing contract worth re-checking whenever this area moves: a structurally empty
+`state def Empty { }` must `-validate` **clean** (exit 0) and only fail at
+`-state Empty` with `failed to create executor: initialize state machine: no initial state found in
+state machine Empty`. A check-time complaint there would be the regression.
+
+Two message hygiene probes: grep the diagnostics for `ast\.|StateNode|%!` (must be zero hits — the
+messages come from `lower.NotAVertexFormat`/`VertexKind`, not `%T`), and endpoints written as deep
+qualified names (`Outer::Inner::Deep::busy`) must be echoed **in full** in the message.
+
+Also note `done` is an inherited feature of `States::StateAction`, so naming a state `done` in your
+own fixture draws `name conflict: done is already the name of the inherited feature …` plus a
+reserved-keyword warning — pick `finished`/`finishedUp` instead, or the legal row fails for an
+unrelated reason.
+
+### Proving a succession or a pseudostate edge really fires (not just validates)
+
+`-validate` cannot tell you whether lowering silently *dropped* an edge — a dropped succession looks
+identical to a clean model. Make the edge observable instead: give the destination state an
+`entry { flag = 1; }` and read both the active state and the attribute back:
+
+```bash
+printf '%%state <Def>\n%%advance 5\n%%current\n%%quit\n' | timeout 60 ./bin/sysml <model>.sysml
+```
+
+`%current` prints `Current state: …` plus a `State data:` block with the attribute values, so
+"reached the state" and "ran its entry action" are separate evidence. Compare against a binary built
+from the *previous revision of the same branch* (not the PR base) to attribute the delta to one
+change. Useful discriminators in this area:
+
+- `x then <junction>; <junction> then <s>;` — an implementation that resolves succession endpoints by
+  simple *state* name drops the pseudostate hop entirely and the machine just stalls one state early.
+- Same-named `junction route;` in two sibling orthogonal regions, each routing to its own region's
+  end state with its own flag — if pseudostates are keyed by simple name, one overwrites the other
+  and *neither* flag gets set. Run it ~5 times; the ordering must be identical every run.
+- A regression row worth keeping: a succession to a **qualified nested** target
+  (`gate then P::Def::outer::r::deep;`) usually works on both old and new revisions, so it proves the
+  rewrite lost nothing rather than proving anything new.
+
+Two traps when writing these fixtures:
+
+- An unqualified target in another region resolves by ordinary name resolution first, so
+  `lidle then rtarget;` fails with `unresolved reference: rtarget — did you mean A::B::right::rtarget?`
+  on *every* revision. That is not a false positive; write the qualified name.
+- A succession carries **no guard**, so a cross-region succession re-enters the composite state, the
+  source region restarts, and the edge re-fires forever: the run ends on `Stopped at the event budget
+  (1000000 events; raise SYSML_MAX_EVENTS to allow more)`. That is a clean bounded stop, not a hang —
+  the state/attribute evidence is still valid. Use the guarded `transition a to b if flag == 0;` form
+  when you want the run to settle instead.
+- Running a shipped conformance model straight from the CLI can report `unresolved reference: Integer`
+  because the conformance harness supplies imports the file omits; add `import ScalarValues::*;` in
+  your own fixtures, and treat that one as pre-existing (the sweep confirms it is identical on both
+  binaries).
+
+## Hierarchical / composite state machines: outward transitions, timers, history (PR #230)
+
+Whole families of state-executor changes (transitions declared on a composite state while a
+substate is active, exit-chain ordering, timer withdrawal, change triggers) are testable from the
+REPL with **no ports and no signals** if you encode observations as *decimal digits* in one
+attribute. This is the single most useful technique in this area:
+
+```
+attribute log : Integer = 0;
+state Outer { entry assign log := log * 10 + 1; exit assign log := log * 10 + 2; }
+```
+
+`%current` then prints e.g. `log = 32419`, which reads left-to-right as the exact order of the
+entries/exits/effects that ran. Give **every nesting level its own digit** — a duplicated exit
+(`…22…`) or a missing one is otherwise invisible, and a doubled exit is exactly the defect class
+that shows up when exit chains are refactored. Keep the digits distinct per level and put the
+transition effect last.
+
+Driving and reading:
+
+- Put fixtures under `$HOME` (e.g. `~/fixtures/pr<N>/`), never `/tmp` — `/tmp` is wiped between
+  sessions and you will lose an afternoon of fixtures. `%load` needs an **absolute** path.
+- A nested state reference must be **qualified**: `start then Working::Step1`, not `then Step1`.
+- A nested `initial` only takes effect inside an explicit `region { … }`. `state Outer { initial o;
+  state Mid { … } transition o to Mid; }` enters **Outer only** — `ActiveStates()`/`%current` show
+  no substate at all, and any test built on that shape silently probes the wrong thing. Wrap both
+  levels in regions and assert the pre-condition configuration before the interesting step.
+- `ActiveStates()` for a region-wrapped chain lists the *innermost* composites and leaves
+  (`map[Mid:true leaf:true]`), not every enclosing composite — assert on the leaf plus the state
+  you expect to survive, not on the outermost name.
+- In Konsole use `%quit`; `Ctrl-D` closes the terminal window and kills the recording. `ctrl+plus`
+  (not `ctrl+shift+plus`) changes the font size.
+- Batch a whole scenario into a `.script` file and pipe it (`timeout 30 ./bin/sysml < z.script`) to
+  discover values, then re-run the interesting ones interactively for the camera.
+- A per-fixture expectation table plus a tiny runner that prints `fixture | final state | log |
+  PASS/FAIL` turns a 30-fixture regression matrix into one screen of camera-friendly evidence, and
+  it fails loudly if a refactor moves any established value.
+
+Timers (`accept after N` + `%advance`) are the cheapest scheduling probe:
+
+- Advance to the **exact** expected instant and read `Remaining events:` (`1` = armed/re-armed,
+  `0` = spent) plus `No pending work - simulation time is now …` — that line is the clearest
+  signal that a timer was never re-armed.
+- To prove a queued time event is *withdrawn* when its state exits, the state must be left **and
+  re-entered**: `accept after 10` left at t=3 and re-entered at t=5 must fire at t=15, not t=10.
+  Add a second region with its own clock (`after 12`) so the ordering of two digits (`21` vs `12`)
+  is the discriminator instead of one absolute time.
+- Bound repeated exit/re-entry with a counter guard (`if trips == 0 do assign trips := trips + 1`)
+  or the fixture becomes an infinite loop.
+- **Pre-existing on every binary tested (not a PR regression):** a state that owns a
+  time-triggered transition ignores its own *signal* transitions, and signal transitions on leaves
+  inside top-level regions never fire. So drive timer fixtures purely with `accept after`, and
+  verify any such oddity against a contrast binary before reporting it.
+- `deep history resume;` works in REPL fixtures (`transition away to resume`) and doubles as an
+  exit-chain probe, since the return path re-runs the entry digits.
+- Once composite self-transitions re-enter their regions, a fixture whose signal poster sits
+  *inside* the self-transitioning composite becomes an infinite event loop; post from a sibling
+  region that is never re-entered.
+
+Change triggers (`accept when`) **cannot be driven from the REPL at all**: `pollChangeEvents` has
+no non-test caller (`grep -rn pollChangeEvents --include='*.go' .` → definition plus `*_test.go`),
+and no meta-command reaches it (`%advance`/`%step`/`%continue` are time and the *action* debugger).
+The REPL therefore parks in the source state with the condition already true — that is the
+documented ⚠️ Approximate row in `docs/project/spec-compliance.md`, not a defect. Show the grep on
+camera to justify covering the behavior with go tests instead:
+
+```go
+exec := stateExecutorForSource(t, "sm", `package test { state sm { … } }`)
+exec.RunToCompletion()
+exec.stateData["ready"] = boolValue(true)
+exec.pollChangeEvents()
+// read exec.ActiveStates() and exec.stateData["log"]
+```
+
+For an internal fix like this the strongest evidence is a worktree A/B:
+`git worktree add ~/wt<sha> <parent-sha>`, **copy the new test file (and any probe file) into the
+worktree** so `state_executor.go` is the only delta (`cmp -s` each file on camera to prove it),
+then run `go test -count=1 -run … -v ./internal/core/runtime` in both trees.
+
+Designing discriminating probes here is genuinely tricky — always confirm a probe **FAILs on the
+parent** before trusting it:
+
+- `getParentChain` is **leaf-first**, so a single active leaf already gets innermost-first
+  treatment; a probe with one leaf plus enclosing composites will pass on both revisions and prove
+  nothing.
+- The discriminating shape for innermost-wins/dedupe in the poll path needs a **sibling region
+  whose leaf watches nothing**, so its outward walk reaches the composite's own watched transition
+  while another region's leaf has its own: only a correct implementation keeps the composite alive.
+- Keep probe files out of the repo tree before running the gates (`rm` it, keep a `.txt` copy in
+  the fixtures dir) and confirm `git status --porcelain` is empty on camera, so the gates clearly
+  reflect the committed tree.
