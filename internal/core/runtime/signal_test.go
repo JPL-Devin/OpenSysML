@@ -768,6 +768,54 @@ func TestAddressedSendToQualifiedNameReachesReceiver(t *testing.T) {
 	assertVisits(t, visits, "init", "waiting", "done")
 }
 
+// A qualified name addresses the element it resolves to, so a same-named feature
+// of the sending object is not the addressee.
+func TestAddressedSendToQualifiedNameSkipsSameNamedFeature(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
+		import ScalarValues::*;
+		package Other {
+			action reader accept n : Integer;
+		}
+		part def Node {
+			action reader accept n : Integer;
+			action listen { first start; done end; then start end; }
+		}
+		part alpha : Node;
+	}`))
+	alpha := instanceOfUsage(t, ctx, idx, "test::alpha")
+	send := lower.Send{Target: "Other::reader", Scope: declScope(oneSymbol(t, idx, "test::Node::listen"))}
+	if err := ctx.post(nil, Message{SignalType: "Integer"}, send, alpha); err != nil {
+		t.Fatalf("post: %v", err)
+	}
+	got := ctx.PendingMessages()[0]
+	if got.Object == alpha.ID {
+		t.Errorf("`send to Other::reader` delivered as %+v, want no delivery to the sender's own reader", got)
+	}
+}
+
+// A port a qualified name resolves to that the sender owns no occurrence of is
+// unroutable, not a delivery to the sender's same-named port.
+func TestAddressedSendToQualifiedPortOfAnotherTypeIsTyped(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
+		item def Ping;
+		port def PingPort { in item ping : Ping; }
+		part def Other { port inPort : PingPort; }
+		part def Node {
+			port inPort : PingPort;
+			action listen { first start; done end; then start end; }
+		}
+		part alpha : Node;
+	}`))
+	send := lower.Send{Target: "Other::inPort", Scope: declScope(oneSymbol(t, idx, "test::Node::listen"))}
+	err := ctx.post(nil, Message{SignalType: "Ping"}, send, instanceOfUsage(t, ctx, idx, "test::alpha"))
+	if !errors.Is(err, ErrUnroutableSend) {
+		t.Fatalf("post to Other::inPort: %v, want ErrUnroutableSend", err)
+	}
+	if len(ctx.PendingMessages()) != 0 {
+		t.Errorf("an unroutable send posted %+v", ctx.PendingMessages())
+	}
+}
+
 // An object's behavior addresses a receiving node of an action it performs: the
 // performance is no object of its own, so identity must not exclude it.
 func TestAddressedSendReachesPerformedAction(t *testing.T) {
