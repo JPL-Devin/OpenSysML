@@ -221,7 +221,7 @@ func isScalarFeature(feat *EffectiveFeature) bool {
 func (ctx *Context) checkDefaultCount(inst *Instance, slot *Slot, name string, val Value) error {
 	count := int64(len(elementsOf(val)))
 	if msg := slot.Feature.Multiplicity.CountViolation(count); msg != "" {
-		return fmt.Errorf("slot %s.%s: %w: %s", inst.Type.Name, name, ErrMultiplicityViolation, msg)
+		return fmt.Errorf("feature value %s.%s: %w: %s", inst.Type.Name, name, ErrMultiplicityViolation, msg)
 	}
 	return nil
 }
@@ -234,7 +234,7 @@ func (ctx *Context) checkDefaultCount(inst *Instance, slot *Slot, name string, v
 func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 	if _, ok := inst.Slots[name]; !ok {
 		// Naming no slot of the object is no materialization of one.
-		return nil, fmt.Errorf("slot %q not found in instance %d (type %s)", name, inst.ID, inst.Type.Name)
+		return nil, fmt.Errorf("feature %q not found in instance %d (type %s)", name, inst.ID, inst.Type.Name)
 	}
 	slot, err := inst.materializeSlot(ctx, name)
 	if err != nil {
@@ -267,7 +267,7 @@ func (inst *Instance) materializeSlot(ctx *Context, name string) (*Slot, error) 
 		}
 		bound, err := ctx.bindVariation(slot.Feature, val, inst.ID)
 		if err != nil {
-			return nil, fmt.Errorf("slot %s.%s: %w", inst.Type.Name, name, err)
+			return nil, fmt.Errorf("feature value %s.%s: %w", inst.Type.Name, name, err)
 		}
 		slot.Value = bound
 		slot.Materialized = true
@@ -277,7 +277,7 @@ func (inst *Instance) materializeSlot(ctx *Context, name string) (*Slot, error) 
 	// A bound value supplies the feature's own features, so a body restating one
 	// of them states two values for it.
 	if restated := ctx.restatedInValuedBody(slot.Feature); restated != "" {
-		return nil, fmt.Errorf("slot %s.%s: %w: %s", inst.Type.Name, name, ErrValuedFeatureRestated, restated)
+		return nil, fmt.Errorf("feature value %s.%s: %w: %s", inst.Type.Name, name, ErrValuedFeatureRestated, restated)
 	}
 
 	// A default that did not constant-fold is a derived value: evaluate it
@@ -326,7 +326,7 @@ func (inst *Instance) materializeSlot(ctx *Context, name string) (*Slot, error) 
 		// Check multiplicity (C2 + C1)
 		mult := slot.Feature.Multiplicity
 		if !mult.Upper.Known || !mult.Lower.Known {
-			return nil, fmt.Errorf("cannot materialize slot %q with unknown multiplicity", name)
+			return nil, fmt.Errorf("cannot materialize feature %q with unknown multiplicity", name)
 		}
 
 		if !mult.Upper.Infinite && mult.Upper.Value == 1 {
@@ -339,7 +339,7 @@ func (inst *Instance) materializeSlot(ctx *Context, name string) (*Slot, error) 
 		} else {
 			// Guard against infinite/huge lower bound (C3)
 			if mult.Lower.Infinite || mult.Lower.Value > maxMaterializedLowerBound {
-				return nil, fmt.Errorf("%w: lower bound too large or infinite for slot %q", ErrMultiplicityViolation, name)
+				return nil, fmt.Errorf("%w: lower bound too large or infinite for feature %q", ErrMultiplicityViolation, name)
 			}
 
 			// A feature subsetting this one holds values this one holds, so the
@@ -483,7 +483,7 @@ func (ctx *Context) evalSlotDefault(inst *Instance, slot *Slot, name string) (Va
 	defer ec.beginStep()()
 	val, err := ec.Eval(slot.Feature.DefaultValue)
 	if err != nil {
-		return Value{}, fmt.Errorf("slot %s.%s: %w", inst.Type.Name, name, err)
+		return Value{}, fmt.Errorf("feature value %s.%s: %w", inst.Type.Name, name, err)
 	}
 	return val, nil
 }
