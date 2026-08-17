@@ -50,7 +50,7 @@ contributes no profile at all (Track C).
 | `internal/core/export` | 89.0% | `internal/core/semantics` | 57.3% |
 | `internal/core/rdf` | 86.7% | `cmd/sysml` | 24.7% |
 | `internal/core/lexer` | 85.5% | `internal/core/ast` | 20.9% |
-| `internal/core/runtime` | 85.0% | `cmd/sysml-grpc` | 18.8% |
+| `internal/core/runtime` | 85.0% | `cmd/sysml-grpc` | 18.3% |
 | `internal/core/passes` | 84.9% | | |
 | `internal/core/libs` | 84.4% | | |
 | `internal/lsp` | 81.5% | | |
@@ -698,7 +698,7 @@ symbol ID written either way, so `Instantiate`, `GetSymbol`, `Evaluate`, `Execut
 
 The three bullets, with what closed them:
 
-- **`cmd/sysml-grpc` had no gate at all and is a published artifact — closed.** 0% → 18.8%.
+- **`cmd/sysml-grpc` had no gate at all and is a published artifact — closed.** 0% → 18.3%.
   `cmd/sysml-grpc/lifecycle_test.go` builds the binary once and drives it as a process the way
   the LSP smoke test does: an ephemeral `-port 0`, readiness taken from the server's own
   listening line rather than a sleep, a real `GetServerInfo` → `ParseFile` → `Instantiate`
