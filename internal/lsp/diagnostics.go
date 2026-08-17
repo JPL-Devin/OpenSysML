@@ -7,27 +7,31 @@ import (
 )
 
 // publishDiagnostics analyzes the named document and pushes diagnostics to the
-// client. It is a no-op when no client is connected.
+// client, withdrawing them for a document the workspace no longer holds. It is a
+// no-op when no client is connected.
 func (s *Server) publishDiagnostics(ctx context.Context, name string) {
 	if s.client == nil {
 		return
 	}
-	doc := s.ws.Document(name)
-	if doc == nil {
-		s.clearDiagnostics(ctx, name)
-		return
-	}
-	content := doc.Content
-	diags := s.ws.Diagnostics(name)
-	out := make([]protocol.Diagnostic, 0, len(diags))
-	for _, d := range diags {
-		out = append(out, protocol.Diagnostic{
-			Range:    spanToRange(content, d.Span),
-			Severity: protocol.DiagnosticSeverity(int(d.Severity) + 1),
-			Message:  d.Message,
-			Code:     d.Code,
-			Source:   d.Source,
-		})
+	// Analysis and send happen together: the coalesced sweep publishes from a
+	// timer goroutine, so interleaving them would let an older set land last on
+	// a client that cannot tell diagnostics apart by version.
+	s.pubMu.Lock()
+	defer s.pubMu.Unlock()
+
+	out := []protocol.Diagnostic{}
+	if doc := s.ws.Document(name); doc != nil {
+		diags := s.ws.Diagnostics(name)
+		out = make([]protocol.Diagnostic, 0, len(diags))
+		for _, d := range diags {
+			out = append(out, protocol.Diagnostic{
+				Range:    spanToRange(doc.Content, d.Span),
+				Severity: protocol.DiagnosticSeverity(int(d.Severity) + 1),
+				Message:  d.Message,
+				Code:     d.Code,
+				Source:   d.Source,
+			})
+		}
 	}
 	// Best-effort push: a failed notification has no recovery path here and the
 	// server currently threads no logger, so the error is intentionally dropped.
@@ -37,12 +41,14 @@ func (s *Server) publishDiagnostics(ctx context.Context, name string) {
 	})
 }
 
-// clearDiagnostics withdraws the diagnostics published for a document the
-// workspace no longer holds, so markers do not outlive the file.
+// clearDiagnostics withdraws the diagnostics published for a document, so
+// markers do not outlive the buffer or the file they came from.
 func (s *Server) clearDiagnostics(ctx context.Context, name string) {
 	if s.client == nil {
 		return
 	}
+	s.pubMu.Lock()
+	defer s.pubMu.Unlock()
 	_ = s.client.PublishDiagnostics(ctx, &protocol.PublishDiagnosticsParams{
 		URI:         nameToURI(name),
 		Diagnostics: []protocol.Diagnostic{},

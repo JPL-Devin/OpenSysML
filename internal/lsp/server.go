@@ -31,6 +31,10 @@ type Server struct {
 	// a burst of keystrokes costs one pass over them instead of one per change.
 	crossDoc *model.Debouncer
 
+	// pubMu serializes analyze-and-send, so the sweep's timer goroutine and a
+	// notification handler cannot deliver one document's diagnostics out of order.
+	pubMu sync.Mutex
+
 	mu               sync.Mutex
 	shutdownReceived bool
 	exitReceived     bool

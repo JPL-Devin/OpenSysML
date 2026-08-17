@@ -4,6 +4,8 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -282,6 +284,59 @@ func TestDidCloseWithdrawsDiagnostics(t *testing.T) {
 	msgs, published := lastDiagnostics(fc, lib)
 	if !published || len(msgs) != 0 {
 		t.Fatalf("diagnostics for the closed lib = %v (published=%v), want an empty set", msgs, published)
+	}
+}
+
+// serialClient records whether two diagnostics sends ever overlapped.
+type serialClient struct {
+	baseClient
+	mu       sync.Mutex
+	active   int
+	overlaps atomic.Bool
+}
+
+func (c *serialClient) PublishDiagnostics(ctx context.Context, params *protocol.PublishDiagnosticsParams) error {
+	c.mu.Lock()
+	c.active++
+	if c.active > 1 {
+		c.overlaps.Store(true)
+	}
+	c.mu.Unlock()
+	time.Sleep(time.Millisecond)
+	c.mu.Lock()
+	c.active--
+	c.mu.Unlock()
+	return nil
+}
+
+func TestPublishDiagnosticsSerialized(t *testing.T) {
+	s, _, _, lib, main := multiFileWorkspace(t)
+	ctx := context.Background()
+	openFile(t, s, main, mainSource)
+	openFile(t, s, lib, libSource)
+
+	// The coalesced sweep publishes from a timer goroutine while handlers publish
+	// from theirs; an overlap would let the older set land last on the client.
+	sc := &serialClient{}
+	s.client = sc
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		name := main
+		if i%2 == 0 {
+			name = lib
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 10; j++ {
+				s.publishDiagnostics(ctx, name)
+				s.clearDiagnostics(ctx, name)
+			}
+		}()
+	}
+	wg.Wait()
+	if sc.overlaps.Load() {
+		t.Errorf("diagnostics sends overlapped, want them serialized")
 	}
 }
 
