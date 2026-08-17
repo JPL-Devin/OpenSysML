@@ -139,6 +139,17 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Python bindings and `sysml-grpc`
 
+- `sysml-grpc` loads the standard library ahead of the requests that need it
+  instead of once per model: the service keeps a small pool of prewarmed library
+  indexes, and a model the service has not seen adds its document to one of them
+  rather than loading and expanding the library again. A cold `ParseFile` on a
+  163-line model measures ~0.5–0.9 ms where it measured ~100–128 ms, which is
+  what makes a parameter sweep varying the model text practical. What a model
+  resolves against is unchanged: an index carries the same library, an index is
+  handed out once so cached models stay independent, and an empty pool builds one
+  on the request path, so a result never depends on prewarming. Prewarming runs
+  in the background, so startup stays prompt, and `SYSML_GRPC_INDEX_POOL` sizes
+  the pool (default 4; 0 keeps the previous per-model behaviour).
 - `sysml-grpc -version` reports the metadata the linker sets, where a released
   binary said `version dev / commit unknown`.
 - A cached `~/.pysysml/bin/sysml-grpc` records the release and repository it was

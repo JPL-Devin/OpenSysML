@@ -12,6 +12,7 @@ into a reported error instead of a hang.
 | `SYSML_MAX_DO_STEPS` | `5000000` | Do-activity actions one state machine run may perform, and the ones one `%advance` drains |
 | `SYSML_MAX_ELEMENTS` | `1000000` | Collection elements one evaluation may hold — the bound on the memory a run holds rather than on the work it does |
 | `SYSML_MAX_CALC_DEPTH` | `10000` (ceiling `25000`) | Nested `calc` invocations one run may hold on the stack, which is what a recursion spends |
+| `SYSML_GRPC_INDEX_POOL` | `4` | How many standard library indexes `sysml-grpc` keeps prewarmed for the models it has not seen yet; `0` loads the library on each request instead |
 
 Each budget is what turns a non-terminating run into a reported error instead of
 a hang. They count incommensurable things — expression evaluations, action token
@@ -99,3 +100,25 @@ evaluation one:
 ```bash
 SYSML_MAX_EVENTS=20000000 SYSML_MAX_DO_STEPS=100000000 sysml descent.sysml
 ```
+
+## The gRPC service's library index pool
+
+`SYSML_GRPC_INDEX_POOL` is not a budget: it is how many standard library indexes
+`sysml-grpc` builds ahead of the requests that need them. The library does not
+depend on the model, so a model the service has not seen adds its document to a
+prewarmed index instead of loading and expanding the library again — measured on
+a 163-line model, ~0.5–0.9 ms rather than ~100–128 ms.
+
+An index is handed out once and then belongs to the model that took it, so cached
+models stay independent; the pool refills in the background, and a request
+arriving when it is empty builds its own index, so an answer never depends on how
+far prewarming got. Raise it for a client sweeping many distinct models at once,
+at roughly the memory of one library index each:
+
+```bash
+SYSML_GRPC_INDEX_POOL=8 sysml-grpc
+```
+
+`0` disables prewarming, which is the behaviour of a service before the pool
+existed: every cache miss loads the library itself. Anything but a non-negative
+integer is reported at service construction rather than silently ignored.
