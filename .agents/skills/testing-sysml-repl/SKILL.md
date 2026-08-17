@@ -1222,6 +1222,52 @@ worth asserting, with the wording each produces:
   That is the only observable half of the replacement without network; say so rather than claiming
   the replacement was proven. Always back up the cache + sidecar and restore them afterwards.
 
+#### Service start-up timing and its failure paths (PR #250)
+
+`Connection._ensure_service` probes the service it spawns immediately and then backs off
+(`START_PROBE_INITIAL_DELAY` 10 ms, doubling to `START_PROBE_MAX_DELAY` 250 ms) until
+`START_TIMEOUT` (2.5 s). Timing claims here need a **contrast run against the parent revision**,
+which needs no rebuild since pysysml is pure Python: `git worktree add /tmp/mainwt main`, copy the
+generated `python/pysysml/proto/*.py` in if they are missing, then run the same script twice, once
+plain and once with `PYTHONPATH=/tmp/mainwt/python`, on the *same* `$HOME/pv` venv. Numbers seen at
+c590253e on a free port with nothing listening: **21 ms on the branch vs 515 ms on main**; the
+connection must then really work (`conn.load_from_content(...)` + `Model.eval('1 + 1') == 2`), since
+a fast connect to a dead service would look the same.
+
+Recipes for the failure paths, all with a port of their own so the :50051 tests stay independent:
+
+- **A binary that exits at once** — point `$HOME` at a throwaway dir holding
+  `.pysysml/bin/sysml-grpc` = `#!/bin/sh\nexit 3`. `get_binary_path()` is hard-coded to
+  `~/.pysysml/bin`, so `$HOME` is the only injection point (there is no `PYSYSML_GRPC_BINARY`);
+  `PYSYSML_STATE_DIR` moves the pid/lock files only. Expect
+  `ConnectionError: Service exited with code 3 without serving localhost:<port>` in ~0.02 s.
+- **A port that accepts TCP but never speaks gRPC** — `nc -l` is wrong: it exits after the first
+  connection closes, the spawned service then binds the port and the test silently *passes*. Use a
+  listener that stays up and never answers (bind + `listen(64)` + accept into a list), and pair it
+  with a fake binary that does not exit (`exec sleep 120`) if you want the `START_TIMEOUT` branch
+  rather than the "could not bind" one.
+  **`START_TIMEOUT` bounds the sleeping, not the wall clock**: each probe may spend its RPC timeout
+  (pre-spawn probe 5 s, later ones `START_PROBE_RPC_TIMEOUT` 2 s), so the observed failure is
+  `ConnectionError: Service failed to start within 2.5s` after **~9 s** (3 probes) on the branch
+  against ~17.5 s (6 probes) on main. Do not assert ~2.5 s wall time; assert the message, a
+  single-digit probe count and the improvement over main. Count probes by wrapping
+  `Connection._probe_service` with a timestamping function — that is also the cheapest proof of "no
+  busy-spin".
+- **A replacement that could not bind** (the `_wait_for_a_service_that_could_not_bind` /
+  `START_CONFIRM_DELAY` path) — start a real service outside pysysml on the port, then push the
+  client past the adopt step the way a release mismatch does:
+  `Connection._adopt_running_service = lambda self: False`. Expect `StaleServiceError` ("the service
+  started here exited (1) while another one kept serving the address"), **no** ownership record
+  (`~/.pysysml/sysml-grpc-<port>.pid` absent, `_OWNED_SERVICES` empty), the foreign pid still alive
+  and a follow-up `Connection(auto_start=False)` still evaluating. Asserting only "an exception was
+  raised" would miss the real regression risk, which is silently adopting a service this client did
+  not start and killing it on close.
+- **Ownership under a race** — two `python /tmp/x.py <port>` processes started together: exactly one
+  prints `_holds_refcount=True` with `{'refs': 1}`, the other reports
+  `origin=service already listening …`; exactly one `sysml-grpc` runs, and it stops when the owner
+  exits. Pair it with a test that closes an *adopted* connection and asserts the hand-started
+  service is still serving.
+
 ### Verification RPCs, typed errors and strict loading (`pysysml` Tier 3, PR #149)
 
 The verification questions the REPL answers with `%constraint`, `%requirement`, `%satisfy` and
