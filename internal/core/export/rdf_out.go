@@ -7,6 +7,7 @@ import (
 	"unicode"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/lexer"
 	"github.com/Open-MBEE/Systemica/internal/core/rdf"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
 )
@@ -623,62 +624,20 @@ func (e *encoder) wroteKindKeyword(n *ast.Usage) bool {
 	return true
 }
 
-// withoutComments replaces each of the three comment shapes the lexer scans —
-// `//* */`, `//` and `/* */` — with a space, leaving quoted names untouched.
+// withoutComments replaces every comment with a space, told apart by the lexer
+// the parser reads them with, so each shape it scans is excluded by construction.
 func withoutComments(text string) string {
 	var kept strings.Builder
-	for at := 0; at < len(text); {
-		switch {
-		case strings.HasPrefix(text[at:], "//*"):
-			// A `//* … */` note runs to its terminator, not to the line end.
-			end := strings.Index(text[at+3:], "*/")
-			if end < 0 {
-				kept.WriteByte(' ')
-				return kept.String()
-			}
+	lx := lexer.New(source.New("head.sysml", []byte(text)))
+	for tok := lx.Next(); tok.Kind != lexer.EOF; tok = lx.Next() {
+		switch tok.Kind {
+		case lexer.SLNote, lexer.MLNote, lexer.RegularComment:
 			kept.WriteByte(' ')
-			at += end + 5
-		case strings.HasPrefix(text[at:], "//"):
-			end := strings.IndexByte(text[at:], '\n')
-			if end < 0 {
-				kept.WriteByte(' ')
-				return kept.String()
-			}
-			kept.WriteByte(' ')
-			at += end
-		case strings.HasPrefix(text[at:], "/*"):
-			end := strings.Index(text[at+2:], "*/")
-			if end < 0 {
-				kept.WriteByte(' ')
-				return kept.String()
-			}
-			kept.WriteByte(' ')
-			at += end + 4
-		case text[at] == '\'' || text[at] == '"':
-			end := quotedEnd(text[at:])
-			kept.WriteString(text[at : at+end])
-			at += end
 		default:
-			kept.WriteByte(text[at])
-			at++
+			kept.WriteString(text[tok.Span.Offset:tok.Span.End()])
 		}
 	}
 	return kept.String()
-}
-
-// quotedEnd returns the length of the quoted name or string at the head of text,
-// or all of text when it is unterminated.
-func quotedEnd(text string) int {
-	quote := text[0]
-	for at := 1; at < len(text); at++ {
-		switch text[at] {
-		case '\\':
-			at++
-		case quote:
-			return at + 1
-		}
-	}
-	return len(text)
 }
 
 // sigilBefore reads the `#` or `@` that introduces an annotation: the character
