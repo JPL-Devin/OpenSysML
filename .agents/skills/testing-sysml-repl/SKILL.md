@@ -306,8 +306,33 @@ is the cheapest source of the values `%slots` should print.
   `t: <error: slot derived.t: member b not found in instance>` — a perfect A/B against the parent
   commit. Name the part something other than `derived` if you want to avoid the (harmless)
   `"derived" is a reserved keyword` warning.
-- **Unset scalar attributes render as `= Instance(ID: n)` / `(no features)`** (also `ringCost`,
-  `ringPort`). Pre-existing on main, unrelated to variation work — don't report it as a regression.
+- **A valueless feature of a value type (`attribute d : Real;`) renders as `= <unset>`** since the A3
+  work (`runtime.Context.HoldsNoValue` + `runtime.UnsetText`); a collection of them reads
+  `[<unset>, <unset>]` and no `(no features)` block is printed under it. On revisions *before* that
+  change the same slots read `= Instance(ID: n)` / `(no features)` (also `ringCost`, `ringPort`), so
+  a parent-commit binary is the ideal A/B. Things that must stay object-shaped: a class-typed part
+  (`Instance(ID: n)` with its nested features, and a genuinely featureless `part def Empty` still
+  legitimately shows `(no features)`) and a value type that *does* declare features
+  (`attribute def Point { attribute x : Real = 1.0; }` still expands). Enums, strings, booleans,
+  quantities, derived attributes and `null` are untouched.
+  Caveat worth re-checking on any follow-up: an expression over an unset slot
+  (`attribute n : Real = d + 1.0;`) still reports
+  `<error: slot q.n: type mismatch: operator '+' is not defined for an instance and a Real>` — the
+  diagnostic still says "an instance" rather than unset, i.e. the unset spelling has not reached the
+  type-mismatch wording.
+- **Surfaces to check together for any value-rendering change**, since they share `formatValue`:
+  `%slots` / `%eval` in the REPL, `sysml <model> -instantiate <fqn> -e <expr>` (same text), the same
+  run with `-json` (the JSON encoder escapes it, so grep `\u003cunset\u003e`, not `<unset>`), and the
+  gRPC/pysysml path. On the Python side `pysysml.UNSET` is a falsy singleton spelled `<unset>` and
+  distinct from `None`: assert `inst.d is pysysml.UNSET`, `inst.d is not None`, `bool(inst.d) is
+  False`, `inst.get_slot('d').value.WhichOneof('kind') == 'unset'` with `materialized=True`, and
+  `'&lt;unset&gt;' in inst._repr_html_()`. `Value.unset` is send-only: the client cannot build it
+  through `_python_to_value`, so to prove the server refuses it, hand-build the request and call the
+  stub directly —
+  `conn._stub.EvaluateCalc(sysml_pb2.EvaluateCalcRequest(model_hash=m.hash, symbol_id='P::Add',
+  arguments=[sysml_pb2.Value(real_value=1.0), sysml_pb2.Value(unset=True)]))` answers
+  `error = 'calc argument could not be read: unset is not a value a caller can supply'` (no result),
+  and a follow-up `conn.calc('P::Add', m.hash, [1.0, 2.0])` → `3.0` proves the service survived.
 - **Known limits, so don't plan around them:** `%slots` takes only the instantiated usage's own name
   — `%slots test::electricVehicle::engine` answers `no instance of …`, and
   `%eval test::electricVehicle.engine.power` answers `usage test::electricVehicle has no value`.
