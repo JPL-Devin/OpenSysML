@@ -557,8 +557,8 @@ func InstanceGraphToProto(rt *runtime.Context, inst *runtime.Instance, idx *symb
 			return pbInst
 		}
 
-		for _, slot := range pbInst.Slots {
-			for _, id := range instanceRefs(slot) {
+		for _, fv := range pbInst.FeatureValues {
+			for _, id := range instanceRefs(fv) {
 				child, ok := rt.Instance(id)
 				if !ok || onPath[child.Type] {
 					continue
@@ -573,8 +573,8 @@ func InstanceGraphToProto(rt *runtime.Context, inst *runtime.Instance, idx *symb
 	return root, all
 }
 
-// instanceRefs collects the instance IDs a slot value references, scalar or not.
-func instanceRefs(slot *pb.SlotValue) []int64 {
+// instanceRefs collects the instance IDs a feature value references, scalar or not.
+func instanceRefs(fv *pb.FeatureValue) []int64 {
 	var ids []int64
 	var collect func(*pb.Value)
 	collect = func(v *pb.Value) {
@@ -587,16 +587,16 @@ func instanceRefs(slot *pb.SlotValue) []int64 {
 			}
 		}
 	}
-	if slot.Value != nil {
-		collect(slot.Value)
+	if fv.Value != nil {
+		collect(fv.Value)
 	}
-	for _, v := range slot.Values {
+	for _, v := range fv.Values {
 		collect(v)
 	}
 	return ids
 }
 
-// collectionElements returns what a collection slot holds; a multi-valued
+// collectionElements returns what a multi-valued feature holds; a multi-valued
 // feature's contents can be either a sequence or a set.
 func collectionElements(val runtime.Value) []runtime.Value {
 	switch val.Kind {
@@ -612,47 +612,64 @@ func collectionElements(val runtime.Value) []runtime.Value {
 	return nil
 }
 
-// InstanceToProto converts runtime.Instance to protobuf Instance. Slots are read
-// through Instance.GetSlot, so a derived default is evaluated against the
-// instance rather than reported as an unmaterialized slot.
+// InstanceToProto converts runtime.Instance to protobuf Instance. Feature values
+// are read through Instance.GetSlot, so a derived default is evaluated against
+// the instance rather than reported as unmaterialized.
 func InstanceToProto(rt *runtime.Context, inst *runtime.Instance, idx *symbols.Index) *pb.Instance {
-	pbSlots := make(map[string]*pb.SlotValue)
+	pbValues := make(map[string]*pb.FeatureValue)
 
 	for name := range inst.Slots {
 		slot, err := inst.GetSlot(rt, name)
 		if err != nil {
-			pbSlots[name] = &pb.SlotValue{
+			pbValues[name] = &pb.FeatureValue{
 				FeatureName: name,
 				Error:       err.Error(),
 			}
 			continue
 		}
 
-		pbSlot := &pb.SlotValue{
+		pbValue := &pb.FeatureValue{
 			FeatureName:  name,
 			Materialized: slot.Materialized,
 		}
 
-		// Check multiplicity to determine scalar vs collection
+		// Check multiplicity to determine single- vs multi-valued
 		mult := slot.Feature.Multiplicity
 		if !mult.Upper.Infinite && mult.Upper.Value <= 1 {
-			// Scalar slot. An unmaterialized one holds no value; marshalling it
+			// Single-valued. An unmaterialized one holds no value; marshalling it
 			// anyway would report the empty value as an unsupported null.
 			if slot.Materialized {
-				pbSlot.Value = ValueToProtoIn(rt, slot.Value, idx)
+				pbValue.Value = ValueToProtoIn(rt, slot.Value, idx)
 			}
 		} else {
 			for _, elem := range collectionElements(slot.Values) {
-				pbSlot.Values = append(pbSlot.Values, ValueToProtoIn(rt, elem, idx))
+				pbValue.Values = append(pbValue.Values, ValueToProtoIn(rt, elem, idx))
 			}
 		}
 
-		pbSlots[name] = pbSlot
+		pbValues[name] = pbValue
 	}
 
 	return &pb.Instance{
-		Id:           inst.ID,
-		TypeSymbolId: idx.GetFQN(inst.Type),
-		Slots:        pbSlots,
+		Id:            inst.ID,
+		TypeSymbolId:  idx.GetFQN(inst.Type),
+		FeatureValues: pbValues,
+		Slots:         deprecatedSlots(pbValues),
 	}
+}
+
+// deprecatedSlots mirrors the feature values into the deprecated `slots` map, so
+// a client generated before the rename still reads them.
+func deprecatedSlots(values map[string]*pb.FeatureValue) map[string]*pb.SlotValue {
+	slots := make(map[string]*pb.SlotValue, len(values))
+	for name, fv := range values {
+		slots[name] = &pb.SlotValue{
+			FeatureName:  fv.FeatureName,
+			Value:        fv.Value,
+			Values:       fv.Values,
+			Materialized: fv.Materialized,
+			Error:        fv.Error,
+		}
+	}
+	return slots
 }

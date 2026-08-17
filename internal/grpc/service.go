@@ -55,12 +55,17 @@ const CapabilitySymbolAttributes = "symbol_attributes"
 // a value type as Value.unset, rather than as the empty object it materializes.
 const CapabilityUnsetValue = "unset_value"
 
+// CapabilityFeatureValues names the capability of populating
+// Instance.feature_values, the current spelling of the deprecated
+// Instance.slots, which is still populated identically.
+const CapabilityFeatureValues = "feature_values"
+
 // capabilities is what this build supports, in report order. A capability is
 // only ever added: renaming or dropping one breaks clients that require it.
 var capabilities = []string{
 	CapabilityTypeFacts, CapabilityConvert, CapabilityVerification, CapabilityQuery,
 	CapabilityEnumValues, CapabilityEvaluateSubject, CapabilitySymbolAttributes,
-	CapabilityUnsetValue,
+	CapabilityUnsetValue, CapabilityFeatureValues,
 }
 
 // Capabilities returns the capability names this build of the service reports.
