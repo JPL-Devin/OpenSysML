@@ -64,7 +64,7 @@ func (s *Server) loadFolders(ctx context.Context) {
 	for _, folder := range folders {
 		s.loadFolder(folder)
 	}
-	s.refreshOpenDiagnostics(ctx)
+	s.refreshOpenDiagnostics(ctx, "")
 }
 
 // loadFolder reads the model sources one folder holds, skipping hidden and
@@ -126,20 +126,24 @@ func (s *Server) DidChangeWatchedFiles(ctx context.Context, params *protocol.Did
 		changed = true
 		if event.Type == protocol.FileChangeTypeDeleted {
 			s.ws.DeleteOnDisk(name)
+			s.publishDiagnostics(ctx, name)
 			continue
 		}
 		s.loadFromDisk(name)
 	}
 	if changed {
-		s.refreshOpenDiagnostics(ctx)
+		s.refreshOpenDiagnostics(ctx, "")
 	}
 	return nil
 }
 
 // refreshOpenDiagnostics republishes diagnostics for the open documents, whose
-// analysis depends on the rest of the workspace.
-func (s *Server) refreshOpenDiagnostics(ctx context.Context) {
+// analysis depends on the rest of the workspace, skipping the name a caller has
+// just published on its own.
+func (s *Server) refreshOpenDiagnostics(ctx context.Context, except string) {
 	for _, name := range s.ws.OpenNames() {
-		s.publishDiagnostics(ctx, name)
+		if name != except {
+			s.publishDiagnostics(ctx, name)
+		}
 	}
 }

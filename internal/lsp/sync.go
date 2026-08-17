@@ -40,7 +40,8 @@ func (s *Server) DidClose(ctx context.Context, params *protocol.DidCloseTextDocu
 	name := uriToName(params.TextDocument.URI)
 	s.loadFromDisk(name)
 	s.ws.Close(name)
-	s.refreshOpenDiagnostics(ctx)
+	s.publishDiagnostics(ctx, name)
+	s.refreshOpenDiagnostics(ctx, name)
 	return nil
 }
 
@@ -48,9 +49,7 @@ func (s *Server) DidClose(ctx context.Context, params *protocol.DidCloseTextDocu
 // file changes what the others resolve.
 func (s *Server) DidSave(ctx context.Context, params *protocol.DidSaveTextDocumentParams) error {
 	name := uriToName(params.TextDocument.URI)
-	if !s.ws.IsOpen(name) {
-		s.publishDiagnostics(ctx, name)
-	}
-	s.refreshOpenDiagnostics(ctx)
+	s.publishDiagnostics(ctx, name)
+	s.refreshOpenDiagnostics(ctx, name)
 	return nil
 }

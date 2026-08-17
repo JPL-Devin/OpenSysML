@@ -14,6 +14,7 @@ func (s *Server) publishDiagnostics(ctx context.Context, name string) {
 	}
 	doc := s.ws.Document(name)
 	if doc == nil {
+		s.clearDiagnostics(ctx, name)
 		return
 	}
 	content := doc.Content
@@ -33,5 +34,17 @@ func (s *Server) publishDiagnostics(ctx context.Context, name string) {
 	_ = s.client.PublishDiagnostics(ctx, &protocol.PublishDiagnosticsParams{
 		URI:         nameToURI(name),
 		Diagnostics: out,
+	})
+}
+
+// clearDiagnostics withdraws the diagnostics published for a document the
+// workspace no longer holds, so markers do not outlive the file.
+func (s *Server) clearDiagnostics(ctx context.Context, name string) {
+	if s.client == nil {
+		return
+	}
+	_ = s.client.PublishDiagnostics(ctx, &protocol.PublishDiagnosticsParams{
+		URI:         nameToURI(name),
+		Diagnostics: []protocol.Diagnostic{},
 	})
 }

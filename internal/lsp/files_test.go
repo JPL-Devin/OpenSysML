@@ -48,17 +48,26 @@ func multiFileWorkspace(t *testing.T) (*Server, *fakeClient, string, string, str
 
 // diagnosticsFor returns the messages of the last diagnostics published for name.
 func diagnosticsFor(fc *fakeClient, name string) []string {
+	msgs, _ := lastDiagnostics(fc, name)
+	return msgs
+}
+
+// lastDiagnostics returns the messages of the last diagnostics published for
+// name, and whether any were published at all.
+func lastDiagnostics(fc *fakeClient, name string) ([]string, bool) {
 	var msgs []string
+	found := false
 	for _, p := range fc.published {
 		if p.URI != uri.File(name) {
 			continue
 		}
+		found = true
 		msgs = msgs[:0]
 		for _, d := range p.Diagnostics {
 			msgs = append(msgs, d.Message)
 		}
 	}
-	return msgs
+	return msgs, found
 }
 
 func openFile(t *testing.T, s *Server, path, text string) {
@@ -233,6 +242,78 @@ func TestDidCloseDropsDocumentWithNoFileOnDisk(t *testing.T) {
 	}
 	if s.ws.Document(name) != nil {
 		t.Errorf("document with no file on disk kept after close")
+	}
+}
+
+func TestDidClosePublishesOnDiskDiagnostics(t *testing.T) {
+	s, fc, _, lib, _ := multiFileWorkspace(t)
+	ctx := context.Background()
+
+	// The buffer holds an error the file on disk does not; closing discards the
+	// buffer, so the errors it produced have to go with it.
+	openFile(t, s, lib, "package Lib {\n    part def Widget;\n    part b : Nope;\n}\n")
+	if msgs := diagnosticsFor(fc, lib); len(msgs) == 0 {
+		t.Fatalf("diagnostics for the lib buffer = none, want an unresolved Nope")
+	}
+	if err := s.DidClose(ctx, &protocol.DidCloseTextDocumentParams{
+		TextDocument: protocol.TextDocumentIdentifier{URI: uri.File(lib)},
+	}); err != nil {
+		t.Fatalf("DidClose err = %v", err)
+	}
+	if msgs := diagnosticsFor(fc, lib); len(msgs) != 0 {
+		t.Fatalf("diagnostics for lib = %v, want none once the buffer is gone", msgs)
+	}
+}
+
+func TestWatchedFileDeleteClearsDiagnostics(t *testing.T) {
+	s, fc, _, lib, _ := multiFileWorkspace(t)
+	ctx := context.Background()
+
+	// Diagnostics reach the client for lib.sysml, and then the file disappears.
+	openFile(t, s, lib, "package Lib {\n    part b : Nope;\n}\n")
+	if msgs := diagnosticsFor(fc, lib); len(msgs) == 0 {
+		t.Fatalf("diagnostics for lib = none, want an unresolved Nope")
+	}
+	if err := s.DidClose(ctx, &protocol.DidCloseTextDocumentParams{
+		TextDocument: protocol.TextDocumentIdentifier{URI: uri.File(lib)},
+	}); err != nil {
+		t.Fatalf("DidClose err = %v", err)
+	}
+	if err := os.Remove(lib); err != nil {
+		t.Fatalf("remove lib: %v", err)
+	}
+	if err := s.DidChangeWatchedFiles(ctx, &protocol.DidChangeWatchedFilesParams{
+		Changes: []*protocol.FileEvent{{URI: uri.File(lib), Type: protocol.FileChangeTypeDeleted}},
+	}); err != nil {
+		t.Fatalf("DidChangeWatchedFiles err = %v", err)
+	}
+	msgs, published := lastDiagnostics(fc, lib)
+	if !published || len(msgs) != 0 {
+		t.Fatalf("diagnostics for the deleted lib = %v (published=%v), want an empty set", msgs, published)
+	}
+}
+
+func TestDidChangeRefreshesOtherOpenDocuments(t *testing.T) {
+	s, fc, _, lib, main := multiFileWorkspace(t)
+	ctx := context.Background()
+	openFile(t, s, main, mainSource)
+	openFile(t, s, lib, libSource)
+
+	// An unsaved edit to lib.sysml renames what main.sysml uses; main's markers
+	// must follow the keystroke, not wait for a save.
+	if err := s.DidChange(ctx, &protocol.DidChangeTextDocumentParams{
+		TextDocument: protocol.VersionedTextDocumentIdentifier{
+			TextDocumentIdentifier: protocol.TextDocumentIdentifier{URI: uri.File(lib)},
+			Version:                2,
+		},
+		ContentChanges: []protocol.TextDocumentContentChangeEvent{
+			{Text: "package Lib {\n    part def Gadget;\n}\n"},
+		},
+	}); err != nil {
+		t.Fatalf("DidChange err = %v", err)
+	}
+	if msgs := diagnosticsFor(fc, main); len(msgs) == 0 {
+		t.Fatalf("diagnostics for main = none, want an unresolved Widget")
 	}
 }
 
