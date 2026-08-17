@@ -231,6 +231,23 @@ func TestViewReportsAViolatedConcernPerElement(t *testing.T) {
 	}
 }
 
+// Tracing records the steps of a report's own evaluation too, so a trace does
+// not depend on whether the session happened to hold the object checked.
+func TestViewTracesAnObjectItMaterialized(t *testing.T) {
+	s := conformanceSession(t)
+	s.SetTracing(true)
+	out, _, err := s.RunMeta("%view Demo::report")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(s.instances) != 0 {
+		t.Fatalf("the session held %v, so the report evaluated no object of its own", s.instances)
+	}
+	if !strings.Contains(strings.Join(out, "\n"), tracePrefix) {
+		t.Errorf("%%view recorded no step while tracing:\n%s", strings.Join(out, "\n"))
+	}
+}
+
 // A view satisfying nothing reports no conformance section at all.
 func TestViewWithoutASatisfyReportsNoConformance(t *testing.T) {
 	out, _, err := viewSession(t).RunMeta("%view Demo::summary")

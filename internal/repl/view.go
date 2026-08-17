@@ -222,6 +222,9 @@ func (r *reportRuntime) runtime() (*runtime.Context, error) {
 	if doc := r.session.ws.Document(docName); doc != nil {
 		ctx.RegisterSource(source.New(docName, doc.Content))
 	}
+	// Recorded like the session's own evaluation, so a trace does not depend on
+	// which objects the report had to materialize.
+	ctx.SetTrace(r.session.trace)
 	r.ctx = ctx
 	return ctx, nil
 }
