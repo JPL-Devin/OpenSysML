@@ -232,6 +232,34 @@ func TestUnsupportedBehavioralShapesAreReported(t *testing.T) {
 	}
 }
 
+// The `else` branch is marked with a term the SysML metamodel does not define,
+// so it belongs to the Systemica namespace and is read from there on its own —
+// without the branch's keyword having to say `else` as well.
+func TestElseBranchIsMarkedUnderTheExtensionNamespace(t *testing.T) {
+	src := "package P {\n\taction def A {\n\t\tdecision d;\n\t\tif x then a;\n\t\telse b;\n\t\taction a;\n\t\taction b;\n\t\tattribute x : Boolean;\n\t}\n}"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	if !strings.Contains(string(turtle), "sysx:isElse") {
+		t.Errorf("the `else` marker should be a sysx: term:\n%s", turtle)
+	}
+	if strings.Contains(string(turtle), "sysml:isElse") {
+		t.Errorf("the SysML vocabulary defines no isElse:\n%s", turtle)
+	}
+
+	// The keyword the branch was written with is dropped, so `else` can only
+	// come back from the marker itself.
+	graph := strings.ReplaceAll(string(turtle), "sysx:declaredKeyword \"else\" ;", "")
+	back, err := export.Convert("m.ttl", []byte(graph), export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation: %v\n%s", err, graph)
+	}
+	if !strings.Contains(string(back), "else b;") {
+		t.Errorf("the marker alone did not write the branch back:\n%s", back)
+	}
+}
+
 // checkRoundTrip converts a model to RDF and back, requiring the same notation
 // and, converted again, the same graph.
 func checkRoundTrip(t *testing.T, src string) {

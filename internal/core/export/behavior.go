@@ -185,7 +185,9 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 		if n.Guard != nil {
 			e.graph.Add(subject, e.sysx(xGuard), rdf.String(e.text(n.Guard)))
 		}
-		e.flags(subject, []boolProperty{{xIsElse, n.IsElse}})
+		if n.IsElse {
+			e.graph.Add(subject, e.sysx(xIsElse), rdf.Bool(true))
+		}
 		return true, e.edgeEnds(subject, n, owner, n.Source, n.Target)
 
 	case *ast.WhileLoopActionNode:
