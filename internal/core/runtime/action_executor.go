@@ -951,7 +951,7 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 		return err
 	}
 	if len(successors) > 1 {
-		return fmt.Errorf("nested action %s has multiple successors", ActionNodeName(usage))
+		return fmt.Errorf("action node %s has multiple successors", ActionNodeName(usage))
 	}
 
 	// The flows out of this node carry what its body produced to the pins the
