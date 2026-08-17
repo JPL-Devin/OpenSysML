@@ -333,6 +333,15 @@ is the cheapest source of the values `%slots` should print.
   arguments=[sysml_pb2.Value(real_value=1.0), sysml_pb2.Value(unset=True)]))` answers
   `error = 'calc argument could not be read: unset is not a value a caller can supply'` (no result),
   and a follow-up `conn.calc('P::Add', m.hash, [1.0, 2.0])` → `3.0` proves the service survived.
+  The refusal arrives **in band** — `resp.error` with `failure_reason=FAILURE_REASON_EVALUATION`, not
+  an `INVALID_ARGUMENT` status exception — so assert on `resp.error`, and note the stub method is
+  `EvaluateCalc` (there is no `Calc`).
+- **Getting the CLI value surface wrong wastes a run:** `-instantiate <fqn>` *alone* prints only the
+  creation lines and no slot values — the value surface is `-instantiate <fqn> -e <fqn>::d`, while
+  `-e` *without* `-instantiate` answers `sysml: "…" has no value to evaluate` and exits 1 (the
+  no-instance path, not unset). In `-json`, grep `u003cunset` — a pattern like `u003cunset.003e`
+  misses, because `\u` is two characters. And write the null case `attribute nul : Real[0..1] = null;`:
+  `Real = null` is itself a multiplicity violation and you end up debugging that instead.
 - **Known limits, so don't plan around them:** `%slots` takes only the instantiated usage's own name
   — `%slots test::electricVehicle::engine` answers `no instance of …`, and
   `%eval test::electricVehicle.engine.power` answers `usage test::electricVehicle has no value`.
@@ -1099,7 +1108,11 @@ fail — that is the documented `docs/project/roadmap.md` §P1 gap, not a new bu
 When the thing under test is the **process** (flags, exit status, graceful shutdown, leaks) rather
 than the model semantics, a hand-started service on `-port 0` is the right harness and
 `pysysml.connect(host, port, auto_start=False)` attaches to it without touching the pidfile
-machinery. Two traps cost real time:
+machinery. Pass `-health-port` too: it defaults to 8081 and collides with an already-running
+service. **Never pipe a command whose exit code you are asserting** — `… | tail` reports `tail`'s
+status, which has produced a false pass on this very exit-code matrix; run it bare and echo `$?`.
+And prove "never listened" with `ss -ltn`, since an exit code alone does not. Two more traps cost
+real time:
 
 - `-port 0` makes the *resolved* port observable only in the log line
   `msg="gRPC server listening" addr=[::]:<port>`. The `-health-port 0` line logs the literal
@@ -1112,7 +1125,12 @@ machinery. Two traps cost real time:
   server logs `code = NotFound` for `/sysml.SysMLService/ParseFile` while staying alive. An already
   occupied `-port` exits **1** with `msg="Failed to listen" port=<port>`; `kill -TERM` exits **0**
   after `Shutting down gracefully...` / `gRPC server stopped`. `pgrep -x sysml-grpc` (never `-f`)
-  before and after is the leak check.
+  before and after is the leak check. Rest of the matrix: an unknown flag exits **2**;
+  `-cache-size 0` exits **1** with `cache maxSize must be positive`, raised in `NewService` *before*
+  `net.Listen`; a bogus `model_hash` is `NOT_FOUND` / `ModelNotFoundError`. Shutdown with a client
+  channel still open exits 0 and makes the client's next call raise `UNAVAILABLE`
+  (`pysysml.ConnectionError`) — bound that call with a timeout so a hang fails instead of hanging
+  the run.
 
 <a id="venv-trap"></a>
 **Python interpreter trap on this box** (bites every pysysml section below): whatever `python3`
@@ -1310,8 +1328,10 @@ Recipes for the failure paths, all with a port of their own so the :50051 tests 
   busy-spin".
 - **A replacement that could not bind** (the `_wait_for_a_service_that_could_not_bind` /
   `START_CONFIRM_DELAY` path) — start a real service outside pysysml on the port, then push the
-  client past the adopt step the way a release mismatch does:
-  `Connection._adopt_running_service = lambda self: False`. Expect `StaleServiceError` ("the service
+  client past the adopt step the way a release mismatch does — either
+  `Connection._adopt_running_service = lambda self: False`, or without monkeypatching, ask for a
+  release the running service cannot be: `pysysml.connect(port=P, version="v9.9.9")` (there is no
+  `PYSYSML_REQUIRE_VERSION` env knob). Expect `StaleServiceError` ("the service
   started here exited (1) while another one kept serving the address"), **no** ownership record
   (`~/.pysysml/sysml-grpc-<port>.pid` absent, `_OWNED_SERVICES` empty), the foreign pid still alive
   and a follow-up `Connection(auto_start=False)` still evaluating. Asserting only "an exception was
@@ -1394,8 +1414,19 @@ generalizes to any service-side perf change:
   differ. A pool that shared an index between models would show up here, not in the timings.
 - Bad values are rejected in `NewService`, so `sysml-grpc` **exits 1 before listening**:
   `-1` → `library index pool size must not be negative, got -1 (SYSML_GRPC_INDEX_POOL)`,
-  `many`/`1.5` → `library index pool size must be an integer, got "many" (…)`. Assert the exit code
-  *and* `ss -ltn | grep :<port>` empty — a service that started anyway is the real failure.
+  `many`/`1.5`/`"4 4"` → `library index pool size must be an integer, got "many" (…)`. Assert the exit
+  code *and* `ss -ltn | grep :<port>` empty — a service that started anyway is the real failure. An
+  empty or all-whitespace value is treated as unset and the service starts normally.
+- Client-side shapes that break these sweeps: proto diagnostics carry severity as a **string**
+  (`d.severity == "error"`; there is no `sysml_pb2.SEVERITY_ERROR`), `Instance.slots` is a **map** so
+  iterate `inst.instance.slots.items()` (and prefer the public `inst.slots` over `inst._slots`), and
+  `file_path="/virtual/…"` must never be passed together with `content=` — the service tries to open
+  the path and answers `NOT_FOUND`. Keep a runner behind `if __name__ == "__main__":` so importing it
+  to reuse its fixture generator does not execute the whole suite.
+- Fixture syntax that silently ruins a pool sweep, since 3 diagnostics per model look like the pool
+  corrupting resolution: write `transition first s1 accept after 1 then s2;` (not
+  `transition s1 then s2 accept after 1;`), and give an `out` an expression
+  (`action def Act { in x : Real; out y : Real = x * 2.0; }`).
 - Prewarming must not block startup: the port accepts in ~30 ms with pool=4, and SIGTERM after
   prewarming exits **0** in ~13 ms (`Close()` waits for in-flight builds, so a hang here is the
   regression to watch). Time both with `date +%s.%N` around the launch/`kill -TERM`.
@@ -1406,6 +1437,18 @@ generalizes to any service-side perf change:
   index handed to a model that is later evicted must not disturb the models still cached.
 - Interpreter trap: see [the venv trap](#venv-trap) above before blaming `import grpc`/`import
   pysysml` on the change under test.
+
+#### The shared on-disk library index cache (`internal/core/libs/cache.go`)
+
+The REPL, the LSP and the gRPC service all read `~/.cache/sysml-ls/libs` (or
+`$XDG_CACHE_HOME/sysml-ls/libs`), 95 content-addressed `*.idx` files — so a change to that file needs
+a cross-surface check, not just a gRPC one. Move the directory away (cold) and run
+`./bin/sysml <model> -instantiate <fqn> -e <fqn>::attr` plus an LSP `initialize`/`shutdown`/`exit`
+over `--stdio`, then repeat warm: expect roughly **860 ms cold vs 160 ms warm** for the CLI run, the
+95 files rebuilt, no leaked `sysml-lsp`, and `ls -a` showing **zero** `.idx.tmp*` droppings (writes go
+through a unique temp file plus rename). Overwriting one `.idx` with garbage — and, separately,
+truncating one to 0 bytes — must degrade to a silent rebuild back to its original size (same output,
+exit 0), never an error mentioning the cache.
 
 ### The `Query` RPC / `model.query(...)` (SysML v2 API & Services, PR #155)
 
@@ -2474,7 +2517,9 @@ number rather than quoting the table.
   listening `pytest python/tests/ -q` was 369 passed / 26 skipped at 0.0.8; with a service already
   listening the integration tests run instead of skipping (since PR #204 nothing fails either way,
   and CI now starts a service). Say which way a row was measured. `go test -race -count=1 ./...`
-  was 3,682 pass / 5 skip / 3,687 total.
+  was 3,682 pass / 5 skip / 3,687 total at 0.0.8, and 4,440 / 7 / 4,447 at 0.0.9 — recount rather
+  than trusting either, and update `README.md` plus `docs/project/spec-compliance.md` together,
+  since they state the same counts and drifted apart between the two releases.
 - **Error-class claims: check the export path.** A class can exist in `pysysml.errors` and be absent
   from the package surface — `hasattr(pysysml, name)` is the check, and
   `TestPackageSurface` in `python/tests/test_errors.py` now locks every exception in
