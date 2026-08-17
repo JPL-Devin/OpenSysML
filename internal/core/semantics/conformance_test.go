@@ -213,6 +213,9 @@ func TestViewConformanceInheritedFraming(t *testing.T) {
 	`)
 	vp := onlyViewpoint(t, conformance(t, m, sym(t, root, "v"), &fakeEvaluator{}))
 	wantVerdict(t, "verdict of mass", vp.Concerns[0].Verdict, VerdictConforms, vp.Concerns[0].Reason)
+	if vp.Concerns[0].FramedIn != sym(t, root, "StructureView") {
+		t.Fatalf("mass framed in %v, want the view definition StructureView that declares it", vp.Concerns[0].FramedIn)
+	}
 }
 
 // A concern framed by a nested view frames for its container (tool-defined: the

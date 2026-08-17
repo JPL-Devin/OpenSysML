@@ -293,9 +293,7 @@ func (m *Model) viewFramings(view *symbols.Symbol) []viewFraming {
 			return
 		}
 		seen[sym] = true
-		for _, fc := range m.FramedConcernsOf(sym) {
-			out = append(out, viewFraming{frame: fc, target: m.FramedConcernTarget(fc), in: sym})
-		}
+		out = append(out, m.framingsDeclaredBy(sym)...)
 		nested, err := m.NestedViews(sym)
 		if err != nil {
 			return
@@ -305,6 +303,27 @@ func (m *Model) viewFramings(view *symbols.Symbol) []viewFraming {
 		}
 	}
 	walk(view, 0)
+	return out
+}
+
+// framingsDeclaredBy returns the framings of a view and of the views it
+// specializes, each attributed to the view that declares it.
+func (m *Model) framingsDeclaredBy(view *symbols.Symbol) []viewFraming {
+	var out []viewFraming
+	seen := map[*symbols.Symbol]bool{}
+	add := func(owner *symbols.Symbol) {
+		for _, fc := range usageMembersOfKind(owner, ast.UsageFramedConcern) {
+			if seen[fc] {
+				continue
+			}
+			seen[fc] = true
+			out = append(out, viewFraming{frame: fc, target: m.FramedConcernTarget(fc), in: owner})
+		}
+	}
+	add(view)
+	for _, super := range m.AllSupertypes(view) {
+		add(super)
+	}
 	return out
 }
 
