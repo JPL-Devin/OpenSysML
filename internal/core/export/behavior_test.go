@@ -263,25 +263,27 @@ func TestElseBranchIsMarkedUnderTheExtensionNamespace(t *testing.T) {
 // The `do` of a combined subaction is what it was written with, whether or not a
 // space separates it from the body it introduces.
 func TestSubactionDoSurvivesWithoutASpace(t *testing.T) {
-	src := "package P {\n    action def Warm;\n    state def Machine {\n        state s {\n" +
-		"            entry do{ perform Warm; }\n        }\n    }\n}\n"
-	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
-	if err != nil {
-		t.Fatalf("to turtle: %v", err)
+	for _, subaction := range []string{"entry do { perform Warm; }", "entry do{ perform Warm; }", "entry do{perform Warm;}"} {
+		src := "package P {\n    action def Warm;\n    state def Machine {\n        state s {\n" +
+			"            " + subaction + "\n        }\n    }\n}\n"
+		turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+		if err != nil {
+			t.Fatalf("to turtle: %v", err)
+		}
+		if !strings.Contains(string(turtle), "sysx:declaredKeyword \"entry do\"") {
+			t.Fatalf("the `do` of %q was not recorded:\n%s", subaction, turtle)
+		}
+		back, err := export.Convert("m.ttl", turtle, export.FormatTurtle, export.FormatSysML)
+		if err != nil {
+			t.Fatalf("back to notation: %v", err)
+		}
+		if !strings.Contains(string(back), "entry do {") {
+			t.Fatalf("%q lost its `do`:\n%s", subaction, back)
+		}
+		// The notation it comes back as is what the printer writes, so converting
+		// that again must change nothing at all.
+		checkRoundTrip(t, string(back))
 	}
-	if !strings.Contains(string(turtle), "sysx:declaredKeyword \"entry do\"") {
-		t.Fatalf("the `do` of the subaction was not recorded:\n%s", turtle)
-	}
-	back, err := export.Convert("m.ttl", turtle, export.FormatTurtle, export.FormatSysML)
-	if err != nil {
-		t.Fatalf("back to notation: %v", err)
-	}
-	if !strings.Contains(string(back), "entry do {") {
-		t.Fatalf("the subaction lost its `do`:\n%s", back)
-	}
-	// The notation it comes back as is what the printer writes, so converting that
-	// again must change nothing at all.
-	checkRoundTrip(t, string(back))
 }
 
 // checkRoundTrip converts a model to RDF and back, requiring the same notation

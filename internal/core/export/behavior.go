@@ -501,10 +501,13 @@ func firstWord(text string) string {
 	return bareWord(fields[0])
 }
 
-// bareWord drops the punctuation a word can run into, which the notation allows
-// without a space between them.
+// bareWord cuts a word at the punctuation it can run into, which the notation
+// allows without a space between them.
 func bareWord(field string) string {
-	return strings.TrimRight(field, ";{")
+	if cut := strings.IndexAny(field, ";{"); cut >= 0 {
+		return field[:cut]
+	}
+	return field
 }
 
 // bareAcceptNode reports whether an accept node was written without the `action`
