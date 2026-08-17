@@ -28,6 +28,7 @@ func (w changeWait) String() string {
 type changePoll struct {
 	condition map[*lower.Transition]bool
 	guard     map[*lower.Transition]bool
+	blocked   map[*lower.Transition]bool
 	waits     []changeWait
 	waited    map[*lower.Transition]bool
 }
@@ -43,6 +44,7 @@ func (e *StateExecutor) pollChangeEvents() (bool, error) {
 	poll := &changePoll{
 		condition: make(map[*lower.Transition]bool),
 		guard:     make(map[*lower.Transition]bool),
+		blocked:   make(map[*lower.Transition]bool),
 		waited:    make(map[*lower.Transition]bool),
 	}
 	if err := e.observeChangeConditions(poll); err != nil {
@@ -74,6 +76,7 @@ func (e *StateExecutor) pollChangeEvents() (bool, error) {
 			return fired, fmt.Errorf("eval change guard: %w", err)
 		}
 		if !pass {
+			poll.blocked[candidate.trans] = true
 			poll.wait(candidate.trans, candidate.source.Name, "guard is false")
 			continue
 		}
@@ -97,8 +100,21 @@ func (e *StateExecutor) pollChangeEvents() (bool, error) {
 		// back the events it deferred.
 		e.recallDeferredEvents()
 	}
+	e.consumeRise(poll)
 	e.changeWaits = poll.waits
 	return fired, nil
+}
+
+// consumeRise latches every enabled transition whose condition was observed
+// risen, not only the ones taken: one rise is one occurrence, so a transition
+// that lost conflict resolution waits for the next rise instead of firing on the
+// next poll. A transition its guard blocked consumes nothing and stays armed.
+func (e *StateExecutor) consumeRise(poll *changePoll) {
+	for trans, holds := range poll.condition {
+		if holds && poll.guard[trans] && !poll.blocked[trans] {
+			e.changeFired[trans] = true
+		}
+	}
 }
 
 // observeChangeConditions evaluates, once each, the change conditions of the
@@ -127,6 +143,18 @@ func (e *StateExecutor) observeChangeConditions(poll *changePoll) error {
 				}
 				if e.changeFired[trans] {
 					poll.wait(trans, source.Name, "condition has not changed since it fired")
+					continue
+				}
+				// The guard is read once per poll, alongside the condition, so which
+				// transitions this rise enables does not depend on selection order.
+				satisfied, err := e.passesGuard(trans)
+				if err != nil {
+					return fmt.Errorf("state %s: eval change guard: %w", source.Name, err)
+				}
+				poll.guard[trans] = satisfied
+				if !satisfied {
+					poll.blocked[trans] = true
+					poll.wait(trans, source.Name, "guard is false")
 				}
 			}
 		}
@@ -158,19 +186,9 @@ func (e *StateExecutor) risenChangeTransition(state *ast.StateNode, poll *change
 		if !poll.condition[trans] || e.changeFired[trans] {
 			continue
 		}
-		satisfied, ok := poll.guard[trans]
-		if !ok {
-			var err error
-			satisfied, err = e.passesGuard(trans)
-			if err != nil {
-				return nil, fmt.Errorf("eval change guard: %w", err)
-			}
-			poll.guard[trans] = satisfied
-		}
-		if satisfied {
+		if poll.guard[trans] {
 			return trans, nil
 		}
-		poll.wait(trans, state.Name, "guard is false")
 	}
 	return nil, nil
 }

@@ -290,6 +290,69 @@ func TestChangeTriggerRearmsOnStateExit(t *testing.T) {
 	}
 }
 
+// One rise is one occurrence: a transition that lost conflict resolution to a
+// nested one is consumed by that rise too, so the enclosing state it would leave
+// stays active until the condition falls and rises again.
+func TestChangeTriggerConsumesTheRiseForALosingTransition(t *testing.T) {
+	source := `package test {
+		state sm {
+			attribute ready : Boolean = false;
+			initial start;
+			state Working {
+				region left {
+					initial lstart;
+					state l1;
+					state l2;
+					transition lstart to l1;
+					transition l1 to l2 accept when ready;
+				}
+				region right {
+					initial rstart;
+					state r1;
+					transition rstart to r1;
+				}
+				accept when ready then Done;
+			}
+			state Done;
+			start then Working;
+		}
+	}`
+	exec := stateExecutorForSource(t, "sm", source)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	exec.stateData["ready"] = boolValue(true)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("raise condition: %v", err)
+	}
+	if active := activeStates(exec); active["Done"] || !active["l2"] || !active["r1"] {
+		t.Errorf("active = %v, want l2 | r1: the losing transition fired on a later poll", active)
+	}
+
+	// The condition falling and rising again is a new occurrence, which the
+	// enclosing transition is now the only one left to take.
+	exec.stateData["ready"] = boolValue(false)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("lower condition: %v", err)
+	}
+	exec.stateData["ready"] = boolValue(true)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("raise condition again: %v", err)
+	}
+	if active := activeStates(exec); !active["Done"] {
+		t.Errorf("active = %v, want Done: the new rise did not reach the enclosing transition", active)
+	}
+}
+
+// activeStates is the executor's active configuration, by state name.
+func activeStates(exec *StateExecutor) map[string]bool {
+	active := make(map[string]bool)
+	for _, state := range exec.ActiveStates() {
+		active[state.Name] = true
+	}
+	return active
+}
+
 // A machine that has not been stepped yet makes no claim about progress: the
 // initial transition it has queued is pending work.
 func TestSuspendReasonMakesNoClaimBeforeTheMachineIsStepped(t *testing.T) {
