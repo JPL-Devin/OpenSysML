@@ -344,6 +344,58 @@ func TestChangeTriggerConsumesTheRiseForALosingTransition(t *testing.T) {
 	}
 }
 
+// A state a firing re-enters mid-poll gets a fresh watch: the rise the poll
+// observed before that entry belongs to the activation that is gone, so it must
+// not latch the watch of the new one.
+func TestChangeTriggerArmsAWatchReenteredDuringThePoll(t *testing.T) {
+	exec := stateExecutorForSource(t, "sm", `package test {
+		state sm {
+			attribute ready : Boolean = false;
+			initial start;
+			state Working {
+				region left {
+					initial lstart;
+					state l1;
+					state l2;
+					transition lstart to l1;
+				}
+				region right {
+					initial rstart;
+					state C {
+						region inner {
+							initial cstart;
+							state c2;
+							transition cstart to c2;
+						}
+					}
+					state r2;
+					transition rstart to C;
+					transition C to r2 accept when ready;
+				}
+			}
+			fork split;
+			transition l1 to split accept when ready;
+			transition split to l2;
+			transition split to C;
+			start then Working;
+		}
+	}`)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	// The fork re-enters C, so the watch out of C is armed again; its own
+	// candidate is skipped because the leaf it was selected for is no longer active.
+	exec.stateData["ready"] = boolValue(true)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("raise condition: %v", err)
+	}
+	if active := activeStates(exec); !active["r2"] || !active["l2"] {
+		t.Errorf("active = %v (%s), want l2 | r2: the re-entered watch stayed latched",
+			active, exec.SuspendReason())
+	}
+}
+
 // activeStates is the executor's active configuration, by state name.
 func activeStates(exec *StateExecutor) map[string]bool {
 	active := make(map[string]bool)

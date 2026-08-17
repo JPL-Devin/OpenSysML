@@ -71,6 +71,10 @@ type StateExecutor struct {
 	// state entries it causes must leave alone.
 	firingChange *lower.Transition
 
+	// changeRearmed collects, while a poll runs, the watches a state entry armed
+	// for a new activation, so the poll's earlier observation does not latch them.
+	changeRearmed map[*lower.Transition]bool
+
 	// changeWaits are the change conditions the last poll found could not fire,
 	// telling a machine waiting on one from a quiesced machine.
 	changeWaits []changeWait
@@ -1872,6 +1876,9 @@ func (e *StateExecutor) enterStateInto(state *ast.StateNode, branches map[*ast.S
 	for _, trans := range e.graph.Transitions[state] {
 		if trans != e.firingChange {
 			delete(e.changeFired, trans)
+			if e.changeRearmed != nil {
+				e.changeRearmed[trans] = true
+			}
 		}
 	}
 

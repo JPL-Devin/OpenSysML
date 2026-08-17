@@ -47,6 +47,9 @@ func (e *StateExecutor) pollChangeEvents() (bool, error) {
 		blocked:   make(map[*lower.Transition]bool),
 		waited:    make(map[*lower.Transition]bool),
 	}
+	e.changeRearmed = make(map[*lower.Transition]bool)
+	defer func() { e.changeRearmed = nil }()
+
 	if err := e.observeChangeConditions(poll); err != nil {
 		return false, err
 	}
@@ -108,10 +111,12 @@ func (e *StateExecutor) pollChangeEvents() (bool, error) {
 // consumeRise latches every enabled transition whose condition was observed
 // risen, not only the ones taken: one rise is one occurrence, so a transition
 // that lost conflict resolution waits for the next rise instead of firing on the
-// next poll. A transition its guard blocked consumes nothing and stays armed.
+// next poll. A transition its guard blocked consumes nothing and stays armed, and
+// so does one a state entry re-armed during this poll: that watch belongs to an
+// activation later than the observation.
 func (e *StateExecutor) consumeRise(poll *changePoll) {
 	for trans, holds := range poll.condition {
-		if holds && poll.guard[trans] && !poll.blocked[trans] {
+		if holds && poll.guard[trans] && !poll.blocked[trans] && !e.changeRearmed[trans] {
 			e.changeFired[trans] = true
 		}
 	}
