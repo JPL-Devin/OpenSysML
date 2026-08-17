@@ -1,0 +1,6 @@
+stmt assign x
+  eval literal 7 -> 7
+  eval feature x -> 7
+  eval literal 100 -> 100
+eval operator > -> false
+step 1: no active tokens

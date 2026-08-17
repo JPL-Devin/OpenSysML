@@ -1,0 +1,9 @@
+{
+	"type": "action",
+	"trace": true,
+	"outputs": {
+		"level": {"type": "Integer", "value": 4},
+		"low": {"type": "Integer", "value": 1},
+		"high": {"type": "Integer", "value": 0}
+	}
+}

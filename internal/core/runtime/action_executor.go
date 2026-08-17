@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -10,6 +11,10 @@ import (
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
+
+// ErrAmbiguousSuccession reports a node whose flow could continue along more
+// than one succession, which the token semantics do not resolve.
+var ErrAmbiguousSuccession = errors.New("more than one succession is enabled")
 
 // ActionExecutor executes action bodies using token-flow semantics.
 type ActionExecutor struct {
@@ -494,13 +499,66 @@ func (e *ActionExecutor) stepToken(tokenIdx int) error {
 	}
 }
 
+// enabledSuccessions returns the successions a token at node may take, in
+// declaration order: a guard that does not hold leaves no link to pass along
+// (TransitionPerformance::transitionLink is HappensBefore[0..1]), so it is pruned.
+func (e *ActionExecutor) enabledSuccessions(node ast.Node) ([]ast.Node, error) {
+	declared := e.graph.Edges[node]
+	guards := e.graph.Guards[node]
+	if len(declared) == 0 || len(guards) == 0 {
+		return declared, nil
+	}
+
+	ec := NewEvalContext(e.ctx, e.graph.Scope)
+	ec.Push(e.data)
+	defer ec.beginStep()()
+
+	enabled := make([]ast.Node, 0, len(declared))
+	for _, succ := range declared {
+		holds, err := e.guardHolds(ec, node, guards[succ])
+		if err != nil {
+			return nil, err
+		}
+		if holds {
+			enabled = append(enabled, succ)
+		}
+	}
+	return enabled, nil
+}
+
+// guardHolds evaluates the guard a succession out of node carries; a succession
+// carrying none is unconditional.
+func (e *ActionExecutor) guardHolds(ec *EvalContext, node, guard ast.Node) (bool, error) {
+	if guard == nil {
+		return true, nil
+	}
+	result, err := ec.Eval(guard)
+	if err != nil {
+		return false, fmt.Errorf("eval guard of %s: %w", nodeDescription(node), err)
+	}
+	if result.Kind != ValConst || result.Const.Kind != semantics.ValBool {
+		return false, fmt.Errorf("%w: %s: guard must evaluate to boolean, got %v",
+			ErrTypeMismatch, nodeDescription(node), result.Kind)
+	}
+	return result.Const.Bool, nil
+}
+
 // stepInitialNode advances token from initial node to successors.
 func (e *ActionExecutor) stepInitialNode(tokenIdx int) error {
 	token := &e.tokens[tokenIdx]
-	successors := e.graph.Edges[token.Location]
-
-	if len(successors) == 0 {
+	if len(e.graph.Edges[token.Location]) == 0 {
 		return fmt.Errorf("initial node has no successors")
+	}
+
+	successors, err := e.enabledSuccessions(token.Location)
+	if err != nil {
+		return err
+	}
+
+	// A guard ruling out the succession the flow starts with ends it here.
+	if len(successors) == 0 {
+		e.retireToken(tokenIdx)
+		return nil
 	}
 
 	// Move token to first successor (initial should have exactly 1)
@@ -530,9 +588,19 @@ func (e *ActionExecutor) stepForkNode(tokenIdx int) error {
 	token := &e.tokens[tokenIdx]
 	node := token.Location.(*ast.ForkNode)
 
-	successors := e.graph.Edges[node]
-	if len(successors) == 0 {
+	if len(e.graph.Edges[node]) == 0 {
 		return fmt.Errorf("fork node %s has no successors", node.Name)
+	}
+
+	// A guard on a branch out of a fork prunes it: only the enabled branches run,
+	// and a fork whose every branch is pruned ends the flow through it.
+	successors, err := e.enabledSuccessions(node)
+	if err != nil {
+		return err
+	}
+	if len(successors) == 0 {
+		e.retireToken(tokenIdx)
+		return nil
 	}
 
 	// Create N tokens (one per successor)
@@ -586,12 +654,26 @@ func (e *ActionExecutor) stepJoinNode(tokenIdx int) error {
 	}
 
 	// Get successor
-	successors := e.graph.Edges[node]
-	if len(successors) == 0 {
+	declared := e.graph.Edges[node]
+	if len(declared) == 0 {
 		return fmt.Errorf("join node %s has no successors", node.Name)
 	}
-	if len(successors) > 1 {
+	if len(declared) > 1 {
 		return fmt.Errorf("join node %s has multiple successors", node.Name)
+	}
+	successors, err := e.enabledSuccessions(node)
+	if err != nil {
+		return err
+	}
+
+	// The branches' tokens are consumed either way; a guard ruling out the
+	// succession out of the join ends the flow there.
+	if len(successors) == 0 {
+		e.tokens = remainingTokens
+		if len(e.tokens) == 0 {
+			e.state = StateCompleted
+		}
+		return nil
 	}
 
 	// Create output token at successor. The branches wrote to the action's own
@@ -637,17 +719,25 @@ func (e *ActionExecutor) stepMergeNode(tokenIdx int) error {
 		return nil
 	}
 
-	// Mark merge visited, pass token through
-	e.mergeVisited[mergeNode] = true
-
-	successors := e.graph.Edges[mergeNode]
-	if len(successors) == 0 {
+	declared := e.graph.Edges[mergeNode]
+	if len(declared) == 0 {
 		return fmt.Errorf("merge node %s has no successors", mergeNode.Name)
 	}
-	if len(successors) > 1 {
+	if len(declared) > 1 {
 		return fmt.Errorf("merge node %s has multiple successors (not yet supported)", mergeNode.Name)
 	}
+	successors, err := e.enabledSuccessions(mergeNode)
+	if err != nil {
+		return err
+	}
+	if len(successors) == 0 {
+		e.retireToken(tokenIdx)
+		return nil
+	}
 
+	// First-wins counts the token that traverses, not the one that arrives: a
+	// token whose succession was pruned leaves the merge open for a later one.
+	e.mergeVisited[mergeNode] = true
 	token.Location = successors[0]
 	return nil
 }
@@ -692,19 +782,11 @@ func (e *ActionExecutor) stepDecisionNode(tokenIdx int) error {
 			continue
 		}
 
-		// Evaluate guard
-		result, err := ec.Eval(guard)
+		holds, err := e.guardHolds(ec, decisionNode, guard)
 		if err != nil {
-			return fmt.Errorf("eval guard: %w", err)
+			return err
 		}
-
-		// Guard must be boolean
-		if result.Kind != ValConst || result.Const.Kind != semantics.ValBool {
-			return fmt.Errorf("decision node %s: guard must evaluate to boolean, got %v", decisionNode.Name, result.Kind)
-		}
-
-		// Check if guard is true
-		if result.Const.Bool {
+		if holds {
 			token.Location = succ
 			return nil
 		}
@@ -758,10 +840,14 @@ func (e *ActionExecutor) stepActionExecutionNode(tokenIdx int) error {
 		}
 	}
 
-	// Advance to successor
-	successors := e.graph.Edges[token.Location]
+	// Advance to a succession its guard, where it carries one, leaves enabled.
+	successors, err := e.enabledSuccessions(token.Location)
+	if err != nil {
+		return err
+	}
 	if len(successors) > 1 {
-		return fmt.Errorf("action node %s has multiple successors (decision nodes not yet supported)", node.Name)
+		return fmt.Errorf("%w: action node %s has multiple successors (decision nodes not yet supported)",
+			ErrAmbiguousSuccession, node.Name)
 	}
 
 	// Apply data flows: transfer data from this node's output pins to target input pins
@@ -859,10 +945,13 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 		return err
 	}
 
-	// Advance to successor
-	successors := e.graph.Edges[token.Location]
+	// Advance to a succession its guard, where it carries one, leaves enabled.
+	successors, err := e.enabledSuccessions(token.Location)
+	if err != nil {
+		return err
+	}
 	if len(successors) > 1 {
-		return fmt.Errorf("nested action %s has multiple successors", ActionNodeName(usage))
+		return fmt.Errorf("%w: action node %s has multiple successors", ErrAmbiguousSuccession, ActionNodeName(usage))
 	}
 
 	// The flows out of this node carry what its body produced to the pins the
@@ -921,7 +1010,10 @@ func (e *ActionExecutor) stepStatementNode(tokenIdx int) error {
 		return err
 	}
 
-	successors := e.graph.Edges[node]
+	successors, err := e.enabledSuccessions(node)
+	if err != nil {
+		return err
+	}
 	if len(successors) > 1 {
 		return fmt.Errorf("%s node has multiple successors", statementNodeKeyword(node))
 	}

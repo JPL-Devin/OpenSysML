@@ -106,6 +106,50 @@ func TestToActionGraph_FirstNamesAFinalNode(t *testing.T) {
 	}
 }
 
+// `first s1 if c then s2;` carries the guard the member states onto the lowered
+// succession, which is what the executor evaluates before traversing it.
+func TestToActionGraph_GuardOnTheSuccessionOutOfTheFirstNode(t *testing.T) {
+	graph := actionGraphFor(t, `
+		action seq {
+			attribute x : Integer = 0;
+			action s1;
+			action s2;
+			first s1 if x > 0 then s2;
+		}
+	`)
+
+	s1 := nodeNamed(t, graph, "s1")
+	s2 := nodeNamed(t, graph, "s2")
+
+	if edges := graph.Edges[s1]; len(edges) != 1 || edges[0] != s2 {
+		t.Fatalf("s1 edges = %v, want [s2]", edges)
+	}
+	if graph.Guards[s1][s2] == nil {
+		t.Error("the guard the member states was not carried onto the succession")
+	}
+}
+
+// The same guard on a succession written as its own member out of an ordinary
+// action node (`then s1 s2 if c;`).
+func TestToActionGraph_GuardOnASuccessionOutOfAnActionNode(t *testing.T) {
+	graph := actionGraphFor(t, `
+		action seq {
+			attribute x : Integer = 0;
+			action s1;
+			action s2;
+			first s1;
+			then s1 s2 if x > 0;
+		}
+	`)
+
+	s1 := nodeNamed(t, graph, "s1")
+	s2 := nodeNamed(t, graph, "s2")
+
+	if graph.Guards[s1][s2] == nil {
+		t.Error("the guard the member states was not carried onto the succession")
+	}
+}
+
 func nodeDescription(node ast.Node) string {
 	if name := getNodeName(node); name != "" {
 		return name
