@@ -59,3 +59,40 @@ func TestEvaluationReportsAValuelessValueTypedFeatureAsUnset(t *testing.T) {
 	wants(t, run(t, s, "%eval P::Q::d"), "= <unset>")
 	wants(t, run(t, s, "%eval P::Q::k"), "= 2.00")
 }
+
+// A debugger session outlives a submission that does not rewrite what it runs,
+// while the session rebuilds its own runtime context, so the run's results are
+// read against the context that produced them.
+func TestActionResultsReadAgainstTheContextThatProducedThem(t *testing.T) {
+	s := loadSource(t, `private import ScalarValues::*;
+part def Holder {
+    attribute d : Real;
+}
+part holder : Holder;
+action tally {
+    attribute got = 0;
+    first start;
+    action read {
+        assign got := holder.d;
+    }
+    done end;
+    then start read;
+    then read end;
+}
+`)
+	wants(t, run(t, s, "%action tally"), "Started action executor")
+
+	if res := s.Submit("package Other { part def Unrelated; }"); len(res.Diagnostics) > 0 {
+		t.Fatalf("unrelated submission has diagnostics: %v", res.Diagnostics)
+	}
+	if s.actionExec == nil {
+		t.Fatal("the debugger session ended on an unrelated submission")
+	}
+	if s.rtCtx == s.actionExec.contextOf() {
+		t.Fatal("the session still holds the run's own context, so this no longer tests anything")
+	}
+
+	out := run(t, s, "%continue")
+	wants(t, out, "got = <unset>")
+	rejects(t, out, "got = Instance(")
+}

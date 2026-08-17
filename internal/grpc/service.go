@@ -51,11 +51,16 @@ const CapabilityEvaluateSubject = "evaluate_subject"
 // SymbolInfo.attributes, rather than always reporting none.
 const CapabilitySymbolAttributes = "symbol_attributes"
 
+// CapabilityUnsetValue names the capability of reporting a valueless feature of
+// a value type as Value.unset, rather than as the empty object it materializes.
+const CapabilityUnsetValue = "unset_value"
+
 // capabilities is what this build supports, in report order. A capability is
 // only ever added: renaming or dropping one breaks clients that require it.
 var capabilities = []string{
 	CapabilityTypeFacts, CapabilityConvert, CapabilityVerification, CapabilityQuery,
 	CapabilityEnumValues, CapabilityEvaluateSubject, CapabilitySymbolAttributes,
+	CapabilityUnsetValue,
 }
 
 // Capabilities returns the capability names this build of the service reports.

@@ -511,6 +511,9 @@ message ServerInfoResponse {
   //   "query"      - the Query RPC evaluates a SysML v2 API & Services Query.
   //   "enum_values" - a Value carries an enumeration literal as enum_literal,
   //                  rather than reporting it as an unsupported null.
+  //   "unset_value" - a valueless feature of a value type is reported as
+  //                  Value.unset, rather than as the empty object it
+  //                  materializes.
   repeated string capabilities = 2;
 }
 

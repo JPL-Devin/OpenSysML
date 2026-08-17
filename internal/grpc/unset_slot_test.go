@@ -1,6 +1,7 @@
 package grpc
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -82,4 +83,67 @@ func TestProtoToValue_RejectsUnset(t *testing.T) {
 	if _, err := ProtoToValueIn(seq, nil, nil); !errors.Is(err, ErrUnsetNotAccepted) {
 		t.Errorf("in a sequence: err = %v, want %v", err, ErrUnsetNotAccepted)
 	}
+}
+
+// A calc answers with the same spelling as every other RPC: a result or output
+// that holds no value is sent unset rather than as an object reference.
+func TestEvaluateCalc_UnsetOutputIsSentUnset(t *testing.T) {
+	srv := mustNewService(t, 10)
+	source := `package Demo {
+	private import ScalarValues::*;
+	part def Q {
+		attribute d : Real;
+	}
+	part q : Q;
+	calc def Read {
+		out r = q.d;
+	}
+	calc reading : Read;
+}
+`
+	hash := mustVerifyModel(t, srv, source, "verify-calc-unset")
+
+	resp, err := srv.EvaluateCalc(context.Background(), &pb.EvaluateCalcRequest{
+		ModelHash: hash,
+		SymbolId:  "Demo::reading",
+	})
+	if err != nil {
+		t.Fatalf("EvaluateCalc: %v", err)
+	}
+	if resp.Error != "" {
+		t.Fatalf("EvaluateCalc reported %q", resp.Error)
+	}
+	if len(resp.Outputs) != 1 {
+		t.Fatalf("got %d outputs, want r: %v", len(resp.Outputs), resp.Outputs)
+	}
+	if _, ok := resp.Outputs[0].GetValue().GetKind().(*pb.Value_Unset); !ok {
+		kind, value := describeValue(resp.Outputs[0].GetValue())
+		t.Errorf("output r: %s %v, want unset", kind, value)
+	}
+
+	invoked, err := srv.EvaluateCalc(context.Background(), &pb.EvaluateCalcRequest{
+		ModelHash: hash,
+		SymbolId:  "Demo::Read",
+	})
+	if err != nil {
+		t.Fatalf("EvaluateCalc of the definition: %v", err)
+	}
+	if invoked.Error != "" {
+		t.Fatalf("EvaluateCalc of the definition reported %q", invoked.Error)
+	}
+	if _, ok := invoked.GetResult().GetKind().(*pb.Value_Unset); !ok {
+		kind, value := describeValue(invoked.GetResult())
+		t.Errorf("result: %s %v, want unset", kind, value)
+	}
+}
+
+// The unset arm is a wire-visible addition, so it is advertised as a capability
+// a client can require rather than left for a client to discover.
+func TestCapabilities_IncludeUnsetValue(t *testing.T) {
+	for _, name := range Capabilities() {
+		if name == CapabilityUnsetValue {
+			return
+		}
+	}
+	t.Errorf("capabilities = %v, want one named %q", Capabilities(), CapabilityUnsetValue)
 }

@@ -1749,6 +1749,7 @@ func (s *Session) startAction(name string, performer []string) ([]string, error)
 		selfFQN:  selfFQN,
 		symbol:   sym,
 		executor: exec,
+		rtCtx:    ctx,
 	}
 	s.endedAction = nil
 
@@ -1790,7 +1791,7 @@ func (s *Session) doStep() ([]string, bool, error) {
 
 	if exec.State() == runtime.StateCompleted {
 		out = append(out, "", "✓ Action completed")
-		out = append(out, renderResults(s.rtCtx, exec.Results())...)
+		out = append(out, renderResults(s.actionExec.contextOf(), exec.Results())...)
 	}
 
 	return out, false, nil
@@ -1812,7 +1813,7 @@ func (s *Session) continueAction() ([]string, []NamedValue, error) {
 
 	// Check if already completed
 	if exec.State() == runtime.StateCompleted {
-		return []string{"✓ Action already completed"}, namedValues(s.rtCtx, exec.Results()), nil
+		return []string{"✓ Action already completed"}, namedValues(s.actionExec.contextOf(), exec.Results()), nil
 	}
 
 	// Run to completion, or to the first breakpoint hit
@@ -1835,9 +1836,9 @@ func (s *Session) continueAction() ([]string, []NamedValue, error) {
 		"✓ Action completed",
 		fmt.Sprintf("  Final state: %s", exec.State()),
 	}
-	out = append(out, renderResults(s.rtCtx, exec.Results())...)
+	out = append(out, renderResults(s.actionExec.contextOf(), exec.Results())...)
 
-	return out, namedValues(s.rtCtx, exec.Results()), nil
+	return out, namedValues(s.actionExec.contextOf(), exec.Results()), nil
 }
 
 // renderResults lists an action's output values, in name order so a report of
@@ -1880,7 +1881,7 @@ func (s *Session) doTokens() ([]string, bool, error) {
 
 	// A token carries no values of its own: every one of them reads and writes
 	// the action's features, so those are shown once.
-	if values := namedValues(s.rtCtx, exec.Data()); len(values) > 0 {
+	if values := namedValues(s.actionExec.contextOf(), exec.Data()); len(values) > 0 {
 		out = append(out, "  Values:")
 		for _, v := range values {
 			out = append(out, fmt.Sprintf("    %s = %s", v.Name, v.Value))
@@ -2006,6 +2007,7 @@ func (s *Session) startStateMachine(name string, performer []string) ([]string, 
 		selfFQN:  selfFQN,
 		symbol:   sym,
 		executor: exec,
+		rtCtx:    ctx,
 		now:      exec.CurrentTime(),
 	}
 	s.endedState = nil
@@ -2064,7 +2066,7 @@ func (s *Session) doCurrent() ([]string, bool, error) {
 		}
 	}
 
-	if values := namedValues(s.rtCtx, stateData); len(values) > 0 {
+	if values := namedValues(s.stateExec.contextOf(), stateData); len(values) > 0 {
 		out = append(out, "", "State data:")
 		for _, v := range values {
 			out = append(out, fmt.Sprintf("  %s = %s", v.Name, v.Value))

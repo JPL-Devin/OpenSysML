@@ -54,6 +54,12 @@ CAPABILITY_EVALUATE_SUBJECT = "evaluate_subject"
 #: which is indistinguishable from an element that has no attributes.
 CAPABILITY_SYMBOL_ATTRIBUTES = "symbol_attributes"
 
+#: A valueless feature of a value type as ``Value.unset``, read as
+#: :data:`pysysml.UNSET`. Without it the empty object such a feature materializes
+#: crosses as an instance id, which is indistinguishable from an object of a
+#: class that declares no features.
+CAPABILITY_UNSET_VALUE = "unset_value"
+
 
 @dataclass(frozen=True)
 class ServerInfo:
