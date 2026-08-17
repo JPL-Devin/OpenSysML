@@ -421,22 +421,9 @@ func (m *Model) unresolvedConcernRef(fc *symbols.Symbol) string {
 // name decides, which is all the two framings share (tool-defined).
 func (m *Model) framesTheSame(c ConcernConformance, f viewFraming) bool {
 	if c.Target != nil && f.target != nil {
-		return c.Target == f.target || m.conformsTo(f.target, c.Target) || m.conformsTo(c.Target, f.target)
+		return c.Target == f.target || m.Conforms(f.target, c.Target) || m.Conforms(c.Target, f.target)
 	}
 	return c.Target == f.frame || (c.Name != "" && c.Name == framedConcernName(f.frame))
-}
-
-// conformsTo reports whether sym is target or specializes it.
-func (m *Model) conformsTo(sym, target *symbols.Symbol) bool {
-	if sym == target {
-		return true
-	}
-	for _, super := range m.AllSupertypes(sym) {
-		if super == target {
-			return true
-		}
-	}
-	return false
 }
 
 // evaluateConcern evaluates a framed concern against the exposed elements its
@@ -448,7 +435,7 @@ func (m *Model) evaluateConcern(out *ConcernConformance, exposed []*symbols.Symb
 	var evaluated int
 	out.Verdict = VerdictConforms
 	for _, elem := range exposed {
-		if subjectType != nil && !m.conformsTo(elem, subjectType) {
+		if subjectType != nil && !m.Conforms(elem, subjectType) {
 			continue
 		}
 		if !instantiable(elem) {

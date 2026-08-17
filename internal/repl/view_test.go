@@ -412,6 +412,32 @@ func TestViewSharesTheObjectOfAQuotedName(t *testing.T) {
 	}
 }
 
+// Anything admits every element, so a concern whose subject states it is
+// checked against each exposed element rather than reported unevaluable.
+func TestViewChecksAConcernWhoseSubjectIsAnything(t *testing.T) {
+	s := conformanceSession(t)
+	res := s.Submit(`package Universal {
+    private import Demo::*;
+    concern def Named { subject s : Base::Anything; require constraint { 1.0 > 2.0 } }
+    viewpoint def AnyPerspective { frame concern named : Named; }
+    viewpoint anything : AnyPerspective;
+    view anyView { expose Demo::wheel; satisfy anything; frame concern named : Named; }
+}`)
+	for _, d := range res.Diagnostics {
+		if d.Severity == passes.SeverityError {
+			t.Fatalf("the view did not load: %v", res.Diagnostics)
+		}
+	}
+	out, err := s.View("Universal::anyView")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := strings.Join(out, "\n")
+	if !strings.Contains(text, "concern named: violated") {
+		t.Errorf("%%view of an Anything-subject concern = %q, want the condition checked", text)
+	}
+}
+
 // The conformance section is deterministic: the same model reported twice reads
 // the same.
 func TestViewConformanceOutputIsDeterministic(t *testing.T) {
