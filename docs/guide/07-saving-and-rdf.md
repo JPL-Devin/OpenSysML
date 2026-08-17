@@ -165,18 +165,20 @@ declarations and survive.
 
 [`examples/semantic-layer/demo.sysml`](../../examples/semantic-layer/demo.sysml)
 and [`examples/repl-behavioral-demo.sysml`](../../examples/repl-behavioral-demo.sysml)
-convert too, as do the structure-only `parser_features_demo_*.kerml` files
-(except `..._advanced_bodies.kerml`, which computes a value, and three that each
-declare one name twice). What converts is structure; a model whose point is a
-behavior does not, the conversion stopping at a state, a region, an assignment,
-an action node or a name two members of one body share (how much of `examples/`
-that leaves converting is measured in
+convert too, as do most `parser_features_demo_*.kerml` files (except
+`..._advanced_bodies.kerml`, which computes a value, and two that each declare
+one name twice). The behavior a body states converts as well — states, regions,
+substates, action nodes, assignments and transitions all have a mapping. What is
+refused is what the notation could not be rebuilt from: an expression the graph
+would have to compute, a name two members of one body share, or an order whose
+ends the notation leaves implicit (how much of `examples/` converts is measured
+in
 [project/roadmap.md](../project/roadmap.md#d6--a-behavioral-node-has-no-metaclass-so-a-model-stating-steps-cannot-convert)):
 
 ```bash
-$ sysml examples/state-machine-demo.sysml -convert ttl
+$ sysml examples/parser_features_demo_action_semantics.sysml -convert ttl
 note: RDF conversion is experimental: the mapping covers model structure and the behavior its bodies state, refuses what it cannot write back, and its vocabulary may change without a compatibility path; see docs/reference/rdf-mapping.md § Status
-sysml: cannot convert the substate member at examples/state-machine-demo.sysml:7:13: save to .sysml or .kerml instead, which writes the source exactly; see docs/reference/rdf-mapping.md § Limitations
+sysml: cannot convert the succession at examples/parser_features_demo_action_semantics.sysml:41:9: it does not name both of the members it sequences, so the order it declares cannot be written back
 ```
 
 ---
