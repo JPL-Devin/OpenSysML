@@ -341,7 +341,7 @@ func TestActionStepBudgetIsConfigurable(t *testing.T) {
 	}
 }
 
-// TestStateBudgetsAreConfigurable: the event and do activity bounds come from
+// TestStateBudgetsAreConfigurable: the event and do action bounds come from
 // the context too, each naming its own variable.
 func TestStateBudgetsAreConfigurable(t *testing.T) {
 	// A machine whose state is re-entered every round never settles, so whichever

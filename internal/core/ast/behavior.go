@@ -167,7 +167,7 @@ type StateNode struct {
 	IsInitial bool   // initial state marker
 	IsFinal   bool   // final state marker
 	Entry     []Node // entry behaviors (action sequence)
-	Do        []Node // do activity (ongoing action)
+	Do        []Node // do action (ongoing action)
 	Exit      []Node // exit behaviors (action sequence)
 	// Defer names the events the state defers while it is active: an event no
 	// transition of the active configuration handles is retained instead of
@@ -408,7 +408,7 @@ type EntryMember struct {
 	Actions []Node // action sequence
 }
 
-// DoMember represents ongoing activity in a state body.
+// DoMember represents an ongoing do action in a state body.
 // Syntax: do { <actions> }
 type DoMember struct {
 	NodeBase

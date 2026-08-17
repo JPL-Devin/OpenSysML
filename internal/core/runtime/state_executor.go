@@ -50,10 +50,10 @@ type StateExecutor struct {
 	// transition of the active configuration handled.
 	deferred []Event
 
-	// doActivities are the running do behaviors, in the order their states were
+	// doActions are the running do behaviors, in the order their states were
 	// entered. Concurrently active states interleave one action per round, so this
 	// order — not map iteration order — decides the interleaving.
-	doActivities []*doActivity
+	doActions []*doAction
 
 	// runStarted marks this executor's run as begun, so the step budget is reset
 	// once however many calls the run is driven over.
@@ -64,10 +64,10 @@ type StateExecutor struct {
 	timerScheduled map[*lower.Transition]bool
 }
 
-// doActivity is the part of a state's do behavior that has still to run. The
+// doAction is the part of a state's do behavior that has still to run. The
 // behavior runs while its state is active rather than at entry, and is abandoned
 // when the state is exited.
-type doActivity struct {
+type doAction struct {
 	state   *ast.StateNode
 	pending []lower.StateBehavior
 }
@@ -238,7 +238,7 @@ func (e *StateExecutor) scheduleFromLeaf(leaf *ast.StateNode) error {
 // so a state still running one is skipped here and scheduled by runDoRound when
 // the behavior ends.
 func (e *StateExecutor) scheduleCompletionTransitions(state *ast.StateNode) error {
-	if e.hasRunningDoActivity(state) {
+	if e.hasRunningDoAction(state) {
 		return nil
 	}
 
@@ -1477,7 +1477,7 @@ func (e *StateExecutor) enterHierarchyInto(state *ast.StateNode, branches map[*a
 // so concurrently active states interleave instead of one running to the end at
 // entry, and leaving a state abandons the rest of its do behavior.
 //
-// The run is bounded by the context's event and do activity budgets
+// The run is bounded by the context's event and do action budgets
 // (SYSML_MAX_EVENTS, SYSML_MAX_DO_STEPS), so a cyclic machine reports a typed
 // error instead of spinning forever.
 func (e *StateExecutor) RunToCompletion() error {
@@ -1492,7 +1492,7 @@ func (e *StateExecutor) RunToCompletion() error {
 		}
 		doSteps += int64(ran)
 		if doSteps >= maxDoSteps {
-			return fmt.Errorf("state machine exceeded max do activity steps (%d steps; raise %s to allow more), possible non-terminating do behavior", maxDoSteps, MaxDoStepsEnvVar)
+			return fmt.Errorf("state machine exceeded max do action steps (%d steps; raise %s to allow more), possible non-terminating do behavior", maxDoSteps, MaxDoStepsEnvVar)
 		}
 		if e.eventQueue.Len() == 0 && !e.deliverPendingSignal() {
 			if ran > 0 {
@@ -1512,15 +1512,15 @@ func (e *StateExecutor) RunToCompletion() error {
 	return nil
 }
 
-// startDoActivity registers a state's do behavior as running. Re-entering a
+// startDoAction registers a state's do behavior as running. Re-entering a
 // state restarts its do behavior rather than resuming the abandoned one.
-func (e *StateExecutor) startDoActivity(state *ast.StateNode) {
+func (e *StateExecutor) startDoAction(state *ast.StateNode) {
 	doBehaviors := e.behaviorsOf(state).Do
 	if len(doBehaviors) == 0 {
 		return
 	}
-	e.stopDoActivity(state)
-	e.doActivities = append(e.doActivities, &doActivity{
+	e.stopDoAction(state)
+	e.doActions = append(e.doActions, &doAction{
 		state:   state,
 		pending: append([]lower.StateBehavior(nil), doBehaviors...),
 	})
@@ -1535,19 +1535,19 @@ func (e *StateExecutor) behaviorsOf(state *ast.StateNode) *lower.StateBehaviors 
 	return &lower.StateBehaviors{}
 }
 
-// stopDoActivity abandons whatever is left of a state's do behavior, which is
+// stopDoAction abandons whatever is left of a state's do behavior, which is
 // what exiting the state does to it.
-func (e *StateExecutor) stopDoActivity(state *ast.StateNode) {
-	kept := e.doActivities[:0]
-	for _, activity := range e.doActivities {
-		if activity.state != state {
-			kept = append(kept, activity)
+func (e *StateExecutor) stopDoAction(state *ast.StateNode) {
+	kept := e.doActions[:0]
+	for _, act := range e.doActions {
+		if act.state != state {
+			kept = append(kept, act)
 		}
 	}
-	for i := len(kept); i < len(e.doActivities); i++ {
-		e.doActivities[i] = nil
+	for i := len(kept); i < len(e.doActions); i++ {
+		e.doActions[i] = nil
 	}
-	e.doActivities = kept
+	e.doActions = kept
 }
 
 // runDoRound advances every running do behavior by one action, in the order the
@@ -1555,43 +1555,43 @@ func (e *StateExecutor) stopDoActivity(state *ast.StateNode) {
 // concurrently active states share the machine: each performs one action before
 // any performs its next.
 func (e *StateExecutor) runDoRound() (int, error) {
-	if len(e.doActivities) == 0 {
+	if len(e.doActions) == 0 {
 		return 0, nil
 	}
-	round := make([]*doActivity, len(e.doActivities))
-	copy(round, e.doActivities)
+	round := make([]*doAction, len(e.doActions))
+	copy(round, e.doActions)
 
 	ran := 0
-	for _, activity := range round {
-		if len(activity.pending) == 0 || !e.isRunningDoActivity(activity) {
+	for _, act := range round {
+		if len(act.pending) == 0 || !e.isRunningDoAction(act) {
 			continue
 		}
-		behavior := activity.pending[0]
-		activity.pending = activity.pending[1:]
+		behavior := act.pending[0]
+		act.pending = act.pending[1:]
 		if e.trace() != nil {
-			e.trace().RecordDoStep(activity.state.Name)
+			e.trace().RecordDoStep(act.state.Name)
 		}
 		if err := e.executeBehavior(behavior); err != nil {
-			return ran, fmt.Errorf("do action in state %s: %w", activity.state.Name, err)
+			return ran, fmt.Errorf("do action in state %s: %w", act.state.Name, err)
 		}
 		ran++
 	}
 
-	// Drop the behaviors that have finished; an activity an action exited the
-	// state of is already gone.
-	finished := make([]*ast.StateNode, 0, len(e.doActivities))
-	kept := e.doActivities[:0]
-	for _, activity := range e.doActivities {
-		if len(activity.pending) > 0 {
-			kept = append(kept, activity)
+	// Drop the behaviors that have finished; a do action whose state was exited
+	// is already gone.
+	finished := make([]*ast.StateNode, 0, len(e.doActions))
+	kept := e.doActions[:0]
+	for _, act := range e.doActions {
+		if len(act.pending) > 0 {
+			kept = append(kept, act)
 			continue
 		}
-		finished = append(finished, activity.state)
+		finished = append(finished, act.state)
 	}
-	for i := len(kept); i < len(e.doActivities); i++ {
-		e.doActivities[i] = nil
+	for i := len(kept); i < len(e.doActions); i++ {
+		e.doActions[i] = nil
 	}
-	e.doActivities = kept
+	e.doActions = kept
 
 	// A state completes once its do behavior has finished, which is when its
 	// completion transitions become eligible.
@@ -1603,21 +1603,21 @@ func (e *StateExecutor) runDoRound() (int, error) {
 	return ran, nil
 }
 
-// isRunningDoActivity reports whether an activity is still registered, which it
+// isRunningDoAction reports whether a do action is still registered, which it
 // is not once its state has been exited.
-func (e *StateExecutor) isRunningDoActivity(activity *doActivity) bool {
-	for _, running := range e.doActivities {
-		if running == activity {
+func (e *StateExecutor) isRunningDoAction(act *doAction) bool {
+	for _, running := range e.doActions {
+		if running == act {
 			return true
 		}
 	}
 	return false
 }
 
-// hasRunningDoActivity reports whether a state's do behavior is still running.
-func (e *StateExecutor) hasRunningDoActivity(state *ast.StateNode) bool {
-	for _, activity := range e.doActivities {
-		if activity.state == state {
+// hasRunningDoAction reports whether a state's do behavior is still running.
+func (e *StateExecutor) hasRunningDoAction(state *ast.StateNode) bool {
+	for _, act := range e.doActions {
+		if act.state == state {
 			return true
 		}
 	}
@@ -1879,7 +1879,7 @@ func (e *StateExecutor) enterStateInto(state *ast.StateNode, branches map[*ast.S
 
 	// The do behavior runs while the state is active, interleaved with the do
 	// behaviors of the states active alongside it, rather than at entry.
-	e.startDoActivity(state)
+	e.startDoAction(state)
 
 	// Don't schedule transitions here - let the caller decide when to schedule
 	// This prevents double-scheduling in region transitions
@@ -1979,7 +1979,7 @@ func (e *StateExecutor) exitState(state *ast.StateNode) error {
 
 	// Leaving the state abandons whatever is left of its do behavior, before the
 	// exit behavior runs.
-	e.stopDoActivity(state)
+	e.stopDoAction(state)
 
 	// Record trace
 	if e.trace() != nil {
@@ -2198,7 +2198,7 @@ func (e *StateExecutor) ProcessNextEvent() error {
 // an event is queued, a signal this machine accepts is in flight, or a state's
 // do behavior has actions left to run.
 func (e *StateExecutor) HasPendingWork() bool {
-	return e.eventQueue.Len() > 0 || len(e.doActivities) > 0 || e.hasPendingSignal()
+	return e.eventQueue.Len() > 0 || len(e.doActions) > 0 || e.hasPendingSignal()
 }
 
 // RunDoRound advances every active state's do behavior by one action, without
@@ -2212,8 +2212,8 @@ func (e *StateExecutor) RunDoRound() (int, error) {
 // HasPendingDoWork reports whether some active state's do behavior still has an
 // action to run. Such work is due now, unlike a queued event's timestamp.
 func (e *StateExecutor) HasPendingDoWork() bool {
-	for _, activity := range e.doActivities {
-		if len(activity.pending) > 0 {
+	for _, act := range e.doActions {
+		if len(act.pending) > 0 {
 			return true
 		}
 	}

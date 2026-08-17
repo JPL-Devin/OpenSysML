@@ -828,7 +828,7 @@ func (s *Session) doBudget() []string {
 		fmt.Sprintf("  evaluation steps     %-10d %s", b.MaxSteps, runtime.MaxStepsEnvVar),
 		fmt.Sprintf("  action steps         %-10d %s", b.MaxActionSteps, runtime.MaxActionStepsEnvVar),
 		fmt.Sprintf("  state events         %-10d %s", b.MaxStateEvents, runtime.MaxStateEventsEnvVar),
-		fmt.Sprintf("  do activity steps    %-10d %s", b.MaxDoSteps, runtime.MaxDoStepsEnvVar),
+		fmt.Sprintf("  do action steps      %-10d %s", b.MaxDoSteps, runtime.MaxDoStepsEnvVar),
 		fmt.Sprintf("  collection elements  %-10d %s", b.MaxElements, runtime.MaxElementsEnvVar),
 		fmt.Sprintf("  nested calc depth    %-10d %s", b.MaxCalcDepth, runtime.MaxCalcDepthEnvVar),
 	}
@@ -2230,7 +2230,7 @@ func (s *Session) advanceBy(duration float64) ([]string, error) {
 		out = append(out, fmt.Sprintf("  Stopped at the event budget (%d events; raise %s to allow more)",
 			maxEvents, runtime.MaxStateEventsEnvVar))
 	case doActions >= maxDoActions:
-		out = append(out, fmt.Sprintf("  Stopped at the do activity budget (%d steps; raise %s to allow more)",
+		out = append(out, fmt.Sprintf("  Stopped at the do action budget (%d steps; raise %s to allow more)",
 			maxDoActions, runtime.MaxDoStepsEnvVar))
 	}
 

@@ -9,14 +9,14 @@ into a reported error instead of a hang.
 | `SYSML_MAX_STEPS` | `10000000` | Evaluation step budget: the number of expression evaluations one run may spend before it is reported as a runaway |
 | `SYSML_MAX_ACTION_STEPS` | `1000000` | Token-flow steps one action run may perform |
 | `SYSML_MAX_EVENTS` | `1000000` | Events one state machine run may dispatch, and the events one `%advance` drains |
-| `SYSML_MAX_DO_STEPS` | `5000000` | Do-activity actions one state machine run may perform, and the ones one `%advance` drains |
+| `SYSML_MAX_DO_STEPS` | `5000000` | Do actions one state machine run may perform, and the ones one `%advance` drains |
 | `SYSML_MAX_ELEMENTS` | `1000000` | Collection elements one evaluation may hold — the bound on the memory a run holds rather than on the work it does |
 | `SYSML_MAX_CALC_DEPTH` | `10000` (ceiling `25000`) | Nested `calc` invocations one run may hold on the stack, which is what a recursion spends |
 | `SYSML_GRPC_INDEX_POOL` | `4` | How many standard library indexes `sysml-grpc` keeps prewarmed for the models it has not seen yet; `0` loads the library on each request instead |
 
 Each budget is what turns a non-terminating run into a reported error instead of
 a hang. They count incommensurable things — expression evaluations, action token
-steps, dispatched events, do-activity actions, materialized collection elements —
+steps, dispatched events, do actions, materialized collection elements —
 so raising one says nothing about the others, and each has its own variable.
 
 A budget bounds **one run** — one `%eval`, one `%instantiate`, one `%calc`, one
@@ -91,7 +91,7 @@ raises them:
 ```
 execution exceeded max steps (1000000 steps; raise SYSML_MAX_ACTION_STEPS to allow more), possible infinite loop
 state machine exceeded max events (1000000 events; raise SYSML_MAX_EVENTS to allow more), possible infinite loop
-state machine exceeded max do activity steps (5000000 steps; raise SYSML_MAX_DO_STEPS to allow more), possible non-terminating do behavior
+state machine exceeded max do action steps (5000000 steps; raise SYSML_MAX_DO_STEPS to allow more), possible non-terminating do behavior
 ```
 
 A long simulation therefore raises the state machine bounds rather than the
