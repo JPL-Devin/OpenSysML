@@ -237,8 +237,10 @@ reaches paths that used to stop at the first behavioral node. What to know:
   `transition first a accept s : S via p if g do action … then b`. At 77abc565 it round-trips with
   the *only* difference being that a state named `deep` comes back as `'deep'` (the writer quotes it
   because `deep` is a keyword) — cosmetic, and stable on the next hop.
-- Corpus baseline at 77abc565: of the 110 `examples/**/*.sysml`, **95 convert to ttl and back, 15
-  are refused**, and the only model whose notation drifts between hop 1 and hop 2 is
+- Corpus baseline at 77abc565 (a clean checkout has only ~10 of these — every count below assumes
+  `./scripts/download-training-examples.sh` has put the OMG corpus in `examples/sysml-v2-training/`,
+  which `.gitignore` keeps untracked): of the 110 `examples/**/*.sysml`, **95 convert to ttl and
+  back, 15 are refused**, and the only model whose notation drifts between hop 1 and hop 2 is
   `41. Language Extension/Model Library Example.sysml` (the documented `end [*] ref` parser gap).
   Treat any other drift as a real defect.
 - Refusal probes that still work and print no file: two members of one namespace sharing a name, a
@@ -281,9 +283,11 @@ the *documented* claims by running them:
   page's refusal example (`examples/state-machine-demo.sysml -convert ttl` → "cannot convert the
   substate member") and its prose "a model whose point is a behavior does not [convert]" are wrong
   since #270 — the model converts, and all ten `examples/parser_features_demo_*.kerml` convert too.
-  Grep for the *old* wording (`model structure only`, `bodies state behavior`) across `docs/ cmd/
-  python/ api/proto/ internal/` to catch leftover copies, and check re-worded prose paragraphs did
-  not leave one line far wider than its siblings (`awk '{print NR": "length($0)}'`).
+  Grep for the *old* wording (`model structure only`, `bodies state behavior`, and `substate member`
+  — that last one caught the same stale transcript in `docs/reference/cli.md`, since a transcript
+  quotes a diagnostic rather than the prose) across `docs/ cmd/ python/ api/proto/ internal/` to
+  catch leftover copies, and check re-worded prose paragraphs did not leave one line far wider than
+  its siblings (`awk '{print NR": "length($0)}'`).
 
 ### Round-trip fidelity of a declaration head (PR #272)
 
@@ -313,7 +317,8 @@ Two narrow export paths decide whether a declaration comes back spelled the way 
 - An unterminated comment in a head (`in /* attribute x : Real;`) is a *parse* error
   (`unterminated comment: missing */`), not an export refusal — so it cannot serve as a refusal
   fixture, only as a "writes no output" check.
-- Corpus baseline at bf2f21e3: `converted=102 refused=18 total=120` over
+- Corpus baseline at bf2f21e3 (same corpus prerequisite as above):
+  `converted=102 refused=18 total=120` over
   `examples/**/*.{sysml,kerml}`; 97 of the converting models are byte-stable across two RDF round
   trips, 0 drift. **5 models' RDF-written notation does not re-parse** (`parser_features_demo_
   declarations.kerml`, `27. Occurrences/Interaction {Example-2,Realization-1,Realization-2}`,

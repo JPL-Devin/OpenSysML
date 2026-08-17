@@ -286,8 +286,8 @@ $ SYSML_MAX_STEPS=abc sysml -e "1+1"; echo $?
 sysml: SYSML_MAX_STEPS="abc" is not an integer: set it to a positive number of evaluation steps (default 10000000)
 2
 
-$ sysml examples/state-machine-demo.sysml -convert ttl; echo $?
-sysml: cannot convert the substate member at examples/state-machine-demo.sysml:7:13: save to .sysml or .kerml instead, which writes the source exactly; see docs/reference/rdf-mapping.md § Limitations
+$ sysml examples/parser_features_demo_action_semantics.sysml -convert ttl; echo $?
+sysml: cannot convert the succession at examples/parser_features_demo_action_semantics.sysml:41:9: it does not name both of the members it sequences, so the order it declares cannot be written back
 2
 ```
 
