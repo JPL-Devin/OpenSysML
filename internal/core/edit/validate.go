@@ -76,7 +76,9 @@ func (m Model) validate(content []byte) error {
 	sf := source.New(m.Source.Name(), content)
 	p := parser.New(sf)
 	root := p.ParseFile()
-	if introduced := introduced(parseDiagnostics(m.ParseDiags), parseDiagnostics(p.Diagnostics)); len(introduced) > 0 {
+	editedParse := parseDiagnostics(p.Diagnostics)
+	originalParse := parseDiagnostics(m.ParseDiags)
+	if introduced := introduced(originalParse, editedParse); len(introduced) > 0 {
 		return &Error{
 			Failure:        FailureResultInvalid,
 			OperationIndex: -1,
@@ -90,7 +92,11 @@ func (m Model) validate(content []byte) error {
 	}
 	idx := m.NewIndex()
 	idx.AddDocument(sf.Name(), root)
-	if introduced := introduced(errorsOnly(m.SemDiags), errorsOnly(passes.Analyze(sf.Name(), root, nil, idx))); len(introduced) > 0 {
+	// The parse diagnostics are handed to the analysis, so a model that already
+	// had syntax errors is not judged by tiers its own parse never reached.
+	before := append(errorsOnly(m.SemDiags), errorsOnly(originalParse)...)
+	after := errorsOnly(passes.Analyze(sf.Name(), root, editedParse, idx))
+	if introduced := introduced(before, after); len(introduced) > 0 {
 		return &Error{
 			Failure:        FailureResultInvalid,
 			OperationIndex: -1,

@@ -439,6 +439,30 @@ func TestPreExistingErrorsDoNotRefuseAnEdit(t *testing.T) {
 	}
 }
 
+// A syntax error elsewhere in a model does not make its editable parts
+// uneditable: the analysis of the edited notation is gated by its own parse, as
+// the original's was.
+func TestSyntaxErrorElsewhereDoesNotRefuseAnEdit(t *testing.T) {
+	m := loadContent(t, "broken.sysml",
+		"package Demo {\n\tattribute x : ISQ::MassValue = 1.0[SI::kg];\n"+
+			"\tattribute y : Missing::Type;\n\tattribute z = 1 + ;\n}\n")
+	if len(m.ParseDiags) == 0 {
+		t.Fatal("fixture was expected to carry a syntax error")
+	}
+	if len(m.SemDiags) > 0 {
+		t.Fatalf("a model with parse errors is not analyzed: %v", m.SemDiags)
+	}
+
+	res := applyOne(t, m, SetValue("Demo::x", "2.0[SI::kg]"))
+	if !strings.Contains(string(res.Content), "= 2.0[SI::kg];") {
+		t.Fatalf("value not set:\n%s", res.Content)
+	}
+	// The edit is still validated: it may not add a syntax error of its own.
+	if _, err := Apply(m, []Operation{SetValue("Demo::x", "1 +")}); err == nil {
+		t.Fatal("unparsable value was accepted")
+	}
+}
+
 func TestSemanticValidationSkippedWithoutIndexSource(t *testing.T) {
 	m := load(t, "spacecraft.sysml")
 	requireClean(t, m)
