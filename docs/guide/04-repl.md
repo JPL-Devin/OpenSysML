@@ -142,10 +142,31 @@ sysml> %builtins
 sysml> %view Demo::summary
 ```
 
-`%view <name>` reports what a view exposes and the views nested in it. A name the session cannot
-find is offered the qualified names it is known under, nearest scope first — what the session
-itself declares before the library, and a package's member before a name nested inside another
-element — and at most three of them.
+`%view <name>` reports what a view exposes, the views nested in it, and whether it conforms to the
+viewpoints it satisfies. Conformance is read-only and reported in declaration order: each `satisfy`
+carries a verdict — `conforms`, `violated` or `unevaluable` — then each concern the viewpoint frames
+carries its own, and a concern whose condition fails names the exposed element it failed for with
+the reason. A `satisfy` inherited from a specialized view is marked `(from <view>)`, a concern the
+viewpoint frames but the view does not is `violated`, and a concern stating no condition, or naming
+one that does not resolve, is `unevaluable` with the reason rather than a pass.
+The verdicts and the treatment of a nested view's framing are this tool's choice: SysML v2 leaves
+verification verdict semantics non-normative.
+
+```
+sysml> %view Demo::report
+view Demo::report
+  exposes
+    Demo::vehicle (partUsage)
+  viewpoint conformance
+    satisfy structure (from Demo::StructureView): violated
+      concern budget: violated
+        Demo::vehicle: satisfaction satisfy MassBudget by Demo::vehicle: require condition evaluated to false: s.mass < 1000.0
+      concern modularity: conforms
+```
+
+A name the session cannot find is offered the qualified names it is known under, nearest scope
+first — what the session itself declares before the library, and a package's member before a name
+nested inside another element — and at most three of them.
 
 ## Where an expression is evaluated
 

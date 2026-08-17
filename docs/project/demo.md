@@ -549,7 +549,7 @@ budgets (each bounds one run, not the session):
   evaluation steps     10000000   SYSML_MAX_STEPS
   action steps         1000000    SYSML_MAX_ACTION_STEPS
   state events         1000000    SYSML_MAX_EVENTS
-  do activity steps    5000000    SYSML_MAX_DO_STEPS
+  do action steps      5000000    SYSML_MAX_DO_STEPS
   collection elements  1000000    SYSML_MAX_ELEMENTS
 
 sysml> %eval 1..2000000

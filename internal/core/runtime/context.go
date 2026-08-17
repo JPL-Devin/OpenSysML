@@ -210,6 +210,17 @@ func (ctx *Context) Model() *semantics.Model {
 	return ctx.model
 }
 
+// Resolver returns the name resolver this context resolves references with.
+func (ctx *Context) Resolver() *resolve.Resolver {
+	return ctx.resolver
+}
+
+// SourceLocation renders where a span in a file was written, as `file:line:col`,
+// falling back to a byte offset for a file whose text was not registered.
+func (ctx *Context) SourceLocation(file string, span source.Span) string {
+	return ctx.sourceLocation(file, span)
+}
+
 // idSequence hands out instance identities, one per object over the contexts
 // sharing it.
 type idSequence struct {
@@ -418,7 +429,7 @@ func (ctx *Context) CheckConstraintOn(sym *symbols.Symbol, scope *symbols.Scope,
 		kind:    "constraint",
 		what:    "assertion",
 		self:    subject.instance,
-		negated: negatedDecl(sym),
+		negated: NegatedDecl(sym),
 	}, conds)
 	return ctx.checkResultOf(holds, subject), err
 }
@@ -509,9 +520,9 @@ func effectiveName(u *ast.Usage) string {
 	return name
 }
 
-// negatedDecl reports whether sym's declaration asserts that its conditions do
+// NegatedDecl reports whether sym's declaration asserts that its conditions do
 // not hold (`assert not constraint { … }`, `assert not satisfy … by …`).
-func negatedDecl(sym *symbols.Symbol) bool {
+func NegatedDecl(sym *symbols.Symbol) bool {
 	usage, ok := sym.Decl.(*ast.Usage)
 	return ok && usage.IsNegated
 }
@@ -603,7 +614,7 @@ func (ctx *Context) CheckRequirementOn(sym *symbols.Symbol, scope *symbols.Scope
 		what:     "require condition",
 		self:     subject.instance,
 		bindings: reqBindings,
-		negated:  negatedDecl(sym),
+		negated:  NegatedDecl(sym),
 	}, conds)
 	return ctx.checkResultOf(holds, subject), err
 }

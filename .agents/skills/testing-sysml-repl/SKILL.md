@@ -194,6 +194,12 @@ for f in examples/*.sysml internal/repl/testdata/*.sysml; do
 done | sort | uniq -c
 ```
 
+### `bin/sysml-grpc` takes `-port`, not `-addr`
+
+`-addr` prints "flag provided but not defined" with a usage dump, so drive a freshly built service
+with `./bin/sysml-grpc -port 50123` and `pysysml.connect(port=50123, auto_start=False)` to keep
+`~/.pysysml/bin` out of it.
+
 ## Proving a Turtle round trip loses nothing
 
 `.sysml -> .ttl -> .sysml` is never byte-equal to the input (the back direction is a canonical AST
@@ -220,6 +226,112 @@ commit before reporting them as regressions):
   red for one unrelated printer bug.
 - `ref` on an `end` attribute is dropped and `redefines`/`typing` relationship order is swapped in a
   couple of models.
+
+### Behavioral bodies through RDF (PR #270)
+
+Since PR #270 an action or state body converts instead of being refused, so a round-trip sweep now
+reaches paths that used to stop at the first behavioral node. What to know:
+
+- **`-o` decides nothing about the format, but the *extension* of an input does.** A sweep that
+  writes intermediate files as `/tmp/x.rt` and feeds them back gets
+  `cannot tell the format` and every model looks refused. Always name intermediates `.sysml` /
+  `.ttl` (or pass `-from`).
+- A good adversarial single fixture: one `action def` with
+  `first/perform/assign/send … via/accept when/fork/join/merge/decision/while/loop-until/for/
+  if-else/terminate/done/succession` plus one `state def` with a nested substate, a `region`,
+  `entry`/`do`/`exit`, `defer`, choice/junction/shallow+deep history and a
+  `transition first a accept s : S via p if g do action … then b`. At 77abc565 it round-trips with
+  the *only* difference being that a state named `deep` comes back as `'deep'` (the writer quotes it
+  because `deep` is a keyword) — cosmetic, and stable on the next hop.
+- Corpus baseline at 77abc565: of the 110 `examples/**/*.sysml`, **95 convert to ttl and back, 15
+  are refused**, and the only model whose notation drifts between hop 1 and hop 2 is
+  `41. Language Extension/Model Library Example.sysml` (the documented `end [*] ref` parser gap).
+  Treat any other drift as a real defect.
+- Refusal probes that still work and print no file: two members of one namespace sharing a name, a
+  bare `snapshot`, and a succession whose end name needs quotes (`then 'my a' b;`). Note
+  `succession then b;` and `transition first a accept s : S;` (no `then`) are *parse* errors, so
+  they cannot be used as export-refusal fixtures.
+- Two silent-change classes were found in that sweep and fixed in the same PR: prefix metadata
+  (`#Safety part def Car;`) is now carried as `sysx:prefixMetadata "#Safety"`, and a feature that
+  wrote no kind keyword (`in x : Real`) is flagged `sysx:isKindImplicit` instead of gaining a kind
+  on the way back. An `@` annotation ahead of a definition is refused, because the parser records
+  it on the declaration before the one it prefixes — worth re-probing if the parser changes.
+- `export.ExperimentalNotice` (internal/core/export/experimental.go) is printed verbatim by the CLI
+  (stderr), `%save` and `ConvertResponse`, and the same wording is duplicated in
+  `cmd/sysml/main.go`, `python/pysysml/`, `api/proto/` and `docs/guide/`. Check every copy whenever
+  the mapping's coverage changes.
+
+### Checking the experimental notice's copies (PR #271)
+
+When a PR claims one wording is stated from one place, check the *runtime* copies mechanically and
+the *documented* claims by running them:
+
+- Extract the Go literal and compare collapsed whitespace, rather than eyeballing:
+  parse `internal/core/export/experimental.go` for the quoted pieces of `ExperimentalNotice`, join
+  them, then compare `" ".join(x.split())` against the paragraph `./bin/sysml -help` prints between
+  "Turtle is normalized." and "Every run that converts RDF". `cmd/sysml/main.go`'s `wrapped(…, 78)`
+  wraps on `strings.Fields`, so also assert every line's **rune** count ≤ 78 — the notice contains
+  `§` (2 bytes), so a byte-based wrapper would pass a naive byte check.
+- `python/pysysml/conversion.py:EXPERIMENTAL_NOTICE` should equal the same literal; compare it in
+  Python against the Go file directly.
+- The client fallback lives in `Connection.convert` (`connection.py`, `response.experimental_notice
+  or EXPERIMENTAL_NOTICE`). To exercise it, wrap the stub: `Connection._stub` is a read-only
+  property, so patch **`conn._service`** with an object that delegates via `__getattr__` and, in
+  `Convert`, calls the real stub then `response.ClearField("experimental_notice")` /
+  `ClearField("experimental")`. That is the only way to simulate an older service without touching
+  the Go side.
+- **Guide transcripts go stale silently.** `docs/guide/07-saving-and-rdf.md` and
+  `docs/guide/09-python.md` embed real byte counts and refusal messages. Re-run each fenced command:
+  the `%save` pair (guide 2's `MyModel` file → `181 bytes of sysml` / `1872 bytes of ttl`) and
+  `examples/rdf-interop-demo.sysml` (`7937` ttl / `877` sysml bytes) still hold at 493693a3, but the
+  page's refusal example (`examples/state-machine-demo.sysml -convert ttl` → "cannot convert the
+  substate member") and its prose "a model whose point is a behavior does not [convert]" are wrong
+  since #270 — the model converts, and all ten `examples/parser_features_demo_*.kerml` convert too.
+  Grep for the *old* wording (`model structure only`, `bodies state behavior`) across `docs/ cmd/
+  python/ api/proto/ internal/` to catch leftover copies, and check re-worded prose paragraphs did
+  not leave one line far wider than its siblings (`awk '{print NR": "length($0)}'`).
+
+### Round-trip fidelity of a declaration head (PR #272)
+
+Two narrow export paths decide whether a declaration comes back spelled the way it was written:
+`encodeSubaction`/`bareWord` (`internal/core/export/behavior.go`) for a combined state subaction, and
+`wroteKindKeyword`/`withoutComments` (`rdf_out.go`) for a kind keyword ahead of a name. Testing them:
+
+- **A fixture only exercises `wroteKindKeyword` when the commented word equals the keyword of the
+  kind the declaration would get implicitly.** `in /* attribute */ x : Real;` inside an `action def`
+  proves nothing: the inferred kind there is `part`, so the check looks for `part`, the ttl records
+  `sysx:isKindImplicit true`, and old and new binaries agree. Put the same members inside a
+  `part def` (where `in x : Real` infers *attribute*) and the pre-fix binary writes back
+  `in attribute x : Real;` while the fixed one writes `in x : Real;`. Always diff against a contrast
+  binary from the parent commit (§"A contrast binary from the previous commit") — an equal result
+  means the fixture missed the path, not that the fix is a no-op.
+- Useful fixture set for these paths, all inside one `part def`: `in /* attribute */ x`,
+  `out // attribute\n y`, `in //* a note\n attribute */ w`, the control `in attribute z`,
+  `in /* /* */ v`, `in //* same line note */ u`, plus quoted names that contain the markers
+  (`attribute 'a /* b */ c'`, `in 'x{y'`, `attribute 'do'`) — the quoted ones must come back
+  character-identical.
+- For subactions: `entry do { … }`, `entry do{ … }`, `entry do{perform A;}` must all come back
+  `entry do {` (the tight two were the bug), and `entry /* do */ { … }` must **not** gain a `do`.
+  A comment adjacent to a real `do` (`entry /*c*/ do { … }`, `entry do/*c*/{ … }`) keeps it too since
+  aa9fa5ab, which reads the subaction head through `withoutComments` as well; before that commit the
+  comment token took `do`'s place and the `do` was dropped, so use a pre-aa9fa5ab binary as the
+  contrast for these two.
+- An unterminated comment in a head (`in /* attribute x : Real;`) is a *parse* error
+  (`unterminated comment: missing */`), not an export refusal — so it cannot serve as a refusal
+  fixture, only as a "writes no output" check.
+- Corpus baseline at bf2f21e3: `converted=102 refused=18 total=120` over
+  `examples/**/*.{sysml,kerml}`; 97 of the converting models are byte-stable across two RDF round
+  trips, 0 drift. **5 models' RDF-written notation does not re-parse** (`parser_features_demo_
+  declarations.kerml`, `27. Occurrences/Interaction {Example-2,Realization-1,Realization-2}`,
+  `32. Requirements/Requirement Satisfaction`) — e.g. `event X;` comes back as
+  `event references X;`, which the parser then rejects. Pre-existing (identical on the parent
+  commit), so treat it as the baseline, not a regression.
+- A cheap way to separate printer formatting from RDF-hop changes: convert the model both ways
+  (`-convert ttl` → back, versus `-convert sysml` alone) and diff the two outputs token-per-line
+  (`tr -s ' \t\n' '\n'`). At bf2f21e3 76 of 102 examples still differ that way (`:>` written
+  `specializes`/`subsets`/`redefines`, `default 3` written `= 3`, `on;` written `'on';`, `doc`
+  comments dropped), **identically on the parent commit** — so use the old-vs-new diff of that report
+  as the regression gate rather than the raw count.
 
 Also note the parser rejects `require constraint <name> { … }` (a *named* nested constraint after
 `require`/`assume`): `expected '{' after 'require constraint'`. Only the anonymous form and the
@@ -556,6 +668,62 @@ because check-clean alone never proves the runtime bound anything.
 - Cheap corpus gate for a resolve change: loop `internal/core/runtime/testdata/conformance/*.sysml`
   and `examples/*.sysml` comparing `grep -c 'error:'` counts new vs old binary and print only files
   where new > old (~1 min).
+
+## Addressed sends and per-object message identity (`send S() to t`, PR #267)
+
+To observe *which object* consumed a message you must drive one performer at a time. `%state` and
+`%action` take an object argument (`%state <machine> <object>`, `internal/repl/meta.go:320`) but the
+object must already exist, so **`%instantiate <Pkg>::<part>` first** — otherwise every command
+answers `error: no instance of "…" (use %instantiate first)` followed by `no active state machine
+session`, which reads like a broken session.
+
+The fixture shape that distinguishes confined from leaking delivery is two structurally identical,
+unconnected parts of one type, each with a `via`-qualified accept **and** a catch-all:
+
+```
+transition first waiting accept Ping via inPort then received;   // the addressee
+transition first waiting accept Ping             then strayed;   // the leak detector
+```
+
+Run the same model once per performer: the addressee must reach `received`, every other object must
+stay in `waiting`. `strayed` is the pre-fix signature (a same-named port of another object consuming
+the message) and it appears for *both* objects on a pre-#267 binary — always A/B against a
+parent-commit binary, since "it ran and ended somewhere" proves nothing on its own.
+
+Limits worth knowing before writing fixtures:
+
+- **Nested performers cannot be driven from the prompt.** `%state <M> Pkg::one::mid::inner` fails
+  with `no instance of "Pkg::Mid::inner"` even after `%instantiate Pkg::one` materialized it (visible
+  in `%slots`). So a nested/composite target (`one.mid.inner.inPort`) is only observable *negatively*:
+  put the catch-all accept on the **sending outer** object and assert it stays `waiting` with no
+  error — the deep path resolved (else it would be a typed error) and did not leak outward.
+- **`accept … via <dotted.path>` does not parse** in a state transition (`expected a body member` /
+  `expected the target of the transition after 'then'`) nor in an action node (`expected ';' after
+  accept action`). Only `send … via p.q` takes a nested path. Don't design an accept-side nested-port
+  fixture; use `conformance/port_nested_port_path.sysml` (connect `p.q` to a simple `sink`) instead.
+- Addressing needs **no connector**: `send Ping() to two.inPort` from `one` delivers to `two`, and the
+  sender must not consume it. That cross-object case is the cheapest positive proof of identity.
+- `send X to self` resolves to nothing and is a silent no-op on both old and new binaries (no
+  receiver is named `self`) — expect `waiting`, not an error. A target naming a **part** rather than a
+  port (`one.mid.inner`) is also delivered-but-unaccepted, not an error.
+- The two unroutable wordings are distinct and both must stay reachable
+  (`internal/core/runtime/routing.go`): an addressed target gives
+  `send reaches no receiving port: "alpha.count" names no port of an object the sender can address`,
+  while a `via` port gives `port "lonely" is joined to no port that can receive it` /
+  `port "dst" is joined only to outbound ends (src)`. A pre-#267 binary **completes successfully**
+  (`✓ Action completed`) for the addressed-target cases, so assert the error text, not just non-zero
+  exit. From a state entry action it surfaces as
+  `error: event processing failed: enter state: entry action: send reaches no receiving port: …` with
+  `Current state: <none>`; the REPL session must survive it (`%tokens` still shows `Token 1 @ sender`,
+  `%eval 1 + 2` still answers `3`).
+- Regression set that must be byte-identical old vs new for any routing change:
+  `port_nested_port_path` (`got = 7`), `port_interface_typed_connection` (conjugated `~Chan`,
+  `got = 13`), `send_no_reachable_receiver`, `send_into_outbound_only_end`,
+  `state_send_self_signal` (`send Ping to Driver` → `done`), `action_send_accept` (accept-node target
+  → `n = 50`, `number = 50`).
+- Loading these conformance fixtures in the REPL prints pre-existing
+  `unresolved reference: Integer — did you mean ScalarValues::Integer?` noise; it reproduces on the
+  parent binary and does not stop execution.
 
 ## Standard SysML v2 behavioral notation (flows, triggers, sends, transition effects)
 
@@ -3284,3 +3452,197 @@ parent** before trusting it:
 - Keep probe files out of the repo tree before running the gates (`rm` it, keep a `.txt` copy in
   the fixtures dir) and confirm `git status --porcelain` is empty on camera, so the gates clearly
   reflect the committed tree.
+
+## Guarded successions in action flows (PR #266 and anything touching `enabledSuccessions`)
+
+Guards on successions out of *ordinary* nodes (`first s1 if c then s2;`, `then s1 s2 if c;`) are
+evaluated in `ActionExecutor.enabledSuccessions`; a failing guard prunes the edge and the flow just
+ends there (`Final state: Completed`, not an error). Test it end to end as
+`%load <file>` → `%action <pkg>::<action>` → `%continue` → read the `Results:` block.
+
+Traps and recipes:
+
+- **The result values are the only evidence.** A guarded flow that skips its successor still prints
+  `✓ Action completed / Final state: Completed`, identical to one that ran it — only the attribute
+  values differ. Always design the skipped branch to write a distinctive attribute (`y := 9`) that
+  stays at its initial value when the guard prunes the edge.
+- **Guards are evaluated when the token LEAVES the node**, so they see what that node wrote: with
+  `x = 3`, `action s1 assign x := x + 4;` and `first s1 if x > 5 then s2;` the branch is taken
+  (`x = 7`, `y = 9`). A "reads the pre-write value" regression shows up as `y = 0`.
+- **A/B against a binary from the parent commit is cheap and decisive here**, because a pre-fix
+  build silently ignores the guard: same file, `y = 9` / `ignited = 1` instead of `0`. Build it with
+  the worktree recipe above and run both in the recording.
+- **Restart the REPL between fixtures.** All the guard fixtures declare `package test`, so a second
+  `%load` in the same session makes `%action test::seq` ambiguous/unresolvable
+  (`unresolved reference: test::seq — did you mean SequenceFunctions::union::seq1 …`). Ctrl-D and
+  relaunch per model; do not chain loads.
+- Write fixtures with `import ScalarValues::*;`, otherwise every `attribute x : Integer` emits
+  `unresolved reference: Integer` noise on camera (execution still works).
+- **The REPL still executes a model with parse errors.** `first s1 if c;` (guard with no `then`) is
+  rejected at parse time with `expected 'then' after guard condition`, yet the rest of the model
+  loads and runs — read the diagnostics, don't just read the `Results:`.
+- Error wordings to assert: non-Boolean guard →
+  `error: execution failed: type mismatch: node s1: guard must evaluate to boolean, got constant`;
+  unresolvable name in a guard → `error: execution failed: eval guard of node s1: unresolved
+  reference: nosuch`. Two guards out of one action node that both hold →
+  `error: execution failed: more than one succession is enabled: action node check has multiple
+  successors` (wraps the `ErrAmbiguousSuccession` sentinel; the run stops with the token still on the
+  node and neither branch's attribute written — assert that with `%tokens`, not just the message).
+- Places a guard could still be silently ignored, all worth a one-liner fixture: succession out of a
+  real initial node (`then start s1 if …;`), out of a `merge`, out of a `join` (must not deadlock —
+  the branch tokens are consumed either way), and one whose target is `done`.
+- **A guard inside a nested action body is not observable**: an action declared inside an action body
+  that itself declares `first … then …` is never executed (pre-fix binaries behave identically), so
+  the enclosing flow's later nodes run while the inner writes never happen. Prove it is pre-existing
+  with the A/B binary and report it as untested rather than a failure.
+
+- **A guard on the succession out of a `merge` needs a token-ordering fixture to be tested at all.**
+  First-token-wins must count the token that *traverses*, not the one that arrives, so the
+  discriminating shape is a fork with one short branch (`a -> mg`) and one longer branch
+  (`b1 -> b2 -> b3 -> mg`) where only the last node of the long branch writes the feature the guard
+  reads. `%step` steps every live token per step, so a guard reading a value written by a *sibling*
+  branch node in the same step is not discriminating — put at least one extra node after the write.
+  Expected on a correct build: `%tokens` shows the short branch's token at `mg` with the guard still
+  false, that token disappears (retired), then the long branch's token traverses `mg` and the node
+  after it runs. A build that closes the merge on arrival instead discards the second token, never
+  runs the node after the merge, and then spins to
+  `error: execution failed: execution exceeded max steps (1000000 steps; ...)` — so "hangs to the
+  step budget", not just a wrong value, is the pre-fix signature here.
+
+## Verifying the RDF "experimental" marking, `%print`, `%view`, guards and addressed sends
+
+The wave-1/0.1.0 surfaces below were verified end to end at `870da1fd`. Each entry is the
+assertion that actually distinguishes working from broken.
+
+### The single experimental notice (`internal/core/export/experimental.go`)
+
+`export.ExperimentalNotice` is the one wording; `export.IsExperimental(from,to)` is true iff either
+side is Turtle (notation→notation is never experimental). **Read the constant from source at the
+start of a run instead of hardcoding it — the wording has already changed once** (220 chars on the
+#261 branch, 239 chars on main; the current text names "the behavior its bodies state").
+
+Assertions that hold, and how to word them:
+
+```bash
+./bin/sysml examples/rdf-interop-demo.sysml -convert ttl >out 2>err   # exit 0
+grep -c '^note:' err            # 1 — the notice is stderr-only
+grep -c experimental out        # 0 — the graph on stdout stays machine-readable
+./bin/sysml m.sysml -convert sysml -o n.sysml 2>&1 | grep -c '^note:'  # 0 (notation→notation)
+```
+
+- Do **not** assert "stderr is empty" for notation runs: the `wrote … (sysml, N bytes)` line also
+  goes to stderr. Assert *no `^note:` line*.
+- `-o /dev/stdout` still keeps the graph clean; refusals print the notice *before* the error, exit 2,
+  write nothing.
+- REPL: `%save x.ttl` prints the notice then `saved N bytes of ttl`; `%save x.sysml` prints none, and
+  neither written file contains a `note:` line.
+- Cross-surface identity is one diff: compare the CLI note (minus the `note: ` prefix) with
+  `pysysml.conversion.EXPERIMENTAL_NOTICE`, the gRPC `ConvertResponse.experimental_notice` and the
+  docs string. All four must be byte-equal.
+- pysysml: one `ExperimentalFeatureWarning` per RDF conversion, `Conversion.experimental` True with
+  the notice; sysml→sysml gives `False`/`""`/0 warnings; a refused RDF conversion warns *then* raises
+  `ConversionError`; `warnings.simplefilter("ignore", ExperimentalFeatureWarning)` silences it while
+  the conversion still returns the graph.
+
+### Corpus claim (`README.md`, `docs/reference/rdf-mapping.md`)
+
+The claim is a measured number and has moved (71/120 → **102/120** after behavioral nodes were
+mapped). Re-measure, never trust the doc:
+
+```bash
+ok=0; bad=0
+while IFS= read -r f; do
+  if ./bin/sysml "$f" -convert ttl -o /dev/null >/dev/null 2>&1; then ok=$((ok+1)); else bad=$((bad+1)); fi
+done < <(find examples \( -name '*.sysml' -o -name '*.kerml' \))
+echo "converted=$ok refused=$bad total=$((ok+bad))"     # 102 / 18 / 120 at 870da1fd
+```
+
+Use process substitution (not `basename`) — many training paths contain spaces. Every refusal must
+name a construct **and** `file:line:col` (`succession`, `operator expr`, `prefix metadata`,
+`` `snapshot` declaration``, `duplicate declaration of "X"`); a bare "cannot convert" or a silent
+drop is the failure shape.
+
+### Round-trip fidelity for behavior (`.sysml → .ttl → .sysml`)
+
+A subaction's `do` and comment contents are the fragile parts. Fixture shape that works:
+
+```
+state off { entry do { perform Warm; } }
+//* a note naming entry and do and exit */
+state starting {
+    // a line comment naming exit
+    do action running : Warm;
+    /* a block comment naming entry do */
+    exit perform Warm;
+}
+```
+
+`entry do { … }`, `do action running : Warm;` and `exit perform Warm;` must all come back, and the
+kind keywords inside the three comment styles must introduce **no** spurious members. Note plain
+comments themselves are not carried through RDF — that is expected, not a failure. `entry do action
+heat : Warm;` does **not** parse (`expected an action, an action reference or '{' after 'entry'`).
+
+### `%print`
+
+Read-only printer of the session buffer or one element:
+
+- `%print` → whole model with its comments; `%print Top::'My Pkg'::Car` → just that element (quoted
+  segments work). Empty session → `nothing to print: the session is empty`; a bad name →
+  `error: unresolved reference: …`. No RDF wording, no `note:` line.
+- Round trip without a GUI: pipe `%load f\n%print\n%quit`, strip the banner/`goodbye` lines with
+  `sed '1d;2d;$d'`, reload that output and print again — the two must be byte-identical.
+- Regression to keep: `%print` during a live `%action`/`%state` debugger leaves it alone —
+  `%instances` still reports none created and the next `%step`/`%continue` still works.
+
+### `%view` (viewpoint conformance)
+
+`%view Demo::report` prints `exposes` then `viewpoint conformance` with
+`satisfy structure (from Demo::StructureView): violated` and one line per concern
+(`conforms` / `violated (framed by the viewpoint but not by the view)` / `unevaluable` + reason).
+A satisfy target that is a `requirementUsage` is diagnosed at load *and* reported as
+`unevaluable (satisfy target spec is a requirementUsage, not a viewpoint)` — never a silent pass.
+`%view` registers no object: `%instances` afterwards says none created, a repeat is identical, and a
+following `%constraint`/`%satisfy` gives a typed message (`not a constraint: MassBudget is a concern
+def …`) rather than an ambiguity error.
+
+### Succession guards and addressed sends
+
+- A guard on a succession leaving an *ordinary* action node is evaluated: fixture with `level = 4`
+  and branches `if level > 10` / `else` must end with the false branch's counter at 0.
+- Fork fixtures under `internal/core/runtime/testdata/conformance/` (e.g.
+  `action_succession_guard_fork_branch_pruned.sysml`) run fine in the REPL but **emit unresolved
+  `Integer` diagnostics** because they rely on the test harness's implicit `ScalarValues` import.
+  Copy the fixture and add `import ScalarValues::*;` if you want a clean transcript.
+- Addressed sends carry object identity: a send to `Ident::alpha::reader` must **not** be consumed by
+  the sending object's own same-named `reader`. The proof of correctness is a *deadlock error*
+  (`accept deadlock in action talk … accept n waiting since step 3`); a broad-delivery bug would
+  complete instead. An unresolvable address gives the typed
+  `send reaches no receiving port: "Unrouted.alpha.count" names no port of an object the sender can
+  address`.
+- For the performed/indirect case use `send_identity_performed_object.sysml` (a state entry sends to
+  `worker`, a two-level `perform`ed action accepts it) and drive it with `%instantiate` + `%state` +
+  `%advance 1` → the machine reaches `heard`. Hand-writing this is easy to get wrong: `send 7 to
+  reader` from a package-level scope reports `unresolved reference: reader`, and a qualified
+  package-level receiver is *unroutable* because it belongs to no object.
+
+### Change/time triggers that are still absent (issue #268 at 870da1fd)
+
+Confirm absence rather than assuming it, and keep the fixture shape right — the body must hang off
+the **state usage**, not the `state def`, or you get
+`initialize state machine: no initial state found`:
+
+```
+part def Machine {
+    attribute ready : Boolean = true;
+    state def Modes;
+    state modes : Modes { entry; then idle; state idle; state done;
+        transition idle_to_done first idle accept when ready then done; }
+}
+```
+
+`%state …::modes`, `%advance 5`, `%current` → still `Current state: idle` (nothing in
+`RunToCompletion` polls change events; documented as ⚠️ Approximate in
+`docs/project/spec-compliance.md`). A unit-carrying time trigger (`accept after 5 [SI::s]`) fails
+with the typed `initialize state machine: schedule events: time duration must be constant, got
+quantity`, while the unitless `accept after 5` fires at t=5 — that pair is the cheapest way to show
+the feature is absent-but-typed rather than half-present.
