@@ -606,7 +606,9 @@ func (e *encoder) wroteKindKeyword(n *ast.Usage) bool {
 	if head <= start {
 		return false
 	}
-	text := e.file.Text(source.Span{Offset: start, Len: head - start})
+	// A keyword inside a comment is trivia the declaration does not state, so the
+	// comments are dropped before the words are read.
+	text := withoutComments(e.file.Text(source.Span{Offset: start, Len: head - start}))
 	// An unnamed declaration's keyword, if it wrote one, is ahead of everything
 	// its head can state.
 	if cut := strings.IndexAny(text, ":=;[{"); cut >= 0 {
@@ -619,6 +621,55 @@ func (e *encoder) wroteKindKeyword(n *ast.Usage) bool {
 		}
 	}
 	return true
+}
+
+// withoutComments replaces each `//` and `/* */` comment with a space, leaving
+// the words the source states outside a quoted name untouched.
+func withoutComments(text string) string {
+	var kept strings.Builder
+	for at := 0; at < len(text); {
+		switch {
+		case strings.HasPrefix(text[at:], "//"):
+			end := strings.IndexByte(text[at:], '\n')
+			if end < 0 {
+				kept.WriteByte(' ')
+				return kept.String()
+			}
+			kept.WriteByte(' ')
+			at += end
+		case strings.HasPrefix(text[at:], "/*"):
+			end := strings.Index(text[at+2:], "*/")
+			if end < 0 {
+				kept.WriteByte(' ')
+				return kept.String()
+			}
+			kept.WriteByte(' ')
+			at += end + 4
+		case text[at] == '\'' || text[at] == '"':
+			end := quotedEnd(text[at:])
+			kept.WriteString(text[at : at+end])
+			at += end
+		default:
+			kept.WriteByte(text[at])
+			at++
+		}
+	}
+	return kept.String()
+}
+
+// quotedEnd returns the length of the quoted name or string at the head of text,
+// or all of text when it is unterminated.
+func quotedEnd(text string) int {
+	quote := text[0]
+	for at := 1; at < len(text); at++ {
+		switch text[at] {
+		case '\\':
+			at++
+		case quote:
+			return at + 1
+		}
+	}
+	return len(text)
 }
 
 // sigilBefore reads the `#` or `@` that introduces an annotation: the character

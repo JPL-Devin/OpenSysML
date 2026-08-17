@@ -304,6 +304,28 @@ func TestCommentInHeadDoesNotChangeKeyword(t *testing.T) {
 	}
 }
 
+// A directed usage records no keyword, so whether it wrote its kind out is read
+// from the source — where a comment naming a kind must not count as one written.
+func TestCommentedKindKeywordIsNotWrittenBack(t *testing.T) {
+	for _, tt := range []struct{ src, want string }{
+		{"package P {\n\tpart p {\n\t\tin /* attribute */ x : Real;\n\t}\n}", "in x : Real;"},
+		{"package P {\n\tpart p {\n\t\tout // attribute\n\t\t\ty : Real;\n\t}\n}", "out y : Real;"},
+		{"package P {\n\tpart p {\n\t\tin attribute z : Real;\n\t}\n}", "in attribute z : Real;"},
+	} {
+		turtle, err := export.Convert("m.sysml", []byte(tt.src), export.FormatSysML, export.FormatTurtle)
+		if err != nil {
+			t.Fatalf("to turtle: %v", err)
+		}
+		back, err := export.Convert("m.ttl", turtle, export.FormatTurtle, export.FormatSysML)
+		if err != nil {
+			t.Fatalf("back to notation: %v", err)
+		}
+		if !strings.Contains(string(back), tt.want) {
+			t.Errorf("wanted %q written back from %q:\n%s", tt.want, tt.src, back)
+		}
+	}
+}
+
 // A usage whose head is kept verbatim comes back as written, so a synonym
 // keyword on it needs no rebuilding and is not refused.
 func TestVerbatimSynonymConverts(t *testing.T) {
