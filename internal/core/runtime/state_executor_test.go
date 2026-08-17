@@ -401,7 +401,7 @@ func TestStateExecutor_ChangeEvent(t *testing.T) {
 	exec.stateData["x"] = Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 10}}
 
 	// Poll for change events
-	err = exec.pollChangeEvents()
+	_, err = exec.pollChangeEvents()
 	if err != nil {
 		t.Fatalf("poll change events: %v", err)
 	}

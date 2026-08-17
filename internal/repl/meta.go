@@ -2063,6 +2063,10 @@ func (s *Session) doCurrent() ([]string, bool, error) {
 		fmt.Sprintf("Execution state: %s", exec.State()),
 	}
 
+	if reason := exec.SuspendReason(); reason != "" {
+		out = append(out, fmt.Sprintf("Cannot progress: %s", reason))
+	}
+
 	if len(stateStack) > 1 {
 		out = append(out, "", "State stack (active configuration):")
 		for i, stateNode := range stateStack {
@@ -2142,21 +2146,24 @@ func (s *Session) advanceBy(duration float64) ([]string, error) {
 	exec := s.stateExec.executor
 	deadline := s.stateExec.now + duration
 
-	// A state's do behavior is work too: the machine can have none queued yet
-	// still have somewhere to go, and its completion transition is queued once
-	// the behavior ends.
-	if !exec.HasPendingWork() {
-		s.stateExec.now = deadline
-		return []string{fmt.Sprintf("No pending work - simulation time is now %.2f", deadline)}, nil
-	}
-
 	// Bound the drain by the session's own budgets, so a machine that keeps
 	// queueing work cannot hang the REPL and the way to raise the bound is the
 	// same one the executors report.
 	maxEvents, maxDoActions := s.budgets.MaxStateEvents, s.budgets.MaxDoSteps
 	var processed, doActions int64
-	for exec.HasPendingWork() && exec.State() == runtime.StateRunning &&
+	for exec.State() == runtime.StateRunning &&
 		processed < maxEvents && doActions < maxDoActions {
+		// The poll comes first, and runs once more at quiescence, so a condition
+		// a do action has just made true is taken in this call.
+		if fired, err := exec.PollChangeEvents(); err != nil {
+			return nil, fmt.Errorf("change condition failed: %w", err)
+		} else if fired {
+			processed++
+			continue
+		}
+		if !exec.HasPendingWork() {
+			break
+		}
 		// A signal in flight is due now, whatever the deadline: dispatching it is
 		// the step RunToCompletion would take here.
 		if exec.EventQueue().Len() == 0 && exec.HasPendingSignal() {
@@ -2188,6 +2195,16 @@ func (s *Session) advanceBy(duration float64) ([]string, error) {
 		processed++
 	}
 	s.stateExec.now = math.Max(deadline, exec.CurrentTime())
+
+	// A machine that took no step and has nowhere to go says why; one whose work
+	// is only due past the deadline still reports the drain and what is left.
+	if processed == 0 && doActions == 0 && !exec.HasPendingWork() {
+		out := []string{fmt.Sprintf("No pending work - simulation time is now %.2f", s.stateExec.now)}
+		if reason := exec.SuspendReason(); reason != "" {
+			out = append(out, fmt.Sprintf("  %s", reason))
+		}
+		return out, nil
+	}
 
 	out := []string{
 		fmt.Sprintf("✓ Advanced to %.2f (%d event(s) processed)", s.stateExec.now, processed),

@@ -243,13 +243,13 @@ func TestChangeConditionOnACompositeStateFiresWhileASubstateIsActive(t *testing.
 	if err := exec.RunToCompletion(); err != nil {
 		t.Fatalf("run: %v", err)
 	}
-	if err := exec.pollChangeEvents(); err != nil {
+	if _, err := exec.pollChangeEvents(); err != nil {
 		t.Fatalf("poll: %v", err)
 	}
 	assertCurrentState(t, exec, "Step1")
 
 	exec.stateData["ready"] = boolValue(true)
-	if err := exec.pollChangeEvents(); err != nil {
+	if _, err := exec.pollChangeEvents(); err != nil {
 		t.Fatalf("poll: %v", err)
 	}
 	assertCurrentState(t, exec, "Done")
@@ -284,7 +284,7 @@ func TestGuardBlockedChangeConditionDoesNotSilenceTheOtherRegions(t *testing.T) 
 		t.Fatalf("run: %v", err)
 	}
 	exec.stateData["ready"] = boolValue(true)
-	if err := exec.pollChangeEvents(); err != nil {
+	if _, err := exec.pollChangeEvents(); err != nil {
 		t.Fatalf("poll: %v", err)
 	}
 
@@ -297,7 +297,7 @@ func TestGuardBlockedChangeConditionDoesNotSilenceTheOtherRegions(t *testing.T) 
 	}
 
 	exec.stateData["allowed"] = boolValue(true)
-	if err := exec.pollChangeEvents(); err != nil {
+	if _, err := exec.pollChangeEvents(); err != nil {
 		t.Fatalf("poll: %v", err)
 	}
 	active = make(map[string]bool)
@@ -341,7 +341,7 @@ func TestChangeConditionTakesTheInnermostTransitionOnly(t *testing.T) {
 		t.Fatalf("run: %v", err)
 	}
 	exec.stateData["ready"] = boolValue(true)
-	if err := exec.pollChangeEvents(); err != nil {
+	if _, err := exec.pollChangeEvents(); err != nil {
 		t.Fatalf("poll: %v", err)
 	}
 

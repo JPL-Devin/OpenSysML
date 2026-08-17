@@ -62,6 +62,22 @@ type StateExecutor struct {
 	// timerScheduled holds the time-triggered transitions whose timer is already
 	// running, so a state's timer is not restarted while it stays active.
 	timerScheduled map[*lower.Transition]bool
+
+	// changeFired holds the change-triggered transitions already taken on a
+	// condition that has stayed true, so an unchanged one does not re-fire.
+	changeFired map[*lower.Transition]bool
+
+	// firingChange is the change-triggered transition being taken, whose latch the
+	// state entries it causes must leave alone.
+	firingChange *lower.Transition
+
+	// changeRearmed collects, while a poll runs, the watches a state entry armed
+	// for a new activation, so the poll's earlier observation does not latch them.
+	changeRearmed map[*lower.Transition]bool
+
+	// changeWaits are the change conditions the last poll found could not fire,
+	// telling a machine waiting on one from a quiesced machine.
+	changeWaits []changeWait
 }
 
 // doActivity is the part of a state's do behavior that has still to run. The
@@ -116,6 +132,7 @@ func newStateExecutor(ctx *Context, stateMachine *symbols.Symbol, self *Instance
 		history:        make(map[*ast.StateNode]*historyRecord),
 		deferred:       make([]Event, 0),
 		timerScheduled: make(map[*lower.Transition]bool),
+		changeFired:    make(map[*lower.Transition]bool),
 		activeConfig: &StateConfiguration{
 			regionStates: make(map[*ast.StateRegion]*ast.StateNode),
 		},
@@ -289,23 +306,12 @@ func (e *StateExecutor) scheduleTimeTransitions(state *ast.StateNode) error {
 				return fmt.Errorf("eval time duration: %w", err)
 			}
 
-			// Extract numeric duration
-			var duration float64
-			if durationVal.Kind == ValConst {
-				switch durationVal.Const.Kind {
-				case semantics.ValInt:
-					duration = float64(durationVal.Const.Int)
-				case semantics.ValReal:
-					duration = durationVal.Const.Real
-				default:
-					return fmt.Errorf("time duration must be numeric, got %v", durationVal.Const.Kind)
-				}
-			} else {
-				return fmt.Errorf("time duration must be constant, got %v", durationVal.Kind)
-			}
-
 			// `accept at t` names an instant, `accept after d` an offset from
 			// entering the state. An instant already past fires immediately.
+			duration, err := e.timeMagnitude(durationVal, "time duration")
+			if err != nil {
+				return err
+			}
 			timestamp := e.currentTime + duration
 			if timeEvent.Absolute {
 				timestamp = math.Max(duration, e.currentTime)
@@ -1477,11 +1483,22 @@ func (e *StateExecutor) enterHierarchyInto(state *ast.StateNode, branches map[*a
 // so concurrently active states interleave instead of one running to the end at
 // entry, and leaving a state abandons the rest of its do behavior.
 //
+// Change conditions are re-tested per micro-step — after the do round, before
+// the next queued event, and again at quiescence — a tool-defined cadence, since
+// KerML has no clock (docs/project/spec-compliance.md).
+//
 // The run is bounded by the context's event and do activity budgets
 // (SYSML_MAX_EVENTS, SYSML_MAX_DO_STEPS), so a cyclic machine reports a typed
-// error instead of spinning forever.
+// error instead of spinning forever. A poll that fires nothing costs no budget;
+// a change transition taken counts as one step, like a dispatched event.
 func (e *StateExecutor) RunToCompletion() error {
 	defer e.ctx.beginExecutorRun(&e.runStarted)()
+
+	// Suspension is derived at quiescence, so re-running is allowed: a run that
+	// finds nothing to do suspends again.
+	if e.state == StateSuspended {
+		e.state = StateRunning
+	}
 
 	maxStateEvents, maxDoSteps := e.ctx.maxStateEvents, e.ctx.maxDoSteps
 	var events, doSteps int64
@@ -1493,6 +1510,17 @@ func (e *StateExecutor) RunToCompletion() error {
 		doSteps += int64(ran)
 		if doSteps >= maxDoSteps {
 			return fmt.Errorf("state machine exceeded max do activity steps (%d steps; raise %s to allow more), possible non-terminating do behavior", maxDoSteps, MaxDoStepsEnvVar)
+		}
+		fired, err := e.pollChangeEvents()
+		if err != nil {
+			return fmt.Errorf("poll change conditions: %w", err)
+		}
+		if fired {
+			if events >= maxStateEvents {
+				return fmt.Errorf("state machine exceeded max events (%d events; raise %s to allow more), possible infinite loop", maxStateEvents, MaxStateEventsEnvVar)
+			}
+			events++
+			continue
 		}
 		if e.eventQueue.Len() == 0 && !e.deliverPendingSignal() {
 			if ran > 0 {
@@ -1842,6 +1870,18 @@ func (e *StateExecutor) enterStateInto(state *ast.StateNode, branches map[*ast.S
 		return nil
 	}
 
+	// Change watches are created fresh per activation, so a condition that stayed
+	// true rises again; the firing transition keeps its latch so the entry it
+	// caused does not re-enable it.
+	for _, trans := range e.graph.Transitions[state] {
+		if trans != e.firingChange {
+			delete(e.changeFired, trans)
+			if e.changeRearmed != nil {
+				e.changeRearmed[trans] = true
+			}
+		}
+	}
+
 	// Track state visit
 	e.stateVisits = append(e.stateVisits, state.Name)
 
@@ -2035,63 +2075,6 @@ func stateActionName(u *ast.Usage) string {
 	return "<anonymous>"
 }
 
-// pollChangeEvents checks ChangeEvent conditions for the outgoing transitions of
-// the active configuration, walking outward from each active leaf so that a
-// condition on an enclosing composite state is watched while a substate is
-// active. Selection and conflict resolution are the ones an event dispatch uses,
-// so a poll resolves an inner against an outer transition the way the equivalent
-// signal would, and every region moves on the conditions it watches.
-func (e *StateExecutor) pollChangeEvents() error {
-	candidates, err := e.selectCandidates(e.enabledChangeTransition)
-	if err != nil {
-		return err
-	}
-	for _, candidate := range candidates {
-		if e.losesToNestedTransition(candidates, candidate) || !e.isActive(candidate.leaf) {
-			continue
-		}
-		if err := e.fireFrom(candidate.source, candidate.trans); err != nil {
-			return fmt.Errorf("fire transition out of %s: %w", candidate.source.Name, err)
-		}
-		if e.state == StateCompleted {
-			return nil
-		}
-	}
-	return nil
-}
-
-// enabledChangeTransition returns the state's first change-triggered transition
-// whose condition holds and whose guard does not block it. A blocked one consumes
-// nothing, so the walk carries on past it.
-func (e *StateExecutor) enabledChangeTransition(state *ast.StateNode) (*lower.Transition, error) {
-	for _, trans := range e.graph.Transitions[state] {
-		changeEvent, ok := trans.Trigger.(*ast.ChangeEvent)
-		if !ok {
-			continue
-		}
-		// Evaluate the condition in the scope the transition was written in, the
-		// machine's data shadowing it.
-		condVal, err := e.evalStep(changeEvent.Condition, trans.Scope)
-		if err != nil {
-			return nil, fmt.Errorf("eval change condition: %w", err)
-		}
-		if condVal.Kind != ValConst || condVal.Const.Kind != semantics.ValBool {
-			return nil, fmt.Errorf("change condition must be boolean, got %v", condVal.Kind)
-		}
-		if !condVal.Const.Bool {
-			continue
-		}
-		satisfied, err := e.passesGuard(trans)
-		if err != nil {
-			return nil, fmt.Errorf("eval change guard: %w", err)
-		}
-		if satisfied {
-			return trans, nil
-		}
-	}
-	return nil, nil
-}
-
 // --- Public accessor methods for REPL debugging ---
 
 // CurrentState returns the current active state node.
@@ -2185,6 +2168,14 @@ func (e *StateExecutor) ProcessNextEvent() error {
 	ran, err := e.runDoRound()
 	if err != nil {
 		return err
+	}
+	// A condition risen in the do round is taken here, as RunToCompletion does.
+	fired, err := e.pollChangeEvents()
+	if err != nil {
+		return fmt.Errorf("poll change conditions: %w", err)
+	}
+	if fired {
+		return nil
 	}
 	// A signal sent by a behavior sharing this context is dispatched by the same
 	// step RunToCompletion takes, so stepping and running agree.

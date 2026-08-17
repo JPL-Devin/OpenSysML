@@ -1,0 +1,15 @@
+// A change trigger fires on its condition rising: a self-transition on a
+// condition that stays true takes its edge once rather than forever, so the run
+// suspends instead of exhausting the event budget.
+package test {
+	state Machine {
+		attribute log : Integer = 0;
+		attribute ready : Boolean = true;
+
+		initial start;
+		state waiting;
+
+		start then waiting;
+		transition waiting to waiting accept when ready do assign log := log * 10 + 1;
+	}
+}
