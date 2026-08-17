@@ -1,0 +1,232 @@
+package runtime
+
+import (
+	"strings"
+	"testing"
+)
+
+// A machine whose only outgoing transition is a change trigger progresses under
+// RunToCompletion: the condition is re-tested by the run itself, not by whatever
+// external driver happens to poll.
+func TestChangeTriggerRunsWithoutAnExternalPoll(t *testing.T) {
+	outputs, visits, err := executeStateSource(t, "Machine", `package test {
+		state Machine {
+			attribute ready : Boolean = true;
+			attribute log : Integer = 0;
+			initial start;
+			state waiting {
+				accept when ready then done;
+			}
+			state done { entry { log = 1; } }
+			start then waiting;
+		}
+	}`)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if want := []string{"start", "waiting", "done"}; !equalStrings(visits, want) {
+		t.Errorf("visits = %v, want %v", visits, want)
+	}
+	if log := outputs["log"]; log.Kind != ValConst || log.Const.Int != 1 {
+		t.Errorf("log = %v, want 1: the change transition did not fire", log)
+	}
+}
+
+// A change condition risen by a do behavior is taken by the step after it, which
+// is what re-testing per micro-step buys: the run neither waits for an event nor
+// misses the rise.
+func TestChangeTriggerFiresOnRiseFromDoBehavior(t *testing.T) {
+	_, visits, err := executeStateSource(t, "Machine", `package test {
+		state Machine {
+			attribute count : Integer = 0;
+			initial start;
+			state counting {
+				do action tick {
+					assign count := count + 1;
+					assign count := count + 1;
+				}
+				accept when count >= 2 then done;
+			}
+			state done;
+			start then counting;
+		}
+	}`)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if want := []string{"start", "counting", "done"}; !equalStrings(visits, want) {
+		t.Errorf("visits = %v, want %v", visits, want)
+	}
+}
+
+// A false change condition is not quiescence: the machine suspends, and says
+// which condition it is waiting on rather than reporting silent completion.
+func TestChangeTriggerFalseConditionIsReported(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			attribute ready : Boolean = false;
+			initial start;
+			state waiting {
+				accept when ready then done;
+			}
+			state done;
+			start then waiting;
+		}
+	}`)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if exec.State() != StateSuspended {
+		t.Fatalf("state = %v, want suspended", exec.State())
+	}
+	reason := exec.SuspendReason()
+	if !strings.Contains(reason, "waiting on change condition") || !strings.Contains(reason, "condition is false") {
+		t.Errorf("reason = %q, want the false change condition it waits on", reason)
+	}
+	if !strings.Contains(reason, "when ready") {
+		t.Errorf("reason = %q, want the trigger as written", reason)
+	}
+
+	// The condition rising makes the transition due; the same run takes it.
+	exec.stateData["ready"] = boolValue(true)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("rerun: %v", err)
+	}
+	assertCurrentState(t, exec, "done")
+	if reason := exec.SuspendReason(); !strings.HasPrefix(reason, "quiesced") {
+		t.Errorf("reason = %q, want quiescence once no condition is watched", reason)
+	}
+}
+
+// A machine watching no change condition reports quiescence, so the two cases a
+// stalled machine can be in stay distinguishable.
+func TestQuiescedMachineReportsNoChangeCondition(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			initial start;
+			state waiting {
+				accept sig then done;
+			}
+			state done;
+			start then waiting;
+		}
+		attribute def sig;
+	}`)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	reason := exec.SuspendReason()
+	if !strings.HasPrefix(reason, "quiesced") {
+		t.Errorf("reason = %q, want quiescence", reason)
+	}
+}
+
+// A condition that stays true fires its edge once: a self-transition on a
+// lasting condition suspends instead of exhausting the event budget.
+func TestChangeTriggerDoesNotRefireUnchangedCondition(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			attribute ready : Boolean = true;
+			attribute laps : Integer = 0;
+			initial start;
+			state waiting;
+			start then waiting;
+			transition waiting to waiting accept when ready do assign laps := laps + 1;
+		}
+	}`)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if exec.State() != StateSuspended {
+		t.Fatalf("state = %v, want suspended", exec.State())
+	}
+	if laps := exec.stateData["laps"]; laps.Kind != ValConst || laps.Const.Int != 1 {
+		t.Errorf("laps = %v, want 1: the edge fired other than once on the rise", laps)
+	}
+	if reason := exec.SuspendReason(); !strings.Contains(reason, "has not changed since it fired") {
+		t.Errorf("reason = %q, want the already-fired condition", reason)
+	}
+
+	// Observing the condition false re-arms the edge, so the next rise fires.
+	exec.stateData["ready"] = boolValue(false)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("rerun false: %v", err)
+	}
+	exec.stateData["ready"] = boolValue(true)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("rerun true: %v", err)
+	}
+	if laps := exec.stateData["laps"]; laps.Kind != ValConst || laps.Const.Int != 2 {
+		t.Errorf("laps = %v, want 2: the re-armed edge did not fire on the next rise", laps)
+	}
+}
+
+// A guard blocking a risen condition consumes nothing: the transition stays
+// armed and the guard is re-tested, and the wait names the guard.
+func TestChangeTriggerGuardBlocks(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			attribute ready : Boolean = true;
+			attribute allowed : Boolean = false;
+			initial start;
+			state waiting;
+			state done;
+			start then waiting;
+			transition waiting to done accept when ready if allowed;
+		}
+	}`)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	assertCurrentState(t, exec, "waiting")
+	if reason := exec.SuspendReason(); !strings.Contains(reason, "guard is false") {
+		t.Errorf("reason = %q, want the blocking guard", reason)
+	}
+
+	exec.stateData["allowed"] = boolValue(true)
+	fired, err := exec.PollChangeEvents()
+	if err != nil {
+		t.Fatalf("poll: %v", err)
+	}
+	if !fired {
+		t.Fatal("poll fired nothing once the guard passed")
+	}
+	assertCurrentState(t, exec, "done")
+}
+
+// Polling costs no event budget of its own: a machine whose conditions stay
+// false runs to suspension under a budget of one event.
+func TestChangeTriggerPollingKeepsEventBudget(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			attribute ready : Boolean = false;
+			initial start;
+			state waiting {
+				do action tick { assign ready := ready; }
+				accept when ready then done;
+			}
+			state done;
+			start then waiting;
+		}
+	}`)
+	exec.ctx.maxStateEvents = 1
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if exec.State() != StateSuspended {
+		t.Fatalf("state = %v, want suspended", exec.State())
+	}
+}
+
+// equalStrings compares two ordered lists of names.
+func equalStrings(got, want []string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+	return true
+}

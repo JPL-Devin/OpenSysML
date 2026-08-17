@@ -1,0 +1,13 @@
+{
+  "type": "state",
+  "libraries": true,
+  "trace": true,
+  "events": [
+    {"signal": "Go", "args": null}
+  ],
+  "finalState": "C",
+  "stateVisits": ["start", "A", "B", "C"],
+  "outputs": {
+    "log": {"type": "Integer", "value": 123}
+  }
+}

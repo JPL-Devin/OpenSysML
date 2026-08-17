@@ -1,0 +1,8 @@
+{
+  "type": "state",
+  "finalState": "waiting",
+  "stateVisits": ["start", "waiting"],
+  "outputs": {
+    "log": {"type": "Integer", "value": 1}
+  }
+}

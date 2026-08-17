@@ -2057,6 +2057,10 @@ func (s *Session) doCurrent() ([]string, bool, error) {
 		fmt.Sprintf("Execution state: %s", exec.State()),
 	}
 
+	if reason := exec.SuspendReason(); reason != "" {
+		out = append(out, fmt.Sprintf("Cannot progress: %s", reason))
+	}
+
 	if len(stateStack) > 1 {
 		out = append(out, "", "State stack (active configuration):")
 		for i, stateNode := range stateStack {
@@ -2136,12 +2140,20 @@ func (s *Session) advanceBy(duration float64) ([]string, error) {
 	exec := s.stateExec.executor
 	deadline := s.stateExec.now + duration
 
-	// A state's do behavior is work too: the machine can have none queued yet
-	// still have somewhere to go, and its completion transition is queued once
-	// the behavior ends.
-	if !exec.HasPendingWork() {
+	// A change condition risen since the last step is due now, ahead of any
+	// queued event, which is the order RunToCompletion takes. A do behavior is
+	// work too, so a machine with none queued can still have somewhere to go.
+	fired, err := exec.PollChangeEvents()
+	if err != nil {
+		return nil, fmt.Errorf("change condition failed: %w", err)
+	}
+	if !fired && !exec.HasPendingWork() {
 		s.stateExec.now = deadline
-		return []string{fmt.Sprintf("No pending work - simulation time is now %.2f", deadline)}, nil
+		out := []string{fmt.Sprintf("No pending work - simulation time is now %.2f", deadline)}
+		if reason := exec.SuspendReason(); reason != "" {
+			out = append(out, fmt.Sprintf("  %s", reason))
+		}
+		return out, nil
 	}
 
 	// Bound the drain by the session's own budgets, so a machine that keeps
@@ -2149,8 +2161,17 @@ func (s *Session) advanceBy(duration float64) ([]string, error) {
 	// same one the executors report.
 	maxEvents, maxDoActions := s.budgets.MaxStateEvents, s.budgets.MaxDoSteps
 	var processed, doActions int64
+	if fired {
+		processed++
+	}
 	for exec.HasPendingWork() && exec.State() == runtime.StateRunning &&
 		processed < maxEvents && doActions < maxDoActions {
+		if fired, err := exec.PollChangeEvents(); err != nil {
+			return nil, fmt.Errorf("change condition failed: %w", err)
+		} else if fired {
+			processed++
+			continue
+		}
 		// A signal in flight is due now, whatever the deadline: dispatching it is
 		// the step RunToCompletion would take here.
 		if exec.EventQueue().Len() == 0 && exec.HasPendingSignal() {
