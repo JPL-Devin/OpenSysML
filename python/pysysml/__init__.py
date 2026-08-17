@@ -27,7 +27,7 @@ from pysysml.conversion import (
 )
 from pysysml.errors import (
     PySysMLError, ChecksumMismatchError, ConnectionError, ConversionError,
-    ExecutionError,
+    ExecutionError, FeatureValueError,
     InstanceTypeError, InvalidRequestError, ModelError,
     ModelFileNotFoundError, ModelNotFoundError, ServiceError,
     ServiceTimeoutError, SlotError, StaleServiceError, SymbolNotFoundError,
@@ -46,7 +46,7 @@ __all__ = [
     "Verdict", "CalcResult",
     "QueryElement", "QueryError",
     "PySysMLError", "ChecksumMismatchError", "ConnectionError",
-    "ConversionError", "ExecutionError",
+    "ConversionError", "ExecutionError", "FeatureValueError",
     "InstanceTypeError", "InvalidRequestError", "MissingCapabilityError",
     "ModelError", "ModelFileNotFoundError", "ModelNotFoundError",
     "ServiceError", "ServiceTimeoutError", "SlotError", "StaleServiceError",

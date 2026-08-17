@@ -1,20 +1,20 @@
 """Instance class wrapping runtime-materialized objects."""
 
-from pysysml.errors import SlotError
-from pysysml.values import UNSET, slot_to_python, value_to_python
+from pysysml.errors import FeatureValueError
+from pysysml.values import UNSET, feature_value_to_python, value_to_python
 
 
 class Instance:
     """Represents a runtime instance of a part/usage.
 
-    Slot values are exposed as Python values: numbers, strings, booleans, lists
-    and nested Instance objects. The protobuf messages remain reachable through
-    ``get_slot()`` and ``raw_slots``.
+    Feature values are exposed as Python values: numbers, strings, booleans,
+    lists and nested Instance objects. The protobuf messages remain reachable
+    through ``get_feature()`` and ``raw_features``.
 
     Attributes:
         id (int): Unique instance identifier
         type_symbol_id (str): FQN of the def/usage this instantiates
-        slots (dict): Feature name → Python value
+        features (dict): Feature name → Python value
     """
 
     def __init__(self, pb_instance, graph=None, _wrappers=None):
@@ -48,47 +48,68 @@ class Instance:
         return self._pb.type_symbol_id
 
     @property
-    def slots(self):
-        """Get all slots as {feature_name: Python value}.
+    def _values(self):
+        """The protobuf feature values, from a server of either spelling."""
+        if "feature_values" in self._pb.DESCRIPTOR.fields_by_name:
+            return self._pb.feature_values or self._pb.slots
+        return self._pb.slots
 
-        Slots that failed to evaluate or were never materialized are reported as
-        SlotError objects instead of raising, so the whole instance stays
-        inspectable; attribute or item access on those slots raises.
+    @property
+    def features(self):
+        """Get all feature values as {feature_name: Python value}.
+
+        A feature whose value failed to evaluate or was never materialized is
+        reported as a FeatureValueError object instead of raising, so the whole
+        instance stays inspectable; attribute or item access on it raises.
         """
         result = {}
-        for name, pb_slot in self._pb.slots.items():
+        for name, pb_value in self._values.items():
             try:
-                result[name] = slot_to_python(name, pb_slot, self._resolve_instance)
-            except SlotError as exc:
+                result[name] = feature_value_to_python(name, pb_value, self._resolve_instance)
+            except FeatureValueError as exc:
                 result[name] = exc
         return result
 
     @property
-    def raw_slots(self):
-        """Get all slots as {feature_name: sysml_pb2.SlotValue}."""
-        return dict(self._pb.slots)
+    def raw_features(self):
+        """Get all feature values as {feature_name: sysml_pb2.FeatureValue}."""
+        return dict(self._values)
 
-    def get_slot(self, feature_name):
-        """Get the raw protobuf slot for a feature.
+    def get_feature(self, feature_name):
+        """Get the raw protobuf feature value for a feature.
 
         Args:
             feature_name (str): Name of feature
 
         Returns:
-            sysml_pb2.SlotValue or None if not found
+            sysml_pb2.FeatureValue or None if not found
         """
-        return self._pb.slots.get(feature_name)
+        return self._values.get(feature_name)
+
+    @property
+    def slots(self):
+        """Deprecated spelling of :attr:`features`."""
+        return self.features
+
+    @property
+    def raw_slots(self):
+        """Deprecated spelling of :attr:`raw_features`."""
+        return self.raw_features
+
+    def get_slot(self, feature_name):
+        """Deprecated spelling of :meth:`get_feature`."""
+        return self.get_feature(feature_name)
 
     def get(self, feature_name, default=None):
-        """Get a slot's Python value, or default if the slot does not exist.
+        """Get a feature's Python value, or default if the feature does not exist.
 
         Raises:
-            SlotError: If the slot exists but failed to evaluate.
+            FeatureValueError: If the feature exists but failed to evaluate.
         """
-        pb_slot = self._pb.slots.get(feature_name)
-        if pb_slot is None:
+        pb_value = self._values.get(feature_name)
+        if pb_value is None:
             return default
-        return slot_to_python(feature_name, pb_slot, self._resolve_instance)
+        return feature_value_to_python(feature_name, pb_value, self._resolve_instance)
 
     def _resolve_instance(self, instance_id):
         """Resolve an instance id to an Instance, or the bare id if unreachable."""
@@ -101,45 +122,45 @@ class Instance:
         return Instance(pb_child, self._graph, self._wrappers)
 
     def __getattr__(self, name):
-        """Expose slots as attributes. Real attributes always win."""
+        """Expose feature values as attributes. Real attributes always win."""
         if name.startswith('_'):
             raise AttributeError(name)
-        pb = self.__dict__.get('_pb')
-        if pb is None or name not in pb.slots:
+        values = self._values if self.__dict__.get('_pb') is not None else {}
+        if name not in values:
             raise AttributeError(
-                f"{type(self).__name__!r} object has no attribute or slot {name!r}"
+                f"{type(self).__name__!r} object has no attribute or feature {name!r}"
             )
-        return slot_to_python(name, pb.slots[name], self._resolve_instance)
+        return feature_value_to_python(name, values[name], self._resolve_instance)
 
     def __getitem__(self, feature_name):
-        """Expose slots by name; raises KeyError for an unknown slot."""
-        pb_slot = self._pb.slots.get(feature_name)
-        if pb_slot is None:
+        """Expose feature values by name; raises KeyError for an unknown feature."""
+        pb_value = self._values.get(feature_name)
+        if pb_value is None:
             raise KeyError(feature_name)
-        return slot_to_python(feature_name, pb_slot, self._resolve_instance)
+        return feature_value_to_python(feature_name, pb_value, self._resolve_instance)
 
     def __contains__(self, feature_name):
-        return feature_name in self._pb.slots
+        return feature_name in self._values
 
     def __dir__(self):
-        return sorted(set(super().__dir__()) | set(self._pb.slots))
+        return sorted(set(super().__dir__()) | set(self._values))
 
     def __str__(self):
         return f"Instance(id={self.id}, type={self.type_symbol_id})"
 
     def __repr__(self):
-        return f"Instance(id={self.id}, type={self.type_symbol_id!r}, slots={len(self._pb.slots)})"
+        return f"Instance(id={self.id}, type={self.type_symbol_id!r}, features={len(self._values)})"
 
     def _repr_html_(self):
-        """IPython rich display: slots table."""
+        """IPython rich display: feature-value table."""
         from html import escape
 
         html = ['<div style="font-family: monospace; padding: 10px; border: 1px solid #ddd;">']
         html.append(f'<h4 style="margin-top: 0;">Instance #{self.id}</h4>')
         html.append(f'<p><strong>Type:</strong> <code>{escape(self.type_symbol_id)}</code></p>')
 
-        raw_slots = self.raw_slots
-        if raw_slots:
+        raw_features = self.raw_features
+        if raw_features:
             html.append('<table style="border-collapse: collapse; width: 100%; margin-top: 10px;">')
             html.append('<thead><tr style="background: #f0f0f0;">')
             html.append('<th style="border: 1px solid #ccc; padding: 5px; text-align: left;">Feature</th>')
@@ -147,27 +168,27 @@ class Instance:
             html.append('<th style="border: 1px solid #ccc; padding: 5px; text-align: left;">Materialized</th>')
             html.append('</tr></thead><tbody>')
 
-            for feature_name, slot_value in raw_slots.items():
+            for feature_name, pb_value in raw_features.items():
                 html.append('<tr>')
                 html.append(f'<td style="border: 1px solid #ccc; padding: 5px;"><code>{escape(feature_name)}</code></td>')
 
                 # Format value
-                if slot_value.error:
-                    value_str = f'<em>error: {escape(slot_value.error)}</em>'
-                elif slot_value.HasField('value'):
-                    value_str = self._format_value(slot_value.value)
-                elif slot_value.values:
-                    value_str = '[' + ', '.join(self._format_value(v) for v in slot_value.values) + ']'
+                if pb_value.error:
+                    value_str = f'<em>error: {escape(pb_value.error)}</em>'
+                elif pb_value.HasField('value'):
+                    value_str = self._format_value(pb_value.value)
+                elif pb_value.values:
+                    value_str = '[' + ', '.join(self._format_value(v) for v in pb_value.values) + ']'
                 else:
                     value_str = '<em>None</em>'
 
                 html.append(f'<td style="border: 1px solid #ccc; padding: 5px;">{value_str}</td>')
-                html.append(f'<td style="border: 1px solid #ccc; padding: 5px;">{"✓" if slot_value.materialized else ""}</td>')
+                html.append(f'<td style="border: 1px solid #ccc; padding: 5px;">{"✓" if pb_value.materialized else ""}</td>')
                 html.append('</tr>')
 
             html.append('</tbody></table>')
         else:
-            html.append('<p><em>No slots</em></p>')
+            html.append('<p><em>No feature values</em></p>')
 
         html.append('</div>')
         return ''.join(html)

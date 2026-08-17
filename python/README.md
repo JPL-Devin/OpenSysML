@@ -126,7 +126,7 @@ reports every edge, and `Symbol.specializations` still carries them all.
 **Limitation, unchanged:** only structural usages (`attribute`, `part`, `item`,
 `occurrence`, `individual`, `port`, `enum`) become properties. Behavioral and
 connector usages — `action`, `state`, `calc`, `constraint`, `requirement`,
-`connection`, `flow`, `interface`, `allocation`, `case` — are not instance slots,
+`connection`, `flow`, `interface`, `allocation`, `case` — are not instance feature values,
 so a generated class has no member for them; reach them through
 `model["Demo::Vehicle"]`, `verify_constraint` and `verify_satisfaction`.
 
