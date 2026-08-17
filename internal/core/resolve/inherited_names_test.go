@@ -57,7 +57,7 @@ func TestRedeclaringAnInheritedNameConflictsUnlessItRedefines(t *testing.T) {
 		if got := len(conflicts) != 0; got != tc.conflict {
 			t.Errorf("%s: name conflict reported = %v, want %v (%v)", tc.name, got, tc.conflict, r.Diagnostics)
 		}
-		if tc.conflict && !strings.Contains(conflicts[0].Message, "Vehicle::wheel") {
+		if len(conflicts) != 0 && !strings.Contains(conflicts[0].Message, "Vehicle::wheel") {
 			t.Errorf("%s: conflict message %q does not name the inherited feature", tc.name, conflicts[0].Message)
 		}
 	}

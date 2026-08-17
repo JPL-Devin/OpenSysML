@@ -61,6 +61,24 @@ func TestUnresolvedNameCarriesImportFix(t *testing.T) {
 	}
 }
 
+// The import a fix writes is private, so applying it does not re-export the
+// imported names onward ([SysML, 7.2] over [KerML, 8.2.3.3]).
+func TestTheImportFixWritesAPrivateImport(t *testing.T) {
+	r := resolveDoc(t, "d.sysml", "package Lib { part def Wheel; }\npackage P { part w : Wheel; }")
+	for _, d := range r.Diagnostics {
+		for _, fix := range d.Fixes {
+			if fix.Title != "Import 'Lib::*'" {
+				continue
+			}
+			if len(fix.Edits) != 1 || fix.Edits[0].NewText != "private import Lib::*;" {
+				t.Errorf("the import fix writes %+v", fix.Edits)
+			}
+			return
+		}
+	}
+	t.Fatal("no import fix")
+}
+
 // A name nothing in the workspace resembles carries no fix rather than a guess.
 func TestUnresolvedNameWithoutCandidatesCarriesNoFix(t *testing.T) {
 	if titles := fixTitles(t, "package P { part w : Zzzqqqxyw; }"); len(titles) != 0 {

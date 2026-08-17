@@ -130,8 +130,9 @@ func TestEffectiveMultiplicityAssumesOne(t *testing.T) {
 	}
 }
 
-// A count against a multiplicity: an unbounded or unknown bound admits any count,
-// either side of a stated one does not.
+// CountViolation is the shared wording for a count against a multiplicity: an
+// unbounded or unknown bound admits any count, either side of a stated one does
+// not.
 func TestRangeCountViolation(t *testing.T) {
 	known := func(v int64) Bound { return Bound{Value: v, Known: true} }
 	for _, tc := range []struct {

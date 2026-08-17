@@ -6,6 +6,24 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ## Unreleased
 
+### Language and semantics
+
+- A member chain from `that` resolves: `attribute b : Real = that.a;` in a usage
+  body reads `a` off the object featuring the value being written — the innermost
+  enclosing usage, whose own and inherited members are both reached — instead of
+  reporting `no scope for member lookup in Base::things::that`, since `that` is
+  declared `Anything[1]` and owns no members ([KerML, 8.4.2]). A `that` written
+  where no usage encloses it stays unresolved rather than resolving to the
+  library's declaration.
+- A root-level `private import X::*;` serves the document that wrote it. It was
+  hidden from that document too, so a file opening with `private import
+  ScalarValues::*;` — the spelling OMG's own training files use — reported `Real`
+  unresolved. A root-level import still reaches no other document, at any
+  visibility ([KerML, 8.2.3.3]).
+- The import an editor offers for an unresolved library name is written `private
+  import X::*;` explicitly, so applying the fix does not re-export the imported
+  names onward.
+
 ### Python client (`pysysml`)
 
 - A quantity can be *sent*, not only read: a `pysysml.values.Quantity` is

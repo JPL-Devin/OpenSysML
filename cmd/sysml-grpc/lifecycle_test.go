@@ -63,7 +63,8 @@ type service struct {
 	// scanned is closed when the log reader reaches EOF, which is when the logs
 	// are complete and the process may be waited on.
 	scanned chan struct{}
-	waited  bool
+	// exit carries the process's end, from the single goroutine that waits on it.
+	exit chan error
 }
 
 // safeBuilder collects the server's stderr while a test reads it.
@@ -99,16 +100,21 @@ func startService(t *testing.T, args ...string) *service {
 		ready:   make(chan string, 1),
 		logs:    &safeBuilder{},
 		scanned: make(chan struct{}),
+		exit:    make(chan error, 1),
 	}
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("starting the service: %v", err)
 	}
 	go s.scan(stderr)
+	go func() {
+		// The logs come from a pipe, so they have to be drained to EOF before the
+		// process is waited on, or a log line is lost with the pipe.
+		<-s.scanned
+		s.exit <- cmd.Wait()
+	}()
 	t.Cleanup(func() {
-		if !s.waited {
-			_ = cmd.Process.Kill()
-			_ = cmd.Wait()
-		}
+		_ = cmd.Process.Kill()
+		<-s.exit
 	})
 	return s
 }
@@ -164,16 +170,9 @@ func (s *service) address(timeout time.Duration) string {
 // process still running when the timeout expires is a leak, and a failure.
 func (s *service) waitStatus(timeout time.Duration) int {
 	s.t.Helper()
-	done := make(chan error, 1)
-	go func() {
-		// The logs are read from a pipe, so they have to be drained to EOF before
-		// the process is waited on, or a log line is lost with the pipe.
-		<-s.scanned
-		done <- s.cmd.Wait()
-	}()
 	select {
-	case err := <-done:
-		s.waited = true
+	case err := <-s.exit:
+		s.exit <- err // the cleanup drains it, so exactly one Wait ever runs
 		var exit *exec.ExitError
 		switch {
 		case err == nil:

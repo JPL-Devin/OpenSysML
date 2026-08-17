@@ -246,6 +246,10 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 	return ec.evalName(n.Name)
 }
 
+// thatName is the implicit feature every usage takes from the base usage: it
+// names the instance featuring the value being evaluated ([KerML, 8.4.2]).
+const thatName = "that"
+
 // evalName evaluates a name as a reference to what it names, which is what an
 // expression written as a bare name is: `rate`, `A::B::x`.
 func (ec *EvalContext) evalName(qn *ast.QualifiedName) (Value, error) {
@@ -290,6 +294,11 @@ func (ec *EvalContext) evalName(qn *ast.QualifiedName) (Value, error) {
 			} else if ok {
 				return val, nil
 			}
+		}
+		// Then `that`, which every usage takes from the base usage: it names the
+		// instance featuring the value being evaluated, which is the bound one.
+		if name == thatName && ec.self != nil {
+			return Value{Kind: ValInstance, Instance: ec.self.ID}, nil
 		}
 		// Then the scope the expression was written in: a sibling attribute, a
 		// member of an enclosing namespace, or a name an import brought in, found

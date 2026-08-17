@@ -11,10 +11,11 @@ follow-through" is maintainer- or account-gated; everything after it is ordinary
 work.
 
 Track status as of this baseline: **Track B is closed**, **Track P is closed** on the
-engineering side (its remaining item, publishing to PyPI, is R2 and account-gated), and Track A
-is closed except **A6** (implicit library import), which is deliberately last because it moves
-the corpus baseline, and the two residuals A6 itself gates (A3, and the unqualified-call
-diagnostic in A4). Tracks C and D are untouched by this batch.
+engineering side (its remaining item, publishing to PyPI, is R2 and account-gated), and
+**Track A is closed bar one question**: A6 (implicit library import) is resolved as **won't do** —
+requiring an import is the conforming behavior (see A6) — so the two residuals it gated are
+re-scoped rather than open, leaving only A3's shape question (does a valueless library-typed
+attribute read as unset?). Tracks C and D are untouched by this batch.
 
 ## Where the repository stands
 
@@ -318,10 +319,11 @@ library type and the feature is materialized. What it materializes is an empty o
 should read as *unset*, since a `Real` has no features to instantiate. `attribute k : Real = 2.0`
 is correct (`k = 2.00`).
 
-Still gated on A6: without `import ScalarValues::*;` the reference is `unresolved reference:
-Real — did you mean ScalarValues::Real?` and the model does not analyse, so the unqualified
-spelling depends on A6 exactly as before. Do A6, then decide whether the valueless case reads as
-unset here or is a shape rule in `runtime/instance.go`.
+Re-scoped with A6's won't-do verdict: the unqualified-spelling half was never a defect —
+`attribute d : Real;` without an import is *correctly* unresolved, and the probe was simply
+missing `private import ScalarValues::*;`. What remains is one question, and it is the whole of
+A3: whether a valueless attribute of a library value type reads as unset or is a shape rule in
+`runtime/instance.go`.
 
 ## A3a — a measurement unit does not resolve inside a condition in the REPL path — done
 
@@ -396,13 +398,13 @@ Both residual items are closed by the unit-resolution work; see `docs/project/sp
   inside a loop or an `if` branch executes; what genuinely has no flow is still lowered to
   `lower.Unsupported` and reported when reached rather than dropped.
 
-Still open — the first waits on A6, the second is a statement of fact rather than a gap:
+Both remaining bullets are statements of fact rather than gaps:
 
-- **An unqualified library function call still reports `unresolved-reference`** while evaluating
-  correctly, because dispatch by local name is a runtime fallback and the checker does not know
-  the library is implicitly in force (A6 is the general fix). This applies equally to the
-  Systemica extension functions: `import SystemicaMathFunctions::*;` clears the diagnostic, a
-  bare `exp(x)` evaluates but is still reported.
+- **An unqualified library function call is reported unresolved, and conformantly so.** Written
+  with no import in force the name is genuinely unresolved (A6), so the diagnostic is right; what
+  is loose is the other side — runtime dispatch by local name answers such a call anyway, so an
+  unimported `exp(x)` evaluates while being reported. `import SystemicaMathFunctions::*;` (or
+  `MathFunctions` for the OMG ones) clears the diagnostic and is the spelling a model should use.
 - **`exp`, `ln`, `log` and `atan2` are a Systemica extension, not OMG.** The vendored library
   declares no signature for any of them, and the vendored files stay byte-identical, so they are
   declared in `internal/core/libs/stdlib/Systemica Libraries/SystemicaMathFunctions.kerml` — a
@@ -507,17 +509,36 @@ literal (`Level::high.n`), and an enum-typed default materializes: the reproduct
   nested in it (`internal/repl/meta.go`, `internal/repl/view_test.go`), so the query has a user
   surface as well as an API.
 
-## A6 — implicit library import (do this LAST) — the only Track A item still open
+## A6 — implicit library import — won't do (the current behavior is the conforming one)
 
-Re-confirmed at this baseline: a model writing `attribute d : Real;` with no
-`import ScalarValues::*;` reports `unresolved reference: Real — did you mean ScalarValues::Real?`
-and exits 2, so nothing here has been closed by the 0.0.8 batch. A3 and A4's
-unqualified-call diagnostic both wait on it.
+A6 asked that `Real`, `Boolean` and `that` resolve in a file that imports no library.
+Implementing that would be **non-conformant**, so the item is closed as won't do rather than
+deferred. Only the *public top-level* members of a root namespace are globally visible
+([SysML, 7.2] over [KerML, 8.2.3.5]); `Real` is a member of `ScalarValues`, not a top-level
+member, so it is reachable only through an import or a qualified name. OMG's own 100 training
+files agree — each writes `private import ScalarValues::*;` — and those files are downloaded
+unmodified by `scripts/download-training-examples.sh`, so they are upstream evidence rather than
+our own convention. Implementing A6 would also make genuinely-unresolved names resolve, which is
+exactly the corpus-masking risk this entry always flagged.
 
-`❌ Unqualified library names in files that do not import their library` (`Boolean`, `Real`,
-`that`). Deferred repeatedly for one reason: it can mask corpus regressions by making
-unresolved references resolve for the wrong reason. Gate it with a **file-by-file** corpus diff,
-never the total, and land it only while the corpus sits at its 98/100 ceiling.
+What the convenience A6 wanted looks like *within* the spec, all already implemented: a
+document-local root import serves that document (`private import ScalarValues::*;` at the top of
+a file), and each document imports what it names — a root-level import is a member of the
+importing document's own root namespace and reaches no other document, at any visibility
+([KerML, 8.2.3.3]), pinned by `model/that_test.go`
+`TestRootImportServesItsOwnDocumentOnly`. The LSP offers both fixes on the diagnostic, and the
+import it inserts is now written `private import …` explicitly (`resolve/fixes.go` `importFix`)
+rather than leaving the visibility to the default.
+
+The one genuine conformance gap this entry carried was its `that` bullet, and it is **done**:
+`that` alone resolved but `that.a` reported `no scope for member lookup in Base::things::that`,
+because `that` is declared `Anything[1]` and owns no members. A member chain from `that` now
+reads the usage enclosing the expression — the object featuring the value being written
+([KerML, 8.4.2]) — and the runtime answers `that` with the object being evaluated:
+`resolve/document.go` `featuringOf`, `runtime/eval.go` `evalName`, tests
+`runtime/that_test.go` and `model/that_test.go` `TestThatChainsThroughTheFeaturingType`.
+A `that` written where no usage encloses it stays unresolved rather than resolving to the
+library's declaration.
 
 ## A7 — parser items, verified — done
 
@@ -797,12 +818,12 @@ Lessons that survived the last two batches, unchanged because they keep applying
 
 ## Suggested sequencing
 
-Tracks A (bar A6), B and P are closed, so what is left reorders:
+Tracks A (bar A3's one question), B and P are closed, so what is left reorders:
 
 1. **R1** (tag), then **R2**/**R3**/**R5** as the account access appears. R1 gates the rest of
    the release section, and R2 is what makes Track P's work reachable by a user.
-2. **A6**, alone and gated on a **file-by-file** corpus diff — the last Track A item, and the one
-   that closes A3 and A4's remaining diagnostic with it.
+2. **A3**, a single decision plus its shape rule in `runtime/instance.go` — corpus-neutral, and
+   the last of Track A now A6 is won't-do.
 3. **Track C** is done: `cmd/sysml-grpc` now has the process lifecycle gate it lacked, and the
    resolver and semantics rules that were tested only on the parsed index are tested on the
    cache-restored one as well.
