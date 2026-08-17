@@ -70,7 +70,7 @@ $ sysml -instantiate MyModel::cold -constraint MyModel::cold::inRange checks.sys
 ✓ package MyModel
 ✓ Created instance of MyModel::cold
   ID: 1
-  Use %slots MyModel::cold to inspect
+  Use %features MyModel::cold to inspect
 ✓ Constraint MyModel::cold::inRange passed (on MyModel::cold ID: 1)
 
 $ sysml -satisfy checks.sysml
@@ -102,7 +102,7 @@ $ sysml -constraint MyModel::hot::inRange -instantiate MyModel::hot checks.sysml
 ✓ package MyModel
 ✓ Created instance of MyModel::hot
   ID: 1
-  Use %slots MyModel::hot to inspect
+  Use %features MyModel::hot to inspect
 ✗ Constraint MyModel::hot::inRange failed (on MyModel::hot ID: 1)
   Assertion evaluated to false: reading <= threshold
 exit=1

@@ -860,7 +860,7 @@ func (s *Session) clear() []string {
 }
 
 // resetLoss reports what a reset takes with it and records why, so a later
-// %instances, %slots or %step explains the loss instead of reading as a session
+// %instances, %features or %step explains the loss instead of reading as a session
 // that never materialized anything.
 func (s *Session) resetLoss() (notices []string, lost instanceLoss, action, state *endedSession) {
 	if n := len(s.instances); n > 0 {

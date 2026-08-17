@@ -214,6 +214,12 @@ func TestPipedSessionExitsOnAMaterializationFailure(t *testing.T) {
 		status: exitUnevaluable,
 		want:   []string{"bad: <error:", "multiplicity violation: 2 value(s) bound to a feature with multiplicity upper bound 1"},
 	}, {
+		name:   "the current spelling of the listing exits the same way",
+		stdin:  "%instantiate Demo::R\n%features Demo::R\n",
+		model:  unmaterializableModel,
+		status: exitUnevaluable,
+		want:   []string{"bad: <error:", "multiplicity violation"},
+	}, {
 		name:   "an evaluation of the same slot leaves the run undecided",
 		stdin:  "%instantiate Demo::R\n%eval bad\n",
 		model:  unmaterializableModel,
@@ -238,11 +244,17 @@ func TestPipedSessionExitsOnAMaterializationFailure(t *testing.T) {
 		status: exitUnevaluable,
 		want:   []string{"bad: <error:"},
 	}, {
-		name:   "a model whose slots materialize exits on what analysis found",
-		stdin:  "%instantiate Rover::pack\n%slots Rover::pack\n%quit\n",
+		name:   "a model whose features materialize exits on what analysis found",
+		stdin:  "%instantiate Rover::pack\n%features Rover::pack\n%quit\n",
 		model:  checkModel,
 		status: exitHolds,
 		want:   []string{"capacity = 100"},
+	}, {
+		name:   "the deprecated spelling still lists, and says what to write instead",
+		stdin:  "%instantiate Rover::pack\n%slots Rover::pack\n%quit\n",
+		model:  checkModel,
+		status: exitHolds,
+		want:   []string{"%slots is deprecated — use %features", "capacity = 100"},
 	}}
 
 	for _, tc := range cases {

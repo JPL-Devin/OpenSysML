@@ -342,13 +342,13 @@ func (s *Session) instantiateNamed(name string) ([]string, error) {
 		return nil, fmt.Errorf("instantiation failed: %w", err)
 	}
 
-	// Keyed by the resolved name, so %slots finds the instance whichever
+	// Keyed by the resolved name, so %features finds the instance whichever
 	// spelling of the name created it.
 	s.instances[fqn] = inst
 	s.lost = instanceLoss{}
 	return []string{
 		fmt.Sprintf("✓ Created instance of %s", notationName(fqn)),
 		fmt.Sprintf("  ID: %d", inst.ID),
-		fmt.Sprintf("  Use %%slots %s to inspect", name),
+		fmt.Sprintf("  Use %%features %s to inspect", name),
 	}, nil
 }

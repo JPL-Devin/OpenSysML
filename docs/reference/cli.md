@@ -123,7 +123,7 @@ Load a file and use meta commands:
 ```bash
 echo "%load model.sysml
 %instantiate Vehicle
-%slots Vehicle
+%features Vehicle
 %eval speedLimit" | sysml
 ```
 
@@ -297,7 +297,7 @@ a default whose value count does not conform to the multiplicity governing its
 feature, which is the assumed `1..1` for a feature that declares none — and
 `-validate` reports `no errors` only for a run that found none. The prompt surface
 follows the same rule: a command that rendered a slot it could not materialize —
-a `%slots` listing carrying `<error: …>`, or an `%eval` of such a slot, pinned to
+a `%features` listing carrying `<error: …>`, or an `%eval` of such a slot, pinned to
 a context (`%eval in <name> : <expr>`) or not — answered nothing about it, so a
 session driven from a pipe exits `2` rather than reporting success, whatever
 analysis found. A name that is no slot of the object is a request the command got
@@ -309,15 +309,15 @@ error: slot craft.volumes: multiplicity violation: 2 value(s) bound to a feature
 sysml: model.sysml did not materialize cleanly
 2
 
-$ printf '%%instantiate test::craft\n%%slots test::craft\n' | sysml model.sysml; echo $?
+$ printf '%%instantiate test::craft\n%%features test::craft\n' | sysml model.sysml; echo $?
 Instance: test::craft (ID: 1)
-Slots:
+Features:
   volumes: <error: slot craft.volumes: multiplicity violation: 2 value(s) bound to a feature with multiplicity upper bound 1>
 2
 ```
 
 Nesting multiplies, and reading a slot materializes the objects it holds, so the
-check is bounded, as the `%slots` listing is: a model wide enough to spend that
+check is bounded, as the `%features` listing is: a model wide enough to spend that
 budget, deeper than the walk descends, or one whose part holds its own kind is
 reported as checked in part (`warning: … materialization is bounded; not every
 slot was checked`, and `no errors in the slots checked`) rather than read to the

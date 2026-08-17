@@ -88,7 +88,7 @@ can sit anywhere in the chain:
 ```
 sysml> package 'My Pkg' { part def Car { attribute m = 5.0; } }
 sysml> %instantiate 'My Pkg'::Car
-sysml> %slots 'My Pkg'::Car
+sysml> %features 'My Pkg'::Car
 sysml> %eval 'My Pkg'::Car::m
 ```
 
@@ -163,7 +163,7 @@ sysml> %eval in Demo::Vehicle : mass * 2
 ```
 
 The pinned name may be an element, whose namespace the expression then reads, or a name an object
-was materialized under, whose slots it reads — the same values an unpinned `%eval` reads after
+was materialized under, whose feature values it reads — the same values an unpinned `%eval` reads after
 `%instantiate`. The `:` separates the context from the expression; `::` inside the name is not a
 separator.
 
@@ -172,7 +172,7 @@ separator.
 | To ask | Use | Chapter |
 |--------|-----|---------|
 | what an expression is worth | `%eval`, `%eval in … : …` | [5](05-checking.md) |
-| what an object's slots hold | `%instantiate`, `%slots`, `%instances` | [5](05-checking.md) |
+| what an object holds for each feature | `%instantiate`, `%features`, `%instances` | [5](05-checking.md) |
 | whether a check holds | `%constraint`, `%requirement`, `%satisfy`, `%calc` | [5](05-checking.md) |
 | what a behavior does, step by step | `%action`, `%state`, `%step`, `%tokens`, `%advance` | [6](06-behavior.md) |
 | where a run stopped and why | `%trace`, `%budget`, `%verbosity` | [10](10-troubleshooting.md) |

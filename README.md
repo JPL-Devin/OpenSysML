@@ -55,11 +55,11 @@ sysml> part def Wheel { attribute diameter = 16.0; }
 sysml> %instantiate Wheel
 ✓ Created instance of Wheel
   ID: 1
-  Use %slots Wheel to inspect
+  Use %features Wheel to inspect
 
-sysml> %slots Wheel
+sysml> %features Wheel
 Instance: Wheel (ID: 1)
-Slots:
+Features:
   diameter = 16.00
 ```
 

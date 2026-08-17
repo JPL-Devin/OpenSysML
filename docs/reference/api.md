@@ -546,7 +546,7 @@ type LineReader interface {
 - `%help`, `%list`, `%clear`, `%load <file>`
 - `%search <substring>` — List the declared and library symbols whose qualified name contains the substring, with the kind of each
 - `%builtins` — List the library functions the runtime implements directly
-- `%instantiate <name>`, `%slots <name>`, `%instances`
+- `%instantiate <name>`, `%features <name>`, `%instances`
 - `%eval <expr>`
 - `%calc <name> [args...]` — Invoke calculation with arguments
 - `%constraint <name>` — Evaluate constraint
