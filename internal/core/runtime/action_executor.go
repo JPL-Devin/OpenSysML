@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -10,6 +11,10 @@ import (
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
+
+// ErrAmbiguousSuccession reports a node whose flow could continue along more
+// than one succession, which the token semantics do not resolve.
+var ErrAmbiguousSuccession = errors.New("more than one succession is enabled")
 
 // ActionExecutor executes action bodies using token-flow semantics.
 type ActionExecutor struct {
@@ -841,7 +846,8 @@ func (e *ActionExecutor) stepActionExecutionNode(tokenIdx int) error {
 		return err
 	}
 	if len(successors) > 1 {
-		return fmt.Errorf("action node %s has multiple successors (decision nodes not yet supported)", node.Name)
+		return fmt.Errorf("%w: action node %s has multiple successors (decision nodes not yet supported)",
+			ErrAmbiguousSuccession, node.Name)
 	}
 
 	// Apply data flows: transfer data from this node's output pins to target input pins
@@ -951,7 +957,7 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 		return err
 	}
 	if len(successors) > 1 {
-		return fmt.Errorf("action node %s has multiple successors", ActionNodeName(usage))
+		return fmt.Errorf("%w: action node %s has multiple successors", ErrAmbiguousSuccession, ActionNodeName(usage))
 	}
 
 	// The flows out of this node carry what its body produced to the pins the

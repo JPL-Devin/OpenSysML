@@ -184,6 +184,84 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("chain_through_a_literal_without_that_attribute", testChainThroughALiteralWithoutThatAttribute)
 	t.Run("classification_outside_the_evaluable_subset", testClassificationOutsideTheEvaluableSubset)
 	t.Run("expression_over_a_slot_holding_no_value", testExpressionOverASlotHoldingNoValue)
+	t.Run("succession_guard_failure_modes", testSuccessionGuardFailureModes)
+}
+
+// testSuccessionGuardFailureModes: a guard on a succession leaving an ordinary
+// action node is evaluated, so its failure modes — a value that is not Boolean,
+// a guard nothing supplies a name for, and two guards holding at once — are each
+// reported as a typed error rather than a panic, a hang or a chosen branch.
+func testSuccessionGuardFailureModes(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body string
+		want error
+	}{
+		{
+			name: "guard is not a boolean",
+			body: `
+				attribute x : Integer = 1;
+				attribute y : Integer = 0;
+				action s1 assign x := 7;
+				action s2 assign y := 9;
+				first s1 if x + 1 then s2;
+			`,
+			want: ErrTypeMismatch,
+		},
+		{
+			name: "guard reads a name nothing supplies",
+			body: `
+				attribute y : Integer = 0;
+				action s1;
+				action s2 assign y := 9;
+				first s1 if missing > 5 then s2;
+			`,
+			want: ErrUnresolvedReference,
+		},
+		{
+			name: "two guards hold at once",
+			body: `
+				attribute level : Integer = 12;
+				attribute low : Integer = 0;
+				attribute high : Integer = 0;
+				action check assign level := level;
+				action alert assign high := 1;
+				action idle assign low := 1;
+				first check;
+				then check alert if level > 10;
+				then check idle if level > 5;
+			`,
+			want: ErrAmbiguousSuccession,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src := "package test {\n private import ScalarValues::*;\n action guarded {" + tc.body + "}\n}"
+			idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+			sym := findSymbolByName(idx.DocumentRoot("<test>"), "guarded", ast.DefAction)
+			if sym == nil {
+				t.Fatal("action guarded not found")
+			}
+
+			done := make(chan error, 1)
+			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						done <- fmt.Errorf("panic: %v", r)
+					}
+				}()
+				_, err := ctx.ExecuteAction(sym)
+				done <- err
+			}()
+			select {
+			case err := <-done:
+				if !errors.Is(err, tc.want) {
+					t.Errorf("ExecuteAction err = %v, want %v", err, tc.want)
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("executing the guarded action did not terminate")
+			}
+		})
+	}
 }
 
 // testExpressionOverASlotHoldingNoValue: a valueless feature of a value type is
