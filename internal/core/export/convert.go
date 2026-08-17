@@ -195,6 +195,26 @@ func ConvertTolerant(name string, data []byte, from, to Format) ([]byte, *Syntax
 	return convert(name, data, from, to, true)
 }
 
+// ErrNoNotation reports an element no notation can be written for: one the
+// document holds no source of, as a symbol read from an index cache is.
+var ErrNoNotation = errors.New("no notation to write")
+
+// SysMLElement writes the notation of one element of a document: the source at
+// span, through the same writer a whole-document notation save goes through, so
+// what one surface writes cannot drift from what another writes. Syntax errors
+// are tolerated and returned as a warning, as ConvertTolerant does, since the
+// span comes from a buffer that is written back as typed.
+func SysMLElement(file *source.SourceFile, span source.Span) ([]byte, *SyntaxError, error) {
+	if file == nil || span.Len <= 0 || span.Offset < 0 || span.End() > file.Len() {
+		return nil, nil, ErrNoNotation
+	}
+	text := strings.TrimSpace(file.Text(span))
+	if text == "" {
+		return nil, nil, ErrNoNotation
+	}
+	return convert(file.Name(), []byte(text), FormatSysML, FormatSysML, true)
+}
+
 func convert(name string, data []byte, from, to Format, tolerateSyntaxErrors bool) ([]byte, *SyntaxError, error) {
 	switch {
 	case from == FormatSysML && to == FormatSysML:
