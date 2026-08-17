@@ -436,6 +436,18 @@ because the obvious ones cannot:
 - `%slots` is a deprecated alias of `%features`, dispatched through the same code: the identical
   listing, led by `note: %slots is deprecated — use %features`. It stays out of `%help` but tab
   completion still offers it, so a script written against the old spelling keeps working.
+  Things worth asserting when the alias table (`metaCommand.instead`, `deprecationNote`) changes:
+  the note appears **exactly once** per invocation and only for the deprecated spelling; the no-arg
+  usage line names the spelling the *user typed* (`usage: %slots <name>`, not `%features`); and the
+  note must not shift the exit status — a listing carrying `<error: …>` still exits `2` over a pipe
+  under either spelling, so check `printf '%%instantiate X\n%%slots X\n' | ./bin/sysml m.sysml; echo $?`
+  next to the `%features` form. The cheapest strong evidence is a **byte-for-byte diff of the two
+  listings captured in one session** (run `%features N` then `%slots N`, drop the note line, compare):
+  a per-spelling code path that drifted shows up there and nowhere else.
+- A part whose type contains its own kind does **not** print a "materialization is bounded" note; the
+  bounded walk renders the nested feature as `child : Node (not expanded: contains its own kind)`
+  after expanding one level. Don't grep for wording the binary never emits — capture the real line
+  over a pipe first. Follow it with `%eval 1 + 1` → `= 2` to show the session survived the walk.
 - `%step` is **action-only**. In a state session it answers
   `error: no active action session (use %action <name> first)`; drive a state machine with
   `%advance <time>` instead. That message during a state sweep is expected, not a broken session.
