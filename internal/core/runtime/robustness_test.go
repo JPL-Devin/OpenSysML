@@ -114,6 +114,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("accept_of_unsent_type", testAcceptOfUnsentTypeReports)
 	t.Run("send_via_unconnected_port", testSendViaUnconnectedPort)
 	t.Run("send_addressed_to_an_unreachable_target", testSendAddressedToAnUnreachableTarget)
+	t.Run("send_addressed_through_several_occurrences", testSendAddressedThroughSeveralOccurrences)
 	t.Run("accept_deadlock_never_satisfied", testAcceptDeadlockNeverSatisfied)
 	t.Run("accept_deadlock_reports_every_waiting_accept", testAcceptDeadlockReportsEveryWaitingAccept)
 	t.Run("history_outside_composite_state", testHistoryOutsideCompositeState)
@@ -1754,6 +1755,30 @@ func testSendAddressedToAnUnreachableTarget(t *testing.T) {
 	}`)
 	if err == nil {
 		t.Fatal("expected an error: alpha.leaf.count is no port of any object")
+	}
+	if !errors.Is(err, ErrUnroutableSend) {
+		t.Errorf("expected ErrUnroutableSend, got: %v", err)
+	}
+}
+
+// testSendAddressedThroughSeveralOccurrences: a path led by a part naming three
+// occurrences reaches no one object, which must be reported rather than
+// attributed to the sending object and delivered to nobody.
+func testSendAddressedThroughSeveralOccurrences(t *testing.T) {
+	_, err := executeActionSource(t, "pipeline", `package P {
+		port def PingPort { in item ping : Integer; }
+		part def Leaf { port inPort : PingPort; }
+		part nodes : Leaf[3];
+		action pipeline {
+			first start;
+			action sender { send 42 to nodes.inPort; }
+			done end;
+			then start sender;
+			then sender end;
+		}
+	}`)
+	if err == nil {
+		t.Fatal("expected an error: nodes names three occurrences, not one addressee")
 	}
 	if !errors.Is(err, ErrUnroutableSend) {
 		t.Errorf("expected ErrUnroutableSend, got: %v", err)

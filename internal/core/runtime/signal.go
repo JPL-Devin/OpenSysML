@@ -160,7 +160,8 @@ func (ctx *Context) resolveAddress(send lower.Send, self *Instance) (messageAddr
 	if addr, ok := ctx.featureAddress(send.Scope, self, segments); ok {
 		return addr, nil
 	}
-	if sym, ok := ctx.portSymbol(send.Scope, send.Target); ok && sym.Kind == symbols.SymbolPortUsage {
+	if sym, ok := ctx.portSymbol(send.Scope, send.Target); ok &&
+		sym.Kind == symbols.SymbolPortUsage && ctx.ownPortPath(send.Scope, segments) {
 		return messageAddress{Port: send.Target, Object: objectID(self)}, nil
 	}
 	return messageAddress{}, &UnroutableSendError{Port: send.Target, Address: true}
@@ -223,9 +224,10 @@ func (ctx *Context) featureAddress(scope *symbols.Scope, self *Instance, segment
 	return messageAddress{Object: owner.ID}, true
 }
 
-// addressOwner answers which object a target's first segment belongs to: the
-// sending object where it names one of its features, else the occurrence it
-// names in the send's scope.
+// addressOwner answers which object a target's leading segments belong to: the
+// sending object where the first names one of its features, else the occurrence
+// the shortest prefix names in the send's scope — a prefix rather than one name,
+// since a namespace qualifies the occurrence in `P::alpha.inPort`.
 func (ctx *Context) addressOwner(scope *symbols.Scope, self *Instance, segments []string) (*Instance, []string, bool) {
 	if self != nil {
 		if _, held := self.Slots[segments[0]]; held {
@@ -235,18 +237,32 @@ func (ctx *Context) addressOwner(scope *symbols.Scope, self *Instance, segments 
 	if scope == nil || ctx.resolver == nil {
 		return nil, nil, false
 	}
-	sym, ok := ctx.resolver.LookupName(scope, segments[0])
-	if !ok || !isOccurrenceUsage(sym) || !ctx.occursOnce(sym) {
-		return nil, nil, false
+	for n := 1; n <= len(segments); n++ {
+		sym, ok := ctx.pathSymbol(scope, segments[:n])
+		if !ok || !isOccurrenceUsage(sym) || !ctx.occursOnce(sym) {
+			continue
+		}
+		if self != nil && self.Type == sym {
+			return self, segments[n:], true
+		}
+		inst, err := ctx.occurrenceOf(sym)
+		if err != nil {
+			return nil, nil, false
+		}
+		return inst, segments[n:], true
 	}
-	if self != nil && self.Type == sym {
-		return self, segments[1:], true
+	return nil, nil, false
+}
+
+// ownPortPath reports whether a port path names a port of the sending behavior
+// itself. A path led by a namespace or by an occurrence names a port of another
+// object, which is unroutable where the instance graph did not reach it.
+func (ctx *Context) ownPortPath(scope *symbols.Scope, segments []string) bool {
+	sym, ok := ctx.pathSymbol(scope, segments[:1])
+	if !ok || isOccurrenceUsage(sym) {
+		return false
 	}
-	inst, err := ctx.occurrenceOf(sym)
-	if err != nil {
-		return nil, nil, false
-	}
-	return inst, segments[1:], true
+	return sym.Kind != symbols.SymbolPackage && sym.Kind != symbols.SymbolNamespace
 }
 
 // slotObject reads the object a feature of inst holds, materializing it, and
