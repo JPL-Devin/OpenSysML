@@ -8,6 +8,7 @@ import (
 	"github.com/Open-MBEE/Systemica/internal/core/passes"
 	"github.com/Open-MBEE/Systemica/internal/core/runtime"
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
+	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
 const viewModel = `package Demo {
@@ -408,5 +409,36 @@ func TestViewConformanceOutputIsDeterministic(t *testing.T) {
 	}
 	if strings.Join(first, "\n") != strings.Join(second, "\n") {
 		t.Errorf("%%view output differs between runs:\n%v\n%v", first, second)
+	}
+}
+
+// falseWithoutError answers no without saying why, which the semantic layer
+// reads as a violation with a reason of its own.
+type falseWithoutError struct{}
+
+func (falseWithoutError) EvaluateConcern(concern, element *symbols.Symbol) (bool, error) {
+	return false, nil
+}
+
+func TestViewReportsAFailedCheckThatCarriesNoError(t *testing.T) {
+	s := conformanceSession(t)
+	sym, _, err := s.lookupSymbol("Demo::report")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, err := s.getOrCreateRuntime()
+	if err != nil {
+		t.Fatal(err)
+	}
+	report, err := ctx.Model().ViewConformance(sym, falseWithoutError{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := strings.Join(s.conformanceLines(report), "\n")
+	if strings.Contains(text, "<nil>") || strings.Contains(text, ": \n") {
+		t.Errorf("a failed check with no error reads %q, want a reason", text)
+	}
+	if !strings.Contains(text, "a required condition does not hold") {
+		t.Errorf("a failed check with no error reads %q, want the reason the model gives", text)
 	}
 }

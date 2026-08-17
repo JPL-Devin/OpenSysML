@@ -88,7 +88,7 @@ func (s *Session) conformanceLines(report *semantics.ViewConformance) []string {
 				if check.Holds {
 					continue
 				}
-				out = append(out, fmt.Sprintf("        %s: %v", s.viewElementName(check.Element), check.Err))
+				out = append(out, fmt.Sprintf("        %s: %s", s.viewElementName(check.Element), checkReason(check, concern)))
 			}
 		}
 		for _, party := range vp.Parties {
@@ -98,6 +98,18 @@ func (s *Session) conformanceLines(report *semantics.ViewConformance) []string {
 		}
 	}
 	return out
+}
+
+// checkReason is why a check did not hold: its own error, else the reason the
+// concern's verdict carries, since a check can answer false without an error.
+func checkReason(check semantics.ConcernCheck, concern semantics.ConcernConformance) string {
+	if check.Err != nil {
+		return check.Err.Error()
+	}
+	if concern.Reason != "" {
+		return concern.Reason
+	}
+	return "a required condition does not hold"
 }
 
 // concernReason is the reason a concern's verdict carries, suppressed for one
