@@ -112,8 +112,10 @@ a 163-line model, ~0.5–0.9 ms rather than ~100–128 ms.
 An index is handed out once and then belongs to the model that took it, so cached
 models stay independent; the pool refills in the background, and a request
 arriving when it is empty builds its own index, so an answer never depends on how
-far prewarming got. Raise it for a client sweeping many distinct models at once,
-at roughly the memory of one library index each:
+far prewarming got. The refill builds one index at a time and takes about as long
+as a library load, so a client sweeping distinct models faster than that drains
+the pool and pays the load on the requests that find it empty. Raise it for such
+a client, at roughly the memory of one library index each:
 
 ```bash
 SYSML_GRPC_INDEX_POOL=8 sysml-grpc

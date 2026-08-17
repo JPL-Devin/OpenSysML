@@ -150,6 +150,10 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   on the request path, so a result never depends on prewarming. Prewarming runs
   in the background, so startup stays prompt, and `SYSML_GRPC_INDEX_POOL` sizes
   the pool (default 4; 0 keeps the previous per-model behaviour).
+- The library record cache writes each store to a temp file of its own, where two
+  stores of one key shared a fixed `<key>.idx.tmp` path and could publish a
+  truncated record that every later start missed on; `Prune` now also clears the
+  temp files a crashed store left behind.
 - `sysml-grpc -version` reports the metadata the linker sets, where a released
   binary said `version dev / commit unknown`.
 - A cached `~/.pysysml/bin/sysml-grpc` records the release and repository it was
