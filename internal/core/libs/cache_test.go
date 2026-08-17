@@ -212,6 +212,14 @@ func TestCachePruneRemovesStaleTempFiles(t *testing.T) {
 	if err := os.Chtimes(stale, old, old); err != nil {
 		t.Fatal(err)
 	}
+	// A build before the temp file got a name of its own left this spelling.
+	legacy := filepath.Join(c.dir, "d00dfeed.idx.tmp")
+	if err := os.WriteFile(legacy, []byte("half a record"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(legacy, old, old); err != nil {
+		t.Fatal(err)
+	}
 	fresh := filepath.Join(c.dir, "cafebabe.idx.tmp-654321")
 	if err := os.WriteFile(fresh, []byte("a store in flight"), 0o600); err != nil {
 		t.Fatal(err)
@@ -221,6 +229,9 @@ func TestCachePruneRemovesStaleTempFiles(t *testing.T) {
 
 	if _, err := os.Stat(stale); !os.IsNotExist(err) {
 		t.Error("Prune kept a temp file no store is writing")
+	}
+	if _, err := os.Stat(legacy); !os.IsNotExist(err) {
+		t.Error("Prune kept a temp file left by an older build")
 	}
 	if _, err := os.Stat(fresh); err != nil {
 		t.Errorf("Prune removed a temp file a store may still be writing: %v", err)

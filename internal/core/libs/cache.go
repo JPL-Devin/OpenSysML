@@ -93,7 +93,7 @@ func (c *Cache) Prune() {
 	}
 	cutoff := time.Now().Add(-maxIdleAge)
 	for _, e := range entries {
-		if e.IsDir() || !(filepath.Ext(e.Name()) == ".idx" || strings.Contains(e.Name(), ".idx.tmp-")) {
+		if e.IsDir() || !(filepath.Ext(e.Name()) == ".idx" || strings.Contains(e.Name(), ".idx.tmp")) {
 			continue
 		}
 		info, err := e.Info()
