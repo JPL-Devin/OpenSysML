@@ -45,9 +45,28 @@ jobs:
           name: Run static analysis (staticcheck + gosec)
           command: make lint
       
+      # The corpus is not vendored and the gate skips while it is absent, so a
+      # release tag could be cut over a corpus regression without it.
+      - restore_cache:
+          keys:
+            - training-corpus-v1-{{ checksum "scripts/download-training-examples.sh" }}
+
+      - run:
+          name: Download the OMG training corpus
+          command: ./scripts/download-training-examples.sh
+
+      - save_cache:
+          key: training-corpus-v1-{{ checksum "scripts/download-training-examples.sh" }}
+          paths:
+            - examples/sysml-v2-training
+
       - run:
           name: Run tests
           command: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+          environment:
+            # Turns "corpus absent" into a failure rather than a skip, as the
+            # GitHub Actions PR workflow already does.
+            SYSTEMICA_REQUIRE_TRAINING_CORPUS: "1"
       
       - run:
           name: Build binaries
