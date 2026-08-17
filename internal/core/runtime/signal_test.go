@@ -1104,6 +1104,63 @@ func TestPerformedBehaviorRunsAsItsPerformer(t *testing.T) {
 	}
 }
 
+// A qualifier naming another object of the sender's own type chooses that
+// object: the element resolved through it is a declaration the sender shares, so
+// its identity has to come from the qualifier rather than from the sender.
+func TestAddressedSendToQualifiedElementOfATwinObject(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
+		import ScalarValues::*;
+		port def PingPort { in item ping : Integer; }
+		part def Node {
+			port inPort : PingPort;
+			action reader accept n : Integer;
+			action listen { first start; done end; then start end; }
+		}
+		part alpha : Node;
+		part beta : Node;
+	}`))
+	alpha, beta := instanceOfUsage(t, ctx, idx, "test::alpha"), instanceOfUsage(t, ctx, idx, "test::beta")
+	scope := declScope(oneSymbol(t, idx, "test::Node::listen"))
+	for _, tc := range []struct{ target, port, receiver string }{
+		{"alpha::inPort", "inPort", ""},
+		{"alpha::reader", "", "reader"},
+	} {
+		ctx.messages = nil
+		if err := ctx.post(nil, Message{SignalType: "Integer"}, lower.Send{Target: tc.target, Scope: scope}, beta); err != nil {
+			t.Fatalf("post to %s: %v", tc.target, err)
+		}
+		got := ctx.PendingMessages()[0]
+		if got.Object != alpha.ID || got.Port != tc.port || got.Target != tc.receiver {
+			t.Errorf("`send to %s` from beta delivered as %+v, want object %d", tc.target, got, alpha.ID)
+		}
+		if got.reaches(tc.receiver, tc.port, beta.ID) {
+			t.Errorf("`send to %s` is deliverable to the sending object %d", tc.target, beta.ID)
+		}
+	}
+}
+
+// A message injected from outside the model names its destination in its fields
+// alone, so it is held to that destination rather than open to any consumer.
+func TestInjectedMessageIsHeldToTheDestinationItNames(t *testing.T) {
+	ctx := &Context{}
+	ctx.PostMessage(Message{SignalType: "Integer", Target: "reader"})
+	ctx.PostMessage(Message{SignalType: "Integer", Port: "inPort", Object: 1})
+	ctx.PostMessage(Message{SignalType: "Integer"})
+	pending := ctx.PendingMessages()
+	if got := pending[0]; got.Delivery != DeliverReceiver || got.reaches("other", "", 0) {
+		t.Errorf("injected for reader: %+v, taken by an unrelated consumer", got)
+	}
+	if !pending[0].reaches("reader", "", 0) {
+		t.Errorf("injected for reader: %+v, not taken by reader", pending[0])
+	}
+	if got := pending[1]; got.Delivery != DeliverPort || got.reaches("", "inPort", 2) {
+		t.Errorf("injected for a port of object 1: %+v, taken elsewhere", got)
+	}
+	if got := pending[2]; got.Delivery != DeliverAnyone || !got.reaches("other", "", 3) {
+		t.Errorf("injected for no one: %+v, want any consumer to take it", got)
+	}
+}
+
 // A consumer takes a message only by satisfying every part of the destination it
 // carries; a behavior no object performs is the one identity that cannot tell.
 func TestDeliveryHoldsAConsumerToTheWholeDestination(t *testing.T) {

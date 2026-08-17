@@ -118,6 +118,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("send_addressed_through_several_occurrences", testSendAddressedThroughSeveralOccurrences)
 	t.Run("send_addressed_to_an_object_that_cannot_be_built", testSendAddressedToAnObjectThatCannotBeBuilt)
 	t.Run("send_addressed_to_a_part_no_sibling_takes", testSendAddressedToAPartNoSiblingTakes)
+	t.Run("injected_message_names_a_receiver_no_accept_has", testInjectedMessageNamesAReceiverNoAcceptHas)
 	t.Run("accept_deadlock_never_satisfied", testAcceptDeadlockNeverSatisfied)
 	t.Run("accept_deadlock_reports_every_waiting_accept", testAcceptDeadlockReportsEveryWaitingAccept)
 	t.Run("history_outside_composite_state", testHistoryOutsideCompositeState)
@@ -1808,6 +1809,36 @@ func testSendAddressedToAPartNoSiblingTakes(t *testing.T) {
 	}`)
 	if err == nil {
 		t.Fatal("expected an error: `other` is no addressee of the message sent to receiver")
+	}
+	if !errors.Is(err, ErrAcceptDeadlock) {
+		t.Errorf("expected ErrAcceptDeadlock, got: %v", err)
+	}
+}
+
+// testInjectedMessageNamesAReceiverNoAcceptHas: a message injected from outside
+// the model is held to the receiver it names, so an accept of another name waits
+// on rather than consumes it, and the run reports that wait.
+func testInjectedMessageNamesAReceiverNoAcceptHas(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package P {
+		import ScalarValues::*;
+		action pipeline {
+			first start;
+			action other accept n : Integer;
+			done end;
+			then start other;
+			then other end;
+		}
+	}`))
+	exec, err := ctx.CreateActionExecutor(oneSymbol(t, idx, "P::pipeline"))
+	if err != nil {
+		t.Fatalf("create action executor: %v", err)
+	}
+	ctx.PostMessage(Message{SignalType: "Integer", Target: "reader", Payload: map[string]Value{
+		"value": {Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 1}},
+	}})
+	err = exec.RunToCompletion()
+	if err == nil {
+		t.Fatal("expected an error: `other` is not the receiver the message names")
 	}
 	if !errors.Is(err, ErrAcceptDeadlock) {
 		t.Errorf("expected ErrAcceptDeadlock, got: %v", err)

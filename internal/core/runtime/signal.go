@@ -62,8 +62,28 @@ type Call struct {
 // sharing this context can see it. Actions and state machines communicate
 // through this bus rather than through per-executor queues, so a message a
 // state machine's entry action sends can be accepted by one of its transitions.
+//
+// A message posted with a destination but no Delivery — one injected from
+// outside the model — is held to the destination it names.
 func (ctx *Context) PostMessage(msg Message) {
+	if msg.Delivery == DeliverAnyone {
+		msg.Delivery = deliveryOf(msg)
+	}
 	ctx.messages = append(ctx.messages, msg)
+}
+
+// deliveryOf is what the fields of a message name as its destination, most
+// specific first: only a message naming nothing is open to any consumer.
+func deliveryOf(msg Message) DeliveryKind {
+	switch {
+	case msg.Port != "":
+		return DeliverPort
+	case msg.Target != "":
+		return DeliverReceiver
+	case msg.Object != 0:
+		return DeliverObject
+	}
+	return DeliverAnyone
 }
 
 // TakeMessage removes and returns the oldest message satisfying match. Messages
@@ -215,26 +235,57 @@ func (ctx *Context) resolveAddress(send lower.Send, self *Instance) (messageAddr
 	return messageAddress{}, &UnroutableSendError{Port: send.Target, Address: true}
 }
 
-// namedAddress resolves a target named rather than chained (`R`, `P::R`) to the
-// element the name resolves to: a port or feature of an object the sender can
-// address, else the receiving node of that name. A port the sender cannot reach
-// is unroutable rather than delivered to a same-named port of its own.
+// namedAddress resolves a target named rather than chained (`R`, `P::R`): an
+// unqualified name is a feature, port or receiving node of the sending object,
+// and a qualified one is the element its path names, never a same-named element
+// of the sender.
 func (ctx *Context) namedAddress(send lower.Send, self *Instance) (messageAddress, error) {
 	segments := strings.Split(send.Target, "::")
 	name := segments[len(segments)-1]
-	target, resolved := ctx.pathSymbol(send.Scope, segments)
-	// A qualified name names the sender's own feature only where the bare name
-	// resolves to that same element: `Other::reader` is not the sender's `reader`.
-	local, sameElement := ctx.pathSymbol(send.Scope, []string{name})
-	own := sameElement && (!resolved || local == target)
-	if resolved && target.Kind == symbols.SymbolPortUsage {
-		addr, built := portAddress(name, objectID(self))
-		if !own || !built {
-			return messageAddress{}, &UnroutableSendError{Port: send.Target, Address: true}
-		}
+	if len(segments) > 1 {
+		return ctx.qualifiedAddress(send, self, segments)
+	}
+	addr, ok, err := ctx.featureAddress(send.Scope, self, segments)
+	if err != nil {
+		return messageAddress{}, err
+	}
+	if ok {
 		return addr, nil
 	}
-	if own {
+	if sym, resolved := ctx.pathSymbol(send.Scope, segments); resolved &&
+		sym.Kind == symbols.SymbolPortUsage {
+		if addr, built := portAddress(name, objectID(self)); built {
+			return addr, nil
+		}
+		return messageAddress{}, &UnroutableSendError{Port: send.Target, Address: true}
+	}
+	if addr, built := receiverAddress(name, objectID(self)); built {
+		return addr, nil
+	}
+	return messageAddress{}, &UnroutableSendError{Port: send.Target, Address: true}
+}
+
+// qualifiedAddress resolves a target naming a namespace path (`alpha::reader`,
+// `P::Driver`) to the element that path names, never to a same-named feature of
+// the sender: the qualifier chooses the object, so the address is the occurrence
+// the path leads through, or unroutable where this run reaches none.
+func (ctx *Context) qualifiedAddress(send lower.Send, self *Instance, segments []string) (messageAddress, error) {
+	addr, ok, err := ctx.featureAddress(send.Scope, nil, segments)
+	if err != nil {
+		return messageAddress{}, err
+	}
+	if ok {
+		return addr, nil
+	}
+	target, resolved := ctx.pathSymbol(send.Scope, segments)
+	if !resolved {
+		return messageAddress{}, &UnroutableSendError{Port: send.Target, Address: true}
+	}
+	name := segments[len(segments)-1]
+	// A path leading through no occurrence names an element of the sending
+	// behavior's own namespace, where its bare name is that same element:
+	// `P::Node::Machine` is the sender's machine, `P::alpha::inPort` is alpha's.
+	if local, ok := ctx.pathSymbol(send.Scope, []string{name}); ok && local == target {
 		addr, ok, err := ctx.featureAddress(send.Scope, self, []string{name})
 		if err != nil {
 			return messageAddress{}, err
@@ -242,23 +293,20 @@ func (ctx *Context) namedAddress(send lower.Send, self *Instance) (messageAddres
 		if ok {
 			return addr, nil
 		}
-	} else if resolved {
-		// A receiver outside the sending object belongs to the object the qualifying
-		// namespace names, where that is an occurrence. Where no object owns it, a
-		// sender that has one cannot address it by name without reaching its own.
-		addr, ok, err := ctx.featureAddress(send.Scope, nil, segments)
-		if err != nil {
-			return messageAddress{}, err
-		}
-		if ok {
+		if target.Kind == symbols.SymbolPortUsage {
+			if addr, built := portAddress(name, objectID(self)); built {
+				return addr, nil
+			}
+		} else if addr, built := receiverAddress(name, objectID(self)); built {
 			return addr, nil
 		}
-		if self != nil {
-			return messageAddress{}, &UnroutableSendError{Port: send.Target, Address: true}
-		}
 	}
-	if addr, ok := receiverAddress(name, objectID(self)); ok {
-		return addr, nil
+	// A receiver no object owns has no identity of its own; a sender that has one
+	// cannot address it by name without reaching its own same-named element.
+	if self == nil && target.Kind != symbols.SymbolPortUsage {
+		if addr, built := receiverAddress(name, 0); built {
+			return addr, nil
+		}
 	}
 	return messageAddress{}, &UnroutableSendError{Port: send.Target, Address: true}
 }
