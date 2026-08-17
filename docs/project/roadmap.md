@@ -12,9 +12,10 @@ work.
 
 Track status as of this baseline: **Track B is closed**, **Track P is closed** on the
 engineering side (its remaining item, publishing to PyPI, is R2 and account-gated), and
-**Track A is closed**: A6 (implicit library import) is resolved as **won't do** — requiring an
-import is the conforming behavior (see A6) — so the two residuals it gated are re-scoped rather
-than open. Tracks C and D are untouched by this batch.
+**Track A is closed bar one question**: A6 (implicit library import) is resolved as **won't do** —
+requiring an import is the conforming behavior (see A6) — so the two residuals it gated are
+re-scoped rather than open, leaving only A3's shape question (does a valueless library-typed
+attribute read as unset?). Tracks C and D are untouched by this batch.
 
 ## Where the repository stands
 
@@ -787,12 +788,12 @@ Lessons that survived the last two batches, unchanged because they keep applying
 
 ## Suggested sequencing
 
-Tracks A (bar A6), B and P are closed, so what is left reorders:
+Tracks A (bar A3's one question), B and P are closed, so what is left reorders:
 
 1. **R1** (tag), then **R2**/**R3**/**R5** as the account access appears. R1 gates the rest of
    the release section, and R2 is what makes Track P's work reachable by a user.
-2. **A6**, alone and gated on a **file-by-file** corpus diff — the last Track A item, and the one
-   that closes A3 and A4's remaining diagnostic with it.
+2. **A3**, a single decision plus its shape rule in `runtime/instance.go` — corpus-neutral, and
+   the last of Track A now A6 is won't-do.
 3. **Track C** next: `cmd/` is the thinnest coverage in the tree and now the only track whose
    work is purely additive, so it parallelizes freely.
 4. **Track D** is independent of the rest and can run whenever. Take **D3** before **D1**/**D2**:
