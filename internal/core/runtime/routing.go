@@ -18,13 +18,18 @@ var ErrUnroutableSend = errors.New("send reaches no receiving port")
 
 // UnroutableSendError reports a send that could not be delivered, naming the
 // port it was sent through and the ends joined to it that refused it, so the
-// model can be corrected.
+// model can be corrected. An addressed send names a target rather than a port it
+// routes through, so it reports the path that reached no port of any object.
 type UnroutableSendError struct {
-	Port     string   // the port the send named, as written
+	Port     string   // the port or target the send named, as written
 	Outbound []string // ends joined to Port that only carry outward
+	Address  bool     // the send addressed a target rather than routing through a port
 }
 
 func (e *UnroutableSendError) Error() string {
+	if e.Address {
+		return fmt.Sprintf("%s: %q names no port of an object the sender can address", ErrUnroutableSend, e.Port)
+	}
 	if len(e.Outbound) == 0 {
 		return fmt.Sprintf("%s: port %q is joined to no port that can receive it", ErrUnroutableSend, e.Port)
 	}

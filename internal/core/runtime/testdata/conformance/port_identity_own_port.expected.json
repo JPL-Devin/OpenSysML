@@ -1,0 +1,11 @@
+{
+  "type": "state",
+  "evaluate": "PortIdentity::Node::Listen",
+  "performers": [
+    {
+      "object": "PortIdentity::solo",
+      "finalState": "received",
+      "stateVisits": ["start", "waiting", "received"]
+    }
+  ]
+}

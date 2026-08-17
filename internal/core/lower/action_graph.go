@@ -501,13 +501,9 @@ func lowerStatement(member ast.Node, scope *symbols.Scope) Statement {
 	case *ast.SendStatement:
 		// A `via` target names a port of the sender, which a nested port names
 		// through its owner (`via p.q`); a receiver is named by one name.
-		target := ast.SimpleName(m.Target)
-		if m.IsVia {
-			target = FeaturePath(m.Target)
-		}
 		return Send{
 			Message: m.Message,
-			Target:  target,
+			Target:  FeaturePath(m.Target),
 			IsVia:   m.IsVia,
 			Scope:   scope,
 		}

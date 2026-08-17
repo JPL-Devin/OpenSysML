@@ -17,21 +17,21 @@ import (
 // typed consumes only messages of that type, so two sends of different types
 // reach different accepts regardless of the order they were posted in.
 //
-// Target names the receiver a `send m to r` addressed. A consumer accepts a
-// message addressed to itself or to no one; an empty Target is a broadcast.
+// Target names the receiving node of the sending behavior a `send m to r`
+// addressed; a consumer accepts a message addressed to itself or to no one.
 //
-// Port names the port a `send m via p` was routed to — the peer end of p, not p
-// itself, since that is where the message arrived. Only an accept on that port
-// consumes it, so port-routed traffic and addressed traffic stay separate.
-// Object identifies the object whose connection routed the message, 0 when no
-// object performed the sending behavior. Two objects of a type route over their
-// own connections, so a port-routed message is only for an accept of the object
-// it was routed within.
+// Port names the port the message reached — the peer end a `via p` send routed
+// to, or the port an addressed send resolved to — and only an accept on that
+// port consumes it, keeping port-routed and addressed traffic separate.
+//
+// Object identifies the object the message reached, 0 for none; Confined says
+// that identity binds, so no other object's same-named port or receiver sees it.
 type Message struct {
 	SignalType string
 	Target     string
 	Port       string
 	Object     int64
+	Confined   bool
 	Payload    map[string]Value
 }
 
@@ -83,10 +83,11 @@ func (m Message) arrivedAt(port string) bool {
 	return m.Port == port
 }
 
-// reachedObject reports whether a message routed within one object reached the
-// object now accepting: a connection of one object never delivers into another.
+// reachedObject reports whether a message delivered to one object reached the
+// object now accepting: neither a connection nor an address of one object
+// delivers into another.
 func (m Message) reachedObject(object int64) bool {
-	return m.Port == "" || m.Object == object
+	return !m.Confined || m.Object == object
 }
 
 // objectID is the identity of an object, 0 for none.
@@ -112,12 +113,120 @@ func (ctx *Context) postVia(conns []lower.Connection, msg Message, send lower.Se
 		routed := msg
 		routed.Target = ""
 		routed.Port = peer
-		if self != nil {
-			routed.Object = self.ID
-		}
+		routed.Object = objectID(self)
+		routed.Confined = true
 		ctx.PostMessage(routed)
 	}
 	return nil
+}
+
+// messageAddress is where an addressed send delivers: the object it reached, the
+// port of that object where the address named one, and otherwise the receiving
+// node of the sending behavior.
+type messageAddress struct {
+	Name   string
+	Port   string
+	Object int64
+}
+
+// postTo delivers an addressed send to the object its target resolves to,
+// leaving the message for that object alone.
+func (ctx *Context) postTo(msg Message, send lower.Send, self *Instance) error {
+	addr, err := ctx.resolveAddress(send, self)
+	if err != nil {
+		return err
+	}
+	msg.Target, msg.Port, msg.Object = addr.Name, addr.Port, addr.Object
+	msg.Confined = true
+	ctx.PostMessage(msg)
+	return nil
+}
+
+// resolveAddress answers what a `send m to t` addressed: the object t belongs to
+// and the port path within it, resolved through the instance graph. A target the
+// graph does not reach is a port or a receiving node of the sender itself; a
+// dotted one reaching neither is unroutable.
+func (ctx *Context) resolveAddress(send lower.Send, self *Instance) (messageAddress, error) {
+	if send.Target == "" {
+		return messageAddress{Object: objectID(self)}, nil
+	}
+	segments := strings.Split(send.Target, ".")
+	if addr, ok := ctx.featureAddress(send.Scope, self, segments); ok {
+		return addr, nil
+	}
+	if sym, ok := ctx.portSymbol(send.Scope, send.Target); ok && sym.Kind == symbols.SymbolPortUsage {
+		return messageAddress{Port: send.Target, Object: objectID(self)}, nil
+	}
+	if len(segments) == 1 {
+		return messageAddress{Name: send.Target, Object: objectID(self)}, nil
+	}
+	return messageAddress{}, &UnroutableSendError{Port: send.Target, Address: true}
+}
+
+// featureAddress walks a target through the instance graph from the object its
+// first segment belongs to, reporting no address where a segment names no
+// feature, or one that is neither a port nor an occurrence to descend into.
+func (ctx *Context) featureAddress(scope *symbols.Scope, self *Instance, segments []string) (messageAddress, bool) {
+	owner, rest, ok := ctx.addressOwner(scope, self, segments)
+	if !ok {
+		return messageAddress{}, false
+	}
+	for i, segment := range rest {
+		slot, held := owner.Slots[segment]
+		if !held {
+			return messageAddress{}, false
+		}
+		if isPortFeature(slot.Feature) {
+			return messageAddress{Port: strings.Join(rest[i:], "."), Object: owner.ID}, true
+		}
+		if owner, ok = ctx.slotObject(owner, segment); !ok {
+			return messageAddress{}, false
+		}
+	}
+	return messageAddress{Object: owner.ID}, true
+}
+
+// addressOwner answers which object a target's first segment belongs to: the
+// sending object where it names one of its features, else the occurrence it
+// names in the send's scope.
+func (ctx *Context) addressOwner(scope *symbols.Scope, self *Instance, segments []string) (*Instance, []string, bool) {
+	if self != nil {
+		if _, held := self.Slots[segments[0]]; held {
+			return self, segments, true
+		}
+	}
+	if scope == nil || ctx.resolver == nil {
+		return nil, nil, false
+	}
+	sym, ok := ctx.resolver.LookupName(scope, segments[0])
+	if !ok || !isOccurrenceUsage(sym) || !ctx.occursOnce(sym) {
+		return nil, nil, false
+	}
+	if self != nil && self.Type == sym {
+		return self, segments[1:], true
+	}
+	inst, err := ctx.occurrenceOf(sym)
+	if err != nil {
+		return nil, nil, false
+	}
+	return inst, segments[1:], true
+}
+
+// slotObject reads the object a feature of inst holds, materializing it, and
+// reports whether the feature holds one at all.
+func (ctx *Context) slotObject(inst *Instance, name string) (*Instance, bool) {
+	slot, err := inst.GetSlot(ctx, name)
+	if err != nil || slot == nil || slot.Value.Kind != ValInstance {
+		return nil, false
+	}
+	held, ok := ctx.instances[slot.Value.Instance]
+	return held, ok
+}
+
+// isPortFeature reports whether a feature is a port, where an address stops: the
+// rest of its path is the port path within the object.
+func isPortFeature(feature *EffectiveFeature) bool {
+	return feature != nil && feature.Symbol != nil && feature.Symbol.Kind == symbols.SymbolPortUsage
 }
 
 // post delivers a built message the way the send addressed it: routed through
@@ -128,8 +237,7 @@ func (ctx *Context) post(conns []lower.Connection, msg Message, send lower.Send,
 	if send.IsVia {
 		return ctx.postVia(conns, msg, send, self)
 	}
-	ctx.PostMessage(msg)
-	return nil
+	return ctx.postTo(msg, send, self)
 }
 
 // carriesSignal reports whether this message satisfies an accept of signalType.
@@ -146,7 +254,8 @@ func (m Message) carriesSignal(signalType string) bool {
 // and the message is typed by the value's type, carrying it as `value`.
 //
 // A `via` send addresses a port rather than a receiver, so the built message
-// carries no Target: postVia fills in the port the message reaches.
+// carries no Target: postVia fills in the port the message reaches, as postTo
+// fills in the object and port an addressed send resolved to.
 func (e *EvalContext) buildMessage(scope *symbols.Scope, send lower.Send) (Message, error) {
 	target := send.Target
 	if send.IsVia {

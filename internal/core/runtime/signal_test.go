@@ -8,6 +8,7 @@ import (
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/lower"
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
+	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
 // executeActionSource executes the named action declared in src.
@@ -615,4 +616,133 @@ func TestRoutingIsPerOwnerVariantSelection(t *testing.T) {
 		}
 		ctx.messages = nil
 	}
+}
+
+// A `send … to r` naming a receiving node is for the object performing the
+// sending behavior, not another object declaring the same node.
+func TestAddressedSendStaysWithinTheSendingObject(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
+	package test {
+		item def Ping;
+		part def Node {
+			action listen {
+				first start;
+				action sender { send Ping() to reader; }
+				action reader accept ping : Ping;
+				done end;
+				then start sender;
+				then sender reader;
+				then reader end;
+			}
+		}
+		part alpha : Node;
+		part beta : Node;
+	}`))
+	alpha, beta := instanceOfUsage(t, ctx, idx, "test::alpha"), instanceOfUsage(t, ctx, idx, "test::beta")
+	send := lower.Send{Target: "reader", Scope: declScope(oneSymbol(t, idx, "test::Node::listen"))}
+	if err := ctx.post(nil, Message{SignalType: "Ping"}, send, alpha); err != nil {
+		t.Fatalf("post: %v", err)
+	}
+	pending := ctx.PendingMessages()
+	if len(pending) != 1 {
+		t.Fatalf("posted %d messages, want 1", len(pending))
+	}
+	if got := pending[0]; !got.reachedObject(alpha.ID) || got.reachedObject(beta.ID) {
+		t.Errorf("message %+v is not confined to the sending object %d", got, alpha.ID)
+	}
+}
+
+// An addressed target resolves through the instance graph: `alpha.inPort` names
+// that object's port, not a same-named port of the sender.
+func TestAddressedSendResolvesPortOfNamedObject(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
+	package test {
+		item def Ping;
+		port def PingPort { in item ping : Ping; }
+		part def Node {
+			port inPort : PingPort;
+			action listen { first start; done end; then start end; }
+		}
+		part alpha : Node;
+		part beta : Node;
+	}`))
+	alpha, beta := instanceOfUsage(t, ctx, idx, "test::alpha"), instanceOfUsage(t, ctx, idx, "test::beta")
+	send := lower.Send{Target: "alpha.inPort", Scope: declScope(oneSymbol(t, idx, "test::Node::listen"))}
+	if err := ctx.post(nil, Message{SignalType: "Ping"}, send, beta); err != nil {
+		t.Fatalf("post: %v", err)
+	}
+	pending := ctx.PendingMessages()
+	if len(pending) != 1 {
+		t.Fatalf("posted %d messages, want 1", len(pending))
+	}
+	got := pending[0]
+	if got.Port != "inPort" || got.Object != alpha.ID {
+		t.Errorf("addressed alpha.inPort delivered as %+v, want port inPort of object %d", got, alpha.ID)
+	}
+	if got.reachedObject(beta.ID) {
+		t.Errorf("message %+v reached the sending object %d, which owns a same-named port", got, beta.ID)
+	}
+}
+
+// A target descends composite features to the object owning the port: the
+// addressee of `inner.inPort` is that part of the sending object, not the sender.
+func TestAddressedSendDescendsToNestedPort(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
+	package test {
+		item def Ping;
+		port def PingPort { in item ping : Ping; }
+		part def Leaf { port inPort : PingPort; }
+		part def Node {
+			part inner : Leaf;
+			action listen { first start; done end; then start end; }
+		}
+		part alpha : Node;
+	}`))
+	alpha := instanceOfUsage(t, ctx, idx, "test::alpha")
+	send := lower.Send{Target: "inner.inPort", Scope: declScope(oneSymbol(t, idx, "test::Node::listen"))}
+	if err := ctx.post(nil, Message{SignalType: "Ping"}, send, alpha); err != nil {
+		t.Fatalf("post: %v", err)
+	}
+	inner, ok := ctx.slotObject(alpha, "inner")
+	if !ok {
+		t.Fatal("part inner materialized no object")
+	}
+	got := ctx.PendingMessages()[0]
+	if got.Port != "inPort" || got.Object != inner.ID {
+		t.Errorf("addressed inner.inPort delivered as %+v, want port inPort of object %d", got, inner.ID)
+	}
+}
+
+// A target reaching no port of an addressable object is a typed error, not a
+// delivery to whatever else carries the last segment's name.
+func TestAddressedSendToUnreachablePortIsTyped(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
+	package test {
+		import ScalarValues::*;
+		item def Ping;
+		part def Node {
+			attribute count : Integer = 0;
+			action listen { first start; done end; then start end; }
+		}
+		part alpha : Node;
+	}`))
+	send := lower.Send{Target: "alpha.count", Scope: declScope(oneSymbol(t, idx, "test::Node::listen"))}
+	err := ctx.post(nil, Message{SignalType: "Ping"}, send, instanceOfUsage(t, ctx, idx, "test::alpha"))
+	if !errors.Is(err, ErrUnroutableSend) {
+		t.Fatalf("post to alpha.count: %v, want ErrUnroutableSend", err)
+	}
+	if len(ctx.PendingMessages()) != 0 {
+		t.Errorf("an unroutable send posted %+v", ctx.PendingMessages())
+	}
+}
+
+// instanceOfUsage materializes the object a part usage occurs as, which is what
+// an address naming that usage resolves to.
+func instanceOfUsage(t *testing.T, ctx *Context, idx *symbols.Index, fqn string) *Instance {
+	t.Helper()
+	inst, err := ctx.occurrenceOf(oneSymbol(t, idx, fqn))
+	if err != nil {
+		t.Fatalf("instantiate %s: %v", fqn, err)
+	}
+	return inst
 }
