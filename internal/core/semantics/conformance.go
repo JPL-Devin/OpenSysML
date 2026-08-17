@@ -3,6 +3,7 @@ package semantics
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
@@ -226,26 +227,17 @@ func declaresOwnConcern(fc *symbols.Symbol) bool {
 }
 
 // FramedConcernTarget returns the concern a `frame` member frames: the concern
-// definition it is typed by, or the concern usage it references. It is nil when
-// the framing declares no concern of its own and names nothing resolvable.
+// definition it is typed by, or the concern usage it references — the element
+// named, not what that element in turn specializes, whose values it may mask. It
+// is nil when the framing names no concern.
 func (m *Model) FramedConcernTarget(fc *symbols.Symbol) *symbols.Symbol {
 	if fc == nil {
 		return nil
 	}
-	seen := map[*symbols.Symbol]bool{fc: true}
-	target := fc
-	for {
-		next := m.declaredConcernTarget(target)
-		if next == nil || seen[next] {
-			break
-		}
-		seen[next] = true
-		target = next
+	if target := m.declaredConcernTarget(fc); target != fc {
+		return target
 	}
-	if target == fc {
-		return nil
-	}
-	return target
+	return nil
 }
 
 // declaredConcernTarget resolves the concern sym names through a relationship it
@@ -338,6 +330,13 @@ func (m *Model) viewpointConformance(view, sat *symbols.Symbol, framings []viewF
 	for _, fc := range m.FramedConcernsOf(target) {
 		out.Concerns = append(out.Concerns, m.concernConformance(fc, framings, exposed, eval))
 	}
+	// A viewpoint framing no concern asks nothing of the view, so conforming to
+	// it would be a verdict reached by checking nothing.
+	if len(out.Concerns) == 0 {
+		out.Verdict = VerdictUnevaluable
+		out.Reason = fmt.Sprintf("%s frames no concern", quoteRef(ref))
+		return out
+	}
 	for _, c := range out.Concerns {
 		out.Verdict = worse(out.Verdict, c.Verdict)
 	}
@@ -354,6 +353,11 @@ func (m *Model) viewpointConformance(view, sat *symbols.Symbol, framings []viewF
 // view exposes.
 func (m *Model) concernConformance(fc *symbols.Symbol, framings []viewFraming, exposed []*symbols.Symbol, eval ConcernEvaluator) ConcernConformance {
 	out := ConcernConformance{Concern: fc, Target: m.FramedConcernTarget(fc), Name: framedConcernName(fc)}
+	if ref := m.unresolvedConcernRef(fc); ref != "" {
+		out.Verdict = VerdictUnevaluable
+		out.Reason = fmt.Sprintf("the framing names %s, which does not resolve", ref)
+		return out
+	}
 	for _, f := range framings {
 		if m.framesTheSame(out, f) {
 			out.FramedBy, out.FramedIn = f.frame, f.in
@@ -373,13 +377,33 @@ func (m *Model) concernConformance(fc *symbols.Symbol, framings []viewFraming, e
 	return out
 }
 
+// unresolvedConcernRef names what a framing references and could not resolve, so
+// the concern it frames is unknown rather than unframed by the view.
+func (m *Model) unresolvedConcernRef(fc *symbols.Symbol) string {
+	for _, rel := range RelationshipsOf(fc) {
+		if rel == nil || rel.Target == nil {
+			continue
+		}
+		switch rel.Kind {
+		case ast.RelTyping, ast.RelSubsets, ast.RelReferences:
+		default:
+			continue
+		}
+		if m.resolveRelTarget(fc, rel) == nil {
+			return quoteRef(refName(rel.Target))
+		}
+	}
+	return ""
+}
+
 // framesTheSame reports whether a view's framing frames the concern the
-// viewpoint's does: the same concern, or the same written name when neither
-// resolves one (tool-defined — an unresolved framing matches by name alone).
+// viewpoint's does: the same concern, or one specializing the other, or the same
+// written name when neither resolves one (tool-defined — an unresolved framing
+// matches by name alone).
 func (m *Model) framesTheSame(c ConcernConformance, f viewFraming) bool {
 	switch {
 	case c.Target != nil && f.target != nil:
-		return c.Target == f.target || m.conformsTo(f.target, c.Target)
+		return c.Target == f.target || m.conformsTo(f.target, c.Target) || m.conformsTo(c.Target, f.target)
 	case c.Target == nil && f.target == nil:
 		return c.Name != "" && c.Name == framedConcernName(f.frame)
 	case c.Target != nil:
@@ -597,23 +621,23 @@ func usageMembersOfKind(sym *symbols.Symbol, kinds ...ast.UsageKind) []*symbols.
 	return out
 }
 
-// declaredMembers returns the symbols declared directly in scope, named ones in
-// declaration order followed by the anonymous ones.
+// declaredMembers returns the symbols declared directly in scope in declaration
+// order. A reference member (`satisfy vp;`, `frame c;`) is anonymous, so the two
+// member lists are merged by source position rather than concatenated.
 func declaredMembers(scope *symbols.Scope) []*symbols.Symbol {
 	var out []*symbols.Symbol
 	seen := map[*symbols.Symbol]bool{}
-	for _, member := range scope.Members() {
-		if !seen[member] {
-			seen[member] = true
-			out = append(out, member)
+	for _, list := range [][]*symbols.Symbol{scope.Members(), scope.AnonymousMembers()} {
+		for _, member := range list {
+			if !seen[member] {
+				seen[member] = true
+				out = append(out, member)
+			}
 		}
 	}
-	for _, member := range scope.AnonymousMembers() {
-		if !seen[member] {
-			seen[member] = true
-			out = append(out, member)
-		}
-	}
+	sort.SliceStable(out, func(i, j int) bool {
+		return out[i].DeclSpan.Offset < out[j].DeclSpan.Offset
+	})
 	return out
 }
 
