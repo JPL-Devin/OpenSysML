@@ -105,9 +105,14 @@ func skipDir(name string) bool {
 }
 
 // loadFromDisk records a file's bytes as its on-disk content, reindexing it
-// unless an open buffer is authoritative. A file that is gone is forgotten; any
-// other read failure leaves what was indexed in place, since it may be transient.
+// unless an open buffer is authoritative. A file that is gone, or too large to
+// serve, is forgotten; any other read failure leaves what was indexed in place,
+// since it may be transient.
 func (s *Server) loadFromDisk(path string) {
+	if info, err := os.Stat(path); err == nil && info.Size() > maxScannedFileSize {
+		s.ws.DeleteOnDisk(path)
+		return
+	}
 	// #nosec G304 -- path comes from the folder the client asked to serve.
 	content, err := os.ReadFile(path)
 	if err != nil {

@@ -492,6 +492,26 @@ func TestDidChangeWorkspaceFoldersKeepsNestedFolder(t *testing.T) {
 	}
 }
 
+func TestLoadFromDiskSkipsOversizedFile(t *testing.T) {
+	s, _, dir, _, _ := multiFileWorkspace(t)
+
+	// The scan's size cap has to hold on the watched-file path too, or the first
+	// change event pulls a file the startup walk refused to read.
+	huge := filepath.Join(dir, "huge.sysml")
+	body := append([]byte(libSource), make([]byte, maxScannedFileSize)...)
+	if err := os.WriteFile(huge, body, 0o600); err != nil {
+		t.Fatalf("write huge: %v", err)
+	}
+	if err := s.DidChangeWatchedFiles(context.Background(), &protocol.DidChangeWatchedFilesParams{
+		Changes: []*protocol.FileEvent{{URI: uri.File(huge), Type: protocol.FileChangeTypeCreated}},
+	}); err != nil {
+		t.Fatalf("DidChangeWatchedFiles err = %v", err)
+	}
+	if s.ws.Document(huge) != nil {
+		t.Errorf("huge.sysml indexed though it exceeds the scan's size cap")
+	}
+}
+
 func TestLoadFromDiskKeepsIndexOnUnreadableFile(t *testing.T) {
 	s, _, _, lib, _ := multiFileWorkspace(t)
 
