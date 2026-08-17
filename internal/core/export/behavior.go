@@ -305,8 +305,8 @@ func (e *encoder) encodeSubaction(n ast.Node, actions []ast.Node, kind string, h
 	head(rdf.SysMLTerm(mSubaction))
 	e.graph.Add(subject, e.sysx(xSubactionKind), rdf.String(kind))
 	// `entry do { … }` states the subaction's own keyword and `do` as well, with
-	// or without a space before the body the `do` introduces.
-	if written := strings.Fields(e.text(n)); len(written) > 1 && bareWord(written[1]) == "do" && kind != "do" {
+	// or without a space or a comment between them and the body.
+	if written := strings.Fields(withoutComments(e.text(n))); len(written) > 1 && bareWord(written[1]) == "do" && kind != "do" {
 		e.graph.Add(subject, e.sysx(xDeclaredKeyword), rdf.String(kind+" do"))
 	}
 	e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(e.bracedBody(n, actions)))

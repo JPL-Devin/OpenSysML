@@ -263,7 +263,13 @@ func TestElseBranchIsMarkedUnderTheExtensionNamespace(t *testing.T) {
 // The `do` of a combined subaction is what it was written with, whether or not a
 // space separates it from the body it introduces.
 func TestSubactionDoSurvivesWithoutASpace(t *testing.T) {
-	for _, subaction := range []string{"entry do { perform Warm; }", "entry do{ perform Warm; }", "entry do{perform Warm;}"} {
+	for _, subaction := range []string{
+		"entry do { perform Warm; }",
+		"entry do{ perform Warm; }",
+		"entry do{perform Warm;}",
+		"entry /* a note */ do { perform Warm; }",
+		"entry do/* a note */{ perform Warm; }",
+	} {
 		src := "package P {\n    action def Warm;\n    state def Machine {\n        state s {\n" +
 			"            " + subaction + "\n        }\n    }\n}\n"
 		turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
