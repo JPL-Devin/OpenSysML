@@ -39,10 +39,11 @@ A slot's `error` is a substring its `SlotValue.error` must contain; a slot witho
 carry no error.
 
 A value is `{"kind": <oneof field of pb.Value>, "value": <literal>}`, where `kind` is one of
-`int_value`, `real_value`, `bool_value`, `string_value`, `instance_id`, `quantity` or `null`.
-The assertion checks the oneof arm as well as the payload, so a value returned with the wrong
-type fails; `instance_id` and `null` assert the arm only, since instance ids are assigned at
-runtime.
+`int_value`, `real_value`, `bool_value`, `string_value`, `instance_id`, `quantity`, `null` or
+`unset` — the last being a materialized slot holding no value, as a valueless feature of a
+value type does. The assertion checks the oneof arm as well as the payload, so a value returned
+with the wrong type fails; `instance_id`, `null` and `unset` assert the arm only, since instance
+ids are assigned at runtime.
 
 A `quantity`'s literal is the string `"<magnitude> [<unit as written>] = <reduction>"`, for
 example `"5.4 [SI::km/SI::h] = 5/18·SI::metre·SI::second^-1"`: the magnitude in the unit it

@@ -183,6 +183,49 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("enumeration_name_that_is_not_a_literal", testEnumerationNameThatIsNotALiteral)
 	t.Run("chain_through_a_literal_without_that_attribute", testChainThroughALiteralWithoutThatAttribute)
 	t.Run("classification_outside_the_evaluable_subset", testClassificationOutsideTheEvaluableSubset)
+	t.Run("expression_over_a_slot_holding_no_value", testExpressionOverASlotHoldingNoValue)
+}
+
+// testExpressionOverASlotHoldingNoValue: a valueless feature of a value type is
+// read without an error and reports that it holds no value, while an expression
+// computing over it reports a type mismatch rather than a number or a panic.
+func testExpressionOverASlotHoldingNoValue(t *testing.T) {
+	src := `
+		package test {
+			private import ScalarValues::*;
+			part def Holder {
+				attribute d : Real;
+				attribute n : Real = d + 1.0;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Holder", ast.DefPart)
+	if sym == nil {
+		t.Fatal("Holder part def not found")
+	}
+	inst, err := ctx.Instantiate(sym)
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+
+	slot, err := inst.GetSlot(ctx, "d")
+	if err != nil {
+		t.Fatalf("slot d: %v", err)
+	}
+	if !ctx.HoldsNoValue(slot.HeldValue()) {
+		t.Errorf("slot d holds %v, want no value", slot.HeldValue())
+	}
+
+	if _, err := inst.GetSlot(ctx, "n"); !errors.Is(err, ErrTypeMismatch) {
+		t.Errorf("slot n err = %v, want ErrTypeMismatch", err)
+	}
+
+	// A value naming an object the context does not hold answers the question
+	// rather than panicking on the lookup.
+	if ctx.HoldsNoValue(Value{Kind: ValInstance, Instance: 1 << 30}) {
+		t.Error("a value naming no object reads as holding none")
+	}
 }
 
 // testClassificationOutsideTheEvaluableSubset: a classification the evaluator

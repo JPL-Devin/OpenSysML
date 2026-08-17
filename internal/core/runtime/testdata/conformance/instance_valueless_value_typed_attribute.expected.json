@@ -1,0 +1,19 @@
+{
+  "type": "instance",
+  "instantiate": "test::Vehicle",
+  "libraries": true,
+  "slots": {
+    "d": {"type": "Unset"},
+    "k": {"type": "Real", "value": 2.0},
+    "names": {
+      "type": "Sequence",
+      "elements": [
+        {"type": "Unset"},
+        {"type": "Unset"},
+        {"type": "Unset"}
+      ]
+    },
+    "origin": {"type": "Instance"},
+    "engine": {"type": "Instance"}
+  }
+}

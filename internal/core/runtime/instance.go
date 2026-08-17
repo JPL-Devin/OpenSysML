@@ -63,6 +63,38 @@ func (s *Slot) HeldValue() Value {
 	return s.Value
 }
 
+// UnsetText is how every surface spells a slot that holds no value: a valueless
+// feature of a value type, whose instances are values rather than objects.
+const UnsetText = "<unset>"
+
+// HoldsNoValue reports whether a value is an object materialized for a valueless
+// feature of a value type. Such an object has no feature that could hold a value
+// and is no value itself (KerML: a DataType classifies values), so it reads as
+// unset rather than as an object.
+func (ctx *Context) HoldsNoValue(val Value) bool {
+	if val.Kind != ValInstance {
+		return false
+	}
+	inst, ok := ctx.instances[val.Instance]
+	return ok && len(inst.Slots) == 0 && isValueTypeSymbol(inst.Type)
+}
+
+// isValueTypeSymbol reports whether sym declares a value type: a `datatype` or
+// `attribute def` (KerML DataType) or an enumeration, as distinct from a class
+// whose instances are objects. Mirrors passes.isDataTypeDefKind.
+func isValueTypeSymbol(sym *symbols.Symbol) bool {
+	if sym == nil {
+		return false
+	}
+	switch sym.Kind {
+	case symbols.SymbolAttributeDef, symbols.SymbolEnumerationDef,
+		symbols.SymbolAttributeUsage, symbols.SymbolEnumerationUsage:
+		return true
+	default:
+		return false
+	}
+}
+
 // Instantiate materializes an instance of the given usage/definition symbol.
 // Allocates ID, creates slots per FeaturesOf(sym), evaluates default values,
 // leaves composite features lazy. Returns the instance or an error.

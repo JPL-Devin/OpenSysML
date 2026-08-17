@@ -114,6 +114,17 @@ type actionSession struct {
 	selfFQN  string
 	symbol   *symbols.Symbol
 	executor *runtime.ActionExecutor
+	// rtCtx is the context the executor runs in. A submission rebuilds the
+	// session's own, so results are read against the one that produced them.
+	rtCtx *runtime.Context
+}
+
+// contextOf returns the context the executor's values belong to, nil for none.
+func (a *actionSession) contextOf() *runtime.Context {
+	if a == nil {
+		return nil
+	}
+	return a.rtCtx
 }
 
 // fqnOf returns the debugged action's qualified name, or "" when no session runs.
@@ -141,9 +152,19 @@ type stateSession struct {
 	selfFQN  string
 	symbol   *symbols.Symbol
 	executor *runtime.StateExecutor
+	// rtCtx is the context the executor runs in; see actionSession.rtCtx.
+	rtCtx *runtime.Context
 	// now is the debugger's clock. The executor's own clock only moves when an
 	// event is processed, so successive %advance calls accumulate here.
 	now float64
+}
+
+// contextOf returns the context the executor's values belong to, nil for none.
+func (s *stateSession) contextOf() *runtime.Context {
+	if s == nil {
+		return nil
+	}
+	return s.rtCtx
 }
 
 // fqnOf returns the debugged state machine's qualified name, or "" when no

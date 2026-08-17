@@ -294,7 +294,7 @@ func TestFormatValue(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := formatValue(tc.val); got != tc.want {
+			if got := formatValue(nil, tc.val); got != tc.want {
 				t.Errorf("formatValue = %q, want %q", got, tc.want)
 			}
 		})

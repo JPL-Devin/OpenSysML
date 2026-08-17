@@ -390,7 +390,7 @@ func runActionConformance(t *testing.T, ctx *Context, idx *symbols.Index, path s
 				t.Errorf("missing output %q", name)
 				continue
 			}
-			validateValue(t, name, expectedVal, actual)
+			validateValue(t, ctx, name, expectedVal, actual)
 		}
 	}
 
@@ -538,7 +538,7 @@ func runOneStatePerformance(t *testing.T, ctx *Context, stateSym *symbols.Symbol
 				t.Errorf("missing output %q", name)
 				continue
 			}
-			validateValue(t, name, expectedVal, actual)
+			validateValue(t, ctx, name, expectedVal, actual)
 		}
 	}
 }
@@ -567,7 +567,7 @@ func runCalcConformance(t *testing.T, ctx *Context, idx *symbols.Index, path str
 
 	// Validate result
 	if expected.Result != nil {
-		validateValue(t, "result", *expected.Result, result)
+		validateValue(t, ctx, "result", *expected.Result, result)
 	}
 }
 
@@ -597,7 +597,7 @@ func runCalcUsageConformance(t *testing.T, ctx *Context, idx *symbols.Index, pat
 			t.Errorf("missing output %q among %v", name, outputNames(outputs))
 			continue
 		}
-		validateValue(t, name, expectedVal, actual)
+		validateValue(t, ctx, name, expectedVal, actual)
 	}
 
 	for name, expectedVal := range expected.Reads {
@@ -616,7 +616,7 @@ func runCalcUsageConformance(t *testing.T, ctx *Context, idx *symbols.Index, pat
 		if err != nil {
 			t.Fatalf("InvokeCalc(%s) failed: %v", ctx.qualifiedSymbolName(usageSym), err)
 		}
-		validateValue(t, "result", *expected.Result, result)
+		validateValue(t, ctx, "result", *expected.Result, result)
 	}
 }
 
@@ -643,7 +643,7 @@ func validateRead(t *testing.T, ctx *Context, idx *symbols.Index, name string, e
 		t.Errorf("read %q: %v", name, err)
 		return
 	}
-	validateValue(t, name, expected, value)
+	validateValue(t, ctx, name, expected, value)
 }
 
 // outputNames names the outputs an evaluation produced, for a message about one
@@ -822,7 +822,7 @@ func runInstanceConformance(t *testing.T, ctx *Context, idx *symbols.Index, expe
 			t.Errorf("slot %q: %v", name, err)
 			continue
 		}
-		validateValue(t, name, expectedVal, slot.HeldValue())
+		validateValue(t, ctx, name, expectedVal, slot.HeldValue())
 	}
 
 	validateIdentity(t, ctx, inst, expected)
@@ -1065,7 +1065,7 @@ func expectedToRuntimeValue(t *testing.T, ev ExpectedValue) Value {
 }
 
 // validateValue checks if runtime Value matches ExpectedValue
-func validateValue(t *testing.T, name string, expected ExpectedValue, actual Value) {
+func validateValue(t *testing.T, ctx *Context, name string, expected ExpectedValue, actual Value) {
 	switch expected.Type {
 	case "Sequence":
 		if actual.Kind != ValSequence {
@@ -1078,11 +1078,19 @@ func validateValue(t *testing.T, name string, expected ExpectedValue, actual Val
 			return
 		}
 		for i, want := range expected.Elements {
-			validateValue(t, fmt.Sprintf("%s#(%d)", name, i+1), want, elements[i])
+			validateValue(t, ctx, fmt.Sprintf("%s#(%d)", name, i+1), want, elements[i])
 		}
 	case "Instance":
 		if actual.Kind != ValInstance {
 			t.Errorf("%s: type = %v, want Instance", name, actual.Kind)
+		}
+		if ctx != nil && ctx.HoldsNoValue(actual) {
+			t.Errorf("%s: holds no value, want an instance holding one", name)
+		}
+	case "Unset":
+		// A valueless feature of a value type: materialized, holding no value.
+		if ctx == nil || !ctx.HoldsNoValue(actual) {
+			t.Errorf("%s: type = %v, want %s", name, actual.Kind, UnsetText)
 		}
 	case "Integer":
 		if actual.Kind != ValConst || actual.Const.Kind != semantics.ValInt {

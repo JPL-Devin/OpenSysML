@@ -167,6 +167,28 @@ class TestRuntimeIntegration:
 
         assert self.conn.server_info().has(CAPABILITY_ENUM_VALUES)
 
+    def test_a_valueless_feature_of_a_value_type_crosses_as_unset(self):
+        """The service says it sends the unset arm, and does."""
+        from pysysml.capabilities import CAPABILITY_UNSET_VALUE
+        from pysysml.values import UNSET
+
+        assert self.conn.server_info().has(CAPABILITY_UNSET_VALUE)
+
+        src = '''
+        package P {
+            private import ScalarValues::*;
+            part def Q {
+                attribute d : Real;
+                attribute k : Real = 2.0;
+            }
+        }
+        '''
+        model = self.conn.load_from_content(src)
+
+        q = self.conn.instantiate("P::Q", model.hash)
+        assert q.d is UNSET
+        assert q.k == 2.0
+
     def test_symbol_attributes_and_parts(self):
         """Symbol filtering works against the kinds the service really emits."""
         src = '''

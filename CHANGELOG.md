@@ -8,6 +8,15 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Language and semantics
 
+- A valueless feature of a value type reads as unset rather than as an empty
+  object: `attribute d : Real;` reports `d = <unset>` where it used to report
+  `d = Instance(ID: 2)` with `(no features)`. What materialization creates is
+  unchanged — a `Real` has no features to instantiate, so the object it holds is
+  empty — but every surface that reports a value now says so with one spelling:
+  `-instantiate`/`-e`, `%slots`, the JSON report, and the wire, where
+  `Value.unset` is a new arm the service sends and refuses to accept. A valued
+  attribute (`k = 2.00`), an object of a class, and a value type that does
+  declare features are unaffected.
 - A member chain from `that` resolves: `attribute b : Real = that.a;` in a usage
   body reads `a` off the object featuring the value being written — the innermost
   enclosing usage, whose own and inherited members are both reached — instead of
@@ -26,6 +35,8 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Python client (`pysysml`)
 
+- `pysysml.UNSET` is what a slot holding no value reads as — falsy, spelled
+  `<unset>`, and distinct from `None`, the model's `null`.
 - A quantity can be *sent*, not only read: a `pysysml.values.Quantity` is
   accepted wherever a value is — an action input, a calc argument, an element of
   a sequence — and crosses as `Value.quantity` with its magnitude in the kind it

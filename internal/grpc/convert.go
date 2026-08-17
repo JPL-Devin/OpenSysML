@@ -247,6 +247,17 @@ func visibilityToString(v ast.Visibility) string {
 // ValueToProto converts runtime.Value to protobuf Value. An enumeration literal
 // is named by its declaration, which idx supplies the qualified name of.
 func ValueToProto(val runtime.Value, idx *symbols.Index) *pb.Value {
+	return ValueToProtoIn(nil, val, idx)
+}
+
+// ValueToProtoIn converts a value read from a live context, which is what tells
+// an object holding no value from one with features: the former crosses as the
+// unset arm, as every other surface reads it. rt may be nil for a value no
+// context materialized.
+func ValueToProtoIn(rt *runtime.Context, val runtime.Value, idx *symbols.Index) *pb.Value {
+	if rt != nil && rt.HoldsNoValue(val) {
+		return &pb.Value{Kind: &pb.Value_Unset{Unset: true}}
+	}
 	switch val.Kind {
 	case runtime.ValConst:
 		// Map semantics.Value to protobuf based on type
@@ -273,7 +284,7 @@ func ValueToProto(val runtime.Value, idx *symbols.Index) *pb.Value {
 		var pbElements []*pb.Value
 		if val.Sequence != nil {
 			for _, elem := range val.Sequence.Elements() {
-				pbElements = append(pbElements, ValueToProto(elem, idx))
+				pbElements = append(pbElements, ValueToProtoIn(rt, elem, idx))
 			}
 		}
 		return &pb.Value{Kind: &pb.Value_Sequence{Sequence: &pb.ValueSequence{Elements: pbElements}}}
@@ -368,6 +379,9 @@ var (
 	// ErrUnitNotReduced reports a named unit sent without its reduction, over
 	// which alone commensurability is decided.
 	ErrUnitNotReduced = errors.New("unit carries no reduction to base units")
+	// ErrUnsetNotAccepted reports the unset arm arriving as an input. It reports
+	// that a slot holds no value, which is something to read, not to supply.
+	ErrUnsetNotAccepted = errors.New("unset is not a value a caller can supply")
 )
 
 // ProtoToValueIn converts a protobuf Value to a runtime.Value in the model idx
@@ -378,6 +392,8 @@ func ProtoToValueIn(pv *pb.Value, idx *symbols.Index, sem *semantics.Model) (run
 		return runtime.Value{Kind: runtime.ValNull}, nil
 	}
 	switch k := pv.GetKind().(type) {
+	case *pb.Value_Unset:
+		return runtime.Value{}, ErrUnsetNotAccepted
 	case *pb.Value_Quantity:
 		return ProtoToQuantity(k.Quantity, idx, sem)
 	case *pb.Value_EnumLiteral:
@@ -623,11 +639,11 @@ func InstanceToProto(rt *runtime.Context, inst *runtime.Instance, idx *symbols.I
 			// Scalar slot. An unmaterialized one holds no value; marshalling it
 			// anyway would report the empty value as an unsupported null.
 			if slot.Materialized {
-				pbSlot.Value = ValueToProto(slot.Value, idx)
+				pbSlot.Value = ValueToProtoIn(rt, slot.Value, idx)
 			}
 		} else {
 			for _, elem := range collectionElements(slot.Values) {
-				pbSlot.Values = append(pbSlot.Values, ValueToProto(elem, idx))
+				pbSlot.Values = append(pbSlot.Values, ValueToProtoIn(rt, elem, idx))
 			}
 		}
 

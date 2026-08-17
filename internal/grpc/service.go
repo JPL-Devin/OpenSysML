@@ -51,11 +51,16 @@ const CapabilityEvaluateSubject = "evaluate_subject"
 // SymbolInfo.attributes, rather than always reporting none.
 const CapabilitySymbolAttributes = "symbol_attributes"
 
+// CapabilityUnsetValue names the capability of reporting a valueless feature of
+// a value type as Value.unset, rather than as the empty object it materializes.
+const CapabilityUnsetValue = "unset_value"
+
 // capabilities is what this build supports, in report order. A capability is
 // only ever added: renaming or dropping one breaks clients that require it.
 var capabilities = []string{
 	CapabilityTypeFacts, CapabilityConvert, CapabilityVerification, CapabilityQuery,
 	CapabilityEnumValues, CapabilityEvaluateSubject, CapabilitySymbolAttributes,
+	CapabilityUnsetValue,
 }
 
 // Capabilities returns the capability names this build of the service reports.
@@ -328,7 +333,7 @@ func (s *Service) Evaluate(ctx context.Context, req *pb.EvaluateRequest) (*pb.Ev
 	}
 
 	return &pb.EvaluateResponse{
-		Result: ValueToProto(result, cached.Index),
+		Result: ValueToProtoIn(runtimeCtx, result, cached.Index),
 	}, nil
 }
 
@@ -434,7 +439,7 @@ func (s *Service) ExecuteAction(ctx context.Context, req *pb.ExecuteActionReques
 	// Convert outputs to protobuf
 	pbOutputs := make(map[string]*pb.Value)
 	for name, val := range outputs {
-		pbOutputs[name] = ValueToProto(val, cached.Index)
+		pbOutputs[name] = ValueToProtoIn(runtimeCtx, val, cached.Index)
 	}
 
 	return &pb.ExecuteActionResponse{
@@ -476,7 +481,7 @@ func (s *Service) ExecuteState(ctx context.Context, req *pb.ExecuteStateRequest)
 	// Convert final context to protobuf
 	pbContext := make(map[string]*pb.Value)
 	for name, val := range finalContext {
-		pbContext[name] = ValueToProto(val, cached.Index)
+		pbContext[name] = ValueToProtoIn(runtimeCtx, val, cached.Index)
 	}
 
 	return &pb.ExecuteStateResponse{

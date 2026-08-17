@@ -408,7 +408,7 @@ func checkValue(t *testing.T, label string, want expectedValue, got *pb.Value) {
 		if got.GetRealValue() != mustFloat(t, want) {
 			t.Errorf("%s: value = %v, want %v", label, got.GetRealValue(), want.Value)
 		}
-	case "null", "instance_id":
+	case "null", "instance_id", "unset":
 		// The oneof arm carries all the information; ids are runtime-assigned.
 	default:
 		if fmt.Sprint(gotValue) != fmt.Sprint(want.Value) {
@@ -436,8 +436,10 @@ func describeValue(v *pb.Value) (string, interface{}) {
 		return "quantity", describeQuantity(k.Quantity)
 	case *pb.Value_Null:
 		return "null", nil
-	default:
+	case *pb.Value_Unset:
 		return "unset", nil
+	default:
+		return "no arm", nil
 	}
 }
 
