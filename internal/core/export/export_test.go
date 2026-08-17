@@ -149,6 +149,28 @@ attribute d = 16.0;
 	}
 }
 
+// A span running past the element into the comments written for what follows
+// writes the element alone: trailing trivia is not part of it.
+func TestSysMLElementDropsTrailingComments(t *testing.T) {
+	src := "part def Q { attribute d = 16.0; }\n\n// which wheel\n/* and another */\npart def R;"
+	file := source.New("session.sysml", []byte(src))
+	span := source.Span{Offset: 0, Len: strings.Index(src, "part def R;")}
+
+	out, _, err := export.SysMLElement(file, span)
+	if err != nil {
+		t.Fatalf("element: %v", err)
+	}
+	if got := strings.TrimRight(string(out), "\n"); got != "part def Q { attribute d = 16.0; }" {
+		t.Errorf("element output carries trailing trivia:\n%q", got)
+	}
+	if _, _, err := export.SysMLElement(file, source.Span{
+		Offset: strings.Index(src, "// which wheel"),
+		Len:    len("// which wheel\n"),
+	}); !errors.Is(err, export.ErrNoNotation) {
+		t.Errorf("a span holding only a comment: err=%v, want ErrNoNotation", err)
+	}
+}
+
 // A span naming no source is reported as such rather than written as an empty
 // document, so a caller can explain it instead of printing nothing.
 func TestSysMLElementWithoutSource(t *testing.T) {

@@ -75,6 +75,22 @@ func TestPrintKeepsComments(t *testing.T) {
 	wants(t, run(t, s, "%print"), "// the car of interest", "// how many wheels")
 }
 
+// A declaration's span reaches the token after it, so the note written for what
+// follows must not be printed with the element before it — nor twice.
+func TestPrintStopsBeforeTheNextElementsComment(t *testing.T) {
+	s := NewSession()
+	s.Submit("package P {\npart def Engine { attribute power = 300.0; }\n\n// how heavy it is\npart def Car {\nattribute mass = 1500.0;\n}\n}")
+
+	engine := run(t, s, "%print P::Engine")
+	if strings.Contains(engine, "how heavy it is") {
+		t.Errorf("printing an element printed the next element's note:\n%s", engine)
+	}
+	car := run(t, s, "%print P::Car")
+	if !strings.Contains(car, "// how heavy it is") {
+		t.Errorf("printing an element dropped its own note:\n%s", car)
+	}
+}
+
 // What a print writes is a model: submitting it into a fresh session declares
 // the same elements and prints back identically.
 func TestPrintRoundTripsThroughSubmit(t *testing.T) {
