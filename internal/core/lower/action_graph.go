@@ -503,8 +503,12 @@ func lowerStatement(member ast.Node, scope *symbols.Scope) Statement {
 	switch m := member.(type) {
 	case *ast.SendStatement:
 		// A target is either a chain through features (`alpha.inPort`) or a name in
-		// a namespace (`P::Driver`), which resolve differently.
+		// a namespace (`P::Driver`), which resolve differently. A `via` target names
+		// a port of the sender, rendered as connector ends are so the two match.
 		target, isPath := SendTarget(m.Target)
+		if m.IsVia {
+			target, isPath = FeaturePath(m.Target), true
+		}
 		return Send{
 			Message:    m.Message,
 			Target:     target,

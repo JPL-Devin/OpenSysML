@@ -163,6 +163,37 @@ func TestLowerSendKeepsAddressedPath(t *testing.T) {
 	}
 }
 
+// A `via` target names a port of the sender, which routing matches against the
+// lowered connector ends, so both must be rendered the same way.
+func TestLowerSendViaQualifiedPortMatchesConnectionEnds(t *testing.T) {
+	graph := actionGraphFor(t, `
+		action a {
+			port inPort;
+			part outer { port p; }
+			connect outer.p to inPort;
+			first start;
+			action viaSend { send 1 via outer::p; }
+			done end;
+			then start viaSend;
+			then viaSend end;
+		}
+	`)
+	var via Send
+	for _, body := range graph.Bodies {
+		for _, stmt := range body {
+			if send, ok := stmt.(Send); ok && send.IsVia {
+				via = send
+			}
+		}
+	}
+	if via.Target != "outer.p" {
+		t.Fatalf("`send 1 via outer::p` lowered target %q, want outer.p", via.Target)
+	}
+	if got := peerPorts(graph.Connections, via.Target); len(got) != 1 || got[0] != "inPort" {
+		t.Errorf("peerPorts(%q) = %v, want [inPort]", via.Target, got)
+	}
+}
+
 func TestLowerAcceptRecordsViaPort(t *testing.T) {
 	graph := actionGraphFor(t, `
 		action a {
