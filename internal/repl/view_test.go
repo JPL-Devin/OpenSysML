@@ -340,6 +340,39 @@ func TestViewEvaluatesTheSessionObject(t *testing.T) {
 	}
 }
 
+// An element whose name needs quotes is one object, not one per spelling: %view
+// keys it as %instantiate does, by the name the index holds.
+func TestViewSharesTheObjectOfAQuotedName(t *testing.T) {
+	s := conformanceSession(t)
+	res := s.Submit(`package Quoted {
+    private import Demo::*;
+    part 'road car' : Vehicle;
+    view quotedView : StructureView { expose Quoted::'road car'; frame concern modularity : Modularity; }
+}`)
+	for _, d := range res.Diagnostics {
+		if d.Severity == passes.SeverityError {
+			t.Fatalf("the view did not load: %v", res.Diagnostics)
+		}
+	}
+	if _, err := s.View("Quoted::quotedView"); err != nil {
+		t.Fatal(err)
+	}
+	out, _, err := s.RunMeta("%slots Quoted::'road car'")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if text := strings.Join(out, "\n"); strings.Contains(text, "no instance") {
+		t.Errorf("%%slots after %%view = %q, want the object %%view evaluated", text)
+	}
+	list, _, err := s.RunMeta("%instances")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Count(strings.Join(list, "\n"), "road car"); got != 1 {
+		t.Errorf("objects of Quoted::'road car' = %d, want 1:\n%v", got, list)
+	}
+}
+
 // The conformance section is deterministic: the same model reported twice reads
 // the same.
 func TestViewConformanceOutputIsDeterministic(t *testing.T) {

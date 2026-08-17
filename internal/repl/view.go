@@ -159,7 +159,7 @@ func (e concernEvaluator) EvaluateConcern(concern, element *symbols.Symbol) (boo
 // as %satisfy keeps its subject, so a repeated %view is about the same object
 // rather than another copy of it.
 func (s *Session) viewSubject(element *symbols.Symbol) (*runtime.Instance, error) {
-	name := s.viewElementName(element)
+	name := s.viewElementFQN(element)
 	if inst, ok := s.instances[name]; ok {
 		return inst, nil
 	}
@@ -189,13 +189,18 @@ func (s *Session) viewElementLine(sym *symbols.Symbol) string {
 	return fmt.Sprintf("%s (%s)", s.viewElementName(sym), sym.Kind.String())
 }
 
-// viewElementName names an element by qualified name where the index knows one.
+// viewElementName names an element as the notation writes it, for reporting.
 func (s *Session) viewElementName(sym *symbols.Symbol) string {
-	name := sym.Name
+	return notationName(s.viewElementFQN(sym))
+}
+
+// viewElementFQN is an element's qualified name as the index spells it, which is
+// what the session keys an object of it under.
+func (s *Session) viewElementFQN(sym *symbols.Symbol) string {
 	if idx := s.browseIndex(); idx != nil {
 		if fqn := idx.GetFQN(sym); fqn != "" {
-			name = fqn
+			return fqn
 		}
 	}
-	return notationName(name)
+	return sym.Name
 }
