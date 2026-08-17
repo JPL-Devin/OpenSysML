@@ -111,6 +111,8 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("region_pseudostate_without_satisfied_guard", testRegionPseudostateWithoutSatisfiedGuard)
 	t.Run("region_pseudostate_cycle", testRegionPseudostateCycle)
 	t.Run("non_numeric_time_trigger", testNonNumericTimeTrigger)
+	t.Run("time_trigger_of_a_non_time_dimension", testTimeTriggerOfANonTimeDimension)
+	t.Run("change_condition_that_never_holds", testChangeConditionThatNeverHolds)
 	t.Run("send_reaches_only_its_addressee", testSendReachesOnlyItsAddressee)
 	t.Run("accept_of_unsent_type", testAcceptOfUnsentTypeReports)
 	t.Run("send_via_unconnected_port", testSendViaUnconnectedPort)
@@ -1983,6 +1985,60 @@ func testNonNumericTimeTrigger(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "time duration must be constant, got string") {
 		t.Errorf("expected a numeric-duration error, got: %v", err)
+	}
+}
+
+// testTimeTriggerOfANonTimeDimension: a duration whose unit measures something
+// other than time cannot be scheduled, and fails as the typed error it is.
+func testTimeTriggerOfANonTimeDimension(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `
+		package test {
+			private import SI::*;
+			state Machine {
+				initial init;
+				state waiting {
+					accept after 5 [kg] then done;
+				}
+				state done;
+				init then waiting;
+			}
+		}
+	`))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Machine", ast.DefState)
+	if sym == nil {
+		t.Fatal("state Machine not found")
+	}
+
+	_, err := ctx.ExecuteState(sym)
+	if !errors.Is(err, ErrIncommensurableUnits) {
+		t.Fatalf("err = %v; want ErrIncommensurableUnits", err)
+	}
+}
+
+// testChangeConditionThatNeverHolds: a machine whose only outgoing transition
+// watches a false condition suspends within its budget and says what it waits
+// on, rather than hanging or reporting silent completion.
+func testChangeConditionThatNeverHolds(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			attribute ready : Boolean = false;
+			initial init;
+			state waiting {
+				accept when ready then done;
+			}
+			state done;
+			init then waiting;
+		}
+	}`)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if exec.State() != StateSuspended {
+		t.Fatalf("state = %v; want suspended", exec.State())
+	}
+	if reason := exec.SuspendReason(); !strings.Contains(reason, "when ready") ||
+		!strings.Contains(reason, "condition is false") {
+		t.Errorf("reason = %q; want the false condition it waits on", reason)
 	}
 }
 
