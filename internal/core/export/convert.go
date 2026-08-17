@@ -57,6 +57,7 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/format"
+	"github.com/Open-MBEE/Systemica/internal/core/lexer"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/rdf"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
@@ -193,6 +194,43 @@ func Convert(name string, data []byte, from, to Format) ([]byte, error) {
 // model is still rejected.
 func ConvertTolerant(name string, data []byte, from, to Format) ([]byte, *SyntaxError, error) {
 	return convert(name, data, from, to, true)
+}
+
+// ErrNoNotation reports an element no notation can be written for: one the
+// document holds no source of, as a symbol read from an index cache is.
+var ErrNoNotation = errors.New("no notation to write")
+
+// SysMLElement writes the notation of one element of a document: the source at
+// span, through the same writer a whole-document notation save goes through, so
+// what one surface writes cannot drift from what another writes. Syntax errors
+// are tolerated and returned as a warning, as ConvertTolerant does, since the
+// span comes from a buffer that is written back as typed.
+//
+// Trailing comments are dropped: a declaration's span ends where the next token
+// begins, so it runs over the notes written for whatever follows it.
+func SysMLElement(file *source.SourceFile, span source.Span) ([]byte, *SyntaxError, error) {
+	if file == nil || span.Len <= 0 || span.Offset < 0 || span.End() > file.Len() {
+		return nil, nil, ErrNoNotation
+	}
+	text := trimTrailingTrivia(file.Text(span))
+	if text == "" {
+		return nil, nil, ErrNoNotation
+	}
+	return convert(file.Name(), []byte(text), FormatSysML, FormatSysML, true)
+}
+
+// trimTrailingTrivia cuts source at its last token that is neither whitespace
+// nor a comment or note, and drops the whitespace before its first one.
+func trimTrailingTrivia(text string) string {
+	lx := lexer.New(source.New("element", []byte(text)))
+	end := 0
+	for tok := lx.Next(); tok.Kind != lexer.EOF; tok = lx.Next() {
+		if tok.IsTrivia() || tok.Kind == lexer.RegularComment {
+			continue
+		}
+		end = tok.Span.End()
+	}
+	return strings.TrimSpace(text[:end])
 }
 
 func convert(name string, data []byte, from, to Format, tolerateSyntaxErrors bool) ([]byte, *SyntaxError, error) {

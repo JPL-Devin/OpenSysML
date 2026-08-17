@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/lower"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/resolve"
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
@@ -113,6 +114,11 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("send_reaches_only_its_addressee", testSendReachesOnlyItsAddressee)
 	t.Run("accept_of_unsent_type", testAcceptOfUnsentTypeReports)
 	t.Run("send_via_unconnected_port", testSendViaUnconnectedPort)
+	t.Run("send_addressed_to_an_unreachable_target", testSendAddressedToAnUnreachableTarget)
+	t.Run("send_addressed_through_several_occurrences", testSendAddressedThroughSeveralOccurrences)
+	t.Run("send_addressed_to_an_object_that_cannot_be_built", testSendAddressedToAnObjectThatCannotBeBuilt)
+	t.Run("send_addressed_to_a_part_no_sibling_takes", testSendAddressedToAPartNoSiblingTakes)
+	t.Run("injected_message_names_a_receiver_no_accept_has", testInjectedMessageNamesAReceiverNoAcceptHas)
 	t.Run("accept_deadlock_never_satisfied", testAcceptDeadlockNeverSatisfied)
 	t.Run("accept_deadlock_reports_every_waiting_accept", testAcceptDeadlockReportsEveryWaitingAccept)
 	t.Run("history_outside_composite_state", testHistoryOutsideCompositeState)
@@ -1728,6 +1734,157 @@ func testSendViaUnconnectedPort(t *testing.T) {
 	}
 	if !errors.Is(err, ErrUnroutableSend) {
 		t.Errorf("expected ErrUnroutableSend, got: %v", err)
+	}
+}
+
+// testSendAddressedToAnUnreachableTarget: a target reaching no port of an object
+// the sender can address is reported where it was written rather than delivered
+// to whatever else carries the last segment's name.
+func testSendAddressedToAnUnreachableTarget(t *testing.T) {
+	_, err := executeActionSource(t, "pipeline", `package P {
+		port def PingPort { in item ping : Integer; }
+		part def Leaf { attribute count : Integer = 0; }
+		part def Node {
+			port inPort : PingPort;
+			part leaf : Leaf;
+		}
+		part alpha : Node;
+		action pipeline {
+			first start;
+			action sender { send 42 to alpha.leaf.count; }
+			done end;
+			then start sender;
+			then sender end;
+		}
+	}`)
+	if err == nil {
+		t.Fatal("expected an error: alpha.leaf.count is no port of any object")
+	}
+	if !errors.Is(err, ErrUnroutableSend) {
+		t.Errorf("expected ErrUnroutableSend, got: %v", err)
+	}
+}
+
+// testSendAddressedThroughSeveralOccurrences: a path led by a part naming three
+// occurrences reaches no one object, which must be reported rather than
+// attributed to the sending object and delivered to nobody.
+func testSendAddressedThroughSeveralOccurrences(t *testing.T) {
+	_, err := executeActionSource(t, "pipeline", `package P {
+		port def PingPort { in item ping : Integer; }
+		part def Leaf { port inPort : PingPort; }
+		part nodes : Leaf[3];
+		action pipeline {
+			first start;
+			action sender { send 42 to nodes.inPort; }
+			done end;
+			then start sender;
+			then sender end;
+		}
+	}`)
+	if err == nil {
+		t.Fatal("expected an error: nodes names three occurrences, not one addressee")
+	}
+	if !errors.Is(err, ErrUnroutableSend) {
+		t.Errorf("expected ErrUnroutableSend, got: %v", err)
+	}
+}
+
+// testSendAddressedToAPartNoSiblingTakes: a message addressed to a part belongs
+// to that object, so a sibling accept of the sending behavior cannot take it and
+// the run reports the accept it is left waiting on.
+func testSendAddressedToAPartNoSiblingTakes(t *testing.T) {
+	_, err := executeActionSource(t, "main", `package P {
+		item def Ping;
+		part def R;
+		part receiver : R;
+		action main {
+			first start;
+			action s { send Ping() to receiver; }
+			action other accept p : Ping;
+			done end;
+			then start s;
+			then s other;
+			then other end;
+		}
+	}`)
+	if err == nil {
+		t.Fatal("expected an error: `other` is no addressee of the message sent to receiver")
+	}
+	if !errors.Is(err, ErrAcceptDeadlock) {
+		t.Errorf("expected ErrAcceptDeadlock, got: %v", err)
+	}
+}
+
+// testInjectedMessageNamesAReceiverNoAcceptHas: a message injected from outside
+// the model is held to the receiver it names, so an accept of another name waits
+// on rather than consumes it, and the run reports that wait.
+func testInjectedMessageNamesAReceiverNoAcceptHas(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package P {
+		import ScalarValues::*;
+		action pipeline {
+			first start;
+			action other accept n : Integer;
+			done end;
+			then start other;
+			then other end;
+		}
+	}`))
+	exec, err := ctx.CreateActionExecutor(oneSymbol(t, idx, "P::pipeline"))
+	if err != nil {
+		t.Fatalf("create action executor: %v", err)
+	}
+	ctx.PostMessage(Message{SignalType: "Integer", Target: "reader", Payload: map[string]Value{
+		"value": {Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 1}},
+	}})
+	err = exec.RunToCompletion()
+	if err == nil {
+		t.Fatal("expected an error: `other` is not the receiver the message names")
+	}
+	if !errors.Is(err, ErrAcceptDeadlock) {
+		t.Errorf("expected ErrAcceptDeadlock, got: %v", err)
+	}
+}
+
+// testSendAddressedToAnObjectThatCannotBeBuilt: locating an addressee can fail
+// on its own terms — an exhausted budget, or a slot the walk cannot read — and
+// each must be reported as that rather than as an address naming no port.
+func testSendAddressedToAnObjectThatCannotBeBuilt(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
+		package test {
+			port def PingPort { in item ping : Integer; }
+			part def Node {
+				port inPort : PingPort;
+				attribute a = b + 1.0;
+				attribute b = a + 1.0;
+				action listen { first start; done end; then start end; }
+			}
+			part alpha : Node;
+		}
+	`))
+	scope := declScope(oneSymbol(t, idx, "test::Node::listen"))
+
+	ctx.maxSteps = 0
+	send := lower.Send{Target: "alpha.inPort", TargetPath: true, Scope: scope}
+	err := ctx.post(nil, Message{SignalType: "Integer"}, send, nil)
+	if !errors.Is(err, ErrStepLimitExceeded) {
+		t.Errorf("budget exhausted while building alpha: %v, want ErrStepLimitExceeded", err)
+	}
+	if errors.Is(err, ErrUnroutableSend) {
+		t.Errorf("an exhausted budget was reported as a bad address: %v", err)
+	}
+
+	ctx.maxSteps = DefaultMaxSteps
+	alpha := instanceOfUsage(t, ctx, idx, "test::alpha")
+	send = lower.Send{Target: "a.inPort", TargetPath: true, Scope: scope}
+	err = ctx.post(nil, Message{SignalType: "Integer"}, send, alpha)
+	if !errors.Is(err, ErrCyclicSlot) {
+		t.Errorf("walking through a cyclic derived slot: %v, want ErrCyclicSlot", err)
+	}
+	if errors.Is(err, ErrUnroutableSend) {
+		t.Errorf("an unreadable slot was reported as a bad address: %v", err)
+	}
+	if len(ctx.PendingMessages()) != 0 {
+		t.Errorf("a send that never found its addressee posted %+v", ctx.PendingMessages())
 	}
 }
 

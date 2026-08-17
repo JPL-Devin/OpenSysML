@@ -748,7 +748,7 @@ func (e *ActionExecutor) stepActionExecutionNode(tokenIdx int) error {
 		e.data[outputPin] = result
 	} else if node.ActionRef != nil {
 		outputs, err := invokeAction(
-			e.ctx, e.action.Scope, actionInvocation{target: node.ActionRef}, e.data,
+			e.ctx, e.action.Scope, actionInvocation{target: node.ActionRef}, e.data, e.self,
 		)
 		if err != nil {
 			return err
@@ -816,13 +816,7 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 			want = accept.SubsetsEvent
 		}
 		msg, taken := e.ctx.TakeMessage(func(m Message) bool {
-			if !m.arrivedAt(accept.ViaPort) || !m.reachedObject(objectID(e.self)) || !m.carriesSignal(want) {
-				return false
-			}
-			// A message routed to this accept's port is already addressed by the
-			// connection it travelled over, so the accept's own name does not
-			// have to appear in it.
-			return accept.ViaPort != "" || m.addressedTo(ActionNodeName(usage))
+			return m.reaches(ActionNodeName(usage), accept.ViaPort, objectID(e.self)) && m.carriesSignal(want)
 		})
 		if !taken {
 			if token.Wait == nil {
@@ -851,7 +845,7 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 	// A usage that performs another action (perform X / action a : X / a = X(...))
 	// runs that action to completion before its own body.
 	if inv, ok := nestedInvocation(usage); ok {
-		outputs, err := invokeAction(e.ctx, e.action.Scope, inv, e.data)
+		outputs, err := invokeAction(e.ctx, e.action.Scope, inv, e.data, e.self)
 		if err != nil {
 			return err
 		}

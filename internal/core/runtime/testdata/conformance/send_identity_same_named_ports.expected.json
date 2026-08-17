@@ -1,0 +1,16 @@
+{
+  "type": "state",
+  "evaluate": "SendIdentity::Node::Listen",
+  "performers": [
+    {
+      "object": "SendIdentity::alpha",
+      "finalState": "received",
+      "stateVisits": ["start", "waiting", "received"]
+    },
+    {
+      "object": "SendIdentity::beta",
+      "finalState": "waiting",
+      "stateVisits": ["start", "waiting"]
+    }
+  ]
+}
