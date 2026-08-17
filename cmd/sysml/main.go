@@ -12,6 +12,7 @@ import (
 
 	"github.com/chzyer/readline"
 
+	"github.com/Open-MBEE/Systemica/internal/core/export"
 	"github.com/Open-MBEE/Systemica/internal/core/runtime"
 	"github.com/Open-MBEE/Systemica/internal/repl"
 )
@@ -127,6 +128,25 @@ func main() {
 	os.Exit(runCLI())
 }
 
+// wrapped breaks text into lines of at most width characters, so a sentence the
+// help prints rather than restates still reads as a paragraph.
+func wrapped(text string, width int) string {
+	var lines []string
+	line := ""
+	for _, word := range strings.Fields(text) {
+		switch {
+		case line == "":
+			line = word
+		case len(line)+1+len(word) <= width:
+			line += " " + word
+		default:
+			lines = append(lines, line)
+			line = word
+		}
+	}
+	return strings.Join(append(lines, line), "\n")
+}
+
 // printUsage writes the help to w: the caller chooses the stream, since help
 // asked for is a result and help shown over a misuse belongs with the error.
 func printUsage(w io.Writer) {
@@ -172,10 +192,11 @@ func printUsage(w io.Writer) {
 	fmt.Fprintf(w, "\nThe input format is taken from the file extension (.sysml, .kerml, .ttl) unless\n")
 	fmt.Fprintf(w, "-from names it. Converting to the format it is already in rewrites the input:\n")
 	fmt.Fprintf(w, "notation is reformatted, Turtle is normalized.\n")
-	fmt.Fprintf(w, "\nRDF Turtle is experimental: the mapping covers model structure only, refuses a\n")
-	fmt.Fprintf(w, "model whose bodies state behavior, and its vocabulary may change without a\n")
-	fmt.Fprintf(w, "compatibility path. Every run that converts RDF says so on stderr. Saving to\n")
-	fmt.Fprintf(w, ".sysml or .kerml is stable.\n")
+	// The notice is printed, not restated, so the help cannot drift from what a
+	// conversion reports.
+	fmt.Fprintf(w, "\n%s\n", wrapped(export.ExperimentalNotice, 78))
+	fmt.Fprintf(w, "Every run that converts RDF says so on stderr. Saving to .sysml or .kerml is\n")
+	fmt.Fprintf(w, "stable.\n")
 	fmt.Fprintf(w, "\nFlags may be written before or after the model they apply to. A file named like\n")
 	fmt.Fprintf(w, "a flag is read as a file after --, which ends the flags: sysml -trace -- -m.sysml\n")
 	fmt.Fprintf(w, "\nReading from standard input:\n")

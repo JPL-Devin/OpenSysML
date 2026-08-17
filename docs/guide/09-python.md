@@ -391,8 +391,8 @@ does the conversion with the same code `sysml -convert` uses, so the client adds
 no second implementation of the mapping.
 
 The Turtle direction is [experimental](../reference/rdf-mapping.md#status-experimental):
-it carries model structure only, refuses a model whose bodies state behavior, and
-its vocabulary may change without a compatibility path. Any conversion through it
+it carries model structure and the behavior its bodies state, refuses what it
+cannot write back, and its vocabulary may change without a compatibility path. Any conversion through it
 warns with `ExperimentalFeatureWarning` and sets `Conversion.experimental`;
 notation is stable and warns about nothing.
 

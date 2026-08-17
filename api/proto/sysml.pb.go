@@ -2075,9 +2075,9 @@ type ConvertResponse struct {
 	// the conversion.
 	Diagnostics []*Diagnostic `protobuf:"bytes,5,rep,name=diagnostics,proto3" json:"diagnostics,omitempty"`
 	// Set when either format is RDF, whose mapping is experimental: it covers
-	// model structure only, refuses a model whose bodies state behavior, and its
-	// vocabulary may change without a compatibility path. Notation to notation is
-	// stable and leaves this unset.
+	// model structure and the behavior its bodies state, refuses what it cannot
+	// write back, and its vocabulary may change without a compatibility path.
+	// Notation to notation is stable and leaves this unset.
 	Experimental bool `protobuf:"varint,6,opt,name=experimental,proto3" json:"experimental,omitempty"`
 	// What is experimental about the conversion, in the wording every surface
 	// reports it in. Empty when experimental is false.

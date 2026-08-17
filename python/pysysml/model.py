@@ -159,9 +159,9 @@ class Model:
     def to_turtle(self):
         """Write this model out as an RDF graph in Turtle syntax.
 
-        The RDF mapping is experimental: it covers model structure only, refuses
-        a model whose bodies state behavior, and warns with
-        :class:`ExperimentalFeatureWarning`.
+        The RDF mapping is experimental: it covers model structure and the
+        behavior its bodies state, refuses what it cannot write back, and warns
+        with :class:`ExperimentalFeatureWarning`.
 
         Returns:
             Conversion: The Turtle; ``str()`` of it is the text

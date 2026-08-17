@@ -33,6 +33,10 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   reported with the line named.
 - RDF conversion remains **experimental** — the vocabulary may still change, and no round trip
   through a running triplestore has been demonstrated (roadmap D1–D3).
+- Every surface now states that status in one wording again: `-help` prints
+  `export.ExperimentalNotice` rather than a copy of it, and the Python client's fallback notice,
+  the `ConvertResponse.experimental` comment and the guide pages were brought back in step. A test
+  pins the Python copy byte-identical to the constant, since Python cannot import it.
 
 ## 0.1.0 — 2026-08-17
 

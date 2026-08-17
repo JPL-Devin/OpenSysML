@@ -26,9 +26,10 @@ _TURTLE_NAMES = frozenset({"ttl", "turtle", "rdf"})
 #: The fallback wording, for a service too old to send its own notice: the RDF
 #: mapping's status is a property of the mapping, not of the service.
 EXPERIMENTAL_NOTICE = (
-    "RDF conversion is experimental: the mapping covers model structure only, "
-    "refuses a model whose bodies state behavior, and its vocabulary may change "
-    "without a compatibility path; see docs/reference/rdf-mapping.md \u00a7 Status"
+    "RDF conversion is experimental: the mapping covers model structure and the "
+    "behavior its bodies state, refuses what it cannot write back, and its "
+    "vocabulary may change without a compatibility path; see "
+    "docs/reference/rdf-mapping.md \u00a7 Status"
 )
 
 
