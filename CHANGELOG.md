@@ -6,6 +6,21 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ## Unreleased
 
+### The prompt prints the model it holds
+
+- **`%print` writes the session's model back as SysML notation at the prompt**, which until now
+  needed `%save <file>` and another program to open the file. `%print <name>` prints one element
+  and its body instead of the whole buffer, taking the quoted and qualified spellings every other
+  command takes (`%print 'My Pkg'::Car`, `%print Top::'My Pkg'::Car`), and tab completes both the
+  command and the names after it.
+- It is the writer `%save` writes `.sysml` with — `export.SysMLElement` renders one element's
+  source through the same `format.Source` path a whole-document save goes through — so comments and
+  the text as typed survive, and a print submitted again rebuilds the same model. Notation only: no
+  RDF notice follows a print.
+- Printing is a read. No object is materialized, `%instances` and the buffer are unchanged, and an
+  `%action`/`%state` debugging session keeps running across it. An empty session, a name nothing
+  declares, and a symbol this session holds no source of (a library name) each answer in one line.
+
 ### A model that states behavior converts to RDF
 
 - The behavioral nodes of an action or state body now have metaclasses and the properties their

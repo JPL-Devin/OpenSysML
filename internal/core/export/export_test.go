@@ -120,6 +120,71 @@ part def R;
 	}
 }
 
+// One element of a document is written through the same notation path a whole
+// save goes through: the source at the span, comments included, re-indented.
+func TestSysMLElementWritesOneElement(t *testing.T) {
+	src := `package P {
+	// which wheel
+	part def Q {
+attribute d = 16.0;
+}
+	part def R;
+}`
+	file := source.New("session.sysml", []byte(src))
+	span := source.Span{Offset: strings.Index(src, "// which wheel")}
+	span.Len = strings.Index(src, "\tpart def R;") - span.Offset
+
+	out, syntax, err := export.SysMLElement(file, span)
+	if err != nil || syntax != nil {
+		t.Fatalf("element: err=%v syntax=%v", err, syntax)
+	}
+	got := string(out)
+	for _, want := range []string{"// which wheel", "part def Q {", "    attribute d = 16.0;"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("element output is missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "part def R") || strings.Contains(got, "package P") {
+		t.Errorf("element output covers more than the element:\n%s", got)
+	}
+}
+
+// A span running past the element into the comments written for what follows
+// writes the element alone: trailing trivia is not part of it.
+func TestSysMLElementDropsTrailingComments(t *testing.T) {
+	src := "part def Q { attribute d = 16.0; }\n\n// which wheel\n/* and another */\npart def R;"
+	file := source.New("session.sysml", []byte(src))
+	span := source.Span{Offset: 0, Len: strings.Index(src, "part def R;")}
+
+	out, _, err := export.SysMLElement(file, span)
+	if err != nil {
+		t.Fatalf("element: %v", err)
+	}
+	if got := strings.TrimRight(string(out), "\n"); got != "part def Q { attribute d = 16.0; }" {
+		t.Errorf("element output carries trailing trivia:\n%q", got)
+	}
+	if _, _, err := export.SysMLElement(file, source.Span{
+		Offset: strings.Index(src, "// which wheel"),
+		Len:    len("// which wheel\n"),
+	}); !errors.Is(err, export.ErrNoNotation) {
+		t.Errorf("a span holding only a comment: err=%v, want ErrNoNotation", err)
+	}
+}
+
+// A span naming no source is reported as such rather than written as an empty
+// document, so a caller can explain it instead of printing nothing.
+func TestSysMLElementWithoutSource(t *testing.T) {
+	file := source.New("session.sysml", []byte("part def Q;"))
+	for _, span := range []source.Span{{}, {Offset: 0, Len: 99}, {Offset: -1, Len: 2}} {
+		if _, _, err := export.SysMLElement(file, span); !errors.Is(err, export.ErrNoNotation) {
+			t.Errorf("span %+v: err=%v, want ErrNoNotation", span, err)
+		}
+	}
+	if _, _, err := export.SysMLElement(nil, source.Span{Len: 1}); !errors.Is(err, export.ErrNoNotation) {
+		t.Errorf("no file: err=%v, want ErrNoNotation", err)
+	}
+}
+
 // Several kind keywords are synonyms that the AST records as one kind, so the
 // keyword as written is carried through the graph rather than normalized.
 func TestKindKeywordSynonymsSurviveRDF(t *testing.T) {
