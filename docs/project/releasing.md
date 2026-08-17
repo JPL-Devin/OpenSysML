@@ -52,9 +52,11 @@ Then check the release-facing text:
 - `README.md` and `docs/guide/` transcripts match what the binary prints.
   Build it (`make build-sysml`) and paste a few commands through it.
 - `python3 scripts/check-doc-links.py` reports no broken link (CI gates on it too).
-- Test counts match a real run and agree across the docs that repeat them
-  (`docs/project/spec-compliance.md`, `docs/internals/architecture.md`, `docs/project/training-examples.md`,
-  `README.md`), and no compliance row claims more than the implementation does.
+- Test counts match a real run and agree across the four surfaces allowed to repeat them
+  (`docs/project/spec-compliance.md`, `README.md`, `docs/project/roadmap.md`,
+  `docs/project/training-examples.md` — everything else links to the first, per CONTRIBUTING.md),
+  and no compliance row claims more than the implementation does. Count first-level subtests:
+  a case that registers sub-subtests, like `variant_connection_per_owner`, otherwise counts twice.
 
 ## Tagging
 

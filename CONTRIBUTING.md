@@ -266,7 +266,12 @@ When a change needs documenting:
 - **Teach in the guide, enumerate in the reference.** Don't repeat a flag table in both; link.
 - **Measured numbers have one home** (fixture, corpus and conversion counts live in
   [docs/project/](docs/project/)); elsewhere, link to it instead of restating a number that
-  will drift.
+  will drift. Three release-gate surfaces are the deliberate exception, because
+  [docs/project/releasing.md](docs/project/releasing.md) checks the numbers they print:
+  `README.md`'s coverage line and status table, and the gate tables in
+  [docs/project/roadmap.md](docs/project/roadmap.md) and
+  [docs/project/training-examples.md](docs/project/training-examples.md). Recount all four
+  together, in one commit.
 - **Moving or renaming a page means updating its inbound links.** Run
   `python3 scripts/check-doc-links.py` — it fails on a link to a missing file or heading and
   runs in CI. Where a released `README.md` linked the old path, leave a one-paragraph pointer
