@@ -306,10 +306,10 @@ Two narrow export paths decide whether a declaration comes back spelled the way 
   character-identical.
 - For subactions: `entry do { … }`, `entry do{ … }`, `entry do{perform A;}` must all come back
   `entry do {` (the tight two were the bug), and `entry /* do */ { … }` must **not** gain a `do`.
-  **Known gap at bf2f21e3:** a comment adjacent to a real `do` (`entry /*c*/ do { … }`,
-  `entry do/*c*/{ … }`) still drops the `do` — `encodeSubaction` reads `strings.Fields(e.text(n))[1]`
-  on raw source and `bareWord` only cuts at `;`/`{`, so the comment token takes `do`'s place. Same on
-  the pre-fix binary; re-probe if `withoutComments` is ever applied there too.
+  A comment adjacent to a real `do` (`entry /*c*/ do { … }`, `entry do/*c*/{ … }`) keeps it too since
+  aa9fa5ab, which reads the subaction head through `withoutComments` as well; before that commit the
+  comment token took `do`'s place and the `do` was dropped, so use a pre-aa9fa5ab binary as the
+  contrast for these two.
 - An unterminated comment in a head (`in /* attribute x : Real;`) is a *parse* error
   (`unterminated comment: missing */`), not an export refusal — so it cannot serve as a refusal
   fixture, only as a "writes no output" check.
