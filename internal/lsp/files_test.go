@@ -341,7 +341,7 @@ func TestPublishDiagnosticsSerialized(t *testing.T) {
 }
 
 func TestDidChangeWorkspaceFoldersIndexesAddedFolder(t *testing.T) {
-	s, fc, dir, _, main := multiFileWorkspace(t)
+	s, fc, _, _, main := multiFileWorkspace(t)
 	ctx := context.Background()
 
 	// main.sysml uses a name declared in a folder added after initialize; the
@@ -350,11 +350,10 @@ func TestDidChangeWorkspaceFoldersIndexesAddedFolder(t *testing.T) {
 	if msgs := diagnosticsFor(fc, main); len(msgs) == 0 {
 		t.Fatalf("diagnostics for main = none, want Gadget unresolved before the folder is added")
 	}
-	added := filepath.Join(dir, "extra")
+	// Outside the initial folder, which stays registered and would otherwise
+	// still cover the file after the added folder goes away.
+	added := t.TempDir()
 	extra := filepath.Join(added, "extra.sysml")
-	if err := os.MkdirAll(added, 0o750); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
 	if err := os.WriteFile(extra, []byte("package Extra {\n    part def Gadget;\n}\n"), 0o600); err != nil {
 		t.Fatalf("write extra: %v", err)
 	}
@@ -402,6 +401,42 @@ func TestDidChangeWorkspaceFoldersKeepsOpenBuffer(t *testing.T) {
 	}
 	if s.ws.Document(lib) == nil {
 		t.Errorf("open lib.sysml dropped with its folder")
+	}
+}
+
+func TestDidChangeWorkspaceFoldersKeepsNestedFolder(t *testing.T) {
+	s, _, dir, lib, _ := multiFileWorkspace(t)
+	ctx := context.Background()
+
+	// LSP allows nested folders: removing the outer one must leave the files the
+	// inner one still contributes indexed.
+	nested := filepath.Join(dir, "nested")
+	inner := filepath.Join(nested, "inner.sysml")
+	if err := os.MkdirAll(nested, 0o750); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(inner, []byte("package Inner {\n    part def Gizmo;\n}\n"), 0o600); err != nil {
+		t.Fatalf("write inner: %v", err)
+	}
+	if err := s.DidChangeWorkspaceFolders(ctx, &protocol.DidChangeWorkspaceFoldersParams{
+		Event: protocol.WorkspaceFoldersChangeEvent{
+			Added: []protocol.WorkspaceFolder{{URI: string(uri.File(nested)), Name: "nested"}},
+		},
+	}); err != nil {
+		t.Fatalf("DidChangeWorkspaceFolders err = %v", err)
+	}
+	if err := s.DidChangeWorkspaceFolders(ctx, &protocol.DidChangeWorkspaceFoldersParams{
+		Event: protocol.WorkspaceFoldersChangeEvent{
+			Removed: []protocol.WorkspaceFolder{{URI: string(uri.File(dir)), Name: "multi"}},
+		},
+	}); err != nil {
+		t.Fatalf("DidChangeWorkspaceFolders err = %v", err)
+	}
+	if s.ws.Document(inner) == nil {
+		t.Errorf("inner.sysml unindexed with the outer folder, though its own folder remains")
+	}
+	if s.ws.Document(lib) != nil {
+		t.Errorf("lib.sysml still indexed after the only folder holding it was removed")
 	}
 }
 

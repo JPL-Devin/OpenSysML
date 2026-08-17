@@ -59,7 +59,8 @@ func legacyRoot(params *protocol.InitializeParams) string {
 // declared in a file the editor never opened still resolves.
 func (s *Server) loadFolders(ctx context.Context) {
 	s.mu.Lock()
-	folders := s.folders
+	// Copied: a folder change can rewrite the slice while this walk runs.
+	folders := append([]string(nil), s.folders...)
 	s.mu.Unlock()
 
 	for _, folder := range folders {
@@ -172,14 +173,14 @@ func (s *Server) addFolder(folder string) {
 	s.loadFolder(folder)
 }
 
-// dropFolder forgets a folder and the documents it contributed; an open buffer
-// stays, since the editor still shows it.
+// dropFolder forgets a folder and the documents only it contributed; folders can
+// nest, and an open buffer stays regardless, since the editor still shows it.
 func (s *Server) dropFolder(folder string) {
 	if folder == "" {
 		return
 	}
 	s.mu.Lock()
-	kept := s.folders[:0]
+	kept := make([]string, 0, len(s.folders))
 	for _, known := range s.folders {
 		if known != folder {
 			kept = append(kept, known)
@@ -189,10 +190,20 @@ func (s *Server) dropFolder(folder string) {
 	s.mu.Unlock()
 
 	for _, name := range s.ws.DocumentNames() {
-		if underFolder(name, folder) {
+		if underFolder(name, folder) && !underAnyFolder(name, kept) {
 			s.ws.DeleteOnDisk(name)
 		}
 	}
+}
+
+// underAnyFolder reports whether name lies inside one of the folders.
+func underAnyFolder(name string, folders []string) bool {
+	for _, folder := range folders {
+		if underFolder(name, folder) {
+			return true
+		}
+	}
+	return false
 }
 
 // underFolder reports whether name lies inside folder.
