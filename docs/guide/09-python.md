@@ -161,7 +161,7 @@ Integers, reals, booleans, strings and sequences map to `int`, `float`, `bool`,
 `KeyError` (item access), so `hasattr`, `copy` and `pickle` behave.
 
 A slot holding no value — a valueless feature of a value type, `attribute d : Real;` —
-reads as `pysysml.UNSET`, the same thing `%slots` and `-instantiate` spell `<unset>`. It
+reads as `pysysml.UNSET`, the same thing `%features` and `-instantiate` spell `<unset>`. It
 is falsy and is not `None`, which stays the model's `null`:
 
 ```python

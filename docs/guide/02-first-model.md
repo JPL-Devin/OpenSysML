@@ -58,11 +58,11 @@ sysml> part def Vehicle {
 sysml> %instantiate Vehicle
 ✓ Created instance of Vehicle
   ID: 1
-  Use %slots Vehicle to inspect
+  Use %features Vehicle to inspect
 
-sysml> %slots Vehicle
+sysml> %features Vehicle
 Instance: Vehicle (ID: 1)
-Slots:
+Features:
   mass = 1500.00
   wheels = [Instance(ID: 2), Instance(ID: 3), Instance(ID: 4), Instance(ID: 5)]
     diameter = 16.00
@@ -135,11 +135,11 @@ package MyModel {
 sysml> %instantiate MyModel::System
 ✓ Created instance of MyModel::System
   ID: 1
-  Use %slots MyModel::System to inspect
+  Use %features MyModel::System to inspect
 
-sysml> %slots MyModel::System
+sysml> %features MyModel::System
 Instance: MyModel::System (ID: 1)
-Slots:
+Features:
   sensors = [Instance(ID: 2), Instance(ID: 3), Instance(ID: 4)]
     reading = 0.00
     threshold = 100.00
@@ -149,7 +149,7 @@ Slots:
     threshold = 100.00
 ```
 
-A composite slot lists the features of each of its objects under it, in order.
+A composite feature lists the features of each of its objects under it, in order.
 
 ---
 

@@ -100,7 +100,7 @@ Fixtures that actually exercise the redefinition-owner path:
 1. **Non-interactive (fast, for exploration and expected-value discovery).** The REPL reads a
    script from stdin fine:
    ```bash
-   printf '%%load internal/repl/testdata/vehicle_package.sysml\n%%instantiate Vehicle\n%%slots Demo::Vehicle\n%%quit\n' | timeout 30 ./bin/sysml
+   printf '%%load internal/repl/testdata/vehicle_package.sysml\n%%instantiate Vehicle\n%%features Demo::Vehicle\n%%quit\n' | timeout 30 ./bin/sysml
    ```
    Note `%%` in `printf` format strings. Always wrap in `timeout` so a hang shows up as a
    non-zero exit rather than stalling the session.
@@ -389,7 +389,7 @@ Fixtures live in `internal/core/runtime/testdata/conformance/`: `variation_attri
 (`test::idealDiamond`), `variation_part_selection.sysml` (`test::electricVehicle`),
 `variation_interface_selection.sysml` (`test::nestedAssembly`), `variation_unselected.sysml`
 (`test::unconfiguredDiamond`) and `ballandchain_variant_configuration.sysml`. Each `.expected.json`
-is the cheapest source of the values `%slots` should print.
+is the cheapest source of the values `%features` should print.
 
 - **Variant rendering.** A bound variation slot prints `name = variantName (Instance ID: n)` with the
   variant's nested values indented under it (`engine = electric (Instance ID: 2)` / `power = 150.00`).
@@ -400,9 +400,9 @@ is the cheapest source of the values `%slots` should print.
 - **Always include a constraint that must be *violated*.** `variation_attribute_selection` asserts
   both `isIdeal` (satisfied) and `notShallow` (violated). An implementation where
   `x == x::variantName` returned true for any variant would still show `isIdeal: satisfied`, so the
-  violated one is the only real discriminator. `%slots` renders these inline as
+  violated one is the only real discriminator. `%features` renders these inline as
   `name: <constraint: satisfied|violated>` — note `%satisfy` answers
-  `no satisfaction assertion in the session` for `assert constraint` members, so use `%slots`.
+  `no satisfaction assertion in the session` for `assert constraint` members, so use `%features`.
 - **Error paths** (all are per-slot `<error: …>` lines, and the dependent computed slot repeats the
   cause): unselected → `variation has no variant selected: <usage>.<feature>`; a name that is not a
   variant → `not a variant of the variation: X is not a variant of Y (variants: a, b)`; two
@@ -433,7 +433,7 @@ is the cheapest source of the values `%slots` should print.
   diagnostic still says "an instance" rather than unset, i.e. the unset spelling has not reached the
   type-mismatch wording.
 - **Surfaces to check together for any value-rendering change**, since they share `formatValue`:
-  `%slots` / `%eval` in the REPL, `sysml <model> -instantiate <fqn> -e <expr>` (same text), the same
+  `%features` / `%eval` in the REPL, `sysml <model> -instantiate <fqn> -e <expr>` (same text), the same
   run with `-json` (the JSON encoder escapes it, so grep `\u003cunset\u003e`, not `<unset>`), and the
   gRPC/pysysml path. On the Python side `pysysml.UNSET` is a falsy singleton spelled `<unset>` and
   distinct from `None`: assert `inst.d is pysysml.UNSET`, `inst.d is not None`, `bool(inst.d) is
@@ -454,13 +454,13 @@ is the cheapest source of the values `%slots` should print.
   no-instance path, not unset). In `-json`, grep `u003cunset` — a pattern like `u003cunset.003e`
   misses, because `\u` is two characters. And write the null case `attribute nul : Real[0..1] = null;`:
   `Real = null` is itself a multiplicity violation and you end up debugging that instead.
-- **Known limits, so don't plan around them:** `%slots` takes only the instantiated usage's own name
-  — `%slots test::electricVehicle::engine` answers `no instance of …`, and
+- **Known limits, so don't plan around them:** `%features` takes only the instantiated usage's own name
+  — `%features test::electricVehicle::engine` answers `no instance of …`, and
   `%eval test::electricVehicle.engine.power` answers `usage test::electricVehicle has no value`.
-  Nested traversal is only observable through the indented nested rendering of the top-level `%slots`.
+  Nested traversal is only observable through the indented nested rendering of the top-level `%features`.
 - **Careful with `clear` while recording:** typed at the `sysml>` prompt it is parsed as a
   declaration (`1:1: error: expected a namespace member`) *and* drops previously created instances,
-  so the next `%slots` says `no instance of …`. Use `%clear` to reset the session, and clear the
+  so the next `%features` says `no instance of …`. Use `%clear` to reset the session, and clear the
   screen before entering the REPL.
 
 ### `variant` used outside a variation, and per-variation-point variant objects
@@ -474,7 +474,7 @@ discriminators for changes in the variant/variation layer:
   `part p : P { attribute total : Real = k + x; }`. Correct behavior: loading prints a *warning*
   (code `variant-outside-variation`) —
   ``variant x is declared in P, which is not a variation, so it offers no choice; declare its owner `variation` or drop `variant` `` —
-  and `%slots M::p` still shows `k = 2.00`, `x = 1.00`, `total = 3.00`, with `%eval M::p.x` → `1.00`.
+  and `%features M::p` still shows `k = 2.00`, `x = 1.00`, `total = 3.00`, with `%eval M::p.x` → `1.00`.
   A build that skips every `DeclaresVariant` member instead prints no warning, omits `x`, reports
   `total: <error: slot p.total: type mismatch>` and `error: evaluation failed: member x not found in
   instance`. The same must hold for a package-level `variant` (warns, still readable through a
@@ -539,12 +539,27 @@ because the obvious ones cannot:
 ## Things to exercise (and their expected shapes)
 
 - There is **no `%what` command** — check `%help` before believing a task description. The lookup
-  surface for "does this name resolve?" is `%instantiate` / `%slots` / `%eval` (a `part def` is
+  surface for "does this name resolve?" is `%instantiate` / `%features` / `%eval` (a `part def` is
   easiest via `%instantiate`, an attribute via `%eval`), all funnelling through
   `internal/repl/lookup.go`. A request phrased as "`%what`/lookup" means those.
-- Symbol-taking commands: `%instantiate %slots %eval %calc %constraint %requirement %action %state`.
+- Symbol-taking commands: `%instantiate %features %eval %calc %constraint %requirement %action %state`.
   All go through one helper (`internal/repl/lookup.go`), so test each with a **simple** name and a
   **qualified** one.
+- `%slots` is a deprecated alias of `%features`, dispatched through the same code: the identical
+  listing, led by `note: %slots is deprecated — use %features`. It stays out of `%help` but tab
+  completion still offers it, so a script written against the old spelling keeps working.
+  Things worth asserting when the alias table (`metaCommand.instead`, `deprecationNote`) changes:
+  the note appears **exactly once** per invocation and only for the deprecated spelling; the no-arg
+  usage line names the spelling the *user typed* (`usage: %slots <name>`, not `%features`); and the
+  note must not shift the exit status — a listing carrying `<error: …>` still exits `2` over a pipe
+  under either spelling, so check `printf '%%instantiate X\n%%slots X\n' | ./bin/sysml m.sysml; echo $?`
+  next to the `%features` form. The cheapest strong evidence is a **byte-for-byte diff of the two
+  listings captured in one session** (run `%features N` then `%slots N`, drop the note line, compare):
+  a per-spelling code path that drifted shows up there and nowhere else.
+- A part whose type contains its own kind does **not** print a "materialization is bounded" note; the
+  bounded walk renders the nested feature as `child : Node (not expanded: contains its own kind)`
+  after expanding one level. Don't grep for wording the binary never emits — capture the real line
+  over a pipe first. Follow it with `%eval 1 + 1` → `= 2` to show the session survived the walk.
 - `%step` is **action-only**. In a state session it answers
   `error: no active action session (use %action <name> first)`; drive a state machine with
   `%advance <time>` instead. That message during a state sweep is expected, not a broken session.
@@ -560,7 +575,7 @@ because the obvious ones cannot:
   separate turns, and `%clear` (or restart) if a stray line lands in the buffer.
 - `%satisfy` takes no argument (every satisfaction assertion the model states) or the name of the
   element stating them, since `assert satisfy … by …` is anonymous.
-- Instances are keyed by resolved FQN, so `%instantiate Vehicle` then `%slots Demo::Vehicle` must
+- Instances are keyed by resolved FQN, so `%instantiate Vehicle` then `%features Demo::Vehicle` must
   hit the same `ID`, and the reverse spelling too. Differing IDs = broken keying.
 - Qualified attribute access works with a full FQN (`%eval Demo::Engine::power` → `= 300.00`) but a
   **partial** qualification (`%eval Engine::power`) is `unresolved reference: …` — the qualified path
@@ -1028,7 +1043,7 @@ forkJoin, action conditional no longer declared)` — every member it declared �
 
 `Submit` **carries instances over** what a submission did not change (`internal/repl/carryover.go`,
 `runtime.Adopt`): after an unrelated `part def B;`, `%instances` still lists the instance with the
-**same ID**, `%slots` still prints its values, and the next `%instantiate` gets a *fresh* ID rather
+**same ID**, `%features` still prints its values, and the next `%instantiate` gets a *fresh* ID rather
 than `ID: 1`. What the submission invalidated still goes — redeclaring the instance's own definition,
 or a declaration its features are typed by — and then the notice
 `note: N instance(s) … dropped because the declarations changed` is expected, with `%instances`
@@ -1039,7 +1054,7 @@ notice naming the declaration, when what it depends on changes.
 Recipes that actually distinguish working from broken here (used to verify PR #168):
 
 - **Survival:** `part def A { attribute x : ScalarValues::Integer = 1; }` + `%instantiate A` +
-  `part def B;` → no drop notice, `%instances` → `A (ID: 1)`, `%slots A` → `x = 1`. The parent
+  `part def B;` → no drop notice, `%instances` → `A (ID: 1)`, `%features A` → `x = 1`. The parent
   commit's binary (see the contrast-binary recipe) prints the drop notice and
   `error: no instance of "A"` on the same input, so run both on camera.
 - **Partial loss:** instantiate two definitions, then redeclare only one → `note: 1 instance was
@@ -1061,17 +1076,17 @@ Recipes that actually distinguish working from broken here (used to verify PR #1
   PR #168): a carried slot whose feature has a value expression (`attribute m = double(3.0);`) is
   reset to unmaterialized, so the new context recomputes it from the declarations the expression
   reads *now*. Redeclaring `calc def double` with `x * 3.0` therefore keeps `ID: 1` and prints **no**
-  drop notice, while `%slots A` moves `6.00 → 9.00`; the same holds through chains
+  drop notice, while `%features A` moves `6.00 → 9.00`; the same holds through chains
   (`outer` calling `inner`: `7.00 → 10.00`; `attribute h = g * 2.0` read by `m`: `11.00 → 15.00`).
-  The assertion that catches the earlier stale-value bug is **`%eval` must agree with `%slots`** after
-  every such change — a `%slots` that keeps the old number while `%eval` of the same expression
+  The assertion that catches the earlier stale-value bug is **`%eval` must agree with `%features`** after
+  every such change — a `%features` that keeps the old number while `%eval` of the same expression
   returns the new one is the failure signature. Composite parts keep their carried values *and*
   nested instance IDs (`w = Instance(ID: 2)`). Drops are still expected for the instance's own
   redeclared definition and for a change to a declaration one of its features is typed by.
 - **What is read again vs kept on carry-over** (`adopt.go` `derivedSlot`/`connectorSlot`/
   `collectedSlot`, as of 4947ca3 + 65b04ec). Four distinct classes, each with its own recipe:
   - *Connector slots are read again under the same identity.* `connection c1 connect a.x to b.y;`
-    where `a.x = double(3.0)`: after redeclaring `double` with `x * 3.0`, `%slots` must show
+    where `a.x = double(3.0)`: after redeclaring `double` with `x * 3.0`, `%features` must show
     `x = 9.00` **and** `c1 = Instance(ID: 4)` (unchanged) **and** `source = 9.00`. A `source` that
     stays `6.00` next to `x = 9.00` is the bug. This applies to named *and* anonymous connectors.
   - *A variation's selected variant is carried, not derived* — its default names a variant rather
@@ -1086,13 +1101,13 @@ Recipes that actually distinguish working from broken here (used to verify PR #1
     `part xs : B[3]` must print the identical `[Instance(ID: 2), Instance(ID: 3), Instance(ID: 4)]`
     after an unrelated submission, and the next `%instantiate` must not reuse 2/3/4.
 - **A stale carried value only shows if the slot was materialized before the change.** These
-  carry-over slot bugs need a `%slots` (or other read) *between* `%instantiate` and the redeclaration:
+  carry-over slot bugs need a `%features` (or other read) *between* `%instantiate` and the redeclaration:
   without it the slot was never materialized, so there is nothing stale to keep and even a broken
   build prints the right number. Contrast runs against a binary built from the parent commit
   (`git worktree add /tmp/wt-old <parent> && go build -o /tmp/old-sysml ./cmd/sysml`) are the cheapest
   way to prove a case actually discriminates — but include that intermediate read in both runs.
   Conversely, the *anonymous* connector-id case must also be checked with **no** read in between
-  (two unrelated submissions back to back, then one `%slots`), which is a separate code path.
+  (two unrelated submissions back to back, then one `%features`), which is a separate code path.
 - **Never put a literal TAB in piped REPL input** (`printf '…\t…' | ./bin/sysml`): readline enters
   completion mode and the process dies with `panic: bytes: negative Repeat count`. Use spaces in
   one-line rehearsal snippets.
@@ -1192,7 +1207,7 @@ diagnostic with the pass that produced it (`[syntax/syntax]`, `[type/type.expr]`
 
 Tracing prefixes every recorded line with `[trace] `. Evaluation entries are **post-order and
 indented**: sub-expressions appear before, and one level deeper than, the expression that consumed
-them (`internal/core/runtime/trace.go`). `%slots` on a model with derived attributes is the easiest
+them (`internal/core/runtime/trace.go`). `%features` on a model with derived attributes is the easiest
 way to see a full tree — `derived_package.sysml` gives `eval operator * -> 3000.0` and a nested
 `eval feature power -> 300.0` / `eval operator * -> 270.0` / `eval operator + -> 1770.0`.
 
@@ -1733,7 +1748,7 @@ attributes (`Level { low { :>> n = 1; } high { :>> n = 9; } }`), read as `eval("
   `def c(self) -> _t.EnumLiteral: return _t.slot(self, "c", _t.as_enum_literal)` and, for the
   quantity slot, `_t.Quantity` / `_t.as_quantity`; then read both off a live instance
   (`Car.from_instance(conn.instantiate("D::Car")).c`) so a wrong decoder raises `TypeMismatchError`
-  instead of passing silently. In the REPL, `%slots` prints `name = value`, i.e.
+  instead of passing silently. In the REPL, `%features` prints `name = value`, i.e.
   `c = Color::red`, `palette = [Color::red, Color::green, Color::blue]`, `mass = 1500.00 [SI::kg]` —
   requests often phrase it as `c: Color::red`, which is the same thing.
 - **Set membership** is only observable through `->includes`/`union`; no REPL syntax builds a `Set`,
@@ -1817,7 +1832,7 @@ Testing notes that generalize to any future built-in:
 - **`-e` is evaluated in the root scope, not inside the model's package.** So a model that declares
   its own `calc def exp` is *not* exercised by `-e "exp(2.0)"` (that hits the built-in). To prove
   shadowing, either use the FQN (`-e "OwnExp::exp(2.0)"`) or read it out of an attribute default
-  with `%instantiate`/`%slots`. Getting this wrong looks exactly like a shadowing bug.
+  with `%instantiate`/`%features`. Getting this wrong looks exactly like a shadowing bug.
 - Results print to **two decimals**, which hides precision differences. To assert exactness, compare
   in the model instead: `-e "log(1000.0, 10.0) == 3.0"` → `= true` (the naive `ln(x)/ln(base)`
   gives 2.9999999999999996 and would print `= 3.00` while being `false`).
@@ -1873,7 +1888,7 @@ Three cheap, high-signal sweeps:
    `redefines;`, `redefines = 5;`, `subsets ;`, `crosses ;` were accepted **silently** and their
    symbol twins `:>>;`, `:>> = 5;`, `:> ;`, `=> ;` all reported `expected a name`. A silently
    accepted member is invisible in a `✓ package T` line — always pair the load with
-   `%instantiate`/`%slots` to see what the member actually did (there, nothing).
+   `%instantiate`/`%features` to see what the member actually did (there, nothing).
 3. **LSP diagnostics without an editor** — drive `bin/sysml-lsp` over stdio with ~15 lines of Python
    (`initialize`, `initialized`, `textDocument/didOpen`, sleep 3, read stdout) and count
    `"severity":1` in the `publishDiagnostics` notification. A file with **no** diagnostics produces
@@ -1890,7 +1905,7 @@ Three cheap, high-signal sweeps:
    `NO RESPONSE`/zero diagnostics, which looks like a pass — re-run with a longer wait before
    believing an empty result.
 5. **Naming probes for a `<shortName>` change** — for `attribute <sn> redefines x = 5;` the
-   assertions that separate working from broken are: `%slots` lists the member as **`x = 5`**
+   assertions that separate working from broken are: `%features` lists the member as **`x = 5`**
    (broken revisions show `sn = 5` with `x = 1`, or a bogus `redefines = <unknown>` slot);
    `%eval T::A::x` **and** `%eval T::A::sn` both evaluate; and an action body doing
    `assign total := total + x` completes instead of `unresolved reference: x`. Load-level `✓ package T`
@@ -1931,7 +1946,7 @@ not a regression.
 
 Adversarial cases for name derivation: a member with two redefinitions
 (`attribute <sn> redefines x, y = 9;`) derives *no* name from them, so it answers to its short name
-(`%slots` shows `sn = 9` and leaves `x`/`y` at their inherited values) with no diagnostic — assert
+(`%features` shows `sn = 9` and leaves `x`/`y` at their inherited values) with no diagnostic — assert
 which key the value landed under rather than assuming it was dropped. REPL call syntax: named
 arguments work as `Scaled(x = 7, factor = 5)`, but *mixing* positional and named
 (`Scaled(7, factor = 5)`) is a parse error on every revision — don't read that as a
@@ -1943,7 +1958,7 @@ A name in the unit position of `x [u]` is an ordinary feature reference, so it r
 **nearest** declaration and then must conform to a measurement unit. Testing anything in this area:
 
 - There are **four** evaluator paths that reach a unit name and they must agree: a slot
-  (`%instantiate` + `%slots`), an action (`%action`), a calc (`%calc`), and a constraint
+  (`%instantiate` + `%features`), an action (`%action`), a calc (`%calc`), and a constraint
   (`%constraint`). The constraint path historically diverged — it reached past a nearer declaration
   and silently converted in metres, giving a *wrong answer with no error*, so always include
   `%constraint` and assert the diagnostic, never just "the other three agree".
@@ -1997,9 +2012,9 @@ formats the magnitude like a bare Real (`%action test::propagate` +`%continue` o
 `h = -0.42 [m]`, `v = -42.86 [m/s]`; raw floats such as `17.19999999999997 [s]` are the pre-fix
 signature). Note the action in that file is named **`propagate`**, not `descent`.
 
-## Multiplicity, subsetting and collection slots in `%slots`
+## Multiplicity, subsetting and collection slots in `%features`
 
-`%slots` is the cheapest window on instantiation semantics, and the interesting values are all in
+`%features` is the cheapest window on instantiation semantics, and the interesting values are all in
 its output rather than in an exit code — so assert on the exact rendered text:
 
 - `part xs : C[*]` should print `xs = []` (an empty collection). `<error: multiplicity violation:
@@ -2186,7 +2201,7 @@ Two ways to drive it:
 
 Completion cases worth covering, and their shapes: a unique meta-command prefix completes in place
 (`%bui`+TAB → `%builtins`), an ambiguous one lists on the second TAB
-(`%s`+TAB TAB → `%satisfy %save %search %slots %state %step %stop`), names after `%eval` come from
+(`%s`+TAB TAB → `%satisfy %save %search %features %state %step %stop`), names after `%eval` come from
 session declarations, builtin function names and the library (`sqr`→`sqrt`), a qualified prefix
 offers **one segment at a time** (`ScalarValues::`+TAB lists only that package's members, never the
 whole library; `ScalarValues`+TAB inserts the `::` and lists the same members), and `%load`/`%save`
@@ -2223,7 +2238,7 @@ on `main`; the "old" shapes double as A/B canaries against the parent commit.
   copy would show as `3.00`.
 - **Untyped/anonymous connectors used to read `<unknown>`.** `interface iface connect a.p to b.q;`
   (and `connection untyped connect …`, `allocation alloc allocate a to b`, KerML `connector`)
-  materialize on the stdlib base. A bare `connect a.p to b.q;` has no slot name, so `%slots` renders
+  materialize on the stdlib base. A bare `connect a.p to b.q;` has no slot name, so `%features` renders
   it as a synthetic `(anonymous <keyword>) = Instance(ID: n)` line with its ends indented under it —
   those lines are printed *after* all the real features, and their ends are shown without nested
   values. Pre-fix, the named untyped usage printed `iface = <unknown>` and the bare one printed
@@ -2246,9 +2261,9 @@ on `main`; the "old" shapes double as A/B canaries against the parent commit.
 - **`flow f from a.p to b.p` and `binding bnd bind a.p = b.p` now parse as named declarations**
   (pre-fix: `expected 'to' between flow ends` / `expected '{' or ';' after declaration`). They are
   *not* connector usages for materialization purposes, so a named `flow` still renders
-  `f = <unknown>` and a named `binding` gets no `%slots` line at all. Don't plan an end-identity
+  `f = <unknown>` and a named `binding` gets no `%features` line at all. Don't plan an end-identity
   assertion on them.
-- **Variant-interface routing is only partly reachable from the REPL.** `%slots` proves the
+- **Variant-interface routing is only partly reachable from the REPL.** `%features` proves the
   *materialization* side: in
   `internal/core/runtime/testdata/conformance/ballandchain_variant_configuration.sysml` the selected
   `engagementRingToBand = engagementRingToBandConnected (Instance ID: 24)` holds
@@ -2266,7 +2281,7 @@ on `main`; the "old" shapes double as A/B canaries against the parent commit.
 - **Cheap end-to-end fixture for the whole family:** `internal/core/runtime/testdata/conformance/`
   `connector_end_identity.sysml`, `ballandchain_interface_connected.sysml` and
   `…_disconnected.sysml`; each `.expected.json` has an `identical` / `distinct` array that names
-  exactly which end must be which port — the cheapest source of the IDs `%slots` should tie together.
+  exactly which end must be which port — the cheapest source of the IDs `%features` should tie together.
 - Ball-and-chain reference numbers, for asserting the cost roll-up did not shift:
   `totalCost = 1450.00`, `band` `bandCost`/`ringCost` `= 400.00`, `engagementRing`
   `engagementRingCost`/`ringCost` `= 500.00`, `diamondCost = 550.00`, and
@@ -2410,8 +2425,8 @@ Discovered while testing inline `entry action { … }` bodies and calc `out` ass
   `perform` in the statement-form body `entry { … perform Work; }` executed). It is a good
   discriminating fixture whenever body lowering changes.
 - **Calc `out` features:** read them through a usage (`calc c : Def { in n = 5; } attribute a :
-  Integer = c.a;`) and inspect with `%slots <part>`; a failing read shows inline as
-  `a: <error: slot p.a: …>` rather than aborting the listing, so one `%slots` can carry several
+  Integer = c.a;`) and inspect with `%features <part>`; a failing read shows inline as
+  `a: <error: slot p.a: …>` rather than aborting the listing, so one `%features` can carry several
   independent negative assertions. Useful expected strings: `no value: output never assigned`,
   `output bound more than once` (declaration value plus a body assignment; two *body* assignments
   are legal, the last one winning), `assignment outside the calculation body: <name> is not declared
@@ -2493,7 +2508,7 @@ object whose type conforms to the type declaring the condition, else declared de
   `Assertion evaluated to false: <condition>`), `? … could not be evaluated` exit 2 — and grep the
   **verdict line only** for the old wording: the `Error:` reason legitimately contains the words
   "evaluation failed", so a bare `grep -c failed` over the whole output is a false positive.
-  `%slots` mirrors the three states as `<constraint: satisfied>` / `<constraint: violated>` /
+  `%features` mirrors the three states as `<constraint: satisfied>` / `<constraint: violated>` /
   `<constraint: not evaluated: …>` (the `not evaluated:` prefix is #180's). `-json` reports
   `"status": "unresolved"`, `"exit": 2` and the same `?` line.
 - CLI checks refuse to run at all on a model that does not analyse cleanly
@@ -2507,7 +2522,7 @@ object whose type conforms to the type declaring the condition, else declared de
   declared default and prints **no** `(on …)`. Subtype carriers (`part hotter :> hot`) work too.
 - Still a blind spot after #180: a **nested part** whose value is redefined on the instantiated
   object is not the subject. With `part o : Outer { part :>> b { attribute :>> c = 99.0; } }`,
-  `%slots A::o` shows `c = 99.00` and `small: <constraint: violated>`, yet `%eval A::Outer::b::c`
+  `%features A::o` shows `c = 99.00` and `small: <constraint: violated>`, yet `%eval A::Outer::b::c`
   answers `= 5.00` and `%constraint A::Inner::small` says `passed` (identical on the parent
   commit, so it is pre-existing, not a regression — but it reads as a contradiction and may be
   worth flagging). Also `%eval A::b::c` (skipping the def segment) is `unresolved reference` in
@@ -2516,12 +2531,12 @@ object whose type conforms to the type declaring the condition, else declared de
   `%requirement` and `%satisfy` evaluate the nested object and *name* it: with
   `part o : Outer { part :>> b { attribute :>> c = 50.0; } }`,
   `%constraint A::Inner::small` answers `✗ Constraint A::Inner::small failed (on A::o::b ID: 2)` —
-  `<session-held root>::<feature path>`, matching the `b = Instance(ID: 2)` line of `%slots A::o`.
+  `<session-held root>::<feature path>`, matching the `b = Instance(ID: 2)` line of `%features A::o`.
   Assert the *whole* suffix: a build that regressed to the outer holder still prints a `✗`, and the
   pre-#236 binary prints the same `✗` line with **no suffix at all**, so ✓/✗ alone proves nothing.
   Ordinary (non-nested) checks keep labelling the object handed in (`(on A::w ID: 3)`), and a
   no-object run still prints no suffix.
-  - Such a label is **descriptive, not addressable**: `%slots A::o::b` answers
+  - Such a label is **descriptive, not addressable**: `%features A::o::b` answers
     `error: no instance of "A::o::b"` and `%instances` lists only `A::o`. Worth reporting whenever
     label spelling changes, and a good adversarial step after any "name the subject" PR.
   - Multiplicity-materialized subjects read `(on A::car::wheels ID: 2)` in the REPL while gRPC still
@@ -2556,7 +2571,7 @@ object whose type conforms to the type declaring the condition, else declared de
 - Konsole typing trap: the `✗` glyph does not survive the computer tool's `type` action into a
   shell command (it arrives empty, and `grep -e ''` then matches every line). Build the pattern in
   the shell instead: `X=$(printf '\u2717'); … | grep -nE "$X|could not be evaluated"`.
-- `%slots <usage>` is the independent oracle — `inRange: <constraint: violated>` must agree with
+- `%features <usage>` is the independent oracle — `inRange: <constraint: violated>` must agree with
   the verdict for the same object. Declaring anything new in the REPL drops all instances, so a
   following check silently reverts to defaults (assert the missing `(on …)` suffix there).
 
@@ -2728,7 +2743,7 @@ number rather than quoting the table.
 - **Cross-checking against the REPL needs fully-qualified expressions.** `%eval mass` on a model with
   several `mass` features fails with `symbol "mass" is ambiguous`, whereas gRPC `subject=` resolves
   the unqualified name inside the subject's scope. Use `%instantiate Demo::sedan` then
-  `%eval Demo::sedan::mass` / `%slots Demo::sedan` to compare; that is a surface divergence in name
+  `%eval Demo::sedan::mass` / `%features Demo::sedan` to compare; that is a surface divergence in name
   resolution, not a wrong value. Drive it non-interactively with
   `printf '%%load …\n%%instantiate …\n%%eval …\n%%quit\n' | ./bin/sysml`.
 - **Attribute metadata checks worth making**: own attributes come before inherited ones; a
@@ -2829,7 +2844,7 @@ tiers**, and testing one proves nothing about the other:
 
 Consequences worth checking on every change here:
 
-- `%slots <instance>` renders a bad slot inline as `name: <error: slot …>` and the REPL still
+- `%features <instance>` renders a bad slot inline as `name: <error: slot …>` and the REPL still
   **exits 0** — a violation is not a session error. For an exit status you need a run that reads the
   slot, e.g. `sysml m.sysml -instantiate test::bad -eval 'test::bad.few'` → exit **2** with
   `evaluation failed: slot bad.few: multiplicity violation: …`.
@@ -2855,7 +2870,7 @@ Fixtures live in `internal/core/runtime/testdata/conformance/multiplicity_defaul
 (merged / composite / nonconforming / redefinition). Drive them over a pipe to discover values:
 
 ```bash
-printf '%%load internal/core/runtime/testdata/conformance/multiplicity_default_merged.sysml\n%%instantiate test::ranges\n%%slots test::ranges\n%%quit\n' | timeout 60 ./bin/sysml
+printf '%%load internal/core/runtime/testdata/conformance/multiplicity_default_merged.sysml\n%%instantiate test::ranges\n%%features test::ranges\n%%quit\n' | timeout 60 ./bin/sysml
 ```
 
 Expected: `exact = [1.00, 2.00, 3.00]`, `star = [1.00, 2.00]`, `empty = []`, `plus = [5.00]`,
@@ -2902,8 +2917,8 @@ Discriminators that separate a working string runtime from a broken one:
   reviewer exactly what ran.
 - At the `sysml>` prompt a bare expression like `("a","b")->includes("b")` is parsed as a
   declaration (`1:1: error: expected a namespace member`). Prefix expressions with `%eval`.
-- `%slots <PartDefName>` (not the part usage path) is what follows `%instantiate <PartDefName>`;
-  `%slots Msg::g` reports `no instance of "Msg::g"`.
+- `%features <PartDefName>` (not the part usage path) is what follows `%instantiate <PartDefName>`;
+  `%features Msg::g` reports `no instance of "Msg::g"`.
 - **Escapes are stored raw**, so `Length("a\"b")` is 4 and the value renders as `"a\\\"b"`. This is
   pre-existing lexer behavior (identical on the parent commit) — verify against a contrast binary
   before reporting it as a string-runtime defect.
@@ -2957,8 +2972,8 @@ checks shows up here and nowhere else.
   recursive calc; recursion through a calc named like a library function (`max`); mutual recursion
   (`isEven`/`isOdd`, whose result for an odd argument is `false`).
 - **There is no `%check` command.** To evaluate an `assert constraint` whose body calls a recursive
-  calc, use `%instantiate <DefName>` then `%slots <DefName>` — note both take the **def** name, not
-  the usage (`%slots P::w` answers `no instance of "P::w"`). A satisfied constraint renders
+  calc, use `%instantiate <DefName>` then `%features <DefName>` — note both take the **def** name, not
+  the usage (`%features P::w` answers `no instance of "P::w"`). A satisfied constraint renders
   `deepOK: <constraint: satisfied>`; a runaway one renders per-slot as
   `spinny: <constraint: not evaluated: … calc recursion limit exceeded …>` and the session survives.
 

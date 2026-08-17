@@ -395,7 +395,7 @@ See [the guide](../guide/) for VS Code configuration.
 **Runtime execution:**
 - `%instantiate <name>` — Create instance from part def
 - `%eval <expr>` — Evaluate expression (feature refs + literals)
-- `%slots <name>` — Show instance slots with values
+- `%features <name>` — Show an object's features and their values
 - `%instances` — List all created instances
 
 **Behavioral execution:**

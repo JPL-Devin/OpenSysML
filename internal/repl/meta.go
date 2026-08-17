@@ -105,6 +105,9 @@ type metaCommand struct {
 	desc  string
 	group string // help heading this command is listed under
 	alias bool   // an alternative spelling, dispatched but not listed
+	// instead names the command that replaces a deprecated spelling, which is
+	// still dispatched but reports what to write.
+	instead string
 }
 
 var metaCommandTable = []metaCommand{
@@ -126,7 +129,8 @@ var metaCommandTable = []metaCommand{
 
 	{group: "Runtime commands:", name: "%instantiate", args: "<name>", desc: "create an instance of a part def"},
 	{group: "Runtime commands:", name: "%eval", args: "[in <name> :] <expr>", desc: "evaluate an expression, in the named element or object when one is named"},
-	{group: "Runtime commands:", name: "%slots", args: "<name>", desc: "show instance slots and values"},
+	{group: "Runtime commands:", name: "%features", args: "<name>", desc: "show an object's features and their values"},
+	{group: "Runtime commands:", name: "%slots", args: "<name>", desc: "deprecated spelling of %features", alias: true, instead: "%features"},
 	{group: "Runtime commands:", name: "%instances", desc: "list all instantiated objects"},
 
 	{group: "Behavioral commands:", name: "%calc", args: "<name> <args>", desc: "invoke a calculation with arguments"},
@@ -169,6 +173,17 @@ func helpText() []string {
 		out = append(out, usage+c.desc)
 	}
 	return out
+}
+
+// deprecationNote reports what to write instead of a deprecated command
+// spelling, and "" for a spelling that is current.
+func deprecationNote(cmd string) string {
+	for _, c := range metaCommandTable {
+		if c.name == cmd && c.instead != "" {
+			return fmt.Sprintf("note: %s is deprecated — use %s", c.name, c.instead)
+		}
+	}
+	return ""
 }
 
 // metaCommands returns every command name the prompt dispatches, aliases
@@ -276,11 +291,19 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 		}
 		tail := strings.TrimPrefix(strings.TrimSpace(line), "%eval")
 		return s.doEvalLine(strings.TrimSpace(tail))
-	case "%slots":
-		if len(fields) < 2 {
-			return []string{"usage: %slots <name>"}, false, nil
+	case "%features", "%slots":
+		var out []string
+		if note := deprecationNote(fields[0]); note != "" {
+			out = append(out, note)
 		}
-		return s.doSlots(fields[1])
+		if len(fields) < 2 {
+			return append(out, "usage: "+fields[0]+" <name>"), false, nil
+		}
+		lines, quit, err := s.doFeatures(fields[1])
+		if err != nil {
+			return nil, quit, err
+		}
+		return append(out, lines...), quit, nil
 	case "%instances":
 		return s.doInstances()
 	case "%calc":
@@ -869,8 +892,8 @@ func isSymbolReference(expr string) bool {
 	return ok
 }
 
-// doSlots shows instance slots.
-func (s *Session) doSlots(name string) ([]string, bool, error) {
+// doFeatures shows what an object holds for each feature of its type.
+func (s *Session) doFeatures(name string) ([]string, bool, error) {
 	_, fqn, lerr := s.lookupSymbol(name)
 	if lerr != nil {
 		out := []string{"error: " + lerr.Error()}
@@ -900,7 +923,7 @@ func (s *Session) doSlots(name string) ([]string, bool, error) {
 
 	lines := []string{
 		fmt.Sprintf("Instance: %s (ID: %d)", notationName(fqn), inst.ID),
-		"Slots:",
+		"Features:",
 	}
 	w := &slotWalk{ctx: ctx, onPath: map[*symbols.Symbol]bool{inst.Type: true}, budget: maxSlotLines}
 	listing := w.lines(inst, "  ", 0)
@@ -911,14 +934,14 @@ func (s *Session) doSlots(name string) ([]string, bool, error) {
 }
 
 const (
-	// maxSlotDepth bounds how deep %slots expands nested objects.
+	// maxSlotDepth bounds how deep %features expands nested objects.
 	maxSlotDepth = 8
 	// maxSlotLines bounds the listing as a whole, since nesting multiplies and
 	// a slot is materialized by reading it: breadth costs objects, not just output.
 	maxSlotLines = 200
 )
 
-// slotWalk expands an object graph for %slots under three bounds: onPath holds
+// slotWalk expands an object graph for %features under three bounds: onPath holds
 // the types being expanded above the current one (a part containing its own
 // kind materializes a fresh instance per descent, so instance identity cannot
 // detect the cycle), depth, and a line budget shared across the listing.

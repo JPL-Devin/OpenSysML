@@ -120,11 +120,11 @@ SysML v2 REPL — %help for commands, Ctrl-D to exit
 sysml> %instantiate Rover::Rover
 ✓ Created instance of Rover::Rover
   ID: 1
-  Use %slots Rover::Rover to inspect
+  Use %features Rover::Rover to inspect
 
-sysml> %slots Rover::Rover
+sysml> %features Rover::Rover
 Instance: Rover::Rover (ID: 1)
-Slots:
+Features:
   wheels = [Instance(ID: 2), Instance(ID: 3), Instance(ID: 4), Instance(ID: 5), Instance(ID: 6), Instance(ID: 7)]
     diameter = 0.25
     mass = 1.20
@@ -148,7 +148,7 @@ Instances:
   Rover::Rover (ID: 1)
 ```
 
-`part wheels : Wheel[6]` became six objects with their own slots — nobody had to write them out.
+`part wheels : Wheel[6]` became six objects with their own feature values — nobody had to write them out.
 
 ---
 
@@ -401,7 +401,7 @@ Point out the token position (`@ rollForward`, then `@ takeSample`) and the data
 `metersDriven` is `0` before the assignment ran and `10` at the breakpoint.
 
 The two attributes inside a `%tokens` or `Results:` block may print in either order from run to run —
-read the values, not the line order. (`%slots` in §3 is stable.)
+read the values, not the line order. (`%features` in §3 is stable.)
 
 ---
 
@@ -566,7 +566,7 @@ that raises it.
 The REPL reads a script on stdin, which is how you rehearse a demo or wire a model check into CI:
 
 ```bash
-printf '%%load rover.sysml\n%%instantiate Rover::Rover\n%%slots Rover::Rover\n%%constraint Rover::MassBudget\n%%quit\n' | sysml
+printf '%%load rover.sysml\n%%instantiate Rover::Rover\n%%features Rover::Rover\n%%constraint Rover::MassBudget\n%%quit\n' | sysml
 ```
 
 `%save session.sysml` writes the session's model back out (atomically, comments preserved); `%list`

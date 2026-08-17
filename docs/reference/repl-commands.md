@@ -5,7 +5,7 @@ replaces, what it drops — is [guide chapter 4](../guide/04-repl.md).
 
 Every command taking a `<name>` accepts the quoted spelling the notation writes, including a
 quoted segment holding a space and one in the middle of a chain: `%instantiate 'My Pkg'::Car`,
-`%slots Top::'My Pkg'::Car`.
+`%features Top::'My Pkg'::Car`.
 
 | Command | Description |
 |---------|-------------|
@@ -24,10 +24,11 @@ quoted segment holding a space and one in the middle of a chain: `%instantiate '
 | `%view <name>` | Show what a view exposes — its own `expose` relationships and the protected ones of the views it specializes — the views nested in it, each of which is asked for its own exposed set, and its conformance to every viewpoint it satisfies: a verdict of `conforms`, `violated` or `unevaluable` per viewpoint and per framed concern, with the reason, the exposed element a concern's condition failed for, and `(from <view>)` where the `satisfy` is inherited. Asking it of an element that is no view says so |
 | **Instantiation & Inspection** | |
 | `%instantiate <name>` | Create instance from part definition |
-| `%slots <name>` | Show instance slots and values |
-| `%instances` | List all created instances |
+| `%features <name>` | Show what an object holds for each feature of its type |
+| `%slots <name>` | Deprecated spelling of `%features`: the same listing, led by a note naming the command to write instead |
+| `%instances` | List all created objects |
 | `%eval <expr>` | Evaluate expression, in the last namespace the session declared |
-| `%eval in <name> : <expr>` | Evaluate expression in the named element's own namespace, or — when an object was materialized under that name — on that object, so a feature reads its slot. The separator is the first `:` outside a quoted name that is not part of a `::`, so `%eval in Demo : Vehicle::mass` works |
+| `%eval in <name> : <expr>` | Evaluate expression in the named element's own namespace, or — when an object was materialized under that name — on that object, so a feature reads its value. The separator is the first `:` outside a quoted name that is not part of a `::`, so `%eval in Demo : Vehicle::mass` works |
 | **Behavioral Execution** | |
 | `%calc <name> [args...]` | Invoke calculation with arguments |
 | `%constraint <name>` | Evaluate constraint (assert/assume) |
@@ -47,5 +48,5 @@ quoted segment holding a space and one in the middle of a chain: `%instantiate '
 | `%advance <time>` | Advance simulation time by `<time>` units, processing every event due |
 | **Control** | |
 | `%quit` | Exit the REPL |
-| `Tab` | Complete meta commands, symbol names (after `%print`, `%instantiate`, `%slots` …), and file paths after `%load` and `%save` |
+| `Tab` | Complete meta commands, symbol names (after `%print`, `%instantiate`, `%features` …), and file paths after `%load` and `%save` |
 | `Ctrl-D` | Exit REPL |

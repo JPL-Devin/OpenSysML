@@ -6,6 +6,19 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ## Unreleased
 
+### `%slots` is now `%features`, the name SysML v2 uses
+
+- **`%features <name>` lists what an object holds for each feature of its type**, which is what
+  `%slots` listed. "Slot" is UML/SysML v1 vocabulary (`InstanceSpecification::slot`); the v2/KerML
+  pair for this concept is `Feature` and `FeatureValue`, and the listing's heading now reads
+  `Features:` to match. `%instantiate` points at the new spelling too.
+- **`%slots <name>` still works**, as a deprecated alias: the same listing, led by
+  `note: %slots is deprecated — use %features`. Nothing else about it changed — the nested
+  expansion, its bounds, the error lines and the exit status a non-interactive run takes from a
+  slot that could not be materialized are all as they were.
+- Only the command surface is renamed. The runtime API (`runtime.Slot`, `Instance.Slots`,
+  `GetSlot`), the gRPC/proto field names and the `pysysml` attributes are unchanged.
+
 ### The prompt prints the model it holds
 
 - **`%print` writes the session's model back as SysML notation at the prompt**, which until now
