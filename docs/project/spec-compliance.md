@@ -1045,6 +1045,11 @@ there, and every other page links here rather than restating them (CONTRIBUTING.
 Two representations are supported, SysML textual notation and RDF Turtle. No JSON
 is used as an input, an output, or an intermediate form.
 
+Notation is stable. **RDF Turtle is experimental** as of 0.1.0: the statuses below
+report how faithful the mapping is to what it covers, not that the mapping covers
+a whole model or that its vocabulary is settled — see
+[the mapping's status](../reference/rdf-mapping.md#status-experimental).
+
 | Capability | Implementation | Test Case | Status |
 |-----------|----------------|-----------|--------|
 | Save a model as notation, preserving comments and notes | `export.Convert` → `format.Source` (token stream, not an AST re-print) | `export_test.go:TestSaveKeepsComments`, `repl/save_test.go:TestMetaSaveSysML` | ✅ Faithful |
@@ -1068,7 +1073,8 @@ is used as an input, an output, or an intermediate form.
 
 **Vocabulary:** `sysml:` = `https://www.omg.org/spec/SysML#` and `elmt:` =
 `urn:sysmlv2:element:` match the Flexo MMS SysML v2 service's `Namespaces.kt`, so
-a converted graph loads into that triplestore. Properties the SysML metamodel
+a converted graph addresses its elements the way that service does. Whether such
+a graph loads into a running Flexo triplestore has not been demonstrated. Properties the SysML metamodel
 does not define are confined to `sysx:` = `urn:systemica:sysml:`: `memberIndex`,
 `hasBody` and `sourceText` carry order, body presence and verbatim heads, and
 `prefixMetadata`, `filter`, `isNamespaceImport`, `isRecursive` and `isExpose`
@@ -1078,7 +1084,10 @@ carry notation the metamodel has no property for.
 OMG's abstract syntax has no standard RDF serialization, so the property names
 follow the metamodel's own attribute names and the Flexo service's conventions.
 A model converted here is faithful to *itself* on a round trip; it is not
-guaranteed to be interpreted identically by an unrelated SysML RDF tool.
+guaranteed to be interpreted identically by an unrelated SysML RDF tool, and no
+round trip through a third-party triplestore has been demonstrated. The
+vocabulary may also change without a compatibility path, so a `.ttl` is an
+artifact to regenerate rather than the copy of record.
 
 ---
 

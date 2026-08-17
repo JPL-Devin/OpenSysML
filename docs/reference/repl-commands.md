@@ -13,7 +13,7 @@ quoted segment holding a space and one in the middle of a chain: `%instantiate '
 | `%list` | List all declarations in current session |
 | `%clear` | Clear session (reset all declarations) |
 | `%load <path>...` | Submit the contents of files, directories or globs |
-| `%save <file>` | Write the session model to a file: `.sysml` notation (comments preserved) or `.ttl` RDF |
+| `%save <file>` | Write the session model to a file: `.sysml` notation (comments preserved) or `.ttl` RDF, which is [experimental](rdf-mapping.md#status-experimental) and reported as such on each save |
 | `%verbosity [level]` | Show or set output level: `quiet` (errors only), `normal`, `debug` (every diagnostic over the whole buffer) |
 | `%trace [on\|off]` | Show or set execution tracing: each evaluation, calc invocation, action step and state transition |
 | `%budget` | Show the five bounds one run may spend, each with the variable that raises it |

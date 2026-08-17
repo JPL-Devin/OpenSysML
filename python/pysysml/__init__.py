@@ -22,7 +22,8 @@ from pysysml.values import UNSET, UnsetType
 from pysysml.verdict import CalcResult, Verdict
 from pysysml.query import QueryElement, QueryError
 from pysysml.conversion import (
-    FORMAT_SYSML, FORMAT_TURTLE, Conversion, format_of_path,
+    FORMAT_SYSML, FORMAT_TURTLE, Conversion, ExperimentalFeatureWarning,
+    format_of_path, is_experimental,
 )
 from pysysml.errors import (
     PySysMLError, ChecksumMismatchError, ConnectionError, ConversionError,
@@ -41,6 +42,7 @@ __all__ = [
     "ServerInfo",
     "UNSET", "UnsetType",
     "Conversion", "FORMAT_SYSML", "FORMAT_TURTLE", "format_of_path",
+    "ExperimentalFeatureWarning", "is_experimental",
     "Verdict", "CalcResult",
     "QueryElement", "QueryError",
     "PySysMLError", "ChecksumMismatchError", "ConnectionError",
@@ -185,6 +187,10 @@ def convert(to_format, file_path=None, content=None, model_hash=None,
 
     Returns:
         Conversion: The converted model; ``str()`` of it is the text
+
+    Warns:
+        ExperimentalFeatureWarning: If either format is RDF, whose mapping is
+            experimental — see ``docs/reference/rdf-mapping.md``
 
     Example:
         >>> import pysysml

@@ -2073,9 +2073,17 @@ type ConvertResponse struct {
 	Error      string `protobuf:"bytes,4,opt,name=error,proto3" json:"error,omitempty"` // non-empty if the conversion failed; content is unset
 	// Syntax errors tolerated under tolerate_syntax_errors, or those that failed
 	// the conversion.
-	Diagnostics   []*Diagnostic `protobuf:"bytes,5,rep,name=diagnostics,proto3" json:"diagnostics,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Diagnostics []*Diagnostic `protobuf:"bytes,5,rep,name=diagnostics,proto3" json:"diagnostics,omitempty"`
+	// Set when either format is RDF, whose mapping is experimental: it covers
+	// model structure only, refuses a model whose bodies state behavior, and its
+	// vocabulary may change without a compatibility path. Notation to notation is
+	// stable and leaves this unset.
+	Experimental bool `protobuf:"varint,6,opt,name=experimental,proto3" json:"experimental,omitempty"`
+	// What is experimental about the conversion, in the wording every surface
+	// reports it in. Empty when experimental is false.
+	ExperimentalNotice string `protobuf:"bytes,7,opt,name=experimental_notice,json=experimentalNotice,proto3" json:"experimental_notice,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *ConvertResponse) Reset() {
@@ -2141,6 +2149,20 @@ func (x *ConvertResponse) GetDiagnostics() []*Diagnostic {
 		return x.Diagnostics
 	}
 	return nil
+}
+
+func (x *ConvertResponse) GetExperimental() bool {
+	if x != nil {
+		return x.Experimental
+	}
+	return false
+}
+
+func (x *ConvertResponse) GetExperimentalNotice() string {
+	if x != nil {
+		return x.ExperimentalNotice
+	}
+	return ""
 }
 
 // SymbolInfo represents any SysML element
@@ -3302,6 +3324,9 @@ type ServerInfoResponse struct {
 	//	"query"      - the Query RPC evaluates a SysML v2 API & Services Query.
 	//	"enum_values" - a Value carries an enumeration literal as enum_literal,
 	//	               rather than reporting it as an unsupported null.
+	//	"unset_value" - a valueless feature of a value type is reported as
+	//	               Value.unset, rather than as the empty object it
+	//	               materializes.
 	Capabilities  []string `protobuf:"bytes,2,rep,name=capabilities,proto3" json:"capabilities,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -3956,14 +3981,16 @@ const file_sysml_proto_rawDesc = "" +
 	"fromFormat\x12\x1b\n" +
 	"\tto_format\x18\x04 \x01(\tR\btoFormat\x124\n" +
 	"\x16tolerate_syntax_errors\x18\x05 \x01(\bR\x14tolerateSyntaxErrorsB\b\n" +
-	"\x06source\"\xb4\x01\n" +
+	"\x06source\"\x89\x02\n" +
 	"\x0fConvertResponse\x12\x18\n" +
 	"\acontent\x18\x01 \x01(\tR\acontent\x12\x1f\n" +
 	"\vfrom_format\x18\x02 \x01(\tR\n" +
 	"fromFormat\x12\x1b\n" +
 	"\tto_format\x18\x03 \x01(\tR\btoFormat\x12\x14\n" +
 	"\x05error\x18\x04 \x01(\tR\x05error\x123\n" +
-	"\vdiagnostics\x18\x05 \x03(\v2\x11.sysml.DiagnosticR\vdiagnostics\"\xbd\x03\n" +
+	"\vdiagnostics\x18\x05 \x03(\v2\x11.sysml.DiagnosticR\vdiagnostics\x12\"\n" +
+	"\fexperimental\x18\x06 \x01(\bR\fexperimental\x12/\n" +
+	"\x13experimental_notice\x18\a \x01(\tR\x12experimentalNotice\"\xbd\x03\n" +
 	"\n" +
 	"SymbolInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +

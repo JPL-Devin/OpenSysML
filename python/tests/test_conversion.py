@@ -10,6 +10,7 @@ you anything about.
 import os
 import subprocess
 import time
+import warnings
 from concurrent import futures
 
 import grpc
@@ -17,7 +18,13 @@ import pytest
 
 from pysysml.capabilities import CAPABILITY_CONVERT, MissingCapabilityError
 from pysysml.connection import Connection
-from pysysml.conversion import FORMAT_SYSML, FORMAT_TURTLE, format_of_path
+from pysysml.conversion import (
+    FORMAT_SYSML,
+    FORMAT_TURTLE,
+    ExperimentalFeatureWarning,
+    format_of_path,
+    is_experimental,
+)
 from pysysml.errors import ConversionError, InvalidRequestError, ModelNotFoundError
 from pysysml.proto import sysml_pb2, sysml_pb2_grpc
 
@@ -41,10 +48,12 @@ GRPC_BINARIES = (
 class FakeService(sysml_pb2_grpc.SysMLServiceServicer):
     """A sysml-grpc whose Convert records the request and answers as told."""
 
-    def __init__(self, capabilities=(CAPABILITY_CONVERT,), error="", diagnostics=0):
+    def __init__(self, capabilities=(CAPABILITY_CONVERT,), error="", diagnostics=0,
+                 experimental_notice=""):
         self._capabilities = list(capabilities)
         self._error = error
         self._diagnostics = diagnostics
+        self._experimental_notice = experimental_notice
         self.requests = []
 
     def GetServerInfo(self, request, context):
@@ -76,6 +85,8 @@ class FakeService(sysml_pb2_grpc.SysMLServiceServicer):
             to_format=request.to_format,
             error=self._error,
             diagnostics=diagnostics,
+            experimental=bool(self._experimental_notice),
+            experimental_notice=self._experimental_notice,
         )
 
 
@@ -106,6 +117,55 @@ def test_format_of_path_infers_and_refuses():
     assert format_of_path("model.turtle") == FORMAT_TURTLE
     with pytest.raises(ValueError, match="cannot tell the format"):
         format_of_path("model.json")
+
+
+def test_is_experimental_names_the_rdf_mapping():
+    """Either side being RDF is what makes a conversion experimental."""
+    assert is_experimental(FORMAT_SYSML, FORMAT_TURTLE)
+    assert is_experimental(FORMAT_TURTLE, FORMAT_SYSML)
+    assert is_experimental("turtle", "rdf")
+    assert not is_experimental(FORMAT_SYSML, FORMAT_SYSML)
+
+
+def test_rdf_conversion_warns_and_says_so_on_the_result(fake_service):
+    """An RDF conversion warns, and carries the status a caller can read."""
+    port, _ = fake_service(experimental_notice="RDF conversion is experimental: only structure")
+    with Connection(port=port, auto_start=False) as conn:
+        with pytest.warns(ExperimentalFeatureWarning, match="only structure"):
+            result = conn.convert("ttl", content=MODEL, from_format="sysml")
+    assert result.experimental is True
+    assert result.experimental_notice == "RDF conversion is experimental: only structure"
+
+
+def test_rdf_conversion_is_experimental_even_against_an_older_service(fake_service):
+    """The mapping's status is the mapping's, so a silent service is read from
+    the formats it reports rather than taken as stable."""
+    port, _ = fake_service()
+    with Connection(port=port, auto_start=False) as conn:
+        with pytest.warns(ExperimentalFeatureWarning, match="rdf-mapping.md"):
+            result = conn.convert("ttl", content=MODEL, from_format="sysml")
+    assert result.experimental is True
+
+
+def test_notation_conversion_does_not_warn(fake_service):
+    """Writing notation is stable, so nothing is warned about."""
+    port, _ = fake_service()
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", ExperimentalFeatureWarning)
+        with Connection(port=port, auto_start=False) as conn:
+            result = conn.convert("sysml", content=MODEL, from_format="sysml")
+    assert result.experimental is False
+    assert result.experimental_notice == ""
+
+
+def test_a_refused_rdf_conversion_still_warns(fake_service):
+    """A refusal is the experimental behavior, so it is warned about before the
+    error is raised."""
+    port, _ = fake_service(error="cannot convert the initial node")
+    with Connection(port=port, auto_start=False) as conn:
+        with pytest.warns(ExperimentalFeatureWarning):
+            with pytest.raises(ConversionError):
+                conn.convert("ttl", content=MODEL, from_format="sysml")
 
 
 def test_convert_requires_the_capability(fake_service):

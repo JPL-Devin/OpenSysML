@@ -165,7 +165,8 @@ sysml> %advance 30
 | Action execution engine (Tier 5) | ✅ Complete (56 conformance cases passing) |
 | State machine runtime (Tier 5) | ✅ Complete (64 conformance cases: transitions, accept events, sourceless) |
 | REPL debugging commands | ✅ Complete — `%constraint`, `%requirement`, `%satisfy` and `%calc` also answer from the command line (`-constraint`, `-requirement`, `-satisfy`, `-calc`) and over gRPC, on one evaluation |
-| Model save & SysML ↔ RDF Turtle conversion (`%save`, `sysml -convert`) | ✅ Complete for model **structure** (packages, definitions, usages, ports, connections, values, documentation) — a behavioral member is refused, see [the RDF mapping](docs/reference/rdf-mapping.md#limitations); worked example: [examples/rdf-interop-demo.sysml](examples/rdf-interop-demo.sysml) |
+| Model save to notation (`%save model.sysml`, `sysml -convert sysml`) | ✅ Complete — writes the source through the formatter, so comments and spacing survive |
+| SysML ↔ RDF Turtle conversion (`%save model.ttl`, `sysml -convert ttl`) | 🧪 **Experimental** — model **structure** only (packages, definitions, usages, ports, connections, values, documentation); a body stating behavior is refused (71 of 120 `examples/` models convert) and the vocabulary may change without a compatibility path. Every run says so; see [the RDF mapping's status](docs/reference/rdf-mapping.md#status-experimental) and [worked example](examples/rdf-interop-demo.sysml) |
 | Standard library bundling | ✅ Complete |
 | LSP server implementation | ✅ Diagnostics, hover, go-to-definition, references, symbols, completion, formatting, rename, semantic tokens (full + range), code actions (quick fixes) — semantic token deltas and signature help not implemented |
 | gRPC service layer | ✅ Complete (parse, symbols, diagnostics, runtime, verification, conversion and Query RPCs) |

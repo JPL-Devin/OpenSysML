@@ -742,7 +742,13 @@ and `resolve.resolveSpecialization` respectively.
 
 Saving and SysML ↔ RDF Turtle conversion landed (`internal/core/rdf`,
 `internal/core/export`, `%save`, `sysml -convert`); see
-[the RDF mapping](../reference/rdf-mapping.md). What that work deliberately left open:
+[the RDF mapping](../reference/rdf-mapping.md).
+
+The RDF direction ships **experimental** as of 0.1.0, because of D1–D3 and D6 below:
+the mapping covers structure only, its vocabulary may change without a compatibility
+path, and no triplestore interop has been demonstrated. Every surface says so
+(`export.ExperimentalNotice`), and promoting it to stable is D3 plus D6, not a
+documentation change. What that work deliberately left open:
 
 ## D1 — expressions are carried as source text, not as triples
 
@@ -766,7 +772,9 @@ The vocabulary and element IRIs match Flexo MMS's `Namespaces.kt`, and the round
 run entirely in-process. Nothing has yet loaded a converted graph into Fuseki via
 `flexo-mms-sysmlv2` and read it back, which is the only way to confirm the interop claim.
 The companion repo's `src/test/resources/docker-compose.yml` brings up Fuseki plus layer1,
-so the harness already exists.
+so the harness already exists. Until it runs, no interop claim is made anywhere:
+the docs say the vocabulary matches Flexo's namespaces, not that a graph loads into
+it, and D3 is the gate on calling the RDF path stable.
 
 ## D4 — the parser records `then` ambiguously, so successions cannot convert — done
 

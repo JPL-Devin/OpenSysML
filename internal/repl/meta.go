@@ -112,7 +112,7 @@ var metaCommandTable = []metaCommand{
 	{name: "%list", desc: "list current session declarations"},
 	{name: "%clear", desc: "reset the session"},
 	{name: "%load", args: "<path>...", desc: "submit the contents of files, directories or globs"},
-	{name: "%save", args: "<file>", desc: "write the session model to a file (.sysml notation or .ttl RDF)"},
+	{name: "%save", args: "<file>", desc: "write the session model to a file (.sysml notation, or .ttl RDF — experimental)"},
 	{name: "%verbosity", args: "[level]", desc: "show or set output level: quiet, normal or debug"},
 	{name: "%trace", args: "[on|off]", desc: "show or set execution tracing (evaluation, calc, action and state steps)"},
 	{name: "%budget", desc: "show the bounds one run may spend, and the variable raising each"},

@@ -19,6 +19,41 @@ FORMAT_SYSML = "sysml"
 #: RDF in Turtle syntax. ``turtle`` and ``rdf`` name it too.
 FORMAT_TURTLE = "ttl"
 
+#: Names the service canonicalizes each format to, so a reported format can be
+#: told apart without repeating the alias table.
+_TURTLE_NAMES = frozenset({"ttl", "turtle", "rdf"})
+
+#: The fallback wording, for a service too old to send its own notice: the RDF
+#: mapping's status is a property of the mapping, not of the service.
+EXPERIMENTAL_NOTICE = (
+    "RDF conversion is experimental: the mapping covers model structure only, "
+    "refuses a model whose bodies state behavior, and its vocabulary may change "
+    "without a compatibility path; see docs/reference/rdf-mapping.md \u00a7 Status"
+)
+
+
+class ExperimentalFeatureWarning(UserWarning):
+    """Warns that a conversion went through an experimental mapping.
+
+    Raised as a warning rather than an error: the conversion did happen. Silence
+    it with :func:`warnings.simplefilter` on this class, which no stable feature
+    warns with, so silencing it cannot hide anything else.
+    """
+
+
+def is_experimental(from_format, to_format):
+    """Report whether a conversion between these formats uses the RDF mapping.
+
+    Args:
+        from_format (str): Format read, as the service reports it.
+        to_format (str): Format written, as the service reports it.
+
+    Returns:
+        bool: True when either side is RDF. Notation to notation is stable.
+    """
+    return from_format in _TURTLE_NAMES or to_format in _TURTLE_NAMES
+
+
 #: Extensions the exporter's FormatOfPath knows, so a path names the same format
 #: here as it does to `sysml -convert` and `%save`.
 _EXTENSIONS = {
@@ -65,12 +100,18 @@ class Conversion:
         diagnostics: Syntax errors the service tolerated under
             ``tolerate_syntax_errors``. Empty otherwise: a conversion that
             failed raises instead.
+        experimental: True when the conversion went through the RDF mapping,
+            which is experimental. A notation conversion is stable.
+        experimental_notice: What is experimental about it, in the service's own
+            wording. Empty when ``experimental`` is False.
     """
 
     content: str
     from_format: str
     to_format: str
     diagnostics: List[object] = field(default_factory=list)
+    experimental: bool = False
+    experimental_notice: str = ""
 
     def __str__(self):
         return self.content

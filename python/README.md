@@ -25,7 +25,7 @@ inst = model.instantiate("Demo::Vehicle")
 inst.mass                                          # 1500.0 [kg] — a Quantity
 
 model.verify_satisfaction()                        # every assert satisfy … by …
-model.save("model.ttl")                            # RDF Turtle
+model.save("model.ttl")                            # RDF Turtle (experimental)
 ```
 
 Every call goes through the `sysml-grpc` service, which `pysysml` starts for you from

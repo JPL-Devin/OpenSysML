@@ -335,6 +335,14 @@ message ConvertResponse {
   // Syntax errors tolerated under tolerate_syntax_errors, or those that failed
   // the conversion.
   repeated Diagnostic diagnostics = 5;
+  // Set when either format is RDF, whose mapping is experimental: it covers
+  // model structure only, refuses a model whose bodies state behavior, and its
+  // vocabulary may change without a compatibility path. Notation to notation is
+  // stable and leaves this unset.
+  bool experimental = 6;
+  // What is experimental about the conversion, in the wording every surface
+  // reports it in. Empty when experimental is false.
+  string experimental_notice = 7;
 }
 
 // SymbolInfo represents any SysML element

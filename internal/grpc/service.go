@@ -25,7 +25,8 @@ import (
 const CapabilityTypeFacts = "type_facts"
 
 // CapabilityConvert names the capability of the Convert RPC, which writes a
-// model back out as SysML notation or RDF Turtle.
+// model back out as SysML notation or RDF Turtle. The RDF direction is
+// experimental, which the response says per conversion.
 const CapabilityConvert = "convert"
 
 // CapabilityVerification names the capability of the verification RPCs, which

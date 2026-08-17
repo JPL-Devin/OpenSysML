@@ -23,7 +23,12 @@ from pysysml.capabilities import (
     require,
     upgrade_remedy,
 )
-from pysysml.conversion import Conversion
+from pysysml.conversion import (
+    Conversion,
+    EXPERIMENTAL_NOTICE,
+    ExperimentalFeatureWarning,
+    is_experimental,
+)
 from pysysml.diagnostic import Diagnostic
 from pysysml.enumeration import EnumLiteral
 from pysysml.errors import (
@@ -580,6 +585,10 @@ class Connection:
             Conversion: The converted model, the formats used and any tolerated
                 syntax errors
 
+        Warns:
+            ExperimentalFeatureWarning: If either format is RDF, whose mapping is
+                experimental — see ``docs/reference/rdf-mapping.md``
+
         Raises:
             ValueError: If other than one of file_path, content and model_hash
                 is given
@@ -626,6 +635,18 @@ class Connection:
         )
         with translate_rpc_errors(not_found=not_found):
             response = self._stub.Convert(request)
+        # Judged from the response, so an inferred format counts and a service
+        # too old to mark the conversion is still read as experimental.
+        experimental = response.experimental or is_experimental(
+            response.from_format, response.to_format
+        )
+        notice = response.experimental_notice or (
+            EXPERIMENTAL_NOTICE if experimental else ""
+        )
+        if experimental:
+            # Warned before the error is raised: a refusal is the mapping's
+            # experimental behavior, not a reason to say nothing about it.
+            warnings.warn(notice, ExperimentalFeatureWarning, stacklevel=2)
         diagnostics = [Diagnostic(d) for d in response.diagnostics]
         if response.error:
             raise ConversionError(response.error, diagnostics=diagnostics)
@@ -634,6 +655,8 @@ class Connection:
             from_format=response.from_format,
             to_format=response.to_format,
             diagnostics=diagnostics,
+            experimental=experimental,
+            experimental_notice=notice,
         )
 
     def query(self, model_hash, payload=None, scope=None, select=None, where=None):

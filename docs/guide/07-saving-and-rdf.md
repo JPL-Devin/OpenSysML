@@ -7,6 +7,12 @@ No JSON is involved anywhere in this path, not even as an intermediate form.
 The vocabulary each triple uses, and what the mapping does not cover, is
 [reference/rdf-mapping.md](../reference/rdf-mapping.md).
 
+> **RDF conversion is experimental.** It covers model structure only, refuses a
+> model whose bodies state behavior, and its vocabulary may change without a
+> compatibility path, so every run that converts RDF says so. Saving to `.sysml`
+> or `.kerml` is stable and exact. See
+> [reference/rdf-mapping.md § Status](../reference/rdf-mapping.md#status-experimental).
+
 ## Saving a session
 
 `%save` writes the session out. The format follows the extension — `.sysml` for
@@ -17,6 +23,7 @@ sysml> %save my_model.sysml
 saved 181 bytes of sysml to my_model.sysml (replaced the existing file)
 
 sysml> %save my_model.ttl
+note: RDF conversion is experimental: the mapping covers model structure only, refuses a model whose bodies state behavior, and its vocabulary may change without a compatibility path; see docs/reference/rdf-mapping.md § Status
 saved 1872 bytes of ttl to my_model.ttl
 ```
 
@@ -94,6 +101,18 @@ it. `tolerate_syntax_errors` writes notation despite syntax errors, and is
 rejected for any direction that builds a graph, where an unparsed declaration
 would go missing without saying so.
 
+A response whose conversion went through the RDF mapping sets `experimental` and
+`experimental_notice`, on a refusal as well as on a success, so a client learns
+the status from the response rather than from this page. pysysml raises it as an
+`ExperimentalFeatureWarning`, which `warnings.simplefilter` can silence:
+
+```python
+import warnings
+from pysysml import ExperimentalFeatureWarning
+
+warnings.simplefilter("ignore", ExperimentalFeatureWarning)
+```
+
 From Python:
 
 ```python
@@ -132,8 +151,10 @@ documentation — all inside the mapping — so it converts and comes back:
 
 ```bash
 $ sysml examples/rdf-interop-demo.sysml -convert ttl -o /tmp/rover.ttl
+note: RDF conversion is experimental: the mapping covers model structure only, refuses a model whose bodies state behavior, and its vocabulary may change without a compatibility path; see docs/reference/rdf-mapping.md § Status
 wrote /tmp/rover.ttl (ttl, 7937 bytes)
 $ sysml /tmp/rover.ttl -convert sysml -o /tmp/rover-back.sysml
+note: RDF conversion is experimental: the mapping covers model structure only, refuses a model whose bodies state behavior, and its vocabulary may change without a compatibility path; see docs/reference/rdf-mapping.md § Status
 wrote /tmp/rover-back.sysml (sysml, 877 bytes)
 ```
 
@@ -154,6 +175,7 @@ that leaves converting is measured in
 
 ```bash
 $ sysml examples/state-machine-demo.sysml -convert ttl
+note: RDF conversion is experimental: the mapping covers model structure only, refuses a model whose bodies state behavior, and its vocabulary may change without a compatibility path; see docs/reference/rdf-mapping.md § Status
 sysml: cannot convert the substate member at examples/state-machine-demo.sysml:7:13: save to .sysml or .kerml instead, which writes the source exactly; see docs/reference/rdf-mapping.md § Limitations
 ```
 

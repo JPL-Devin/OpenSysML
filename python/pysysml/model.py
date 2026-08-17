@@ -131,6 +131,10 @@ class Model:
         Returns:
             Conversion: The converted model; ``str()`` of it is the text
 
+        Warns:
+            ExperimentalFeatureWarning: If the format is RDF, whose mapping is
+                experimental — see ``docs/reference/rdf-mapping.md``
+
         Raises:
             ConversionError: If the model could not be written in that format
             MissingCapabilityError: If the service cannot convert
@@ -154,6 +158,10 @@ class Model:
 
     def to_turtle(self):
         """Write this model out as an RDF graph in Turtle syntax.
+
+        The RDF mapping is experimental: it covers model structure only, refuses
+        a model whose bodies state behavior, and warns with
+        :class:`ExperimentalFeatureWarning`.
 
         Returns:
             Conversion: The Turtle; ``str()`` of it is the text

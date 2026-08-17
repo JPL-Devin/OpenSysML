@@ -135,7 +135,7 @@ echo "%load model.sysml
 | `--debug` | | Report every diagnostic over the whole session buffer, with the pass that produced it |
 | `--quiet` | | Report errors only, suppressing warnings |
 | `--trace` | | Report each execution step: expression evaluation, calc invocation, action tokens, state transitions |
-| `--convert <format>` | | Convert the model instead of running it: `sysml`, `kerml`, `ttl`, `turtle` or `rdf` (see [the RDF mapping](rdf-mapping.md)) |
+| `--convert <format>` | | Convert the model instead of running it: `sysml`, `kerml`, `ttl`, `turtle` or `rdf`. RDF is [experimental](rdf-mapping.md#status-experimental) and every run that converts it says so on stderr (see [the RDF mapping](rdf-mapping.md)) |
 | `--from <format>` | | Input format for `--convert` (default: from the input's extension) |
 | `--output <file>` | `-o` | Write the conversion to a file instead of stdout |
 | `--version` | `-v` | Show version information |
