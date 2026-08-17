@@ -20,7 +20,7 @@ quoted segment holding a space and one in the middle of a chain: `%instantiate '
 | **Library Discovery** | |
 | `%search <substring>` | List the declared and library symbols whose qualified name contains the substring, with the kind of each |
 | `%builtins` | List the library functions the runtime implements directly (`sqrt`, `abs`, `max`, `floor`, `x->isEmpty()`, `x->sum()` …) |
-| `%view <name>` | Show what a view exposes — its own `expose` relationships and the protected ones of the views it specializes — and the views nested in it, each of which is asked for its own exposed set. Asking it of an element that is no view says so |
+| `%view <name>` | Show what a view exposes — its own `expose` relationships and the protected ones of the views it specializes — the views nested in it, each of which is asked for its own exposed set, and its conformance to every viewpoint it satisfies: a verdict of `conforms`, `violated` or `unevaluable` per viewpoint and per framed concern, with the reason, the exposed element a concern's condition failed for, and `(from <view>)` where the `satisfy` is inherited. Asking it of an element that is no view says so |
 | **Instantiation & Inspection** | |
 | `%instantiate <name>` | Create instance from part definition |
 | `%slots <name>` | Show instance slots and values |
