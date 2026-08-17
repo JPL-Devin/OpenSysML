@@ -28,7 +28,7 @@ package Demo {
 // one are unaffected.
 func TestInstantiate_ValuelessValueTypedSlotIsSentUnset(t *testing.T) {
 	resp := instantiate(t, unsetSlotModel, "unset-slot", "Demo::Vehicle")
-	slots := resp.GetInstance().GetSlots()
+	slots := resp.GetInstance().GetFeatureValues()
 
 	d := slots["d"]
 	if !d.GetMaterialized() {

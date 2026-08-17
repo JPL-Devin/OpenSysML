@@ -294,7 +294,7 @@ func TestQuantitySlotsAndNestedQuantities(t *testing.T) {
 		"writtenSpeed": "5.4 [SI::km/SI::h] = 5/18·SI::metre·SI::second^-1",
 		"count":        "3 [SI::m] = SI::metre",
 	} {
-		slot, ok := resp.Instance.Slots[name]
+		slot, ok := resp.Instance.FeatureValues[name]
 		if !ok {
 			t.Errorf("missing slot %q", name)
 			continue
@@ -309,11 +309,11 @@ func TestQuantitySlotsAndNestedQuantities(t *testing.T) {
 	}
 
 	// The ordinary real slot is untouched by the quantity arm.
-	if got := resp.Instance.Slots["n"].GetValue().GetRealValue(); got != 2.0 {
+	if got := resp.Instance.FeatureValues["n"].GetValue().GetRealValue(); got != 2.0 {
 		t.Errorf("slot n = %v, want 2", got)
 	}
 
-	engineID := resp.Instance.Slots["engine"].GetValue().GetInstanceId()
+	engineID := resp.Instance.FeatureValues["engine"].GetValue().GetInstanceId()
 	if engineID == 0 {
 		t.Fatal("slot engine holds no instance")
 	}
@@ -327,7 +327,7 @@ func TestQuantitySlotsAndNestedQuantities(t *testing.T) {
 		t.Fatalf("instance %d is not in the response graph", engineID)
 	}
 	wantPower := "300 [SI::W] = 1000/1·SI::gram·SI::metre^2·SI::second^-3"
-	if got := describeQuantity(engine.Slots["power"].GetValue().GetQuantity()); got != wantPower {
+	if got := describeQuantity(engine.FeatureValues["power"].GetValue().GetQuantity()); got != wantPower {
 		t.Errorf("nested slot power = %q, want %q", got, wantPower)
 	}
 }
@@ -481,7 +481,7 @@ package V {
 		t.Fatalf("verdict instance %d is not in the response", resp.Verdict.InstanceId)
 	}
 	wantMass := "2500 [SI::kg] = 1000/1·SI::gram"
-	if got := describeQuantity(subject.Slots["mass"].GetValue().GetQuantity()); got != wantMass {
+	if got := describeQuantity(subject.FeatureValues["mass"].GetValue().GetQuantity()); got != wantMass {
 		t.Errorf("subject mass = %q, want %q", got, wantMass)
 	}
 }

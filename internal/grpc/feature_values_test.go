@@ -14,6 +14,7 @@ func TestInstantiate_FeatureValuesMirrorTheDeprecatedSlots(t *testing.T) {
 	resp := instantiate(t, unsetSlotModel, "feature-values", "Demo::Vehicle")
 
 	for _, inst := range append([]*pb.Instance{resp.GetInstance()}, resp.GetInstances()...) {
+		//lint:ignore SA1019 the deprecated map is what this test is about.
 		values, slots := inst.GetFeatureValues(), inst.GetSlots()
 		if len(values) == 0 {
 			t.Fatalf("instance %d carries no feature values", inst.GetId())

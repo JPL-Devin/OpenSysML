@@ -132,9 +132,9 @@ package D {
 }
 `
 	resp := instantiate(t, content, "enum-slot", "D::Car")
-	slot := resp.Instance.Slots["c"]
+	slot := resp.Instance.FeatureValues["c"]
 	if slot == nil {
-		t.Fatalf("slot c not present in %v", resp.Instance.Slots)
+		t.Fatalf("slot c not present in %v", resp.Instance.FeatureValues)
 	}
 	if slot.Error != "" {
 		t.Fatalf("slot c: %s", slot.Error)

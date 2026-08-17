@@ -61,9 +61,9 @@ func TestVerifyConstraintNamesTheNestedSubject(t *testing.T) {
 	if named == nil {
 		t.Fatalf("verdict names instance %d, which the response does not carry", resp.Verdict.InstanceId)
 	}
-	pressure, ok := named.Slots["pressure"]
+	pressure, ok := named.FeatureValues["pressure"]
 	if !ok {
-		t.Fatalf("the object the verdict names has no pressure slot: %v", named.Slots)
+		t.Fatalf("the object the verdict names has no pressure slot: %v", named.FeatureValues)
 	}
 	if pressure.Value.GetRealValue() != 5.0 {
 		t.Errorf("pressure = %v, want the redefined 5", pressure)
