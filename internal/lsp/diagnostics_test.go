@@ -2,6 +2,7 @@ package lsp
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"go.lsp.dev/protocol"
@@ -50,14 +51,26 @@ func (baseClient) WorkspaceFolders(ctx context.Context) ([]protocol.WorkspaceFol
 	return nil, nil
 }
 
+// fakeClient is locked because the debounced cross-document refresh publishes
+// from a timer goroutine.
 type fakeClient struct {
 	baseClient
+	mu        sync.Mutex
 	published []*protocol.PublishDiagnosticsParams
 }
 
 func (c *fakeClient) PublishDiagnostics(ctx context.Context, params *protocol.PublishDiagnosticsParams) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.published = append(c.published, params)
 	return nil
+}
+
+// all returns a snapshot of what has been published so far.
+func (c *fakeClient) all() []*protocol.PublishDiagnosticsParams {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]*protocol.PublishDiagnosticsParams(nil), c.published...)
 }
 
 func TestPublishDiagnosticsReportsSyntaxError(t *testing.T) {
@@ -71,10 +84,10 @@ func TestPublishDiagnosticsReportsSyntaxError(t *testing.T) {
 	ws.Open(name, []byte("package P {"), 1)
 	s.publishDiagnostics(context.Background(), name)
 
-	if len(fc.published) != 1 {
-		t.Fatalf("published count = %d, want 1", len(fc.published))
+	if len(fc.all()) != 1 {
+		t.Fatalf("published count = %d, want 1", len(fc.all()))
 	}
-	got := fc.published[0]
+	got := fc.all()[0]
 	if got.URI != uri.File(name) {
 		t.Errorf("URI = %q, want %q", got.URI, uri.File(name))
 	}
@@ -105,11 +118,11 @@ func TestPublishDiagnosticsClearsWhenClean(t *testing.T) {
 	ws.Open("ok.sysml", []byte("package P;"), 1)
 	s.publishDiagnostics(context.Background(), "ok.sysml")
 
-	if len(fc.published) != 1 {
-		t.Fatalf("published count = %d, want 1", len(fc.published))
+	if len(fc.all()) != 1 {
+		t.Fatalf("published count = %d, want 1", len(fc.all()))
 	}
-	if len(fc.published[0].Diagnostics) != 0 {
-		t.Fatalf("diagnostics = %d, want 0 on clean doc", len(fc.published[0].Diagnostics))
+	if len(fc.all()[0].Diagnostics) != 0 {
+		t.Fatalf("diagnostics = %d, want 0 on clean doc", len(fc.all()[0].Diagnostics))
 	}
 }
 

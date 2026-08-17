@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"go.lsp.dev/protocol"
 	"go.lsp.dev/uri"
@@ -57,7 +58,7 @@ func diagnosticsFor(fc *fakeClient, name string) []string {
 func lastDiagnostics(fc *fakeClient, name string) ([]string, bool) {
 	var msgs []string
 	found := false
-	for _, p := range fc.published {
+	for _, p := range fc.all() {
 		if p.URI != uri.File(name) {
 			continue
 		}
@@ -68,6 +69,23 @@ func lastDiagnostics(fc *fakeClient, name string) ([]string, bool) {
 		}
 	}
 	return msgs, found
+}
+
+// waitForDiagnostics polls until name's last published diagnostics satisfy want,
+// which the debounced cross-document refresh reaches asynchronously.
+func waitForDiagnostics(t *testing.T, fc *fakeClient, name string, want func([]string) bool) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		msgs := diagnosticsFor(fc, name)
+		if want(msgs) {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("diagnostics for %s = %v, still unwanted after 5s", name, msgs)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 func openFile(t *testing.T, s *Server, path, text string) {
@@ -300,7 +318,7 @@ func TestDidChangeRefreshesOtherOpenDocuments(t *testing.T) {
 	openFile(t, s, lib, libSource)
 
 	// An unsaved edit to lib.sysml renames what main.sysml uses; main's markers
-	// must follow the keystroke, not wait for a save.
+	// must follow the edit burst, not wait for a save.
 	if err := s.DidChange(ctx, &protocol.DidChangeTextDocumentParams{
 		TextDocument: protocol.VersionedTextDocumentIdentifier{
 			TextDocumentIdentifier: protocol.TextDocumentIdentifier{URI: uri.File(lib)},
@@ -312,9 +330,45 @@ func TestDidChangeRefreshesOtherOpenDocuments(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("DidChange err = %v", err)
 	}
-	if msgs := diagnosticsFor(fc, main); len(msgs) == 0 {
-		t.Fatalf("diagnostics for main = none, want an unresolved Widget")
+	waitForDiagnostics(t, fc, main, func(msgs []string) bool { return len(msgs) > 0 })
+}
+
+func TestDidChangeCoalescesOtherOpenDocuments(t *testing.T) {
+	s, fc, _, lib, main := multiFileWorkspace(t)
+	ctx := context.Background()
+	openFile(t, s, main, mainSource)
+	openFile(t, s, lib, libSource)
+
+	// Typing is a burst of changes; re-analyzing main.sysml on each one would
+	// serialize behind the workspace lock, so the sweep runs once at the end.
+	for version := 2; version < 12; version++ {
+		if err := s.DidChange(ctx, &protocol.DidChangeTextDocumentParams{
+			TextDocument: protocol.VersionedTextDocumentIdentifier{
+				TextDocumentIdentifier: protocol.TextDocumentIdentifier{URI: uri.File(lib)},
+				Version:                int32(version),
+			},
+			ContentChanges: []protocol.TextDocumentContentChangeEvent{
+				{Text: "package Lib {\n    part def Gadget;\n}\n"},
+			},
+		}); err != nil {
+			t.Fatalf("DidChange err = %v", err)
+		}
 	}
+	waitForDiagnostics(t, fc, main, func(msgs []string) bool { return len(msgs) > 0 })
+	if got := publishCount(fc, main); got > 5 {
+		t.Errorf("published %d times for main across 10 edits, want the burst coalesced", got)
+	}
+}
+
+// publishCount reports how many times diagnostics were published for name.
+func publishCount(fc *fakeClient, name string) int {
+	n := 0
+	for _, p := range fc.all() {
+		if p.URI == uri.File(name) {
+			n++
+		}
+	}
+	return n
 }
 
 func TestInitializeFoldersFallsBackToRoot(t *testing.T) {

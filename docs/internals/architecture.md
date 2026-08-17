@@ -303,7 +303,10 @@ Parse + model all behavioral bodies with unified fallback grammar:
   outside the editor; a deletion leaves an open buffer alone
 
 **Diagnostics:**
-- Publish on document open/change
+- Publish on document open/change; the edited document immediately, the other
+  open ones on a coalesced sweep once the edit burst settles, since each sweep
+  re-analyzes them
+- Withdrawn (empty set) for a document the workspace no longer holds
 - Syntax errors (parser)
 - Semantic errors (name resolution, type checking, validation passes)
 - Real-time feedback

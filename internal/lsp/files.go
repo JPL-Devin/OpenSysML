@@ -147,3 +147,15 @@ func (s *Server) refreshOpenDiagnostics(ctx context.Context, except string) {
 		}
 	}
 }
+
+// queueOpenDiagnostics is refreshOpenDiagnostics once an editor burst settles;
+// a refresh re-analyzes every open document, too much to pay per keystroke.
+func (s *Server) queueOpenDiagnostics(ctx context.Context, except string) {
+	if s.crossDoc == nil {
+		s.refreshOpenDiagnostics(ctx, except)
+		return
+	}
+	// The sweep outlives the notification, whose context is cancelled on return.
+	ctx = context.WithoutCancel(ctx)
+	s.crossDoc.Trigger(except, func() { s.refreshOpenDiagnostics(ctx, except) })
+}

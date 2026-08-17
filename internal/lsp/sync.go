@@ -6,11 +6,14 @@ import (
 	"go.lsp.dev/protocol"
 )
 
-// DidOpen registers a newly opened document with the workspace.
+// DidOpen registers a newly opened document with the workspace. The buffer the
+// editor sends can differ from what was read from disk, so the other open
+// documents are refreshed too.
 func (s *Server) DidOpen(ctx context.Context, params *protocol.DidOpenTextDocumentParams) error {
 	name := uriToName(params.TextDocument.URI)
 	s.ws.Open(name, []byte(params.TextDocument.Text), int(params.TextDocument.Version))
 	s.publishDiagnostics(ctx, name)
+	s.queueOpenDiagnostics(ctx, name)
 	return nil
 }
 
