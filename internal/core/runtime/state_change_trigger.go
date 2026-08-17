@@ -77,6 +77,11 @@ func (e *StateExecutor) pollChangeEvents() (bool, error) {
 			break
 		}
 	}
+	if fired {
+		// The configuration changed, so a state left by this step no longer holds
+		// back the events it deferred.
+		e.recallDeferredEvents()
+	}
 	e.changeWaits = poll.waits
 	return fired, nil
 }
@@ -190,8 +195,14 @@ func (e *StateExecutor) SuspendReason() string {
 	if e.state == StateCompleted || (e.state != StateSuspended && e.HasPendingWork()) {
 		return ""
 	}
+	reason := "quiesced: nothing left can fire (no queued event, signal in flight, running do behavior or watched change condition)"
 	if waits := e.ChangeWaits(); len(waits) > 0 {
-		return "waiting on change condition: " + strings.Join(waits, "; ")
+		reason = "waiting on change condition: " + strings.Join(waits, "; ")
 	}
-	return "quiesced: nothing left can fire (no queued event, signal in flight, running do behavior or watched change condition)"
+	// An event the active states still defer cannot be dispatched here, but it is
+	// not gone either, so a stalled machine reports it rather than losing it.
+	if held := len(e.deferred); held > 0 {
+		reason += fmt.Sprintf("; %d event(s) still deferred by the active states", held)
+	}
+	return reason
 }

@@ -218,6 +218,53 @@ func TestChangeTriggerPollingKeepsEventBudget(t *testing.T) {
 	}
 }
 
+// A change condition moving the machine out of a deferring state recalls the
+// events that state held back: the run dispatches the deferred signal rather
+// than declaring itself settled with the signal still held.
+func TestChangeTriggerRecallsDeferredEvents(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		attribute def Ping;
+		state Machine {
+			attribute ready : Boolean = false;
+			initial start;
+			state busy {
+				defer Ping;
+				accept when ready then waiting;
+			}
+			state waiting {
+				accept Ping then done;
+			}
+			state done;
+			start then busy;
+		}
+	}`)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	exec.SendSignal("Ping", nil)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("deliver Ping: %v", err)
+	}
+	assertCurrentState(t, exec, "busy")
+	if len(exec.deferred) != 1 {
+		t.Fatalf("deferred = %d, want the Ping held by busy", len(exec.deferred))
+	}
+	if reason := exec.SuspendReason(); !strings.Contains(reason, "still deferred") {
+		t.Errorf("reason = %q, want the deferred event it holds", reason)
+	}
+
+	// The condition rising leaves busy, so the Ping it deferred is dispatched by
+	// the same run rather than stranded.
+	exec.stateData["ready"] = boolValue(true)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("rerun: %v", err)
+	}
+	assertCurrentState(t, exec, "done")
+	if len(exec.deferred) != 0 {
+		t.Errorf("deferred = %d, want the recalled Ping delivered", len(exec.deferred))
+	}
+}
+
 // equalStrings compares two ordered lists of names.
 func equalStrings(got, want []string) bool {
 	if len(got) != len(want) {

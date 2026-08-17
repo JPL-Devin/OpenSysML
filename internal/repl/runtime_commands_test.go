@@ -448,6 +448,19 @@ func TestAdvanceTakesChangeTriggerAndReportsAFalseCondition(t *testing.T) {
 	wants(t, run(t, s, "%current"), "Current state: armed", "Cannot progress: waiting on change condition")
 }
 
+// Advancing less than the next event's timestamp is not "no pending work": the
+// event is still queued, so the drain is reported with the state and what is left.
+func TestAdvanceShorterThanNextEventReportsRemainingWork(t *testing.T) {
+	s := loadFixture(t, "testdata/state_debug.sysml")
+	run(t, s, "%state Cycle")
+	run(t, s, "%advance 1") // leaves the transition out of `waiting` queued at 10
+
+	wants(t, run(t, s, "%advance 1"),
+		"Advanced to 2.00 (0 event(s) processed)",
+		"Current state: waiting",
+		"Remaining events: 1")
+}
+
 func TestAdvanceRejectsBadDuration(t *testing.T) {
 	s := loadFixture(t, "testdata/state_debug.sysml")
 	run(t, s, "%state Cycle")

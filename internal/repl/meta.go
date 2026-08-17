@@ -2190,9 +2190,9 @@ func (s *Session) advanceBy(duration float64) ([]string, error) {
 	}
 	s.stateExec.now = math.Max(deadline, exec.CurrentTime())
 
-	// A machine that took no step has nowhere to go: say why rather than report
-	// a drain that did nothing.
-	if processed == 0 && doActions == 0 {
+	// A machine that took no step and has nowhere to go says why; one whose work
+	// is only due past the deadline still reports the drain and what is left.
+	if processed == 0 && doActions == 0 && !exec.HasPendingWork() {
 		out := []string{fmt.Sprintf("No pending work - simulation time is now %.2f", s.stateExec.now)}
 		if reason := exec.SuspendReason(); reason != "" {
 			out = append(out, fmt.Sprintf("  %s", reason))
