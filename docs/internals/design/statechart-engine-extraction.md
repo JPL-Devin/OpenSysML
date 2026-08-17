@@ -206,7 +206,51 @@ an engine API release.
 
 Stdlib-only is achievable and worth committing to: after §2, the engine imports
 nothing outside the standard library, which is exactly the property that makes
-libraries like these adoptable.
+libraries like these adoptable. Today the module carries readline, gRPC, protobuf,
+zap and the LSP stack; a consumer who wants only a statechart engine should not
+inherit any of that, which is an argument for option C over B.
+
+### 4.1 Library, or standalone runner? They are two different costs
+
+"Decoupled engine" splits into two products, and it matters which one we mean:
+
+**A Go library, embedded in a host (cheap — this is Phases A–C).** The consumer
+supplies `Host`: expression evaluation, behavior execution, event routing.
+Systemica is the first such host; a second host could be an app that wants
+hierarchy, regions, history and deferral for its own workflow states and evaluates
+its own guards as Go closures:
+
+```go
+m, _ := statechart.New[any](model, myHost{})     // guards/effects are my funcs
+m.Send("payment_captured", nil)
+```
+
+This is usable standalone in the sense that it needs no SysML, no parser and no
+model file. It is *not* usable standalone in the sense of "run a `.sysml` file" —
+because it deliberately never learns what an expression means.
+
+**A standalone runner that executes a KerML model (more expensive, and worth
+naming as separate scope).** The blocker is that guards, change conditions, time
+durations and effects are today `ast.Node`s evaluated by Systemica's evaluator
+against live scopes — they are references into a parsed model, not data. A
+standalone runner therefore needs a **serializable behavior/expression IR** plus
+an evaluator for it, so that:
+
+```
+sysml compile model.sysml --state Vehicle::controller -o controller.scm.json
+scrun controller.scm.json --send brakeApplied     # no parser, no symbol table
+```
+
+That is real work (expression lowering to a closed instruction set, plus its own
+conformance tests) and it is what buys the deployment shapes below. It should be
+a deliberate later phase, not smuggled into the extraction.
+
+Once that IR exists, the same engine ships as: an in-process Go library; a
+compile-once/run-anywhere CLI; the existing gRPC service minus the compiler (a
+slim execution service the `pysysml` client already has a protocol for); and —
+because the engine is stdlib-only and allocation-flat — a WASM build, which is the
+cheapest path to animating a state machine in a browser diagram viewer without a
+server.
 
 ---
 
@@ -282,6 +326,60 @@ its own — it improves the codebase, and it is the seam
 `state-engine-pluggability.md` Phase 1 asked for, so the two directions converge
 here rather than competing.
 
+**Phase E — standalone runner (demand-driven, ~2–3 sessions, §4.1).** A
+serializable behavior/expression IR plus its evaluator, a `compile`/`run` CLI pair,
+and the gRPC/WASM shapes that follow. Only worth starting if a §6.1 consumer in
+the second group is actually wanted.
+
+### 6.1 Who would use a KerML engine, other than us
+
+Ordered by how little extra scope each needs beyond the extraction. The first
+group needs only the library (§4.1); the second needs the serializable IR.
+
+**Needs only the library.**
+
+- **Systemica itself, better factored.** The immediate consumer: one engine, host
+  callbacks, and the pluggability seam of the companion document for free.
+- **Trace-based V&V and model-based test generation.** Deterministic traces plus
+  budgets make the engine a generator of expected behavior: enumerate event
+  sequences over a model, emit traces, and use them as test vectors for the
+  implementation the model describes. Budgets are what makes bounded exploration
+  safe here.
+- **Conformance oracle in both directions.** Run the OMG PSSM suite and the W3C
+  SCXML suite against the matching profile (§5) — that is how the library earns
+  the right to describe its own semantics, and it also tells us where *we* differ.
+- **Non-SysML Go users.** Hierarchical states with orthogonal regions, deep
+  history, deferral and choice/junction are exactly what application state
+  machines (device controllers, long-running workflows, protocol handling) need
+  and what `looplab/fsm` does not have. This is the audience that makes it a
+  *library* rather than an internal package, and it is served by the UML profile,
+  not by KerML semantics.
+- **Animation and debugging front-ends.** `Observe(Record)` plus the stepping API
+  is a ready-made protocol for a diagram animator or a time-travel debugger; the
+  VS Code extension in `editors/vscode` is the obvious first client.
+
+**Needs the serializable behavior/expression IR too (§4.1).**
+
+- **Runtime conformance monitoring.** Execute the model's state machine alongside
+  a real system's telemetry and flag where observed behavior departs from the
+  specified machine — the model becomes an executable monitor rather than a
+  document. This is the use case with the most obvious value for flight software
+  and ground-system operations, and the one that most needs "run the model
+  without a compiler in the loop".
+- **Co-execution against generated or hand-written implementations.** Compile the
+  model once, run it in step with the C/C++/Rust implementation, and compare
+  traces — a cheap way to keep codegen or a hand port honest.
+- **Simulation embedded in other tools.** Any Go, Python (via the existing gRPC
+  protocol) or browser (WASM) tool that wants to run behavior from a model it did
+  not compile.
+- **CI gates over models.** Execute a model's machines in a pipeline with no IDE
+  and no full toolchain, asserting reachability, no-deadlock, and expected traces.
+
+What this list does *not* contain is a case for making the engine standalone as an
+end in itself. Every entry above is either served by the library today plus
+callbacks, or by the library plus a compiled model artifact. That is the argument
+for doing Phases A–C first and treating the runner as demand-driven.
+
 ---
 
 ## 7. Risks and honest limitations
@@ -312,3 +410,7 @@ here rather than competing.
 2. Are semantics profiles (§5, Phase C) in scope for the first external release,
    or is v0.1 KerML-only with profiles as a follow-on?
 3. Is a real-time/tick driver (§7) in scope, or explicitly out for v0.1?
+4. Do we want the serializable behavior/expression IR and a standalone runner
+   (§4.1) on the roadmap at all, or is the library-with-host shape enough? The
+   answer follows from whether runtime conformance monitoring (§6.1) is something
+   we actually want to offer.
