@@ -191,12 +191,30 @@ func (w *Workspace) invalidateLocked() {
 func (w *Workspace) Diagnostics(name string) []passes.Diagnostic {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if cached, ok := w.diagCache[name]; ok {
-		return cached
-	}
 	doc := w.docs[name]
 	if doc == nil {
 		return nil
+	}
+	return w.diagnosticsLocked(name, doc)
+}
+
+// AnalyzedContent returns a document's diagnostics together with the content
+// they were computed against, so an edit cannot split the two. Reports whether
+// the document exists.
+func (w *Workspace) AnalyzedContent(name string) ([]byte, []passes.Diagnostic, bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	doc := w.docs[name]
+	if doc == nil {
+		return nil, nil, false
+	}
+	return doc.Content, w.diagnosticsLocked(name, doc), true
+}
+
+// diagnosticsLocked analyzes doc, caching the result. Caller holds the lock.
+func (w *Workspace) diagnosticsLocked(name string, doc *Document) []passes.Diagnostic {
+	if cached, ok := w.diagCache[name]; ok {
+		return cached
 	}
 	parseDiags := make([]passes.Diagnostic, 0, len(doc.ParseDiagnostics)+len(doc.ParseWarnings))
 	for _, pd := range doc.ParseDiagnostics {

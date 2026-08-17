@@ -20,12 +20,11 @@ func (s *Server) publishDiagnostics(ctx context.Context, name string) {
 	defer s.pubMu.Unlock()
 
 	out := []protocol.Diagnostic{}
-	if doc := s.ws.Document(name); doc != nil {
-		diags := s.ws.Diagnostics(name)
+	if content, diags, ok := s.ws.AnalyzedContent(name); ok {
 		out = make([]protocol.Diagnostic, 0, len(diags))
 		for _, d := range diags {
 			out = append(out, protocol.Diagnostic{
-				Range:    spanToRange(doc.Content, d.Span),
+				Range:    spanToRange(content, d.Span),
 				Severity: protocol.DiagnosticSeverity(int(d.Severity) + 1),
 				Message:  d.Message,
 				Code:     d.Code,

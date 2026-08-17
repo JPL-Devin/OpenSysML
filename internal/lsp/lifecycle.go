@@ -16,6 +16,9 @@ func (s *Server) Initialize(ctx context.Context, params *protocol.InitializePara
 			TextDocumentSync: &protocol.TextDocumentSyncOptions{
 				OpenClose: true,
 				Change:    protocol.TextDocumentSyncKindIncremental,
+				// Without this a client sends no didSave, so the save-time
+				// cross-document refresh would never run.
+				Save: &protocol.SaveOptions{IncludeText: false},
 			},
 			HoverProvider:           true,
 			DefinitionProvider:      true,

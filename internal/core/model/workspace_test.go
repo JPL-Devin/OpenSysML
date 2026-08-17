@@ -79,6 +79,30 @@ func TestWorkspaceTracksOpenNames(t *testing.T) {
 	}
 }
 
+func TestWorkspaceAnalyzedContentMatchesDiagnostics(t *testing.T) {
+	ws := NewWorkspace()
+	src := "package P {\n    part x : Missing;\n}\n"
+	ws.Open("a.sysml", []byte(src), 1)
+
+	// The spans returned belong to the content returned with them; a caller
+	// converting them against any other revision would misplace the markers.
+	content, diags, ok := ws.AnalyzedContent("a.sysml")
+	if !ok || string(content) != src {
+		t.Fatalf("AnalyzedContent ok=%v content=%q", ok, content)
+	}
+	if len(diags) == 0 {
+		t.Fatal("no diagnostics for an unresolved type")
+	}
+	for _, d := range diags {
+		if d.Span.End() > len(content) {
+			t.Errorf("span %v outside the content it was analyzed with (%d bytes)", d.Span, len(content))
+		}
+	}
+	if _, _, ok := ws.AnalyzedContent("gone.sysml"); ok {
+		t.Error("AnalyzedContent ok for an unknown document")
+	}
+}
+
 func TestWorkspaceRemoveDropsFromIndex(t *testing.T) {
 	ws := NewWorkspace()
 	ws.Open("a.sysml", []byte("package P;"), 1)
