@@ -217,10 +217,9 @@ func underFolder(name, folder string) bool {
 // just published on its own.
 func (s *Server) refreshOpenDiagnostics(ctx context.Context, except string) {
 	for _, name := range s.ws.OpenNames() {
-		// Rechecked: a tab closed mid-sweep has had its markers withdrawn, and
-		// must not get them back.
-		if name != except && s.ws.IsOpen(name) {
-			s.publishDiagnostics(ctx, name)
+		if name != except {
+			// A tab closed mid-sweep has had its markers withdrawn already.
+			s.publishOpenDiagnostics(ctx, name)
 		}
 	}
 }
