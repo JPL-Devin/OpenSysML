@@ -1,0 +1,16 @@
+{
+  "type": "state",
+  "evaluate": "SendIdentityPart::Node::Listen",
+  "performers": [
+    {
+      "object": "SendIdentityPart::alpha",
+      "finalState": "waiting",
+      "stateVisits": ["start", "waiting"]
+    },
+    {
+      "object": "SendIdentityPart::worker",
+      "finalState": "heard",
+      "stateVisits": ["start", "waiting", "heard"]
+    }
+  ]
+}

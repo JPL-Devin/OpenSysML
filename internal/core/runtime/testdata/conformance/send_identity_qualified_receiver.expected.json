@@ -1,0 +1,11 @@
+{
+  "type": "state",
+  "evaluate": "SendIdentityQualified::Node::Machine",
+  "performers": [
+    {
+      "object": "SendIdentityQualified::solo",
+      "finalState": "heard",
+      "stateVisits": ["start", "waiting", "heard"]
+    }
+  ]
+}
