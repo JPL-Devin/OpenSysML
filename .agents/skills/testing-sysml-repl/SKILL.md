@@ -3269,3 +3269,59 @@ parent** before trusting it:
 - Keep probe files out of the repo tree before running the gates (`rm` it, keep a `.txt` copy in
   the fixtures dir) and confirm `git status --porcelain` is empty on camera, so the gates clearly
   reflect the committed tree.
+
+## Guarded successions in action flows (PR #266 and anything touching `enabledSuccessions`)
+
+Guards on successions out of *ordinary* nodes (`first s1 if c then s2;`, `then s1 s2 if c;`) are
+evaluated in `ActionExecutor.enabledSuccessions`; a failing guard prunes the edge and the flow just
+ends there (`Final state: Completed`, not an error). Test it end to end as
+`%load <file>` → `%action <pkg>::<action>` → `%continue` → read the `Results:` block.
+
+Traps and recipes:
+
+- **The result values are the only evidence.** A guarded flow that skips its successor still prints
+  `✓ Action completed / Final state: Completed`, identical to one that ran it — only the attribute
+  values differ. Always design the skipped branch to write a distinctive attribute (`y := 9`) that
+  stays at its initial value when the guard prunes the edge.
+- **Guards are evaluated when the token LEAVES the node**, so they see what that node wrote: with
+  `x = 3`, `action s1 assign x := x + 4;` and `first s1 if x > 5 then s2;` the branch is taken
+  (`x = 7`, `y = 9`). A "reads the pre-write value" regression shows up as `y = 0`.
+- **A/B against a binary from the parent commit is cheap and decisive here**, because a pre-fix
+  build silently ignores the guard: same file, `y = 9` / `ignited = 1` instead of `0`. Build it with
+  the worktree recipe above and run both in the recording.
+- **Restart the REPL between fixtures.** All the guard fixtures declare `package test`, so a second
+  `%load` in the same session makes `%action test::seq` ambiguous/unresolvable
+  (`unresolved reference: test::seq — did you mean SequenceFunctions::union::seq1 …`). Ctrl-D and
+  relaunch per model; do not chain loads.
+- Write fixtures with `import ScalarValues::*;`, otherwise every `attribute x : Integer` emits
+  `unresolved reference: Integer` noise on camera (execution still works).
+- **The REPL still executes a model with parse errors.** `first s1 if c;` (guard with no `then`) is
+  rejected at parse time with `expected 'then' after guard condition`, yet the rest of the model
+  loads and runs — read the diagnostics, don't just read the `Results:`.
+- Error wordings to assert: non-Boolean guard →
+  `error: execution failed: type mismatch: node s1: guard must evaluate to boolean, got constant`;
+  unresolvable name in a guard → `error: execution failed: eval guard of node s1: unresolved
+  reference: nosuch`. Two guards out of one action node that both hold →
+  `error: execution failed: more than one succession is enabled: action node check has multiple
+  successors` (wraps the `ErrAmbiguousSuccession` sentinel; the run stops with the token still on the
+  node and neither branch's attribute written — assert that with `%tokens`, not just the message).
+- Places a guard could still be silently ignored, all worth a one-liner fixture: succession out of a
+  real initial node (`then start s1 if …;`), out of a `merge`, out of a `join` (must not deadlock —
+  the branch tokens are consumed either way), and one whose target is `done`.
+- **A guard inside a nested action body is not observable**: an action declared inside an action body
+  that itself declares `first … then …` is never executed (pre-fix binaries behave identically), so
+  the enclosing flow's later nodes run while the inner writes never happen. Prove it is pre-existing
+  with the A/B binary and report it as untested rather than a failure.
+
+- **A guard on the succession out of a `merge` needs a token-ordering fixture to be tested at all.**
+  First-token-wins must count the token that *traverses*, not the one that arrives, so the
+  discriminating shape is a fork with one short branch (`a -> mg`) and one longer branch
+  (`b1 -> b2 -> b3 -> mg`) where only the last node of the long branch writes the feature the guard
+  reads. `%step` steps every live token per step, so a guard reading a value written by a *sibling*
+  branch node in the same step is not discriminating — put at least one extra node after the write.
+  Expected on a correct build: `%tokens` shows the short branch's token at `mg` with the guard still
+  false, that token disappears (retired), then the long branch's token traverses `mg` and the node
+  after it runs. A build that closes the merge on arrival instead discards the second token, never
+  runs the node after the merge, and then spins to
+  `error: execution failed: execution exceeded max steps (1000000 steps; ...)` — so "hangs to the
+  step budget", not just a wrong value, is the pre-fix signature here.
