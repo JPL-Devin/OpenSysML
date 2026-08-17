@@ -720,6 +720,26 @@ func TestConstraintViewSatisfyViewpointOK(t *testing.T) {
 	}
 }
 
+// A view body may satisfy a requirement of a stated subject — the stdlib's
+// `View` does, as `satisfy requirement viewpointConformance by that` — which
+// asserts that requirement rather than conformance to a viewpoint.
+func TestConstraintViewSatisfyRequirementBySubjectOK(t *testing.T) {
+	src := `
+		part def Vehicle;
+		part vehicle : Vehicle;
+		requirement def VehicleSpecification { subject s : Vehicle; }
+		requirement spec : VehicleSpecification;
+		view v {
+			expose vehicle;
+			satisfy requirement conformance : VehicleSpecification by vehicle;
+			satisfy spec by vehicle;
+		}
+	`
+	if diags := constraintDiags(t, src); hasCode(diags, "view-satisfy-viewpoint") {
+		t.Fatalf("unexpected view-satisfy-viewpoint, got %v", diags)
+	}
+}
+
 // A satisfy outside a view body is an ordinary requirement satisfaction, which
 // this rule says nothing about.
 func TestConstraintSatisfyOutsideAViewIsNotChecked(t *testing.T) {

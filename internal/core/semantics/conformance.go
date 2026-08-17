@@ -146,15 +146,15 @@ func (m *Model) ViewConformance(view *symbols.Symbol, eval ConcernEvaluator) (*V
 	return out, nil
 }
 
-// SatisfyMembersOf returns the `satisfy` usages in a view's body followed by
-// those of the views it specializes, in declaration order and once each: a
-// satisfy is inherited the way an expose is.
+// SatisfyMembersOf returns the viewpoint-claiming `satisfy` usages in a view's
+// body followed by those of the views it specializes, in declaration order and
+// once each: a satisfy is inherited the way an expose is.
 func (m *Model) SatisfyMembersOf(view *symbols.Symbol) []*symbols.Symbol {
 	var out []*symbols.Symbol
 	seen := map[*symbols.Symbol]bool{}
 	add := func(owner *symbols.Symbol) {
 		for _, sym := range usageMembersOfKind(owner, ast.UsageSatisfy) {
-			if !seen[sym] {
+			if !seen[sym] && IsViewpointSatisfy(sym) {
 				seen[sym] = true
 				out = append(out, sym)
 			}
@@ -397,20 +397,14 @@ func (m *Model) unresolvedConcernRef(fc *symbols.Symbol) string {
 }
 
 // framesTheSame reports whether a view's framing frames the concern the
-// viewpoint's does: the same concern, or one specializing the other, or the same
-// written name when neither resolves one (tool-defined — an unresolved framing
-// matches by name alone).
+// viewpoint's does: the same concern, or one specializing the other. Where
+// either side names no concern — an untyped `frame concern mass;` — the written
+// name decides, which is all the two framings share (tool-defined).
 func (m *Model) framesTheSame(c ConcernConformance, f viewFraming) bool {
-	switch {
-	case c.Target != nil && f.target != nil:
+	if c.Target != nil && f.target != nil {
 		return c.Target == f.target || m.conformsTo(f.target, c.Target) || m.conformsTo(c.Target, f.target)
-	case c.Target == nil && f.target == nil:
-		return c.Name != "" && c.Name == framedConcernName(f.frame)
-	case c.Target != nil:
-		return c.Target == f.frame
-	default:
-		return c.Name != "" && c.Name == framedConcernName(f.frame)
 	}
+	return c.Target == f.frame || (c.Name != "" && c.Name == framedConcernName(f.frame))
 }
 
 // conformsTo reports whether sym is target or specializes it.
@@ -595,6 +589,33 @@ func (m *Model) SatisfyTarget(sat *symbols.Symbol) (*symbols.Symbol, string) {
 		return m.resolveRelTarget(sat, rel), refName(rel.Target)
 	}
 	return nil, ""
+}
+
+// IsViewpointSatisfy reports whether a satisfy member claims conformance to
+// what it names — `satisfy vp;`. A satisfy stating a subject asserts its
+// requirement of that subject instead (`satisfy requirement r by that;`, as the
+// stdlib View does), which is no claim about the view.
+func IsViewpointSatisfy(sat *symbols.Symbol) bool {
+	if sat == nil {
+		return false
+	}
+	usage, ok := sat.Decl.(*ast.Usage)
+	if !ok || usage.Kind != ast.UsageSatisfy {
+		return false
+	}
+	names := false
+	for _, rel := range usage.Relationships {
+		if rel == nil {
+			continue
+		}
+		switch rel.Kind {
+		case ast.RelSubject:
+			return false
+		case ast.RelSubsets, ast.RelTyping:
+			names = names || rel.Target != nil
+		}
+	}
+	return names
 }
 
 // usageMembersOfKind returns the usages of the given kinds declared directly in

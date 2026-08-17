@@ -386,6 +386,51 @@ func TestViewConformanceFramesTheNamedConcernUsage(t *testing.T) {
 	wantVerdict(t, "verdict of tight", other.Concerns[0].Verdict, VerdictViolated, other.Concerns[0].Reason)
 }
 
+// A satisfy stating a subject asserts a requirement of that subject, as the
+// stdlib's `View` does with `satisfy requirement viewpointConformance by that`,
+// so it is no claim of viewpoint conformance and is not reported as one.
+func TestViewConformanceIgnoresSatisfyWithASubject(t *testing.T) {
+	m, root := buildModel(t, conformanceLib+`
+		requirement def VehicleSpecification { subject s : Vehicle; }
+		requirement spec : VehicleSpecification;
+		viewpoint def VP { frame concern mass : MassConcern; }
+		viewpoint vp : VP;
+		view v {
+			expose vehicle;
+			satisfy requirement conformance : VehicleSpecification by vehicle;
+			satisfy spec by vehicle;
+			satisfy vp;
+			frame concern mass : MassConcern;
+		}
+	`)
+	report := conformance(t, m, sym(t, root, "v"), &fakeEvaluator{})
+	vp := onlyViewpoint(t, report)
+	if vp.Viewpoint == nil || localName(vp.Viewpoint.Name) != "vp" {
+		t.Fatalf("satisfied viewpoint = %v, want vp", vp.Viewpoint)
+	}
+	wantVerdict(t, "verdict of v", report.Verdict, VerdictConforms, vp.Reason)
+}
+
+// A view framing a concern without naming its type frames it under that name:
+// the framings share no resolved concern, so the name is what matches, either
+// way round.
+func TestViewConformanceUntypedFramingMatchesByName(t *testing.T) {
+	m, root := buildModel(t, conformanceLib+`
+		viewpoint def VP { frame concern mass : MassConcern; }
+		viewpoint vp : VP;
+		viewpoint def UntypedVP { frame concern mass; }
+		viewpoint untypedVp : UntypedVP;
+		view untypedByTheView { expose vehicle; satisfy vp; frame concern mass; }
+		view untypedByTheViewpoint { expose vehicle; satisfy untypedVp; frame concern mass : MassConcern; }
+	`)
+	for _, name := range []string{"untypedByTheView", "untypedByTheViewpoint"} {
+		vp := onlyViewpoint(t, conformance(t, m, sym(t, root, name), &fakeEvaluator{}))
+		if vp.Concerns[0].FramedBy == nil {
+			t.Errorf("%s: mass reported as not framed (%s), want it framed under its name", name, vp.Concerns[0].Reason)
+		}
+	}
+}
+
 // Satisfies and framings come back in declaration order even where a named
 // declaration and an anonymous reference are mixed, which the symbol table keeps
 // in separate member lists.

@@ -89,12 +89,12 @@ func (cc *constraintChecker) check(sym *symbols.Symbol) {
 	cc.checkViewSatisfyTarget(sym)
 }
 
-// checkViewSatisfyTarget flags a `satisfy` in a view body naming a requirement
-// that is no viewpoint (SysML v2 §8.3.20): only a viewpoint frames concerns, so
-// such a claim is one nothing can evaluate.
+// checkViewSatisfyTarget flags a `satisfy` claiming a view's conformance to a
+// requirement that is no viewpoint (SysML v2 §8.3.20): only a viewpoint frames
+// concerns, so such a claim is one nothing can evaluate. A satisfy stating a
+// subject asserts its requirement of that subject, not conformance, and stands.
 func (cc *constraintChecker) checkViewSatisfyTarget(sym *symbols.Symbol) {
-	usage, ok := sym.Decl.(*ast.Usage)
-	if !ok || usage.Kind != ast.UsageSatisfy || sym.OwnerScope == nil {
+	if sym.OwnerScope == nil || !semantics.IsViewpointSatisfy(sym) {
 		return
 	}
 	owner := sym.OwnerScope.Owner()
