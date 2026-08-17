@@ -2,6 +2,7 @@ package lsp
 
 import (
 	"context"
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -103,12 +104,15 @@ func skipDir(name string) bool {
 }
 
 // loadFromDisk records a file's bytes as its on-disk content, reindexing it
-// unless an open buffer is authoritative. An unreadable file is treated as gone.
+// unless an open buffer is authoritative. A file that is gone is forgotten; any
+// other read failure leaves what was indexed in place, since it may be transient.
 func (s *Server) loadFromDisk(path string) {
 	// #nosec G304 -- path comes from the folder the client asked to serve.
 	content, err := os.ReadFile(path)
 	if err != nil {
-		s.ws.DeleteOnDisk(path)
+		if errors.Is(err, fs.ErrNotExist) {
+			s.ws.DeleteOnDisk(path)
+		}
 		return
 	}
 	s.ws.SetOnDisk(path, content)

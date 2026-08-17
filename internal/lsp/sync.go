@@ -38,13 +38,15 @@ func (s *Server) DidChange(ctx context.Context, params *protocol.DidChangeTextDo
 }
 
 // DidClose marks the document closed, re-reading its on-disk content first so
-// closing a tab does not unindex names other documents resolve through it.
+// closing a tab does not unindex names other documents resolve through it. Its
+// markers are withdrawn: only an open document has a set that keeps pace with
+// the workspace.
 func (s *Server) DidClose(ctx context.Context, params *protocol.DidCloseTextDocumentParams) error {
 	name := uriToName(params.TextDocument.URI)
 	s.loadFromDisk(name)
 	s.ws.Close(name)
-	s.publishDiagnostics(ctx, name)
-	s.refreshOpenDiagnostics(ctx, name)
+	s.clearDiagnostics(ctx, name)
+	s.queueOpenDiagnostics(ctx, name)
 	return nil
 }
 

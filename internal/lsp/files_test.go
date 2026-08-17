@@ -263,12 +263,13 @@ func TestDidCloseDropsDocumentWithNoFileOnDisk(t *testing.T) {
 	}
 }
 
-func TestDidClosePublishesOnDiskDiagnostics(t *testing.T) {
+func TestDidCloseWithdrawsDiagnostics(t *testing.T) {
 	s, fc, _, lib, _ := multiFileWorkspace(t)
 	ctx := context.Background()
 
-	// The buffer holds an error the file on disk does not; closing discards the
-	// buffer, so the errors it produced have to go with it.
+	// The buffer holds an error the file on disk does not. Closing discards the
+	// buffer, and a closed document's markers are never refreshed again, so they
+	// are withdrawn rather than frozen at what closing happened to see.
 	openFile(t, s, lib, "package Lib {\n    part def Widget;\n    part b : Nope;\n}\n")
 	if msgs := diagnosticsFor(fc, lib); len(msgs) == 0 {
 		t.Fatalf("diagnostics for the lib buffer = none, want an unresolved Nope")
@@ -278,8 +279,27 @@ func TestDidClosePublishesOnDiskDiagnostics(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("DidClose err = %v", err)
 	}
-	if msgs := diagnosticsFor(fc, lib); len(msgs) != 0 {
-		t.Fatalf("diagnostics for lib = %v, want none once the buffer is gone", msgs)
+	msgs, published := lastDiagnostics(fc, lib)
+	if !published || len(msgs) != 0 {
+		t.Fatalf("diagnostics for the closed lib = %v (published=%v), want an empty set", msgs, published)
+	}
+}
+
+func TestLoadFromDiskKeepsIndexOnUnreadableFile(t *testing.T) {
+	s, _, _, lib, _ := multiFileWorkspace(t)
+
+	// A read that fails for any reason other than the file being gone — a lock
+	// or a momentary permission problem — must not unindex what it declares.
+	if err := os.Chmod(lib, 0o000); err != nil {
+		t.Fatalf("chmod lib: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(lib, 0o600) })
+	if _, err := os.ReadFile(lib); err == nil {
+		t.Skip("file still readable; test needs an unreadable file")
+	}
+	s.loadFromDisk(lib)
+	if s.ws.Document(lib) == nil {
+		t.Errorf("lib.sysml unindexed by a transient read failure")
 	}
 }
 

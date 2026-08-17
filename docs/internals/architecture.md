@@ -297,7 +297,8 @@ Parse + model all behavioral bodies with unified fallback grammar:
 - `textDocument/didOpen` — Track opened documents (the buffer becomes authoritative)
 - `textDocument/didChange` — Incremental updates (UTF-8 byte offsets)
 - `textDocument/didClose` — Revert to the file's on-disk content; the document
-  stays indexed, since other documents resolve names through it
+  stays indexed, since other documents resolve names through it, but its markers
+  are withdrawn — only open documents carry diagnostics
 - `textDocument/didSave` — Refresh diagnostics for every open document
 - `workspace/didChangeWatchedFiles` — Reindex files created, edited or deleted
   outside the editor; a deletion leaves an open buffer alone
