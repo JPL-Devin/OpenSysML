@@ -84,10 +84,13 @@ func (m Message) arrivedAt(port string) bool {
 }
 
 // reachedObject reports whether a message delivered to one object reached the
-// object now accepting: neither a connection nor an address of one object
-// delivers into another.
+// object now accepting: no delivery of one object reaches another. An addressed
+// message still crosses a behavior no object performs, which has no identity.
 func (m Message) reachedObject(object int64) bool {
-	return !m.Confined || m.Object == object
+	if !m.Confined || m.Object == object {
+		return true
+	}
+	return m.Port == "" && (m.Object == 0 || object == 0)
 }
 
 // objectID is the identity of an object, 0 for none.
@@ -143,12 +146,15 @@ func (ctx *Context) postTo(msg Message, send lower.Send, self *Instance) error {
 }
 
 // resolveAddress answers what a `send m to t` addressed: the object t belongs to
-// and the port path within it, resolved through the instance graph. A target the
-// graph does not reach is a port or a receiving node of the sender itself; a
-// dotted one reaching neither is unroutable.
+// and the port path within it, resolved through the instance graph. A chain the
+// graph does not reach is a port of the sender itself, and unroutable if it is
+// neither; a name reaching neither is the receiving node of that name.
 func (ctx *Context) resolveAddress(send lower.Send, self *Instance) (messageAddress, error) {
 	if send.Target == "" {
 		return messageAddress{Object: objectID(self)}, nil
+	}
+	if !send.TargetPath {
+		return ctx.namedAddress(send, self), nil
 	}
 	segments := strings.Split(send.Target, ".")
 	if addr, ok := ctx.featureAddress(send.Scope, self, segments); ok {
@@ -157,10 +163,25 @@ func (ctx *Context) resolveAddress(send lower.Send, self *Instance) (messageAddr
 	if sym, ok := ctx.portSymbol(send.Scope, send.Target); ok && sym.Kind == symbols.SymbolPortUsage {
 		return messageAddress{Port: send.Target, Object: objectID(self)}, nil
 	}
-	if len(segments) == 1 {
-		return messageAddress{Name: send.Target, Object: objectID(self)}, nil
-	}
 	return messageAddress{}, &UnroutableSendError{Port: send.Target, Address: true}
+}
+
+// namedAddress resolves a target named rather than chained (`R`, `P::R`): a
+// feature of an object the sender can address, else a port of the sender, else
+// the receiving node the name belongs to, which is matched by that name alone.
+func (ctx *Context) namedAddress(send lower.Send, self *Instance) messageAddress {
+	name := send.Target
+	if at := strings.LastIndex(name, "::"); at >= 0 {
+		name = name[at+len("::"):]
+	}
+	if addr, ok := ctx.featureAddress(send.Scope, self, []string{name}); ok {
+		return addr
+	}
+	sym, ok := ctx.pathSymbol(send.Scope, strings.Split(send.Target, "::"))
+	if ok && sym.Kind == symbols.SymbolPortUsage {
+		return messageAddress{Port: name, Object: objectID(self)}
+	}
+	return messageAddress{Name: name, Object: objectID(self)}
 }
 
 // featureAddress walks a target through the instance graph from the object its
@@ -178,6 +199,10 @@ func (ctx *Context) featureAddress(scope *symbols.Scope, self *Instance, segment
 		}
 		if isPortFeature(slot.Feature) {
 			return messageAddress{Port: strings.Join(rest[i:], "."), Object: owner.ID}, true
+		}
+		// A behavior of an object is a receiving node of it, addressed by name.
+		if i == len(rest)-1 && isBehaviorFeature(slot.Feature) {
+			return messageAddress{Name: segment, Object: owner.ID}, true
 		}
 		if owner, ok = ctx.slotObject(owner, segment); !ok {
 			return messageAddress{}, false
@@ -227,6 +252,19 @@ func (ctx *Context) slotObject(inst *Instance, name string) (*Instance, bool) {
 // rest of its path is the port path within the object.
 func isPortFeature(feature *EffectiveFeature) bool {
 	return feature != nil && feature.Symbol != nil && feature.Symbol.Kind == symbols.SymbolPortUsage
+}
+
+// isBehaviorFeature reports whether a feature is a behavior an object performs,
+// which receives by name rather than being an object of its own.
+func isBehaviorFeature(feature *EffectiveFeature) bool {
+	if feature == nil || feature.Symbol == nil {
+		return false
+	}
+	switch feature.Symbol.Kind {
+	case symbols.SymbolActionUsage, symbols.SymbolStateUsage:
+		return true
+	}
+	return false
 }
 
 // post delivers a built message the way the send addressed it: routed through

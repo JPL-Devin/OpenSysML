@@ -226,10 +226,15 @@ func (ctx *Context) endReceives(scope *symbols.Scope, end string) bool {
 // port it declares, each segment after the first being a member of the one
 // before it.
 func (ctx *Context) portSymbol(scope *symbols.Scope, path string) (*symbols.Symbol, bool) {
-	if scope == nil || ctx.resolver == nil || path == "" {
+	return ctx.pathSymbol(scope, strings.Split(path, "."))
+}
+
+// pathSymbol resolves the first segment in scope and every later one as a member
+// of the one before it, whichever separator the segments were written with.
+func (ctx *Context) pathSymbol(scope *symbols.Scope, segments []string) (*symbols.Symbol, bool) {
+	if scope == nil || ctx.resolver == nil || len(segments) == 0 || segments[0] == "" {
 		return nil, false
 	}
-	segments := strings.Split(path, ".")
 	sym, ok := ctx.resolver.LookupName(scope, segments[0])
 	for _, segment := range segments[1:] {
 		if !ok || sym == nil {

@@ -126,25 +126,40 @@ func TestLowerSendRecordsViaForm(t *testing.T) {
 // An addressed target keeps every segment it was written with: dropping the
 // owner would let the runtime address any same-named port.
 func TestLowerSendKeepsAddressedPath(t *testing.T) {
-	graph := actionGraphFor(t, `
-		action a {
-			first start;
-			action toSend { send 2 to alpha.inPort; }
-			done end;
-			then start toSend;
-			then toSend end;
-		}
-	`)
-	var targets []string
-	for _, body := range graph.Bodies {
-		for _, stmt := range body {
-			if send, ok := stmt.(Send); ok {
-				targets = append(targets, send.Target)
+	tests := []struct {
+		target string
+		want   string
+		path   bool
+	}{
+		{"alpha.inPort", "alpha.inPort", true},
+		{"P::Driver", "P::Driver", false},
+		{"reader", "reader", false},
+	}
+	for _, tc := range tests {
+		graph := actionGraphFor(t, `
+			action a {
+				first start;
+				action toSend { send 2 to `+tc.target+`; }
+				done end;
+				then start toSend;
+				then toSend end;
+			}
+		`)
+		var sends []Send
+		for _, body := range graph.Bodies {
+			for _, stmt := range body {
+				if send, ok := stmt.(Send); ok {
+					sends = append(sends, send)
+				}
 			}
 		}
-	}
-	if len(targets) != 1 || targets[0] != "alpha.inPort" {
-		t.Errorf("`send 2 to alpha.inPort` lowered targets %v, want [alpha.inPort]", targets)
+		if len(sends) != 1 {
+			t.Fatalf("`send 2 to %s` lowered %d sends, want 1", tc.target, len(sends))
+		}
+		if sends[0].Target != tc.want || sends[0].TargetPath != tc.path {
+			t.Errorf("`send 2 to %s` lowered target %q (path %v), want %q (path %v)",
+				tc.target, sends[0].Target, sends[0].TargetPath, tc.want, tc.path)
+		}
 	}
 }
 

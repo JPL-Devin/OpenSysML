@@ -667,7 +667,7 @@ func TestAddressedSendResolvesPortOfNamedObject(t *testing.T) {
 		part beta : Node;
 	}`))
 	alpha, beta := instanceOfUsage(t, ctx, idx, "test::alpha"), instanceOfUsage(t, ctx, idx, "test::beta")
-	send := lower.Send{Target: "alpha.inPort", Scope: declScope(oneSymbol(t, idx, "test::Node::listen"))}
+	send := lower.Send{Target: "alpha.inPort", TargetPath: true, Scope: declScope(oneSymbol(t, idx, "test::Node::listen"))}
 	if err := ctx.post(nil, Message{SignalType: "Ping"}, send, beta); err != nil {
 		t.Fatalf("post: %v", err)
 	}
@@ -699,7 +699,7 @@ func TestAddressedSendDescendsToNestedPort(t *testing.T) {
 		part alpha : Node;
 	}`))
 	alpha := instanceOfUsage(t, ctx, idx, "test::alpha")
-	send := lower.Send{Target: "inner.inPort", Scope: declScope(oneSymbol(t, idx, "test::Node::listen"))}
+	send := lower.Send{Target: "inner.inPort", TargetPath: true, Scope: declScope(oneSymbol(t, idx, "test::Node::listen"))}
 	if err := ctx.post(nil, Message{SignalType: "Ping"}, send, alpha); err != nil {
 		t.Fatalf("post: %v", err)
 	}
@@ -726,13 +726,101 @@ func TestAddressedSendToUnreachablePortIsTyped(t *testing.T) {
 		}
 		part alpha : Node;
 	}`))
-	send := lower.Send{Target: "alpha.count", Scope: declScope(oneSymbol(t, idx, "test::Node::listen"))}
+	send := lower.Send{Target: "alpha.count", TargetPath: true, Scope: declScope(oneSymbol(t, idx, "test::Node::listen"))}
 	err := ctx.post(nil, Message{SignalType: "Ping"}, send, instanceOfUsage(t, ctx, idx, "test::alpha"))
 	if !errors.Is(err, ErrUnroutableSend) {
 		t.Fatalf("post to alpha.count: %v, want ErrUnroutableSend", err)
 	}
 	if len(ctx.PendingMessages()) != 0 {
 		t.Errorf("an unroutable send posted %+v", ctx.PendingMessages())
+	}
+}
+
+// A receiver named by a qualified name is the element the name resolves to, not
+// a path through the sender's features: `::` separates namespaces, `.` chains
+// features.
+func TestAddressedSendToQualifiedNameReachesReceiver(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package P {
+		item def Ping;
+		action pipeline {
+			first start;
+			action sender { send Ping to P::Driver; }
+			done end;
+			then start sender;
+			then sender end;
+		}
+		state Driver {
+			initial init;
+			state waiting;
+			final done;
+			init then waiting;
+			transition waiting to done when Ping;
+		}
+	}`))
+	root := idx.DocumentRoot("<test>")
+	if _, err := ctx.ExecuteAction(findSymbolByName(root, "pipeline", ast.DefAction)); err != nil {
+		t.Fatalf("execute action: %v", err)
+	}
+	_, visits, err := ctx.ExecuteStateWithEvents(findSymbolByName(root, "Driver", ast.DefState), nil)
+	if err != nil {
+		t.Fatalf("execute state machine: %v", err)
+	}
+	assertVisits(t, visits, "init", "waiting", "done")
+}
+
+// An object's behavior addresses a receiving node of an action it performs: the
+// performance is no object of its own, so identity must not exclude it.
+func TestAddressedSendReachesPerformedAction(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
+		import ScalarValues::*;
+		action listener {
+			first start;
+			action reader accept n : Integer;
+			done fin;
+			then start reader;
+			then reader fin;
+		}
+		part def Node {
+			action main {
+				first start;
+				action sender { send 7 to reader; }
+				perform listener;
+				done fin;
+				then start sender;
+				then sender listener;
+				then listener fin;
+			}
+		}
+		part solo : Node;
+	}`))
+	main := oneSymbol(t, idx, "test::Node::main")
+	solo := instanceOfUsage(t, ctx, idx, "test::solo")
+	if _, err := ctx.ExecuteActionPerformedBy(main, solo, nil); err != nil {
+		t.Fatalf("performed by an object: %v", err)
+	}
+}
+
+// Confinement discriminates between objects, and only between objects: a
+// behavior no object performs has no identity to exclude, either side of a send.
+func TestConfinementCrossesBehaviorPerformedByNoObject(t *testing.T) {
+	tests := []struct {
+		name    string
+		msg     Message
+		object  int64
+		reached bool
+	}{
+		{"same object", Message{Object: 1, Confined: true}, 1, true},
+		{"other object", Message{Object: 1, Confined: true}, 2, false},
+		{"unconfined", Message{Object: 1}, 2, true},
+		{"object to no object", Message{Object: 1, Confined: true}, 0, true},
+		{"no object to object", Message{Confined: true}, 1, true},
+		{"port of another object", Message{Object: 1, Port: "inPort", Confined: true}, 0, false},
+		{"port to another object", Message{Port: "inPort", Confined: true}, 1, false},
+	}
+	for _, tc := range tests {
+		if got := tc.msg.reachedObject(tc.object); got != tc.reached {
+			t.Errorf("%s: %+v reachedObject(%d) = %v, want %v", tc.name, tc.msg, tc.object, got, tc.reached)
+		}
 	}
 }
 
