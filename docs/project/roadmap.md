@@ -29,7 +29,8 @@ Full gate green: `gofmt -l .` empty, `go build ./...`, `go vet ./...`,
 | Execution conformance cases | 297 |
 | gRPC conformance fixtures | 14 |
 | Golden execution traces | 98 |
-| Runtime robustness cases | 173 |
+| Runtime robustness cases | 165 |
+| gRPC robustness cases | 8 |
 | Golden AST fixtures | 86 |
 | Negative parser subtests | 129 |
 
