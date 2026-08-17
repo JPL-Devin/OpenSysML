@@ -1166,9 +1166,9 @@ the `@type` mapping and the comparison choices.
 
 **Current:**
 - ✅ Layer 1 (Golden AST): Covered via parser tests (fixtures in internal/core/parser/testdata/)
-- ✅ Layer 2 (Execution conformance): `internal/grpc/conformance_test.go` drives `Evaluate`, `Instantiate`, `ExecuteAction` and `ExecuteState` from `.sysml` + `.expected.json` pairs in `internal/grpc/testdata/conformance/` (8 cases, one of them a failure mode), each parsed through the `ParseFile` RPC so the whole wrapper is exercised. Schema: that directory's `README.md`.
+- ✅ Layer 2 (Execution conformance): `internal/grpc/conformance_test.go` drives `Evaluate`, `Instantiate`, `ExecuteAction`, `ExecuteState` and `GetSymbol` from `.sysml` + `.expected.json` pairs in `internal/grpc/testdata/conformance/` (count in the Test Coverage list near the top; three of them failure modes), each parsed through the `ParseFile` RPC so the whole wrapper is exercised. Schema: that directory's `README.md`.
 - ✅ Layer 3 (Golden traces): N/A — the wrapper adds no ordering behavior of its own; traces are pinned at the runtime tier.
-- ✅ Layer 4 (Robustness): `internal/grpc/robustness_test.go` — 8 cases covering the wrapper's failure modes (unknown model hash, unknown symbol, malformed expression, a standard library that did not load); execution-level failure modes stay pinned in `internal/core/runtime/robustness_test.go`.
+- ✅ Layer 4 (Robustness): `internal/grpc/robustness_test.go` covers the wrapper's failure modes (unknown model hash, unknown symbol, malformed expression, a standard library that did not load); execution-level failure modes stay pinned in `internal/core/runtime/robustness_test.go`.
 
 **Rationale:** the gRPC layer is a protocol wrapper over `internal/core/runtime`, which carries full §5.2 compliance for execution semantics. Its own conformance cases assert what the wrapper is responsible for: symbol lookup by FQN, input binding, value marshalling in both directions (including which `Value` oneof arm is set), the state-visit trace, and in-band error reporting.
 
