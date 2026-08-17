@@ -166,6 +166,18 @@ def sports_car_instance():
     return Instance(pb, {5: pb})
 
 
+def test_as_quantity_decodes_a_quantity_and_rejects_a_bare_number():
+    """A quantity slot decodes to a Quantity; a unitless value is a mismatch."""
+    from pysysml.values import Unit
+
+    quantity = _t.Quantity(5.0, Unit(text="SI::kg"))
+
+    assert _t.as_quantity("mass", quantity) is quantity
+    with pytest.raises(TypeMismatchError) as excinfo:
+        _t.as_quantity("mass", 5.0)
+    assert excinfo.value.expected == "Quantity"
+
+
 def test_the_type_errors_are_reachable_from_the_package():
     """A caller catches these the documented way, through the package namespace."""
     import pysysml
@@ -227,3 +239,13 @@ def test_nested_slot_of_the_wrong_type_is_rejected():
     with pytest.raises(InstanceTypeError):
         nested_view = Vehicle.from_instance(nested)
         nested_view.engine
+
+
+def test_as_enum_literal_decodes_a_literal_and_rejects_its_rendering():
+    """An enumeration slot holds the literal itself, not the text of it."""
+    from pysysml import EnumLiteral
+
+    red = EnumLiteral("D::Color::red", "D::Color", "Color::red")
+    assert _t.as_enum_literal("c", red) is red
+    with pytest.raises(TypeMismatchError):
+        _t.as_enum_literal("c", "Color::red")

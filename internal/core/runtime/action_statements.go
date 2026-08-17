@@ -14,12 +14,17 @@ import (
 type actionStmtHost struct {
 	exec *ActionExecutor
 	node ast.Node // the action node whose body is running, for diagnostics
+	// engine runs the body, and holds the values a `perform` in it reads and
+	// writes: the action's own, and those of every block entered around it.
+	engine *stmtEngine
 }
 
 // executeBody runs the lowered statements of the given action node against the
 // action's feature space.
 func (e *ActionExecutor) executeBody(node ast.Node) error {
-	engine := newStmtEngine(e.ctx, &actionStmtHost{exec: e, node: node}, e.data)
+	host := &actionStmtHost{exec: e, node: node}
+	engine := newStmtEngine(e.ctx, host, e.data)
+	host.engine = engine
 	// The body's activation ends with this execution of it, so a run stepping the
 	// node many times does not hold what every execution computed.
 	defer engine.finish()
@@ -36,8 +41,7 @@ func (h *actionStmtHost) send(ec *EvalContext, s lower.Send) error {
 	if err != nil {
 		return err
 	}
-	h.exec.ctx.post(h.exec.graph.Connections, msg, s, h.exec.self)
-	return nil
+	return h.exec.ctx.post(h.exec.graph.Connections, msg, s, h.exec.self)
 }
 
 // assignOuter writes a name the body's blocks do not declare to the action's
@@ -52,9 +56,29 @@ func (h *actionStmtHost) acceptReturn(Value, lower.Return) error {
 	return fmt.Errorf("%w: %s", ErrReturnOutsideCalc, h.describe())
 }
 
-// effect reports an effect statement no action body executes yet.
+// effect performs the action a `perform` names, as a node of the flow the block
+// holding it states (lower/block_graph.go); any other effect is reported.
 func (h *actionStmtHost) effect(s lower.Effect) error {
-	return fmt.Errorf("%s: '%s' in a body is not executable", h.describe(), s.Kind)
+	if s.Kind != lower.EffectPerform {
+		return fmt.Errorf("%s: '%s' in a body is not executable", h.describe(), s.Kind)
+	}
+	inv, ok := performedInvocation(s.Node)
+	if !ok {
+		return fmt.Errorf("%s: 'perform' names no action to perform", h.describe())
+	}
+	// The performed action reads the values in scope where it is performed and its
+	// outputs come back to them, so a perform in a loop body sees that iteration.
+	env := h.engine.env
+	outputs, err := invokeAction(h.exec.ctx, s.Scope, inv, env.values())
+	if err != nil {
+		return fmt.Errorf("%s: %w", h.describe(), err)
+	}
+	for name, value := range outputs {
+		if !env.assign(name, value) {
+			env.data[name] = value
+		}
+	}
+	return nil
 }
 
 // declaredOutput reports no output features: an action node's parameters live

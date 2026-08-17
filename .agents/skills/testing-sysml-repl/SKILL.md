@@ -52,8 +52,11 @@ in `cmd/sysml/main.go`: walk every mode and assert the status, since a `return` 
   … allocations over … collections, … MiB taken from the OS`). Prove the split with
   `>out 2>err` and `cat` both — a memstats line on stdout would break `-convert -o /dev/stdout`
   and JSON reporting.
-- It fires for the interactive REPL too, after `goodbye`, because it runs in the deferred stop.
-  This is the cheapest check that the profile flush survives the REPL path.
+- It fires for the interactive REPL too, after the session ends, because it runs in the deferred
+  stop. This is the cheapest check that the profile flush survives the REPL path.
+  **Leave the REPL with Ctrl-D, not by typing `goodbye`** — at b3f16e4 `goodbye` at the `sysml>`
+  prompt is parsed as model text and answers `1:1: error: expected a namespace member` (and, over a
+  pipe, makes the whole run exit 2), so a transcript that types it looks like a failure.
 - Heap profiles are written at end of run, when the model is already unreachable, so read them as
   `go tool pprof -top -sample_index=alloc_space <file>` (plain `-top` shows inuse_space and looks
   almost empty). Expect `parser.(*Parser).fill` / `parseUsage` and `symbols.*` at the top.
@@ -303,8 +306,42 @@ is the cheapest source of the values `%slots` should print.
   `t: <error: slot derived.t: member b not found in instance>` — a perfect A/B against the parent
   commit. Name the part something other than `derived` if you want to avoid the (harmless)
   `"derived" is a reserved keyword` warning.
-- **Unset scalar attributes render as `= Instance(ID: n)` / `(no features)`** (also `ringCost`,
-  `ringPort`). Pre-existing on main, unrelated to variation work — don't report it as a regression.
+- **A valueless feature of a value type (`attribute d : Real;`) renders as `= <unset>`** since the A3
+  work (`runtime.Context.HoldsNoValue` + `runtime.UnsetText`); a collection of them reads
+  `[<unset>, <unset>]` and no `(no features)` block is printed under it. On revisions *before* that
+  change the same slots read `= Instance(ID: n)` / `(no features)` (also `ringCost`, `ringPort`), so
+  a parent-commit binary is the ideal A/B. Things that must stay object-shaped: a class-typed part
+  (`Instance(ID: n)` with its nested features, and a genuinely featureless `part def Empty` still
+  legitimately shows `(no features)`) and a value type that *does* declare features
+  (`attribute def Point { attribute x : Real = 1.0; }` still expands). Enums, strings, booleans,
+  quantities, derived attributes and `null` are untouched.
+  Caveat worth re-checking on any follow-up: an expression over an unset slot
+  (`attribute n : Real = d + 1.0;`) still reports
+  `<error: slot q.n: type mismatch: operator '+' is not defined for an instance and a Real>` — the
+  diagnostic still says "an instance" rather than unset, i.e. the unset spelling has not reached the
+  type-mismatch wording.
+- **Surfaces to check together for any value-rendering change**, since they share `formatValue`:
+  `%slots` / `%eval` in the REPL, `sysml <model> -instantiate <fqn> -e <expr>` (same text), the same
+  run with `-json` (the JSON encoder escapes it, so grep `\u003cunset\u003e`, not `<unset>`), and the
+  gRPC/pysysml path. On the Python side `pysysml.UNSET` is a falsy singleton spelled `<unset>` and
+  distinct from `None`: assert `inst.d is pysysml.UNSET`, `inst.d is not None`, `bool(inst.d) is
+  False`, `inst.get_slot('d').value.WhichOneof('kind') == 'unset'` with `materialized=True`, and
+  `'&lt;unset&gt;' in inst._repr_html_()`. `Value.unset` is send-only: the client cannot build it
+  through `_python_to_value`, so to prove the server refuses it, hand-build the request and call the
+  stub directly —
+  `conn._stub.EvaluateCalc(sysml_pb2.EvaluateCalcRequest(model_hash=m.hash, symbol_id='P::Add',
+  arguments=[sysml_pb2.Value(real_value=1.0), sysml_pb2.Value(unset=True)]))` answers
+  `error = 'calc argument could not be read: unset is not a value a caller can supply'` (no result),
+  and a follow-up `conn.calc('P::Add', m.hash, [1.0, 2.0])` → `3.0` proves the service survived.
+  The refusal arrives **in band** — `resp.error` with `failure_reason=FAILURE_REASON_EVALUATION`, not
+  an `INVALID_ARGUMENT` status exception — so assert on `resp.error`, and note the stub method is
+  `EvaluateCalc` (there is no `Calc`).
+- **Getting the CLI value surface wrong wastes a run:** `-instantiate <fqn>` *alone* prints only the
+  creation lines and no slot values — the value surface is `-instantiate <fqn> -e <fqn>::d`, while
+  `-e` *without* `-instantiate` answers `sysml: "…" has no value to evaluate` and exits 1 (the
+  no-instance path, not unset). In `-json`, grep `u003cunset` — a pattern like `u003cunset.003e`
+  misses, because `\u` is two characters. And write the null case `attribute nul : Real[0..1] = null;`:
+  `Real = null` is itself a multiplicity violation and you end up debugging that instead.
 - **Known limits, so don't plan around them:** `%slots` takes only the instantiated usage's own name
   — `%slots test::electricVehicle::engine` answers `no instance of …`, and
   `%eval test::electricVehicle.engine.power` answers `usage test::electricVehicle has no value`.
@@ -457,8 +494,10 @@ An action token that reaches an `accept` with no matching message **parks** inst
 - Satisfiable: `internal/core/runtime/testdata/conformance/action_send_accept.sysml`
   (`%action communicator`) — `%break counter` pauses on the accept node, and resuming completes with
   `number = 50` / `n = 50` (the typed accept skips the String and takes the Integer). Loading these
-  fixtures prints a tier-2 `unresolved reference: n` diagnostic for the `assign` that reads the
-  accepted parameter; the runtime still binds it, so don't mistake that for a new failure.
+  fixtures used to print a tier-2 `unresolved reference: n` diagnostic for the `assign` that reads
+  the accepted parameter while the runtime bound it anyway; **PR #196 fixed that**, so on current
+  revisions loading them must be clean. Seeing that diagnostic again is a regression of the
+  accept-payload scope contribution, not harness noise.
 - Unsatisfiable: write a one-accept action with nothing sending to it. `%step` → `State: Waiting`,
   and `%continue` must return a typed
   `accept deadlock in action <name>: nothing can post the awaited message (...)` — **never** hang.
@@ -466,6 +505,42 @@ An action token that reaches an `accept` with no matching message **parks** inst
   `no active action session`.
 
 Always run these under `timeout` when driving over a pipe; a hang is the failure mode to catch.
+
+### An accept node's payload as a body-scoped name (PR #196)
+
+`internal/core/resolve/accept_payload.go` contributes `action r accept msg : T;`'s payload to the
+**body** the accept node is declared in, so sibling nodes read it by simple name. Test it on both
+surfaces — `bin/sysml -validate f.sysml` for the diagnostic and
+`printf '%%load f\n%%action <n>\n%%continue\n%%quit\n' | timeout 30 ./bin/sysml` for the value —
+because check-clean alone never proves the runtime bound anything.
+
+- The A/B against a parent-commit binary is what makes this convincing: the same model gives
+  `error: unresolved reference: msg — did you mean test::communicator::receiver::msg?` (exit 2) on
+  the old binary and `✓ … no errors` on the new one. Payload names must be **non-keyword** —
+  `accept first : Integer` is parsed as an initial node and derails the whole graph with
+  `action has multiple initial nodes`; `first`, `after`, `then` are all reserved.
+- Positive shapes worth one run each, with the numbers a correct build gives (send value in
+  parens): later sibling reads `msg + 1` (42 → `seen = 43`); nested `if msg > 5` + `while` in a
+  sibling node (7 → `total = 21`); two accepts binding `alpha`/`beta` (11, 30 → `sum = 41`);
+  reader declared textually **before** the accept but sequenced after it (4 → `seen = 5`).
+- **Shadowing is the case only a value can catch.** A package-level `attribute msg : Integer = 1;`
+  keeps the model check-clean on *both* binaries, so assert `seen = 9` (the sent payload) and not
+  `1`. Note a *body*-level `attribute msg = 111` in the same action is a weak probe: the accept
+  writes the same value slot, so `seen = 9` either way — prefer the package-level form.
+- Negatives that must stay `unresolved reference: msg` at exit 2, and each exercises a different
+  guard: a misspelling in the same body (now gains `— did you mean msg?`); a **sibling** action's
+  node in the same package; a package-level `attribute` initializer; a wildcard
+  `import src::communicator::*` into another package; and a `part def` body declaring an action
+  node with the accept (`sharesBodyFeatureSpace` rejects a part — this one is easy to forget).
+- A node that executes **before** the accept binds must fail, not read stale data:
+  `error: execution failed: eval assignment RHS: unresolved reference: msg` in ~0.1 s, with
+  `%tokens` afterwards still showing `Token 1 @ <node>` (session survives).
+- A **qualified** `receiver::msg` reference resolves at check time and then fails the run with
+  `usage receiver::msg has no value` — identical on both binaries, i.e. pre-existing rather than a
+  regression of this change. Always A/B it before reporting it as a defect.
+- Cheap corpus gate for a resolve change: loop `internal/core/runtime/testdata/conformance/*.sysml`
+  and `examples/*.sysml` comparing `grep -c 'error:'` counts new vs old binary and print only files
+  where new > old (~1 min).
 
 ## Standard SysML v2 behavioral notation (flows, triggers, sends, transition effects)
 
@@ -572,7 +647,90 @@ several steps, so a runaway loop (or an empty loop body, whose condition can nev
 in under a second (0.7 s measured). Always follow the failure with another meta-command (`%tokens`, `%instances`)
 to prove the session survived — `%tokens` still shows the token parked at the node with its partial value. A
 `for` over a non-collection gives
-`action node <n>: 'for' collection must be a sequence or a set, got constant`.
+`action node <n>: 'for' collection must be a sequence or a set, got constant` before PR #202, and
+`action node <n>: type mismatch: 'for' iterates a collection, and expression is not one` after it —
+and only for a value that states a *computation* (a body expression). See the next section.
+
+### `for` over a scalar is a typed error (PR #231)
+
+Since PR #231 `forElements` (`internal/core/runtime/statements.go`) only iterates a **sequence** or a
+**set**; `null` iterates zero times, and *everything else* — Integer, Real, Boolean, String, an
+expression — is `type mismatch: 'for' iterates a collection, and <describeValue> is not one`. Exact
+texts observed on `bin/sysml`, worth asserting verbatim:
+
+| input | message |
+|---|---|
+| scalar `Integer` / nested `for` whose inner input is scalar | `error: execution failed: action node <n>: type mismatch: 'for' iterates a collection, and an Integer is not one` |
+| `Boolean` | `… and a Boolean is not one` |
+| `String` | `… and string is not one` (no article — `describeValue` renders it lowercase) |
+| the same `for` in a **calc** body | `error: calc invocation failed: calc <fqn>: calculation body: type mismatch: 'for' iterates a collection, and an Integer is not one` |
+| attribute declared with **no value** (`attribute missing : Integer;`) | `error: execution failed: eval 'for' collection: unresolved reference: missing` — the loop input never reaches `forElements`, so do not expect the new wording here |
+
+Testing notes for this class of change:
+
+- The pre-fix contrast is the convincing frame: build the parent commit into `/tmp/old-sysml` and the
+  same model **completes** with the counter at `1` (and the scalar calc answers `4` instead of
+  erroring) — a silent single iteration, which is exactly what a broken build looks like.
+- Zero-iteration inputs must still *complete*: give the fixture an `assign marker := 1;` **after** the
+  loops so the `Results:` block proves execution continued (`emptyVisited = 0`, `nullVisited = 0`,
+  `marker = 1`), not just that nothing errored. `attribute absent : Integer[0..1] = null;` is the way
+  to get a `ValNull` loop input.
+- Check the strictness did **not** leak into `elementsOf` (collection operators, multiplicity):
+  `%eval SequenceFunctions::size(7)` → `= 1`, `%eval 7->size()` → `= 1`,
+  `%eval SequenceFunctions::isEmpty(7)` → `= false`.
+- `%calc` takes **positional** arguments only: `%calc P::C 4`. `%calc P::C n=4` answers
+  `error: named arguments are not supported here; pass arguments positionally`.
+- An entry action nested inside a part is reachable by its qualified path (`%action test::p::a`), which
+  is the REPL twin of the conformance harness's qualified `"evaluate": "test::p::a"`.
+- After every failing case, run `%eval 1+1` → `= 2` to prove the session survived.
+
+### Block token flows: nested actions and `perform` in a loop body / `if` branch (PR #202)
+
+Before PR #202 a loop body or `if` branch containing an **action node** (a nested `action`
+declaration, or a `perform`) aborted the run at lowering:
+`action node iterate: action usage "scale" in a body is not executable` /
+`'perform' in a body is not executable`. After it, the block becomes a token flow of its own
+(`internal/core/lower/block_graph.go`) and runs. That old message is the **ideal A/B contrast** —
+build the parent commit into `/tmp/old-sysml` (recipe above) and run the same model through both;
+the old binary aborting while the new one prints numbers is far stronger than a screenshot of the
+new numbers alone.
+
+Things that cost time when writing models for this area:
+
+- **A `perform Foo;` binds `Foo`'s `in` parameters by NAME from the enclosing scope**, and merges
+  its `out` values back under their own names. So `action def Bump { in i; out doubled; }` performed
+  inside `for i in 1..3` works because the loop variable is *also* called `i`; rename either side and
+  the run dies with `invoke action Bump: … unresolved reference: i` — which reads like a feature bug
+  but is just a name mismatch in the fixture. Always name the performed action's inputs after the
+  values that exist where it is performed.
+- **`perform <an action def>` also emits a pre-existing static diagnostic**
+  `error: references target must be a usage, found actionDef` on *every* revision (the shipped
+  conformance fixtures do it too) while still executing correctly. Do not report it as a regression;
+  check it against the contrast binary first.
+- **A nested action's own declarations do not leak outward.** Reading one after the node
+  (`assign x := local;`) fails at *name resolution* time, i.e. already at `%load`, with
+  `unresolved reference: local` — a cheaper and stronger no-leak assertion than inspecting Results.
+  Conversely a value declared *before* the nested action IS readable after it (one block scope), so
+  assert both directions.
+- **`%trace on` is the best evidence here**: it labels each block-flow node
+  (`stmt node scale`, `stmt node deeper`, `stmt node Bump` / `stmt perform`) under
+  `iteration N`, so "the perform ran once per iteration" and "the untaken branch ran nothing"
+  are directly visible (no `stmt node <else-branch-action>` line at all). Assert zero `ast.`
+  substrings in the trace — a Go type name there means a node kind is missing from the label switch.
+- The whole block flow still runs inside **one** token step, so `%step` jumps
+  `Token 1 @ start` → `@ iterate` (values still at their initial values) → `@ end` (final values).
+- A non-terminating `while` that performs an action fails with the **evaluation** step limit
+  (`eval assignment RHS: evaluation step limit exceeded (10000000 steps; …)`) in ~4 s, not the
+  action step limit — budget ~10 s, and don't assert on which of the five budgets trips.
+- To reach the `for`-over-a-non-collection error you need a **body expression**, e.g.
+  `attribute notACollection = { in j; j > 1 };` then `for i in notACollection`. Naming a `calc def`
+  (`for i in Mk`) gives `unresolved reference: Mk` instead and does not exercise the path.
+- **The shipped `*_block_flow_*` / `action_for_over_produced_collections` fixtures emit static
+  `unresolved reference` errors when loaded in the REPL** (`select` → "did you mean
+  `ControlFunctions::select`?", `Integer` → "did you mean `ScalarValues::Integer`?") because they
+  import only what the conformance harness needs. Execution still yields the right values, so this
+  is a fixture wart, not a runtime defect — but add the missing imports to your *own* models so the
+  recording is clean.
 
 ### Raising the budgets (PRs #83, #87)
 
@@ -945,6 +1103,45 @@ auto-start is both the realistic user path and the only way it writes its pidfil
 service you started yourself makes `test_lifecycle.py::test_service_shuts_down_when_last_process_exits`
 fail — that is the documented `docs/project/roadmap.md` §P1 gap, not a new bug.
 
+### Driving the service on an ephemeral port (process-lifecycle work, PR #249)
+
+When the thing under test is the **process** (flags, exit status, graceful shutdown, leaks) rather
+than the model semantics, a hand-started service on `-port 0` is the right harness and
+`pysysml.connect(host, port, auto_start=False)` attaches to it without touching the pidfile
+machinery. Pass `-health-port` too: it defaults to 8081 and collides with an already-running
+service. **Never pipe a command whose exit code you are asserting** — `… | tail` reports `tail`'s
+status, which has produced a false pass on this very exit-code matrix; run it bare and echo `$?`.
+And prove "never listened" with `ss -ltn`, since an exit code alone does not. Two more traps cost
+real time:
+
+- `-port 0` makes the *resolved* port observable only in the log line
+  `msg="gRPC server listening" addr=[::]:<port>`. The `-health-port 0` line logs the literal
+  `addr=:0`, so a naive `grep -o 'addr=[^ ]*' | head -1` grabs the health line and you dial port 0
+  ("Connection refused"). Always filter on `gRPC server listening` first, and take the port with
+  `${ADDR##*:}` — `cut -d: -f3` yields `]` for `[::]:41325`.
+- Expected values at 0cf94e80 for `internal/grpc/testdata/conformance/instantiate_derived_slot.sysml`:
+  `mass` → `materialized=True kind=real_value 1500.0`, `doubled` → `real_value 3000.0`; a missing
+  model path raises `pysysml.errors.ModelFileNotFoundError` ("file not found: open …") and the
+  server logs `code = NotFound` for `/sysml.SysMLService/ParseFile` while staying alive. An already
+  occupied `-port` exits **1** with `msg="Failed to listen" port=<port>`; `kill -TERM` exits **0**
+  after `Shutting down gracefully...` / `gRPC server stopped`. `pgrep -x sysml-grpc` (never `-f`)
+  before and after is the leak check. Rest of the matrix: an unknown flag exits **2**;
+  `-cache-size 0` exits **1** with `cache maxSize must be positive`, raised in `NewService` *before*
+  `net.Listen`; a bogus `model_hash` is `NOT_FOUND` / `ModelNotFoundError`. Shutdown with a client
+  channel still open exits 0 and makes the client's next call raise `UNAVAILABLE`
+  (`pysysml.ConnectionError`) — bound that call with a timeout so a hang fails instead of hanging
+  the run.
+
+<a id="venv-trap"></a>
+**Python interpreter trap on this box** (bites every pysysml section below): whatever `python3`
+resolves to in a tool shell may be another project's venv, and a venv built from it gets a
+mismatched `sys.path` — `pyvenv.cfg` naming one minor version while `bin/python` runs another, so
+the editable install lands in a `site-packages` the interpreter never searches and `import pysysml`
+(or `import grpc`) fails right after a *successful* `pip install -e python/`. Always build the venv
+from an explicit real interpreter (`/home/ubuntu/.pyenv/versions/3.12.8/bin/python3.12 -m venv ~/pv`,
+or `/usr/bin/python3.10`) and verify `<venv>/bin/python -c 'import pysysml'` before blaming the
+client. `$HOME/pv` is created by the blueprint, so prefer reusing it.
+
 ### Service lifecycle, the stale-service check and `require_capabilities` (PR #181)
 
 Since PR #181 `Connection` interrogates whatever is *already* listening (`GetServerInfo`) and
@@ -973,11 +1170,13 @@ PYSYSML_GRPC_VERSION=v0.0.7 python -c '...connect(port=50099)...'   # -> StaleSe
   client was built is checked at the first call of *any* kind, so assert it through `conn.load(...)`
   and not only through `conn.server_info()`.
 - `pysysml` has **no module-level `load_from_content`**; use `conn.load_from_content(...)`.
-- Lifecycle state lives in `~/.pysysml/sysml-grpc.{pid,refcount,lock}`. Reset a clean auto-start
-  state with `pkill -x sysml-grpc; rm -f ~/.pysysml/sysml-grpc.pid ~/.pysysml/sysml-grpc.refcount`
+- Lifecycle state is per-port: `~/.pysysml/sysml-grpc-<port>.pid` (a JSON ownership record whose
+  `refs` is the in-process holder count) and `~/.pysysml/sysml-grpc-<port>.lock`. There is no
+  `sysml-grpc.refcount` file. Reset a clean auto-start state with
+  `pkill -x sysml-grpc; rm -f ~/.pysysml/sysml-grpc-50051.pid ~/.pysysml/sysml-grpc-50051.lock`
   (`-x`, never `-f`, which matches your own shell — see the pkill trap below).
   Refcount behaviour worth asserting both within one process (two `connect()`s) and across two
-  processes: 1 → 2 → 1, service still serving the remaining holder, and pidfile/refcount removed
+  processes: 1 → 2 → 1, service still serving the remaining holder, and the pidfile removed
   only when the last one closes.
 - The known-failing pair with a service on :50051
   (`test_integration.py::…::test_load_nonexistent_file_real_server`,
@@ -989,7 +1188,7 @@ Client API shapes that are easy to get wrong:
 
 - `Model.find(name)` returns **one `Symbol` or `None`**, not a list — iterating it raises
   `TypeError: 'Symbol' object is not iterable`. Use `.id` (FQN), `.name`, `.kind`.
-- `pysysml.instantiate(fqn, file_path=...)` and `pysysml.eval(expr, file_path=..., context_symbol_id=...)`
+- `pysysml.instantiate(fqn, file_path=...)` and `pysysml.evaluate(expr, file_path=..., context_symbol_id=...)`
   each take *exactly one* of `file_path` / `model_hash`.
 - `Instance.get_slot(name)` returns the raw protobuf `SlotValue`. Read it as
   `sv.materialized` and `sv.value.WhichOneof('kind')` → `real_value` / `int_value` / `instance_id` /
@@ -1008,7 +1207,7 @@ What the slot kinds mean (`ValueToProto`, `convert.go`):
   attributes (`attribute a = b + 1.0; attribute b = a + 1.0;`) — expect
   `slot Loop.a: slot Loop.b: cyclic slot dependency: Loop.a`, promptly, raised as `SlotError` by
   the client, and prove the service is still alive afterwards with a follow-up
-  `pysysml.eval('1 + 1', ...)`.
+  `pysysml.evaluate('1 + 1', ...)`.
 - A nested `part engine : Engine;` still marshals as bare `instance_id=N`, but
   `InstantiateResponse.instances` carries every instance reachable from the root, so Python
   expands the child too (`inst.engine.power`). An id is only resolvable against the response that
@@ -1057,7 +1256,7 @@ Liveness check: after `test_lifecycle` runs, `pgrep -af sysml-grpc` still lists 
 zombie, so it lies. Use `ss -ltn | grep 50051` to decide whether a service is really listening.
 `pkill -9 -f sysml-grpc` matches your own shell's command line — use `pkill -9 -x sysml-grpc`.
 A full-suite run stops even a service another process owns, leaving a stale
-`~/.pysysml/sysml-grpc.{pid,refcount}`; clear them before the next liveness test.
+`~/.pysysml/sysml-grpc-<port>.pid`; clear it before the next liveness test.
 To hold a service alive for a whole test run, keep a client process open, e.g.
 `(setsid python -c "import pysysml,time; pysysml.connect(); time.sleep(300)" &)` — a plain
 backgrounded `python -c` from a non-tty shell may exit before it prints, so verify the port.
@@ -1095,6 +1294,54 @@ worth asserting, with the wording each produces:
   `UserWarning: Keeping the cached sysml-grpc … could not be downloaded` and returns the old path.
   That is the only observable half of the replacement without network; say so rather than claiming
   the replacement was proven. Always back up the cache + sidecar and restore them afterwards.
+
+#### Service start-up timing and its failure paths (PR #250)
+
+`Connection._ensure_service` probes the service it spawns immediately and then backs off
+(`START_PROBE_INITIAL_DELAY` 10 ms, doubling to `START_PROBE_MAX_DELAY` 250 ms) until
+`START_TIMEOUT` (2.5 s). Timing claims here need a **contrast run against the parent revision**,
+which needs no rebuild since pysysml is pure Python: `git worktree add /tmp/mainwt main`, copy the
+generated `python/pysysml/proto/*.py` in if they are missing, then run the same script twice, once
+plain and once with `PYTHONPATH=/tmp/mainwt/python`, on the *same* `$HOME/pv` venv. Numbers seen at
+c590253e on a free port with nothing listening: **21 ms on the branch vs 515 ms on main**; the
+connection must then really work (`conn.load_from_content(...)` + `Model.eval('1 + 1') == 2`), since
+a fast connect to a dead service would look the same.
+
+Recipes for the failure paths, all with a port of their own so the :50051 tests stay independent:
+
+- **A binary that exits at once** — point `$HOME` at a throwaway dir holding
+  `.pysysml/bin/sysml-grpc` = `#!/bin/sh\nexit 3`. `get_binary_path()` is hard-coded to
+  `~/.pysysml/bin`, so `$HOME` is the only injection point (there is no `PYSYSML_GRPC_BINARY`);
+  `PYSYSML_STATE_DIR` moves the pid/lock files only. Expect
+  `ConnectionError: Service exited with code 3 without serving localhost:<port>` in ~0.02 s.
+- **A port that accepts TCP but never speaks gRPC** — `nc -l` is wrong: it exits after the first
+  connection closes, the spawned service then binds the port and the test silently *passes*. Use a
+  listener that stays up and never answers (bind + `listen(64)` + accept into a list), and pair it
+  with a fake binary that does not exit (`exec sleep 120`) if you want the `START_TIMEOUT` branch
+  rather than the "could not bind" one.
+  **`START_TIMEOUT` bounds the sleeping, not the wall clock**: each probe may spend its RPC timeout
+  (pre-spawn probe 5 s, later ones `START_PROBE_RPC_TIMEOUT` 2 s), so the observed failure is
+  `ConnectionError: Service failed to start within 2.5s` after **~9 s** (3 probes) on the branch
+  against ~17.5 s (6 probes) on main. Do not assert ~2.5 s wall time; assert the message, a
+  single-digit probe count and the improvement over main. Count probes by wrapping
+  `Connection._probe_service` with a timestamping function — that is also the cheapest proof of "no
+  busy-spin".
+- **A replacement that could not bind** (the `_wait_for_a_service_that_could_not_bind` /
+  `START_CONFIRM_DELAY` path) — start a real service outside pysysml on the port, then push the
+  client past the adopt step the way a release mismatch does — either
+  `Connection._adopt_running_service = lambda self: False`, or without monkeypatching, ask for a
+  release the running service cannot be: `pysysml.connect(port=P, version="v9.9.9")` (there is no
+  `PYSYSML_REQUIRE_VERSION` env knob). Expect `StaleServiceError` ("the service
+  started here exited (1) while another one kept serving the address"), **no** ownership record
+  (`~/.pysysml/sysml-grpc-<port>.pid` absent, `_OWNED_SERVICES` empty), the foreign pid still alive
+  and a follow-up `Connection(auto_start=False)` still evaluating. Asserting only "an exception was
+  raised" would miss the real regression risk, which is silently adopting a service this client did
+  not start and killing it on close.
+- **Ownership under a race** — two `python /tmp/x.py <port>` processes started together: exactly one
+  prints `_holds_refcount=True` with `{'refs': 1}`, the other reports
+  `origin=service already listening …`; exactly one `sysml-grpc` runs, and it stops when the owner
+  exits. Pair it with a test that closes an *adopted* connection and asserts the hand-started
+  service is still serving.
 
 ### Verification RPCs, typed errors and strict loading (`pysysml` Tier 3, PR #149)
 
@@ -1141,6 +1388,67 @@ verify_requirement / verify_satisfaction / satisfied / calc`. Testing them from 
   `InvalidRequestError`/`ValueError`, `ConnectionError`/`ConnectionError`,
   `ExecutionError`/`RuntimeError`) and that `__cause__` is the original `grpc.RpcError`. A dead
   service is reproducible with `pysysml.connect(port=50123, auto_start=False)`.
+
+### The prewarmed library-index pool, `SYSML_GRPC_INDEX_POOL` (PR #252)
+
+`internal/grpc/libindex.go` keeps N standard library indexes built ahead of the requests that need
+them (default 4; `0` restores the old per-cache-miss build). How to observe it end to end, and what
+generalizes to any service-side perf change:
+
+- **Measure with DISTINCT model texts.** The service caches models by content, so a repeated model
+  is a cache hit and shows nothing. Append a unique trailing comment (`// distinct model %d`) per
+  iteration and time `conn.load_from_content(src)` client-side; a library-backed model (imports
+  `ScalarValues`/`ISQ`, a derived attribute) is required, otherwise no library index is needed.
+- Numbers observed at 607b0eb8 on a ~85-line model, 12 distinct models: **pool default (4) median
+  4.4 ms**, `SYSML_GRPC_INDEX_POOL=0` **median 112.5 ms**. Expect 1–2 spikes of ~140–155 ms in the
+  pooled run: a tight client loop drains the 4 warm indexes faster than the background refill
+  (~100 ms per index), and the drained request builds inline by design. Report the median plus the
+  spikes rather than the mean, which the spikes dominate.
+- **The env var reaches the service through the pysysml auto-start path** (the client spawns the
+  child, so it inherits the env), so `SYSML_GRPC_INDEX_POOL=0 python sweep.py` is enough — but
+  `pkill -x sysml-grpc; rm -f ~/.pysysml/sysml-grpc-50051.pid ~/.pysysml/sysml-grpc-50051.lock`
+  first, or you keep measuring the previously spawned service's configuration.
+- **Equivalence is the assertion that catches a wrong index.** Have one script print a sorted JSON
+  blob (diagnostics, `find()` id/kind, `eval`, instantiate slot kind+value, `execute_action`,
+  `execute_state`) and `diff` the pool=4 and pool=0 runs: only the line naming the configuration may
+  differ. A pool that shared an index between models would show up here, not in the timings.
+- Bad values are rejected in `NewService`, so `sysml-grpc` **exits 1 before listening**:
+  `-1` → `library index pool size must not be negative, got -1 (SYSML_GRPC_INDEX_POOL)`,
+  `many`/`1.5`/`"4 4"` → `library index pool size must be an integer, got "many" (…)`. Assert the exit
+  code *and* `ss -ltn | grep :<port>` empty — a service that started anyway is the real failure. An
+  empty or all-whitespace value is treated as unset and the service starts normally.
+- Client-side shapes that break these sweeps: proto diagnostics carry severity as a **string**
+  (`d.severity == "error"`; there is no `sysml_pb2.SEVERITY_ERROR`), `Instance.slots` is a **map** so
+  iterate `inst.instance.slots.items()` (and prefer the public `inst.slots` over `inst._slots`), and
+  `file_path="/virtual/…"` must never be passed together with `content=` — the service tries to open
+  the path and answers `NOT_FOUND`. Keep a runner behind `if __name__ == "__main__":` so importing it
+  to reuse its fixture generator does not execute the whole suite.
+- Fixture syntax that silently ruins a pool sweep, since 3 diagnostics per model look like the pool
+  corrupting resolution: write `transition first s1 accept after 1 then s2;` (not
+  `transition s1 then s2 accept after 1;`), and give an `out` an expression
+  (`action def Act { in x : Real; out y : Real = x * 2.0; }`).
+- Prewarming must not block startup: the port accepts in ~30 ms with pool=4, and SIGTERM after
+  prewarming exits **0** in ~13 ms (`Close()` waits for in-flight builds, so a hang here is the
+  regression to watch). Time both with `date +%s.%N` around the launch/`kill -TERM`.
+- Two cheap adversarial shapes worth keeping: `SYSML_GRPC_INDEX_POOL=1` with 8 threads loading
+  distinct models at once (pool permanently drained → mostly inline builds; all 8 must still answer
+  `Perf::Engine`, `1+1 == 2` and the full `execute_action` dict), and `-cache-size 5` with 8 distinct
+  models loaded (the 3 oldest hashes raise `ModelNotFoundError`, the 5 newest still evaluate) — an
+  index handed to a model that is later evicted must not disturb the models still cached.
+- Interpreter trap: see [the venv trap](#venv-trap) above before blaming `import grpc`/`import
+  pysysml` on the change under test.
+
+#### The shared on-disk library index cache (`internal/core/libs/cache.go`)
+
+The REPL, the LSP and the gRPC service all read `~/.cache/sysml-ls/libs` (or
+`$XDG_CACHE_HOME/sysml-ls/libs`), 95 content-addressed `*.idx` files — so a change to that file needs
+a cross-surface check, not just a gRPC one. Move the directory away (cold) and run
+`./bin/sysml <model> -instantiate <fqn> -e <fqn>::attr` plus an LSP `initialize`/`shutdown`/`exit`
+over `--stdio`, then repeat warm: expect roughly **860 ms cold vs 160 ms warm** for the CLI run, the
+95 files rebuilt, no leaked `sysml-lsp`, and `ls -a` showing **zero** `.idx.tmp*` droppings (writes go
+through a unique temp file plus rename). Overwriting one `.idx` with garbage — and, separately,
+truncating one to 0 bytes — must degrade to a silent rebuild back to its original size (same output,
+exit 0), never an error mentioning the cache.
 
 ### The `Query` RPC / `model.query(...)` (SysML v2 API & Services, PR #155)
 
@@ -1192,6 +1500,76 @@ verify_requirement / verify_satisfaction / satisfied / calc`. Testing them from 
   step the pauses on camera. Never type `clear` at such a pause — it is consumed as the Enter for
   the *next* section and you lose that section from the screen; use Konsole's `shift+PageUp`
   scrollback to recover it.
+
+## Enumeration literals: runtime value and gRPC wire form (PRs #197, #208)
+
+A literal's identity is its **declaration**, so nothing in this area should ever be tested by
+comparing rendered text. The two flavors behave differently and both need a case: a plain literal
+(`enum def Color { red; green; blue; }`) is its own value and crosses the wire as an
+`EnumLiteral`, while a literal of an enumeration that specializes a scalar
+(`enum def GradePoints :> ScalarValues::Real { A = 4.0; }`) evaluates to the **declared scalar**,
+so `eval("D::GradePoints::A")` must be the float `4.0`, not an `EnumLiteral`. A literal can also own
+attributes (`Level { low { :>> n = 1; } high { :>> n = 9; } }`), read as `eval("D::Level::high.n")`
+→ `9`.
+
+- **Stale-binary trap (costs an hour if missed).** `pysysml` auto-start runs
+  `~/.pysysml/bin/sysml-grpc` and otherwise *downloads a release*, which lacks new capabilities.
+  Always `make build-grpc && cp bin/sysml-grpc ~/.pysysml/bin/` first and prove it on camera with
+  `./bin/sysml-grpc --version` (prints `commit: <sha>`) plus `ls -l` on both paths. Capability check:
+  `conn.server_info()` must list `enum_values`
+  (`['convert','enum_values','query','type_facts','verification']`).
+- **Wire field numbers are shared real estate.** `api/proto/sysml.proto` has
+  `Quantity quantity = 8;` and `EnumLiteral enum_literal = 9;` — the enum arm moved from 8 to 9 when
+  `main`'s quantity support landed. After any merge that touches the `Value` oneof, re-run both
+  arms *on the same part* (one `part def` with `attribute c : Color = Color::red;` **and**
+  `attribute mass = 1500.0 [SI::kg];`): a field-number mismatch shows up as `None`/`unsupported`,
+  not as an exception. `python/tests/test_wire_compat.py` pins the numbers at unit level.
+- **Incoming values go through one converter.** `ProtoToValueIn(pv, idx, sem)` in
+  `internal/grpc/convert.go` dispatches the quantity and literal arms and recurses into sequences;
+  it is called from `internal/grpc/service.go` (action inputs) and `internal/grpc/verify.go` (calc
+  arguments). The error wording is layer-specific and worth asserting verbatim:
+  calc → `calc argument could not be read: …`, action → `input "c" could not be read: …`.
+- **Identity is `literal_id` alone** (`python/pysysml/enumeration.py` marks `enumeration_id` and
+  `name` `compare=False`). Comparing two *wire-populated* literals passes even when this is broken,
+  so always include the bare-vs-populated cases: with `bare = EnumLiteral("D::Color::red")` and the
+  slot value, assert `bare == car.c`, `hash(bare) == hash(car.c)`,
+  `len({bare, car.c}) == 1`, `{car.c: "R"}[bare]` and `{bare: "R2"}[car.c]` both resolve, while
+  `bare != EnumLiteral("D::Color::green")` and `len({bare, green}) == 2`. The broken shape reads
+  `False False 2`. Also send a bare literal *to* the server (`calc IsRed([EnumLiteral(
+  "D::Color::red")])` → `True`) — a description-free literal must still resolve against the index.
+- **Type, not text.** Assert `isinstance(car.c, pysysml.EnumLiteral)` **and**
+  `car.c != "Color::red"`; a string-shaped decode passes every `str()`-based check.
+- **Input round-trips need a real executable action.** An `action def` whose body is only `in`/`out`
+  parameters is not executable (`initialize action: no initial node found`). Use
+  `action Classify { attribute c : Color = Color::green; attribute isRed : Boolean = false;
+  first start; action inner { assign isRed := c == Color::red; } done end; then start inner;
+  then inner end; }` and pass `inputs={"c": red}` — the in-model default being *green* is what
+  proves the input actually bound.
+- **Adversarial wire ids** (run on both the calc and action path): `D::Color::mauve` →
+  `… D::Color::mauve is not an enumeration literal of this model`; empty `literal_id` →
+  `enumeration literal: literal_id names no declaration`; a valid but non-literal FQN `D::Car` →
+  `… D::Car is not an enumeration literal of this model`. Through `eval` the typed runtime error
+  appears instead: `not a literal of the enumeration: mauve is not a literal of Color (literals:
+  red, green, blue)`. Finish with `eval("1 + 1")` → `2` to prove the service survived. Carried over
+  from #197 and still true: a *bare* REPL `%eval D::Color::purple` never reaches `ErrNotALiteral`,
+  it answers `unresolved reference … did you mean <stdlib name>?`.
+- **Quantities: received but not sendable from the public client.** `connection._python_to_value`
+  has no `Quantity` arm (bool/int/float/str/None/Instance/EnumLiteral/list only), so a quantity
+  *input* can only be exercised by building a `sysml_pb2.Value(quantity=…)` and calling the stub on
+  the same channel. That asymmetry is `main`'s, not the enum PR's — report it as "found, not fixed"
+  rather than a defect. **Trap:** do not fabricate the `unit_term`; naming `SI::kg` as a base factor
+  yields the false-looking `incommensurable units: cannot express SI::kg (1000·SI::gram) in SI::kg
+  (SI::kilogram)`. Echo back the reduction the service itself reported
+  (`car.mass.unit` → `scale_num=1000.0`, `factors=(UnitFactor('SI::gram', 1.0),)`).
+- **Codegen and REPL cross-checks.** `python -m pysysml.generate` must emit
+  `def c(self) -> _t.EnumLiteral: return _t.slot(self, "c", _t.as_enum_literal)` and, for the
+  quantity slot, `_t.Quantity` / `_t.as_quantity`; then read both off a live instance
+  (`Car.from_instance(conn.instantiate("D::Car")).c`) so a wrong decoder raises `TypeMismatchError`
+  instead of passing silently. In the REPL, `%slots` prints `name = value`, i.e.
+  `c = Color::red`, `palette = [Color::red, Color::green, Color::blue]`, `mass = 1500.00 [SI::kg]` —
+  requests often phrase it as `c: Color::red`, which is the same thing.
+- **Set membership** is only observable through `->includes`/`union`; no REPL syntax builds a `Set`,
+  and a sequence literal keeps duplicates by design.
 
 ## Typed codegen (`python -m pysysml.generate`, Tier 2)
 
@@ -1601,6 +1979,11 @@ revision. Discover expected values with the
 piped-stdin form *before* recording, so the recorded run is one clean pass; anything only verified
 over a pipe is not visible in the video and should be reported as weaker evidence.
 
+**`%stop` ends a debugging session but does NOT exit the REPL.** After `%stop` you are still at
+`sysml>`, so a shell command typed next (`clear; ./bin/sysml`) is submitted as SysML and leaves an
+unresolved session error that taints later submissions with
+`note: deeper checks may not have run here…`. Use `%quit` when you mean to get back to the shell.
+
 **Never type `clear` at the `sysml>` prompt while recording.** It is submitted as SysML, not run by
 the shell, so it leaves an unresolved session error and the next submission gains a
 `note: deeper checks may not have run here: the error on buffer line N is unresolved` line that
@@ -1720,6 +2103,75 @@ on `main`; the "old" shapes double as A/B canaries against the parent commit.
   `totalCost = 1450.00`, `band` `bandCost`/`ringCost` `= 400.00`, `engagementRing`
   `engagementRingCost`/`ringCost` `= 500.00`, `diamondCost = 550.00`, and
   `engagementRingToBandConstraint: <constraint: satisfied>`.
+
+## Port routing: direction, conjugation and connector end paths (PR #195)
+
+Routing a `send … via p` is only observable through an `accept` that either receives or does not, so
+every fixture needs **both** a sender node and a reader node writing an attribute, e.g.
+`action reader accept n : Integer via dst { assign got := n; }` — then `%continue` prints
+`Results: got = <n>` / `n = <n>`. A model with no reader completes either way and proves nothing.
+
+- **Drive it with `%load <file>` + `%action <name>` + `%continue`** (or `%state <m>` + `%advance 1` +
+  `%current` for a transition `accept … via p`). Put `import ScalarValues::*;` in every fixture,
+  otherwise the load is noisy with `unresolved reference: Integer — did you mean
+  ScalarValues::Integer?` (harmless, but it costs screen space on camera).
+- **The two performer paths are different code and both need a run:** `%action Pkg::Part::ship`
+  (no object → connectors of the *nearest enclosing part*) and `%instantiate <part usage>` followed
+  by `%action Pkg::Part::ship <usage>` (object → connectors of the object's *type*). Same model, same
+  expected value; a regression in either one is invisible if you only run one.
+- **Direction/conjugation shape:** `port def Chan { out attribute v : Integer; }` with
+  `port src : Chan; port dst : ~Chan; connect src to dst;`. `send via src` delivers; `send via dst`
+  must fail with
+  `error: execution failed: send reaches no receiving port: port "dst" is joined only to outbound
+  ends (src)`. The mirror shape with an `in` feature (`port def Ctrl { in attribute c; }`,
+  `cin : Ctrl`, `cout : ~Ctrl`) must fail on `send via cin` — worth running, because it catches a
+  conjugation applied in only one direction.
+- **A port with no flow features is undirected** (receives either way) and an `inout` feature also
+  receives — assert a *successful* delivery for both, otherwise an over-strict direction check looks
+  like a pass.
+- **Nested-path routing needs a decoy to be a real test.** Declare `port p { port q; }` *and*
+  `port other { port q; }`, `connect p.q to sink`. Two runs: `send via p.q` → reader gets the value;
+  `send via other.q` → `port "other.q" is joined to no port that can receive it` **and** the reader's
+  attribute stays at its initial value. Without the decoy the test passes on a build that routes by
+  bare last segment.
+- **Contrast binary is very cheap here and worth it** (`git worktree add /tmp/old<sha> <sha>`): on the
+  pre-fix commit the direction fixture *completes silently* (message delivered nowhere, no error) and
+  the nested/part-level fixtures end in `accept deadlock in action ship: nothing can post the awaited
+  message (…)`. Those two failure shapes are the proof that the new run means something.
+- **`connect a, b, c;` is a parse error** (`expected 'to' between connector ends`); the n-ary form is
+  `connect (a, b, c);`. If a multi-end routing test "fails" with `joined to no port that can receive
+  it`, check the load diagnostics first — the connector may never have lowered.
+- `connect a to a;` (self-connection) reports `port "a" is joined to no port that can receive it` (the
+  sending port is excluded from its own receivers), and an end naming a nonexistent feature
+  (`connect a to nosuchthing;`) is *deliberately* treated as able to receive, so the action completes
+  with no error and no panic. Assert both — they are the "must not crash" cases.
+
+### Routing from a state machine declared inside a part (PR #195 follow-up, 8cffc9e)
+
+`send … via p` inside a `state machine` nested in a `part def` has to walk out through state,
+region and transition scopes to reach the part's `connect`. Testing it needs shapes the REPL will
+actually descend into:
+
+- **Fixture shape:** `part def Radio { port src : PingPort; port dst : PingPort; connect src to dst;
+  state machine { attribute received : Integer = 0; … } }` with `port def PingPort { in item ping :
+  Ping; }`. Assert on `%current`'s `State data:` block (`received = <n>`), and drive with
+  `%state <Pkg>::<Part>::machine` — a bare `%state Radio::machine` fails with
+  `unresolved reference`, the name must be fully qualified (or just `machine` if it is the only one).
+- **Cover both send sites**: a state entry (`state waiting { entry send Ping() via src; }`) *and* a
+  transition effect (`transition go first waiting do send Ping() via src then sent;`). At the
+  pre-fix commit the entry form can already work while the **transition effect** fails with
+  `error: event processing failed: transition effect: send reaches no receiving port: port "src" is
+  joined to no port that can receive it` — so the transition-effect case is the discriminating one.
+- **Nesting: `initial`/`then` inside a composite state does not descend** in this build — a
+  `state outer { initial s0; state a { entry … } s0 then a; }` machine stays in `outer` and the inner
+  entry never runs (reproducible with no part/ports involved, so it is a pre-existing state-machine
+  limitation, not routing). Use the **entry-succession form instead**, which does descend and shows a
+  `State stack (active configuration): 0. outer / 1. a` in `%current`:
+  `state machine { entry; then outer; state outer { entry; then a; state a { entry send … via src; } … } }`
+  A `region main { initial start; … }` wrapper also works with plain `initial`.
+- **Add a negative for over-reach:** a machine at package level with an unconnected port, and a
+  second part with its own `connect ox to oy`. The send must still fail with the typed error — if the
+  scope walk goes too far it could pick up the unrelated part's connectors.
 
 ## Driving a state machine and its transition effects on camera
 
@@ -1892,6 +2344,40 @@ object whose type conforms to the type declaring the condition, else declared de
   commit, so it is pre-existing, not a regression — but it reads as a contradiction and may be
   worth flagging). Also `%eval A::b::c` (skipping the def segment) is `unresolved reference` in
   both revisions; the resolvable spellings are `A::Outer::b::c` and `A::Inner::c`.
+- **The nested-subject blind spot above was fixed (PRs #206/#219/#236).** Now `%constraint`,
+  `%requirement` and `%satisfy` evaluate the nested object and *name* it: with
+  `part o : Outer { part :>> b { attribute :>> c = 50.0; } }`,
+  `%constraint A::Inner::small` answers `✗ Constraint A::Inner::small failed (on A::o::b ID: 2)` —
+  `<session-held root>::<feature path>`, matching the `b = Instance(ID: 2)` line of `%slots A::o`.
+  Assert the *whole* suffix: a build that regressed to the outer holder still prints a `✗`, and the
+  pre-#236 binary prints the same `✗` line with **no suffix at all**, so ✓/✗ alone proves nothing.
+  Ordinary (non-nested) checks keep labelling the object handed in (`(on A::w ID: 3)`), and a
+  no-object run still prints no suffix.
+  - Such a label is **descriptive, not addressable**: `%slots A::o::b` answers
+    `error: no instance of "A::o::b"` and `%instances` lists only `A::o`. Worth reporting whenever
+    label spelling changes, and a good adversarial step after any "name the subject" PR.
+  - Multiplicity-materialized subjects read `(on A::car::wheels ID: 2)` in the REPL while gRPC still
+    reports the *definition* (`instance_type_id 'A::Bolt'`/`'A::Wheel'`) — the two surfaces disagree
+    by design so far; check both rather than assuming one from the other.
+- **Ambiguity carrier labels: check every fixture shape, they regress independently.** The message is
+  `ambiguous subject: <cond> is carried by <Def> #<id> (<feature path>), …`. Three shapes worth
+  running together, because a change that improves one can flatten another:
+  `front`/`rear` nested parts → `Bolt #4 (front::bolt), Bolt #5 (rear::bolt)` (pre-#236 both read
+  `(bolt)`); subsetting into a shared collection (`part subsystem : Component[*]` fed by
+  `part small : Component :> subsystem` / `large`) → at `658076e9` `Component #2 (small),
+  Component #3 (large)` but at #236 both read `(subsystem)`, because the label now shows the
+  features *walked* (the collection slot) rather than the declaration materialized; recursive
+  containment → `Leaf #2 (leaf), Leaf #5 (next::leaf)`. Always time the recursive/mutual fixtures
+  (`time ./bin/sysml recursive.sysml < cmds`, ~0.22 s) whenever the occurrence key changes.
+- **gRPC classifies an ambiguity since PR #236:** `FailureReason.FAILURE_REASON_AMBIGUOUS_SUBJECT`
+  (enum 3, `api/proto/sysml.proto`). pysysml exposes **no public property** for it — read
+  `verdict._pb.failure_reason` and name it with
+  `from pysysml.proto import sysml_pb2 as pb; pb.FailureReason.Name(...)`; `Verdict` has no
+  `failure_reason` attribute and `connection._failure_of` maps only `WRONG_KIND`, so a client
+  wanting to branch on ambiguity today reaches into a private field. An ordinary violated condition
+  comes back `holds=False` with `FAILURE_REASON_UNSPECIFIED` (0), i.e. "plain violation" is the unset
+  value — assert the ambiguous *and* the violated case in the same run so a hard-coded reason cannot
+  pass both.
 - `-instantiate` objects are created **before** `-e` expressions since PR #180, so
   `sysml -instantiate P::hot -e P::Sensor::reading m.sysml` prints the instance line first and
   answers `140.00 (on P::hot ID: 1)`; the parent binary answered `0.00`. Any change to
@@ -2028,10 +2514,16 @@ number rather than quoting the table.
   71 / 44 / 44 (65 / 38 / 38 counting the 110 `.sysml` files alone — state the denominator, since
   the published limitation counts both languages).
 - **Counted rows go stale fast, and the Python row depends on the environment.** With no service
-  listening (what CI does) `pytest python/tests/ -q` is 369 passed / 26 skipped at 0.0.8; with a
-  service already listening the integration tests run instead of skipping *and* two lifecycle tests
-  fail by design, because they assert this client owns the service it started. Measure the row the
-  no-service way and say so. `go test -race -count=1 ./...` was 3,682 pass / 5 skip / 3,687 total.
+  listening `pytest python/tests/ -q` was 369 passed / 26 skipped at 0.0.8; with a service already
+  listening the integration tests run instead of skipping (since PR #204 nothing fails either way,
+  and CI now starts a service). Say which way a row was measured. `go test -race -count=1 ./...`
+  was 3,682 pass / 5 skip / 3,687 total at 0.0.8, and 4,440 / 7 / 4,447 at 0.0.9 — recount rather
+  than trusting either. Count **first-level** subtests: `variant_connection_per_owner` registers one
+  sub-subtest per owner, so counting every `=== RUN` line reported 299 conformance cases where 297
+  fixtures exist, and inflated the robustness row from 173 to 199. Four documents are allowed to
+  state counts (`docs/project/spec-compliance.md`, `README.md`, `docs/project/roadmap.md`,
+  `docs/project/training-examples.md`) and must be updated in one commit; anywhere else, link to
+  spec-compliance rather than adding a fifth copy.
 - **Error-class claims: check the export path.** A class can exist in `pysysml.errors` and be absent
   from the package surface — `hasattr(pysysml, name)` is the check, and
   `TestPackageSurface` in `python/tests/test_errors.py` now locks every exception in
@@ -2043,3 +2535,737 @@ number rather than quoting the table.
   `WorkspaceEdit` whose `newText` actually fixes the file. A missing-semicolon fix needs a fixture
   the parser recovers with a fix on — `action def A { first start }` yields `Insert ';'`; a plain
   attribute declaration yields a diagnostic with no fix.
+
+## Subject-aware `Evaluate`, attribute metadata and generated classes (Track P, PR #218)
+
+- **`pandas` is not installed by the blueprint but `Symbol.to_dataframe()` needs it.** If
+  `to_dataframe()` raises `ModuleNotFoundError: No module named 'pandas'`, run
+  `$HOME/pv/bin/pip install pandas -q` first — the failure is environmental, not a product defect.
+- **Subject evaluation is the difference between the *declared default* and the *object's slot*.**
+  A fixture that distinguishes them is mandatory: `part def Vehicle { attribute mass = 1500.0; }`,
+  `part def Sedan :> Vehicle { attribute :>> mass = 1200.0; }`, `part sedan : Sedan;`. Then
+  `m.eval('mass', context_symbol_id='Demo::Vehicle')` must be `1500.0` while
+  `m.eval('mass', subject='Demo::sedan')` must be `1200.0`. Without the redefinition both paths
+  return the same number and the test proves nothing.
+  - On `Model` the kwarg is `subject=`; on `Connection.eval` it is `subject_symbol_id=` and the
+    model hash comes **second**. Module-level `pysysml.evaluate` also takes `subject=`; the
+    deprecated `pysysml.eval` forwards to it and warns `DeprecationWarning`.
+  - A `subject=` plus an explicit `context_symbol_id=` still reads the object, and derived slots
+    (`attribute doubled = mass * 2.0`) follow the object too.
+  - A *definition* as subject is accepted (it is instantiated and reads its own redefinition), and an
+    unrelated subject (e.g. an attribute) is tolerated rather than rejected — record those as
+    observed behavior, not failures. An unknown FQN gives `ExecutionError: subject not found: <fqn>`.
+  - A subject with a cyclic slot raises `ExecutionError: ... cyclic slot dependency: <feature>` and
+    the service must still answer afterwards — always follow such a case with `m.eval('1+1') == 2`.
+- **Cross-checking against the REPL needs fully-qualified expressions.** `%eval mass` on a model with
+  several `mass` features fails with `symbol "mass" is ambiguous`, whereas gRPC `subject=` resolves
+  the unqualified name inside the subject's scope. Use `%instantiate Demo::sedan` then
+  `%eval Demo::sedan::mass` / `%slots Demo::sedan` to compare; that is a surface divergence in name
+  resolution, not a wrong value. Drive it non-interactively with
+  `printf '%%load …\n%%instantiate …\n%%eval …\n%%quit\n' | ./bin/sysml`.
+- **Attribute metadata checks worth making**: own attributes come before inherited ones; a
+  redefinition masks the attribute it redefines (`Sedan.mass` = 1200.0, not two `mass` rows);
+  `attributes()` ids point at the *declaring* supertype (`Demo::Vehicle::name`); a **non-constant**
+  default such as `mass * 2.0` must report `value=None` rather than a guessed number; a quantity
+  default `120.0 [kg]` reports value and `unit='kg'` separately; an element with no attributes yields
+  `[]` and an empty DataFrame that still has all 8 columns
+  (`name,kind,id,type,multiplicity,value,unit,inherited`).
+- **Stdlib elements themselves are not reachable through `Model.find`/`m['ISQ::MassValue']` (returns
+  `None`)**, so "attributes of a stdlib element" can only be covered indirectly: declare
+  `attribute m : ISQBase::MassValue = 3.0 [kg];` in your own model and assert the *resolved* type
+  string `ISQBase::MassValue`.
+- **Generated classes**: `python -m pysysml.generate model.sysml -o out.py` then actually `import` the
+  module — an MRO bug only surfaces at import as
+  `TypeError: Cannot create a consistent method resolution order`. Assert `cls.__mro__` names against
+  the model (include multiple supertypes and a diamond), that a `:>>`/`subsets` feature inherits the
+  type/multiplicity it does not restate (`String[0..*]` → `-> list[str]`), and that any base Python
+  cannot linearize, or that has no generated class, is dropped **with a comment** such as
+  `# specializes G2::Hybrid, left out: Python cannot linearize it with the bases above` /
+  `# specializes ISQBase::MassValue, which has no generated class`.
+- **Quantity results carry the scalar on `Quantity.magnitude`, not `.value`** — a probe using `.value`
+  reports a false failure even when the runtime is correct.
+- **A stale `~/.pysysml/bin/sysml-grpc` silently blocks the subject/attribute surface.** These features
+  are capability-gated (`evaluate_subject`, `symbol_attributes` in `pysysml/capabilities.py`), so a
+  service built before they landed makes `conn.eval(..., subject_symbol_id=…)` /
+  `attribute_facts()` / `to_dataframe()` raise `MissingCapabilityError` instead of answering — which
+  looks like a client bug. Always reinstall the binary before testing a merge:
+  `make build-grpc && pkill -x sysml-grpc && rm -f ~/.pysysml/sysml-grpc-50051.pid ~/.pysysml/sysml-grpc-50051.lock && cp bin/sysml-grpc ~/.pysysml/bin/`
+  (the `cp` fails with `Text file busy` while the old one still runs), then assert
+  `sorted(conn.server_info().capabilities)` contains both names before trusting any result.
+- **The auto-started service dies with the session that started it.** After an interactive
+  `pysysml` REPL exits, `PYSYSML_REQUIRE_SERVICE=1 pytest tests/` aborts during collection with
+  `$PYSYSML_REQUIRE_SERVICE is set … but none answers on localhost:50051`. Start one yourself first:
+  `nohup ~/.pysysml/bin/sysml-grpc -port 50051 >/tmp/svc.log 2>&1 &`.
+- **`PINNED_SHA256` is nested `repo -> version -> asset`.** To exercise the *contradicted* digest arm
+  you must inject the key for the repository actually in use, e.g.
+  `binary.PINNED_SHA256['Open-MBEE/Systemica'] = {'v0.0.8': {'sysml-grpc-linux-amd64': 'de'*32}}`
+  (`DEFAULT_GITHUB_REPO`, looked up case-sensitively, so the spelling must match exactly);
+  a mis-cased, flat or `in`-substring patch leaves the pin absent and you silently re-test the *unpinned* arm
+  (`UnpinnedReleaseError` + kept cache) while believing you tested the contradiction.
+
+## Symbol *kind* changes: `%search` is the only REPL probe (PR #210)
+
+When a change moves a declaration from one `symbols.SymbolKind` to another (modifier-driven usage
+kinds, KerML classifier classification, `classifyUsage` edits), `-validate` proves nothing: a model
+can be clean on both revisions while every kind is wrong. The probe is the REPL's
+`%search <prefix>`, which prints `<fqn>  <kind>` from `sym.Kind.String()`
+(`internal/repl/discover.go`, names in `internal/core/symbols/symbol.go`):
+
+```bash
+printf '%%load /tmp/m.sysml\n%%search Pkg::\n%%quit\n' | timeout 30 ./bin/sysml -quiet
+```
+
+- **Always search a `Pkg::` prefix, not a bare word.** `%search Observe` matched ~20 stdlib symbols
+  (ISQLight, VerificationCases) and truncated with `(9 more; narrow the search)`, burying the
+  model's own symbols. The trailing `::` also drops the package row itself.
+- `%list` only echoes the submitted source text and `renderMember` never reaches action-body
+  parameters, so it cannot show a parameter's kind. There is no `%kind`/`%hover` in the REPL.
+- **Anonymous usages are invisible to `%search`** (no name to index). To show that
+  `individual part : Vehicle;` or `in snapshot ;` still built something, use
+  `./bin/sysml <m> -convert sysml -o /dev/stdout` and assert the member round-trips
+  (`in snapshot;`, `in event;`, `in;`).
+- Warning-only changes need the **exit code** asserted explicitly: `-validate` prints warnings and
+  still ends `✓ no errors` with exit 0, so `echo "exit=$?"` is the difference between "warning" and
+  "error" in the recording. Count them with `-validate f 2>&1 | grep -c 'reserved keyword'`.
+- The A/B main binary is essential here: on `main` the same fixture printed
+  `attributeUsage`/`partUsage` for `individual i : V` and `in snapshot atStart : Flight`, which is
+  the only visible difference between fixed and broken.
+
+Pre-existing traps worth not re-reporting as regressions:
+
+- A bare `event e : O;` **declaration** reports `error: unresolved reference: e — did you mean
+  Demo::e?` on every revision — `event <name>` is read as naming an existing occurrence. Use
+  `occurrence takeoff : Flight; event takeoff;` for a clean fixture; the symbol is still built as
+  `occurrenceUsage`.
+- Fixtures using `Real`/`Integer` need `private import ScalarValues::*;` or `-validate` fails with
+  `unresolved reference: Real` and masks the kind assertions.
+- **Run the suite with a cold library index when you change classification.** The on-disk index
+  (`$XDG_CACHE_HOME/sysml-ls/libs`) caches stdlib symbol kinds, so a warm cache keeps returning the
+  old kinds and `go test ./...` passes locally while CI fails. Gate with
+  `export XDG_CACHE_HOME=$(mktemp -d) && go test -count=1 ./...`; this is how PR #210's
+  `function` → `kermlType` regression (every `IntegerFunctions` operator stopped being a calc,
+  `internal/repl/discover_test.go` pinned `ScalarValues::Integer attributeDef`) stayed hidden.
+
+## Multiplicity of a feature's default value (PR #199, Track A / A2)
+
+A default bound to a feature is checked against the feature's multiplicity in **two independent
+tiers**, and testing one proves nothing about the other:
+
+- **Static (type tier)**: `sysml <m> -validate` reports counts it can see in the source, from
+  `passes.checkValueCount` over `exactCount(u.Value)`. Wording:
+  `N value(s) bound to a feature with multiplicity lower|upper bound M`, exit **2** with
+  `did not analyse cleanly; no check was made`.
+- **Runtime**: `Context.checkDefaultCount` fires only when the slot is **materialized**, i.e. when
+  something reads it. Wording adds a prefix:
+  `slot <Type>.<name>: multiplicity violation: N value(s) bound to …`.
+
+Consequences worth checking on every change here:
+
+- `%slots <instance>` renders a bad slot inline as `name: <error: slot …>` and the REPL still
+  **exits 0** — a violation is not a session error. For an exit status you need a run that reads the
+  slot, e.g. `sysml m.sysml -instantiate test::bad -eval 'test::bad.few'` → exit **2** with
+  `evaluation failed: slot bad.few: multiplicity violation: …`.
+- `sysml m.sysml -instantiate X -validate` prints `no errors` and exits **0** even when every
+  default in the model violates its multiplicity, because `-instantiate` creates the object without
+  materializing its slots. Do not use it as the "does the runtime check fire" probe.
+- **The two tiers can disagree, and a collection holding a reference is where they do.** `exactCount`
+  flattens nested collection literals just as binding does, so
+  `attribute nested : Real[4] = ((1.0, 2.0), (3.0, 4.0));` counts 4 statically and materializes as
+  `[1.00, 2.00, 3.00, 4.00]` with no diagnostic; but a collection whose elements are references has
+  no statically known count, so `attribute two : Real[2] = (src, src);` (with `src : Real[3]`)
+  passes statically and errors at runtime with "6 value(s) … upper bound 2". Include both shapes in
+  any regression fixture.
+- A feature that declares **no** multiplicity is deliberately not held to the assumed `1..1`
+  (`EffectiveFeature.MultiplicityStated`), so `attribute anyN = both.volume;` over a `[0..*]`
+  sibling must show `[2.00, 3.50]` with no diagnostic. A test asserting an error there is wrong.
+- Multiplicity is inherited through `:>>` when the redefinition does not restate it, in both tiers:
+  `part def Base { attribute xs : Real[2]; }` + `attribute :>> xs = (1.0, 2.0, 3.0);` must
+  `-validate` as an error (exit 2) — this is the cheapest static probe of that path, and it is
+  clean on any build predating the fix.
+
+Fixtures live in `internal/core/runtime/testdata/conformance/multiplicity_default_*.sysml`
+(merged / composite / nonconforming / redefinition). Drive them over a pipe to discover values:
+
+```bash
+printf '%%load internal/core/runtime/testdata/conformance/multiplicity_default_merged.sysml\n%%instantiate test::ranges\n%%slots test::ranges\n%%quit\n' | timeout 60 ./bin/sysml
+```
+
+Expected: `exact = [1.00, 2.00, 3.00]`, `star = [1.00, 2.00]`, `empty = []`, `plus = [5.00]`,
+`masses = [1.00 [kg], 2.00 [kg]]` (units survive), and in the composite fixture
+`stowed = [Instance(ID: 2), Instance(ID: 3)]` reusing **left/right's own IDs** rather than fresh
+ones — comparing IDs is the only way to tell "held the objects the default names" from
+"instantiated two new ones".
+
+Two gotchas when recording this area in Konsole: the REPL does **not** expand shell variables, so
+`%load $CONF/x.sysml` fails with a path error — type full relative paths; and `part derived : …`
+draws a `"derived" is a reserved keyword` warning that is unrelated to the defaults under test.
+
+## String values and StringFunctions (PR #211)
+
+A model that declares `String`/`Integer`/`Boolean` attributes needs `import ScalarValues::*;` —
+without it every type annotation reports `unresolved reference: String — did you mean
+ScalarValues::String?` and `-validate` exits 2 before any string behavior runs, which looks like a
+feature failure but is a fixture bug. Add `import StringFunctions::*;` to call `Length`/`Substring`
+unqualified inside a model (the REPL's `-e` mode resolves those two unqualified with no import,
+because they are aliased in `library_functions.go`'s unqualified map; the other StringFunctions
+names always need the `StringFunctions::` prefix).
+
+Discriminators that separate a working string runtime from a broken one:
+
+- **Characters, not bytes.** `Length("héllo")` is 5 (6 bytes), `Length("日本語")` is 3 (9 bytes),
+  `Substring("héllo", 2, 3)` is `"él"`. A byte-based implementation answers 6/9 or returns mojibake,
+  so always use a non-ASCII fixture — an ASCII-only test passes either way.
+- **Substring is 1-based and inclusive**, with `lower > upper` returning `""` rather than erroring,
+  while `lower < 1` or `upper > Length` gives `sequence index out of range: function
+  StringFunctions::Substring lower 0 is outside 1..5` and exit 2.
+- **The `==` split is deliberate**: `"a" == 3` evaluates to `false` (it specializes
+  `DataFunctions::'=='`), while the explicit `StringFunctions::'=='("a", 3)` is a type mismatch.
+  Test both; only one of them being right is the likely regression.
+- A string against an Integer/quantity/sequence must say
+  `type mismatch: operator '<' is not defined for a string and a quantity` (naming both types).
+
+### Driving these cases through a GUI terminal
+
+- **xdotool cannot type CJK into Konsole** — `type` with `日本語` silently delivers nothing, so
+  `Length("日本語")` arrives as `Length("")` and answers 0, which reads as a failure in the video.
+  Latin-1 accents (`héllo`, `naïve`) do type fine. Put any CJK (and any quoted-operator name such as
+  `StringFunctions::'=='`, which shell quoting mangles when typed inline) into a small
+  `/tmp/*.sh` written from a tool shell, then `cat` it and `bash` it on camera — the `cat` shows the
+  reviewer exactly what ran.
+- At the `sysml>` prompt a bare expression like `("a","b")->includes("b")` is parsed as a
+  declaration (`1:1: error: expected a namespace member`). Prefix expressions with `%eval`.
+- `%slots <PartDefName>` (not the part usage path) is what follows `%instantiate <PartDefName>`;
+  `%slots Msg::g` reports `no instance of "Msg::g"`.
+- **Escapes are stored raw**, so `Length("a\"b")` is 4 and the value renders as `"a\\\"b"`. This is
+  pre-existing lexer behavior (identical on the parent commit) — verify against a contrast binary
+  before reporting it as a string-runtime defect.
+- A 512 KiB string built by doubling inside a `for` loop (`acc = acc + acc` ×16, then
+  `Length(acc)` → 524288) completes in seconds; use it as the cheap no-hang/no-quadratic check.
+  Note that a calc whose body assigns to a `return acc` feature returns no value when *invoked from
+  another calc's expression* (`calculation returned no value`), so compute the length inside the
+  same body rather than wrapping the loop calc in another one.
+
+## Runtime budgets, and `calc` recursion in particular (PR #198)
+
+Every budget in `internal/core/runtime/budget.go` is reachable from the CLI as an env var and is
+listed by `%budget` in the REPL — that meta-command is the cheapest proof a new bound was wired
+into `internal/repl/meta.go`. `SYSML_MAX_CALC_DEPTH` (default 10000) bounds nested `calc`
+invocations, i.e. recursion depth, and is the only budget with a **ceiling** (25000).
+
+Four distinct surfaces to assert for any budget change, since they fail independently:
+
+1. **Under the bound the run must succeed with the right number**, not merely "not error".
+   `%calc P::sumTo 5000` → `= 12502500`. Deep-but-terminating recursion is fast (~0.3 s), so a
+   long pause is itself a signal.
+2. **Over the bound: a typed error, promptly, with a sane exit status.** Both
+   `%calc P::spin 1` in the REPL and `./bin/sysml m.sysml -eval 'P::spin(1)'` (exit **2**, wall
+   time well under a second). Wrap in `timeout` so a hang shows as exit 124, and read the output
+   for `fatal error: stack overflow` — a Go runtime crash rather than a reported error is the
+   failure mode the budget exists to prevent. Follow the REPL error with `%eval 1 + 1` → `= 2` to
+   show the session survived.
+3. **A low value must refuse input that otherwise evaluates** (`SYSML_MAX_CALC_DEPTH=50` on a
+   200-deep recursion). Without this contrast the env var could be ignored entirely and the test
+   would still look green.
+4. **Invalid/out-of-range values are refused at startup**, before any model work, naming the
+   variable: `=abc` → `is not an integer … (default 10000)`; `=30000` → `must be at most 25000 …`.
+   Also assert the ceiling value itself (`=25000`) is *accepted* — an off-by-one in the comparison
+   is otherwise invisible. Both refusals exit 2 and print no evaluation output.
+
+Budget interactions matter: under `SYSML_MAX_STEPS=100` a runaway recursion must report the *step*
+limit, not the depth limit. Whichever budget is spent first wins, so a change that reorders the
+checks shows up here and nowhere else.
+
+### Fixture notes for recursive `calc` models
+
+- Bare `Integer`/`Boolean` do **not** resolve in a hand-written file (the conformance harness
+  supplies the imports). Start the package with `private import ScalarValues::*;` or every line
+  errors with `unresolved reference: Integer — did you mean ScalarValues::Integer?`.
+- A recursive calc is just `calc f { in n : Integer; return : Integer = if n <= 1 ? 1 else n * f(n - 1); }`.
+  An **implicit-result** body drops `return :` and ends in a bare expression:
+  `calc f { in n : Integer; if n <= 1 ? 1 else n * f(n - 1) }`. Both must be exercised — they take
+  different paths in `passes/typecheck.go` (`checkBehaviorMember`) and only the explicit one was
+  type-checked before #198.
+- Adversarial shapes worth having in one file: a non-recursive calc *usage* nested inside a
+  recursive calc; recursion through a calc named like a library function (`max`); mutual recursion
+  (`isEven`/`isOdd`, whose result for an odd argument is `false`).
+- **There is no `%check` command.** To evaluate an `assert constraint` whose body calls a recursive
+  calc, use `%instantiate <DefName>` then `%slots <DefName>` — note both take the **def** name, not
+  the usage (`%slots P::w` answers `no instance of "P::w"`). A satisfied constraint renders
+  `deepOK: <constraint: satisfied>`; a runaway one renders per-slot as
+  `spinny: <constraint: not evaluated: … calc recursion limit exceeded …>` and the session survives.
+
+### Type diagnostics on implicit-result bodies
+
+`-validate` is the surface: an implicit result is typed like any expression, so
+`calc def C { in n : Integer; n + "one" }` must report
+`error: operator '+' is not defined for Integer and String` (exit 2) and an incommensurable pair
+(`ISQ::LengthValue` + `ISQ::DurationValue`) must report
+`warning: operator '+' combines incommensurable quantities: … (dimension L) and … (dimension T)`
+(exit 0). Always pair these with a **clean** implicit-result body (`n + 1` → `no errors`) — a pass
+that over-reports would look identical otherwise. Because the pre-fix binary printed `no errors`
+for all three, the contrast binary from the parent commit is what makes this evidence conclusive.
+
+## pysysml service ownership and the require-service gate (PR #204)
+
+Ownership is the claim worth testing by hand, because pytest can pass while the invariant is
+broken. Three probes, each with a state dir of its own so nothing collides:
+
+```bash
+PY=~/pysysml-venv/bin/python          # ls -d /home/ubuntu/*venv* if it is missing
+cp bin/sysml-grpc ~/.pysysml/bin/     # what CI does; otherwise ensure_binary downloads
+PORT=$($PY -c 'import socket;s=socket.socket();s.bind(("localhost",0));print(s.getsockname()[1])')
+```
+
+- **Foreign service:** start `bin/sysml-grpc -port $PORT` from the shell, then in one
+  `PYSYSML_STATE_DIR=/tmp/stateN` python process `Connection(port=P, auto_start=False)`,
+  `pysysml.connect(port=P)` (the adopt path) and a connection left open at exit. Expect the
+  shell's pid to still be alive and the state dir to hold **only** `sysml-grpc-<port>.lock` — a
+  `sysml-grpc-<port>.pid` for a service pysysml did not spawn is the bug.
+- **Own service:** `pysysml.connect(port=<free>)` writes
+  `{"pid","create_time","port","owner_pid","owner_create_time"}`; assert `create_time` equals
+  `psutil.Process(pid).create_time()` and `owner_pid == os.getpid()`. Two connections must keep it
+  alive when the first closes, and the last close (or plain interpreter exit, via `atexit`) must
+  stop it and delete the `.pid`.
+- **Pid spoof:** `bash -c 'exec -a "sysml-grpc -port P (decoy)" sleep 600'` plus a hand-written
+  pidfile naming that pid with a `create_time` off by a few hundred seconds. The decoy must survive
+  and the record must be replaced/removed. The old cmdline-substring scheme killed it, so this is
+  the one probe that distinguishes the schemes.
+- Use `conn.load(path)` (not `load_model`) for a real RPC that proves the connection talked to the
+  service rather than failing early.
+
+Suite counts as PR #204 merged (`cd python && $PY -m pytest tests/ -q`): **413 passed / 13 skipped**
+with no service; **423 passed / 3 skipped** with a service on 50051 and
+`PYSYSML_REQUIRE_SERVICE=1`, the
+3 remaining skips being mypy-not-installed and a manual-binary-cache case, never a service skip.
+With `PYSYSML_REQUIRE_SERVICE=1` and no service, collection must **error** (exit 2,
+"none answers on localhost:50051"), never skip. A whole run must leave an operator-started service
+on 50051 with the same pid.
+
+## Orthogonal regions and cross-region transitions (`internal/core/runtime/state_region_transition.go`)
+
+A transition whose source and target sit in different orthogonal regions of the same composite
+state must exit only its source side, not the enclosing composite. The REPL surfaces needed to
+see that at all:
+
+- **`%trace on` is the only surface that shows exit/entry order.** `%current` shows the resulting
+  configuration; only the trace distinguishes "exited the source" from "exited and re-entered the
+  whole composite". Turn it on *before* the `%advance` that fires the transition, and assert on the
+  absence of lines too (`no exit: <composite>`, no second `enter: <composite>`).
+- **`%current` prints one active state per active region**, joined by ` | `, and each name is the
+  state the region itself **declares** — a composite (`wrapper`), not the nested target inside it.
+  So `wrapper | rtarget` is the correct shape for a target nested one level deep, and a **repeated
+  name (`rtarget | rtarget`) is a bug signal**, not a rendering quirk: it means an outer region
+  recorded a state it does not declare. Do not dismiss duplicates as legitimate.
+- An emptied source region simply disappears from the list, so "the source region has no active
+  state" is asserted by its absence.
+- **Counter attributes, not state names, are the discriminator.** Give every state on the path an
+  `entry`/`exit` action incrementing its own counter (`wrapperExits`, `runningEntries`, …) and read
+  them from `%current`'s "State data". Exactly-once claims (`exit ran once`, `composite entered
+  once`) are unprovable from the configuration alone, and double-exit bugs are invisible without
+  them.
+- **Always build a contrast binary and run the same model through both** (recipe earlier in this
+  file). Cross-region models are easy to write so that they pass on the broken build too; the
+  contrast run is what proves the model is adversarial. **Pick the contrast commit by where the
+  defect lives:** the parent commit for a regression introduced by the PR, but `origin/main` when the
+  bug is pre-existing — a main-based contrast additionally proves the PR fixes a shipped defect
+  rather than one of its own making. Useful discriminating values seen historically: a pre-fix build
+  re-enters the composite forever and dies at the event budget; a build with the wrong recorded
+  active state prints a duplicated name; a build missing the widened concurrency test leaves the
+  target region's old state running (`<state>Exits = 0`) and prints it alongside the target
+  (`lstate | mid`); a build with the old `leaveRegion` clearing rule runs the same exit actions twice
+  (`midExits = 2`, `wrapperExits = 2`).
+
+Shapes worth covering, in increasing order of subtlety — each has broken independently:
+
+1. plain sibling-region target (`state_transition_cross_region.sysml`);
+2. a third sibling region that must keep its state (`..._third_region.sysml`);
+3. target nested one and two levels under a composite the target region is **already running**
+   (`..._nested_target.sysml`) — the abandoned inner state must exit;
+4. target nested under a composite that is **not** active there (`..._inactive_wrapper.sysml`);
+5. target region running a **different** composite, whose nested regions must be torn down;
+6. **source nested deeper than the target's region** (`..._deep_source.sysml`) — the source side
+   must be exited up to the shared region-set level (`exit: ideep` → `exit: wrapper`) while the
+   composite is untouched;
+7. outward exit past the composite, and a nested non-orthogonal move that must still stop at the
+   LCA (regressions for the `leaveRegion` / `getLCA` paths);
+8. **a region whose owning state is a plain substate** — the single highest-value shape, because it
+   broke the dispatch walk and the exit walk independently, in consecutive commits. Write it as
+   `region right { initial rs; state wrapper { state mid { region inner { … state ideep … } } }
+   then rs mid; }`: `mid` is declared directly in `wrapper`'s body, so it is **not** in
+   `graph.RegionOf`, and `then rs mid;` is what makes the inner region active. Any outward walk
+   written as `RegionOf[RegionOwner[…]]` returns nil here and silently takes a wrong branch, and any
+   "clear the region only when its entry is exactly this state" rule misses that `regionStates[right]`
+   is `mid`, a *descendant* of the `wrapper` being exited. Cover both directions from `ideep`: a
+   cross-region target (sibling region keeps a stale state → `lstate | mid`, `lidleExits = 0`) and a
+   target **outside** the whole composite (`mid`/`wrapper` exit actions run twice). The shipped
+   fixtures are `..._cross_region_substate_owner.sysml` and
+   `state_transition_leave_composite_substate_region.sysml`;
+9. ping-pong: two cross-region transitions targeting each other must stop with the typed
+   `Stopped at the event budget (N events; raise SYSML_MAX_EVENTS to allow more)`, never hang or
+   panic. Run the REPL as `SYSML_MAX_EVENTS=2000 ./bin/sysml` so the stop takes a second, and
+   follow it with `%eval 1+1` → `= 2` to show the session survived.
+
+**History interacts with region bookkeeping — always test it, with a control model.** A `deep
+history resume;` vertex inside a composite with orthogonal regions is the natural victim of any
+change to how a region records its active state: at ca7f3a89 the restore entered the region's
+*initial pseudostate* instead of the recorded composite, so the inner region restarted and the deep
+state was lost. To attribute such a failure correctly, write a control model with **no cross-region
+transition at all** (region reaches a nested state, machine leaves the composite, history resumes)
+and run it on both binaries — that separates "the cross-region path broke history" from "history is
+broken for any composite-in-a-region". Shallow history legitimately restarts the inner region, so
+only the deep variant discriminates. Read the restore in `%trace on`: `enter: <region initial
+pseudostate>` in place of `enter: <recorded state>` is the signature. Cover the **plain
+non-orthogonal** nesting too (one region, `first -> second`, `second::inner` running `a -> b`): it
+broke separately from the orthogonal case and its signature is an *inconsistent* `%current` such as
+`first | b`, where the outer region records a state whose inner region holds a descendant of a
+different one. Any change to `leaveRegion`/`exitState` bookkeeping can move history even when it
+looks like a pure exit-ordering fix, so re-run `restarts = 1` (shipped
+`state_deep_history_region_composite.sysml`) plus a control model whose restored configuration is
+visible (`lidle | wrapper | deepState`) as part of every such pass.
+
+**Write history/nesting models with an explicit `region <name> { … }` wrapper.** Substates declared
+directly in a state body (`state outer { state first; state second; }`) did not start in a history
+model — the machine stalled at `outer` and no transition fired — so a model written that way looks
+like a runtime failure when it is really an authoring shape the engine does not drive. Declare
+`state outer { region only { initial os; state first; … then os first; } }` instead. Note the
+exception exercised deliberately by shape 8 above: a substate *owning* a region
+(`state mid { region inner { … } }`) does run, provided the enclosing region's initial transition
+names it (`then rs mid;`).
+
+### Engine limitations that constrain how these models can be written
+
+All reproduce on several commits (not caused by any one PR), but they silently make a test vacuous:
+
+- **A transition whose source is a composite state never fires.** Put the "later trigger" that
+  leaves a composite on a nested **leaf** state instead; it exercises the same `leaveRegion` path.
+- **A timer declared directly on a composite state entered by a cross-region move is never
+  scheduled.** Use `%events` to confirm what is actually queued before trusting a `%advance`; leaf
+  timers are scheduled correctly.
+- **A guard-only transition is not re-evaluated for regions other than the one where the event
+  occurred**, so "a timer in region C flips a flag that fires a guarded transition in region A"
+  never happens. Drive each region with its own timed transition.
+- Stale-reaction probes are still the best evidence that an abandoned state is really gone: give it
+  `accept after N then boom` where `boom` sets a counter, advance past N, and assert the counter is
+  still 0 — a state left running in a region reacts and flips it.
+
+Practical notes for a recorded pass: shipped conformance fixtures under
+`internal/core/runtime/testdata/conformance/` emit harmless
+`unresolved reference: Integer — did you mean ScalarValues::Integer?` diagnostics (they omit the
+`ScalarValues::*` import); the runtime still executes and the `.expected.json` next to each fixture
+is the cheapest source of expected counter values. `/tmp` is wiped between sessions, so adversarial
+models and contrast binaries must be recreated each run — and when you recreate a model, **re-derive
+its state-def name from the file** (`grep -n 'state def' /tmp/…/model.sysml`) instead of trusting a
+name written in a previous run's plan: a rebuilt model can end up with a different name, and
+`%state Adv::WrongName` just reports `unresolved reference`, which is easy to misread as a runtime
+bug mid-recording. Typing `clear` at the `sysml>` prompt is parsed as SysML and errors — `%quit`
+first, then clear at the shell (this also rules out `clear; %load …` as a one-liner).
+
+`python/scripts/pin_release_checksums.py --check` hits the GitHub releases API for every pinned
+asset and dies with `HTTP Error 403: rate limit exceeded` once the unauthenticated budget is spent;
+it reads `$GITHUB_TOKEN`. Set it without putting the token on camera:
+`read -rs GITHUB_TOKEN; export GITHUB_TOKEN`. Careful with `--version <tag> --write`: it edits
+`python/pysysml/binary.py`, so `git checkout python/pysysml/binary.py` afterwards. For the
+"release publishes no assets" refusal use an old tag (`v0.0.4`) — v0.0.5..v0.0.8 all publish
+binaries now. The unpinned-download refusal is testable offline-ish with
+`HOME=/tmp/fakehome $PY -c "...ensure_binary(version='v9.9.9')"`, which keeps the real
+`~/.pysysml/bin` cache intact; the opt-in out of it is per repository
+(`PYSYSML_ALLOW_UNPINNED_DOWNLOAD=<owner/repo>`, or `=1` for any).
+
+## Quantities on the wire: `Value.quantity` and the Python `Quantity` (PR #200)
+
+Once the service can marshal `runtime.ValQuantity`, a quantity slot no longer reads as
+`SlotError: slot 'm': unsupported: quantity value` but as `pysysml.values.Quantity`. The
+highest-value evidence is the **parent-commit contrast** (build `/tmp/old-sysml-grpc` from the
+commit before the change, swap it into `~/.pysysml/bin/sysml-grpc`, clear
+`~/.pysysml/sysml-grpc.{pid,refcount}`, run the same script): the old service raises the SlotError
+while a plain `ScalarValues::Real` slot still reads `2.0`, so the frame proves the delta.
+
+What to assert on the decoded value, and why each one distinguishes working from broken:
+
+- **The magnitude must stay in the unit written.** `5.4 [SI::km/SI::h]` must decode as magnitude
+  `5.4` with `unit.text == "SI::km/SI::h"` and `scale_num/scale_den == 5.0/18.0`; a reduction done
+  behind the caller's back shows up as `1.5`. `in_unit(Unit(text="m/s", factors=(m^1, s^-1)))`
+  must be **exactly** `1.5` — a float-sloppy conversion gives `1.4999999999999998`.
+- **Integer and Real stay apart:** `3 [SI::m]` → `isinstance(magnitude, int)`.
+- Base units are reported by **FQN of the base unit**, not the written unit: `SI::kg` reduces to
+  `1000/1·SI::gram`, `SI::W` to `1000·SI::gram·SI::metre^2·SI::second^-3`. Assert
+  `unit.exponents()`, which is order-independent.
+- A **dimensionless** ratio (`3.0 [SI::m] / 1.5 [SI::m]`) does not arrive as a quantity at all — the
+  runtime reduces it to a plain `float`. Don't write a test that requires a `Quantity` there.
+- An exponent survives: `(2.0 [SI::m])**2` → magnitude `4.0`, `unit.text == "(SI::m)**2"`,
+  `SI::metre` exponent `2.0`.
+- Quantities also come back from `conn.eval("5.4 [SI::km/SI::h]", hash, context_symbol_id=pkg)`,
+  from a nested child (`inst.engine.power`), inside sequences (`LengthValue[3]` → `list[Quantity]`),
+  and on a `verify_constraint` verdict — filter `verdict.instances` on `verdict.instance_id` and
+  read the slot off that instance.
+- Comparison semantics worth pinning: `1 [SI::km] == 1000.0 [SI::m]` is True and the two hash
+  alike; ordering/adding incommensurable units raises `IncommensurableUnitsError` naming both
+  reductions (`cannot order a quantity in [SI::km] and one in [SI::kg]: … 1000·SI::metre …
+  1000·SI::gram`); ordering against a bare `float` raises `TypeError`, while `q == 5.0` is just
+  `False`.
+
+**Inbound (client → service) is a different code path.** `Connection._python_to_value` has no
+`Quantity` arm, so a quantity argument cannot be sent through `conn.calc(...)` — build the request
+proto by hand and send it on the client's stub (still the real service over gRPC):
+
+```python
+q = sysml_pb2.Quantity(real_magnitude=2.0, unit="SI::m",
+    unit_term=sysml_pb2.UnitTerm(scale_num=1.0, scale_den=1.0,
+        factors=[sysml_pb2.UnitFactor(unit_id="SI::metre", exponent=1.0)]))
+c._stub.EvaluateCalc(sysml_pb2.EvaluateCalcRequest(model_hash=m.hash,
+    symbol_id="q2::Double", arguments=[sysml_pb2.Value(quantity=q)]))
+```
+
+Only the paths that decode with the model's `symbols.Index` work. `EvaluateCalc` does, and returns
+typed errors worth asserting verbatim (`calc argument could not be read: unknown base unit:
+SI::nope` / `unit scale is not a usable ratio: 1/0` / `quantity in "SI::m" carries no magnitude`,
+all with `FAILURE_REASON_EVALUATION`, and the service stays alive). `ExecuteAction` (in
+`internal/grpc/service.go`) decodes its `inputs` map the same index-aware way, so a quantity input
+binds (`ExecuteActionRequest(inputs={"mass": Value(quantity=q)})` on an action whose `in mass :
+ISQ::MassValue` body does `assign heavier := mass + 1.0 [SI::kg]` returns `6 [SI::kg]`), and a
+malformed one comes back as `ExecuteActionResponse.Error` = `input "<name>" could not be read:
+<err>` with **zero** outputs rather than a bound `ValInvalid`. If you ever see outputs coming back
+`null: "unsupported"` for a quantity input, that call site has regressed to a context-free decoder.
+Worth checking cheaply: a commensurable-but-different unit (`2000 [SI::g]`), an un-normalized
+reduction (`SI::gram^2 · SI::gram^-1`, which the service re-normalizes), and a bad quantity nested
+inside a `ValueSequence` input (the error still names the top-level input). Traps: the field is
+`action_symbol_id`, not `symbol_id`, and an action **usage** (`action showIt : Show;`) reports
+`no initial node found`, so execute the **def** that carries the body.
+
+### Generated typed classes and mypy
+
+`pysysml-generate <model> -o out.py` (or `python -m pysysml.generate`) types a quantity property
+`-> _t.Quantity` with `_t.slot(self, "x", _t.as_quantity)`. Only slots with a **declared** quantity
+type get it: an untyped derived attribute (`attribute derivedSpeed = 10.0 [SI::m] / 2.0 [SI::s];`)
+has no type facts and still generates `-> object` / `_t.as_object`, even though the runtime value is
+a `Quantity`. Don't read that as a bug in the quantity typing.
+
+To make mypy actually enforce it, **set `MYPYPATH` to the repo's `python/` directory** — without it
+mypy cannot resolve the editable-installed `pysysml`, silently treats `_t.Quantity` as `Any` and
+reports *no* errors on obvious misuse (a false pass that looks like a passing test):
+
+```bash
+cd /tmp/qw && MYPYPATH=/home/ubuntu/repos/Systemica/python \
+  $HOME/pv/bin/python -m mypy --no-incremental --no-error-summary --follow-imports=silent misuse.py
+# -> Unsupported operand types for + ("Quantity" and "float")  [operator]
+# -> Incompatible types in assignment (expression has type "Quantity", variable has type "float")
+```
+
+`mypy` must be present in the same venv as `pysysml` ($HOME/pv here); otherwise the typed-codegen
+tests skip rather than fail.
+
+## The evaluate/eval split and generated-base planning (PR #218)
+
+- **Since the rename, `pysysml.evaluate` is the real module-level evaluator and `pysysml.eval` is a
+  forwarder that emits `DeprecationWarning` and is out of `pysysml.__all__`.** Test both sides:
+  `evaluate(...)` must produce **zero** DeprecationWarnings (catch them with
+  `warnings.catch_warnings(record=True)` + `simplefilter("always")`), `eval(...)` must return the
+  identical value and warn exactly once with a message naming `pysysml.evaluate`, and
+  `from pysysml import *` must bind `evaluate` but not `eval`. `subject` is the **last** parameter of
+  `evaluate` precisely so a pre-rename positional call
+  `eval(expr, None, hash, None, host, port)` still binds host/port — prove that argument really is the
+  host by also calling it with a bogus address (`"203.0.113.9", 59999`) and requiring a
+  `ConnectionError`; that call takes ~30-60s to time out, so give the runner a generous timeout.
+- **`pysysml.errors.RuntimeError` is a warn-on-access alias of `ExecutionError`** served by the module
+  `__getattr__` and absent from `errors.__all__`. Check it by *catching a real failure* with it
+  (`except pysysml.errors.RuntimeError` around a cyclic-slot eval), not just by identity.
+- **`generate.py` elides a base that another declared base already specializes, silently and by design**
+  (`_without_implied`): `part def Backwards :> Vehicle, Hybrid` where `Hybrid :> Vehicle` emits
+  `class Backwards(Hybrid):` with **no** comment, because `Vehicle` is still in the MRO. Only a base the
+  class genuinely does not inherit gets `# … left out: Python cannot linearize it with the bases above`.
+  To exercise the comment path you need a real C3 conflict, e.g. `X :> A, B`, `Y :> B, A`, `M :> X, Y`
+  → `class M(X):` plus the `left out` note. Asserting the comment on a merely redundant base is a
+  false negative.
+
+## State-machine transition endpoint checking (PR #225 class)
+
+The check that a transition names a vertex of *its own* machine (and that a routing pseudostate is
+left by something) is a **name-resolution-tier pass**, so it is fully observable from
+`./bin/sysml -validate <f>` — no execution needed. Codes: `endpoint-not-of-machine`,
+`no-outgoing-transition`; messages are
+`transition endpoint <as written> names a <state|pseudostate|start marker|end marker|element> that
+is not a vertex of this state machine` and
+`<kind> <name> has no outgoing transition, so a transition reaching it terminates nowhere`.
+
+Because the pre-fix binary reports **nothing** for these models, the parent-commit contrast binary
+(see the worktree recipe above) is the strongest single frame: old = `✓ no errors` exit 0,
+new = error + `did not analyse cleanly` exit 2 on identical input.
+
+Fixture shapes that actually discriminate (all one-liners; `state def` and `state` usage both work):
+
+- Illegal, target of another machine: two `state def`s in one package, `transition busy to
+  Other::running;` → reported at the endpoint's column.
+- Illegal, marker as target: `first begin then off;` plus `transition on to begin;` → the message
+  says **"start marker"**, which is how you tell `VertexKind` is being consulted.
+- Illegal, dangling routing pseudostate: `junction route;` + `transition busy to route;` and no
+  transition out → reported at the `junction` declaration, not at the transition.
+
+False-positive traps to always include as *legal* rows, since each exercises a different branch:
+
+- A transition into a **sibling orthogonal region** (`transition lidle to rtarget;` across
+  `region left` / `region right`) — legal per UML §14.2.3.9.
+  `internal/core/runtime/testdata/conformance/state_transition_sibling_region.sysml` is the shipped
+  one; run it with `%state TransitionSiblingRegion` + `%advance 1` → `Current state: lidle | rtarget`
+  and `crossed = 1`.
+- `entry point into;` / `exit point outOf;` as endpoints (`state_entry_exit_points.sysml`).
+- A sourceless `accept after 5 then <s>;` written *inside* a state (source is implicit).
+- `first start then off;` with no `initial`.
+- A junction left by a **succession** (`route then finishedUp;`) rather than a `transition`, and a
+  `fork`/`join` reached by one — the pass tracks succession sources *by name*, so a regression here
+  shows up as a bogus `no-outgoing-transition`.
+- Two states with the **same name** in sibling regions (both `idle`) — must stay clean.
+
+Cheap whole-repo false-positive sweep (~40 s, 83 models at 11d0ed72, expect `differing: 0`):
+
+```bash
+for f in $(grep -rl 'state def\|state .*{' --include=*.sysml examples \
+             internal/core/runtime/testdata/conformance testdata | sort); do
+  a=$(./bin/sysml -validate "$f" 2>&1; echo $?); b=$(/tmp/old-sysml -validate "$f" 2>&1; echo $?)
+  [ "$a" != "$b" ] && echo "DIFFERS: $f"
+done
+```
+
+Error-timing contract worth re-checking whenever this area moves: a structurally empty
+`state def Empty { }` must `-validate` **clean** (exit 0) and only fail at
+`-state Empty` with `failed to create executor: initialize state machine: no initial state found in
+state machine Empty`. A check-time complaint there would be the regression.
+
+Two message hygiene probes: grep the diagnostics for `ast\.|StateNode|%!` (must be zero hits — the
+messages come from `lower.NotAVertexFormat`/`VertexKind`, not `%T`), and endpoints written as deep
+qualified names (`Outer::Inner::Deep::busy`) must be echoed **in full** in the message.
+
+Also note `done` is an inherited feature of `States::StateAction`, so naming a state `done` in your
+own fixture draws `name conflict: done is already the name of the inherited feature …` plus a
+reserved-keyword warning — pick `finished`/`finishedUp` instead, or the legal row fails for an
+unrelated reason.
+
+### Proving a succession or a pseudostate edge really fires (not just validates)
+
+`-validate` cannot tell you whether lowering silently *dropped* an edge — a dropped succession looks
+identical to a clean model. Make the edge observable instead: give the destination state an
+`entry { flag = 1; }` and read both the active state and the attribute back:
+
+```bash
+printf '%%state <Def>\n%%advance 5\n%%current\n%%quit\n' | timeout 60 ./bin/sysml <model>.sysml
+```
+
+`%current` prints `Current state: …` plus a `State data:` block with the attribute values, so
+"reached the state" and "ran its entry action" are separate evidence. Compare against a binary built
+from the *previous revision of the same branch* (not the PR base) to attribute the delta to one
+change. Useful discriminators in this area:
+
+- `x then <junction>; <junction> then <s>;` — an implementation that resolves succession endpoints by
+  simple *state* name drops the pseudostate hop entirely and the machine just stalls one state early.
+- Same-named `junction route;` in two sibling orthogonal regions, each routing to its own region's
+  end state with its own flag — if pseudostates are keyed by simple name, one overwrites the other
+  and *neither* flag gets set. Run it ~5 times; the ordering must be identical every run.
+- A regression row worth keeping: a succession to a **qualified nested** target
+  (`gate then P::Def::outer::r::deep;`) usually works on both old and new revisions, so it proves the
+  rewrite lost nothing rather than proving anything new.
+
+Two traps when writing these fixtures:
+
+- An unqualified target in another region resolves by ordinary name resolution first, so
+  `lidle then rtarget;` fails with `unresolved reference: rtarget — did you mean A::B::right::rtarget?`
+  on *every* revision. That is not a false positive; write the qualified name.
+- A succession carries **no guard**, so a cross-region succession re-enters the composite state, the
+  source region restarts, and the edge re-fires forever: the run ends on `Stopped at the event budget
+  (1000000 events; raise SYSML_MAX_EVENTS to allow more)`. That is a clean bounded stop, not a hang —
+  the state/attribute evidence is still valid. Use the guarded `transition a to b if flag == 0;` form
+  when you want the run to settle instead.
+- Running a shipped conformance model straight from the CLI can report `unresolved reference: Integer`
+  because the conformance harness supplies imports the file omits; add `import ScalarValues::*;` in
+  your own fixtures, and treat that one as pre-existing (the sweep confirms it is identical on both
+  binaries).
+
+## Hierarchical / composite state machines: outward transitions, timers, history (PR #230)
+
+Whole families of state-executor changes (transitions declared on a composite state while a
+substate is active, exit-chain ordering, timer withdrawal, change triggers) are testable from the
+REPL with **no ports and no signals** if you encode observations as *decimal digits* in one
+attribute. This is the single most useful technique in this area:
+
+```
+attribute log : Integer = 0;
+state Outer { entry assign log := log * 10 + 1; exit assign log := log * 10 + 2; }
+```
+
+`%current` then prints e.g. `log = 32419`, which reads left-to-right as the exact order of the
+entries/exits/effects that ran. Give **every nesting level its own digit** — a duplicated exit
+(`…22…`) or a missing one is otherwise invisible, and a doubled exit is exactly the defect class
+that shows up when exit chains are refactored. Keep the digits distinct per level and put the
+transition effect last.
+
+Driving and reading:
+
+- Put fixtures under `$HOME` (e.g. `~/fixtures/pr<N>/`), never `/tmp` — `/tmp` is wiped between
+  sessions and you will lose an afternoon of fixtures. `%load` needs an **absolute** path.
+- A nested state reference must be **qualified**: `start then Working::Step1`, not `then Step1`.
+- A nested `initial` only takes effect inside an explicit `region { … }`. `state Outer { initial o;
+  state Mid { … } transition o to Mid; }` enters **Outer only** — `ActiveStates()`/`%current` show
+  no substate at all, and any test built on that shape silently probes the wrong thing. Wrap both
+  levels in regions and assert the pre-condition configuration before the interesting step.
+- `ActiveStates()` for a region-wrapped chain lists the *innermost* composites and leaves
+  (`map[Mid:true leaf:true]`), not every enclosing composite — assert on the leaf plus the state
+  you expect to survive, not on the outermost name.
+- In Konsole use `%quit`; `Ctrl-D` closes the terminal window and kills the recording. `ctrl+plus`
+  (not `ctrl+shift+plus`) changes the font size.
+- Batch a whole scenario into a `.script` file and pipe it (`timeout 30 ./bin/sysml < z.script`) to
+  discover values, then re-run the interesting ones interactively for the camera.
+- A per-fixture expectation table plus a tiny runner that prints `fixture | final state | log |
+  PASS/FAIL` turns a 30-fixture regression matrix into one screen of camera-friendly evidence, and
+  it fails loudly if a refactor moves any established value.
+
+Timers (`accept after N` + `%advance`) are the cheapest scheduling probe:
+
+- Advance to the **exact** expected instant and read `Remaining events:` (`1` = armed/re-armed,
+  `0` = spent) plus `No pending work - simulation time is now …` — that line is the clearest
+  signal that a timer was never re-armed.
+- To prove a queued time event is *withdrawn* when its state exits, the state must be left **and
+  re-entered**: `accept after 10` left at t=3 and re-entered at t=5 must fire at t=15, not t=10.
+  Add a second region with its own clock (`after 12`) so the ordering of two digits (`21` vs `12`)
+  is the discriminator instead of one absolute time.
+- Bound repeated exit/re-entry with a counter guard (`if trips == 0 do assign trips := trips + 1`)
+  or the fixture becomes an infinite loop.
+- **Pre-existing on every binary tested (not a PR regression):** a state that owns a
+  time-triggered transition ignores its own *signal* transitions, and signal transitions on leaves
+  inside top-level regions never fire. So drive timer fixtures purely with `accept after`, and
+  verify any such oddity against a contrast binary before reporting it.
+- `deep history resume;` works in REPL fixtures (`transition away to resume`) and doubles as an
+  exit-chain probe, since the return path re-runs the entry digits.
+- Once composite self-transitions re-enter their regions, a fixture whose signal poster sits
+  *inside* the self-transitioning composite becomes an infinite event loop; post from a sibling
+  region that is never re-entered.
+
+Change triggers (`accept when`) **cannot be driven from the REPL at all**: `pollChangeEvents` has
+no non-test caller (`grep -rn pollChangeEvents --include='*.go' .` → definition plus `*_test.go`),
+and no meta-command reaches it (`%advance`/`%step`/`%continue` are time and the *action* debugger).
+The REPL therefore parks in the source state with the condition already true — that is the
+documented ⚠️ Approximate row in `docs/project/spec-compliance.md`, not a defect. Show the grep on
+camera to justify covering the behavior with go tests instead:
+
+```go
+exec := stateExecutorForSource(t, "sm", `package test { state sm { … } }`)
+exec.RunToCompletion()
+exec.stateData["ready"] = boolValue(true)
+exec.pollChangeEvents()
+// read exec.ActiveStates() and exec.stateData["log"]
+```
+
+For an internal fix like this the strongest evidence is a worktree A/B:
+`git worktree add ~/wt<sha> <parent-sha>`, **copy the new test file (and any probe file) into the
+worktree** so `state_executor.go` is the only delta (`cmp -s` each file on camera to prove it),
+then run `go test -count=1 -run … -v ./internal/core/runtime` in both trees.
+
+Designing discriminating probes here is genuinely tricky — always confirm a probe **FAILs on the
+parent** before trusting it:
+
+- `getParentChain` is **leaf-first**, so a single active leaf already gets innermost-first
+  treatment; a probe with one leaf plus enclosing composites will pass on both revisions and prove
+  nothing.
+- The discriminating shape for innermost-wins/dedupe in the poll path needs a **sibling region
+  whose leaf watches nothing**, so its outward walk reaches the composite's own watched transition
+  while another region's leaf has its own: only a correct implementation keeps the composite alive.
+- Keep probe files out of the repo tree before running the gates (`rm` it, keep a `.txt` copy in
+  the fixtures dir) and confirm `git status --porcelain` is empty on camera, so the gates clearly
+  reflect the committed tree.

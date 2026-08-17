@@ -5,20 +5,33 @@ import os
 import pytest
 import tempfile
 import time
+from contextlib import ExitStack
 from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
-from pysysml.connection import Connection
+from pysysml.connection import (
+    Connection,
+    START_PROBE_RPC_TIMEOUT,
+    START_TIMEOUT,
+    _OWNED_SERVICES,
+    _get_lockfile_path,
+    _service_key,
+)
 from pysysml.errors import PySysMLError, ServiceError
 from pysysml.proto import sysml_pb2
 
 
 @pytest.fixture
 def tmp_home(tmp_path, monkeypatch):
-    """Isolate HOME directory to prevent touching real ~/.pysysml."""
+    """Isolate HOME and the state dir, so no real service state is touched."""
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
-    return home
+    monkeypatch.setenv("PYSYSML_STATE_DIR", str(home / ".pysysml"))
+    before = set(_OWNED_SERVICES)
+    yield home
+    # Only this test's records: another test's connection still needs its own.
+    for key in set(_OWNED_SERVICES) - before:
+        del _OWNED_SERVICES[key]
 
 
 def test_connection_init():
@@ -284,7 +297,9 @@ def test_ensure_service_starts_when_needed(tmp_home):
                     with patch.object(conn, '_probe_service', side_effect=probe_results):
                         with patch('subprocess.Popen') as mock_popen:
                             mock_process = Mock()
-                            mock_process.pid = 12345
+                            # A pid that exists, so the record written for it
+                            # can authenticate the process it names.
+                            mock_process.pid = os.getpid()
                             # A running process polls as None.
                             mock_process.poll.return_value = None
                             mock_popen.return_value = mock_process
@@ -329,36 +344,156 @@ def test_ensure_service_timeout(tmp_home):
                                     assert "Service failed to start" in str(e)
 
 
-def test_cleanup_service():
-    """Test _cleanup_service decrements a refcount held by this connection."""
+def _spawning_connection(port=50051):
+    """A connection whose _ensure_service starts a mocked binary.
+
+    Returns:
+        tuple: the connection, and the ExitStack holding the patches to close
+    """
+    binary_path = '/path/to/sysml-grpc'
+    real_exists = os.path.exists
+
+    def mock_exists(path):
+        return True if path == binary_path else real_exists(path)
+
+    stack = ExitStack()
+    stack.enter_context(patch('grpc.insecure_channel'))
+    stack.enter_context(patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub'))
+    stack.enter_context(
+        patch('pysysml.connection.ensure_binary', return_value=binary_path)
+    )
+    stack.enter_context(patch('os.path.exists', side_effect=mock_exists))
+    stack.enter_context(patch('atexit.register'))
+    popen = stack.enter_context(patch('subprocess.Popen'))
+    process = Mock()
+    # A pid that exists, so the record written for it authenticates.
+    process.pid = os.getpid()
+    process.poll.return_value = None
+    popen.return_value = process
+    conn = Connection(port=port, auto_start=False)
+    return conn, stack
+
+
+def test_started_service_is_probed_before_any_sleep(tmp_home):
+    """The spawned service is asked at once, so answering costs no delay."""
+    conn, stack = _spawning_connection()
+    events = []
+
+    def probe(*args, **kwargs):
+        events.append('probe')
+        # The first probe is the pre-spawn one; the service answers the next.
+        return len(events) > 1
+
+    with stack:
+        with patch.object(conn, '_probe_service', side_effect=probe):
+            with patch('time.sleep', side_effect=lambda s: events.append('sleep')):
+                conn._ensure_service()
+
+    assert events == ['probe', 'probe']  # no sleep before the service answered
+
+
+def test_service_that_never_answers_fails_within_the_waiting_bound(tmp_home):
+    """A service that never comes up raises the same error, still bounded."""
+    conn, stack = _spawning_connection()
+    probes = []
+
+    def probe(*args, **kwargs):
+        probes.append(time.monotonic())
+        return False
+
+    started = time.monotonic()
+    with stack:
+        with patch.object(conn, '_probe_service', side_effect=probe):
+            with pytest.raises(PySysMLError) as excinfo:
+                conn._ensure_service()
+    elapsed = time.monotonic() - started
+
+    assert "Service failed to start" in str(excinfo.value)
+    assert START_TIMEOUT <= elapsed < START_TIMEOUT + 1.0
+    # Backing off, not busy-spinning: a bounded number of probes covers the wait.
+    assert 4 < len(probes) < 25
+
+
+def test_a_probe_that_answers_nothing_may_not_outlive_the_bound(tmp_home):
+    """A port accepting without answering spends a probe's timeout, not the wait.
+
+    Each probe is given at most what is left of the bound, so the wait is over
+    when the bound is, rather than one whole RPC timeout later.
+    """
+    conn, stack = _spawning_connection()
+
+    def deaf(host, port, timeout=None):
+        # As a probe of a port that accepts and never answers does. Only the
+        # probes of the started service are given a timeout here.
+        time.sleep(timeout or 0)
+        return False
+
+    started = time.monotonic()
+    with stack:
+        with patch('pysysml.connection.START_TIMEOUT', 0.4):
+            with patch.object(conn, '_probe_service', side_effect=deaf):
+                with pytest.raises(PySysMLError):
+                    conn._ensure_service()
+    elapsed = time.monotonic() - started
+
+    assert 0.4 <= elapsed < 0.4 + START_PROBE_RPC_TIMEOUT
+
+
+def test_waiting_bound_is_the_module_constant(tmp_home):
+    """START_TIMEOUT is the seam: shortening it shortens the wait."""
+    conn, stack = _spawning_connection()
+
+    started = time.monotonic()
+    with stack:
+        with patch('pysysml.connection.START_TIMEOUT', 0.2):
+            with patch.object(conn, '_probe_service', return_value=False):
+                with pytest.raises(PySysMLError):
+                    conn._ensure_service()
+    elapsed = time.monotonic() - started
+
+    assert 0.2 <= elapsed < 0.9
+
+
+def test_cleanup_service_releases_one_reference_of_a_service_still_in_use():
+    """A released reference leaves a service other connections still hold."""
     with patch('grpc.insecure_channel'):
         with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
             conn = Connection(auto_start=False)
             conn._holds_refcount = True
-            
-            # Mock refcount file
-            with patch('pysysml.connection._decrement_refcount') as mock_decr:
-                mock_decr.return_value = 1  # Not last connection
-                
-                conn._cleanup_service()
-                
-                # Should decrement refcount
-                mock_decr.assert_called_once()
-                
-                # Instance state should be cleared
-                assert conn._process is None
+            conn._referenced_service = (12345, 1.0)
+            key = _service_key(conn.port)
+            _OWNED_SERVICES[key] = {'pid': 12345, 'create_time': 1.0, 'refs': 2}
+
+            try:
+                with patch('pysysml.connection._stop_process') as mock_stop:
+                    conn._cleanup_service()
+
+                    mock_stop.assert_not_called()
+                    assert _OWNED_SERVICES[key]['refs'] == 1
+                    assert conn._process is None
+            finally:
+                _OWNED_SERVICES.pop(key, None)
 
 
-def test_cleanup_service_without_refcount():
-    """A connection that never took a reference must not release one."""
+def test_cleanup_service_without_a_reference_touches_nothing():
+    """Attaching to a service this process did not spawn takes no reference.
+
+    Closing must therefore leave the ownership of whoever did spawn it alone.
+    """
     with patch('grpc.insecure_channel'):
         with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
             conn = Connection(auto_start=False)
+            key = _service_key(conn.port)
+            _OWNED_SERVICES[key] = {'pid': 12345, 'create_time': 1.0, 'refs': 1}
 
-            with patch('pysysml.connection._decrement_refcount') as mock_decr:
-                conn._cleanup_service()
+            try:
+                with patch('pysysml.connection._stop_process') as mock_stop:
+                    conn._cleanup_service()
 
-                mock_decr.assert_not_called()
+                    mock_stop.assert_not_called()
+                    assert _OWNED_SERVICES[key]['refs'] == 1
+            finally:
+                _OWNED_SERVICES.pop(key, None)
 
 
 def test_auto_start_enabled():
@@ -399,7 +534,7 @@ def test_ensure_service_uses_lockfile(tmp_home):
         
         with patch('os.path.exists', side_effect=mock_exists):
             with patch('subprocess.Popen') as mock_popen:
-                mock_popen.return_value = Mock(pid=12345)
+                mock_popen.return_value = Mock(pid=os.getpid())
                 mock_popen.return_value.poll.return_value = None
                 
                 # Mock time.sleep to skip retries
@@ -420,13 +555,14 @@ def test_ensure_service_uses_lockfile(tmp_home):
                                     assert mock_popen.called
 
 
-def test_concurrent_ensure_service_blocks():
+def test_concurrent_ensure_service_blocks(tmp_home):
     """Test that second process blocks while first starts service."""
     import os
     import pytest
     from filelock import FileLock, Timeout
-    
-    lockfile_path = os.path.expanduser('~/.pysysml/sysml-grpc.lock')
+
+    # Per port: two services on different ports do not wait on each other.
+    lockfile_path = _get_lockfile_path(50051)
     
     # Simulate first process holding lock
     lock1 = FileLock(lockfile_path, timeout=0.1)

@@ -100,13 +100,38 @@ jobs:
             pip install -e .
             pip install pytest pytest-mock
       
-      # The integration tests skip without a service on localhost:50051, and
-      # starting one here fails test_lifecycle: see docs/project/roadmap.md §P1.
+      # The integration tests need a service to talk to; without one they skip,
+      # which exercises nothing, so one runs here for the rest of the job.
+      - run:
+          name: Start sysml-grpc service
+          command: ~/.pysysml/bin/sysml-grpc -port 50051
+          background: true
+
+      - run:
+          name: Wait for the service to answer
+          command: |
+            # The backslash escapes the heredoc operator for a 2.1 config; the
+            # shell sees a plain heredoc.
+            python3 - \<<'PY'
+            import socket, sys, time
+
+            for _ in range(30):
+                with socket.socket() as probe:
+                    probe.settimeout(1)
+                    if probe.connect_ex(("localhost", 50051)) == 0:
+                        print("sysml-grpc is listening on 50051")
+                        sys.exit(0)
+                time.sleep(1)
+            sys.exit("sysml-grpc never listened on 50051")
+            PY
+
+      # PYSYSML_REQUIRE_SERVICE turns "no service, so skip" into a failure: a
+      # service is provided here, so its absence is the bug, not a pass.
       - run:
           name: Run Python tests
           command: |
             cd python
-            pytest tests/ -v
+            PYSYSML_REQUIRE_SERVICE=1 pytest tests/ -v
       
       - run:
           name: Verify import
@@ -347,6 +372,46 @@ jobs:
             (cd grpc && for f in sysml-grpc-*; do sha256sum "$f" > "$f.sha256"; done)
             cat SHA256SUMS.txt
       
+      # An artifact whose version disagrees with its tag looks identical on the
+      # release page. The host-platform builds are asked what they report; the
+      # cross-compiled ones cannot run here, so they are checked for the version
+      # string the ldflags should have written into them.
+      - run:
+          name: Verify the built artifacts report the tag
+          command: |
+            if [ -z "${CIRCLE_TAG}" ]; then
+              echo "Error: CIRCLE_TAG is empty; this job only runs on a tag"
+              exit 1
+            fi
+            status=0
+            fail() {
+              echo "Error: $1 does not carry the tag ${CIRCLE_TAG} it is being"
+              echo "released as: $2. The version ldflags (see the Makefile's"
+              echo "LDFLAGS) did not reach this build; nothing was published."
+              status=1
+            }
+            for binary in dist/sysml-linux-amd64 dist/sysml-lsp-linux-amd64 \
+                          dist/grpc/sysml-grpc-linux-amd64; do
+              reported="$("$binary" --version 2>&1 | head -n 1)"
+              case " $reported " in
+                *" ${CIRCLE_TAG} "*) echo "ok: $binary reports ${CIRCLE_TAG}" ;;
+                *) fail "$binary" "it reports '${reported}'" ;;
+              esac
+            done
+            for binary in dist/sysml-* dist/grpc/sysml-grpc-*; do
+              case "$binary" in
+                *.tar.gz|*.zip|*.sha256) continue ;;
+                dist/sysml-linux-amd64|dist/sysml-lsp-linux-amd64) continue ;;
+                dist/grpc/sysml-grpc-linux-amd64) continue ;;
+              esac
+              if grep -qa -- "${CIRCLE_TAG}" "$binary"; then
+                echo "ok: $binary carries ${CIRCLE_TAG}"
+              else
+                fail "$binary" "the version string is absent from the binary"
+              fi
+            done
+            exit $status
+
       - store_artifacts:
           path: dist/
           destination: release-binaries

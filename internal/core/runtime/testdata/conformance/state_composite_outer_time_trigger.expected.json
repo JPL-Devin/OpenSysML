@@ -1,0 +1,8 @@
+{
+    "type": "state",
+    "finalState": "Done",
+    "stateVisits": ["start", "Working", "Step1", "Done"],
+    "outputs": {
+        "log": {"type": "Integer", "value": 123}
+    }
+}

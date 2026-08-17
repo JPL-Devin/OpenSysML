@@ -2,6 +2,8 @@ package runtime
 
 import (
 	"errors"
+	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -35,6 +37,12 @@ func TestBudgetFromValue(t *testing.T) {
 
 	for _, v := range budgetVars {
 		for _, tt := range values {
+			// A bound with a ceiling accepts a value only up to it, so the
+			// accepted values are read against that bound's own range.
+			if v.ceiling > 0 && tt.want > v.ceiling {
+				tt.want = v.ceiling
+				tt.value = strconv.FormatInt(v.ceiling, 10)
+			}
 			t.Run(v.env+"/"+tt.name, func(t *testing.T) {
 				got, err := budgetFromValue(v, tt.value)
 				if tt.errContains != "" {
@@ -69,6 +77,19 @@ func TestBudgetFromValue(t *testing.T) {
 				}
 			})
 		}
+		if v.ceiling == 0 {
+			continue
+		}
+		t.Run(v.env+"/above_the_ceiling", func(t *testing.T) {
+			raw := strconv.FormatInt(v.ceiling+1, 10)
+			got, err := budgetFromValue(v, raw)
+			if err == nil {
+				t.Fatalf("budgetFromValue(%q) = %d, want an error", raw, got)
+			}
+			if !strings.Contains(err.Error(), fmt.Sprintf("must be at most %d", v.ceiling)) {
+				t.Errorf("error %q does not report the ceiling %d", err, v.ceiling)
+			}
+		})
 	}
 }
 
@@ -176,7 +197,7 @@ func TestSetBudgets(t *testing.T) {
 		t.Errorf("a new context runs under %+v, want the defaults %+v", got, DefaultBudgets())
 	}
 
-	want := Budgets{MaxSteps: 11, MaxActionSteps: 22, MaxStateEvents: 33, MaxDoSteps: 44, MaxElements: 55}
+	want := Budgets{MaxSteps: 11, MaxActionSteps: 22, MaxStateEvents: 33, MaxDoSteps: 44, MaxElements: 55, MaxCalcDepth: 66}
 	if err := ctx.SetBudgets(want); err != nil {
 		t.Fatalf("SetBudgets: %v", err)
 	}
@@ -185,9 +206,11 @@ func TestSetBudgets(t *testing.T) {
 	}
 
 	for _, bad := range []Budgets{
-		{MaxSteps: 0, MaxActionSteps: 1, MaxStateEvents: 1, MaxDoSteps: 1, MaxElements: 1},
-		{MaxSteps: 1, MaxActionSteps: -1, MaxStateEvents: 1, MaxDoSteps: 1, MaxElements: 1},
-		{MaxSteps: 1, MaxActionSteps: 1, MaxStateEvents: 1, MaxDoSteps: 1, MaxElements: 0},
+		{MaxSteps: 0, MaxActionSteps: 1, MaxStateEvents: 1, MaxDoSteps: 1, MaxElements: 1, MaxCalcDepth: 1},
+		{MaxSteps: 1, MaxActionSteps: -1, MaxStateEvents: 1, MaxDoSteps: 1, MaxElements: 1, MaxCalcDepth: 1},
+		{MaxSteps: 1, MaxActionSteps: 1, MaxStateEvents: 1, MaxDoSteps: 1, MaxElements: 0, MaxCalcDepth: 1},
+		{MaxSteps: 1, MaxActionSteps: 1, MaxStateEvents: 1, MaxDoSteps: 1, MaxElements: 1, MaxCalcDepth: 0},
+		{MaxSteps: 1, MaxActionSteps: 1, MaxStateEvents: 1, MaxDoSteps: 1, MaxElements: 1, MaxCalcDepth: MaxCalcDepthCeiling + 1},
 		{},
 	} {
 		if err := ctx.SetBudgets(bad); err == nil {

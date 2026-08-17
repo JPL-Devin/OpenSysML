@@ -1,7 +1,12 @@
-"""Integration tests for runtime operations against real service."""
+"""Integration tests for runtime operations against real service.
+
+Without a service they skip, as a developer with no binary wants; with
+$PYSYSML_REQUIRE_SERVICE set, as CI sets it, an absent service fails instead.
+"""
 import pytest
 from pysysml import Connection
 from pysysml.errors import ExecutionError
+from tests.service_gate import skip_or_fail_without_service
 
 @pytest.mark.integration
 class TestRuntimeIntegration:
@@ -21,10 +26,14 @@ class TestRuntimeIntegration:
             if e.code() == grpc.StatusCode.NOT_FOUND:
                 return  # Service is healthy, self.conn already set
             self.conn = None  # Failed, clear for teardown safety
-            pytest.skip("sysml-grpc service not running")
-        except Exception:
+            skip_or_fail_without_service(
+                f"the sysml-grpc service on localhost:50051 answered {e.code()}"
+            )
+        except Exception as e:
             self.conn = None  # Failed, clear for teardown safety
-            pytest.skip("sysml-grpc service not running")
+            skip_or_fail_without_service(
+                f"no sysml-grpc service could be reached on localhost:50051 ({e})"
+            )
     
     def teardown_method(self):
         """Clean up connection after each test."""
@@ -131,6 +140,54 @@ class TestRuntimeIntegration:
         with pytest.raises(SlotError, match="cyclic"):
             inst.a
         assert isinstance(inst.slots["a"], SlotError)
+
+    def test_enum_typed_slot_and_eval_return_the_literal(self):
+        """An enumeration literal reaches the client as the literal it is."""
+        from pysysml import EnumLiteral
+
+        src = '''
+        package D {
+            enum def Color { red; green; blue; }
+            part def Car {
+                attribute c : Color = Color::red;
+            }
+        }
+        '''
+        model = self.conn.load_from_content(src)
+
+        car = self.conn.instantiate("D::Car", model.hash)
+        red = EnumLiteral("D::Color::red", "D::Color", "Color::red")
+        assert car.c == red
+        assert self.conn.eval("D::Color::red", model.hash) == red
+        assert self.conn.eval("D::Color::green", model.hash) != red
+
+    def test_service_reports_the_enum_values_capability(self):
+        """The wire form is a contract, so the service says it honours it."""
+        from pysysml.capabilities import CAPABILITY_ENUM_VALUES
+
+        assert self.conn.server_info().has(CAPABILITY_ENUM_VALUES)
+
+    def test_a_valueless_feature_of_a_value_type_crosses_as_unset(self):
+        """The service says it sends the unset arm, and does."""
+        from pysysml.capabilities import CAPABILITY_UNSET_VALUE
+        from pysysml.values import UNSET
+
+        assert self.conn.server_info().has(CAPABILITY_UNSET_VALUE)
+
+        src = '''
+        package P {
+            private import ScalarValues::*;
+            part def Q {
+                attribute d : Real;
+                attribute k : Real = 2.0;
+            }
+        }
+        '''
+        model = self.conn.load_from_content(src)
+
+        q = self.conn.instantiate("P::Q", model.hash)
+        assert q.d is UNSET
+        assert q.k == 2.0
 
     def test_symbol_attributes_and_parts(self):
         """Symbol filtering works against the kinds the service really emits."""

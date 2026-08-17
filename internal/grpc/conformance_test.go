@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -28,6 +29,14 @@ type expectedSlot struct {
 	Error string `json:"error"`
 }
 
+// expectedAttribute is the fixture encoding of a pb.AttributeInfo.
+type expectedAttribute struct {
+	Type      string      `json:"type"`
+	ValueKind string      `json:"value_kind"`
+	Value     interface{} `json:"value"`
+	Unit      string      `json:"unit"`
+}
+
 // conformanceCase is the schema of a <name>.expected.json fixture. See
 // testdata/conformance/README.md.
 type conformanceCase struct {
@@ -36,8 +45,9 @@ type conformanceCase struct {
 	// Evaluate
 	Expression      string `json:"expression,omitempty"`
 	ContextSymbolID string `json:"context_symbol_id,omitempty"`
+	SubjectSymbolID string `json:"subject_symbol_id,omitempty"`
 
-	// Instantiate, ExecuteAction, ExecuteState
+	// GetSymbol, Instantiate, ExecuteAction, ExecuteState
 	SymbolID string `json:"symbol_id,omitempty"`
 
 	// ExecuteAction
@@ -52,6 +62,10 @@ type conformanceCase struct {
 	ExpectedOutputs       map[string]expectedValue `json:"expected_outputs,omitempty"`
 	ExpectedStatesVisited []string                 `json:"expected_states_visited,omitempty"`
 	ExpectedFinalContext  map[string]expectedValue `json:"expected_final_context,omitempty"`
+
+	// GetSymbol
+	ExpectedAttributeNames []string                     `json:"expected_attribute_names,omitempty"`
+	ExpectedAttributes     map[string]expectedAttribute `json:"expected_attributes,omitempty"`
 
 	// ExpectedError, when set, requires the RPC to report an in-band error
 	// containing this substring.
@@ -121,6 +135,8 @@ func runGRPCConformanceCase(t *testing.T, dir, caseName string) {
 	}
 
 	switch tc.RPC {
+	case "GetSymbol":
+		runGetSymbolCase(t, srv, ctx, parseResp.ModelHash, tc)
 	case "Evaluate":
 		runEvaluateCase(t, srv, ctx, parseResp.ModelHash, tc)
 	case "Instantiate":
@@ -141,6 +157,7 @@ func runEvaluateCase(t *testing.T, srv *Service, ctx context.Context, modelHash 
 		ModelHash:       modelHash,
 		Expression:      tc.Expression,
 		ContextSymbolId: tc.ContextSymbolID,
+		SubjectSymbolId: tc.SubjectSymbolID,
 	})
 	if err != nil {
 		t.Fatalf("Evaluate: %v", err)
@@ -150,6 +167,63 @@ func runEvaluateCase(t *testing.T, srv *Service, ctx context.Context, modelHash 
 	}
 	if tc.ExpectedResult != nil {
 		checkValue(t, "result", *tc.ExpectedResult, resp.Result)
+	}
+}
+
+// runGetSymbolCase pins the static facts a symbol is reported with, and is how
+// the attribute set is kept from regressing to empty.
+func runGetSymbolCase(t *testing.T, srv *Service, ctx context.Context, modelHash string, tc conformanceCase) {
+	t.Helper()
+
+	resp, err := srv.GetSymbol(ctx, &pb.GetSymbolRequest{
+		ModelHash: modelHash,
+		SymbolId:  tc.SymbolID,
+	})
+	if err != nil {
+		t.Fatalf("GetSymbol: %v", err)
+	}
+	if checkExpectedError(t, tc, resp.Error) {
+		return
+	}
+	if resp.Symbol == nil {
+		t.Fatal("expected a symbol")
+	}
+
+	attrs := resp.Symbol.GetAttributes()
+	if tc.ExpectedAttributeNames != nil {
+		var got []string
+		for _, attr := range attrs {
+			got = append(got, attr.GetName())
+		}
+		if strings.Join(got, ",") != strings.Join(tc.ExpectedAttributeNames, ",") {
+			t.Errorf("attributes = %v, want %v", got, tc.ExpectedAttributeNames)
+		}
+	}
+
+	byName := make(map[string]*pb.AttributeInfo, len(attrs))
+	for _, attr := range attrs {
+		byName[attr.GetName()] = attr
+	}
+	for name, want := range tc.ExpectedAttributes {
+		got, ok := byName[name]
+		if !ok {
+			t.Errorf("missing attribute %q", name)
+			continue
+		}
+		if got.GetType() != want.Type {
+			t.Errorf("attribute %q: type = %q, want %q", name, got.GetType(), want.Type)
+		}
+		if got.GetUnit() != want.Unit {
+			t.Errorf("attribute %q: unit = %q, want %q", name, got.GetUnit(), want.Unit)
+		}
+		if want.ValueKind == "" {
+			if got.GetValue() != nil {
+				kind, value := describeValue(got.GetValue())
+				t.Errorf("attribute %q: unexpected value %s %v", name, kind, value)
+			}
+			continue
+		}
+		checkValue(t, "attribute "+name, expectedValue{Kind: want.ValueKind, Value: want.Value}, got.GetValue())
 	}
 }
 
@@ -334,7 +408,7 @@ func checkValue(t *testing.T, label string, want expectedValue, got *pb.Value) {
 		if got.GetRealValue() != mustFloat(t, want) {
 			t.Errorf("%s: value = %v, want %v", label, got.GetRealValue(), want.Value)
 		}
-	case "null", "instance_id":
+	case "null", "instance_id", "unset":
 		// The oneof arm carries all the information; ids are runtime-assigned.
 	default:
 		if fmt.Sprint(gotValue) != fmt.Sprint(want.Value) {
@@ -358,11 +432,54 @@ func describeValue(v *pb.Value) (string, interface{}) {
 		return "instance_id", k.InstanceId
 	case *pb.Value_Sequence:
 		return "sequence", k.Sequence
+	case *pb.Value_Quantity:
+		return "quantity", describeQuantity(k.Quantity)
 	case *pb.Value_Null:
 		return "null", nil
-	default:
+	case *pb.Value_Unset:
 		return "unset", nil
+	default:
+		return "no arm", nil
 	}
+}
+
+// describeQuantity renders a quantity as "<magnitude> [<unit as written>] =
+// <reduction>", which is every part of it a fixture needs to pin.
+func describeQuantity(q *pb.Quantity) string {
+	if q == nil {
+		return ""
+	}
+	magnitude := "unset"
+	switch m := q.GetMagnitude().(type) {
+	case *pb.Quantity_IntMagnitude:
+		magnitude = strconv.FormatInt(m.IntMagnitude, 10)
+	case *pb.Quantity_RealMagnitude:
+		magnitude = strconv.FormatFloat(m.RealMagnitude, 'g', -1, 64)
+	}
+	return fmt.Sprintf("%s [%s] = %s", magnitude, q.GetUnit(), describeUnitTerm(q.GetUnitTerm()))
+}
+
+// describeUnitTerm renders a unit's reduction as "1000/3600·SI::m·SI::s^-1",
+// leaving a scale of one and an exponent of one implicit.
+func describeUnitTerm(term *pb.UnitTerm) string {
+	if term == nil {
+		return "absent"
+	}
+	var parts []string
+	if term.GetScaleNum() != term.GetScaleDen() {
+		parts = append(parts, fmt.Sprintf("%g/%g", term.GetScaleNum(), term.GetScaleDen()))
+	}
+	for _, factor := range term.GetFactors() {
+		if factor.GetExponent() == 1 {
+			parts = append(parts, factor.GetUnitId())
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("%s^%g", factor.GetUnitId(), factor.GetExponent()))
+	}
+	if len(parts) == 0 {
+		return "1"
+	}
+	return strings.Join(parts, "·")
 }
 
 func mustFloat(t *testing.T, ev expectedValue) float64 {

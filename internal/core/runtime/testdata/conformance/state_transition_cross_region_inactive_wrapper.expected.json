@@ -1,0 +1,10 @@
+{
+  "type": "state",
+  "finalState": "done",
+  "outputs": {
+    "crossed": {"type": "Integer", "value": 1},
+    "wrapperEntries": {"type": "Integer", "value": 1},
+    "rtargetExits": {"type": "Integer", "value": 1},
+    "ridleExits": {"type": "Integer", "value": 1}
+  }
+}

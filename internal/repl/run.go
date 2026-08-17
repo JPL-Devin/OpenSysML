@@ -24,7 +24,7 @@ type NamedValue struct {
 
 // namedValues lists an executor's results in name order, so two reports of the
 // same run read the same way.
-func namedValues(results map[string]runtime.Value) []NamedValue {
+func namedValues(ctx *runtime.Context, results map[string]runtime.Value) []NamedValue {
 	if len(results) == 0 {
 		return nil
 	}
@@ -35,7 +35,7 @@ func namedValues(results map[string]runtime.Value) []NamedValue {
 	slices.Sort(names)
 	values := make([]NamedValue, 0, len(names))
 	for _, name := range names {
-		values = append(values, NamedValue{Name: name, Value: formatValue(results[name])})
+		values = append(values, NamedValue{Name: name, Value: formatValue(ctx, results[name])})
 	}
 	return values
 }
@@ -75,7 +75,10 @@ func (s *Session) LoadFileSummary(path string) ([]string, error) {
 		return nil, readError(name, err)
 	}
 	res := s.submit(name, string(data))
-	return append(append([]string(nil), res.Notices...), renderSummary(res.ownMembers())...), nil
+	// The analysis is reported once every file is in, but a file that does not
+	// parse is a finding about that file alone and is reported with it.
+	lines := renderSyntax(res, s.verbosity)
+	return append(append(lines, res.Notices...), renderSummary(res.ownMembers())...), nil
 }
 
 // DiagnosticLines reports the analysis of everything submitted so far as the
@@ -107,20 +110,60 @@ func (s *Session) DiagnosticLines() []string {
 	return out
 }
 
-// Diagnostics reports the analysis of everything submitted so far.
+// Diagnostics reports the analysis of everything submitted so far, including the
+// syntax errors of a submission masked out of the buffer for not closing its own
+// text: a load whose file does not parse says why, and HasErrors is true, which is
+// what a non-interactive run exits on.
 func (s *Session) Diagnostics() []passes.Diagnostic {
-	return s.ws.Diagnostics(docName)
+	return s.diagnostics()
 }
 
-// HasErrors reports whether analysis found something that stops the model from
-// being run, as against something worth saying about a model that does run.
+// HasErrors reports whether the session found the model wrong: something analysis
+// found, or a slot a command could not materialize. It is what a non-interactive
+// run exits on.
 func (s *Session) HasErrors() bool {
+	return s.hasAnalysisErrors() || len(s.MaterializationFailures()) > 0
+}
+
+// hasAnalysisErrors reports whether analysis found something that stops the model
+// from being run at all.
+func (s *Session) hasAnalysisErrors() bool {
 	for _, d := range s.Diagnostics() {
 		if d.Severity == passes.SeverityError {
 			return true
 		}
 	}
 	return false
+}
+
+// MaterializationFailures reports the slots the session's commands could not
+// materialize, in the order they were reported: a command that rendered one
+// answered nothing about that slot.
+func (s *Session) MaterializationFailures() []error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.materializeFailures)
+}
+
+// noteIfMaterializationFailure records an error a command reported when it is a
+// slot that could not be materialized, so which command surfaced it — a slot
+// listing, an evaluation, a pinned one — does not decide whether it is recorded.
+// Callers hold s.mu.
+func (s *Session) noteIfMaterializationFailure(err error) {
+	if errors.Is(err, runtime.ErrSlotMaterialization) {
+		s.noteMaterializationFailure(err)
+	}
+}
+
+// noteMaterializationFailure records slots a command could not materialize. It is
+// a record of what the session answered, so it stands once the object is gone.
+// Callers hold s.mu.
+func (s *Session) noteMaterializationFailure(errs ...error) {
+	for _, err := range errs {
+		if err != nil {
+			s.materializeFailures = append(s.materializeFailures, err)
+		}
+	}
 }
 
 // Diagnostic is one finding about the session's model, located in it, for a
@@ -252,6 +295,6 @@ func (s *Session) runStateMachine(name string, duration *float64, performer []st
 		{Name: "state", Value: currentStateName(exec)},
 		{Name: "time", Value: fmt.Sprintf("%.2f", s.stateExec.now)},
 	}
-	values = append(values, namedValues(exec.StateData())...)
+	values = append(values, namedValues(s.stateExec.contextOf(), exec.StateData())...)
 	return s.withTrace(Verdict{Subject: name, Status: VerdictHolds, Lines: lines, Values: values})
 }

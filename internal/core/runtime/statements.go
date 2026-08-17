@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"fmt"
+	"maps"
 	"sort"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
@@ -53,6 +54,17 @@ func (env *stmtEnv) assignLocal(name string, value Value) bool {
 		}
 	}
 	return false
+}
+
+// values is the values a statement reads: the behavior's own, overridden by
+// those of the blocks entered around it, innermost last.
+func (env *stmtEnv) values() map[string]Value {
+	merged := make(map[string]Value, len(env.data))
+	maps.Copy(merged, env.data)
+	for _, frame := range env.frames {
+		maps.Copy(merged, frame)
+	}
+	return merged
 }
 
 // assign writes to the innermost entered block that declares name, or to the
@@ -259,7 +271,52 @@ func (e *stmtEngine) block(block lower.Block) (stmtFlow, error) {
 	e.env.enter()
 	defer e.env.leave()
 	defer e.enterActivation()()
+	return e.runBlock(block)
+}
+
+// runBlock runs a block's statements, or the token flow it states where a member
+// of it is an action node rather than a statement.
+func (e *stmtEngine) runBlock(block lower.Block) (stmtFlow, error) {
+	if block.Graph != nil {
+		return e.blockFlow(block)
+	}
 	return e.run(block.Statements)
+}
+
+// blockFlow runs a block that is a token flow of its own (lower/block_graph.go):
+// a token starts at the block's initial node and passes along the successions the
+// block states, running each node it reaches until one succeeds to none.
+func (e *stmtEngine) blockFlow(block lower.Block) (stmtFlow, error) {
+	graph := block.Graph
+	for node := graph.Initial; node != nil; {
+		// A node reached spends a step, so a flow that does not end fails the run.
+		if err := e.ctx.incrementStep(); err != nil {
+			return flowNext, err
+		}
+		flow, err := e.blockNode(graph, node)
+		if err != nil || flow == flowReturn {
+			return flow, err
+		}
+		successors := graph.Edges[node]
+		if len(successors) == 0 {
+			return flowNext, nil
+		}
+		node = successors[0]
+	}
+	return flowNext, nil
+}
+
+// blockNode runs one node of a block's flow. A node declaring a namespace of its
+// own was lowered to a block, which enters a frame of its own; a node standing
+// for a run of statements shares the frame the enclosing block entered.
+func (e *stmtEngine) blockNode(graph *lower.ActionGraph, node ast.Node) (stmtFlow, error) {
+	if name := ActionNodeName(node); name != "" && !graph.StatementRuns[node] {
+		if tr := e.ctx.trace; tr != nil {
+			tr.RecordStatement("node " + name)
+			defer tr.EndStatement()
+		}
+	}
+	return e.run(graph.Bodies[node])
 }
 
 // enterActivation runs what follows in a new activation and returns the
@@ -321,7 +378,7 @@ func (e *stmtEngine) iteration(
 	}
 
 	clear(frame)
-	flow, err := e.run(stmt.Body.Statements)
+	flow, err := e.runBlock(stmt.Body)
 	if err != nil || flow == flowReturn {
 		return flow, true, err
 	}
@@ -389,7 +446,7 @@ func (e *stmtEngine) forIteration(
 	defer e.enterActivation()()
 	clear(frame)
 	frame[stmt.Variable] = element
-	return e.run(stmt.Body.Statements)
+	return e.runBlock(stmt.Body)
 }
 
 // stmtLabel names a statement for a trace by what it does and, where it has
@@ -428,10 +485,13 @@ func stmtLabel(stmt lower.Statement) string {
 	}
 }
 
-// forElements returns the elements a `for` loop iterates over, in the order it
-// visits them. A set has no order of its own and its backing map does not
-// iterate in a stable one, so its elements are visited in the order their
-// canonical rendering sorts in — the same order a trace renders them in.
+// forElements returns the elements a `for` loop visits, in visiting order: a
+// sequence in the order the expression built it (a range ascending, a filter as
+// the collection it filtered), and a set in the order its canonical rendering
+// sorts in since a set carries no order of its own. A `for` input that is not a
+// collection is reported rather than read as the one-element collection
+// elementsOf coerces it to: iterating a scalar is a modelling error, and a
+// single silent iteration hides it.
 func forElements(value Value) ([]Value, error) {
 	switch value.Kind {
 	case ValSequence:
@@ -448,8 +508,13 @@ func forElements(value Value) ([]Value, error) {
 			return FormatTraceValue(elements[i]) < FormatTraceValue(elements[j])
 		})
 		return elements, nil
+	case ValNull:
+		// An absent value holds no elements, which is the empty collection: zero
+		// iterations, not an error.
+		return nil, nil
 	default:
-		return nil, fmt.Errorf("'for' collection must be a sequence or a set, got %s", value.Kind)
+		return nil, fmt.Errorf("%w: 'for' iterates a collection, and %s is not one",
+			ErrTypeMismatch, describeValue(value))
 	}
 }
 

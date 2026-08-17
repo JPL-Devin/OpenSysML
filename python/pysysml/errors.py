@@ -44,7 +44,28 @@ class ChecksumMismatchError(ConnectionError):
     A :class:`ConnectionError`, since the service cannot be started, but its own
     class so that a possibly tampered download is never handled as a transport
     failure and answered from whatever was cached before.
+
+    Attributes:
+        unpinned (bool): False for a real mismatch; see
+            :class:`UnpinnedReleaseError`, which is the only one it is True for
     """
+
+    #: A digest contradicts another one, which is what this class means.
+    unpinned = False
+
+
+class UnpinnedReleaseError(ChecksumMismatchError):
+    """Raised when this pysysml pins no digest for the release being downloaded.
+
+    Nothing contradicts anything here, so calling it a checksum mismatch named
+    the wrong cause: the release is simply not one this pysysml vouches for. A
+    :class:`ChecksumMismatchError` still, so an ``except`` clause written before
+    this class existed keeps catching it, and a working cached binary may still
+    be used because no download is under suspicion.
+    """
+
+    #: Told apart from a mismatch by class; the flag is kept for older callers.
+    unpinned = True
 
 
 class StaleServiceError(ConnectionError):
@@ -393,6 +414,7 @@ __all__ = [
     "StaleServiceError",
     "SymbolNotFoundError",
     "TypeMismatchError",
+    "UnpinnedReleaseError",
     "UnsupportedOperationError",
     "UnsupportedValueError",
     "WrongKindError",

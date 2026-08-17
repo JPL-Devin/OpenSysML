@@ -63,6 +63,38 @@ func (s *Slot) HeldValue() Value {
 	return s.Value
 }
 
+// UnsetText is how every surface spells a slot that holds no value: a valueless
+// feature of a value type, whose instances are values rather than objects.
+const UnsetText = "<unset>"
+
+// HoldsNoValue reports whether a value is an object materialized for a valueless
+// feature of a value type. Such an object has no feature that could hold a value
+// and is no value itself (KerML: a DataType classifies values), so it reads as
+// unset rather than as an object.
+func (ctx *Context) HoldsNoValue(val Value) bool {
+	if val.Kind != ValInstance {
+		return false
+	}
+	inst, ok := ctx.instances[val.Instance]
+	return ok && len(inst.Slots) == 0 && isValueTypeSymbol(inst.Type)
+}
+
+// isValueTypeSymbol reports whether sym declares a value type: a `datatype` or
+// `attribute def` (KerML DataType) or an enumeration, as distinct from a class
+// whose instances are objects. Mirrors passes.isDataTypeDefKind.
+func isValueTypeSymbol(sym *symbols.Symbol) bool {
+	if sym == nil {
+		return false
+	}
+	switch sym.Kind {
+	case symbols.SymbolAttributeDef, symbols.SymbolEnumerationDef,
+		symbols.SymbolAttributeUsage, symbols.SymbolEnumerationUsage:
+		return true
+	default:
+		return false
+	}
+}
+
 // Instantiate materializes an instance of the given usage/definition symbol.
 // Allocates ID, creates slots per FeaturesOf(sym), evaluates default values,
 // leaves composite features lazy. Returns the instance or an error.
@@ -168,7 +200,7 @@ func isOccurrenceUsage(sym *symbols.Symbol) bool {
 // occursOnce reports whether a usage names at most one occurrence; several
 // occurrences are a collection rather than one object to read features from.
 func (ctx *Context) occursOnce(sym *symbols.Symbol) bool {
-	mult := ctx.extractMultiplicity(sym)
+	mult, _ := ctx.extractMultiplicity(sym)
 	return !mult.Upper.Infinite && mult.Upper.Value <= 1
 }
 
@@ -179,15 +211,44 @@ func isScalarFeature(feat *EffectiveFeature) bool {
 	return !feat.Multiplicity.Upper.Infinite && feat.Multiplicity.Upper.Value <= 1
 }
 
-// GetSlot retrieves the slot for the named feature, materializing it lazily
-// if it's a composite feature that hasn't been accessed yet.
-func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
-	defer ctx.beginRun()()
+// checkDefaultCount reports a default whose element count does not conform to
+// the multiplicity governing the feature, which is the assumed 1..1 for a
+// feature that declares none. A conforming default is merged as written; a
+// non-conforming one is neither broadcast nor padded, since that would invent
+// values the model does not state. The count of an expression's result is only
+// known here, so this is where such a default is reported; a count the type tier
+// can see statically is reported there (passes.checkValueCount).
+func (ctx *Context) checkDefaultCount(inst *Instance, slot *Slot, name string, val Value) error {
+	count := int64(len(elementsOf(val)))
+	if msg := slot.Feature.Multiplicity.CountViolation(count); msg != "" {
+		return fmt.Errorf("slot %s.%s: %w: %s", inst.Type.Name, name, ErrMultiplicityViolation, msg)
+	}
+	return nil
+}
 
-	slot, ok := inst.Slots[name]
-	if !ok {
+// GetSlot retrieves the slot for the named feature, materializing it lazily
+// if it's a composite feature that hasn't been accessed yet. A slot that could
+// not be materialized is marked as such — it unwraps to ErrSlotMaterialization —
+// so a caller can tell it from any other failure to evaluate, whatever the
+// expression it surfaced through.
+func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
+	if _, ok := inst.Slots[name]; !ok {
+		// Naming no slot of the object is no materialization of one.
 		return nil, fmt.Errorf("slot %q not found in instance %d (type %s)", name, inst.ID, inst.Type.Name)
 	}
+	slot, err := inst.materializeSlot(ctx, name)
+	if err != nil {
+		return nil, &SlotError{Err: err}
+	}
+	return slot, nil
+}
+
+// materializeSlot is GetSlot's materialization: the slot's value, evaluated and
+// checked against the multiplicity governing its feature the first time it is read.
+func (inst *Instance) materializeSlot(ctx *Context, name string) (*Slot, error) {
+	defer ctx.beginRun()()
+
+	slot := inst.Slots[name]
 
 	// If already materialized, return
 	if slot.Materialized {
@@ -221,32 +282,32 @@ func (inst *Instance) GetSlot(ctx *Context, name string) (*Slot, error) {
 
 	// A default that did not constant-fold is a derived value: evaluate it
 	// against this instance, so that it sees the sibling slots it refers to.
-	if slot.Feature.DefaultValue != nil && isScalarFeature(slot.Feature) {
-		val, err := ctx.evalSlotDefault(inst, slot, name)
-		if err != nil {
-			return nil, err
-		}
-		slot.Value = val
-		slot.Materialized = true
-		return slot, nil
-	}
-
-	// A multi-valued feature given a default holds that default's contents; a
-	// single value written there is the collection's one element.
+	// The feature holds what the default states, once that conforms to the
+	// feature's multiplicity.
 	if slot.Feature.DefaultValue != nil {
 		val, err := ctx.evalSlotDefault(inst, slot, name)
 		if err != nil {
 			return nil, err
 		}
-		if val.Kind != ValSequence && val.Kind != ValSet {
-			if err := ctx.chargeElements(1); err != nil {
-				return nil, err
-			}
-			seq := NewSequence()
-			seq.Append(val)
-			val = Value{Kind: ValSequence, Sequence: seq}
+		if err := ctx.checkDefaultCount(inst, slot, name, val); err != nil {
+			return nil, err
 		}
-		slot.Values = val
+		if isScalarFeature(slot.Feature) {
+			slot.Value = val
+		} else {
+			// A multi-valued feature holds a collection, so a single value
+			// stated as its default is that collection's one element, and a
+			// default that is no value at all holds nothing: the elements
+			// stored are the ones counted above.
+			if val.Kind != ValSequence && val.Kind != ValSet {
+				elements := elementsOf(val)
+				if err := ctx.chargeElements(int64(len(elements))); err != nil {
+					return nil, err
+				}
+				val = sequenceOf(elements)
+			}
+			slot.Values = val
+		}
 		slot.Materialized = true
 		return slot, nil
 	}

@@ -22,11 +22,19 @@ type dropReport struct {
 	// "P::A". Anything running against one of them (or something under it) is
 	// stale; what the submission left alone is not.
 	gone []string
+	// reopened names a namespace a loaded file opened again, which stays a
+	// declaration of its own rather than contributing to the earlier one.
+	reopened string
 }
 
 // notice renders the report as the line the user is told about it, so no
 // declaration ever disappears silently.
 func (d dropReport) notice() string {
+	if d.reopened != "" {
+		name := notationName(d.reopened)
+		return fmt.Sprintf("note: %s is opened by more than one loaded file; each opening stays a declaration of its own, so a member of one is not visible unqualified in the other — qualify it (%s::member)",
+			name, name)
+	}
 	if d.decl == "" {
 		return ""
 	}
@@ -133,24 +141,69 @@ func instancesDroppedNotice(n int) string {
 	return fmt.Sprintf("note: %s dropped because the declarations changed; re-run %%instantiate", countOf(n, "instance was", "instances were"))
 }
 
-// instancesGoneNote explains an empty instance list that was not always empty,
-// which %instances would otherwise report the same way as a fresh session.
-func instancesGoneNote(n, version int) string {
+// instancesResetNotice reports the instances a reset took with it. The document
+// they were materialized from is gone entirely, so there is nothing left to
+// carry them over to.
+func instancesResetNotice(n int) string {
 	if n == 0 {
 		return ""
 	}
-	return fmt.Sprintf("(no instances created; %s dropped when the declarations changed at submission %d — re-run %%instantiate)",
-		countOf(n, "instance was", "instances were"), version)
+	return fmt.Sprintf("note: %s dropped because the session was reset; re-run %%instantiate", countOf(n, "instance was", "instances were"))
 }
 
-// instancesPartlyGoneNote reports the objects a submission dropped alongside the
-// ones it kept, which a list of the survivors would not otherwise mention.
-func instancesPartlyGoneNote(n, version int) string {
-	if n == 0 {
+// instanceLoss records the objects the session no longer holds and what took
+// them, so a command that finds none says which it is: a session that never
+// materialized anything, or one whose objects are gone.
+type instanceLoss struct {
+	count int
+	// why is what took them, phrased for the notes below to read with.
+	why string
+}
+
+// lossAtSubmission records objects a submission's changed declarations dropped.
+func lossAtSubmission(n, version int) instanceLoss {
+	return instanceLoss{count: n, why: fmt.Sprintf("when the declarations changed at submission %d", version)}
+}
+
+// lossOnReset records objects a reset dropped, which belongs to no submission.
+func lossOnReset(n int) instanceLoss {
+	return instanceLoss{count: n, why: "when the session was reset"}
+}
+
+// lossOnBudgets records objects dropped with the runtime context their IDs came
+// from, which new run bounds replace.
+func lossOnBudgets(n int) instanceLoss {
+	return instanceLoss{count: n, why: "when the run bounds were changed"}
+}
+
+// goneNote explains an empty instance list that was not always empty, which
+// %instances would otherwise report the same way as a fresh session.
+func (l instanceLoss) goneNote() string {
+	if l.count == 0 {
 		return ""
 	}
-	return fmt.Sprintf("(%s also dropped when the declarations changed at submission %d — re-run %%instantiate)",
-		countOf(n, "instance was", "instances were"), version)
+	return fmt.Sprintf("(no instances created; %s dropped %s — re-run %%instantiate)",
+		countOf(l.count, "instance was", "instances were"), l.why)
+}
+
+// partlyGoneNote reports the objects dropped alongside the ones that were kept,
+// which a list of the survivors would not otherwise mention.
+func (l instanceLoss) partlyGoneNote() string {
+	if l.count == 0 {
+		return ""
+	}
+	return fmt.Sprintf("(%s also dropped %s — re-run %%instantiate)",
+		countOf(l.count, "instance was", "instances were"), l.why)
+}
+
+// lostNote explains an object a command asked for that the session no longer
+// holds.
+func (l instanceLoss) lostNote() string {
+	if l.count == 0 {
+		return ""
+	}
+	return fmt.Sprintf("  %s dropped %s — re-run %%instantiate",
+		countOf(l.count, "instance was", "instances were"), l.why)
 }
 
 func countOf(n int, one, many string) string {
@@ -170,7 +223,10 @@ type endedSession struct {
 	// objectGone records that what ended it was the loss of the object performing
 	// the behavior, which rootName then names.
 	objectGone bool
-	version    int // the submission that did it
+	// reset records that a reset ended it, which belongs to no submission and
+	// names no declaration.
+	reset   bool
+	version int // the submission that did it
 }
 
 // reason explains an ended debugging session in the past tense, for a command
@@ -178,6 +234,9 @@ type endedSession struct {
 func (e *endedSession) reason() string {
 	if e == nil {
 		return ""
+	}
+	if e.reset {
+		return fmt.Sprintf("the %s session for %q ended when the session was reset", e.kind, e.name)
 	}
 	if e.objectGone {
 		return fmt.Sprintf("the %s session for %q ended when the object %s performing it was dropped at submission %d",

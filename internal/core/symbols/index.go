@@ -1111,7 +1111,9 @@ func (idx *Index) LookupQualifiedFrom(fqn, fromFQN string) []*Symbol {
 		return syms
 	}
 	hidden := idx.hidden[fqn]
-	if len(hidden) > 0 && !withinNamespace(fromFQN, namespaceOf(fqn)) {
+	// A root-level name belongs to the importing document's own root namespace, so
+	// a private import of it is answered per document by ReexportVisible, not here.
+	if len(hidden) > 0 && namespaceOf(fqn) != "" && !withinNamespace(fromFQN, namespaceOf(fqn)) {
 		visible := make([]*Symbol, 0, len(syms))
 		for _, sym := range syms {
 			if !hidden[sym] {
@@ -1344,6 +1346,12 @@ func (idx *Index) LookupDirectChildrenFrom(prefix, fromFQN string) []*Symbol {
 // GetFQN returns the fully-qualified name for a symbol by walking its owner scope chain.
 // Returns the local name if the symbol has no owner scope (root-level symbol).
 func (idx *Index) GetFQN(sym *Symbol) string {
+	return FQNOf(sym)
+}
+
+// FQNOf returns a symbol's fully-qualified name from its owner scope chain, so
+// a caller holding a symbol but no index can still name it.
+func FQNOf(sym *Symbol) string {
 	if sym == nil {
 		return ""
 	}

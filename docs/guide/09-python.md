@@ -24,7 +24,7 @@ Every call goes through `sysml-grpc`. `pysysml` starts one for you and expects t
 find it at `~/.pysysml/bin/sysml-grpc`. Three ways to put it there:
 
 ```bash
-# 1. Download the release build (checksum-verified against its .sha256 sidecar)
+# 1. Download the release build (verified against the digest pinned in pysysml)
 python -c "from pysysml.binary import download_binary; download_binary('latest')"
 
 # 2. Let pysysml.connect() download it on first use
@@ -48,6 +48,16 @@ triggers that check, so with `PYSYSML_GRPC_VERSION` unset a binary you put there
 yourself (option 3) is left alone. If the release asked for cannot be downloaded
 (no asset for your platform, no network), the cached binary keeps serving and the
 warning says so, rather than the connection failing.
+
+A download is checked against the SHA-256 `pysysml` pins for that release, not
+the `.sha256` served beside the binary: the sidecar comes from whoever served the
+binary, so it catches corruption but not a republished release. A release this
+`pysysml` pins no digest for is refused, naming the version, and keeps a working
+cached binary rather than trusting the served checksum; `export
+PYSYSML_ALLOW_UNPINNED_DOWNLOAD=<owner/repo>` (or `=1` for any repository, which a
+fork's releases do not need) accepts same-origin trust explicitly for the repository
+it names, with a warning. `PYSYSML_STATE_DIR` moves the state directory
+(`~/.pysysml`) holding the binary cache and the service records.
 
 The published releases up to v0.0.4 carry the `sysml`/`sysml-lsp` archives only;
 `sysml-grpc` binaries are published from the next release onward, so until then
@@ -150,6 +160,15 @@ Integers, reals, booleans, strings and sequences map to `int`, `float`, `bool`,
 `str` and `list`. Unknown names raise `AttributeError` (attribute access) or
 `KeyError` (item access), so `hasattr`, `copy` and `pickle` behave.
 
+A slot holding no value — a valueless feature of a value type, `attribute d : Real;` —
+reads as `pysysml.UNSET`, the same thing `%slots` and `-instantiate` spell `<unset>`. It
+is falsy and is not `None`, which stays the model's `null`:
+
+```python
+inst.d is pysysml.UNSET   # True
+inst.d is None            # False
+```
+
 The service expands the object graph to depth 8 and stops at a type already on
 the path, so a part containing its own kind terminates; a child it did not
 expand comes back as its bare integer id rather than an `Instance`.
@@ -190,7 +209,7 @@ a value the wire format cannot represent is reported as an
 `UnsupportedValueError` in that entry, leaving the other entries intact.
 
 Every call about a loaded model is a `Model` method, and the module-level
-`pysysml.instantiate`/`eval`/`convert` remain for instantiating straight out of a
+`pysysml.instantiate`/`evaluate`/`convert` remain for instantiating straight out of a
 file (`pysysml.instantiate("Demo::Vehicle", file_path="model.sysml")`) or against
 a hash obtained elsewhere (`model_hash=…`).
 
@@ -306,7 +325,9 @@ grpc` and switch on status codes; the original `grpc.RpcError` stays reachable a
 ```
 PySysMLError
 ├── ConnectionError            service unreachable or would not start (UNAVAILABLE)
-│   └── StaleServiceError      another release is already listening on that address
+│   ├── StaleServiceError      another release is already listening on that address
+│   └── ChecksumMismatchError  a download contradicts the digest pinned for it
+│       └── UnpinnedReleaseError  this pysysml pins no digest for that release
 ├── ServiceError               any other status the service failed a call with
 │   ├── ModelNotFoundError     the model hash is no longer in the service cache
 │   ├── ModelFileNotFoundError the service could not read the path (also FileNotFoundError)
@@ -345,6 +366,23 @@ remains as a deprecated alias of `ExecutionError` (same class, so existing
 over renaming alone because it fixes existing code that never caught the old
 class, and the alias is excluded from `__all__` so a star-import no longer
 shadows the built-in.
+
+### Names that no longer shadow a built-in
+
+Both names the package used to bind over a Python built-in were renamed before
+0.2.0 published, so no deprecation cycle is owed:
+
+| Old name | Use instead |
+| --- | --- |
+| `pysysml.eval` | `pysysml.evaluate` |
+| `pysysml.RuntimeError`, `pysysml.errors.RuntimeError` | `pysysml.ExecutionError` |
+
+Each old name still resolves to the same object — `pysysml.eval` *is*
+`pysysml.evaluate` and `pysysml.RuntimeError` *is* `ExecutionError`, so existing
+snippets and `except` clauses keep working — and emits a `DeprecationWarning` on
+access. Neither is in `__all__`, so `from pysysml import *` no longer binds over
+`eval` or `RuntimeError`. The `Model.eval`/`Connection.eval` *methods* keep their
+name: an attribute of an object shadows nothing.
 
 ## Writing a model back out
 

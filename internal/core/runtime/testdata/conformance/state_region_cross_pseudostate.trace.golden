@@ -20,16 +20,7 @@ eval operator == -> true
 eval operator == -> true
 exit: lidle
 exit: ridle
-exit: running
-enter: running
-enter: lstart
 enter: rtarget (entry action)
 stmt assign crossed
   eval literal 1 -> 1
 transition: lidle -> rtarget
-exit: lstart
-enter: lidle
-  eval feature crossed -> 1
-  eval literal 0 -> 0
-eval operator == -> false
-transition: lstart -> lidle

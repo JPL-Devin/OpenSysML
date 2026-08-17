@@ -1,6 +1,8 @@
 package grpc
 
 import (
+	"errors"
+	"fmt"
 	"math"
 
 	pb "github.com/Open-MBEE/Systemica/api/proto"
@@ -57,8 +59,9 @@ func SymbolToProtoIn(sym *symbols.Symbol, sc *SymbolContext) *pb.SymbolInfo {
 	info.Multiplicity = sc.multiplicityOf(sym)
 	info.Specializations = sc.specializationsOf(sym)
 
-	// Attributes populated later when semantic layer ready
-	info.Attributes = []*pb.AttributeInfo{}
+	// The attributes the element has, own and inherited, with their resolved
+	// types and constant default values.
+	info.Attributes = sc.attributesOf(sym)
 
 	return info
 }
@@ -241,8 +244,20 @@ func visibilityToString(v ast.Visibility) string {
 	}
 }
 
-// ValueToProto converts runtime.Value to protobuf Value.
-func ValueToProto(val runtime.Value) *pb.Value {
+// ValueToProto converts runtime.Value to protobuf Value. An enumeration literal
+// is named by its declaration, which idx supplies the qualified name of.
+func ValueToProto(val runtime.Value, idx *symbols.Index) *pb.Value {
+	return ValueToProtoIn(nil, val, idx)
+}
+
+// ValueToProtoIn converts a value read from a live context, which is what tells
+// an object holding no value from one with features: the former crosses as the
+// unset arm, as every other surface reads it. rt may be nil for a value no
+// context materialized.
+func ValueToProtoIn(rt *runtime.Context, val runtime.Value, idx *symbols.Index) *pb.Value {
+	if rt != nil && rt.HoldsNoValue(val) {
+		return &pb.Value{Kind: &pb.Value_Unset{Unset: true}}
+	}
 	switch val.Kind {
 	case runtime.ValConst:
 		// Map semantics.Value to protobuf based on type
@@ -269,7 +284,7 @@ func ValueToProto(val runtime.Value) *pb.Value {
 		var pbElements []*pb.Value
 		if val.Sequence != nil {
 			for _, elem := range val.Sequence.Elements() {
-				pbElements = append(pbElements, ValueToProto(elem))
+				pbElements = append(pbElements, ValueToProtoIn(rt, elem, idx))
 			}
 		}
 		return &pb.Value{Kind: &pb.Value_Sequence{Sequence: &pb.ValueSequence{Elements: pbElements}}}
@@ -281,20 +296,211 @@ func ValueToProto(val runtime.Value) *pb.Value {
 		}
 		return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported: variant selection"}}
 	case runtime.ValQuantity:
-		// The wire Value has no magnitude-and-unit form, and sending the bare
-		// magnitude would drop the unit, so the value is reported unsupported.
-		return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported: quantity value"}}
+		pq := QuantityToProto(val.Quantity)
+		if pq == nil {
+			return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported: quantity with a non-numeric magnitude"}}
+		}
+		return &pb.Value{Kind: &pb.Value_Quantity{Quantity: pq}}
+	case runtime.ValEnumLiteral:
+		lit := enumLiteralToProto(val, idx)
+		if lit == nil {
+			return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported: unresolved enumeration literal"}}
+		}
+		return &pb.Value{Kind: &pb.Value_EnumLiteral{EnumLiteral: lit}}
 	default:
 		return &pb.Value{Kind: &pb.Value_Null{Null: "unsupported"}}
 	}
 }
 
-// ProtoToValue converts a protobuf Value to a runtime.Value. It is the inverse
-// of ValueToProto and is used to bind gRPC-supplied inputs into the runtime.
-func ProtoToValue(pv *pb.Value) runtime.Value {
-	if pv == nil {
-		return runtime.Value{Kind: runtime.ValNull}
+// enumLiteralToProto names a literal by the declaration it is, which is its
+// identity, and by the enumeration declaring it. Nil for an unresolved literal.
+func enumLiteralToProto(val runtime.Value, idx *symbols.Index) *pb.EnumLiteral {
+	if val.Literal == nil {
+		return nil
 	}
+	lit := &pb.EnumLiteral{
+		LiteralId: idx.GetFQN(val.Literal),
+		Name:      val.LiteralText(),
+	}
+	if enum := semantics.EnumerationOwning(val.Literal); enum != nil {
+		lit.EnumerationId = idx.GetFQN(enum)
+	}
+	return lit
+}
+
+// QuantityToProto marshals a quantity: the magnitude in the unit written, plus
+// what that unit reduces to. Reports nil for a magnitude that is not a number.
+func QuantityToProto(q *runtime.Quantity) *pb.Quantity {
+	if q == nil {
+		return nil
+	}
+	pq := &pb.Quantity{Unit: q.Unit.Text, UnitTerm: unitTermToProto(q.Unit.Term)}
+	switch q.Num.Kind {
+	case semantics.ValInt:
+		pq.Magnitude = &pb.Quantity_IntMagnitude{IntMagnitude: q.Num.Int}
+	case semantics.ValReal:
+		pq.Magnitude = &pb.Quantity_RealMagnitude{RealMagnitude: q.Num.Real}
+	default:
+		return nil
+	}
+	return pq
+}
+
+// unitTermToProto marshals a unit's reduction to base units, naming each base
+// unit by qualified name: a symbol pointer means nothing to another process.
+func unitTermToProto(term semantics.UnitTerm) *pb.UnitTerm {
+	pt := &pb.UnitTerm{ScaleNum: term.Scale.Num, ScaleDen: term.Scale.Den}
+	for _, f := range term.Factors {
+		pt.Factors = append(pt.Factors, &pb.UnitFactor{
+			UnitId:   symbols.FQNOf(f.Unit),
+			Exponent: f.Exponent,
+		})
+	}
+	return pt
+}
+
+var (
+	// ErrQuantityNeedsIndex reports a quantity converted from the wire without
+	// the model's symbols, which its base units can only be resolved against.
+	ErrQuantityNeedsIndex = errors.New("a quantity needs the model's symbols to be converted from the wire")
+
+	// ErrUnknownBaseUnit reports a base unit the model does not declare, so no
+	// unit can be rebuilt from the reduction naming it.
+	ErrUnknownBaseUnit = errors.New("unknown base unit")
+
+	// ErrNotAMeasurementUnit reports a reduction naming a symbol that is not a
+	// measurement unit, which nothing is measured in.
+	ErrNotAMeasurementUnit = errors.New("not a measurement unit")
+
+	// ErrUnitScaleUnusable reports a unit reduction whose scale is zero or
+	// undefined, which no magnitude can be converted through.
+	ErrUnitScaleUnusable = errors.New("unit scale is not a usable ratio")
+
+	// ErrUnitNotReduced reports a named unit sent without its reduction, over
+	// which alone commensurability is decided.
+	ErrUnitNotReduced = errors.New("unit carries no reduction to base units")
+	// ErrUnsetNotAccepted reports the unset arm arriving as an input. It reports
+	// that a slot holds no value, which is something to read, not to supply.
+	ErrUnsetNotAccepted = errors.New("unset is not a value a caller can supply")
+)
+
+// ProtoToValueIn converts a protobuf Value to a runtime.Value in the model idx
+// and sem describe, resolving a quantity's base units against them. Inverse of
+// ValueToProto.
+func ProtoToValueIn(pv *pb.Value, idx *symbols.Index, sem *semantics.Model) (runtime.Value, error) {
+	if pv == nil {
+		return runtime.Value{Kind: runtime.ValNull}, nil
+	}
+	switch k := pv.GetKind().(type) {
+	case *pb.Value_Unset:
+		return runtime.Value{}, ErrUnsetNotAccepted
+	case *pb.Value_Quantity:
+		return ProtoToQuantity(k.Quantity, idx, sem)
+	case *pb.Value_EnumLiteral:
+		return enumLiteralFromProto(k.EnumLiteral, idx)
+	case *pb.Value_Sequence:
+		seq := runtime.NewSequence()
+		if k.Sequence != nil {
+			for _, elem := range k.Sequence.Elements {
+				val, err := ProtoToValueIn(elem, idx, sem)
+				if err != nil {
+					return runtime.Value{}, err
+				}
+				seq.Append(val)
+			}
+		}
+		return runtime.Value{Kind: runtime.ValSequence, Sequence: seq}, nil
+	default:
+		return protoToScalar(pv), nil
+	}
+}
+
+// ProtoToQuantity rebuilds a quantity from the wire: the magnitude as sent, in
+// the unit as written, over the base units idx resolves its reduction to.
+func ProtoToQuantity(pq *pb.Quantity, idx *symbols.Index, sem *semantics.Model) (runtime.Value, error) {
+	if pq == nil {
+		return runtime.Value{Kind: runtime.ValNull}, nil
+	}
+	if (idx == nil || sem == nil) && len(pq.GetUnitTerm().GetFactors()) > 0 {
+		return runtime.Value{}, fmt.Errorf("%w: %s", ErrQuantityNeedsIndex, pq.GetUnit())
+	}
+	if pq.GetUnitTerm() == nil && pq.GetUnit() != "" {
+		return runtime.Value{}, fmt.Errorf("%w: %s", ErrUnitNotReduced, pq.GetUnit())
+	}
+	term, err := protoToUnitTerm(pq.GetUnitTerm(), idx, sem)
+	if err != nil {
+		return runtime.Value{}, err
+	}
+
+	var num semantics.Value
+	switch m := pq.GetMagnitude().(type) {
+	case *pb.Quantity_IntMagnitude:
+		num = semantics.Value{Kind: semantics.ValInt, Int: m.IntMagnitude}
+	case *pb.Quantity_RealMagnitude:
+		num = semantics.Value{Kind: semantics.ValReal, Real: m.RealMagnitude}
+	default:
+		return runtime.Value{}, fmt.Errorf("quantity in %q carries no magnitude", pq.GetUnit())
+	}
+
+	quantity := &runtime.Quantity{Num: num, Unit: runtime.Unit{Text: pq.GetUnit(), Term: term}}
+	return runtime.Value{Kind: runtime.ValQuantity, Quantity: quantity}, nil
+}
+
+// protoToUnitTerm rebuilds a unit's reduction, normalized so a term sent in any
+// factor order is commensurable with the same unit derived in the model. A name
+// the model does not declare uniquely as a measurement unit is an error, not a
+// factor over whatever symbol it happened to resolve to.
+func protoToUnitTerm(pt *pb.UnitTerm, idx *symbols.Index, sem *semantics.Model) (semantics.UnitTerm, error) {
+	if pt == nil {
+		// A magnitude sent under no unit at all: dimension one.
+		return semantics.UnitTerm{Scale: semantics.UnitScale(1)}, nil
+	}
+	scale := semantics.Scale{Num: pt.GetScaleNum(), Den: pt.GetScaleDen()}
+	if scale.IsZero() {
+		return semantics.UnitTerm{}, fmt.Errorf("%w: %g/%g", ErrUnitScaleUnusable, scale.Num, scale.Den)
+	}
+	term := semantics.UnitTerm{Scale: scale}
+	for _, f := range pt.GetFactors() {
+		// An empty name is a lookup of the document root, so it is rejected here
+		// rather than resolved to a symbol that measures nothing.
+		if f.GetUnitId() == "" {
+			return semantics.UnitTerm{}, fmt.Errorf("%w: unit factor names no unit", ErrUnknownBaseUnit)
+		}
+		matches := idx.LookupQualified(f.GetUnitId())
+		if len(matches) != 1 {
+			return semantics.UnitTerm{}, fmt.Errorf("%w: %s", ErrUnknownBaseUnit, f.GetUnitId())
+		}
+		if !sem.IsMeasurementUnit(matches[0]) {
+			return semantics.UnitTerm{}, fmt.Errorf("%w: %s", ErrNotAMeasurementUnit, f.GetUnitId())
+		}
+		term.Factors = append(term.Factors, semantics.UnitFactor{
+			Unit:     matches[0],
+			Exponent: f.GetExponent(),
+		})
+	}
+	return term.Normalized(), nil
+}
+
+// enumLiteralFromProto resolves a literal against the model, since a literal is
+// the declaration it names: one the model does not declare has no identity here.
+func enumLiteralFromProto(lit *pb.EnumLiteral, idx *symbols.Index) (runtime.Value, error) {
+	if lit == nil || lit.GetLiteralId() == "" {
+		return runtime.Value{}, fmt.Errorf("enumeration literal: literal_id names no declaration")
+	}
+	if idx == nil {
+		return runtime.Value{}, fmt.Errorf("enumeration literal %s: no model to resolve it against", lit.GetLiteralId())
+	}
+	for _, sym := range idx.LookupQualified(lit.GetLiteralId()) {
+		if semantics.EnumerationOwning(sym) != nil {
+			return runtime.NewEnumLiteral(sym), nil
+		}
+	}
+	return runtime.Value{}, fmt.Errorf("%s is not an enumeration literal of this model", lit.GetLiteralId())
+}
+
+// protoToScalar converts the arms of Value that name no symbol and hold no
+// nested value.
+func protoToScalar(pv *pb.Value) runtime.Value {
 	switch k := pv.GetKind().(type) {
 	case *pb.Value_IntValue:
 		return runtime.Value{Kind: runtime.ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: k.IntValue}}
@@ -306,14 +512,6 @@ func ProtoToValue(pv *pb.Value) runtime.Value {
 		return runtime.Value{Kind: runtime.ValString, Str: k.StringValue}
 	case *pb.Value_InstanceId:
 		return runtime.Value{Kind: runtime.ValInstance, Instance: k.InstanceId}
-	case *pb.Value_Sequence:
-		seq := runtime.NewSequence()
-		if k.Sequence != nil {
-			for _, elem := range k.Sequence.Elements {
-				seq.Append(ProtoToValue(elem))
-			}
-		}
-		return runtime.Value{Kind: runtime.ValSequence, Sequence: seq}
 	case *pb.Value_Null:
 		return runtime.Value{Kind: runtime.ValNull}
 	default:
@@ -441,11 +639,11 @@ func InstanceToProto(rt *runtime.Context, inst *runtime.Instance, idx *symbols.I
 			// Scalar slot. An unmaterialized one holds no value; marshalling it
 			// anyway would report the empty value as an unsupported null.
 			if slot.Materialized {
-				pbSlot.Value = ValueToProto(slot.Value)
+				pbSlot.Value = ValueToProtoIn(rt, slot.Value, idx)
 			}
 		} else {
 			for _, elem := range collectionElements(slot.Values) {
-				pbSlot.Values = append(pbSlot.Values, ValueToProto(elem))
+				pbSlot.Values = append(pbSlot.Values, ValueToProtoIn(rt, elem, idx))
 			}
 		}
 

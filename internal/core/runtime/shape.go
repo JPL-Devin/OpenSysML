@@ -13,7 +13,7 @@ type EffectiveFeature struct {
 	Symbol       *symbols.Symbol // the declaring feature symbol
 	OwnerType    *symbols.Symbol // type that declares this feature (may be supertype)
 	Type         *symbols.Symbol // resolved type (nil if untyped)
-	Multiplicity semantics.Range // from MultiplicityOf (default 1..1)
+	Multiplicity semantics.Range // declared or inherited (default 1..1)
 	DefaultValue ast.Node        // value-binding expression (nil if none)
 	DefaultDecl  *symbols.Symbol // feature the DefaultValue was written on (nil if none)
 }
@@ -100,7 +100,12 @@ func (ctx *Context) buildFeatures(typeSym *symbols.Symbol) []EffectiveFeature {
 
 		name := memberSym.Name
 		typ := ctx.extractType(memberSym)
-		mult := ctx.extractMultiplicity(memberSym)
+		mult, multStated := ctx.extractMultiplicity(memberSym)
+		if !multStated {
+			if inherited, ok := ctx.redefinedMultiplicity(memberSym, typeSym); ok {
+				mult = inherited
+			}
+		}
 		defaultVal := ctx.extractDefaultValue(memberSym)
 		defaultDecl := memberSym
 		if defaultVal == nil {
@@ -192,16 +197,11 @@ func (ctx *Context) declaredType(featureSym *symbols.Symbol) *symbols.Symbol {
 	return nil
 }
 
-// extractMultiplicity returns the multiplicity range for a feature.
-func (ctx *Context) extractMultiplicity(featureSym *symbols.Symbol) semantics.Range {
-	if mult, ok := ctx.model.MultiplicityOf(featureSym); ok {
-		return mult
-	}
-	// Default: 1..1
-	return semantics.Range{
-		Lower: semantics.Bound{Value: 1, Known: true},
-		Upper: semantics.Bound{Value: 1, Known: true},
-	}
+// extractMultiplicity returns the multiplicity governing a feature. stated is
+// false when it declares none and the assumed 1..1 governs it instead.
+func (ctx *Context) extractMultiplicity(featureSym *symbols.Symbol) (r semantics.Range, stated bool) {
+	_, stated = ctx.model.MultiplicityOf(featureSym)
+	return ctx.model.EffectiveMultiplicityOf(featureSym), stated
 }
 
 // extractDefaultValue returns the default-value expression for a feature (nil if none).
@@ -210,6 +210,31 @@ func (ctx *Context) extractDefaultValue(featureSym *symbols.Symbol) ast.Node {
 		return usage.Value // nil if no default
 	}
 	return nil
+}
+
+// redefinedMultiplicity returns the multiplicity a feature takes from the
+// feature it redefines when it declares none: a redefining feature is the
+// redefined feature declared again (KerML 1.0 §7.3.4.5), so `:>> xs = (1, 2)`
+// is bound by the `xs` it restates. Subsetting is not inherited this way — a
+// subsetting feature is one of the subsetted feature's values, not the same
+// feature.
+func (ctx *Context) redefinedMultiplicity(sym, owner *symbols.Symbol) (semantics.Range, bool) {
+	seen := map[*symbols.Symbol]bool{sym: true}
+	for queue := []*symbols.Symbol{sym}; len(queue) > 0; {
+		cur := queue[0]
+		queue = queue[1:]
+		for _, redefined := range ctx.relatedFeatures(cur, owner, ast.RelRedefines) {
+			if seen[redefined] {
+				continue
+			}
+			seen[redefined] = true
+			if mult, ok := ctx.model.MultiplicityOf(redefined); ok {
+				return mult, true
+			}
+			queue = append(queue, redefined)
+		}
+	}
+	return semantics.Range{}, false
 }
 
 // redefinedDefault returns the value a feature takes from the feature it

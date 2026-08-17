@@ -35,6 +35,10 @@ func (r *Resolver) walkUnqualifiedHiding(scope *symbols.Scope, name string, hide
 			return resolution{sym: sym, ok: true}
 		}
 
+		if sym, ok := r.acceptPayload(s, name); ok && !hide.hides(sym) {
+			return resolution{sym: sym, ok: true}
+		}
+
 		if sym, ok := r.implicitlyNamedMember(s, name, hide); ok {
 			return resolution{sym: sym, ok: true}
 		}

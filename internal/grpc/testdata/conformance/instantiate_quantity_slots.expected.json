@@ -1,0 +1,36 @@
+{
+	"rpc": "Instantiate",
+	"symbol_id": "quantities::Car",
+	"expected_slots": {
+		"mass": {
+			"materialized": true,
+			"value_kind": "quantity",
+			"value": "5 [SI::kg] = 1000/1·SI::gram"
+		},
+		"plainMass": {
+			"materialized": true,
+			"value_kind": "real_value",
+			"value": 2.0
+		},
+		"derivedSpeed": {
+			"materialized": true,
+			"value_kind": "quantity",
+			"value": "5 [SI::m/SI::s] = SI::metre·SI::second^-1"
+		},
+		"writtenSpeed": {
+			"materialized": true,
+			"value_kind": "quantity",
+			"value": "5.4 [SI::km/SI::h] = 5/18·SI::metre·SI::second^-1"
+		},
+		"length": {
+			"materialized": true,
+			"value_kind": "quantity",
+			"value": "3 [SI::m] = SI::metre"
+		},
+		"engine": {
+			"materialized": true,
+			"value_kind": "instance_id"
+		}
+	},
+	"expected_instance_count": 2
+}

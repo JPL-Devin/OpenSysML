@@ -4,7 +4,194 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Cutting a release
 is described in [docs/project/releasing.md](docs/project/releasing.md).
 
+## 0.0.9 — 2026-08-17
+
+### Language and semantics
+
+- A transition leaving a composite state fires while a substate is active, where it used to
+  never be taken, and a transition between sibling regions exits only its source rather than
+  the whole composite state; history is recorded per region.
+- Succession and transition endpoints (`a then b`, a transition's source and target) are
+  resolved at the name-resolution tier, in the scope they were written in, instead of being
+  matched against a flat list of states and silently dropped where no match was found. An
+  endpoint naming a vertex of another state machine, or a named `first`/`then` marker, is a
+  check-time diagnostic rather than a failure to construct the executor; an endpoint no pass
+  reported leaves its own edge out instead of failing the lowering.
+- A `send` reaches its target by port direction, conjugation and the performing part, so a
+  message declared on a conjugated port arrives where the model says it does and a state
+  machine nested in a part reaches that part.
+- A block owns its token flow: `for` iterates every collection it is given, an output the
+  block's own flow assigns is counted, a result written among its flow nodes is returned, and
+  a `for` over a non-collection is reported rather than iterated once.
+- Library evaluation covers string operators and `StringFunctions`, `VectorFunctions` and
+  `ComplexFunctions`, `@`/`@@` classification, a queryable exposed element set for views,
+  library feature values read as names (`TrigFunctions::pi`, deg/rad) and `includingAt`
+  insertion. A vector element or inner product beyond the `Real` range, and an argument named
+  for no declared parameter, are reported rather than wrapped or ignored.
+- An enumeration literal is a value, in the runtime and across the API.
+- The subject of a check or evaluation is chosen deterministically and reported: keyed by
+  declaration path rather than holder identity, bounded in its search, routed through
+  `satisfy`, with the objects of one declaration counted once, an object held by another not
+  a subject root, a nested definition's objects among them, and a nested redefinition on an
+  object eligible. An ambiguous carrier is named by its definition, and a nested subject is
+  named in verdicts, labels and over the wire.
+- A calc body with an implicit result is type-checked, and calc recursion evaluates under a
+  budget instead of exhausting the stack.
+- A multi-valued default is honoured where it conforms and reported where it does not, and a
+  default whose multiplicity is not declared is held to the assumed `1..1`.
+- An accept node's payload resolves in its action body, a nameless payload no longer masks
+  the feature it is named after, and shared payload visibility is limited to action bodies.
+- Parser and classification: modifier-driven usage kinds, keyword-named parameters and loop
+  variables, a classifier specializing any definition, a KerML datatype classified as a
+  definition while `function` stays a calc, recursive `expose` traversal preserved through
+  filtered namespaces, and classification judged by element name across index generations.
+
+- A valueless feature of a value type reads as unset rather than as an empty
+  object: `attribute d : Real;` reports `d = <unset>` where it used to report
+  `d = Instance(ID: 2)` with `(no features)`. What materialization creates is
+  unchanged — a `Real` has no features to instantiate, so the object it holds is
+  empty — but every surface that reports a value now says so with one spelling:
+  `-instantiate`/`-e`, `%slots`, the JSON report, and the wire, where
+  `Value.unset` is a new arm the service sends and refuses to accept. A valued
+  attribute (`k = 2.00`), an object of a class, and a value type that does
+  declare features are unaffected.
+- A member chain from `that` resolves: `attribute b : Real = that.a;` in a usage
+  body reads `a` off the object featuring the value being written — the innermost
+  enclosing usage, whose own and inherited members are both reached — instead of
+  reporting `no scope for member lookup in Base::things::that`, since `that` is
+  declared `Anything[1]` and owns no members ([KerML, 8.4.2]). A `that` written
+  where no usage encloses it stays unresolved rather than resolving to the
+  library's declaration.
+- A root-level `private import X::*;` serves the document that wrote it. It was
+  hidden from that document too, so a file opening with `private import
+  ScalarValues::*;` — the spelling OMG's own training files use — reported `Real`
+  unresolved. A root-level import still reaches no other document, at any
+  visibility ([KerML, 8.2.3.3]).
+- The import an editor offers for an unresolved library name is written `private
+  import X::*;` explicitly, so applying the fix does not re-export the imported
+  names onward.
+
+### Tools
+
+- `sysml-lsp` accepts `--stdio` and implements the `shutdown`/`exit` lifecycle, so the
+  shipped VS Code extension can start the shipped server; it used to exit 2 and crash-loop.
+- The REPL closes a cluster of usability gaps: unclosed submissions, load diagnostics,
+  object-resolved subjects, `%view`, ranked suggestions, quoted qualified names, a pinned
+  `%eval` context, reported reset loss, and an unreadable name reported as typed.
+- A piped REPL session whose command could not materialize a slot exits 2, so a script can
+  detect it, and the CLI reports materialization diagnostics instead of swallowing them.
+
+### gRPC service
+
+- A quantity crosses in both directions with its magnitude, the unit as written and the
+  reduced unit term, and is read as a typed Python value. An unreduced unit, a zero unit
+  scale and a named unit arriving without its reduction are rejected.
+- `Evaluate` is subject-aware behind a capability, attributes are populated by following
+  typing edges, and generalization bases are reported.
+
+### Performance
+
+- A cold `ParseFile` is served from a pool of prewarmed standard library indexes, taking
+  under 1 ms where it used to rebuild the index per distinct model at ~110 ms. Each cache
+  store writes its own temp file and the pool refills serially.
+
+### Tests and documentation
+
+- `cmd/sysml-grpc`, a published artifact that had no tests, is gated on process lifecycle —
+  start, one RPC, shutdown, and the failure exits — along with the subtle `resolve` and
+  `semantics` rules that were uncovered.
+- The gate figures are counted at the first-subtest level and each has exactly one home;
+  every other page links to it rather than restating a number that drifts.
+- Behavioral semantics cite SysML v2 and KerML rather than UML 2.5.1.
+
+### Python client (`pysysml`)
+
+- `pysysml.UNSET` is what a slot holding no value reads as — falsy, spelled
+  `<unset>`, and distinct from `None`, the model's `null`.
+- A quantity can be *sent*, not only read: a `pysysml.values.Quantity` is
+  accepted wherever a value is — an action input, a calc argument, an element of
+  a sequence — and crosses as `Value.quantity` with its magnitude in the kind it
+  was written in, the unit as written and the reduced unit term, so a quantity
+  read from the service round-trips through an evaluation with both magnitude and
+  unit preserved. A unit named without the reduction commensurability is decided
+  over is refused before anything is sent, rather than compared by bare
+  magnitude.
+- A `Connection` that starts the service asks it at once and then backs off (10
+  ms, 20 ms, 40 ms … capped at 250 ms) instead of sleeping half a second before
+  the first probe, so starting a service that answers in milliseconds costs ~17
+  ms rather than ~510 ms. Waiting is bounded by the same ~2.5 s and raises the
+  same `ConnectionError`, now as the documented `connection.START_TIMEOUT` and
+  covering the probing as well as the sleeping, so a port that accepts without
+  ever answering no longer costs a whole probe timeout beyond the bound; a
+  service that died is still detected before each probe and ownership,
+  stale-service and pid authentication are unchanged.
+- The two names that shadowed builtins are renamed: `pysysml.eval` is
+  `pysysml.evaluate` and `pysysml.RuntimeError` is `pysysml.ExecutionError`. Each
+  old name still resolves to the same object with a `DeprecationWarning` and is
+  gone from `__all__`, so existing snippets keep working while a star-import
+  shadows neither builtin. The `Model.eval` and `Connection.eval` methods are
+  unchanged.
+- A release this `pysysml` pins no digest for raises the new
+  `UnpinnedReleaseError` instead of `ChecksumMismatchError`, which named the
+  wrong cause. It subclasses `ChecksumMismatchError`, so an `except` clause
+  written before it existed still catches it, and only it may be answered from a
+  cached binary — a contradicted digest still never is.
+- `pysysml.__version__` reports the declaration shipped beside the module, so an
+  editable install whose checkout bumped `VERSION` after `pip install -e` no
+  longer reports the version it had at install time. The version tests locate the
+  installed package through the install's own PEP 610 record, which for an
+  editable install is the checkout rather than a site-packages path holding no
+  `pysysml/`.
+- The generated protobuf stubs ship type annotations (`sysml_pb2.pyi`, generated
+  by `make python-proto`), so `mypy` no longer reports the message classes and
+  enum constants as undefined.
+
+### Known limitations
+
+- Two of 0.0.8's four listed limitations are closed by this release (the nested
+  redefinition as a subject, and the unchecked implicit-result `calc` body). The RDF
+  limitation stands: expressions are not emitted as triples and a model whose behavior is
+  stated as action or state nodes is still reported rather than converted, so the RDF path
+  should be read as experimental.
+- A `that` written inside a nested `action`, `constraint` or transition-guard body binds to
+  the innermost enclosing usage, so `that.k` naming a member of the enclosing part is
+  unresolved. This is what the spec text says as written; the outward binding is not
+  implemented.
+- An unqualified standard library name still requires an import (`private import
+  ScalarValues::*;`, the spelling OMG's own training files use). Only the public top-level
+  elements of a root namespace are globally visible ([SysML, 7.2] over [KerML, 8.2.3.5]), so
+  this is conformant rather than a gap, and is recorded as won't-do.
+- A port that accepts TCP but never answers gRPC costs `pysysml` about 9 s of wall clock
+  rather than the nominal 2.5 s `START_TIMEOUT`. The wait is bounded and raises a clear
+  `ConnectionError`.
+- The tag pipeline (`.circleci/config.yml`) does not download the OMG training corpus, so
+  the corpus gate does not run there; it was run locally for this release.
+
+### Release process
+
+- `build-release` fails a release whose built artifacts do not report the tag
+  they were cut from, before anything is stored or published.
+- `python/scripts/pin_release_checksums.py` fails with a typed
+  `MissingTokenError` naming `GITHUB_TOKEN`/`GH_TOKEN` when neither is set,
+  instead of an opaque rate-limited HTTP 403 from an unauthenticated request; the
+  scope it needs is documented in the release runbook.
+
 ## 0.0.8 — 2026-08-15
+
+### Language and semantics
+
+- A multi-valued feature that is both typed and given a default holds the
+  default's values rather than an instantiation of its type: `attribute xs :
+  Real[3] = (1.0, 2.0, 3.0);` materializes those three elements, a
+  `part`-typed collection holds the very objects its default names, an
+  expression default holds what the expression produced, and a quantity keeps
+  its unit. A default whose element count does not conform to the declared
+  multiplicity — one value against `[3]`, four against `[3]`, `()` against
+  `[1..3]` — is a multiplicity violation, reported statically where the count is
+  a literal one and when the slot materializes where only evaluating the
+  expression knows it, rather than broadcast, padded or silently dropped. A
+  feature whose multiplicity a redefinition does not restate is bound by the one
+  it redefines. This was the second known limitation listed for 0.0.4 and 0.0.5.
 
 ### Diagnostics
 
@@ -27,6 +214,32 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 - A condition whose evaluation could not be carried out is worded as undecided
   (`? … could not be evaluated`) and names why, keeping exit 2, where it used to
   print a failure while exiting 2.
+- A submission the parser cannot close — an unterminated body, block comment or
+  quoted name, typed or in a loaded file — no longer absorbs the submissions
+  after it: it is reported, kept in the buffer for `%list` and `%save`, and
+  masked out of the text the session analyzes, so the next declaration parses
+  and resolves as it would have before the bad one.
+- A loaded file's syntax errors are printed the way a typed submission's are,
+  against that file and its own line numbering, and count as errors for
+  `HasErrors`, so a non-interactive run over a broken file fails instead of
+  reporting nothing.
+- An expression whose subject is reached through a declaration is evaluated on
+  the object in effect for it, so `%eval Spec::c` honors a redefinition made on
+  a nested object; two objects carrying the feature are still refused rather
+  than chosen between.
+- Two loaded files that open the same package are told apart explicitly: each
+  opening stays a declaration of its own, both openings' members resolve
+  qualified, and the load says to qualify a reference across them. Re-typing a
+  package at the prompt still folds into the package already in the session.
+- `%view <name>` is implemented, listing what a view exposes — its own `expose`
+  relationships and the protected ones of the views it specializes — and the
+  views nested in it; asking it of an element that is no view says so.
+- The qualified names offered for an unresolved name are ranked and capped:
+  what the session declares before the library, a package's member before a name
+  nested in another element, and at most three, where an unresolved `length`
+  used to list every same-named library member including function parameters.
+- A `%satisfy` verdict quotes the inner names of the assertion it reports, so a
+  requirement or subject whose name the notation quotes reads back as written.
 
 ### `sysml` command line
 
@@ -56,6 +269,21 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Python bindings and `sysml-grpc`
 
+- `sysml-grpc` loads the standard library ahead of the requests that need it
+  instead of once per model: the service keeps a small pool of prewarmed library
+  indexes, and a model the service has not seen adds its document to one of them
+  rather than loading and expanding the library again. A cold `ParseFile` on a
+  163-line model measures ~0.5–0.9 ms where it measured ~100–128 ms, which is
+  what makes a parameter sweep varying the model text practical. What a model
+  resolves against is unchanged: an index carries the same library, an index is
+  handed out once so cached models stay independent, and an empty pool builds one
+  on the request path, so a result never depends on prewarming. Prewarming runs
+  in the background, so startup stays prompt, and `SYSML_GRPC_INDEX_POOL` sizes
+  the pool (default 4; 0 keeps the previous per-model behaviour).
+- The library record cache writes each store to a temp file of its own, where two
+  stores of one key shared a fixed `<key>.idx.tmp` path and could publish a
+  truncated record that every later start missed on; `Prune` now also clears the
+  temp files a crashed store left behind.
 - `sysml-grpc -version` reports the metadata the linker sets, where a released
   binary said `version dev / commit unknown`.
 - A cached `~/.pysysml/bin/sysml-grpc` records the release and repository it was
@@ -106,8 +334,8 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   shows the instantiated value.
 - A `calc` body written without `return` is not expression-type-checked, so no
   static dimensional warning is reported inside it.
-- Submitting any declaration to the REPL ends an active `%action` or `%state`
-  debugging session.
+- Submitting a declaration the debugger depends on ends an active `%action` or
+  `%state` session; a submission that changes something else carries it over.
 
 ## 0.0.7 — 2026-08-15
 
@@ -612,7 +840,8 @@ are listed here rather than under a heading of their own.
   earlier snippet rather than merging into it, so adding a member to a package by
   re-typing the package drops the members left out of the new text.
 - A multi-valued feature that is both typed and given a default takes the typed
-  instantiation; the default is not merged into it (as in 0.0.4).
+  instantiation; the default is not merged into it (as in 0.0.4). *(Fixed after
+  this release; see 0.0.8.)*
 - An attribute declared with a type but no value (`attribute diameter : Real;`)
   instantiates as an object of that type rather than an unset value, so `%slots`
   shows `diameter = Instance(ID: n)` with `(no features)` under it.
@@ -701,4 +930,5 @@ The first tagged release.
   conditions it inherits from its definition. *(Fixed after this release; see
   0.0.5.)*
 - A multi-valued feature that is both typed and given a default takes the typed
-  instantiation; the default is not merged into it.
+  instantiation; the default is not merged into it. *(Fixed after this release;
+  see 0.0.8.)*

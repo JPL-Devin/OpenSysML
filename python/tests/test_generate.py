@@ -128,6 +128,29 @@ def test_element_type_scalar_definition_maps_to_its_scalar():
     assert mapped.decoder == "_t.as_float"
 
 
+def test_element_type_enumeration_is_a_literal():
+    """An enumeration-typed usage holds a literal, not an instance of the enum def."""
+    mapped = element_type(
+        TypeFacts(declared="Color", resolved_id="D::Color", resolved_kind="enumDef"),
+        {"D::Color": "Color"},
+    )
+    assert mapped.annotation == "_t.EnumLiteral"
+    assert mapped.decoder == "_t.as_enum_literal"
+
+
+def test_element_type_valued_enumeration_maps_to_its_scalar():
+    """A literal declaring a value of its own evaluates to that value."""
+    mapped = element_type(
+        TypeFacts(
+            declared="Code", resolved_id="D::Code", resolved_kind="enumDef",
+            primitive="Integer",
+        ),
+        {"D::Code": "Code"},
+    )
+    assert mapped.annotation == "int"
+    assert mapped.decoder == "_t.as_int"
+
+
 def test_element_type_unmapped_primitive_is_object():
     """Complex and Number have no sound Python type and say so."""
     mapped = element_type(TypeFacts(primitive="Complex"), {})
@@ -135,11 +158,18 @@ def test_element_type_unmapped_primitive_is_object():
     assert "Complex" in mapped.comment
 
 
-def test_element_type_quantity_is_object_with_unit():
-    """A quantity maps to object and names its unit."""
+def test_element_type_quantity_is_a_quantity_naming_its_unit():
+    """A quantity maps to the Quantity class, whatever scalar it is written over."""
     mapped = element_type(TypeFacts(primitive="Real", quantity=True, unit="kg"), {})
-    assert mapped.annotation == "object"
+    assert mapped.annotation == "_t.Quantity"
+    assert mapped.decoder == "_t.as_quantity"
     assert "kg" in mapped.comment
+
+    # A quantity value type says nothing about what was written for it: such a
+    # slot may hold a plain number or a structured value.
+    no_unit = element_type(TypeFacts(primitive="Real", quantity=True), {})
+    assert no_unit.annotation == "object"
+    assert no_unit.decoder == "_t.as_object"
 
 
 def test_element_type_unresolved_and_untyped():
@@ -295,6 +325,213 @@ def test_render_module_emits_bases_before_subclasses():
     vehicle = definition("Demo::Vehicle")
     source = render_module([car, vehicle])
     assert source.index("class Vehicle(") < source.index("class Car(Vehicle)")
+
+
+@pytest.mark.parametrize("kind", ["subsets", "redefines"])
+def test_render_module_makes_every_generalization_edge_a_base(kind):
+    """A subsets or redefines edge becomes a base class, like specializes does."""
+    car = definition(
+        "Demo::Car",
+        specializations=[Specialization(kind=kind, declared="Vehicle", target_id="Demo::Vehicle")],
+    )
+    source = render_module([car, definition("Demo::Vehicle")])
+    assert "class Car(Vehicle):" in source
+    assert source.index("class Vehicle(") < source.index("class Car(Vehicle)")
+
+
+def test_render_module_keeps_multiple_supertypes_in_declaration_order():
+    """Several generalization edges become several bases, in declaration order."""
+    hybrid = definition(
+        "Demo::Hybrid",
+        specializations=[
+            Specialization(kind="specializes", declared="Vehicle", target_id="Demo::Vehicle"),
+            Specialization(kind="subsets", declared="Electric", target_id="Demo::Electric"),
+            # A repeated target is one base class, not two.
+            Specialization(kind="redefines", declared="Vehicle", target_id="Demo::Vehicle"),
+        ],
+    )
+    source = render_module([hybrid, definition("Demo::Vehicle"), definition("Demo::Electric")])
+    assert "class Hybrid(Vehicle, Electric):" in source
+
+
+def test_render_module_keeps_the_base_that_implies_the_other():
+    """A base a sibling base already specializes is left implicit, not dropped for it."""
+    vehicle = definition("Demo::Vehicle")
+    electric = definition(
+        "Demo::Electric",
+        specializations=[Specialization(kind="specializes", declared="Vehicle", target_id="Demo::Vehicle")],
+    )
+    # Vehicle before Electric is unlinearizable as written: Electric is already a
+    # Vehicle, so Electric alone preserves both relationships and its members.
+    hybrid = definition(
+        "Demo::Hybrid",
+        specializations=[
+            Specialization(kind="specializes", declared="Vehicle", target_id="Demo::Vehicle"),
+            Specialization(kind="specializes", declared="Electric", target_id="Demo::Electric"),
+        ],
+    )
+    source = render_module([hybrid, electric, vehicle])
+    assert "class Hybrid(Electric):" in source
+    assert "left out" not in source
+    namespace: dict = {}
+    exec(compile(source, "demo_types.py", "exec"), namespace)
+    assert issubclass(namespace["Hybrid"], namespace["Electric"])
+    assert issubclass(namespace["Hybrid"], namespace["Vehicle"])
+
+
+def test_render_module_drops_a_base_python_cannot_linearize():
+    """An order Python has no MRO for keeps the module importable and says what it left out."""
+    left = definition("Demo::Left")
+    right = definition("Demo::Right")
+    # Opposite base orders have no common linearization, and neither implies the
+    # other, so one edge cannot be expressed in Python at all.
+    one = definition(
+        "Demo::One",
+        specializations=[
+            Specialization(kind="specializes", declared="Left", target_id="Demo::Left"),
+            Specialization(kind="specializes", declared="Right", target_id="Demo::Right"),
+        ],
+    )
+    two = definition(
+        "Demo::Two",
+        specializations=[
+            Specialization(kind="specializes", declared="Right", target_id="Demo::Right"),
+            Specialization(kind="specializes", declared="Left", target_id="Demo::Left"),
+        ],
+    )
+    both = definition(
+        "Demo::Both",
+        specializations=[
+            Specialization(kind="specializes", declared="One", target_id="Demo::One"),
+            Specialization(kind="specializes", declared="Two", target_id="Demo::Two"),
+        ],
+    )
+    source = render_module([both, one, two, left, right])
+    assert "class Both(One):" in source
+    assert "# specializes Demo::Two, left out: Python cannot linearize it" in source
+    namespace: dict = {}
+    exec(compile(source, "demo_types.py", "exec"), namespace)
+    assert namespace["Both"].__mro__[1] is namespace["One"]
+
+
+def test_render_module_reports_a_base_left_implicit_by_a_base_that_is_then_dropped():
+    """A base only a dropped base implied is reported, not silently lost."""
+    left = definition("Demo::Left")
+    right = definition("Demo::Right")
+    extra = definition("Demo::Extra")
+    one = definition(
+        "Demo::One",
+        specializations=[
+            Specialization(kind="specializes", declared="Left", target_id="Demo::Left"),
+            Specialization(kind="specializes", declared="Right", target_id="Demo::Right"),
+        ],
+    )
+    two = definition(
+        "Demo::Two",
+        specializations=[
+            Specialization(kind="specializes", declared="Right", target_id="Demo::Right"),
+            Specialization(kind="specializes", declared="Left", target_id="Demo::Left"),
+            Specialization(kind="specializes", declared="Extra", target_id="Demo::Extra"),
+        ],
+    )
+    # Extra is implied by Two, but Two has no MRO alongside One, so dropping Two
+    # takes Extra with it.
+    both = definition(
+        "Demo::Both",
+        specializations=[
+            Specialization(kind="specializes", declared="One", target_id="Demo::One"),
+            Specialization(kind="subsets", declared="Extra", target_id="Demo::Extra"),
+            Specialization(kind="specializes", declared="Two", target_id="Demo::Two"),
+        ],
+    )
+    source = render_module([both, one, two, left, right, extra])
+    assert "class Both(One):" in source
+    assert "# subsets Demo::Extra, left out" in source
+    assert "# specializes Demo::Two, left out" in source
+    namespace: dict = {}
+    exec(compile(source, "demo_types.py", "exec"), namespace)
+    assert not issubclass(namespace["Both"], namespace["Extra"])
+
+
+def test_render_module_reports_a_base_in_a_generalization_cycle():
+    """A cyclic edge no base order can express is named in a comment."""
+    first = definition(
+        "Demo::First",
+        specializations=[
+            Specialization(kind="specializes", declared="Second", target_id="Demo::Second")
+        ],
+    )
+    second = definition(
+        "Demo::Second",
+        specializations=[
+            Specialization(kind="specializes", declared="First", target_id="Demo::First")
+        ],
+    )
+    source = render_module([first, second])
+    assert "left out" in source
+    namespace: dict = {}
+    exec(compile(source, "demo_types.py", "exec"), namespace)
+    assert issubclass(namespace["First"], namespace["Second"]) != issubclass(
+        namespace["Second"], namespace["First"]
+    )
+
+
+def test_collect_definitions_takes_type_and_multiplicity_from_a_redefinition():
+    """A redefining feature that restates neither type nor multiplicity inherits both."""
+    root = FakeSymbol(
+        SymbolFacts(id="Demo", name="Demo", kind="package"),
+        [
+            FakeSymbol(SymbolFacts(id="Demo::Engine", name="Engine", kind="partDef")),
+            FakeSymbol(
+                SymbolFacts(id="Demo::Base", name="Base", kind="partDef"),
+                [
+                    FakeSymbol(
+                        SymbolFacts(
+                            id="Demo::Base::engine",
+                            name="engine",
+                            kind="partUsage",
+                            type=TypeFacts(declared="Engine", resolved_id="Demo::Engine"),
+                            multiplicity=Multiplicity("0", "*"),
+                        )
+                    )
+                ],
+            ),
+            FakeSymbol(
+                SymbolFacts(
+                    id="Demo::Car",
+                    name="Car",
+                    kind="partDef",
+                    specializations=(
+                        Specialization(kind="specializes", declared="Base", target_id="Demo::Base"),
+                    ),
+                ),
+                [
+                    FakeSymbol(
+                        SymbolFacts(
+                            id="Demo::Car::engine",
+                            name="engine",
+                            kind="partUsage",
+                            specializations=(
+                                Specialization(
+                                    kind="redefines",
+                                    declared="engine",
+                                    target_id="Demo::Base::engine",
+                                ),
+                            ),
+                        )
+                    )
+                ],
+            ),
+        ],
+    )
+
+    definitions = {d.id: d for d in collect_definitions(root)}
+    redefining = definitions["Demo::Car"].features[0]
+    assert redefining.facts.type.resolved_id == "Demo::Engine"
+    assert redefining.facts.multiplicity == Multiplicity("0", "*")
+
+    source = render_module(list(definitions.values()))
+    assert '_t.list_slot(self, "engine", _t.as_typed(Engine))' in source
 
 
 def test_render_module_notes_ungenerated_base():

@@ -1,0 +1,11 @@
+{
+  "type": "state",
+  "events": [
+    {"signal": "restart", "args": null}
+  ],
+  "finalState": "l1",
+  "stateVisits": ["start", "Working", "lstart", "l1", "Working", "lstart", "l1"],
+  "outputs": {
+    "log": {"type": "Integer", "value": 1342913}
+  }
+}

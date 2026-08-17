@@ -212,8 +212,8 @@ Parse + model all behavioral bodies with unified fallback grammar:
 ### Tier 5 — Behavioral Interpreter ✅ Complete
 
 **Package:** `internal/core/runtime`  
-**Status:** Complete. Conformance gate: 211/211 cases passing (calc/constraint/requirement/satisfy/action/state all functional).  
-**Spec Alignment:** Token-flow semantics align with UML 2.5.1 Activity diagrams; state machine execution follows UML 2.5.1 StateMachine run-to-completion semantics. See [SPEC_COMPLIANCE.md](../project/spec-compliance.md) for detailed compliance mapping (~98% faithful implementation).
+**Status:** Complete. Conformance gate: every case passing (calc/constraint/requirement/satisfy/action/state all functional); count in [the measured counts](../project/spec-compliance.md).  
+**Spec Alignment:** The governing reference is the SysML v2 metamodel or the bundled KerML semantic library (`internal/core/libs/stdlib/`); UML 2.5.1 is a fallback only where the SysML v2 notation has no production for a concept *and* the KerML library no performance for it (state-body `fork`/`join`, history, entry/exit points, regions). Token flow is succession-ordered: a succession is a KerML `HappensBefore` link (`Occurrences.kerml`), which orders occurrences in time and carries no values — a `SuccessionFlow` is the form that carries a payload (`KerML.kerml`: `Succession specializes Connector`, `SuccessionFlow specializes Succession, Flow`). State machine execution is `Occurrences::Occurrence::isRunToCompletion` over its `runToCompletionScope` ("determines whether transition performances might happen during state entry performances within the run to completion scope"), with event dispatch `isDispatch` / `dispatchScope`. See [SPEC_COMPLIANCE.md](../project/spec-compliance.md) for detailed compliance mapping (~98% faithful implementation).
 
 **Architecture:**
 
@@ -261,12 +261,12 @@ Parse + model all behavioral bodies with unified fallback grammar:
 - Lowering to execution IR lives in `internal/core/lower/` (`ToActionGraph`, `ToStateGraph`)
 
 **Testing:**
-- **Golden ASTs**: 82 fixtures - `internal/core/parser/testdata/parse/`
-- **Negative tests**: 127 subtests - `internal/core/parser/negative_test.go`
-- **Unit tests**: 43 tests (action, state) - `action_executor_test.go`, `state_executor_test.go`
-- **Conformance gate**: 211 cases (all passing: calc×56, action×50, state×41, requirement×12, instance×9, unit×7, constraint×7, satisfy×5, variation×5, redefinition×5, variant×3, feature×3, ballandchain×3, and one each of accept, attribute, connector, cubesat and multiplicity) - `conformance_test.go`
-- **Golden traces**: 69 `.trace.golden` files (action×28, calc×25, state×12, constraint×4) - `trace_test.go`
-- **Robustness**: 146 failure-mode subtests (deadlock, unbound params, missing features, dangling transitions, sourceless accept, step budget, pseudostate dead ends and cycles, history and defer misuse, send/accept misrouting, calc arity/recursion, `perform` reference failures) - `robustness_test.go`
+- **Golden ASTs**: `internal/core/parser/testdata/parse/` — count in [the measured counts](../project/spec-compliance.md)
+- **Negative tests**: `internal/core/parser/negative_test.go` — count in [the measured counts](../project/spec-compliance.md)
+- **Unit tests**: `action_executor_test.go`, `state_executor_test.go` (action, state)
+- **Conformance gate**: `.sysml` + `.expected.json` pairs, all passing - `conformance_test.go` — counts and per-category breakdown in [the measured counts](../project/spec-compliance.md)
+- **Golden traces**: `.trace.golden` files - `trace_test.go` — count in [the measured counts](../project/spec-compliance.md)
+- **Robustness**: failure-mode cases (deadlock, unbound params, missing features, dangling transitions, sourceless accept, step budget, pseudostate dead ends and cycles, history and defer misuse, send/accept misrouting, calc arity/recursion, `perform` reference failures) - `robustness_test.go`
 - **Coverage**: All behavioral types fully functional. Action: 14/14 features ✅. State: 13/13 features ✅. Calc: 8/8 ✅. Constraint: 5/5 ✅. Requirement: 5/5 ✅. Evaluation: 7/7 ✅.
 
 **Measured Compliance:** See [SPEC_COMPLIANCE.md](../project/spec-compliance.md) for semantic rule → implementation → test case mapping with status (✅ faithful / ⚠️ approximate / ❌ not yet implemented).
@@ -283,7 +283,7 @@ Parse + model all behavioral bodies with unified fallback grammar:
 
 **Package:** `internal/lsp`  
 **Binary:** `cmd/sysml-lsp`  
-**Status:** ✅ Complete (stdio protocol, 10 LSP features, 104 tests)
+**Status:** ✅ Complete (stdio protocol, 10 LSP features, tested end to end)
 
 ### Features
 
@@ -360,7 +360,7 @@ Parse + model all behavioral bodies with unified fallback grammar:
 - `walk.go` — Reference lookup over `resolve.References`
 
 **Testing:**
-- 104 tests covering all features
+- Tests covering every feature — count in [the measured counts](../project/spec-compliance.md)
 - Integration tests with mock clients
 - Incremental sync edge cases (astral plane characters, multi-change, offset-zero insertion)
 
@@ -506,7 +506,7 @@ go test -v -run TestStdlibConformance ./internal/core/libs
 #### 2. Golden AST Snapshots
 - **Purpose:** Verify AST structure matches expected output
 - **Location:** `internal/core/parser/golden_test.go`
-- **Fixtures:** `testdata/parse/*.sysml` and `*.kerml` (82 representative files)
+- **Fixtures:** `testdata/parse/*.sysml` and `*.kerml` (one representative file per construct)
 - **Goldens:** `testdata/parse/*.golden` (AST dumps)
 - **Acceptance:** Parse output matches golden file
 - **Update flag:** `go test -run TestGolden -update` (regenerate goldens after intentional changes)
@@ -530,7 +530,7 @@ go test -v -run TestStdlibConformance ./internal/core/libs
 #### 4. Negative Test Suite
 - **Purpose:** Verify parser rejects malformed input gracefully
 - **Location:** `internal/core/parser/negative_test.go`
-- **Test:** `TestNegative` with 127 malformed-input subtests
+- **Test:** `TestNegative`, one subtest per malformed input
 - **Acceptance:** Each case produces diagnostics (doesn't panic)
 - **Coverage:** Unclosed blocks, unexpected tokens, invalid syntax, incomplete behavioral members
 
@@ -552,7 +552,7 @@ New behavioral features (actions, states, calc, constraints, requirements) requi
 #### 1. Golden AST Fixtures
 - **Purpose:** Lock in parse structure before execution changes
 - **Location:** `internal/core/parser/testdata/parse/` (behavioral fixtures)
-- **Coverage:** 82 fixtures in total, behavioral ones (action, calc, constraint, requirement, state) among them
+- **Coverage:** the behavioral fixtures (action, calc, constraint, requirement, state) among the whole set
 - **Acceptance:** `TestGolden` passes, AST dumps match expectations
 - **Update flag:** `go test -run TestGolden -update`
 
@@ -571,15 +571,15 @@ New behavioral features (actions, states, calc, constraints, requirements) requi
 - **Allowlist:** `known_failures.txt` (currently empty — all cases pass)
 - **Acceptance:** Expected outputs/satisfaction match actual execution results
 
-**Coverage (211 cases, by fixture prefix):**
-- Calc: parameter binding, return values, defaults, inherited parameters, unary operators, type coercion, qualified names, body-local usages, statement bodies, nested and from-constraint invocation (×56)
-- Action: token flow, outputs, nested invocation, send/accept, port communication, `perform` reference and shorthand, accept...then, flows, loops and decisions (×50)
-- State: simple, do behavior, concurrent do, transition effect, choice/junction/fork-join pseudostates, orthogonal regions and region pseudostates, shallow/deep history, entry/exit points, deferred/undeferred events, call and timed triggers, signal discrimination/unmatched, self signal (×41)
-- Requirement: require/subject/actor/assume satisfaction, nested (×12)
-- Instance: derived slots, constraint binding, inherited constraints, nested usage bodies (×9)
-- Unit and quantity evaluation (×7)
-- Constraint: assert/assume satisfaction, negation (×7)
-- Satisfy assertions (×5), variations (×5), redefinitions (×5), variants (×3), feature chains (×3), the ball-and-chain model (×3), and one each of accept, attribute, connector, cubesat and multiplicity
+**Coverage (by fixture prefix, all passing; counts in [the measured counts](../project/spec-compliance.md)):**
+- Calc: parameter binding, return values, defaults, inherited parameters, unary operators, type coercion, qualified names, body-local usages, statement bodies, nested and from-constraint invocation
+- Action: token flow, outputs, nested invocation, send/accept, port communication, `perform` reference and shorthand, accept...then, flows, loops and decisions
+- State: simple, do behavior, concurrent do, transition effect, choice/junction/fork-join pseudostates, orthogonal regions and region pseudostates, shallow/deep history, entry/exit points, deferred/undeferred events, call and timed triggers, signal discrimination/unmatched, self signal
+- Requirement: require/subject/actor/assume satisfaction, nested
+- Instance: derived slots, constraint binding, inherited constraints, nested usage bodies
+- Unit and quantity evaluation
+- Constraint: assert/assume satisfaction, negation
+- Satisfy assertions, variations, redefinitions, variants, feature chains, string operations, nested behaviors, element filters, the ball-and-chain model, and one each of attribute, connector, cubesat and view
 
 **Usage:**
 ```bash
@@ -593,7 +593,7 @@ go test -v -run TestExecutionConformance ./internal/core/runtime
 - **Determinism:** Token sorting by ID, fixed event queue tie-breaking
 - **Acceptance:** Trace output matches golden file
 - **Update flag:** `go test -run TestExecutionTrace -update-traces`
-- **Coverage:** 69 `.trace.golden` files (action×28, calc×25, state×12, constraint×4)
+- **Coverage:** `.trace.golden` files for action, calc, state, constraint, accept and string execution
 
 **Trace format:**
 - Action: `step N: token T1@node1, token T2@node2` (sorted)
@@ -602,7 +602,7 @@ go test -v -run TestExecutionConformance ./internal/core/runtime
 #### 4. Runtime Robustness Tests
 - **Purpose:** Verify malformed/pathological behaviors fail gracefully (typed errors, no panics/hangs)
 - **Location:** `internal/core/runtime/robustness_test.go`
-- **Test:** `TestRuntimeRobustness` with 146 failure-mode subtests
+- **Test:** `TestRuntimeRobustness`, one subtest per failure mode
 - **Acceptance:** All return typed errors, never panic, timeout guard (60s) prevents hangs
 
 **Failure modes:**
@@ -632,15 +632,15 @@ go test -v -run TestRuntimeRobustness -timeout 60s ./internal/core/runtime
 
 ### Behavioral Semantics Map
 
-**See:** [SPEC_COMPLIANCE.md](../project/spec-compliance.md) for UML/KerML semantic rule → implementation → test case → status mapping.
+**See:** [SPEC_COMPLIANCE.md](../project/spec-compliance.md) for semantic rule → implementation → test case → status mapping.
 
 Every behavioral feature must have:
-- Semantic rule reference (UML 2.5.1 / KerML / SysML v2)
+- Semantic rule reference: the SysML v2 metamodel or the bundled KerML semantic library, and UML 2.5.1 only where neither has the concept
 - Implementation location (file:function)
 - Test case(s) exercising the feature
 - Status: ✅ Faithful / ⚠️ Approximate / ❌ Not Yet Implemented / 🚧 Known Failure
 
-**Current coverage:** ~98% faithful implementation. Calc/constraint/requirement fully functional. Action/state executor infrastructure complete (fork/join/decision, TimeEvent/ChangeEvent, guards, hierarchy, orthogonal regions all tested); all 211 conformance cases pass. Fork/join, shallow/deep history, entry/exit points and deferred events are implemented and reachable from source text — see docs/project/spec-compliance.md and docs/reference/grammar/README.md.
+**Current coverage:** ~98% faithful implementation. Calc/constraint/requirement fully functional. Action/state executor infrastructure complete (fork/join/decision, TimeEvent/ChangeEvent, guards, hierarchy, orthogonal regions all tested); every conformance case passes. Fork/join, shallow/deep history, entry/exit points and deferred events are implemented and reachable from source text — see docs/project/spec-compliance.md and docs/reference/grammar/README.md.
 
 ---
 

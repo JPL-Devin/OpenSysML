@@ -27,16 +27,25 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("fork_branches_assigning_the_same_feature", testForkBranchesAssigningTheSameFeature)
 	t.Run("decision_no_satisfied_guard", testDecisionNoSatisfiedGuard)
 	t.Run("state_dangling_transition", testStateDanglingTransition)
+	t.Run("state_transition_endpoint_misspelled", testStateTransitionEndpointMisspelled)
+	t.Run("state_transition_endpoint_in_another_machine", testStateTransitionEndpointInAnotherMachine)
+	t.Run("state_transition_endpoint_never_resolved", testStateTransitionEndpointNeverResolved)
+	t.Run("state_transition_endpoint_naming_a_first_marker", testStateTransitionEndpointNamingAFirstMarker)
+	t.Run("state_junction_without_an_outgoing_transition", testStateJunctionWithoutAnOutgoingTransition)
 	t.Run("state_transition_without_a_target", testStateTransitionWithoutATarget)
 	t.Run("state_transition_effect_reads_an_unknown_feature", testStateTransitionEffectReadsAnUnknownFeature)
+	t.Run("state_cross_region_transitions_ping_pong", testStateCrossRegionTransitionsPingPong)
 	t.Run("sourceless_accept_at_top_level", testSourcelessAcceptAtTopLevel)
 	t.Run("calc_unbound_parameter", testCalcUnboundParameter)
+	t.Run("calc_unbound_keyword_named_parameter", testCalcUnboundKeywordNamedParameter)
 	t.Run("calc_too_many_arguments", testCalcTooManyArguments)
 	t.Run("calc_unknown_named_argument", testCalcUnknownNamedArgument)
 	t.Run("calc_without_result", testCalcWithoutResult)
 	t.Run("calc_symbol_is_not_a_calc", testCalcSymbolIsNotACalc)
 	t.Run("calc_direct_recursion", testCalcDirectRecursion)
 	t.Run("calc_mutual_recursion", testCalcMutualRecursion)
+	t.Run("calc_recursion_spends_step_budget", testCalcRecursionSpendsStepBudget)
+	t.Run("calc_recursion_at_depth_ceiling", testCalcRecursionAtDepthCeiling)
 	t.Run("calc_non_terminating_loop", testCalcNonTerminatingLoop)
 	t.Run("calc_body_never_returns", testCalcBodyNeverReturns)
 	t.Run("calc_send_is_rejected", testCalcSendIsRejected)
@@ -66,16 +75,30 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("collection_spends_the_element_budget", testCollectionSpendsTheElementBudget)
 	t.Run("usage_read_through_a_part_without_an_output", testUsageReadThroughAPartWithoutAnOutput)
 	t.Run("constraint_missing_feature", testConstraintMissingFeature)
+	t.Run("nested_condition_subject_is_ambiguous", testNestedConditionSubjectIsAmbiguous)
+	t.Run("satisfaction_subject_is_ambiguous", testSatisfactionSubjectIsAmbiguous)
+	t.Run("recursive_composition_subject_search", testRecursiveCompositionSubjectSearch)
+	t.Run("duplicate_objects_of_one_declaration", testDuplicateObjectsOfOneDeclaration)
+	t.Run("duplicate_objects_holding_a_plain_part", testDuplicateObjectsHoldingAPlainPart)
+	t.Run("nested_part_held_with_a_multiplicity", testNestedPartHeldWithAMultiplicity)
+	t.Run("part_nested_inside_a_repeated_part", testPartNestedInsideARepeatedPart)
+	t.Run("parts_subsetting_one_collection", testPartsSubsettingOneCollection)
 	t.Run("requirement_feature_without_a_value", testRequirementFeatureWithoutAValue)
 	t.Run("requirement_features_valued_from_each_other", testRequirementFeaturesValuedFromEachOther)
 	t.Run("step_budget_exceeded", testStepBudgetExceeded)
+	t.Run("eval_on_an_instance_spends_the_step_budget", testEvalOnAnInstanceSpendsTheStepBudget)
 	t.Run("non_terminating_loop_exhausts_step_budget", testNonTerminatingLoopExhaustsStepBudget)
 	t.Run("loop_body_declaration_does_not_leak", testLoopBodyDeclarationDoesNotLeak)
 	t.Run("loop_body_of_unexecutable_statement", testLoopBodyOfUnexecutableStatement)
+	t.Run("block_flow_of_unexecutable_member", testBlockFlowOfUnexecutableMember)
+	t.Run("non_terminating_loop_performing_an_action", testNonTerminatingLoopPerformingAnAction)
+	t.Run("for_over_a_value_no_expression_makes_iterable", testForOverAValueNoExpressionMakesIterable)
+	t.Run("for_over_a_scalar", testForOverAScalar)
 	t.Run("statement_directly_in_an_action_body", testStatementDirectlyInAnActionBody)
 	t.Run("flow_end_naming_no_node", testFlowEndNamingNoNode)
 	t.Run("flow_naming_no_pin", testFlowNamingNoPin)
 	t.Run("accept_payload_without_a_value", testAcceptPayloadWithoutAValue)
+	t.Run("accept_payload_read_before_it_is_bound", testAcceptPayloadReadBeforeItIsBound)
 	t.Run("flow_from_a_node_that_produced_nothing", testFlowFromANodeThatProducedNothing)
 	t.Run("action_accept_time_trigger", testActionAcceptTimeTrigger)
 	t.Run("action_accept_non_boolean_change_trigger", testActionAcceptNonBooleanChangeTrigger)
@@ -101,6 +124,10 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("behavior_performing_an_action_and_stating_a_body", testBehaviorPerformingAnActionAndStatingABody)
 	t.Run("qualified_assignment_target_in_a_state_effect", testQualifiedAssignmentTargetInAStateEffect)
 	t.Run("call_of_unhandled_operation", testCallOfUnhandledOperation)
+	t.Run("signal_no_level_of_a_composite_state_accepts", testSignalNoLevelOfACompositeStateAccepts)
+	t.Run("stale_composite_timer_in_a_region", testStaleCompositeTimerInARegion)
+	t.Run("composite_self_transition_with_no_substate_to_re_enter", testCompositeSelfTransitionWithNoSubstateToReEnter)
+	t.Run("exit_of_nested_regions_with_a_history_pseudostate", testExitOfNestedRegionsWithAHistoryPseudostate)
 	t.Run("call_argument_of_wrong_type", testCallArgumentOfWrongType)
 	t.Run("perform_of_missing_action", testPerformOfMissingAction)
 	t.Run("perform_reference_cycle", testPerformReferenceCycle)
@@ -123,6 +150,8 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("derived_slot_over_missing_feature", testDerivedSlotOverMissingFeature)
 	t.Run("sequence_index_names_no_position", testSequenceIndexNamesNoPosition)
 	t.Run("collection_operand_of_the_wrong_kind", testCollectionOperandOfTheWrongKind)
+	t.Run("numeric_library_call_that_has_no_value", testNumericLibraryCallThatHasNoValue)
+	t.Run("string_operand_of_the_wrong_kind", testStringOperandOfTheWrongKind)
 	t.Run("collection_body_of_the_wrong_arity", testCollectionBodyOfTheWrongArity)
 	t.Run("select_predicate_is_not_a_condition", testSelectPredicateIsNotACondition)
 	t.Run("collection_operation_step_budget", testCollectionOperationStepBudget)
@@ -142,6 +171,8 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("valued_feature_restated_in_a_body", testValuedFeatureRestatedInABody)
 	t.Run("multiplicity_infinite_lower_bound", testMultiplicityInfiniteLowerBound)
 	t.Run("multiplicity_lower_bound_too_large", testMultiplicityLowerBoundTooLarge)
+	t.Run("default_not_conforming_to_multiplicity", testDefaultNotConformingToMultiplicity)
+	t.Run("default_against_an_undeclared_multiplicity", testDefaultAgainstAnUndeclaredMultiplicity)
 	t.Run("feature_chain_through_an_unset_slot", testFeatureChainThroughAnUnsetSlot)
 	t.Run("feature_chain_spends_the_element_budget", testFeatureChainSpendsTheElementBudget)
 	t.Run("mutually_subsetting_features", testMutuallySubsettingFeatures)
@@ -149,6 +180,84 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("multiplicity_on_a_connector", testMultiplicityOnAConnector)
 	t.Run("connector_attached_to_itself", testConnectorAttachedToItself)
 	t.Run("mutually_attached_connectors", testMutuallyAttachedConnectors)
+	t.Run("enumeration_name_that_is_not_a_literal", testEnumerationNameThatIsNotALiteral)
+	t.Run("chain_through_a_literal_without_that_attribute", testChainThroughALiteralWithoutThatAttribute)
+	t.Run("classification_outside_the_evaluable_subset", testClassificationOutsideTheEvaluableSubset)
+	t.Run("expression_over_a_slot_holding_no_value", testExpressionOverASlotHoldingNoValue)
+}
+
+// testExpressionOverASlotHoldingNoValue: a valueless feature of a value type is
+// read without an error and reports that it holds no value, while an expression
+// computing over it reports a type mismatch rather than a number or a panic.
+func testExpressionOverASlotHoldingNoValue(t *testing.T) {
+	src := `
+		package test {
+			private import ScalarValues::*;
+			part def Holder {
+				attribute d : Real;
+				attribute n : Real = d + 1.0;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Holder", ast.DefPart)
+	if sym == nil {
+		t.Fatal("Holder part def not found")
+	}
+	inst, err := ctx.Instantiate(sym)
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+
+	slot, err := inst.GetSlot(ctx, "d")
+	if err != nil {
+		t.Fatalf("slot d: %v", err)
+	}
+	if !ctx.HoldsNoValue(slot.HeldValue()) {
+		t.Errorf("slot d holds %v, want no value", slot.HeldValue())
+	}
+
+	if _, err := inst.GetSlot(ctx, "n"); !errors.Is(err, ErrTypeMismatch) {
+		t.Errorf("slot n err = %v, want ErrTypeMismatch", err)
+	}
+
+	// A value naming an object the context does not hold answers the question
+	// rather than panicking on the lookup.
+	if ctx.HoldsNoValue(Value{Kind: ValInstance, Instance: 1 << 30}) {
+		t.Error("a value naming no object reads as holding none")
+	}
+}
+
+// testClassificationOutsideTheEvaluableSubset: a classification the evaluator
+// cannot judge — no subject to classify, a subject that is a datum, an
+// unresolved metadata type, or a subject naming nothing — reports
+// ErrFilterUnevaluable rather than silently answering false.
+func testClassificationOutsideTheEvaluableSubset(t *testing.T) {
+	const model = `
+		metadata def Safety;
+		#Safety part def Belt;
+		attribute level = 3;
+	`
+	for _, tc := range []struct{ name, cond string }{
+		{"implicit subject outside an object", "@Safety"},
+		{"self outside an object", "self @ Safety"},
+		{"a datum subject", "42 @ Safety"},
+		{"a string subject", `"belt" @ Safety`},
+		{"an unresolved metadata type", "Belt @ Nonexistent"},
+	} {
+		src := model + "\nconstraint c { " + tc.cond + " }"
+		got, err := constraintVerdict(t, src, "c")
+		if got {
+			t.Errorf("%s: `%s` was satisfied, want a report", tc.name, tc.cond)
+		}
+		if !errors.Is(err, semantics.ErrFilterUnevaluable) {
+			t.Errorf("%s: `%s` err = %v, want ErrFilterUnevaluable", tc.name, tc.cond, err)
+		}
+	}
+	// A subject naming nothing is the unresolved reference it is, not a verdict.
+	if got, err := constraintVerdict(t, model+"\nconstraint c { Missing @ Safety }", "c"); got || err == nil {
+		t.Errorf("`Missing @ Safety` = %v err=%v, want a report", got, err)
+	}
 }
 
 // testMultiplicityInfiniteLowerBound: `[*..*]` requires unboundedly many objects,
@@ -190,6 +299,87 @@ func testMultiplicityLowerBoundTooLarge(t *testing.T) {
 	}
 	if len(ctx.instances) > 100 {
 		t.Errorf("materialized %d instances before reporting the bound", len(ctx.instances))
+	}
+}
+
+// testDefaultNotConformingToMultiplicity: a default whose element count is
+// outside the feature's multiplicity is reported, rather than broadcast to fill
+// the lower bound, truncated to the upper one, or dropped.
+func testDefaultNotConformingToMultiplicity(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		decl string
+	}{
+		{"one value against three", "attribute xs : Real[3] = 1.0;"},
+		{"four values against three", "attribute xs : Real[3] = (1.0, 2.0, 3.0, 4.0);"},
+		{"no values against one or more", "attribute xs : Real[1..3] = ();"},
+		{"an expression producing too few", "attribute m : Real = 1.0; attribute xs : Real[2] = m;"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			inst, ctx := instantiateHolder(t, `
+				package test {
+					private import ScalarValues::Real;
+					part def Holder { `+tc.decl+` }
+				}
+			`)
+			done := make(chan error, 1)
+			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						done <- fmt.Errorf("panic: %v", r)
+					}
+				}()
+				_, err := inst.GetSlot(ctx, "xs")
+				done <- err
+			}()
+			select {
+			case err := <-done:
+				if err == nil {
+					t.Fatal("want a multiplicity violation, got a materialized slot")
+				}
+				if !errors.Is(err, ErrMultiplicityViolation) {
+					t.Errorf("expected ErrMultiplicityViolation, got: %v", err)
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("materializing the default did not terminate")
+			}
+		})
+	}
+}
+
+// testDefaultAgainstAnUndeclaredMultiplicity: a feature that declares no
+// multiplicity holds exactly one value, so a default of any other number of
+// values is reported rather than held under an unconstrained bound.
+func testDefaultAgainstAnUndeclaredMultiplicity(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		decl     string
+		reported bool
+	}{
+		{"one value", "attribute xs : Real = 1.0;", false},
+		{"one value of an untyped feature", "attribute xs = 1.0;", false},
+		{"two values", "attribute xs : Real = (1.0, 2.0);", true},
+		{"two values of an untyped feature", "attribute xs = (1.0, 2.0);", true},
+		{"no values", "attribute xs : Real = ();", true},
+		{"an expression producing two", "attribute m : Real[2] = (1.0, 2.0); attribute xs : Real = m;", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			inst, ctx := instantiateHolder(t, `
+				package test {
+					private import ScalarValues::Real;
+					part def Holder { `+tc.decl+` }
+				}
+			`)
+			_, err := inst.GetSlot(ctx, "xs")
+			switch {
+			case tc.reported && err == nil:
+				t.Fatalf("%s was held, want a multiplicity violation", tc.decl)
+			case tc.reported && !errors.Is(err, ErrMultiplicityViolation):
+				t.Errorf("expected ErrMultiplicityViolation, got: %v", err)
+			case !tc.reported && err != nil:
+				t.Errorf("%s was reported: %v", tc.decl, err)
+			}
+		})
 	}
 }
 
@@ -307,6 +497,71 @@ func testSequenceIndexNamesNoPosition(t *testing.T) {
 		{"()#(1)", ErrIndexOutOfRange},
 		{"xs#(1.5)", ErrTypeMismatch},
 		{"xs#(ys)", ErrTypeMismatch},
+	} {
+		got, err := evalCollectionExpr(t, tt.expr)
+		if !errors.Is(err, tt.want) {
+			t.Errorf("%s = (%v, %v), want %v", tt.expr, got, err, tt.want)
+		}
+	}
+}
+
+// testNumericLibraryCallThatHasNoValue: a vector, Complex or sequence library
+// declaration that cannot answer reports itself — a malformed argument by kind or
+// dimension, an undefined result, or a declaration this runtime has no
+// representation for the values of — rather than computing something else.
+func testNumericLibraryCallThatHasNoValue(t *testing.T) {
+	for _, tt := range []struct {
+		expr string
+		want error
+	}{
+		{"VectorFunctions::cartesianInner(xs, ys)", ErrTypeMismatch},
+		{"VectorFunctions::'cartesian+'(xs, ys)", ErrTypeMismatch},
+		{"VectorFunctions::cartesianNorm(flags)", ErrTypeMismatch},
+		{"VectorFunctions::cartesianAngle(xs, (0.0, 0.0, 0.0))", semantics.ErrArithmeticDomain},
+		{"VectorFunctions::vectorScalarDiv(xs, 0)", ErrDivisionByZero},
+		{"VectorFunctions::cartesianInner(xs)", ErrCalcArity},
+		{"VectorFunctions::sum(xs)", ErrUnevaluableLibraryFunction},
+		{"ComplexFunctions::'/'(ys, (0.0, 0.0))", ErrDivisionByZero},
+		{"ComplexFunctions::re(xs)", ErrTypeMismatch},
+		{"ComplexFunctions::ToString(ys)", ErrUnevaluableLibraryFunction},
+		// includingAt inserts before a position of 1..size+1, so an index past the
+		// end of the sequence names no insertion point and is reported rather than
+		// appending or dropping the values.
+		{"SequenceFunctions::includingAt(xs, 9, 5)", ErrIndexOutOfRange},
+		{"SequenceFunctions::includingAt(xs, 9, 0)", ErrIndexOutOfRange},
+		{"SequenceFunctions::includingAt((), 9, 2)", ErrIndexOutOfRange},
+		{"SequenceFunctions::includingAt(xs, 9, 1.5)", ErrTypeMismatch},
+		{"SequenceFunctions::includingAt(xs, 9)", ErrCalcArity},
+	} {
+		got, err := evalCollectionExpr(t, tt.expr)
+		if !errors.Is(err, tt.want) {
+			t.Errorf("%s = (%v, %v), want %v", tt.expr, got, err, tt.want)
+		}
+	}
+}
+
+// testStringOperandOfTheWrongKind: an operator or StringFunctions call given a
+// value that is not the String its signature declares is reported rather than
+// coerced, and a Substring position naming no character is reported rather than
+// clamped.
+func testStringOperandOfTheWrongKind(t *testing.T) {
+	for _, tt := range []struct {
+		expr string
+		want error
+	}{
+		{`"a" + 1`, ErrTypeMismatch},
+		{`1 + "a"`, ErrTypeMismatch},
+		{`"a" < 1`, ErrTypeMismatch},
+		{`"a" >= factor`, ErrTypeMismatch},
+		{`"a" < xs`, ErrTypeMismatch},
+		{`"a" - "b"`, ErrTypeMismatch},
+		{`StringFunctions::Length(1)`, ErrTypeMismatch},
+		{`StringFunctions::Length(xs)`, ErrTypeMismatch},
+		{`StringFunctions::Substring("abc", 1, 9)`, ErrIndexOutOfRange},
+		{`StringFunctions::Substring("héllo", 1, 6)`, ErrIndexOutOfRange},
+		{`StringFunctions::Substring("abc", 0, 2)`, ErrIndexOutOfRange},
+		{`StringFunctions::Substring("abc", "1", 2)`, ErrTypeMismatch},
+		{`StringFunctions::Substring("abc", 1)`, ErrCalcArity},
 	} {
 		got, err := evalCollectionExpr(t, tt.expr)
 		if !errors.Is(err, tt.want) {
@@ -698,6 +953,227 @@ func testDeferOfNonDeferrableTrigger(t *testing.T) {
 	}
 }
 
+// testStateTransitionEndpointMisspelled: a misspelled endpoint is a
+// name-resolution diagnostic, so lowering leaves the edge out and the machine
+// runs to a halt in the state it reached rather than panicking or hanging.
+func testStateTransitionEndpointMisspelled(t *testing.T) {
+	src := `package test {
+		state Machine {
+			initial init;
+			state busy;
+			final done;
+			init then busy;
+			transition busy to donee;
+		}
+	}`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	ctx.resolver.ResolveDocument("<test>", file)
+
+	var endpoint *resolve.Diagnostic
+	for i, diag := range ctx.resolver.Diagnostics {
+		if strings.Contains(diag.Message, "donee") {
+			endpoint = &ctx.resolver.Diagnostics[i]
+		}
+	}
+	if endpoint == nil {
+		t.Fatalf("expected a name-resolution diagnostic for 'donee', got: %v", ctx.resolver.Diagnostics)
+	}
+	if endpoint.Code != "unresolved" {
+		t.Errorf("expected code %q, got %q", "unresolved", endpoint.Code)
+	}
+
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Machine", ast.DefState)
+	if sym == nil {
+		t.Fatal("Machine not found")
+	}
+	exec, err := newStateExecutor(ctx, sym, nil)
+	if err != nil {
+		t.Fatalf("newStateExecutor: %v", err)
+	}
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- exec.RunToCompletion() }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("RunToCompletion: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("RunToCompletion hung on a machine whose transition names nothing")
+	}
+	if got := exec.getCurrentState(); got == nil || got.Name != "busy" {
+		t.Errorf("expected the machine to halt in 'busy', got %v", got)
+	}
+}
+
+// testStateTransitionEndpointNeverResolved: executed without a name-resolution
+// pass, as the REPL and the service handlers do, an endpoint naming nothing
+// leaves its edge out; the machine still runs, and the misspelling is reported
+// by whoever resolves the document rather than by lowering.
+func testStateTransitionEndpointNeverResolved(t *testing.T) {
+	src := `package test {
+		state Machine {
+			initial init;
+			state busy;
+			final done;
+			init then busy;
+			transition busy to donee;
+		}
+	}`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Machine", ast.DefState)
+	if sym == nil {
+		t.Fatal("Machine not found")
+	}
+	exec, err := newStateExecutor(ctx, sym, nil)
+	if err != nil {
+		t.Fatalf("newStateExecutor: %v", err)
+	}
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- exec.RunToCompletion() }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("RunToCompletion: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("RunToCompletion hung on an endpoint no resolution pass reported")
+	}
+	if got := exec.getCurrentState(); got == nil || got.Name != "busy" {
+		t.Errorf("expected the machine to halt in 'busy', got %v", got)
+	}
+}
+
+// testStateTransitionEndpointInAnotherMachine: an endpoint naming a state of a
+// different machine resolves, so no name diagnostic reports it; the state
+// transition check reports it, and lowering backstops the check with a typed
+// error rather than dropping the edge.
+func testStateTransitionEndpointInAnotherMachine(t *testing.T) {
+	src := `package test {
+		state Other {
+			initial start;
+			state running;
+			start then running;
+		}
+		state Machine {
+			initial init;
+			state busy;
+			init then busy;
+			transition busy to Other::running;
+		}
+	}`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	ctx.resolver.ResolveDocument("<test>", file)
+
+	for _, diag := range ctx.resolver.Diagnostics {
+		if strings.Contains(diag.Message, "running") {
+			t.Fatalf("the endpoint resolves, so name resolution reports nothing: %v", diag)
+		}
+	}
+
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Machine", ast.DefState)
+	if sym == nil {
+		t.Fatal("Machine not found")
+	}
+	_, err := newStateExecutor(ctx, sym, nil)
+	if err == nil {
+		t.Fatal("expected an error for an endpoint that is not a vertex of this machine")
+	}
+	if !strings.Contains(err.Error(), "not a vertex of this state machine") {
+		t.Errorf("expected the error to say the endpoint is not a vertex of this machine, got %v", err)
+	}
+	if strings.Contains(err.Error(), "*ast.") {
+		t.Errorf("the message a modeller reads names a Go type: %v", err)
+	}
+}
+
+// testStateTransitionEndpointNamingAFirstMarker: a `first m then x` marker is no
+// vertex, so an endpoint naming one is reported by the state transition check and
+// backstopped here with a typed error rather than a panic.
+func testStateTransitionEndpointNamingAFirstMarker(t *testing.T) {
+	src := `package test {
+		state Machine {
+			initial init;
+			state busy;
+			state other;
+			first marker then other;
+			init then busy;
+			transition busy to marker;
+		}
+	}`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Machine", ast.DefState)
+	if sym == nil {
+		t.Fatal("Machine not found")
+	}
+	_, err := newStateExecutor(ctx, sym, nil)
+	if err == nil {
+		t.Fatal("expected an error for an endpoint naming a marker rather than a vertex")
+	}
+	if !strings.Contains(err.Error(), "not a vertex of this state machine") {
+		t.Errorf("expected the error to say the endpoint is not a vertex, got %v", err)
+	}
+	if strings.Contains(err.Error(), "*ast.") {
+		t.Errorf("the message a modeller reads names a Go type: %v", err)
+	}
+}
+
+// testStateJunctionWithoutAnOutgoingTransition: a junction no transition leaves
+// routes a transition reaching it nowhere, which the state transition check
+// reports; reaching it at run time errors rather than panicking or hanging.
+func testStateJunctionWithoutAnOutgoingTransition(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			initial init;
+			state busy;
+			junction stuck;
+			init then busy;
+			transition busy to stuck;
+		}
+	}`)
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- exec.RunToCompletion() }()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("expected an error for a junction no transition leaves")
+		}
+		if !strings.Contains(err.Error(), "junction stuck has no outgoing transitions") {
+			t.Errorf("expected the error to name the junction, got %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("RunToCompletion hung on a junction no transition leaves")
+	}
+}
+
 // testStateTransitionWithoutATarget: a transition with no target names no edge,
 // so lowering reports it rather than dereferencing the absent target.
 func testStateTransitionWithoutATarget(t *testing.T) {
@@ -727,6 +1203,49 @@ func testStateTransitionWithoutATarget(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "names no target") {
 		t.Errorf("expected a missing-target error, got: %v", err)
+	}
+}
+
+// testStateCrossRegionTransitionsPingPong: guardless successions crossing back
+// and forth between two regions never settle, so the event budget bounds the run
+// with a typed error instead of hanging.
+func testStateCrossRegionTransitionsPingPong(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			initial init;
+			state running {
+				region left {
+					initial ls;
+					state lidle;
+					then ls lidle;
+					transition lidle to rtarget;
+				}
+				region right {
+					initial rs;
+					state ridle;
+					state rtarget;
+					then rs ridle;
+					transition rtarget to lidle;
+				}
+			}
+			init then running;
+		}
+	}`)
+	exec.ctx.maxStateEvents = 50
+
+	done := make(chan error, 1)
+	go func() { done <- exec.RunToCompletion() }()
+	var err error
+	select {
+	case err = <-done:
+	case <-time.After(30 * time.Second):
+		t.Fatal("run to completion hangs on successions crossing between regions")
+	}
+	if err == nil {
+		t.Fatal("expected a budget error for cross-region successions that never settle")
+	}
+	if !strings.Contains(err.Error(), MaxStateEventsEnvVar) {
+		t.Errorf("error %q does not name %s", err, MaxStateEventsEnvVar)
 	}
 }
 
@@ -954,6 +1473,152 @@ func testCallOfUnhandledOperation(t *testing.T) {
 	}
 }
 
+// testSignalNoLevelOfACompositeStateAccepts: a signal neither the active substate
+// nor any composite state enclosing it accepts is dropped by run-to-completion,
+// so walking outward for a trigger ends in the machine standing still rather than
+// erroring or hanging.
+func testSignalNoLevelOfACompositeStateAccepts(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			initial init;
+			state outer {
+				state middle {
+					state inner;
+					state other;
+					transition inner to other accept step;
+				}
+				state recovered;
+				transition middle to recovered accept abort;
+			}
+			state stopped;
+			init then inner;
+			transition outer to stopped accept shutdown;
+		}
+	}`)
+	exec.SendSignal("unknown", nil)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run to completion: %v", err)
+	}
+	current, ok := exec.CurrentState().(*ast.StateNode)
+	if !ok || current.Name != "inner" {
+		t.Errorf("expected the unaccepted signal to leave the machine in inner, got %v", exec.CurrentState())
+	}
+}
+
+// testCompositeSelfTransitionWithNoSubstateToReEnter: a composite state that
+// declares no starting substate is re-entered by its own self-transition without
+// erroring or hanging, and stays active with no substate of its own.
+func testCompositeSelfTransitionWithNoSubstateToReEnter(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			initial init;
+			state Working {
+				state Step1;
+			}
+			init then Working::Step1;
+			transition Working to Working accept restart;
+		}
+	}`)
+	exec.SendSignal("restart", nil)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run to completion: %v", err)
+	}
+	current, ok := exec.CurrentState().(*ast.StateNode)
+	if !ok || current.Name != "Working" {
+		t.Errorf("expected the re-entered composite state to be active, got %v", exec.CurrentState())
+	}
+}
+
+// testStaleCompositeTimerInARegion: a time trigger on a composite state inside an
+// orthogonal region whose composite is left before the timer expires is dropped,
+// leaving the sibling region where it was rather than erroring or hanging.
+func testStaleCompositeTimerInARegion(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			initial init;
+			state working {
+				region left {
+					initial lstart;
+					state grouping {
+						state step1;
+						accept after 5 then late;
+					}
+					state moved;
+					state late;
+					transition lstart to step1;
+					transition grouping to moved accept skip;
+				}
+				region right {
+					initial rstart;
+					state watching;
+					then rstart watching;
+				}
+			}
+			init then working;
+		}
+	}`)
+	exec.SendSignal("skip", nil)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run to completion: %v", err)
+	}
+	active := make(map[string]bool)
+	for _, state := range exec.ActiveStates() {
+		active[state.Name] = true
+	}
+	if !active["moved"] || !active["watching"] || active["late"] {
+		t.Errorf("expected the stale composite timer to leave moved and watching active, got %v", active)
+	}
+}
+
+// testExitOfNestedRegionsWithAHistoryPseudostate: leaving a composite state whose
+// region holds another composite with a region of its own, then returning through a
+// deep history, restores the recorded configuration rather than erroring or hanging.
+func testExitOfNestedRegionsWithAHistoryPseudostate(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			initial init;
+			state outer {
+				region left {
+					initial lstart;
+					state grouping {
+						region inner {
+							initial gstart;
+							state g1;
+							state g2;
+							transition gstart to g1;
+							transition g1 to g2 accept advance;
+						}
+					}
+					transition lstart to grouping;
+				}
+				region right {
+					initial rstart;
+					state watching;
+					transition rstart to watching;
+				}
+				deep history resume;
+			}
+			state away;
+			init then outer;
+			transition outer to away accept leave;
+			transition away to resume accept back;
+		}
+	}`)
+	for _, signal := range []string{"advance", "leave", "back"} {
+		exec.SendSignal(signal, nil)
+		if err := exec.RunToCompletion(); err != nil {
+			t.Fatalf("run to completion after %s: %v", signal, err)
+		}
+	}
+	active := make(map[string]bool)
+	for _, state := range exec.ActiveStates() {
+		active[state.Name] = true
+	}
+	if !active["g2"] || !active["watching"] {
+		t.Errorf("expected the deep history to restore g2 and watching, got %v", active)
+	}
+}
+
 // testCallArgumentOfWrongType: an argument the guard cannot compare reports
 // rather than firing or dropping the transition on a wrong comparison.
 func testCallArgumentOfWrongType(t *testing.T) {
@@ -1042,8 +1707,8 @@ func testHistoryWithoutRecordOrDefault(t *testing.T) {
 }
 
 // testSendViaUnconnectedPort: a port with no connection reaches no one, so the
-// accept waiting on the message suspends forever — which must be reported as a
-// deadlock rather than hanging or binding nothing.
+// send itself is undeliverable — which must be reported where it was written
+// rather than left for the accept waiting on it to time out as a deadlock.
 func testSendViaUnconnectedPort(t *testing.T) {
 	_, err := executeActionSource(t, "pipeline", `package P {
 		action pipeline {
@@ -1061,8 +1726,8 @@ func testSendViaUnconnectedPort(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error: nothing connects outPort to inPort")
 	}
-	if !errors.Is(err, ErrAcceptDeadlock) {
-		t.Errorf("expected ErrAcceptDeadlock, got: %v", err)
+	if !errors.Is(err, ErrUnroutableSend) {
+		t.Errorf("expected ErrUnroutableSend, got: %v", err)
 	}
 }
 
@@ -1687,6 +2352,35 @@ func testCalcUnboundParameter(t *testing.T) {
 	}
 }
 
+// testCalcUnboundKeywordNamedParameter: a parameter named with a keyword is a
+// parameter like any other, so leaving it unbound reports, never panics.
+func testCalcUnboundKeywordNamedParameter(t *testing.T) {
+	src := `
+		package test {
+			calc classify {
+				in 'type': Integer;
+				in 'state': Integer;
+				return 'type' + 'state';
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "classify", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("classify calc not found")
+	}
+
+	arg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 3}}
+	result, err := ctx.InvokeCalc(sym, []Value{arg}, rootScope)
+	if err == nil {
+		t.Fatalf("expected an unbound parameter error, calc returned %+v", result)
+	}
+	if !errors.Is(err, ErrUnboundParameter) {
+		t.Errorf("expected ErrUnboundParameter, got: %v", err)
+	}
+}
+
 // testCalcTooManyArguments: more arguments than parameters has no binding, so it
 // reports an arity error instead of dropping the extras.
 func testCalcTooManyArguments(t *testing.T) {
@@ -1796,8 +2490,9 @@ func testCalcSymbolIsNotACalc(t *testing.T) {
 	}
 }
 
-// testCalcDirectRecursion: a calc that invokes itself unconditionally must be
-// stopped by the nesting bound instead of exhausting the stack.
+// testCalcDirectRecursion: a calc that invokes itself unconditionally never
+// terminates, so the run's calc depth budget must report it instead of the
+// process exhausting its stack.
 func testCalcDirectRecursion(t *testing.T) {
 	src := `
 		package test {
@@ -1807,11 +2502,11 @@ func testCalcDirectRecursion(t *testing.T) {
 			}
 		}
 	`
-	assertCalcRecursionBounded(t, src, "countdown")
+	assertCalcRecursionBounded(t, src, "countdown", ErrCalcRecursionLimit)
 }
 
-// testCalcMutualRecursion: the bound is on nesting depth, so a cycle through
-// another calc is caught the same way as direct self-invocation.
+// testCalcMutualRecursion: the budget is spent by nesting, so a cycle through
+// another calc is reported the same way direct self-invocation is.
 func testCalcMutualRecursion(t *testing.T) {
 	src := `
 		package test {
@@ -1826,16 +2521,60 @@ func testCalcMutualRecursion(t *testing.T) {
 			}
 		}
 	`
-	assertCalcRecursionBounded(t, src, "ping")
+	assertCalcRecursionBounded(t, src, "ping", ErrCalcRecursionLimit)
 }
 
-// assertCalcRecursionBounded invokes calcName and requires a recursion-limit
+// testCalcRecursionSpendsStepBudget: the two bounds are independent, so a
+// recursion whose evaluations run out first is reported by the step budget
+// rather than running on until the depth bound.
+func testCalcRecursionSpendsStepBudget(t *testing.T) {
+	src := `
+		package test {
+			calc grow {
+				in n: Integer;
+				return : Integer = n + grow(n + 1);
+			}
+		}
+	`
+	assertCalcRecursionBounded(t, src, "grow", ErrStepLimitExceeded, func(ctx *Context) {
+		// Room to recurse far deeper than the evaluations allow.
+		ctx.maxCalcDepth = MaxCalcDepthCeiling
+		ctx.maxSteps = 500
+	})
+}
+
+// testCalcRecursionAtDepthCeiling: the highest depth budget a run may be given
+// must still be reported rather than reached by exhausting the stack, which
+// would be fatal.
+func testCalcRecursionAtDepthCeiling(t *testing.T) {
+	src := `
+		package test {
+			calc deep {
+				in n: Integer;
+				attribute acc : Integer = (n + 1) * (n + 2) - n * n;
+				return : Integer = acc + deep(n + 1);
+			}
+		}
+	`
+	assertCalcRecursionBounded(t, src, "deep", ErrCalcRecursionLimit, func(ctx *Context) {
+		ctx.maxCalcDepth = MaxCalcDepthCeiling
+	})
+}
+
+// assertCalcRecursionBounded invokes calcName and requires the given budget
 // error promptly: the invocation runs on its own goroutine so a hang fails the
-// case instead of stalling the suite until the package timeout.
-func assertCalcRecursionBounded(t *testing.T, src, calcName string) {
+// case instead of stalling the suite until the package timeout, and a panic in
+// it fails the case rather than the package.
+func assertCalcRecursionBounded(t *testing.T, src, calcName string, want error, budgets ...func(*Context)) {
 	t.Helper()
 
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	// The default step budget, so a recursion bounded by depth reaches that bound
+	// rather than running out of evaluations first.
+	ctx.maxSteps = DefaultMaxSteps
+	for _, set := range budgets {
+		set(ctx)
+	}
 	rootScope := idx.DocumentRoot("<test>")
 	sym := findSymbolByName(rootScope, calcName, ast.DefCalc)
 	if sym == nil {
@@ -1844,6 +2583,11 @@ func assertCalcRecursionBounded(t *testing.T, src, calcName string) {
 
 	done := make(chan error, 1)
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				done <- fmt.Errorf("calc %s panicked: %v", calcName, r)
+			}
+		}()
 		arg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 10}}
 		_, err := ctx.InvokeCalc(sym, []Value{arg}, rootScope)
 		done <- err
@@ -1854,10 +2598,10 @@ func assertCalcRecursionBounded(t *testing.T, src, calcName string) {
 		if err == nil {
 			t.Fatalf("expected recursive calc %s to be bounded, it returned a value", calcName)
 		}
-		if !errors.Is(err, ErrCalcRecursionLimit) {
-			t.Errorf("expected ErrCalcRecursionLimit, got: %v", err)
+		if !errors.Is(err, want) {
+			t.Errorf("expected %v, got: %v", want, err)
 		}
-	case <-time.After(10 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatalf("recursive calc %s did not terminate", calcName)
 	}
 }
@@ -1899,6 +2643,333 @@ func testConstraintMissingFeature(t *testing.T) {
 	}
 
 	t.Log("EvaluateConstraint returned true (missing feature tolerated)")
+}
+
+// testNestedConditionSubjectIsAmbiguous: two objects redefining the same nested
+// feature differently make the subject of a check a question, reported as
+// ErrAmbiguousSubject rather than answered from whichever object is found first.
+func testNestedConditionSubjectIsAmbiguous(t *testing.T) {
+	src := `
+		package test {
+			part def Leaf {
+				attribute value = 1.0;
+				constraint small { value < 10.0 }
+			}
+			part def Top {
+				part leaf : Leaf;
+			}
+			part slow : Top {
+				part :>> leaf { attribute :>> value = 2.0; }
+			}
+			part fast : Top {
+				part :>> leaf { attribute :>> value = 99.0; }
+			}
+		}
+	`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	rootScope := idx.DocumentRoot("<test>")
+	for _, name := range []string{"slow", "fast"} {
+		if _, err := ctx.Instantiate(memberPath(t, rootScope, "test", name)); err != nil {
+			t.Fatalf("instantiate %s: %v", name, err)
+		}
+	}
+	small := memberPath(t, rootScope, "test", "Leaf", "small")
+	satisfied, err := ctx.EvaluateConstraint(small, small.OwnerScope)
+	if !errors.Is(err, ErrAmbiguousSubject) {
+		t.Fatalf("satisfied = %t, err = %v, want ErrAmbiguousSubject", satisfied, err)
+	}
+	if satisfied {
+		t.Error("an ambiguous subject is no verdict")
+	}
+}
+
+// testSatisfactionSubjectIsAmbiguous: a satisfaction assertion whose `by` object
+// holds two objects of the requirement's owner has no one subject either, and
+// reports it as ErrAmbiguousSubject rather than picking one.
+func testSatisfactionSubjectIsAmbiguous(t *testing.T) {
+	src := `
+		package test {
+			part def Leaf {
+				attribute value = 1.0;
+				requirement lim { require value < 10.0; }
+			}
+			part def Top {
+				part slow : Leaf { attribute :>> value = 2.0; }
+				part fast : Leaf { attribute :>> value = 99.0; }
+			}
+			part top : Top;
+			assert satisfy Leaf::lim by top;
+		}
+	`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	rootScope := idx.DocumentRoot("<test>")
+	pkg := memberPath(t, rootScope, "test")
+	assertions := ctx.SatisfyAssertionsIn(pkg.Scope)
+	if len(assertions) != 1 {
+		t.Fatalf("assertions = %d, want the one the package states", len(assertions))
+	}
+	result, err := ctx.CheckSatisfactionOn(assertions[0], nil)
+	if !errors.Is(err, ErrAmbiguousSubject) {
+		t.Fatalf("holds = %t, err = %v, want ErrAmbiguousSubject", result.Holds, err)
+	}
+	if result.Holds {
+		t.Error("an ambiguous subject is no verdict")
+	}
+}
+
+// testRecursiveCompositionSubjectSearch: searching for the object a check is
+// about does not walk a design containing its own kind forever; it answers about
+// the declaration, since no object of the checked type is there.
+func testRecursiveCompositionSubjectSearch(t *testing.T) {
+	src := `
+		package test {
+			part def Leaf {
+				attribute value = 1.0;
+				constraint small { value < 10.0 }
+			}
+			part def Node {
+				part next : Node;
+			}
+			part root : Node;
+		}
+	`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	rootScope := idx.DocumentRoot("<test>")
+	if _, err := ctx.Instantiate(memberPath(t, rootScope, "test", "root")); err != nil {
+		t.Fatalf("instantiate root: %v", err)
+	}
+	small := memberPath(t, rootScope, "test", "Leaf", "small")
+	done := make(chan struct{})
+	var satisfied bool
+	var err error
+	go func() {
+		defer close(done)
+		satisfied, err = ctx.EvaluateConstraint(small, small.OwnerScope)
+	}()
+	select {
+	case <-done:
+	case <-time.After(20 * time.Second):
+		t.Fatal("the subject search did not terminate on recursive composition")
+	}
+	if err != nil {
+		t.Fatalf("EvaluateConstraint: %v", err)
+	}
+	if !satisfied {
+		t.Error("satisfied = false, want the declaration's answer")
+	}
+	if len(ctx.instances) > 1000 {
+		t.Errorf("%d objects materialized: the search is not bounded", len(ctx.instances))
+	}
+}
+
+// testDuplicateObjectsOfOneDeclaration: materializing the same declaration twice
+// is one object as far as a check is concerned, not an ambiguous subject.
+func testDuplicateObjectsOfOneDeclaration(t *testing.T) {
+	src := `
+		package test {
+			part def Leaf {
+				attribute value = 1.0;
+				constraint small { value < 10.0 }
+			}
+			part def Top {
+				part leaf : Leaf;
+			}
+			part o : Top {
+				part :>> leaf { attribute :>> value = 99.0; }
+			}
+		}
+	`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	rootScope := idx.DocumentRoot("<test>")
+	obj := memberPath(t, rootScope, "test", "o")
+	for range 2 {
+		if _, err := ctx.Instantiate(obj); err != nil {
+			t.Fatalf("instantiate o: %v", err)
+		}
+	}
+	small := memberPath(t, rootScope, "test", "Leaf", "small")
+	satisfied, err := ctx.EvaluateConstraint(small, small.OwnerScope)
+	if err != nil && !errors.Is(err, ErrViolated) {
+		t.Fatalf("EvaluateConstraint: %v", err)
+	}
+	if satisfied {
+		t.Error("satisfied = true, want the object's 99.0 to violate the constraint")
+	}
+}
+
+// testDuplicateObjectsHoldingAPlainPart: a nested part typed by a definition
+// rather than by a body of its own is reached through its holder, so what two
+// materializations of that holder leave behind is no ambiguous subject.
+func testDuplicateObjectsHoldingAPlainPart(t *testing.T) {
+	src := `
+		package test {
+			part def Leaf {
+				attribute value = 99.0;
+				constraint small { value < 10.0 }
+			}
+			part def Top {
+				part leaf : Leaf;
+			}
+			part o : Top;
+		}
+	`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	rootScope := idx.DocumentRoot("<test>")
+	obj := memberPath(t, rootScope, "test", "o")
+	small := memberPath(t, rootScope, "test", "Leaf", "small")
+	for range 2 {
+		if _, err := ctx.Instantiate(obj); err != nil {
+			t.Fatalf("instantiate o: %v", err)
+		}
+		satisfied, err := ctx.EvaluateConstraint(small, small.OwnerScope)
+		if err != nil && !errors.Is(err, ErrViolated) {
+			t.Fatalf("EvaluateConstraint: %v", err)
+		}
+		if satisfied {
+			t.Error("satisfied = true, want the object's 99.0 to violate the constraint")
+		}
+	}
+}
+
+// testNestedPartHeldWithAMultiplicity: the objects one slot materializes for a
+// multiplicity are occurrences of one declaration, so a check answers a verdict
+// rather than calling its subject ambiguous.
+func testNestedPartHeldWithAMultiplicity(t *testing.T) {
+	src := `
+		package test {
+			part def Wheel {
+				attribute pressure = 99.0;
+				constraint inflated { pressure < 10.0 }
+			}
+			part def Car {
+				part wheels : Wheel[4];
+			}
+			part car : Car;
+		}
+	`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	rootScope := idx.DocumentRoot("<test>")
+	if _, err := ctx.Instantiate(memberPath(t, rootScope, "test", "car")); err != nil {
+		t.Fatalf("instantiate car: %v", err)
+	}
+	inflated := memberPath(t, rootScope, "test", "Wheel", "inflated")
+	satisfied, err := ctx.EvaluateConstraint(inflated, inflated.OwnerScope)
+	if err != nil && !errors.Is(err, ErrViolated) {
+		t.Fatalf("EvaluateConstraint: %v", err)
+	}
+	if satisfied {
+		t.Error("satisfied = true, want the wheels' 99.0 to violate the constraint")
+	}
+}
+
+// testPartNestedInsideARepeatedPart: the declaration a check names may sit
+// deeper inside the part a multiplicity repeated, and the objects reached along
+// one declaration path are still one subject rather than an ambiguity.
+func testPartNestedInsideARepeatedPart(t *testing.T) {
+	src := `
+		package test {
+			part def Bolt {
+				attribute torque = 99.0;
+				constraint tight { torque < 10.0 }
+			}
+			part def Wheel {
+				part bolt : Bolt;
+			}
+			part def Car {
+				part wheels : Wheel[4];
+			}
+			part car : Car;
+		}
+	`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	rootScope := idx.DocumentRoot("<test>")
+	if _, err := ctx.Instantiate(memberPath(t, rootScope, "test", "car")); err != nil {
+		t.Fatalf("instantiate car: %v", err)
+	}
+	tight := memberPath(t, rootScope, "test", "Bolt", "tight")
+	satisfied, err := ctx.EvaluateConstraint(tight, tight.OwnerScope)
+	if err != nil && !errors.Is(err, ErrViolated) {
+		t.Fatalf("EvaluateConstraint: %v", err)
+	}
+	if satisfied {
+		t.Error("satisfied = true, want the bolts' 99.0 to violate the constraint")
+	}
+}
+
+// testPartsSubsettingOneCollection: two declarations feeding one collection are
+// two subjects, not repetitions of the collection, so the check reports the
+// ambiguity rather than answering from whichever it reached first.
+func testPartsSubsettingOneCollection(t *testing.T) {
+	src := `
+		package test {
+			part def Component {
+				attribute v = 1.0;
+				constraint ok { v < 10.0 }
+			}
+			part def Assembly {
+				part subsystem : Component[*];
+				part small : Component :> subsystem {
+					attribute :>> v = 5.0;
+				}
+				part large : Component :> subsystem {
+					attribute :>> v = 99.0;
+				}
+			}
+			part assembly : Assembly;
+		}
+	`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	rootScope := idx.DocumentRoot("<test>")
+	if _, err := ctx.Instantiate(memberPath(t, rootScope, "test", "assembly")); err != nil {
+		t.Fatalf("instantiate assembly: %v", err)
+	}
+	ok := memberPath(t, rootScope, "test", "Component", "ok")
+	satisfied, err := ctx.EvaluateConstraint(ok, ok.OwnerScope)
+	if !errors.Is(err, ErrAmbiguousSubject) {
+		t.Fatalf("satisfied = %t, err = %v, want ErrAmbiguousSubject", satisfied, err)
+	}
+	if satisfied {
+		t.Error("an ambiguous subject is no verdict")
+	}
+	// The two objects reached through one collection are told apart by the
+	// declaration each materializes, not by the feature holding both.
+	for _, want := range []string{"(small)", "(large)"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not name a carrier %q", err, want)
+		}
+	}
 }
 
 // testRequirementFeatureWithoutAValue: a condition naming a feature the
@@ -2007,6 +3078,56 @@ func testStepBudgetExceeded(t *testing.T) {
 	}
 }
 
+// testEvalOnAnInstanceSpendsTheStepBudget: an expression evaluated against an
+// instance is one run, so reading a slot inside it does not start a run of its
+// own and reset the counter; an expression longer than the budget is refused.
+func testEvalOnAnInstanceSpendsTheStepBudget(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
+		package test {
+			part def Car { attribute m = 5.0; }
+		}
+	`))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "Car", ast.DefPart)
+	if sym == nil {
+		t.Fatal("part def Car not found")
+	}
+	inst, err := ctx.Instantiate(sym)
+	if err != nil {
+		t.Fatalf("instantiating Car: %v", err)
+	}
+
+	// Nested to the right, so the slot read - which brackets a run of its own when
+	// the evaluation is not already one - is reached on the second step.
+	expr := "m"
+	for i := 0; i < 60; i++ {
+		expr = "m + (" + expr + ")"
+	}
+	node := parser.New(source.New("<e>", []byte(expr))).ParseExpression()
+	if node == nil {
+		t.Fatal("the expression did not parse")
+	}
+
+	ctx.maxSteps = 6
+	got, err := ctx.EvalWithScopeOn(node, sym.Scope, inst)
+	if err == nil {
+		t.Fatalf("expected the step budget to bound the evaluation, got %v", got)
+	}
+	if !errors.Is(err, ErrStepLimitExceeded) {
+		t.Errorf("expected ErrStepLimitExceeded, got: %v", err)
+	}
+
+	// The budget bounds one run, not the session: a short expression is answered
+	// however many ran before it.
+	ctx.maxSteps = 20
+	short := parser.New(source.New("<e>", []byte("m + m"))).ParseExpression()
+	for i := 0; i < 5; i++ {
+		if _, err := ctx.EvalWithScopeOn(short, sym.Scope, inst); err != nil {
+			t.Fatalf("evaluation %d of m + m under a fresh run: %v", i+1, err)
+		}
+	}
+}
+
 // testNonTerminatingLoopExhaustsStepBudget: a loop whose condition never fails
 // spends a step per iteration, so it ends the execution with
 // ErrStepLimitExceeded instead of hanging whoever drove it (a REPL or the LSP).
@@ -2110,7 +3231,7 @@ func testLoopBodyOfUnexecutableStatement(t *testing.T) {
 				first start;
 				action accumulate {
 					while total < 3 {
-						action inner;
+						part inner;
 						assign total := total + 1;
 					}
 				}
@@ -2134,6 +3255,157 @@ func testLoopBodyOfUnexecutableStatement(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "not executable") {
 		t.Errorf("error does not name the unexecutable member: %v", err)
+	}
+}
+
+// testBlockFlowOfUnexecutableMember: a member outside the semantics a block's own
+// flow gives its members is still reported when reached, even in a block that
+// does state a flow because a nested action is declared beside it.
+func testBlockFlowOfUnexecutableMember(t *testing.T) {
+	src := `
+		package test {
+			action counter {
+				attribute total : Integer = 0;
+				first start;
+				action accumulate {
+					while total < 3 {
+						action bump {
+							assign total := total + 1;
+						}
+						part inner;
+					}
+				}
+				done end;
+				then start accumulate;
+				then accumulate end;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "counter", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action counter not found")
+	}
+
+	_, err := ctx.ExecuteAction(sym)
+	if err == nil {
+		t.Fatal("expected the unexecutable member of the block's flow to be reported")
+	}
+	if !strings.Contains(err.Error(), "not executable") {
+		t.Errorf("error does not name the unexecutable member: %v", err)
+	}
+}
+
+// testNonTerminatingLoopPerformingAnAction: a loop whose body performs an action
+// as a node of the block's own flow still spends a step per iteration, so it
+// ends with ErrStepLimitExceeded rather than performing forever.
+func testNonTerminatingLoopPerformingAnAction(t *testing.T) {
+	src := `
+		package test {
+			action spinner {
+				attribute total : Integer = 0;
+				first start;
+				action spin {
+					while total >= 0 {
+						perform bump;
+						assign total := total + 1;
+					}
+				}
+				done end;
+				then start spin;
+				then spin end;
+			}
+
+			action bump {
+				out spun : Integer;
+				first begin;
+				action run {
+					assign spun := 1;
+				}
+				done finish;
+				then begin run;
+				then run finish;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+
+	ctx.maxSteps = 40
+	ctx.steps = 0
+
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "spinner", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action spinner not found")
+	}
+
+	_, err := ctx.ExecuteAction(sym)
+	if err == nil {
+		t.Fatal("expected the step budget to be exceeded, the action completed")
+	}
+	if !errors.Is(err, ErrStepLimitExceeded) {
+		t.Errorf("expected ErrStepLimitExceeded, got: %v", err)
+	}
+}
+
+// testForOverAValueNoExpressionMakesIterable: a value that states a computation
+// rather than a collection is no collection in any order, so a `for` over it
+// fails with a typed error naming it.
+func testForOverAValueNoExpressionMakesIterable(t *testing.T) {
+	for _, value := range []Value{{Kind: ValExpr}, {Kind: ValInvalid}} {
+		elements, err := forElements(value)
+		if err == nil {
+			t.Errorf("forElements(%s) = %v, want a typed error", describeValue(value), elements)
+			continue
+		}
+		if !errors.Is(err, ErrTypeMismatch) {
+			t.Errorf("forElements(%s) failed with %v, want ErrTypeMismatch", describeValue(value), err)
+		}
+		if !strings.Contains(err.Error(), describeValue(value)) {
+			t.Errorf("error does not name the value: %v", err)
+		}
+	}
+}
+
+// testForOverAScalar: a `for` whose input is a scalar fails with a typed error
+// rather than iterating once over the coercion elementsOf would make of it.
+func testForOverAScalar(t *testing.T) {
+	src := `
+		package test {
+			action counter {
+				attribute single : Integer = 7;
+				attribute visited : Integer = 0;
+				first start;
+				action iterate {
+					for s in single {
+						assign visited := visited + 1;
+					}
+				}
+				done end;
+				then start iterate;
+				then iterate end;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "counter", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action counter not found")
+	}
+
+	result, err := ctx.ExecuteAction(sym)
+	if err == nil {
+		t.Fatalf("the action completed with %v, want a typed error", result)
+	}
+	if !errors.Is(err, ErrTypeMismatch) {
+		t.Errorf("execution failed with %v, want ErrTypeMismatch", err)
+	}
+	if !strings.Contains(err.Error(), "an Integer is not one") {
+		t.Errorf("error does not name the value it was given: %v", err)
 	}
 }
 
@@ -2270,6 +3542,30 @@ func testAcceptPayloadWithoutAValue(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "Ping") {
 		t.Errorf("error does not name the accepted signal: %v", err)
+	}
+}
+
+// testAcceptPayloadReadBeforeItIsBound: the payload is a declaration of the body
+// wherever the body resolves, so a node running before the accept binds it
+// resolves the name and finds no value — reported, not read as an empty value.
+func testAcceptPayloadReadBeforeItIsBound(t *testing.T) {
+	_, err := executeActionSource(t, "pipeline", `package P {
+		action pipeline {
+			attribute seen : Integer = 0;
+			first start;
+			action reader { assign seen := msg; }
+			action waiter accept msg : Integer;
+			done end;
+			then start reader;
+			then reader waiter;
+			then waiter end;
+		}
+	}`)
+	if !errors.Is(err, ErrUnresolvedReference) {
+		t.Fatalf("err = %v; want ErrUnresolvedReference", err)
+	}
+	if !strings.Contains(err.Error(), "msg") {
+		t.Errorf("error does not name the payload: %v", err)
 	}
 }
 
@@ -3008,11 +4304,14 @@ func testCalcNonBooleanCondition(t *testing.T) {
 // returns the error the read reports, on its own goroutine so a body that never
 // terminates fails the case instead of stalling the suite. maxSteps bounds the
 // run.
-func calcUsageOutputInSource(t *testing.T, src, usageName, output string, maxSteps int64) error {
+func calcUsageOutputInSource(t *testing.T, src, usageName, output string, maxSteps int64, budgets ...func(*Context)) error {
 	t.Helper()
 
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
 	ctx.maxSteps = maxSteps
+	for _, set := range budgets {
+		set(ctx)
+	}
 	rootScope := idx.DocumentRoot("<test>")
 	sym := findSymbolByName(rootScope, usageName, ast.DefCalc)
 	if sym == nil {
@@ -3363,7 +4662,8 @@ func testNestedCalcUsageSelfCycle(t *testing.T) {
 }
 
 // testNestedCalcUsageRecursionDepth: a calc whose nested usage is of itself
-// never bottoms out, so the nesting limit reports it instead of hanging.
+// never bottoms out, so the depth budget reports it instead of hanging. A usage
+// frame costs far more than an invocation, so the case states a shallow budget.
 func testNestedCalcUsageRecursionDepth(t *testing.T) {
 	src := `
 		package test {
@@ -3376,7 +4676,8 @@ func testNestedCalcUsageRecursionDepth(t *testing.T) {
 			calc c : Down { in n = 3; }
 		}
 	`
-	err := calcUsageOutputInSource(t, src, "c", "a", 1000000)
+	err := calcUsageOutputInSource(t, src, "c", "a", 1000000,
+		func(ctx *Context) { ctx.maxCalcDepth = nestingProbeDepth })
 	if !errors.Is(err, ErrCalcRecursionLimit) {
 		t.Errorf("expected ErrCalcRecursionLimit, got: %v", err)
 	}
@@ -4008,5 +5309,43 @@ func testUsageReadThroughAPartWithoutAnOutput(t *testing.T) {
 	}
 	if err != nil && !strings.Contains(err.Error(), "a, b") {
 		t.Errorf("error should name the outputs to read, got: %v", err)
+	}
+}
+
+// testEnumerationNameThatIsNotALiteral: a name qualified by an enumeration
+// designates one of its literals, so one it does not declare is reported with
+// the literals it does, never answered as an empty value.
+func testEnumerationNameThatIsNotALiteral(t *testing.T) {
+	src := `
+	package test {
+		enum def Color { red; green; blue; }
+		part def Car { attribute c : Color = Color::purple; }
+	}`
+	got, err := variationSlotInSource(t, src, "test::Car", "c")
+	if !errors.Is(err, ErrNotALiteral) {
+		t.Fatalf("c = (%v, %v), want ErrNotALiteral", got, err)
+	}
+	for _, name := range []string{"purple", "red", "green", "blue"} {
+		if !strings.Contains(err.Error(), name) {
+			t.Errorf("error %q does not name %s", err, name)
+		}
+	}
+}
+
+// testChainThroughALiteralWithoutThatAttribute: a literal carries only the
+// features it declares, so reading another one off it is reported rather than
+// materializing an empty slot.
+func testChainThroughALiteralWithoutThatAttribute(t *testing.T) {
+	src := `
+	package test {
+		enum def Level { low { attribute n = 1; } high { attribute n = 9; } }
+		part def Sensor { attribute missing = Level::low.label; }
+	}`
+	got, err := variationSlotInSource(t, src, "test::Sensor", "missing")
+	if err == nil {
+		t.Fatalf("missing = %v, want an error naming the unknown member", got)
+	}
+	if !strings.Contains(err.Error(), "label") {
+		t.Errorf("error %q does not name the unknown member", err)
 	}
 }

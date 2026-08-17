@@ -1,0 +1,8 @@
+{
+  "libraries": true,
+  "type": "calc",
+  "inputs": [
+    {"type": "String", "value": "abc"}
+  ],
+  "error": "index out of range: function StringFunctions::Substring upper character 9 is outside 1..3"
+}

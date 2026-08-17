@@ -20,16 +20,6 @@ type Shapes struct {
 	unnamed bool              // an object of a type with no qualified name
 }
 
-// Types lists the qualified names of the types the objects are of, so a caller
-// that knows which declarations a change superseded can decide before comparing
-// shapes at all.
-func (s *Shapes) Types() []string {
-	if s == nil {
-		return nil
-	}
-	return s.types
-}
-
 // AdoptError says which object could not be carried over into a new context, and
 // why, so the loss is reported rather than silently absorbed.
 type AdoptError struct {

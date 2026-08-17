@@ -1,0 +1,6 @@
+{
+	"type": "action",
+	"outputs": {
+		"got": {"type": "Integer", "value": 11}
+	}
+}

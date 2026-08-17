@@ -66,7 +66,8 @@ func (e *StateExecutor) pseudostateTarget(ps *ast.PseudostateNode) (*ast.StateNo
 
 // pseudostateBranch returns the outgoing transition a pseudostate routes along:
 // the first whose guard is satisfied, in declaration order, an unguarded one
-// being UML's else branch.
+// being the default branch. Exactly one succession is taken, as KerML
+// `DecisionPerformance::outgoingHBLink: HappensBefore[1]` requires.
 func (e *StateExecutor) pseudostateBranch(ps *ast.PseudostateNode) (*lower.Transition, error) {
 	outgoing := e.graph.Transitions[ps]
 	if len(outgoing) == 0 {
@@ -153,7 +154,7 @@ func (e *StateExecutor) activeLeavesBelow(state *ast.StateNode) []*ast.StateNode
 // just made active below and including state.
 func (e *StateExecutor) scheduleFromEntered(state *ast.StateNode) error {
 	for _, leaf := range e.activeLeavesBelow(state) {
-		if err := e.scheduleTransitionsForState(leaf); err != nil {
+		if err := e.scheduleFromLeaf(leaf); err != nil {
 			return fmt.Errorf("schedule transitions: %w", err)
 		}
 	}
@@ -195,31 +196,135 @@ func (e *StateExecutor) fireTransitionInRegion(region *ast.StateRegion, trans *l
 		return fmt.Errorf("transition out of region %s has no target state", region.Name)
 	}
 
+	source := e.activeConfig.regionStates[region]
 	if e.regionContains(region, target) {
-		return e.moveWithinRegion(region, trans, target)
+		return e.moveBetweenRegions(region, region, source, trans, target)
+	}
+	if exit, sibling := e.concurrentRegionsFor(region, target); sibling != nil {
+		return e.moveBetweenRegions(exit, e.innermostActiveRegion(sibling, target), source, trans, target)
 	}
 	return e.leaveRegion(region, trans, target)
 }
 
-// moveWithinRegion moves one orthogonal region from its active state to a target
-// inside the same region, leaving its sibling regions untouched. The exit stops
-// at the region boundary even when the least common ancestor lies above it, since
-// the region is not left.
-func (e *StateExecutor) moveWithinRegion(region *ast.StateRegion, trans *lower.Transition, target *ast.StateNode) error {
-	source := e.activeConfig.regionStates[region]
+// concurrentRegionsFor finds the level at which target lies in a region concurrent
+// with region: it returns the region on the source side at that level — the one to
+// leave, which is region itself or an enclosing one — and the region holding target.
+// Both are nil when target lies outside every enclosing region set.
+func (e *StateExecutor) concurrentRegionsFor(region *ast.StateRegion, target *ast.StateNode) (*ast.StateRegion, *ast.StateRegion) {
+	for current := region; current != nil; {
+		if sibling := e.siblingRegionContaining(current, target); sibling != nil {
+			return current, sibling
+		}
+		owner := e.graph.RegionOwner[current]
+		if owner == nil {
+			return nil, nil
+		}
+		current = e.enclosingRegion(owner)
+	}
+	return nil, nil
+}
 
-	// The region is not left, so the move stops at the region's own boundary even
-	// when the least common ancestor lies above it: the state owning the region
-	// stays active and is not re-entered.
-	lca := e.getLCA(source, target)
-	if !e.regionContains(region, lca) {
-		lca = e.graph.RegionOwner[region]
+// enclosingRegion returns the region state is declared in, or the one declaring
+// its nearest ancestor when state is a substate, and nil when neither is in one.
+func (e *StateExecutor) enclosingRegion(state *ast.StateNode) *ast.StateRegion {
+	for current := state; current != nil; current = e.graph.ParentState[current] {
+		if region := e.graph.RegionOf[current]; region != nil {
+			return region
+		}
+	}
+	return nil
+}
+
+// isBelowOrEqual reports whether state is ancestor itself or nested below it.
+func (e *StateExecutor) isBelowOrEqual(state, ancestor *ast.StateNode) bool {
+	for current := state; current != nil; current = e.graph.ParentState[current] {
+		if current == ancestor {
+			return true
+		}
+	}
+	return false
+}
+
+// siblingRegionContaining returns the region concurrent with region — another of
+// the same composite state's regions, or another of the machine's own — that
+// contains state, and nil when state lies outside that region set.
+func (e *StateExecutor) siblingRegionContaining(region *ast.StateRegion, state *ast.StateNode) *ast.StateRegion {
+	siblings := e.graph.TopRegions
+	if owner := e.graph.RegionOwner[region]; owner != nil {
+		siblings = e.graph.CompositeStates[owner]
+	}
+	for _, sibling := range siblings {
+		if sibling != region && e.regionContains(sibling, state) {
+			return sibling
+		}
+	}
+	return nil
+}
+
+// innermostActiveRegion descends from region through the already-active states on
+// the path to target, which stay active, and returns the region the move happens in.
+func (e *StateExecutor) innermostActiveRegion(region *ast.StateRegion, target *ast.StateNode) *ast.StateRegion {
+	for {
+		active, ok := e.activeConfig.regionStates[region]
+		if !ok || active == target {
+			return region
+		}
+		inner := e.regionUnder(active, target)
+		if inner == nil {
+			return region
+		}
+		region = inner
+	}
+}
+
+// regionUnder returns the orthogonal region of state that contains target, and
+// nil when target is not below one of state's own regions.
+func (e *StateExecutor) regionUnder(state, target *ast.StateNode) *ast.StateRegion {
+	for current := target; current != nil; current = e.graph.ParentState[current] {
+		if e.graph.ParentState[current] == state {
+			return e.graph.RegionOf[current]
+		}
+	}
+	return nil
+}
+
+// moveBetweenRegions moves sourceRegion's active state — source, or a state
+// nested below it — to a target in targetRegion, which is either sourceRegion
+// itself or a region concurrent with it. KerML's StateTransitionPerformance orders only
+// `guard then transitionLinkSource.exit`, so the state owning the regions is
+// neither exited nor re-entered and the regions holding neither endpoint keep
+// their active states.
+func (e *StateExecutor) moveBetweenRegions(
+	sourceRegion, targetRegion *ast.StateRegion,
+	source *ast.StateNode,
+	trans *lower.Transition,
+	target *ast.StateNode,
+) error {
+	// Entering the target replaces its region's active state, so that region is
+	// left only down to the deepest state it keeps active — its own boundary when
+	// it shares none with the target. The state owning the region stays active.
+	keep := e.getLCA(e.activeConfig.regionStates[targetRegion], target)
+	// A transition out of a composite state is external even inside a region: the
+	// source is exited and re-entered when it encloses the target.
+	if declared, isState := trans.Source.(*ast.StateNode); isState && e.encloses(declared, target) {
+		keep = e.graph.ParentState[declared]
+	}
+	if !e.regionContains(targetRegion, keep) {
+		keep = e.graph.RegionOwner[targetRegion]
 	}
 
-	delete(e.activeConfig.regionStates, region)
-	for current := source; current != nil && current != lca && e.regionContains(region, current); current = e.graph.ParentState[current] {
-		if err := e.exitState(current); err != nil {
-			return fmt.Errorf("exit state: %w", err)
+	if sourceRegion == targetRegion {
+		if err := e.exitRegionTo(sourceRegion, keep); err != nil {
+			return err
+		}
+	} else {
+		// The source region holds neither the target nor any state below it, so it
+		// is left entirely: the transition's source performance exits.
+		if err := e.exitRegionTo(sourceRegion, nil); err != nil {
+			return err
+		}
+		if err := e.exitRegionTo(targetRegion, keep); err != nil {
+			return err
 		}
 	}
 
@@ -227,15 +332,18 @@ func (e *StateExecutor) moveWithinRegion(region *ast.StateRegion, trans *lower.T
 		return err
 	}
 
-	enter, branches := e.entryPlan(lca, target)
+	enter, branches := e.entryPlan(keep, target)
+	// The region's active state is the deepest state on the path to target that the
+	// region itself declares, which is a composite state above target when the
+	// target is nested inside one.
 	leaf := target
-	if branch, ok := branches[region]; ok {
+	if branch, ok := e.branchesTo(nil, target)[targetRegion]; ok {
 		leaf = branch
 	}
 	// The region's own entry is recorded before entering, so a state entered
 	// inside it is not mistaken for the single active state of a simple machine.
-	e.activeConfig.regionStates[region] = leaf
-	for _, state := range e.descendantChain(lca, enter) {
+	e.activeConfig.regionStates[targetRegion] = leaf
+	for _, state := range e.descendantChain(keep, enter) {
 		if err := e.enterStateInto(state, branches); err != nil {
 			return fmt.Errorf("enter state: %w", err)
 		}
@@ -248,11 +356,31 @@ func (e *StateExecutor) moveWithinRegion(region *ast.StateRegion, trans *lower.T
 	return nil
 }
 
-// leaveRegion takes a transition whose target lies outside the orthogonal region
-// its source is active in. UML's least common ancestor for such a transition is
-// the region containing the composite state that owns the region set, so the
-// whole set is left: every sibling region is exited — recording its
-// configuration for history — before the target is entered.
+// exitRegionTo exits region's active state and the states between it and stop,
+// which stays active; a nil stop leaves the region entirely, up to its own
+// boundary. The region is left without an active state.
+func (e *StateExecutor) exitRegionTo(region *ast.StateRegion, stop *ast.StateNode) error {
+	active, ok := e.activeConfig.regionStates[region]
+	if !ok {
+		return nil
+	}
+	delete(e.activeConfig.regionStates, region)
+	if stop == nil {
+		// The region keeps no active state, so it has none to restore either.
+		e.forgetRegionHistory(region)
+	}
+	for current := active; current != nil && current != stop && e.regionContains(region, current); current = e.graph.ParentState[current] {
+		if err := e.exitState(current); err != nil {
+			return fmt.Errorf("exit state: %w", err)
+		}
+	}
+	return nil
+}
+
+// leaveRegion takes a transition whose target lies outside the region set its
+// source is active in — outside the composite state that owns the regions. The
+// whole set is left: every sibling region is exited, recording its configuration
+// for history, before the target is entered.
 func (e *StateExecutor) leaveRegion(region *ast.StateRegion, trans *lower.Transition, target *ast.StateNode) error {
 	source := e.activeConfig.regionStates[region]
 	owner := e.graph.RegionOwner[region]
@@ -260,31 +388,20 @@ func (e *StateExecutor) leaveRegion(region *ast.StateRegion, trans *lower.Transi
 		return e.leaveTopRegions(trans, source, target)
 	}
 
-	// A target inside another region of the same composite state re-enters that
-	// state: the regions the target does not name restart at their initial
-	// states, since their previous configuration was left.
-	if e.ownsRegionContaining(owner, target) {
-		if err := e.exitState(owner); err != nil {
-			return fmt.Errorf("exit state: %w", err)
-		}
-		if err := e.runEffect(trans); err != nil {
-			return err
-		}
-		branches := e.branchesTo(owner, target)
-		if err := e.enterStateInto(owner, branches); err != nil {
-			return fmt.Errorf("enter state: %w", err)
-		}
-		if err := e.scheduleFromEntered(owner); err != nil {
-			return err
-		}
-		e.recordTransitionTrace(trans, source, target)
-		return nil
-	}
-
 	// The target is outside the composite state: exit it and its ancestors up to
-	// the least common ancestor, then enter down to the target.
+	// the least common ancestor, then enter down to the target. Exiting the state
+	// exits its regions' active states, as exiting a KerML StatePerformance ends
+	// its subperformances.
 	lca := e.getLCA(owner, target)
 	for current := owner; current != nil && current != lca; current = e.graph.ParentState[current] {
+		// Clear the region current is active in first — a region's active state may
+		// be nested below current — or an enclosing state exits current again.
+		if declaring := e.enclosingRegion(current); declaring != nil {
+			if active, isActive := e.activeConfig.regionStates[declaring]; isActive && e.isBelowOrEqual(active, current) {
+				e.recordRegionHistory(declaring, active)
+				delete(e.activeConfig.regionStates, declaring)
+			}
+		}
 		if err := e.exitState(current); err != nil {
 			return fmt.Errorf("exit state: %w", err)
 		}
@@ -296,9 +413,8 @@ func (e *StateExecutor) leaveRegion(region *ast.StateRegion, trans *lower.Transi
 }
 
 // leaveTopRegions leaves the machine's own orthogonal regions, which no state
-// owns: every region is exited in declaration order and the target is then
-// entered, either as one region's state — the others restarting at their initial
-// states — or as the machine's single active state.
+// owns: every region is exited in declaration order and the target — outside
+// all of them — is then entered as the machine's single active state.
 func (e *StateExecutor) leaveTopRegions(trans *lower.Transition, source, target *ast.StateNode) error {
 	for _, region := range e.graph.TopRegions {
 		active, ok := e.activeConfig.regionStates[region]
@@ -306,10 +422,12 @@ func (e *StateExecutor) leaveTopRegions(trans *lower.Transition, source, target 
 			continue
 		}
 		delete(e.activeConfig.regionStates, region)
+		leaving := make([]*ast.StateNode, 0)
 		for current := active; current != nil; current = e.graph.ParentState[current] {
-			if err := e.exitState(current); err != nil {
-				return fmt.Errorf("exit state: %w", err)
-			}
+			leaving = append(leaving, current)
+		}
+		if err := e.exitStates(leaving); err != nil {
+			return err
 		}
 	}
 	e.activeConfig.regionStates = make(map[*ast.StateRegion]*ast.StateNode)
@@ -317,22 +435,6 @@ func (e *StateExecutor) leaveTopRegions(trans *lower.Transition, source, target 
 
 	if err := e.runEffect(trans); err != nil {
 		return err
-	}
-
-	if e.topRegionContaining(target) != nil {
-		branches := e.branchesTo(nil, target)
-		if err := e.enterRegionsInto(nil, e.graph.TopRegions, branches); err != nil {
-			return err
-		}
-		for _, region := range e.graph.TopRegions {
-			if active, ok := e.activeConfig.regionStates[region]; ok {
-				if err := e.scheduleFromEntered(active); err != nil {
-					return err
-				}
-			}
-		}
-		e.recordTransitionTrace(trans, source, target)
-		return nil
 	}
 
 	return e.enterOutside(trans, source, nil, target)
@@ -367,28 +469,6 @@ func (e *StateExecutor) enterOutside(trans *lower.Transition, source, lca, targe
 		e.state = StateCompleted
 	}
 	e.recordTransitionTrace(trans, source, target)
-	return nil
-}
-
-// ownsRegionContaining reports whether one of owner's own orthogonal regions
-// contains state.
-func (e *StateExecutor) ownsRegionContaining(owner, state *ast.StateNode) bool {
-	for _, region := range e.graph.CompositeStates[owner] {
-		if e.regionContains(region, state) {
-			return true
-		}
-	}
-	return false
-}
-
-// topRegionContaining returns the machine's own region containing state, nil
-// when state is outside all of them.
-func (e *StateExecutor) topRegionContaining(state *ast.StateNode) *ast.StateRegion {
-	for _, region := range e.graph.TopRegions {
-		if e.regionContains(region, state) {
-			return region
-		}
-	}
 	return nil
 }
 

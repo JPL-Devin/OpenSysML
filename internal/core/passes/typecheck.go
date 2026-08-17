@@ -45,7 +45,7 @@ func (tc *typeChecker) walk(scope *symbols.Scope, members []ast.Node) {
 	for _, m := range members {
 		switch d := unwrapType(m).(type) {
 		case *ast.Definition:
-			tc.checkRelationships(scope, d.Relationships, declKind{isDef: true, defKind: d.Kind})
+			tc.checkRelationships(scope, d.Relationships, declKind{isDef: true, defKind: d.Kind, keyword: d.Keyword})
 			if child := childScopeOf(scope, d); child != nil {
 				tc.walk(child, d.Members)
 			}
@@ -124,6 +124,10 @@ func (tc *typeChecker) checkBehaviorMember(scope *symbols.Scope, n ast.Node) {
 		tc.expr.infer(scope, m.Expression)
 	case *ast.SubjectMember:
 		tc.checkSubjectMember(scope, m)
+	default:
+		// A body member that is an expression is a value the body computes — a
+		// calc body whose result is its last expression — and is typed as one.
+		tc.expr.infer(scope, n)
 	}
 }
 
@@ -182,6 +186,16 @@ type declKind struct {
 	// declares it.
 	isIndividual bool
 	portion      ast.PortionKind
+	// keyword is the kind keyword as written, which tells apart the spellings a
+	// single DefinitionKind carries (`classifier` and `class` are both DefClass).
+	keyword string
+}
+
+// isPlainClassifier reports whether the declaration is written with `classifier`
+// (or `subclassifier`), a KerML Classifier rather than the narrower `class`.
+func (d declKind) isPlainClassifier() bool {
+	return d.isDef && d.defKind == ast.DefClass &&
+		(d.keyword == "classifier" || d.keyword == "subclassifier")
 }
 
 // isOccurrenceUsage reports whether the `individual` modifier or a portion
@@ -320,6 +334,11 @@ func compatMessage(decl declKind, rel ast.RelationshipKind, target symbols.Symbo
 		// (SysML v2 §7.9.4). It may not specialize an attribute definition:
 		// Occurrences::Occurrence is disjoint with Base::DataValues (§8.4.5.1).
 		if defKind == ast.DefIndividual && isOccurrenceDefKind(target) {
+			return ""
+		}
+		// Every definition is a Classifier, a DataType among them (KerML §8.3.2), so a
+		// classifier specializes any kind; `class`/`struct` stay constrained (§8.4.4.1).
+		if decl.isPlainClassifier() {
 			return ""
 		}
 		if target != want {

@@ -42,6 +42,9 @@ type reporter struct {
 
 	verdicts []repl.Verdict
 	report   checkReport
+	// findings counts the model errors the run itself produced, which are
+	// reported as diagnostics and decide no check.
+	findings int
 }
 
 // checkReport is the JSON document -json writes: what was checked, what analysis
@@ -141,6 +144,41 @@ func (r *reporter) failed(message string) {
 	}
 }
 
+// finding records a diagnostic the run itself produced — a slot whose value
+// could not be materialized — and reports it like one analysis found. It is a
+// model error rather than a verdict, so it leaves the run undecided.
+func (r *reporter) finding(message string) {
+	r.findings++
+	r.report.Diagnostics = append(r.report.Diagnostics, diagnostic{
+		Severity: "error",
+		Message:  message,
+		Pass:     "runtime",
+		Code:     "runtime.materialize",
+	})
+	if !r.json {
+		fmt.Fprintln(r.err, promptPrefix+message)
+	}
+}
+
+// warn records something about the run that is no model error and decides no
+// check — a check that was bounded rather than completed.
+func (r *reporter) warn(message string) {
+	r.report.Diagnostics = append(r.report.Diagnostics, diagnostic{
+		Severity: "warning",
+		Message:  message,
+		Pass:     "runtime",
+		Code:     "runtime.materialize.bounded",
+	})
+	if !r.json {
+		fmt.Fprintln(r.err, "warning: "+message)
+	}
+}
+
+// clean reports whether the run has found nothing wrong with the model so far.
+func (r *reporter) clean() bool {
+	return r.findings == 0 && len(r.report.Errors) == 0
+}
+
 // diags records what analysis found. In JSON it is reported as data; the lines
 // the load already produced carry it in the printed form.
 func (r *reporter) diags(diags []repl.Diagnostic) {
@@ -203,7 +241,7 @@ func (r *reporter) finish() int {
 // it unresolved, and otherwise the worst verdict decided stands.
 func (r *reporter) status() (repl.VerdictStatus, int) {
 	worst := repl.WorstStatus(r.verdicts)
-	if len(r.report.Errors) > 0 {
+	if !r.clean() {
 		worst = repl.VerdictUnresolved
 	}
 	switch worst {

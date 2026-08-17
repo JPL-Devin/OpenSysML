@@ -22,7 +22,9 @@ var updateTraces = flag.Bool("update-traces", false, "Update golden trace files"
 // Traces capture step-by-step execution (token movements for actions, state
 // transitions for states, parameter binding and sub-expression order for calc
 // and constraint evaluation).
-// Use -update-traces flag to regenerate golden files after reviewing diffs.
+//
+// The test owns the goldens already on disk plus the ones cases opt into with
+// "trace": true; -update-traces regenerates every one and writes nothing else.
 func TestExecutionTrace(t *testing.T) {
 	conformanceDir := filepath.Join("testdata", "conformance")
 
@@ -30,30 +32,46 @@ func TestExecutionTrace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read conformance dir: %v", err)
 	}
+	knownFailures := loadKnownFailures(t, conformanceDir)
 
-	// Find all .sysml files
+	updated := 0
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".sysml") {
 			continue
 		}
 
 		testName := strings.TrimSuffix(entry.Name(), ".sysml")
+		if knownFailures[testName] {
+			continue // the case does not execute yet, so it owns no trace
+		}
 		goldenPath := filepath.Join(conformanceDir, testName+".trace.golden")
-
-		// Skip if no golden file exists and not updating
-		if !*updateTraces {
-			if _, err := os.Stat(goldenPath); os.IsNotExist(err) {
-				continue // Golden doesn't exist yet, skip
-			}
+		expected := loadExpectedOutcome(t, conformanceDir, testName)
+		if !ownsGolden(goldenPath, expected) {
+			continue
 		}
 
+		updated++
 		t.Run(testName, func(t *testing.T) {
-			runTraceTest(t, conformanceDir, testName, goldenPath)
+			runTraceTest(t, conformanceDir, testName, goldenPath, expected)
 		})
+	}
+
+	if updated == 0 {
+		t.Fatalf("no trace-checked cases in %s", conformanceDir)
 	}
 }
 
-func runTraceTest(t *testing.T, conformanceDir, testName, goldenPath string) {
+// ownsGolden reports whether the trace harness owns a golden for a case: one it
+// already carries, or one the case opts into.
+func ownsGolden(goldenPath string, expected ExpectedOutcome) bool {
+	if expected.Trace {
+		return true
+	}
+	_, err := os.Stat(goldenPath)
+	return err == nil
+}
+
+func runTraceTest(t *testing.T, conformanceDir, testName, goldenPath string, expected ExpectedOutcome) {
 	sysmlPath := filepath.Join(conformanceDir, testName+".sysml")
 
 	// Load file
@@ -61,8 +79,6 @@ func runTraceTest(t *testing.T, conformanceDir, testName, goldenPath string) {
 	if err != nil {
 		t.Fatalf("load source: %v", err)
 	}
-
-	expected := loadExpectedOutcome(t, conformanceDir, testName)
 
 	// Parse and build model
 	p := parser.New(source.New(sysmlPath, sysmlData))
@@ -88,15 +104,17 @@ func runTraceTest(t *testing.T, conformanceDir, testName, goldenPath string) {
 	trace := NewTraceRecorder()
 	var traceOutput string
 
-	// -update-traces runs every conformance case, including known failures and
-	// cases that produce no trace at all (requirements), so there is nothing to
-	// record for those rather than anything to report.
-	unrecordable := t.Fatalf
-	if *updateTraces {
-		unrecordable = t.Skipf
-	}
-
 	rootScope := idx.DocumentRoot(sysmlPath)
+
+	// A qualified path drives the case through the behavior it names, which is how
+	// one nested in a part is reached.
+	var actionEntry, stateEntry string
+	switch expected.Type {
+	case "action":
+		actionEntry = expected.Evaluate
+	case "state":
+		stateEntry = expected.Evaluate
+	}
 
 	// Evaluation-based cases (calc, constraint) trace through the context rather
 	// than an executor, and the expected outcome supplies the calc arguments.
@@ -109,7 +127,7 @@ func runTraceTest(t *testing.T, conformanceDir, testName, goldenPath string) {
 			args[i] = expectedToRuntimeValue(t, input)
 		}
 		if _, err := ctx.InvokeCalc(calcSym, args, rootScope); err != nil {
-			unrecordable("invoke calc: %v", err)
+			t.Fatalf("invoke calc: %v", err)
 		}
 		traceOutput = trace.String()
 	case "calcUsage":
@@ -118,20 +136,20 @@ func runTraceTest(t *testing.T, conformanceDir, testName, goldenPath string) {
 		ctx.SetTrace(trace)
 		usageSym := namedOrFoundSymbol(t, idx, expected.Evaluate, rootScope, ast.DefCalc, ast.UsageCalc)
 		if _, err := ctx.CalcUsageOutputs(usageSym, usageSym.OwnerScope, nil); err != nil {
-			unrecordable("evaluate calc usage: %v", err)
+			t.Fatalf("evaluate calc usage: %v", err)
 		}
 		traceOutput = trace.String()
 	case "constraint":
 		ctx.SetTrace(trace)
-		constraintSym := findBehavioralSymbol(t, rootScope, ast.DefConstraint, ast.UsageConstraint)
+		constraintSym := namedOrFoundSymbol(t, idx, expected.Evaluate, rootScope, ast.DefConstraint, ast.UsageConstraint)
 		if _, err := ctx.EvaluateConstraint(constraintSym, rootScope); err != nil {
-			unrecordable("evaluate constraint: %v", err)
+			t.Fatalf("evaluate constraint: %v", err)
 		}
 		traceOutput = trace.String()
 	}
 
 	// Try action execution
-	if actionSym := lookupBehavioralSymbol(rootScope, ast.DefAction, ast.UsageAction); actionSym != nil {
+	if actionSym := entryBehavior(idx, actionEntry, rootScope, ast.DefAction, ast.UsageAction); actionSym != nil {
 		exec, err := ctx.CreateActionExecutor(actionSym)
 		if err != nil {
 			t.Fatalf("create action executor: %v", err)
@@ -141,30 +159,30 @@ func runTraceTest(t *testing.T, conformanceDir, testName, goldenPath string) {
 		// Drive the traced executor itself: ctx.ExecuteAction would build a
 		// second, untraced one and leave the recorder empty.
 		if err := exec.RunToCompletion(); err != nil {
-			unrecordable("action execution: %v", err)
+			t.Fatalf("action execution: %v", err)
 		}
 		traceOutput = trace.String()
 	}
 
 	// Try state execution
-	if stateSym := lookupBehavioralSymbol(rootScope, ast.DefState, ast.UsageState); stateSym != nil {
+	if stateSym := entryBehavior(idx, stateEntry, rootScope, ast.DefState, ast.UsageState); stateSym != nil {
 		exec, err := ctx.CreateStateExecutor(stateSym)
 		if err != nil {
 			t.Fatalf("create state executor: %v", err)
 		}
 		exec.SetTrace(trace)
 
+		// The case's events drive the trace too, so ordering under an event —
+		// which transition wins, and in what order states are left — is recorded
+		// rather than only the initial entry.
+		injectEvents(t, exec, expected.Events)
+
 		if err := exec.RunToCompletion(); err != nil {
-			unrecordable("state execution: %v", err)
+			t.Fatalf("state execution: %v", err)
 		}
 		traceOutput = trace.String()
 	}
 	if traceOutput == "" {
-		// Cases with no traced behavior at all (requirements) produce nothing to
-		// compare.
-		if *updateTraces {
-			t.Skipf("%s produces no trace", testName)
-		}
 		t.Fatalf("%s has a golden trace but produced none", testName)
 	}
 
@@ -187,6 +205,16 @@ func runTraceTest(t *testing.T, conformanceDir, testName, goldenPath string) {
 			t.Errorf("trace mismatch for %s\n=== WANT ===\n%s\n=== GOT ===\n%s\n", testName, want, got)
 		}
 	}
+}
+
+// entryBehavior returns the behavior a case is driven through: the one its
+// qualified path names, or the first of that kind the document declares. It is
+// nil when the model declares none, since the harness probes each kind in turn.
+func entryBehavior(idx *symbols.Index, fqn string, scope *symbols.Scope, defKind ast.DefinitionKind, usageKind ast.UsageKind) *symbols.Symbol {
+	if fqn == "" {
+		return lookupBehavioralSymbol(scope, defKind, usageKind)
+	}
+	return namedSymbol(idx, fqn, defKind, usageKind)
 }
 
 // loadExpectedOutcome reads a case's conformance expectation, which tells the

@@ -1,0 +1,6 @@
+{
+	"type": "action",
+	"outputs": {
+		"seen": {"type": "Integer", "value": 9}
+	}
+}

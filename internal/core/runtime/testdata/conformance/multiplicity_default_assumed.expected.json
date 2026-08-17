@@ -1,0 +1,12 @@
+{
+	"type": "instance",
+	"libraries": true,
+	"instantiate": "test::craft",
+	"slots": {
+		"left": {"type": "Instance"},
+		"right": {"type": "Instance"},
+		"both": {"type": "Sequence", "elements": [{"type": "Instance"}, {"type": "Instance"}]},
+		"one": {"type": "Real", "value": 2.0},
+		"two": {"error": "2 value(s) bound to a feature with multiplicity upper bound 1"}
+	}
+}

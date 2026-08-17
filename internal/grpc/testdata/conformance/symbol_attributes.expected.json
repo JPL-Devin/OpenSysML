@@ -1,0 +1,43 @@
+{
+	"rpc": "GetSymbol",
+	"symbol_id": "demo::Car",
+	"expected_attribute_names": [
+		"mass",
+		"wheels",
+		"ratio",
+		"derived",
+		"label",
+		"inheritedOnly"
+	],
+	"expected_attributes": {
+		"mass": {
+			"type": "ISQBase::MassValue",
+			"value_kind": "real_value",
+			"value": 1600.0,
+			"unit": "SI::kg"
+		},
+		"wheels": {
+			"type": "ScalarValues::Integer",
+			"value_kind": "int_value",
+			"value": 4
+		},
+		"ratio": {
+			"type": "ScalarValues::Real",
+			"value_kind": "real_value",
+			"value": 2.0
+		},
+		"derived": {
+			"type": "ScalarValues::Real"
+		},
+		"label": {
+			"type": "ScalarValues::String",
+			"value_kind": "string_value",
+			"value": "base"
+		},
+		"inheritedOnly": {
+			"type": "ScalarValues::Integer",
+			"value_kind": "int_value",
+			"value": 3
+		}
+	}
+}

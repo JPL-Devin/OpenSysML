@@ -266,6 +266,17 @@ func TestToStateGraph_Regions(t *testing.T) {
 	}
 }
 
+// pseudostateNamed is the graph's pseudostate with that simple name, or nil. The
+// graph keys none by name, since two regions may declare same-named ones.
+func pseudostateNamed(graph *StateGraph, name string) *ast.PseudostateNode {
+	for _, ps := range graph.Pseudostates {
+		if ps.Name == name {
+			return ps
+		}
+	}
+	return nil
+}
+
 func TestToStateGraph_Pseudostates(t *testing.T) {
 	src := `
 		package test {
@@ -314,7 +325,7 @@ func TestToStateGraph_Pseudostates(t *testing.T) {
 		t.Errorf("expected 1 pseudostate, got %d", len(graph.Pseudostates))
 	}
 
-	choiceNode := graph.Pseudostates["c"]
+	choiceNode := pseudostateNamed(graph, "c")
 	if choiceNode == nil {
 		t.Fatal("choice pseudostate 'c' not found")
 	}

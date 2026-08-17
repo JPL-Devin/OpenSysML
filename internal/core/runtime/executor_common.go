@@ -147,6 +147,19 @@ func (q *EventQueue) Len() int {
 	return len(q.events)
 }
 
+// Withdraw drops every pending event the predicate accepts, which cancels an
+// occurrence a state no longer waits for.
+func (q *EventQueue) Withdraw(drop func(Event) bool) {
+	kept := q.events[:0]
+	for _, event := range q.events {
+		if !drop(event) {
+			kept = append(kept, event)
+		}
+	}
+	q.events = kept
+	heap.Init(&q.events)
+}
+
 // eventHeap implements heap.Interface for Event.
 type eventHeap []Event
 

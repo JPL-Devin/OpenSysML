@@ -197,6 +197,15 @@ func (ctx *Context) EvalWithScope(node ast.Node, scope *symbols.Scope) (Value, e
 	return ec.Eval(node)
 }
 
+// EvalWithScopeOn evaluates an expression against a concrete instance, so a
+// feature it names reads that object's slot. It brackets one run, as
+// EvalWithScope does, which is what bounds the evaluation by the step budget.
+func (ctx *Context) EvalWithScopeOn(node ast.Node, scope *symbols.Scope, self *Instance) (Value, error) {
+	defer ctx.beginRun()()
+
+	return NewEvalContextIn(ctx, scope, self).Eval(node)
+}
+
 // evalLiteralInteger evaluates an integer literal.
 func (ec *EvalContext) evalLiteralInteger(n *ast.LiteralInteger) (Value, error) {
 	val, _ := strconv.ParseInt(n.Value, 10, 64)
@@ -236,6 +245,10 @@ func (ec *EvalContext) evalFeatureReference(n *ast.FeatureReference) (Value, err
 	}
 	return ec.evalName(n.Name)
 }
+
+// thatName is the implicit feature every usage takes from the base usage: it
+// names the instance featuring the value being evaluated ([KerML, 8.4.2]).
+const thatName = "that"
 
 // evalName evaluates a name as a reference to what it names, which is what an
 // expression written as a bare name is: `rate`, `A::B::x`.
@@ -282,6 +295,11 @@ func (ec *EvalContext) evalName(qn *ast.QualifiedName) (Value, error) {
 				return val, nil
 			}
 		}
+		// Then `that`, which every usage takes from the base usage: it names the
+		// instance featuring the value being evaluated, which is the bound one.
+		if name == thatName && ec.self != nil {
+			return Value{Kind: ValInstance, Instance: ec.self.ID}, nil
+		}
 		// Then the scope the expression was written in: a sibling attribute, a
 		// member of an enclosing namespace, or a name an import brought in, found
 		// the way a written reference finds it. The declaration's own value is
@@ -292,6 +310,15 @@ func (ec *EvalContext) evalName(qn *ast.QualifiedName) (Value, error) {
 				// A variant names a choice, not the value it declares.
 				if ec.ctx.model.VariationPointOwning(sym) != nil {
 					return variantReference(sym), nil
+				}
+				// A literal of an enumeration is a value of that enumeration.
+				if semantics.EnumerationOwning(sym) != nil {
+					return ec.enumLiteralValue(sym)
+				}
+				// A library feature's value comes from the feature seam, not its
+				// declared body: a warm library cache restores symbols without AST.
+				if val, ok, err := ec.ctx.libraryFeatureValue(sym); ok {
+					return val, err
 				}
 				if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Value != nil {
 					if ec.resolving == nil {
@@ -361,9 +388,22 @@ func (ec *EvalContext) evalName(qn *ast.QualifiedName) (Value, error) {
 					ErrNotAVariant, memberName, currentSym.Name,
 					ec.ctx.variantSummary(currentSym))
 			}
+			// A name qualified by an enumeration designates one of its literals,
+			// so one that is no literal is reported as such.
+			if currentSym.Kind == symbols.SymbolEnumerationDef {
+				return Value{}, fmt.Errorf("%w: %s is not a literal of %s (%s)",
+					ErrNotALiteral, memberName, currentSym.Name,
+					ec.ctx.enumerationSummary(currentSym))
+			}
 			return Value{}, fmt.Errorf("member %s not found in %s", memberName, currentSym.Name)
 		}
 		currentSym = nextSym
+	}
+
+	// A library feature reads through the feature seam, whatever the library
+	// declares for it and whether or not the cache kept its declaration.
+	if val, ok, err := ec.ctx.libraryFeatureValue(currentSym); ok {
+		return val, err
 	}
 
 	// Evaluate the final symbol's declaration
@@ -373,6 +413,11 @@ func (ec *EvalContext) evalName(qn *ast.QualifiedName) (Value, error) {
 		// equal to the variation that selected it.
 		if ec.ctx.model.VariationPointOwning(currentSym) != nil {
 			return variantReference(currentSym), nil
+		}
+		// A literal of an enumeration is a value of that enumeration, whether or
+		// not it declares one of its own.
+		if semantics.EnumerationOwning(currentSym) != nil {
+			return ec.enumLiteralValue(currentSym)
 		}
 		if decl.Value != nil {
 			val, err := ec.Eval(decl.Value)
@@ -490,6 +535,14 @@ func (ec *EvalContext) chainMemberValue(value Value, parts []ast.NameSegment, fr
 		return ec.chainOverElements(value, parts, from)
 	case ValInstance, ValVariant:
 		// handled below
+	case ValEnumLiteral:
+		// A literal is an occurrence of its enumeration, so its own features are
+		// read from the object that literal stands for.
+		inst, err := ec.ctx.enumLiteralObject(value.Literal)
+		if err != nil {
+			return Value{}, err
+		}
+		return ec.chainMemberValue(Value{Kind: ValInstance, Instance: inst.ID}, parts, from)
 	default:
 		return Value{}, fmt.Errorf("cannot chain through non-instance member %s (%v)", from, value.Kind)
 	}
@@ -557,14 +610,64 @@ func (ec *EvalContext) chainOverElements(value Value, parts []ast.NameSegment, f
 	return sequenceOf(collected), nil
 }
 
+// enumLiteralValue is the value a literal declares — a scalar-specializing
+// enumeration's literal *is* its value — else the identity of the literal.
+func (ec *EvalContext) enumLiteralValue(sym *symbols.Symbol) (Value, error) {
+	value := semantics.LiteralValue(sym)
+	if value == nil {
+		return NewEnumLiteral(sym), nil
+	}
+	val, err := ec.evalIn(declScope(sym)).Eval(value)
+	if err != nil {
+		return Value{}, fmt.Errorf("enumeration literal %s: %w", sym.Name, err)
+	}
+	return val, nil
+}
+
+// EnumerationLiteralValue is the value sym has when it is an enumeration
+// literal, reported as such so a caller holding only a symbol — an `%eval` of a
+// literal — answers with the value rather than "no value".
+func (ctx *Context) EnumerationLiteralValue(sym *symbols.Symbol) (Value, bool, error) {
+	if semantics.EnumerationOwning(sym) == nil {
+		return Value{}, false, nil
+	}
+	val, err := NewEvalContext(ctx, declScope(sym)).enumLiteralValue(sym)
+	return val, true, err
+}
+
+// enumLiteralObject returns the object a literal stands for, materialized once
+// so the features it carries read the same object every time.
+func (ctx *Context) enumLiteralObject(literal *symbols.Symbol) (*Instance, error) {
+	if literal == nil {
+		return nil, fmt.Errorf("%w: the literal was never resolved", ErrNotALiteral)
+	}
+	inst, err := ctx.occurrenceOf(literal)
+	if err != nil {
+		return nil, fmt.Errorf("enumeration literal %s: %w", literal.Name, err)
+	}
+	return inst, nil
+}
+
+// enumerationSummary names the literals an enumeration declares, for a report
+// about a qualified name that is none of them.
+func (ctx *Context) enumerationSummary(enum *symbols.Symbol) string {
+	literals := ctx.model.LiteralsOf(enum)
+	if len(literals) == 0 {
+		return "it declares no literals"
+	}
+	names := make([]string, 0, len(literals))
+	for _, lit := range literals {
+		names = append(names, lit.Name)
+	}
+	return "literals: " + strings.Join(names, ", ")
+}
+
 // unimplementedOperators names the operators the runtime does not evaluate and
 // says what each would need, so reaching one reports why rather than "unsupported".
 var unimplementedOperators = map[ast.OperatorKind]string{
 	ast.OpBitNot:  "bitwise complement is declared by no function library the runtime applies",
 	ast.OpHasType: "classification needs the runtime type of a value, which values do not carry yet",
 	ast.OpIsType:  "classification needs the runtime type of a value, which values do not carry yet",
-	ast.OpAt:      "classification needs the runtime type of a value, which values do not carry yet",
-	ast.OpMetaAt:  "metadata classification needs the metadata of a value at runtime",
 	ast.OpAs:      "a cast needs the runtime type of a value, which values do not carry yet",
 	ast.OpMeta:    "metadata access is evaluated from a MetadataAccessExpression, not this operator",
 	ast.OpAll:     "'all' needs the extent of a type, which the runtime does not enumerate",
@@ -600,12 +703,105 @@ func (ec *EvalContext) evalOperator(n *ast.OperatorExpr) (Value, error) {
 		return ec.evalUnary(n)
 	case ast.OpRange:
 		return ec.evalRange(n)
+	case ast.OpAt, ast.OpMetaAt:
+		return ec.evalClassification(n)
 	default:
 		if why, ok := unimplementedOperators[n.Operator]; ok {
 			return Value{}, fmt.Errorf("%w: '%s': %s", ErrUnsupportedOperator, n.Operator, why)
 		}
 		return Value{}, fmt.Errorf("%w: '%s'", ErrUnsupportedOperator, n.Operator)
 	}
+}
+
+// evalClassification evaluates `@T` (metadata T annotates the subject) and `@@T`
+// (the subject's own metaclass conforms to T) through the semantic model, so the
+// verdict is the one an element filter writing the same test reaches.
+func (ec *EvalContext) evalClassification(n *ast.OperatorExpr) (Value, error) {
+	elem, err := ec.classifiedElement(n)
+	if err != nil {
+		return Value{}, err
+	}
+	classified, err := ec.ctx.model.EvalClassification(ec.scope, n, elem)
+	if err != nil {
+		return Value{}, err
+	}
+	return Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValBool, Bool: classified}}, nil
+}
+
+// classifiedElement is the element a classification's subject denotes, since
+// metadata annotates elements and not values: the object being evaluated for an
+// implicit subject or `self`, the element a name names, else what its value
+// denotes.
+func (ec *EvalContext) classifiedElement(n *ast.OperatorExpr) (*symbols.Symbol, error) {
+	if len(n.Operands) > 1 {
+		return nil, semantics.UnevaluableClassification(
+			fmt.Sprintf("`%s` classifies one subject, and %d were given", n.Operator, len(n.Operands)), n.Span())
+	}
+	if len(n.Operands) == 0 || isSelfName(n.Operands[0]) {
+		if ec.self == nil {
+			return nil, semantics.UnevaluableClassification(
+				fmt.Sprintf("`%s` leaves its subject implicit and no object is being evaluated", n.Operator), n.Span())
+		}
+		return ec.self.Type, nil
+	}
+	subject := n.Operands[0]
+	// A name is the element it names: what `p @ Safety` classifies is the
+	// declaration p, the same element a filter condition would be judged for.
+	if qn := subjectName(subject); qn != nil {
+		if sym, ok := ec.ctx.resolver.ResolveQualified(ec.scope, qn); ok && sym != nil {
+			return sym, nil
+		}
+	}
+	val, err := ec.Eval(subject)
+	if err != nil {
+		return nil, err
+	}
+	elem, ok := ec.elementDenotedBy(val)
+	if !ok {
+		return nil, semantics.UnevaluableClassification(
+			fmt.Sprintf("a %s denotes no element to classify", val.Kind), subject.Span())
+	}
+	return elem, nil
+}
+
+// elementDenotedBy is the element a value stands for: the classifier an object
+// was materialized from, the variant a variation was bound to, or the literal an
+// enumeration value is. Every other value is a datum, which nothing annotates.
+func (ec *EvalContext) elementDenotedBy(val Value) (*symbols.Symbol, bool) {
+	switch val.Kind {
+	case ValInstance:
+		inst, ok := ec.ctx.instances[val.Instance]
+		if !ok || inst.Type == nil {
+			return nil, false
+		}
+		return inst.Type, true
+	case ValVariant:
+		return val.Variant, val.Variant != nil
+	case ValEnumLiteral:
+		return val.Literal, val.Literal != nil
+	default:
+		return nil, false
+	}
+}
+
+// subjectName is the qualified name a classification's subject is written as, or
+// nil for a subject that is no name.
+func subjectName(n ast.Node) *ast.QualifiedName {
+	switch subject := n.(type) {
+	case *ast.FeatureReference:
+		return subject.Name
+	case *ast.QualifiedName:
+		return subject
+	default:
+		return nil
+	}
+}
+
+// isSelfName reports whether a subject is written as `self`, which names the
+// object being evaluated — the same subject the notation leaves out.
+func isSelfName(n ast.Node) bool {
+	qn := subjectName(n)
+	return qn != nil && len(qn.Parts) == 1 && qn.Parts[0].Text == "self"
 }
 
 // evalConditional evaluates `if c ? a else b`, evaluating only the branch the
@@ -694,6 +890,12 @@ func (ec *EvalContext) evalArithmetic(n *ast.OperatorExpr) (Value, error) {
 	right, err := ec.Eval(n.Operands[1])
 	if err != nil {
 		return Value{}, err
+	}
+
+	// '+' over two strings concatenates, the one arithmetic operator
+	// StringFunctions declares; a non-string operand is not coerced.
+	if n.Operator == ast.OpAdd && left.Kind == ValString && right.Kind == ValString {
+		return concatStrings(left.Str, right.Str), nil
 	}
 
 	// A quantity carries its unit through arithmetic: a sum converts, a product
@@ -851,6 +1053,24 @@ func (ec *EvalContext) evalComparison(n *ast.OperatorExpr) (Value, error) {
 	// across units without conversion.
 	if lq, rq, ok := quantityOperands(left, right); ok {
 		return compareQuantities(n.Operator, lq, rq)
+	}
+
+	// StringFunctions declares the comparisons over two String operands, so a
+	// string orders against a string and against nothing else.
+	if left.Kind == ValString || right.Kind == ValString {
+		if left.Kind != ValString || right.Kind != ValString {
+			return Value{}, &OperandTypeError{
+				Op:    n.Operator.String(),
+				Left:  describeOperand(left),
+				Right: describeOperand(right),
+				Span:  n.Span(),
+			}
+		}
+		ordered, err := compareStrings(n.Operator, left.Str, right.Str)
+		if err != nil {
+			return Value{}, err
+		}
+		return boolValue(ordered), nil
 	}
 
 	// Both must be ValConst
@@ -1183,6 +1403,10 @@ func valueEqual(a, b Value) bool {
 	case ValVariant:
 		// A variation compares equal to the variant it selected.
 		return a.Variant == b.Variant
+	case ValEnumLiteral:
+		// A literal is its own identity: two literals are equal exactly when they
+		// are the same declaration, across enumerations included.
+		return a.Literal == b.Literal
 	case ValQuantity:
 		// Incommensurable units are not equal here: an equality that has to hold
 		// or fail (a set member, a sequence element) has no error to report.

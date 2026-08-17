@@ -1,7 +1,7 @@
 # Pseudostates Design - Choice and Junction
 
 **Status:** Implemented — choice, junction, fork, join, entry/exit points and history, including pseudostates reached from inside an orthogonal region  
-**UML Reference:** UML 2.5.1 §14.2.3.4 (Pseudostates)
+**Semantic Reference:** choice and junction are KerML performances — `ControlPerformances::DecisionPerformance` (`outgoingHBLink: HappensBefore[1]`) and `MergePerformance` (`incomingHBLink: HappensBefore[1]`), with `StatePerformances::StatePerformance specializes DecisionPerformance`. Fork/join in a state body, history and entry/exit points have no SysML v2 notation and no KerML performance, so UML 2.5.1 §14.2.3.4 (Pseudostates) is their reference semantics only; the notation for all of them is a Systemica extension.
 
 ## Overview
 
@@ -21,7 +21,15 @@ Pseudostates are transient vertices in state machines that enable complex contro
 - All outgoing guards must be mutually exclusive and complete
 - Deterministic - no runtime evaluation order
 
-### UML Semantics (UML 2.5.1 §14.2.3.4.3-4)
+### Semantics
+
+KerML gives the branching itself: a `DecisionPerformance` "represents the selection of one of
+the Successions that have the DecisionPerformance behavior as their source", and
+`outgoingHBLink: HappensBefore[1]` makes that exactly one — a branching point is left by exactly
+one succession, choice and junction alike. Since `StatePerformance specializes
+DecisionPerformance`, a state is left the same way. What KerML does not distinguish is *when* the
+guards are read, which is the choice/junction difference below; UML 2.5.1 §14.2.3.4.3-4 is the
+reference for that distinction:
 
 **Choice:**
 > "A choice vertex is a dynamic conditional branch. The guards on the outgoing transitions are evaluated only when the choice is entered, at run time."
@@ -275,8 +283,9 @@ package JunctionTest {
 
 ## References
 
-- UML 2.5.1 §14.2.3.4.3 (Choice Pseudostates)
-- UML 2.5.1 §14.2.3.4.4 (Junction Pseudostates)
+- KerML `ControlPerformances::DecisionPerformance` / `MergePerformance` (stdlib `Kernel Libraries/Kernel Semantic Library/ControlPerformances.kerml`) — one outgoing / one incoming `HappensBefore` link
+- KerML `StatePerformances::StatePerformance specializes DecisionPerformance`
+- UML 2.5.1 §14.2.3.4.3-4 (Choice / Junction Pseudostates) — for guard evaluation timing only
 - SysML v2 Pilot Implementation (state machine examples)
 
 ## Fork and Join
@@ -323,8 +332,11 @@ state body.
 **History** (`ast.PseudostateShallowHistory`, `ast.PseudostateDeepHistory`) is
 owned by the composite state it restores — `lower.StateGraph.PseudostateOwner`
 records that ownership — and re-enters the configuration that state was last left
-in. `exitState` records the configuration on the way out, per composite state: the
-substate that was active, and the active state of each orthogonal region.
+in. The configuration is recorded on the way out — the substate that was active by
+`exitState`, and the active state of each orthogonal region by `recordRegionHistory`
+as that region is left, whether by `exitState`, `leaveRegion` or `exitRegionTo`. A
+region left with no active state has its record dropped (`forgetRegionHistory`),
+since there is nothing to restore.
 
 `fireHistoryTransition` reads that record before leaving the source
 configuration, since a transition out of the owner's own substates would
@@ -337,7 +349,8 @@ otherwise overwrite it, then:
   state is the one entered;
 - when the owner has never been exited there is nothing to restore, so the
   history's own outgoing transition supplies the target — UML's default history
-  transition.
+  transition, UML being the reference semantics for history, which SysML v2 and
+  KerML have no counterpart for.
 
 Entering a branch nested below a region runs the entry behaviors of the states
 above it inside that region, so a restored deep configuration is not entered
@@ -376,21 +389,23 @@ state def RegionChoice {
   routes back into a pseudostate it already passed, a branch with no satisfied
   guard, and a branch into a fork, join or history all return typed errors rather
   than leaving the machine resting on a pseudostate.
-- **`moveWithinRegion`** handles a branch ending inside the source region: the
-  exit stops at the region boundary even when the least common ancestor lies
-  above it, so the state owning the region is neither exited nor re-entered and
-  every sibling region keeps the state it was in — including its entry behaviors,
-  which do not run again.
-- **`leaveRegion`** handles a branch ending outside the source region. The least
-  common ancestor is then above the region set, so the whole set is left: every
-  region is exited in declaration order — recording its configuration, so a later
-  history transition restores it — before the target is entered.
-  - A target in a **sibling region of the same composite state** re-enters that
-    state with one branch naming the target: the regions the branch does not name
-    restart at their initial states, since their previous configuration was left.
-  - A target **outside the composite state** exits it and its ancestors up to the
-    least common ancestor, then enters down to the target, entering that target's
-    own regions on the way.
+- **`moveBetweenRegions`** handles a branch ending inside the source region or
+  inside a region concurrent with it, which `concurrentRegionsFor` and
+  `siblingRegionContaining` classify. KerML `StateTransitionPerformance` orders
+  only `guard then transitionLinkSource.exit`, so `exitRegionTo` exits the source
+  and its descendants down to the boundary the target region keeps: the state
+  owning the regions is neither exited nor re-entered, and the regions holding
+  neither endpoint keep the states they were in, entry behaviors included. A
+  target nested inside a composite state the target region is already running
+  moves that inner region (`innermostActiveRegion`); a source nested deeper than
+  the target's region leaves its region set up to the level the two share, which
+  `enclosingRegion` finds even when the region's owning state is a substate.
+- **`leaveRegion`** handles a branch ending outside every enclosing region set.
+  The least common ancestor is then above the region set, so the whole set is
+  left: every region is exited in declaration order — recording its
+  configuration, so a later history transition restores it — before the composite
+  state and its ancestors up to the least common ancestor are exited and the
+  target is entered, entering that target's own regions on the way.
 - **`leaveTopRegions`** does the same for the machine's own regions, which no
   state owns. `lower.StateGraph.TopRegions` carries their declaration order, so
   the order regions are entered, exited and offered an event in is the declared

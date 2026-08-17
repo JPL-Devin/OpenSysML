@@ -1,0 +1,35 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="ForKeywordVariables" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Collection"))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="Iterate"
+          (Membership visibility="default"
+            (Usage kind="part" name="items" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Collection
+                (*ast.QualifiedName))))
+          (WhileLoopActionNode kind="for" variable="step"
+            (FeatureReference name="items")
+            (Membership visibility="default"
+              (Usage kind="action" name="inner" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)))
+          (WhileLoopActionNode kind="for" variable="item"
+            (FeatureReference name="items")
+            (Membership visibility="default"
+              (Usage kind="action" name="inner2" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)))
+          (WhileLoopActionNode kind="for" variable="state"
+            (FeatureReference name="items")
+            (Membership visibility="default"
+              (Usage kind="action" name="inner3" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)))
+          (WhileLoopActionNode kind="for" variable="part"
+            (FeatureReference name="items")
+            (Membership visibility="default"
+              (Usage kind="action" name="inner4" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)))
+          (WhileLoopActionNode kind="for" variable="end"
+            (FeatureReference name="items")
+            (Membership visibility="default"
+              (Usage kind="action" name="inner5" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)))
+          (WhileLoopActionNode kind="for" variable="i"
+            (FeatureReference name="items")
+            (Membership visibility="default"
+              (Usage kind="action" name="inner6" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))))))))

@@ -24,7 +24,9 @@ const formatAdvice = export.ExtensionAdvice + ", or pass -convert on the command
 // A `.ttl` save of the same session is refused, because a graph built from a
 // tree the parser recovered would be quietly missing declarations.
 func (s *Session) doSave(path string) ([]string, bool, error) {
-	src := s.joined()
+	// The text as typed, not the analyzed buffer: work the parser could not read
+	// is masked out of that buffer and is exactly what this save exists for.
+	src := s.text()
 	if strings.TrimSpace(src) == "" {
 		return []string{"nothing to save: the session is empty"}, false, nil
 	}

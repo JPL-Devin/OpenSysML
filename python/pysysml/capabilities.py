@@ -40,6 +40,27 @@ CAPABILITY_VERIFICATION = "verification"
 #: indistinguishable from a broken channel.
 CAPABILITY_QUERY = "query"
 
+#: An enumeration literal as ``Value.enum_literal``. Without it a literal is
+#: reported as an unsupported null, which is indistinguishable from a value the
+#: service could not evaluate.
+CAPABILITY_ENUM_VALUES = "enum_values"
+
+#: Evaluating an expression against an instantiated subject. Without it the
+#: subject is ignored and the answer is the declared default, which is
+#: indistinguishable from the object's own value.
+CAPABILITY_EVALUATE_SUBJECT = "evaluate_subject"
+
+#: Populated ``SymbolInfo.attributes``. Without it the attribute set is empty,
+#: which is indistinguishable from an element that has no attributes.
+CAPABILITY_SYMBOL_ATTRIBUTES = "symbol_attributes"
+
+#: A valueless feature of a value type as ``Value.unset``, read as
+#: :data:`pysysml.UNSET`. Without it the empty object such a feature materializes
+#: crosses as an instance id, which is indistinguishable from an object of a
+#: class that declares no features.
+CAPABILITY_UNSET_VALUE = "unset_value"
+
+
 @dataclass(frozen=True)
 class ServerInfo:
     """Self-description of the service a :class:`~pysysml.connection.Connection` talks to.

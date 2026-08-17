@@ -5,9 +5,10 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"os"
+	"strings"
 
 	pb "github.com/Open-MBEE/Systemica/api/proto"
-	"github.com/Open-MBEE/Systemica/internal/core/libs"
+	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/passes"
 	"github.com/Open-MBEE/Systemica/internal/core/resolve"
@@ -36,10 +37,29 @@ const CapabilityVerification = "verification"
 // SysML v2 API & Services Query over a parsed model.
 const CapabilityQuery = "query"
 
+// CapabilityEnumValues names the capability of carrying an enumeration literal
+// as Value.enum_literal, rather than reporting it as an unsupported null.
+const CapabilityEnumValues = "enum_values"
+
+// CapabilityEvaluateSubject names the capability of evaluating an expression
+// against an instantiated subject, rather than ignoring the subject and
+// answering with the declared default.
+const CapabilityEvaluateSubject = "evaluate_subject"
+
+// CapabilitySymbolAttributes names the capability of populating
+// SymbolInfo.attributes, rather than always reporting none.
+const CapabilitySymbolAttributes = "symbol_attributes"
+
+// CapabilityUnsetValue names the capability of reporting a valueless feature of
+// a value type as Value.unset, rather than as the empty object it materializes.
+const CapabilityUnsetValue = "unset_value"
+
 // capabilities is what this build supports, in report order. A capability is
 // only ever added: renaming or dropping one breaks clients that require it.
 var capabilities = []string{
 	CapabilityTypeFacts, CapabilityConvert, CapabilityVerification, CapabilityQuery,
+	CapabilityEnumValues, CapabilityEvaluateSubject, CapabilitySymbolAttributes,
+	CapabilityUnsetValue,
 }
 
 // Capabilities returns the capability names this build of the service reports.
@@ -51,6 +71,10 @@ func Capabilities() []string {
 type Service struct {
 	pb.UnimplementedSysMLServiceServer
 	cache *Cache
+	// libIndexes hands out indexes carrying the standard library, built ahead of
+	// the requests that need them: the library does not depend on the model, so a
+	// cache miss should not pay for loading it.
+	libIndexes *indexPool
 	// budgets bounds every runtime context the service creates, read once from
 	// the environment at construction.
 	budgets runtime.Budgets
@@ -60,7 +84,10 @@ type Service struct {
 
 // NewService creates a gRPC service with specified cache size, reporting
 // version as its build version. It returns an error if cacheSize is not
-// positive, or if a budget variable holds anything but a positive integer.
+// positive, if a budget variable holds anything but a positive integer, or if
+// the index pool size is not a non-negative integer. It does not load the
+// standard library: call Prewarm to have that happen in the background, ahead of
+// the requests that need it.
 func NewService(cacheSize int, version string) (*Service, error) {
 	cache, err := NewCache(cacheSize)
 	if err != nil {
@@ -70,7 +97,30 @@ func NewService(cacheSize int, version string) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Service{cache: cache, budgets: budgets, version: version}, nil
+	poolSize, err := indexPoolSizeFromEnv()
+	if err != nil {
+		return nil, err
+	}
+	return &Service{
+		cache:      cache,
+		libIndexes: newIndexPool(poolSize, buildLibraryIndex),
+		budgets:    budgets,
+		version:    version,
+	}, nil
+}
+
+// Prewarm starts building the service's pool of standard library indexes in the
+// background, so the first model to arrive is not the one that pays for the
+// library. It returns immediately and is safe to call more than once.
+func (s *Service) Prewarm() {
+	s.libIndexes.prewarm()
+}
+
+// Close releases the prewarmed indexes nobody took and waits for the background
+// builds in flight. The service still answers afterwards, building each index on
+// the request that needs it.
+func (s *Service) Close() {
+	s.libIndexes.close()
 }
 
 // GetServerInfo reports the service's build version and capabilities. A service
@@ -133,29 +183,11 @@ func (s *Service) ParseFile(ctx context.Context, req *pb.ParseFileRequest) (*pb.
 	// Get parser diagnostics
 	parseDiags := p.Diagnostics
 
-	// Build symbol index for lookups
-	idx := symbols.NewIndex()
-
-	// Load stdlib into index (required for type resolution)
-	stdlibSrc := libs.DefaultSource()
-	cache, _ := libs.NewCache() // Ignore cache errors, continue without
-	loader := libs.NewLoader(stdlibSrc, cache)
-	loaded := true
-	for _, name := range stdlibSrc.List() {
-		if err := loader.Load(name, idx); err != nil {
-			loaded = false // Ignore load errors, continue
-		}
-	}
-
-	// Expand wildcard imports (facade packages like ISQ re-exporting ISQMechanics)
-	idx.ExpandWildcardImports()
-
-	// Cache what was parsed, so the next request restores it instead. An
-	// incomplete library is not cached: a record is keyed by content alone, so
-	// it would be reused without the supertypes the missing file declared.
-	if loaded {
-		loader.Persist(idx)
-	}
+	// Take an index carrying the standard library, which type resolution needs.
+	// It is prewarmed when the pool has one, and built here when it does not; the
+	// two are the same index, so what a model resolves against does not depend on
+	// prewarming. This model owns it from here on.
+	idx := s.libIndexes.get()
 
 	// Add user document
 	idx.AddDocument(filePath, root)
@@ -193,7 +225,7 @@ func (s *Service) GetSymbol(ctx context.Context, req *pb.GetSymbolRequest) (*pb.
 	}
 
 	// Lookup symbol by FQN
-	syms := cached.Index.LookupQualified(req.SymbolId)
+	syms := lookupNamed(cached.Index, req.SymbolId)
 	if len(syms) == 0 {
 		return &pb.SymbolResponse{
 			Error: fmt.Sprintf("symbol not found: %s", req.SymbolId),
@@ -255,14 +287,31 @@ func (s *Service) Evaluate(ctx context.Context, req *pb.EvaluateRequest) (*pb.Ev
 		}, nil
 	}
 
+	// A subject is both what the expression is evaluated against and, unless a
+	// context is named, the namespace its features are named in — the way the
+	// prompt evaluates in the context it pinned.
+	var subject *symbols.Symbol
+	if req.SubjectSymbolId != "" {
+		syms := lookupNamed(cached.Index, req.SubjectSymbolId)
+		if len(syms) == 0 {
+			return &pb.EvaluateResponse{
+				Error: fmt.Sprintf("subject not found: %s", req.SubjectSymbolId),
+			}, nil
+		}
+		subject = syms[0]
+	}
+
 	// Determine scope
 	var scope *symbols.Scope
 	if req.ContextSymbolId != "" {
 		// Lookup context symbol
-		syms := cached.Index.LookupQualified(req.ContextSymbolId)
+		syms := lookupNamed(cached.Index, req.ContextSymbolId)
 		if len(syms) > 0 && syms[0].Scope != nil {
 			scope = syms[0].Scope
 		}
+	}
+	if scope == nil && subject != nil {
+		scope = evalScope(subject, cached)
 	}
 	if scope == nil {
 		// Use document root as default scope
@@ -274,8 +323,19 @@ func (s *Service) Evaluate(ctx context.Context, req *pb.EvaluateRequest) (*pb.Ev
 	semModel := semantics.NewModel(resolver)
 	runtimeCtx := s.newRuntime(semModel, resolver)
 
+	var self *runtime.Instance
+	if subject != nil {
+		inst, err := runtimeCtx.Instantiate(subject)
+		if err != nil {
+			return &pb.EvaluateResponse{
+				Error: fmt.Sprintf("instantiation of subject %s failed: %v", req.SubjectSymbolId, err),
+			}, nil
+		}
+		self = inst
+	}
+
 	// Create eval context and evaluate
-	evalCtx := runtime.NewEvalContext(runtimeCtx, scope)
+	evalCtx := runtime.NewEvalContextIn(runtimeCtx, scope, self)
 	result, err := evalCtx.Eval(exprNode)
 	if err != nil {
 		return &pb.EvaluateResponse{
@@ -284,8 +344,24 @@ func (s *Service) Evaluate(ctx context.Context, req *pb.EvaluateRequest) (*pb.Ev
 	}
 
 	return &pb.EvaluateResponse{
-		Result: ValueToProto(result),
+		Result: ValueToProtoIn(runtimeCtx, result, cached.Index),
 	}, nil
+}
+
+// evalScope is the namespace a subject's features are named in: its own scope,
+// so a member is named unqualified, else the scope it was declared in. Mirrors
+// the REPL's contextScope.
+func evalScope(sym *symbols.Symbol, cached *CachedModel) *symbols.Scope {
+	switch {
+	case sym == nil:
+		return nil
+	case sym.Scope != nil:
+		return sym.Scope
+	case sym.OwnerScope != nil:
+		return sym.OwnerScope
+	default:
+		return cached.Index.DocumentRoot(cached.Source.Name())
+	}
 }
 
 // Instantiate creates a runtime instance of a part/usage
@@ -297,7 +373,7 @@ func (s *Service) Instantiate(ctx context.Context, req *pb.InstantiateRequest) (
 	}
 
 	// Lookup symbol
-	syms := cached.Index.LookupQualified(req.SymbolId)
+	syms := lookupNamed(cached.Index, req.SymbolId)
 	if len(syms) == 0 {
 		return &pb.InstantiateResponse{
 			Error: fmt.Sprintf("symbol not found: %s", req.SymbolId),
@@ -334,7 +410,7 @@ func (s *Service) ExecuteAction(ctx context.Context, req *pb.ExecuteActionReques
 	}
 
 	// Lookup action symbol
-	syms := cached.Index.LookupQualified(req.ActionSymbolId)
+	syms := lookupNamed(cached.Index, req.ActionSymbolId)
 	if len(syms) == 0 {
 		return &pb.ExecuteActionResponse{
 			Error: fmt.Sprintf("action not found: %s", req.ActionSymbolId),
@@ -347,12 +423,19 @@ func (s *Service) ExecuteAction(ctx context.Context, req *pb.ExecuteActionReques
 	semModel := semantics.NewModel(resolver)
 	runtimeCtx := s.newRuntime(semModel, resolver)
 
-	// Convert inputs from req.Inputs into runtime values for parameter binding.
+	// Converted against the model's index, so a quantity input keeps the base
+	// units it is commensurable with instead of binding an unusable value.
 	var inputs map[string]runtime.Value
 	if len(req.Inputs) > 0 {
 		inputs = make(map[string]runtime.Value, len(req.Inputs))
 		for name, pv := range req.Inputs {
-			inputs[name] = ProtoToValue(pv)
+			val, cerr := ProtoToValueIn(pv, cached.Index, semModel)
+			if cerr != nil {
+				return &pb.ExecuteActionResponse{
+					Error: fmt.Sprintf("input %q could not be read: %v", name, cerr),
+				}, nil
+			}
+			inputs[name] = val
 		}
 	}
 
@@ -367,7 +450,7 @@ func (s *Service) ExecuteAction(ctx context.Context, req *pb.ExecuteActionReques
 	// Convert outputs to protobuf
 	pbOutputs := make(map[string]*pb.Value)
 	for name, val := range outputs {
-		pbOutputs[name] = ValueToProto(val)
+		pbOutputs[name] = ValueToProtoIn(runtimeCtx, val, cached.Index)
 	}
 
 	return &pb.ExecuteActionResponse{
@@ -384,7 +467,7 @@ func (s *Service) ExecuteState(ctx context.Context, req *pb.ExecuteStateRequest)
 	}
 
 	// Lookup state machine symbol
-	syms := cached.Index.LookupQualified(req.StateMachineSymbolId)
+	syms := lookupNamed(cached.Index, req.StateMachineSymbolId)
 	if len(syms) == 0 {
 		return &pb.ExecuteStateResponse{
 			Error: fmt.Sprintf("state machine not found: %s", req.StateMachineSymbolId),
@@ -409,7 +492,7 @@ func (s *Service) ExecuteState(ctx context.Context, req *pb.ExecuteStateRequest)
 	// Convert final context to protobuf
 	pbContext := make(map[string]*pb.Value)
 	for name, val := range finalContext {
-		pbContext[name] = ValueToProto(val)
+		pbContext[name] = ValueToProtoIn(runtimeCtx, val, cached.Index)
 	}
 
 	return &pb.ExecuteStateResponse{
@@ -471,4 +554,43 @@ func collectChildIDs(scope *symbols.Scope, idx *symbols.Index) []string {
 func computeHash(content string) string {
 	hash := sha256.Sum256([]byte(content))
 	return fmt.Sprintf("%x", hash)
+}
+
+// lookupNamed resolves a symbol ID written in either spelling: the quoted,
+// notation-legal form a model author writes ('My Pkg'::Car), or the unquoted
+// spelling the index records (My Pkg::Car), which keeps working as it did.
+func lookupNamed(idx *symbols.Index, id string) []*symbols.Symbol {
+	if syms := idx.LookupQualified(id); len(syms) > 0 {
+		return syms
+	}
+	if plain, ok := unquotedName(id); ok && plain != id {
+		return idx.LookupQualified(plain)
+	}
+	return nil
+}
+
+// unquotedName is the name a notation-legal qualified name states, with the
+// quoting of its unrestricted segments removed, or false for an ID the notation
+// does not read as one whole name.
+func unquotedName(id string) (string, bool) {
+	if id == "" {
+		return "", false
+	}
+	p := parser.New(source.New("<symbol-id>", []byte(id)))
+	expr := p.ParseExpression()
+	if len(p.Diagnostics) > 0 || p.Offset() != len(id) {
+		return "", false
+	}
+	ref, ok := expr.(*ast.FeatureReference)
+	if !ok || ref.Name == nil || ref.Name.Global || len(ref.Name.Parts) == 0 {
+		return "", false
+	}
+	segments := make([]string, 0, len(ref.Name.Parts))
+	for _, part := range ref.Name.Parts {
+		if part.Text == "" {
+			return "", false
+		}
+		segments = append(segments, part.Text)
+	}
+	return strings.Join(segments, "::"), true
 }

@@ -28,6 +28,8 @@ func failureReason(err error) pb.FailureReason {
 	switch {
 	case err == nil:
 		return pb.FailureReason_FAILURE_REASON_UNSPECIFIED
+	case errors.Is(err, runtime.ErrAmbiguousSubject):
+		return pb.FailureReason_FAILURE_REASON_AMBIGUOUS_SUBJECT
 	case errors.Is(err, runtime.ErrNotAConstraint),
 		errors.Is(err, runtime.ErrNotARequirement),
 		errors.Is(err, runtime.ErrNotASatisfaction),
@@ -43,6 +45,7 @@ func failureReason(err error) pb.FailureReason {
 type verifyContext struct {
 	cached  *CachedModel
 	runtime *runtime.Context
+	sem     *semantics.Model
 }
 
 // newVerifyContext looks the model up and builds a runtime over it, the same way
@@ -54,7 +57,7 @@ func (s *Service) newVerifyContext(modelHash string) (*verifyContext, error) {
 	}
 	resolver := resolve.New(cached.Index)
 	semModel := semantics.NewModel(resolver)
-	return &verifyContext{cached: cached, runtime: s.newRuntime(semModel, resolver)}, nil
+	return &verifyContext{cached: cached, runtime: s.newRuntime(semModel, resolver), sem: semModel}, nil
 }
 
 // lookup resolves an FQN to the symbol it names.
@@ -155,10 +158,11 @@ func (s *Service) VerifyConstraint(ctx context.Context, req *pb.VerifyConstraint
 		return &pb.VerifyConstraintResponse{Error: err.Error()}, nil
 	}
 
-	holds, evalErr := v.runtime.EvaluateConstraintOn(sym, v.declaringScope(sym), inst)
+	result, evalErr := v.runtime.CheckConstraintOn(sym, v.declaringScope(sym), inst)
+	subject := subjectOf(result, inst)
 	return &pb.VerifyConstraintResponse{
-		Verdict:   v.verdict(verdictConstraint, sym, "", inst, holds, evalErr),
-		Instances: v.instanceGraph(inst),
+		Verdict:   v.verdict(verdictConstraint, sym, "", subject, result.Holds, evalErr),
+		Instances: v.instanceGraph(subject),
 	}, nil
 }
 
@@ -178,10 +182,11 @@ func (s *Service) VerifyRequirement(ctx context.Context, req *pb.VerifyRequireme
 		return &pb.VerifyRequirementResponse{Error: err.Error()}, nil
 	}
 
-	holds, evalErr := v.runtime.EvaluateRequirementOn(sym, v.declaringScope(sym), inst)
+	result, evalErr := v.runtime.CheckRequirementOn(sym, v.declaringScope(sym), inst)
+	subject := subjectOf(result, inst)
 	return &pb.VerifyRequirementResponse{
-		Verdict:   v.verdict(verdictRequirement, sym, "", inst, holds, evalErr),
-		Instances: v.instanceGraph(inst),
+		Verdict:   v.verdict(verdictRequirement, sym, "", subject, result.Holds, evalErr),
+		Instances: v.instanceGraph(subject),
 	}, nil
 }
 
@@ -251,9 +256,20 @@ func (v *verifyContext) satisfyVerdict(a *runtime.SatisfyAssertion) (*pb.Verdict
 		}
 		subject = inst
 	}
-	holds, err := v.runtime.EvaluateSatisfactionOn(a, subject)
-	return v.verdict(verdictSatisfy, a.Symbol, a.Text(), subject, holds, err),
+	result, err := v.runtime.CheckSatisfactionOn(a, subject)
+	subject = subjectOf(result, subject)
+	return v.verdict(verdictSatisfy, a.Symbol, a.Text(), subject, result.Holds, err),
 		v.instanceGraph(subject)
+}
+
+// subjectOf is the object a verdict is about: the one the runtime evaluated the
+// check against, which for a check reached through a nested redefinition is not
+// the object supplied. fallback covers a check that never reached evaluation.
+func subjectOf(result runtime.CheckResult, fallback *runtime.Instance) *runtime.Instance {
+	if result.Subject != nil {
+		return result.Subject
+	}
+	return fallback
 }
 
 // EvaluateCalc invokes a calculation, as the REPL's %calc does: a calc usage
@@ -283,9 +299,18 @@ func (s *Service) EvaluateCalc(ctx context.Context, req *pb.EvaluateCalcRequest)
 		}
 	}
 
+	// Converted against the model's index, so a quantity argument keeps the base
+	// units it is commensurable with instead of arriving as an unusable value.
 	args := make([]runtime.Value, 0, len(req.Arguments))
 	for _, arg := range req.Arguments {
-		args = append(args, ProtoToValue(arg))
+		val, cerr := ProtoToValueIn(arg, v.cached.Index, v.sem)
+		if cerr != nil {
+			return &pb.EvaluateCalcResponse{
+				Error:         fmt.Sprintf("calc argument could not be read: %v", cerr),
+				FailureReason: failureReason(cerr),
+			}, nil
+		}
+		args = append(args, val)
 	}
 
 	result, err := v.runtime.InvokeCalc(sym, args, v.declaringScope(sym))
@@ -295,7 +320,7 @@ func (s *Service) EvaluateCalc(ctx context.Context, req *pb.EvaluateCalcRequest)
 			FailureReason: failureReason(err),
 		}, nil
 	}
-	return &pb.EvaluateCalcResponse{Result: ValueToProto(result)}, nil
+	return &pb.EvaluateCalcResponse{Result: ValueToProtoIn(v.runtime, result, v.cached.Index)}, nil
 }
 
 // calcUsageOutputs evaluates a calc usage from its own member values. It reports
@@ -317,7 +342,7 @@ func (v *verifyContext) calcUsageOutputs(sym *symbols.Symbol) ([]*pb.CalcOutput,
 	for _, out := range outputs {
 		pbOutputs = append(pbOutputs, &pb.CalcOutput{
 			Name:  out.Name,
-			Value: ValueToProto(out.Value),
+			Value: ValueToProtoIn(v.runtime, out.Value, v.cached.Index),
 		})
 	}
 	return pbOutputs, true, nil

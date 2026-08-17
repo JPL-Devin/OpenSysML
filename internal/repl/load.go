@@ -70,7 +70,7 @@ func (s *Session) loadPathsReport(paths []string) (LoadReport, error) {
 		}
 	}
 	found, declared := renderSplit(s.submitFiles(srcs), s.verbosity)
-	return LoadReport{Loaded: loaded, Found: found, Declared: declared, Errors: s.HasErrors()}, nil
+	return LoadReport{Loaded: loaded, Found: found, Declared: declared, Errors: s.hasAnalysisErrors()}, nil
 }
 
 // ExpandPaths turns the paths a caller was given — files, directories to walk

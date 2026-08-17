@@ -1,0 +1,19 @@
+{
+  "rpc": "Instantiate",
+  "symbol_id": "test::Vehicle",
+  "expected_slots": {
+    "d": {
+      "materialized": true,
+      "value_kind": "unset"
+    },
+    "k": {
+      "materialized": true,
+      "value_kind": "real_value",
+      "value": 2.0
+    },
+    "engine": {
+      "materialized": true,
+      "value_kind": "instance_id"
+    }
+  }
+}

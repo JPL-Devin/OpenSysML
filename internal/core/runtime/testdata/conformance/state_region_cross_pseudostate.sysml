@@ -1,5 +1,6 @@
-// A branch that enters a sibling region of the same composite state re-enters
-// that state: the region the branch does not name restarts at its initial state.
+// A branch that enters a sibling region of the same composite state exits its
+// source only: the composite state is not re-entered, and the region the source
+// was active in is left without an active state.
 package Test {
 	state def RegionCrossPseudostate {
 		attribute crossed : Integer = 0;

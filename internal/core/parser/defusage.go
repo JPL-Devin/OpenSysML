@@ -356,6 +356,19 @@ func isKindKeyword(t lexer.Token) bool {
 	return isDef || isUsage
 }
 
+// declarationKindKeyword reports whether parseDefUsage reads this token as the kind
+// of the declaration rather than as its name: `frame` and `render` name the
+// declaration unless they introduce their member form.
+func (p *Parser) declarationKindKeyword(t lexer.Token) bool {
+	if !isKindKeyword(t) {
+		return false
+	}
+	if kw := t.KeywordID; kw == "frame" || kw == "render" {
+		return p.atMemberKeywordUsedAsKeyword(kw)
+	}
+	return true
+}
+
 // namesDeclaration reports whether a kind keyword followed by this token is the
 // name of the declaration rather than its kind. A declaration that ends there
 // (`;`), opens a body (`{`) or is typed (`:`) has nothing else to take its name
@@ -564,6 +577,38 @@ func (p *Parser) parsePostModifiers() featureMods {
 	}
 }
 
+// modifierImpliedKind gives the kind an occurrence modifier declares with no kind
+// keyword after it (SysML.xtext IndividualUsage, PortionUsage, EventOccurrenceUsage).
+func modifierImpliedKind(mods featureMods) (ast.UsageKind, string) {
+	switch {
+	case mods.isIndividual:
+		return ast.UsageIndividual, "individual"
+	case mods.portion == ast.PortionSnapshot:
+		return ast.UsageOccurrence, "snapshot"
+	case mods.portion == ast.PortionTimeslice:
+		return ast.UsageOccurrence, "timeslice"
+	case mods.isEvent:
+		return ast.UsageOccurrence, "event"
+	}
+	return ast.UsageAttribute, ""
+}
+
+// warnAmbiguousModifierKind reports `individual part : Vehicle` and its kin, where
+// the kind keyword sits where a name would and so leaves the usage unnamed. isKind
+// reports which keywords the caller reads as a kind, since a keyword it reads as a
+// name is not ambiguous at all.
+func (p *Parser) warnAmbiguousModifierKind(mods featureMods, isKind func(lexer.Token) bool) {
+	if !mods.isIndividual && !mods.isReference && !mods.isEvent && mods.portion == ast.PortionNone {
+		return
+	}
+	t := p.peek()
+	if !isKind(t) || !namesDeclaration(p.peekN(1)) {
+		return
+	}
+	p.warn(t.Span, "'"+t.KeywordID+"' is read as the kind of this usage, which is therefore unnamed; "+
+		"name the usage after the keyword, or quote the keyword to use it as the name", codeAmbiguousModifierKind)
+}
+
 // parseDefUsage parses a definition or usage declaration. The caller has
 // already established (via atDefUsageStart) that a def/usage begins here.
 func (p *Parser) parseDefUsage(start int) ast.Node {
@@ -621,6 +666,8 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 			return applyPrefixes(p.parseUsage(start, ast.UsageOccurrence, tok.KeywordID, mods, isAll))
 		}
 	}
+
+	p.warnAmbiguousModifierKind(mods, p.declarationKindKeyword)
 
 	// Two-word `use case` kind keyword.
 	if p.atUseCase() {
@@ -890,14 +937,17 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 			return applyPrefixes(p.parseAnonymousEndUsage(start, mods))
 		}
 
-		hasModifiers := mods.direction != ast.DirNone || mods.isReference || mods.isEnd || mods.isComposite || mods.isDerived
+		hasModifiers := mods.direction != ast.DirNone || mods.isReference || mods.isEnd ||
+			mods.isComposite || mods.isDerived || mods.isIndividual || mods.isEvent ||
+			mods.portion != ast.PortionNone
 		hasNameWithMultOrMods := p.atNameOrKeyword() && (p.peekN(1).Kind == lexer.LBracket || p.peekN(1).Kind == lexer.Colon || isPostModifierKeyword(p.peekN(1)))
 		// SysML v2 §7.27.4: a user-defined keyword may declare a usage without
 		// any language-defined keyword (`#cause 'battery old' { ... }`). The
 		// kind of such a usage comes from the metadata, not the syntax.
 		keywordOnlyUsage := len(prefixes) > 0 && (p.at(lexer.Identifier) || p.at(lexer.UnrestrictedName))
 		if hasModifiers || hasNameWithMultOrMods || keywordOnlyUsage {
-			return applyPrefixes(p.parseUsage(start, ast.UsageAttribute, "", mods, false))
+			kind, keyword := modifierImpliedKind(mods)
+			return applyPrefixes(p.parseUsage(start, kind, keyword, mods, false))
 		}
 		return applyPrefixes(nil)
 	}

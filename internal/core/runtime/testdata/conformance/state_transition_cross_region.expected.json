@@ -1,0 +1,8 @@
+{
+  "type": "state",
+  "finalState": "rtarget",
+  "outputs": {
+    "crossed": {"type": "Integer", "value": 1},
+    "reentered": {"type": "Integer", "value": 1}
+  }
+}

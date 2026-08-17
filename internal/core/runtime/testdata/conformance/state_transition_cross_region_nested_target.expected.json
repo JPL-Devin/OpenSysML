@@ -1,0 +1,9 @@
+{
+  "type": "state",
+  "finalState": "rtarget+wrapper",
+  "outputs": {
+    "crossed": {"type": "Integer", "value": 1},
+    "wrapperEntries": {"type": "Integer", "value": 1},
+    "innerExits": {"type": "Integer", "value": 1}
+  }
+}

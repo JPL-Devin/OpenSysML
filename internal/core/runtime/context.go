@@ -77,9 +77,10 @@ type Context struct {
 	// bounding recursion across nested action executors.
 	actionDepth int
 
-	// calcDepth is the number of calc invocations currently on the stack,
-	// bounding recursion across nested calc evaluations.
-	calcDepth int
+	// calcDepth is the number of calc invocations currently on the stack, which
+	// maxCalcDepth bounds, so a recursion evaluates while it stays within it.
+	calcDepth    int
+	maxCalcDepth int64
 
 	// runDepth is the number of runs currently under way, so the step counter is
 	// reset per run rather than accumulated over the context's whole life.
@@ -148,6 +149,7 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		maxStateEvents: DefaultMaxStateEvents,
 		maxDoSteps:     DefaultMaxDoSteps,
 		maxElements:    DefaultMaxElements,
+		maxCalcDepth:   DefaultMaxCalcDepth,
 
 		occurrences:      make(map[*symbols.Symbol]int64),
 		variantObjects:   make(map[variantObject]int64),
@@ -344,8 +346,9 @@ func (ctx *Context) registerInstance(inst *Instance) {
 	ctx.instances[inst.ID] = inst
 }
 
-// EvaluateConstraint evaluates a constraint definition/usage against the
-// declared defaults of the features it refers to.
+// EvaluateConstraint evaluates a constraint definition/usage naming no object:
+// against the single object of this runtime carrying it, the declared defaults
+// when there is none, ErrAmbiguousSubject when there are several.
 // Returns (satisfied, error). If IsAssert=true, violation is an error.
 // If IsAssert=false (assume), always returns (true, nil) but logs assumptions.
 func (ctx *Context) EvaluateConstraint(sym *symbols.Symbol, scope *symbols.Scope) (bool, error) {
@@ -386,24 +389,61 @@ func RequireRequirement(sym *symbols.Symbol) error {
 
 // EvaluateConstraintOn evaluates a constraint against a concrete instance: a
 // feature the constraint names resolves to that instance's slot, so the same
-// constraint can pass for one instance and fail for another. A nil instance
-// evaluates against declared defaults, as EvaluateConstraint does.
+// constraint can pass for one instance and fail for another. An instance that
+// does not carry the constraint itself is searched for the nested object that
+// does; a nil instance leaves the subject to EvaluateConstraint's rule.
 func (ctx *Context) EvaluateConstraintOn(sym *symbols.Symbol, scope *symbols.Scope, self *Instance) (bool, error) {
+	result, err := ctx.CheckConstraintOn(sym, scope, self)
+	return result.Holds, err
+}
+
+// CheckConstraintOn evaluates a constraint as EvaluateConstraintOn does and also
+// reports the object it turned out to be about, which a caller labelling the
+// verdict needs: it is not always the instance supplied.
+func (ctx *Context) CheckConstraintOn(sym *symbols.Symbol, scope *symbols.Scope, self *Instance) (CheckResult, error) {
 	defer ctx.beginRun()()
 
 	if err := RequireConstraint(sym); err != nil {
-		return false, err
+		return CheckResult{Subject: self}, err
+	}
+	subject, err := ctx.checkSubject("constraint", sym.Name, sym, self)
+	if err != nil {
+		return CheckResult{}, err
 	}
 
 	// Evaluate every condition the constraint states, inherited ones included.
 	conds := conditionsOf(ctx.chainMembers(sym, scope))
-	return ctx.evaluateConditions(conditionCheck{
+	holds, err := ctx.evaluateConditions(conditionCheck{
 		sym:     sym,
 		kind:    "constraint",
 		what:    "assertion",
-		self:    self,
+		self:    subject.instance,
 		negated: negatedDecl(sym),
 	}, conds)
+	return ctx.checkResultOf(holds, subject), err
+}
+
+// CheckResult is the outcome of one check: whether it holds, the object its
+// conditions were evaluated against — nil when they were evaluated against the
+// declaration because no object carries the checked element — and, for a nested
+// subject, the object the search started from plus the features walked from it —
+// ending in the declaration the object materializes, as an ambiguity names it —
+// which are how a caller names an object holding no name of its own.
+type CheckResult struct {
+	Holds       bool
+	Subject     *Instance
+	SubjectRoot *Instance
+	SubjectPath string
+}
+
+// checkResultOf reports a verdict about the object a check resolved to.
+func (ctx *Context) checkResultOf(holds bool, subject carrier) CheckResult {
+	return CheckResult{
+		Holds:       holds,
+		Subject:     subject.instance,
+		SubjectRoot: subject.root,
+		SubjectPath: ctx.carrierFeatures(subject),
+	}
 }
 
 // memberBindings evaluates the values members bind by name — a subject or actor
@@ -514,8 +554,8 @@ func bodyScope(sym *symbols.Symbol, fallback *symbols.Scope) *symbols.Scope {
 	return fallback
 }
 
-// EvaluateRequirement evaluates a requirement definition/usage against the
-// declared defaults of the features it refers to.
+// EvaluateRequirement evaluates a requirement definition/usage naming no object,
+// choosing its subject as EvaluateConstraint does.
 // Returns (satisfied, error). Validates subject/actor types and evaluates assume/require expressions.
 // Assume members always pass (trusted), require members must evaluate to true.
 func (ctx *Context) EvaluateRequirement(sym *symbols.Symbol, scope *symbols.Scope) (bool, error) {
@@ -523,13 +563,25 @@ func (ctx *Context) EvaluateRequirement(sym *symbols.Symbol, scope *symbols.Scop
 }
 
 // EvaluateRequirementOn evaluates a requirement against a concrete instance,
-// binding the features it names to that instance's slots. A nil instance
-// evaluates against declared defaults, as EvaluateRequirement does.
+// binding the features it names to that instance's slots. The subject is chosen
+// as EvaluateConstraintOn chooses it, and the subject/actor bindings are
+// evaluated against that same object.
 func (ctx *Context) EvaluateRequirementOn(sym *symbols.Symbol, scope *symbols.Scope, self *Instance) (bool, error) {
+	result, err := ctx.CheckRequirementOn(sym, scope, self)
+	return result.Holds, err
+}
+
+// CheckRequirementOn evaluates a requirement as EvaluateRequirementOn does and
+// also reports the object it turned out to be about.
+func (ctx *Context) CheckRequirementOn(sym *symbols.Symbol, scope *symbols.Scope, self *Instance) (CheckResult, error) {
 	defer ctx.beginRun()()
 
 	if err := RequireRequirement(sym); err != nil {
-		return false, err
+		return CheckResult{Subject: self}, err
+	}
+	subject, err := ctx.checkSubject("requirement", sym.Name, sym, self)
+	if err != nil {
+		return CheckResult{}, err
 	}
 
 	// Requirement-local bindings are shared by every member, whichever scope it
@@ -537,22 +589,23 @@ func (ctx *Context) EvaluateRequirementOn(sym *symbols.Symbol, scope *symbols.Sc
 	members := ctx.chainMembers(sym, scope)
 
 	// First pass: process subject/actor bindings
-	reqBindings, err := ctx.memberBindings(sym, sym.Name, members, self, nil)
+	reqBindings, err := ctx.memberBindings(sym, sym.Name, members, subject.instance, nil)
 
 	if err != nil {
-		return false, err
+		return ctx.checkResultOf(false, subject), err
 	}
 
 	// Second pass: evaluate the assumed and required conditions.
 	conds := conditionsOf(members)
-	return ctx.evaluateConditions(conditionCheck{
+	holds, err := ctx.evaluateConditions(conditionCheck{
 		sym:      sym,
 		kind:     "requirement",
 		what:     "require condition",
-		self:     self,
+		self:     subject.instance,
 		bindings: reqBindings,
 		negated:  negatedDecl(sym),
 	}, conds)
+	return ctx.checkResultOf(holds, subject), err
 }
 
 // ExecuteAction executes an action definition/usage to completion.

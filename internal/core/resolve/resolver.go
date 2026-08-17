@@ -47,6 +47,9 @@ type Resolver struct {
 	memo      map[ast.Node]resolution
 	resolving map[ast.Node]bool // cycle detection
 	parts     map[*ast.QualifiedName][]*symbols.Symbol
+	// endpoints are the vertices transition endpoints resolve to, memoized per
+	// name node: lowering consumes what this tier resolved (see ResolveEndpoint).
+	endpoints map[*ast.QualifiedName]resolution
 	// imports are the import declarations of a namespace-bearing node, found once
 	// and kept: see (*Resolver).importsOf.
 	imports     map[ast.Node][]*ast.Import
@@ -59,8 +62,11 @@ type Resolver struct {
 	inCondition int
 	// nsFilters are the `filter` members of a namespace, extracted once per scope.
 	nsFilters map[*symbols.Scope][]symbols.ElementFilter
-	model     MemberLookup             // Optional *semantics.Model for inheritance-aware member lookup
-	naming    map[*symbols.Symbol]bool // effective names being computed, for cycle detection
+	// payloads are the accept-node payloads a scope's body shares, collected
+	// once per scope: see (*Resolver).acceptPayload.
+	payloads map[*symbols.Scope]map[string]*symbols.Symbol
+	model    MemberLookup             // Optional *semantics.Model for inheritance-aware member lookup
+	naming   map[*symbols.Symbol]bool // effective names being computed, for cycle detection
 	// inheritedImports are the declarations whose supertypes' imports are being
 	// searched, so a specialization cycle ends the walk.
 	inheritedImports map[*symbols.Symbol]bool
@@ -84,9 +90,11 @@ func New(idx *symbols.Index) *Resolver {
 		memo:      map[ast.Node]resolution{},
 		resolving: map[ast.Node]bool{},
 		parts:     map[*ast.QualifiedName][]*symbols.Symbol{},
+		endpoints: map[*ast.QualifiedName]resolution{},
 		imports:   map[ast.Node][]*ast.Import{},
 		naming:    map[*symbols.Symbol]bool{},
 		nsFilters: map[*symbols.Scope][]symbols.ElementFilter{},
+		payloads:  map[*symbols.Scope]map[string]*symbols.Symbol{},
 
 		suggestions: map[suggestKey][]string{},
 		suggesting:  map[suggestKey]bool{},

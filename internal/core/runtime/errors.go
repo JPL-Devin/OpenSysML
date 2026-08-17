@@ -97,8 +97,8 @@ var (
 	ErrNoClock = errors.New("no clock to wait on")
 
 	// ErrCalcRecursionLimit is returned when calc invocation nests deeper than
-	// maxCalcNestingDepth, which a recursive calc would otherwise do until the
-	// process ran out of stack.
+	// the run's calc depth budget, which an unbounded recursion would otherwise
+	// do until the process ran out of stack.
 	ErrCalcRecursionLimit = errors.New("calc recursion limit exceeded")
 
 	// ErrViolated is returned when an asserted constraint or a required
@@ -170,11 +170,10 @@ var (
 	// hand back and is read through a calc usage's output features instead.
 	ErrAmbiguousResult = errors.New("calculation has no single result")
 
-	// ErrIndexOutOfRange is returned when a sequence index names no position of
-	// the sequence it indexes. Sequence indices are 1-based (KerML
-	// SequenceFunctions::'#' takes `index: Positive[1]`), so 0 is out of range
-	// as much as size+1 is.
-	ErrIndexOutOfRange = errors.New("sequence index out of range")
+	// ErrIndexOutOfRange is returned when an index names no position of the
+	// sequence or string it indexes; indices are 1-based, so 0 is out of range
+	// as much as size+1 is, and each operation names what it indexed.
+	ErrIndexOutOfRange = errors.New("index out of range")
 
 	// ErrBodyArity is returned when the body expression a collection operation
 	// is given declares a number of parameters the operation cannot call it
@@ -201,6 +200,10 @@ var (
 	// variant, which selects no single configuration.
 	ErrMultipleVariants = errors.New("more than one variant selected")
 
+	// ErrNotALiteral is returned when a name qualified by an enumeration
+	// definition names something the enumeration does not declare as a literal.
+	ErrNotALiteral = errors.New("not a literal of the enumeration")
+
 	// ErrConflictingRedefinition is returned when one declaration values the
 	// same feature under two of its names: a redefinition renames one feature,
 	// so which of the two values it holds would be a silent pick.
@@ -210,6 +213,12 @@ var (
 	// value and given a body restating features of it: the bound value supplies
 	// those features, so the restatement could only be silently dropped.
 	ErrValuedFeatureRestated = errors.New("feature both valued and restated in a body")
+
+	// ErrSlotMaterialization marks an error as a slot that could not be
+	// materialized, whatever kept it from materializing. Reading a slot is what
+	// finds such a failure, so a surface reporting one answered nothing about
+	// that slot rather than deciding anything about the model.
+	ErrSlotMaterialization = errors.New("slot could not be materialized")
 
 	// ErrNoSubject is returned when the feature a satisfaction assertion names
 	// with `by` cannot supply a subject: it resolves to nothing, or no object of
@@ -232,6 +241,17 @@ func (e *ViolationError) Error() string {
 }
 
 func (e *ViolationError) Unwrap() error { return ErrViolated }
+
+// SlotError marks a slot that could not be materialized. It reads as the error
+// that kept the slot from materializing and unwraps to it as well as to
+// ErrSlotMaterialization, so a caller tests either.
+type SlotError struct {
+	Err error
+}
+
+func (e *SlotError) Error() string { return e.Err.Error() }
+
+func (e *SlotError) Unwrap() []error { return []error{ErrSlotMaterialization, e.Err} }
 
 // OperandTypeError reports an operator applied to operand types it is not
 // defined for, naming the operator and both operands and carrying the span of

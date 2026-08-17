@@ -1,0 +1,42 @@
+// A composite state that self-transitions inside an orthogonal region is exited
+// and re-entered like any other external transition, and its sibling region is
+// left untouched.
+package Test {
+	state Machine {
+		attribute log : Integer = 0;
+
+		initial start;
+		state Outer {
+			region left {
+				initial lstart;
+				state Grouping {
+					entry { log = log * 10 + 1; }
+					exit { log = log * 10 + 2; }
+
+					region inner {
+						initial gstart;
+						state g1 {
+							entry { log = log * 10 + 3; }
+							exit { log = log * 10 + 4; }
+						}
+
+						then gstart g1;
+					}
+				}
+
+				then lstart Grouping;
+				transition Grouping to Grouping when restart do assign log := log * 10 + 9;
+			}
+			region right {
+				initial rstart;
+				state Watching {
+					entry { log = log * 10 + 7; }
+				}
+
+				then rstart Watching;
+			}
+		}
+
+		start then Outer;
+	}
+}

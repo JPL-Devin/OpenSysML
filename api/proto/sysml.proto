@@ -53,6 +53,7 @@ enum FailureReason {
   FAILURE_REASON_UNSPECIFIED = 0;  // no failure, or one not classified
   FAILURE_REASON_EVALUATION = 1;   // the condition or calculation could not be evaluated
   FAILURE_REASON_WRONG_KIND = 2;   // the symbol named declares something else
+  FAILURE_REASON_AMBIGUOUS_SUBJECT = 3;  // several objects carry the element; name one as the subject
 }
 
 // Verdict is one verification's answer: whether the condition held, and, when
@@ -228,6 +229,9 @@ message EvaluateRequest {
   string model_hash = 1;        // from ParseFile response
   string expression = 2;         // SysML expression string (e.g., "2 + 2")
   string context_symbol_id = 3; // optional: symbol FQN for context scope
+  // optional: FQN to instantiate and evaluate against, so a feature reads that
+  // object's value rather than the declared default (as %eval after %instantiate)
+  string subject_symbol_id = 4;
 }
 
 // EvaluateResponse contains evaluation result
@@ -377,8 +381,7 @@ message TypeInfo {
   // Origin of `primitive`: "declared" (from the declared or inherited type),
   // "value" (inferred from the default value), or empty.
   string primitive_source = 5;
-  // Values carry a measurement unit. The wire Value has no quantity form, so
-  // such a slot reads as unsupported.
+  // Values carry a measurement unit, so such a slot holds a Quantity.
   bool quantity = 6;
   // Unit as written when the default value names one ("m/s"), else empty.
   string unit = 7;
@@ -409,11 +412,62 @@ message Value {
     int64 instance_id = 5;      // reference to Instance
     ValueSequence sequence = 6;
     string null = 7;            // marker for null (empty string)
+    Quantity quantity = 8;      // magnitude and the unit it is expressed in
+    EnumLiteral enum_literal = 9;
+    // A valueless feature of a value type: materialized, holding no value.
+    // Always true when set; a value the server sends, never one it accepts.
+    bool unset = 10;
   }
+}
+
+// EnumLiteral is one literal of an enumeration definition. A literal is its own
+// identity, so it travels as the declaration it names rather than as a number
+// or a string: two values are the same literal exactly when `literal_id` is.
+message EnumLiteral {
+  // FQN of the literal's declaration ("D::Color::red"). Its identity.
+  string literal_id = 1;
+  // FQN of the enumeration definition declaring it ("D::Color").
+  string enumeration_id = 2;
+  // The literal as a reader writes it ("Color::red").
+  string name = 3;
 }
 
 message ValueSequence {
   repeated Value elements = 1;
+}
+
+// Quantity is a magnitude and the measurement reference it is expressed in, sent
+// in the unit written: `5.4 [km/h]` crosses as 5.4 `km/h`, not as 1.5 `m/s`.
+message Quantity {
+  // Magnitude, keeping Integer and Real apart as the rest of Value does.
+  oneof magnitude {
+    int64 int_magnitude = 1;
+    double real_magnitude = 2;
+  }
+  // Unit as written ("km/h") or as an operation composed it ("m/s"); empty for
+  // one never written down, described by unit_term alone.
+  string unit = 3;
+  // What the unit reduces to, which decides commensurability and conversion.
+  // Required wherever `unit` names one: a named unit sent without its reduction
+  // is rejected rather than read as dimension one.
+  UnitTerm unit_term = 4;
+}
+
+// UnitTerm is a unit reduced to a scale factor over base units: `km/h` reduces
+// to 1000/3600 over `SI::m` and `SI::s^-1`.
+message UnitTerm {
+  // Scale as an unevaluated ratio, so an exact conversion stays exact.
+  double scale_num = 1;
+  double scale_den = 2;
+  // Base units of the reduction, carrying no zero exponents.
+  repeated UnitFactor factors = 3;
+}
+
+// UnitFactor is one base unit raised to an exponent.
+message UnitFactor {
+  // FQN of the base unit ("SI::m"), naming it across processes.
+  string unit_id = 1;
+  double exponent = 2;
 }
 
 // Diagnostic represents a parse/semantic error or warning
@@ -455,6 +509,11 @@ message ServerInfoResponse {
   //                  questions the REPL's %constraint, %requirement, %satisfy
   //                  and %calc answer.
   //   "query"      - the Query RPC evaluates a SysML v2 API & Services Query.
+  //   "enum_values" - a Value carries an enumeration literal as enum_literal,
+  //                  rather than reporting it as an unsupported null.
+  //   "unset_value" - a valueless feature of a value type is reported as
+  //                  Value.unset, rather than as the empty object it
+  //                  materializes.
   repeated string capabilities = 2;
 }
 

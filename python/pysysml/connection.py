@@ -2,17 +2,20 @@
 
 import atexit
 import grpc
+import json
 import os
 import psutil
 import subprocess
 import time
 import warnings
+from typing import Any, Dict, Tuple
 from filelock import FileLock, Timeout
 from pysysml.proto import sysml_pb2, sysml_pb2_grpc
 from pysysml.model import Model
 from pysysml.binary import cached_release, ensure_binary, resolve_latest_version
 from pysysml.capabilities import (
     CAPABILITY_CONVERT,
+    CAPABILITY_EVALUATE_SUBJECT,
     CAPABILITY_QUERY,
     CAPABILITY_VERIFICATION,
     ServerInfo,
@@ -22,6 +25,7 @@ from pysysml.capabilities import (
 )
 from pysysml.conversion import Conversion
 from pysysml.diagnostic import Diagnostic
+from pysysml.enumeration import EnumLiteral
 from pysysml.errors import (
     ChecksumMismatchError,
     ConnectionError,
@@ -31,13 +35,14 @@ from pysysml.errors import (
     ModelNotFoundError,
     PySysMLError,
     StaleServiceError,
+    UnpinnedReleaseError,
     UnsupportedValueError,
     WrongKindError,
     from_rpc_error,
     translate_rpc_errors,
 )
 from pysysml.query import build_query, elements_of
-from pysysml.values import value_to_python
+from pysysml.values import Quantity, value_to_python
 from pysysml.verdict import CalcResult, Verdict
 
 
@@ -46,6 +51,40 @@ DEFAULT_PORT = 50051
 
 #: A required release not looked up yet, distinct from 'none required'.
 _UNRESOLVED = object()
+
+#: Directory the lockfile and ownership records live in. $PYSYSML_STATE_DIR
+#: overrides it, so a test or a sandbox can run a service beside another's.
+STATE_DIR_ENV = 'PYSYSML_STATE_DIR'
+
+#: Start times are floats read back from JSON, so they are compared to the
+#: resolution the platform reports rather than for equality.
+_START_TIME_TOLERANCE = 1e-3
+
+#: Seconds a service started here is given to answer, sleeping or probing.
+START_TIMEOUT = 2.5
+
+#: Delay before the second probe, doubled up to START_PROBE_MAX_DELAY. The first
+#: probe is immediate, so a service answering in milliseconds is not waited out.
+START_PROBE_INITIAL_DELAY = 0.01
+
+#: Longest delay between probes, so a slow start costs a bounded probe count.
+START_PROBE_MAX_DELAY = 0.25
+
+#: RPC timeout of one probe. A port nothing listens on refuses the connection in
+#: about a millisecond, so an immediate probe does not spend this.
+START_PROBE_RPC_TIMEOUT = 2.0
+
+#: How long the service started here is given to exit before an answer from an
+#: address it cannot yet have bound is attributed to it. One that could not bind
+#: exits at once, so this is spent only when something else already answers.
+START_CONFIRM_DELAY = 0.5
+
+#: Services this process spawned, keyed by state directory and port, each with
+#: the count of live connections holding it. Ownership does not outlive the
+#: process that spawned a service, so it is not shared through a file: no other
+#: process may stop that service, and this one stops it when its own last
+#: reference is released.
+_OWNED_SERVICES: Dict[Tuple[str, int], Dict[str, Any]] = {}
 
 
 def split_target(host, port=None):
@@ -118,112 +157,149 @@ def _raise_wrong_kind(pb_verdict, diagnostics):
         raise WrongKindError(pb_verdict.error, diagnostics=diagnostics)
 
 
-def _get_lockfile_path():
-    """Get path to service lockfile."""
-    pysysml_dir = os.path.expanduser('~/.pysysml')
-    os.makedirs(pysysml_dir, exist_ok=True)
-    return os.path.join(pysysml_dir, 'sysml-grpc.lock')
+def _state_dir():
+    """Directory the lockfile and ownership records are kept in.
 
-
-def _get_pidfile_path():
-    """Get path to service PID file."""
-    pysysml_dir = os.path.expanduser('~/.pysysml')
-    return os.path.join(pysysml_dir, 'sysml-grpc.pid')
-
-
-def _get_refcount_path():
-    """Get path to service reference count file."""
-    pysysml_dir = os.path.expanduser('~/.pysysml')
-    return os.path.join(pysysml_dir, 'sysml-grpc.refcount')
-
-
-def _increment_refcount():
-    """Increment service reference count. Caller must hold lockfile."""
-    refcount_path = _get_refcount_path()
-    os.makedirs(os.path.dirname(refcount_path), exist_ok=True)
-    
-    if os.path.exists(refcount_path):
-        with open(refcount_path, 'r') as f:
-            count = int(f.read().strip())
-    else:
-        count = 0
-    
-    count += 1
-    with open(refcount_path, 'w') as f:
-        f.write(str(count))
-    return count
-
-
-def _decrement_refcount():
-    """Decrement service reference count. Caller must hold lockfile."""
-    refcount_path = _get_refcount_path()
-    if not os.path.exists(refcount_path):
-        return 0
-    
-    with open(refcount_path, 'r') as f:
-        count = int(f.read().strip())
-    
-    count = max(0, count - 1)
-    if count > 0:
-        with open(refcount_path, 'w') as f:
-            f.write(str(count))
-    else:
-        os.remove(refcount_path)
-    return count
-
-
-def _is_pidfile_stale():
-    """Check if pidfile refers to dead/wrong process. Returns (stale, live_process).
-    
-    Caller must hold lockfile.
-    
     Returns:
-        tuple: (bool stale, psutil.Process or None)
-               - (True, None): pidfile doesn't exist or points to dead process
-               - (True, proc): pidfile points to wrong process (PID reused)
-               - (False, proc): pidfile valid, process is sysml-grpc
+        str: $PYSYSML_STATE_DIR, or ~/.pysysml
     """
-    pidfile_path = _get_pidfile_path()
-    if not os.path.exists(pidfile_path):
-        return (True, None)
-    
+    return os.path.expanduser(os.environ.get(STATE_DIR_ENV) or '~/.pysysml')
+
+
+def _get_lockfile_path(port):
+    """Path of the lockfile serializing starts of the service on a port."""
+    state_dir = _state_dir()
+    os.makedirs(state_dir, exist_ok=True)
+    return os.path.join(state_dir, f'sysml-grpc-{port}.lock')
+
+
+def _get_pidfile_path(port):
+    """Path of the ownership record of the service on a port.
+
+    One service listens per port, so its record is named after the port: a
+    second service on another port is not the first one's record rewritten.
+    """
+    return os.path.join(_state_dir(), f'sysml-grpc-{port}.pid')
+
+
+def _service_key(port):
+    """Key a service is held under while this process owns it."""
+    return (_state_dir(), port)
+
+
+def _write_ownership_record(port, pid, create_time):
+    """Record which process is the service on a port, and which process spawned it.
+
+    The start time is written beside the pid so the record authenticates the
+    process it names: a pid reused by an unrelated process fails the check
+    instead of being taken for the service. Caller must hold the lockfile.
+
+    Args:
+        port (int): Port the service listens on
+        pid (int): Process id of the service
+        create_time (float): Start time psutil reports for that process
+
+    Returns:
+        dict: The record written
+    """
+    owner = psutil.Process()
+    record = {
+        'pid': pid,
+        'create_time': create_time,
+        'port': port,
+        'owner_pid': owner.pid,
+        'owner_create_time': owner.create_time(),
+    }
+    path = _get_pidfile_path(port)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, 'w') as f:
+        json.dump(record, f)
+    return record
+
+
+def _read_ownership_record(port):
+    """The ownership record for the service on a port, or None when there is none.
+
+    Caller must hold the lockfile.
+
+    Returns:
+        dict or None: What was recorded, or None when nothing readable was
+    """
     try:
-        with open(pidfile_path, 'r') as f:
-            pid = int(f.read().strip())
-        
-        process = psutil.Process(pid)
-        
-        # Verify process is actually sysml-grpc (not PID reuse)
-        cmdline = ' '.join(process.cmdline())
-        if 'sysml-grpc' in cmdline:
-            return (False, process)  # Valid
-        else:
-            return (True, process)  # PID reused by different process
-            
-    except (psutil.NoSuchProcess, psutil.AccessDenied, ValueError, OSError):
-        return (True, None)
+        with open(_get_pidfile_path(port), 'r') as f:
+            record = json.load(f)
+    except (OSError, ValueError):
+        return None
+    if not isinstance(record, dict) or not isinstance(record.get('pid'), int):
+        return None
+    return record
 
 
-def _read_refcount():
-    """How many clients hold a reference to the service. Caller must hold lockfile."""
-    refcount_path = _get_refcount_path()
+def _started_at(recorded, actual):
+    """Whether a recorded start time is the one a process reports."""
+    if not isinstance(recorded, (int, float)) or isinstance(recorded, bool):
+        return False
+    return abs(float(recorded) - actual) <= _START_TIME_TOLERANCE
+
+
+def _authenticate_record(record):
+    """The live service process a record names, or None when it names none.
+
+    Identity is the pid together with the start time recorded for it, so a pid
+    the operating system has since handed to an unrelated process is not taken
+    for the service and is never signalled.
+
+    Args:
+        record (dict): An ownership record
+
+    Returns:
+        psutil.Process or None: The process, or None when the record is stale
+    """
     try:
-        with open(refcount_path, 'r') as f:
-            return int(f.read().strip())
-    except (FileNotFoundError, ValueError):
-        return 0
+        process = psutil.Process(record['pid'])
+        create_time = process.create_time()
+    except (psutil.Error, KeyError, OSError, TypeError, ValueError):
+        return None
+    if not _started_at(record.get('create_time'), create_time):
+        return None
+    return process
 
 
-def _remove_service_state():
-    """Forget the pidfile and refcount of a service that is gone.
+def _recorded_service(port):
+    """The record for the service on a port and the live process it authenticates.
+
+    Caller must hold the lockfile.
+
+    Returns:
+        tuple[dict or None, psutil.Process or None]: The record, and the process
+            it names when that process is still the one recorded
+    """
+    record = _read_ownership_record(port)
+    if record is None:
+        return (None, None)
+    return (record, _authenticate_record(record))
+
+
+def _recorded_by_this_process(record):
+    """Whether this process wrote a record, so the service it names is its own.
+
+    The spawner's start time is checked too: a record left behind by a process
+    whose pid this one has since been given is not this process's ownership.
+    """
+    if record is None or record.get('owner_pid') != os.getpid():
+        return False
+    return _started_at(record.get('owner_create_time'), psutil.Process().create_time())
+
+
+def _remove_service_state(port):
+    """Forget the ownership record of a service that is gone.
 
     Caller must hold the lockfile.
     """
-    for path in (_get_pidfile_path(), _get_refcount_path()):
-        try:
-            os.remove(path)
-        except FileNotFoundError:
-            pass
+    try:
+        os.remove(_get_pidfile_path(port))
+    except FileNotFoundError:
+        pass
 
 
 def _stop_process(process):
@@ -298,8 +374,10 @@ class Connection:
         # Refined by _ensure_service, which knows how it was reached.
         self._origin = f"service at {self._address} (not started by this client)"
         self._server_info = None
-        # Only connections that took a reference may release one on close.
+        # Only connections that took a reference may release one on close, and
+        # only against the service identity it was taken on.
         self._holds_refcount = False
+        self._referenced_service = None
         self._version = version or os.environ.get('PYSYSML_GRPC_VERSION') or None
         self._required_capabilities = frozenset(require_capabilities or ())
         self._resolved_release = _UNRESOLVED
@@ -360,7 +438,7 @@ class Connection:
             )
 
     def close(self):
-        """Close the gRPC channel and decrement refcount."""
+        """Close the gRPC channel and release any reference on the service."""
         if self._channel:
             self._channel.close()
         self._cleanup_service()
@@ -616,13 +694,22 @@ class Connection:
         
         return response.symbol
     
-    def eval(self, expression, model_hash, context_symbol_id=None):
+    def eval(
+        self,
+        expression,
+        model_hash,
+        context_symbol_id=None,
+        subject_symbol_id=None,
+    ):
         """Evaluate a SysML expression.
         
         Args:
             expression (str): SysML expression (e.g., "2 + 2")
             model_hash (str): Hash from ParseFile response
             context_symbol_id (str, optional): Symbol FQN for context scope
+            subject_symbol_id (str, optional): FQN of a part/usage to
+                instantiate and evaluate against, so a feature reads that
+                object's value rather than the declared default
             
         Returns:
             Value from expression (int, float, bool, str, Instance, etc.)
@@ -632,10 +719,20 @@ class Connection:
             ModelNotFoundError: If the service no longer holds the model
             UnsupportedValueError: If the result cannot be represented on the wire
         """
+        if subject_symbol_id:
+            # A service that ignores the subject would answer with the declared
+            # default, which is indistinguishable from the object's own value.
+            require(
+                self.server_info(),
+                CAPABILITY_EVALUATE_SUBJECT,
+                upgrade_remedy(CAPABILITY_EVALUATE_SUBJECT),
+            )
+
         req = sysml_pb2.EvaluateRequest(
             model_hash=model_hash,
             expression=expression,
-            context_symbol_id=context_symbol_id or ""
+            context_symbol_id=context_symbol_id or "",
+            subject_symbol_id=subject_symbol_id or "",
         )
         
         with translate_rpc_errors():
@@ -951,6 +1048,14 @@ class Connection:
             return sysml_pb2.Value(null="")
         elif isinstance(py_value, Instance):
             return sysml_pb2.Value(instance_id=py_value.id)
+        elif isinstance(py_value, Quantity):
+            return sysml_pb2.Value(quantity=py_value.to_pb())
+        elif isinstance(py_value, EnumLiteral):
+            return sysml_pb2.Value(enum_literal=sysml_pb2.EnumLiteral(
+                literal_id=py_value.literal_id,
+                enumeration_id=py_value.enumeration_id,
+                name=py_value.name,
+            ))
         elif isinstance(py_value, list):
             elements = [self._python_to_value(v) for v in py_value]
             return sysml_pb2.Value(sequence=sysml_pb2.ValueSequence(elements=elements))
@@ -1063,24 +1168,43 @@ class Connection:
         return self._resolved_release
 
     def _started_by_this_client(self):
-        """The service process this client's records say it started on this port.
+        """The service process this process spawned on this port, if it still runs.
 
-        Ownership is read from the pidfile and the process's command line, so a
-        service the user started is never taken for one of ours.
+        Ownership is read from the record this process wrote, and the process it
+        names is authenticated by its start time, so neither a service someone
+        else started nor an unrelated process holding a reused pid is ever taken
+        for one of ours. Caller must hold the lockfile.
 
         Returns:
             psutil.Process or None: The owned process, or None if there is none
         """
-        stale, process = _is_pidfile_stale()
-        if stale or process is None:
-            return None
-        try:
-            cmdline = process.cmdline()
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
-            return None
-        if cmdline[-2:] != ['-port', str(self.port)]:
+        record, process = _recorded_service(self.port)
+        if process is None or not _recorded_by_this_process(record):
             return None
         return process
+
+    def _owned_service(self):
+        """The bookkeeping for a service this process spawned on this port.
+
+        Returns:
+            dict or None: Its recorded identity and reference count, or None
+                when this process owns no service on the port
+        """
+        return _OWNED_SERVICES.get(_service_key(self.port))
+
+    def _take_ownership_reference(self):
+        """Hold the service this process spawned until this connection is closed.
+
+        Caller must hold the lockfile. The last reference released stops the
+        service, so every reference taken is released exactly once.
+        """
+        owned = self._owned_service()
+        if owned is None or self._holds_refcount:
+            return
+        owned['refs'] += 1
+        self._holds_refcount = True
+        self._referenced_service = (owned['pid'], owned['create_time'])
+        atexit.register(self._cleanup_service)
 
     def _adopt_running_service(self):
         """Take over the service already listening, or make room for the one asked for.
@@ -1137,25 +1261,31 @@ class Connection:
         return False
 
     def _hold_running_service(self, info):
-        """Take a reference on the service already listening.
+        """Attach to the service already listening, taking ownership only if it is ours.
 
-        Caller must hold the lockfile. ``info`` is None when the handshake could
-        not be made, so it is asked again over the connection's own channel.
+        A service this process did not spawn is used and left alone: no
+        reference is taken and no record is written, so closing this connection
+        never stops a service somebody else owns. Caller must hold the lockfile.
+        ``info`` is None when the handshake could not be made, so it is asked
+        again over the connection's own channel.
         """
         self._server_info = info
-        _increment_refcount()
-        self._holds_refcount = True
-        atexit.register(self._cleanup_service)
+        if self._started_by_this_client() is None:
+            return
+        self._take_ownership_reference()
 
     def _replacement_serves(self, required):
         """Whether starting the binary would serve the release asked for.
 
         Stopping a service to start the same build gains nothing, so a
         replacement that cannot differ is reported instead of made. A download
-        failing its checksum is raised, never read as "the same build".
+        failing its checksum is raised, never read as "the same build"; a
+        release this pysysml pins nothing for is only a build it cannot get.
         """
         try:
             ensure_binary(version=self._version)
+        except UnpinnedReleaseError:
+            return False
         except ChecksumMismatchError:
             raise
         except PySysMLError:
@@ -1188,13 +1318,14 @@ class Connection:
                 f"is running by unsetting $PYSYSML_GRPC_VERSION",
                 info=info,
             )
-        holders = _read_refcount()
+        owned = self._owned_service()
+        holders = owned['refs'] if owned else 0
         if holders > 0:
             raise StaleServiceError(
                 self._address, reason,
-                f"{holders} other pysysml connection(s) still hold this "
-                f"service, so it is not this client's to stop; close them and "
-                f"retry, or reach a service of your own with "
+                f"{holders} other pysysml connection(s) in this process still "
+                f"hold this service, so it is not this client's to stop; close "
+                f"them and retry, or reach a service of your own with "
                 f"connect(port=<other port>)",
                 info=info,
             )
@@ -1220,42 +1351,36 @@ class Connection:
             RuntimeWarning,
             stacklevel=2,
         )
-        _remove_service_state()
+        _OWNED_SERVICES.pop(_service_key(self.port), None)
+        _remove_service_state(self.port)
 
     def _ensure_service(self):
         """Ensure sysml-grpc service is running, with lockfile coordination.
         
         Uses filelock to coordinate between multiple Python processes.
         If service already running, returns immediately.
-        Otherwise, acquires lock and starts service.
+        Otherwise, acquires lock and starts service, which is probed at once and
+        then on a backoff bounded by START_TIMEOUT.
         
         Raises:
             ConnectionError: If service cannot be started or lockfile timeout
         """
-        lockfile_path = _get_lockfile_path()
+        lockfile_path = _get_lockfile_path(self.port)
         lock = FileLock(lockfile_path, timeout=30)
         
         try:
             with lock:
-                # Check for stale pidfile (SIGKILL'd process, PID reuse, etc.)
-                stale, proc = _is_pidfile_stale()
-                if stale:
-                    # Clean up stale state (use try/except to handle TOCTOU races)
-                    pidfile_path = _get_pidfile_path()
-                    refcount_path = _get_refcount_path()
-                    try:
-                        if os.path.exists(pidfile_path):
-                            os.remove(pidfile_path)
-                    except FileNotFoundError:
-                        pass  # Another process already removed it
-                    try:
-                        if os.path.exists(refcount_path):
-                            os.remove(refcount_path)
-                    except FileNotFoundError:
-                        pass  # Another process already removed it
+                # A record whose process is gone, or whose pid another process
+                # now holds, is a service that crashed: it is cleaned, never
+                # trusted, and the process it named is never signalled.
+                record, process = _recorded_service(self.port)
+                if record is not None and process is None:
+                    _OWNED_SERVICES.pop(_service_key(self.port), None)
+                    _remove_service_state(self.port)
                 
                 # Check if service already running (another process may have started it)
-                if self._probe_service(self.host, self.port):
+                answered_before_start = self._probe_service(self.host, self.port)
+                if answered_before_start:
                     self._origin = (
                         f"service already listening on {self._address}, "
                         f"not started by this client"
@@ -1279,30 +1404,39 @@ class Connection:
                 
                 self._process = process
                 
-                # Wait for service to become healthy
-                max_retries = 5
-                retry_delay = 0.5
-                
-                for attempt in range(max_retries):
-                    time.sleep(retry_delay)
+                # Wait for service to become healthy, probing at once and then
+                # backing off: the service answers in milliseconds, so sleeping
+                # first would be the whole cost of starting it.
+                deadline = time.monotonic() + START_TIMEOUT
+                delay = START_PROBE_INITIAL_DELAY
+                # An answer is the started service's own unless something was
+                # already answering the address and has not stopped since.
+                its_own_answer = not answered_before_start
+
+                while True:
                     # One that could not bind the address exits and leaves the
                     # old service answering the probe.
                     if process.poll() is not None:
                         self._service_started_here_died(process.poll())
-                    if self._probe_service(self.host, self.port, timeout=2.0):
-                        # Write PID file for reference counting
-                        pidfile_path = _get_pidfile_path()
-                        os.makedirs(os.path.dirname(pidfile_path), exist_ok=True)
-                        with open(pidfile_path, 'w') as f:
-                            f.write(f"{process.pid}\n")
-                        
-                        # Increment refcount
-                        _increment_refcount()
-                        self._holds_refcount = True
-                        
-                        # Register cleanup
-                        atexit.register(self._cleanup_service)
+                    # A port that accepts without answering would spend a probe's
+                    # whole timeout, so no probe outlives the deadline either.
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        break
+                    if self._probe_service(
+                        self.host, self.port,
+                        timeout=min(START_PROBE_RPC_TIMEOUT, remaining),
+                    ):
+                        if not its_own_answer:
+                            self._wait_for_a_service_that_could_not_bind(process)
+                        self._own_spawned_service(process)
                         return
+                    its_own_answer = True
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        break
+                    time.sleep(min(delay, remaining))
+                    delay = min(delay * 2, START_PROBE_MAX_DELAY)
                 
                 # Service didn't start in time
                 # Cleanup without decrementing refcount (service never became healthy)
@@ -1314,7 +1448,7 @@ class Connection:
                         self._process.kill()
                         self._process.wait()
                     self._process = None
-                raise ConnectionError(f"Service failed to start within {max_retries * retry_delay}s")
+                raise ConnectionError(f"Service failed to start within {START_TIMEOUT}s")
                 
         except Timeout:
             raise ConnectionError(
@@ -1322,6 +1456,52 @@ class Connection:
                 f"Another process may be starting the service."
             )
     
+    def _wait_for_a_service_that_could_not_bind(self, process):
+        """Report a started service that exits rather than serving the address.
+
+        A service that could not bind the address exits at once, so an answer
+        the started one cannot yet have given is attributed to it only after it
+        is given START_CONFIRM_DELAY to exit. Only an address something already
+        answers is waited on.
+
+        Args:
+            process (subprocess.Popen): The service this connection started
+
+        Raises:
+            StaleServiceError: If it exited while another service answers
+        """
+        try:
+            exit_code = process.wait(timeout=START_CONFIRM_DELAY)
+        except subprocess.TimeoutExpired:
+            return
+        self._service_started_here_died(exit_code)
+
+    def _own_spawned_service(self, process):
+        """Record the service started here, authenticated, and hold a reference.
+
+        Args:
+            process (subprocess.Popen): The service this connection started
+
+        Raises:
+            StaleServiceError: If it exited after answering and another service
+                still serves the address
+            ConnectionError: If it exited after answering and nothing does
+        """
+        try:
+            spawned = psutil.Process(process.pid)
+            create_time = spawned.create_time()
+        except psutil.Error:
+            # Gone between answering and being recorded, so whatever serves the
+            # address is not what was started here.
+            self._service_started_here_died(process.poll())
+        record = _write_ownership_record(self.port, process.pid, create_time)
+        _OWNED_SERVICES[_service_key(self.port)] = {
+            'pid': record['pid'],
+            'create_time': record['create_time'],
+            'refs': 0,
+        }
+        self._take_ownership_reference()
+
     def _service_started_here_died(self, exit_code):
         """Report a service started here that exited instead of serving.
 
@@ -1334,7 +1514,7 @@ class Connection:
             ConnectionError: If nothing serves the address
         """
         self._process = None
-        if self._probe_service(self.host, self.port, timeout=2.0):
+        if self._probe_service(self.host, self.port, timeout=START_PROBE_RPC_TIMEOUT):
             raise StaleServiceError(
                 self._address,
                 f"the service started here exited ({exit_code}) while another "
@@ -1348,55 +1528,38 @@ class Connection:
         )
 
     def _cleanup_service(self):
-        """Clean up service process with reference counting."""
+        """Release this connection's reference, stopping the service if it was the last.
+
+        Only a connection that took a reference releases one, and only a service
+        this process spawned is ever stopped. The reference is dropped before the
+        service is stopped, so a second call cannot stop it twice.
+        """
         if self._cleaned_up or not self._holds_refcount:
             return
         self._cleaned_up = True
         self._holds_refcount = False
-        
-        lockfile_path = _get_lockfile_path()
-        lock = FileLock(lockfile_path, timeout=5)
-        
+        self._process = None
+
+        key = _service_key(self.port)
+        owned = _OWNED_SERVICES.get(key)
+        # A service that crashed is replaced under the same key, and a reference
+        # taken on the one that died is not a reference on its replacement.
+        if owned is None or (owned['pid'], owned['create_time']) != self._referenced_service:
+            return
+        owned['refs'] -= 1
+        if owned['refs'] > 0:
+            return
+        del _OWNED_SERVICES[key]
+
+        lock = FileLock(_get_lockfile_path(self.port), timeout=5)
         with lock:
-            new_count = _decrement_refcount()
-            
-            if new_count == 0:
-                # Last connection - shut down service
-                pidfile_path = _get_pidfile_path()
-                
-                if os.path.exists(pidfile_path):
-                    with open(pidfile_path, 'r') as f:
-                        pid = int(f.read().strip())
-                    
-                    process = None
-                    try:
-                        process = psutil.Process(pid)
-                        
-                        # Verify this is our process before terminating
-                        cmdline = process.cmdline()
-                        if not any('sysml-grpc' in arg for arg in cmdline):
-                            # Stale PID file - process is not sysml-grpc
-                            os.remove(pidfile_path)
-                            return
-                        
-                        # Safe to terminate
-                        process.terminate()
-                        process.wait(timeout=5)
-                    except psutil.AccessDenied:
-                        # Can't access process - clean up file
-                        os.remove(pidfile_path)
-                        return
-                    except (psutil.NoSuchProcess, psutil.TimeoutExpired) as e:
-                        if process and isinstance(e, psutil.TimeoutExpired):
-                            try:
-                                if process.is_running():
-                                    process.kill()
-                            except psutil.NoSuchProcess:
-                                pass
-                    
-                    # Clean up PID file
-                    os.remove(pidfile_path)
-        
-        # Clean up instance state
-        if self._process:
-            self._process = None
+            record, process = _recorded_service(self.port)
+            if record is None or (record['pid'], record['create_time']) != (
+                owned['pid'], owned['create_time']
+            ):
+                # Another service holds the port now; its record is not ours to
+                # remove and its process is not ours to stop.
+                return
+            if process is not None:
+                _stop_process(process)
+            _remove_service_state(self.port)

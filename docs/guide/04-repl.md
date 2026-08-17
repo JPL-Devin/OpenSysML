@@ -38,7 +38,33 @@ Two properties of the session model are worth knowing before a long session:
   running. What is dropped is reported as a `note:` line saying what to re-run.
 
 `%list` shows the session's declarations, `%clear` resets it, and `%save` writes it out
-([chapter 7](07-saving-and-rdf.md)).
+([chapter 7](07-saving-and-rdf.md)). `%clear` replaces every declaration, so nothing it held can be
+proved to still exist: it reports what it took, and the next command that would have used it says why
+it is gone.
+
+```
+sysml> %clear
+session cleared
+note: 1 instance was dropped because the session was reset; re-run %instantiate
+sysml> %instances
+(no instances created; 1 instance was dropped when the session was reset — re-run %instantiate)
+```
+
+## A name that needs quotes
+
+A name the notation has to quote — one containing a space, a keyword used as a name, punctuation —
+is written to a command exactly as it is written in a model, quotes included, and a quoted segment
+can sit anywhere in the chain:
+
+```
+sysml> package 'My Pkg' { part def Car { attribute m = 5.0; } }
+sysml> %instantiate 'My Pkg'::Car
+sysml> %slots 'My Pkg'::Car
+sysml> %eval 'My Pkg'::Car::m
+```
+
+The unquoted spelling of a name that does not need quoting is unchanged. Commands report a name back
+quoted the same way, so a name from `%search` can be typed into the next command as it appears.
 
 ## Loading files
 
@@ -54,6 +80,27 @@ it (`note: replaced package …`) rather than adding to it. Edit the file and lo
 completes paths after `%load` and `%save`, and completes meta-commands and symbol names
 everywhere else.
 
+A file whose text the parser cannot read is reported the way a typed declaration is — the same
+diagnostic, pointing into the file at its own line — and nothing of it enters the session, so the
+next submission is parsed against what was there before the load. In the non-interactive path the
+diagnostics of a load are errors, so a script loading a broken file fails rather than continuing
+against an empty session.
+
+Two loaded files that both open `package P` declare two packages of that name, and the load says
+so:
+
+```
+sysml> %load a.sysml b.sysml
+note: P is opened by more than one loaded file; each opening stays a declaration of its own, so a
+member of one is not visible unqualified in the other — qualify it (P::member)
+```
+
+Each file keeps its own identity — that is what makes re-loading one of them replace only its own
+contribution — so the two openings cannot be one namespace without a file's edit silently deleting
+the other file's members. Both openings' members are declared and reachable qualified
+(`P::Wheel`, `P::Axle`); an unqualified reference across the two does not resolve. Re-typing a
+package at the prompt is unaffected: it still folds into the package already in the session.
+
 ## Finding what a build offers
 
 `%search` looks a substring up across the declared and library symbols with the kind of each,
@@ -63,13 +110,39 @@ whether an expression will evaluate before writing a model around it.
 ```
 sysml> %search Vehicle
 sysml> %builtins
+sysml> %view Demo::summary
 ```
+
+`%view <name>` reports what a view exposes and the views nested in it. A name the session cannot
+find is offered the qualified names it is known under, nearest scope first — what the session
+itself declares before the library, and a package's member before a name nested inside another
+element — and at most three of them.
+
+## Where an expression is evaluated
+
+`%eval <expression>` evaluates in the namespace the session is working in — the last one it declared
+— so a scratch package typed later moves it. Name a context to pin it instead:
+
+```
+sysml> %eval in Demo::Vehicle : mass * 2
+✓ mass * 2 (in Demo::Vehicle)
+  = 3000.00
+sysml> %instantiate Demo::Vehicle
+sysml> %eval in Demo::Vehicle : mass * 2
+✓ mass * 2 (on Demo::Vehicle ID: 1)
+  = 3000.00
+```
+
+The pinned name may be an element, whose namespace the expression then reads, or a name an object
+was materialized under, whose slots it reads — the same values an unpinned `%eval` reads after
+`%instantiate`. The `:` separates the context from the expression; `::` inside the name is not a
+separator.
 
 ## Asking questions
 
 | To ask | Use | Chapter |
 |--------|-----|---------|
-| what an expression is worth | `%eval` | [5](05-checking.md) |
+| what an expression is worth | `%eval`, `%eval in … : …` | [5](05-checking.md) |
 | what an object's slots hold | `%instantiate`, `%slots`, `%instances` | [5](05-checking.md) |
 | whether a check holds | `%constraint`, `%requirement`, `%satisfy`, `%calc` | [5](05-checking.md) |
 | what a behavior does, step by step | `%action`, `%state`, `%step`, `%tokens`, `%advance` | [6](06-behavior.md) |

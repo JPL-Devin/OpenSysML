@@ -13,6 +13,7 @@ import (
 	"github.com/Open-MBEE/Systemica/internal/core/lexer"
 	"github.com/Open-MBEE/Systemica/internal/core/model"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
+	"github.com/Open-MBEE/Systemica/internal/core/passes"
 	"github.com/Open-MBEE/Systemica/internal/core/resolve"
 	"github.com/Open-MBEE/Systemica/internal/core/runtime"
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
@@ -44,6 +45,12 @@ type snippet struct {
 	// own locates, within src, the text a merge added to a namespace already in
 	// the buffer. It is empty for a snippet that is wholly its submission's.
 	own []source.Span
+	// open marks a submission that left a brace, comment or quoted name open, so
+	// it absorbs the text after it. Such a snippet is kept for %list and %save but
+	// masked out of the analyzed buffer, and diags carries what its own parse
+	// found, mapped as the workspace maps a document's.
+	open  bool
+	diags []passes.Diagnostic
 }
 
 // Session accumulates submissions into a single implicit <repl> document.
@@ -73,10 +80,14 @@ type Session struct {
 	// Why the debugging sessions and the instances are gone, when a submission
 	// ended them. A command that finds nothing active reports this rather than
 	// leaving the user to guess.
-	endedAction   *endedSession
-	endedState    *endedSession
-	lostInstances int // how many instances the last submission that dropped any took
-	lostAt        int // the submission that dropped them
+	endedAction *endedSession
+	endedState  *endedSession
+	// lost records the objects the session no longer holds, and what took them.
+	lost instanceLoss
+
+	// materializeFailures are the slots a command of this session reported it
+	// could not materialize, which a non-interactive run exits on.
+	materializeFailures []error
 
 	// notedBlocker identifies the unresolved error the session has already
 	// reported as blocking the deeper checks, so it is named once rather than on
@@ -103,6 +114,17 @@ type actionSession struct {
 	selfFQN  string
 	symbol   *symbols.Symbol
 	executor *runtime.ActionExecutor
+	// rtCtx is the context the executor runs in. A submission rebuilds the
+	// session's own, so results are read against the one that produced them.
+	rtCtx *runtime.Context
+}
+
+// contextOf returns the context the executor's values belong to, nil for none.
+func (a *actionSession) contextOf() *runtime.Context {
+	if a == nil {
+		return nil
+	}
+	return a.rtCtx
 }
 
 // fqnOf returns the debugged action's qualified name, or "" when no session runs.
@@ -130,9 +152,19 @@ type stateSession struct {
 	selfFQN  string
 	symbol   *symbols.Symbol
 	executor *runtime.StateExecutor
+	// rtCtx is the context the executor runs in; see actionSession.rtCtx.
+	rtCtx *runtime.Context
 	// now is the debugger's clock. The executor's own clock only moves when an
 	// event is processed, so successive %advance calls accumulate here.
 	now float64
+}
+
+// contextOf returns the context the executor's values belong to, nil for none.
+func (s *stateSession) contextOf() *runtime.Context {
+	if s == nil {
+		return nil
+	}
+	return s.rtCtx
 }
 
 // fqnOf returns the debugged state machine's qualified name, or "" when no
@@ -170,8 +202,12 @@ func (s *Session) SetBudgets(budgets runtime.Budgets) error {
 	}
 	s.budgets = budgets
 	// Dropping the context invalidates everything derived from it, instances
-	// included: their IDs restart with the next context.
+	// included: their IDs restart with the next context. What goes is recorded, so
+	// a later command explains it.
 	s.rtCtx = nil
+	if n := len(s.instances); n > 0 {
+		s.lost = lossOnBudgets(n)
+	}
 	s.instances = make(map[string]*runtime.Instance)
 	return nil
 }
@@ -221,16 +257,45 @@ func (s *Session) accept(origin, src string) {
 // A loaded file supersedes only itself and what the prompt said about the same
 // names, since several files of one model commonly open the same package.
 func (s *Session) acceptFrom(origin, src string) (drops []dropReport) {
-	root := parser.New(source.New(docName, []byte(src))).ParseFile()
+	p := parser.New(source.New(docName, []byte(src)))
+	root := p.ParseFile()
 	names := declaredNames(root)
 	text := src
+	// A submission that does not close its own text is masked out of the buffer
+	// rather than left to absorb the submissions after it, and declares nothing:
+	// what the parser recovered from it is not what was meant.
+	if !closesItsOwnText(src) {
+		key := fileKeyOf(origin)
+		if key != "" {
+			// Re-reading the file supersedes what it declared before, which it no
+			// longer does.
+			kept := s.snippets[:0]
+			for _, sn := range s.snippets {
+				if sn.key == key {
+					drops = append(drops, dropReport{gone: sn.names})
+					continue
+				}
+				kept = append(kept, sn)
+			}
+			s.snippets = kept
+		}
+		s.snippets = append(s.snippets, snippet{
+			src:    src,
+			origin: origin,
+			key:    key,
+			gen:    s.version,
+			open:   true,
+			diags:  parseDiagnostics(p),
+		})
+		return drops
+	}
 	var (
 		comments  string
 		mergedOwn []source.Span
 	)
 	if origin != "" {
 		set := nameSet(names)
-		key := fileKey(origin)
+		key := fileKeyOf(origin)
 		top := topLevelMembers(root)
 		kept := s.snippets[:0]
 		for _, sn := range s.snippets {
@@ -248,7 +313,7 @@ func (s *Session) acceptFrom(origin, src string) (drops []dropReport) {
 			}
 		}
 		s.snippets = append(kept, snippet{src: src, names: names, origin: origin, key: key, gen: s.version})
-		return drops
+		return append(drops, s.reopenedNamespaces(key, root)...)
 	}
 	if len(names) > 0 {
 		set := nameSet(names)
@@ -366,7 +431,9 @@ func (s *Session) genOffset(joined string) int {
 // document. A comment-only file is a file in its own right, so it stays.
 func (s *Session) takeLeadingComments() string {
 	cut := len(s.snippets)
-	for cut > 0 && s.snippets[cut-1].origin == "" && isCommentOnly(s.snippets[cut-1].src) {
+	// An open comment is not documentation to fold in front of a declaration: it
+	// would swallow the declaration it was folded in front of.
+	for cut > 0 && s.snippets[cut-1].origin == "" && !s.snippets[cut-1].open && isCommentOnly(s.snippets[cut-1].src) {
 		cut--
 	}
 	if cut == len(s.snippets) {
@@ -402,12 +469,113 @@ func isCommentOnly(src string) bool {
 // belongs to no file on disk.
 const sessionOrigin = "<session>"
 
+// joined is the buffer the session analyzes: every accepted submission, with a
+// submission that does not close its own text masked out so it cannot change how
+// the others parse. Masking is byte for byte, so every offset still locates the
+// snippet and line it came from.
 func (s *Session) joined() string {
+	parts := make([]string, len(s.snippets))
+	for i, sn := range s.snippets {
+		if sn.open {
+			parts[i] = maskedText(sn.src)
+			continue
+		}
+		parts[i] = sn.src
+	}
+	return strings.Join(parts, "\n")
+}
+
+// text is the buffer as it was submitted, masking nothing: what %save writes
+// back, so work the parser could not read is not lost.
+func (s *Session) text() string {
 	parts := make([]string, len(s.snippets))
 	for i, sn := range s.snippets {
 		parts[i] = sn.src
 	}
 	return strings.Join(parts, "\n")
+}
+
+// parseDiagnostics maps a parse of one submission the way the workspace maps a
+// document's: its errors carry the syntax code, its warnings their own.
+func parseDiagnostics(p *parser.Parser) []passes.Diagnostic {
+	out := make([]passes.Diagnostic, 0, len(p.Diagnostics)+len(p.Warnings))
+	for _, d := range p.Diagnostics {
+		out = append(out, passes.Diagnostic{
+			Severity: passes.SeverityError,
+			Span:     d.Span,
+			Message:  d.Message,
+			Code:     "syntax",
+			Source:   "syntax",
+			Fixes:    d.Fixes,
+		})
+	}
+	for _, w := range p.Warnings {
+		out = append(out, passes.Diagnostic{
+			Severity: passes.SeverityWarning,
+			Span:     w.Span,
+			Message:  w.Message,
+			Code:     w.Code,
+			Source:   "syntax",
+			Fixes:    w.Fixes,
+		})
+	}
+	return out
+}
+
+// maskedSpans locates the masked submissions in the buffer, so a finding of
+// theirs is not read as having stopped the deeper checks from running.
+func (s *Session) maskedSpans() []source.Span {
+	var out []source.Span
+	acc := 0
+	for _, sn := range s.snippets {
+		if sn.open {
+			out = append(out, source.Span{Offset: acc, Len: len(sn.src)})
+		}
+		acc += len(sn.src) + 1 // the newline joined() writes between snippets
+	}
+	return out
+}
+
+// openDiagnostics reports the findings of the masked submissions, located in the
+// session buffer so every surface places them in the file they came from.
+func (s *Session) openDiagnostics() []passes.Diagnostic {
+	var out []passes.Diagnostic
+	acc := 0
+	for _, sn := range s.snippets {
+		if sn.open {
+			for _, d := range sn.diags {
+				d.Span.Offset += acc
+				out = append(out, d)
+			}
+		}
+		acc += len(sn.src) + 1 // the newline joined() writes between snippets
+	}
+	return out
+}
+
+// diagnostics reports the analysis of the buffer together with the syntax errors
+// of the submissions masked out of it. The masked text is blanked rather than
+// removed, so what the analysis finds is about the submissions that did parse
+// and is reported as it stands.
+func (s *Session) diagnostics() []passes.Diagnostic {
+	analyzed := s.ws.Diagnostics(docName)
+	open := s.openDiagnostics()
+	if len(open) == 0 {
+		return analyzed
+	}
+	out := make([]passes.Diagnostic, 0, len(analyzed)+len(open))
+	out = append(out, analyzed...)
+	out = append(out, open...)
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Span.Offset < out[j].Span.Offset })
+	return out
+}
+
+// fileKeyOf is fileKey for a path that may be absent, typed input having no file.
+func fileKeyOf(path string) string {
+	if path == "" {
+		return ""
+	}
+	return fileKey(path)
 }
 
 // fileKey identifies the file a path is written for, so the same file loaded
@@ -441,10 +609,11 @@ func intersects(names []string, set map[string]bool) bool {
 }
 
 // Submit accumulates src into the <repl> document, reindexes and eagerly
-// analyzes the whole buffer, and returns a Result. Submissions are always
-// accumulated (even with parse errors) so diagnostics are reported against the
-// live session context; a later redeclaration of the same name replaces the
-// prior snippet (see accept).
+// analyzes the whole buffer, and returns a Result. A submission with parse errors
+// is still accumulated, so its diagnostics are reported against the live session
+// context; one that leaves a brace, comment or quoted name open is masked out of
+// the buffer instead, since it would otherwise absorb the next submission. A
+// later redeclaration of the same name replaces the prior snippet (see accept).
 func (s *Session) Submit(src string) Result {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -526,11 +695,11 @@ func (s *Session) submitFiles(files []SourceFile) Result {
 	s.rtCtx = nil
 	gone := goneNames(drops)
 	notices := dropNotices(drops)
-	notices = append(notices, s.carryOverObjects(over, gone)...)
+	notices = append(notices, s.carryOverObjects(over)...)
 	notices = append(notices, s.dropStaleDebugSessions(gone, over)...)
 	s.keepIdentitiesOf(over.prev)
 	// The diagnostics already carry their own "did you mean" hints.
-	diags := s.ws.Diagnostics(docName)
+	diags := s.diagnostics()
 	var members []ast.Node
 	if doc := s.ws.Document(docName); doc != nil && doc.AST != nil {
 		members = doc.AST.Members
@@ -539,11 +708,14 @@ func (s *Session) submitFiles(files []SourceFile) Result {
 		Members:     members,
 		Declared:    declared,
 		Diagnostics: diags,
-		Source:      joined,
-		Offset:      offset,
-		Origins:     s.origins(),
-		own:         own,
-		Notices:     notices,
+		// The unmasked buffer: masking is byte for byte, so offsets still land
+		// where they did, and a diagnostic echoes the line it is about.
+		Source:  s.text(),
+		Offset:  offset,
+		Origins: s.origins(),
+		own:     own,
+		masked:  s.maskedSpans(),
+		Notices: notices,
 	}
 	res.Blocked = s.blockedBy(res)
 	return res
@@ -630,6 +802,12 @@ func (s *Session) staleDebugState(gone []string, fqn, selfFQN string, shapes *ru
 	return by, false, changed
 }
 
+// debugSessionResetEnded reports a debugging session a reset ended, which no
+// redeclaration accounts for.
+func debugSessionResetEnded(kind, name string) string {
+	return fmt.Sprintf("note: %s debugging session for %q ended (the session was reset)", kind, name)
+}
+
 func debugSessionEnded(kind, name, superseded string, objectGone bool) string {
 	if objectGone {
 		return fmt.Sprintf("note: %s debugging session for %q ended (the object %s performing it was dropped)", kind, name, superseded)
@@ -651,14 +829,19 @@ func supersededBy(gone []string, fqn string) (string, bool) {
 	return "", false
 }
 
-// Clear resets the session, dropping all accumulated declarations.
-func (s *Session) Clear() {
+// Clear resets the session, dropping all accumulated declarations. It returns
+// the notices for what the reset took with it.
+func (s *Session) Clear() []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.clear()
+	return s.clear()
 }
 
-func (s *Session) clear() {
+// clear drops the document and everything derived from it. A reset replaces no
+// declaration, so nothing materialized from the old one can be rebound: what
+// goes is reported and recorded rather than silently emptied.
+func (s *Session) clear() []string {
+	notices, lost, endedAction, endedState := s.resetLoss()
 	s.ws.Remove(docName)
 	s.snippets = nil
 	s.version = 0
@@ -671,10 +854,28 @@ func (s *Session) clear() {
 	s.instances = make(map[string]*runtime.Instance)
 	s.actionExec = nil
 	s.stateExec = nil
-	s.endedAction = nil
-	s.endedState = nil
-	s.lostInstances, s.lostAt = 0, 0
+	s.lost, s.endedAction, s.endedState = lost, endedAction, endedState
 	s.notedBlocker.record("")
+	return notices
+}
+
+// resetLoss reports what a reset takes with it and records why, so a later
+// %instances, %slots or %step explains the loss instead of reading as a session
+// that never materialized anything.
+func (s *Session) resetLoss() (notices []string, lost instanceLoss, action, state *endedSession) {
+	if n := len(s.instances); n > 0 {
+		notices = append(notices, instancesResetNotice(n))
+		lost = lossOnReset(n)
+	}
+	if s.actionExec != nil {
+		notices = append(notices, debugSessionResetEnded("action", s.actionExec.name))
+		action = &endedSession{kind: "action", name: s.actionExec.name, reset: true}
+	}
+	if s.stateExec != nil {
+		notices = append(notices, debugSessionResetEnded("state", s.stateExec.name))
+		state = &endedSession{kind: "state machine", name: s.stateExec.name, reset: true}
+	}
+	return notices, lost, action, state
 }
 
 // getOrCreateRuntime lazily creates runtime context when first needed.

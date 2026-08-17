@@ -1,16 +1,24 @@
 """pysysml - Python client library for Systemica SysML v2 parser."""
 
-from importlib.metadata import PackageNotFoundError, version as _distribution_version
+import warnings
 
 from pysysml._version import VERSION as _declared_version
 from pysysml.connection import Connection, DEFAULT_PORT, split_target
 from pysysml.model import Model
 from pysysml.symbol import Symbol
 from pysysml.diagnostic import Diagnostic
+from pysysml.enumeration import EnumLiteral
 from pysysml.instance import Instance
 from pysysml.typed import TypedObject
-from pysysml.typefacts import Multiplicity, Specialization, SymbolFacts, TypeFacts
+from pysysml.typefacts import (
+    AttributeFacts,
+    Multiplicity,
+    Specialization,
+    SymbolFacts,
+    TypeFacts,
+)
 from pysysml.capabilities import MissingCapabilityError, ServerInfo
+from pysysml.values import UNSET, UnsetType
 from pysysml.verdict import CalcResult, Verdict
 from pysysml.query import QueryElement, QueryError
 from pysysml.conversion import (
@@ -22,14 +30,16 @@ from pysysml.errors import (
     InstanceTypeError, InvalidRequestError, ModelError,
     ModelFileNotFoundError, ModelNotFoundError, ServiceError,
     ServiceTimeoutError, SlotError, StaleServiceError, SymbolNotFoundError,
-    TypeMismatchError, UnsupportedOperationError, UnsupportedValueError,
-    WrongKindError,
+    TypeMismatchError, UnpinnedReleaseError, UnsupportedOperationError,
+    UnsupportedValueError, WrongKindError,
 )
 
 __all__ = [
-    "Connection", "Model", "Symbol", "Diagnostic", "Instance",
+    "Connection", "Model", "Symbol", "Diagnostic", "EnumLiteral", "Instance",
     "TypedObject", "TypeFacts", "Multiplicity", "Specialization", "SymbolFacts",
+    "AttributeFacts",
     "ServerInfo",
+    "UNSET", "UnsetType",
     "Conversion", "FORMAT_SYSML", "FORMAT_TURTLE", "format_of_path",
     "Verdict", "CalcResult",
     "QueryElement", "QueryError",
@@ -39,21 +49,20 @@ __all__ = [
     "ModelError", "ModelFileNotFoundError", "ModelNotFoundError",
     "ServiceError", "ServiceTimeoutError", "SlotError", "StaleServiceError",
     "SymbolNotFoundError",
-    "TypeMismatchError", "UnsupportedOperationError", "UnsupportedValueError",
+    "TypeMismatchError", "UnpinnedReleaseError",
+    "UnsupportedOperationError", "UnsupportedValueError",
     "WrongKindError",
     "load", "connect", "convert",
-    "eval", "instantiate",
+    # "eval" is deprecated in favour of "evaluate", so it is not exported.
+    "evaluate", "instantiate",
     "DEFAULT_PORT", "split_target",
     "__version__"
 ]
 
-try:
-    # The version of the distribution actually installed, so a wheel reports
-    # what was published rather than a string kept in step by hand.
-    __version__ = _distribution_version("pysysml")
-except PackageNotFoundError:
-    # Running from a source tree that was never installed.
-    __version__ = _declared_version
+# The declaration ships beside this module, so this is the version of the code
+# being imported: right for an editable install, whose dist-info metadata is
+# frozen at install time, and the same value a wheel's metadata is built from.
+__version__ = _declared_version
 
 # Module-level default connection (lazy singleton)
 _default_connection = None
@@ -194,8 +203,8 @@ def convert(to_format, file_path=None, content=None, model_hash=None,
     )
 
 
-def eval(expression, file_path=None, model_hash=None, context_symbol_id=None,
-         host='localhost', port=None):
+def evaluate(expression, file_path=None, model_hash=None, context_symbol_id=None,
+             host='localhost', port=None, subject=None):
     """Evaluate a SysML expression (module-level convenience).
 
     A model in hand has :meth:`Model.eval`, which needs neither the hash nor the
@@ -208,6 +217,10 @@ def eval(expression, file_path=None, model_hash=None, context_symbol_id=None,
         context_symbol_id (str, optional): Context for evaluation
         host (str): Service hostname, or a ``host:port`` address
         port (int, optional): Service port (default: 50051)
+        subject (str, optional): FQN of a part/usage to instantiate and evaluate
+            against, so a feature reads that object's value rather than the
+            declared default. Last, so a positional call written before it
+            still binds the address it meant
         
     Returns:
         Evaluated value
@@ -219,7 +232,7 @@ def eval(expression, file_path=None, model_hash=None, context_symbol_id=None,
         
     Example:
         >>> import pysysml
-        >>> result = pysysml.eval("2 + 2", file_path="test.sysml")
+        >>> result = pysysml.evaluate("2 + 2", file_path="test.sysml")
         >>> print(result)  # 4
     """
     conn = _get_default_connection(host, port)
@@ -235,7 +248,12 @@ def eval(expression, file_path=None, model_hash=None, context_symbol_id=None,
         model = conn.load(file_path)
         model_hash = model.hash
     
-    return conn.eval(expression, model_hash, context_symbol_id)
+    return conn.eval(
+        expression,
+        model_hash,
+        context_symbol_id=context_symbol_id,
+        subject_symbol_id=subject,
+    )
 
 
 def instantiate(symbol_id, file_path=None, model_hash=None, host='localhost',
@@ -279,3 +297,25 @@ def instantiate(symbol_id, file_path=None, model_hash=None, host='localhost',
         model_hash = model.hash
     
     return conn.instantiate(symbol_id, model_hash)
+
+
+#: Names that shadowed a built-in, and what each is called now. Served through
+#: __getattr__ so a star-import no longer binds over the built-in.
+_RENAMED_NAMES = {"eval": "evaluate", "RuntimeError": "ExecutionError"}
+
+
+def __getattr__(name):
+    """Serve a renamed name with the object it became, warning about its use.
+
+    ``pysysml.eval`` is :func:`evaluate` and ``pysysml.RuntimeError`` is
+    :class:`~pysysml.errors.ExecutionError`, so existing snippets keep working.
+    """
+    replacement = _RENAMED_NAMES.get(name)
+    if replacement is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    warnings.warn(
+        f"pysysml.{name} is deprecated; use pysysml.{replacement} instead",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return globals()[replacement]

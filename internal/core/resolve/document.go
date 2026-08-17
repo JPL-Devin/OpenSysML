@@ -227,11 +227,13 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		}
 		r.walkMembers(states, d.States)
 	case *ast.TransitionMember:
-		// Source and target name states, which the state machine's own scope
-		// need not contain (a transition may cross into a region), so they are
-		// left to the lowering layer; the payload expressions are checkable.
+		// Source and target name vertices of the enclosing machine: resolved here,
+		// so a misspelled endpoint reports with the other name diagnostics rather
+		// than at lowering, which consumes what this resolved.
 		// The guard and effect resolve against the parameters the transition's
 		// call trigger declares, which live in a scope of their own.
+		r.ResolveEndpoint(scope, d.Source)
+		r.ResolveEndpoint(scope, d.Target)
 		r.resolveTrigger(scope, d.Trigger)
 		body := symbols.TriggerScope(scope, d)
 		r.resolveExpr(body, d.Guard)
@@ -903,6 +905,9 @@ func (r *Resolver) resolveFeatureChain(scope *symbols.Scope, fc *ast.FeatureChai
 	if operandSym == nil || fc.Member == nil {
 		return
 	}
+	if featuring := r.featuringOf(scope, operandSym); featuring != nil {
+		operandSym = featuring
+	}
 
 	// Walk member parts explicitly, assigning symbols to each part
 	r.resolveMemberChain(operandSym, fc.Member)
@@ -1006,6 +1011,9 @@ func (r *Resolver) getOperandSymbol(scope *symbols.Scope, e ast.Node) *symbols.S
 		r.resolveFeatureChain(scope, v)
 		// Get the operand's symbol, then lookup member
 		operandSym := r.getOperandSymbol(scope, v.Operand)
+		if featuring := r.featuringOf(scope, operandSym); featuring != nil {
+			operandSym = featuring
+		}
 		if operandSym == nil || operandSym.Scope == nil {
 			return nil
 		}
@@ -1027,6 +1035,34 @@ func (r *Resolver) getOperandSymbol(scope *symbols.Scope, e ast.Node) *symbols.S
 	default:
 		return nil
 	}
+}
+
+// baseThatFQN is the implicit `that` feature every usage takes from the base
+// usage Base::things ([KerML, 8.4.2]).
+const baseThatFQN = "Base::things::that"
+
+// featuringOf returns what a member chain from `that` reads its members from:
+// the usage enclosing the expression, whose value features the value being
+// written. It is nil for any other operand, and where no usage encloses the
+// expression — `that` is typed Anything, which has no members of its own.
+func (r *Resolver) featuringOf(scope *symbols.Scope, operand *symbols.Symbol) *symbols.Symbol {
+	if operand == nil {
+		return nil
+	}
+	if operand.Name != baseThatFQN && r.registeredFQN(operand) != baseThatFQN {
+		return nil
+	}
+	for s := scope; s != nil; s = s.Parent() {
+		owner := s.Owner()
+		if owner == nil {
+			continue
+		}
+		if _, ok := owner.Decl.(*ast.Usage); ok {
+			return owner
+		}
+		return nil
+	}
+	return nil
 }
 
 // getUsageType returns the type symbol of a usage by resolving its typing relationship.

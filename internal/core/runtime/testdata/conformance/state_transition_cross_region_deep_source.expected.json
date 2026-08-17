@@ -1,0 +1,10 @@
+{
+  "type": "state",
+  "finalState": "lstate",
+  "outputs": {
+    "lidleExits": {"type": "Integer", "value": 1},
+    "deepExits": {"type": "Integer", "value": 1},
+    "wrapperExits": {"type": "Integer", "value": 1},
+    "runningEntries": {"type": "Integer", "value": 1}
+  }
+}

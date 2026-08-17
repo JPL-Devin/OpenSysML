@@ -8,6 +8,10 @@
 **Errors**: 2/100 files have semantic errors (4 total errors), both pinned OMG bugs  
 **Gate**: the per-file error counts are recorded in `internal/core/model/testdata/training_examples_expected.txt`, so `TestTrainingExamplesSemanticErrors` fails when a file regresses *or* improves without updating the list (`-update-training` regenerates it)  
 
+Defects found in OMG material *outside* this corpus — a wrong declaration in a vendored
+specification library rather than a model using it — are recorded in
+[omg-issues.md](omg-issues.md), so there is one place to look for both.
+
 These training examples are from the official OMG pilot implementation and are not vendored here. Run `./scripts/download-training-examples.sh` to fetch the pinned (`2026-05`) copy into `examples/sysml-v2-training/`; the tests that read it skip while it is absent.
 
 CI is not allowed that skip. `.github/workflows/pr.yml` runs the download script before the
@@ -609,7 +613,7 @@ directory and fails if any file's diagnostics differ between the two.
 
 ## Conclusion
 
-**Implementation Status**: Core behavioral semantics complete (211/211 execution conformance cases passing).
+**Implementation Status**: Core behavioral semantics complete (297/297 execution conformance cases passing).
 
 **Training Example Status**: 98/100 clean (2 files, 4 errors). What remains is two files that use
 feature names KerML does not define (`start`/`done` instead of `startShot`/`endShot`) — bugs in the

@@ -1,0 +1,7 @@
+{
+  "type": "constraint",
+  "instantiate": "test::top",
+  "evaluate": "test::Leaf::small",
+  "libraries": true,
+  "satisfied": false
+}
