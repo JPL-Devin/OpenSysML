@@ -1,49 +1,64 @@
 # Systemica — Roadmap
 
-Baseline: `main` @ `b1e2900`, verified locally on 2026-08-15 with Go 1.25.13.
+Baseline: `main` @ `32f5a03`, verified locally on 2026-08-17 with Go 1.25.13.
 Read `AGENTS.md` first; it governs everything below.
 
 0.0.7 is released from `Open-MBEE/Systemica`, carrying `sysml`, `sysml-lsp` and `sysml-grpc`
-archives. `main` since carries the nine post-0.0.7 fixes, the documentation reorganization and
-the release-publishing fix, all listed under 0.0.8 in `CHANGELOG.md`, which is cut and awaiting
-its tag. Everything in "Release follow-through" is maintainer- or account-gated; everything
-after it is ordinary engineering work.
+archives. `main` now carries the whole 0.0.8 batch — the post-0.0.7 fixes, the documentation
+reorganization, the release-publishing fix, and the Track A/B/P work below — all listed under
+0.0.8 in `CHANGELOG.md`, which is cut and awaiting its tag. Everything in "Release
+follow-through" is maintainer- or account-gated; everything after it is ordinary engineering
+work.
+
+Track status as of this baseline: **Track B is closed**, **Track P is closed** on the
+engineering side (its remaining item, publishing to PyPI, is R2 and account-gated), and Track A
+is closed except **A6** (implicit library import), which is deliberately last because it moves
+the corpus baseline, and the two residuals A6 itself gates (A3, and the unqualified-call
+diagnostic in A4). Tracks C and D are untouched by this batch.
 
 ## Where the repository stands
 
-Full gate green: `gofmt -l .` empty, `go build ./...`, `go vet ./...`, `staticcheck ./...`,
-`go test -race ./...`.
+Full gate green: `gofmt -l .` empty, `go build ./...`, `go vet ./...`,
+`go test ./...`, `go test -race ./...`, and the corpus gate run locally at its ceiling.
 
 | Gate | Count |
 |---|---|
 | OMG training corpus | **98/100 clean** — 2 files / 4 errors, both pinned OMG source bugs (the ceiling) |
 | Stdlib parser conformance | 95/95 clean — 94 vendored OMG files and 1 non-normative Systemica extension |
-| Execution conformance cases | 211 |
-| gRPC conformance cases | 8 |
-| Golden execution traces | 69 |
-| Runtime robustness subtests | 146 |
-| Golden AST fixtures | 82 |
-| Negative parser subtests | 127 |
+| Execution conformance cases | 296 |
+| gRPC conformance fixtures | 27 |
+| Golden execution traces | 98 |
+| Runtime robustness subtests | 190 |
+| Golden AST fixtures | 86 |
+| Negative parser subtests | 129 |
 
-Statement coverage, measured today with `go test -cover ./...`:
+Statement coverage, measured with `go test -cover ./...` at the baseline commit:
 
 | Package | Coverage | Package | Coverage |
 |---|---|---|---|
-| `internal/core/format` | 96.6% | `internal/core/model` | 79.5% |
-| `internal/core/source` | 90.9% | | |
-| `internal/core/lexer` | 87.7% | `internal/lsp` | 72.4% |
-| `internal/core/libs` | 87.8% | `internal/core/lower` | 62.1% |
-| `internal/repl` | 86.9% | `internal/core/symbols` | 62.0% |
-| `internal/grpc` | 80.1% | `internal/core/parser` | 61.5% |
-| `internal/core/passes` | 80.2% | `internal/core/semantics` | 61.1% |
-| `internal/core/runtime` | 79.7% | `internal/core/resolve` | 54.3% |
-| | | `internal/core/ast` | 27.4% |
-| | | `cmd/sysml` | 6.4% |
-| | | `cmd/sysml-lsp`, `cmd/sysml-grpc` | 0% |
+| `internal/core/quickfix` | 100.0% | `internal/core/parser` | 75.8% |
+| `internal/core/format` | 97.2% | `internal/core/model` | 74.4% |
+| `internal/core/suggest` | 92.6% | `internal/core/symbols` | 71.3% |
+| `internal/core/source` | 90.9% | `cmd/sysml-lsp` | 71.1% |
+| `internal/grpc` | 89.9% | `internal/core/lower` | 63.9% |
+| `internal/repl` | 89.3% | `internal/core/resolve` | 56.3% |
+| `internal/core/export` | 89.0% | `internal/core/semantics` | 54.8% |
+| `internal/core/rdf` | 86.7% | `cmd/sysml` | 24.7% |
+| `internal/core/lexer` | 85.5% | `internal/core/ast` | 20.9% |
+| `internal/core/runtime` | 85.0% | `cmd/sysml-grpc` | 0% |
+| `internal/core/passes` | 84.9% | | |
+| `internal/core/libs` | 84.4% | | |
+| `internal/lsp` | 81.5% | | |
 
 The corpus gate needs the corpus (`./scripts/download-training-examples.sh`) and never
 re-baseline `internal/core/model/testdata/training_examples_expected.txt`: adjudicate each
 drifted file and record the verdict in `docs/project/training-examples.md`.
+
+Open gap in the gating itself, found in the 0.0.8 pre-release audit: only the GitHub Actions PR
+workflow downloads the corpus and sets `SYSTEMICA_REQUIRE_TRAINING_CORPUS=1`.
+`.circleci/config.yml` — the pipeline that *builds release tags* — mentions the corpus nowhere,
+so it skips the gate silently and a tag can be cut over a corpus regression. Adding the download
+plus that variable to the release pipeline belongs with R1.
 
 ---
 
@@ -75,6 +90,12 @@ into a clean virtualenv and only then uploading. The version is declared once, i
 package keeps its own version line on purpose: it resolves a `sysml-grpc` binary at runtime
 from whichever release the caller names, so its version and the core's are not lockstep.
 See `docs/project/releasing.md`.
+
+One decision precedes the upload, found in the 0.0.8 pre-release audit: `python/pysysml/_version.py`
+declares `0.2.0` while the newest published artifact is `0.1.1`, so the first upload has to be
+`pysysml-v0.2.0` (the tag-versus-source check refuses anything else) and 0.2.0's Python-side
+changes — `evaluate`/`ExecutionError`, pinned checksums, subject-aware `eval`, generated typed
+classes — all land in that one release rather than incrementally.
 
 What remains is account-gated and cannot be done from a session: create the PyPI project's
 first release with an account-scoped token, then replace it with a project-scoped one; create
@@ -115,9 +136,23 @@ Notarization needs an Apple Developer account, a Developer ID certificate, an Ap
 API key in CI and a macOS runner. Windows needs an OV/EV certificate. Both are purchases, not
 tasks.
 
+## R5 — the VS Code extension is not released
+
+Found in the 0.0.8 pre-release audit and still open. `editors/vscode` builds only as a PR CI
+artifact: no `.vsix` is attached to a release and there is no marketplace listing, so a user
+cannot install it without building it. The blocker that made the built extension unusable *is*
+fixed — the client appends `--stdio`, which `sysml-lsp` rejected with exit 2, so it crash-looped;
+`--stdio` is accepted now and the server also honours `shutdown`/`exit` instead of leaking a
+process. What remains is packaging and publishing: `vsce package` in the release workflow, a
+`.vsix` on the release, and (for the marketplace) a publisher account and a PAT in CI — the same
+class of account gate as R2/R4.
+
 ---
 
-# Track P — the Python/gRPC surface
+# Track P — the Python/gRPC surface — done
+
+Every engineering item below is on `main`; what remains for a Python user is R2, publishing the
+wheel, which is account-gated rather than work.
 
 This is where the release just changed shape: `sysml-grpc-<os>-<arch>` binaries now ship with a
 `.sha256` sidecar, and `pysysml` downloads and verifies one, so a Python user no longer needs a
@@ -173,7 +208,7 @@ structural usages become properties. `specializes`, `subsets` and `redefines` ea
 corresponding Python base class; an edge Python cannot linearize is named in a comment on the
 class rather than dropped silently.
 
-## P4 — smaller Python-side items, all recorded in `docs/project/spec-compliance.md`
+## P4 — smaller Python-side items, all recorded in `docs/project/spec-compliance.md` — done
 
 - ~~`connection.py` verifies a pid is the service by substring-matching its cmdline — spoofable.~~
   **Done:** the spawner writes the service's pid *and* process start time (plus its own), and a
@@ -250,17 +285,39 @@ What came out of it, recorded under Requirement in `docs/project/spec-compliance
   now that A1a is done, but its `actualVerticalSpeed` is produced by a descent analysis rather than
   bound by the requirement or held by the part.
 
-## A2 — a typed multi-valued feature ignores its default
+## A2 — a typed multi-valued feature ignores its default — done
 
-A feature that is both typed and given a default takes the typed instantiation; the default is
-not merged. Second known limitation in the changelog. Decide the semantics before coding — the
-spec question is whether the default supplies elements or replaces the instantiation.
+Landed on the maintainer's ruling (option 3 of the three readings offered): a default is
+*honoured where it conforms* and *reported where it does not*, never invented and never dropped.
+`attribute speeds : Real[3] = (1.0, 2.0, 3.0)` materializes its three values; a scalar default
+against `[3]` is not broadcast into three copies — that would supply values the model never
+wrote — but a `multiplicity violation: 2 value(s) bound to a feature with multiplicity lower
+bound 3` diagnostic, which is what the silent drop the changelog admitted to used to hide. A
+feature declaring no multiplicity is held to the assumed `1..1` (`AssumedRange`,
+`Model.EffectiveMultiplicityOf`), so the same rule decides the single-valued case rather than
+exempting it.
 
-## A3 — a library value type does not resolve as a type in the REPL path
+The diagnostic is reported wherever the value is materialized, with the same verdict on every
+surface: `-instantiate … -validate` exits 2, a `%slots` in a piped REPL session exits 2 (it
+exited 0 before, so a script could not detect the failure), the JSON output carries it under
+`runtime.materialize`, and a walk elided by the depth or self-containment bound marks itself
+partial rather than printing `✓ no errors`. Duplicate diagnostics for one redefined slot are
+suppressed. `runtime/instance.go`, `runtime/shape.go`, `semantics/multiplicity.go`,
+`cmd/sysml/report.go`.
 
-`attribute d : Real;` with no default reports `<unknown>` (reproduced today), because the
-reference does not resolve to a type at all rather than because instantiation fails. Related to
-A6; do A6 first and re-test this.
+## A3 — a library value type materializes as an empty object rather than a value
+
+Half of this is gone and the remaining half is narrower than the entry claimed. `attribute d :
+Real;` no longer reports `<unknown>`: with the library imported, the reference resolves to the
+library type and the feature is materialized. What it materializes is an empty object —
+`d = Instance(ID: 2)` with `(no features)` — where a valueless attribute of a library value type
+should read as *unset*, since a `Real` has no features to instantiate. `attribute k : Real = 2.0`
+is correct (`k = 2.00`).
+
+Still gated on A6: without `import ScalarValues::*;` the reference is `unresolved reference:
+Real — did you mean ScalarValues::Real?` and the model does not analyse, so the unqualified
+spelling depends on A6 exactly as before. Do A6, then decide whether the valueless case reads as
+unset here or is a shape rule in `runtime/instance.go`.
 
 ## A3a — a measurement unit does not resolve inside a condition in the REPL path — done
 
@@ -296,30 +353,47 @@ Both residual items are closed by the unit-resolution work; see `docs/project/sp
   nested call survives. Named arguments (`v0 = …`) remain out: the notation writes those inside an
   invocation's parentheses, and the prompt reports the limitation instead of misreading them.
 
-## A4 — executor approximations
+## A4 — executor approximations — all but two bullets done
 
-- **Port routing ignores direction and conjugation.** A message reaches every port connected by
-  a connector in the same behavior body, and a port of the enclosing part is invisible to the
-  behavior.
-- **Accept-parameter visibility.** The payload lives in the action's shared feature space, which scoping does
-  not model, so a sibling node reading it by simple name reports unresolved.
-- **Transition endpoint names** are resolved at lowering, not at the name-resolution tier, so a
-  misspelled endpoint surfaces late. Error timing is part of the contract (AGENTS.md §4):
-  moving it is the point of the task, and the affected tests must be updated deliberately.
-- **Dangling transition detection is lenient.** `TransitionUsage::source : ActionUsage[1..1]`
-  and `::target : ActionUsage[1..1]` (stdlib `Systems Library/SysML.sysml`), and KerML
-  `TransitionPerformance::transitionLinkSource: Performance[1]`, want exactly one source and
-  one target vertex. Hard cases to name in the prompt: a target in a sibling orthogonal
-  region (legal), in an unrelated machine (illegal), an entry/exit point on a composite state
-  (legal), a target resolving to a non-vertex (illegal), the sourceless `accept … then` form
-  (legal), a junction chain terminating nowhere (illegal, and not a cycle).
-- **Calc recursion** is depth-bounded and rejected rather than evaluated.
-- **Numeric library coverage is scalar only.** The KerML function library's scalar numeric
-  functions and `**` are evaluable (`runtime/library_functions.go`); `VectorFunctions`,
-  `MatrixFunctions`, `ComplexFunctions` and the rest of `SequenceFunctions` are not (quantity
-  arithmetic is, as of A1a). `TrigFunctions::pi` has no declared value, so the
-  library's own `deg`/`rad` bodies cannot be evaluated — that needs a library *feature* value,
-  a different seam from function dispatch.
+- ~~**Port routing ignores direction and conjugation.**~~ **Done.** A message is routed by the
+  direction of each end and by conjugation (`~`), the ports of the enclosing part are reachable
+  from the behavior, and a send with no conforming route is a typed error rather than a silent
+  no-op.
+- ~~**Accept-parameter visibility.**~~ **Done.** The payload is scoped so a sibling node reads it
+  by simple name, and reading it before the accept is reported rather than answered.
+- ~~**Transition endpoint names** are resolved at lowering, not at the name-resolution tier.~~
+  **Done**, with the affected tests moved deliberately: a misspelled endpoint is a
+  name-resolution finding, and the two shapes handed over with this work — an endpoint naming a
+  vertex of a *different* state machine, and one naming a named `first`/`then` marker — are
+  check-time diagnostics rather than executor-construction failures.
+- ~~**Dangling transition detection is lenient.**~~ **Done**, over the hard cases the entry
+  named: a target in a sibling orthogonal region and an entry/exit point on a composite state are
+  legal, a target in an unrelated machine, a target resolving to a non-vertex and a junction chain
+  terminating nowhere are reported, and the sourceless `accept … then` form stays legal.
+- ~~**Calc recursion** is depth-bounded and rejected rather than evaluated.~~ **Done.** A
+  recursive `calc` evaluates (`Fact(5) = 120`); the bound remains as a budget against
+  non-terminating recursion rather than as a refusal of recursion itself.
+- ~~**Numeric library coverage is scalar only.**~~ **Done.** `VectorFunctions`,
+  `MatrixFunctions`, `ComplexFunctions` and the rest of `SequenceFunctions` dispatch
+  (`norm((3.0, 4.0, 0.0)) = 5.00`), `includingAt` inserts at its position on the maintainer's
+  ruling, and the library *feature* seam supplies `TrigFunctions::pi`, so the library's own
+  `deg`/`rad` bodies evaluate (`deg(1.0) = 57.30`) and an expression reading `pi` answers.
+  Residual, small and REPL-side: `%eval TrigFunctions::pi` on its own reports "has no value to
+  evaluate" because the meta-command reads the declaration's default rather than the seam, while
+  `2.0 * TrigFunctions::pi` inside a model evaluates.
+- ~~**A `for` loop iterates a sequence or a set only.**~~ **Done.** A loop iterates every
+  collection the expression layer produces — a range ascends, a filter keeps the order of what it
+  filtered, a collection-valued calc is iterated in the order it returned, and an empty sequence
+  or a descending range is iterated not at all (conformance case
+  `action_for_over_produced_collections`). A `for` written directly in an action body, with no
+  position in the token flow, is reported as such rather than run in declaration order.
+- ~~**A body member that is not an executable statement fails the run.**~~ **Done.** A block has
+  its own token flow (`lower/block_graph.go`), so a nested action declaration or a `perform`
+  inside a loop or an `if` branch executes; what genuinely has no flow is still lowered to
+  `lower.Unsupported` and reported when reached rather than dropped.
+
+Still open — the first waits on A6, the second is a statement of fact rather than a gap:
+
 - **An unqualified library function call still reports `unresolved-reference`** while evaluating
   correctly, because dispatch by local name is a runtime fallback and the checker does not know
   the library is implicitly in force (A6 is the general fix). This applies equally to the
@@ -330,14 +404,6 @@ Both residual items are closed by the unit-resolution work; see `docs/project/sp
   declared in `internal/core/libs/stdlib/Systemica Libraries/SystemicaMathFunctions.kerml` — a
   non-normative package a model reaches with `import SystemicaMathFunctions::*;`. A model meant
   to be portable to another SysML v2 tool cannot rely on it.
-- **A `for` loop iterates a sequence or a set only.** `runtime/action_statements.go` `forElements`
-  reports anything else, because those are the only collections the expression layer produces; a
-  collection built by an expression (a range, a filter) has to wait on that layer. A set is
-  visited in the order its canonical rendering sorts in, since a set has no order of its own.
-- **A body member that is not an executable statement fails the run.** A nested action
-  declaration or a `perform` written inside a loop or an `if` branch body is lowered to
-  `lower.Unsupported` and reported when reached, since neither has succession semantics inside a
-  block. Executing them means giving a block its own token flow.
 
 ## A11 — string operators and the string function library — done
 
@@ -391,7 +457,7 @@ literal (`Level::high.n`), and an enum-typed default materializes: the reproduct
 `c = Color::red`. `runtime/value.go`, `eval.go`, `semantics/enumeration.go`, conformance cases
 `enum_literal_default_slot`, `enum_literal_own_attributes`, `enum_literal_scalar_valued`.
 
-## A5 — visibility rules
+## A5 — visibility rules — done
 
 - ~~**Protected imports are treated as private.**~~ **Done.** A protected or public import now
   reaches the bodies that specialize the definition or usage declaring it (SysML v2 §7.5.3):
@@ -432,10 +498,17 @@ literal (`Level::high.n`), and an enum-typed default materializes: the reproduct
   outside the evaluable subset is reported (`ErrFilterUnevaluable`) rather than answered false.
   `semantics/expose.go` `Model.ExposedElements` answers a view's exposed set, enumerated through
   `resolve/filter.go` `Resolver.ImportedElements` so exposes are admitted and filtered exactly as
-  name resolution admits them, with `Model.NestedViews` to walk a view tree. Still open: a REPL
-  surface for the query (see the `%view` proposal in the A5 PR).
+  name resolution admits them, with `Model.NestedViews` to walk a view tree. ~~Still open: a REPL
+  surface for the query.~~ **Done:** `%view <name>` prints what a view exposes and the views
+  nested in it (`internal/repl/meta.go`, `internal/repl/view_test.go`), so the query has a user
+  surface as well as an API.
 
-## A6 — implicit library import (do this LAST)
+## A6 — implicit library import (do this LAST) — the only Track A item still open
+
+Re-confirmed at this baseline: a model writing `attribute d : Real;` with no
+`import ScalarValues::*;` reports `unresolved reference: Real — did you mean ScalarValues::Real?`
+and exits 2, so nothing here has been closed by the 0.0.8 batch. A3 and A4's
+unqualified-call diagnostic both wait on it.
 
 `❌ Unqualified library names in files that do not import their library` (`Boolean`, `Real`,
 `that`). Deferred repeatedly for one reason: it can mask corpus regressions by making
@@ -464,9 +537,10 @@ because two of the four descriptions no longer matched the code.
   (SysML.xtext `ForVariableDeclaration: UsageDeclaration`), so `parseForAction` now names it with
   `parseIdentification` rather than demanding an `Identifier`: any keyword may name the loop
   variable, with the usual `reserved-keyword-name` warning. Reproduced as described — two errors,
-  and the recovery misread `in` as a step usage and `c` as an enum usage. Still open (the REPL
-  layer is not touched here): `internal/repl` does not print load-time parse diagnostics, so a
-  file with parse errors still looks accepted when loaded from the REPL.
+  and the recovery misread `in` as a step usage and `c` as an enum usage. ~~Still open (the REPL
+  layer is not touched here): `internal/repl` does not print load-time parse diagnostics.~~
+  **Closed by the REPL work in this batch:** `%load` of a file with parse errors prints them
+  rather than reporting the file as accepted.
 - ~~`action a { in snapshot ; }` is silently accepted.~~ **Done, and it is legal.** SysML.xtext
   makes the declaration of a usage optional (`Usage: UsageDeclaration? UsageCompletion`), so an
   anonymous parameter is well-formed and needs no diagnostic. It did build a symbol, but as a
@@ -496,25 +570,35 @@ because two of the four descriptions no longer matched the code.
   `Classifier`, and only `Class` is disjoint with it (§8.3.3), so a plain `classifier` may
   specialize a datatype; the kind-compatibility matrix is the error site A7-4 forbids patching.
 
-## A8 — a nested feature redefined on an object is not the subject of a check or an `%eval`
+## A8 — a nested feature redefined on an object is not the subject of a check or an `%eval` — done
 
-The direct case landed: a condition declared on a definition is checked against the object
-carrying it. A *nested* redefinition is not reached, so `%eval A::Outer::b::c` and
-`%constraint A::Inner::small` answer about the declaration while `%slots` shows the
-instantiated value — the same class of wrong-subject answer, one level down.
+Landed: a nested redefinition is reached, so the meta-commands answer about the object rather
+than the declaration and agree with `%slots`. On the entry's own model — `part def Outer { part b
+: Inner { attribute redefines c = 9.0; } }` over an `Inner` defaulting `c` to `1.0` —
+`%eval A::Outer::b::c` answers `9.00` and labels the subject it used
+(`on A::o::b ID: 2`), and `%constraint A::Inner::small` fails against that same object rather
+than passing against the declaration. The subject is labelled on every surface that resolves one,
+including over gRPC, where an ambiguous subject is a stated failure reason rather than a silent
+choice.
 
-## A9 — a `calc` body without `return` is not expression-type-checked
+## A9 — a `calc` body without `return` is not expression-type-checked — done
 
-Such a body reaches no expression-typing pass, so the static dimensional warning (and every
-other type-tier finding about its expressions) cannot be reported inside it. The gap is in the
-pass's reach, not in the dimension inference.
+Landed: the type tier reaches the expressions of a returnless `calc` body, so a body whose only
+member is `attribute bad : Real = m + t;` over a mass and a duration reports
+`operator '+' combines incommensurable quantities: MassValue (dimension M) and DurationValue
+(dimension T)` where it previously reported nothing. The dimension inference was already right;
+what changed is the pass's reach.
 
 ---
 
-# Track B — REPL refinements
+# Track B — REPL refinements — done
 
-None of these are capability gaps; the REPL executes models. They are the rough edges a new
-user meets.
+None of these were capability gaps; the REPL executes models. They were the rough edges a new
+user meets, and all three are closed. Two REPL residuals that came out of the batch are recorded
+with the items they belong to rather than reopening this track: `%eval TrigFunctions::pi` reads
+the declaration rather than the library-feature seam (A4), and `Session.accept` still supersedes
+an earlier snippet whose declared names intersect the new one, so re-typing a package body
+replaces it rather than merging into it (B1).
 
 ## B1 — a declaration ends an in-progress debugger session — done
 
@@ -560,14 +644,15 @@ symbol ID written either way, so `Instantiate`, `GetSymbol`, `Evaluate`, `Execut
 
 Ordered by what a bug there would cost:
 
-- **`cmd/` is thinly tested** (`cmd/sysml` was 6.4%, the other two 0%). `cmd/sysml/main_test.go`
-  covers only how flags become session options. `cmd/sysml/convert_test.go` now builds and
-  drives the binary as a process for the conversion paths, so the pattern exists to copy; the
-  REPL and LSP/gRPC binaries still have no smoke test — start it, exchange one message, shut it
-  down — and `sysml-grpc` is a published artifact.
-- **`internal/core/resolve` at 54.3%** is the lowest of the semantic packages while carrying the
-  most subtle rules (feature chains, redefinition, aliases, cached targets).
-- **`internal/core/ast` at 27.4%** is mostly declarations, so the number is misleading; check
+- **`cmd/` is still the thinnest, but less so.** `cmd/sysml` is 24.7% (was 6.4%) and
+  `cmd/sysml-lsp` 71.1% (was 0%) after the 0.0.8 batch drove both binaries as processes — the
+  LSP lifecycle work brought a start/exchange/`shutdown`/`exit` smoke test with it.
+  **`cmd/sysml-grpc` is still 0%** and is a published artifact, so its smoke test is the one
+  genuinely missing: start it, exchange one RPC, shut it down.
+- **`internal/core/semantics` at 54.8% and `internal/core/resolve` at 56.3%** are the lowest of
+  the semantic packages while carrying the most subtle rules (feature chains, redefinition,
+  aliases, cached targets).
+- **`internal/core/ast` at 20.9%** is mostly declarations, so the number is misleading; check
   what is actually uncovered before writing tests for their own sake.
 
 ---
@@ -682,17 +767,15 @@ Lessons that survived the last two batches, unchanged because they keep applying
 
 ## Suggested sequencing
 
-1. **R1** (tag), then **R2**/**R3** as the account access appears. R1 gates the rest of the
-   release section.
-2. **P1** and **P2** next: the release now ships the service binary, so the Python surface is
-   the newest promise and the least CI-verified.
-3. **A2** — A1 is done end to end, so it is the limitation the changelog still admits to — then **A4**/**A5** in
-   parallel (they share only `docs/project/spec-compliance.md`; the two `state_executor.go` items in A4
-   must run one at a time).
-4. **A6** last, gated on a per-file corpus diff.
-5. **B1**, **B2** and **Track C** are good filler sessions: small, isolated, and each closes a
-   rough edge a user would otherwise report.
-6. **Track D** is independent of the rest and can run whenever. Take **D3** before **D1**/**D2**:
+Tracks A (bar A6), B and P are closed, so what is left reorders:
+
+1. **R1** (tag), then **R2**/**R3**/**R5** as the account access appears. R1 gates the rest of
+   the release section, and R2 is what makes Track P's work reachable by a user.
+2. **A6**, alone and gated on a **file-by-file** corpus diff — the last Track A item, and the one
+   that closes A3 and A4's remaining diagnostic with it.
+3. **Track C** next: `cmd/` is the thinnest coverage in the tree and now the only track whose
+   work is purely additive, so it parallelizes freely.
+4. **Track D** is independent of the rest and can run whenever. Take **D3** before **D1**/**D2**:
    it is the cheapest, and it is what would show whether the Flexo interop claim actually holds
    before more work is layered on the mapping. **D4** is done; what it left behind — a succession
    end that refers to an unnamed member — belongs with **D2**, since both want real end triples
