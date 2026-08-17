@@ -1939,11 +1939,13 @@ func (e *StateExecutor) exitState(state *ast.StateNode) error {
 		return nil
 	}
 
-	// A state's timers are destroyed when it is left: the event one already queued
-	// is withdrawn, so re-entering the state times a fresh interval.
+	// A state's timers and change watches are destroyed when it is left: the event
+	// a timer already queued is withdrawn, so re-entering the state times a fresh
+	// interval and watches its conditions rise again.
 	timed := make(map[*lower.Transition]bool)
 	for _, trans := range e.graph.Transitions[state] {
 		delete(e.timerScheduled, trans)
+		delete(e.changeFired, trans)
 		if _, isTime := trans.Trigger.(*ast.TimeEvent); isTime {
 			timed[trans] = true
 		}

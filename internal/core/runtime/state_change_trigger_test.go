@@ -218,6 +218,61 @@ func TestChangeTriggerPollingKeepsEventBudget(t *testing.T) {
 	}
 }
 
+// A change watch belongs to an activation of its state: leaving and re-entering
+// the state arms it again, even though its condition never went false.
+func TestChangeTriggerRearmsOnStateExit(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		attribute def Back;
+		state Machine {
+			attribute ready : Boolean = true;
+			initial start;
+			state waiting {
+				accept when ready then working;
+			}
+			state working {
+				accept Back then waiting;
+			}
+			start then waiting;
+		}
+	}`)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	assertCurrentState(t, exec, "working")
+
+	exec.SendSignal("Back", nil)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("rerun: %v", err)
+	}
+	assertCurrentState(t, exec, "working")
+	if got := countVisits(exec.stateVisits, "working"); got != 2 {
+		t.Errorf("working visited %d time(s), want 2: the re-entered watch stayed latched", got)
+	}
+}
+
+// A machine that has not been stepped yet makes no claim about progress: the
+// initial transition it has queued is pending work.
+func TestSuspendReasonMakesNoClaimBeforeTheMachineIsStepped(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			attribute ready : Boolean = true;
+			initial start;
+			state waiting {
+				accept when ready then done;
+			}
+			state done;
+			start then waiting;
+		}
+	}`)
+	if reason := exec.SuspendReason(); reason != "" {
+		t.Errorf("reason = %q, want none before the machine is stepped", reason)
+	}
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	assertCurrentState(t, exec, "done")
+}
+
 // A guard blocked by an earlier candidate's effect in the same poll stays armed:
 // the fire path re-tests the guard, so latching such an edge would lose it for as
 // long as its condition stays true.
