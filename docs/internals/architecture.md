@@ -212,7 +212,7 @@ Parse + model all behavioral bodies with unified fallback grammar:
 ### Tier 5 — Behavioral Interpreter ✅ Complete
 
 **Package:** `internal/core/runtime`  
-**Status:** Complete. Conformance gate: 299/299 cases passing (calc/constraint/requirement/satisfy/action/state all functional).  
+**Status:** Complete. Conformance gate: 297/297 cases passing (calc/constraint/requirement/satisfy/action/state all functional).  
 **Spec Alignment:** The governing reference is the SysML v2 metamodel or the bundled KerML semantic library (`internal/core/libs/stdlib/`); UML 2.5.1 is a fallback only where the SysML v2 notation has no production for a concept *and* the KerML library no performance for it (state-body `fork`/`join`, history, entry/exit points, regions). Token flow is succession-ordered: a succession is a KerML `HappensBefore` link (`Occurrences.kerml`), which orders occurrences in time and carries no values — a `SuccessionFlow` is the form that carries a payload (`KerML.kerml`: `Succession specializes Connector`, `SuccessionFlow specializes Succession, Flow`). State machine execution is `Occurrences::Occurrence::isRunToCompletion` over its `runToCompletionScope` ("determines whether transition performances might happen during state entry performances within the run to completion scope"), with event dispatch `isDispatch` / `dispatchScope`. See [SPEC_COMPLIANCE.md](../project/spec-compliance.md) for detailed compliance mapping (~98% faithful implementation).
 
 **Architecture:**
