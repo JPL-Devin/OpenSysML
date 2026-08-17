@@ -39,6 +39,12 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 - The README capability table splits notation save (complete) from RDF conversion
   (experimental), and the guide, CLI and REPL references, Python guide and roadmap say the same.
 
+### Release process
+
+- The CircleCI pipeline that builds release tags downloads the OMG training corpus and runs the
+  suite with `SYSTEMICA_REQUIRE_TRAINING_CORPUS=1`, so the corpus gate can no longer skip
+  silently where a tag is cut. 0.0.9 listed that as a known limitation; it is closed.
+
 ### Known limitations
 
 - Everything 0.0.9 listed still stands, with the RDF limitation now stated as a feature status
