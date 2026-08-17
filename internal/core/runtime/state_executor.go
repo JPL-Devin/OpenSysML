@@ -1866,10 +1866,9 @@ func (e *StateExecutor) enterStateInto(state *ast.StateNode, branches map[*ast.S
 		return nil
 	}
 
-	// A state's change watches are created fresh for each activation, so a
-	// condition that stayed true while the state was inactive is a rising edge
-	// again. The transition being taken keeps its latch: the entry it caused must
-	// not enable it again.
+	// Change watches are created fresh per activation, so a condition that stayed
+	// true rises again; the firing transition keeps its latch so the entry it
+	// caused does not re-enable it.
 	for _, trans := range e.graph.Transitions[state] {
 		if trans != e.firingChange {
 			delete(e.changeFired, trans)
