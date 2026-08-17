@@ -105,6 +105,8 @@ The `sysx:` properties:
 | `sysx:declaredKeyword` | The kind keyword as written, when it is one of the synonyms several keywords share (`datatype` and `attribute`, `function` and `calc`, `snapshot` and `occurrence`). The AST records one kind for all of them, so without this the notation would come back rewritten. Also the keyword a constraint body's condition is stated with (`assert`, `assume`, or absent for a bare condition, which asserts implicitly). |
 | `sysx:declaredPrefix` | The keyword qualifying the kind keyword after it — the `assert` of `assert constraint c : C`. It says what the declaration is for, and the AST kind alone does not carry it. |
 | `sysx:condition` | The condition a condition member states, as its notation. |
+| `sysx:prefixMetadata` | A metadata annotation as written (`#Safety`). It states what the element it prefixes is, and the AST records no span for it, so the notation is read from the source. |
+| `sysx:isKindImplicit` | The declaration wrote no kind keyword (`in x : Real;`), which takes its kind from its owner. Without it the canonical keyword would come back written out, declaring what the author did not. |
 | the behavioral properties | `sysx:guard`, `sysx:expression`, `sysx:payload`, … — the parts of a behavioral node the vocabulary has no predicate for, listed under [Behavior](#behavior). |
 
 Metaclass names with no counterpart in the OMG vocabulary are typed in the
@@ -269,6 +271,15 @@ its own has nothing for `sysx:declaredKeyword` to hang off, so writing it back a
 the canonical `occurrence` would be a different declaration. It is reported
 instead. `perform a : A;` does convert: the `perform` is kept as the keyword it
 was written with.
+
+**A metadata annotation is carried as the notation it was written as**
+(`sysx:prefixMetadata "#Safety"`), read from the source because the AST records
+no span for the annotation itself. Two shapes are reported rather than written
+back: an annotation carrying a body of its own (`@M { isSet = true; }`), which
+the vocabulary has no properties for, and an `@` annotation ahead of a
+definition (`@Safety part def Car;`), which the parser records on the
+declaration *before* the one it prefixes — writing that back would annotate a
+different element.
 
 **A name declared twice in one namespace is refused.** An element's identity in
 the graph is its qualified name, so `part def A; part def A;` in one container

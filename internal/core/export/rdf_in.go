@@ -654,6 +654,10 @@ func (d *decoder) keywordOr(el *element, canonical string) string {
 	if written, ok := d.stringOf(el, rdf.Systemica+xDeclaredKeyword); ok && written != "" {
 		return written
 	}
+	// A declaration that wrote no kind keyword takes its kind from its owner.
+	if d.boolOf(el, rdf.Systemica+xImplicitKind) {
+		return ""
+	}
 	return canonical
 }
 

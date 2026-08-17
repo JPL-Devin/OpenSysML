@@ -25,6 +25,12 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   `bind result = x;` and the `x` of `first x;` are carried as references to that member rather
   than as a name the element declares, which is what made those models fail as duplicate
   declarations.
+- Two things the mapping used to lose quietly now survive it: a metadata annotation
+  (`#Safety part def Car;`) is carried as the notation it was written as, and a feature that wrote
+  no kind keyword (`in x : Real;`) comes back without one instead of gaining the kind's canonical
+  keyword. The two annotation shapes that still cannot be written back — one carrying a body, and
+  an `@` annotation the parser records on the declaration ahead of the one it prefixes — are
+  reported with the line named.
 - RDF conversion remains **experimental** — the vocabulary may still change, and no round trip
   through a running triplestore has been demonstrated (roadmap D1–D3).
 

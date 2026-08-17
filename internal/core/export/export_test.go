@@ -358,6 +358,42 @@ func TestShortKindKeywordSurvivesTheRoundTrip(t *testing.T) {
 	}
 }
 
+// A metadata annotation states what the element it prefixes is, so the graph
+// carries the notation it was written as rather than dropping it.
+func TestPrefixMetadataSurvivesTheRoundTrip(t *testing.T) {
+	src := "package P {\n\tmetadata def Safety;\n\t#Safety part def Car;\n}"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	back, err := export.Convert("m.ttl", turtle, export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation: %v", err)
+	}
+	if !strings.Contains(string(back), "#Safety part def Car;") {
+		t.Errorf("the annotation did not survive the round trip:\n%s", back)
+	}
+}
+
+// A feature that wrote no kind keyword takes its kind from its owner, so the
+// graph must not put a keyword back that the author never wrote.
+func TestImplicitKindStaysImplicitThroughTheRoundTrip(t *testing.T) {
+	src := "package P {\n\taction def Drive {\n\t\tin x : Real;\n\t\tin attribute y : Real;\n\t\tout result : Real;\n\t}\n}"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	back, err := export.Convert("m.ttl", turtle, export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation: %v", err)
+	}
+	for _, want := range []string{"in x : Real;", "in attribute y : Real;", "out result : Real;"} {
+		if !strings.Contains(string(back), want) {
+			t.Errorf("`%s` did not survive the round trip:\n%s", want, back)
+		}
+	}
+}
+
 // Every direction rejects notation the parser cannot read, including the
 // notation-to-notation save: formatting broken input would suggest it is valid.
 func TestSysMLToSysMLChecksSyntax(t *testing.T) {

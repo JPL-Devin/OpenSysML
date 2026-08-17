@@ -177,6 +177,7 @@ elmt:ActionNodes::Drive::Brake
     sysml:qualifiedName "ActionNodes::Drive::@15::@0" ;
     sysml:owningNamespace <urn:sysmlv2:element:ActionNodes::Drive::@15> ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:isReference "true"^^xsd:boolean ;
     sysml:isAccept "true"^^xsd:boolean ;
     sysml:direction "out" ;
