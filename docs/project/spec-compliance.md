@@ -1066,6 +1066,7 @@ a whole model or that its vocabulary is settled — see
 | End-binding heads (`connect`, `bind`, `flow`, `succession`, `transition`, `accept`, `satisfy`) | carried as `sysx:sourceText` with structural properties alongside | `export_test.go:TestVerbatimHeadsRoundTrip` | ⚠️ Approximate — exact through Systemica; a foreign graph without the text is reported as unsupported rather than guessed |
 | Accept-action shorthand (`action X accept p : T [via Port]`) | parameter encoded structurally; printer rebuilds the shorthand | `export_test.go` fixture `testdata/convert/accept.sysml`, `parser/testdata/parse/accept_action_shorthand.golden` | ✅ Faithful |
 | `then` succession between members | `sysml:SuccessionAsUsage` with `sourceFeature`/`targetFeature`, from the one edge node every `then` parses to, in every body that admits one (a state's regions included) | `export_test.go:TestSuccessionRoundTrips`, `:TestSuccessionRoundTripsInEveryBody`, `parser/succession_test.go:TestMemberAttachedThenDesugars`, `:TestMemberAttachedThenInRegionDesugars` | ⚠️ Approximate — a `then` beside a member with no name cannot be named by these ends: it warns (`unnamed-succession-end`) and no edge is recorded |
+| Behavioral nodes of an action or state body (initial/final node, `perform`, `send`, `accept`, `terminate`, `assign`, fork/join/merge/decision, `while`/`loop`/`for`, `if`/`else`, states, substates, regions, `entry`/`do`/`exit`, `defer`, pseudostates, transitions) | `export/behavior.go` metaclasses and `sysx:` properties, encoded and printed back | `export/behavior_test.go:TestBehavioralModelsComeBackByteIdentical`, `:TestActionNodeMetaclasses`, `:TestLoopAndConditionalMetaclasses`, `:TestStateMachineMetaclasses`, `:TestStateMembersRoundTrip`, fixtures `testdata/convert/action_nodes.sysml`, `loops_conditionals.sysml`, `state_machine.sysml` | ⚠️ Approximate — the nodes round-trip byte-identically, but the conditions and expressions they carry are source text, and a succession that does not name both of its ends is refused (`export/behavior_test.go:TestUnsupportedBehavioralShapesAreReported`) |
 | Two members of one namespace sharing a name | refused: the qualified name is an element's graph identity | `export_test.go:TestDuplicateNameIsUnsupported` | ❌ Rejected rather than merged |
 | Ownership cycle in an input graph | refused: no root owns the element, so printing would emit an empty document | `export_test.go:TestOwnershipCycleIsUnsupported` | ❌ Rejected rather than emitting an empty file |
 | Lexical `//` and `/* */` trivia across the RDF hop | no element owns trivia; `doc`/`comment` are declarations and do convert | `export_test.go:TestCommentsThroughRDF` | ❌ Not carried through `.ttl` (a direct `.sysml` save keeps it) |
@@ -1076,9 +1077,11 @@ a whole model or that its vocabulary is settled — see
 a converted graph addresses its elements the way that service does. Whether such
 a graph loads into a running Flexo triplestore has not been demonstrated. Properties the SysML metamodel
 does not define are confined to `sysx:` = `urn:systemica:sysml:`: `memberIndex`,
-`hasBody` and `sourceText` carry order, body presence and verbatim heads, and
+`hasBody` and `sourceText` carry order, body presence and verbatim heads,
 `prefixMetadata`, `filter`, `isNamespaceImport`, `isRecursive` and `isExpose`
-carry notation the metamodel has no property for.
+carry notation the metamodel has no property for, and the behavioral properties
+(`guard`, `expression`, `payload`, `subactionKind`, …) carry the parts of a
+behavioral node the metamodel has no predicate for.
 
 **What can't be claimed:** this is not a normative SysML v2 → RDF/OWL mapping.
 OMG's abstract syntax has no standard RDF serialization, so the property names

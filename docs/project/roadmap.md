@@ -744,11 +744,11 @@ Saving and SysML ↔ RDF Turtle conversion landed (`internal/core/rdf`,
 `internal/core/export`, `%save`, `sysml -convert`); see
 [the RDF mapping](../reference/rdf-mapping.md).
 
-The RDF direction ships **experimental** as of 0.1.0, because of D1–D3 and D6 below:
-the mapping covers structure only, its vocabulary may change without a compatibility
-path, and no triplestore interop has been demonstrated. Every surface says so
-(`export.ExperimentalNotice`), and promoting it to stable is D3 plus D6, not a
-documentation change. What that work deliberately left open:
+The RDF direction ships **experimental** as of 0.1.0, because of D1–D3 below: its
+vocabulary may change without a compatibility path, and no triplestore interop has
+been demonstrated. Every surface says so (`export.ExperimentalNotice`), and
+promoting it to stable is D3, not a documentation change. What that work
+deliberately left open:
 
 ## D1 — expressions are carried as source text, not as triples
 
@@ -827,13 +827,28 @@ variation semantics currently rest on the enclosing `variation` definition alone
 
 ## D6 — a behavioral node has no metaclass, so a model stating steps cannot convert
 
-Constraint-bearing models convert since the condition members were mapped, but an action or
-state body that carries nodes still reports the node and aborts: measured on the built binary,
-71 of the 120 models under `examples/` convert (8 of the 19 top-level models, 62 of the 100
-training copies, and the semantic-layer demo), and the 49 refusals are initial nodes, `perform`,
-`send`, `terminate`, loop nodes, state regions and substates, plus four duplicate declarations.
-`docs/reference/rdf-mapping.md` § Limitations lists the shapes. The fix is metaclasses for the behavioral
-nodes, not a wider fallback — a graph missing a model's steps would be worse than a refusal.
+**Done.** The behavioral nodes now have metaclasses and the properties their notation is
+rebuilt from (`internal/core/export/behavior.go`): the initial and final node, `perform`, `send`, `accept`,
+`terminate`, `assign`, the fork/join/merge/decision control nodes, `while`/`loop`/`for`,
+`if`/`else`, and the state machine's states, substates, regions, `entry`/`do`/`exit`, `defer`,
+pseudostates and transitions. Each is covered by a `notation → RDF → notation` round trip that
+asserts the body comes back byte-identically (`export/behavior_test.go`), and the mapping is
+tabulated in `docs/reference/rdf-mapping.md` § Behavior.
+
+Measured on the built binary the same way, 102 of the 120 models under `examples/` convert,
+up from 71. The 18 refusals are: nine successions that do not name both of their ends (a
+`then` attached to a member states an order whose source end the notation leaves implicit, and
+reconstructing it means inferring which node an edge belongs to from member position — silent
+reattachment, so it is reported instead), three prefix-metadata models, three duplicate
+declarations (two names genuinely declared twice in one namespace, which the graph would merge),
+two operator-expression members, and one anonymous `snapshot`. One further model converts but is
+not byte-stable in its notation across a second hop: the graph records the `ref` of
+`end [*] ref cause : Situation;` faithfully and writes it back as `end ref attribute cause`,
+which the parser reads with no reference flag — a parser gap, noted rather than worked around.
+
+RDF stays **experimental**: D1 (expressions as source text), D2 (end-binding heads) and D3 (no
+triplestore round trip) are untouched by this, and D3 remains the gate on calling the path
+stable.
 
 ---
 

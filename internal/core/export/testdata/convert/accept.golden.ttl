@@ -49,6 +49,7 @@ elmt:Accepts::Observe::trigger::scene
     sysml:owningNamespace elmt:Accepts::Observe::trigger ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "scene" ;
+    sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:isReference "true"^^xsd:boolean ;
     sysml:isAccept "true"^^xsd:boolean ;
     sysml:direction "out" ;
@@ -87,6 +88,7 @@ elmt:Accepts::Watch::framed::scene
     sysml:owningNamespace elmt:Accepts::Watch::framed ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "scene" ;
+    sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:isReference "true"^^xsd:boolean ;
     sysml:isAccept "true"^^xsd:boolean ;
     sysml:direction "out" ;
