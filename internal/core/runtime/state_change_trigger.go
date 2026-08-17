@@ -66,6 +66,17 @@ func (e *StateExecutor) pollChangeEvents() (bool, error) {
 		if e.losesToNestedTransition(candidates, candidate) || !e.isActive(candidate.leaf) {
 			continue
 		}
+		// An earlier candidate's effect may have blocked this guard since the poll
+		// read it, and the fire path re-tests it: a transition that would not move
+		// the machine must stay armed rather than latch as fired.
+		pass, err := e.passesGuard(candidate.trans)
+		if err != nil {
+			return fired, fmt.Errorf("eval change guard: %w", err)
+		}
+		if !pass {
+			poll.wait(candidate.trans, candidate.source.Name, "guard is false")
+			continue
+		}
 		// The edge is latched before it is taken: an effect that leaves the
 		// condition true must not enable the same edge again.
 		e.changeFired[candidate.trans] = true

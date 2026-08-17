@@ -218,6 +218,66 @@ func TestChangeTriggerPollingKeepsEventBudget(t *testing.T) {
 	}
 }
 
+// A guard blocked by an earlier candidate's effect in the same poll stays armed:
+// the fire path re-tests the guard, so latching such an edge would lose it for as
+// long as its condition stays true.
+func TestChangeTriggerKeepsAnEdgeBlockedDuringThePoll(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			attribute ready : Boolean = false;
+			attribute allowed : Boolean = true;
+			attribute laps : Integer = 0;
+			initial start;
+			state Working {
+				region first {
+					initial f0;
+					state fWait;
+					state fDone;
+					transition f0 to fWait;
+					transition fWait to fDone accept when ready do assign allowed := false;
+				}
+				region second {
+					initial s0;
+					state sWait;
+					state sDone { entry { laps = 1; } }
+					transition s0 to sWait;
+					transition sWait to sDone accept when ready if allowed;
+				}
+			}
+			start then Working;
+		}
+	}`)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	// Both regions watch the condition, so raising it puts both transitions in
+	// one poll and the first one's effect blocks the second one's guard.
+	exec.stateData["ready"] = boolValue(true)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("raise condition: %v", err)
+	}
+	if !containsState(exec.stateVisits, "fDone") {
+		t.Fatalf("the first region did not fire, visits: %v", exec.stateVisits)
+	}
+	if containsState(exec.stateVisits, "sDone") {
+		t.Fatalf("the second region fired against a blocked guard, visits: %v", exec.stateVisits)
+	}
+	if reason := exec.SuspendReason(); !strings.Contains(reason, "guard is false") {
+		t.Errorf("reason = %q, want the guard blocked during the poll", reason)
+	}
+
+	// The blocked edge is still armed, so it fires once its guard passes even
+	// though its condition never went false.
+	exec.stateData["allowed"] = boolValue(true)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("rerun: %v", err)
+	}
+	if laps := exec.stateData["laps"]; laps.Kind != ValConst || laps.Const.Int != 1 {
+		t.Errorf("laps = %v, want 1: the blocked edge was lost", laps)
+	}
+}
+
 // A change condition moving the machine out of a deferring state recalls the
 // events that state held back: the run dispatches the deferred signal rather
 // than declaring itself settled with the signal still held.
