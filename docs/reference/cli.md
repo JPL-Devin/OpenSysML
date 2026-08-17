@@ -292,35 +292,35 @@ sysml: cannot convert the substate member at examples/state-machine-demo.sysml:7
 ```
 
 Materializing an object is part of the run, so what it finds is a diagnostic
-about the model: `-instantiate` reports every slot it could not materialize —
+about the model: `-instantiate` reports every feature value it could not materialize —
 a default whose value count does not conform to the multiplicity governing its
 feature, which is the assumed `1..1` for a feature that declares none — and
 `-validate` reports `no errors` only for a run that found none. The prompt surface
-follows the same rule: a command that rendered a slot it could not materialize —
-a `%features` listing carrying `<error: …>`, or an `%eval` of such a slot, pinned to
+follows the same rule: a command that rendered a feature value it could not materialize —
+a `%features` listing carrying `<error: …>`, or an `%eval` of such a value, pinned to
 a context (`%eval in <name> : <expr>`) or not — answered nothing about it, so a
 session driven from a pipe exits `2` rather than reporting success, whatever
-analysis found. A name that is no slot of the object is a request the command got
-wrong, not a slot that failed to materialize, and does not change the status.
+analysis found. A name that is no feature of the object is a request the command got
+wrong, not a feature value that failed to materialize, and does not change the status.
 
 ```bash
 $ sysml model.sysml -instantiate test::craft -validate; echo $?
-error: slot craft.volumes: multiplicity violation: 2 value(s) bound to a feature with multiplicity upper bound 1
+error: feature value craft.volumes: multiplicity violation: 2 value(s) bound to a feature with multiplicity upper bound 1
 sysml: model.sysml did not materialize cleanly
 2
 
 $ printf '%%instantiate test::craft\n%%features test::craft\n' | sysml model.sysml; echo $?
 Instance: test::craft (ID: 1)
 Features:
-  volumes: <error: slot craft.volumes: multiplicity violation: 2 value(s) bound to a feature with multiplicity upper bound 1>
+  volumes: <error: feature value craft.volumes: multiplicity violation: 2 value(s) bound to a feature with multiplicity upper bound 1>
 2
 ```
 
-Nesting multiplies, and reading a slot materializes the objects it holds, so the
+Nesting multiplies, and reading a feature value materializes the objects it holds, so the
 check is bounded, as the `%features` listing is: a model wide enough to spend that
 budget, deeper than the walk descends, or one whose part holds its own kind is
 reported as checked in part (`warning: … materialization is bounded; not every
-slot was checked`, and `no errors in the slots checked`) rather than read to the
+feature value was checked`, and `no errors in the feature values checked`) rather than read to the
 end. Being no model error, that leaves the status `0`.
 
 The prompt is the exception: a line it could not carry out is reported and the
@@ -328,7 +328,7 @@ session goes on, and `%quit` or Ctrl-D exits `0`. `sysml model.sysml` at a
 terminal loads the model, reports what analysis found, and opens the prompt with
 status `0` — the prompt is where the model gets fixed. The same command with its
 lines coming from a pipe or a file gates: it exits `2` for a model that did not
-analyse cleanly, and for one whose slots a command could not materialize.
+analyse cleanly, and for one whose feature values a command could not materialize.
 
 ## Use Cases
 

@@ -52,7 +52,7 @@ func TestCheckReportsMaterializationDiagnostics(t *testing.T) {
 `,
 			object: "M::craft",
 			status: 2,
-			want:   []string{"slot craft.volumes", "1 value(s) bound to a feature with multiplicity lower bound 3"},
+			want:   []string{"feature value craft.volumes", "1 value(s) bound to a feature with multiplicity lower bound 3"},
 		},
 		{
 			name: "a multi-valued default on a feature declaring no multiplicity is held to 1..1",
@@ -64,7 +64,7 @@ func TestCheckReportsMaterializationDiagnostics(t *testing.T) {
 `,
 			object: "M::craft",
 			status: 2,
-			want:   []string{"slot craft.volumes", "2 value(s) bound to a feature with multiplicity upper bound 1"},
+			want:   []string{"feature value craft.volumes", "2 value(s) bound to a feature with multiplicity upper bound 1"},
 		},
 		{
 			name: "a redefined feature and the feature it redefines read one slot, reported once",
@@ -94,7 +94,7 @@ func TestCheckReportsMaterializationDiagnostics(t *testing.T) {
 `,
 			object: "M::craft",
 			status: 0,
-			want:   []string{"materialization is bounded", "no errors in the slots checked"},
+			want:   []string{"materialization is bounded", "no errors in the feature values checked"},
 		},
 	}
 
@@ -276,7 +276,7 @@ func TestPipedSessionExitsOnAMaterializationFailure(t *testing.T) {
 // the session is where an unusable model gets fixed, so what a command could not
 // materialize is reported at the prompt without deciding the run.
 func TestSessionStatusAtATerminal(t *testing.T) {
-	failure := []error{errors.New("slot X.bad: multiplicity violation")}
+	failure := []error{errors.New("feature value X.bad: multiplicity violation")}
 
 	cases := []struct {
 		name     string

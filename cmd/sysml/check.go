@@ -207,7 +207,7 @@ func runChecks(files []string, exprs []string, c checks) int {
 		// check is bounded; what it did not reach is unchecked rather than clean.
 		if report.Bounded {
 			bounded = true
-			rep.warn(fmt.Sprintf("%s: materialization is bounded; not every slot was checked", name))
+			rep.warn(fmt.Sprintf("%s: materialization is bounded; not every feature value was checked", name))
 		}
 	}
 
@@ -217,7 +217,7 @@ func runChecks(files []string, exprs []string, c checks) int {
 	if c.validate {
 		switch {
 		case rep.clean() && bounded:
-			rep.info([]string{fmt.Sprintf("✓ %s: no errors in the slots checked", namedModels(files))})
+			rep.info([]string{fmt.Sprintf("✓ %s: no errors in the feature values checked", namedModels(files))})
 		case rep.clean():
 			rep.info([]string{fmt.Sprintf("✓ %s: no errors", namedModels(files))})
 		default:

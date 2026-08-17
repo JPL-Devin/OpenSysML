@@ -146,8 +146,8 @@ classes first), nothing environment-dependent written — so it can be committed
 diffed; `python/tests/golden/vehicle_types.py` is exactly that.
 
 Generated classes are views, not copies: attribute access goes to the underlying
-slot on every read, and Tier 1 behaviour is preserved. A slot that failed to
-evaluate raises `SlotError`; a slot holding a value of another type than the model
+feature value on every read, and Tier 1 behaviour is preserved. A feature value that
+failed to evaluate raises `FeatureValueError`; one holding a value of another type than the model
 declared raises `TypeMismatchError` rather than returning a wrongly typed value.
 
 ### SysML → Python mapping
@@ -178,7 +178,7 @@ dodge one.
 - **Behavioral and connector usages.** Only structural usages (attribute, part,
   item, occurrence, individual, port, enum) become properties. Action, state,
   calc, constraint, requirement, connection, flow, interface, allocation and case
-  usages are not instance slots and are skipped.
+  usages are not instance feature values and are skipped.
 - **Redefinition narrowing.** A redefinition reuses the redefined feature's name,
   so its property overrides the base class's, and takes over the type and
   multiplicity it does not restate; a redefinition that *narrows* the type is
@@ -196,7 +196,7 @@ dodge one.
 - **Name collisions.** Two definitions with the same simple name both get
   path-qualified class names (`A_Thing`, `B_Thing`). A feature named like a member
   `TypedObject` provides (`instance`, `from_instance`, `sysml_id`) gets a trailing
-  underscore (`instance_`); the SysML slot name it reads is unchanged.
+  underscore (`instance_`); the SysML feature name it reads is unchanged.
 
 `pysysml.connect(host, port, auto_start=True)` returns a `Connection` when you
 want to manage the service yourself; the module-level functions share a lazily
@@ -263,7 +263,7 @@ make python-proto
 - `connection.py` — gRPC channel, service lifecycle, ownership of services it started
 - `model.py` — a parsed model: root symbol and diagnostics
 - `symbol.py` — lazy symbol proxy, fetches children on demand
-- `instance.py` — instantiated object and its slots
+- `instance.py` — instantiated object and its feature values
 - `conversion.py` — a written model, its formats, extension inference, and the
   `ExperimentalFeatureWarning` an RDF conversion raises
 - `query.py` — the standard's Query payload, translated and its answers
@@ -271,7 +271,7 @@ make python-proto
 - `errors.py` — the exception hierarchy and the gRPC status translation
 - `capabilities.py` — what the connected service reports it supports
 - `typefacts.py` — a symbol's static type, multiplicity and supertypes
-- `typed.py` — base class and slot decoders the generated classes are built on
+- `typed.py` — base class and feature-value decoders the generated classes are built on
 - `generate.py` — emits typed classes from a parsed model
 - `diagnostic.py` — one diagnostic with its source location
 - `proto/` — generated message classes and stubs

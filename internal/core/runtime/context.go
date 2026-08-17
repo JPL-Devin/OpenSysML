@@ -23,7 +23,7 @@ type Context struct {
 	instances map[int64]*Instance
 
 	// maxActionSteps, maxStateEvents and maxDoSteps bound the executors this
-	// context runs: token-flow steps, dispatched events, and do activity actions.
+	// context runs: token-flow steps, dispatched events, and do actions.
 	// Unlike maxSteps they are counted by the executor, not here.
 	maxActionSteps int64
 	maxStateEvents int64

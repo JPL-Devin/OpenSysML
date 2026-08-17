@@ -2,8 +2,9 @@
 
 A generated class derives from :class:`TypedObject` and exposes one property per
 SysML feature, each delegating to the underlying Tier 1 :class:`~pysysml.instance.Instance`
-through :func:`slot`, :func:`optional_slot` or :func:`list_slot`. Slot decoding,
-including its ``SlotError`` behaviour, is unchanged: this layer only states what
+through :func:`feature_value`, :func:`optional_feature_value` or
+:func:`list_feature_value`. Decoding,
+including its ``FeatureValueError`` behaviour, is unchanged: this layer only states what
 type a decoded value is expected to have, and reports a mismatch rather than
 returning a wrongly typed value.
 """
@@ -27,7 +28,10 @@ __all__ = [
     "as_quantity",
     "as_str",
     "as_typed",
+    "feature_value",
+    "list_feature_value",
     "list_slot",
+    "optional_feature_value",
     "optional_slot",
     "slot",
 ]
@@ -72,7 +76,7 @@ class TypedObject:
           class carries, so the client cannot relate it to a definition at all.
           Rejecting it would break instantiating a usage, which is the ordinary
           way to get an instance, so an unrecognized type is accepted — the
-          per-slot decoding in this module still reports a wrong shape.
+          per-feature decoding in this module still reports a wrong shape.
 
         Rejected: an instance whose type *is* described by a generated class that
         is not this class or a subclass of it.
@@ -92,9 +96,9 @@ class TypedObject:
     def unchecked(cls: "type[TypedObjectT]", instance: Instance) -> TypedObjectT:
         """Return a typed view over ``instance`` without checking its type.
 
-        For a caller who knows better than the reported type — reading the slots
+        For a caller who knows better than the reported type — reading the feature values
         of a partially materialized instance, for instance. Accessing a property
-        the instance does not have still raises from the slot decoder.
+        the instance does not have still raises from the decoder.
         """
         return cls(instance)
 
@@ -131,14 +135,14 @@ def _mismatch(feature_name: str, expected: str, value: object) -> TypeMismatchEr
 
 
 def as_bool(feature_name: str, value: object) -> bool:
-    """Decode a Boolean slot value."""
+    """Decode a Boolean feature value."""
     if isinstance(value, bool):
         return value
     raise _mismatch(feature_name, "bool", value)
 
 
 def as_int(feature_name: str, value: object) -> int:
-    """Decode an Integer/Natural slot value."""
+    """Decode an Integer/Natural feature value."""
     if isinstance(value, bool) or not isinstance(value, int):
         raise _mismatch(feature_name, "int", value)
     return value
@@ -156,7 +160,7 @@ def as_float(feature_name: str, value: object) -> float:
 
 
 def as_str(feature_name: str, value: object) -> str:
-    """Decode a String slot value."""
+    """Decode a String feature value."""
     if isinstance(value, str):
         return value
     raise _mismatch(feature_name, "str", value)
@@ -170,14 +174,14 @@ def as_quantity(feature_name: str, value: object) -> Quantity:
 
 
 def as_enum_literal(feature_name: str, value: object) -> EnumLiteral:
-    """Decode an enumeration-typed slot, which holds a literal rather than an instance."""
+    """Decode an enumeration-typed feature, which holds a literal rather than an instance."""
     if isinstance(value, EnumLiteral):
         return value
     raise _mismatch(feature_name, "EnumLiteral", value)
 
 
 def as_object(feature_name: str, value: object) -> object:
-    """Decode a slot whose SysML type has no sound Python type."""
+    """Decode a feature value whose SysML type has no sound Python type."""
     return value
 
 
@@ -192,12 +196,12 @@ def as_typed(cls: "type[TypedObjectT]") -> Callable[[str, object], TypedObjectT]
     return decode
 
 
-def slot(obj: TypedObject, feature_name: str, decode: Callable[[str, object], T]) -> T:
-    """Return the decoded value of a required single-valued slot.
+def feature_value(obj: TypedObject, feature_name: str, decode: Callable[[str, object], T]) -> T:
+    """Return the decoded value of a required single-valued feature.
 
     Raises:
-        SlotError: If the slot failed to evaluate or was never materialized.
-        TypeMismatchError: If the slot is absent or holds another type.
+        FeatureValueError: If the value failed to evaluate or was never materialized.
+        TypeMismatchError: If the feature value is absent or holds another type.
     """
     value = _require(obj, feature_name)
     if isinstance(value, list):
@@ -205,10 +209,10 @@ def slot(obj: TypedObject, feature_name: str, decode: Callable[[str, object], T]
     return decode(feature_name, value)
 
 
-def optional_slot(
+def optional_feature_value(
     obj: TypedObject, feature_name: str, decode: Callable[[str, object], T]
 ) -> Optional[T]:
-    """Return the decoded value of a ``0..1`` slot, or None when it holds no value."""
+    """Return the decoded value of a ``0..1`` feature, or None when it holds no value."""
     instance = obj.instance
     if feature_name not in instance:
         return None
@@ -224,10 +228,10 @@ def optional_slot(
     return decode(feature_name, value)
 
 
-def list_slot(
+def list_feature_value(
     obj: TypedObject, feature_name: str, decode: Callable[[str, object], T]
 ) -> List[T]:
-    """Return the decoded values of a multi-valued slot; an absent or null slot is empty."""
+    """Return the decoded values of a multi-valued feature; an absent or null one is empty."""
     instance = obj.instance
     if feature_name not in instance:
         return []
@@ -247,3 +251,9 @@ def _require(obj: TypedObject, feature_name: str) -> object:
     if value is None:
         raise _mismatch(feature_name, "a value", None)
     return value
+
+
+#: Deprecated spellings of the decoders above, kept for generated modules.
+slot = feature_value
+optional_slot = optional_feature_value
+list_slot = list_feature_value

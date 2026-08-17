@@ -20,7 +20,7 @@ type expectedValue struct {
 	Value interface{} `json:"value"`
 }
 
-// expectedSlot is the fixture encoding of a pb.SlotValue.
+// expectedSlot is the fixture encoding of a pb.FeatureValue.
 type expectedSlot struct {
 	Materialized bool        `json:"materialized"`
 	ValueKind    string      `json:"value_kind"`
@@ -247,7 +247,7 @@ func runInstantiateCase(t *testing.T, srv *Service, ctx context.Context, modelHa
 		t.Errorf("type_symbol_id = %q, want %q", resp.Instance.TypeSymbolId, tc.SymbolID)
 	}
 	for name, want := range tc.ExpectedSlots {
-		slot, ok := resp.Instance.Slots[name]
+		slot, ok := resp.Instance.FeatureValues[name]
 		if !ok {
 			t.Errorf("missing slot %q", name)
 			continue

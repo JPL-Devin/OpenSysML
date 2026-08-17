@@ -1096,7 +1096,7 @@ class Connection:
     def _values_to_python(self, pb_values):
         """Convert a name → Value map, keeping an unsupported value as its error.
 
-        Mirrors Instance.slots: one value the wire format cannot represent must
+        Mirrors Instance.feature_values: one value the wire format cannot represent must
         not discard the entries around it.
         """
         result = {}

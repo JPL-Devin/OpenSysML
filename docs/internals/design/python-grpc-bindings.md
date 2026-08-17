@@ -1334,7 +1334,7 @@ jupyter nbconvert --execute --to notebook examples/pysysml_demo.ipynb
 2. Implement `pysysml/display.py`
    - `_repr_html_()` for Model (tree + diagnostics summary)
    - `_repr_html_()` for Symbol (formatted definition)
-   - `_repr_html_()` for Instance (slots table)
+   - `_repr_html_()` for Instance (feature values table)
    - Text fallback for non-notebook use
 
 3. Update classes to use display hooks

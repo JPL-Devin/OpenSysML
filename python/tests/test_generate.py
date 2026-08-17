@@ -218,7 +218,7 @@ def test_feature_named_like_a_typed_object_member_is_renamed():
         ]
     )
     assert "def instance_(self) -> float:" in source
-    assert '_t.slot(self, "instance", _t.as_float)' in source
+    assert '_t.feature_value(self, "instance", _t.as_float)' in source
 
     namespace: dict = {}
     exec(compile(source, "generated", "exec"), namespace)
@@ -531,7 +531,7 @@ def test_collect_definitions_takes_type_and_multiplicity_from_a_redefinition():
     assert redefining.facts.multiplicity == Multiplicity("0", "*")
 
     source = render_module(list(definitions.values()))
-    assert '_t.list_slot(self, "engine", _t.as_typed(Engine))' in source
+    assert '_t.list_feature_value(self, "engine", _t.as_typed(Engine))' in source
 
 
 def test_render_module_notes_ungenerated_base():
@@ -558,8 +558,8 @@ def test_render_module_uses_multiplicity_accessors():
             )
         ]
     )
-    assert '_t.optional_slot(self, "spare", _t.as_float)' in source
-    assert '_t.list_slot(self, "wheels", _t.as_float)' in source
+    assert '_t.optional_feature_value(self, "spare", _t.as_float)' in source
+    assert '_t.list_feature_value(self, "wheels", _t.as_float)' in source
 
 
 def test_render_module_empty_model():

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from pysysml import typed as _t
 
-SYSML_GENERATOR_VERSION = "2"
+SYSML_GENERATOR_VERSION = "3"
 """Emission schema this module was generated with."""
 
 SYSML_MODEL_HASH = "sha256:fdfb382a055a458ee6d161e64d120ddf0f4711b3d38a7279e0fc3536ff194fdf"
@@ -20,7 +20,7 @@ class Engine(_t.TypedObject):
     @property
     def power(self) -> float:
         """attributeUsage Demo::Engine::power."""
-        return _t.slot(self, "power", _t.as_float)
+        return _t.feature_value(self, "power", _t.as_float)
 
 
 class Vehicle(_t.TypedObject):
@@ -31,9 +31,9 @@ class Vehicle(_t.TypedObject):
     @property
     def engine(self) -> Engine:
         """partUsage Demo::Vehicle::engine."""
-        return _t.slot(self, "engine", _t.as_typed(Engine))
+        return _t.feature_value(self, "engine", _t.as_typed(Engine))
 
     @property
     def mass(self) -> float:
         """attributeUsage Demo::Vehicle::mass."""
-        return _t.slot(self, "mass", _t.as_float)
+        return _t.feature_value(self, "mass", _t.as_float)

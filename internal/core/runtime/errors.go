@@ -30,7 +30,7 @@ var (
 	ErrMultiplicityViolation = errors.New("multiplicity violation")
 
 	// ErrUninitializedSlot is returned when accessing a slot that has no value and no default.
-	ErrUninitializedSlot = errors.New("uninitialized slot")
+	ErrUninitializedSlot = errors.New("uninitialized feature value")
 
 	// ErrNotACalc is returned when a calc invocation targets a symbol that is
 	// not a calc definition or usage.
@@ -116,7 +116,7 @@ var (
 
 	// ErrCyclicSlot is returned when a slot's default value depends, directly or
 	// through other slots, on the slot being computed.
-	ErrCyclicSlot = errors.New("cyclic slot dependency")
+	ErrCyclicSlot = errors.New("cyclic feature value dependency")
 
 	// ErrConnectorEnd is returned when a connector cannot be attached to the
 	// features its ends name: an end naming nothing reachable from the object
@@ -218,7 +218,7 @@ var (
 	// materialized, whatever kept it from materializing. Reading a slot is what
 	// finds such a failure, so a surface reporting one answered nothing about
 	// that slot rather than deciding anything about the model.
-	ErrSlotMaterialization = errors.New("slot could not be materialized")
+	ErrSlotMaterialization = errors.New("feature value could not be materialized")
 
 	// ErrNoSubject is returned when the feature a satisfaction assertion names
 	// with `by` cannot supply a subject: it resolves to nothing, or no object of
