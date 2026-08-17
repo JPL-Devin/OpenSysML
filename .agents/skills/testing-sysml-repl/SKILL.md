@@ -2517,7 +2517,13 @@ number rather than quoting the table.
   listening `pytest python/tests/ -q` was 369 passed / 26 skipped at 0.0.8; with a service already
   listening the integration tests run instead of skipping (since PR #204 nothing fails either way,
   and CI now starts a service). Say which way a row was measured. `go test -race -count=1 ./...`
-  was 3,682 pass / 5 skip / 3,687 total.
+  was 3,682 pass / 5 skip / 3,687 total at 0.0.8, and 4,440 / 7 / 4,447 at 0.0.9 — recount rather
+  than trusting either. Count **first-level** subtests: `variant_connection_per_owner` registers one
+  sub-subtest per owner, so counting every `=== RUN` line reported 299 conformance cases where 297
+  fixtures exist, and inflated the robustness row from 173 to 199. Four documents are allowed to
+  state counts (`docs/project/spec-compliance.md`, `README.md`, `docs/project/roadmap.md`,
+  `docs/project/training-examples.md`) and must be updated in one commit; anywhere else, link to
+  spec-compliance rather than adding a fifth copy.
 - **Error-class claims: check the export path.** A class can exist in `pysysml.errors` and be absent
   from the package surface — `hasattr(pysysml, name)` is the check, and
   `TestPackageSurface` in `python/tests/test_errors.py` now locks every exception in

@@ -43,7 +43,7 @@ go test -v -run TestStdlibConformance ./internal/core/libs
 **Purpose:** Verify AST structure matches expected output
 
 - **Test:** `TestGolden` (internal/core/parser/)
-- **Fixtures:** `testdata/parse/*.sysml` and `*.kerml` (82 representative files)
+- **Fixtures:** `testdata/parse/*.sysml` and `*.kerml` (one representative file per construct)
 - **Goldens:** `testdata/parse/*.golden` (AST dumps)
 - **Acceptance:** Parse output matches golden file
 
@@ -73,7 +73,7 @@ Future work: If SysML printer added, verify `parse(print(parse(input))) == parse
 **Purpose:** Verify parser rejects malformed input gracefully
 
 - **Test:** `TestNegative` (internal/core/parser/)
-- **Coverage:** 127 malformed-input subtests
+- **Coverage:** one subtest per malformed input — count in [the measured counts](../project/spec-compliance.md)
 - **Acceptance:** Each case produces diagnostics (never panics)
 
 **Examples:**
@@ -93,7 +93,7 @@ New behavioral features (actions, states, calc, constraints, requirements) requi
 **Purpose:** Lock in parse structure before execution changes
 
 - **Location:** `internal/core/parser/testdata/parse/` (behavioral fixtures)
-- **Coverage:** 82 fixtures in total, behavioral ones among them
+- **Coverage:** the behavioral fixtures among the whole set — count in [the measured counts](../project/spec-compliance.md)
 - **Acceptance:** `TestGolden` passes, AST dumps match expectations
 
 **Behavioral fixtures:**
@@ -112,12 +112,12 @@ New behavioral features (actions, states, calc, constraints, requirements) requi
 - **Schema:** `internal/core/runtime/testdata/conformance/README.md`
 - **Allowlist:** `known_failures.txt` (currently empty)
 
-**Coverage (211 cases - all passing, by fixture prefix):**
-- Calc: parameter binding, return values, defaults, inherited parameters, unary ops, qualified names, type coercion, body-local usages, statement bodies, nested and from-constraint invocation (×56)
-- Action: token flow, outputs, nested invocation, send/accept, port communication, `perform` reference and shorthand, accept...then, flows, loops and decisions (×50)
-- State: simple, do behavior, concurrent do, transition effect, choice/junction/fork-join pseudostates, orthogonal regions and region pseudostates, shallow/deep history, entry/exit points, deferred/undeferred events, call and timed triggers, signal discrimination/unmatched, self signal (×41)
-- Requirement: require, subject, actor, assume, nested (×12)
-- Instance (×9), unit and quantity (×7), constraint assert/assume/negation (×7), satisfy (×5), variation (×5), redefinition (×5), variant (×3), feature chains (×3), ball-and-chain (×3), and one each of accept, attribute, connector, cubesat and multiplicity
+**Coverage (all passing, by fixture prefix; counts in [the measured counts](../project/spec-compliance.md)):**
+- Calc: parameter binding, return values, defaults, inherited parameters, unary ops, qualified names, type coercion, body-local usages, statement bodies, nested and from-constraint invocation
+- Action: token flow, outputs, nested invocation, send/accept, port communication, `perform` reference and shorthand, accept...then, flows, loops and decisions
+- State: simple, do behavior, concurrent do, transition effect, choice/junction/fork-join pseudostates, orthogonal regions and region pseudostates, shallow/deep history, entry/exit points, deferred/undeferred events, call and timed triggers, signal discrimination/unmatched, self signal
+- Requirement: require, subject, actor, assume, nested
+- Instance, unit and quantity, constraint assert/assume/negation, satisfy, variation, redefinition, variant, feature chains, string operations, nested behaviors, element filters, ball-and-chain, and one each of attribute, connector, cubesat and view
 
 ```bash
 go test -v -run TestExecutionConformance ./internal/core/runtime
@@ -130,7 +130,7 @@ go test -v -run TestExecutionConformance ./internal/core/runtime
 - **Test:** `TestExecutionTrace` (internal/core/runtime/)
 - **Format:** `.trace.golden` files
 - **Determinism:** Token sorting by ID, fixed event queue tie-breaking
-- **Coverage:** 69 `.trace.golden` files (action×28, calc×25, state×12, constraint×4)
+- **Coverage:** `.trace.golden` files for action, calc, state, constraint, accept and string execution
 
 **Trace format examples:**
 - Action: `step 1: token T1@node1, token T2@node2` (sorted)
@@ -146,7 +146,7 @@ go test -run TestExecutionTrace -update-traces ./internal/core/runtime
 **Purpose:** Verify malformed/pathological behaviors fail gracefully
 
 - **Test:** `TestRuntimeRobustness` (internal/core/runtime/)
-- **Coverage:** 146 failure-mode subtests
+- **Coverage:** one subtest per failure mode — count in [the measured counts](../project/spec-compliance.md)
 - **Acceptance:** Typed errors, never panic, 60s timeout guard
 
 **Failure modes:**
