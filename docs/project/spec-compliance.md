@@ -58,9 +58,9 @@
 - Assignment statements in an action node's body
 - Conditional statement (`if <cond> { … } else { … }`), nestable in either direction with a loop
 - Pre-condition loop (`while <cond> { … }`) and post-condition loop (`loop { … } until <cond>;`)
-- Iteration over a collection (`for <x> in <collection> { … }`, ⚠️ over a sequence or a set the expression layer can produce)
+- Iteration over a collection (`for <x> in <collection> { … }`, over every collection the expression layer produces; a non-collection input is reported)
 - Send statement (⚠️ typed messages addressed by name or routed through a connected port)
-- Accept action (⚠️ takes the oldest message of its type; no suspension)
+- Accept action (takes the oldest message of its type, parking its token until one arrives)
 - Object flow (pin-to-pin data)
 - Succession edges
 - Deadlock detection
@@ -941,15 +941,13 @@ are tracked here):
 - Structured activities with pin connectors
 
 **State Machines (Advanced):**
-- Textual notation for history, entry and exit point pseudostates, and for deferred events (the runtime supports them; only the syntax is missing)
 - Protocol state machines
 
 **Object Model:**
 - Dynamic object creation/destruction
 - Classifier behaviors
 - Operation invocation on instances
-- Port-based routing (basic validation only)
-- Connector binding with full routing
+- Connector binding with full routing (a `via` send is routed by the connections, end direction and conjugation; an *addressed* send still identifies its target and port by simple name)
 
 **Type System:**
 - Full generic/specialization validation
