@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	pb "github.com/Open-MBEE/Systemica/api/proto"
+	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
 // TestGRPCRobustness exercises failure modes: missing models, invalid symbols, parse errors.
@@ -159,6 +160,29 @@ func TestGRPCRobustness(t *testing.T) {
 		}
 		if execResp.Error == "" {
 			t.Error("Expected error field for missing state machine, got empty")
+		}
+	})
+
+	t.Run("parse_with_unavailable_standard_library", func(t *testing.T) {
+		// A library that would not load leaves the index without it. The request
+		// must still answer, reporting unresolved names as diagnostics.
+		svc := mustNewService(t, 10)
+		defer svc.Close()
+		svc.libIndexes = newIndexPool(0, symbols.NewIndex)
+
+		resp, err := svc.ParseFile(context.Background(), &pb.ParseFileRequest{
+			Source: &pb.ParseFileRequest_Content{
+				Content: "package test { attribute def A { attribute x : ScalarValues::Real; } }",
+			},
+		})
+		if err != nil {
+			t.Fatalf("ParseFile RPC failed: %v (should return diagnostics, not RPC error)", err)
+		}
+		if len(resp.Diagnostics) == 0 {
+			t.Error("Expected diagnostics for library types that did not load, got none")
+		}
+		if _, ok := svc.cache.Get(resp.ModelHash); !ok {
+			t.Error("Expected the model to be cached despite the missing library")
 		}
 	})
 }

@@ -78,6 +78,10 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Build the standard library indexes in the background, so the first model to
+	// arrive does not pay for the library and startup stays prompt.
+	svc.Prewarm()
+
 	// Start health check server
 	healthSrv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", *healthPort),
@@ -120,6 +124,7 @@ func main() {
 
 	<-shutdown
 	slog.Info("Shutting down gracefully...")
+	svc.Close()
 
 	// Stop health check server
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

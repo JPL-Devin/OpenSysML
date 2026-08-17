@@ -239,6 +239,24 @@ class rather than dropped silently.
   `%instantiate`, and `Model.eval(expr, subject=…)` reads that object's values behind the
   `evaluate_subject` capability; a call without a subject is unchanged.
 
+## P5 — the standard library was rebuilt on every cold `ParseFile` — done
+
+`ParseFile` built a new `symbols.Index` on every cache miss — loading every standard library unit
+into it and expanding the library's wildcard imports — so ~99% of a cold load (28-31 ms loading,
+38-41 ms expanding) was work that does not depend on the model. The REPL and the LSP pay it once
+per session; the service paid it per distinct model, which is what made a Python parameter sweep
+varying the model text impractical at 70 ms x N of pure overhead.
+
+The service now keeps a small pool of prewarmed library indexes (`internal/grpc/libindex.go`,
+sized by `SYSML_GRPC_INDEX_POOL`, default 4): a cache miss takes one, adds its document and keeps
+it with its `CachedModel`. An index is handed out once, so cached models stay independent and
+nothing is shared behind a mutex; the pool refills in the background and an empty pool builds one
+inline, so a result never depends on prewarming. Measured on this VM with
+`examples/combined-behavioral-demo.sysml`, a cold `ParseFile` went from ~100-128 ms to ~0.5-0.9 ms
+with identical diagnostics. What a model resolves against is pinned by test rather than asserted:
+`TestPooledIndexMatchesFreshlyBuiltIndex` compares diagnostics and every qualified lookup of a
+pooled index against one built on the request path.
+
 ---
 
 # Track A — runtime and semantic gaps
