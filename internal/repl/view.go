@@ -4,8 +4,10 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/Open-MBEE/Systemica/internal/core/resolve"
 	"github.com/Open-MBEE/Systemica/internal/core/runtime"
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
+	"github.com/Open-MBEE/Systemica/internal/core/source"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
@@ -59,7 +61,8 @@ func (s *Session) View(name string) ([]string, error) {
 			out = append(out, "    "+s.viewElementLine(view))
 		}
 	}
-	report, err := model.ViewConformance(sym, concernEvaluator{session: s, ctx: ctx})
+	evaluator := concernEvaluator{session: s, ctx: ctx, reported: newReportRuntime(s)}
+	report, err := model.ViewConformance(sym, evaluator)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", notationName(fqn), err)
 	}
@@ -125,13 +128,14 @@ func quoted(name string) string {
 // concernEvaluator answers whether a framed concern holds of one exposed element
 // through the runtime's requirement engine, as `satisfy <concern> by <element>`.
 type concernEvaluator struct {
-	session *Session
-	ctx     *runtime.Context
+	session  *Session
+	ctx      *runtime.Context
+	reported *reportRuntime
 }
 
 // EvaluateConcern evaluates concern's conditions against an object of element.
 func (e concernEvaluator) EvaluateConcern(concern, element *symbols.Symbol) (bool, error) {
-	inst, err := e.session.viewSubject(element)
+	ctx, inst, err := e.viewSubject(element)
 	if err != nil {
 		return false, err
 	}
@@ -146,7 +150,7 @@ func (e concernEvaluator) EvaluateConcern(concern, element *symbols.Symbol) (boo
 		assertion.Requirement = requirement
 		assertion.RequirementRef = requirement.Name
 	}
-	result, err := e.ctx.CheckSatisfactionOn(assertion, inst)
+	result, err := ctx.CheckSatisfactionOn(assertion, inst)
 	// A concern stating no condition lacks a condition, not a requirement.
 	if errors.Is(err, runtime.ErrNoRequirement) || errors.Is(err, runtime.ErrNoConditions) {
 		return false, errNoConcernCondition
@@ -154,25 +158,60 @@ func (e concernEvaluator) EvaluateConcern(concern, element *symbols.Symbol) (boo
 	return result.Holds, err
 }
 
-// viewSubject returns the object a concern is evaluated against for one exposed
-// element: the one the session already created for it, else one created and kept
-// as %satisfy keeps its subject, so a repeated %view is about the same object
-// rather than another copy of it.
-func (s *Session) viewSubject(element *symbols.Symbol) (*runtime.Instance, error) {
-	name := s.viewElementFQN(element)
-	if inst, ok := s.instances[name]; ok {
-		return inst, nil
+// viewSubject returns the object a concern is evaluated against, with its runtime:
+// the object the session holds for that element, else one the report materializes
+// in a runtime of its own, so a report leaves the session holding nothing new.
+func (e concernEvaluator) viewSubject(element *symbols.Symbol) (*runtime.Context, *runtime.Instance, error) {
+	name := e.session.viewElementFQN(element)
+	if inst, ok := e.session.instances[name]; ok {
+		return e.ctx, inst, nil
 	}
-	ctx, err := s.getOrCreateRuntime()
+	ctx, err := e.reported.runtime()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	if inst, ok := e.reported.objects[name]; ok {
+		return ctx, inst, nil
 	}
 	inst, err := ctx.Instantiate(element)
 	if err != nil {
+		return nil, nil, err
+	}
+	e.reported.objects[name] = inst
+	return ctx, inst, nil
+}
+
+// reportRuntime holds the objects one report materialized for itself, in a runtime
+// the session does not keep, so they reach neither %instances nor a later check.
+type reportRuntime struct {
+	session *Session
+	ctx     *runtime.Context
+	objects map[string]*runtime.Instance
+}
+
+func newReportRuntime(s *Session) *reportRuntime {
+	return &reportRuntime{session: s, objects: map[string]*runtime.Instance{}}
+}
+
+// runtime builds the report's own context over the session's symbols, once.
+func (r *reportRuntime) runtime() (*runtime.Context, error) {
+	if r.ctx != nil {
+		return r.ctx, nil
+	}
+	idx := r.session.browseIndex()
+	if idx == nil {
+		return nil, fmt.Errorf("no document loaded")
+	}
+	resolver := resolve.New(idx)
+	ctx := runtime.NewContext(semantics.NewModel(resolver), resolver, r.session.budgets.MaxSteps)
+	if err := ctx.SetBudgets(r.session.budgets); err != nil {
 		return nil, err
 	}
-	s.instances[name] = inst
-	return inst, nil
+	if doc := r.session.ws.Document(docName); doc != nil {
+		ctx.RegisterSource(source.New(docName, doc.Content))
+	}
+	r.ctx = ctx
+	return ctx, nil
 }
 
 // errNoConcernCondition is a framed concern that states nothing to evaluate.

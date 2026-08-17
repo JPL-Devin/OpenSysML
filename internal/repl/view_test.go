@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/Open-MBEE/Systemica/internal/core/passes"
+	"github.com/Open-MBEE/Systemica/internal/core/runtime"
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
 )
 
@@ -259,10 +260,10 @@ func TestViewReportsASatisfyThatIsNoViewpoint(t *testing.T) {
 	}
 }
 
-// Repeated %view evaluates against one object per exposed element rather than
-// leaving another copy of it in the runtime each time: the identity a later
-// %instantiate is handed does not grow with the number of runs.
-func TestViewReusesOneObjectPerExposedElement(t *testing.T) {
+// Reporting on a view creates nothing the session then holds, however often it
+// is asked: the objects a report evaluates are its own, so the session's objects
+// and the identity a later %instantiate is handed are the same either way.
+func TestViewCreatesNoObjectOfItsOwn(t *testing.T) {
 	nextIdentity := func(runs int) int64 {
 		s := conformanceSession(t)
 		for i := 0; i < runs; i++ {
@@ -270,8 +271,8 @@ func TestViewReusesOneObjectPerExposedElement(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		if _, ok := s.instances["Demo::vehicle"]; !ok {
-			t.Fatalf("%%view evaluated no object of the exposed element: %v", s.instances)
+		if len(s.instances) != 0 {
+			t.Fatalf("%%view left the session holding %v", s.instances)
 		}
 		if out, _, err := s.RunMeta("%instantiate Demo::wheel"); err != nil {
 			t.Fatalf("%%instantiate: %v (%v)", err, out)
@@ -283,15 +284,21 @@ func TestViewReusesOneObjectPerExposedElement(t *testing.T) {
 	}
 }
 
-// A check made after %view is about the same object %view was, so a repeated
-// report leaves no copy behind for a later check to find ambiguous.
+// A check made after %view answers as it did before: a report leaves no object
+// behind, so a view exposing two usages of one definition does not turn a later
+// check of that definition into an ambiguity.
 func TestViewLeavesNoAmbiguityForALaterCheck(t *testing.T) {
 	s := conformanceSession(t)
 	res := s.Submit(`package Checked {
     private import Demo::*;
     part def Car :> Vehicle { constraint light { mass > 1.0 } }
     part car : Car;
-    view carView : StructureView { expose Checked::car; frame concern modularity : Modularity; }
+    part spare : Car;
+    view carView : StructureView {
+        expose Checked::car;
+        expose Checked::spare;
+        frame concern modularity : Modularity;
+    }
 }`)
 	for _, d := range res.Diagnostics {
 		if d.Severity == passes.SeverityError {
@@ -315,8 +322,8 @@ func TestViewLeavesNoAmbiguityForALaterCheck(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Count(strings.Join(list, "\n"), "Checked::car "); got != 1 {
-		t.Errorf("objects of Checked::car after two %%view runs = %d, want 1:\n%v", got, list)
+	if joined := strings.Join(list, "\n"); strings.Contains(joined, "Checked::") {
+		t.Errorf("%%instances after two %%view runs lists objects the user never created:\n%s", joined)
 	}
 }
 
@@ -340,8 +347,9 @@ func TestViewEvaluatesTheSessionObject(t *testing.T) {
 	}
 }
 
-// An element whose name needs quotes is one object, not one per spelling: %view
-// keys it as %instantiate does, by the name the index holds.
+// An element whose name needs quotes is keyed as %instantiate keys it, by the
+// name the index holds: the object the session created for it is the one the
+// verdict is about, and no second copy appears under the quoted spelling.
 func TestViewSharesTheObjectOfAQuotedName(t *testing.T) {
 	s := conformanceSession(t)
 	res := s.Submit(`package Quoted {
@@ -354,15 +362,28 @@ func TestViewSharesTheObjectOfAQuotedName(t *testing.T) {
 			t.Fatalf("the view did not load: %v", res.Diagnostics)
 		}
 	}
-	if _, err := s.View("Quoted::quotedView"); err != nil {
-		t.Fatal(err)
+	if out, _, err := s.RunMeta("%instantiate Quoted::'road car'"); err != nil {
+		t.Fatalf("%%instantiate: %v (%v)", err, out)
 	}
-	out, _, err := s.RunMeta("%slots Quoted::'road car'")
+	created, ok := s.instances["Quoted::road car"]
+	if !ok {
+		t.Fatalf("%%instantiate created no object: %v", s.instances)
+	}
+	// The verdict is about this object, so editing it below the concern's bound
+	// has to change it — which it only can if the report read this object.
+	created.Slots["mass"].Value = runtime.Value{
+		Kind:  runtime.ValConst,
+		Const: semantics.Value{Kind: semantics.ValReal, Real: 0.5},
+	}
+	out, err := s.View("Quoted::quotedView")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if text := strings.Join(out, "\n"); strings.Contains(text, "no instance") {
-		t.Errorf("%%slots after %%view = %q, want the object %%view evaluated", text)
+	if text := strings.Join(out, "\n"); !strings.Contains(text, "concern modularity: violated") {
+		t.Errorf("%%view of an edited object = %q, want the verdict to be about that object", text)
+	}
+	if got := s.instances["Quoted::road car"]; got != created {
+		t.Errorf("%%view replaced the session object %d with %v", created.ID, got)
 	}
 	list, _, err := s.RunMeta("%instances")
 	if err != nil {
