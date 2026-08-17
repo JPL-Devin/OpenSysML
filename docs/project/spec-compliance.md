@@ -60,7 +60,7 @@
 - Pre-condition loop (`while <cond> { … }`) and post-condition loop (`loop { … } until <cond>;`)
 - Iteration over a collection (`for <x> in <collection> { … }`, over every collection the expression layer produces; a non-collection input is reported)
 - Send statement (⚠️ typed messages addressed to an object's port or receiving node, or routed through a connected port)
-- Accept action (takes the oldest message of its type, parking its token until one arrives)
+- Accept action (⚠️ takes the oldest message of its type, parking its token until one arrives; suspension is bounded by the executor — see the Action map)
 - Object flow (pin-to-pin data)
 - Succession edges
 - Deadlock detection
