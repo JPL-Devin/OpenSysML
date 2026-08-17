@@ -542,6 +542,62 @@ because check-clean alone never proves the runtime bound anything.
   and `examples/*.sysml` comparing `grep -c 'error:'` counts new vs old binary and print only files
   where new > old (~1 min).
 
+## Addressed sends and per-object message identity (`send S() to t`, PR #267)
+
+To observe *which object* consumed a message you must drive one performer at a time. `%state` and
+`%action` take an object argument (`%state <machine> <object>`, `internal/repl/meta.go:320`) but the
+object must already exist, so **`%instantiate <Pkg>::<part>` first** — otherwise every command
+answers `error: no instance of "…" (use %instantiate first)` followed by `no active state machine
+session`, which reads like a broken session.
+
+The fixture shape that distinguishes confined from leaking delivery is two structurally identical,
+unconnected parts of one type, each with a `via`-qualified accept **and** a catch-all:
+
+```
+transition first waiting accept Ping via inPort then received;   // the addressee
+transition first waiting accept Ping             then strayed;   // the leak detector
+```
+
+Run the same model once per performer: the addressee must reach `received`, every other object must
+stay in `waiting`. `strayed` is the pre-fix signature (a same-named port of another object consuming
+the message) and it appears for *both* objects on a pre-#267 binary — always A/B against a
+parent-commit binary, since "it ran and ended somewhere" proves nothing on its own.
+
+Limits worth knowing before writing fixtures:
+
+- **Nested performers cannot be driven from the prompt.** `%state <M> Pkg::one::mid::inner` fails
+  with `no instance of "Pkg::Mid::inner"` even after `%instantiate Pkg::one` materialized it (visible
+  in `%slots`). So a nested/composite target (`one.mid.inner.inPort`) is only observable *negatively*:
+  put the catch-all accept on the **sending outer** object and assert it stays `waiting` with no
+  error — the deep path resolved (else it would be a typed error) and did not leak outward.
+- **`accept … via <dotted.path>` does not parse** in a state transition (`expected a body member` /
+  `expected the target of the transition after 'then'`) nor in an action node (`expected ';' after
+  accept action`). Only `send … via p.q` takes a nested path. Don't design an accept-side nested-port
+  fixture; use `conformance/port_nested_port_path.sysml` (connect `p.q` to a simple `sink`) instead.
+- Addressing needs **no connector**: `send Ping() to two.inPort` from `one` delivers to `two`, and the
+  sender must not consume it. That cross-object case is the cheapest positive proof of identity.
+- `send X to self` resolves to nothing and is a silent no-op on both old and new binaries (no
+  receiver is named `self`) — expect `waiting`, not an error. A target naming a **part** rather than a
+  port (`one.mid.inner`) is also delivered-but-unaccepted, not an error.
+- The two unroutable wordings are distinct and both must stay reachable
+  (`internal/core/runtime/routing.go`): an addressed target gives
+  `send reaches no receiving port: "alpha.count" names no port of an object the sender can address`,
+  while a `via` port gives `port "lonely" is joined to no port that can receive it` /
+  `port "dst" is joined only to outbound ends (src)`. A pre-#267 binary **completes successfully**
+  (`✓ Action completed`) for the addressed-target cases, so assert the error text, not just non-zero
+  exit. From a state entry action it surfaces as
+  `error: event processing failed: enter state: entry action: send reaches no receiving port: …` with
+  `Current state: <none>`; the REPL session must survive it (`%tokens` still shows `Token 1 @ sender`,
+  `%eval 1 + 2` still answers `3`).
+- Regression set that must be byte-identical old vs new for any routing change:
+  `port_nested_port_path` (`got = 7`), `port_interface_typed_connection` (conjugated `~Chan`,
+  `got = 13`), `send_no_reachable_receiver`, `send_into_outbound_only_end`,
+  `state_send_self_signal` (`send Ping to Driver` → `done`), `action_send_accept` (accept-node target
+  → `n = 50`, `number = 50`).
+- Loading these conformance fixtures in the REPL prints pre-existing
+  `unresolved reference: Integer — did you mean ScalarValues::Integer?` noise; it reproduces on the
+  parent binary and does not stop execution.
+
 ## Standard SysML v2 behavioral notation (flows, triggers, sends, transition effects)
 
 Testing this family end-to-end has a few traps that cost a whole run if hit late:
