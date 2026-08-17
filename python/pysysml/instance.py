@@ -1,7 +1,7 @@
 """Instance class wrapping runtime-materialized objects."""
 
 from pysysml.errors import SlotError
-from pysysml.values import slot_to_python, value_to_python
+from pysysml.values import UNSET, slot_to_python, value_to_python
 
 
 class Instance:
@@ -183,6 +183,8 @@ class Instance:
             return f'Instance#{pb_value.instance_id}'
         if kind == 'null':
             return escape(pb_value.null) if pb_value.null else 'null'
+        if kind == 'unset':
+            return f'<em>{escape(str(UNSET))}</em>'
         try:
             return escape(str(value_to_python(pb_value)))
         except Exception:  # pragma: no cover - display must not fail

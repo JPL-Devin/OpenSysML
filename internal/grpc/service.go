@@ -9,7 +9,6 @@ import (
 
 	pb "github.com/Open-MBEE/Systemica/api/proto"
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/libs"
 	"github.com/Open-MBEE/Systemica/internal/core/parser"
 	"github.com/Open-MBEE/Systemica/internal/core/passes"
 	"github.com/Open-MBEE/Systemica/internal/core/resolve"
@@ -51,11 +50,16 @@ const CapabilityEvaluateSubject = "evaluate_subject"
 // SymbolInfo.attributes, rather than always reporting none.
 const CapabilitySymbolAttributes = "symbol_attributes"
 
+// CapabilityUnsetValue names the capability of reporting a valueless feature of
+// a value type as Value.unset, rather than as the empty object it materializes.
+const CapabilityUnsetValue = "unset_value"
+
 // capabilities is what this build supports, in report order. A capability is
 // only ever added: renaming or dropping one breaks clients that require it.
 var capabilities = []string{
 	CapabilityTypeFacts, CapabilityConvert, CapabilityVerification, CapabilityQuery,
 	CapabilityEnumValues, CapabilityEvaluateSubject, CapabilitySymbolAttributes,
+	CapabilityUnsetValue,
 }
 
 // Capabilities returns the capability names this build of the service reports.
@@ -67,6 +71,10 @@ func Capabilities() []string {
 type Service struct {
 	pb.UnimplementedSysMLServiceServer
 	cache *Cache
+	// libIndexes hands out indexes carrying the standard library, built ahead of
+	// the requests that need them: the library does not depend on the model, so a
+	// cache miss should not pay for loading it.
+	libIndexes *indexPool
 	// budgets bounds every runtime context the service creates, read once from
 	// the environment at construction.
 	budgets runtime.Budgets
@@ -76,7 +84,10 @@ type Service struct {
 
 // NewService creates a gRPC service with specified cache size, reporting
 // version as its build version. It returns an error if cacheSize is not
-// positive, or if a budget variable holds anything but a positive integer.
+// positive, if a budget variable holds anything but a positive integer, or if
+// the index pool size is not a non-negative integer. It does not load the
+// standard library: call Prewarm to have that happen in the background, ahead of
+// the requests that need it.
 func NewService(cacheSize int, version string) (*Service, error) {
 	cache, err := NewCache(cacheSize)
 	if err != nil {
@@ -86,7 +97,30 @@ func NewService(cacheSize int, version string) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Service{cache: cache, budgets: budgets, version: version}, nil
+	poolSize, err := indexPoolSizeFromEnv()
+	if err != nil {
+		return nil, err
+	}
+	return &Service{
+		cache:      cache,
+		libIndexes: newIndexPool(poolSize, buildLibraryIndex),
+		budgets:    budgets,
+		version:    version,
+	}, nil
+}
+
+// Prewarm starts building the service's pool of standard library indexes in the
+// background, so the first model to arrive is not the one that pays for the
+// library. It returns immediately and is safe to call more than once.
+func (s *Service) Prewarm() {
+	s.libIndexes.prewarm()
+}
+
+// Close releases the prewarmed indexes nobody took and waits for the background
+// builds in flight. The service still answers afterwards, building each index on
+// the request that needs it.
+func (s *Service) Close() {
+	s.libIndexes.close()
 }
 
 // GetServerInfo reports the service's build version and capabilities. A service
@@ -149,29 +183,11 @@ func (s *Service) ParseFile(ctx context.Context, req *pb.ParseFileRequest) (*pb.
 	// Get parser diagnostics
 	parseDiags := p.Diagnostics
 
-	// Build symbol index for lookups
-	idx := symbols.NewIndex()
-
-	// Load stdlib into index (required for type resolution)
-	stdlibSrc := libs.DefaultSource()
-	cache, _ := libs.NewCache() // Ignore cache errors, continue without
-	loader := libs.NewLoader(stdlibSrc, cache)
-	loaded := true
-	for _, name := range stdlibSrc.List() {
-		if err := loader.Load(name, idx); err != nil {
-			loaded = false // Ignore load errors, continue
-		}
-	}
-
-	// Expand wildcard imports (facade packages like ISQ re-exporting ISQMechanics)
-	idx.ExpandWildcardImports()
-
-	// Cache what was parsed, so the next request restores it instead. An
-	// incomplete library is not cached: a record is keyed by content alone, so
-	// it would be reused without the supertypes the missing file declared.
-	if loaded {
-		loader.Persist(idx)
-	}
+	// Take an index carrying the standard library, which type resolution needs.
+	// It is prewarmed when the pool has one, and built here when it does not; the
+	// two are the same index, so what a model resolves against does not depend on
+	// prewarming. This model owns it from here on.
+	idx := s.libIndexes.get()
 
 	// Add user document
 	idx.AddDocument(filePath, root)
@@ -328,7 +344,7 @@ func (s *Service) Evaluate(ctx context.Context, req *pb.EvaluateRequest) (*pb.Ev
 	}
 
 	return &pb.EvaluateResponse{
-		Result: ValueToProto(result, cached.Index),
+		Result: ValueToProtoIn(runtimeCtx, result, cached.Index),
 	}, nil
 }
 
@@ -434,7 +450,7 @@ func (s *Service) ExecuteAction(ctx context.Context, req *pb.ExecuteActionReques
 	// Convert outputs to protobuf
 	pbOutputs := make(map[string]*pb.Value)
 	for name, val := range outputs {
-		pbOutputs[name] = ValueToProto(val, cached.Index)
+		pbOutputs[name] = ValueToProtoIn(runtimeCtx, val, cached.Index)
 	}
 
 	return &pb.ExecuteActionResponse{
@@ -476,7 +492,7 @@ func (s *Service) ExecuteState(ctx context.Context, req *pb.ExecuteStateRequest)
 	// Convert final context to protobuf
 	pbContext := make(map[string]*pb.Value)
 	for name, val := range finalContext {
-		pbContext[name] = ValueToProto(val, cached.Index)
+		pbContext[name] = ValueToProtoIn(runtimeCtx, val, cached.Index)
 	}
 
 	return &pb.ExecuteStateResponse{

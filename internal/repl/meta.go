@@ -451,7 +451,7 @@ func (s *Session) evalIn(name, expr string) ([]string, error) {
 		}
 		return []string{
 			fmt.Sprintf("✓ %s%s", expr, onInstance(inst, owner)),
-			fmt.Sprintf("  = %s", formatValue(val)),
+			fmt.Sprintf("  = %s", formatValue(ctx, val)),
 		}, nil
 	}
 	val, err := ctx.EvalWithScope(node, scope)
@@ -460,7 +460,7 @@ func (s *Session) evalIn(name, expr string) ([]string, error) {
 	}
 	return []string{
 		fmt.Sprintf("✓ %s (in %s)", expr, notationName(fqn)),
-		fmt.Sprintf("  = %s", formatValue(val)),
+		fmt.Sprintf("  = %s", formatValue(ctx, val)),
 	}, nil
 }
 
@@ -565,7 +565,7 @@ func (s *Session) evalExpr(expr string) ([]string, error) {
 				}
 				return []string{
 					fmt.Sprintf("✓ %s%s", expr, onInstance(inst, owner)),
-					fmt.Sprintf("  = %s", formatSlot(slot)),
+					fmt.Sprintf("  = %s", formatSlot(ctx, slot)),
 				}, nil
 			}
 		}
@@ -576,7 +576,7 @@ func (s *Session) evalExpr(expr string) ([]string, error) {
 			}
 			return []string{
 				fmt.Sprintf("✓ %s", expr),
-				fmt.Sprintf("  = %s", formatValue(val)),
+				fmt.Sprintf("  = %s", formatValue(ctx, val)),
 			}, nil
 		}
 		usage, ok := sym.Decl.(*ast.Usage)
@@ -590,7 +590,7 @@ func (s *Session) evalExpr(expr string) ([]string, error) {
 		}
 		return []string{
 			fmt.Sprintf("✓ %s", expr),
-			fmt.Sprintf("  = %s", formatValue(val)),
+			fmt.Sprintf("  = %s", formatValue(ctx, val)),
 		}, nil
 	}
 
@@ -650,7 +650,7 @@ func (s *Session) evalExpr(expr string) ([]string, error) {
 
 	return []string{
 		fmt.Sprintf("✓ %s", expr),
-		fmt.Sprintf("  = %s", formatValue(val)),
+		fmt.Sprintf("  = %s", formatValue(ctx, val)),
 	}, nil
 }
 
@@ -786,7 +786,7 @@ func (s *Session) tryEvalLiteral(expr string) ([]string, bool, error) {
 
 	return []string{
 		fmt.Sprintf("✓ %s", expr),
-		fmt.Sprintf("  = %s", formatValue(val)),
+		fmt.Sprintf("  = %s", formatValue(ctx, val)),
 	}, true, nil
 }
 
@@ -960,7 +960,7 @@ func (w *slotWalk) lines(inst *runtime.Instance, indent string, depth int) []str
 			lines = w.emit(lines, fmt.Sprintf("%s%s: <error: %v>", indent, feat.Name, err))
 			continue
 		}
-		lines = w.emit(lines, fmt.Sprintf("%s%s = %s", indent, feat.Name, formatSlot(slot)))
+		lines = w.emit(lines, fmt.Sprintf("%s%s = %s", indent, feat.Name, formatSlot(w.ctx, slot)))
 		for _, nested := range nestedInstances(w.ctx, slot) {
 			if w.budget <= 0 {
 				return truncated(lines, "  ")
@@ -985,12 +985,12 @@ func (w *slotWalk) connectors(inst *runtime.Instance, indent string) []string {
 	var lines []string
 	for _, conn := range conns {
 		lines = w.emit(lines, fmt.Sprintf("%s(anonymous %s) = %s", indent, connectorKeyword(conn),
-			formatValue(runtime.Value{Kind: runtime.ValInstance, Instance: conn.ID})))
+			formatValue(w.ctx, runtime.Value{Kind: runtime.ValInstance, Instance: conn.ID})))
 		for _, end := range conn.Ends {
 			if w.budget <= 0 {
 				return append(lines, indent+"  … (listing truncated)")
 			}
-			lines = w.emit(lines, fmt.Sprintf("%s  %s = %s", indent, endLabel(end), formatValue(end.Value)))
+			lines = w.emit(lines, fmt.Sprintf("%s  %s = %s", indent, endLabel(end), formatValue(w.ctx, end.Value)))
 		}
 	}
 	return lines
@@ -1046,7 +1046,8 @@ func elisionReason(depth int) string {
 }
 
 // nestedInstances returns the instances a slot holds, whether it carries one
-// value or a collection of them.
+// value or a collection of them. An object that holds no value has nothing to
+// expand: it reads as unset, not as an object with no features.
 func nestedInstances(ctx *runtime.Context, slot *runtime.Slot) []*runtime.Instance {
 	values := []runtime.Value{slot.Value}
 	switch slot.Values.Kind {
@@ -1059,7 +1060,7 @@ func nestedInstances(ctx *runtime.Context, slot *runtime.Slot) []*runtime.Instan
 	var out []*runtime.Instance
 	for _, val := range values {
 		id, ok := val.Object()
-		if !ok {
+		if !ok || ctx.HoldsNoValue(val) {
 			continue
 		}
 		if nested, ok := ctx.Instance(id); ok {
@@ -1129,14 +1130,19 @@ func (s *Session) doInstances() ([]string, bool, error) {
 
 // formatSlot renders what a slot holds: a multi-valued feature keeps its
 // contents in Values, leaving the scalar Value unset.
-func formatSlot(slot *runtime.Slot) string {
+func formatSlot(ctx *runtime.Context, slot *runtime.Slot) string {
 	if slot.Values.Kind != runtime.ValInvalid {
-		return formatValue(slot.Values)
+		return formatValue(ctx, slot.Values)
 	}
-	return formatValue(slot.Value)
+	return formatValue(ctx, slot.Value)
 }
 
-func formatValue(val runtime.Value) string {
+// formatValue renders a value as every surface spells it. ctx may be nil, which
+// only costs the unset reading of an object that holds no value.
+func formatValue(ctx *runtime.Context, val runtime.Value) string {
+	if ctx != nil && ctx.HoldsNoValue(val) {
+		return runtime.UnsetText
+	}
 	switch val.Kind {
 	case runtime.ValConst:
 		return formatConst(val.Const)
@@ -1147,7 +1153,7 @@ func formatValue(val runtime.Value) string {
 	case runtime.ValInstance:
 		return fmt.Sprintf("Instance(ID: %d)", val.Instance)
 	case runtime.ValSequence:
-		return formatElements(val.Sequence.Elements())
+		return formatElements(ctx, val.Sequence.Elements())
 	case runtime.ValSet:
 		return fmt.Sprintf("Set{%d}", val.Set.Size())
 	case runtime.ValVariant:
@@ -1191,10 +1197,10 @@ func formatConst(c semantics.Value) string {
 
 // formatElements renders a collection's contents, since its size alone answers
 // nothing about what the object holds.
-func formatElements(elements []runtime.Value) string {
+func formatElements(ctx *runtime.Context, elements []runtime.Value) string {
 	parts := make([]string, len(elements))
 	for i, el := range elements {
-		parts[i] = formatValue(el)
+		parts[i] = formatValue(ctx, el)
 	}
 	return "[" + strings.Join(parts, ", ") + "]"
 }
@@ -1269,8 +1275,8 @@ func (s *Session) evalCalc(calcName, argText string) ([]string, []NamedValue, er
 
 	return []string{
 		fmt.Sprintf("✓ %s(%s)", calcName, strings.Join(argTexts, ", ")),
-		fmt.Sprintf("  = %s", formatValue(result)),
-	}, []NamedValue{{Name: "result", Value: formatValue(result)}}, nil
+		fmt.Sprintf("  = %s", formatValue(ctx, result)),
+	}, []NamedValue{{Name: "result", Value: formatValue(ctx, result)}}, nil
 }
 
 // calcUsageOutputs lists the outputs of a calc usage evaluated from its own
@@ -1293,8 +1299,8 @@ func (s *Session) calcUsageOutputs(ctx *runtime.Context, sym *symbols.Symbol, ca
 	lines = append(lines, fmt.Sprintf("✓ %s", calcName))
 	values := make([]NamedValue, 0, len(outputs))
 	for _, out := range outputs {
-		lines = append(lines, fmt.Sprintf("  %s = %s", out.Name, formatValue(out.Value)))
-		values = append(values, NamedValue{Name: out.Name, Value: formatValue(out.Value)})
+		lines = append(lines, fmt.Sprintf("  %s = %s", out.Name, formatValue(ctx, out.Value)))
+		values = append(values, NamedValue{Name: out.Name, Value: formatValue(ctx, out.Value)})
 	}
 	return lines, values, true, nil
 }
@@ -1743,6 +1749,7 @@ func (s *Session) startAction(name string, performer []string) ([]string, error)
 		selfFQN:  selfFQN,
 		symbol:   sym,
 		executor: exec,
+		rtCtx:    ctx,
 	}
 	s.endedAction = nil
 
@@ -1784,7 +1791,7 @@ func (s *Session) doStep() ([]string, bool, error) {
 
 	if exec.State() == runtime.StateCompleted {
 		out = append(out, "", "✓ Action completed")
-		out = append(out, renderResults(exec.Results())...)
+		out = append(out, renderResults(s.actionExec.contextOf(), exec.Results())...)
 	}
 
 	return out, false, nil
@@ -1806,7 +1813,7 @@ func (s *Session) continueAction() ([]string, []NamedValue, error) {
 
 	// Check if already completed
 	if exec.State() == runtime.StateCompleted {
-		return []string{"✓ Action already completed"}, namedValues(exec.Results()), nil
+		return []string{"✓ Action already completed"}, namedValues(s.actionExec.contextOf(), exec.Results()), nil
 	}
 
 	// Run to completion, or to the first breakpoint hit
@@ -1829,15 +1836,15 @@ func (s *Session) continueAction() ([]string, []NamedValue, error) {
 		"✓ Action completed",
 		fmt.Sprintf("  Final state: %s", exec.State()),
 	}
-	out = append(out, renderResults(exec.Results())...)
+	out = append(out, renderResults(s.actionExec.contextOf(), exec.Results())...)
 
-	return out, namedValues(exec.Results()), nil
+	return out, namedValues(s.actionExec.contextOf(), exec.Results()), nil
 }
 
 // renderResults lists an action's output values, in name order so a report of
 // the same run always reads the same way.
-func renderResults(results map[string]runtime.Value) []string {
-	values := namedValues(results)
+func renderResults(ctx *runtime.Context, results map[string]runtime.Value) []string {
+	values := namedValues(ctx, results)
 	if len(values) == 0 {
 		return nil
 	}
@@ -1874,7 +1881,7 @@ func (s *Session) doTokens() ([]string, bool, error) {
 
 	// A token carries no values of its own: every one of them reads and writes
 	// the action's features, so those are shown once.
-	if values := namedValues(exec.Data()); len(values) > 0 {
+	if values := namedValues(s.actionExec.contextOf(), exec.Data()); len(values) > 0 {
 		out = append(out, "  Values:")
 		for _, v := range values {
 			out = append(out, fmt.Sprintf("    %s = %s", v.Name, v.Value))
@@ -2000,6 +2007,7 @@ func (s *Session) startStateMachine(name string, performer []string) ([]string, 
 		selfFQN:  selfFQN,
 		symbol:   sym,
 		executor: exec,
+		rtCtx:    ctx,
 		now:      exec.CurrentTime(),
 	}
 	s.endedState = nil
@@ -2058,7 +2066,7 @@ func (s *Session) doCurrent() ([]string, bool, error) {
 		}
 	}
 
-	if values := namedValues(stateData); len(values) > 0 {
+	if values := namedValues(s.stateExec.contextOf(), stateData); len(values) > 0 {
 		out = append(out, "", "State data:")
 		for _, v := range values {
 			out = append(out, fmt.Sprintf("  %s = %s", v.Name, v.Value))

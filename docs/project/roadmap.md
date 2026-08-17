@@ -12,10 +12,10 @@ work.
 
 Track status as of this baseline: **Track B is closed**, **Track P is closed** on the
 engineering side (its remaining item, publishing to PyPI, is R2 and account-gated), and
-**Track A is closed bar one question**: A6 (implicit library import) is resolved as **won't do** —
-requiring an import is the conforming behavior (see A6) — so the two residuals it gated are
-re-scoped rather than open, leaving only A3's shape question (does a valueless library-typed
-attribute read as unset?). Tracks C and D are untouched by this batch.
+**Track A is closed**: A6 (implicit library import) is resolved as **won't do** — requiring an
+import is the conforming behavior (see A6) — and A3's shape question is answered: a valueless
+feature of a value type keeps the empty object it materializes and reads as `<unset>` on every
+surface. Tracks C and D are untouched by this batch.
 
 ## Where the repository stands
 
@@ -243,6 +243,24 @@ class rather than dropped silently.
   `%instantiate`, and `Model.eval(expr, subject=…)` reads that object's values behind the
   `evaluate_subject` capability; a call without a subject is unchanged.
 
+## P5 — the standard library was rebuilt on every cold `ParseFile` — done
+
+`ParseFile` built a new `symbols.Index` on every cache miss — loading every standard library unit
+into it and expanding the library's wildcard imports — so ~99% of a cold load (28-31 ms loading,
+38-41 ms expanding) was work that does not depend on the model. The REPL and the LSP pay it once
+per session; the service paid it per distinct model, which is what made a Python parameter sweep
+varying the model text impractical at 70 ms x N of pure overhead.
+
+The service now keeps a small pool of prewarmed library indexes (`internal/grpc/libindex.go`,
+sized by `SYSML_GRPC_INDEX_POOL`, default 4): a cache miss takes one, adds its document and keeps
+it with its `CachedModel`. An index is handed out once, so cached models stay independent and
+nothing is shared behind a mutex; the pool refills in the background and an empty pool builds one
+inline, so a result never depends on prewarming. Measured on this VM with
+`examples/combined-behavioral-demo.sysml`, a cold `ParseFile` went from ~100-128 ms to ~0.5-0.9 ms
+with identical diagnostics. What a model resolves against is pinned by test rather than asserted:
+`TestPooledIndexMatchesFreshlyBuiltIndex` compares diagnostics and every qualified lookup of a
+pooled index against one built on the request path.
+
 ---
 
 # Track A — runtime and semantic gaps
@@ -310,20 +328,31 @@ partial rather than printing `✓ no errors`. Duplicate diagnostics for one rede
 suppressed. `runtime/instance.go`, `runtime/shape.go`, `semantics/multiplicity.go`,
 `cmd/sysml/report.go`.
 
-## A3 — a library value type materializes as an empty object rather than a value
+## A3 — a library value type materializes as an empty object rather than a value — done
 
-Half of this is gone and the remaining half is narrower than the entry claimed. `attribute d :
-Real;` no longer reports `<unknown>`: with the library imported, the reference resolves to the
-library type and the feature is materialized. What it materializes is an empty object —
-`d = Instance(ID: 2)` with `(no features)` — where a valueless attribute of a library value type
-should read as *unset*, since a `Real` has no features to instantiate. `attribute k : Real = 2.0`
-is correct (`k = 2.00`).
+Half of this was already gone: `attribute d : Real;` no longer reports `<unknown>`, and
+`attribute k : Real = 2.0` was always correct (`k = 2.00`). What was left was how the valueless
+case *reads*, and it was decided as a reporting question, not a materialization one.
 
-Re-scoped with A6's won't-do verdict: the unqualified-spelling half was never a defect —
-`attribute d : Real;` without an import is *correctly* unresolved, and the probe was simply
-missing `private import ScalarValues::*;`. What remains is one question, and it is the whole of
-A3: whether a valueless attribute of a library value type reads as unset or is a shape rule in
-`runtime/instance.go`.
+The spec does not settle what materialization creates. `Base::DataValue` is
+`abstract datatype DataValue specializes Anything` — "entities that are values that do not change
+over time" — and `ScalarValues::Real` is a datatype with no features of its own, so an empty
+object is a value type's whole content; nothing in KerML or SysML prescribes a runtime
+representation, and a `FeatureValue` is optional (a feature has at most one). So the maintainer's
+ruling stands: the empty object stays what materialization holds, and every surface that reports a
+value says so. `Context.HoldsNoValue` (`runtime/instance.go`) recognizes an empty object of a value
+type, and `-instantiate`/`-e`, `%slots`, the JSON report and the gRPC/Python view all spell it
+`<unset>` — `pb.Value.unset` on the wire, `pysysml.UNSET` in Python — while a valued attribute, an
+object of a class, and a value type that does have features are unchanged. Unset is sent, never
+accepted: `ProtoToValueIn` rejects it with `ErrUnsetNotAccepted`.
+
+Left open deliberately: no diagnostic is owed for a valueless `1..1` feature. The multiplicity
+check applies to values a model binds (A2, `semantics/multiplicity.go`); a feature declaring no
+value binds none, and the spec does not make that ill-formed.
+
+The other half went away with A6's won't-do verdict: the unqualified spelling was never a defect —
+`attribute d : Real;` without an import is *correctly* unresolved, and the probe was simply missing
+`private import ScalarValues::*;`.
 
 ## A3a — a measurement unit does not resolve inside a condition in the REPL path — done
 
@@ -818,16 +847,14 @@ Lessons that survived the last two batches, unchanged because they keep applying
 
 ## Suggested sequencing
 
-Tracks A (bar A3's one question), B and P are closed, so what is left reorders:
+Tracks A, B and P are closed, so what is left reorders:
 
 1. **R1** (tag), then **R2**/**R3**/**R5** as the account access appears. R1 gates the rest of
    the release section, and R2 is what makes Track P's work reachable by a user.
-2. **A3**, a single decision plus its shape rule in `runtime/instance.go` — corpus-neutral, and
-   the last of Track A now A6 is won't-do.
-3. **Track C** is done: `cmd/sysml-grpc` now has the process lifecycle gate it lacked, and the
+2. **Track C** is done: `cmd/sysml-grpc` now has the process lifecycle gate it lacked, and the
    resolver and semantics rules that were tested only on the parsed index are tested on the
    cache-restored one as well.
-4. **Track D** is independent of the rest and can run whenever. Take **D3** before **D1**/**D2**:
+3. **Track D** is independent of the rest and can run whenever. Take **D3** before **D1**/**D2**:
    it is the cheapest, and it is what would show whether the Flexo interop claim actually holds
    before more work is layered on the mapping. **D4** is done; what it left behind — a succession
    end that refers to an unnamed member — belongs with **D2**, since both want real end triples

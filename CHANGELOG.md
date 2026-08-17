@@ -8,6 +8,15 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Language and semantics
 
+- A valueless feature of a value type reads as unset rather than as an empty
+  object: `attribute d : Real;` reports `d = <unset>` where it used to report
+  `d = Instance(ID: 2)` with `(no features)`. What materialization creates is
+  unchanged — a `Real` has no features to instantiate, so the object it holds is
+  empty — but every surface that reports a value now says so with one spelling:
+  `-instantiate`/`-e`, `%slots`, the JSON report, and the wire, where
+  `Value.unset` is a new arm the service sends and refuses to accept. A valued
+  attribute (`k = 2.00`), an object of a class, and a value type that does
+  declare features are unaffected.
 - A member chain from `that` resolves: `attribute b : Real = that.a;` in a usage
   body reads `a` off the object featuring the value being written — the innermost
   enclosing usage, whose own and inherited members are both reached — instead of
@@ -26,6 +35,8 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Python client (`pysysml`)
 
+- `pysysml.UNSET` is what a slot holding no value reads as — falsy, spelled
+  `<unset>`, and distinct from `None`, the model's `null`.
 - A quantity can be *sent*, not only read: a `pysysml.values.Quantity` is
   accepted wherever a value is — an action input, a calc argument, an element of
   a sequence — and crosses as `Value.quantity` with its magnitude in the kind it
@@ -34,6 +45,15 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   unit preserved. A unit named without the reduction commensurability is decided
   over is refused before anything is sent, rather than compared by bare
   magnitude.
+- A `Connection` that starts the service asks it at once and then backs off (10
+  ms, 20 ms, 40 ms … capped at 250 ms) instead of sleeping half a second before
+  the first probe, so starting a service that answers in milliseconds costs ~17
+  ms rather than ~510 ms. Waiting is bounded by the same ~2.5 s and raises the
+  same `ConnectionError`, now as the documented `connection.START_TIMEOUT` and
+  covering the probing as well as the sleeping, so a port that accepts without
+  ever answering no longer costs a whole probe timeout beyond the bound; a
+  service that died is still detected before each probe and ownership,
+  stale-service and pid authentication are unchanged.
 - The two names that shadowed builtins are renamed: `pysysml.eval` is
   `pysysml.evaluate` and `pysysml.RuntimeError` is `pysysml.ExecutionError`. Each
   old name still resolves to the same object with a `DeprecationWarning` and is
@@ -157,6 +177,21 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ### Python bindings and `sysml-grpc`
 
+- `sysml-grpc` loads the standard library ahead of the requests that need it
+  instead of once per model: the service keeps a small pool of prewarmed library
+  indexes, and a model the service has not seen adds its document to one of them
+  rather than loading and expanding the library again. A cold `ParseFile` on a
+  163-line model measures ~0.5–0.9 ms where it measured ~100–128 ms, which is
+  what makes a parameter sweep varying the model text practical. What a model
+  resolves against is unchanged: an index carries the same library, an index is
+  handed out once so cached models stay independent, and an empty pool builds one
+  on the request path, so a result never depends on prewarming. Prewarming runs
+  in the background, so startup stays prompt, and `SYSML_GRPC_INDEX_POOL` sizes
+  the pool (default 4; 0 keeps the previous per-model behaviour).
+- The library record cache writes each store to a temp file of its own, where two
+  stores of one key shared a fixed `<key>.idx.tmp` path and could publish a
+  truncated record that every later start missed on; `Prune` now also clears the
+  temp files a crashed store left behind.
 - `sysml-grpc -version` reports the metadata the linker sets, where a released
   binary said `version dev / commit unknown`.
 - A cached `~/.pysysml/bin/sysml-grpc` records the release and repository it was

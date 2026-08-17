@@ -414,6 +414,9 @@ message Value {
     string null = 7;            // marker for null (empty string)
     Quantity quantity = 8;      // magnitude and the unit it is expressed in
     EnumLiteral enum_literal = 9;
+    // A valueless feature of a value type: materialized, holding no value.
+    // Always true when set; a value the server sends, never one it accepts.
+    bool unset = 10;
   }
 }
 
@@ -508,6 +511,9 @@ message ServerInfoResponse {
   //   "query"      - the Query RPC evaluates a SysML v2 API & Services Query.
   //   "enum_values" - a Value carries an enumeration literal as enum_literal,
   //                  rather than reporting it as an unsupported null.
+  //   "unset_value" - a valueless feature of a value type is reported as
+  //                  Value.unset, rather than as the empty object it
+  //                  materializes.
   repeated string capabilities = 2;
 }
 

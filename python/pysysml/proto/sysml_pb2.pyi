@@ -12,6 +12,7 @@ class FailureReason(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     FAILURE_REASON_UNSPECIFIED: _ClassVar[FailureReason]
     FAILURE_REASON_EVALUATION: _ClassVar[FailureReason]
     FAILURE_REASON_WRONG_KIND: _ClassVar[FailureReason]
+    FAILURE_REASON_AMBIGUOUS_SUBJECT: _ClassVar[FailureReason]
 
 class PrimitiveOperator(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -28,6 +29,7 @@ class CompositeOperator(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
 FAILURE_REASON_UNSPECIFIED: FailureReason
 FAILURE_REASON_EVALUATION: FailureReason
 FAILURE_REASON_WRONG_KIND: FailureReason
+FAILURE_REASON_AMBIGUOUS_SUBJECT: FailureReason
 PRIMITIVE_OPERATOR_UNSPECIFIED: PrimitiveOperator
 PRIMITIVE_OPERATOR_EQUAL: PrimitiveOperator
 PRIMITIVE_OPERATOR_GREATER: PrimitiveOperator
@@ -209,14 +211,16 @@ class DiagnosticsResponse(_message.Message):
     def __init__(self, diagnostics: _Optional[_Iterable[_Union[Diagnostic, _Mapping]]] = ..., error: _Optional[str] = ...) -> None: ...
 
 class EvaluateRequest(_message.Message):
-    __slots__ = ("model_hash", "expression", "context_symbol_id")
+    __slots__ = ("model_hash", "expression", "context_symbol_id", "subject_symbol_id")
     MODEL_HASH_FIELD_NUMBER: _ClassVar[int]
     EXPRESSION_FIELD_NUMBER: _ClassVar[int]
     CONTEXT_SYMBOL_ID_FIELD_NUMBER: _ClassVar[int]
+    SUBJECT_SYMBOL_ID_FIELD_NUMBER: _ClassVar[int]
     model_hash: str
     expression: str
     context_symbol_id: str
-    def __init__(self, model_hash: _Optional[str] = ..., expression: _Optional[str] = ..., context_symbol_id: _Optional[str] = ...) -> None: ...
+    subject_symbol_id: str
+    def __init__(self, model_hash: _Optional[str] = ..., expression: _Optional[str] = ..., context_symbol_id: _Optional[str] = ..., subject_symbol_id: _Optional[str] = ...) -> None: ...
 
 class EvaluateResponse(_message.Message):
     __slots__ = ("result", "error", "diagnostics")
@@ -452,7 +456,7 @@ class AttributeInfo(_message.Message):
     def __init__(self, name: _Optional[str] = ..., type: _Optional[str] = ..., value: _Optional[_Union[Value, _Mapping]] = ..., unit: _Optional[str] = ...) -> None: ...
 
 class Value(_message.Message):
-    __slots__ = ("int_value", "real_value", "bool_value", "string_value", "instance_id", "sequence", "null", "quantity", "enum_literal")
+    __slots__ = ("int_value", "real_value", "bool_value", "string_value", "instance_id", "sequence", "null", "quantity", "enum_literal", "unset")
     INT_VALUE_FIELD_NUMBER: _ClassVar[int]
     REAL_VALUE_FIELD_NUMBER: _ClassVar[int]
     BOOL_VALUE_FIELD_NUMBER: _ClassVar[int]
@@ -462,6 +466,7 @@ class Value(_message.Message):
     NULL_FIELD_NUMBER: _ClassVar[int]
     QUANTITY_FIELD_NUMBER: _ClassVar[int]
     ENUM_LITERAL_FIELD_NUMBER: _ClassVar[int]
+    UNSET_FIELD_NUMBER: _ClassVar[int]
     int_value: int
     real_value: float
     bool_value: bool
@@ -471,7 +476,8 @@ class Value(_message.Message):
     null: str
     quantity: Quantity
     enum_literal: EnumLiteral
-    def __init__(self, int_value: _Optional[int] = ..., real_value: _Optional[float] = ..., bool_value: _Optional[bool] = ..., string_value: _Optional[str] = ..., instance_id: _Optional[int] = ..., sequence: _Optional[_Union[ValueSequence, _Mapping]] = ..., null: _Optional[str] = ..., quantity: _Optional[_Union[Quantity, _Mapping]] = ..., enum_literal: _Optional[_Union[EnumLiteral, _Mapping]] = ...) -> None: ...
+    unset: bool
+    def __init__(self, int_value: _Optional[int] = ..., real_value: _Optional[float] = ..., bool_value: _Optional[bool] = ..., string_value: _Optional[str] = ..., instance_id: _Optional[int] = ..., sequence: _Optional[_Union[ValueSequence, _Mapping]] = ..., null: _Optional[str] = ..., quantity: _Optional[_Union[Quantity, _Mapping]] = ..., enum_literal: _Optional[_Union[EnumLiteral, _Mapping]] = ..., unset: _Optional[bool] = ...) -> None: ...
 
 class EnumLiteral(_message.Message):
     __slots__ = ("literal_id", "enumeration_id", "name")

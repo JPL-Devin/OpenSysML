@@ -24,7 +24,7 @@ type NamedValue struct {
 
 // namedValues lists an executor's results in name order, so two reports of the
 // same run read the same way.
-func namedValues(results map[string]runtime.Value) []NamedValue {
+func namedValues(ctx *runtime.Context, results map[string]runtime.Value) []NamedValue {
 	if len(results) == 0 {
 		return nil
 	}
@@ -35,7 +35,7 @@ func namedValues(results map[string]runtime.Value) []NamedValue {
 	slices.Sort(names)
 	values := make([]NamedValue, 0, len(names))
 	for _, name := range names {
-		values = append(values, NamedValue{Name: name, Value: formatValue(results[name])})
+		values = append(values, NamedValue{Name: name, Value: formatValue(ctx, results[name])})
 	}
 	return values
 }
@@ -295,6 +295,6 @@ func (s *Session) runStateMachine(name string, duration *float64, performer []st
 		{Name: "state", Value: currentStateName(exec)},
 		{Name: "time", Value: fmt.Sprintf("%.2f", s.stateExec.now)},
 	}
-	values = append(values, namedValues(exec.StateData())...)
+	values = append(values, namedValues(s.stateExec.contextOf(), exec.StateData())...)
 	return s.withTrace(Verdict{Subject: name, Status: VerdictHolds, Lines: lines, Values: values})
 }

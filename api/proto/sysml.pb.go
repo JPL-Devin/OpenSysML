@@ -2569,6 +2569,7 @@ type Value struct {
 	//	*Value_Null
 	//	*Value_Quantity
 	//	*Value_EnumLiteral
+	//	*Value_Unset
 	Kind          isValue_Kind `protobuf_oneof:"kind"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -2692,6 +2693,15 @@ func (x *Value) GetEnumLiteral() *EnumLiteral {
 	return nil
 }
 
+func (x *Value) GetUnset() bool {
+	if x != nil {
+		if x, ok := x.Kind.(*Value_Unset); ok {
+			return x.Unset
+		}
+	}
+	return false
+}
+
 type isValue_Kind interface {
 	isValue_Kind()
 }
@@ -2732,6 +2742,12 @@ type Value_EnumLiteral struct {
 	EnumLiteral *EnumLiteral `protobuf:"bytes,9,opt,name=enum_literal,json=enumLiteral,proto3,oneof"`
 }
 
+type Value_Unset struct {
+	// A valueless feature of a value type: materialized, holding no value.
+	// Always true when set; a value the server sends, never one it accepts.
+	Unset bool `protobuf:"varint,10,opt,name=unset,proto3,oneof"`
+}
+
 func (*Value_IntValue) isValue_Kind() {}
 
 func (*Value_RealValue) isValue_Kind() {}
@@ -2749,6 +2765,8 @@ func (*Value_Null) isValue_Kind() {}
 func (*Value_Quantity) isValue_Kind() {}
 
 func (*Value_EnumLiteral) isValue_Kind() {}
+
+func (*Value_Unset) isValue_Kind() {}
 
 // EnumLiteral is one literal of an enumeration definition. A literal is its own
 // identity, so it travels as the declaration it names rather than as a number
@@ -3984,7 +4002,7 @@ const file_sysml_proto_rawDesc = "" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12\"\n" +
 	"\x05value\x18\x03 \x01(\v2\f.sysml.ValueR\x05value\x12\x12\n" +
-	"\x04unit\x18\x04 \x01(\tR\x04unit\"\xea\x02\n" +
+	"\x04unit\x18\x04 \x01(\tR\x04unit\"\x82\x03\n" +
 	"\x05Value\x12\x1d\n" +
 	"\tint_value\x18\x01 \x01(\x03H\x00R\bintValue\x12\x1f\n" +
 	"\n" +
@@ -3997,7 +4015,9 @@ const file_sysml_proto_rawDesc = "" +
 	"\bsequence\x18\x06 \x01(\v2\x14.sysml.ValueSequenceH\x00R\bsequence\x12\x14\n" +
 	"\x04null\x18\a \x01(\tH\x00R\x04null\x12-\n" +
 	"\bquantity\x18\b \x01(\v2\x0f.sysml.QuantityH\x00R\bquantity\x127\n" +
-	"\fenum_literal\x18\t \x01(\v2\x12.sysml.EnumLiteralH\x00R\venumLiteralB\x06\n" +
+	"\fenum_literal\x18\t \x01(\v2\x12.sysml.EnumLiteralH\x00R\venumLiteral\x12\x16\n" +
+	"\x05unset\x18\n" +
+	" \x01(\bH\x00R\x05unsetB\x06\n" +
 	"\x04kind\"g\n" +
 	"\vEnumLiteral\x12\x1d\n" +
 	"\n" +
@@ -4297,6 +4317,7 @@ func file_sysml_proto_init() {
 		(*Value_Null)(nil),
 		(*Value_Quantity)(nil),
 		(*Value_EnumLiteral)(nil),
+		(*Value_Unset)(nil),
 	}
 	file_sysml_proto_msgTypes[36].OneofWrappers = []any{
 		(*Quantity_IntMagnitude)(nil),

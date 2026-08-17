@@ -60,6 +60,25 @@ STATE_DIR_ENV = 'PYSYSML_STATE_DIR'
 #: resolution the platform reports rather than for equality.
 _START_TIME_TOLERANCE = 1e-3
 
+#: Seconds a service started here is given to answer, sleeping or probing.
+START_TIMEOUT = 2.5
+
+#: Delay before the second probe, doubled up to START_PROBE_MAX_DELAY. The first
+#: probe is immediate, so a service answering in milliseconds is not waited out.
+START_PROBE_INITIAL_DELAY = 0.01
+
+#: Longest delay between probes, so a slow start costs a bounded probe count.
+START_PROBE_MAX_DELAY = 0.25
+
+#: RPC timeout of one probe. A port nothing listens on refuses the connection in
+#: about a millisecond, so an immediate probe does not spend this.
+START_PROBE_RPC_TIMEOUT = 2.0
+
+#: How long the service started here is given to exit before an answer from an
+#: address it cannot yet have bound is attributed to it. One that could not bind
+#: exits at once, so this is spent only when something else already answers.
+START_CONFIRM_DELAY = 0.5
+
 #: Services this process spawned, keyed by state directory and port, each with
 #: the count of live connections holding it. Ownership does not outlive the
 #: process that spawned a service, so it is not shared through a file: no other
@@ -1340,7 +1359,8 @@ class Connection:
         
         Uses filelock to coordinate between multiple Python processes.
         If service already running, returns immediately.
-        Otherwise, acquires lock and starts service.
+        Otherwise, acquires lock and starts service, which is probed at once and
+        then on a backoff bounded by START_TIMEOUT.
         
         Raises:
             ConnectionError: If service cannot be started or lockfile timeout
@@ -1359,7 +1379,8 @@ class Connection:
                     _remove_service_state(self.port)
                 
                 # Check if service already running (another process may have started it)
-                if self._probe_service(self.host, self.port):
+                answered_before_start = self._probe_service(self.host, self.port)
+                if answered_before_start:
                     self._origin = (
                         f"service already listening on {self._address}, "
                         f"not started by this client"
@@ -1383,19 +1404,39 @@ class Connection:
                 
                 self._process = process
                 
-                # Wait for service to become healthy
-                max_retries = 5
-                retry_delay = 0.5
-                
-                for attempt in range(max_retries):
-                    time.sleep(retry_delay)
+                # Wait for service to become healthy, probing at once and then
+                # backing off: the service answers in milliseconds, so sleeping
+                # first would be the whole cost of starting it.
+                deadline = time.monotonic() + START_TIMEOUT
+                delay = START_PROBE_INITIAL_DELAY
+                # An answer is the started service's own unless something was
+                # already answering the address and has not stopped since.
+                its_own_answer = not answered_before_start
+
+                while True:
                     # One that could not bind the address exits and leaves the
                     # old service answering the probe.
                     if process.poll() is not None:
                         self._service_started_here_died(process.poll())
-                    if self._probe_service(self.host, self.port, timeout=2.0):
+                    # A port that accepts without answering would spend a probe's
+                    # whole timeout, so no probe outlives the deadline either.
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        break
+                    if self._probe_service(
+                        self.host, self.port,
+                        timeout=min(START_PROBE_RPC_TIMEOUT, remaining),
+                    ):
+                        if not its_own_answer:
+                            self._wait_for_a_service_that_could_not_bind(process)
                         self._own_spawned_service(process)
                         return
+                    its_own_answer = True
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        break
+                    time.sleep(min(delay, remaining))
+                    delay = min(delay * 2, START_PROBE_MAX_DELAY)
                 
                 # Service didn't start in time
                 # Cleanup without decrementing refcount (service never became healthy)
@@ -1407,7 +1448,7 @@ class Connection:
                         self._process.kill()
                         self._process.wait()
                     self._process = None
-                raise ConnectionError(f"Service failed to start within {max_retries * retry_delay}s")
+                raise ConnectionError(f"Service failed to start within {START_TIMEOUT}s")
                 
         except Timeout:
             raise ConnectionError(
@@ -1415,6 +1456,26 @@ class Connection:
                 f"Another process may be starting the service."
             )
     
+    def _wait_for_a_service_that_could_not_bind(self, process):
+        """Report a started service that exits rather than serving the address.
+
+        A service that could not bind the address exits at once, so an answer
+        the started one cannot yet have given is attributed to it only after it
+        is given START_CONFIRM_DELAY to exit. Only an address something already
+        answers is waited on.
+
+        Args:
+            process (subprocess.Popen): The service this connection started
+
+        Raises:
+            StaleServiceError: If it exited while another service answers
+        """
+        try:
+            exit_code = process.wait(timeout=START_CONFIRM_DELAY)
+        except subprocess.TimeoutExpired:
+            return
+        self._service_started_here_died(exit_code)
+
     def _own_spawned_service(self, process):
         """Record the service started here, authenticated, and hold a reference.
 
@@ -1453,7 +1514,7 @@ class Connection:
             ConnectionError: If nothing serves the address
         """
         self._process = None
-        if self._probe_service(self.host, self.port, timeout=2.0):
+        if self._probe_service(self.host, self.port, timeout=START_PROBE_RPC_TIMEOUT):
             raise StaleServiceError(
                 self._address,
                 f"the service started here exited ({exit_code}) while another "

@@ -341,6 +341,33 @@ class Quantity:
         return f"Quantity({self.magnitude!r}, {self.unit!r})"
 
 
+class UnsetType:
+    """A slot holding no value: a valueless feature of a value type.
+
+    Distinct from ``None``, the model's ``null``. Falsy, reads as ``<unset>``
+    as every other surface spells it, and is a singleton, so ``is UNSET`` tests it.
+    """
+
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def __bool__(self) -> bool:
+        return False
+
+    def __repr__(self) -> str:
+        return "<unset>"
+
+    __str__ = __repr__
+
+
+#: The value of a slot that holds none. See :class:`UnsetType`.
+UNSET = UnsetType()
+
+
 def value_to_python(pb_value, resolve_instance=None):
     """Convert a protobuf Value into a plain Python value.
 
@@ -350,7 +377,7 @@ def value_to_python(pb_value, resolve_instance=None):
             when omitted, instance references are returned as their integer id.
 
     Returns:
-        int, float, bool, str, list, None, a :class:`Quantity`, an
+        int, float, bool, str, list, None, :data:`UNSET`, a :class:`Quantity`, an
         :class:`~pysysml.enumeration.EnumLiteral`, or the resolved instance object.
 
     Raises:
@@ -376,6 +403,8 @@ def value_to_python(pb_value, resolve_instance=None):
     if kind == 'enum_literal':
         lit = pb_value.enum_literal
         return EnumLiteral(lit.literal_id, lit.enumeration_id, lit.name)
+    if kind == 'unset':
+        return UNSET
     if kind == 'null':
         # A non-empty null carries the reason the value could not be sent.
         if pb_value.null:
@@ -393,7 +422,8 @@ def slot_to_python(feature_name, pb_slot, resolve_instance=None):
         resolve_instance: optional callable mapping an instance id to an object
 
     Returns:
-        The scalar value, or a list for collection slots.
+        The scalar value, :data:`UNSET` for one holding no value, or a list for
+        collection slots.
 
     Raises:
         SlotError: If evaluation failed or the slot was never materialized.
