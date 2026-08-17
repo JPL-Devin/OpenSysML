@@ -321,18 +321,40 @@ func TestVerbatimSynonymConverts(t *testing.T) {
 	}
 }
 
-// A synonym keyword whose declaration names no element of its own takes an
-// inline reference, a shape the graph cannot rebuild, so it is reported rather
-// than written back as the canonical keyword — a different declaration.
-func TestUnrebuildableSynonymIsUnsupported(t *testing.T) {
+// A `perform` declares an action of its own, so the graph carries the keyword
+// it was written with: the canonical `action` would be a different declaration.
+func TestPerformedActionKeepsItsKeyword(t *testing.T) {
 	src := "package P {\n\taction def A;\n\tpart def Q {\n\t\tperform a : A;\n\t}\n}"
-	_, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
-	var unsupported *export.UnsupportedError
-	if !errors.As(err, &unsupported) {
-		t.Fatalf("want an UnsupportedError for a `perform` reference, got %v", err)
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
 	}
-	if !strings.Contains(err.Error(), "perform") {
-		t.Errorf("the error should name the keyword: %v", err)
+	back, err := export.Convert("m.ttl", turtle, export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation: %v", err)
+	}
+	if !strings.Contains(string(back), "perform a : A;") {
+		t.Errorf("the `perform` did not survive the round trip:\n%s", back)
+	}
+}
+
+// A kind keyword written as one word of a two-word kind (`verification def`
+// for a verification case) comes back as written: the canonical spelling
+// reparses as a plain `case`, a different kind.
+func TestShortKindKeywordSurvivesTheRoundTrip(t *testing.T) {
+	src := "package P {\n\tverification def V;\n\tanalysis def A;\n\tanalysis a : A;\n}"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	back, err := export.Convert("m.ttl", turtle, export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation: %v", err)
+	}
+	for _, want := range []string{"verification def V;", "analysis def A;", "analysis a : A;"} {
+		if !strings.Contains(string(back), want) {
+			t.Errorf("`%s` did not survive the round trip:\n%s", want, back)
+		}
 	}
 }
 

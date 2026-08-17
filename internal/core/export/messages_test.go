@@ -19,13 +19,15 @@ func TestUnsupportedConversionMessages(t *testing.T) {
 		src  string
 		want []string
 	}{{
-		name: "state_entry_member",
-		src:  "package P {\n\tstate def M {\n\t\tentry; then s1;\n\t\tstate s1;\n\t}\n}",
-		want: []string{"cannot convert the entry member at m.sysml:3:3", remedy},
+		name: "metadata_prefix",
+		src:  "package P {\n\tmetadata def M;\n\tpart p {@M{isSet = true;}}\n}",
+		want: []string{"cannot convert the prefix metadata at m.sysml:3:10", remedy},
 	}, {
-		name: "performed_action_reference",
-		src:  "package P {\n\taction def A;\n\tpart def Q {\n\t\tperform a : A;\n\t}\n}",
-		want: []string{"perform"},
+		// The entry member is unnamed, so the `then` beside it sequences an end
+		// no reference can name.
+		name: "succession_with_an_unnamed_end",
+		src:  "package P {\n\tstate def M {\n\t\tentry; then s1;\n\t\tstate s1;\n\t}\n}",
+		want: []string{"cannot convert the succession at m.sysml:3:10", "does not name both of the members it sequences"},
 	}}
 
 	for _, tc := range cases {

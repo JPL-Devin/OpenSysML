@@ -1,0 +1,219 @@
+@prefix elmt: <urn:sysmlv2:element:> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix sysx: <urn:systemica:sysml:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+elmt:ActionNodes
+    a sysml:Package ;
+    sysml:qualifiedName "ActionNodes" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "ActionNodes" ;
+    sysx:hasBody "true"^^xsd:boolean .
+
+elmt:ActionNodes::Command
+    a sysml:AttributeDefinition ;
+    sysml:qualifiedName "ActionNodes::Command" ;
+    sysml:owningNamespace elmt:ActionNodes ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "Command" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:ActionNodes::Radio
+    a sysml:PortDefinition ;
+    sysml:qualifiedName "ActionNodes::Radio" ;
+    sysml:owningNamespace elmt:ActionNodes ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:declaredName "Radio" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:ActionNodes::Brake
+    a sysml:ActionDefinition ;
+    sysml:qualifiedName "ActionNodes::Brake" ;
+    sysml:owningNamespace elmt:ActionNodes ;
+    sysx:memberIndex "2"^^xsd:integer ;
+    sysml:declaredName "Brake" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:ActionNodes::Drive
+    a sysml:ActionDefinition ;
+    sysml:qualifiedName "ActionNodes::Drive" ;
+    sysml:owningNamespace elmt:ActionNodes ;
+    sysx:memberIndex "3"^^xsd:integer ;
+    sysml:declaredName "Drive" ;
+    sysx:hasBody "true"^^xsd:boolean .
+
+elmt:ActionNodes::Drive::speed
+    a sysml:AttributeUsage ;
+    sysml:qualifiedName "ActionNodes::Drive::speed" ;
+    sysml:owningNamespace elmt:ActionNodes::Drive ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "speed" ;
+    sysml:direction "in" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:ActionNodes::Drive::log
+    a sysml:AttributeUsage ;
+    sysml:qualifiedName "ActionNodes::Drive::log" ;
+    sysml:owningNamespace elmt:ActionNodes::Drive ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:declaredName "log" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:ActionNodes::Drive::antenna
+    a sysml:PortUsage ;
+    sysml:qualifiedName "ActionNodes::Drive::antenna" ;
+    sysml:owningNamespace elmt:ActionNodes::Drive ;
+    sysx:memberIndex "2"^^xsd:integer ;
+    sysml:declaredName "antenna" ;
+    sysml:type elmt:ActionNodes::Radio ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:ActionNodes::Drive::Stop
+    a sysml:ActionDefinition ;
+    sysml:qualifiedName "ActionNodes::Drive::Stop" ;
+    sysml:owningNamespace elmt:ActionNodes::Drive ;
+    sysx:memberIndex "3"^^xsd:integer ;
+    sysml:declaredName "Stop" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+<urn:sysmlv2:element:ActionNodes::Drive::@4>
+    a sysx:InitialNode ;
+    sysml:qualifiedName "ActionNodes::Drive::@4" ;
+    sysml:owningNamespace elmt:ActionNodes::Drive ;
+    sysx:memberIndex "4"^^xsd:integer ;
+    sysml:sourceFeature "start" .
+
+elmt:ActionNodes::Drive::brake
+    a sysml:ActionUsage ;
+    sysml:qualifiedName "ActionNodes::Drive::brake" ;
+    sysml:owningNamespace elmt:ActionNodes::Drive ;
+    sysx:memberIndex "5"^^xsd:integer ;
+    sysml:declaredName "brake" ;
+    sysml:type elmt:ActionNodes::Drive::Brake ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:ActionNodes::Drive::split
+    a sysml:ForkNode ;
+    sysml:qualifiedName "ActionNodes::Drive::split" ;
+    sysml:owningNamespace elmt:ActionNodes::Drive ;
+    sysx:memberIndex "6"^^xsd:integer ;
+    sysml:declaredName "split" .
+
+elmt:ActionNodes::Drive::sync
+    a sysml:JoinNode ;
+    sysml:qualifiedName "ActionNodes::Drive::sync" ;
+    sysml:owningNamespace elmt:ActionNodes::Drive ;
+    sysx:memberIndex "7"^^xsd:integer ;
+    sysml:declaredName "sync" .
+
+elmt:ActionNodes::Drive::gather
+    a sysml:MergeNode ;
+    sysml:qualifiedName "ActionNodes::Drive::gather" ;
+    sysml:owningNamespace elmt:ActionNodes::Drive ;
+    sysx:memberIndex "8"^^xsd:integer ;
+    sysml:declaredName "gather" .
+
+elmt:ActionNodes::Drive::pick
+    a sysml:DecisionNode ;
+    sysml:qualifiedName "ActionNodes::Drive::pick" ;
+    sysml:owningNamespace elmt:ActionNodes::Drive ;
+    sysx:memberIndex "9"^^xsd:integer ;
+    sysml:declaredName "pick" .
+
+<urn:sysmlv2:element:ActionNodes::Drive::@10>
+    a sysml:ActionUsage ;
+    sysml:qualifiedName "ActionNodes::Drive::@10" ;
+    sysml:owningNamespace elmt:ActionNodes::Drive ;
+    sysx:memberIndex "10"^^xsd:integer ;
+    sysx:declaredKeyword "perform" ;
+    sysml:references elmt:ActionNodes::Drive::brake ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:ActionNodes::Drive::Brake
+    a sysml:ActionUsage ;
+    sysml:qualifiedName "ActionNodes::Drive::Brake" ;
+    sysml:owningNamespace elmt:ActionNodes::Drive ;
+    sysx:memberIndex "11"^^xsd:integer ;
+    sysml:declaredName "Brake" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+<urn:sysmlv2:element:ActionNodes::Drive::@12>
+    a sysml:AssignmentActionUsage ;
+    sysml:qualifiedName "ActionNodes::Drive::@12" ;
+    sysml:owningNamespace elmt:ActionNodes::Drive ;
+    sysx:memberIndex "12"^^xsd:integer ;
+    sysx:declaredKeyword "assign" ;
+    sysx:target "log" ;
+    sysml:value "speed" .
+
+<urn:sysmlv2:element:ActionNodes::Drive::@13>
+    a sysml:SendActionUsage ;
+    sysml:qualifiedName "ActionNodes::Drive::@13" ;
+    sysml:owningNamespace elmt:ActionNodes::Drive ;
+    sysx:memberIndex "13"^^xsd:integer ;
+    sysx:payload "Command()" ;
+    sysx:receiver "antenna" .
+
+<urn:sysmlv2:element:ActionNodes::Drive::@14>
+    a sysml:SendActionUsage ;
+    sysml:qualifiedName "ActionNodes::Drive::@14" ;
+    sysml:owningNamespace elmt:ActionNodes::Drive ;
+    sysx:memberIndex "14"^^xsd:integer ;
+    sysx:payload "Command()" ;
+    sysx:receiver "antenna" ;
+    sysx:isVia "true"^^xsd:boolean .
+
+<urn:sysmlv2:element:ActionNodes::Drive::@15>
+    a sysml:ActionUsage ;
+    sysml:qualifiedName "ActionNodes::Drive::@15" ;
+    sysml:owningNamespace elmt:ActionNodes::Drive ;
+    sysx:memberIndex "15"^^xsd:integer ;
+    sysx:declaredKeyword "accept" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+<urn:sysmlv2:element:ActionNodes::Drive::@15::@0>
+    a sysml:AttributeUsage ;
+    sysml:qualifiedName "ActionNodes::Drive::@15::@0" ;
+    sysml:owningNamespace <urn:sysmlv2:element:ActionNodes::Drive::@15> ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:isReference "true"^^xsd:boolean ;
+    sysml:isAccept "true"^^xsd:boolean ;
+    sysml:direction "out" ;
+    sysml:value "when speed > 0" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+<urn:sysmlv2:element:ActionNodes::Drive::@16>
+    a sysml:TerminateActionUsage ;
+    sysml:qualifiedName "ActionNodes::Drive::@16" ;
+    sysml:owningNamespace elmt:ActionNodes::Drive ;
+    sysx:memberIndex "16"^^xsd:integer .
+
+<urn:sysmlv2:element:ActionNodes::Drive::@17>
+    a sysml:TerminateActionUsage ;
+    sysml:qualifiedName "ActionNodes::Drive::@17" ;
+    sysml:owningNamespace elmt:ActionNodes::Drive ;
+    sysx:memberIndex "17"^^xsd:integer ;
+    sysx:expression "brake" .
+
+elmt:ActionNodes::Drive::finish
+    a sysx:FinalNode ;
+    sysml:qualifiedName "ActionNodes::Drive::finish" ;
+    sysml:owningNamespace elmt:ActionNodes::Drive ;
+    sysx:memberIndex "18"^^xsd:integer ;
+    sysml:declaredName "finish" .
+
+<urn:sysmlv2:element:ActionNodes::Drive::@19>
+    a sysml:SuccessionAsUsage ;
+    sysml:qualifiedName "ActionNodes::Drive::@19" ;
+    sysml:owningNamespace elmt:ActionNodes::Drive ;
+    sysx:memberIndex "19"^^xsd:integer ;
+    sysml:sourceFeature "start" ;
+    sysml:targetFeature elmt:ActionNodes::Drive::brake .
+
+<urn:sysmlv2:element:ActionNodes::Drive::@20>
+    a sysml:SuccessionAsUsage ;
+    sysml:qualifiedName "ActionNodes::Drive::@20" ;
+    sysml:owningNamespace elmt:ActionNodes::Drive ;
+    sysx:memberIndex "20"^^xsd:integer ;
+    sysx:sourceText "succession first brake then finish;" .
