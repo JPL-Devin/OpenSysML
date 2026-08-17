@@ -1284,6 +1284,8 @@ These are documented for transparency; none block production use.
 
 **Standard:** LSP 3.17 § Lifecycle Messages. **Reference:** docs/reference/api.md § `internal/lsp`.
 
+**Measured coverage:** 115 tests and subtests in `internal/lsp`, of which 107 are top-level `Test` functions, plus the built-binary lifecycle tests in `cmd/sysml-lsp`.
+
 | Rule | Implementation (file:function) | Tests | Status |
 |---|---|---|---|
 | The server is started by an editor over stdin/stdout, and a client that names the transport on the command line (`--stdio`, as `TransportKind.stdio` sends) is served rather than rejected | `cmd/sysml-lsp/main.go` `run` (explicit `stdio` flag; Go's `flag` accepts `-stdio` and `--stdio`) | `cmd/sysml-lsp/lifecycle_test.go:TestStdioTransportServesTheLifecycle` (both spellings, built binary over pipes), `cmd/sysml-lsp/main_test.go:TestCommandLine` | ✅ Faithful — the flag is a documented no-op because stdio is the only transport; every *other* unknown flag still exits 2 with usage, so a typo is not swallowed |
