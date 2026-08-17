@@ -85,7 +85,7 @@ type Session struct {
 	// lost records the objects the session no longer holds, and what took them.
 	lost instanceLoss
 
-	// materializeFailures are the slots a command of this session reported it
+	// materializeFailures are the feature values a command of this session reported it
 	// could not materialize, which a non-interactive run exits on.
 	materializeFailures []error
 

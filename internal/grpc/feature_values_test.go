@@ -11,7 +11,7 @@ import (
 // Instance.feature_values is the current spelling of Instance.slots, so every
 // object carries both, holding the same thing under the same names.
 func TestInstantiate_FeatureValuesMirrorTheDeprecatedSlots(t *testing.T) {
-	resp := instantiate(t, unsetSlotModel, "feature-values", "Demo::Vehicle")
+	resp := instantiate(t, unsetFeatureValueModel, "feature-values", "Demo::Vehicle")
 
 	for _, inst := range append([]*pb.Instance{resp.GetInstance()}, resp.GetInstances()...) {
 		//lint:ignore SA1019 the deprecated map is what this test is about.

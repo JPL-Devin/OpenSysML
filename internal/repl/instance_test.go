@@ -5,10 +5,10 @@ import (
 	"testing"
 )
 
-// TestInstantiatedModelEvaluatesDerivedSlots is the "executable model" contract:
+// TestInstantiatedModelEvaluatesDerivedFeatureValues is the "executable model" contract:
 // after %instantiate, an attribute defined in terms of other features reports a
 // value rather than <unknown>, including through a nested part.
-func TestInstantiatedModelEvaluatesDerivedSlots(t *testing.T) {
+func TestInstantiatedModelEvaluatesDerivedFeatureValues(t *testing.T) {
 	s := loadFixture(t, "testdata/derived_package.sysml")
 	run(t, s, "%instantiate Derived::Vehicle")
 
@@ -23,7 +23,7 @@ func TestInstantiatedModelEvaluatesDerivedSlots(t *testing.T) {
 
 // A derived value is reachable by %eval too, and reports which instance
 // produced it.
-func TestEvalReadsDerivedSlotOfInstance(t *testing.T) {
+func TestEvalReadsDerivedFeatureValueOfInstance(t *testing.T) {
 	s := loadFixture(t, "testdata/derived_package.sysml")
 	run(t, s, "%instantiate Derived::Vehicle")
 
@@ -44,7 +44,7 @@ func TestEvalWithoutInstanceUsesDeclaredDefault(t *testing.T) {
 
 // TestConstraintBindsToInstance: the same constraint text gives opposite
 // verdicts on two instances, which is only possible if evaluation sees the
-// instance's slots.
+// instance's feature values.
 func TestConstraintBindsToInstance(t *testing.T) {
 	s := loadFixture(t, "testdata/derived_package.sysml")
 	run(t, s, "%instantiate Derived::Vehicle")
@@ -62,9 +62,9 @@ func TestConstraintBindsToInstance(t *testing.T) {
 	rejects(t, failed, "Error:")
 }
 
-// %slots renders a constraint feature as a verdict; a slot value would be
+// %slots renders a constraint feature as a verdict; a feature value would be
 // meaningless for it.
-func TestSlotsRendersConstraintVerdict(t *testing.T) {
+func TestFeatureValuesRendersConstraintVerdict(t *testing.T) {
 	s := loadFixture(t, "testdata/derived_package.sysml")
 	run(t, s, "%instantiate Derived::Vehicle")
 	run(t, s, "%instantiate Derived::Heavy")
@@ -75,7 +75,7 @@ func TestSlotsRendersConstraintVerdict(t *testing.T) {
 
 // A requirement usage is a verdict too, and %slots must agree with what
 // %requirement says about the same feature of the same instance.
-func TestSlotsAgreesWithRequirementOnSameInstance(t *testing.T) {
+func TestFeatureValuesAgreesWithRequirementOnSameInstance(t *testing.T) {
 	s := loadFixture(t, "testdata/derived_package.sysml")
 	run(t, s, "%instantiate Derived::Vehicle")
 
@@ -247,9 +247,9 @@ func TestInstanceOwningAnAnonymousConnectorSurvives(t *testing.T) {
 		part def Sys { part a : A; part b : B; connect a.p to b.q; }
 	}`)
 	wants(t, run(t, s, "%instantiate Demo::Sys"), "ID: 1")
-	slots := run(t, s, "%slots Demo::Sys")
-	wants(t, slots, "(anonymous connector)")
-	connector := connectorLine(t, slots)
+	fvs := run(t, s, "%slots Demo::Sys")
+	wants(t, fvs, "(anonymous connector)")
+	connector := connectorLine(t, fvs)
 
 	for _, decl := range []string{"part def Widget;", "part def Gadget;"} {
 		if res := s.Submit(decl); len(res.Notices) != 0 {
@@ -555,7 +555,7 @@ func TestNestedPartMemberBindsToTheNestedInstance(t *testing.T) {
 }
 
 // A multi-valued feature shows what the object holds, not <unknown>.
-func TestCollectionSlotsShowTheirContents(t *testing.T) {
+func TestCollectionFeatureValuesShowTheirContents(t *testing.T) {
 	s := loadFixture(t, "testdata/collection_slots.sysml")
 	run(t, s, "%instantiate Coll::Rig")
 
@@ -565,9 +565,9 @@ func TestCollectionSlotsShowTheirContents(t *testing.T) {
 	wants(t, run(t, s, "%eval Coll::Rig::doubles"), "= [200.00]")
 }
 
-// A part held in a slot is worth nothing to the reader as an opaque ID: %slots
-// shows what the nested object holds, indented under the slot that holds it.
-func TestSlotsExpandNestedInstances(t *testing.T) {
+// A part held in a feature value is worth nothing to the reader as an opaque ID: %slots
+// shows what the nested object holds, indented under the feature value that holds it.
+func TestFeatureValuesExpandNestedInstances(t *testing.T) {
 	s := loadFixture(t, "testdata/nested_part.sysml")
 	run(t, s, "%instantiate Nested::Car")
 
@@ -578,8 +578,8 @@ func TestSlotsExpandNestedInstances(t *testing.T) {
 	)
 }
 
-// Each element of a multi-valued part slot is expanded too.
-func TestSlotsExpandCollectionElements(t *testing.T) {
+// Each element of a multi-valued part feature value is expanded too.
+func TestFeatureValuesExpandCollectionElements(t *testing.T) {
 	s := loadFixture(t, "testdata/collection_slots.sysml")
 	run(t, s, "%instantiate Coll::Rig")
 
@@ -592,7 +592,7 @@ func TestSlotsExpandCollectionElements(t *testing.T) {
 
 // A part containing its own kind materializes a fresh object per expansion, so
 // nesting is bounded by type rather than by instance identity.
-func TestSlotsStopAtRecursiveContainment(t *testing.T) {
+func TestFeatureValuesStopAtRecursiveContainment(t *testing.T) {
 	s := NewSession()
 	s.Submit("part def Node { attribute v = 1.0; part child : Node; }")
 	run(t, s, "%instantiate Node")
@@ -606,15 +606,15 @@ func TestSlotsStopAtRecursiveContainment(t *testing.T) {
 
 // Nesting multiplies, and every expansion materializes an object, so a wide
 // model is truncated rather than listed in full.
-func TestSlotsTruncateWideNesting(t *testing.T) {
+func TestFeatureValuesTruncateWideNesting(t *testing.T) {
 	s := NewSession()
 	s.Submit("part def Leaf { attribute v = 1.0; } part def Mid { part leaves : Leaf[20]; } part def Top { part mids : Mid[20]; }")
 	run(t, s, "%instantiate Top")
 
 	got := run(t, s, "%slots Top")
 	wants(t, got, "… (listing truncated)")
-	if n := strings.Count(got, "\n"); n > maxSlotLines+10 {
-		t.Errorf("listing ran to %d lines, want it bounded near %d:\n%.400s", n, maxSlotLines, got)
+	if n := strings.Count(got, "\n"); n > maxFeatureValueLines+10 {
+		t.Errorf("listing ran to %d lines, want it bounded near %d:\n%.400s", n, maxFeatureValueLines, got)
 	}
 }
 

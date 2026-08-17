@@ -32,9 +32,9 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
     `typed.feature_value`/`optional_feature_value`/`list_feature_value`, which generated modules now
     emit (emission schema `3`). `slots`, `raw_slots`, `get_slot`, `SlotError` and the `slot`
     decoders remain as deprecated spellings, and `SlotError is FeatureValueError`.
-  - The internal Go runtime keeps its `Slot` names for now (`runtime.Slot`, `Instance.Slots`,
-    `GetSlot`); nothing outside the module depends on them, and renaming them would collide with
-    in-flight runtime work.
+  - The Go runtime API is renamed to match (`runtime.FeatureValue`, `Instance.FeatureValues`,
+    `GetFeatureValue`, `FeatureValueError`, `ErrFeatureValueMaterialization`, `ErrCyclicFeatureValue`,
+    `ErrUninitializedFeatureValue`). It is internal, so nothing outside the module depends on it.
 
 ### The prompt prints the model it holds
 

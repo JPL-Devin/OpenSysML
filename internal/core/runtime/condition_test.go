@@ -325,7 +325,7 @@ func TestParameterBoundToSameNamedFeature(t *testing.T) {
 
 // An inherited parameter nothing binds still reads a same-named value of the
 // object being checked.
-func TestUnboundParameterFallsBackToInstanceSlot(t *testing.T) {
+func TestUnboundParameterFallsBackToInstanceFeatureValue(t *testing.T) {
 	src := `
 		package test {
 			constraint def MassLimit {

@@ -28,25 +28,25 @@ type ConnectorEnd struct {
 // holds its ends there.
 const participantEndName = "participant"
 
-// materializeConnectorSlot fills a slot holding a connector usage: the object it
+// materializeConnectorFeatureValue fills a feature value that holds a connector usage: the object it
 // denotes, with its ends attached to the features the `connect` clause names,
 // resolved against the instance that owns the connector.
-func (ctx *Context) materializeConnectorSlot(owner *Instance, slot *Slot, name string) error {
-	if !isScalarFeature(slot.Feature) {
+func (ctx *Context) materializeConnectorFeatureValue(owner *Instance, fv *FeatureValue, name string) error {
+	if !isScalarFeature(fv.Feature) {
 		return &ConnectorEndError{
 			Connector: fmt.Sprintf("%s.%s", owner.Type.Name, name),
 			End:       name,
-			Location:  ctx.symbolLocation(slot.Feature.Symbol),
+			Location:  ctx.symbolLocation(fv.Feature.Symbol),
 			Err:       errors.New("a connector of more than one object has no set of ends to attach"),
 		}
 	}
-	conn, err := ctx.materializeConnectorAs(owner, slot.Feature.Symbol, ctx.connectorBaseOf(slot.Feature), owner.keptConnectors[slot])
+	conn, err := ctx.materializeConnectorAs(owner, fv.Feature.Symbol, ctx.connectorBaseOf(fv.Feature), owner.keptConnectors[fv])
 	if err != nil {
 		return err
 	}
-	delete(owner.keptConnectors, slot)
-	slot.Value = Value{Kind: ValInstance, Instance: conn.ID}
-	slot.Materialized = true
+	delete(owner.keptConnectors, fv)
+	fv.Value = Value{Kind: ValInstance, Instance: conn.ID}
+	fv.Materialized = true
 	return nil
 }
 
@@ -116,7 +116,7 @@ func (ctx *Context) materializeConnectorAs(owner *Instance, connSym, base *symbo
 	}
 	key := connectorRef{owner: ownerID, connector: connSym}
 	if ctx.materializingConnectors[key] {
-		return nil, fmt.Errorf("%w: connector %s attaches to itself", ErrCyclicSlot, connectorName(connSym))
+		return nil, fmt.Errorf("%w: connector %s attaches to itself", ErrCyclicFeatureValue, connectorName(connSym))
 	}
 	ctx.materializingConnectors[key] = true
 	defer delete(ctx.materializingConnectors, key)
@@ -137,7 +137,7 @@ func (ctx *Context) materializeConnectorAs(owner *Instance, connSym, base *symbo
 			unnamed = append(unnamed, val)
 			continue
 		}
-		ctx.bindEndSlot(inst, end, val)
+		ctx.bindEndFeatureValue(inst, end, val)
 	}
 	if len(unnamed) > 0 {
 		ctx.bindParticipants(inst, inst.Ends)
@@ -172,26 +172,26 @@ func (ctx *Context) attachConnectorEnd(owner *Instance, connSym *symbols.Symbol,
 	return val, nil
 }
 
-// bindEndSlot writes an attached end into the slot named after the end feature,
-// adding the slot when the object carries none: the ends of an implicitly typed
+// bindEndFeatureValue writes an attached end into the feature value named after the end feature,
+// adding the feature value when the object carries none: the ends of an implicitly typed
 // connector are declared by a library connector, indexed without its body.
-func (ctx *Context) bindEndSlot(inst *Instance, end semantics.ConnectorEndAttachment, val Value) {
-	slot, ok := inst.Slots[end.Name]
+func (ctx *Context) bindEndFeatureValue(inst *Instance, end semantics.ConnectorEndAttachment, val Value) {
+	fv, ok := inst.FeatureValues[end.Name]
 	if !ok {
-		slot = &Slot{Feature: &EffectiveFeature{
+		fv = &FeatureValue{Feature: &EffectiveFeature{
 			Name:         end.Name,
 			Symbol:       end.EndFeature,
 			OwnerType:    inst.Type,
 			Multiplicity: singleValue(),
 		}}
-		inst.Slots[end.Name] = slot
+		inst.FeatureValues[end.Name] = fv
 	}
-	slot.Value = val
-	slot.Values = Value{}
-	slot.Materialized = true
+	fv.Value = val
+	fv.Values = Value{}
+	fv.Materialized = true
 }
 
-// bindParticipants writes every end into the participant slot, in declaration
+// bindParticipants writes every end into the participant feature value, in declaration
 // order, for a connector whose ends have no names of their own: that feature is
 // where a link holds the things it relates.
 func (ctx *Context) bindParticipants(inst *Instance, ends []ConnectorEnd) {
@@ -199,18 +199,18 @@ func (ctx *Context) bindParticipants(inst *Instance, ends []ConnectorEnd) {
 	for _, end := range ends {
 		seq.Append(end.Value)
 	}
-	slot, ok := inst.Slots[participantEndName]
+	fv, ok := inst.FeatureValues[participantEndName]
 	if !ok {
-		slot = &Slot{Feature: &EffectiveFeature{
+		fv = &FeatureValue{Feature: &EffectiveFeature{
 			Name:         participantEndName,
 			OwnerType:    inst.Type,
 			Multiplicity: participants(len(ends)),
 		}}
-		inst.Slots[participantEndName] = slot
+		inst.FeatureValues[participantEndName] = fv
 	}
-	slot.Value = Value{}
-	slot.Values = Value{Kind: ValSequence, Sequence: seq}
-	slot.Materialized = true
+	fv.Value = Value{}
+	fv.Values = Value{Kind: ValSequence, Sequence: seq}
+	fv.Materialized = true
 }
 
 // singleValue is the multiplicity of a feature holding one value, which an end
@@ -231,9 +231,9 @@ func participants(n int) semantics.Range {
 	}
 }
 
-// OwnedConnectors returns the connectors the instance owns that no slot names —
+// OwnedConnectors returns the connectors the instance owns that no feature names —
 // an anonymous `connect a.p to b.q` member — materializing them once, in
-// declaration order. A named connector is reached through its slot instead.
+// declaration order. A named connector is reached through its feature value instead.
 func (inst *Instance) OwnedConnectors(ctx *Context) ([]*Instance, error) {
 	defer ctx.beginRun()()
 	if inst.anonymous != nil {

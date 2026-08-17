@@ -452,7 +452,7 @@ func (p *Parser) errorNodeSkip(start int, msg string) *ast.ErrorNode {
 }
 
 // expectCommentBody consumes a trailing /* */ regular comment and returns its
-// span. It peeks first to force any trailing comment into the pending slot.
+// span. It peeks first to force any trailing comment into the pending feature value.
 func (p *Parser) expectCommentBody(start int) source.Span {
 	p.peek()
 	if sp, ok := p.takePendingComment(); ok {

@@ -186,13 +186,13 @@ without a binary still skips.
 
 ## P2 — a nested object is unreachable over gRPC — done
 
-`Instantiate` reads slots through `Instance.GetSlot`, so a derived attribute comes back
-evaluated instead of unmaterialized (conformance `instantiate_derived_slot`). A slot holding an
+`Instantiate` reads feature values through `Instance.GetFeatureValue`, so a derived attribute comes back
+evaluated instead of unmaterialized (conformance `instantiate_derived_slot`). A feature value holding an
 *object* still marshals as that child instance's id, but `InstantiateResponse.instances` now
 carries every instance reachable from the root, so `part engine : Engine` expands for a Python
 caller (`inst.engine.power`) as `%slots` expands it in the REPL. Expansion is bounded the way
 `%slots` bounds it — depth 8, and no descent into a type already on the path, since reading a
-composite slot materializes the object it holds and a self-referential part would otherwise
+composite feature value materializes the object it holds and a self-referential part would otherwise
 instantiate forever; an unexpanded child stays a bare id. A `GetInstance` RPC was
 rejected: runtime instances live in the request's `runtime.Context` and do not survive the
 call, so an id is only meaningful against the response that carried it — noted as a limitation
@@ -208,7 +208,7 @@ the library scalar it reduces to, and whether it is a quantity), `multiplicity`,
 generalization edge in `specializations` — `extractMetadata` exported only the first `specializes`
 of a definition and the first typing of a usage, which cannot express multiple supertypes or tell
 subsetting from redefinition. Known limitations are listed in `python/README.md`; the load-bearing
-ones are that a quantity slot is typed `object` because the wire `Value` has no
+ones are that a quantity feature value is typed `object` because the wire `Value` has no
 magnitude-and-unit form (the same reason `ValueToProto` reports one as unsupported), and that only
 structural usages become properties. `specializes`, `subsets` and `redefines` each produce the
 corresponding Python base class; an edge Python cannot linearize is named in a comment on the
@@ -325,7 +325,7 @@ The diagnostic is reported wherever the value is materialized, with the same ver
 surface: `-instantiate … -validate` exits 2, a `%slots` in a piped REPL session exits 2 (it
 exited 0 before, so a script could not detect the failure), the JSON output carries it under
 `runtime.materialize`, and a walk elided by the depth or self-containment bound marks itself
-partial rather than printing `✓ no errors`. Duplicate diagnostics for one redefined slot are
+partial rather than printing `✓ no errors`. Duplicate diagnostics for one redefined feature value are
 suppressed. `runtime/instance.go`, `runtime/shape.go`, `semantics/multiplicity.go`,
 `cmd/sysml/report.go`.
 
@@ -677,7 +677,7 @@ the namespace a member typed at the prompt would be written in, so `mass * 2` an
 that namespace's members and imports. What remains is a choice, not a defect: that namespace is the
 *last* one the session declared. A context is now named explicitly to decide it:
 `%eval in Demo::Vehicle : mass * 2` evaluates in that element's namespace, and pinning a name an
-object was materialized under reads that object's slots, as an unpinned `%eval` does after
+object was materialized under reads that object's feature values, as an unpinned `%eval` does after
 `%instantiate`. The default is unchanged — the last declared namespace — so nothing moved under an
 existing session. Documented in `docs/guide/04-repl.md` and in `%help`.
 
@@ -796,7 +796,7 @@ disagree about which member the flag marked. The body loop tested for `then` imm
 parsing the previous member, so the trailing site claimed the keyword first and the prefix site
 was reachable only for a leading `then` — one rule plus an unreachable-in-practice branch, not
 two contradictory ones. `SuccessionGuard` was indeed never assigned, and no notation would have
-filled it: SysML.xtext's `EmptySuccession` is `'then'` plus two empty ends and has no guard slot
+filled it: SysML.xtext's `EmptySuccession` is `'then'` plus two empty ends and has no guard field
 — a guard needs `GuardedSuccession`, its own member spelled
 `first <source> if <guard> then <target>` — so the field went without replacement, and
 `then part b if a;` is the syntax error it already was.

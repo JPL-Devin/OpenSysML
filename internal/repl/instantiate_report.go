@@ -1,23 +1,23 @@
 package repl
 
 // InstantiationReport is what creating an object produced: the lines a caller
-// prints, and the diagnostics materializing the object's slots reported.
+// prints, and the diagnostics materializing the object's feature values reported.
 type InstantiationReport struct {
 	Lines []string
-	// SlotErrors are the slots that could not be materialized, in the order they
+	// FeatureValueErrors are the feature values that could not be materialized, in the order they
 	// were read: a default whose value count does not conform to the feature's
 	// multiplicity is one.
-	SlotErrors []string
+	FeatureValueErrors []string
 	// Bounded is true when materialization stopped short — at its budget, or at
-	// nesting it does not descend into — so the slots it did not reach were not
+	// nesting it does not descend into — so the feature values it did not reach were not
 	// checked rather than found clean.
 	Bounded bool
 }
 
-// InstantiateReport creates the named object and materializes its slots, so a
+// InstantiateReport creates the named object and materializes its feature values, so a
 // non-interactive caller reports what materialization found rather than leaving
-// it to whoever reads a slot next. An object that cannot be created at all is an
-// error; a slot that cannot be materialized is a finding about the model.
+// it to whoever reads a feature value next. An object that cannot be created at all is an
+// error; a feature value that cannot be materialized is a finding about the model.
 func (s *Session) InstantiateReport(name string) (InstantiationReport, error) {
 	lines, err := s.InstantiateNamed(name)
 	if err != nil {
@@ -38,12 +38,12 @@ func (s *Session) InstantiateReport(name string) (InstantiationReport, error) {
 	if err != nil {
 		return report, err
 	}
-	slotErrs, bounded := ctx.MaterializationErrors(inst)
-	for _, slotErr := range slotErrs {
-		report.SlotErrors = append(report.SlotErrors, slotErr.Error())
+	fvErrs, bounded := ctx.MaterializationErrors(inst)
+	for _, fvErr := range fvErrs {
+		report.FeatureValueErrors = append(report.FeatureValueErrors, fvErr.Error())
 	}
 	report.Bounded = bounded
-	// The steps reading those slots are this object's, not the next command's.
+	// The steps reading those feature values are this object's, not the next command's.
 	report.Lines = append(report.Lines, s.drainTrace()...)
 	return report, nil
 }

@@ -321,20 +321,20 @@ func (ctx *Context) featureAddress(scope *symbols.Scope, self *Instance, segment
 		return messageAddress{}, false, err
 	}
 	for i, segment := range rest {
-		slot, held := owner.Slots[segment]
+		fv, held := owner.FeatureValues[segment]
 		if !held {
 			return messageAddress{}, false, nil
 		}
-		if isPortFeature(slot.Feature) {
+		if isPortFeature(fv.Feature) {
 			addr, built := portAddress(strings.Join(rest[i:], "."), owner.ID)
 			return addr, built, nil
 		}
 		// A behavior of an object is a receiving node of it, addressed by name.
-		if i == len(rest)-1 && isBehaviorFeature(slot.Feature) {
+		if i == len(rest)-1 && isBehaviorFeature(fv.Feature) {
 			addr, built := receiverAddress(segment, owner.ID)
 			return addr, built, nil
 		}
-		owner, ok, err = ctx.slotObject(owner, segment)
+		owner, ok, err = ctx.fvObject(owner, segment)
 		if err != nil || !ok {
 			return messageAddress{}, false, err
 		}
@@ -349,7 +349,7 @@ func (ctx *Context) featureAddress(scope *symbols.Scope, self *Instance, segment
 // since a namespace qualifies the occurrence in `P::alpha.inPort`.
 func (ctx *Context) addressOwner(scope *symbols.Scope, self *Instance, segments []string) (*Instance, []string, bool, error) {
 	if self != nil {
-		if slot, held := self.Slots[segments[0]]; held && ctx.namesFeature(scope, self, slot, segments[0]) {
+		if fv, held := self.FeatureValues[segments[0]]; held && ctx.namesFeature(scope, self, fv, segments[0]) {
 			return self, segments, true, nil
 		}
 	}
@@ -375,12 +375,12 @@ func (ctx *Context) addressOwner(scope *symbols.Scope, self *Instance, segments 
 	return nil, nil, false, nil
 }
 
-// namesFeature reports whether a slot of the sending object is what a name in
+// namesFeature reports whether a feature value of the sending object is what a name in
 // the send's scope denotes: a nearer declaration, such as a node of the sending
 // behavior, shadows the object's feature as name resolution has it.
-func (ctx *Context) namesFeature(scope *symbols.Scope, self *Instance, slot *Slot, name string) bool {
+func (ctx *Context) namesFeature(scope *symbols.Scope, self *Instance, fv *FeatureValue, name string) bool {
 	sym, ok := ctx.pathSymbol(scope, []string{name})
-	if !ok || (slot.Feature != nil && slot.Feature.Symbol == sym) {
+	if !ok || (fv.Feature != nil && fv.Feature.Symbol == sym) {
 		return true
 	}
 	for _, feat := range ctx.FeaturesOf(self.Type) {
@@ -402,18 +402,18 @@ func (ctx *Context) ownPortPath(scope *symbols.Scope, segments []string) bool {
 	return sym.Kind != symbols.SymbolPackage && sym.Kind != symbols.SymbolNamespace
 }
 
-// slotObject reads the object a feature of inst holds, materializing it, and
-// reports whether the feature holds one at all. A slot that cannot be read is
+// featureValueObject reads the object a feature of inst holds, materializing it, and
+// reports whether the feature holds one at all. A feature value that cannot be read is
 // that failure rather than a feature holding no object.
-func (ctx *Context) slotObject(inst *Instance, name string) (*Instance, bool, error) {
-	slot, err := inst.GetSlot(ctx, name)
+func (ctx *Context) fvObject(inst *Instance, name string) (*Instance, bool, error) {
+	fv, err := inst.GetFeatureValue(ctx, name)
 	if err != nil {
 		return nil, false, err
 	}
-	if slot == nil || slot.Value.Kind != ValInstance {
+	if fv == nil || fv.Value.Kind != ValInstance {
 		return nil, false, nil
 	}
-	held, ok := ctx.instances[slot.Value.Instance]
+	held, ok := ctx.instances[fv.Value.Instance]
 	return held, ok, nil
 }
 

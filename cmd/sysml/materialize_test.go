@@ -67,7 +67,7 @@ func TestCheckReportsMaterializationDiagnostics(t *testing.T) {
 			want:   []string{"feature value craft.volumes", "2 value(s) bound to a feature with multiplicity upper bound 1"},
 		},
 		{
-			name: "a redefined feature and the feature it redefines read one slot, reported once",
+			name: "a redefined feature and the feature it redefines read one feature value, reported once",
 			model: `package M {
     private import ScalarValues::Real;
     part def Base { attribute mass : Real; }
@@ -189,13 +189,13 @@ func TestCheckReportsMaterializationDiagnosticsAsJSON(t *testing.T) {
 }
 
 // unmaterializableModel binds two values to a feature declaring no multiplicity,
-// so reading the slot finds a default that does not conform to 1..1.
+// so reading the feature value finds a default that does not conform to 1..1.
 const unmaterializableModel = `package Demo { attribute def X { attribute bad : ScalarValues::Real = (1.0, 2.0); }
                part def R { attribute b : X; } }
 `
 
 // TestPipedSessionExitsOnAMaterializationFailure checks the exit-status rule for a
-// session driven from a pipe: a command that reported a slot it could not
+// session driven from a pipe: a command that reported a feature value it could not
 // materialize answered nothing about it, so the run exits 2 with the diagnostic
 // rendered, while a conforming model still exits 0.
 func TestPipedSessionExitsOnAMaterializationFailure(t *testing.T) {
@@ -208,7 +208,7 @@ func TestPipedSessionExitsOnAMaterializationFailure(t *testing.T) {
 		status int
 		want   []string
 	}{{
-		name:   "a slot listing that could not materialize leaves the run undecided",
+		name:   "a feature value listing that could not materialize leaves the run undecided",
 		stdin:  "%instantiate Demo::R\n%slots Demo::R\n",
 		model:  unmaterializableModel,
 		status: exitUnevaluable,
@@ -220,7 +220,7 @@ func TestPipedSessionExitsOnAMaterializationFailure(t *testing.T) {
 		status: exitUnevaluable,
 		want:   []string{"bad: <error:", "multiplicity violation"},
 	}, {
-		name:   "an evaluation of the same slot leaves the run undecided",
+		name:   "an evaluation of the same feature value leaves the run undecided",
 		stdin:  "%instantiate Demo::R\n%eval bad\n",
 		model:  unmaterializableModel,
 		status: exitUnevaluable,
@@ -232,7 +232,7 @@ func TestPipedSessionExitsOnAMaterializationFailure(t *testing.T) {
 		status: exitUnevaluable,
 		want:   []string{"error:", "multiplicity violation"},
 	}, {
-		name:   "a name that is no slot of the object decides nothing",
+		name:   "a name that is no feature value of the object decides nothing",
 		stdin:  "%instantiate Demo::R\n%eval nosuch\n",
 		model:  unmaterializableModel,
 		status: exitHolds,

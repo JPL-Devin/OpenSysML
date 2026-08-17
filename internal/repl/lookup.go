@@ -109,7 +109,7 @@ func (s *Session) owningInstance(fqn string) (*runtime.Instance, string) {
 
 // objectNamed returns the object a fully-qualified name denotes: the one
 // materialized under it, or the longest instantiated prefix with the remaining
-// segments walked through that instance's slots, since a nested part is an
+// segments walked through that instance's feature values, since a nested part is an
 // object of its own. The second result is the found object's FQN, for reporting.
 func (s *Session) objectNamed(fqn string) (*runtime.Instance, string) {
 	if fqn == "" {
@@ -122,7 +122,7 @@ func (s *Session) objectNamed(fqn string) (*runtime.Instance, string) {
 		if !ok {
 			continue
 		}
-		return s.walkSlots(inst, key, segments[i:])
+		return s.walkFeatureValues(inst, key, segments[i:])
 	}
 	return nil, ""
 }
@@ -248,22 +248,22 @@ type carrier struct {
 	inst *runtime.Instance
 }
 
-// nestedObjects returns the objects held in an object's slots, in slot-name
+// nestedObjects returns the objects held in an object's feature values, in feature-value-name
 // order, each under the name it is reached by.
 func nestedObjects(ctx *runtime.Context, of carrier) []carrier {
-	slots := make([]string, 0, len(of.inst.Slots))
-	for name := range of.inst.Slots {
-		slots = append(slots, name)
+	fvs := make([]string, 0, len(of.inst.FeatureValues))
+	for name := range of.inst.FeatureValues {
+		fvs = append(fvs, name)
 	}
-	sort.Strings(slots)
-	out := make([]carrier, 0, len(slots))
-	for _, name := range slots {
-		// A part slot holds its object only once it is asked for.
-		slot, err := of.inst.GetSlot(ctx, name)
-		if err != nil || slot == nil {
+	sort.Strings(fvs)
+	out := make([]carrier, 0, len(fvs))
+	for _, name := range fvs {
+		// A part feature value holds its object only once it is asked for.
+		fv, err := of.inst.GetFeatureValue(ctx, name)
+		if err != nil || fv == nil {
 			continue
 		}
-		id, isObject := slot.Value.Object()
+		id, isObject := fv.Value.Object()
 		if !isObject {
 			continue
 		}
@@ -312,9 +312,9 @@ func (s *Session) subjectFor(name, fqn string, sym *symbols.Symbol) (*runtime.In
 	}
 }
 
-// walkSlots follows a chain of part slots from inst. An unwalkable segment
+// walkFeatureValues follows a chain of part feature values from inst. An unwalkable segment
 // yields no object, since binding to an ancestor would answer about the wrong one.
-func (s *Session) walkSlots(inst *runtime.Instance, name string, segments []string) (*runtime.Instance, string) {
+func (s *Session) walkFeatureValues(inst *runtime.Instance, name string, segments []string) (*runtime.Instance, string) {
 	if len(segments) == 0 {
 		return inst, name
 	}
@@ -323,12 +323,12 @@ func (s *Session) walkSlots(inst *runtime.Instance, name string, segments []stri
 		return nil, ""
 	}
 	for _, seg := range segments {
-		slot, serr := inst.GetSlot(ctx, seg)
-		if serr != nil || slot == nil {
+		fv, serr := inst.GetFeatureValue(ctx, seg)
+		if serr != nil || fv == nil {
 			return nil, ""
 		}
-		// A variation slot holds the object of the variant it selected.
-		id, isObject := slot.Value.Object()
+		// A variation feature value holds the object of the variant it selected.
+		id, isObject := fv.Value.Object()
 		if !isObject {
 			return nil, ""
 		}

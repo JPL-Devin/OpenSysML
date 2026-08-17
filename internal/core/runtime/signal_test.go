@@ -703,7 +703,7 @@ func TestAddressedSendDescendsToNestedPort(t *testing.T) {
 	if err := ctx.post(nil, Message{SignalType: "Ping"}, send, alpha); err != nil {
 		t.Fatalf("post: %v", err)
 	}
-	inner, ok, err := ctx.slotObject(alpha, "inner")
+	inner, ok, err := ctx.fvObject(alpha, "inner")
 	if err != nil {
 		t.Fatalf("alpha.inner: %v", err)
 	}

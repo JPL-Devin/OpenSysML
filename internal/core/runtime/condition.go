@@ -281,7 +281,7 @@ func (ctx *Context) readThrough(inst *Instance) bool {
 }
 
 // rootInstances returns the objects this runtime holds that stand on their own,
-// in identity order: an object a slot holds is reached through its holder, and one
+// in identity order: an object a feature value holds is reached through its holder, and one
 // materialized to read a nested declaration through is an occurrence of nothing,
 // while an object a caller asked for is a root whatever it materializes. One
 // declaration materialized twice is one object here, the latest.
@@ -305,8 +305,8 @@ func (ctx *Context) rootInstances() []*Instance {
 	return out
 }
 
-// heldObjectIDs returns the identities a slot of another object already holds, so
-// an object reached through its holder is no root of its own. Slots are read as
+// heldObjectIDs returns the identities a feature value of another object already holds, so
+// an object reached through its holder is no root of its own. Feature values are read as
 // they stand, since materializing one is the search that asked for these.
 func (ctx *Context) heldObjectIDs() map[int64]bool {
 	held := make(map[int64]bool)
@@ -314,8 +314,8 @@ func (ctx *Context) heldObjectIDs() map[int64]bool {
 		if inst == nil {
 			continue
 		}
-		for _, slot := range inst.Slots {
-			for _, id := range heldObjects(slot.HeldValue()) {
+		for _, fv := range inst.FeatureValues {
+			for _, id := range heldObjects(fv.HeldValue()) {
 				held[id] = true
 			}
 		}
@@ -391,7 +391,7 @@ type heldObject struct {
 }
 
 // nestedObjects returns the objects the object-valued features of inst hold,
-// materializing a lazy one as reading its slot does. A slot that cannot be read
+// materializing a lazy one as reading its feature value does. A feature value that cannot be read
 // yields no object: one that is not there is no subject either.
 func (ctx *Context) nestedObjects(inst *Instance) []heldObject {
 	features := ctx.FeaturesOf(inst.Type)
@@ -401,11 +401,11 @@ func (ctx *Context) nestedObjects(inst *Instance) []heldObject {
 		if feat.Name == "" || !holdsObjects(feat) {
 			continue
 		}
-		slot, err := inst.GetSlot(ctx, feat.Name)
-		if err != nil || slot == nil {
+		fv, err := inst.GetFeatureValue(ctx, feat.Name)
+		if err != nil || fv == nil {
 			continue
 		}
-		for _, id := range heldObjects(slot.HeldValue()) {
+		for _, id := range heldObjects(fv.HeldValue()) {
 			if child, ok := ctx.instances[id]; ok {
 				out = append(out, heldObject{feature: feat.Name, instance: child})
 			}
@@ -431,7 +431,7 @@ func holdsObjects(feat *EffectiveFeature) bool {
 	return false
 }
 
-// heldObjects returns the identities a slot value denotes, a collection's
+// heldObjects returns the identities a feature value denotes, a collection's
 // elements included.
 func heldObjects(val Value) []int64 {
 	if id, ok := val.Object(); ok {

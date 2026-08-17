@@ -332,7 +332,7 @@ func TestCalcOutputChainIsNotNesting(t *testing.T) {
 }
 
 // A nested usage read through an object keeps that object's state in reach: an
-// input may name a slot of the part the enclosing usage is a feature of.
+// input may name a feature value of the part the enclosing usage is a feature of.
 func TestNestedCalcUsageReadsEnclosingObject(t *testing.T) {
 	src := `
 		package test {

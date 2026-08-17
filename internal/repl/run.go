@@ -119,7 +119,7 @@ func (s *Session) Diagnostics() []passes.Diagnostic {
 }
 
 // HasErrors reports whether the session found the model wrong: something analysis
-// found, or a slot a command could not materialize. It is what a non-interactive
+// found, or a feature value a command could not materialize. It is what a non-interactive
 // run exits on.
 func (s *Session) HasErrors() bool {
 	return s.hasAnalysisErrors() || len(s.MaterializationFailures()) > 0
@@ -136,9 +136,9 @@ func (s *Session) hasAnalysisErrors() bool {
 	return false
 }
 
-// MaterializationFailures reports the slots the session's commands could not
+// MaterializationFailures reports the feature values the session's commands could not
 // materialize, in the order they were reported: a command that rendered one
-// answered nothing about that slot.
+// answered nothing about that feature value.
 func (s *Session) MaterializationFailures() []error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -146,16 +146,16 @@ func (s *Session) MaterializationFailures() []error {
 }
 
 // noteIfMaterializationFailure records an error a command reported when it is a
-// slot that could not be materialized, so which command surfaced it — a slot
+// feature value that could not be materialized, so which command surfaced it — a feature value
 // listing, an evaluation, a pinned one — does not decide whether it is recorded.
 // Callers hold s.mu.
 func (s *Session) noteIfMaterializationFailure(err error) {
-	if errors.Is(err, runtime.ErrSlotMaterialization) {
+	if errors.Is(err, runtime.ErrFeatureValueMaterialization) {
 		s.noteMaterializationFailure(err)
 	}
 }
 
-// noteMaterializationFailure records slots a command could not materialize. It is
+// noteMaterializationFailure records feature values a command could not materialize. It is
 // a record of what the session answered, so it stands once the object is gone.
 // Callers hold s.mu.
 func (s *Session) noteMaterializationFailure(errs ...error) {

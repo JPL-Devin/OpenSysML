@@ -18,7 +18,7 @@ import (
 //
 // Redefinition: a redefining feature is the same feature as the one it
 // redefines, seen through a new declaration (KerML 1.0 §7.3.4.5), so
-// the two names read one slot rather than two — `part subsystems :>> Subsystems`
+// the two names read one feature value rather than two — `part subsystems :>> Subsystems`
 // makes `Subsystems.mass` read the values held under `subsystems`.
 
 // relatedFeatures returns the features of owner that sym's relationships of the
@@ -79,13 +79,13 @@ func (ctx *Context) relatedFeatureNames(sym, owner *symbols.Symbol, kind ast.Rel
 	return names
 }
 
-// aliasRedefinedSlots makes every name of one feature of this instance read one
-// slot: a redefinition declares the redefined feature again under a new name, so
+// aliasRedefinedFeatureValues makes every name of one feature of this instance read one
+// feature value: a redefinition declares the redefined feature again under a new name, so
 // however many names a chain of redefinitions gives it, they name one set of
-// values. The slot they share is the one the most specific declaration writing a
+// values. The feature value they share is the one the most specific declaration writing a
 // value created, whichever of the names that declaration used; one declaration
 // valuing two names of the feature is reported rather than silently picked from.
-func (ctx *Context) aliasRedefinedSlots(inst *Instance) error {
+func (ctx *Context) aliasRedefinedFeatureValues(inst *Instance) error {
 	features := ctx.FeaturesOf(inst.Type)
 	byName := make(map[string]*EffectiveFeature, len(features))
 	for i := range features {
@@ -97,15 +97,15 @@ func (ctx *Context) aliasRedefinedSlots(inst *Instance) error {
 		if err != nil {
 			return err
 		}
-		slot := inst.Slots[chosen]
+		fv := inst.FeatureValues[chosen]
 		for _, name := range names {
-			inst.Slots[name] = slot
+			inst.FeatureValues[name] = fv
 		}
 	}
 	return nil
 }
 
-// redefinitionGroups groups the instance's slot names by the feature they name,
+// redefinitionGroups groups the instance's feature names by the feature they name,
 // in feature order, keeping only names that share a feature with another. Each
 // group's names are ordered from the most specific declaration to the least,
 // which is the order the features are computed in.
@@ -123,14 +123,14 @@ func (ctx *Context) redefinitionGroups(inst *Instance, features []EffectiveFeatu
 		return root
 	}
 	for _, feat := range features {
-		if _, ok := inst.Slots[feat.Name]; !ok || feat.Symbol == nil {
+		if _, ok := inst.FeatureValues[feat.Name]; !ok || feat.Symbol == nil {
 			continue
 		}
 		for _, redefined := range ctx.redefinedNames(feat.Symbol, inst.Type) {
 			if redefined == feat.Name {
 				continue
 			}
-			if _, ok := inst.Slots[redefined]; !ok {
+			if _, ok := inst.FeatureValues[redefined]; !ok {
 				continue
 			}
 			if a, b := find(feat.Name), find(redefined); a != b {
@@ -157,7 +157,7 @@ func (ctx *Context) redefinitionGroups(inst *Instance, features []EffectiveFeatu
 }
 
 // sharedRedefinitionName returns the name in a group of names of one feature
-// whose slot the group shares: the first name, in most-specific-first order,
+// whose feature value the group shares: the first name, in most-specific-first order,
 // whose own declaration writes a value, and otherwise the most specific name.
 // Two names valued by one declaration are ErrConflictingRedefinition.
 func (ctx *Context) sharedRedefinitionName(inst *Instance, byName map[string]*EffectiveFeature, names []string) (string, error) {
@@ -194,7 +194,7 @@ func (ctx *Context) redefinedNames(sym, owner *symbols.Symbol) []string {
 		queue = queue[1:]
 		// An end of a connector redefines the end at its position of each
 		// connector its owner specializes without naming it, so the two names read
-		// one slot as an explicit redefinition's do.
+		// one feature value as an explicit redefinition's do.
 		redefines := append(ctx.relatedFeatures(cur, owner, ast.RelRedefines),
 			ctx.model.ImplicitEndRedefinitions(cur)...)
 		for _, redefined := range redefines {
@@ -210,16 +210,16 @@ func (ctx *Context) redefinedNames(sym, owner *symbols.Symbol) []string {
 }
 
 // subsettingContributions returns the values the features subsetting the named
-// feature contribute to it, in declaration order. A redefinition shares one slot
-// under two names, so membership is decided by the slot a subsetted name reads
+// feature contribute to it, in declaration order. A redefinition shares one feature value
+// under two names, so membership is decided by the feature value a subsetted name reads
 // rather than by the name this collection was read under. Reading a subsetting
 // feature materializes it, so a cycle between subsetting features is reported as
-// ErrCyclicSlot rather than recursing until the step budget runs out.
+// ErrCyclicFeatureValue rather than recursing until the step budget runs out.
 func (ctx *Context) subsettingContributions(inst *Instance, name string) ([]Value, error) {
-	target := inst.Slots[name]
-	key := slotRef{instance: inst.ID, feature: name}
+	target := inst.FeatureValues[name]
+	key := featureValueRef{instance: inst.ID, feature: name}
 	if ctx.collectingSubsets[key] {
-		return nil, fmt.Errorf("%w: %s.%s subsets itself", ErrCyclicSlot, inst.Type.Name, name)
+		return nil, fmt.Errorf("%w: %s.%s subsets itself", ErrCyclicFeatureValue, inst.Type.Name, name)
 	}
 	ctx.collectingSubsets[key] = true
 	defer delete(ctx.collectingSubsets, key)
@@ -231,7 +231,7 @@ func (ctx *Context) subsettingContributions(inst *Instance, name string) ([]Valu
 		}
 		subsets := false
 		for _, subsetted := range ctx.relatedFeatureNames(feat.Symbol, inst.Type, ast.RelSubsets) {
-			if subsetted == name || (target != nil && inst.Slots[subsetted] == target) {
+			if subsetted == name || (target != nil && inst.FeatureValues[subsetted] == target) {
 				subsets = true
 				break
 			}
@@ -239,11 +239,11 @@ func (ctx *Context) subsettingContributions(inst *Instance, name string) ([]Valu
 		if !subsets {
 			continue
 		}
-		slot, ok := inst.Slots[feat.Name]
-		if !ok || slot == inst.Slots[name] {
+		fv, ok := inst.FeatureValues[feat.Name]
+		if !ok || fv == inst.FeatureValues[name] {
 			continue
 		}
-		sub, err := inst.GetSlot(ctx, feat.Name)
+		sub, err := inst.GetFeatureValue(ctx, feat.Name)
 		if err != nil {
 			return nil, fmt.Errorf("subsetting feature %s of %s: %w", feat.Name, name, err)
 		}

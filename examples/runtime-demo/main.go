@@ -104,19 +104,19 @@ func demo2_PartInstantiation() {
 	fmt.Printf("✓ Created instance of Wheel (ID: %d)\n", inst.ID)
 
 	// Access diameter
-	diamSlot, err := inst.GetSlot(ctx, "diameter")
+	diamFeatureValue, err := inst.GetFeatureValue(ctx, "diameter")
 	if err != nil {
 		fmt.Printf("❌ diameter access failed: %v\n", err)
 	} else {
-		fmt.Printf("  → diameter = %.1f meters\n", diamSlot.Value.Const.Real)
+		fmt.Printf("  → diameter = %.1f meters\n", diamFeatureValue.Value.Const.Real)
 	}
 
 	// Access pressure
-	pressSlot, err := inst.GetSlot(ctx, "pressure")
+	pressFeatureValue, err := inst.GetFeatureValue(ctx, "pressure")
 	if err != nil {
 		fmt.Printf("❌ pressure access failed: %v\n", err)
 	} else {
-		fmt.Printf("  → pressure = %.1f PSI\n", pressSlot.Value.Const.Real)
+		fmt.Printf("  → pressure = %.1f PSI\n", pressFeatureValue.Value.Const.Real)
 	}
 
 	fmt.Println()
@@ -159,19 +159,19 @@ func demo3_NestedParts() {
 	fmt.Printf("✓ Created instance of Vehicle (ID: %d)\n", inst.ID)
 
 	// Access wheels attribute
-	wheelsSlot, err := inst.GetSlot(ctx, "wheels")
+	wheelsFeatureValue, err := inst.GetFeatureValue(ctx, "wheels")
 	if err != nil {
 		fmt.Printf("❌ wheels access failed: %v\n", err)
 	} else {
-		fmt.Printf("  → wheels = %d\n", wheelsSlot.Value.Const.Int)
+		fmt.Printf("  → wheels = %d\n", wheelsFeatureValue.Value.Const.Int)
 	}
 
 	// Access nested engine part
-	engineSlot, err := inst.GetSlot(ctx, "engine")
+	engineFeatureValue, err := inst.GetFeatureValue(ctx, "engine")
 	if err != nil {
 		fmt.Printf("❌ engine access failed: %v\n", err)
-	} else if engineSlot.Value.Kind == runtime.ValInstance {
-		fmt.Printf("  → engine = Instance(ID: %d) [nested part]\n", engineSlot.Value.Instance)
+	} else if engineFeatureValue.Value.Kind == runtime.ValInstance {
+		fmt.Printf("  → engine = Instance(ID: %d) [nested part]\n", engineFeatureValue.Value.Instance)
 		fmt.Printf("     (Nested instance fully materialized via lazy evaluation)\n")
 	}
 
@@ -182,7 +182,7 @@ func demo3_NestedParts() {
 	fmt.Println("  ✓ Expression evaluation (arithmetic, real, comparison)")
 	fmt.Println("  ✓ Part instantiation with default values")
 	fmt.Println("  ✓ Nested composite structures")
-	fmt.Println("  ✓ Lazy slot materialization")
+	fmt.Println("  ✓ Lazy feature value materialization")
 }
 
 // Helper: parse model and build semantic index

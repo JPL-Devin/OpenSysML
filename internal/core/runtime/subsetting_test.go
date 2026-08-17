@@ -37,21 +37,21 @@ func TestRedefinedCollectionReadsSubsetsUnderEitherName(t *testing.T) {
 				t.Fatalf("Instantiate: %v", err)
 			}
 			// Reading the redefined collection is what materializes the shared
-			// slot, so each name has to be the one read first in turn.
+			// feature value, so each name has to be the one read first in turn.
 			for _, name := range []string{first, "Subsystems", "subsystems"} {
-				slot, err := inst.GetSlot(ctx, name)
+				fv, err := inst.GetFeatureValue(ctx, name)
 				if err != nil {
-					t.Fatalf("GetSlot(%s): %v", name, err)
+					t.Fatalf("GetFeatureValue(%s): %v", name, err)
 				}
-				if got := len(elementsOf(slot.HeldValue())); got != 2 {
+				if got := len(elementsOf(fv.HeldValue())); got != 2 {
 					t.Fatalf("%s: %d elements, want 2", name, got)
 				}
 			}
-			slot, err := inst.GetSlot(ctx, "totalmass")
+			fv, err := inst.GetFeatureValue(ctx, "totalmass")
 			if err != nil {
-				t.Fatalf("GetSlot(totalmass): %v", err)
+				t.Fatalf("GetFeatureValue(totalmass): %v", err)
 			}
-			if got := FormatTraceValue(slot.HeldValue()); got != "7.0" {
+			if got := FormatTraceValue(fv.HeldValue()); got != "7.0" {
 				t.Fatalf("totalmass = %s, want 7.0", got)
 			}
 		})
@@ -78,11 +78,11 @@ func TestRedefiningFeatureHoldsTheRedefinedDefault(t *testing.T) {
 		t.Fatalf("Instantiate: %v", err)
 	}
 	for _, name := range []string{"grossMass", "mass"} {
-		slot, err := inst.GetSlot(ctx, name)
+		fv, err := inst.GetFeatureValue(ctx, name)
 		if err != nil {
-			t.Fatalf("GetSlot(%s): %v", name, err)
+			t.Fatalf("GetFeatureValue(%s): %v", name, err)
 		}
-		if got := FormatTraceValue(slot.HeldValue()); got != "1000.0" {
+		if got := FormatTraceValue(fv.HeldValue()); got != "1000.0" {
 			t.Errorf("%s = %s, want 1000.0", name, got)
 		}
 	}
@@ -90,7 +90,7 @@ func TestRedefiningFeatureHoldsTheRedefinedDefault(t *testing.T) {
 
 // A usage restating a redefinition writes the one feature it names, so the
 // redefined name is not left holding the definition's default.
-func TestRestatedRedefinitionWritesOneSlot(t *testing.T) {
+func TestRestatedRedefinitionWritesOneFeatureValue(t *testing.T) {
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
 		package test {
 			private import ScalarValues::Real;
@@ -108,16 +108,16 @@ func TestRestatedRedefinitionWritesOneSlot(t *testing.T) {
 		t.Fatalf("Instantiate: %v", err)
 	}
 	for _, name := range []string{"own", "mass"} {
-		slot, err := inst.GetSlot(ctx, name)
+		fv, err := inst.GetFeatureValue(ctx, name)
 		if err != nil {
-			t.Fatalf("GetSlot(%s): %v", name, err)
+			t.Fatalf("GetFeatureValue(%s): %v", name, err)
 		}
-		if got := FormatTraceValue(slot.HeldValue()); got != "10.0" {
+		if got := FormatTraceValue(fv.HeldValue()); got != "10.0" {
 			t.Errorf("%s = %s, want 10.0", name, got)
 		}
 	}
-	if inst.Slots["own"] != inst.Slots["mass"] {
-		t.Error("own and mass are separate slots, want one shared slot")
+	if inst.FeatureValues["own"] != inst.FeatureValues["mass"] {
+		t.Error("own and mass are separate feature values, want one shared feature value")
 	}
 }
 
@@ -143,11 +143,11 @@ func TestSubsettingIgnoresALibraryFeatureOfTheSameName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Instantiate: %v", err)
 	}
-	slot, err := inst.GetSlot(ctx, "mass")
+	fv, err := inst.GetFeatureValue(ctx, "mass")
 	if err != nil {
-		t.Fatalf("GetSlot(mass): %v", err)
+		t.Fatalf("GetFeatureValue(mass): %v", err)
 	}
-	if got := len(elementsOf(slot.HeldValue())); got != 0 {
+	if got := len(elementsOf(fv.HeldValue())); got != 0 {
 		t.Errorf("mass holds %d elements, want 0", got)
 	}
 }

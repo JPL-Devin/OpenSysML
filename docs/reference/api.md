@@ -329,15 +329,13 @@ Execution runtime (Tiers 1-5: instances, expressions, behaviors).
 - **`Instance`** — Runtime instance
   - `ID int64` — Unique instance ID
   - `Type *symbols.Symbol` — Type symbol
-  - `Slots map[*symbols.Symbol]Value` — Feature values
+  - `FeatureValues map[string]*FeatureValue` — Feature values by feature name
 
 **Execution Context:**
 
 - **`Context`** — Runtime execution context
   - `Instantiate(sym *symbols.Symbol) (*Instance, error)` — Create instance
   - `Eval(expr ast.Node, env map[*symbols.Symbol]Value) (Value, error)` — Evaluate expression
-  - `GetSlot(inst *Instance, feature *symbols.Symbol) (Value, bool)` — Read slot
-  - `SetSlot(inst *Instance, feature *symbols.Symbol, val Value) error` — Write slot
   - `InvokeCalc(sym *symbols.Symbol, args []Value, scope *symbols.Scope) (Value, error)` — Invoke calculation
   - `EvaluateConstraint(sym *symbols.Symbol, scope *symbols.Scope) (bool, error)` — Evaluate constraint
   - `EvaluateRequirement(sym *symbols.Symbol, scope *symbols.Scope) (bool, error)` — Evaluate requirement
@@ -403,7 +401,7 @@ Tier 1-3 (Instances & Expressions):
 //   err = ctx.SetBudgets(budgets)
 ctx := runtime.NewContext(model, resolver, runtime.DefaultMaxSteps)
 inst, _ := ctx.Instantiate(wheelSym)
-val, _ := ctx.GetSlot(inst, diameterSym)
+fv, _ := inst.GetFeatureValue(ctx, "diameter")
 result, _ := ctx.InvokeCalc(addSym, []Value{v1, v2}, scope)
 ```
 
@@ -796,8 +794,8 @@ import (
 
 rtCtx := runtime.NewContext(model, resolver, runtime.DefaultMaxSteps)
 inst, _ := rtCtx.Instantiate(wheelSym)
-diameterSlot, _ := inst.GetSlot(rtCtx, "diameter")
-fmt.Println(diameterSlot.Value) // Value{Kind: ValConst, Real: 16.0}
+diameter, _ := inst.GetFeatureValue(rtCtx, "diameter")
+fmt.Println(diameter.Value) // Value{Kind: ValConst, Real: 16.0}
 ```
 
 ---

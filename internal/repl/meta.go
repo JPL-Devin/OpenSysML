@@ -451,7 +451,7 @@ func contextSeparator(tail string) int {
 }
 
 // evalIn evaluates an expression in the context the command pinned: the object
-// materialized under that name, whose slots it then reads as `%eval` does after
+// materialized under that name, whose feature values it then reads as `%eval` does after
 // `%instantiate`, or else the named element's own namespace.
 func (s *Session) evalIn(name, expr string) ([]string, error) {
 	sym, fqn, lerr := s.lookupSymbol(name)
@@ -580,21 +580,21 @@ func (s *Session) evalExpr(expr string) ([]string, error) {
 	}
 	if sym != nil {
 		// An object carrying the feature makes this a question about that object,
-		// as a check of a condition is: read the slot, which holds the value the
+		// as a check of a condition is: read the feature value, which holds the value the
 		// object actually has, rather than the value the declaration defaults to.
 		inst, owner, subjErr := s.subjectFor(expr, fqn, sym)
 		if subjErr != nil {
 			return nil, subjErr
 		}
 		if inst != nil {
-			if _, ok := inst.Slots[sym.Name]; ok {
-				slot, err := inst.GetSlot(ctx, sym.Name)
+			if _, ok := inst.FeatureValues[sym.Name]; ok {
+				fv, err := inst.GetFeatureValue(ctx, sym.Name)
 				if err != nil {
 					return nil, fmt.Errorf("evaluation failed: %w", err)
 				}
 				return []string{
 					fmt.Sprintf("✓ %s%s", expr, onInstance(inst, owner)),
-					fmt.Sprintf("  = %s", formatSlot(ctx, slot)),
+					fmt.Sprintf("  = %s", formatFeatureValue(ctx, fv)),
 				}, nil
 			}
 		}
@@ -925,36 +925,36 @@ func (s *Session) doFeatures(name string) ([]string, bool, error) {
 		fmt.Sprintf("Instance: %s (ID: %d)", notationName(fqn), inst.ID),
 		"Features:",
 	}
-	w := &slotWalk{ctx: ctx, onPath: map[*symbols.Symbol]bool{inst.Type: true}, budget: maxSlotLines}
+	w := &featureValueWalk{ctx: ctx, onPath: map[*symbols.Symbol]bool{inst.Type: true}, budget: maxFeatureValueLines}
 	listing := w.lines(inst, "  ", 0)
-	// A slot the listing rendered as an error is one the session could not answer
+	// A feature value the listing rendered as an error is one the session could not answer
 	// about, which a non-interactive run exits on.
 	s.noteMaterializationFailure(w.errs...)
 	return append(lines, listing...), false, nil
 }
 
 const (
-	// maxSlotDepth bounds how deep %features expands nested objects.
-	maxSlotDepth = 8
-	// maxSlotLines bounds the listing as a whole, since nesting multiplies and
-	// a slot is materialized by reading it: breadth costs objects, not just output.
-	maxSlotLines = 200
+	// maxFeatureValueDepth bounds how deep %features expands nested objects.
+	maxFeatureValueDepth = 8
+	// maxFeatureValueLines bounds the listing as a whole, since nesting multiplies and
+	// a feature value is materialized by reading it: breadth costs objects, not just output.
+	maxFeatureValueLines = 200
 )
 
-// slotWalk expands an object graph for %features under three bounds: onPath holds
+// featureValueWalk expands an object graph for %features under three bounds: onPath holds
 // the types being expanded above the current one (a part containing its own
 // kind materializes a fresh instance per descent, so instance identity cannot
 // detect the cycle), depth, and a line budget shared across the listing.
-type slotWalk struct {
+type featureValueWalk struct {
 	ctx    *runtime.Context
 	onPath map[*symbols.Symbol]bool
 	budget int
-	// errs are the slots the listing could not materialize, rendered as errors in
+	// errs are the feature values the listing could not materialize, rendered as errors in
 	// its lines and reported as findings about the model by the caller.
 	errs []error
 }
 
-func (w *slotWalk) lines(inst *runtime.Instance, indent string, depth int) []string {
+func (w *featureValueWalk) lines(inst *runtime.Instance, indent string, depth int) []string {
 	features := w.ctx.FeaturesOf(inst.Type)
 	connectors := w.connectors(inst, indent)
 	if len(features) == 0 && len(connectors) == 0 {
@@ -983,14 +983,14 @@ func (w *slotWalk) lines(inst *runtime.Instance, indent string, depth int) []str
 			lines = w.emit(lines, fmt.Sprintf("%s%s : %s (not expanded: %s)", indent, feat.Name, held, elisionReason(depth)))
 			continue
 		}
-		slot, err := inst.GetSlot(w.ctx, feat.Name)
+		fv, err := inst.GetFeatureValue(w.ctx, feat.Name)
 		if err != nil {
 			w.errs = append(w.errs, err)
 			lines = w.emit(lines, fmt.Sprintf("%s%s: <error: %v>", indent, feat.Name, err))
 			continue
 		}
-		lines = w.emit(lines, fmt.Sprintf("%s%s = %s", indent, feat.Name, formatSlot(w.ctx, slot)))
-		for _, nested := range nestedInstances(w.ctx, slot) {
+		lines = w.emit(lines, fmt.Sprintf("%s%s = %s", indent, feat.Name, formatFeatureValue(w.ctx, fv)))
+		for _, nested := range nestedInstances(w.ctx, fv) {
 			if w.budget <= 0 {
 				return truncated(lines, "  ")
 			}
@@ -1005,7 +1005,7 @@ func (w *slotWalk) lines(inst *runtime.Instance, indent string, depth int) []str
 // connectors lists the connectors the object owns that no feature names: an
 // anonymous `connect a.p to b.q` relates the features at its ends whether or not
 // it is named, and its ends are the only way to see what it relates.
-func (w *slotWalk) connectors(inst *runtime.Instance, indent string) []string {
+func (w *featureValueWalk) connectors(inst *runtime.Instance, indent string) []string {
 	conns, err := inst.OwnedConnectors(w.ctx)
 	if err != nil {
 		w.errs = append(w.errs, err)
@@ -1043,47 +1043,47 @@ func endLabel(end runtime.ConnectorEnd) string {
 	return "end"
 }
 
-func (w *slotWalk) emit(lines []string, line string) []string {
+func (w *featureValueWalk) emit(lines []string, line string) []string {
 	w.budget--
 	return append(lines, line)
 }
 
 // elided reports whether expanding a feature would revisit a type already on
 // the path or exceed the depth bound, naming the type it holds. Asked before
-// the slot is read, since reading it materializes the object.
-func (w *slotWalk) elided(feat *runtime.EffectiveFeature, depth int) (string, bool) {
+// the feature value is read, since reading it materializes the object.
+func (w *featureValueWalk) elided(feat *runtime.EffectiveFeature, depth int) (string, bool) {
 	held := w.ctx.CompositeTypeOf(feat)
 	if held == nil {
 		// A variation is materialized from the variant it selects, so the depth
 		// bound applies to it too.
-		if w.ctx.IsVariationFeature(feat) && depth >= maxSlotDepth {
+		if w.ctx.IsVariationFeature(feat) && depth >= maxFeatureValueDepth {
 			return feat.Name, true
 		}
 		return "", false
 	}
-	if depth >= maxSlotDepth || w.onPath[held] {
+	if depth >= maxFeatureValueDepth || w.onPath[held] {
 		return held.Name, true
 	}
 	return "", false
 }
 
 func elisionReason(depth int) string {
-	if depth >= maxSlotDepth {
-		return fmt.Sprintf("depth %d", maxSlotDepth)
+	if depth >= maxFeatureValueDepth {
+		return fmt.Sprintf("depth %d", maxFeatureValueDepth)
 	}
 	return "contains its own kind"
 }
 
-// nestedInstances returns the instances a slot holds, whether it carries one
+// nestedInstances returns the instances a feature value holds, whether it carries one
 // value or a collection of them. An object that holds no value has nothing to
 // expand: it reads as unset, not as an object with no features.
-func nestedInstances(ctx *runtime.Context, slot *runtime.Slot) []*runtime.Instance {
-	values := []runtime.Value{slot.Value}
-	switch slot.Values.Kind {
+func nestedInstances(ctx *runtime.Context, fv *runtime.FeatureValue) []*runtime.Instance {
+	values := []runtime.Value{fv.Value}
+	switch fv.Values.Kind {
 	case runtime.ValSequence:
-		values = slot.Values.Sequence.Elements()
+		values = fv.Values.Sequence.Elements()
 	case runtime.ValSet:
-		values = slot.Values.Set.Elements()
+		values = fv.Values.Set.Elements()
 	}
 
 	var out []*runtime.Instance
@@ -1100,7 +1100,7 @@ func nestedInstances(ctx *runtime.Context, slot *runtime.Slot) []*runtime.Instan
 }
 
 // featureVerdict evaluates a constraint or requirement feature against the
-// instance that carries it and renders the outcome for a slot listing.
+// instance that carries it and renders the outcome for a feature value listing.
 // Reports false for a feature that holds a value rather than a verdict.
 func featureVerdict(ctx *runtime.Context, feat *runtime.EffectiveFeature, inst *runtime.Instance) (string, bool) {
 	if feat.Symbol == nil {
@@ -1157,13 +1157,13 @@ func (s *Session) doInstances() ([]string, bool, error) {
 	return lines, false, nil
 }
 
-// formatSlot renders what a slot holds: a multi-valued feature keeps its
+// formatFeatureValue renders what a feature value holds: a multi-valued feature keeps its
 // contents in Values, leaving the scalar Value unset.
-func formatSlot(ctx *runtime.Context, slot *runtime.Slot) string {
-	if slot.Values.Kind != runtime.ValInvalid {
-		return formatValue(ctx, slot.Values)
+func formatFeatureValue(ctx *runtime.Context, fv *runtime.FeatureValue) string {
+	if fv.Values.Kind != runtime.ValInvalid {
+		return formatValue(ctx, fv.Values)
 	}
-	return formatValue(ctx, slot.Value)
+	return formatValue(ctx, fv.Value)
 }
 
 // formatValue renders a value as every surface spells it. ctx may be nil, which

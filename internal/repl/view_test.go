@@ -389,7 +389,7 @@ func TestViewSharesTheObjectOfAQuotedName(t *testing.T) {
 	}
 	// The verdict is about this object, so editing it below the concern's bound
 	// has to change it — which it only can if the report read this object.
-	created.Slots["mass"].Value = runtime.Value{
+	created.FeatureValues["mass"].Value = runtime.Value{
 		Kind:  runtime.ValConst,
 		Const: semantics.Value{Kind: semantics.ValReal, Real: 0.5},
 	}

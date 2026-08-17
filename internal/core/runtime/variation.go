@@ -15,7 +15,7 @@ func variantReference(sym *symbols.Symbol) Value {
 	return Value{Kind: ValVariant, Variant: sym}
 }
 
-// IsVariationFeature reports whether a feature is a variation point, whose slot
+// IsVariationFeature reports whether a feature is a variation point, whose feature value
 // holds the variant it is bound to rather than an object of itself.
 func (ctx *Context) IsVariationFeature(feat *EffectiveFeature) bool {
 	return feat != nil && ctx.model.IsVariationFeature(feat.Symbol)
@@ -49,7 +49,7 @@ func (ctx *Context) variantSummary(variation *symbols.Symbol) string {
 }
 
 // bindVariation resolves what a variation feature is bound to into the value its
-// slot holds: the selected variant's value, or an object of it (SysML v2 §7.20).
+// feature value holds: the selected variant's value, or an object of it (SysML v2 §7.20).
 // Anything that is not one of the feature's variants is reported.
 func (ctx *Context) bindVariation(feat *EffectiveFeature, selection Value, owner int64) (Value, error) {
 	name := feat.Name

@@ -31,7 +31,7 @@ type ExpectedValue struct {
 	// Elements are the members a Sequence holds, in order, for a case asserting a
 	// multi-valued feature. Set it instead of value.
 	Elements []ExpectedValue `json:"elements,omitempty"`
-	// Error is the text producing this value must fail with, for a slot whose
+	// Error is the text producing this value must fail with, for a feature value whose
 	// contract is a diagnostic. Set it instead of type and value.
 	Error string `json:"error,omitempty"`
 }
@@ -110,9 +110,9 @@ type ExpectedOutcome struct {
 	Performers []Performer `json:"performers,omitempty"`
 
 	// Instance fields
-	Instantiate string                   `json:"instantiate,omitempty"` // qualified name of the type to instantiate
-	Slots       map[string]ExpectedValue `json:"slots,omitempty"`       // expected slot values, derived ones included
-	Constraints map[string]bool          `json:"constraints,omitempty"` // constraint feature name -> satisfied on this instance
+	Instantiate   string                   `json:"instantiate,omitempty"` // qualified name of the type to instantiate
+	FeatureValues map[string]ExpectedValue `json:"slots,omitempty"`       // expected feature values, derived ones included
+	Constraints   map[string]bool          `json:"constraints,omitempty"` // constraint feature name -> satisfied on this instance
 	// Identical states pairs of paths through the instance that must reach the
 	// very same object, for a case whose contract is identity rather than a
 	// value — a connector end is the feature it attaches to, so
@@ -790,7 +790,7 @@ func sortedKeys(m map[string]bool) []string {
 	return keys
 }
 
-// runInstanceConformance instantiates a type and validates the values its slots
+// runInstanceConformance instantiates a type and validates the values its feature values
 // hold, including derived defaults, plus the verdict of each constraint the
 // instance carries.
 func runInstanceConformance(t *testing.T, ctx *Context, idx *symbols.Index, expected ExpectedOutcome) {
@@ -812,17 +812,17 @@ func runInstanceConformance(t *testing.T, ctx *Context, idx *symbols.Index, expe
 		t.Fatalf("Instantiate(%s) failed: %v", expected.Instantiate, err)
 	}
 
-	for name, expectedVal := range expected.Slots {
-		slot, err := inst.GetSlot(ctx, name)
+	for name, expectedVal := range expected.FeatureValues {
+		fv, err := inst.GetFeatureValue(ctx, name)
 		if expectedVal.Error != "" {
-			requireError(t, "slot "+name, err, expectedVal.Error)
+			requireError(t, "feature value "+name, err, expectedVal.Error)
 			continue
 		}
 		if err != nil {
-			t.Errorf("slot %q: %v", name, err)
+			t.Errorf("feature value %q: %v", name, err)
 			continue
 		}
-		validateValue(t, ctx, name, expectedVal, slot.HeldValue())
+		validateValue(t, ctx, name, expectedVal, fv.HeldValue())
 	}
 
 	validateIdentity(t, ctx, inst, expected)
@@ -875,20 +875,20 @@ func identityPair(t *testing.T, ctx *Context, inst *Instance, pair []string) (in
 	return objectAtPath(t, ctx, inst, pair[0]), objectAtPath(t, ctx, inst, pair[1])
 }
 
-// objectAtPath walks a dotted path of slot names from inst and returns the
+// objectAtPath walks a dotted path of feature names from inst and returns the
 // object it reaches.
 func objectAtPath(t *testing.T, ctx *Context, inst *Instance, path string) int64 {
 	t.Helper()
 	cur := inst
 	segments := strings.Split(path, ".")
 	for i, name := range segments {
-		slot, err := cur.GetSlot(ctx, name)
+		fv, err := cur.GetFeatureValue(ctx, name)
 		if err != nil {
-			t.Fatalf("%s: slot %q: %v", path, name, err)
+			t.Fatalf("%s: feature value %q: %v", path, name, err)
 		}
-		id, isObject := slot.HeldValue().Object()
+		id, isObject := fv.HeldValue().Object()
 		if !isObject {
-			t.Fatalf("%s: %q holds %s, want an object", path, name, slot.HeldValue().Kind)
+			t.Fatalf("%s: %q holds %s, want an object", path, name, fv.HeldValue().Kind)
 		}
 		if i == len(segments)-1 {
 			return id

@@ -158,17 +158,17 @@ func (ctx *Context) selectedVariant(conn lower.Connection, self *Instance) strin
 	return ""
 }
 
-// heldVariant reads the variant an object's variation slot holds, which is that
+// heldVariant reads the variant an object's variation feature value holds, which is that
 // object's own selection whether or not it was read before the message was sent.
 func (ctx *Context) heldVariant(inst *Instance, variation string) string {
-	slot, err := inst.GetSlot(ctx, variation)
-	if err != nil || slot == nil {
+	fv, err := inst.GetFeatureValue(ctx, variation)
+	if err != nil || fv == nil {
 		return ""
 	}
-	if slot.Value.Kind != ValVariant || slot.Value.Variant == nil {
+	if fv.Value.Kind != ValVariant || fv.Value.Variant == nil {
 		return ""
 	}
-	return slot.Value.Variant.Name
+	return fv.Value.Variant.Name
 }
 
 // receivingEnds sorts the ends joined to sendingPort into the ones a message can

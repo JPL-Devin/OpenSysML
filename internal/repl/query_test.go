@@ -149,7 +149,7 @@ func TestSatisfactionThatCouldNotBeEvaluated(t *testing.T) {
 }
 
 // TestCheckOnInstantiatedObject checks that a check made after InstantiateNamed
-// is about that object, so its verdict is about concrete slot values.
+// is about that object, so its verdict is about concrete feature values.
 func TestCheckOnInstantiatedObject(t *testing.T) {
 	s := loadSource(t, checkFixture)
 

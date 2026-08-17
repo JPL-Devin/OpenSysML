@@ -154,8 +154,8 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("satisfy_unresolved_requirement", testSatisfyUnresolvedRequirement)
 	t.Run("satisfy_requirement_without_conditions", testSatisfyRequirementWithoutConditions)
 	t.Run("satisfy_bounded_by_the_step_budget", testSatisfyBoundedByTheStepBudget)
-	t.Run("cyclic_derived_slot", testCyclicDerivedSlot)
-	t.Run("derived_slot_over_missing_feature", testDerivedSlotOverMissingFeature)
+	t.Run("cyclic_derived_feature_value", testCyclicDerivedFeatureValue)
+	t.Run("derived_feature_value_over_missing_feature", testDerivedFeatureValueOverMissingFeature)
 	t.Run("sequence_index_names_no_position", testSequenceIndexNamesNoPosition)
 	t.Run("collection_operand_of_the_wrong_kind", testCollectionOperandOfTheWrongKind)
 	t.Run("numeric_library_call_that_has_no_value", testNumericLibraryCallThatHasNoValue)
@@ -181,7 +181,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("multiplicity_lower_bound_too_large", testMultiplicityLowerBoundTooLarge)
 	t.Run("default_not_conforming_to_multiplicity", testDefaultNotConformingToMultiplicity)
 	t.Run("default_against_an_undeclared_multiplicity", testDefaultAgainstAnUndeclaredMultiplicity)
-	t.Run("feature_chain_through_an_unset_slot", testFeatureChainThroughAnUnsetSlot)
+	t.Run("feature_chain_through_an_unset_feature_value", testFeatureChainThroughAnUnsetFeatureValue)
 	t.Run("feature_chain_spends_the_element_budget", testFeatureChainSpendsTheElementBudget)
 	t.Run("mutually_subsetting_features", testMutuallySubsettingFeatures)
 	t.Run("unattachable_connector_end", testUnattachableConnectorEnd)
@@ -191,7 +191,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("enumeration_name_that_is_not_a_literal", testEnumerationNameThatIsNotALiteral)
 	t.Run("chain_through_a_literal_without_that_attribute", testChainThroughALiteralWithoutThatAttribute)
 	t.Run("classification_outside_the_evaluable_subset", testClassificationOutsideTheEvaluableSubset)
-	t.Run("expression_over_a_slot_holding_no_value", testExpressionOverASlotHoldingNoValue)
+	t.Run("expression_over_a_feature_value_holding_no_value", testExpressionOverAFeatureValueHoldingNoValue)
 	t.Run("succession_guard_failure_modes", testSuccessionGuardFailureModes)
 }
 
@@ -272,10 +272,10 @@ func testSuccessionGuardFailureModes(t *testing.T) {
 	}
 }
 
-// testExpressionOverASlotHoldingNoValue: a valueless feature of a value type is
+// testExpressionOverAFeatureValueHoldingNoValue: a valueless feature of a value type is
 // read without an error and reports that it holds no value, while an expression
 // computing over it reports a type mismatch rather than a number or a panic.
-func testExpressionOverASlotHoldingNoValue(t *testing.T) {
+func testExpressionOverAFeatureValueHoldingNoValue(t *testing.T) {
 	src := `
 		package test {
 			private import ScalarValues::*;
@@ -295,16 +295,16 @@ func testExpressionOverASlotHoldingNoValue(t *testing.T) {
 		t.Fatalf("Instantiate: %v", err)
 	}
 
-	slot, err := inst.GetSlot(ctx, "d")
+	fv, err := inst.GetFeatureValue(ctx, "d")
 	if err != nil {
-		t.Fatalf("slot d: %v", err)
+		t.Fatalf("feature value d: %v", err)
 	}
-	if !ctx.HoldsNoValue(slot.HeldValue()) {
-		t.Errorf("slot d holds %v, want no value", slot.HeldValue())
+	if !ctx.HoldsNoValue(fv.HeldValue()) {
+		t.Errorf("feature value d holds %v, want no value", fv.HeldValue())
 	}
 
-	if _, err := inst.GetSlot(ctx, "n"); !errors.Is(err, ErrTypeMismatch) {
-		t.Errorf("slot n err = %v, want ErrTypeMismatch", err)
+	if _, err := inst.GetFeatureValue(ctx, "n"); !errors.Is(err, ErrTypeMismatch) {
+		t.Errorf("feature value n err = %v, want ErrTypeMismatch", err)
 	}
 
 	// A value naming an object the context does not hold answers the question
@@ -347,7 +347,7 @@ func testClassificationOutsideTheEvaluableSubset(t *testing.T) {
 }
 
 // testMultiplicityInfiniteLowerBound: `[*..*]` requires unboundedly many objects,
-// which cannot be materialized, so the slot reports a multiplicity violation
+// which cannot be materialized, so the feature value reports a multiplicity violation
 // rather than allocating until memory runs out.
 func testMultiplicityInfiniteLowerBound(t *testing.T) {
 	inst, ctx := instantiateHolder(t, `
@@ -357,9 +357,9 @@ func testMultiplicityInfiniteLowerBound(t *testing.T) {
 			part def Holder { part p : C[*..*]; }
 		}
 	`)
-	_, err := inst.GetSlot(ctx, "p")
+	_, err := inst.GetFeatureValue(ctx, "p")
 	if err == nil {
-		t.Fatal("want a multiplicity violation, got a materialized slot")
+		t.Fatal("want a multiplicity violation, got a materialized feature value")
 	}
 	if !errors.Is(err, ErrMultiplicityViolation) {
 		t.Errorf("expected ErrMultiplicityViolation, got: %v", err)
@@ -376,9 +376,9 @@ func testMultiplicityLowerBoundTooLarge(t *testing.T) {
 			part def Holder { part p : C[5000]; }
 		}
 	`)
-	_, err := inst.GetSlot(ctx, "p")
+	_, err := inst.GetFeatureValue(ctx, "p")
 	if err == nil {
-		t.Fatal("want a multiplicity violation, got a materialized slot")
+		t.Fatal("want a multiplicity violation, got a materialized feature value")
 	}
 	if !errors.Is(err, ErrMultiplicityViolation) {
 		t.Errorf("expected ErrMultiplicityViolation, got: %v", err)
@@ -415,13 +415,13 @@ func testDefaultNotConformingToMultiplicity(t *testing.T) {
 						done <- fmt.Errorf("panic: %v", r)
 					}
 				}()
-				_, err := inst.GetSlot(ctx, "xs")
+				_, err := inst.GetFeatureValue(ctx, "xs")
 				done <- err
 			}()
 			select {
 			case err := <-done:
 				if err == nil {
-					t.Fatal("want a multiplicity violation, got a materialized slot")
+					t.Fatal("want a multiplicity violation, got a materialized feature value")
 				}
 				if !errors.Is(err, ErrMultiplicityViolation) {
 					t.Errorf("expected ErrMultiplicityViolation, got: %v", err)
@@ -456,7 +456,7 @@ func testDefaultAgainstAnUndeclaredMultiplicity(t *testing.T) {
 					part def Holder { `+tc.decl+` }
 				}
 			`)
-			_, err := inst.GetSlot(ctx, "xs")
+			_, err := inst.GetFeatureValue(ctx, "xs")
 			switch {
 			case tc.reported && err == nil:
 				t.Fatalf("%s was held, want a multiplicity violation", tc.decl)
@@ -469,10 +469,10 @@ func testDefaultAgainstAnUndeclaredMultiplicity(t *testing.T) {
 	}
 }
 
-// testFeatureChainThroughAnUnsetSlot: a chain over a collection whose objects
+// testFeatureChainThroughAnUnsetFeatureValue: a chain over a collection whose objects
 // hold no value for the last feature names that feature, rather than reading it
 // as an empty collection.
-func testFeatureChainThroughAnUnsetSlot(t *testing.T) {
+func testFeatureChainThroughAnUnsetFeatureValue(t *testing.T) {
 	inst, ctx := instantiateHolder(t, `
 		package test {
 			private import ScalarValues::Real;
@@ -484,12 +484,12 @@ func testFeatureChainThroughAnUnsetSlot(t *testing.T) {
 			}
 		}
 	`)
-	_, err := inst.GetSlot(ctx, "total")
+	_, err := inst.GetFeatureValue(ctx, "total")
 	if err == nil {
-		t.Fatal("want the unset slot's error, got a value")
+		t.Fatal("want the unset feature value's error, got a value")
 	}
-	if !errors.Is(err, ErrUninitializedSlot) {
-		t.Errorf("expected ErrUninitializedSlot, got: %v", err)
+	if !errors.Is(err, ErrUninitializedFeatureValue) {
+		t.Errorf("expected ErrUninitializedFeatureValue, got: %v", err)
 	}
 	if !strings.Contains(err.Error(), "volume") {
 		t.Errorf("error %q does not name the unset feature", err)
@@ -511,7 +511,7 @@ func testFeatureChainSpendsTheElementBudget(t *testing.T) {
 		}
 	`)
 	ctx.maxElements = 15
-	_, err := inst.GetSlot(ctx, "volumes")
+	_, err := inst.GetFeatureValue(ctx, "volumes")
 	if err == nil {
 		t.Fatal("want the element budget's error, got a value")
 	}
@@ -535,26 +535,26 @@ func testMutuallySubsettingFeatures(t *testing.T) {
 		}
 	`)
 	done := make(chan struct{})
-	var slotErr error
+	var fvErr error
 	go func() {
 		defer close(done)
-		_, slotErr = inst.GetSlot(ctx, "a")
+		_, fvErr = inst.GetFeatureValue(ctx, "a")
 	}()
 	select {
 	case <-done:
 	case <-time.After(5 * time.Second):
-		t.Fatal("GetSlot hung on mutually subsetting features")
+		t.Fatal("GetFeatureValue hung on mutually subsetting features")
 	}
-	if slotErr == nil {
-		t.Fatal("want the cyclic slot's error, got a materialized slot")
+	if fvErr == nil {
+		t.Fatal("want the cyclic feature value's error, got a materialized feature value")
 	}
-	if !errors.Is(slotErr, ErrCyclicSlot) {
-		t.Errorf("expected ErrCyclicSlot, got: %v", slotErr)
+	if !errors.Is(fvErr, ErrCyclicFeatureValue) {
+		t.Errorf("expected ErrCyclicFeatureValue, got: %v", fvErr)
 	}
 }
 
 // instantiateHolder instantiates the `Holder` part def the source declares, for
-// a case whose failure surfaces when one of its slots is read.
+// a case whose failure surfaces when one of its feature values is read.
 func instantiateHolder(t *testing.T, src string) (*Instance, *Context) {
 	t.Helper()
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
@@ -830,9 +830,9 @@ func testSatisfyBoundedByTheStepBudget(t *testing.T) {
 	}
 }
 
-// testCyclicDerivedSlot: two derived defaults that read each other are reported
+// testCyclicDerivedFeatureValue: two derived defaults that read each other are reported
 // as a cycle instead of recursing until the step budget runs out.
-func testCyclicDerivedSlot(t *testing.T) {
+func testCyclicDerivedFeatureValue(t *testing.T) {
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
 		package test {
 			part def Loop {
@@ -852,26 +852,26 @@ func testCyclicDerivedSlot(t *testing.T) {
 	}
 
 	done := make(chan struct{})
-	var slotErr error
+	var fvErr error
 	go func() {
 		defer close(done)
-		_, slotErr = inst.GetSlot(ctx, "a")
+		_, fvErr = inst.GetFeatureValue(ctx, "a")
 	}()
 	select {
 	case <-done:
 	case <-time.After(5 * time.Second):
-		t.Fatal("GetSlot hung on a cyclic derived slot")
+		t.Fatal("GetFeatureValue hung on a cyclic derived feature value")
 	}
 
-	if !errors.Is(slotErr, ErrCyclicSlot) {
-		t.Fatalf("GetSlot error = %v, want ErrCyclicSlot", slotErr)
+	if !errors.Is(fvErr, ErrCyclicFeatureValue) {
+		t.Fatalf("GetFeatureValue error = %v, want ErrCyclicFeatureValue", fvErr)
 	}
 }
 
-// testDerivedSlotOverMissingFeature: a derived default that names something the
-// instance does not have fails with the slot named, rather than silently
-// leaving the slot empty.
-func testDerivedSlotOverMissingFeature(t *testing.T) {
+// testDerivedFeatureValueOverMissingFeature: a derived default that names something the
+// instance does not have fails with the feature value named, rather than silently
+// leaving the feature value empty.
+func testDerivedFeatureValueOverMissingFeature(t *testing.T) {
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
 		package test {
 			part def Broken {
@@ -889,12 +889,12 @@ func testDerivedSlotOverMissingFeature(t *testing.T) {
 		t.Fatalf("Instantiate: %v", err)
 	}
 
-	_, err = inst.GetSlot(ctx, "derived")
+	_, err = inst.GetFeatureValue(ctx, "derived")
 	if err == nil {
-		t.Fatal("GetSlot succeeded on a default over an undeclared feature")
+		t.Fatal("GetFeatureValue succeeded on a default over an undeclared feature")
 	}
 	if !strings.Contains(err.Error(), "derived") {
-		t.Errorf("error %q does not name the slot", err)
+		t.Errorf("error %q does not name the feature value", err)
 	}
 }
 
@@ -1926,7 +1926,7 @@ func testInjectedMessageNamesAReceiverNoAcceptHas(t *testing.T) {
 }
 
 // testSendAddressedToAnObjectThatCannotBeBuilt: locating an addressee can fail
-// on its own terms — an exhausted budget, or a slot the walk cannot read — and
+// on its own terms — an exhausted budget, or a feature value the walk cannot read — and
 // each must be reported as that rather than as an address naming no port.
 func testSendAddressedToAnObjectThatCannotBeBuilt(t *testing.T) {
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
@@ -1957,11 +1957,11 @@ func testSendAddressedToAnObjectThatCannotBeBuilt(t *testing.T) {
 	alpha := instanceOfUsage(t, ctx, idx, "test::alpha")
 	send = lower.Send{Target: "a.inPort", TargetPath: true, Scope: scope}
 	err = ctx.post(nil, Message{SignalType: "Integer"}, send, alpha)
-	if !errors.Is(err, ErrCyclicSlot) {
-		t.Errorf("walking through a cyclic derived slot: %v, want ErrCyclicSlot", err)
+	if !errors.Is(err, ErrCyclicFeatureValue) {
+		t.Errorf("walking through a cyclic derived feature value: %v, want ErrCyclicFeatureValue", err)
 	}
 	if errors.Is(err, ErrUnroutableSend) {
-		t.Errorf("an unreadable slot was reported as a bad address: %v", err)
+		t.Errorf("an unreadable feature value was reported as a bad address: %v", err)
 	}
 	if len(ctx.PendingMessages()) != 0 {
 		t.Errorf("a send that never found its addressee posted %+v", ctx.PendingMessages())
@@ -3142,7 +3142,7 @@ func testDuplicateObjectsHoldingAPlainPart(t *testing.T) {
 	}
 }
 
-// testNestedPartHeldWithAMultiplicity: the objects one slot materializes for a
+// testNestedPartHeldWithAMultiplicity: the objects one feature value materializes for a
 // multiplicity are occurrences of one declaration, so a check answers a verdict
 // rather than calling its subject ambiguous.
 func testNestedPartHeldWithAMultiplicity(t *testing.T) {
@@ -3330,8 +3330,8 @@ func testRequirementFeaturesValuedFromEachOther(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected an error, got satisfied = %v", satisfied)
 	}
-	if !errors.Is(err, ErrCyclicSlot) {
-		t.Errorf("expected ErrCyclicSlot, got: %v", err)
+	if !errors.Is(err, ErrCyclicFeatureValue) {
+		t.Errorf("expected ErrCyclicFeatureValue, got: %v", err)
 	}
 }
 
@@ -3370,7 +3370,7 @@ func testStepBudgetExceeded(t *testing.T) {
 }
 
 // testEvalOnAnInstanceSpendsTheStepBudget: an expression evaluated against an
-// instance is one run, so reading a slot inside it does not start a run of its
+// instance is one run, so reading a feature value inside it does not start a run of its
 // own and reset the counter; an expression longer than the budget is refused.
 func testEvalOnAnInstanceSpendsTheStepBudget(t *testing.T) {
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
@@ -3388,7 +3388,7 @@ func testEvalOnAnInstanceSpendsTheStepBudget(t *testing.T) {
 		t.Fatalf("instantiating Car: %v", err)
 	}
 
-	// Nested to the right, so the slot read - which brackets a run of its own when
+	// Nested to the right, so the feature value read - which brackets a run of its own when
 	// the evaluation is not already one - is reached on the second step.
 	expr := "m"
 	for i := 0; i < 60; i++ {
@@ -4947,8 +4947,8 @@ func testNestedCalcUsageSelfCycle(t *testing.T) {
 		}
 	`
 	err := calcUsageOutputInSource(t, src, "c", "d", 10000)
-	if !errors.Is(err, ErrCyclicSlot) {
-		t.Errorf("expected ErrCyclicSlot, got: %v", err)
+	if !errors.Is(err, ErrCyclicFeatureValue) {
+		t.Errorf("expected ErrCyclicFeatureValue, got: %v", err)
 	}
 }
 
@@ -5001,9 +5001,9 @@ func testNestedCalcUsageStepBudget(t *testing.T) {
 	}
 }
 
-// variationSlotInSource instantiates a usage and returns the value its named
-// slot holds, so a variation's failure modes are read where a model reads them.
-func variationSlotInSource(t *testing.T, src, usage, slot string) (Value, error) {
+// variationFeatureValueInSource instantiates a usage and returns the value its named
+// feature value holds, so a variation's failure modes are read where a model reads them.
+func variationFeatureValueInSource(t *testing.T, src, usage, fv string) (Value, error) {
 	t.Helper()
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
 	matches := idx.LookupQualified(usage)
@@ -5014,7 +5014,7 @@ func variationSlotInSource(t *testing.T, src, usage, slot string) (Value, error)
 	if err != nil {
 		return Value{}, err
 	}
-	got, err := inst.GetSlot(ctx, slot)
+	got, err := inst.GetFeatureValue(ctx, fv)
 	if err != nil {
 		return Value{}, err
 	}
@@ -5043,7 +5043,7 @@ const variationFamily = `
 // own empty object or one of the variants arbitrarily.
 func testVariationWithoutASelectedVariant(t *testing.T) {
 	src := fmt.Sprintf(variationFamily, `part unconfigured :> family;`)
-	got, err := variationSlotInSource(t, src, "test::unconfigured", "cut")
+	got, err := variationFeatureValueInSource(t, src, "test::unconfigured", "cut")
 	if !errors.Is(err, ErrVariationUnselected) {
 		t.Errorf("cut = (%v, %v), want ErrVariationUnselected", got, err)
 	}
@@ -5055,7 +5055,7 @@ func testVariationWithoutASelectedVariant(t *testing.T) {
 }
 
 // variationReadFromDeclaration evaluates a usage's value with no bound object,
-// so a variation is read through its declaration rather than through a slot.
+// so a variation is read through its declaration rather than through a feature value.
 func variationReadFromDeclaration(t *testing.T, src, probe string) (Value, error) {
 	t.Helper()
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
@@ -5071,7 +5071,7 @@ func variationReadFromDeclaration(t *testing.T, src, probe string) (Value, error
 }
 
 // testVariationReadThroughItsDeclaration: a variation read without a bound
-// object is bound the same way as one read from a slot, so what a legal
+// object is bound the same way as one read from a feature value, so what a legal
 // selection is does not depend on how the model is inspected.
 func testVariationReadThroughItsDeclaration(t *testing.T) {
 	for _, tt := range []struct {
@@ -5123,7 +5123,7 @@ func testChainThroughAnUnselectedVariationPart(t *testing.T) {
 		}
 		part probe { attribute p : Real = engine.power; }
 	}`
-	got, err := variationSlotInSource(t, src, "test::probe", "p")
+	got, err := variationFeatureValueInSource(t, src, "test::probe", "p")
 	if !errors.Is(err, ErrVariationUnselected) {
 		t.Errorf("p = (%v, %v), want ErrVariationUnselected", got, err)
 	}
@@ -5141,7 +5141,7 @@ func testVariationBoundToWhatIsNotAVariant(t *testing.T) {
 		{"variant_mixed_with_an_ordinary_value", `part chosen :> family { attribute :>> cut = (cut::cutIdeal, 250.0); }`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := variationSlotInSource(t, fmt.Sprintf(variationFamily, tt.selection), "test::chosen", "cut")
+			got, err := variationFeatureValueInSource(t, fmt.Sprintf(variationFamily, tt.selection), "test::chosen", "cut")
 			if !errors.Is(err, ErrNotAVariant) {
 				t.Errorf("cut = (%v, %v), want ErrNotAVariant", got, err)
 			}
@@ -5154,7 +5154,7 @@ func testVariationBoundToWhatIsNotAVariant(t *testing.T) {
 func testVariationBoundToTwoVariants(t *testing.T) {
 	src := fmt.Sprintf(variationFamily,
 		`part chosen :> family { attribute :>> cut = (cut::cutIdeal, cut::cutShallow); }`)
-	got, err := variationSlotInSource(t, src, "test::chosen", "cut")
+	got, err := variationFeatureValueInSource(t, src, "test::chosen", "cut")
 	if !errors.Is(err, ErrMultipleVariants) {
 		t.Fatalf("cut = (%v, %v), want ErrMultipleVariants", got, err)
 	}
@@ -5204,7 +5204,7 @@ func testRepeatedReadsOfAVariantObject(t *testing.T) {
 
 // testTwoOwnersSelectingOneVariant: a variant is selected per owning object, so
 // two owners of one variation each hold their own object of the variant rather
-// than sharing one whose materialized slots the other reads.
+// than sharing one whose materialized feature values the other reads.
 func testTwoOwnersSelectingOneVariant(t *testing.T) {
 	src := `
 	package test {
@@ -5225,13 +5225,13 @@ func testTwoOwnersSelectingOneVariant(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", usage, err)
 		}
-		slot, err := inst.GetSlot(ctx, "engine")
+		fv, err := inst.GetFeatureValue(ctx, "engine")
 		if err != nil {
 			t.Fatalf("%s.engine: %v", usage, err)
 		}
-		id, ok := slot.Value.Object()
+		id, ok := fv.Value.Object()
 		if !ok {
-			t.Fatalf("%s.engine = %v, want an object of the selected variant", usage, slot.Value)
+			t.Fatalf("%s.engine = %v, want an object of the selected variant", usage, fv.Value)
 		}
 		ids = append(ids, id)
 	}
@@ -5284,18 +5284,18 @@ func testVariantOutsideAVariation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Instantiate(test::widget): %v", err)
 	}
-	slot, err := inst.GetSlot(ctx, "misplaced")
+	fv, err := inst.GetFeatureValue(ctx, "misplaced")
 	if err != nil {
 		t.Fatalf("widget.misplaced: %v", err)
 	}
-	if slot.Value.Kind != ValConst || slot.Value.Const.Real != 1.0 {
-		t.Errorf("widget.misplaced = %v, want 1", slot.Value)
+	if fv.Value.Kind != ValConst || fv.Value.Const.Real != 1.0 {
+		t.Errorf("widget.misplaced = %v, want 1", fv.Value)
 	}
 }
 
 // testVariantUnderARedefinedVariation: a usage redefining a variation usage is a
 // variation point without restating the modifier, so the variants under it stay
-// choices that specialize it instead of materializing slots.
+// choices that specialize it instead of materializing feature values.
 func testVariantUnderARedefinedVariation(t *testing.T) {
 	src := `
 	package test {
@@ -5317,17 +5317,17 @@ func testVariantUnderARedefinedVariation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Instantiate(test::sedan): %v", err)
 	}
-	if slot, err := inst.GetSlot(ctx, "electric"); err == nil {
-		t.Errorf("sedan.electric materialized a slot: %v", slot.Value)
+	if fv, err := inst.GetFeatureValue(ctx, "electric"); err == nil {
+		t.Errorf("sedan.electric materialized a feature value: %v", fv.Value)
 	}
-	slot, err := inst.GetSlot(ctx, "engine")
+	fv, err := inst.GetFeatureValue(ctx, "engine")
 	if err != nil {
 		t.Fatalf("sedan.engine: %v", err)
 	}
-	if slot.Value.Kind != ValVariant || slot.Value.Instance == 0 {
-		t.Fatalf("sedan.engine = %v, want the selected variant's object", slot.Value)
+	if fv.Value.Kind != ValVariant || fv.Value.Instance == 0 {
+		t.Fatalf("sedan.engine = %v, want the selected variant's object", fv.Value)
 	}
-	power, err := ctx.instances[slot.Value.Instance].GetSlot(ctx, "power")
+	power, err := ctx.instances[fv.Value.Instance].GetFeatureValue(ctx, "power")
 	if err != nil {
 		t.Fatalf("sedan.engine.power: %v", err)
 	}
@@ -5366,7 +5366,7 @@ func testDeepSpecializationChainOfRedefinitions(t *testing.T) {
 	var err error
 	go func() {
 		defer close(done)
-		got, err = variationSlotInSource(t, b.String(), fmt.Sprintf("test::level%d", depth), "t")
+		got, err = variationFeatureValueInSource(t, b.String(), fmt.Sprintf("test::level%d", depth), "t")
 	}()
 	select {
 	case <-done:
@@ -5393,7 +5393,7 @@ func testConflictingRedefinitionsAtSeveralLevels(t *testing.T) {
 			part middle :> base { part :>> inner { attribute :>> b = 20.0; attribute :>> c = 200.0; } }
 			part leaf :> middle { part :>> inner { attribute :>> c = 300.0; } }
 		}`
-	got, err := variationSlotInSource(t, src, "test::leaf", "t")
+	got, err := variationFeatureValueInSource(t, src, "test::leaf", "t")
 	if err != nil {
 		t.Fatalf("t = %v", err)
 	}
@@ -5414,7 +5414,7 @@ func testOneFeatureValuedUnderTwoNames(t *testing.T) {
 				attribute :>> ringCost = 500.0;
 			}
 		}`
-	got, err := variationSlotInSource(t, src, "test::conflicted", "ringCost")
+	got, err := variationFeatureValueInSource(t, src, "test::conflicted", "ringCost")
 	if !errors.Is(err, ErrConflictingRedefinition) {
 		t.Fatalf("ringCost = %+v, err = %v, want ErrConflictingRedefinition", got, err)
 	}
@@ -5432,7 +5432,7 @@ func testValuedFeatureRestatedInABody(t *testing.T) {
 				attribute :>> ringCost = 400.0 { attribute :>> v = 9.0; }
 			}
 		}`
-	got, err := variationSlotInSource(t, src, "test::conflicted", "ringCost")
+	got, err := variationFeatureValueInSource(t, src, "test::conflicted", "ringCost")
 	if !errors.Is(err, ErrValuedFeatureRestated) {
 		t.Fatalf("ringCost = %+v, err = %v, want ErrValuedFeatureRestated", got, err)
 	}
@@ -5612,7 +5612,7 @@ func testEnumerationNameThatIsNotALiteral(t *testing.T) {
 		enum def Color { red; green; blue; }
 		part def Car { attribute c : Color = Color::purple; }
 	}`
-	got, err := variationSlotInSource(t, src, "test::Car", "c")
+	got, err := variationFeatureValueInSource(t, src, "test::Car", "c")
 	if !errors.Is(err, ErrNotALiteral) {
 		t.Fatalf("c = (%v, %v), want ErrNotALiteral", got, err)
 	}
@@ -5625,14 +5625,14 @@ func testEnumerationNameThatIsNotALiteral(t *testing.T) {
 
 // testChainThroughALiteralWithoutThatAttribute: a literal carries only the
 // features it declares, so reading another one off it is reported rather than
-// materializing an empty slot.
+// materializing an empty feature value.
 func testChainThroughALiteralWithoutThatAttribute(t *testing.T) {
 	src := `
 	package test {
 		enum def Level { low { attribute n = 1; } high { attribute n = 9; } }
 		part def Sensor { attribute missing = Level::low.label; }
 	}`
-	got, err := variationSlotInSource(t, src, "test::Sensor", "missing")
+	got, err := variationFeatureValueInSource(t, src, "test::Sensor", "missing")
 	if err == nil {
 		t.Fatalf("missing = %v, want an error naming the unknown member", got)
 	}

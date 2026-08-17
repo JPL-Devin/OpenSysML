@@ -566,8 +566,8 @@ func TestStepBudgetIsPerRunForInstancesAndCalcs(t *testing.T) {
 		if err != nil {
 			t.Fatalf("instantiation %d failed: %v", i, err)
 		}
-		if _, err := inst.GetSlot(ctx, "m"); err != nil {
-			t.Fatalf("slot read %d failed: %v", i, err)
+		if _, err := inst.GetFeatureValue(ctx, "m"); err != nil {
+			t.Fatalf("feature value read %d failed: %v", i, err)
 		}
 		args := []Value{{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 21}}}
 		if _, err := ctx.InvokeCalc(calcSym, args, scope); err != nil {

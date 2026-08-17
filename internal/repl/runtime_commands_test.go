@@ -151,7 +151,7 @@ func TestLookupSeesDeclarationsAddedAfterFirstLookup(t *testing.T) {
 }
 
 // An instance does not outlive the declaration it is of: redeclaring that
-// definition rewrites what its slots mean, so the object built from the old one
+// definition rewrites what its feature values mean, so the object built from the old one
 // goes, and the listing says why rather than reading like a fresh session.
 func TestInstancesDoNotOutliveTheirDeclaration(t *testing.T) {
 	s := NewSession()
@@ -166,7 +166,7 @@ func TestInstancesDoNotOutliveTheirDeclaration(t *testing.T) {
 	wants(t, run(t, s, "%slots Demo::Vehicle"), "mass = 900.00")
 }
 
-func TestSlotsWithoutInstance(t *testing.T) {
+func TestFeatureValuesWithoutInstance(t *testing.T) {
 	s := loadFixture(t, "testdata/vehicle_package.sysml")
 	wants(t, run(t, s, "%slots Vehicle"), "no instance of", "%instantiate")
 }

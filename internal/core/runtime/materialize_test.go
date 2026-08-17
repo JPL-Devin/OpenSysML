@@ -7,9 +7,9 @@ import (
 	"time"
 )
 
-// MaterializationErrors reads the slots a caller would otherwise leave lazy, so
+// MaterializationErrors reads the feature values a caller would otherwise leave lazy, so
 // an object created without reading it still reports what its defaults are.
-func TestMaterializationErrorsReadsEverySlot(t *testing.T) {
+func TestMaterializationErrorsReadsEveryFeatureValue(t *testing.T) {
 	inst, ctx := instantiateHolder(t, `
 		package test {
 			private import ScalarValues::Real;
@@ -43,7 +43,7 @@ func TestMaterializationErrorsReadsEverySlot(t *testing.T) {
 	}
 }
 
-// An object whose slots all materialize reports nothing, and one holding itself
+// An object whose feature values all materialize reports nothing, and one holding itself
 // terminates rather than descending forever.
 func TestMaterializationErrorsOfAConformingObject(t *testing.T) {
 	inst, ctx := instantiateHolder(t, `
@@ -75,8 +75,8 @@ func TestMaterializationErrorsOfAConformingObject(t *testing.T) {
 }
 
 // A redefinition names the redefined feature again and the two names read one
-// slot, so one faulty slot is reported once.
-func TestMaterializationErrorsReportsARedefinedSlotOnce(t *testing.T) {
+// feature value, so one faulty feature value is reported once.
+func TestMaterializationErrorsReportsARedefinedFeatureValueOnce(t *testing.T) {
 	inst, ctx := instantiateHolder(t, `
 		package test {
 			private import ScalarValues::Real;
@@ -89,14 +89,14 @@ func TestMaterializationErrorsReportsARedefinedSlotOnce(t *testing.T) {
 
 	errs, _ := ctx.MaterializationErrors(inst)
 	if len(errs) != 1 {
-		t.Fatalf("MaterializationErrors = %v, want the shared slot reported once", errs)
+		t.Fatalf("MaterializationErrors = %v, want the shared feature value reported once", errs)
 	}
 	if !errors.Is(errs[0], ErrMultiplicityViolation) {
 		t.Errorf("err = %v, want ErrMultiplicityViolation", errs[0])
 	}
 }
 
-// Nesting multiplies and reading a slot materializes the objects it holds, so a
+// Nesting multiplies and reading a feature value materializes the objects it holds, so a
 // wide model stops at the walk's budget rather than allocating without end.
 func TestMaterializationErrorsBoundsAWideModel(t *testing.T) {
 	inst, ctx := instantiateHolder(t, `

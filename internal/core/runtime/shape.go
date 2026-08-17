@@ -6,7 +6,7 @@ import (
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
-// EffectiveFeature represents one slot in a type's flattened schema:
+// EffectiveFeature represents one feature value in a type's flattened schema:
 // own + inherited − redefined/masked, carrying type + multiplicity + default.
 type EffectiveFeature struct {
 	Name         string
@@ -92,7 +92,7 @@ func (ctx *Context) buildFeatures(typeSym *symbols.Symbol) []EffectiveFeature {
 			continue
 		}
 		// A variant is a choice offered for its variation, not a feature of the
-		// object declaring it: it materializes no slot of its own. A `variant`
+		// object declaring it: it materializes no feature value of its own. A `variant`
 		// outside a variation offers no choice, so it stays an ordinary feature.
 		if ctx.model.VariationPointOwning(memberSym) != nil {
 			continue

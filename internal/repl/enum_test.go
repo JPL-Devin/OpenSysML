@@ -2,9 +2,9 @@ package repl
 
 import "testing"
 
-// TestSlotsEnumerationLiteral: an enum-typed default materializes, and the slot
+// TestFeatureValuesEnumerationLiteral: an enum-typed default materializes, and the feature value
 // shows the literal as the model writes it rather than a number or an error.
-func TestSlotsEnumerationLiteral(t *testing.T) {
+func TestFeatureValuesEnumerationLiteral(t *testing.T) {
 	s := loadFixture(t, "testdata/enum_package.sysml")
 	run(t, s, "%instantiate D::Car")
 
