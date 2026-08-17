@@ -1037,6 +1037,73 @@ func TestAddressedSendReachesPerformedAction(t *testing.T) {
 	}
 }
 
+// An object performs a behavior as itself however deeply it is performed, so an
+// accept two performances down takes a message addressed to that object; the
+// same behavior performed by no object has no identity to present and waits.
+func TestPerformedBehaviorRunsAsItsPerformer(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
+		import ScalarValues::*;
+		action inner {
+			first start;
+			action reader accept n : Integer;
+			done fin;
+			then start reader;
+			then reader fin;
+		}
+		action outer {
+			first start;
+			perform inner;
+			done fin;
+			then start inner;
+			then inner fin;
+		}
+		part def Node {
+			action main {
+				first start;
+				action sender { send 7 to solo; }
+				perform outer;
+				done fin;
+				then start sender;
+				then sender outer;
+				then outer fin;
+			}
+		}
+		part solo : Node;
+	}`))
+	main := oneSymbol(t, idx, "test::Node::main")
+	solo := instanceOfUsage(t, ctx, idx, "test::solo")
+	if _, err := ctx.ExecuteActionPerformedBy(main, solo, nil); err != nil {
+		t.Fatalf("performed by the object addressed: %v", err)
+	}
+
+	idx, _, ctx = buildRuntime(t, "<test>", parseAndBuild(t, `package test {
+		import ScalarValues::*;
+		action inner {
+			first start;
+			action reader accept n : Integer;
+			done fin;
+			then start reader;
+			then reader fin;
+		}
+		part def Node {
+			action main {
+				first start;
+				action sender { send 7 to solo; }
+				perform inner;
+				done fin;
+				then start sender;
+				then sender inner;
+				then inner fin;
+			}
+		}
+		part solo : Node;
+	}`))
+	main = oneSymbol(t, idx, "test::Node::main")
+	if _, err := ctx.ExecuteActionPerformedBy(main, nil, nil); !errors.Is(err, ErrAcceptDeadlock) {
+		t.Errorf("performed by no object: %v, want %v", err, ErrAcceptDeadlock)
+	}
+}
+
 // A consumer takes a message only by satisfying every part of the destination it
 // carries; a behavior no object performs is the one identity that cannot tell.
 func TestDeliveryHoldsAConsumerToTheWholeDestination(t *testing.T) {
