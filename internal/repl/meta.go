@@ -2140,37 +2140,23 @@ func (s *Session) advanceBy(duration float64) ([]string, error) {
 	exec := s.stateExec.executor
 	deadline := s.stateExec.now + duration
 
-	// A change condition risen since the last step is due now, ahead of any
-	// queued event, which is the order RunToCompletion takes. A do behavior is
-	// work too, so a machine with none queued can still have somewhere to go.
-	fired, err := exec.PollChangeEvents()
-	if err != nil {
-		return nil, fmt.Errorf("change condition failed: %w", err)
-	}
-	if !fired && !exec.HasPendingWork() {
-		s.stateExec.now = deadline
-		out := []string{fmt.Sprintf("No pending work - simulation time is now %.2f", deadline)}
-		if reason := exec.SuspendReason(); reason != "" {
-			out = append(out, fmt.Sprintf("  %s", reason))
-		}
-		return out, nil
-	}
-
 	// Bound the drain by the session's own budgets, so a machine that keeps
 	// queueing work cannot hang the REPL and the way to raise the bound is the
 	// same one the executors report.
 	maxEvents, maxDoActions := s.budgets.MaxStateEvents, s.budgets.MaxDoSteps
 	var processed, doActions int64
-	if fired {
-		processed++
-	}
-	for exec.HasPendingWork() && exec.State() == runtime.StateRunning &&
+	for exec.State() == runtime.StateRunning &&
 		processed < maxEvents && doActions < maxDoActions {
+		// The poll comes first, and runs once more at quiescence, so a condition
+		// a do action has just made true is taken in this call.
 		if fired, err := exec.PollChangeEvents(); err != nil {
 			return nil, fmt.Errorf("change condition failed: %w", err)
 		} else if fired {
 			processed++
 			continue
+		}
+		if !exec.HasPendingWork() {
+			break
 		}
 		// A signal in flight is due now, whatever the deadline: dispatching it is
 		// the step RunToCompletion would take here.
@@ -2203,6 +2189,16 @@ func (s *Session) advanceBy(duration float64) ([]string, error) {
 		processed++
 	}
 	s.stateExec.now = math.Max(deadline, exec.CurrentTime())
+
+	// A machine that took no step has nowhere to go: say why rather than report
+	// a drain that did nothing.
+	if processed == 0 && doActions == 0 {
+		out := []string{fmt.Sprintf("No pending work - simulation time is now %.2f", s.stateExec.now)}
+		if reason := exec.SuspendReason(); reason != "" {
+			out = append(out, fmt.Sprintf("  %s", reason))
+		}
+		return out, nil
+	}
 
 	out := []string{
 		fmt.Sprintf("✓ Advanced to %.2f (%d event(s) processed)", s.stateExec.now, processed),

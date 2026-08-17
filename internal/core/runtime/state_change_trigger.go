@@ -193,5 +193,5 @@ func (e *StateExecutor) SuspendReason() string {
 	if waits := e.ChangeWaits(); len(waits) > 0 {
 		return "waiting on change condition: " + strings.Join(waits, "; ")
 	}
-	return "quiesced: no queued event, signal in flight, running do behavior or watched change condition can fire"
+	return "quiesced: nothing left can fire (no queued event, signal in flight, running do behavior or watched change condition)"
 }
