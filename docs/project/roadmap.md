@@ -26,10 +26,10 @@ Full gate green: `gofmt -l .` empty, `go build ./...`, `go vet ./...`,
 |---|---|
 | OMG training corpus | **98/100 clean** — 2 files / 4 errors, both pinned OMG source bugs (the ceiling) |
 | Stdlib parser conformance | 95/95 clean — 94 vendored OMG files and 1 non-normative Systemica extension |
-| Execution conformance cases | 296 |
-| gRPC conformance fixtures | 27 |
+| Execution conformance cases | 299 |
+| gRPC conformance fixtures | 14 |
 | Golden execution traces | 98 |
-| Runtime robustness subtests | 190 |
+| Runtime robustness subtests | 199 |
 | Golden AST fixtures | 86 |
 | Negative parser subtests | 129 |
 
