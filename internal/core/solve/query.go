@@ -23,6 +23,9 @@ const (
 	// RoleDomain is a bound a declaration puts on a variable's values rather
 	// than a condition the model wrote, such as a Natural being non-negative.
 	RoleDomain
+	// RoleDefined is a side condition a condition needs for the solver to mean by
+	// it what the evaluator means, such as a divisor being non-zero.
+	RoleDefined
 )
 
 var roleNames = map[Role]string{
@@ -30,6 +33,7 @@ var roleNames = map[Role]string{
 	RoleAssumed:  "assumed condition",
 	RoleDenied:   "denied conditions",
 	RoleDomain:   "declared domain",
+	RoleDefined:  "well-definedness",
 }
 
 // String names the role as an assertion's comment reads it.
@@ -124,17 +128,24 @@ type Query struct {
 	// Vars are the variables the query declares, ordered by name.
 	Vars []*Var
 
-	// Assertions are the terms asserted, declared domains first and then the
-	// conditions in the order the evaluator checks them.
+	// Assertions are the terms asserted: declared domains first, then the
+	// well-definedness side conditions, then the conditions in the order the
+	// evaluator checks them.
 	Assertions []Assertion
 
 	// Nonlinear is set when a product or a quotient of two non-literal terms was
 	// asserted, which decides the logic the script sets.
 	Nonlinear bool
+
+	// IntegerDivision is set when integer division or remainder was encoded.
+	// SMT-LIB's arithmetic logics do not admit `div`, so such a query is written
+	// with the unrestricted logic even when it is linear.
+	IntegerDivision bool
 }
 
 // Logic returns the SMT-LIB logic the sorts and operators used need: "ALL" once
-// a datatype or string is involved, the narrowest arithmetic logic otherwise.
+// a datatype, a string or integer division is involved, the narrowest arithmetic
+// logic otherwise.
 func (q *Query) Logic() string {
 	usesInt, usesReal, usesString, usesDatatype := false, false, false, false
 	note := func(s Sort) {
@@ -156,7 +167,7 @@ func (q *Query) Logic() string {
 		a.Term.walk(func(t *Term) { note(t.Sort) })
 	}
 	switch {
-	case usesDatatype || usesString:
+	case usesDatatype || usesString || q.IntegerDivision:
 		return "ALL"
 	case usesInt && usesReal:
 		if q.Nonlinear {

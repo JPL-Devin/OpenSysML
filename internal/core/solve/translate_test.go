@@ -343,8 +343,10 @@ func TestRefusals(t *testing.T) {
 		want string // substring of the refusal's message
 	}{
 		{"exponentiation", `in i : Integer; assert constraint { i ** 2 == 4 }`, "exponentiation"},
-		{"modulo", `in i : Integer; assert constraint { i % 2 == 0 }`, "Euclidean"},
-		{"integer division", `in i : Integer; in j : Integer; assert constraint { i / j == 2 }`, "truncates toward zero"},
+		{"division by a literal zero", `in i : Integer; assert constraint { i / 0 == 1 }`, "division by zero"},
+		{"remainder by a literal zero", `in i : Integer; assert constraint { i % 0 == 1 }`, "division by zero"},
+		{"real division by a literal zero", `in x : Real; assert constraint { x / 0.0 == 1.0 }`, "division by zero"},
+		{"real remainder", `in x : Real; assert constraint { x % 2.0 == 0.0 }`, "floating point"},
 		{"range", `in i : Integer; assert constraint { i == 1..3 }`, "collection"},
 		{"sequence index", `in i : Integer; assert constraint { i#(1) == 1 }`, "sequence"},
 		{"classification", `in i : Integer; assert constraint { i istype Integer }`, "classification"},

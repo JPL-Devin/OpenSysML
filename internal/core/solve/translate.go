@@ -96,6 +96,7 @@ func Translate(ctx *runtime.Context, subject Subject, conds []runtime.Condition)
 		features: effectiveFeatures(ctx, subject.Symbol),
 		vars:     map[string]*Var{},
 		sorts:    map[string]Sort{},
+		guarded:  map[string]bool{},
 	}
 	if err := t.translate(conds); err != nil {
 		return nil, err
@@ -118,9 +119,15 @@ type translator struct {
 	vars    map[string]*Var
 	sorts   map[string]Sort
 	domains []Assertion
+	guards  []Assertion
 	asserts []Assertion
 
+	// guarded remembers the divisors already asserted non-zero, by their term, so
+	// a divisor read twice is guarded once.
+	guarded map[string]bool
+
 	nonlinear bool
+	intDiv    bool
 
 	condLabel string
 	condFile  string
@@ -191,10 +198,11 @@ func (t *translator) translate(conds []runtime.Condition) error {
 // assertions before the conditions, which is what makes a script deterministic.
 func (t *translator) query() *Query {
 	q := &Query{
-		Kind:      t.subject.Kind,
-		Element:   t.subject.Name,
-		Negated:   t.subject.Negated,
-		Nonlinear: t.nonlinear,
+		Kind:            t.subject.Kind,
+		Element:         t.subject.Name,
+		Negated:         t.subject.Negated,
+		Nonlinear:       t.nonlinear,
+		IntegerDivision: t.intDiv,
 	}
 	for _, v := range t.vars {
 		q.Vars = append(q.Vars, v)
@@ -206,7 +214,8 @@ func (t *translator) query() *Query {
 	sortSorts(q.Sorts)
 	domains := append([]Assertion(nil), t.domains...)
 	sortAssertions(domains)
-	q.Assertions = append(domains, t.asserts...)
+	q.Assertions = append(domains, t.guards...)
+	q.Assertions = append(q.Assertions, t.asserts...)
 	return q
 }
 
@@ -361,6 +370,8 @@ func (t *translator) operator(n *ast.OperatorExpr, scope *symbols.Scope) (*Term,
 		return t.multiplicative(n, scope, OpMul)
 	case ast.OpDiv:
 		return t.multiplicative(n, scope, OpDiv)
+	case ast.OpMod:
+		return t.remainder(n, scope)
 	case ast.OpNeg, ast.OpPos:
 		return t.unaryNumber(n, scope)
 	case ast.OpConditional:
@@ -372,8 +383,6 @@ func (t *translator) operator(n *ast.OperatorExpr, scope *symbols.Scope) (*Term,
 // operatorReason says why an operator outside the subset is outside it.
 func operatorReason(op ast.OperatorKind) string {
 	switch op {
-	case ast.OpMod:
-		return "the evaluator truncates toward zero while SMT-LIB's `mod` is Euclidean"
 	case ast.OpPow:
 		return "exponentiation is outside the arithmetic encoded here"
 	case ast.OpRange:
@@ -463,20 +472,26 @@ func (t *translator) additive(n *ast.OperatorExpr, scope *symbols.Scope, op Op) 
 	return Binary(op, left.Sort, left, right), nil
 }
 
-// multiplicative translates `*` or `/`. Integer division is refused, since the
-// evaluator truncates toward zero while SMT-LIB's `div` is Euclidean.
+// multiplicative translates `*` or `/`. Integer division truncates toward zero as
+// the evaluator's does, and either division asserts its divisor to be non-zero,
+// which the evaluator reports as an error rather than answering.
 func (t *translator) multiplicative(n *ast.OperatorExpr, scope *symbols.Scope, op Op) (*Term, error) {
+	if op == OpDiv {
+		if folded, ok := t.folded(n); ok {
+			return folded, nil
+		}
+	}
 	left, right, err := t.numericOperands(n, scope)
 	if err != nil {
 		return nil, err
 	}
 	if op == OpDiv {
-		if left.Sort.Kind == SortInt && right.Sort.Kind == SortInt {
-			return nil, t.refuse(n, "operator `/` on integers",
-				"the evaluator truncates toward zero while SMT-LIB's `div` is Euclidean")
+		if err := t.divisor(n, right); err != nil {
+			return nil, err
 		}
-		if !right.Literal() {
-			t.nonlinear = true
+		if left.Sort.Kind == SortInt && right.Sort.Kind == SortInt {
+			t.intDiv = true
+			return TruncDiv(left, right), nil
 		}
 		return Binary(OpDiv, Real, ToReal(left), ToReal(right)), nil
 	}
@@ -484,6 +499,95 @@ func (t *translator) multiplicative(n *ast.OperatorExpr, scope *symbols.Scope, o
 		t.nonlinear = true
 	}
 	return Binary(OpMul, left.Sort, left, right), nil
+}
+
+// remainder translates `%` on integers as the remainder truncating division
+// leaves, which takes the sign of the dividend as the evaluator's does.
+func (t *translator) remainder(n *ast.OperatorExpr, scope *symbols.Scope) (*Term, error) {
+	if folded, ok := t.folded(n); ok {
+		return folded, nil
+	}
+	left, right, err := t.numericOperands(n, scope)
+	if err != nil {
+		return nil, err
+	}
+	if left.Sort.Kind != SortInt || right.Sort.Kind != SortInt {
+		return nil, t.refuse(n, "operator `%` on real numbers",
+			"the evaluator computes it in floating point, which this encoding does not model")
+	}
+	if err := t.divisor(n, right); err != nil {
+		return nil, err
+	}
+	t.intDiv = true
+	return TruncRem(left, right), nil
+}
+
+// divisor refuses a literal zero divisor, as the evaluator reports division by
+// zero, and asserts a computed one to be non-zero: SMT-LIB's division is total,
+// so a solver could otherwise satisfy a condition by dividing by zero. A divisor
+// that is not a literal makes the arithmetic nonlinear.
+func (t *translator) divisor(n *ast.OperatorExpr, divisor *Term) error {
+	if divisor.Literal() {
+		if isZero(divisor) {
+			return t.refuse(n, "operator `"+n.Operator.String()+"` by zero",
+				"the evaluator reports division by zero")
+		}
+		return nil
+	}
+	t.nonlinear = true
+	t.guard(Binary(OpNe, Bool, divisor, zeroOf(divisor.Sort)), n)
+	return nil
+}
+
+// guard asserts a side condition a translated condition needs to mean what the
+// evaluator means, once per distinct term.
+func (t *translator) guard(term *Term, node ast.Node) {
+	key := writeTerm(term)
+	if t.guarded[key] {
+		return
+	}
+	t.guarded[key] = true
+	t.guards = append(t.guards, Assertion{Term: term, From: t.provenance(RoleDefined, nil, node.Span())})
+}
+
+// folded returns what the evaluator's constant folder answers for a constant
+// expression: it keeps a constant `7 / 2` a real quotient rather than truncating
+// it, so the encoding must answer the same.
+func (t *translator) folded(n *ast.OperatorExpr) (*Term, bool) {
+	val, ok := t.model.Eval(n)
+	if !ok {
+		return nil, false
+	}
+	switch val.Kind {
+	case semantics.ValInt:
+		return IntTerm(val.Int), true
+	case semantics.ValReal:
+		rat := new(big.Rat).SetFloat64(val.Real)
+		if rat == nil {
+			return nil, false
+		}
+		return RealTerm(rat), true
+	}
+	return nil, false
+}
+
+// isZero reports whether a numeric literal is zero.
+func isZero(term *Term) bool {
+	switch term.Op {
+	case OpInt:
+		return term.Int == 0
+	case OpReal:
+		return term.Real.Sign() == 0
+	}
+	return false
+}
+
+// zeroOf is the zero of a numeric sort.
+func zeroOf(sort Sort) *Term {
+	if sort.Kind == SortInt {
+		return IntTerm(0)
+	}
+	return RealTerm(new(big.Rat))
 }
 
 // unaryNumber translates unary `-` and `+`.
@@ -502,7 +606,19 @@ func (t *translator) unaryNumber(n *ast.OperatorExpr, scope *symbols.Scope) (*Te
 	if n.Operator == ast.OpPos {
 		return arg, nil
 	}
-	return Unary(OpNeg, arg.Sort, arg), nil
+	return negated(arg), nil
+}
+
+// negated is unary `-`, folded over a literal so a negative literal stays one:
+// a literal divisor is what keeps a division linear.
+func negated(arg *Term) *Term {
+	switch arg.Op {
+	case OpInt:
+		return IntTerm(-arg.Int)
+	case OpReal:
+		return RealTerm(new(big.Rat).Neg(arg.Real))
+	}
+	return Unary(OpNeg, arg.Sort, arg)
 }
 
 // conditional translates `if c ? a else b`, whose branches must share a sort.

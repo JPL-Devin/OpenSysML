@@ -34,6 +34,7 @@ quoted segment holding a space and one in the middle of a chain: `%instantiate '
 | `%constraint <name>` | Evaluate constraint (assert/assume) |
 | `%requirement <name>` | Evaluate requirement (subject/assume/require/actor) |
 | `%satisfy [name]` | Evaluate satisfaction assertions of the model, or of one element |
+| `%check <name>` | **Experimental.** Ask an external SMT solver whether a constraint, requirement or satisfaction assertion *can* be satisfied, and on `sat` print an assignment. Reports `sat`, `unsat` or `unknown`, kept distinct; needs `z3` or `cvc5` on `PATH` (or `SYSTEMICA_SMT`), and reports an error rather than a verdict when none is installed. Satisfiability is not evaluation: use `%constraint`/`%satisfy` for what holds of an object |
 | **Action debugging** ([guide chapter 6](../guide/06-behavior.md)) | |
 | `%action <name> [<object>]` | Start an action debugging session, optionally performed by an instantiated object |
 | `%step` | Advance one token step |

@@ -77,3 +77,28 @@ func smtSymbol(name string) string {
 	}
 	return "|" + replaced + "|"
 }
+
+// smtName recovers the name an SMT-LIB symbol was rendered from, its `|` bars
+// already stripped: it is the inverse of smtSymbol's escaping.
+func smtName(symbol string) string {
+	var b strings.Builder
+	for i := 0; i < len(symbol); i++ {
+		if symbol[i] != '!' || i+1 >= len(symbol) {
+			b.WriteByte(symbol[i])
+			continue
+		}
+		switch symbol[i+1] {
+		case '!':
+			b.WriteByte('!')
+		case 'p':
+			b.WriteByte('|')
+		case 'b':
+			b.WriteByte('\\')
+		default:
+			b.WriteByte('!')
+			b.WriteByte(symbol[i+1])
+		}
+		i++
+	}
+	return b.String()
+}
