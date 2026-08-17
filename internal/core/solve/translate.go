@@ -1,0 +1,691 @@
+package solve
+
+import (
+	"fmt"
+	"math"
+	"math/big"
+	"strconv"
+	"strings"
+
+	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/runtime"
+	"github.com/Open-MBEE/Systemica/internal/core/semantics"
+	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+)
+
+// Subject is the element a query is about: what a verdict on it would name, and
+// whether it asserts that its conditions do not hold.
+type Subject struct {
+	// Kind is the kind of element: "constraint", "requirement" or
+	// "satisfaction".
+	Kind string
+
+	// Name is the element as a verdict about it would name it.
+	Name string
+
+	// Symbol is the element's declaration, used for provenance.
+	Symbol *symbols.Symbol
+
+	// Negated is set for `assert not …`, which denies the conjunction of the
+	// required conditions rather than asserting each one.
+	Negated bool
+}
+
+// Constraint translates the conditions sym states as a constraint, inherited ones
+// included, in the order the evaluator checks them. scope stands in for sym's
+// own scope when sym declares none.
+func Constraint(ctx *runtime.Context, sym *symbols.Symbol, scope *symbols.Scope) (*Query, error) {
+	if err := runtime.RequireConstraint(sym); err != nil {
+		return nil, err
+	}
+	subject := Subject{
+		Kind:    "constraint",
+		Name:    sym.Name,
+		Symbol:  sym,
+		Negated: runtime.NegatedDecl(sym),
+	}
+	return Translate(ctx, subject, ctx.ConditionsOf(sym, scope))
+}
+
+// Requirement translates the conditions sym states as a requirement, its
+// assumptions included as assumed rather than required.
+func Requirement(ctx *runtime.Context, sym *symbols.Symbol, scope *symbols.Scope) (*Query, error) {
+	if err := runtime.RequireRequirement(sym); err != nil {
+		return nil, err
+	}
+	subject := Subject{
+		Kind:    "requirement",
+		Name:    sym.Name,
+		Symbol:  sym,
+		Negated: runtime.NegatedDecl(sym),
+	}
+	return Translate(ctx, subject, ctx.ConditionsOf(sym, scope))
+}
+
+// Satisfaction translates the conditions an `assert satisfy` checks: those of the
+// requirement it names, read through that requirement's own parameters, since the
+// query asks what they permit rather than what the subject holds.
+func Satisfaction(ctx *runtime.Context, assertion *runtime.SatisfyAssertion) (*Query, error) {
+	if assertion == nil || assertion.Symbol == nil {
+		return nil, fmt.Errorf("satisfaction: %w", ErrNoConditions)
+	}
+	subject := Subject{
+		Kind:    "satisfaction",
+		Name:    assertion.Text(),
+		Symbol:  assertion.Symbol,
+		Negated: assertion.Negated,
+	}
+	return Translate(ctx, subject, ctx.ConditionsOf(assertion.Symbol, assertion.Symbol.OwnerScope))
+}
+
+// Translate builds a query from conditions the runtime collected. One refusal
+// fails the whole translation, since a query missing a conjunct would answer
+// about conditions it does not hold.
+func Translate(ctx *runtime.Context, subject Subject, conds []runtime.Condition) (*Query, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("solve: no runtime context")
+	}
+	if len(conds) == 0 {
+		return nil, fmt.Errorf("%s %s: %w", subject.Kind, subject.Name, ErrNoConditions)
+	}
+	t := &translator{
+		ctx:     ctx,
+		model:   ctx.Model(),
+		subject: subject,
+		vars:    map[string]*Var{},
+		sorts:   map[string]Sort{},
+	}
+	if err := t.translate(conds); err != nil {
+		return nil, err
+	}
+	return t.query(), nil
+}
+
+// translator holds the state of one translation: the variables and sorts the
+// conditions turned out to need, the assertions built so far, and which
+// condition is being translated, for a refusal's provenance.
+type translator struct {
+	ctx     *runtime.Context
+	model   *semantics.Model
+	subject Subject
+
+	vars    map[string]*Var
+	sorts   map[string]Sort
+	domains []Assertion
+	asserts []Assertion
+
+	nonlinear bool
+
+	condLabel string
+	condFile  string
+}
+
+// translate builds an assertion per condition, in the order the evaluator checks
+// them. A negated element instead denies the conjunction of its required
+// conditions, as evaluating it negates their verdict as a whole.
+func (t *translator) translate(conds []runtime.Condition) error {
+	var required []*Term
+	var labels []string
+	for _, cond := range conds {
+		owner, span := conditionOrigin(cond)
+		t.condLabel = cond.Label()
+		t.condFile = ""
+		if owner != nil {
+			t.condFile = owner.DocName
+		}
+		term, err := t.condition(cond)
+		if err != nil {
+			return err
+		}
+		if t.subject.Negated && cond.Required {
+			required = append(required, term)
+			labels = append(labels, cond.Label())
+			continue
+		}
+		role := RoleAssumed
+		if cond.Required {
+			role = RoleRequired
+		}
+		t.asserts = append(t.asserts, Assertion{Term: term, From: t.provenance(role, owner, span)})
+	}
+	if !t.subject.Negated {
+		return nil
+	}
+	if len(required) == 0 {
+		return fmt.Errorf("%s %s: %w to deny", t.subject.Kind, t.subject.Name, ErrNoConditions)
+	}
+	t.condLabel = "not (" + strings.Join(labels, " and ") + ")"
+	from := t.provenance(RoleDenied, t.subject.Symbol, declSpan(t.subject.Symbol))
+	if t.subject.Symbol != nil {
+		from.File = t.subject.Symbol.DocName
+		from.Location = t.ctx.SourceLocation(from.File, from.Span)
+	}
+	t.asserts = append(t.asserts, Assertion{Term: Not(And(required...)), From: from})
+	return nil
+}
+
+// query assembles the translated parts, declarations ordered by name and domain
+// assertions before the conditions, which is what makes a script deterministic.
+func (t *translator) query() *Query {
+	q := &Query{
+		Kind:      t.subject.Kind,
+		Element:   t.subject.Name,
+		Negated:   t.subject.Negated,
+		Nonlinear: t.nonlinear,
+	}
+	for _, v := range t.vars {
+		q.Vars = append(q.Vars, v)
+	}
+	sortVars(q.Vars)
+	for _, s := range t.sorts {
+		q.Sorts = append(q.Sorts, s)
+	}
+	sortSorts(q.Sorts)
+	domains := append([]Assertion(nil), t.domains...)
+	sortAssertions(domains)
+	q.Assertions = append(domains, t.asserts...)
+	return q
+}
+
+// condition translates one condition, applying the negation it was written with.
+// A group stands for the conjunction of its conditions, so negating a group
+// negates that conjunction.
+func (t *translator) condition(cond runtime.Condition) (*Term, error) {
+	if cond.Group != nil {
+		parts := make([]*Term, 0, len(cond.Group))
+		for _, sub := range cond.Group {
+			term, err := t.condition(sub)
+			if err != nil {
+				return nil, err
+			}
+			parts = append(parts, term)
+		}
+		return negate(And(parts...), cond.Negated), nil
+	}
+	if cond.Expr == nil {
+		return nil, t.refuse(nil, "empty condition", "it states no expression")
+	}
+	term, err := t.expr(cond.Expr, cond.Scope)
+	if err != nil {
+		return nil, err
+	}
+	if term.Sort.Kind != SortBool {
+		return nil, t.refuse(cond.Expr, "condition", "it yields "+term.Sort.Name+" rather than a boolean")
+	}
+	return negate(term, cond.Negated), nil
+}
+
+// negate applies a written negation.
+func negate(term *Term, negated bool) *Term {
+	if negated {
+		return Not(term)
+	}
+	return term
+}
+
+// expr translates an expression, resolving names in scope.
+func (t *translator) expr(node ast.Node, scope *symbols.Scope) (*Term, error) {
+	switch n := node.(type) {
+	case *ast.LiteralBool:
+		return BoolTerm(n.Value), nil
+	case *ast.LiteralInteger:
+		val, err := strconv.ParseInt(n.Value, 10, 64)
+		if err != nil {
+			return nil, t.refuse(n, "integer literal "+n.Value, "it does not fit a 64-bit integer")
+		}
+		return IntTerm(val), nil
+	case *ast.LiteralReal:
+		rat, ok := new(big.Rat).SetString(n.Value)
+		if !ok {
+			return nil, t.refuse(n, "real literal "+n.Value, "it is not an exact rational")
+		}
+		return RealTerm(rat), nil
+	case *ast.LiteralString:
+		return StringTerm(unquote(n.Value)), nil
+	case *ast.FeatureReference, *ast.FeatureChainExpr:
+		return t.reference(node, scope)
+	case *ast.IndexExpr:
+		if !n.Bracket {
+			return nil, t.refuse(n, "index expression", "indexing a sequence is outside the subset")
+		}
+		return t.quantity(n, scope)
+	case *ast.OperatorExpr:
+		return t.operator(n, scope)
+	case *ast.SequenceExpr:
+		if len(n.Elements) == 1 {
+			return t.expr(n.Elements[0], scope)
+		}
+		return nil, t.refuse(n, "sequence", "a collection is outside the subset")
+	}
+	return nil, t.refuse(node, describe(node), "it is outside the subset")
+}
+
+// quantity translates `magnitude [unit]`, scaling the magnitude to the base units
+// its unit reduces to so that magnitudes of one dimension are comparable.
+func (t *translator) quantity(n *ast.IndexExpr, scope *symbols.Scope) (*Term, error) {
+	unit, err := t.model.UnitTermOfExpr(scope, n.Index)
+	if err != nil {
+		return nil, t.refuse(n, "quantity", err.Error())
+	}
+	unit = unit.Normalized()
+	if _, ok := t.model.DimensionOfExpr(scope, n); !ok {
+		return nil, t.refuse(n, "quantity", "the dimension of its unit is not determined statically")
+	}
+	scale, ok := ratOfScale(unit.Scale)
+	if !ok {
+		return nil, t.refuse(n, "quantity", "its unit reduces to a scale factor that is not an exact ratio")
+	}
+	magnitude, err := t.expr(n.Operand, scope)
+	if err != nil {
+		return nil, err
+	}
+	if !magnitude.Sort.Numeric() {
+		return nil, t.refuse(n, "quantity", "its magnitude yields "+magnitude.Sort.Name+" rather than a number")
+	}
+	real := ToReal(magnitude)
+	if real.Op == OpReal {
+		return RealTerm(new(big.Rat).Mul(real.Real, scale)), nil
+	}
+	if scale.Cmp(big.NewRat(1, 1)) == 0 {
+		return real, nil
+	}
+	return Binary(OpMul, Real, real, RealTerm(scale)), nil
+}
+
+// ratOfScale converts a unit's scale factor to an exact ratio.
+func ratOfScale(scale semantics.Scale) (*big.Rat, bool) {
+	num, den := new(big.Rat), new(big.Rat)
+	if math.IsInf(scale.Num, 0) || math.IsNaN(scale.Num) || num.SetFloat64(scale.Num) == nil {
+		return nil, false
+	}
+	if math.IsInf(scale.Den, 0) || math.IsNaN(scale.Den) || den.SetFloat64(scale.Den) == nil || scale.Den == 0 {
+		return nil, false
+	}
+	return num.Quo(num, den), true
+}
+
+// operator translates an operator application, refusing one whose meaning this
+// term language does not carry.
+func (t *translator) operator(n *ast.OperatorExpr, scope *symbols.Scope) (*Term, error) {
+	switch n.Operator {
+	case ast.OpNot:
+		return t.unaryBool(n, scope)
+	case ast.OpAnd, ast.OpConditionalAnd:
+		return t.binaryBool(n, scope, OpAnd)
+	case ast.OpOr, ast.OpConditionalOr:
+		return t.binaryBool(n, scope, OpOr)
+	case ast.OpXor:
+		return t.binaryBool(n, scope, OpXor)
+	case ast.OpImplies:
+		return t.binaryBool(n, scope, OpImplies)
+	case ast.OpEq:
+		return t.equality(n, scope, OpEq)
+	case ast.OpNeq:
+		return t.equality(n, scope, OpNe)
+	case ast.OpLt:
+		return t.comparison(n, scope, OpLt)
+	case ast.OpLe:
+		return t.comparison(n, scope, OpLe)
+	case ast.OpGt:
+		return t.comparison(n, scope, OpGt)
+	case ast.OpGe:
+		return t.comparison(n, scope, OpGe)
+	case ast.OpAdd:
+		return t.additive(n, scope, OpAdd)
+	case ast.OpSub:
+		return t.additive(n, scope, OpSub)
+	case ast.OpMul:
+		return t.multiplicative(n, scope, OpMul)
+	case ast.OpDiv:
+		return t.multiplicative(n, scope, OpDiv)
+	case ast.OpNeg, ast.OpPos:
+		return t.unaryNumber(n, scope)
+	case ast.OpConditional:
+		return t.conditional(n, scope)
+	}
+	return nil, t.refuse(n, "operator `"+n.Operator.String()+"`", operatorReason(n.Operator))
+}
+
+// operatorReason says why an operator outside the subset is outside it.
+func operatorReason(op ast.OperatorKind) string {
+	switch op {
+	case ast.OpMod:
+		return "the evaluator truncates toward zero while SMT-LIB's `mod` is Euclidean"
+	case ast.OpPow:
+		return "exponentiation is outside the arithmetic encoded here"
+	case ast.OpRange:
+		return "a range is a collection"
+	case ast.OpIndex, ast.OpAll:
+		return "a collection operation is outside the subset"
+	case ast.OpEqEqEq, ast.OpNeqEqEq:
+		return "identity compares objects rather than values"
+	case ast.OpHasType, ast.OpIsType, ast.OpAs, ast.OpMeta, ast.OpAt, ast.OpMetaAt:
+		return "classification and metadata are not encoded as terms"
+	case ast.OpNullCoalesce:
+		return "a null value has no term"
+	case ast.OpBitNot:
+		return "bitwise negation is outside the subset"
+	}
+	return "it is outside the subset"
+}
+
+// unaryBool translates `not e`.
+func (t *translator) unaryBool(n *ast.OperatorExpr, scope *symbols.Scope) (*Term, error) {
+	arg, err := t.operandOfSort(n, scope, 0, Bool)
+	if err != nil {
+		return nil, err
+	}
+	return Not(arg), nil
+}
+
+// binaryBool translates a boolean connective.
+func (t *translator) binaryBool(n *ast.OperatorExpr, scope *symbols.Scope, op Op) (*Term, error) {
+	left, err := t.operandOfSort(n, scope, 0, Bool)
+	if err != nil {
+		return nil, err
+	}
+	right, err := t.operandOfSort(n, scope, 1, Bool)
+	if err != nil {
+		return nil, err
+	}
+	switch op {
+	case OpAnd:
+		return And(left, right), nil
+	case OpOr:
+		return Or(left, right), nil
+	}
+	return Binary(op, Bool, left, right), nil
+}
+
+// equality translates `==` or `!=` between two values of the same sort.
+func (t *translator) equality(n *ast.OperatorExpr, scope *symbols.Scope, op Op) (*Term, error) {
+	left, right, err := t.operands(n, scope)
+	if err != nil {
+		return nil, err
+	}
+	left, right = promote(left, right)
+	if !left.Sort.Equal(right.Sort) {
+		return nil, t.refuse(n, "operator `"+n.Operator.String()+"`",
+			fmt.Sprintf("its operands yield %s and %s", left.Sort.Name, right.Sort.Name))
+	}
+	if left.Sort.Numeric() {
+		if err := t.sameDimension(n, scope); err != nil {
+			return nil, err
+		}
+	}
+	return Binary(op, Bool, left, right), nil
+}
+
+// comparison translates an ordering comparison between two numbers.
+func (t *translator) comparison(n *ast.OperatorExpr, scope *symbols.Scope, op Op) (*Term, error) {
+	left, right, err := t.numericOperands(n, scope)
+	if err != nil {
+		return nil, err
+	}
+	if err := t.sameDimension(n, scope); err != nil {
+		return nil, err
+	}
+	return Binary(op, Bool, left, right), nil
+}
+
+// additive translates `+` or `-` between two numbers of the same dimension.
+func (t *translator) additive(n *ast.OperatorExpr, scope *symbols.Scope, op Op) (*Term, error) {
+	left, right, err := t.numericOperands(n, scope)
+	if err != nil {
+		return nil, err
+	}
+	if err := t.sameDimension(n, scope); err != nil {
+		return nil, err
+	}
+	return Binary(op, left.Sort, left, right), nil
+}
+
+// multiplicative translates `*` or `/`. Integer division is refused, since the
+// evaluator truncates toward zero while SMT-LIB's `div` is Euclidean.
+func (t *translator) multiplicative(n *ast.OperatorExpr, scope *symbols.Scope, op Op) (*Term, error) {
+	left, right, err := t.numericOperands(n, scope)
+	if err != nil {
+		return nil, err
+	}
+	if op == OpDiv {
+		if left.Sort.Kind == SortInt && right.Sort.Kind == SortInt {
+			return nil, t.refuse(n, "operator `/` on integers",
+				"the evaluator truncates toward zero while SMT-LIB's `div` is Euclidean")
+		}
+		if !right.Literal() {
+			t.nonlinear = true
+		}
+		return Binary(OpDiv, Real, ToReal(left), ToReal(right)), nil
+	}
+	if !left.Literal() && !right.Literal() {
+		t.nonlinear = true
+	}
+	return Binary(OpMul, left.Sort, left, right), nil
+}
+
+// unaryNumber translates unary `-` and `+`.
+func (t *translator) unaryNumber(n *ast.OperatorExpr, scope *symbols.Scope) (*Term, error) {
+	if len(n.Operands) != 1 {
+		return nil, t.refuse(n, "operator `"+n.Operator.String()+"`", "it takes one operand")
+	}
+	arg, err := t.expr(n.Operands[0], scope)
+	if err != nil {
+		return nil, err
+	}
+	if !arg.Sort.Numeric() {
+		return nil, t.refuse(n, "operator `"+n.Operator.String()+"`",
+			"its operand yields "+arg.Sort.Name+" rather than a number")
+	}
+	if n.Operator == ast.OpPos {
+		return arg, nil
+	}
+	return Unary(OpNeg, arg.Sort, arg), nil
+}
+
+// conditional translates `if c ? a else b`, whose branches must share a sort.
+func (t *translator) conditional(n *ast.OperatorExpr, scope *symbols.Scope) (*Term, error) {
+	if len(n.Operands) != 3 {
+		return nil, t.refuse(n, "conditional expression", "it takes a condition and two branches")
+	}
+	cond, err := t.operandOfSort(n, scope, 0, Bool)
+	if err != nil {
+		return nil, err
+	}
+	then, err := t.expr(n.Operands[1], scope)
+	if err != nil {
+		return nil, err
+	}
+	otherwise, err := t.expr(n.Operands[2], scope)
+	if err != nil {
+		return nil, err
+	}
+	then, otherwise = promote(then, otherwise)
+	if !then.Sort.Equal(otherwise.Sort) {
+		return nil, t.refuse(n, "conditional expression",
+			fmt.Sprintf("its branches yield %s and %s", then.Sort.Name, otherwise.Sort.Name))
+	}
+	return Ite(cond, then, otherwise), nil
+}
+
+// operands translates the two operands of a binary operator.
+func (t *translator) operands(n *ast.OperatorExpr, scope *symbols.Scope) (*Term, *Term, error) {
+	if len(n.Operands) != 2 {
+		return nil, nil, t.refuse(n, "operator `"+n.Operator.String()+"`", "it takes two operands")
+	}
+	left, err := t.expr(n.Operands[0], scope)
+	if err != nil {
+		return nil, nil, err
+	}
+	right, err := t.expr(n.Operands[1], scope)
+	if err != nil {
+		return nil, nil, err
+	}
+	return left, right, nil
+}
+
+// numericOperands translates two operands that must both be numbers, widening an
+// integer one when the other is real.
+func (t *translator) numericOperands(n *ast.OperatorExpr, scope *symbols.Scope) (*Term, *Term, error) {
+	left, right, err := t.operands(n, scope)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !left.Sort.Numeric() || !right.Sort.Numeric() {
+		return nil, nil, t.refuse(n, "operator `"+n.Operator.String()+"`",
+			fmt.Sprintf("its operands yield %s and %s rather than numbers", left.Sort.Name, right.Sort.Name))
+	}
+	left, right = promote(left, right)
+	return left, right, nil
+}
+
+// operandOfSort translates one operand and requires the sort given.
+func (t *translator) operandOfSort(n *ast.OperatorExpr, scope *symbols.Scope, i int, want Sort) (*Term, error) {
+	if i >= len(n.Operands) {
+		return nil, t.refuse(n, "operator `"+n.Operator.String()+"`", "it is missing an operand")
+	}
+	term, err := t.expr(n.Operands[i], scope)
+	if err != nil {
+		return nil, err
+	}
+	if !term.Sort.Equal(want) {
+		return nil, t.refuse(n.Operands[i], "operand of `"+n.Operator.String()+"`",
+			"it yields "+term.Sort.Name+" rather than "+want.Name)
+	}
+	return term, nil
+}
+
+// promote widens an integer term to a real one when the other side is real.
+func promote(left, right *Term) (*Term, *Term) {
+	if left.Sort.Kind == SortInt && right.Sort.Kind == SortReal {
+		return ToReal(left), right
+	}
+	if left.Sort.Kind == SortReal && right.Sort.Kind == SortInt {
+		return left, ToReal(right)
+	}
+	return left, right
+}
+
+// sameDimension refuses an operator whose operands are magnitudes of different
+// dimensions, which the evaluator reports as incommensurable units. A dimension
+// that is not statically determined counts as dimensionless, as a bare number is.
+func (t *translator) sameDimension(n *ast.OperatorExpr, scope *symbols.Scope) error {
+	left := t.dimensionOf(scope, n.Operands[0])
+	right := t.dimensionOf(scope, n.Operands[1])
+	if left.Term.Commensurable(right.Term) {
+		return nil
+	}
+	return t.refuse(n, "operator `"+n.Operator.String()+"`",
+		fmt.Sprintf("incommensurable units: %s against %s", dimensionText(left), dimensionText(right)))
+}
+
+// dimensionOf returns the dimension of an expression, dimensionless when it is
+// not statically determined.
+func (t *translator) dimensionOf(scope *symbols.Scope, node ast.Node) semantics.Dimension {
+	if dim, ok := t.model.DimensionOfExpr(scope, node); ok {
+		return dim
+	}
+	return semantics.Dimension{Term: semantics.UnitTerm{Scale: semantics.UnitScale(1)}}
+}
+
+// dimensionText names a dimension for a message, naming a dimensionless one.
+func dimensionText(dim semantics.Dimension) string {
+	if dim.Term.Dimensionless() {
+		return "a plain number"
+	}
+	return dim.String()
+}
+
+// unquote strips the quotes a string literal's raw text carries, as the
+// evaluator does.
+func unquote(text string) string {
+	if len(text) >= 2 && text[0] == '"' && text[len(text)-1] == '"' {
+		return text[1 : len(text)-1]
+	}
+	return text
+}
+
+// describe names a node as the notation writes it, for a refusal.
+func describe(node ast.Node) string {
+	switch node.(type) {
+	case nil:
+		return "empty expression"
+	case *ast.NullExpr:
+		return "`null`"
+	case *ast.LiteralInfinity:
+		return "`*`"
+	case *ast.InvocationExpr:
+		return "invocation"
+	case *ast.CollectExpr:
+		return "`->` collect expression"
+	case *ast.SelectExpr:
+		return "`->select` expression"
+	case *ast.BodyExpr:
+		return "body expression"
+	case *ast.MetadataAccessExpr:
+		return "metadata access"
+	case *ast.CastExpr:
+		return "cast"
+	case *ast.ConstructorExpr:
+		return "constructor"
+	}
+	return fmt.Sprintf("expression %T", node)
+}
+
+// conditionOrigin returns the element that declared a condition and where it was
+// written, descending into a group's first condition, which carries the scope a
+// group has none of.
+func conditionOrigin(cond runtime.Condition) (*symbols.Symbol, source.Span) {
+	if cond.Group != nil {
+		if len(cond.Group) == 0 {
+			return nil, source.Span{}
+		}
+		return conditionOrigin(cond.Group[0])
+	}
+	owner := cond.Owner()
+	span := declSpan(owner)
+	if cond.Expr != nil {
+		span = cond.Expr.Span()
+	}
+	return owner, span
+}
+
+// declSpan is where a symbol was declared, empty for none.
+func declSpan(sym *symbols.Symbol) source.Span {
+	if sym == nil {
+		return source.Span{}
+	}
+	return sym.DeclSpan
+}
+
+// provenance records what the assertion being built came from.
+func (t *translator) provenance(role Role, owner *symbols.Symbol, span source.Span) Provenance {
+	return Provenance{
+		Kind:      t.subject.Kind,
+		Element:   t.subject.Name,
+		Condition: t.condLabel,
+		Role:      role,
+		Declared:  owner,
+		File:      t.condFile,
+		Span:      span,
+		Location:  t.ctx.SourceLocation(t.condFile, span),
+	}
+}
+
+// refuse reports that a construct is outside the translatable subset, naming the
+// condition it appeared in and where it was written.
+func (t *translator) refuse(node ast.Node, construct, reason string) error {
+	span := source.Span{}
+	if node != nil {
+		span = node.Span()
+	}
+	return &NotTranslatableError{
+		Construct: construct,
+		Reason:    reason,
+		Element:   t.subject.Kind + " " + t.subject.Name,
+		Condition: t.condLabel,
+		File:      t.condFile,
+		Span:      span,
+		Location:  t.ctx.SourceLocation(t.condFile, span),
+	}
+}
