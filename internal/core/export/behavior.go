@@ -304,8 +304,9 @@ func (e *encoder) encodeLoop(n *ast.WhileLoopActionNode, head func(rdf.Term), su
 func (e *encoder) encodeSubaction(n ast.Node, actions []ast.Node, kind string, head func(rdf.Term), subject rdf.Term, fqn string) error {
 	head(rdf.SysMLTerm(mSubaction))
 	e.graph.Add(subject, e.sysx(xSubactionKind), rdf.String(kind))
-	// `entry do { … }` states the subaction's own keyword and `do` as well.
-	if written := strings.Fields(e.text(n)); len(written) > 1 && written[1] == "do" && kind != "do" {
+	// `entry do { … }` states the subaction's own keyword and `do` as well, with
+	// or without a space or a comment between them and the body.
+	if written := strings.Fields(withoutComments(e.text(n))); len(written) > 1 && bareWord(written[1]) == "do" && kind != "do" {
 		e.graph.Add(subject, e.sysx(xDeclaredKeyword), rdf.String(kind+" do"))
 	}
 	e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(e.bracedBody(n, actions)))
@@ -497,7 +498,16 @@ func firstWord(text string) string {
 	if len(fields) == 0 {
 		return ""
 	}
-	return strings.TrimRight(fields[0], ";{")
+	return bareWord(fields[0])
+}
+
+// bareWord cuts a word at the punctuation it can run into, which the notation
+// allows without a space between them.
+func bareWord(field string) string {
+	if cut := strings.IndexAny(field, ";{"); cut >= 0 {
+		return field[:cut]
+	}
+	return field
 }
 
 // bareAcceptNode reports whether an accept node was written without the `action`
