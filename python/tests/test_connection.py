@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 from pysysml.connection import (
     Connection,
+    START_PROBE_RPC_TIMEOUT,
     START_TIMEOUT,
     _OWNED_SERVICES,
     _get_lockfile_path,
@@ -411,6 +412,31 @@ def test_service_that_never_answers_fails_within_the_waiting_bound(tmp_home):
     assert START_TIMEOUT <= elapsed < START_TIMEOUT + 1.0
     # Backing off, not busy-spinning: a bounded number of probes covers the wait.
     assert 4 < len(probes) < 25
+
+
+def test_a_probe_that_answers_nothing_may_not_outlive_the_bound(tmp_home):
+    """A port accepting without answering spends a probe's timeout, not the wait.
+
+    Each probe is given at most what is left of the bound, so the wait is over
+    when the bound is, rather than one whole RPC timeout later.
+    """
+    conn, stack = _spawning_connection()
+
+    def deaf(host, port, timeout=None):
+        # As a probe of a port that accepts and never answers does. Only the
+        # probes of the started service are given a timeout here.
+        time.sleep(timeout or 0)
+        return False
+
+    started = time.monotonic()
+    with stack:
+        with patch('pysysml.connection.START_TIMEOUT', 0.4):
+            with patch.object(conn, '_probe_service', side_effect=deaf):
+                with pytest.raises(PySysMLError):
+                    conn._ensure_service()
+    elapsed = time.monotonic() - started
+
+    assert 0.4 <= elapsed < 0.4 + START_PROBE_RPC_TIMEOUT
 
 
 def test_waiting_bound_is_the_module_constant(tmp_home):

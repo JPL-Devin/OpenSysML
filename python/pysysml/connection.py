@@ -1408,7 +1408,6 @@ class Connection:
                 # backing off: the service answers in milliseconds, so sleeping
                 # first would be the whole cost of starting it.
                 deadline = time.monotonic() + START_TIMEOUT
-                slept = 0.0
                 delay = START_PROBE_INITIAL_DELAY
                 # An answer is the started service's own unless something was
                 # already answering the address and has not stopped since.
@@ -1419,24 +1418,24 @@ class Connection:
                     # old service answering the probe.
                     if process.poll() is not None:
                         self._service_started_here_died(process.poll())
+                    # A port that accepts without answering would spend a probe's
+                    # whole timeout, so no probe outlives the deadline either.
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        break
                     if self._probe_service(
-                        self.host, self.port, timeout=START_PROBE_RPC_TIMEOUT
+                        self.host, self.port,
+                        timeout=min(START_PROBE_RPC_TIMEOUT, remaining),
                     ):
                         if not its_own_answer:
                             self._wait_for_a_service_that_could_not_bind(process)
                         self._own_spawned_service(process)
                         return
                     its_own_answer = True
-                    # Bound the sleeping and the whole wait, since a probe of a
-                    # port that accepts without answering spends its timeout.
-                    remaining = min(
-                        START_TIMEOUT - slept, deadline - time.monotonic()
-                    )
+                    remaining = deadline - time.monotonic()
                     if remaining <= 0:
                         break
-                    nap = min(delay, remaining)
-                    time.sleep(nap)
-                    slept += nap
+                    time.sleep(min(delay, remaining))
                     delay = min(delay * 2, START_PROBE_MAX_DELAY)
                 
                 # Service didn't start in time

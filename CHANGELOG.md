@@ -20,7 +20,9 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   ms, 20 ms, 40 ms … capped at 250 ms) instead of sleeping half a second before
   the first probe, so starting a service that answers in milliseconds costs ~17
   ms rather than ~510 ms. Waiting is bounded by the same ~2.5 s and raises the
-  same `ConnectionError`, now as the documented `connection.START_TIMEOUT`; a
+  same `ConnectionError`, now as the documented `connection.START_TIMEOUT` and
+  covering the probing as well as the sleeping, so a port that accepts without
+  ever answering no longer costs a whole probe timeout beyond the bound; a
   service that died is still detected before each probe and ownership,
   stale-service and pid authentication are unchanged.
 - The two names that shadowed builtins are renamed: `pysysml.eval` is
