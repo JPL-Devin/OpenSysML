@@ -1,0 +1,9 @@
+step 1: token 1@split
+  eval feature armed -> 0
+  eval literal 0 -> 0
+eval operator > -> false
+step 2: token 2@log
+stmt assign logged
+  eval literal 1 -> 1
+step 3: token 2@end
+step 4: no active tokens

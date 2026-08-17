@@ -1,0 +1,9 @@
+{
+	"type": "action",
+	"trace": true,
+	"outputs": {
+		"armed": {"type": "Integer", "value": 0},
+		"ignited": {"type": "Integer", "value": 0},
+		"logged": {"type": "Integer", "value": 1}
+	}
+}
