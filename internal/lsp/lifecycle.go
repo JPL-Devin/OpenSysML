@@ -7,8 +7,10 @@ import (
 	"go.lsp.dev/protocol"
 )
 
-// Initialize advertises the server capabilities this plan implements.
+// Initialize advertises the server capabilities this plan implements and records
+// the session's folders, scanned later so the handshake is not delayed.
 func (s *Server) Initialize(ctx context.Context, params *protocol.InitializeParams) (*protocol.InitializeResult, error) {
+	s.setFolders(initializeFolders(params))
 	return &protocol.InitializeResult{
 		Capabilities: protocol.ServerCapabilities{
 			TextDocumentSync: &protocol.TextDocumentSyncOptions{
@@ -41,8 +43,10 @@ func (s *Server) Initialize(ctx context.Context, params *protocol.InitializePara
 	}, nil
 }
 
-// Initialized is a no-op notification acknowledgement.
+// Initialized indexes the session's folders, so cross-file names resolve without
+// the editor having opened every file.
 func (s *Server) Initialized(ctx context.Context, params *protocol.InitializedParams) error {
+	s.loadFolders(ctx)
 	return nil
 }
 

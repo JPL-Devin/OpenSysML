@@ -29,6 +29,7 @@ type Server struct {
 	mu               sync.Mutex
 	shutdownReceived bool
 	exitReceived     bool
+	folders          []string
 }
 
 // NewServer returns a Server bound to ws.

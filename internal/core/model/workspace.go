@@ -111,6 +111,35 @@ func (w *Workspace) SetOnDisk(name string, content []byte) {
 	}
 }
 
+// DeleteOnDisk forgets the on-disk bytes recorded for name. An open document
+// keeps its authoritative buffer; a closed one leaves the document set.
+func (w *Workspace) DeleteOnDisk(name string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	delete(w.onDisk, name)
+	if !w.open[name] {
+		w.removeLocked(name)
+	}
+}
+
+// IsOpen reports whether name has an authoritative open buffer.
+func (w *Workspace) IsOpen(name string) bool {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	return w.open[name]
+}
+
+// OpenNames returns a snapshot of the names with an open buffer.
+func (w *Workspace) OpenNames() []string {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	names := make([]string, 0, len(w.open))
+	for name := range w.open {
+		names = append(names, name)
+	}
+	return names
+}
+
 // Close drops the open buffer for name; the document reverts to on-disk content
 // if any, otherwise it is removed.
 func (w *Workspace) Close(name string) {

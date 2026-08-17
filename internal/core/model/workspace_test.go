@@ -41,6 +41,44 @@ func TestWorkspaceCloseKeepsOnDiskContent(t *testing.T) {
 	}
 }
 
+func TestWorkspaceDeleteOnDiskKeepsOpenBuffer(t *testing.T) {
+	ws := NewWorkspace()
+	ws.SetOnDisk("a.sysml", []byte("package Disk { namespace D; }"))
+	ws.Open("a.sysml", []byte("package Buf { namespace B; }"), 1)
+	ws.DeleteOnDisk("a.sysml")
+	if syms := ws.LookupQualified("Buf::B"); len(syms) != 1 {
+		t.Fatal("open buffer should survive the file's deletion")
+	}
+	ws.Close("a.sysml")
+	if ws.Document("a.sysml") != nil {
+		t.Fatal("closing a deleted file should drop the document")
+	}
+}
+
+func TestWorkspaceDeleteOnDiskRemovesClosedDocument(t *testing.T) {
+	ws := NewWorkspace()
+	ws.SetOnDisk("a.sysml", []byte("package Disk { namespace D; }"))
+	ws.DeleteOnDisk("a.sysml")
+	if syms := ws.LookupQualified("Disk::D"); len(syms) != 0 {
+		t.Fatalf("Disk::D = %d, want 0 after the file was deleted", len(syms))
+	}
+	if ws.Document("a.sysml") != nil {
+		t.Fatal("document should be gone after the file was deleted")
+	}
+}
+
+func TestWorkspaceTracksOpenNames(t *testing.T) {
+	ws := NewWorkspace()
+	ws.SetOnDisk("disk.sysml", []byte("package D;"))
+	ws.Open("open.sysml", []byte("package O;"), 1)
+	if !ws.IsOpen("open.sysml") || ws.IsOpen("disk.sysml") {
+		t.Fatalf("IsOpen: open=%v disk=%v", ws.IsOpen("open.sysml"), ws.IsOpen("disk.sysml"))
+	}
+	if names := ws.OpenNames(); len(names) != 1 || names[0] != "open.sysml" {
+		t.Fatalf("OpenNames = %v, want [open.sysml]", names)
+	}
+}
+
 func TestWorkspaceRemoveDropsFromIndex(t *testing.T) {
 	ws := NewWorkspace()
 	ws.Open("a.sysml", []byte("package P;"), 1)

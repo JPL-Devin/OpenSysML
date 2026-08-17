@@ -34,15 +34,23 @@ func (s *Server) DidChange(ctx context.Context, params *protocol.DidChangeTextDo
 	return nil
 }
 
-// DidClose marks the document closed in the workspace.
+// DidClose marks the document closed, re-reading its on-disk content first so
+// closing a tab does not unindex names other documents resolve through it.
 func (s *Server) DidClose(ctx context.Context, params *protocol.DidCloseTextDocumentParams) error {
-	s.ws.Close(uriToName(params.TextDocument.URI))
+	name := uriToName(params.TextDocument.URI)
+	s.loadFromDisk(name)
+	s.ws.Close(name)
+	s.refreshOpenDiagnostics(ctx)
 	return nil
 }
 
-// DidSave refreshes diagnostics for the saved document.
+// DidSave refreshes diagnostics for every open document, since an edit to one
+// file changes what the others resolve.
 func (s *Server) DidSave(ctx context.Context, params *protocol.DidSaveTextDocumentParams) error {
 	name := uriToName(params.TextDocument.URI)
-	s.publishDiagnostics(ctx, name)
+	if !s.ws.IsOpen(name) {
+		s.publishDiagnostics(ctx, name)
+	}
+	s.refreshOpenDiagnostics(ctx)
 	return nil
 }
