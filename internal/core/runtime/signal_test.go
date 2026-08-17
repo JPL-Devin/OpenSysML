@@ -791,8 +791,64 @@ func TestAddressedSendToQualifiedNameSkipsSameNamedFeature(t *testing.T) {
 		t.Fatalf("post: %v", err)
 	}
 	got := ctx.PendingMessages()[0]
-	if got.Object == alpha.ID {
+	if got.Object == alpha.ID || got.reachedObject(alpha.ID) {
 		t.Errorf("`send to Other::reader` delivered as %+v, want no delivery to the sender's own reader", got)
+	}
+}
+
+// A receiver of another object carries that object's identity, so the sender's
+// own same-named receiver cannot take the message.
+func TestAddressedSendToReceiverOfAnotherObjectCarriesItsIdentity(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
+		import ScalarValues::*;
+		part def Node { action reader accept n : Integer; }
+		part def Talker {
+			action reader accept n : Integer;
+			action talk { first start; done end; then start end; }
+		}
+		part alpha : Node;
+		part beta : Talker;
+	}`))
+	alpha, beta := instanceOfUsage(t, ctx, idx, "test::alpha"), instanceOfUsage(t, ctx, idx, "test::beta")
+	send := lower.Send{Target: "alpha::reader", Scope: declScope(oneSymbol(t, idx, "test::Talker::talk"))}
+	if err := ctx.post(nil, Message{SignalType: "Integer"}, send, beta); err != nil {
+		t.Fatalf("post: %v", err)
+	}
+	got := ctx.PendingMessages()[0]
+	if got.Target != "reader" || got.Object != alpha.ID {
+		t.Errorf("`send to alpha::reader` delivered as %+v, want receiver reader of object %d", got, alpha.ID)
+	}
+	if got.reachedObject(beta.ID) {
+		t.Errorf("%+v is deliverable to the sending object %d", got, beta.ID)
+	}
+}
+
+// A node of the sending behavior is nearer than a feature of the object, and a
+// name resolving to it addresses that node rather than the object's feature.
+func TestAddressedSendPrefersTheNearerDeclaration(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
+		import ScalarValues::*;
+		part def Leaf { attribute count : Integer = 0; }
+		part def Node {
+			part reader : Leaf;
+			action listen {
+				first start;
+				action reader accept n : Integer;
+				then start reader;
+				then reader done;
+				done done;
+			}
+		}
+		part alpha : Node;
+	}`))
+	alpha := instanceOfUsage(t, ctx, idx, "test::alpha")
+	send := lower.Send{Target: "reader", Scope: declScope(oneSymbol(t, idx, "test::Node::listen"))}
+	if err := ctx.post(nil, Message{SignalType: "Integer"}, send, alpha); err != nil {
+		t.Fatalf("post: %v", err)
+	}
+	got := ctx.PendingMessages()[0]
+	if got.Target != "reader" || got.Object != alpha.ID || got.Port != "" {
+		t.Errorf("`send to reader` delivered as %+v, want node reader of object %d", got, alpha.ID)
 	}
 }
 
@@ -933,8 +989,8 @@ func TestAddressedSendReachesPerformedAction(t *testing.T) {
 	}
 }
 
-// Confinement discriminates between objects, and only between objects: a
-// behavior no object performs has no identity to exclude, either side of a send.
+// Confinement discriminates between objects: a behavior no object performs has
+// no identity to exclude, while an address outside every object reaches none.
 func TestConfinementCrossesBehaviorPerformedByNoObject(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -946,7 +1002,7 @@ func TestConfinementCrossesBehaviorPerformedByNoObject(t *testing.T) {
 		{"other object", Message{Object: 1, Confined: true}, 2, false},
 		{"unconfined", Message{Object: 1}, 2, true},
 		{"object to no object", Message{Object: 1, Confined: true}, 0, true},
-		{"no object to object", Message{Confined: true}, 1, true},
+		{"no object to object", Message{Confined: true}, 1, false},
 		{"port of another object", Message{Object: 1, Port: "inPort", Confined: true}, 0, false},
 		{"port to another object", Message{Port: "inPort", Confined: true}, 1, false},
 	}

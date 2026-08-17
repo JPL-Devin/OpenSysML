@@ -84,13 +84,14 @@ func (m Message) arrivedAt(port string) bool {
 }
 
 // reachedObject reports whether a message delivered to one object reached the
-// object now accepting: no delivery of one object reaches another. An addressed
-// message still crosses a behavior no object performs, which has no identity.
+// object now accepting: no delivery of one object reaches another. A behavior no
+// object performs has no identity to exclude it, so an addressed message still
+// crosses it — but one addressed outside every object does not reach an object.
 func (m Message) reachedObject(object int64) bool {
 	if !m.Confined || m.Object == object {
 		return true
 	}
-	return m.Port == "" && (m.Object == 0 || object == 0)
+	return m.Port == "" && object == 0
 }
 
 // objectID is the identity of an object, 0 for none.
@@ -198,8 +199,16 @@ func (ctx *Context) namedAddress(send lower.Send, self *Instance) (messageAddres
 			return addr, nil
 		}
 	} else if resolved {
-		// A receiver outside the sending object is no occurrence of it, so there is
-		// no object identity to confine the message to.
+		// A receiver outside the sending object belongs to the object the qualifying
+		// namespace names, where that is an occurrence; a namespace no object
+		// materializes leaves no identity to confine the message to.
+		addr, ok, err := ctx.featureAddress(send.Scope, nil, segments)
+		if err != nil {
+			return messageAddress{}, err
+		}
+		if ok {
+			return addr, nil
+		}
 		return messageAddress{Name: name}, nil
 	}
 	return messageAddress{Name: name, Object: objectID(self)}, nil
@@ -240,7 +249,7 @@ func (ctx *Context) featureAddress(scope *symbols.Scope, self *Instance, segment
 // since a namespace qualifies the occurrence in `P::alpha.inPort`.
 func (ctx *Context) addressOwner(scope *symbols.Scope, self *Instance, segments []string) (*Instance, []string, bool, error) {
 	if self != nil {
-		if _, held := self.Slots[segments[0]]; held {
+		if slot, held := self.Slots[segments[0]]; held && ctx.namesFeature(scope, self, slot, segments[0]) {
 			return self, segments, true, nil
 		}
 	}
@@ -264,6 +273,22 @@ func (ctx *Context) addressOwner(scope *symbols.Scope, self *Instance, segments 
 		return inst, segments[n:], true, nil
 	}
 	return nil, nil, false, nil
+}
+
+// namesFeature reports whether a slot of the sending object is what a name in
+// the send's scope denotes: a nearer declaration, such as a node of the sending
+// behavior, shadows the object's feature as name resolution has it.
+func (ctx *Context) namesFeature(scope *symbols.Scope, self *Instance, slot *Slot, name string) bool {
+	sym, ok := ctx.pathSymbol(scope, []string{name})
+	if !ok || (slot.Feature != nil && slot.Feature.Symbol == sym) {
+		return true
+	}
+	for _, feat := range ctx.FeaturesOf(self.Type) {
+		if feat.Symbol == sym {
+			return true
+		}
+	}
+	return false
 }
 
 // ownPortPath reports whether a port path names a port of the sending behavior
