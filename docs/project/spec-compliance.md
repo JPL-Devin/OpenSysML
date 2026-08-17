@@ -948,6 +948,7 @@ are tracked here):
 - Dynamic object creation/destruction
 - Classifier behaviors
 - Operation invocation on instances
+- Routing to a second object of one usage (a `via` send follows the connections and an addressed send resolves an object, but the object reached is the one this context holds as its target's occurrence — see Known Limitations)
 
 **Type System:**
 - Full generic/specialization validation
@@ -970,7 +971,7 @@ are tracked here):
 - Allocation execution - SysML v2 §9.2.4: syntax defined, execution semantics not normative
 
 **Implementable But Not Yet Done:**
-- Port binding with message routing (spec exists, requires routing graph)
+- Binding and flow connector objects (their ends reach routing, but neither is materialized as a connector object — see the Structural map)
 - Interruptible regions (spec exists, needs token cancellation)
 - Exception handlers (spec exists, needs exception propagation)
 
