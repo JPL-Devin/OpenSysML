@@ -46,7 +46,7 @@ contributes no profile at all (Track C).
 | `internal/core/suggest` | 92.6% | `internal/core/symbols` | 71.3% |
 | `internal/core/source` | 90.9% | `cmd/sysml-lsp` | 71.1% |
 | `internal/grpc` | 89.9% | `internal/core/lower` | 63.9% |
-| `internal/repl` | 89.3% | `internal/core/resolve` | 78.4% |
+| `internal/repl` | 89.3% | `internal/core/resolve` | 77.9% |
 | `internal/core/export` | 89.0% | `internal/core/semantics` | 57.3% |
 | `internal/core/rdf` | 86.7% | `cmd/sysml` | 24.7% |
 | `internal/core/lexer` | 85.5% | `internal/core/ast` | 20.9% |
@@ -680,7 +680,7 @@ The three bullets, with what closed them:
   percentage counts only the two in-process helpers (`server_test.go`), since a child process
   contributes nothing to the parent test binary's profile — the lifecycle itself is gated by the
   assertions, not by the number.
-- **`internal/core/resolve` 56.3% → 78.4% and `internal/core/semantics` 54.8% → 57.3%.** The
+- **`internal/core/resolve` 56.3% → 77.9% and `internal/core/semantics` 54.8% → 57.3%.** The
   tests went to the subtle rules rather than to the percentage: a redefinition target found two
   supertypes up, redeclaration-versus-redefinition name conflicts, requirement parameters,
   reference collection and its resolution kinds, what an import actually surfaces through a
