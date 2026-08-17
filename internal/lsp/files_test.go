@@ -340,6 +340,58 @@ func TestPublishDiagnosticsSerialized(t *testing.T) {
 	}
 }
 
+// closeOnPublishClient closes a document while a sweep is publishing, the window
+// in which a closed tab's withdrawn markers could be republished.
+type closeOnPublishClient struct {
+	baseClient
+	ws      *model.Workspace
+	trigger string
+	close   string
+
+	mu         sync.Mutex
+	closed     bool
+	afterClose []string
+}
+
+func (c *closeOnPublishClient) PublishDiagnostics(ctx context.Context, params *protocol.PublishDiagnosticsParams) error {
+	name := uriToName(params.URI)
+	c.mu.Lock()
+	if c.closed {
+		c.afterClose = append(c.afterClose, name)
+	}
+	trip := !c.closed && name == c.trigger
+	c.mu.Unlock()
+	if trip {
+		c.ws.Close(c.close)
+		c.mu.Lock()
+		c.closed = true
+		c.mu.Unlock()
+	}
+	return nil
+}
+
+func TestRefreshOpenDiagnosticsSkipsDocumentClosedMidSweep(t *testing.T) {
+	// Open-document order is map order, so repeat until the sweep hits main first.
+	for i := 0; i < 10; i++ {
+		s, _, _, lib, main := multiFileWorkspace(t)
+		openFile(t, s, main, mainSource)
+		openFile(t, s, lib, libSource)
+
+		cc := &closeOnPublishClient{ws: s.ws, trigger: main, close: lib}
+		s.client = cc
+		s.refreshOpenDiagnostics(context.Background(), "")
+
+		cc.mu.Lock()
+		after := append([]string(nil), cc.afterClose...)
+		cc.mu.Unlock()
+		for _, name := range after {
+			if name == lib {
+				t.Fatalf("lib.sysml diagnostics republished after its tab closed")
+			}
+		}
+	}
+}
+
 func TestDidChangeWorkspaceFoldersIndexesAddedFolder(t *testing.T) {
 	s, fc, _, _, main := multiFileWorkspace(t)
 	ctx := context.Background()
