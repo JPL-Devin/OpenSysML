@@ -905,6 +905,9 @@ func (r *Resolver) resolveFeatureChain(scope *symbols.Scope, fc *ast.FeatureChai
 	if operandSym == nil || fc.Member == nil {
 		return
 	}
+	if featuring := r.featuringOf(scope, operandSym); featuring != nil {
+		operandSym = featuring
+	}
 
 	// Walk member parts explicitly, assigning symbols to each part
 	r.resolveMemberChain(operandSym, fc.Member)
@@ -1008,6 +1011,9 @@ func (r *Resolver) getOperandSymbol(scope *symbols.Scope, e ast.Node) *symbols.S
 		r.resolveFeatureChain(scope, v)
 		// Get the operand's symbol, then lookup member
 		operandSym := r.getOperandSymbol(scope, v.Operand)
+		if featuring := r.featuringOf(scope, operandSym); featuring != nil {
+			operandSym = featuring
+		}
 		if operandSym == nil || operandSym.Scope == nil {
 			return nil
 		}
@@ -1029,6 +1035,34 @@ func (r *Resolver) getOperandSymbol(scope *symbols.Scope, e ast.Node) *symbols.S
 	default:
 		return nil
 	}
+}
+
+// baseThatFQN is the implicit `that` feature every usage takes from the base
+// usage Base::things ([KerML, 8.4.2]).
+const baseThatFQN = "Base::things::that"
+
+// featuringOf returns what a member chain from `that` reads its members from:
+// the usage enclosing the expression, whose value features the value being
+// written. It is nil for any other operand, and where no usage encloses the
+// expression — `that` is typed Anything, which has no members of its own.
+func (r *Resolver) featuringOf(scope *symbols.Scope, operand *symbols.Symbol) *symbols.Symbol {
+	if operand == nil {
+		return nil
+	}
+	if operand.Name != baseThatFQN && r.registeredFQN(operand) != baseThatFQN {
+		return nil
+	}
+	for s := scope; s != nil; s = s.Parent() {
+		owner := s.Owner()
+		if owner == nil {
+			continue
+		}
+		if _, ok := owner.Decl.(*ast.Usage); ok {
+			return owner
+		}
+		return nil
+	}
+	return nil
 }
 
 // getUsageType returns the type symbol of a usage by resolving its typing relationship.

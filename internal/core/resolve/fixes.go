@@ -36,6 +36,8 @@ func (r *Resolver) unresolvedFixes(scope *symbols.Scope, name string, span sourc
 
 // importFix imports the namespace declaring cand, offered only where cand is the
 // written name declared elsewhere, so the import alone resolves the reference.
+// The import is written private: it serves the namespace importing it without
+// re-exporting its names onward ([SysML, 7.2] over [KerML, 8.2.3.3]).
 func (r *Resolver) importFix(scope *symbols.Scope, name, cand string) (quickfix.Fix, bool) {
 	cut := strings.LastIndex(cand, "::")
 	if cut < 0 || suggest.LastSegment(cand) != name || !r.importable(cand) {
@@ -45,7 +47,7 @@ func (r *Resolver) importFix(scope *symbols.Scope, name, cand string) (quickfix.
 	if !ok {
 		return quickfix.Fix{}, false
 	}
-	stmt := "import " + cand[:cut] + "::*;"
+	stmt := "private import " + cand[:cut] + "::*;"
 	return quickfix.Fix{
 		Title:     "Import '" + cand[:cut] + "::*'",
 		Edits:     []quickfix.Edit{quickfix.InsertLine(at, stmt)},

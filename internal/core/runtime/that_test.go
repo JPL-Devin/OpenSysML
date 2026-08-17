@@ -1,0 +1,57 @@
+package runtime
+
+import (
+	"testing"
+
+	"github.com/Open-MBEE/Systemica/internal/core/semantics"
+)
+
+// realValue reports the real a slot holds.
+func realValue(t *testing.T, v Value) float64 {
+	t.Helper()
+	if v.Kind != ValConst || v.Const.Kind != semantics.ValReal {
+		t.Fatalf("value is %v, want a real", v)
+	}
+	return v.Const.Real
+}
+
+// A usage's `that` names the object featuring the usage's values, so a chain
+// from it reads that object's slots ([KerML, 8.4.2]).
+func TestThatReadsTheFeaturingObject(t *testing.T) {
+	const src = `
+	package test {
+		private import ScalarValues::Real;
+		part def P { attribute a : Real = 1.5; }
+		part def Holder { part p : P { attribute b : Real = that.a; } }
+	}`
+	inst, ctx := instantiatePart(t, "Holder", src)
+	p := slotInstance(t, ctx, inst, "p")
+	slot, err := p.GetSlot(ctx, "b")
+	if err != nil {
+		t.Fatalf("GetSlot b: %v", err)
+	}
+	if got := realValue(t, slot.HeldValue()); got != 1.5 {
+		t.Errorf("b = %v, want the featuring object's a (1.5)", got)
+	}
+}
+
+// The innermost usage features the value, so `that` in a nested usage's body
+// reads that usage's object rather than an outer one.
+func TestThatReadsTheInnermostFeaturingObject(t *testing.T) {
+	const src = `
+	package test {
+		private import ScalarValues::Real;
+		part def Inner { attribute a : Real = 2.0; }
+		part def Outer { attribute a : Real = 9.0; part i : Inner { attribute b : Real = that.a; } }
+		part def Holder { part o : Outer; }
+	}`
+	inst, ctx := instantiatePart(t, "Holder", src)
+	i := slotInstance(t, ctx, inst, "o", "i")
+	slot, err := i.GetSlot(ctx, "b")
+	if err != nil {
+		t.Fatalf("GetSlot b: %v", err)
+	}
+	if got := realValue(t, slot.HeldValue()); got != 2.0 {
+		t.Errorf("b = %v, want the inner object's a (2.0)", got)
+	}
+}
