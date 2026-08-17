@@ -2558,3 +2558,77 @@ func TestActionExecutor_GuardedSuccession_TwoGuardsHold(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
+
+// A token whose succession out of a merge is pruned does not consume the merge:
+// first-wins counts the token that traverses, so a later token still passes.
+func TestActionExecutor_GuardedSuccession_PrunedMergeStaysOpen(t *testing.T) {
+	initial := &ast.InitialNode{Name: "start"}
+	fork := &ast.ForkNode{Name: "split"}
+	low := &ast.ActionExecutionNode{Name: "low", Expression: &ast.LiteralInteger{Value: "1"}}
+	high := &ast.ActionExecutionNode{Name: "high", Expression: &ast.LiteralInteger{Value: "2"}}
+	merge := &ast.MergeNode{Name: "join"}
+	after := &ast.ActionExecutionNode{Name: "after", Expression: &ast.LiteralString{Value: "ran"}}
+
+	name := func(text string) *ast.QualifiedName {
+		return &ast.QualifiedName{Parts: []ast.NameSegment{{Text: text}}}
+	}
+	// The succession out of the merge holds only once `high` has written result.
+	guard := &ast.OperatorExpr{
+		Operator: ast.OpGt,
+		Operands: []ast.Node{
+			&ast.FeatureReference{Name: name("result")},
+			&ast.LiteralInteger{Value: "1"},
+		},
+	}
+
+	actionSym := &symbols.Symbol{
+		Name: "GuardedMerge",
+		Kind: symbols.SymbolActionUsage,
+		Decl: &ast.Usage{
+			Kind:  ast.UsageAction,
+			Ident: ast.Identification{Name: "GuardedMerge"},
+			Members: []ast.Node{
+				initial, fork, low, high, merge, after,
+				&ast.SuccessionEdge{Source: name("start"), Target: name("split")},
+				&ast.SuccessionEdge{Source: name("split"), Target: name("low")},
+				&ast.SuccessionEdge{Source: name("split"), Target: name("high")},
+				&ast.SuccessionEdge{Source: name("low"), Target: name("join")},
+				&ast.SuccessionEdge{Source: name("high"), Target: name("join")},
+				&ast.ControlFlowEdge{Source: name("join"), Target: name("after"), Guard: guard},
+			},
+		},
+	}
+
+	exec, err := newActionExecutor(NewContext(semantics.NewModel(nil), nil, 1000), actionSym, nil)
+	if err != nil {
+		t.Fatalf("create executor: %v", err)
+	}
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+
+	step := func(at ast.Node) {
+		t.Helper()
+		for i := range exec.tokens {
+			if exec.tokens[i].Location == at {
+				if err := exec.stepToken(i); err != nil {
+					t.Fatalf("step %s: %v", ActionNodeName(at), err)
+				}
+				return
+			}
+		}
+		t.Fatalf("no token at %s", ActionNodeName(at))
+	}
+
+	step(initial) // start → split
+	step(fork)    // split → low, high
+	step(low)     // result = 1, low → join
+	step(merge)   // guard 1 > 1 does not hold: pruned, merge left open
+	step(high)    // result = 2, high → join
+	step(merge)   // guard 2 > 1 holds: join → after
+	step(after)
+
+	if value, ran := exec.data["result"]; !ran || value.Str != "ran" {
+		t.Errorf("after did not run: result = %v", value)
+	}
+}
