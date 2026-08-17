@@ -194,20 +194,11 @@ for f in examples/*.sysml internal/repl/testdata/*.sysml; do
 done | sort | uniq -c
 ```
 
-### Which stream the experimental notice uses (PR #261)
+### `bin/sysml-grpc` takes `-port`, not `-addr`
 
-Any conversion with Turtle on either side is experimental (`export.IsExperimental`), and the notice
-goes to **stderr**, before the conversion, so a refusal carries it too. So test the streams apart
-(`>out 2>err`): assert `grep -c experimental out` is **0** — a note leaking into the graph is the
-failure mode that matters, and `-o /dev/stdout` is the case that would show it. Don't assert an
-*empty* stderr for a notation-only run: `wrote <path> (fmt, N bytes)` is on stderr too, so count
-`^note:` lines instead (0 for `-convert sysml`/`kerml`, 1 for `ttl` in either direction).
-
-`bin/sysml-grpc` takes **`-port`, not `-addr`** (`-addr` prints "flag provided but not defined" with
-a usage dump), so drive a freshly built service with `./bin/sysml-grpc -port 50123` and
-`pysysml.connect(port=50123, auto_start=False)` to keep `~/.pysysml/bin` out of it. pysysml raises
-`ExperimentalFeatureWarning` *before* `ConversionError` on a refusal, so a test that only catches
-the error still has to expect the warning.
+`-addr` prints "flag provided but not defined" with a usage dump, so drive a freshly built service
+with `./bin/sysml-grpc -port 50123` and `pysysml.connect(port=50123, auto_start=False)` to keep
+`~/.pysysml/bin` out of it.
 
 ## Proving a Turtle round trip loses nothing
 
@@ -3502,3 +3493,141 @@ Traps and recipes:
   runs the node after the merge, and then spins to
   `error: execution failed: execution exceeded max steps (1000000 steps; ...)` — so "hangs to the
   step budget", not just a wrong value, is the pre-fix signature here.
+
+## Verifying the RDF "experimental" marking, `%print`, `%view`, guards and addressed sends
+
+The wave-1/0.1.0 surfaces below were verified end to end at `870da1fd`. Each entry is the
+assertion that actually distinguishes working from broken.
+
+### The single experimental notice (`internal/core/export/experimental.go`)
+
+`export.ExperimentalNotice` is the one wording; `export.IsExperimental(from,to)` is true iff either
+side is Turtle (notation→notation is never experimental). **Read the constant from source at the
+start of a run instead of hardcoding it — the wording has already changed once** (220 chars on the
+#261 branch, 239 chars on main; the current text names "the behavior its bodies state").
+
+Assertions that hold, and how to word them:
+
+```bash
+./bin/sysml examples/rdf-interop-demo.sysml -convert ttl >out 2>err   # exit 0
+grep -c '^note:' err            # 1 — the notice is stderr-only
+grep -c experimental out        # 0 — the graph on stdout stays machine-readable
+./bin/sysml m.sysml -convert sysml -o n.sysml 2>&1 | grep -c '^note:'  # 0 (notation→notation)
+```
+
+- Do **not** assert "stderr is empty" for notation runs: the `wrote … (sysml, N bytes)` line also
+  goes to stderr. Assert *no `^note:` line*.
+- `-o /dev/stdout` still keeps the graph clean; refusals print the notice *before* the error, exit 2,
+  write nothing.
+- REPL: `%save x.ttl` prints the notice then `saved N bytes of ttl`; `%save x.sysml` prints none, and
+  neither written file contains a `note:` line.
+- Cross-surface identity is one diff: compare the CLI note (minus the `note: ` prefix) with
+  `pysysml.conversion.EXPERIMENTAL_NOTICE`, the gRPC `ConvertResponse.experimental_notice` and the
+  docs string. All four must be byte-equal.
+- pysysml: one `ExperimentalFeatureWarning` per RDF conversion, `Conversion.experimental` True with
+  the notice; sysml→sysml gives `False`/`""`/0 warnings; a refused RDF conversion warns *then* raises
+  `ConversionError`; `warnings.simplefilter("ignore", ExperimentalFeatureWarning)` silences it while
+  the conversion still returns the graph.
+
+### Corpus claim (`README.md`, `docs/reference/rdf-mapping.md`)
+
+The claim is a measured number and has moved (71/120 → **102/120** after behavioral nodes were
+mapped). Re-measure, never trust the doc:
+
+```bash
+ok=0; bad=0
+while IFS= read -r f; do
+  if ./bin/sysml "$f" -convert ttl -o /dev/null >/dev/null 2>&1; then ok=$((ok+1)); else bad=$((bad+1)); fi
+done < <(find examples \( -name '*.sysml' -o -name '*.kerml' \))
+echo "converted=$ok refused=$bad total=$((ok+bad))"     # 102 / 18 / 120 at 870da1fd
+```
+
+Use process substitution (not `basename`) — many training paths contain spaces. Every refusal must
+name a construct **and** `file:line:col` (`succession`, `operator expr`, `prefix metadata`,
+`` `snapshot` declaration``, `duplicate declaration of "X"`); a bare "cannot convert" or a silent
+drop is the failure shape.
+
+### Round-trip fidelity for behavior (`.sysml → .ttl → .sysml`)
+
+A subaction's `do` and comment contents are the fragile parts. Fixture shape that works:
+
+```
+state off { entry do { perform Warm; } }
+//* a note naming entry and do and exit */
+state starting {
+    // a line comment naming exit
+    do action running : Warm;
+    /* a block comment naming entry do */
+    exit perform Warm;
+}
+```
+
+`entry do { … }`, `do action running : Warm;` and `exit perform Warm;` must all come back, and the
+kind keywords inside the three comment styles must introduce **no** spurious members. Note plain
+comments themselves are not carried through RDF — that is expected, not a failure. `entry do action
+heat : Warm;` does **not** parse (`expected an action, an action reference or '{' after 'entry'`).
+
+### `%print`
+
+Read-only printer of the session buffer or one element:
+
+- `%print` → whole model with its comments; `%print Top::'My Pkg'::Car` → just that element (quoted
+  segments work). Empty session → `nothing to print: the session is empty`; a bad name →
+  `error: unresolved reference: …`. No RDF wording, no `note:` line.
+- Round trip without a GUI: pipe `%load f\n%print\n%quit`, strip the banner/`goodbye` lines with
+  `sed '1d;2d;$d'`, reload that output and print again — the two must be byte-identical.
+- Regression to keep: `%print` during a live `%action`/`%state` debugger leaves it alone —
+  `%instances` still reports none created and the next `%step`/`%continue` still works.
+
+### `%view` (viewpoint conformance)
+
+`%view Demo::report` prints `exposes` then `viewpoint conformance` with
+`satisfy structure (from Demo::StructureView): violated` and one line per concern
+(`conforms` / `violated (framed by the viewpoint but not by the view)` / `unevaluable` + reason).
+A satisfy target that is a `requirementUsage` is diagnosed at load *and* reported as
+`unevaluable (satisfy target spec is a requirementUsage, not a viewpoint)` — never a silent pass.
+`%view` registers no object: `%instances` afterwards says none created, a repeat is identical, and a
+following `%constraint`/`%satisfy` gives a typed message (`not a constraint: MassBudget is a concern
+def …`) rather than an ambiguity error.
+
+### Succession guards and addressed sends
+
+- A guard on a succession leaving an *ordinary* action node is evaluated: fixture with `level = 4`
+  and branches `if level > 10` / `else` must end with the false branch's counter at 0.
+- Fork fixtures under `internal/core/runtime/testdata/conformance/` (e.g.
+  `action_succession_guard_fork_branch_pruned.sysml`) run fine in the REPL but **emit unresolved
+  `Integer` diagnostics** because they rely on the test harness's implicit `ScalarValues` import.
+  Copy the fixture and add `import ScalarValues::*;` if you want a clean transcript.
+- Addressed sends carry object identity: a send to `Ident::alpha::reader` must **not** be consumed by
+  the sending object's own same-named `reader`. The proof of correctness is a *deadlock error*
+  (`accept deadlock in action talk … accept n waiting since step 3`); a broad-delivery bug would
+  complete instead. An unresolvable address gives the typed
+  `send reaches no receiving port: "Unrouted.alpha.count" names no port of an object the sender can
+  address`.
+- For the performed/indirect case use `send_identity_performed_object.sysml` (a state entry sends to
+  `worker`, a two-level `perform`ed action accepts it) and drive it with `%instantiate` + `%state` +
+  `%advance 1` → the machine reaches `heard`. Hand-writing this is easy to get wrong: `send 7 to
+  reader` from a package-level scope reports `unresolved reference: reader`, and a qualified
+  package-level receiver is *unroutable* because it belongs to no object.
+
+### Change/time triggers that are still absent (issue #268 at 870da1fd)
+
+Confirm absence rather than assuming it, and keep the fixture shape right — the body must hang off
+the **state usage**, not the `state def`, or you get
+`initialize state machine: no initial state found`:
+
+```
+part def Machine {
+    attribute ready : Boolean = true;
+    state def Modes;
+    state modes : Modes { entry; then idle; state idle; state done;
+        transition idle_to_done first idle accept when ready then done; }
+}
+```
+
+`%state …::modes`, `%advance 5`, `%current` → still `Current state: idle` (nothing in
+`RunToCompletion` polls change events; documented as ⚠️ Approximate in
+`docs/project/spec-compliance.md`). A unit-carrying time trigger (`accept after 5 [SI::s]`) fails
+with the typed `initialize state machine: schedule events: time duration must be constant, got
+quantity`, while the unitless `accept after 5` fires at t=5 — that pair is the cheapest way to show
+the feature is absent-but-typed rather than half-present.
