@@ -227,10 +227,20 @@ func (e *StateExecutor) ChangeWaits() []string {
 	return waits
 }
 
+// canStillProgress reports whether a step is left to take. A suspended machine's
+// do activities are registered but exhausted, so what is left there is a queued
+// event, a signal in flight or a do action still to run.
+func (e *StateExecutor) canStillProgress() bool {
+	if e.state != StateSuspended {
+		return e.HasPendingWork()
+	}
+	return e.eventQueue.Len() > 0 || e.hasPendingSignal() || e.HasPendingDoWork()
+}
+
 // SuspendReason says why a machine that cannot progress cannot: the change
 // conditions it waits on, or that nothing is left that could fire.
 func (e *StateExecutor) SuspendReason() string {
-	if e.state == StateCompleted || (e.state != StateSuspended && e.HasPendingWork()) {
+	if e.state == StateCompleted || e.canStillProgress() {
 		return ""
 	}
 	reason := "quiesced: nothing left can fire (no queued event, signal in flight, running do behavior or watched change condition)"

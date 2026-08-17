@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -134,5 +135,9 @@ func TestTimeTriggerRejectsNonTimeDimension(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "5 [kg] is not a time") {
 		t.Errorf("err = %v, want it to name the quantity as written", err)
+	}
+	// The dimension mismatch keeps its identity, so a caller can branch on it.
+	if !errors.Is(err, ErrIncommensurableUnits) {
+		t.Errorf("err = %v, want it to wrap ErrIncommensurableUnits", err)
 	}
 }

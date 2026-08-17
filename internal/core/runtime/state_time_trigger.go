@@ -1,7 +1,6 @@
 package runtime
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
@@ -38,11 +37,14 @@ func (e *StateExecutor) durationInClockUnits(q *Quantity, what string) (float64,
 	if err != nil {
 		return 0, fmt.Errorf("%s %s: %w", what, q, err)
 	}
+	// The dimension is reported as the error it is, keeping the sentinel a caller
+	// can recognise; any other conversion failure is passed on as it was raised.
+	if !q.Unit.Term.Commensurable(second.Term) {
+		return 0, fmt.Errorf("%w: %s %s is not a time: %s does not measure a duration",
+			ErrIncommensurableUnits, what, q, q.Unit)
+	}
 	magnitude, err := q.convertTo(second)
 	if err != nil {
-		if errors.Is(err, ErrIncommensurableUnits) {
-			return 0, fmt.Errorf("%s %s is not a time: %s does not measure a duration", what, q, q.Unit)
-		}
 		return 0, fmt.Errorf("%s %s: %w", what, q, err)
 	}
 	return magnitude, nil

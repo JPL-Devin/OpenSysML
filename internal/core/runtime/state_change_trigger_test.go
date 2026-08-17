@@ -428,6 +428,39 @@ func TestSuspendReasonMakesNoClaimBeforeTheMachineIsStepped(t *testing.T) {
 	assertCurrentState(t, exec, "done")
 }
 
+// A signal sent to a suspended machine is a step it can take, so the report
+// stops claiming the machine is stuck on its false condition.
+func TestSuspendReasonMakesNoClaimOnceASignalIsQueued(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		attribute def Go;
+		state Machine {
+			attribute ready : Boolean = false;
+			initial start;
+			state waiting {
+				accept when ready then done;
+				accept Go then done;
+			}
+			state done;
+			start then waiting;
+		}
+	}`)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if reason := exec.SuspendReason(); !strings.Contains(reason, "condition is false") {
+		t.Errorf("reason = %q, want the false condition it waits on", reason)
+	}
+
+	exec.SendSignal("Go", nil)
+	if reason := exec.SuspendReason(); reason != "" {
+		t.Errorf("reason = %q, want none while a queued signal can still be dispatched", reason)
+	}
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("rerun: %v", err)
+	}
+	assertCurrentState(t, exec, "done")
+}
+
 // A guard blocked by an earlier candidate's effect in the same poll stays armed:
 // the fire path re-tests the guard, so latching such an edge would lose it for as
 // long as its condition stays true.
