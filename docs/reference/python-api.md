@@ -27,6 +27,18 @@ library into a fresh symbol index and runs the semantic passes. Everything else
 here is around a millisecond, of which the RPC itself — protobuf encode/decode
 plus loopback — is a few hundred microseconds.
 
+### Starting the service
+
+A `Connection` that starts `sysml-grpc` itself probes the service immediately and
+then on a doubling backoff (10 ms, 20 ms, 40 ms … capped at 250 ms), so a service
+that answers in milliseconds costs milliseconds: ~17 ms on the machine above,
+against a fixed 500 ms wait before 0.0.9. Waiting is bounded by
+`pysysml.connection.START_TIMEOUT` (2.5 s), after which `ConnectionError` is
+raised; a probe of a port nothing listens on is refused in a few milliseconds
+rather than spending the per-probe RPC timeout. `Connection(auto_start=False)`
+costs ~0.3 ms and the first RPC on it ~1 ms; `import pysysml` is ~120 ms, mostly
+`grpc` (~48 ms), `filelock` and the generated protobuf modules.
+
 ### Real-time analytics
 
 This is a request/response service over gRPC, not a hard real-time engine. It

@@ -16,6 +16,13 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   unit preserved. A unit named without the reduction commensurability is decided
   over is refused before anything is sent, rather than compared by bare
   magnitude.
+- A `Connection` that starts the service asks it at once and then backs off (10
+  ms, 20 ms, 40 ms … capped at 250 ms) instead of sleeping half a second before
+  the first probe, so starting a service that answers in milliseconds costs ~17
+  ms rather than ~510 ms. Waiting is bounded by the same ~2.5 s and raises the
+  same `ConnectionError`, now as the documented `connection.START_TIMEOUT`; a
+  service that died is still detected before each probe and ownership,
+  stale-service and pid authentication are unchanged.
 - The two names that shadowed builtins are renamed: `pysysml.eval` is
   `pysysml.evaluate` and `pysysml.RuntimeError` is `pysysml.ExecutionError`. Each
   old name still resolves to the same object with a `DeprecationWarning` and is
