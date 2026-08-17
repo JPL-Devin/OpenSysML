@@ -86,6 +86,34 @@ func (cc *constraintChecker) check(sym *symbols.Symbol) {
 	cc.checkRedefinition(sym)
 	cc.checkUnnamedRedefinitionValue(sym)
 	cc.checkVariantOutsideVariation(sym)
+	cc.checkViewSatisfyTarget(sym)
+}
+
+// checkViewSatisfyTarget flags a `satisfy` in a view body naming a requirement
+// that is no viewpoint (SysML v2 §8.3.20): only a viewpoint frames concerns, so
+// such a claim is one nothing can evaluate.
+func (cc *constraintChecker) checkViewSatisfyTarget(sym *symbols.Symbol) {
+	usage, ok := sym.Decl.(*ast.Usage)
+	if !ok || usage.Kind != ast.UsageSatisfy || sym.OwnerScope == nil {
+		return
+	}
+	owner := sym.OwnerScope.Owner()
+	if owner == nil || !semantics.IsView(owner) {
+		return
+	}
+	target, ref := cc.model.SatisfyTarget(sym)
+	if target == nil || semantics.IsViewpoint(target) {
+		return
+	}
+	cc.diags = append(cc.diags, Diagnostic{
+		Severity: SeverityError,
+		Span:     sym.DeclSpan,
+		Message: fmt.Sprintf(
+			"satisfy in a view body must name a viewpoint: %s is a %s, which frames no concern for the view to conform to",
+			ref, target.Kind.String()),
+		Code:   "view-satisfy-viewpoint",
+		Source: "constraint",
+	})
 }
 
 // checkVariantOutsideVariation warns about a `variant` whose owner is not a

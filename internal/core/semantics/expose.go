@@ -20,13 +20,13 @@ var ErrNotAView = errors.New("not a view")
 // since an Expose is protected. An empty set is no error, a non-view is
 // ErrNotAView, and a nested view's own set is asked of it directly.
 func (m *Model) ExposedElements(view *symbols.Symbol) ([]*symbols.Symbol, error) {
-	if view == nil || !isView(view) {
+	if view == nil || !IsView(view) {
 		return nil, ErrNotAView
 	}
 	out := &exposedSet{seen: map[*symbols.Symbol]bool{}}
 	m.addExposed(view, out)
 	for _, super := range m.AllSupertypes(view) {
-		if isView(super) {
+		if IsView(super) {
 			m.addExposed(super, out)
 		}
 	}
@@ -36,7 +36,7 @@ func (m *Model) ExposedElements(view *symbols.Symbol) ([]*symbols.Symbol, error)
 // NestedViews returns the views declared in view's body, in declaration order,
 // so a caller can walk a view tree.
 func (m *Model) NestedViews(view *symbols.Symbol) ([]*symbols.Symbol, error) {
-	if view == nil || !isView(view) {
+	if view == nil || !IsView(view) {
 		return nil, ErrNotAView
 	}
 	if view.Scope == nil {
@@ -44,7 +44,7 @@ func (m *Model) NestedViews(view *symbols.Symbol) ([]*symbols.Symbol, error) {
 	}
 	var out []*symbols.Symbol
 	for _, member := range view.Scope.Members() {
-		if member != view && isView(member) {
+		if member != view && IsView(member) {
 			out = append(out, member)
 		}
 	}
@@ -60,9 +60,9 @@ func (m *Model) addExposed(view *symbols.Symbol, out *exposedSet) {
 	}
 }
 
-// isView reports whether sym is a view usage or a view definition, the two
+// IsView reports whether sym is a view usage or a view definition, the two
 // elements that own Expose relationships.
-func isView(sym *symbols.Symbol) bool {
+func IsView(sym *symbols.Symbol) bool {
 	switch sym.Kind {
 	case symbols.SymbolViewUsage, symbols.SymbolViewDef:
 		return true

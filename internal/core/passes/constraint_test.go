@@ -691,3 +691,45 @@ func TestConstraintVariantUnderInheritedVariationOK(t *testing.T) {
 		t.Fatalf("unexpected variant-outside-variation, got %v", diags)
 	}
 }
+
+// A view body's satisfy must name a viewpoint: only a viewpoint frames concerns,
+// so a satisfy naming a plain requirement claims a conformance nothing checks.
+func TestConstraintViewSatisfyNonViewpointRequirement(t *testing.T) {
+	src := `
+		part def Vehicle;
+		part vehicle : Vehicle;
+		requirement spec { subject s : Vehicle; }
+		view v { expose vehicle; satisfy spec; }
+	`
+	diags := constraintDiags(t, src)
+	if !hasCode(diags, "view-satisfy-viewpoint") {
+		t.Fatalf("expected view-satisfy-viewpoint diagnostic, got %v", diags)
+	}
+}
+
+func TestConstraintViewSatisfyViewpointOK(t *testing.T) {
+	src := `
+		part def Vehicle;
+		part vehicle : Vehicle;
+		viewpoint def VP;
+		viewpoint vp : VP;
+		view v { expose vehicle; satisfy vp; }
+	`
+	if diags := constraintDiags(t, src); hasCode(diags, "view-satisfy-viewpoint") {
+		t.Fatalf("unexpected view-satisfy-viewpoint, got %v", diags)
+	}
+}
+
+// A satisfy outside a view body is an ordinary requirement satisfaction, which
+// this rule says nothing about.
+func TestConstraintSatisfyOutsideAViewIsNotChecked(t *testing.T) {
+	src := `
+		part def Vehicle;
+		part vehicle : Vehicle;
+		requirement spec { subject s : Vehicle; }
+		part holder { satisfy spec by vehicle; }
+	`
+	if diags := constraintDiags(t, src); hasCode(diags, "view-satisfy-viewpoint") {
+		t.Fatalf("unexpected view-satisfy-viewpoint, got %v", diags)
+	}
+}
