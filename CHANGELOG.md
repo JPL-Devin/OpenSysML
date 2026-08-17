@@ -32,7 +32,7 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   an `@` annotation the parser records on the declaration ahead of the one it prefixes — are
   reported with the line named.
 - Two more shapes the mapping used to change quietly now come back as written: a combined state
-  subaction written without a space before its body (`entry do{ … }`) keeps its `do`, and a kind
+  subaction keeps its `do` whatever separates it from its body (`entry do{ … }`), and a kind
   keyword named inside a comment in a declaration's head (`in /* attribute */ x : Real;`) is read
   as the trivia it is rather than as a keyword the author wrote.
 - RDF conversion remains **experimental** — the vocabulary may still change, and no round trip

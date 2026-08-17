@@ -143,7 +143,7 @@ the node, that name is used; the rest are `sysx:` terms, marked below.
 | `for x in c { … }` | `sysml:ForLoopActionUsage` | `sysx:loopVariable`, `sysx:collection` |
 | `if c { … } else { … }` | `sysml:IfActionUsage` + `sysx:IfBranch` per branch | `sysx:condition`, `sysx:branchKind` |
 | `state s { … }`, `initial s;`, `final s;` | `sysml:StateUsage` | `sysml:declaredName`, `sysx:declaredKeyword`, its members |
-| `entry`/`do`/`exit`, `entry do { … }` (with or without a space before the body) | `sysml:StateSubactionMembership` | `sysx:subactionKind`, `sysx:declaredKeyword`, its actions |
+| `entry`/`do`/`exit`, `entry do { … }` (whatever separates the `do` from the body) | `sysml:StateSubactionMembership` | `sysx:subactionKind`, `sysx:declaredKeyword`, its actions |
 | `defer sig, other;` | `sysx:DeferMember` | `sysx:deferredEvent` per event |
 | `region r { … }` | `sysx:StateRegion` | `sysml:declaredName`, its states |
 | `choice`, `junction`, `fork`, `join`, `entry point`, `exit point`, `shallow`/`deep history` | `sysx:Pseudostate` | `sysx:pseudostateKind`, `sysx:declaredKeyword` |
