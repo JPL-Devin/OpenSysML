@@ -46,6 +46,11 @@ func runConvert(files []string) error {
 	if err != nil {
 		return err
 	}
+	// Reported before the conversion, so a refusal carries it too, and on stderr,
+	// where it cannot land in the converted model written to stdout.
+	if export.IsExperimental(from, to) {
+		fmt.Fprintf(os.Stderr, "note: %s\n", export.ExperimentalNotice)
+	}
 	out, err := export.Convert(name, data, from, to)
 	if err != nil {
 		return err

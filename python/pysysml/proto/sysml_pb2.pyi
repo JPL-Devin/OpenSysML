@@ -363,18 +363,22 @@ class ConvertRequest(_message.Message):
     def __init__(self, file_path: _Optional[str] = ..., content: _Optional[str] = ..., model_hash: _Optional[str] = ..., from_format: _Optional[str] = ..., to_format: _Optional[str] = ..., tolerate_syntax_errors: _Optional[bool] = ...) -> None: ...
 
 class ConvertResponse(_message.Message):
-    __slots__ = ("content", "from_format", "to_format", "error", "diagnostics")
+    __slots__ = ("content", "from_format", "to_format", "error", "diagnostics", "experimental", "experimental_notice")
     CONTENT_FIELD_NUMBER: _ClassVar[int]
     FROM_FORMAT_FIELD_NUMBER: _ClassVar[int]
     TO_FORMAT_FIELD_NUMBER: _ClassVar[int]
     ERROR_FIELD_NUMBER: _ClassVar[int]
     DIAGNOSTICS_FIELD_NUMBER: _ClassVar[int]
+    EXPERIMENTAL_FIELD_NUMBER: _ClassVar[int]
+    EXPERIMENTAL_NOTICE_FIELD_NUMBER: _ClassVar[int]
     content: str
     from_format: str
     to_format: str
     error: str
     diagnostics: _containers.RepeatedCompositeFieldContainer[Diagnostic]
-    def __init__(self, content: _Optional[str] = ..., from_format: _Optional[str] = ..., to_format: _Optional[str] = ..., error: _Optional[str] = ..., diagnostics: _Optional[_Iterable[_Union[Diagnostic, _Mapping]]] = ...) -> None: ...
+    experimental: bool
+    experimental_notice: str
+    def __init__(self, content: _Optional[str] = ..., from_format: _Optional[str] = ..., to_format: _Optional[str] = ..., error: _Optional[str] = ..., diagnostics: _Optional[_Iterable[_Union[Diagnostic, _Mapping]]] = ..., experimental: _Optional[bool] = ..., experimental_notice: _Optional[str] = ...) -> None: ...
 
 class SymbolInfo(_message.Message):
     __slots__ = ("id", "name", "kind", "metadata", "child_ids", "attributes", "type_info", "multiplicity", "specializations")

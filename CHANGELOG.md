@@ -4,6 +4,48 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Cutting a release
 is described in [docs/project/releasing.md](docs/project/releasing.md).
 
+## 0.1.0 — 2026-08-17
+
+### RDF conversion is experimental
+
+- SysML ↔ RDF Turtle conversion is labelled **experimental**, in both directions, on every
+  surface that offers it. The mapping covers model structure only — 71 of the 120 models under
+  `examples/` convert and the other 49 are refused with the construct named — its vocabulary
+  may change without a compatibility path, and no round trip through a running triplestore has
+  been demonstrated (roadmap D1–D3, D6). Saving and converting notation (`.sysml`, `.kerml`) is
+  stable and unchanged.
+- `sysml -convert` writes the status as a `note:` on **stderr**, so a conversion piped to a file
+  or to stdout carries no extra bytes, and a refused conversion is labelled too. `-help` says
+  the same.
+- `%save model.ttl` prints the status before it writes, including when the model is refused.
+- `ConvertResponse` carries `experimental` and `experimental_notice`, set before the conversion
+  runs, so a client reads the status off a refusal as well as off a success. The `convert`
+  capability is unchanged: the status is per conversion, not per service.
+- `pysysml` raises the status as `ExperimentalFeatureWarning` and exposes it as
+  `Conversion.experimental`/`.experimental_notice`, plus `pysysml.is_experimental(from, to)`.
+  A service too old to send the fields is read from the formats it reports instead, so an RDF
+  conversion warns either way. Silence it with
+  `warnings.simplefilter("ignore", pysysml.ExperimentalFeatureWarning)` — no stable feature
+  warns with that class.
+- The wording lives once, in `export.ExperimentalNotice`, so no surface can drift from another.
+
+### Documentation
+
+- The RDF mapping reference opens with a **Status: experimental** section stating what the
+  mapping covers, that the vocabulary may change, and that interoperability is unverified.
+- The claim that a converted graph "loads into" Flexo MMS's triplestore is withdrawn from the
+  reference and from `docs/project/spec-compliance.md`: the vocabulary and element IRIs match
+  Flexo's `Namespaces.kt`, which is an addressing claim, not a demonstrated load.
+- The README capability table splits notation save (complete) from RDF conversion
+  (experimental), and the guide, CLI and REPL references, Python guide and roadmap say the same.
+
+### Known limitations
+
+- Everything 0.0.9 listed still stands, with the RDF limitation now stated as a feature status
+  rather than a footnote: expressions are not emitted as triples, a model whose behavior is
+  stated as action or state nodes is refused, and end-binding heads depend on
+  `sysx:sourceText`.
+
 ## 0.0.9 — 2026-08-17
 
 ### Language and semantics

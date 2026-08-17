@@ -264,7 +264,8 @@ make python-proto
 - `model.py` — a parsed model: root symbol and diagnostics
 - `symbol.py` — lazy symbol proxy, fetches children on demand
 - `instance.py` — instantiated object and its slots
-- `conversion.py` — a written model, its formats and extension inference
+- `conversion.py` — a written model, its formats, extension inference, and the
+  `ExperimentalFeatureWarning` an RDF conversion raises
 - `query.py` — the standard's Query payload, translated and its answers
 - `verdict.py` — a verification's answer and what a calculation computed
 - `errors.py` — the exception hierarchy and the gRPC status translation

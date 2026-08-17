@@ -390,6 +390,12 @@ A loaded model can be written back to SysML notation or RDF Turtle. The service
 does the conversion with the same code `sysml -convert` uses, so the client adds
 no second implementation of the mapping.
 
+The Turtle direction is [experimental](../reference/rdf-mapping.md#status-experimental):
+it carries model structure only, refuses a model whose bodies state behavior, and
+its vocabulary may change without a compatibility path. Any conversion through it
+warns with `ExperimentalFeatureWarning` and sets `Conversion.experimental`;
+notation is stable and warns about nothing.
+
 ```python
 model = pysysml.load("model.sysml")
 
@@ -402,8 +408,9 @@ pysysml.convert("ttl", file_path="model.sysml")            # without loading fir
 pysysml.convert("sysml", content=turtle, from_format="ttl")  # Turtle back to notation
 ```
 
-A `Conversion` is the output text plus the formats it went between; `str()` and
-`len()` give the text, and `write(path)` saves it. Formats are named `sysml`,
+A `Conversion` is the output text plus the formats it went between, and whether
+the mapping it used is `experimental` (with `experimental_notice` saying why);
+`str()` and `len()` give the text, and `write(path)` saves it. Formats are named `sysml`,
 `kerml`, `text`, `ttl`, `turtle` or `rdf`. A file path's format is inferred from
 its extension; inline `content` has no extension, so it needs `from_format`.
 
@@ -431,7 +438,11 @@ What each direction preserves:
 
 Conversion is negotiated: against a service too old to report the `convert`
 capability, these calls raise `MissingCapabilityError` naming the upgrade rather
-than failing on an unimplemented method.
+than failing on an unimplemented method. A service too old to report the RDF
+mapping's status is read from the formats it reports instead, so an RDF
+conversion warns either way. Silence the warning with
+`warnings.simplefilter("ignore", pysysml.ExperimentalFeatureWarning)`, which no
+stable feature uses.
 
 ## Querying a model the standard's way
 

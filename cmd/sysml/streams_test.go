@@ -124,11 +124,18 @@ func TestStreamsAndStatus(t *testing.T) {
 		status: exitUnevaluable,
 		stderr: []string{"error: expected a name", "did not analyse cleanly"},
 	}, {
-		name:      "a conversion writes only the model out",
+		name:   "an RDF conversion writes only the model out, and its status on stderr",
+		model:  sampleModel,
+		args:   []string{"-convert", "ttl"},
+		status: exitHolds,
+		stdout: []string{"@prefix sysml:"},
+		stderr: []string{"note: RDF conversion is experimental"},
+	}, {
+		name:      "a notation conversion writes only the model out",
 		model:     sampleModel,
-		args:      []string{"-convert", "ttl"},
+		args:      []string{"-convert", "sysml"},
 		status:    exitHolds,
-		stdout:    []string{"@prefix sysml:"},
+		stdout:    []string{"package"},
 		emptyErrs: true,
 	}, {
 		name:     "a failed conversion writes nothing out",

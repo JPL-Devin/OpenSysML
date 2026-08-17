@@ -103,6 +103,59 @@ func TestConvertToTurtleAndBack(t *testing.T) {
 	}
 }
 
+// TestConvertMarksRDFExperimental verifies the response carries the RDF
+// mapping's status in both directions, carries it on a refusal too, and leaves
+// it off a notation conversion.
+func TestConvertMarksRDFExperimental(t *testing.T) {
+	srv := mustNewService(t, 10)
+
+	turtle := mustConvert(t, srv, &pb.ConvertRequest{
+		Source:     &pb.ConvertRequest_Content{Content: convertModelSource},
+		FromFormat: "sysml",
+		ToFormat:   "ttl",
+	})
+	if !turtle.Experimental {
+		t.Error("experimental = false, want true for a conversion to RDF")
+	}
+	if !strings.Contains(turtle.ExperimentalNotice, "experimental") {
+		t.Errorf("experimental_notice = %q, want it to state the status", turtle.ExperimentalNotice)
+	}
+
+	back := mustConvert(t, srv, &pb.ConvertRequest{
+		Source:     &pb.ConvertRequest_Content{Content: turtle.Content},
+		FromFormat: "ttl",
+		ToFormat:   "sysml",
+	})
+	if !back.Experimental {
+		t.Error("reading RDF is experimental too, but was not marked")
+	}
+
+	notation := mustConvert(t, srv, &pb.ConvertRequest{
+		Source:     &pb.ConvertRequest_Content{Content: convertModelSource},
+		FromFormat: "sysml",
+		ToFormat:   "sysml",
+	})
+	if notation.Experimental || notation.ExperimentalNotice != "" {
+		t.Errorf("a notation conversion is stable, but was marked: %t %q",
+			notation.Experimental, notation.ExperimentalNotice)
+	}
+
+	refused, err := srv.Convert(context.Background(), &pb.ConvertRequest{
+		Source:     &pb.ConvertRequest_Content{Content: "action def Go { action step; first start; then step; }"},
+		FromFormat: "sysml",
+		ToFormat:   "ttl",
+	})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	if refused.Error == "" {
+		t.Fatalf("expected the mapping to refuse a behavioral body:\n%s", refused.Content)
+	}
+	if !refused.Experimental {
+		t.Error("a refusal is the experimental behavior, but was not marked")
+	}
+}
+
 // TestConvertFilePathInfersFormat verifies a path source is read by the service
 // and its extension names the input format.
 func TestConvertFilePathInfersFormat(t *testing.T) {

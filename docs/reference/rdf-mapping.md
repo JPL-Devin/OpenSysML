@@ -3,6 +3,31 @@
 Which triples a model becomes, and which constructs the mapping does not represent. Saving and
 converting as a task is [guide chapter 7](../guide/07-saving-and-rdf.md).
 
+## Status: experimental
+
+RDF conversion — `sysml -convert ttl`, `%save model.ttl`, the service's `Convert`
+to or from `ttl`, and each in reverse — is **experimental** as of 0.1.0. Saving
+and converting notation (`.sysml`, `.kerml`) is stable; this mapping is not, and
+each of these is a deliberate property of it rather than a defect to report:
+
+- **Model structure only.** A model whose bodies state behavior is refused, not
+  partly converted, with the construct named: 71 of the 120 models under
+  `examples/` convert to Turtle and the other 49 are refused. See
+  [Limitations](#limitations).
+- **The vocabulary may change without a compatibility path.** A graph written by
+  one release may not read back into the next, and no migration is provided.
+  Treat a `.ttl` as an interchange artifact you can regenerate, not as the copy
+  of record.
+- **Interoperability is unverified.** The `sysml:` vocabulary and the `elmt:`
+  element base are read from Flexo MMS's `Namespaces.kt`, but no round trip
+  through a running Flexo service or triplestore has been demonstrated, so
+  nothing here claims one (roadmap item D3).
+
+Every surface reports this where it is used: the command line writes a `note:` to
+stderr, `%save` prints one, and `ConvertResponse` carries `experimental` and
+`experimental_notice`, which pysysml raises as an `ExperimentalFeatureWarning`.
+The wording is one constant, `export.ExperimentalNotice`.
+
 ## The RDF mapping
 
 ### Namespaces
@@ -16,8 +41,10 @@ converting as a task is [guide chapter 7](../guide/07-saving-and-rdf.md).
 
 The `sysml:` vocabulary and the `elmt:` element base match the ones the
 [Flexo MMS SysML v2 service](https://github.com/Open-MBEE/flexo-mms-sysmlv2)
-writes into its triplestore (`Namespaces.kt`), so a graph produced here loads
-into that service.
+writes into its triplestore (`Namespaces.kt`), so a graph produced here is
+addressed the way that service addresses elements. Whether such a graph loads
+into a running Flexo triplestore has not been demonstrated — see
+[Status](#status-experimental).
 
 Systemica's own additions are namespaced separately as `sysx:` so a consumer can
 tell them from the standard vocabulary and ignore them if it wants only standard
