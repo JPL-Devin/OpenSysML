@@ -887,6 +887,25 @@ RDF stays **experimental**: D1 (expressions as source text), D2 (end-binding hea
 triplestore round trip) are untouched by this, and D3 remains the gate on calling the path
 stable.
 
+## T1 — the runtime layer still names a feature value a "slot"
+
+**Deferred, deliberately, and it is a rename rather than a behavior change.** `slot` is UML /
+SysML v1 vocabulary (`InstanceSpecification::slot`). It occurs **zero** times in the vendored
+normative metamodel and standard library, and v2 has no `InstanceSpecification` metaclass at
+all; the pair for this concept is `Feature` (`KerML.kerml:164`) and `FeatureValue`
+(`KerML.kerml:360-366`).
+
+The user-facing half is handled: the REPL command is `%features`, with `%slots` kept as a
+deprecated alias, and the printed error and report wording plus the v2-named gRPC and `pysysml`
+aliases (the old names keep working) follow in the terminology PR.
+
+What is left is the Go layer — `runtime.Slot`, `Instance.Slots`, `GetSlot`, `SlotError`,
+`ErrSlotMaterialization` and their call sites, 71 Go files (42 of them tests). It is internal,
+so it buys naming consistency and not spec correctness, and a repo-wide runtime diff conflicts
+with anything in flight in the executors. Take it as one mechanical PR in a quiet window, with
+no behavior change in the same commit, and keep the local corpus gate in the run — the
+expectation file is never regenerated for a rename.
+
 ---
 
 # How to run the next batch
@@ -915,7 +934,9 @@ Tracks A, B and P are closed, so what is left reorders:
 2. **Track C** is done: `cmd/sysml-grpc` now has the process lifecycle gate it lacked, and the
    resolver and semantics rules that were tested only on the parsed index are tested on the
    cache-restored one as well.
-3. **Track D** is independent of the rest and can run whenever. Take **D3** before **D1**/**D2**:
+3. **T1** is unordered with respect to everything else, but it wants an empty runtime queue, so
+   run it when no executor work is in flight rather than alongside a batch.
+4. **Track D** is independent of the rest and can run whenever. Take **D3** before **D1**/**D2**:
    it is the cheapest, and it is what would show whether the Flexo interop claim actually holds
    before more work is layered on the mapping. **D4** is done; what it left behind — a succession
    end that refers to an unnamed member — belongs with **D2**, since both want real end triples
