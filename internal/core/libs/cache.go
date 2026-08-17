@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -80,7 +81,8 @@ func (c *Cache) Load(key string) (*IndexRecord, bool) {
 	return &rec, true
 }
 
-// Prune removes records that no load has hit for maxIdleAge. Cache entries are
+// Prune removes records that no load has hit for maxIdleAge, and the temp files
+// a crashed store left behind. Cache entries are
 // otherwise never invalidated explicitly — a key that no longer matches is
 // simply missed — so without this the directory keeps every record any library
 // version ever produced.
@@ -91,7 +93,7 @@ func (c *Cache) Prune() {
 	}
 	cutoff := time.Now().Add(-maxIdleAge)
 	for _, e := range entries {
-		if e.IsDir() || filepath.Ext(e.Name()) != ".idx" {
+		if e.IsDir() || !(filepath.Ext(e.Name()) == ".idx" || strings.Contains(e.Name(), ".idx.tmp-")) {
 			continue
 		}
 		info, err := e.Info()
@@ -104,8 +106,9 @@ func (c *Cache) Prune() {
 }
 
 // Store gob-encodes rec and writes it to <dir>/<key>.idx atomically: it writes a
-// sibling <key>.idx.tmp then renames it into place, so a concurrent Load or a
-// crash never observes a partially written file. A failed encode/write removes
+// temp file of its own then renames it into place, so a concurrent Load or a
+// crash never observes a partially written file, and two writers of one key
+// cannot truncate or publish each other's temp. A failed encode/write removes
 // the temp and leaves any existing final file untouched.
 func (c *Cache) Store(key string, rec *IndexRecord) error {
 	var buf bytes.Buffer
@@ -113,9 +116,13 @@ func (c *Cache) Store(key string, rec *IndexRecord) error {
 		return err
 	}
 	final := c.path(key)
-	tmp := final + ".tmp"
-	if err := os.WriteFile(tmp, buf.Bytes(), 0o600); err != nil {
+	f, err := os.CreateTemp(c.dir, key+".idx.tmp-*")
+	if err != nil {
 		return err
+	}
+	tmp := f.Name()
+	if err := writeTemp(f, buf.Bytes()); err != nil {
+		return errors.Join(err, os.Remove(tmp))
 	}
 	if err := os.Rename(tmp, final); err != nil {
 		if rmErr := os.Remove(tmp); rmErr != nil {
@@ -124,4 +131,16 @@ func (c *Cache) Store(key string, rec *IndexRecord) error {
 		return err
 	}
 	return nil
+}
+
+// writeTemp writes data to f with the permissions a record is kept at, and
+// closes f whatever happens.
+func writeTemp(f *os.File, data []byte) error {
+	if err := f.Chmod(0o600); err != nil {
+		return errors.Join(err, f.Close())
+	}
+	if _, err := f.Write(data); err != nil {
+		return errors.Join(err, f.Close())
+	}
+	return f.Close()
 }

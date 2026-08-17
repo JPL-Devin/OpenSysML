@@ -142,21 +142,23 @@ func (p *indexPool) get() *symbols.Index {
 	return built
 }
 
-// fillLocked starts a background build for every warm index the pool is short
-// of. The caller holds the lock.
+// fillLocked starts a background build if the pool is short of a warm index and
+// none is being built. One at a time is deliberate: the builds of one library
+// hit the same records, so running them in parallel would have each parse what
+// the one before it cached, and spend every core doing it. The caller holds the
+// lock.
 func (p *indexPool) fillLocked() {
-	if p.closed {
+	if p.closed || p.inflight > 0 || len(p.ready) >= p.target {
 		return
 	}
-	for len(p.ready)+p.inflight < p.target {
-		p.inflight++
-		p.wg.Add(1)
-		go p.fillOne()
-	}
+	p.inflight++
+	p.wg.Add(1)
+	go p.fillOne()
 }
 
 // fillOne builds one index in the background and adds it to the pool, dropping
-// it if the pool closed or filled up while it was building.
+// it if the pool closed or filled up while it was building, then starts the next
+// build the pool is short of.
 func (p *indexPool) fillOne() {
 	defer p.wg.Done()
 	idx := p.build()
@@ -168,6 +170,7 @@ func (p *indexPool) fillOne() {
 		return
 	}
 	p.ready = append(p.ready, idx)
+	p.fillLocked()
 }
 
 // warm is how many prewarmed indexes are ready now.

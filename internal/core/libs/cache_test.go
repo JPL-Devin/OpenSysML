@@ -2,7 +2,9 @@ package libs
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -155,5 +157,72 @@ func TestCacheStoreIsAtomic(t *testing.T) {
 		if strings.HasSuffix(e.Name(), ".tmp") {
 			t.Fatalf("leftover temp file after Store: %s", e.Name())
 		}
+	}
+}
+
+// TestCacheStoreConcurrentWritersOfOneKey covers what several library builds do
+// on a cold cache: they miss on the same keys and store them at once, and each
+// store has to publish a whole record rather than truncate a peer's temp file.
+func TestCacheStoreConcurrentWritersOfOneKey(t *testing.T) {
+	c := &Cache{dir: t.TempDir()}
+	rec := sampleRecord("crowded.kerml")
+	key := c.keyFor([]byte("content stored by everyone"), "set")
+
+	var wg sync.WaitGroup
+	errs := make([]error, 8)
+	for i := range errs {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			errs[i] = c.Store(key, rec)
+		}(i)
+	}
+	wg.Wait()
+	for i, err := range errs {
+		if err != nil {
+			t.Errorf("writer %d: %v", i, err)
+		}
+	}
+
+	got, ok := c.Load(key)
+	if !ok {
+		t.Fatal("Load miss after concurrent stores: a record was published truncated")
+	}
+	if got.Name != rec.Name || len(got.Symbols) != len(rec.Symbols) {
+		t.Fatalf("record after concurrent stores: got %+v want %+v", got, rec)
+	}
+	entries, err := os.ReadDir(c.dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("cache holds %d files after storing one key, want 1", len(entries))
+	}
+}
+
+// TestCachePruneRemovesStaleTempFiles covers the temp a crashed store leaves: it
+// is not a record, so nothing ever loads it, and only Prune can clear it.
+func TestCachePruneRemovesStaleTempFiles(t *testing.T) {
+	c := &Cache{dir: t.TempDir()}
+	stale := filepath.Join(c.dir, "deadbeef.idx.tmp-123456")
+	if err := os.WriteFile(stale, []byte("half a record"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-2 * maxIdleAge)
+	if err := os.Chtimes(stale, old, old); err != nil {
+		t.Fatal(err)
+	}
+	fresh := filepath.Join(c.dir, "cafebabe.idx.tmp-654321")
+	if err := os.WriteFile(fresh, []byte("a store in flight"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	c.Prune()
+
+	if _, err := os.Stat(stale); !os.IsNotExist(err) {
+		t.Error("Prune kept a temp file no store is writing")
+	}
+	if _, err := os.Stat(fresh); err != nil {
+		t.Errorf("Prune removed a temp file a store may still be writing: %v", err)
 	}
 }

@@ -381,6 +381,42 @@ func TestIndexPoolStopsAtItsSize(t *testing.T) {
 	}
 }
 
+// TestIndexPoolBuildsOneIndexAtATime pins that filling the pool does not run the
+// builds in parallel: the builds of one library hit the same cache records, so
+// overlapping them has each build parse what its peers were about to cache.
+func TestIndexPoolBuildsOneIndexAtATime(t *testing.T) {
+	var mu sync.Mutex
+	building, peak := 0, 0
+	pool := newIndexPool(4, func() *symbols.Index {
+		mu.Lock()
+		building++
+		if building > peak {
+			peak = building
+		}
+		mu.Unlock()
+		time.Sleep(5 * time.Millisecond)
+		mu.Lock()
+		building--
+		mu.Unlock()
+		return symbols.NewIndex()
+	})
+	defer pool.close()
+
+	pool.prewarm()
+	deadline := time.Now().Add(30 * time.Second)
+	for pool.warm() < 4 {
+		if time.Now().After(deadline) {
+			t.Fatal("pool never warmed")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if peak > 1 {
+		t.Errorf("%d library builds ran at once, want them one at a time", peak)
+	}
+}
+
 // BenchmarkParseFileColdPooled measures a first-time model against a prewarmed
 // pool; BenchmarkParseFileColdInline measures the same work with prewarming off.
 // The gap between them is the library build the pool takes off the request path.
