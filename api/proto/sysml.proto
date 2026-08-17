@@ -414,6 +414,9 @@ message Value {
     string null = 7;            // marker for null (empty string)
     Quantity quantity = 8;      // magnitude and the unit it is expressed in
     EnumLiteral enum_literal = 9;
+    // A valueless feature of a value type: materialized, holding no value.
+    // Always true when set; a value the server sends, never one it accepts.
+    bool unset = 10;
   }
 }
 

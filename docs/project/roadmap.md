@@ -13,8 +13,8 @@ work.
 Track status as of this baseline: **Track B is closed**, **Track P is closed** on the
 engineering side (its remaining item, publishing to PyPI, is R2 and account-gated), and Track A
 is closed except **A6** (implicit library import), which is deliberately last because it moves
-the corpus baseline, and the two residuals A6 itself gates (A3, and the unqualified-call
-diagnostic in A4). Tracks C and D are untouched by this batch.
+the corpus baseline, and the unqualified-call diagnostic in A4, which A6 gates. Tracks C and D
+are untouched by this batch.
 
 ## Where the repository stands
 
@@ -305,19 +305,31 @@ partial rather than printing `✓ no errors`. Duplicate diagnostics for one rede
 suppressed. `runtime/instance.go`, `runtime/shape.go`, `semantics/multiplicity.go`,
 `cmd/sysml/report.go`.
 
-## A3 — a library value type materializes as an empty object rather than a value
+## A3 — a library value type materializes as an empty object rather than a value — done
 
-Half of this is gone and the remaining half is narrower than the entry claimed. `attribute d :
-Real;` no longer reports `<unknown>`: with the library imported, the reference resolves to the
-library type and the feature is materialized. What it materializes is an empty object —
-`d = Instance(ID: 2)` with `(no features)` — where a valueless attribute of a library value type
-should read as *unset*, since a `Real` has no features to instantiate. `attribute k : Real = 2.0`
-is correct (`k = 2.00`).
+Half of this was already gone: `attribute d : Real;` no longer reports `<unknown>`, and
+`attribute k : Real = 2.0` was always correct (`k = 2.00`). What was left was how the valueless
+case *reads*, and it was decided as a reporting question, not a materialization one.
 
-Still gated on A6: without `import ScalarValues::*;` the reference is `unresolved reference:
-Real — did you mean ScalarValues::Real?` and the model does not analyse, so the unqualified
-spelling depends on A6 exactly as before. Do A6, then decide whether the valueless case reads as
-unset here or is a shape rule in `runtime/instance.go`.
+The spec does not settle what materialization creates. `Base::DataValue` is
+`abstract datatype DataValue specializes Anything` — "entities that are values that do not change
+over time" — and `ScalarValues::Real` is a datatype with no features of its own, so an empty
+object is a value type's whole content; nothing in KerML or SysML prescribes a runtime
+representation, and a `FeatureValue` is optional (a feature has at most one). So the maintainer's
+ruling stands: the empty object stays what materialization holds, and every surface that reports a
+value says so. `Context.HoldsNoValue` (`runtime/instance.go`) recognizes an empty object of a value
+type, and `-instantiate`/`-e`, `%slots`, the JSON report and the gRPC/Python view all spell it
+`<unset>` — `pb.Value.unset` on the wire, `pysysml.UNSET` in Python — while a valued attribute, an
+object of a class, and a value type that does have features are unchanged. Unset is sent, never
+accepted: `ProtoToValueIn` rejects it with `ErrUnsetNotAccepted`.
+
+Left open deliberately: no diagnostic is owed for a valueless `1..1` feature. The multiplicity
+check applies to values a model binds (A2, `semantics/multiplicity.go`); a feature declaring no
+value binds none, and the spec does not make that ill-formed.
+
+Still gated on A6, unchanged by this: without `import ScalarValues::*;` the reference is
+`unresolved reference: Real — did you mean ScalarValues::Real?` and the model does not analyse, so
+the unqualified spelling still waits on A6.
 
 ## A3a — a measurement unit does not resolve inside a condition in the REPL path — done
 
@@ -507,8 +519,8 @@ literal (`Level::high.n`), and an enum-typed default materializes: the reproduct
 
 Re-confirmed at this baseline: a model writing `attribute d : Real;` with no
 `import ScalarValues::*;` reports `unresolved reference: Real — did you mean ScalarValues::Real?`
-and exits 2, so nothing here has been closed by the 0.0.8 batch. A3 and A4's
-unqualified-call diagnostic both wait on it.
+and exits 2, so nothing here has been closed by the 0.0.8 batch. A4's unqualified-call
+diagnostic waits on it, as does the unqualified spelling of A3's model.
 
 `❌ Unqualified library names in files that do not import their library` (`Boolean`, `Real`,
 `that`). Deferred repeatedly for one reason: it can mask corpus regressions by making
@@ -772,7 +784,7 @@ Tracks A (bar A6), B and P are closed, so what is left reorders:
 1. **R1** (tag), then **R2**/**R3**/**R5** as the account access appears. R1 gates the rest of
    the release section, and R2 is what makes Track P's work reachable by a user.
 2. **A6**, alone and gated on a **file-by-file** corpus diff — the last Track A item, and the one
-   that closes A3 and A4's remaining diagnostic with it.
+   that closes A4's remaining diagnostic with it.
 3. **Track C** next: `cmd/` is the thinnest coverage in the tree and now the only track whose
    work is purely additive, so it parallelizes freely.
 4. **Track D** is independent of the rest and can run whenever. Take **D3** before **D1**/**D2**:

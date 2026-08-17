@@ -18,6 +18,7 @@ from pysysml.typefacts import (
     TypeFacts,
 )
 from pysysml.capabilities import MissingCapabilityError, ServerInfo
+from pysysml.values import UNSET, UnsetType
 from pysysml.verdict import CalcResult, Verdict
 from pysysml.query import QueryElement, QueryError
 from pysysml.conversion import (
@@ -38,6 +39,7 @@ __all__ = [
     "TypedObject", "TypeFacts", "Multiplicity", "Specialization", "SymbolFacts",
     "AttributeFacts",
     "ServerInfo",
+    "UNSET", "UnsetType",
     "Conversion", "FORMAT_SYSML", "FORMAT_TURTLE", "format_of_path",
     "Verdict", "CalcResult",
     "QueryElement", "QueryError",

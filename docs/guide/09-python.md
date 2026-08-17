@@ -160,6 +160,15 @@ Integers, reals, booleans, strings and sequences map to `int`, `float`, `bool`,
 `str` and `list`. Unknown names raise `AttributeError` (attribute access) or
 `KeyError` (item access), so `hasattr`, `copy` and `pickle` behave.
 
+A slot holding no value — a valueless feature of a value type, `attribute d : Real;` —
+reads as `pysysml.UNSET`, the same thing `%slots` and `-instantiate` spell `<unset>`. It
+is falsy and is not `None`, which stays the model's `null`:
+
+```python
+inst.d is pysysml.UNSET   # True
+inst.d is None            # False
+```
+
 The service expands the object graph to depth 8 and stops at a type already on
 the path, so a part containing its own kind terminates; a child it did not
 expand comes back as its bare integer id rather than an `Instance`.
