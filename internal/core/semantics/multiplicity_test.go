@@ -1,6 +1,10 @@
 package semantics
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+)
 
 func TestMultiplicitySingleBound(t *testing.T) {
 	m, root := buildModel(t, "part def C { part wheels [4]; }")
@@ -126,9 +130,8 @@ func TestEffectiveMultiplicityAssumesOne(t *testing.T) {
 	}
 }
 
-// CountViolation is the shared wording for a count against a multiplicity: an
-// unbounded or unknown bound admits any count, either side of a stated one does
-// not.
+// A count against a multiplicity: an unbounded or unknown bound admits any count,
+// either side of a stated one does not.
 func TestRangeCountViolation(t *testing.T) {
 	known := func(v int64) Bound { return Bound{Value: v, Known: true} }
 	for _, tc := range []struct {
@@ -148,6 +151,61 @@ func TestRangeCountViolation(t *testing.T) {
 	} {
 		if got := tc.r.CountViolation(tc.count); got != tc.want {
 			t.Errorf("%s: CountViolation(%d) = %q, want %q", tc.name, tc.count, got, tc.want)
+		}
+	}
+}
+
+// A bound that is not a literal is not evaluable, so the ordering check reports
+// ok=false and a caller skips it rather than diagnosing an unknown bound.
+func TestMultiplicityWithANonEvaluableBound(t *testing.T) {
+	m, root := buildModel(t, "part def C { attribute n; part a [n..5]; }")
+	c := sym(t, root, "C")
+	a, _ := c.Scope.LookupLocal("a")
+	r, ok := m.MultiplicityOf(a)
+	if !ok {
+		t.Fatal("MultiplicityOf(a) not ok: the usage declares a multiplicity")
+	}
+	if r.Lower.Known {
+		t.Errorf("lower = %+v, want unknown", r.Lower)
+	}
+	if _, evalOK := r.LowerLeUpper(); evalOK {
+		t.Error("LowerLeUpper is evaluable with an unknown lower bound")
+	}
+	if msg := r.CountViolation(0); msg != "" {
+		t.Errorf("CountViolation against an unknown lower bound = %q, want none", msg)
+	}
+}
+
+// An infinite lower bound only orders against an infinite upper one, so `[*..2]`
+// is a stated, evaluable, invalid range rather than an unknown one.
+func TestMultiplicityInfiniteLowerWithFiniteUpper(t *testing.T) {
+	m, root := buildModel(t, "part def C { part a [*..2]; }")
+	c := sym(t, root, "C")
+	a, _ := c.Scope.LookupLocal("a")
+	r, ok := m.MultiplicityOf(a)
+	if !ok {
+		t.Fatal("MultiplicityOf(a) not ok")
+	}
+	valid, evalOK := r.LowerLeUpper()
+	if !evalOK {
+		t.Fatal("LowerLeUpper not evaluable: both bounds are stated")
+	}
+	if valid {
+		t.Errorf("[*..2] = %+v reported a valid range", r)
+	}
+}
+
+// Multiplicity is a property of a usage, so a definition and a nil symbol have
+// none and take the assumed range.
+func TestMultiplicityOfANonUsage(t *testing.T) {
+	m, root := buildModel(t, "part def C { part a [2]; }")
+	c := sym(t, root, "C")
+	for name, s := range map[string]*symbols.Symbol{"definition": c, "nil": nil} {
+		if _, ok := m.MultiplicityOf(s); ok {
+			t.Errorf("%s: MultiplicityOf reported a multiplicity", name)
+		}
+		if r := m.EffectiveMultiplicityOf(s); r != AssumedRange() {
+			t.Errorf("%s: EffectiveMultiplicityOf = %+v, want the assumed range", name, r)
 		}
 	}
 }

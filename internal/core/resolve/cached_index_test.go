@@ -1,0 +1,187 @@
+package resolve_test
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/Open-MBEE/Systemica/internal/core/libs"
+	"github.com/Open-MBEE/Systemica/internal/core/parser"
+	"github.com/Open-MBEE/Systemica/internal/core/resolve"
+	"github.com/Open-MBEE/Systemica/internal/core/semantics"
+	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+)
+
+// A restored library symbol carries no declaration, so every rule reading a
+// library element has two implementations. Both are asked about this library.
+const cachedLibrary = `standard library package Cycles {
+	attribute def Mass;
+	part def Cycle {
+		attribute weight : Mass;
+		part wheel : Wheel;
+	}
+	part def Wheel {
+		attribute spokes : Mass;
+	}
+	part def Tandem :> Cycle;
+	alias Bike for Cycle;
+	private part def Frame;
+	alias HiddenFrame for Frame;
+}`
+
+// cachedUser reaches into the library: a typing, a specialization, a redefinition,
+// a feature chain through a library type and an alias.
+const cachedUser = `package App {
+	private import Cycles::*;
+	part def Racer :> Cycle {
+		attribute :>> weight = 9;
+		attribute chainMass = wheel.spokes;
+	}
+	part def Copy :> Bike;
+	part racer : Racer;
+}`
+
+// What resolution answers about a library element must not depend on whether the
+// index was parsed or restored: inherited features, redefinitions, chains, aliases.
+func TestResolutionOfALibraryIsTheSameParsedAndRestored(t *testing.T) {
+	dir, cacheDir := t.TempDir(), t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "cycles.sysml"), []byte(cachedLibrary), 0o600); err != nil {
+		t.Fatalf("write library: %v", err)
+	}
+
+	parsedIdx := loadLibrary(t, dir, cacheDir)   // cache miss: parses
+	restoredIdx := loadLibrary(t, dir, cacheDir) // cache hit: restores
+	if sym := libSymbol(t, parsedIdx, "Cycles::Cycle"); sym.Decl == nil {
+		t.Fatal("the first load must parse the library, leaving its symbols a declaration")
+	}
+	if sym := libSymbol(t, restoredIdx, "Cycles::Cycle"); sym.Decl != nil {
+		t.Fatal("the second load must restore the library's record, whose symbols carry no declaration")
+	}
+
+	parsedAnswers := resolveAgainstLibrary(t, parsedIdx)
+	restoredAnswers := resolveAgainstLibrary(t, restoredIdx)
+	for question, want := range parsedAnswers {
+		// Every question has an answer, so agreeing on "unresolved" is no pass.
+		if want == "unresolved" || want == "false" {
+			t.Errorf("%s = %q on the parsed path, which is not an answer", question, want)
+		}
+		if got := restoredAnswers[question]; got != want {
+			t.Errorf("%s = %q with a restored library, %q with a parsed one", question, got, want)
+		}
+	}
+}
+
+// resolveAgainstLibrary resolves cachedUser over idx and reports, for each
+// question a consumer asks of the library, the fully-qualified name it answers.
+func resolveAgainstLibrary(t *testing.T, idx *symbols.Index) map[string]string {
+	t.Helper()
+	const name = "app.sysml"
+	p := parser.New(source.New(name, []byte(cachedUser)))
+	root := p.ParseFile()
+	if len(p.Diagnostics) != 0 {
+		t.Fatalf("parse diagnostics: %v", p.Diagnostics)
+	}
+	idx.AddDocument(name, root)
+	idx.ExpandWildcardImports()
+	r := resolve.New(idx)
+	m := semantics.NewModel(r)
+	r.SetModel(m)
+	r.ResolveDocument(name, root)
+	if len(r.Diagnostics) != 0 {
+		t.Fatalf("the document must resolve against the library: %v", r.Diagnostics)
+	}
+
+	racer := libSymbol(t, idx, "App::Racer")
+	out := map[string]string{}
+	fqnOf := func(sym *symbols.Symbol, ok bool) string {
+		if !ok || sym == nil {
+			return "unresolved"
+		}
+		if fqn := idx.GetFQN(sym); fqn != "" {
+			return fqn
+		}
+		return sym.Name
+	}
+
+	// An inherited feature, and the one a redefinition in the document names.
+	out["Racer inherits weight"] = fqnOf(m.LookupContributedMember(racer, "weight"))
+	out["Racer.wheel"] = fqnOf(m.LookupMember(racer, "wheel"))
+	// A chain through a library type: `wheel.spokes` names a member of Wheel.
+	if wheel, ok := m.LookupMember(racer, "wheel"); ok {
+		out["Racer.wheel.spokes"] = fqnOf(m.LookupMember(typeOf(t, m, wheel), "spokes"))
+	}
+	// An alias of a library element, and one whose target the library keeps
+	// private: reachable through the alias, not by a qualified reference.
+	out["Cycles::Bike"] = fqnOf(r.ResolveAliasTarget(libSymbol(t, idx, "Cycles::Bike")))
+	out["Cycles::HiddenFrame"] = fqnOf(r.ResolveAliasTarget(libSymbol(t, idx, "Cycles::HiddenFrame")))
+	out["App::Copy super"] = fqnOf(firstSuper(m, libSymbol(t, idx, "App::Copy")))
+	// Conformance across a library specialization, which the restored path reads
+	// from the record's supertype names.
+	out["Tandem conforms to Cycle"] = boolText(m.Conforms(
+		libSymbol(t, idx, "Cycles::Tandem"), libSymbol(t, idx, "Cycles::Cycle")))
+	out["Racer conforms to Cycle"] = boolText(m.Conforms(racer, libSymbol(t, idx, "Cycles::Cycle")))
+	return out
+}
+
+// loadLibrary indexes every file of the library in dir through a loader backed
+// by cacheDir, persisting its records exactly as the stdlib load does.
+func loadLibrary(t *testing.T, dir, cacheDir string) *symbols.Index {
+	t.Helper()
+	t.Setenv("XDG_CACHE_HOME", cacheDir)
+	cache, err := libs.NewCache()
+	if err != nil {
+		t.Fatalf("cache: %v", err)
+	}
+	src := libs.NewDirSource(dir)
+	ld := libs.NewLoader(src, cache)
+	idx := symbols.NewIndex()
+	for _, name := range src.List() {
+		if err := ld.Load(name, idx); err != nil {
+			t.Fatalf("load %s: %v", name, err)
+		}
+	}
+	idx.ExpandWildcardImports()
+	ld.Persist(idx)
+	if len(idx.FQNs()) == 0 {
+		t.Fatal("the load registered nothing")
+	}
+	return idx
+}
+
+// libSymbol is the single symbol idx registers under fqn.
+func libSymbol(t *testing.T, idx *symbols.Index, fqn string) *symbols.Symbol {
+	t.Helper()
+	syms := idx.LookupQualified(fqn)
+	if len(syms) != 1 {
+		t.Fatalf("%s names %d symbols, want 1", fqn, len(syms))
+	}
+	return syms[0]
+}
+
+// typeOf is the type a usage is typed by, the owner of the members a chain
+// segment after it names.
+func typeOf(t *testing.T, m *semantics.Model, sym *symbols.Symbol) *symbols.Symbol {
+	t.Helper()
+	supers := m.DirectSupertypes(sym)
+	if len(supers) == 0 {
+		t.Fatalf("%s has no type", sym.Name)
+	}
+	return supers[0]
+}
+
+// firstSuper is the first supertype of sym, or unresolved when it has none.
+func firstSuper(m *semantics.Model, sym *symbols.Symbol) (*symbols.Symbol, bool) {
+	supers := m.DirectSupertypes(sym)
+	if len(supers) == 0 {
+		return nil, false
+	}
+	return supers[0], true
+}
+
+func boolText(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
+}
