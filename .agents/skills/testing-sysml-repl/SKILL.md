@@ -194,6 +194,21 @@ for f in examples/*.sysml internal/repl/testdata/*.sysml; do
 done | sort | uniq -c
 ```
 
+### Which stream the experimental notice uses (PR #261)
+
+Any conversion with Turtle on either side is experimental (`export.IsExperimental`), and the notice
+goes to **stderr**, before the conversion, so a refusal carries it too. So test the streams apart
+(`>out 2>err`): assert `grep -c experimental out` is **0** — a note leaking into the graph is the
+failure mode that matters, and `-o /dev/stdout` is the case that would show it. Don't assert an
+*empty* stderr for a notation-only run: `wrote <path> (fmt, N bytes)` is on stderr too, so count
+`^note:` lines instead (0 for `-convert sysml`/`kerml`, 1 for `ttl` in either direction).
+
+`bin/sysml-grpc` takes **`-port`, not `-addr`** (`-addr` prints "flag provided but not defined" with
+a usage dump), so drive a freshly built service with `./bin/sysml-grpc -port 50123` and
+`pysysml.connect(port=50123, auto_start=False)` to keep `~/.pysysml/bin` out of it. pysysml raises
+`ExperimentalFeatureWarning` *before* `ConversionError` on a refusal, so a test that only catches
+the error still has to expect the warning.
+
 ## Proving a Turtle round trip loses nothing
 
 `.sysml -> .ttl -> .sysml` is never byte-equal to the input (the back direction is a canonical AST
