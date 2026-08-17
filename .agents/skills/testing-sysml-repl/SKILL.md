@@ -221,6 +221,112 @@ commit before reporting them as regressions):
 - `ref` on an `end` attribute is dropped and `redefines`/`typing` relationship order is swapped in a
   couple of models.
 
+### Behavioral bodies through RDF (PR #270)
+
+Since PR #270 an action or state body converts instead of being refused, so a round-trip sweep now
+reaches paths that used to stop at the first behavioral node. What to know:
+
+- **`-o` decides nothing about the format, but the *extension* of an input does.** A sweep that
+  writes intermediate files as `/tmp/x.rt` and feeds them back gets
+  `cannot tell the format` and every model looks refused. Always name intermediates `.sysml` /
+  `.ttl` (or pass `-from`).
+- A good adversarial single fixture: one `action def` with
+  `first/perform/assign/send … via/accept when/fork/join/merge/decision/while/loop-until/for/
+  if-else/terminate/done/succession` plus one `state def` with a nested substate, a `region`,
+  `entry`/`do`/`exit`, `defer`, choice/junction/shallow+deep history and a
+  `transition first a accept s : S via p if g do action … then b`. At 77abc565 it round-trips with
+  the *only* difference being that a state named `deep` comes back as `'deep'` (the writer quotes it
+  because `deep` is a keyword) — cosmetic, and stable on the next hop.
+- Corpus baseline at 77abc565: of the 110 `examples/**/*.sysml`, **95 convert to ttl and back, 15
+  are refused**, and the only model whose notation drifts between hop 1 and hop 2 is
+  `41. Language Extension/Model Library Example.sysml` (the documented `end [*] ref` parser gap).
+  Treat any other drift as a real defect.
+- Refusal probes that still work and print no file: two members of one namespace sharing a name, a
+  bare `snapshot`, and a succession whose end name needs quotes (`then 'my a' b;`). Note
+  `succession then b;` and `transition first a accept s : S;` (no `then`) are *parse* errors, so
+  they cannot be used as export-refusal fixtures.
+- Two silent-change classes were found in that sweep and fixed in the same PR: prefix metadata
+  (`#Safety part def Car;`) is now carried as `sysx:prefixMetadata "#Safety"`, and a feature that
+  wrote no kind keyword (`in x : Real`) is flagged `sysx:isKindImplicit` instead of gaining a kind
+  on the way back. An `@` annotation ahead of a definition is refused, because the parser records
+  it on the declaration before the one it prefixes — worth re-probing if the parser changes.
+- `export.ExperimentalNotice` (internal/core/export/experimental.go) is printed verbatim by the CLI
+  (stderr), `%save` and `ConvertResponse`, and the same wording is duplicated in
+  `cmd/sysml/main.go`, `python/pysysml/`, `api/proto/` and `docs/guide/`. Check every copy whenever
+  the mapping's coverage changes.
+
+### Checking the experimental notice's copies (PR #271)
+
+When a PR claims one wording is stated from one place, check the *runtime* copies mechanically and
+the *documented* claims by running them:
+
+- Extract the Go literal and compare collapsed whitespace, rather than eyeballing:
+  parse `internal/core/export/experimental.go` for the quoted pieces of `ExperimentalNotice`, join
+  them, then compare `" ".join(x.split())` against the paragraph `./bin/sysml -help` prints between
+  "Turtle is normalized." and "Every run that converts RDF". `cmd/sysml/main.go`'s `wrapped(…, 78)`
+  wraps on `strings.Fields`, so also assert every line's **rune** count ≤ 78 — the notice contains
+  `§` (2 bytes), so a byte-based wrapper would pass a naive byte check.
+- `python/pysysml/conversion.py:EXPERIMENTAL_NOTICE` should equal the same literal; compare it in
+  Python against the Go file directly.
+- The client fallback lives in `Connection.convert` (`connection.py`, `response.experimental_notice
+  or EXPERIMENTAL_NOTICE`). To exercise it, wrap the stub: `Connection._stub` is a read-only
+  property, so patch **`conn._service`** with an object that delegates via `__getattr__` and, in
+  `Convert`, calls the real stub then `response.ClearField("experimental_notice")` /
+  `ClearField("experimental")`. That is the only way to simulate an older service without touching
+  the Go side.
+- **Guide transcripts go stale silently.** `docs/guide/07-saving-and-rdf.md` and
+  `docs/guide/09-python.md` embed real byte counts and refusal messages. Re-run each fenced command:
+  the `%save` pair (guide 2's `MyModel` file → `181 bytes of sysml` / `1872 bytes of ttl`) and
+  `examples/rdf-interop-demo.sysml` (`7937` ttl / `877` sysml bytes) still hold at 493693a3, but the
+  page's refusal example (`examples/state-machine-demo.sysml -convert ttl` → "cannot convert the
+  substate member") and its prose "a model whose point is a behavior does not [convert]" are wrong
+  since #270 — the model converts, and all ten `examples/parser_features_demo_*.kerml` convert too.
+  Grep for the *old* wording (`model structure only`, `bodies state behavior`) across `docs/ cmd/
+  python/ api/proto/ internal/` to catch leftover copies, and check re-worded prose paragraphs did
+  not leave one line far wider than its siblings (`awk '{print NR": "length($0)}'`).
+
+### Round-trip fidelity of a declaration head (PR #272)
+
+Two narrow export paths decide whether a declaration comes back spelled the way it was written:
+`encodeSubaction`/`bareWord` (`internal/core/export/behavior.go`) for a combined state subaction, and
+`wroteKindKeyword`/`withoutComments` (`rdf_out.go`) for a kind keyword ahead of a name. Testing them:
+
+- **A fixture only exercises `wroteKindKeyword` when the commented word equals the keyword of the
+  kind the declaration would get implicitly.** `in /* attribute */ x : Real;` inside an `action def`
+  proves nothing: the inferred kind there is `part`, so the check looks for `part`, the ttl records
+  `sysx:isKindImplicit true`, and old and new binaries agree. Put the same members inside a
+  `part def` (where `in x : Real` infers *attribute*) and the pre-fix binary writes back
+  `in attribute x : Real;` while the fixed one writes `in x : Real;`. Always diff against a contrast
+  binary from the parent commit (§"A contrast binary from the previous commit") — an equal result
+  means the fixture missed the path, not that the fix is a no-op.
+- Useful fixture set for these paths, all inside one `part def`: `in /* attribute */ x`,
+  `out // attribute\n y`, `in //* a note\n attribute */ w`, the control `in attribute z`,
+  `in /* /* */ v`, `in //* same line note */ u`, plus quoted names that contain the markers
+  (`attribute 'a /* b */ c'`, `in 'x{y'`, `attribute 'do'`) — the quoted ones must come back
+  character-identical.
+- For subactions: `entry do { … }`, `entry do{ … }`, `entry do{perform A;}` must all come back
+  `entry do {` (the tight two were the bug), and `entry /* do */ { … }` must **not** gain a `do`.
+  **Known gap at bf2f21e3:** a comment adjacent to a real `do` (`entry /*c*/ do { … }`,
+  `entry do/*c*/{ … }`) still drops the `do` — `encodeSubaction` reads `strings.Fields(e.text(n))[1]`
+  on raw source and `bareWord` only cuts at `;`/`{`, so the comment token takes `do`'s place. Same on
+  the pre-fix binary; re-probe if `withoutComments` is ever applied there too.
+- An unterminated comment in a head (`in /* attribute x : Real;`) is a *parse* error
+  (`unterminated comment: missing */`), not an export refusal — so it cannot serve as a refusal
+  fixture, only as a "writes no output" check.
+- Corpus baseline at bf2f21e3: `converted=102 refused=18 total=120` over
+  `examples/**/*.{sysml,kerml}`; 97 of the converting models are byte-stable across two RDF round
+  trips, 0 drift. **5 models' RDF-written notation does not re-parse** (`parser_features_demo_
+  declarations.kerml`, `27. Occurrences/Interaction {Example-2,Realization-1,Realization-2}`,
+  `32. Requirements/Requirement Satisfaction`) — e.g. `event X;` comes back as
+  `event references X;`, which the parser then rejects. Pre-existing (identical on the parent
+  commit), so treat it as the baseline, not a regression.
+- A cheap way to separate printer formatting from RDF-hop changes: convert the model both ways
+  (`-convert ttl` → back, versus `-convert sysml` alone) and diff the two outputs token-per-line
+  (`tr -s ' \t\n' '\n'`). At bf2f21e3 76 of 102 examples still differ that way (`:>` written
+  `specializes`/`subsets`/`redefines`, `default 3` written `= 3`, `on;` written `'on';`, `doc`
+  comments dropped), **identically on the parent commit** — so use the old-vs-new diff of that report
+  as the regression gate rather than the raw count.
+
 Also note the parser rejects `require constraint <name> { … }` (a *named* nested constraint after
 `require`/`assume`): `expected '{' after 'require constraint'`. Only the anonymous form and the
 `require R { … }` reference form parse, so an export test cannot cover the named variant.
