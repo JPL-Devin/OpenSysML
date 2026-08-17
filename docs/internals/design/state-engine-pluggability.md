@@ -1,6 +1,9 @@
 # Pluggable State Machine Engines — Assessment and Design
 
 Status: assessment / design proposal. No code changes accompany this document.
+See also `statechart-engine-extraction.md`, which assesses the inverse
+direction — extracting our engine as a reusable statechart library — and
+supersedes this document's recommendation.
 
 Question asked: pre-existing state machine engines exist; could Systemica support
 additional state machine engines by configuration, and what would that take?
