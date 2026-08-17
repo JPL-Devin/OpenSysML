@@ -647,7 +647,7 @@ func TestAddressedSendStaysWithinTheSendingObject(t *testing.T) {
 	if len(pending) != 1 {
 		t.Fatalf("posted %d messages, want 1", len(pending))
 	}
-	if got := pending[0]; !got.reachedObject(alpha.ID) || got.reachedObject(beta.ID) {
+	if got := pending[0]; !got.reaches("reader", "", alpha.ID) || got.reaches("reader", "", beta.ID) {
 		t.Errorf("message %+v is not confined to the sending object %d", got, alpha.ID)
 	}
 }
@@ -679,7 +679,7 @@ func TestAddressedSendResolvesPortOfNamedObject(t *testing.T) {
 	if got.Port != "inPort" || got.Object != alpha.ID {
 		t.Errorf("addressed alpha.inPort delivered as %+v, want port inPort of object %d", got, alpha.ID)
 	}
-	if got.reachedObject(beta.ID) {
+	if got.reaches("", "inPort", beta.ID) {
 		t.Errorf("message %+v reached the sending object %d, which owns a same-named port", got, beta.ID)
 	}
 }
@@ -772,7 +772,8 @@ func TestAddressedSendToQualifiedNameReachesReceiver(t *testing.T) {
 }
 
 // A qualified name addresses the element it resolves to, so a same-named feature
-// of the sending object is not the addressee.
+// of the sending object is not the addressee: no object owns a receiver declared
+// in a package, so a sending object cannot address it rather than reach its own.
 func TestAddressedSendToQualifiedNameSkipsSameNamedFeature(t *testing.T) {
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
 		import ScalarValues::*;
@@ -787,12 +788,59 @@ func TestAddressedSendToQualifiedNameSkipsSameNamedFeature(t *testing.T) {
 	}`))
 	alpha := instanceOfUsage(t, ctx, idx, "test::alpha")
 	send := lower.Send{Target: "Other::reader", Scope: declScope(oneSymbol(t, idx, "test::Node::listen"))}
+	err := ctx.post(nil, Message{SignalType: "Integer"}, send, alpha)
+	if !errors.Is(err, ErrUnroutableSend) {
+		t.Errorf("`send to Other::reader` from an object: %v, want %v", err, ErrUnroutableSend)
+	}
+	for _, msg := range ctx.PendingMessages() {
+		if msg.reaches("reader", "", alpha.ID) {
+			t.Errorf("%+v is deliverable to the sender's own reader", msg)
+		}
+	}
+}
+
+// A behavior no object performs has no object of its own to reach instead, so it
+// still addresses a receiver of a package by name.
+func TestAddressedSendToQualifiedNameFromNoObjectIsDelivered(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
+		import ScalarValues::*;
+		package Other {
+			action reader accept n : Integer;
+		}
+		action listen { first start; done end; then start end; }
+	}`))
+	send := lower.Send{Target: "Other::reader", Scope: declScope(oneSymbol(t, idx, "test::listen"))}
+	if err := ctx.post(nil, Message{SignalType: "Integer"}, send, nil); err != nil {
+		t.Fatalf("post: %v", err)
+	}
+	if got := ctx.PendingMessages()[0]; got.Target != "reader" || !got.reaches("reader", "", 0) {
+		t.Errorf("`send to Other::reader` delivered as %+v, want the reader of Other", got)
+	}
+}
+
+// An address naming an object alone names no receiver within it, so only that
+// object's own accepts take it — not a behavior of unknown performer.
+func TestAddressedSendToAnObjectNeedsThatObject(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
+		import ScalarValues::*;
+		part def Leaf { attribute count : Integer = 0; }
+		part def Node {
+			part leaf : Leaf;
+			action talk { first start; done end; then start end; }
+		}
+		part alpha : Node;
+	}`))
+	alpha := instanceOfUsage(t, ctx, idx, "test::alpha")
+	send := lower.Send{Target: "leaf", Scope: declScope(oneSymbol(t, idx, "test::Node::talk"))}
 	if err := ctx.post(nil, Message{SignalType: "Integer"}, send, alpha); err != nil {
 		t.Fatalf("post: %v", err)
 	}
 	got := ctx.PendingMessages()[0]
-	if got.Object == alpha.ID || got.reachedObject(alpha.ID) {
-		t.Errorf("`send to Other::reader` delivered as %+v, want no delivery to the sender's own reader", got)
+	if got.Target != "" || got.Object == 0 || got.Object == alpha.ID {
+		t.Errorf("`send to leaf` delivered as %+v, want the object of leaf alone", got)
+	}
+	if got.reaches("anything", "", 0) {
+		t.Errorf("%+v is deliverable to a behavior no object performs", got)
 	}
 }
 
@@ -818,7 +866,7 @@ func TestAddressedSendToReceiverOfAnotherObjectCarriesItsIdentity(t *testing.T) 
 	if got.Target != "reader" || got.Object != alpha.ID {
 		t.Errorf("`send to alpha::reader` delivered as %+v, want receiver reader of object %d", got, alpha.ID)
 	}
-	if got.reachedObject(beta.ID) {
+	if got.reaches("reader", "", beta.ID) {
 		t.Errorf("%+v is deliverable to the sending object %d", got, beta.ID)
 	}
 }
@@ -989,26 +1037,33 @@ func TestAddressedSendReachesPerformedAction(t *testing.T) {
 	}
 }
 
-// Confinement discriminates between objects: a behavior no object performs has
-// no identity to exclude, while an address outside every object reaches none.
-func TestConfinementCrossesBehaviorPerformedByNoObject(t *testing.T) {
+// A consumer takes a message only by satisfying every part of the destination it
+// carries; a behavior no object performs is the one identity that cannot tell.
+func TestDeliveryHoldsAConsumerToTheWholeDestination(t *testing.T) {
 	tests := []struct {
 		name    string
 		msg     Message
+		who     string
+		port    string
 		object  int64
 		reached bool
 	}{
-		{"same object", Message{Object: 1, Confined: true}, 1, true},
-		{"other object", Message{Object: 1, Confined: true}, 2, false},
-		{"unconfined", Message{Object: 1}, 2, true},
-		{"object to no object", Message{Object: 1, Confined: true}, 0, true},
-		{"no object to object", Message{Confined: true}, 1, false},
-		{"port of another object", Message{Object: 1, Port: "inPort", Confined: true}, 0, false},
-		{"port to another object", Message{Port: "inPort", Confined: true}, 1, false},
+		{"unaddressed", Message{}, "reader", "", 2, true},
+		{"unaddressed on a port", Message{}, "reader", "inPort", 2, false},
+		{"receiver of the same object", Message{Target: "reader", Object: 1, Delivery: DeliverReceiver}, "reader", "", 1, true},
+		{"receiver of another object", Message{Target: "reader", Object: 1, Delivery: DeliverReceiver}, "reader", "", 2, false},
+		{"another receiver", Message{Target: "reader", Object: 1, Delivery: DeliverReceiver}, "other", "", 1, false},
+		{"receiver of no object performer", Message{Target: "reader", Object: 1, Delivery: DeliverReceiver}, "reader", "", 0, true},
+		{"receiver addressed by no object", Message{Target: "reader", Delivery: DeliverReceiver}, "reader", "", 1, true},
+		{"port of the same object", Message{Port: "inPort", Object: 1, Delivery: DeliverPort}, "", "inPort", 1, true},
+		{"port of another object", Message{Port: "inPort", Object: 1, Delivery: DeliverPort}, "", "inPort", 2, false},
+		{"another port", Message{Port: "inPort", Object: 1, Delivery: DeliverPort}, "", "outPort", 1, false},
+		{"object itself", Message{Object: 1, Delivery: DeliverObject}, "reader", "", 1, true},
+		{"object and no object performer", Message{Object: 1, Delivery: DeliverObject}, "reader", "", 0, false},
 	}
 	for _, tc := range tests {
-		if got := tc.msg.reachedObject(tc.object); got != tc.reached {
-			t.Errorf("%s: %+v reachedObject(%d) = %v, want %v", tc.name, tc.msg, tc.object, got, tc.reached)
+		if got := tc.msg.reaches(tc.who, tc.port, tc.object); got != tc.reached {
+			t.Errorf("%s: %+v reaches(%q, %q, %d) = %v, want %v", tc.name, tc.msg, tc.who, tc.port, tc.object, got, tc.reached)
 		}
 	}
 }

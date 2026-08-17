@@ -117,6 +117,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("send_addressed_to_an_unreachable_target", testSendAddressedToAnUnreachableTarget)
 	t.Run("send_addressed_through_several_occurrences", testSendAddressedThroughSeveralOccurrences)
 	t.Run("send_addressed_to_an_object_that_cannot_be_built", testSendAddressedToAnObjectThatCannotBeBuilt)
+	t.Run("send_addressed_to_a_part_no_sibling_takes", testSendAddressedToAPartNoSiblingTakes)
 	t.Run("accept_deadlock_never_satisfied", testAcceptDeadlockNeverSatisfied)
 	t.Run("accept_deadlock_reports_every_waiting_accept", testAcceptDeadlockReportsEveryWaitingAccept)
 	t.Run("history_outside_composite_state", testHistoryOutsideCompositeState)
@@ -1784,6 +1785,32 @@ func testSendAddressedThroughSeveralOccurrences(t *testing.T) {
 	}
 	if !errors.Is(err, ErrUnroutableSend) {
 		t.Errorf("expected ErrUnroutableSend, got: %v", err)
+	}
+}
+
+// testSendAddressedToAPartNoSiblingTakes: a message addressed to a part belongs
+// to that object, so a sibling accept of the sending behavior cannot take it and
+// the run reports the accept it is left waiting on.
+func testSendAddressedToAPartNoSiblingTakes(t *testing.T) {
+	_, err := executeActionSource(t, "main", `package P {
+		item def Ping;
+		part def R;
+		part receiver : R;
+		action main {
+			first start;
+			action s { send Ping() to receiver; }
+			action other accept p : Ping;
+			done end;
+			then start s;
+			then s other;
+			then other end;
+		}
+	}`)
+	if err == nil {
+		t.Fatal("expected an error: `other` is no addressee of the message sent to receiver")
+	}
+	if !errors.Is(err, ErrAcceptDeadlock) {
+		t.Errorf("expected ErrAcceptDeadlock, got: %v", err)
 	}
 }
 

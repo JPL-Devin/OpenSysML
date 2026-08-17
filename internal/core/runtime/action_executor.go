@@ -816,13 +816,7 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 			want = accept.SubsetsEvent
 		}
 		msg, taken := e.ctx.TakeMessage(func(m Message) bool {
-			if !m.arrivedAt(accept.ViaPort) || !m.reachedObject(objectID(e.self)) || !m.carriesSignal(want) {
-				return false
-			}
-			// A message routed to this accept's port is already addressed by the
-			// connection it travelled over, so the accept's own name does not
-			// have to appear in it.
-			return accept.ViaPort != "" || m.addressedTo(ActionNodeName(usage))
+			return m.reaches(ActionNodeName(usage), accept.ViaPort, objectID(e.self)) && m.carriesSignal(want)
 		})
 		if !taken {
 			if token.Wait == nil {

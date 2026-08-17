@@ -24,16 +24,33 @@ import (
 // to, or the port an addressed send resolved to — and only an accept on that
 // port consumes it, keeping port-routed and addressed traffic separate.
 //
-// Object identifies the object the message reached, 0 for none; Confined says
-// that identity binds, so no other object's same-named port or receiver sees it.
+// Object identifies the object the message reached, 0 for none, and Delivery
+// what of that destination a consumer must satisfy to take the message.
 type Message struct {
 	SignalType string
 	Target     string
 	Port       string
 	Object     int64
-	Confined   bool
+	Delivery   DeliveryKind
 	Payload    map[string]Value
 }
+
+// DeliveryKind is what a message's destination resolved to, and so what a
+// consumer must match: an unaddressed message resolved nothing and any consumer
+// may take it, while every addressed or routed one names a destination in full.
+type DeliveryKind uint8
+
+const (
+	// DeliverAnyone is a message no send addressed, such as one injected from
+	// outside the model: it has no destination to hold a consumer to.
+	DeliverAnyone DeliveryKind = iota
+	// DeliverPort is the port of an object, reached by a connection or addressed.
+	DeliverPort
+	// DeliverReceiver is the receiving node named within an object.
+	DeliverReceiver
+	// DeliverObject is an object itself, whichever of its consumers accepts.
+	DeliverObject
+)
 
 // Call is the payload of an EventCall: the operation invoked and its arguments.
 type Call struct {
@@ -69,29 +86,22 @@ func (ctx *Context) PendingMessages() []Message {
 	return out
 }
 
-// addressedTo reports whether a consumer named name may take this message.
-func (m Message) addressedTo(name string) bool {
-	return m.Target == "" || m.Target == name
-}
-
-// arrivedAt reports whether a consumer listening on port may take this message.
-// The two sides must agree: a message routed through a port is only for an
-// accept on that port, and an accept on a port takes nothing else — otherwise a
-// broadcast would be consumed by whichever accept ran first, regardless of the
-// connections the model declared.
-func (m Message) arrivedAt(port string) bool {
-	return m.Port == port
-}
-
-// reachedObject reports whether a message delivered to one object reached the
-// object now accepting: no delivery of one object reaches another. A behavior no
-// object performs has no identity to exclude it, so an addressed message still
-// crosses it — but one addressed outside every object does not reach an object.
-func (m Message) reachedObject(object int64) bool {
-	if !m.Confined || m.Object == object {
-		return true
+// reaches reports whether a consumer named name, accepting on port and performed
+// by object, may take this message: every part of the destination must hold, the
+// ports always included, so port-routed and addressed traffic stay apart. A
+// behavior no object performs has no identity to compare, so a message naming
+// the receiver it is neither excludes it nor is excluded by it.
+func (m Message) reaches(name, port string, object int64) bool {
+	if m.Port != port {
+		return false
 	}
-	return m.Port == "" && object == 0
+	switch m.Delivery {
+	case DeliverPort, DeliverObject:
+		return m.Object == object
+	case DeliverReceiver:
+		return m.Target == name && (m.Object == object || m.Object == 0 || object == 0)
+	}
+	return true
 }
 
 // objectID is the identity of an object, 0 for none.
@@ -118,19 +128,45 @@ func (ctx *Context) postVia(conns []lower.Connection, msg Message, send lower.Se
 		routed.Target = ""
 		routed.Port = peer
 		routed.Object = objectID(self)
-		routed.Confined = true
+		routed.Delivery = DeliverPort
 		ctx.PostMessage(routed)
 	}
 	return nil
 }
 
-// messageAddress is where an addressed send delivers: the object it reached, the
-// port of that object where the address named one, and otherwise the receiving
-// node of the sending behavior.
+// messageAddress is where an addressed send delivers: what the address resolved
+// to, and the object, port or receiving node naming it. Only the constructors
+// below build one, so no address can name a destination in part.
 type messageAddress struct {
-	Name   string
-	Port   string
-	Object int64
+	Delivery DeliveryKind
+	Name     string
+	Port     string
+	Object   int64
+}
+
+// portAddress is a port of an object, refused where no port was resolved.
+func portAddress(port string, object int64) (messageAddress, bool) {
+	if port == "" {
+		return messageAddress{}, false
+	}
+	return messageAddress{Delivery: DeliverPort, Port: port, Object: object}, true
+}
+
+// receiverAddress is a receiving node of an object, refused where it is unnamed.
+func receiverAddress(name string, object int64) (messageAddress, bool) {
+	if name == "" {
+		return messageAddress{}, false
+	}
+	return messageAddress{Delivery: DeliverReceiver, Name: name, Object: object}, true
+}
+
+// objectAddress is an object itself, refused where no object was reached: a
+// destination confined to object 0 would confine the message to nothing.
+func objectAddress(object int64) (messageAddress, bool) {
+	if object == 0 {
+		return messageAddress{}, false
+	}
+	return messageAddress{Delivery: DeliverObject, Object: object}, true
 }
 
 // postTo delivers an addressed send to the object its target resolves to,
@@ -141,7 +177,7 @@ func (ctx *Context) postTo(msg Message, send lower.Send, self *Instance) error {
 		return err
 	}
 	msg.Target, msg.Port, msg.Object = addr.Name, addr.Port, addr.Object
-	msg.Confined = true
+	msg.Delivery = addr.Delivery
 	ctx.PostMessage(msg)
 	return nil
 }
@@ -152,7 +188,12 @@ func (ctx *Context) postTo(msg Message, send lower.Send, self *Instance) error {
 // neither; a name reaching neither is the receiving node of that name.
 func (ctx *Context) resolveAddress(send lower.Send, self *Instance) (messageAddress, error) {
 	if send.Target == "" {
-		return messageAddress{Object: objectID(self)}, nil
+		// A send addressing no one is for the sending object, or for whoever accepts
+		// it where no object sent it.
+		if addr, ok := objectAddress(objectID(self)); ok {
+			return addr, nil
+		}
+		return messageAddress{Delivery: DeliverAnyone}, nil
 	}
 	if !send.TargetPath {
 		return ctx.namedAddress(send, self)
@@ -167,7 +208,9 @@ func (ctx *Context) resolveAddress(send lower.Send, self *Instance) (messageAddr
 	}
 	if sym, ok := ctx.portSymbol(send.Scope, send.Target); ok &&
 		sym.Kind == symbols.SymbolPortUsage && ctx.ownPortPath(send.Scope, segments) {
-		return messageAddress{Port: send.Target, Object: objectID(self)}, nil
+		if addr, ok := portAddress(send.Target, objectID(self)); ok {
+			return addr, nil
+		}
 	}
 	return messageAddress{}, &UnroutableSendError{Port: send.Target, Address: true}
 }
@@ -185,10 +228,11 @@ func (ctx *Context) namedAddress(send lower.Send, self *Instance) (messageAddres
 	local, sameElement := ctx.pathSymbol(send.Scope, []string{name})
 	own := sameElement && (!resolved || local == target)
 	if resolved && target.Kind == symbols.SymbolPortUsage {
-		if !own {
+		addr, built := portAddress(name, objectID(self))
+		if !own || !built {
 			return messageAddress{}, &UnroutableSendError{Port: send.Target, Address: true}
 		}
-		return messageAddress{Port: name, Object: objectID(self)}, nil
+		return addr, nil
 	}
 	if own {
 		addr, ok, err := ctx.featureAddress(send.Scope, self, []string{name})
@@ -200,8 +244,8 @@ func (ctx *Context) namedAddress(send lower.Send, self *Instance) (messageAddres
 		}
 	} else if resolved {
 		// A receiver outside the sending object belongs to the object the qualifying
-		// namespace names, where that is an occurrence; a namespace no object
-		// materializes leaves no identity to confine the message to.
+		// namespace names, where that is an occurrence. Where no object owns it, a
+		// sender that has one cannot address it by name without reaching its own.
 		addr, ok, err := ctx.featureAddress(send.Scope, nil, segments)
 		if err != nil {
 			return messageAddress{}, err
@@ -209,9 +253,14 @@ func (ctx *Context) namedAddress(send lower.Send, self *Instance) (messageAddres
 		if ok {
 			return addr, nil
 		}
-		return messageAddress{Name: name}, nil
+		if self != nil {
+			return messageAddress{}, &UnroutableSendError{Port: send.Target, Address: true}
+		}
 	}
-	return messageAddress{Name: name, Object: objectID(self)}, nil
+	if addr, ok := receiverAddress(name, objectID(self)); ok {
+		return addr, nil
+	}
+	return messageAddress{}, &UnroutableSendError{Port: send.Target, Address: true}
 }
 
 // featureAddress walks a target through the instance graph from the object its
@@ -229,18 +278,21 @@ func (ctx *Context) featureAddress(scope *symbols.Scope, self *Instance, segment
 			return messageAddress{}, false, nil
 		}
 		if isPortFeature(slot.Feature) {
-			return messageAddress{Port: strings.Join(rest[i:], "."), Object: owner.ID}, true, nil
+			addr, built := portAddress(strings.Join(rest[i:], "."), owner.ID)
+			return addr, built, nil
 		}
 		// A behavior of an object is a receiving node of it, addressed by name.
 		if i == len(rest)-1 && isBehaviorFeature(slot.Feature) {
-			return messageAddress{Name: segment, Object: owner.ID}, true, nil
+			addr, built := receiverAddress(segment, owner.ID)
+			return addr, built, nil
 		}
 		owner, ok, err = ctx.slotObject(owner, segment)
 		if err != nil || !ok {
 			return messageAddress{}, false, err
 		}
 	}
-	return messageAddress{Object: owner.ID}, true, nil
+	addr, built := objectAddress(owner.ID)
+	return addr, built, nil
 }
 
 // addressOwner answers which object a target's leading segments belong to: the
