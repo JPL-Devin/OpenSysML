@@ -259,6 +259,87 @@ func TestViewReportsASatisfyThatIsNoViewpoint(t *testing.T) {
 	}
 }
 
+// Repeated %view evaluates against one object per exposed element rather than
+// leaving another copy of it in the runtime each time: the identity a later
+// %instantiate is handed does not grow with the number of runs.
+func TestViewReusesOneObjectPerExposedElement(t *testing.T) {
+	nextIdentity := func(runs int) int64 {
+		s := conformanceSession(t)
+		for i := 0; i < runs; i++ {
+			if _, err := s.View("Demo::report"); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if _, ok := s.instances["Demo::vehicle"]; !ok {
+			t.Fatalf("%%view evaluated no object of the exposed element: %v", s.instances)
+		}
+		if out, _, err := s.RunMeta("%instantiate Demo::wheel"); err != nil {
+			t.Fatalf("%%instantiate: %v (%v)", err, out)
+		}
+		return s.instances["Demo::wheel"].ID
+	}
+	if once, thrice := nextIdentity(1), nextIdentity(3); once != thrice {
+		t.Errorf("identity after three %%view runs = %d, after one = %d: %%view leaks an object per run", thrice, once)
+	}
+}
+
+// A check made after %view is about the same object %view was, so a repeated
+// report leaves no copy behind for a later check to find ambiguous.
+func TestViewLeavesNoAmbiguityForALaterCheck(t *testing.T) {
+	s := conformanceSession(t)
+	res := s.Submit(`package Checked {
+    private import Demo::*;
+    part def Car :> Vehicle { constraint light { mass > 1.0 } }
+    part car : Car;
+    view carView : StructureView { expose Checked::car; frame concern modularity : Modularity; }
+}`)
+	for _, d := range res.Diagnostics {
+		if d.Severity == passes.SeverityError {
+			t.Fatalf("the view did not load: %v", res.Diagnostics)
+		}
+	}
+	for i := 0; i < 2; i++ {
+		if _, err := s.View("Checked::carView"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	out, _, err := s.RunMeta("%constraint Checked::Car::light")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := strings.Join(out, "\n")
+	if strings.Contains(text, "carried by") || !strings.Contains(text, "passed") {
+		t.Errorf("a check after two %%view runs = %q, want it to pass unambiguously", text)
+	}
+	list, _, err := s.RunMeta("%instances")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Count(strings.Join(list, "\n"), "Checked::car "); got != 1 {
+		t.Errorf("objects of Checked::car after two %%view runs = %d, want 1:\n%v", got, list)
+	}
+}
+
+// %view evaluates the object the session already created, so what the user
+// instantiated is what the verdict is about.
+func TestViewEvaluatesTheSessionObject(t *testing.T) {
+	s := conformanceSession(t)
+	out, _, err := s.RunMeta("%instantiate Demo::vehicle")
+	if err != nil {
+		t.Fatalf("%%instantiate: %v (%v)", err, out)
+	}
+	created, ok := s.instances["Demo::vehicle"]
+	if !ok {
+		t.Fatalf("%%instantiate created no object: %v", out)
+	}
+	if _, err := s.View("Demo::report"); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.instances["Demo::vehicle"]; got != created {
+		t.Errorf("%%view replaced the session object %d with %v", created.ID, got)
+	}
+}
+
 // The conformance section is deterministic: the same model reported twice reads
 // the same.
 func TestViewConformanceOutputIsDeterministic(t *testing.T) {

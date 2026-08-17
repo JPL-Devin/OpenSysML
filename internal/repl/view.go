@@ -129,10 +129,9 @@ type concernEvaluator struct {
 	ctx     *runtime.Context
 }
 
-// EvaluateConcern evaluates concern's conditions against a fresh object of
-// element.
+// EvaluateConcern evaluates concern's conditions against an object of element.
 func (e concernEvaluator) EvaluateConcern(concern, element *symbols.Symbol) (bool, error) {
-	inst, err := e.ctx.Instantiate(element)
+	inst, err := e.session.viewSubject(element)
 	if err != nil {
 		return false, err
 	}
@@ -153,6 +152,27 @@ func (e concernEvaluator) EvaluateConcern(concern, element *symbols.Symbol) (boo
 		return false, errNoConcernCondition
 	}
 	return result.Holds, err
+}
+
+// viewSubject returns the object a concern is evaluated against for one exposed
+// element: the one the session already created for it, else one created and kept
+// as %satisfy keeps its subject, so a repeated %view is about the same object
+// rather than another copy of it.
+func (s *Session) viewSubject(element *symbols.Symbol) (*runtime.Instance, error) {
+	name := s.viewElementName(element)
+	if inst, ok := s.instances[name]; ok {
+		return inst, nil
+	}
+	ctx, err := s.getOrCreateRuntime()
+	if err != nil {
+		return nil, err
+	}
+	inst, err := ctx.Instantiate(element)
+	if err != nil {
+		return nil, err
+	}
+	s.instances[name] = inst
+	return inst, nil
 }
 
 // errNoConcernCondition is a framed concern that states nothing to evaluate.
