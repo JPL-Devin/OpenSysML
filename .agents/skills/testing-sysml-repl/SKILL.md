@@ -1094,6 +1094,33 @@ auto-start is both the realistic user path and the only way it writes its pidfil
 service you started yourself makes `test_lifecycle.py::test_service_shuts_down_when_last_process_exits`
 fail — that is the documented `docs/project/roadmap.md` §P1 gap, not a new bug.
 
+### Driving the service on an ephemeral port (process-lifecycle work, PR #249)
+
+When the thing under test is the **process** (flags, exit status, graceful shutdown, leaks) rather
+than the model semantics, a hand-started service on `-port 0` is the right harness and
+`pysysml.connect(host, port, auto_start=False)` attaches to it without touching the pidfile
+machinery. Two traps cost real time:
+
+- `-port 0` makes the *resolved* port observable only in the log line
+  `msg="gRPC server listening" addr=[::]:<port>`. The `-health-port 0` line logs the literal
+  `addr=:0`, so a naive `grep -o 'addr=[^ ]*' | head -1` grabs the health line and you dial port 0
+  ("Connection refused"). Always filter on `gRPC server listening` first, and take the port with
+  `${ADDR##*:}` — `cut -d: -f3` yields `]` for `[::]:41325`.
+- Expected values at 0cf94e80 for `internal/grpc/testdata/conformance/instantiate_derived_slot.sysml`:
+  `mass` → `materialized=True kind=real_value 1500.0`, `doubled` → `real_value 3000.0`; a missing
+  model path raises `pysysml.errors.ModelFileNotFoundError` ("file not found: open …") and the
+  server logs `code = NotFound` for `/sysml.SysMLService/ParseFile` while staying alive. An already
+  occupied `-port` exits **1** with `msg="Failed to listen" port=<port>`; `kill -TERM` exits **0**
+  after `Shutting down gracefully...` / `gRPC server stopped`. `pgrep -x sysml-grpc` (never `-f`)
+  before and after is the leak check.
+
+Python interpreter trap on this box: `python3` may be a venv whose `bin/python` is a *broken*
+pyenv symlink (`pyvenv.cfg` says 3.12 while `python -V` reports the system 3.10, and the editable
+install lands in `lib/python3.12/site-packages` where 3.10 never looks — `import pysysml` fails
+right after a successful `pip install -e python/`). Build the throwaway venv off an explicit real
+interpreter (`/usr/bin/python3.10 -m venv /home/ubuntu/pv`) and verify
+`<venv>/bin/python -c 'import pysysml'` before blaming the client.
+
 ### Service lifecycle, the stale-service check and `require_capabilities` (PR #181)
 
 Since PR #181 `Connection` interrogates whatever is *already* listening (`GetServerInfo`) and
