@@ -141,6 +141,66 @@ func (s *Server) DidChangeWatchedFiles(ctx context.Context, params *protocol.Did
 	return nil
 }
 
+// DidChangeWorkspaceFolders indexes the model sources a folder added to the
+// session holds, and drops those a removed folder contributed. The file watcher
+// reports changes only, so a newly added folder has to be walked here.
+func (s *Server) DidChangeWorkspaceFolders(ctx context.Context, params *protocol.DidChangeWorkspaceFoldersParams) error {
+	for _, folder := range params.Event.Removed {
+		s.dropFolder(uriToName(protocol.DocumentURI(folder.URI)))
+	}
+	for _, folder := range params.Event.Added {
+		s.addFolder(uriToName(protocol.DocumentURI(folder.URI)))
+	}
+	s.refreshOpenDiagnostics(ctx, "")
+	return nil
+}
+
+// addFolder records a folder and indexes the model sources under it.
+func (s *Server) addFolder(folder string) {
+	if folder == "" {
+		return
+	}
+	s.mu.Lock()
+	for _, known := range s.folders {
+		if known == folder {
+			s.mu.Unlock()
+			return
+		}
+	}
+	s.folders = append(s.folders, folder)
+	s.mu.Unlock()
+	s.loadFolder(folder)
+}
+
+// dropFolder forgets a folder and the documents it contributed; an open buffer
+// stays, since the editor still shows it.
+func (s *Server) dropFolder(folder string) {
+	if folder == "" {
+		return
+	}
+	s.mu.Lock()
+	kept := s.folders[:0]
+	for _, known := range s.folders {
+		if known != folder {
+			kept = append(kept, known)
+		}
+	}
+	s.folders = kept
+	s.mu.Unlock()
+
+	for _, name := range s.ws.DocumentNames() {
+		if underFolder(name, folder) {
+			s.ws.DeleteOnDisk(name)
+		}
+	}
+}
+
+// underFolder reports whether name lies inside folder.
+func underFolder(name, folder string) bool {
+	rel, err := filepath.Rel(folder, name)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
 // refreshOpenDiagnostics republishes diagnostics for the open documents, whose
 // analysis depends on the rest of the workspace, skipping the name a caller has
 // just published on its own.

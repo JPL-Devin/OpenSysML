@@ -340,6 +340,71 @@ func TestPublishDiagnosticsSerialized(t *testing.T) {
 	}
 }
 
+func TestDidChangeWorkspaceFoldersIndexesAddedFolder(t *testing.T) {
+	s, fc, dir, _, main := multiFileWorkspace(t)
+	ctx := context.Background()
+
+	// main.sysml uses a name declared in a folder added after initialize; the
+	// client's watcher reports changes only, so the folder has to be walked.
+	openFile(t, s, main, "package Main {\n    import Extra::*;\n    part g : Gadget;\n}\n")
+	if msgs := diagnosticsFor(fc, main); len(msgs) == 0 {
+		t.Fatalf("diagnostics for main = none, want Gadget unresolved before the folder is added")
+	}
+	added := filepath.Join(dir, "extra")
+	extra := filepath.Join(added, "extra.sysml")
+	if err := os.MkdirAll(added, 0o750); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(extra, []byte("package Extra {\n    part def Gadget;\n}\n"), 0o600); err != nil {
+		t.Fatalf("write extra: %v", err)
+	}
+	if err := s.DidChangeWorkspaceFolders(ctx, &protocol.DidChangeWorkspaceFoldersParams{
+		Event: protocol.WorkspaceFoldersChangeEvent{
+			Added: []protocol.WorkspaceFolder{{URI: string(uri.File(added)), Name: "extra"}},
+		},
+	}); err != nil {
+		t.Fatalf("DidChangeWorkspaceFolders err = %v", err)
+	}
+	if s.ws.Document(extra) == nil {
+		t.Errorf("extra.sysml not indexed after its folder was added")
+	}
+	if msgs := diagnosticsFor(fc, main); len(msgs) != 0 {
+		t.Errorf("diagnostics for main = %v, want none once the folder is indexed", msgs)
+	}
+
+	// Removing the folder again unindexes what it contributed.
+	if err := s.DidChangeWorkspaceFolders(ctx, &protocol.DidChangeWorkspaceFoldersParams{
+		Event: protocol.WorkspaceFoldersChangeEvent{
+			Removed: []protocol.WorkspaceFolder{{URI: string(uri.File(added)), Name: "extra"}},
+		},
+	}); err != nil {
+		t.Fatalf("DidChangeWorkspaceFolders err = %v", err)
+	}
+	if s.ws.Document(extra) != nil {
+		t.Errorf("extra.sysml still indexed after its folder was removed")
+	}
+	if msgs := diagnosticsFor(fc, main); len(msgs) == 0 {
+		t.Errorf("diagnostics for main = none, want Gadget unresolved again")
+	}
+}
+
+func TestDidChangeWorkspaceFoldersKeepsOpenBuffer(t *testing.T) {
+	s, _, dir, lib, _ := multiFileWorkspace(t)
+
+	// A removed folder leaves a buffer the editor still shows alone.
+	openFile(t, s, lib, libSource)
+	if err := s.DidChangeWorkspaceFolders(context.Background(), &protocol.DidChangeWorkspaceFoldersParams{
+		Event: protocol.WorkspaceFoldersChangeEvent{
+			Removed: []protocol.WorkspaceFolder{{URI: string(uri.File(dir)), Name: "multi"}},
+		},
+	}); err != nil {
+		t.Fatalf("DidChangeWorkspaceFolders err = %v", err)
+	}
+	if s.ws.Document(lib) == nil {
+		t.Errorf("open lib.sysml dropped with its folder")
+	}
+}
+
 func TestLoadFromDiskKeepsIndexOnUnreadableFile(t *testing.T) {
 	s, _, _, lib, _ := multiFileWorkspace(t)
 

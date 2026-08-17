@@ -38,6 +38,13 @@ func (s *Server) Initialize(ctx context.Context, params *protocol.InitializePara
 			CodeActionProvider: &protocol.CodeActionOptions{
 				CodeActionKinds: []protocol.CodeActionKind{protocol.QuickFix},
 			},
+			// Folders added mid-session are only indexed if the client reports them.
+			Workspace: &protocol.ServerCapabilitiesWorkspace{
+				WorkspaceFolders: &protocol.ServerCapabilitiesWorkspaceFolders{
+					Supported:           true,
+					ChangeNotifications: true,
+				},
+			},
 		},
 		ServerInfo: &protocol.ServerInfo{
 			Name:    "sysml-lsp",

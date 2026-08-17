@@ -302,6 +302,8 @@ Parse + model all behavioral bodies with unified fallback grammar:
 - `textDocument/didSave` — Refresh diagnostics for every open document
 - `workspace/didChangeWatchedFiles` — Reindex files created, edited or deleted
   outside the editor; a deletion leaves an open buffer alone
+- `workspace/didChangeWorkspaceFolders` — Walk a folder added mid-session and
+  unindex what a removed one contributed, open buffers aside
 
 **Diagnostics:**
 - Publish on document open/change; the edited document immediately, the other
