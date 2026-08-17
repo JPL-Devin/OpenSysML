@@ -292,15 +292,15 @@ func TestMetaSaveTurtleIsMarkedExperimental(t *testing.T) {
 		t.Errorf("a notation save is stable, but was marked: %v", out)
 	}
 
-	behavior := NewSession()
-	behavior.Submit("action def Go { action step; first start; then step; }")
-	out, _, err = behavior.runMeta("%save " + filepath.Join(dir, "refused.ttl"))
+	refusing := NewSession()
+	refusing.Submit("package P { metadata def Safety; part seat {@Safety{isMandatory = true;}} }")
+	out, _, err = refusing.runMeta("%save " + filepath.Join(dir, "refused.ttl"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	joined := strings.Join(out, "\n")
 	if !strings.Contains(joined, "error:") {
-		t.Fatalf("expected the mapping to refuse a behavioral body, got %v", out)
+		t.Fatalf("expected the mapping to refuse inline metadata, got %v", out)
 	}
 	if !strings.Contains(joined, "RDF conversion is experimental") {
 		t.Errorf("a refusal is the experimental behavior, but was not marked: %v", out)

@@ -169,6 +169,7 @@ elmt:FlowsAndViews::Measure::mass
     sysml:owningNamespace elmt:FlowsAndViews::Measure ;
     sysx:memberIndex "1"^^xsd:integer ;
     sysml:declaredName "mass" ;
+    sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:direction "out" ;
     sysml:type "Real" ;
     sysx:hasBody "false"^^xsd:boolean .

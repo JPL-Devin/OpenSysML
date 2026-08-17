@@ -44,7 +44,10 @@ func ToSysML(graph *rdf.Graph) ([]byte, error) {
 	if graph == nil || graph.Len() == 0 {
 		return nil, &UnsupportedError{What: "an empty graph", Note: "nothing to convert"}
 	}
-	d := &decoder{graph: graph, byIRI: map[string]*element{}}
+	d := &decoder{
+		graph: graph,
+		byIRI: map[string]*element{},
+	}
 	roots, err := d.build()
 	if err != nil {
 		return nil, err
@@ -173,6 +176,9 @@ func (d *decoder) print(b *strings.Builder, el *element, depth int) error {
 		b.WriteString(indent + strings.TrimSpace(text) + "\n")
 		return nil
 	}
+	if handled, err := d.printBehavior(b, el, depth); handled {
+		return err
+	}
 	head, err := d.head(el)
 	if err != nil {
 		return err
@@ -253,18 +259,13 @@ func (d *decoder) head(el *element) (string, error) {
 	// sequences the two members it names wherever they are declared, so the
 	// order survives the round trip. A `succession` declaration whose head was
 	// kept verbatim never reaches here — print() writes its source text.
-	if el.metaclass == "SuccessionAsUsage" {
-		source := d.referenceText(el, rdf.SysML+pSourceFeature)
-		target := d.referenceText(el, rdf.SysML+pTargetFeature)
-		if source != "" && target != "" {
-			return "then " + source + " " + target, nil
-		}
-		// A half-named succession states no order, so it is reported rather than
-		// written back as a bare `succession;` the notation reads as nothing.
-		return "", &UnsupportedError{
-			What: fmt.Sprintf("the succession <%s>", el.iri),
-			Note: "it does not name both of the members it sequences, so the order it declares cannot be written back",
-		}
+	if el.metaclass == mSuccession {
+		return d.successionHead(el)
+	}
+	// A control node, statement, state or region: the behavioral half of the
+	// mapping writes the ones whose notation is a head and a terminator.
+	if head, handled, err := d.behaviorHead(el); handled {
+		return head, err
 	}
 	if kind, ok := metaclassDefinition[el.metaclass]; ok {
 		return d.definitionHead(el, kind), nil
@@ -349,6 +350,11 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 		words = append(words, direction)
 	}
 	keyword := d.keywordOr(el, usageKeyword(kind))
+	// An accept written without the `action` keyword its kind states carries
+	// `accept` as the keyword it was written with; the shorthand writes it.
+	if keyword == "accept" {
+		keyword = ""
+	}
 	for _, flag := range []struct {
 		property string
 		keyword  string
@@ -388,7 +394,10 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 	case negated:
 		return "", d.missing(el, "sysx:"+xDeclaredPrefix, "the `not` of a negated declaration qualifies the prefix keyword it follows")
 	}
-	words = append(words, keyword)
+	keywordAt := len(words)
+	if keyword != "" {
+		words = append(words, keyword)
+	}
 	// `chain` qualifies the kind keyword it follows, unlike the modifiers above.
 	if d.boolOf(el, rdf.SysML+"isChain") {
 		words = append(words, "chain")
@@ -408,13 +417,42 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 			words = append(words, noun)
 		}
 	}
-	words = append(words, d.identWords(el)...)
+	// `include` states the use case a case performs: `include <ref>;` names an
+	// existing one, `include use case <name> : T` declares one that includes T
+	// (SysML.xtext PerformedUseCaseUsage). Both carry the inclusion as a
+	// relationship, which the keyword itself writes.
+	if included := d.referenceList(el, rdf.SysML+relationshipProperty[ast.RelIncludes]); len(included) > 0 {
+		skip = append(skip, ast.RelIncludes)
+		if len(d.identWords(el)) == 0 {
+			// `include <ref>;` states no kind keyword and takes the inclusion in
+			// its place; the typing the parser derives from it is that same target.
+			words = append(words[:keywordAt:keywordAt], "include", strings.Join(included, ", "))
+			skip = append(skip, ast.RelTyping)
+		} else {
+			words = append(words[:keywordAt:keywordAt], append([]string{"include"}, words[keywordAt:]...)...)
+		}
+	}
+	// A `perform` or a state's `entry`/`do`/`exit` names the action it performs,
+	// declaring no name of its own (SysML.xtext PerformActionUsageDeclaration).
+	identWords := d.identWords(el)
+	if len(identWords) == 0 && referenceMemberKeyword(keyword) {
+		if targets := d.referenceList(el, rdf.SysML+relationshipProperty[ast.RelReferences]); len(targets) > 0 {
+			words = append(words, strings.Join(targets, ", "))
+			skip = append(skip, ast.RelReferences)
+		}
+	}
+	words = append(words, identWords...)
 	// The accept shorthand writes its parameter into the head, ahead of the
 	// `via` clause the parent's relationships supply.
 	if accept := d.acceptParam(el); accept != nil {
 		words = append(words, "accept")
 		words = append(words, d.identWords(accept)...)
 		words = append(words, d.relationshipWords(accept, "")...)
+		// A trigger (`when`/`at`/`after` …) is what the payload accepts, written
+		// in place of a type rather than as a value clause.
+		if trigger, ok := d.stringOf(accept, rdf.SysML+pValue); ok {
+			words = append(words, trigger)
+		}
 	}
 	// The multiplicity part (`[1] ordered nonunique`) qualifies the type it
 	// follows, so it goes with the typing clause and ahead of any further
@@ -615,6 +653,10 @@ func (d *decoder) localeWords(el *element) []string {
 func (d *decoder) keywordOr(el *element, canonical string) string {
 	if written, ok := d.stringOf(el, rdf.Systemica+xDeclaredKeyword); ok && written != "" {
 		return written
+	}
+	// A declaration that wrote no kind keyword takes its kind from its owner.
+	if d.boolOf(el, rdf.Systemica+xImplicitKind) {
+		return ""
 	}
 	return canonical
 }

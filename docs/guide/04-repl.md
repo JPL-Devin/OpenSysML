@@ -50,6 +50,35 @@ sysml> %instances
 (no instances created; 1 instance was dropped when the session was reset — re-run %instantiate)
 ```
 
+## Seeing the model
+
+`%print` writes the session back as notation, at the prompt — the whole model, or one element and
+its body when a name is given:
+
+```
+sysml> package Demo {
+  ...>   // how heavy it is
+  ...>   part def Vehicle {
+  ...>     attribute mass = 1500.0;
+  ...>   }
+  ...> }
+✓ package Demo
+sysml> %print Demo::Vehicle
+// how heavy it is
+part def Vehicle {
+    attribute mass = 1500.0;
+}
+```
+
+It is the writer `%save` writes a `.sysml` file with, so a print keeps comments and the text as it
+was written, re-indented the way a save would be, and what it prints can be typed or loaded back to
+rebuild the same model.
+Names are spelled as every other command spells them (`%print 'My Pkg'::Car`). Printing reads the
+session and nothing more: no object is created, and an `%action`/`%state` session keeps running
+across it. An empty session, a name nothing declares, and a name whose element this session holds
+no source of each say so in one line. RDF is `%save`'s `.ttl` path ([chapter 7](07-saving-and-rdf.md));
+a print is notation only.
+
 ## A name that needs quotes
 
 A name the notation has to quote — one containing a space, a keyword used as a name, punctuation —

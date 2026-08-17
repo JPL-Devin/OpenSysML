@@ -1,0 +1,11 @@
+{
+  "type": "state",
+  "evaluate": "SendIdentityNested::Node::Machine",
+  "performers": [
+    {
+      "object": "SendIdentityNested::solo",
+      "finalState": "heard",
+      "stateVisits": ["start", "sending", "heard"]
+    }
+  ]
+}

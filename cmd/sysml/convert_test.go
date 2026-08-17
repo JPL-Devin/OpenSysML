@@ -29,13 +29,10 @@ const sampleModel = `package Demo {
 }
 `
 
-// behavioralModel states behavior in a body, which the RDF mapping refuses.
-const behavioralModel = `package Demo {
-    action def Go {
-        action step;
-        first start;
-        then step;
-    }
+// refusedModel carries inline metadata, which the RDF mapping refuses.
+const refusedModel = `package Demo {
+    metadata def Safety;
+    part seat {@Safety{isMandatory = true;}}
 }
 `
 
@@ -197,11 +194,11 @@ func TestConvertRDFIsMarkedExperimental(t *testing.T) {
 	binary := buildCLI(t)
 	dir := t.TempDir()
 	model := filepath.Join(dir, "model.sysml")
-	behavior := filepath.Join(dir, "behavior.sysml")
+	behavior := filepath.Join(dir, "refused.sysml")
 	if err := os.WriteFile(model, []byte(sampleModel), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(behavior, []byte(behavioralModel), 0o644); err != nil {
+	if err := os.WriteFile(behavior, []byte(refusedModel), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -230,7 +227,7 @@ func TestConvertRDFIsMarkedExperimental(t *testing.T) {
 
 	refused := runCommand(t, exec.Command(binary, behavior, "-convert", "ttl"))
 	if refused.status == 0 {
-		t.Fatalf("expected the mapping to refuse a behavioral body:\n%s", refused.stdout)
+		t.Fatalf("expected the mapping to refuse inline metadata:\n%s", refused.stdout)
 	}
 	if !strings.Contains(refused.stderr, "RDF conversion is experimental") {
 		t.Errorf("a refusal is the experimental behavior, but was not marked:\n%s", refused.stderr)

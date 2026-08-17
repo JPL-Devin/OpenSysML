@@ -140,6 +140,25 @@ func endName(end *ast.ConnectorEnd) string {
 	return FeaturePath(end.AttachedTarget())
 }
 
+// SendTarget renders a send's target and reports whether it is a feature chain
+// (`alpha.inPort`) rather than a name in a namespace (`R`, `P::R`).
+func SendTarget(node ast.Node) (string, bool) {
+	if _, chain := node.(*ast.FeatureChainExpr); chain {
+		return FeaturePath(node), true
+	}
+	if qname := ast.AsQualifiedName(node); qname != nil {
+		parts := make([]string, 0, len(qname.Parts))
+		for _, part := range qname.Parts {
+			if part.Text == "" {
+				return "", false
+			}
+			parts = append(parts, part.Text)
+		}
+		return strings.Join(parts, "::"), false
+	}
+	return ast.SimpleName(node), false
+}
+
 // FeaturePath renders the feature a node names as a dotted path, so a nested
 // port keeps every segment it was written with. It returns "" for a node that
 // names no feature.

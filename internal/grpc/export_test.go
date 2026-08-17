@@ -141,7 +141,7 @@ func TestConvertMarksRDFExperimental(t *testing.T) {
 	}
 
 	refused, err := srv.Convert(context.Background(), &pb.ConvertRequest{
-		Source:     &pb.ConvertRequest_Content{Content: "action def Go { action step; first start; then step; }"},
+		Source:     &pb.ConvertRequest_Content{Content: "package P { metadata def Safety; part seat {@Safety{isMandatory = true;}} }"},
 		FromFormat: "sysml",
 		ToFormat:   "ttl",
 	})
@@ -149,7 +149,7 @@ func TestConvertMarksRDFExperimental(t *testing.T) {
 		t.Fatalf("Convert: %v", err)
 	}
 	if refused.Error == "" {
-		t.Fatalf("expected the mapping to refuse a behavioral body:\n%s", refused.Content)
+		t.Fatalf("expected the mapping to refuse inline metadata:\n%s", refused.Content)
 	}
 	if !refused.Experimental {
 		t.Error("a refusal is the experimental behavior, but was not marked")

@@ -112,6 +112,7 @@ var metaCommandTable = []metaCommand{
 	{name: "%list", desc: "list current session declarations"},
 	{name: "%clear", desc: "reset the session"},
 	{name: "%load", args: "<path>...", desc: "submit the contents of files, directories or globs"},
+	{name: "%print", args: "[name]", desc: "print the session model as SysML notation, or just the named element"},
 	{name: "%save", args: "<file>", desc: "write the session model to a file (.sysml notation, or .ttl RDF — experimental)"},
 	{name: "%verbosity", args: "[level]", desc: "show or set output level: quiet, normal or debug"},
 	{name: "%trace", args: "[on|off]", desc: "show or set execution tracing (evaluation, calc, action and state steps)"},
@@ -216,6 +217,11 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 			return nil, false, lerr
 		}
 		return lines, false, nil
+	case "%print":
+		if len(fields) < 2 {
+			return s.doPrint("")
+		}
+		return s.doPrint(fields[1])
 	case "%save":
 		if len(fields) < 2 {
 			return []string{"usage: %save <file.sysml|file.ttl>"}, false, nil

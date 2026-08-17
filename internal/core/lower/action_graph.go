@@ -75,8 +75,11 @@ type Statement interface {
 type Send struct {
 	Message ast.Node
 	Target  string
-	IsVia   bool
-	Scope   *symbols.Scope // the scope the statement was declared in
+	// TargetPath records that Target is a feature chain (`a.b`) reaching through
+	// the sender's features, rather than a name in a namespace (`R`, `P::R`).
+	TargetPath bool
+	IsVia      bool
+	Scope      *symbols.Scope // the scope the statement was declared in
 }
 
 func (Send) statement() {}
@@ -499,17 +502,19 @@ func lowerBody(graph *ActionGraph, node *ast.Usage, scope *symbols.Scope) {
 func lowerStatement(member ast.Node, scope *symbols.Scope) Statement {
 	switch m := member.(type) {
 	case *ast.SendStatement:
-		// A `via` target names a port of the sender, which a nested port names
-		// through its owner (`via p.q`); a receiver is named by one name.
-		target := ast.SimpleName(m.Target)
+		// A target is either a chain through features (`alpha.inPort`) or a name in
+		// a namespace (`P::Driver`), which resolve differently. A `via` target names
+		// a port of the sender, rendered as connector ends are so the two match.
+		target, isPath := SendTarget(m.Target)
 		if m.IsVia {
-			target = FeaturePath(m.Target)
+			target, isPath = FeaturePath(m.Target), true
 		}
 		return Send{
-			Message: m.Message,
-			Target:  target,
-			IsVia:   m.IsVia,
-			Scope:   scope,
+			Message:    m.Message,
+			Target:     target,
+			TargetPath: isPath,
+			IsVia:      m.IsVia,
+			Scope:      scope,
 		}
 	case *ast.AssignmentActionNode:
 		// A target naming more than one segment reaches outside the body, which no
