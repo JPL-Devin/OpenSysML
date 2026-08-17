@@ -2,18 +2,14 @@
 // satisfaction assertion states into a solver-independent term IR and writes
 // that IR as an SMT-LIB2 script.
 //
-// This is an optional, additive extension: the runtime evaluator
-// (internal/core/runtime) remains the normative semantics of Invariant,
-// RequirementUsage and `assert satisfy`, and nothing here changes a verdict it
-// reaches. SysML v2 defines no solving semantics, so a translation is an
-// advertised extension rather than a conformance claim. No solver is invoked —
-// the package produces a script, and running one is a caller's business.
+// The runtime evaluator remains the normative semantics; SysML v2 defines no
+// solving semantics, so this is an advertised extension, not a conformance
+// claim. No solver is invoked: the package only writes a script.
 //
 // Conditions come from the evaluator's own collection
-// (runtime.Context.ConditionsOf), so the terms encode exactly what the evaluator
-// checks, with the same order and the same distinctions: `require` versus
-// `assume`, negation, and a body meaning the conjunction of its conditions
-// (negating a body negates that conjunction, not each condition).
+// (runtime.Context.ConditionsOf), keeping its order and its distinctions:
+// `require` versus `assume`, negation, and a body meaning the conjunction of
+// its conditions.
 //
 // # Translatable subset
 //
@@ -37,16 +33,14 @@
 //   - Enumeration literals and variants, as constructors of a finite datatype
 //     sort declared per enumeration definition or variation point.
 //
-// A variable stands for the value a feature may take, unconstrained except by
-// its sort: values a model declares are not asserted, so a query asks what the
-// conditions permit rather than what one object holds. Two feature chains
-// reaching the same feature through different objects are two variables.
+// A variable stands for the value a feature may take, constrained only by its
+// sort: declared values are not asserted, so a query asks what the conditions
+// permit rather than what one object holds.
 //
 // # Deliberately out of subset
 //
-// Everything else refuses with ErrNotTranslatable rather than being dropped, and
-// one refused conjunct fails the whole query — a partial script would answer
-// sat/unsat about conditions it does not contain:
+// Everything else refuses with ErrNotTranslatable, and one refused conjunct
+// fails the whole query, so no partial script exists:
 //
 //   - Collections and quantifiers: sequences, sets, `->select`, `->collect`,
 //     `->forAll`, `->exists`, `->size`, indexing `#(i)`, ranges `a..b`, and
