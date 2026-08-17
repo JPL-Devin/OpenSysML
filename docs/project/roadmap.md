@@ -60,11 +60,11 @@ The corpus gate needs the corpus (`./scripts/download-training-examples.sh`) and
 re-baseline `internal/core/model/testdata/training_examples_expected.txt`: adjudicate each
 drifted file and record the verdict in `docs/project/training-examples.md`.
 
-Open gap in the gating itself, found in the 0.0.8 pre-release audit: only the GitHub Actions PR
-workflow downloads the corpus and sets `SYSTEMICA_REQUIRE_TRAINING_CORPUS=1`.
-`.circleci/config.yml` — the pipeline that *builds release tags* — mentions the corpus nowhere,
-so it skips the gate silently and a tag can be cut over a corpus regression. Adding the download
-plus that variable to the release pipeline belongs with R1.
+The gap found in the 0.0.8 pre-release audit — only the GitHub Actions PR workflow downloaded the
+corpus and set `SYSTEMICA_REQUIRE_TRAINING_CORPUS=1`, so `.circleci/config.yml`, the pipeline that
+*builds release tags*, skipped the gate silently and a tag could be cut over a corpus
+regression — is closed: `build-and-test` downloads the corpus (cached on the download script) and
+runs the suite with that variable set, and it runs on `v*` tags as well as on branches.
 
 ---
 
