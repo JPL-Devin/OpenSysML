@@ -1,19 +1,19 @@
 package Constraints {
     attribute def Mass;
     constraint def MassLimit {
-        in attribute m : Mass;
-        in attribute limit : Mass;
+        in m : Mass;
+        in limit : Mass;
         m < limit;
     }
     calc def Margin {
-        in attribute m : Mass;
-        return attribute : Mass = 100 - m;
+        in m : Mass;
+        return : Mass = 100 - m;
     }
     part def Rover {
         attribute mass : Mass = 80;
         constraint limit : MassLimit {
-            in attribute m = mass;
-            in attribute limit = 100;
+            in m = mass;
+            in limit = 100;
         }
         assert constraint massOK : MassLimit;
         assert not constraint massBad : MassLimit;
@@ -37,8 +37,8 @@ package Constraints {
             require r.mass < 200;
             require MassLimit;
             assume MassLimit {
-                in attribute m = r.mass;
-                in attribute limit = 100;
+                in m = r.mass;
+                in limit = 100;
             }
         }
         requirement refined : lightEnough {

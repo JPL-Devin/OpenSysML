@@ -2,6 +2,7 @@ package export
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -48,6 +49,7 @@ const (
 	xExpose          = "isExpose"
 	xDeclaredKeyword = "declaredKeyword"
 	xDeclaredPrefix  = "declaredPrefix"
+	xImplicitKind    = "isKindImplicit"
 	xCondition       = "condition"
 )
 
@@ -123,21 +125,23 @@ type encoder struct {
 // the canonical one, so the notation comes back as the author spelled it rather
 // than rewritten. A synonym written in a shape the decoder cannot rebuild is
 // refused instead: returning the canonical keyword would be a different model.
-func (e *encoder) declaredKeyword(subject rdf.Term, node ast.Node, written, canonical, named string) error {
+// referenced states whether the declaration names an existing feature, the
+// shape a keyword with no name of its own is rebuilt from.
+func (e *encoder) declaredKeyword(subject rdf.Term, node ast.Node, written, canonical, named string, referenced bool) error {
 	if written == "" || written == canonical {
 		return nil
-	}
-	// A two-word kind keyword such as `use case` is written one word at a time;
-	// its last word is not a synonym of the whole.
-	for _, word := range strings.Fields(canonical) {
-		if written == word {
-			return nil
-		}
 	}
 	// The keyword introduces a declaration whose subject is its name. Without
 	// one the keyword takes an inline reference instead (`perform a`), a shape
 	// rebuilt from the relationship rather than the head.
-	if named == "" {
+	if named == "" && !(referenced && referenceMemberKeyword(written)) {
+		// A shorter spelling of a multi-word kind keyword (`verification` for
+		// `verification case`) states the same kind, so it needs no name.
+		for _, word := range strings.Fields(canonical) {
+			if written == word {
+				return nil
+			}
+		}
 		return &UnsupportedError{
 			What: fmt.Sprintf("the `%s` declaration at %s", written, e.where(node)),
 			Note: fmt.Sprintf("it names no element of its own, so the notation cannot be rebuilt from the graph and would come back as `%s`, a different declaration", canonical),
@@ -213,14 +217,18 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 			{"isLibraryPackage", n.IsLibrary},
 			{"isStandardLibraryPackage", n.IsStandard},
 		})
-		e.prefixes(subject, n.Prefixes)
+		if err := e.prefixes(subject, n, n.Prefixes); err != nil {
+			return err
+		}
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
 		return e.encode(n.Members, fqn, subject)
 
 	case *ast.Namespace:
 		head(rdf.SysMLTerm("Namespace"))
 		e.ident(subject, n.Ident)
-		e.prefixes(subject, n.Prefixes)
+		if err := e.prefixes(subject, n, n.Prefixes); err != nil {
+			return err
+		}
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
 		return e.encode(n.Members, fqn, subject)
 
@@ -231,7 +239,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		}
 		head(rdf.SysMLTerm(metaclass))
 		e.ident(subject, n.Ident)
-		if err := e.declaredKeyword(subject, n, n.Keyword, definitionKeyword(n.Kind), n.Ident.Name); err != nil {
+		if err := e.declaredKeyword(subject, n, n.Keyword, definitionKeyword(n.Kind), n.Ident.Name, false); err != nil {
 			return err
 		}
 		e.flags(subject, []boolProperty{
@@ -241,7 +249,9 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 			{"isConstant", n.IsConstant},
 			{"isEvent", n.IsEvent},
 		})
-		e.prefixes(subject, n.Prefixes)
+		if err := e.prefixes(subject, n, n.Prefixes); err != nil {
+			return err
+		}
 		e.relationships(subject, owner, n.Relationships)
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
 		return e.encode(n.Members, fqn, subject)
@@ -252,11 +262,23 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 			return &UnsupportedError{What: fmt.Sprintf("usage kind %q at %s", n.Kind, e.where(n))}
 		}
 		head(rdf.SysMLTerm(metaclass))
-		e.ident(subject, n.Ident)
-		// A verbatim head is reproduced as written, so its keyword needs no
-		// reconstructing and never has to be refused.
-		if !verbatimUsage(n) {
-			if err := e.declaredKeyword(subject, n, n.Keyword, usageKeyword(n.Kind), n.Ident.Name); err != nil {
+		if !shorthandRelationship(n) {
+			e.ident(subject, n.Ident)
+		}
+		switch {
+		case verbatimUsage(n):
+			// A verbatim head is reproduced as written, so its keyword needs no
+			// reconstructing and never has to be refused.
+		case bareAcceptNode(n, e.text(n)):
+			// The `action` of an accept node is optional and the parser records it
+			// either way, so what the author wrote is read from the source.
+			e.graph.Add(subject, e.sysx(xDeclaredKeyword), rdf.String("accept"))
+		case n.Keyword == "" && !e.wroteKindKeyword(n):
+			// A feature written with no kind keyword (`in x : Real;`) takes its kind
+			// from its owner; writing that kind's keyword back would declare more.
+			e.graph.Add(subject, e.sysx(xImplicitKind), rdf.Bool(true))
+		default:
+			if err := e.declaredKeyword(subject, n, n.Keyword, usageKeyword(n.Kind), n.Ident.Name, referencesFeature(n)); err != nil {
 				return err
 			}
 		}
@@ -287,7 +309,9 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 			{"isAccept", n.IsAccept},
 			{"isResult", n.IsResult},
 		})
-		e.prefixes(subject, n.Prefixes)
+		if err := e.prefixes(subject, n, n.Prefixes); err != nil {
+			return err
+		}
 		if keyword := directionKeyword(n.Direction); keyword != "" {
 			e.graph.Add(subject, e.sysml(pDirection), rdf.String(keyword))
 		}
@@ -337,7 +361,9 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		for _, supplier := range n.Suppliers {
 			e.graph.Add(subject, e.sysml(pSupplier), e.reference(owner, qualifiedText(supplier)))
 		}
-		e.prefixes(subject, n.Prefixes)
+		if err := e.prefixes(subject, n, n.Prefixes); err != nil {
+			return err
+		}
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
 		return e.encode(n.Body, fqn, subject)
 
@@ -425,28 +451,16 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		e.graph.Add(subject, e.sysx(xFilter), rdf.String(e.text(n.Condition)))
 		return nil
 
-	case *ast.SuccessionEdge:
-		// A succession, however it was written: as its own member (`then a b;`)
-		// or as a `then` attached to a member, which the parser desugars to this
-		// same node. Its ends are what carries execution order, so they are
-		// mapped as references rather than as the text of the declaration.
-		source, target := qualifiedText(n.Source), qualifiedText(n.Target)
-		if source == "" || target == "" {
-			return &UnsupportedError{
-				What: fmt.Sprintf("the succession at %s", e.where(n)),
-				Note: "it does not name both of the members it sequences, so the order it declares cannot be written back",
-			}
-		}
-		head(rdf.SysMLTerm("SuccessionAsUsage"))
-		e.graph.Add(subject, e.sysml(pSourceFeature), e.reference(owner, source))
-		e.graph.Add(subject, e.sysml(pTargetFeature), e.reference(owner, target))
-		return nil
-
 	case *ast.ErrorNode:
 		return &UnsupportedError{
 			What: fmt.Sprintf("the malformed declaration at %s", e.where(n)),
 			Note: "fix the syntax error before converting",
 		}
+	}
+	// A behavioral node — a control node, statement, loop, conditional, state or
+	// transition — is mapped by the behavior half of this encoder.
+	if handled, err := e.encodeBehavior(node, head, subject, fqn, owner, index); handled {
+		return err
 	}
 	return &UnsupportedError{
 		What: fmt.Sprintf("the %s at %s", nodeDescription(node), e.where(node)),
@@ -470,6 +484,13 @@ func (e *encoder) condition(subject rdf.Term, fqn, owner string, expr ast.Node, 
 	// names — are written with a body, whether or not it has members.
 	e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(true))
 	return e.encode(body, fqn, subject)
+}
+
+// shorthandRelationship reports whether a usage's identification is the first
+// end of a shorthand head (`bind x = y;`) rather than a name it declares; the
+// named form spells the kind out (`binding b bind x = y;`).
+func shorthandRelationship(n *ast.Usage) bool {
+	return n.Kind == ast.UsageBinding && n.Keyword == "bind"
 }
 
 // verbatimUsage reports whether a usage's declaration head has to be carried as
@@ -528,13 +549,92 @@ func isExtensionFlag(name string) bool {
 	return false
 }
 
-func (e *encoder) prefixes(subject rdf.Term, prefixes []*ast.PrefixMetadata) {
+func (e *encoder) prefixes(subject rdf.Term, node ast.Node, prefixes []*ast.PrefixMetadata) error {
 	for _, prefix := range prefixes {
 		if prefix == nil {
 			continue
 		}
-		e.graph.Add(subject, e.sysx(xPrefixMetadata), rdf.String(e.text(prefix)))
+		written, err := e.prefixText(node, prefix)
+		if err != nil {
+			return err
+		}
+		e.graph.Add(subject, e.sysx(xPrefixMetadata), rdf.String(written))
 	}
+	return nil
+}
+
+// prefixText writes an annotation as the notation it was written as. The node
+// carries no span of its own, so its sigil is read from ahead of the type it
+// names; a prefix that cannot be rebuilt that way is refused, not dropped.
+func (e *encoder) prefixText(node ast.Node, prefix *ast.PrefixMetadata) (string, error) {
+	at := ast.Node(prefix)
+	if prefix.Type != nil {
+		at = prefix.Type
+	}
+	unsupported := &UnsupportedError{
+		What: fmt.Sprintf("the metadata annotation at %s", e.where(at)),
+		Note: "its notation cannot be rebuilt from the graph, and a graph without it would be a different model; " + rdfLimitationsNote,
+	}
+	// An annotation the parser records ahead of the declaration it belongs to
+	// would be written back onto a different element.
+	if prefix.Type == nil || len(prefix.Body) > 0 || prefix.Type.Span().Offset >= node.Span().End() {
+		return "", unsupported
+	}
+	name := e.text(prefix.Type)
+	sigil := e.sigilBefore(prefix.Type.Span().Offset)
+	if name == "" || sigil == "" {
+		return "", unsupported
+	}
+	return sigil + name, nil
+}
+
+// wroteKindKeyword reports whether the declaration spells its kind keyword out.
+// A directed usage (`in attribute speed`) does not record the keyword it wrote,
+// so the words ahead of the name are read from the source.
+func (e *encoder) wroteKindKeyword(n *ast.Usage) bool {
+	keyword := usageKeyword(n.Kind)
+	if keyword == "" {
+		return false
+	}
+	start, head := n.Span().Offset, n.Span().End()
+	if name := n.Ident.NameSpan; name.Len > 0 && name.Offset < head {
+		head = name.Offset
+	}
+	if short := n.Ident.ShortNameSpan; short.Len > 0 && short.Offset < head {
+		head = short.Offset
+	}
+	if head <= start {
+		return false
+	}
+	text := e.file.Text(source.Span{Offset: start, Len: head - start})
+	// An unnamed declaration's keyword, if it wrote one, is ahead of everything
+	// its head can state.
+	if cut := strings.IndexAny(text, ":=;[{"); cut >= 0 {
+		text = text[:cut]
+	}
+	written := strings.Fields(text)
+	for _, word := range strings.Fields(keyword) {
+		if !slices.Contains(written, word) {
+			return false
+		}
+	}
+	return true
+}
+
+// sigilBefore reads the `#` or `@` that introduces an annotation: the character
+// ahead of the type it names.
+func (e *encoder) sigilBefore(offset int) string {
+	for at := offset - 1; at >= 0; at-- {
+		switch text := e.file.Text(source.Span{Offset: at, Len: 1}); text {
+		case "#", "@":
+			return text
+		case " ", "\t", "\n", "\r":
+			continue
+		default:
+			return ""
+		}
+	}
+	return ""
 }
 
 func (e *encoder) relationships(subject rdf.Term, owner string, rels []*ast.Relationship) {
@@ -680,9 +780,23 @@ func unwrapMember(member ast.Node) (ast.Node, ast.Visibility) {
 	return member, ast.VisibilityDefault
 }
 
+// referencesFeature reports whether a usage names an existing feature rather
+// than declaring one of its own (`perform doIt;`).
+func referencesFeature(n *ast.Usage) bool {
+	for _, rel := range n.Relationships {
+		if rel.Kind == ast.RelReferences && rel.Target != nil {
+			return true
+		}
+	}
+	return false
+}
+
 // declaredNameAndMembers returns the name a declaration introduces and the
 // members it owns, for the node kinds that have either.
 func declaredNameAndMembers(node ast.Node) (string, []ast.Node) {
+	if name, members, ok := behaviorNameAndMembers(node); ok {
+		return name, members
+	}
 	switch n := node.(type) {
 	case *ast.Package:
 		return n.Ident.Name, n.Members
@@ -692,6 +806,9 @@ func declaredNameAndMembers(node ast.Node) (string, []ast.Node) {
 		return n.Ident.Name, n.Members
 	case *ast.Usage:
 		if verbatimUsage(n) {
+			if shorthandRelationship(n) {
+				return "", nil
+			}
 			return n.Ident.Name, nil
 		}
 		return n.Ident.Name, n.Members

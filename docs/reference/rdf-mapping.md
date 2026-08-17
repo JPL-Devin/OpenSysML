@@ -10,10 +10,9 @@ to or from `ttl`, and each in reverse — is **experimental** as of 0.1.0. Savin
 and converting notation (`.sysml`, `.kerml`) is stable; this mapping is not, and
 each of these is a deliberate property of it rather than a defect to report:
 
-- **Model structure only.** A model whose bodies state behavior is refused, not
-  partly converted, with the construct named: 71 of the 120 models under
-  `examples/` convert to Turtle and the other 49 are refused. See
-  [Limitations](#limitations).
+- **What is not mapped is refused, not partly converted**, with the construct
+  named: 102 of the 120 models under `examples/` convert to Turtle and the other
+  18 are refused. See [Behavior](#behavior) and [Limitations](#limitations).
 - **The vocabulary may change without a compatibility path.** A graph written by
   one release may not read back into the next, and no migration is provided.
   Treat a `.ttl` as an interchange artifact you can regenerate, not as the copy
@@ -106,16 +105,73 @@ The `sysx:` properties:
 | `sysx:declaredKeyword` | The kind keyword as written, when it is one of the synonyms several keywords share (`datatype` and `attribute`, `function` and `calc`, `snapshot` and `occurrence`). The AST records one kind for all of them, so without this the notation would come back rewritten. Also the keyword a constraint body's condition is stated with (`assert`, `assume`, or absent for a bare condition, which asserts implicitly). |
 | `sysx:declaredPrefix` | The keyword qualifying the kind keyword after it — the `assert` of `assert constraint c : C`. It says what the declaration is for, and the AST kind alone does not carry it. |
 | `sysx:condition` | The condition a condition member states, as its notation. |
+| `sysx:prefixMetadata` | A metadata annotation as written (`#Safety`). It states what the element it prefixes is, and the AST records no span for it, so the notation is read from the source. |
+| `sysx:isKindImplicit` | The declaration wrote no kind keyword (`in x : Real;`), which takes its kind from its owner. Without it the canonical keyword would come back written out, declaring what the author did not. |
+| the behavioral properties | `sysx:guard`, `sysx:expression`, `sysx:payload`, … — the parts of a behavioral node the vocabulary has no predicate for, listed under [Behavior](#behavior). |
 
-Seven metaclass names have no counterpart in the OMG vocabulary and are typed in
-the `sysx:` namespace rather than `sysml:`, so a consumer can tell them from the
+Metaclass names with no counterpart in the OMG vocabulary are typed in the
+`sysx:` namespace rather than `sysml:`, so a consumer can tell them from the
 standard metaclasses: `sysx:Alias`, `sysx:FilterMember`,
 `sysx:MultiplicityDeclaration`, `sysx:ConstraintMember`, `sysx:AssumeMember`,
-`sysx:RequireMember` and `sysx:ResultMember`.
+`sysx:RequireMember`, `sysx:ResultMember`, and the behavioral ones listed under
+[Behavior](#behavior).
 
 Comments, documentation and textual representations convert as their own
 elements (`sysml:Comment`, `sysml:Documentation`, `sysml:TextualRepresentation`)
 carrying `sysml:body`.
+
+## Behavior
+
+An action or state body converts: each node it states has a metaclass and the
+properties its notation is rebuilt from, so `notation → RDF → notation` returns
+the body byte-identically (`behavior_test.go`). Where the OMG vocabulary names
+the node, that name is used; the rest are `sysx:` terms, marked below.
+
+| written | metaclass | carries |
+|---|---|---|
+| `first x;`, `initial x;` | `sysx:InitialNode` | `sysml:sourceFeature` (the member the body starts at — a reference, not a name it declares), `sysml:targetFeature`, `sysx:guard`, `sysx:declaredKeyword` |
+| `done;`, `final;` | `sysx:FinalNode` | `sysml:declaredName`, `sysx:declaredKeyword` |
+| `action a;`, `action a { x + 1 }` | `sysx:ActionExecutionNode` | `sysml:references` or `sysx:expression` |
+| `perform a;` | `sysml:PerformActionUsage` | `sysx:expression` (the action performed) |
+| `assign x := 1;` | `sysml:AssignmentActionUsage` | `sysx:target`, `sysml:value`, `sysx:assignmentOperator` when it is not `:=` |
+| `send M(x) to p;`, `… via p;` | `sysml:SendActionUsage` | `sysx:payload`, `sysx:receiver`, `sysx:isVia` |
+| `terminate;`, `terminate x;` | `sysml:TerminateActionUsage` | `sysx:expression` |
+| `accept sig : Signal;`, `accept when c;` | the usage's own metaclass | `sysml:isAccept`, and `sysx:declaredKeyword "accept"` where the optional `action` was not written |
+| `fork`, `join`, `merge`, `decision` | `sysml:ForkNode`, `JoinNode`, `MergeNode`, `DecisionNode` | `sysml:declaredName` |
+| `then a b;`, `if g then b;`, `else b;` | `sysml:SuccessionAsUsage` | `sysml:sourceFeature`, `sysml:targetFeature`, `sysx:guard`, `sysx:isElse`, `sysx:declaredKeyword` |
+| `while c { … }`, `loop { … } until c;` | `sysml:WhileLoopActionUsage` | `sysx:whileCondition`, `sysx:untilCondition` |
+| `for x in c { … }` | `sysml:ForLoopActionUsage` | `sysx:loopVariable`, `sysx:collection` |
+| `if c { … } else { … }` | `sysml:IfActionUsage` + `sysx:IfBranch` per branch | `sysx:condition`, `sysx:branchKind` |
+| `state s { … }`, `initial s;`, `final s;` | `sysml:StateUsage` | `sysml:declaredName`, `sysx:declaredKeyword`, its members |
+| `entry`/`do`/`exit`, `entry do { … }` | `sysml:StateSubactionMembership` | `sysx:subactionKind`, `sysx:declaredKeyword`, its actions |
+| `defer sig, other;` | `sysx:DeferMember` | `sysx:deferredEvent` per event |
+| `region r { … }` | `sysx:StateRegion` | `sysml:declaredName`, its states |
+| `choice`, `junction`, `fork`, `join`, `entry point`, `exit point`, `shallow`/`deep history` | `sysx:Pseudostate` | `sysx:pseudostateKind`, `sysx:declaredKeyword` |
+| `transition [n] first s [accept t] [if g] [do e] then t;`, `transition s to t;` | `sysml:TransitionUsage` | `sysml:sourceFeature`, `sysml:targetFeature`, `sysx:trigger`, `sysx:triggerKeyword`, `sysx:guard`, `sysx:transitionSyntax`, its effect |
+
+A state's members are held in the AST in one bucket per kind (entry, do, exit,
+defer, substates, regions); they are written back in the order they were
+declared, taken from their source spans, so `do` before `entry` stays that way.
+
+The conditions and expressions these nodes carry are notation, as everywhere
+else in this mapping, so they convert back exactly but SPARQL cannot see inside
+them.
+
+What is still refused, with the node named:
+
+- **A succession that does not name both of its ends.** `then fork;` and
+  `then monitorPedal;` written under a preceding member state an order whose
+  source end the notation leaves implicit, and the parser records the node the
+  statement introduces separately from the edge into it. Reconstructing that
+  shape means inferring which node an edge belongs to from member position,
+  which would silently reattach edges, so it is reported instead. Nine of the
+  eighteen remaining refusals under `examples/` are this shape.
+- **A succession end whose name is not a basic name.** The two-end form the
+  graph is written back as (`then a b;`) is read by the parser only when both
+  ends are basic names, so `then 'enter vehicle' 'drive vehicle';` would not
+  parse; the edge is reported rather than written.
+- **Prefix metadata** (`#Safety part p;`, `@M { … }`) and an **operator
+  expression member**, both unchanged from before.
 
 ## Limitations
 
@@ -176,7 +232,8 @@ yields the same graph (`export_test.go:TestSuccessionRoundTripsInEveryBody`).
 A `then` beside a member with no name (`then send Show(x) to screen;`) declares
 an order these ends cannot name. The parser warns (`unnamed-succession-end`) and
 records no edge, so the conversion carries the members without it; an edge that
-reaches the encoder naming only one end is reported rather than written back.
+reaches the encoder naming only one end is reported rather than written back —
+see [Behavior](#behavior) for that boundary.
 
 **Two keyword prefixes are normalized away.** `variant` and `include` prefix a
 kind keyword the AST records on its own, and the prefix is not recorded, so
@@ -186,7 +243,15 @@ conversion time, so they are normalized rather than reported — the one place
 this mapping changes a model without saying so. Recording them in the parser is
 roadmap item D5. Save straight to `.sysml` when they matter.
 
-**Conditions convert; a behavior statement is refused.** The members that state
+**A reference end is written back in a spelling the parser reads back
+differently.** `end [*] ref cause : Situation;` is carried faithfully — the
+graph states `sysml:isReference` — and comes back as
+`end ref attribute cause : Situation[*];`, but the parser records no reference
+flag for a `ref` that follows `end`, so converting *that* notation again drops
+the `ref`. The graph is right; recording the flag in the parser is what a stable
+second hop needs.
+
+**Conditions convert as their notation.** The members that state
 a condition are carried, each as the `sysx:` metaclass named above with its
 condition as `sysx:condition`: a constraint body's conditions (`assert`,
 `assume`, a bare condition, and the `not` of `assert not …` as
@@ -197,35 +262,34 @@ declares, and `return <expr>;`. The `assert` prefixing a named usage
 (`assert constraint c : C`) is carried as `sysx:declaredPrefix`. The conditions
 themselves are notation, with the limits stated above.
 
-The mapping still covers model *structure* only for behavior: it has no
-metaclass for the members that state a step, so converting a model containing
-one reports the member rather than dropping it. Measured against the built
-binary, each of these is `cannot convert the <node> at <file>:<line>`:
+The nodes an action or state body states are mapped under
+[Behavior](#behavior), together with the shapes still refused there.
 
-| written | refused as |
-|---|---|
-| `assign x := 1;` | `*ast.AssignmentActionNode` |
-| `if … { … }`, `while`/`loop`/`for … in …` | `*ast.IfActionNode`, `*ast.WhileLoopActionNode` |
-| `state s { … }` inside a state machine | `*ast.SubstateMember` |
-| `accept … then …`, a transition member | `*ast.TransitionMember` |
-| `entry`/`do`/`exit` | `*ast.EntryMember`, `*ast.DoMember`, `*ast.ExitMember` |
+**A synonym keyword that names no element of its own is refused.** `snapshot s;`
+shares its AST kind with `occurrence`, and a declaration that carries no name of
+its own has nothing for `sysx:declaredKeyword` to hang off, so writing it back as
+the canonical `occurrence` would be a different declaration. It is reported
+instead. `perform a : A;` does convert: the `perform` is kept as the keyword it
+was written with.
 
-The list is not exhaustive: an action or state body carries several more node
-kinds (an initial node, `perform`, `send`, `fork`, a control-flow edge, a state
-region, prefix metadata), each refused the same way. So any state machine or
-action body that carries statements cannot be exported to Turtle today; save to
-`.sysml` instead. Carrying them needs metaclasses for the behavioral nodes, not
-a wider fallback — a graph missing a model's steps would be worse than a
-refusal.
-
-**A synonym keyword that names no element of its own is refused.** `perform a : A`
-puts its subject in an inline reference rather than a declared name, a shape the
-graph cannot rebuild; writing it back as the canonical `action` would be a
-different declaration, so it is reported instead.
+**A metadata annotation is carried as the notation it was written as**
+(`sysx:prefixMetadata "#Safety"`), read from the source because the AST records
+no span for the annotation itself. Two shapes are reported rather than written
+back: an annotation carrying a body of its own (`@M { isSet = true; }`), which
+the vocabulary has no properties for, and an `@` annotation ahead of a
+definition (`@Safety part def Car;`), which the parser records on the
+declaration *before* the one it prefixes — writing that back would annotate a
+different element.
 
 **A name declared twice in one namespace is refused.** An element's identity in
 the graph is its qualified name, so `part def A; part def A;` in one container
 would merge into a single subject. The duplicate is reported instead.
+
+A shorthand relationship declares no name: the `result` of `bind result = x;` and
+the `x` of `first x;` name the end the statement relates, so those elements are
+addressed by position (`sysx:memberIndex`) and the name is carried as a
+reference. Without that they collided with the member they name and the model was
+refused as a duplicate.
 
 **Unsupported on the RDF input side**, each an error naming the line or element:
 

@@ -57,7 +57,9 @@ func nestedInvocation(usage *ast.Usage) (actionInvocation, bool) {
 }
 
 // invokeAction runs the action named by inv to completion as a sub-execution of
-// the caller, and returns the values its output parameters ended with.
+// the caller, and returns the values its output parameters ended with. The
+// performed action runs as self, the object performing the caller, so what it
+// accepts and sends carries that object's identity.
 //
 // The callee gets a fresh executor with its own tokens, so values cross the
 // boundary only through parameters: arguments (or, for an argument-less
@@ -69,6 +71,7 @@ func invokeAction(
 	scope *symbols.Scope,
 	inv actionInvocation,
 	data map[string]Value,
+	self *Instance,
 ) (map[string]Value, error) {
 	sym, err := resolveActionSymbol(ctx, scope, inv)
 	if err != nil {
@@ -90,7 +93,7 @@ func invokeAction(
 		return nil, err
 	}
 
-	results, err := ctx.ExecuteActionWithInputs(sym, inputs)
+	results, err := ctx.ExecuteActionPerformedBy(sym, self, inputs)
 	if err != nil {
 		return nil, fmt.Errorf("invoke action %s: %w", qualifiedNameText(inv.target), err)
 	}

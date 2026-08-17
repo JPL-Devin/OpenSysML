@@ -33,6 +33,7 @@ elmt:Constraints::MassLimit::m
     sysml:owningNamespace elmt:Constraints::MassLimit ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "m" ;
+    sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:direction "in" ;
     sysml:type elmt:Constraints::Mass ;
     sysx:hasBody "false"^^xsd:boolean .
@@ -43,6 +44,7 @@ elmt:Constraints::MassLimit::limit
     sysml:owningNamespace elmt:Constraints::MassLimit ;
     sysx:memberIndex "1"^^xsd:integer ;
     sysml:declaredName "limit" ;
+    sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:direction "in" ;
     sysml:type elmt:Constraints::Mass ;
     sysx:hasBody "false"^^xsd:boolean .
@@ -68,6 +70,7 @@ elmt:Constraints::Margin::m
     sysml:owningNamespace elmt:Constraints::Margin ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "m" ;
+    sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:direction "in" ;
     sysml:type elmt:Constraints::Mass ;
     sysx:hasBody "false"^^xsd:boolean .
@@ -77,6 +80,7 @@ elmt:Constraints::Margin::m
     sysml:qualifiedName "Constraints::Margin::@1" ;
     sysml:owningNamespace elmt:Constraints::Margin ;
     sysx:memberIndex "1"^^xsd:integer ;
+    sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:isResult "true"^^xsd:boolean ;
     sysml:direction "out" ;
     sysml:type elmt:Constraints::Mass ;
@@ -116,6 +120,7 @@ elmt:Constraints::Rover::limit::m
     sysml:owningNamespace elmt:Constraints::Rover::limit ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "m" ;
+    sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:direction "in" ;
     sysml:value "mass" ;
     sysx:hasBody "false"^^xsd:boolean .
@@ -126,6 +131,7 @@ elmt:Constraints::Rover::limit::limit
     sysml:owningNamespace elmt:Constraints::Rover::limit ;
     sysx:memberIndex "1"^^xsd:integer ;
     sysml:declaredName "limit" ;
+    sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:direction "in" ;
     sysml:value "100" ;
     sysx:hasBody "false"^^xsd:boolean .
@@ -281,6 +287,7 @@ elmt:Constraints::Rover::lightEnough::r
     sysml:owningNamespace <urn:sysmlv2:element:Constraints::Rover::lightEnough::@5> ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "m" ;
+    sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:direction "in" ;
     sysml:value "r.mass" ;
     sysx:hasBody "false"^^xsd:boolean .
@@ -291,6 +298,7 @@ elmt:Constraints::Rover::lightEnough::r
     sysml:owningNamespace <urn:sysmlv2:element:Constraints::Rover::lightEnough::@5> ;
     sysx:memberIndex "1"^^xsd:integer ;
     sysml:declaredName "limit" ;
+    sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:direction "in" ;
     sysml:value "100" ;
     sysx:hasBody "false"^^xsd:boolean .

@@ -839,7 +839,7 @@ func (e *StateExecutor) matchesEvent(trans *lower.Transition, event *Event) bool
 			return true
 		}
 		msg, ok := event.Payload.(Message)
-		return ok && msg.arrivedAt(trans.Via) && msg.reachedObject(objectID(e.self))
+		return ok && msg.reaches(e.stateMachine.Name, trans.Via, objectID(e.self))
 
 	case EventTime:
 		// Time events carry the specific transition in Payload
@@ -1675,7 +1675,7 @@ func (e *StateExecutor) acceptableMessage(m Message) bool {
 	if m.Port != "" {
 		return e.acceptsSignal(m)
 	}
-	return m.addressedTo(e.stateMachine.Name) && e.acceptsSignal(m)
+	return m.reaches(e.stateMachine.Name, "", objectID(e.self)) && e.acceptsSignal(m)
 }
 
 // HasPendingSignal reports whether a signal this machine accepts is in flight.
@@ -1717,7 +1717,7 @@ func (e *StateExecutor) acceptsSignalFrom(state *ast.StateNode, msg Message) boo
 		if !ok {
 			continue
 		}
-		if !msg.arrivedAt(trans.Via) || !msg.reachedObject(objectID(e.self)) {
+		if !msg.reaches(e.stateMachine.Name, trans.Via, objectID(e.self)) {
 			continue
 		}
 		signal := ast.SimpleName(accept.SignalType)
@@ -2003,7 +2003,7 @@ func (e *StateExecutor) exitState(state *ast.StateNode) error {
 // passing state data in through the callee's input parameters and merging its
 // output parameters back into state data.
 func (e *StateExecutor) invokeNested(inv actionInvocation) error {
-	outputs, err := invokeAction(e.ctx, e.stateMachine.Scope, inv, e.stateData)
+	outputs, err := invokeAction(e.ctx, e.stateMachine.Scope, inv, e.stateData, e.self)
 	if err != nil {
 		return err
 	}

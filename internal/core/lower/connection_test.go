@@ -123,6 +123,77 @@ func TestLowerSendRecordsViaForm(t *testing.T) {
 	}
 }
 
+// An addressed target keeps every segment it was written with: dropping the
+// owner would let the runtime address any same-named port.
+func TestLowerSendKeepsAddressedPath(t *testing.T) {
+	tests := []struct {
+		target string
+		want   string
+		path   bool
+	}{
+		{"alpha.inPort", "alpha.inPort", true},
+		{"P::Driver", "P::Driver", false},
+		{"reader", "reader", false},
+	}
+	for _, tc := range tests {
+		graph := actionGraphFor(t, `
+			action a {
+				first start;
+				action toSend { send 2 to `+tc.target+`; }
+				done end;
+				then start toSend;
+				then toSend end;
+			}
+		`)
+		var sends []Send
+		for _, body := range graph.Bodies {
+			for _, stmt := range body {
+				if send, ok := stmt.(Send); ok {
+					sends = append(sends, send)
+				}
+			}
+		}
+		if len(sends) != 1 {
+			t.Fatalf("`send 2 to %s` lowered %d sends, want 1", tc.target, len(sends))
+		}
+		if sends[0].Target != tc.want || sends[0].TargetPath != tc.path {
+			t.Errorf("`send 2 to %s` lowered target %q (path %v), want %q (path %v)",
+				tc.target, sends[0].Target, sends[0].TargetPath, tc.want, tc.path)
+		}
+	}
+}
+
+// A `via` target names a port of the sender, which routing matches against the
+// lowered connector ends, so both must be rendered the same way.
+func TestLowerSendViaQualifiedPortMatchesConnectionEnds(t *testing.T) {
+	graph := actionGraphFor(t, `
+		action a {
+			port inPort;
+			part outer { port p; }
+			connect outer.p to inPort;
+			first start;
+			action viaSend { send 1 via outer::p; }
+			done end;
+			then start viaSend;
+			then viaSend end;
+		}
+	`)
+	var via Send
+	for _, body := range graph.Bodies {
+		for _, stmt := range body {
+			if send, ok := stmt.(Send); ok && send.IsVia {
+				via = send
+			}
+		}
+	}
+	if via.Target != "outer.p" {
+		t.Fatalf("`send 1 via outer::p` lowered target %q, want outer.p", via.Target)
+	}
+	if got := peerPorts(graph.Connections, via.Target); len(got) != 1 || got[0] != "inPort" {
+		t.Errorf("peerPorts(%q) = %v, want [inPort]", via.Target, got)
+	}
+}
+
 func TestLowerAcceptRecordsViaPort(t *testing.T) {
 	graph := actionGraphFor(t, `
 		action a {

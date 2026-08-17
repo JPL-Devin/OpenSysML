@@ -4,6 +4,51 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Cutting a release
 is described in [docs/project/releasing.md](docs/project/releasing.md).
 
+## Unreleased
+
+### The prompt prints the model it holds
+
+- **`%print` writes the session's model back as SysML notation at the prompt**, which until now
+  needed `%save <file>` and another program to open the file. `%print <name>` prints one element
+  and its body instead of the whole buffer, taking the quoted and qualified spellings every other
+  command takes (`%print 'My Pkg'::Car`, `%print Top::'My Pkg'::Car`), and tab completes both the
+  command and the names after it.
+- It is the writer `%save` writes `.sysml` with — `export.SysMLElement` renders one element's
+  source through the same `format.Source` path a whole-document save goes through — so comments and
+  the text as typed survive, and a print submitted again rebuilds the same model. Notation only: no
+  RDF notice follows a print.
+- Printing is a read. No object is materialized, `%instances` and the buffer are unchanged, and an
+  `%action`/`%state` debugging session keeps running across it. An empty session, a name nothing
+  declares, and a symbol this session holds no source of (a library name) each answer in one line.
+
+### A model that states behavior converts to RDF
+
+- The behavioral nodes of an action or state body now have metaclasses and the properties their
+  notation is rebuilt from, so a model stating steps converts instead of being refused: the
+  initial and final node, `perform`, `send`, `accept`, `terminate`, `assign`, the
+  fork/join/merge/decision control nodes, `while`/`loop`/`for`, `if`/`else`, and the state
+  machine's states, substates, regions, `entry`/`do`/`exit`, `defer`, pseudostates and
+  transitions. Each category is covered by a `notation → RDF → notation` round trip asserting the
+  body comes back byte-identically. The mapping is tabulated in
+  [the RDF mapping](docs/reference/rdf-mapping.md) § Behavior; terms the OMG vocabulary has no
+  counterpart for are named under the `sysx:` extension namespace.
+- **102 of the 120 models under `examples/` now convert to Turtle, up from 71.** The remaining 18
+  are refused with the node named, not partly converted: nine successions that do not name both
+  of their ends, three prefix-metadata models, three duplicate declarations, two
+  operator-expression members and one anonymous `snapshot`.
+- A shorthand relationship no longer collides with the member it names: the `result` of
+  `bind result = x;` and the `x` of `first x;` are carried as references to that member rather
+  than as a name the element declares, which is what made those models fail as duplicate
+  declarations.
+- Two things the mapping used to lose quietly now survive it: a metadata annotation
+  (`#Safety part def Car;`) is carried as the notation it was written as, and a feature that wrote
+  no kind keyword (`in x : Real;`) comes back without one instead of gaining the kind's canonical
+  keyword. The two annotation shapes that still cannot be written back — one carrying a body, and
+  an `@` annotation the parser records on the declaration ahead of the one it prefixes — are
+  reported with the line named.
+- RDF conversion remains **experimental** — the vocabulary may still change, and no round trip
+  through a running triplestore has been demonstrated (roadmap D1–D3).
+
 ## 0.1.0 — 2026-08-17
 
 ### RDF conversion is experimental

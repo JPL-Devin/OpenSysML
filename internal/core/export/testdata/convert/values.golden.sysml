@@ -1,8 +1,8 @@
 package Values {
     calc def Total {
-        in attribute x : Real;
-        in attribute y : Real;
-        return attribute result : Real;
+        in x : Real;
+        in y : Real;
+        return result : Real;
     }
     part def Sized {
         attribute size : Real = 4.5;
