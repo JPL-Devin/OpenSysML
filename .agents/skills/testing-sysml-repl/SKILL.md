@@ -3647,6 +3647,67 @@ with the typed `initialize state machine: schedule events: time duration must be
 quantity`, while the unitless `accept after 5` fires at t=5 — that pair is the cheapest way to show
 the feature is absent-but-typed rather than half-present.
 
+## Source-preserving edits: `ApplyEdits` / `model.edit()` (PR #282)
+
+The edit surface is only reachable through pysysml (`model.edit()` → `set_value` / `rename` →
+`apply()` → `save(path)`); there is no REPL meta-command for it, so the REPL is only useful
+afterwards, to prove the edited file still parses/instantiates.
+
+Setup that actually matters: the client auto-starts `~/.pysysml/bin/sysml-grpc`, so a stale copy
+there serves an old build and `apply()` fails as `MissingCapabilityError('apply_edits')` — which
+looks like a client bug. Always `go build -o bin/sysml-grpc ./cmd/sysml-grpc`, then
+`pkill -x sysml-grpc` (the file is `Text file busy` while it runs) before
+`cp bin/sysml-grpc ~/.pysysml/bin/`.
+
+Fixture shape that discriminates a broken implementation: one file with line comments, a block
+comment, blank lines and **deliberately mixed tab/space indentation** (some lines space-indented
+inconsistently). A reformatting implementation normalizes those lines, so the assertion is
+`diff -u orig edited` showing exactly **2** changed lines per operation (`diff | grep -c '^[<>]'`),
+never "the file still validates". `cat -A` the fixture on camera to show the tabs are real.
+
+Targets and evals worth using (they cover the interesting locate.go branches in one file):
+
+| target | notes |
+|---|---|
+| `Demo::sc::unitMass` (`attribute redefines unitMass = …;`) | the `redefines` shorthand path |
+| `Demo::SC::margin` (`attribute margin : ISQ::MassValue;`) | value **added**: `AppliedEdit.length == 0`, `new_text == ' = 5.0[SI::kg]'` (a space is inserted before `=`) |
+| `Demo::SC::avionics::board::count` | deeply nested; eval it as `eval("avionics.board.count", subject="Demo::sc")` |
+| `Demo::SC::total = unitMass * 2` | expression referencing another feature; evaluates against the *redefined* value (1200 → 2400) |
+
+Refusals and the exact class each raises (all leave the file byte-identical — sha256 it before and
+after every case, since "an exception was raised" says nothing about writes):
+
+| case | class / `failure` |
+|---|---|
+| unknown FQN, **and any stdlib element** (`ISQ::MassValue` reports `no element named … in this model`) | `EditTargetError` / `EDIT_FAILURE_UNKNOWN_TARGET` |
+| a `part def` target | `EditTargetError` / `EDIT_FAILURE_NOT_VALUED` |
+| `"1050.0[SI::kg"`, `""`, rename to `part` or `2bad` | `InvalidEditError` (`INVALID_VALUE` / `INVALID_NAME`) |
+| a value that parses but does not resolve (`Nope::missing`) | **`EditResultError` / `EDIT_FAILURE_RESULT_INVALID`** — not `InvalidEditError`; it is caught by re-analysis, and `diagnostics` names the *model* file and line |
+| two `set_value`s on one feature | `OverlappingEditsError` |
+| `apply()` twice | plain `builtins.RuntimeError` (client-side, **not** a `PySysMLError`) |
+| `apply()` with no ops | `NoEditsError` |
+| non-`str` value | `TypeError` |
+| renaming a referenced declaration | `RenameReferencedError`, `referring_elements == ['Demo::SC', 'Demo::sc']` |
+
+Two cases need process work rather than a Python call:
+
+- **Evicted model → `ModelNotFoundError`.** Hand-start the service (`bin/sysml-grpc -port 50123
+  -health-port 8123`) with `pysysml.connect(port=50123, auto_start=False)`, load, kill and restart
+  it, reconnect, then rebuild the editor against the *new* connection with the *old* hash:
+  `pysysml.edit.Editor(m._hash, c2)`. Killing the auto-started 50051 service mid-script instead
+  tends to hang the run — a `connect()` right after a `pkill -x sysml-grpc` did not return.
+- **`MissingCapabilityError` before the RPC.** Don't chase the v0.0.7 download; build the merge-base
+  with `git worktree add /tmp/oldmain main` + `go build -o /tmp/old-sysml-grpc ./cmd/sysml-grpc`
+  and run it on port 50099 (`-health-port 8099`; 8081 collides). Assert the old service still
+  serves reads (`load` + `eval`) and that the raise is `MissingCapabilityError`, not
+  `UnsupportedOperationError`/UNIMPLEMENTED — that class difference is the proof the check ran
+  client-side. The service logs no per-RPC lines at INFO, so "no ApplyEdits in the log" proves
+  nothing on its own.
+
+`Model.find` returns **None** for a missing symbol (only `model[name]` raises), so the
+"old name is gone after a rename" assertion must compare against `None`; a `try/except` around
+`find` passes even when the rename did nothing.
+
 ## `%check` and the SMT solver driver (PR #285)
 
 `%check <name>` asks an external solver about a constraint def, requirement def or satisfaction
