@@ -345,7 +345,7 @@ class Model:
             symbol_id (str): FQN of the part/usage to instantiate
 
         Returns:
-            Instance: The object built, with its slots and nested objects
+            Instance: The object built, with its feature values and nested objects
 
         Raises:
             ExecutionError: If the element could not be instantiated

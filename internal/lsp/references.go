@@ -5,60 +5,64 @@ import (
 
 	"go.lsp.dev/protocol"
 
+	"github.com/Open-MBEE/Systemica/internal/core/model"
+	"github.com/Open-MBEE/Systemica/internal/core/source"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
-// References returns all reference locations for the symbol under the cursor.
+// References returns every location naming the symbol under the cursor, in all
+// workspace documents, at whichever segment of a qualified name denotes it.
 func (s *Server) References(ctx context.Context, params *protocol.ReferenceParams) ([]protocol.Location, error) {
 	name := uriToName(params.TextDocument.URI)
 	doc := s.ws.Document(name)
 	if doc == nil || doc.Scope == nil {
 		return nil, nil
 	}
-	content := doc.Content
-	offset := positionToOffset(content, params.Position)
-
-	refs := collectRefs(doc.AST, doc.Scope)
-
-	// Determine the target symbol: either the cursor is on a reference (resolve it)
-	// or on a declaration (find the symbol whose DeclSpan contains the cursor).
-	var target *symbols.Symbol
-	if ref := refAtOffset(refs, offset); ref != nil {
-		if sym, ok := s.ws.ResolveReferenceInDoc(name, *ref); ok {
-			target = sym
-		}
-	}
-	if target == nil {
-		target = symbolAtOffset(doc.Scope, offset)
-	}
+	target := s.referenceTarget(name, doc, params.Position)
 	if target == nil {
 		return nil, nil
 	}
 
 	var out []protocol.Location
-	if params.Context.IncludeDeclaration {
-		out = append(out, s.symbolLocation(name, target))
+	seen := map[protocol.Location]bool{}
+	add := func(docName string, content []byte, span source.Span) {
+		loc := protocol.Location{URI: nameToURI(docName), Range: spanToRange(content, span)}
+		if seen[loc] {
+			return
+		}
+		seen[loc] = true
+		out = append(out, loc)
 	}
-	for _, ref := range refs {
-		sym, ok := s.ws.ResolveReferenceInDoc(name, ref)
-		// Pointer identity: same-document resolution stays inside the Document-tree
-		// scope captured above (ref.Scope points into doc.Scope), so sym and target
-		// are both Document-tree pointers and comparable. Cross-document references
-		// (resolved through the global index tree) are out of scope for v1 and would
-		// need FQN/DocName+DeclSpan equality instead of pointer identity.
-		if !ok || sym != target {
+
+	if params.Context.IncludeDeclaration {
+		loc := s.symbolLocation(name, target)
+		seen[loc] = true
+		out = append(out, loc)
+	}
+	for _, docName := range s.ws.DocumentNames() {
+		refDoc := s.ws.Document(docName)
+		if refDoc == nil || refDoc.Scope == nil {
 			continue
 		}
-		// A QualifiedName resolves to the symbol of its terminal segment, so the
-		// reference range highlights that segment, not the whole dotted name.
-		refSpan := ref.QN.Span()
-		if n := len(ref.QN.Parts); n > 0 {
-			refSpan = ref.QN.Parts[n-1].Span
+		for _, ref := range collectRefs(refDoc.AST, refDoc.Scope) {
+			for i, seg := range s.ws.ResolveReferenceSegmentsInDoc(docName, ref) {
+				if sameSymbol(seg, target) {
+					add(docName, refDoc.Content, ref.QN.Parts[i].Span)
+				}
+			}
 		}
-		out = append(out, protocol.Location{
-			URI:   nameToURI(name),
-			Range: spanToRange(content, refSpan),
-		})
 	}
 	return out, nil
+}
+
+// referenceTarget returns the symbol named at pos: the one a reference under the
+// cursor resolves to, or the declaration the cursor sits in.
+func (s *Server) referenceTarget(name string, doc *model.Document, pos protocol.Position) *symbols.Symbol {
+	offset := positionToOffset(doc.Content, pos)
+	if ref := refAtOffset(collectRefs(doc.AST, doc.Scope), offset); ref != nil {
+		if sym, ok := s.ws.ResolveReferenceInDoc(name, *ref); ok {
+			return sym
+		}
+	}
+	return symbolAtOffset(doc.Scope, offset)
 }

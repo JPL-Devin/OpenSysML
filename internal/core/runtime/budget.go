@@ -31,7 +31,7 @@ const (
 	DefaultMaxActionSteps int64 = 1000000
 	// DefaultMaxStateEvents bounds the events one state machine run dispatches.
 	DefaultMaxStateEvents int64 = 1000000
-	// DefaultMaxDoSteps bounds the do activity actions one state machine run
+	// DefaultMaxDoSteps bounds the do actions one state machine run
 	// performs.
 	DefaultMaxDoSteps int64 = 5000000
 	// DefaultMaxElements bounds the collection elements one evaluation holds,
@@ -59,7 +59,7 @@ const (
 
 // Budgets bounds one run of the runtime. The six bounds count incommensurable
 // things — expression evaluations, action token-flow steps, state machine
-// events, do activity actions, materialized collection elements and nested calc
+// events, do actions, materialized collection elements and nested calc
 // invocations — so raising one says nothing about the others.
 type Budgets struct {
 	MaxSteps       int64
@@ -99,7 +99,7 @@ var budgetVars = []budgetVar{
 	{MaxStepsEnvVar, DefaultMaxSteps, "evaluation steps", func(b *Budgets) *int64 { return &b.MaxSteps }, 0},
 	{MaxActionStepsEnvVar, DefaultMaxActionSteps, "action token-flow steps", func(b *Budgets) *int64 { return &b.MaxActionSteps }, 0},
 	{MaxStateEventsEnvVar, DefaultMaxStateEvents, "state machine events", func(b *Budgets) *int64 { return &b.MaxStateEvents }, 0},
-	{MaxDoStepsEnvVar, DefaultMaxDoSteps, "do activity steps", func(b *Budgets) *int64 { return &b.MaxDoSteps }, 0},
+	{MaxDoStepsEnvVar, DefaultMaxDoSteps, "do action steps", func(b *Budgets) *int64 { return &b.MaxDoSteps }, 0},
 	{MaxElementsEnvVar, DefaultMaxElements, "collection elements", func(b *Budgets) *int64 { return &b.MaxElements }, 0},
 	{MaxCalcDepthEnvVar, DefaultMaxCalcDepth, "nested calc invocations", func(b *Budgets) *int64 { return &b.MaxCalcDepth }, MaxCalcDepthCeiling},
 }

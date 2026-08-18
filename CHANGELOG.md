@@ -15,9 +15,26 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 - **`%slots <name>` still works**, as a deprecated alias: the same listing, led by
   `note: %slots is deprecated — use %features`. Nothing else about it changed — the nested
   expansion, its bounds, the error lines and the exit status a non-interactive run takes from a
-  slot that could not be materialized are all as they were.
-- Only the command surface is renamed. The runtime API (`runtime.Slot`, `Instance.Slots`,
-  `GetSlot`), the gRPC/proto field names and the `pysysml` attributes are unchanged.
+  feature value that could not be materialized are all as they were.
+- **The vocabulary behind the command is v2 too.** What was printed and named as a "slot" is now a
+  *feature value* (`FeatureValue`, `KerML.kerml`), and a state's `do` behavior is a *do action*
+  (`States.sysml`) rather than a "do activity":
+  - Message text changed: `feature value craft.volumes: multiplicity violation: …`,
+    `cyclic feature value dependency`, `uninitialized feature value`,
+    `no errors in the feature values checked`, and
+    `state machine exceeded max do action steps (…)`. The `%budget` label reads `do action steps`.
+    `SYSML_MAX_DO_STEPS` and every exit status are unchanged, but a script matching the old text
+    needs updating.
+  - The gRPC interface gained `Instance.feature_values` (`FeatureValue`) and the
+    `feature-values` capability. The deprecated `Instance.slots` (`SlotValue`) is still populated
+    identically, so an existing client keeps working.
+  - `pysysml` gained `Instance.features`, `raw_features`, `get_feature`, `FeatureValueError`, and
+    `typed.feature_value`/`optional_feature_value`/`list_feature_value`, which generated modules now
+    emit (emission schema `3`). `slots`, `raw_slots`, `get_slot`, `SlotError` and the `slot`
+    decoders remain as deprecated spellings, and `SlotError is FeatureValueError`.
+  - The internal Go runtime keeps its `Slot` names for now (`runtime.Slot`, `Instance.Slots`,
+    `GetSlot`); nothing outside the module depends on them, and renaming them would collide with
+    in-flight runtime work.
 
 ### The prompt prints the model it holds
 

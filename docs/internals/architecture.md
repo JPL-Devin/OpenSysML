@@ -288,18 +288,28 @@ Parse + model all behavioral bodies with unified fallback grammar:
 ### Features
 
 **Lifecycle:**
-- `initialize` — Advertise server capabilities
-- `initialized` — Acknowledge client ready
+- `initialize` — Advertise server capabilities, record the session's folders
+- `initialized` — Scan those folders and index every `.sysml`/`.kerml` file they
+  hold, so cross-file names resolve without the editor opening each file
 - `shutdown` / `exit` — Graceful termination
 
 **Document Synchronization:**
-- `textDocument/didOpen` — Track opened documents
+- `textDocument/didOpen` — Track opened documents (the buffer becomes authoritative)
 - `textDocument/didChange` — Incremental updates (UTF-8 byte offsets)
-- `textDocument/didClose` — Remove from workspace
-- `textDocument/didSave` — No-op (diagnostics on change)
+- `textDocument/didClose` — Revert to the file's on-disk content; the document
+  stays indexed, since other documents resolve names through it, but its markers
+  are withdrawn — only open documents carry diagnostics
+- `textDocument/didSave` — Refresh diagnostics for every open document
+- `workspace/didChangeWatchedFiles` — Reindex files created, edited or deleted
+  outside the editor; a deletion leaves an open buffer alone
+- `workspace/didChangeWorkspaceFolders` — Walk a folder added mid-session and
+  unindex what a removed one contributed, open buffers aside
 
 **Diagnostics:**
-- Publish on document open/change
+- Publish on document open/change; the edited document immediately, the other
+  open ones on a coalesced sweep once the edit burst settles, since each sweep
+  re-analyzes them
+- Withdrawn (empty set) for a document the workspace no longer holds
 - Syntax errors (parser)
 - Semantic errors (name resolution, type checking, validation passes)
 - Real-time feedback
@@ -315,9 +325,9 @@ Parse + model all behavioral bodies with unified fallback grammar:
 - Cross-document navigation
 
 **Find References (textDocument/references):**
-- Find all usages of symbol
-- Workspace-wide search
-- Include declaration option
+- Find all usages of symbol, in every workspace document, at whichever segment
+  of a qualified name denotes it
+- Include declaration option, reported in the declaring document
 
 **Completion (textDocument/completion):**
 - Trigger characters: `:`, `.`
@@ -343,7 +353,7 @@ Parse + model all behavioral bodies with unified fallback grammar:
 **Workspace Symbols (workspace/symbol):**
 - Global symbol search
 - Fuzzy matching
-- Aggregates across all documents
+- Aggregates across every indexed document, opened or not
 
 ### Implementation
 
@@ -351,7 +361,8 @@ Parse + model all behavioral bodies with unified fallback grammar:
 - `server.go` — Server lifecycle, stdio transport
 - `base.go` — Stub handlers for unimplemented LSP methods
 - `handler.go` — Custom didChange with pointer-valued Range (full vs incremental edits)
-- `sync.go` — Document synchronization (didOpen/didChange/didClose)
+- `sync.go` — Document synchronization (didOpen/didChange/didClose/didSave)
+- `files.go` — Folder scan and watched-file events (the on-disk half of the workspace)
 - `lifecycle.go` — Initialize capabilities advertisement
 - `diagnostics.go` — Error publishing
 - `hover.go`, `completion.go`, `definition.go`, `references.go`, `symbols.go` — Feature implementations

@@ -83,7 +83,7 @@ func TestDoBehaviorIsCancelledWhenItsStateIsExited(t *testing.T) {
 	if ticks := ticksAfter(t, exec); ticks >= 4 {
 		t.Errorf("the do behavior ran to its end (%d actions) although its state was exited", ticks)
 	}
-	if exec.hasRunningDoActivity(work) {
+	if exec.hasRunningDoAction(work) {
 		t.Error("the do behavior of an exited state is still running")
 	}
 }
@@ -222,7 +222,7 @@ func TestDoBehaviorsOfOrthogonalRegionsInterleave(t *testing.T) {
 	var bothRan bool
 	for i := 0; i < 100 && !containsState(exec.stateVisits, "rdone"); i++ {
 		stepMachine(t, exec)
-		if exec.hasRunningDoActivity(lwork) && exec.hasRunningDoActivity(rwork) {
+		if exec.hasRunningDoAction(lwork) && exec.hasRunningDoAction(rwork) {
 			bothRan = true
 		}
 	}

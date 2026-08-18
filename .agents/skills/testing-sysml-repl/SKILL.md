@@ -925,7 +925,7 @@ about the others:
 | `SYSML_MAX_STEPS` | 10000000 | expression evaluations |
 | `SYSML_MAX_ACTION_STEPS` | 1000000 | action token-flow steps |
 | `SYSML_MAX_EVENTS` | 1000000 | state machine events, and the events one `%advance` drains |
-| `SYSML_MAX_DO_STEPS` | 5000000 | do-activity actions, ditto for `%advance` |
+| `SYSML_MAX_DO_STEPS` | 5000000 | do actions, ditto for `%advance` |
 | `SYSML_MAX_ELEMENTS` | 1000000 | collection elements one evaluation holds (~104 MB of `Value`s), the memory bound: `(1..2000000)` reports `collection element limit exceeded`, not the step limit, while a loop building a small collection many times is unaffected |
 
 `%budget` prints the five bounds in force with the variable raising each, so a test can read what a

@@ -29,7 +29,7 @@ from pysysml.edit import AppliedEdit, EditResult, Editor
 from pysysml.errors import (
     PySysMLError, ChecksumMismatchError, ConnectionError, ConversionError,
     EditError, EditResultError, EditTargetError, ExecutionError,
-    InvalidEditError, NoEditsError, OverlappingEditsError,
+    FeatureValueError, InvalidEditError, NoEditsError, OverlappingEditsError,
     RenameReferencedError,
     InstanceTypeError, InvalidRequestError, ModelError,
     ModelFileNotFoundError, ModelNotFoundError, ServiceError,
@@ -50,7 +50,7 @@ __all__ = [
     "Verdict", "CalcResult",
     "QueryElement", "QueryError",
     "PySysMLError", "ChecksumMismatchError", "ConnectionError",
-    "ConversionError", "ExecutionError",
+    "ConversionError", "ExecutionError", "FeatureValueError",
     "EditError", "NoEditsError", "EditTargetError", "InvalidEditError",
     "RenameReferencedError", "OverlappingEditsError", "EditResultError",
     "InstanceTypeError", "InvalidRequestError", "MissingCapabilityError",

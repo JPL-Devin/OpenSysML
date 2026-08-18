@@ -59,12 +59,17 @@ const CapabilityUnsetValue = "unset_value"
 // a parsed model's own source, preserving everything the edit did not touch.
 const CapabilityApplyEdits = "apply_edits"
 
+// CapabilityFeatureValues names the capability of populating
+// Instance.feature_values, the current spelling of the deprecated
+// Instance.slots, which is still populated identically.
+const CapabilityFeatureValues = "feature_values"
+
 // capabilities is what this build supports, in report order. A capability is
 // only ever added: renaming or dropping one breaks clients that require it.
 var capabilities = []string{
 	CapabilityTypeFacts, CapabilityConvert, CapabilityVerification, CapabilityQuery,
 	CapabilityEnumValues, CapabilityEvaluateSubject, CapabilitySymbolAttributes,
-	CapabilityUnsetValue, CapabilityApplyEdits,
+	CapabilityUnsetValue, CapabilityFeatureValues, CapabilityApplyEdits,
 }
 
 // Capabilities returns the capability names this build of the service reports.

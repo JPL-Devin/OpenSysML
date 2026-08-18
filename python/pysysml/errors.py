@@ -99,32 +99,37 @@ class UnsupportedValueError(PySysMLError):
     """Raised when the service sends a value the wire format cannot represent."""
 
 
-class SlotError(PySysMLError):
-    """Raised when a slot could not be evaluated or was never materialized.
+class FeatureValueError(PySysMLError):
+    """Raised when a feature value could not be evaluated or was never materialized.
 
     Attributes:
-        feature_name (str): Name of the slot
+        feature_name (str): Name of the feature
         message (str): Error description reported by the service
     """
 
     def __init__(self, feature_name, message):
-        super().__init__(f"slot {feature_name!r}: {message}")
+        super().__init__(f"feature value {feature_name!r}: {message}")
         self.feature_name = feature_name
         self.message = message
 
 
+#: Deprecated spelling of :class:`FeatureValueError`; ``except SlotError`` still
+#: catches it, since it is the same class.
+SlotError = FeatureValueError
+
+
 class TypeMismatchError(PySysMLError):
-    """Raised when a slot holds a value of another type than its generated view declares.
+    """Raised when a feature holds a value of another type than its generated view declares.
 
     Attributes:
-        feature_name (str): Name of the slot
+        feature_name (str): Name of the feature
         expected (str): Type the generated class declares
-        value: The value actually decoded from the slot
+        value: The value actually decoded
     """
 
     def __init__(self, feature_name, expected, value):
         super().__init__(
-            f"slot {feature_name!r}: expected {expected}, got {value!r}"
+            f"feature value {feature_name!r}: expected {expected}, got {value!r}"
         )
         self.feature_name = feature_name
         self.expected = expected
@@ -481,6 +486,7 @@ __all__ = [
     "ModelFileNotFoundError",
     "ModelNotFoundError",
     "ServiceError",
+    "FeatureValueError",
     "ServiceTimeoutError",
     "SlotError",
     "StaleServiceError",

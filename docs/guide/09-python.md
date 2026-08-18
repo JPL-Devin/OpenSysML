@@ -142,17 +142,17 @@ engine.specializations   # [Specialization(kind='typing', target_id='Demo::Engin
 
 ## Instances
 
-Slot values come back as Python values, and a slot holding an object comes back
-as a nested `Instance`:
+Feature values come back as Python values, and a feature value holding an object
+comes back as a nested `Instance`:
 
 ```python
 inst = model.instantiate("Demo::Vehicle")
 
 inst.mass                 # 1500.0
 inst["mass"]              # 1500.0
-inst.engine               # Instance(id=2, type='Demo::Engine', slots=1)
+inst.engine               # Instance(id=2, type='Demo::Engine', features=1)
 inst.engine.power         # 300.0
-inst.slots                # {'mass': 1500.0, 'engine': Instance(...)}
+inst.features             # {'mass': 1500.0, 'engine': Instance(...)}
 inst.get("missing", 0)    # 0
 ```
 
@@ -160,7 +160,7 @@ Integers, reals, booleans, strings and sequences map to `int`, `float`, `bool`,
 `str` and `list`. Unknown names raise `AttributeError` (attribute access) or
 `KeyError` (item access), so `hasattr`, `copy` and `pickle` behave.
 
-A slot holding no value — a valueless feature of a value type, `attribute d : Real;` —
+A feature value holding nothing — a valueless feature of a value type, `attribute d : Real;` —
 reads as `pysysml.UNSET`, the same thing `%features` and `-instantiate` spell `<unset>`. It
 is falsy and is not `None`, which stays the model's `null`:
 
@@ -173,26 +173,30 @@ The service expands the object graph to depth 8 and stops at a type already on
 the path, so a part containing its own kind terminates; a child it did not
 expand comes back as its bare integer id rather than an `Instance`.
 
-The raw protobuf stays reachable: `get_slot(name)` returns the `SlotValue`
-message, and `raw_slots` is the whole map.
+The raw protobuf stays reachable: `get_feature(name)` returns the `FeatureValue`
+message, and `raw_features` is the whole map.
 
 ```python
-inst.get_slot("mass").materialized         # True
-inst.get_slot("engine").value.instance_id  # 2
+inst.get_feature("mass").materialized         # True
+inst.get_feature("engine").value.instance_id  # 2
 ```
 
-A slot the service could not evaluate — a cyclic derived attribute, say — is
-never reported as `None`. Attribute and item access raise `SlotError`, while
-`slots` carries the `SlotError` as that entry's value so the rest of the
+A feature value the service could not evaluate — a cyclic derived attribute, say — is
+never reported as `None`. Attribute and item access raise `FeatureValueError`, while
+`features` carries the `FeatureValueError` as that entry's value so the rest of the
 instance stays inspectable.
 
 ```python
-cyclic.a             # raises SlotError: slot 'a': ... cyclic slot dependency
-cyclic.slots["a"]    # SlotError(...)
+cyclic.a               # raises FeatureValueError: feature value 'a': ... cyclic feature value dependency
+cyclic.features["a"]   # FeatureValueError(...)
 ```
 
-`SlotError` is not an `AttributeError`, so `hasattr` on such a slot propagates it rather than
-returning `False`; use `slots` to inspect an instance whose slots may have failed.
+`FeatureValueError` is not an `AttributeError`, so `hasattr` on such a feature propagates it
+rather than returning `False`; use `features` to inspect an instance whose feature values may
+have failed.
+
+`slots`, `raw_slots`, `get_slot` and `SlotError` remain as deprecated spellings of
+`features`, `raw_features`, `get_feature` and `FeatureValueError`.
 
 `eval` returns a single value, so a result the wire format cannot represent raises
 `UnsupportedValueError` rather than being reported per entry.
@@ -338,10 +342,10 @@ PySysMLError
 │   └── WrongKindError         the call named an element of another kind than it asks about
 ├── ModelError                 strict load of a model with error diagnostics
 ├── SymbolNotFoundError        model["Nope"] (also KeyError)
-├── SlotError                  a slot could not be evaluated
+├── FeatureValueError          a feature value could not be evaluated
 ├── ConversionError            the model could not be written in that format
 ├── UnsupportedValueError      a value the wire format cannot represent
-├── TypeMismatchError          a slot's value contradicts its generated view
+├── TypeMismatchError          a feature value contradicts its generated view
 ├── InstanceTypeError          a typed view was given an instance of another type
 └── MissingCapabilityError     the connected service does not report the capability
 ```

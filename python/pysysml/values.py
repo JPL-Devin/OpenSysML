@@ -1,10 +1,10 @@
-"""Conversion between protobuf Value/SlotValue messages and Python values."""
+"""Conversion between protobuf Value/FeatureValue messages and Python values."""
 
 from dataclasses import dataclass, field
 from typing import Dict, Tuple, Union
 
 from pysysml.enumeration import EnumLiteral
-from pysysml.errors import PySysMLError, SlotError, UnsupportedValueError
+from pysysml.errors import FeatureValueError, PySysMLError, UnsupportedValueError
 from pysysml.proto import sysml_pb2
 
 #: What a quantity's magnitude can be: the service keeps Integer and Real apart.
@@ -155,7 +155,7 @@ class Unit:
 class Quantity:
     """A magnitude and the measurement reference it is expressed in.
 
-    This is what a quantity-valued slot holds: ``inst.mass`` of
+    This is what a quantity-valued feature holds: ``inst.mass`` of
     ``attribute mass : ISQ::MassValue = 5.0 [SI::kg]`` is ``Quantity(5.0,
     Unit("kg"))``. The magnitude is the one the model wrote, in the unit it wrote
     it in — nothing is reduced to base units behind the caller's back — while
@@ -342,7 +342,7 @@ class Quantity:
 
 
 class UnsetType:
-    """A slot holding no value: a valueless feature of a value type.
+    """A feature holding no value: a valueless feature of a value type.
 
     Distinct from ``None``, the model's ``null``. Falsy, reads as ``<unset>``
     as every other surface spells it, and is a singleton, so ``is UNSET`` tests it.
@@ -364,7 +364,7 @@ class UnsetType:
     __str__ = __repr__
 
 
-#: The value of a slot that holds none. See :class:`UnsetType`.
+#: The value of a feature that holds none. See :class:`UnsetType`.
 UNSET = UnsetType()
 
 
@@ -413,37 +413,41 @@ def value_to_python(pb_value, resolve_instance=None):
     return None
 
 
-def slot_to_python(feature_name, pb_slot, resolve_instance=None):
-    """Convert a protobuf SlotValue into a plain Python value.
+def feature_value_to_python(feature_name, pb_value_msg, resolve_instance=None):
+    """Convert a protobuf FeatureValue into a plain Python value.
 
     Args:
-        feature_name (str): Slot name, used for error reporting
-        pb_slot: sysml_pb2.SlotValue message
+        feature_name (str): Feature name, used for error reporting
+        pb_value_msg: sysml_pb2.FeatureValue message (or the deprecated SlotValue)
         resolve_instance: optional callable mapping an instance id to an object
 
     Returns:
-        The scalar value, :data:`UNSET` for one holding no value, or a list for
-        collection slots.
+        The single value, :data:`UNSET` for one holding no value, or a list for
+        a multi-valued feature.
 
     Raises:
-        SlotError: If evaluation failed or the slot was never materialized.
+        FeatureValueError: If evaluation failed or nothing was materialized.
     """
-    if pb_slot.error:
-        raise SlotError(feature_name, pb_slot.error)
+    if pb_value_msg.error:
+        raise FeatureValueError(feature_name, pb_value_msg.error)
 
-    if pb_slot.HasField('value'):
+    if pb_value_msg.HasField('value'):
         try:
-            return value_to_python(pb_slot.value, resolve_instance)
+            return value_to_python(pb_value_msg.value, resolve_instance)
         except UnsupportedValueError as exc:
-            raise SlotError(feature_name, str(exc)) from exc
+            raise FeatureValueError(feature_name, str(exc)) from exc
 
-    if pb_slot.values:
+    if pb_value_msg.values:
         try:
-            return [value_to_python(v, resolve_instance) for v in pb_slot.values]
+            return [value_to_python(v, resolve_instance) for v in pb_value_msg.values]
         except UnsupportedValueError as exc:
-            raise SlotError(feature_name, str(exc)) from exc
+            raise FeatureValueError(feature_name, str(exc)) from exc
 
-    if pb_slot.materialized:
+    if pb_value_msg.materialized:
         return []
 
-    raise SlotError(feature_name, "slot is not materialized")
+    raise FeatureValueError(feature_name, "feature value is not materialized")
+
+
+#: Deprecated spelling of :func:`feature_value_to_python`.
+slot_to_python = feature_value_to_python

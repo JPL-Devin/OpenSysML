@@ -111,6 +111,35 @@ func (w *Workspace) SetOnDisk(name string, content []byte) {
 	}
 }
 
+// DeleteOnDisk forgets the on-disk bytes recorded for name. An open document
+// keeps its authoritative buffer; a closed one leaves the document set.
+func (w *Workspace) DeleteOnDisk(name string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	delete(w.onDisk, name)
+	if !w.open[name] {
+		w.removeLocked(name)
+	}
+}
+
+// IsOpen reports whether name has an authoritative open buffer.
+func (w *Workspace) IsOpen(name string) bool {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	return w.open[name]
+}
+
+// OpenNames returns a snapshot of the names with an open buffer.
+func (w *Workspace) OpenNames() []string {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	names := make([]string, 0, len(w.open))
+	for name := range w.open {
+		names = append(names, name)
+	}
+	return names
+}
+
 // Close drops the open buffer for name; the document reverts to on-disk content
 // if any, otherwise it is removed.
 func (w *Workspace) Close(name string) {
@@ -162,12 +191,30 @@ func (w *Workspace) invalidateLocked() {
 func (w *Workspace) Diagnostics(name string) []passes.Diagnostic {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if cached, ok := w.diagCache[name]; ok {
-		return cached
-	}
 	doc := w.docs[name]
 	if doc == nil {
 		return nil
+	}
+	return w.diagnosticsLocked(name, doc)
+}
+
+// AnalyzedContent returns a document's diagnostics together with the content
+// they were computed against, so an edit cannot split the two. Reports whether
+// the document exists.
+func (w *Workspace) AnalyzedContent(name string) ([]byte, []passes.Diagnostic, bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	doc := w.docs[name]
+	if doc == nil {
+		return nil, nil, false
+	}
+	return doc.Content, w.diagnosticsLocked(name, doc), true
+}
+
+// diagnosticsLocked analyzes doc, caching the result. Caller holds the lock.
+func (w *Workspace) diagnosticsLocked(name string, doc *Document) []passes.Diagnostic {
+	if cached, ok := w.diagCache[name]; ok {
+		return cached
 	}
 	parseDiags := make([]passes.Diagnostic, 0, len(doc.ParseDiagnostics)+len(doc.ParseWarnings))
 	for _, pd := range doc.ParseDiagnostics {

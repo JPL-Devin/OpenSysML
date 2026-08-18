@@ -68,7 +68,7 @@ package Demo {
 		t.Error("root instance missing from Instances")
 	}
 
-	engine := resp.Instance.Slots["engine"]
+	engine := resp.Instance.FeatureValues["engine"]
 	if engine == nil {
 		t.Fatal("expected engine slot")
 	}
@@ -84,7 +84,7 @@ package Demo {
 	if child.TypeSymbolId != "Demo::Engine" {
 		t.Errorf("child type = %q, want Demo::Engine", child.TypeSymbolId)
 	}
-	if got := child.Slots["power"].Value.GetRealValue(); got != 300.0 {
+	if got := child.FeatureValues["power"].Value.GetRealValue(); got != 300.0 {
 		t.Errorf("child power = %v, want 300", got)
 	}
 }
@@ -112,15 +112,15 @@ package Demo {
 		t.Fatalf("expected 3 reachable instances, got %d", len(graph))
 	}
 
-	engine := graph[resp.Instance.Slots["engine"].Value.GetInstanceId()]
+	engine := graph[resp.Instance.FeatureValues["engine"].Value.GetInstanceId()]
 	if engine == nil {
 		t.Fatal("engine instance missing")
 	}
-	bolt := graph[engine.Slots["bolt"].Value.GetInstanceId()]
+	bolt := graph[engine.FeatureValues["bolt"].Value.GetInstanceId()]
 	if bolt == nil {
 		t.Fatal("bolt instance missing")
 	}
-	if got := bolt.Slots["size"].Value.GetIntValue(); got != 8 {
+	if got := bolt.FeatureValues["size"].Value.GetIntValue(); got != 8 {
 		t.Errorf("bolt size = %d, want 8", got)
 	}
 }
@@ -140,7 +140,7 @@ package Demo {
 `
 	resp := instantiate(t, content, "graph-collection", "Demo::Vehicle")
 
-	slot := resp.Instance.Slots["wheels"]
+	slot := resp.Instance.FeatureValues["wheels"]
 	if slot == nil {
 		t.Fatal("expected wheels slot")
 	}
@@ -179,7 +179,7 @@ package Demo {
 `
 	resp := instantiate(t, content, "graph-unmaterialized", "Demo::Sensor")
 
-	slot := resp.Instance.Slots["reading"]
+	slot := resp.Instance.FeatureValues["reading"]
 	if slot == nil {
 		t.Fatal("expected reading slot")
 	}
@@ -192,7 +192,7 @@ package Demo {
 }
 
 // TestInstantiate_SlotErrorReported verifies a cyclic derived attribute is
-// reported through SlotValue.error rather than as a null value.
+// reported through FeatureValue.error rather than as a null value.
 func TestInstantiate_SlotErrorReported(t *testing.T) {
 	content := `
 package Demo {
@@ -204,7 +204,7 @@ package Demo {
 `
 	resp := instantiate(t, content, "graph-cyclic", "Demo::Cyclic")
 
-	slot := resp.Instance.Slots["a"]
+	slot := resp.Instance.FeatureValues["a"]
 	if slot == nil {
 		t.Fatal("expected slot a")
 	}
@@ -244,7 +244,7 @@ package Demo {
 		if len(resp.Instances) != 1 {
 			t.Errorf("expected only the root instance, got %d", len(resp.Instances))
 		}
-		if id := resp.Instance.Slots["next"].Value.GetInstanceId(); id == 0 {
+		if id := resp.Instance.FeatureValues["next"].Value.GetInstanceId(); id == 0 {
 			t.Error("expected the unexpanded child to stay a bare instance id")
 		}
 	case <-time.After(30 * time.Second):
