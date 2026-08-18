@@ -1,0 +1,56 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="P" library=false standard=false
+      (Membership visibility="default"
+        (Usage kind="part" name="x" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="requirement" name="r" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Usage kind="connection" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (ConnectorEnd target="r"
+              (*ast.QualifiedName))
+            (ConnectorEnd target="x"
+              (*ast.QualifiedName)))
+          (Usage kind="flow" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (FlowEnds from="x" to="x" payload="nil" declared=false))
+          (Usage kind="flow" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="message"
+            (FlowEnds from="x" to="x" payload="nil" declared=false))))
+      (Membership visibility="default"
+        (Usage kind="constraint" name="c" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="connection" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="x"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="x"
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Usage kind="concern" name="cn" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Usage kind="connection" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (ConnectorEnd target="x"
+              (*ast.QualifiedName))
+            (ConnectorEnd target="x"
+              (*ast.QualifiedName)))))
+      (Membership visibility="default"
+        (Definition kind="verification case" abstract=false variation=false name="V"
+          (Membership visibility="default"
+            (Usage kind="objective" name="o" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Usage kind="connection" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                (ConnectorEnd target="x"
+                  (*ast.QualifiedName))
+                (ConnectorEnd target="x"
+                  (*ast.QualifiedName)))))))
+      (Membership visibility="default"
+        (Usage kind="use case" name="uc" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="connection" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="x"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="x"
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Usage kind="view" name="v" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="connection" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="x"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="x"
+                (*ast.QualifiedName)))))))))

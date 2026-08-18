@@ -1380,12 +1380,9 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 				p.parseMultiplicity() // end multiplicity, not the connector's
 			}
 			if source := p.parseRelationshipTarget(); source != nil {
-				u.Relationships = append(u.Relationships, &ast.Relationship{
-					Kind:   ast.RelRedefines, // Use redefines to mark binding source
-					Target: source,
-				})
+				u.Relationships = append(u.Relationships, bindingEnd(source))
 			}
-		} else if p.atNameOrKeyword() && p.peekN(1).Kind != lexer.Dot && p.peekN(1).Kind != lexer.LBracket {
+		} else if p.atNameOrKeyword() && p.peekN(1).Kind != lexer.Dot && p.peekN(1).Kind != lexer.ColonColon && p.peekN(1).Kind != lexer.LBracket {
 			// Parse source (name or feature chain like x.field)
 			// Check if simple name or feature chain
 			// Simple name - use as identification
@@ -1396,14 +1393,11 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 			u.Ident = p.parseIdentification()
 			// Don't parse multiplicity yet, handle after checking for "of"
 		} else {
-			// Feature chain or qualified name - parse as relationship target
-			// Store in relationships as source (redefines relationship to indicate binding source)
+			// A qualified name or feature chain here states the binding's first
+			// end, not the connector's name.
 			source := p.parseRelationshipTarget()
 			if source != nil {
-				u.Relationships = append(u.Relationships, &ast.Relationship{
-					Kind:   ast.RelRedefines, // Use redefines to mark binding source
-					Target: source,
-				})
+				u.Relationships = append(u.Relationships, bindingEnd(source))
 			}
 		}
 
@@ -1420,10 +1414,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 				p.parseMultiplicity() // end multiplicity, not the connector's
 			}
 			if source := p.parseRelationshipTarget(); source != nil {
-				u.Relationships = append(u.Relationships, &ast.Relationship{
-					Kind:   ast.RelRedefines, // Use redefines to mark binding source
-					Target: source,
-				})
+				u.Relationships = append(u.Relationships, bindingEnd(source))
 			}
 		}
 
@@ -1433,10 +1424,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 			// Parse source as relationship target
 			source := p.parseRelationshipTarget()
 			if source != nil {
-				u.Relationships = append(u.Relationships, &ast.Relationship{
-					Kind:   ast.RelRedefines, // Use redefines to mark binding source
-					Target: source,
-				})
+				u.Relationships = append(u.Relationships, bindingEnd(source))
 			}
 		}
 
@@ -2787,6 +2775,13 @@ func (p *Parser) parseReferenceMemberUsage(start int, kind ast.UsageKind, kw, no
 	return u
 }
 
+// bindingEnd records the first end of a binding connector. A connector end
+// reference-subsets the feature it names (KerML OwnedReferenceSubsetting), so
+// it resolves outside the connector rather than as an inherited redefinition.
+func bindingEnd(target ast.Node) *ast.Relationship {
+	return &ast.Relationship{Kind: ast.RelReferences, Target: target}
+}
+
 // parseRelationshipTarget parses a relationship target which can be either:
 // - A qualified name (A::B::C)
 // - A feature chain (A.B.C or A::B.C.D - mix of :: and .)
@@ -2813,16 +2808,16 @@ func (p *Parser) parseRelationshipTarget() ast.Node {
 
 	for p.at(lexer.Dot) {
 		p.advance() // consume '.'
-		// Parse member name
-		seg, ok := p.parseNameSegmentRelaxed()
-		if !ok {
+		// Each chaining feature of a chain is itself a qualified name
+		// (KerML OwnedFeatureChaining: chainingFeature = [Feature|QualifiedName]).
+		if !p.atNameOrKeyword() && !(p.at(lexer.Dollar) && p.peekN(1).Kind == lexer.ColonColon) {
 			p.error(p.peek().Span, "expected a name after '.'")
 			break
 		}
-
-		// Create member name as QualifiedName
-		memberName := &ast.QualifiedName{Parts: []ast.NameSegment{seg}}
-		memberName.NodeSpan = seg.Span
+		memberName := p.parseQualifiedNameRelaxed()
+		if memberName == nil {
+			break
+		}
 
 		chain := &ast.FeatureChainExpr{
 			Operand: operand,

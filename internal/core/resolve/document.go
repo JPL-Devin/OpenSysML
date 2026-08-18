@@ -914,8 +914,37 @@ func (r *Resolver) resolveFeatureChain(scope *symbols.Scope, fc *ast.FeatureChai
 		operandSym = featuring
 	}
 
+	// A chaining feature spelled as a qualified name resolves outward through the
+	// enclosing namespaces when the previous element has no such member (KerML
+	// §7.2.5): in `A::B.C::D`, `C::D` names a declaration, not a member of `B`.
+	// The outward reading is probed, so that a chain the walk below reads instead
+	// keeps its own diagnostics and per-segment symbols (see probe).
+	if len(fc.Member.Parts) > 1 {
+		if _, ok := r.chainMember(operandSym, fc.Member.Parts[0].Text); !ok {
+			outward := r.probe(fc.Member, func() bool {
+				_, ok := r.ResolveQualified(scope, fc.Member)
+				return ok
+			})
+			if outward {
+				return
+			}
+		}
+	}
+
 	// Walk member parts explicitly, assigning symbols to each part
 	r.resolveMemberChain(operandSym, fc.Member)
+}
+
+// chainMember looks a chain segment up as the member walk does: as a member of
+// sym when a model is attached, else in sym's own scope.
+func (r *Resolver) chainMember(sym *symbols.Symbol, name string) (*symbols.Symbol, bool) {
+	if found, ok := r.lookupMember(sym, name); ok {
+		return found, true
+	}
+	if sym == nil || sym.Scope == nil {
+		return nil, false
+	}
+	return sym.Scope.LookupLocal(name)
 }
 
 // resolveMemberChain walks a qualified name member-by-member in the given scope,

@@ -1832,10 +1832,12 @@ func (p *Parser) parseRequirementMember() ast.Node {
 
 // usageIsSubstantive reports whether a usage declares anything: a name, a
 // relationship of any kind (`ref concern :>> self : ConcernCheck` takes its name
-// from its redefinition), a value or a body. A usage with none of those came
-// from a keyword the requirement body parser handles itself.
+// from its redefinition), a value, a body or connector/flow ends (an anonymous
+// `connection connect a to b`). A usage with none of those came from a keyword
+// the requirement body parser handles itself.
 func usageIsSubstantive(u *ast.Usage) bool {
-	return u.Ident.Name != "" || len(u.Relationships) > 0 || u.Value != nil || len(u.Members) > 0
+	return u.Ident.Name != "" || len(u.Relationships) > 0 || u.Value != nil || len(u.Members) > 0 ||
+		len(u.ConnectorEnds) > 0 || u.FlowEnds != nil
 }
 
 // parseSubjectMember parses: subject <name> : <Type>; OR subject = <expr>; OR subject <name> = <expr>;

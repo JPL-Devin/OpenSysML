@@ -784,6 +784,8 @@ semantics layer over the conjugation parity of the typing/specialization chain.
 | Every usage element subsets the most general base usage `Base::things`, whose `that` feature is therefore visible in a usage body (§7.6, [KerML 8.4.2]) | `semantics/implicit.go` `implicitBaseUsage`, `semantics/reference.go` `contributors` | `semantics/implicit_test.go` `TestImplicitBaseUsageContributesThat`, `model/that_constraint_test.go` `TestThatResolvesInAssertedConstraint` | ✅ Faithful (a member-contribution edge only: it is deliberately not a direct supertype, so conformance and `DirectSupertypes` are unchanged) |
 | The notation the Open-MBEE corpus models write stays clean at every validation tier: a conjugated interface *and* connection end, `connect`/`flow` between two such ends, and a portion prefixed onto a kind keyword and named as its whole occurrence is (`item item1 { timeslice item item1; }`) | the rules above (`parser/defusage.go` end and portion prefixes, `semantics/conjugation.go`, `passes/typecheck.go` `checkConjugatedTyping`) | `passes/integration_test.go` `TestPassesGoldenCorpusNotation` over `testdata/passes/corpus_notation.golden` (`(no diagnostics)`), `parser/negative_test.go` (`conjugated_end_no_type`) | ✅ Faithful |
 | A succession may be written with no keyword at the start of a namespace member: `first a::b then c;` (`SuccessionAsUsage`) | `parser/namespace.go` `parseMember`, `parseSuccessionAsUsage` | `parse/succession_as_usage.golden` | ✅ Faithful |
+| Each end of a binding connector is a `ConnectorEnd`, so it names a feature by a `QualifiedName` or by a feature chain each of whose chaining features is itself a qualified name (§8.2.2.9.2 `BindingConnectorAsUsage`/`ConnectorEndMember`, [KerML 8.3.3.2] `OwnedReferenceSubsetting`, `OwnedFeatureChaining`): `bind A::b.C::d.e = F::g;`. The chain is recorded segment by segment (nested `ast.FeatureChainExpr` whose `Member` is the full qualified name), and the end is a `ReferenceSubsetting`, so it resolves outside the connector rather than as an inherited redefinition | `parser/defusage.go` `parseUsage` UsageBinding branch, `bindingEnd`, `parseRelationshipTarget`; `resolve/document.go` `resolveFeatureChain` (a qualified chaining feature resolves outward when the previous element has no such member) | `parse/binding_qualified_ends.golden`, `resolve/analysis_test.go` `TestResolveQualifiedBindingChain`, `parser/negative_test.go` (`binding_end_qualification_no_name`, `binding_end_chain_trailing_dot`, `binding_end_chain_trailing_dot_qualified`, `binding_end_unterminated`, `binding_end_no_target`) | ✅ Faithful |
+| A requirement-like body admits usage elements, so a connector, flow or message written with its kind keyword (`connection connect r to x;`) is a member of a `requirement`, `constraint`, `concern`, `objective`, `use case` or `view` body exactly as it is at package level (§8.2.2.19 `RequirementBody` → `DefinitionBodyItem` → `UsageElement`) | `parser/behavior.go` `parseRequirementMember`, `usageIsSubstantive` (a connector or flow usage declares no name, so its ends are what make it substantive) | `parse/requirement_body_prefixed_usages.golden` | ✅ Faithful |
 
 **Known limitations of this notation**
 
@@ -795,8 +797,8 @@ semantics layer over the conjugation parity of the typing/specialization chain.
   keyword-less end, `DefaultReferenceUsage`, requires a `UsageDeclaration`.
   OpenSysML reports these with a typed diagnostic naming the conforming form
   (`end ref;`, which `ReferenceUsage` does allow) rather than inventing grammar.
-- `Dragon.sysml` and `OOSEM.sysml` type their views by `'SysML Standard
-  Diagrams'::gv` (7 sites). No such namespace exists in the OMG release library
+- `Dragon.sysml`, `OOSEM.sysml` and `DesertKite.sysml` type their views by `'SysML
+  Standard Diagrams'::gv` (7, 3 and 10 sites). No such namespace exists in the OMG release library
   or the pilot implementation — it is a tool-specific package, not part of the
   standard library — so it is not vendored under that name and no alias to
   `StandardViewDefinitions` is fabricated. The diagnostic says the namespace is
@@ -1319,6 +1321,12 @@ the `@type` mapping and the comparison choices.
   (`end ;` outside an interface body, `'SysML Standard Diagrams'::gv`) and unresolved library
   references in the notebook models (`Scalarattributes::String`, `start`, `envelopingShapes`,
   `mRefs`). The conjugated end and `timeslice item item1` are legal and are accepted
+- what `DesertKite.sysml` (branch `InitialDesign`) and `OOSEM.sysml` report, and nothing else:
+  the `'SysML Standard Diagrams'::gv` sites above; `attribute 'Animal Capture Rate' :>> OOSEM::MOE;`,
+  where `MOE` is the short name of a member of `OOSEM::'OOSEM Measures'` and so is not a member of
+  `OOSEM` itself; and 3 references to the decision node `__unnamed1` of `'Move with Herd'`, which
+  resolve to nothing because a control node's name is not registered as a symbol
+  (`symbols/builder.go` `buildDecl`)
 
 **Go gRPC layer:**
 - `SymbolInfo.attributes` reports only defaults that fold to a model-level
