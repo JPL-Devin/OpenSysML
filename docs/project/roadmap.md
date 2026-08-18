@@ -896,7 +896,7 @@ all; the pair for this concept is `Feature` (`KerML.kerml:164`) and `FeatureValu
 (`KerML.kerml:360-366`).
 
 The user-facing half is handled: the REPL command is `%features`, with `%slots` kept as a
-deprecated alias, and the printed error and report wording plus the v2-named gRPC and `pysysml`
+deprecated alias, and the printed error and report wording plus the v2-named gRPC and `opensysml`
 aliases (the old names keep working) follow in the terminology PR.
 
 What is left is the Go layer — `runtime.Slot`, `Instance.Slots`, `GetSlot`, `SlotError`,
