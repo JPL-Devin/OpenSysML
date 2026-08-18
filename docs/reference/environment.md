@@ -17,6 +17,14 @@ into a reported error instead of a hang.
 | `OPENSYSML_SMT_CORE_BUDGET` | `30s` | How long `%explain` may spend reducing an unsat core to a minimal one, as a Go duration; past it the solver's own core is reported, said not to be necessarily minimal |
 | `SYSML_GRPC_INDEX_POOL` | `4` | How many standard library indexes `sysml-grpc` keeps prewarmed for the models it has not seen yet; `0` loads the library on each request instead |
 
+The three `OPENSYSML_SMT*` variables belong to the experimental solving extension
+(`%check`/`%explain`), which needs an external z3 or cvc5 — installing one, per platform, is
+[1. Install: installing a solver](../guide/01-install.md#installing-a-solver-optional).
+`OPENSYSML_SMT` takes an executable name or a path and is consulted before `PATH`, where `z3`
+is preferred over `cvc5`; a value naming no executable file is reported rather than falling
+back to the search. Nothing else in the toolchain reads them, and the concrete evaluator needs
+no solver.
+
 Each budget is what turns a non-terminating run into a reported error instead of
 a hang. They count incommensurable things — expression evaluations, action token
 steps, dispatched events, do actions, materialized collection elements —

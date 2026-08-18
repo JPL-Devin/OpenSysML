@@ -148,6 +148,7 @@ func TestNegative(t *testing.T) {
 		// body, and a portion usage declares what it portions.
 		{"conjugated_no_type", "part def P { port p : ~; }"},
 		{"conjugated_no_type_after_name", "port def P; port p ~;"},
+		{"conjugated_end_no_type", "connection def C { end e : ~; }"},
 		{"end_outside_connector", "part def P { end ; }"},
 		{"end_outside_connector_package", "package p { end ; }"},
 		{"end_in_package_nested_in_interface", "interface def I { package P { end ; } }"},

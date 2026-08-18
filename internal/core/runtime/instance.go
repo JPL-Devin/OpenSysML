@@ -138,7 +138,7 @@ func (ctx *Context) instantiateAs(sym *symbols.Symbol, id int64) (*Instance, err
 		// Fold constant defaults eagerly. A default that is not constant may read
 		// sibling feature values of this very instance, so it is left to GetFeatureValue, which
 		// evaluates it against the finished instance.
-		if feat.DefaultValue != nil && isScalarFeature(feat) && !ctx.model.IsVariationFeature(feat.Symbol) &&
+		if ctx.valueBinds(feat) && isScalarFeature(feat) && !ctx.model.IsVariationFeature(feat.Symbol) &&
 			ctx.restatedInValuedBody(feat) == "" {
 			if semVal, ok := ctx.model.Eval(feat.DefaultValue); ok {
 				fv.Value = Value{Kind: ValConst, Const: semVal}
@@ -284,7 +284,7 @@ func (inst *Instance) materializeFeatureValue(ctx *Context, name string) (*Featu
 	// against this instance, so that it sees the sibling feature values it refers to.
 	// The feature holds what the default states, once that conforms to the
 	// feature's multiplicity.
-	if fv.Feature.DefaultValue != nil {
+	if ctx.valueBinds(fv.Feature) {
 		val, err := ctx.evalFeatureValueDefault(inst, fv, name)
 		if err != nil {
 			return nil, err
@@ -379,13 +379,13 @@ func (inst *Instance) materializeFeatureValue(ctx *Context, name string) (*Featu
 }
 
 // CompositeTypeOf returns what a feature is materialized from, or nil for one
-// that holds a value rather than an object — any default takes precedence
+// that holds a value rather than an object — a default that binds takes precedence
 // over instantiation, as in GetFeatureValue above. A usage with features of its own is
 // instantiated as itself, so its body governs and an untyped nested part
 // materializes at all. Answering costs no allocation, so a caller walking an
 // object graph can decide whether to descend before descending.
 func (ctx *Context) CompositeTypeOf(feat *EffectiveFeature) *symbols.Symbol {
-	if feat.DefaultValue != nil {
+	if ctx.valueBinds(feat) {
 		return nil
 	}
 	// A variation is materialized from the variant it is bound to, never from
@@ -414,11 +414,28 @@ func declaresFeatures(sym *symbols.Symbol) bool {
 	return false
 }
 
-// restatedInValuedBody returns the name of a feature valued again in the body of
-// the declaration that binds a value to it, or "" when there is none: the bound
-// value supplies the features, so a second value for one could only be dropped.
-// A declaration whose body only re-declares features states no second value,
-// and neither does a body over a value the redefined declaration wrote.
+// valueBinds reports whether the value bound to a feature governs it: a redefining
+// declaration's own value body governs over one the redefined declaration wrote,
+// being the more specific declaration of the feature (KerML 1.0 §7.3.4.5).
+func (ctx *Context) valueBinds(feat *EffectiveFeature) bool {
+	if feat == nil || feat.DefaultValue == nil {
+		return false
+	}
+	return !ctx.bodyGovernsInheritedValue(feat)
+}
+
+// bodyGovernsInheritedValue reports whether a feature's own body values what the value
+// it inherits from the declaration it redefines would supply, superseding that value.
+func (ctx *Context) bodyGovernsInheritedValue(feat *EffectiveFeature) bool {
+	if feat.Symbol == nil || feat.DefaultDecl == nil || feat.DefaultDecl == feat.Symbol {
+		return false
+	}
+	return ctx.restatedValueInBody(feat.Symbol, feat.Type) != ""
+}
+
+// restatedInValuedBody returns the name of a feature valued again in the body of the
+// declaration that binds a value to it — two values, neither more specific — or ""
+// when there is none. A body over an inherited value governs instead, above.
 func (ctx *Context) restatedInValuedBody(feat *EffectiveFeature) string {
 	if feat.Symbol == nil {
 		return ""
@@ -427,13 +444,20 @@ func (ctx *Context) restatedInValuedBody(feat *EffectiveFeature) string {
 	if !ok || decl.Value == nil {
 		return ""
 	}
+	return ctx.restatedValueInBody(feat.Symbol, feat.Type)
+}
+
+// restatedValueInBody returns the name of a feature the body of sym values
+// again — restating it with `:>>`/`:>`, or re-declaring a feature typ carries —
+// or "" when the body values none of them.
+func (ctx *Context) restatedValueInBody(sym, typ *symbols.Symbol) string {
 	inherited := make(map[string]bool)
-	for _, f := range ctx.FeaturesOf(feat.Type) {
+	for _, f := range ctx.FeaturesOf(typ) {
 		inherited[f.Name] = true
 	}
-	for _, member := range declMembers(feat.Symbol.Decl) {
+	for _, member := range declMembers(sym.Decl) {
 		usage, ok := member.(*ast.Usage)
-		if !ok || (usage.Value == nil && len(declMembers(usage)) == 0) {
+		if !ok || !valuesAFeature(usage) {
 			continue
 		}
 		if name := restatedFeatureName(usage); name != "" {
@@ -444,6 +468,20 @@ func (ctx *Context) restatedInValuedBody(feat *EffectiveFeature) string {
 		}
 	}
 	return ""
+}
+
+// valuesAFeature reports whether a usage states a value: its own, or one its
+// body states at any depth. A body that only re-declares features states none.
+func valuesAFeature(usage *ast.Usage) bool {
+	if usage.Value != nil {
+		return true
+	}
+	for _, member := range declMembers(usage) {
+		if nested, ok := member.(*ast.Usage); ok && valuesAFeature(nested) {
+			return true
+		}
+	}
+	return false
 }
 
 // restatedFeatureName returns the name a usage restates with `:>>` or `:>`, or

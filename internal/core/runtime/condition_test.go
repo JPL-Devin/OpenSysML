@@ -434,3 +434,27 @@ func TestViolationRendersQuantityOperands(t *testing.T) {
 		}
 	}
 }
+
+// A condition stated inside a require body reads the names that body declares,
+// which live in the body's own scope rather than the enclosing element's.
+func TestRequireBodyConditionReadsABodyLocalName(t *testing.T) {
+	ctx, pkg := conditionFixture(t, `
+		package test {
+			requirement def Limit { attribute cap; }
+			requirement lim : Limit { attribute :>> cap = 5; }
+			requirement study {
+				require lim {
+					attribute margin = 2;
+					require constraint { margin > 1 }
+				}
+			}
+		}
+	`)
+	satisfied, err := ctx.EvaluateRequirement(requirementNamed(t, pkg, "study"), pkg)
+	if err != nil {
+		t.Fatalf("study: %v", err)
+	}
+	if !satisfied {
+		t.Error("study: not satisfied")
+	}
+}

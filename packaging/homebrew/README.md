@@ -12,6 +12,15 @@ notarized; see [docs/project/macos-distribution.md](../../docs/project/macos-dis
 `scripts/render-homebrew-formula.sh` substitutes them from a release's `SHA256SUMS.txt` and
 strips the maintainer-facing header comment.
 
+The formula `depends_on "z3"`, so `brew install` gives the experimental `%check`/`%explain`
+solver path a solver out of the box (`z3` is in `homebrew/core`, MIT, bottled). The dependency
+is a convenience only: the solver is discovered at runtime on `PATH` or via `OPENSYSML_SMT`,
+nothing links it, and every other command works without it — see
+[docs/guide/01-install.md](../../docs/guide/01-install.md#installing-a-solver-optional). The
+`test do` block asserts that the dependency is on `PATH` and answers SMT-LIB2, rather than
+driving `%check` through the installed binary, so it holds for release binaries that predate
+those commands.
+
 The formula deliberately has **no `version` line**: Homebrew scans the version from the tag
 in the release URL, and `brew audit --strict` fails with `version ... is redundant with
 version scanned from URL` if it is also stated explicitly.

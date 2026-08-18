@@ -191,11 +191,11 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 	case *ast.AssumeMember:
 		c.expr(scope, d.Expression)
 		c.add(scope, d.Reference)
-		c.walkMembers(scope, d.Body)
+		c.walkMembers(symbols.ConstraintBodyScope(scope, d), d.Body)
 	case *ast.RequireMember:
 		c.expr(scope, d.Expression)
 		c.add(scope, d.Reference)
-		c.walkMembers(scope, d.Body)
+		c.walkMembers(symbols.ConstraintBodyScope(scope, d), d.Body)
 	case *ast.EntryMember:
 		c.walkMembers(scope, d.Actions)
 	case *ast.DoMember:

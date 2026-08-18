@@ -46,6 +46,11 @@ func (s *Session) Complete(line string, pos int) Completion {
 		word := lastField(head)
 		return completion(word, pathCompletions(word))
 	}
+	// %render takes the form after the view name, which is no name to look up.
+	if command == "%render" && atSecondArgument(head) {
+		word := lastField(head)
+		return completion(word, matchingPrefix(renderForms(), word))
+	}
 	word := nameWord(head)
 	return completion(word, s.nameCompletions(word))
 }
@@ -86,6 +91,37 @@ func sharedPrefix(candidates []string) string {
 		}
 	}
 	return prefix
+}
+
+// atSecondArgument reports whether the word being typed is the second argument
+// of the command, the first one having been typed and followed by a space. The
+// arguments are counted the way dispatch splits them, so a quoted name holding a
+// space ('My View') is one argument, and one still being typed is not yet past.
+func atSecondArgument(head string) bool {
+	if inUnfinishedName(head) {
+		return false
+	}
+	args := parseArgs(head)
+	typing := !strings.HasSuffix(head, " ") && !strings.HasSuffix(head, "\t")
+	return (len(args) == 3 && typing) || (len(args) == 2 && !typing)
+}
+
+// inUnfinishedName reports whether head ends inside an unrestricted name whose
+// closing quote has not been typed. The notation's own escape is honoured, so
+// 'it\'s' is a finished name.
+func inUnfinishedName(head string) bool {
+	inName, escaped := false, false
+	for _, r := range head {
+		switch {
+		case escaped:
+			escaped = false
+		case r == '\\':
+			escaped = true
+		case r == '\'':
+			inName = !inName
+		}
+	}
+	return inName
 }
 
 // firstToken returns the first whitespace-separated token of a line.

@@ -1,5 +1,6 @@
 {
   "type": "calc",
+  "libraries": true,
   "inputs": [
     {"type": "Real", "value": 3.0},
     {"type": "Real", "value": 1.0},

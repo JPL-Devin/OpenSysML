@@ -1,0 +1,7 @@
+%% FilteredViews::safetyView — tree rendering
+flowchart TD
+  n0["part def Systems::Radio"]
+  n1["part def Systems::Airbag"]
+  n2["part def Systems::Braking::Brake"]
+  n3["part pad"]
+  n2 --- n3

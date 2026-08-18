@@ -6,6 +6,38 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ## Unreleased
 
+### A view renders
+
+- **`%render <name>` turns a view's exposed set into the rendering its `render` member states**, and
+  into a containment tree where it states none. The kinds produced are a tree (the exposed elements
+  with their kinds and names, nested views as subtrees), an interconnection diagram (the exposed
+  parts and the connections between them, read from the model's own connector and flow ends), a
+  state machine (states and transitions), an action flow (nodes and successions) and a table (the
+  exposed elements, what they declare and the views nested in the rendered one, as rows). State and
+  action renderings read the lowered `StateGraph`/`ActionGraph` the runtime executes, so a rendering
+  cannot drift from what runs.
+- **`%render <name> <form>` writes the machine-readable form of the rendering**: `mermaid` for the
+  graph-shaped kinds — `flowchart TD` for a tree or an action, `flowchart LR` for an
+  interconnection, `stateDiagram-v2` for a state machine — and `markdown` for a table, which Mermaid
+  has no grammar for. Either pastes into Markdown, a documentation site or an editor as-is, and text
+  stays the default at the prompt. A form the kind is not written in is a typed error naming the one
+  it is.
+- **`sysml model.sysml -render <view>` renders without the prompt**: the artifact on stdout, the
+  kind's machine-readable form by default and `-render-form text` for the read form, `-o` writing it
+  to a file, and every human notice — what was loaded, an empty rendering, an element the rendering
+  cannot represent — on stderr. Rendering decides nothing about the model, so it is not asked for
+  together with `-convert` or a check flag.
+- **Rendering is a read.** `%render` materializes no object, registers nothing in the session and
+  leaves an `%action`/`%state` debugging session stepping the same graph and the same objects, so it
+  can be asked between two `%step`s. `%view`'s report is unchanged.
+- **The empty and error paths say what happened**: a view exposing nothing renders an empty artifact
+  and says so, a rendering kind this build does not produce is a typed error naming the kind and the
+  view rather than a substituted rendering, a name that is no view is `semantics.ErrNotAView` as
+  `%view` answers, and an exposed element a rendering cannot draw is reported rather than dropped.
+- The rendering itself is **tool-defined output**: SysML v2 §10.2 leaves rendering to the tool, so
+  the notation is what is supported and the artifact is OpenSysML's own — recorded as such in
+  [docs/project/spec-compliance.md](docs/project/spec-compliance.md).
+
 ### The project is now OpenSysML
 
 The rename is a clean break with no compatibility aliases: every name below has exactly one
@@ -114,6 +146,76 @@ artifacts they describe really were called that.
   `export.ExperimentalNotice` rather than a copy of it, and the Python client's fallback notice,
   the `ConvertResponse.experimental` comment and the guide pages were brought back in step. A test
   pins the Python copy byte-identical to the constant, since Python cannot import it.
+
+### A nested value body governs over an inherited value
+
+- **A redefining declaration whose body values features holds those values.** `part def Ring
+  { attribute cost : Cost = template; }` re-opened as `part r : Ring { attribute :>> cost
+  { attribute :>> v = 11.0; } }` now reads `r.cost.v` as `11.0`: the more specific declaration of
+  the feature governs (KerML 1.0 §7.3.4.5), where the inherited value used to win and the body's
+  restatements were dropped with no diagnostic. A feature the body does not value takes its type's
+  own default, the inherited value binding nothing there — the body supersedes that value rather
+  than merging with it, since a `FeatureValue` binds a feature as a whole.
+- Unchanged: a body on the *same* declaration that writes the value still reports
+  `ErrValuedFeatureRestated` (two values, neither more specific), and a body that only re-declares
+  features (`attribute :>> kept { attribute :>> v; }`) still reads the inherited value — at any
+  depth of nesting, a value stated anywhere in the body being what makes it govern.
+- **A check made without an object agrees with materializing one.** A condition naming a feature a
+  body governs over reads it as uninitialized rather than against the superseded value, so the same
+  model no longer passes or fails a check depending on whether an object was built for it, and an
+  edit confined to a governing body changes the type's shape, so a carried-over object is
+  re-materialized instead of keeping the value the body replaced.
+
+### Names nested inside a `require`/`assume` body are resolved
+
+- **A `require`/`assume` body now resolves to whatever depth it is written to.** Where only its
+  direct members resolved, a declaration nested in it (`require Q::r { part p : P { :>> f; } }`)
+  had its own body left unwalked, so a typo there produced no diagnostic at all; such a name is
+  now resolved and, if it names nothing, reported at its own span.
+- The body is a scope of its own: what it declares is visible to what nests inside it but is no
+  member of the namespace that declares the member, and the referenced requirement's features stay
+  offered to the body's direct members, which is what the reference subsetting inherits them to.
+- **Every tier reads the body in that same scope.** Type checking and condition evaluation walked
+  such a body in the *enclosing* scope, so a value written there was typed against the wrong set of
+  names — silently missing a genuine type error, or judging the name against an unrelated
+  declaration outside the body — and a condition stated in the body could not read a name the body
+  declares.
+
+### An unimported OpenSysML extension function no longer answers a call it is reported unresolved on
+
+- **`exp`, `ln`, `log` and `atan2` now require the import that declares them.** They are declared by
+  the non-normative `OpenSysMLMathFunctions` extension, which no OMG library carries, so a bare
+  `exp(x)` is reported `unresolved reference: exp` — and used to be evaluated anyway by dispatch on
+  the local name, which meant the diagnostic and the behavior disagreed: ignore the error and the
+  model computed, trust it and the model looked broken. Such a call now fails with a typed error
+  (`ErrUnimportedExtensionFunction`) naming the function and the `import OpenSysMLMathFunctions::*;`
+  that makes it legal.
+- **A model that imports the package, or writes the call qualified, is unaffected**, as is a bare
+  call to an OMG function library (`sqrt`, `sin`, …), which every model may write whatever it
+  imports.
+- **`%builtins` still lists them, marked with the import they need.** Dropping the four names from
+  the unqualified-dispatch registry also dropped them from the listing and from name completion,
+  which made implemented functions look unsupported; the listing is now taken from what the build
+  implements, and an extension function is listed with a `(needs import OpenSysMLMathFunctions::*;)`
+  marker rather than silently omitted.
+- **A root-level import in a document that declares nothing else now surfaces its names**, which is
+  what a bare `import OpenSysMLMathFunctions::*;` at the REPL prompt is: the editor's own scope tree
+  is identified by the document name stamped on it, and a document with no member had no symbol left
+  to carry that name, so its own import was read as another document's private re-export.
+
+### The corpus notation two verdicts were open on is adjudicated legal
+
+- **A conjugated end (`end spacePort : ~CommunicationPort`) and a portion prefixed onto a kind
+  keyword (`timeslice item item1`) are legal, and are accepted.** `ConjugatedPortTyping`
+  specializes `FeatureTyping`, so any feature typing — a connection or interface end among them —
+  may name a conjugated port definition, and `PortionKind` is an attribute of `OccurrenceUsage`,
+  which an item usage is. Both are pinned clean over every validation tier by
+  `testdata/passes/corpus_notation.golden`, so a regression is caught as the false positive on a
+  flagship model that it would be. What the Open-MBEE models still report is other notation: the
+  OMG-side `end;` outside an interface body and `'SysML Standard Diagrams'::gv`, and — in
+  `DesertKite.sysml`, which lives only on that repository's `InitialDesign` branch — 7 errors that
+  are ours: a qualified name refused as a `bind` end and `connection connect … ;` refused inside a
+  `requirement` body, both owned by a separate session.
 
 ### A binding end may be a qualified name, and a requirement body takes a prefixed connector
 

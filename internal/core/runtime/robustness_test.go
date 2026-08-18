@@ -38,6 +38,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("state_cross_region_transitions_ping_pong", testStateCrossRegionTransitionsPingPong)
 	t.Run("sourceless_accept_at_top_level", testSourcelessAcceptAtTopLevel)
 	t.Run("calc_unbound_parameter", testCalcUnboundParameter)
+	t.Run("calc_calls_an_unimported_extension_function", testCalcCallsAnUnimportedExtensionFunction)
 	t.Run("calc_unbound_keyword_named_parameter", testCalcUnboundKeywordNamedParameter)
 	t.Run("calc_too_many_arguments", testCalcTooManyArguments)
 	t.Run("calc_unknown_named_argument", testCalcUnknownNamedArgument)
@@ -2643,6 +2644,38 @@ func testCalcUnboundParameter(t *testing.T) {
 	}
 }
 
+// testCalcCallsAnUnimportedExtensionFunction: `exp(x)` with no import of the
+// OpenSysML extension library is reported unresolved by name resolution, so the
+// call fails with a typed error naming the import rather than being answered.
+func testCalcCallsAnUnimportedExtensionFunction(t *testing.T) {
+	src := `
+		package test {
+			calc grow {
+				in x: Real;
+				return exp(x);
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "grow", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("grow calc not found")
+	}
+
+	arg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 1}}
+	result, err := ctx.InvokeCalc(sym, []Value{arg}, rootScope)
+	if err == nil {
+		t.Fatalf("expected an out-of-scope error, calc returned %+v", result)
+	}
+	if !errors.Is(err, ErrUnimportedExtensionFunction) {
+		t.Fatalf("expected ErrUnimportedExtensionFunction, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "import OpenSysMLMathFunctions::*;") {
+		t.Errorf("error %q does not name the import that makes the call legal", err)
+	}
+}
+
 // testCalcUnboundKeywordNamedParameter: a parameter named with a keyword is a
 // parameter like any other, so leaving it unbound reports, never panics.
 func testCalcUnboundKeywordNamedParameter(t *testing.T) {
@@ -4100,13 +4133,15 @@ func testLibraryFunctionWrongArity(t *testing.T) {
 func testExtensionLibraryFunctionOutsideItsDomain(t *testing.T) {
 	src := `
 		package test {
+			import ScalarValues::*;
+			import OpenSysMLMathFunctions::*;
 			calc root {
 				in x : Real;
 				return : Real = ln(x);
 			}
 		}
 	`
-	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
 	rootScope := idx.DocumentRoot("<test>")
 	sym := findSymbolByName(rootScope, "root", ast.DefCalc)
 	if sym == nil {
