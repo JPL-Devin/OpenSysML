@@ -3708,6 +3708,36 @@ Two cases need process work rather than a Python call:
 "old name is gone after a rename" assertion must compare against `None`; a `try/except` around
 `find` passes even when the rename did nothing.
 
+### Traps that cost time when re-testing the edit surface
+
+- **`python/tests/test_edit.py`'s `real_service` fixture prefers `<repo>/bin/sysml-grpc` over
+  `~/.pysysml/bin/sysml-grpc`** (`GRPC_BINARIES`, test_edit.py:61). A stale `bin/sysml-grpc` left
+  from an earlier snapshot therefore fails all 13 `TestEditRoundTripAgainstRealService` cases with
+  `MissingCapabilityError('apply_edits')` / `assert has('apply_edits') == False`, which reads like a
+  product bug. Always `make build-grpc` and check `./bin/sysml-grpc -version` prints the current
+  commit *before* running the suite; the same applies to the copy in `~/.pysysml/bin`.
+- `MissingCapabilityError` lives in **`pysysml.capabilities`**, not `pysysml.errors`
+  (`pysysml.errors.__getattr__` raises `AttributeError` for it). It is still a `PySysMLError` and is
+  *not* an `UnsupportedOperationError`.
+- `test_generate_golden.py::test_typed_codegen_modules_are_mypy_clean` may fail for reasons unrelated
+  to any change: with mypy 2.3.x and the venv's numpy stubs it reports
+  `numpy/__init__.pyi:737: error: Type statement is only supported in Python 3.12 and greater`.
+  Reproduce with `echo 'import numpy' > /tmp/nm.py; $HOME/pv/bin/python -m mypy --no-incremental
+  /tmp/nm.py` before blaming a PR; pinning/refreshing numpy stubs is the likely fix.
+- Non-ASCII **identifiers** (`package Démo`) do not parse, so a Unicode fixture must keep the
+  accents/emoji in comments and strings only. That still exercises the byte-vs-rune offset risk:
+  assert `saved == orig[:a.offset] + a.new_text.encode() + orig[a.offset + a.length:]`, which is the
+  strongest single assertion available for `AppliedEdit` (it proves offsets are byte offsets and
+  that nothing outside the span moved).
+- CRLF: build the fixture as `orig.replace(b"\n", b"\r\n")` and assert the saved file has the same
+  `\r` count, **zero bare LFs** (`b.count(b"\n") - b.count(b"\r\n") == 0`) and no `\r\r`. Test the
+  *insertion* case (a feature with no value) on CRLF too, not just replacement.
+- Unwritable targets: `save()` raises plain `PermissionError`/`FileNotFoundError` from `open()`, so
+  sha256 the victim file before/after — the point of the case is that it is not truncated first.
+- An edit is allowed on a file that already has errors elsewhere (name *or* syntax), and the saved
+  file keeps exactly those pre-existing diagnostics; a refusal there is the regression the
+  "baseline diagnostics" fixes in PR #282 were about.
+
 ## `%check` and the SMT solver driver (PR #285)
 
 `%check <name>` asks an external solver about a constraint def, requirement def or satisfaction
