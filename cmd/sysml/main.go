@@ -291,6 +291,11 @@ func runCLI() int {
 	// Get positional arguments (files to load)
 	args := flag.Args()
 
+	if renderForm != "" && renderView == "" {
+		fmt.Fprintln(os.Stderr, "sysml: -render-form is the form -render writes; name the view to render with -render")
+		return 2
+	}
+
 	if convertFormat != "" {
 		if modelChecks.requested() {
 			return refuse(modelChecks,
@@ -315,11 +320,6 @@ func runCLI() int {
 			return fail(err)
 		}
 		return exitHolds
-	}
-
-	if renderForm != "" {
-		fmt.Fprintln(os.Stderr, "sysml: -render-form is the form -render writes; name the view to render with -render")
-		return 2
 	}
 
 	// Resolve the run bounds before any model runs, so a bad value is reported at

@@ -118,6 +118,11 @@ func TestRenderReportsWhatItCouldNotDo(t *testing.T) {
 		status: exitUnevaluable,
 		stderr: []string{"name the view to render with -render"},
 	}, {
+		name:   "a form without a view to render is reported even while converting",
+		args:   []string{"-convert", "ttl", "-render-form", "mermaid"},
+		status: exitUnevaluable,
+		stderr: []string{"name the view to render with -render"},
+	}, {
 		name:   "rendering and converting in one run is refused",
 		args:   []string{"-render", "Demo::overview", "-convert", "ttl"},
 		status: exitUnevaluable,
