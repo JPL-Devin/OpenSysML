@@ -1,7 +1,7 @@
 {
   "type": "instance",
   "instantiate": "test::Sys",
-  "featureValues": {
+  "slots": {
     "a": {"type": "Sequence", "elements": [
       {"type": "Integer", "value": 1},
       {"type": "Integer", "value": 2}

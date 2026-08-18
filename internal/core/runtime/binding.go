@@ -100,10 +100,6 @@ func (ctx *Context) bindingsForFeature(typeSym *symbols.Symbol, name string) []l
 }
 
 func (ctx *Context) resolveBindingValue(inst *Instance, name string) (Value, bool, error) {
-	bindings := ctx.bindingsForFeature(inst.Type, name)
-	if len(bindings) == 0 {
-		return Value{}, false, nil
-	}
 	target, ok := inst.FeatureValues[name]
 	if !ok {
 		return Value{}, false, nil
@@ -112,31 +108,52 @@ func (ctx *Context) resolveBindingValue(inst *Instance, name string) (Value, boo
 	if ctx.resolvingBindings[key] {
 		return Value{}, false, &BindingCycleError{Features: []string{bindingLocationText(bindingLocation{instance: inst, name: name})}}
 	}
-	ctx.resolvingBindings[key] = true
-	defer delete(ctx.resolvingBindings, key)
 
-	cycleSeen := false
-	var cycleFeatures []string
-	for _, binding := range bindings {
-		attempt := ctx.attemptBinding(inst, target, name, binding, key)
-		if attempt.err != nil {
-			return Value{}, false, attempt.err
+	path := name
+	for current := inst; current != nil; {
+		bindings := ctx.bindingsForFeature(current.Type, path)
+		if len(bindings) != 0 {
+			ctx.resolvingBindings[key] = true
+			value, found, cycle, cycleFeatures, err := ctx.resolveBindingSet(
+				current, inst, target, bindings, key,
+			)
+			delete(ctx.resolvingBindings, key)
+			if err != nil || found {
+				return value, found, err
+			}
+			if cycle {
+				return Value{}, false, &BindingCycleError{Features: cycleFeatures}
+			}
 		}
-		if attempt.cycle {
-			cycleSeen = true
-			cycleFeatures = attempt.cycleFeatures
+		owner, ownerFeature := current.Owner()
+		if owner == nil || ownerFeature == "" {
+			break
 		}
-		if attempt.found {
-			return attempt.value, true, nil
-		}
-	}
-	if cycleSeen {
-		return Value{}, false, &BindingCycleError{Features: cycleFeatures}
+		path = ownerFeature + "." + path
+		current = owner
 	}
 	return Value{}, false, nil
 }
 
-func (ctx *Context) attemptBinding(inst *Instance, target *FeatureValue, name string,
+func (ctx *Context) resolveBindingSet(owner, targetInst *Instance, target *FeatureValue,
+	bindings []lower.Binding, key featureValueRef) (Value, bool, bool, []string, error) {
+	var cycleFeatures []string
+	for _, binding := range bindings {
+		attempt := ctx.attemptBinding(owner, targetInst, target, binding, key)
+		if attempt.err != nil {
+			return Value{}, false, false, nil, attempt.err
+		}
+		if attempt.cycle {
+			cycleFeatures = attempt.cycleFeatures
+		}
+		if attempt.found {
+			return attempt.value, true, false, nil, nil
+		}
+	}
+	return Value{}, false, len(cycleFeatures) != 0, cycleFeatures, nil
+}
+
+func (ctx *Context) attemptBinding(owner, targetInst *Instance, target *FeatureValue,
 	binding lower.Binding, key featureValueRef) (attempt bindingAttempt) {
 	previousOwner, hadOwner := ctx.bindingOwners[key]
 	ctx.bindingOwners[key] = binding.Decl
@@ -148,26 +165,25 @@ func (ctx *Context) attemptBinding(inst *Instance, target *FeatureValue, name st
 		}
 	}()
 
-	left, err := ctx.resolveBindingEndpoint(inst, binding, 0)
+	left, err := ctx.resolveBindingEndpoint(owner, binding, 0)
 	if err != nil {
 		attempt.err = err
 		return attempt
 	}
-	right, err := ctx.resolveBindingEndpoint(inst, binding, 1)
+	right, err := ctx.resolveBindingEndpoint(owner, binding, 1)
 	if err != nil {
 		attempt.err = err
 		return attempt
 	}
 	leftCarries := left.location.instance != nil &&
-		bindingLocationCarries(left.location, target, inst)
+		bindingLocationCarries(left.location, target, targetInst)
 	rightCarries := right.location.instance != nil &&
-		bindingLocationCarries(right.location, target, inst)
-	if !leftCarries && !rightCarries &&
-		left.location.path != name && right.location.path != name {
+		bindingLocationCarries(right.location, target, targetInst)
+	if !leftCarries && !rightCarries {
 		return attempt
 	}
 
-	leftValue, leftSet, err := ctx.bindingEndpointValue(left, inst)
+	leftValue, leftSet, err := ctx.bindingEndpointValue(left, owner)
 	if err != nil {
 		attempt.err = err
 		return attempt
@@ -179,7 +195,7 @@ func (ctx *Context) attemptBinding(inst *Instance, target *FeatureValue, name st
 		}, binding.Decl) {
 		attempt.cycle = true
 	}
-	rightValue, rightSet, err := ctx.bindingEndpointValue(right, inst)
+	rightValue, rightSet, err := ctx.bindingEndpointValue(right, owner)
 	if err != nil {
 		attempt.err = err
 		return attempt
@@ -237,7 +253,7 @@ func (ctx *Context) genuineBindingCycle(ref featureValueRef, binding *ast.Usage)
 
 func bindingInvolvesFeature(binding lower.Binding, name string) bool {
 	for _, end := range binding.Ends {
-		if root := strings.SplitN(end.Path, ".", 2)[0]; root == name {
+		if end.Path == name {
 			return true
 		}
 	}

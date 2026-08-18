@@ -72,6 +72,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("binding_unrelated_expression_does_not_poison_read", testBindingUnrelatedExpressionDoesNotPoisonRead)
 	t.Run("binding_expression_end_cannot_receive", testBindingExpressionEndCannotReceive)
 	t.Run("binding_result_tracks_later_mutation", testBindingResultTracksLaterMutation)
+	t.Run("binding_nested_container_is_not_a_cycle", testBindingNestedContainerIsNotACycle)
 	t.Run("nested_calc_usage_unbound_input", testNestedCalcUsageUnboundInput)
 	t.Run("nested_calc_usage_unknown_output", testNestedCalcUsageUnknownOutput)
 	t.Run("nested_calc_usage_self_cycle", testNestedCalcUsageSelfCycle)
@@ -435,6 +436,41 @@ func testBindingResultTracksLaterMutation(t *testing.T) {
 			t.Fatalf("later GetFeatureValue(b) = %v, want ErrBindingConflict", err)
 		}
 	})
+}
+
+func testBindingNestedContainerIsNotACycle(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<binding-nested-container>", parseAndBuild(t, `package P {
+		part def Child {
+			attribute b;
+		}
+		part def Sys {
+			attribute x = 9;
+			part child : Child;
+			binding bind child.b = x;
+		}
+	}`))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	if _, err := inst.GetFeatureValue(ctx, "child"); err != nil {
+		t.Fatalf("GetFeatureValue(child) = %v, want no binding cycle", err)
+	}
+	childValue, err := inst.GetFeatureValue(ctx, "child")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(child): %v", err)
+	}
+	child, ok := ctx.Instance(childValue.Value.Instance)
+	if !ok {
+		t.Fatalf("child instance %d is not materialized", childValue.Value.Instance)
+	}
+	b, err := child.GetFeatureValue(ctx, "b")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(child.b) = %v, want 9", err)
+	}
+	if got := b.HeldValue().Const.Int; got != 9 {
+		t.Fatalf("child.b = %d, want 9", got)
+	}
 }
 
 // testSuccessionGuardFailureModes: a guard on a succession leaving an ordinary

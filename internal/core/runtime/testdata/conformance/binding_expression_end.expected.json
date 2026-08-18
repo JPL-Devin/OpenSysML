@@ -1,7 +1,7 @@
 {
   "type": "instance",
   "instantiate": "test::Sys",
-  "featureValues": {
+  "slots": {
     "a": {"type": "Integer", "value": 5},
     "b": {"type": "Integer", "value": 6},
     "sibling": {"type": "Integer", "value": 8}
