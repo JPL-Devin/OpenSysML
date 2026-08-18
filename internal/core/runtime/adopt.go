@@ -278,7 +278,27 @@ func (ctx *Context) writeShape(b *strings.Builder, sym *symbols.Symbol, open map
 		ctx.writeShape(b, feat.Type, open)
 		b.WriteString(";")
 	}
+	ctx.writeBoundBehaviors(b, sym)
 	b.WriteString("}")
+}
+
+// writeBoundBehaviors renders the behaviors a type binds to its objects as the
+// bodies they now state: an object of a type whose machine was rewritten runs a
+// behavior the one carried over does not, so it is not the same object.
+func (ctx *Context) writeBoundBehaviors(b *strings.Builder, sym *symbols.Symbol) {
+	for _, decl := range ctx.classifierBehaviorsOf(sym) {
+		fmt.Fprintf(b, "!%s %s=%s;", decl.behavior.Kind, decl.behavior.Name, ctx.behaviorText(decl))
+	}
+}
+
+// behaviorText renders the body a binding declaration runs as written, or says
+// that it names none.
+func (ctx *Context) behaviorText(decl classifierBehaviorDecl) string {
+	body, err := ctx.classifierBehaviorSymbol(decl)
+	if err != nil || body == nil || body.Decl == nil {
+		return "<unresolved>"
+	}
+	return ctx.declText(body, body.Decl.Span())
 }
 
 func bound(b semantics.Bound) string {

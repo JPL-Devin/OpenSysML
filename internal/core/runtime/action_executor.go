@@ -285,6 +285,46 @@ func (e *ActionExecutor) RunToCompletion() error {
 	return nil
 }
 
+// RunToQuiescence runs the action until it completes, stops at a breakpoint, or
+// parks every remaining token at an accept. Unlike RunToCompletion, a parked
+// action is quiescence rather than a deadlock: this is what an object performing
+// an action is run with, where a sibling object may still send the awaited
+// message.
+func (e *ActionExecutor) RunToQuiescence() error {
+	if err := e.RunToCompletion(); err != nil && !errors.Is(err, ErrAcceptDeadlock) {
+		return err
+	}
+	return nil
+}
+
+// HasPendingSignal reports whether a message in flight would let a parked token
+// proceed, without consuming it.
+func (e *ActionExecutor) HasPendingSignal() bool {
+	for _, token := range e.tokens {
+		if token.Wait == nil {
+			continue
+		}
+		usage, ok := token.Location.(*ast.Usage)
+		if !ok {
+			continue
+		}
+		accept, isAccept := e.graph.Accepts[usage]
+		if !isAccept || accept.Trigger != nil {
+			continue
+		}
+		want := accept.SignalType
+		if want == "" {
+			want = accept.SubsetsEvent
+		}
+		for _, msg := range e.ctx.PendingMessages() {
+			if msg.reaches(ActionNodeName(usage), accept.ViaPort, objectID(e.self)) && msg.carriesSignal(want) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // breakpointHit returns the name of a breakpoint node a token sits on and has
 // not yet stopped the run at, or "" if none does. Firing once per token and
 // visit means a resumed run continues past the node it stopped at, while a
@@ -430,6 +470,20 @@ func (e *ActionExecutor) initializeAttributes() error {
 // initial node has no step to perform.
 func (e *ActionExecutor) hasFlow() bool {
 	return e.graph != nil && e.graph.Initial != nil
+}
+
+// declaresParameter reports whether the action declares a parameter of this
+// name, which its own feature space holds rather than the performing object.
+func (e *ActionExecutor) declaresParameter(name string) bool {
+	if e.action == nil || e.action.Decl == nil {
+		return false
+	}
+	for _, param := range actionParameterDecls(e.action.Decl) {
+		if param.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 // initialize spawns initial token at InitialNode.

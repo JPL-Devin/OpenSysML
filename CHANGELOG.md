@@ -94,6 +94,10 @@ artifacts they describe really were called that.
 - **`%state <object>` attaches to the object's exhibited machine**, so `%step`, `%advance`,
   `%current`, `%events` and `%features` all describe that object. A behavior-written feature value
   now survives an unrelated declaration too, along with the object's identity and the debug session.
+- **Rewriting a behavior drops the objects running it.** A behavior-written value survives an
+  unrelated declaration, but re-declaring the machine or action an object runs changes what the
+  object is, so the object is dropped with a reported reason rather than resuming a new body on the
+  values the old one wrote.
 
 ### `%slots` is now `%features`, the name SysML v2 uses
 

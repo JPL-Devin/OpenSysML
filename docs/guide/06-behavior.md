@@ -164,7 +164,14 @@ do-step budgets in [reference/environment.md](../reference/environment.md): an e
 settles reports a budget error rather than hanging. Materializing the same name twice makes a second
 object with its own identity and its own machines; `%instantiate` reports the new object, and the
 name then denotes it. An exhibited machine with no initial state is reported; a performed action that
-states no flow simply has no step to perform, so the object is still created.
+states no flow simply has no step to perform, so the object is still created. A performed action
+parked at an `accept` is quiescent too, and a message a sibling object sends later wakes it.
+
+**Editing the model while an object runs.** An unrelated declaration leaves an object and its
+behaviors alone: identity, current state and the values the behaviors wrote all survive the rebuilt
+analysis. Re-declaring what the object runs — its type's features or the body of a machine or action
+it runs — makes it a different object, so it is dropped with a reported reason instead of resuming a
+new body on values the old one wrote. Re-run `%instantiate` to start from the edited model.
 
 **Invoking an operation.** `%invoke <object> <op> [<p>=<expr>]` runs an action the object's type
 owns, performed by that object:

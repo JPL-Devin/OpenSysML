@@ -112,6 +112,20 @@ func (ctx *Context) classifierBehaviorsOf(typeSym *symbols.Symbol) []classifierB
 // inside a running behavior only attaches, leaving the run to the outermost
 // start, so materializing objects that exhibit each other terminates.
 func (ctx *Context) startClassifierBehaviors(inst *Instance) error {
+	attached := len(ctx.objectBehaviors)
+	if err := ctx.startBehaviorsOf(inst); err != nil {
+		// An object that failed to be created leaves no behavior of its own behind,
+		// so nothing of it runs during the next, unrelated command.
+		ctx.forgetBehaviorsFrom(attached)
+		delete(ctx.instances, inst.ID)
+		return err
+	}
+	return nil
+}
+
+// startBehaviorsOf attaches the object's behaviors and, at the outermost start,
+// runs everything attached.
+func (ctx *Context) startBehaviorsOf(inst *Instance) error {
 	for _, decl := range ctx.classifierBehaviorsOf(inst.Type) {
 		if inst.runsBound(decl.member) {
 			continue
@@ -134,6 +148,34 @@ func (ctx *Context) startClassifierBehaviors(inst *Instance) error {
 	ctx.behaviorRunDepth++
 	defer func() { ctx.behaviorRunDepth-- }()
 	return ctx.drainObjectBehaviors()
+}
+
+// forgetBehaviorsFrom drops the behaviors attached since a start began, and the
+// work queued for them: a start that failed queues nothing for a later one.
+func (ctx *Context) forgetBehaviorsFrom(attached int) {
+	if attached > len(ctx.objectBehaviors) {
+		return
+	}
+	dropped := make(map[*ObjectBehavior]bool, len(ctx.objectBehaviors)-attached)
+	for _, behavior := range ctx.objectBehaviors[attached:] {
+		dropped[behavior] = true
+	}
+	for behavior := range dropped {
+		behavior.Object.behaviors = behaviorsExcept(behavior.Object.behaviors, dropped)
+	}
+	ctx.objectBehaviors = ctx.objectBehaviors[:attached]
+	ctx.pendingBehaviors = behaviorsExcept(ctx.pendingBehaviors, dropped)
+}
+
+// behaviorsExcept returns the behaviors none of which is one being dropped.
+func behaviorsExcept(behaviors []*ObjectBehavior, dropped map[*ObjectBehavior]bool) []*ObjectBehavior {
+	kept := make([]*ObjectBehavior, 0, len(behaviors))
+	for _, behavior := range behaviors {
+		if !dropped[behavior] {
+			kept = append(kept, behavior)
+		}
+	}
+	return kept
 }
 
 // drainObjectBehaviors runs the attached behaviors until the objects are
@@ -175,14 +217,19 @@ func (ctx *Context) nextRunnableBehavior() (*ObjectBehavior, bool) {
 	return nil, false
 }
 
-// hasPendingWork reports whether running the behavior again would advance it: an
-// exhibited machine woken by an event due now or a signal in flight. An event
-// scheduled for a later time is not work materialization waits for.
+// hasPendingWork reports whether running the behavior again would advance it: a
+// machine woken by an event due now or a signal in flight, or an action whose
+// awaited message a sibling has since sent. An event scheduled for a later time
+// is not work materialization waits for.
 func (b *ObjectBehavior) hasPendingWork() bool {
-	if b.State == nil {
+	switch {
+	case b.State != nil:
+		return b.State.HasDueEvent() || b.State.HasPendingSignal()
+	case b.Action != nil:
+		return b.Action.HasPendingSignal()
+	default:
 		return false
 	}
-	return b.State.HasDueEvent() || b.State.HasPendingSignal()
 }
 
 // attachClassifierBehavior builds the object's own execution of one behavior its
@@ -242,8 +289,9 @@ func (ctx *Context) attachClassifierBehavior(inst *Instance, decl classifierBeha
 	return behavior, nil
 }
 
-// run advances the object's behavior until it is quiescent: an action runs to
-// completion, a machine until no event is due and no do action is runnable.
+// run advances the object's behavior until it is quiescent: an action until it
+// completes or waits for a message, a machine until no event is due and no do
+// action is runnable.
 func (b *ObjectBehavior) run() error {
 	switch {
 	case b.State != nil:
@@ -252,7 +300,7 @@ func (b *ObjectBehavior) run() error {
 		if !b.Action.hasFlow() {
 			return nil
 		}
-		return b.Action.RunToCompletion()
+		return b.Action.RunToQuiescence()
 	default:
 		return fmt.Errorf("%w: %s has no execution", ErrUnsupportedClassifierBehavior, b.Name)
 	}

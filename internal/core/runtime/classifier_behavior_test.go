@@ -273,3 +273,157 @@ func TestExhibitedMachineNamingNoBodyIsReported(t *testing.T) {
 		t.Errorf("error %q does not name the behavior", err)
 	}
 }
+
+// featureInt is the integer an object's feature value holds.
+func featureInt(t *testing.T, ctx *Context, inst *Instance, name string) int64 {
+	t.Helper()
+	fv, err := inst.GetFeatureValue(ctx, name)
+	if err != nil {
+		t.Fatalf("GetFeatureValue %s: %v", name, err)
+	}
+	return fv.HeldValue().Const.Int
+}
+
+// An operation output the object's type also declares a feature for answers the
+// caller: an action's own parameter is not the performing object's feature.
+func TestOperationOutputNamedLikeAFeatureAnswersTheCaller(t *testing.T) {
+	src := `
+		part def Gauge {
+			attribute level: Integer = 2;
+			action read { out level; first apply; action apply { assign level := 7; } }
+		}
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	ctx := NewContext(model, resolver, 10000)
+	inst, err := ctx.Instantiate(resolveSymbol(t, root, "Gauge"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+
+	results, err := ctx.InvokeOperation(inst, "read", nil)
+	if err != nil {
+		t.Fatalf("InvokeOperation: %v", err)
+	}
+	if got, ok := results["level"]; !ok || got.Const.Int != 7 {
+		t.Errorf("output level = %v, want 7", results)
+	}
+	fv, err := inst.GetFeatureValue(ctx, "level")
+	if err != nil {
+		t.Fatalf("GetFeatureValue: %v", err)
+	}
+	if got := fv.HeldValue(); got.Const.Int != 2 {
+		t.Errorf("object level = %v, want the feature untouched at 2", got.Const)
+	}
+}
+
+// An object performing an action that awaits a message is materialized waiting
+// rather than deadlocked, and the message a sibling sends wakes it.
+func TestPerformedActionAwaitingAMessageIsWokenByASibling(t *testing.T) {
+	src := `
+		package test {
+			action def Await {
+				first start;
+				action heard accept g : Integer;
+				action mark { assign woken := 1; }
+				done end;
+				then start heard;
+				then heard mark;
+				then mark end;
+			}
+
+			part def Waiter {
+				attribute woken: Integer = 0;
+				perform action await : Await;
+			}
+
+			part def Sender {
+				exhibit state sending {
+					entry; then sent;
+					state sent { entry send 5 to w; }
+				}
+			}
+
+			part def Pair {
+				part w : Waiter;
+				part s : Sender;
+			}
+		}
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	pkg := resolveSymbol(t, root, "test")
+
+	// Materialized alone, the waiter parks at the accept: nothing has sent it a
+	// message yet, which is quiescence for an object rather than a deadlock.
+	alone := NewContext(model, resolver, 10000)
+	waiter, err := alone.Instantiate(resolveSymbol(t, pkg.Scope, "Waiter"))
+	if err != nil {
+		t.Fatalf("Instantiate Waiter: %v", err)
+	}
+	behavior, ok := waiter.Behavior("await")
+	if !ok || behavior.Action == nil {
+		t.Fatalf("object performs no await action, behaviors: %v", waiter.Behaviors())
+	}
+	if behavior.Action.state != StateWaiting {
+		t.Errorf("await is %v, want waiting at its accept", behavior.Action.state)
+	}
+	if got := featureInt(t, alone, waiter, "woken"); got != 0 {
+		t.Errorf("woken = %d before any message, want 0", got)
+	}
+
+	// Materialized beside a sender, the message wakes the parked action, which
+	// then writes its own object's feature value.
+	ctx := NewContext(model, resolver, 10000)
+	pair, err := ctx.Instantiate(resolveSymbol(t, pkg.Scope, "Pair"))
+	if err != nil {
+		t.Fatalf("Instantiate Pair: %v", err)
+	}
+	// Each nested object is materialized when its feature value is reached, so the
+	// waiter parks before the sender it wakes is materialized at all.
+	nested := instanceAtPath(t, ctx, pair, "w")
+	instanceAtPath(t, ctx, pair, "s")
+	if got := featureInt(t, ctx, nested, "woken"); got != 1 {
+		t.Errorf("woken = %d, want 1 once the sibling's message arrived", got)
+	}
+}
+
+// A failed materialization leaves no behavior of the object behind, so the next
+// object materialized runs its own behaviors and nothing else.
+func TestFailedMaterializationLeavesNoBehaviorBehind(t *testing.T) {
+	src := `
+		part def Broken {
+			attribute n: Integer = 0;
+			exhibit state modes { entry; then on; state on { entry action bump { assign n := 1; } } }
+			exhibit state missing;
+		}
+		part def Fine {
+			exhibit state modes { entry; then idle; state idle; }
+		}
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	ctx := NewContext(model, resolver, 10000)
+
+	broken, err := ctx.Instantiate(resolveSymbol(t, root, "Broken"))
+	if err == nil {
+		t.Fatal("expected the unresolved machine to fail materialization")
+	}
+	if broken != nil {
+		t.Errorf("failed materialization answered object %v", broken)
+	}
+	if got := len(ctx.objectBehaviors); got != 0 {
+		t.Errorf("%d behavior(s) left attached after a failed materialization", got)
+	}
+	if got := len(ctx.pendingBehaviors); got != 0 {
+		t.Errorf("%d behavior(s) left queued after a failed materialization", got)
+	}
+
+	fine, err := ctx.Instantiate(resolveSymbol(t, root, "Fine"))
+	if err != nil {
+		t.Fatalf("Instantiate after a failed one: %v", err)
+	}
+	if got := len(ctx.objectBehaviors); got != 1 {
+		t.Errorf("%d behaviors attached, want only the new object's", got)
+	}
+	if _, ok := fine.ExhibitedState(); !ok {
+		t.Error("the new object exhibits no machine")
+	}
+}

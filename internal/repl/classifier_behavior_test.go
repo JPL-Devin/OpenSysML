@@ -86,6 +86,35 @@ func TestObjectMachineSurvivesAnUnrelatedDeclaration(t *testing.T) {
 	wants(t, run(t, s, "%features Obj::Monitor"), "count = 1", "ID: "+id)
 }
 
+// Re-declaring the machine an object exhibits drops that object and says so: a
+// rewritten body never resumes on values the old one wrote.
+func TestRewritingTheExhibitedMachineDropsTheObject(t *testing.T) {
+	s := loadFixture(t, "testdata/exhibited_machine.sysml")
+	run(t, s, "%instantiate Obj::Monitor")
+	wants(t, run(t, s, "%features Obj::Monitor"), "count = 1")
+
+	rewritten := `
+		package Obj {
+			part def Monitor {
+				attribute count = 0;
+				exhibit state modes {
+					entry; then idle;
+					state idle { entry action bump { assign count := count + 5; } }
+				}
+			}
+		}
+	`
+	res := s.Submit(rewritten)
+	if len(res.Diagnostics) > 0 {
+		t.Fatalf("rewritten declaration has diagnostics: %v", res.Diagnostics)
+	}
+	wants(t, strings.Join(res.Notices, "\n"), "dropped")
+	wants(t, run(t, s, "%features Obj::Monitor"), "no instance")
+
+	run(t, s, "%instantiate Obj::Monitor")
+	wants(t, run(t, s, "%features Obj::Monitor"), "count = 5")
+}
+
 // objectIDIn reports the object identity a command's output names, written either
 // as `#<n>` or as `ID: <n>`.
 func objectIDIn(t *testing.T, out string) string {
