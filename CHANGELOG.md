@@ -110,6 +110,19 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   member of the namespace that declares the member, and the referenced requirement's features stay
   offered to the body's direct members, which is what the reference subsetting inherits them to.
 
+### An unimported Systemica extension function no longer answers a call it is reported unresolved on
+
+- **`exp`, `ln`, `log` and `atan2` now require the import that declares them.** They are declared by
+  the non-normative `SystemicaMathFunctions` extension, which no OMG library carries, so a bare
+  `exp(x)` is reported `unresolved reference: exp` — and used to be evaluated anyway by dispatch on
+  the local name, which meant the diagnostic and the behavior disagreed: ignore the error and the
+  model computed, trust it and the model looked broken. Such a call now fails with a typed error
+  (`ErrUnimportedExtensionFunction`) naming the function and the `import SystemicaMathFunctions::*;`
+  that makes it legal.
+- **A model that imports the package, or writes the call qualified, is unaffected**, as is a bare
+  call to an OMG function library (`sqrt`, `sin`, …), which every model may write whatever it
+  imports.
+
 ## 0.1.0 — 2026-08-17
 
 ### RDF conversion is experimental

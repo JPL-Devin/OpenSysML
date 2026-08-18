@@ -697,10 +697,12 @@ the subdirectory out of the OMG notice.
 
 **Reachability.** A model writes `import SystemicaMathFunctions::*;` (or calls
 `SystemicaMathFunctions::exp(x)` qualified); both resolve like any other library
-package, with no diagnostic. A *bare* `exp(x)` with no import **evaluates**, by
-the same unqualified-name dispatch a bare `sqrt(x)` uses, but the checker still
-reports `unresolved reference: exp` on the name — exactly the rough edge the
-vendored functions have, no better and no worse. ROADMAP A6 is the general fix.
+package, with no diagnostic. A *bare* `exp(x)` with no import is reported
+`unresolved reference: exp` and **does not evaluate**: the name is legal only
+under that import, since no OMG library declares it, so the call fails with
+`ErrUnimportedExtensionFunction` naming the import rather than being answered by
+a declaration the model never made visible. A bare `sqrt(x)` still evaluates —
+the OMG function libraries are in force whatever a model imports.
 
 | Semantic Rule | Implementation | Test Case | Status |
 |--------------|----------------|-----------|--------|
@@ -710,7 +712,8 @@ vendored functions have, no better and no worse. ROADMAP A6 is the general fix.
 | `atan2(y, x)` — full-quadrant angle, parameters ordered as in IEEE 754 and `math.Atan2` | `runtime/library_functions.go` `atan2Real` | `TestLibraryFunctionValues`, `TestLibraryFunctionAtan2NamedArguments` | ✅ Faithful |
 | `ln(0.0)`, `ln(-1.0)`, `log(x, 1.0)`, `log(-1.0, 10.0)`, `atan2(0.0, 0.0)` report a domain error; `exp` beyond the Real range reports an overflow | `runtime/library_functions.go` | `TestLibraryFunctionErrors`, `TestRuntimeRobustness/extension_library_function_outside_its_domain` | ✅ Faithful |
 | The shipped declarations and the registered implementations cannot drift (names, parameter names, parameter order) | `runtime/library_functions.go` registry | `TestSystemicaMathFunctionsMatchTheShippedDeclarations` | ✅ Faithful |
-| Evaluable from a `calc def` body | `runtime/invoke_calc.go` | `calc_systemica_math_functions.sysml` + golden trace | ✅ Faithful |
+| Evaluable from a `calc def` body under `import SystemicaMathFunctions::*;` | `runtime/invoke_calc.go` | `calc_systemica_math_functions.sysml` + golden trace | ✅ Faithful |
+| An unqualified call the model imports no declaration of fails with a typed error naming the function and the import that makes it legal, so the diagnostic and the behavior agree instead of contradicting each other | `runtime/library_functions.go` `extensionLocalNames`, `unresolvedLibraryFunction`, `ErrUnimportedExtensionFunction`, read by `runtime/eval.go` (unresolved-call dispatch) | `runtime/library_functions_test.go:TestUnimportedExtensionFunctionCallIsATypedError`, `TestLibraryFunctionUnqualifiedNames`, `TestRuntimeRobustness/calc_calls_an_unimported_extension_function` | ✅ Faithful |
 
 ### Static Expression Type Checking (KerML §7.4 Expressions, §8.3 Feature Values)
 

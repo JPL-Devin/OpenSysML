@@ -256,10 +256,45 @@ func TestLibraryFunctionUnqualifiedNames(t *testing.T) {
 		}
 	}
 
-	for _, local := range []string{"sqrt", "abs", "max", "min", "floor", "round", "sin", "cos", "tan", "cot", "arcsin", "arccos", "arctan", "isZero", "isUnit", "exp", "ln", "log", "atan2"} {
+	for _, local := range []string{"sqrt", "abs", "max", "min", "floor", "round", "sin", "cos", "tan", "cot", "arcsin", "arccos", "arctan", "isZero", "isUnit"} {
 		if _, ok := libraryFunctionsByLocalName[local]; !ok {
 			t.Errorf("unqualified name %q is not dispatchable", local)
 		}
+	}
+
+	// The extension names are no part of any OMG library, so nothing puts them
+	// in scope and they are dispatched by their import alone.
+	for _, local := range []string{"exp", "ln", "log", "atan2"} {
+		if _, ok := libraryFunctionsByLocalName[local]; ok {
+			t.Errorf("extension name %q is dispatchable without its import", local)
+		}
+		if _, ok := extensionLocalNames[local]; !ok {
+			t.Errorf("extension name %q names no import", local)
+		}
+	}
+}
+
+// An unimported extension call fails with a typed error naming the function and
+// the import that makes it legal, rather than being answered by a declaration
+// the model never made visible.
+func TestUnimportedExtensionFunctionCallIsATypedError(t *testing.T) {
+	fn, err := unresolvedLibraryFunction(&ast.QualifiedName{Parts: []ast.NameSegment{{Text: "exp"}}}, "exp")
+	if fn != nil {
+		t.Fatalf("exp dispatched to %v without its import", fn.name)
+	}
+	if !errors.Is(err, ErrUnimportedExtensionFunction) {
+		t.Fatalf("error = %v, want %v", err, ErrUnimportedExtensionFunction)
+	}
+	for _, want := range []string{"exp", "import SystemicaMathFunctions::*;"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not mention %q", err, want)
+		}
+	}
+
+	// The qualified name is the model's own reading and stays dispatchable.
+	qualified := &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "SystemicaMathFunctions"}, {Text: "exp"}}}
+	if fn, err := unresolvedLibraryFunction(qualified, "SystemicaMathFunctions::exp"); fn == nil || err != nil {
+		t.Fatalf("qualified exp = %v, %v; want the implementation", fn, err)
 	}
 }
 

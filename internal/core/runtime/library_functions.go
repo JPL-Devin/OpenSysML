@@ -19,6 +19,10 @@ import (
 // so a model is told which declaration it is rather than answered wrongly.
 var ErrUnevaluableLibraryFunction = errors.New("library function is not evaluable")
 
+// ErrUnimportedExtensionFunction is returned for an unqualified call to a
+// Systemica extension function the model imports no declaration of.
+var ErrUnimportedExtensionFunction = errors.New("function is not in scope")
+
 // noVectorCollection and noComplexCollection are why the aggregations over a
 // collection of vectors or of Complex values are not evaluable: a sequence of
 // them flattens, losing the grouping the aggregation sums over.
@@ -57,11 +61,21 @@ type libraryApply func(name string, ctx *Context, args []Value) (Value, error)
 var libraryFunctions = map[string]*libraryFunction{}
 
 // libraryFunctionsByLocalName maps an unqualified name to the implementation a
-// call denotes when the name resolves to no declaration in the model — the
+// call denotes when the name resolves to no declaration in the model — the OMG
 // function libraries are always in force, even in a model that imports no part
 // of them. A name only appears here when every library declaration of it
 // means the same operation.
 var libraryFunctionsByLocalName = map[string]*libraryFunction{}
+
+// extensionLocalNames maps the unqualified name of a Systemica extension
+// function to the package an import must name for such a call to be legal. No
+// OMG library declares these names, so nothing puts them in scope on its own.
+var extensionLocalNames = map[string]string{
+	"exp":   "SystemicaMathFunctions",
+	"ln":    "SystemicaMathFunctions",
+	"log":   "SystemicaMathFunctions",
+	"atan2": "SystemicaMathFunctions",
+}
 
 func init() {
 	// RealFunctions (Kernel Function Library). `abs`, `max` and `min` take Real
@@ -144,10 +158,6 @@ func init() {
 		"arcsin": "TrigFunctions::arcsin",
 		"arccos": "TrigFunctions::arccos",
 		"arctan": "TrigFunctions::arctan",
-		"exp":    "SystemicaMathFunctions::exp",
-		"ln":     "SystemicaMathFunctions::ln",
-		"log":    "SystemicaMathFunctions::log",
-		"atan2":  "SystemicaMathFunctions::atan2",
 
 		"deg": "TrigFunctions::deg",
 		"rad": "TrigFunctions::rad",
@@ -325,17 +335,26 @@ func libraryFunctionByName(fqn string) (*libraryFunction, bool) {
 
 // unresolvedLibraryFunction returns the library function a call denotes when its
 // name resolves to no declaration: the library's own qualified name, or an
-// unqualified name, which denotes the library function of that name. written is
-// the name as the model wrote it.
-func unresolvedLibraryFunction(qn *ast.QualifiedName, written string) (*libraryFunction, bool) {
+// unqualified name of an OMG library function. written is the name as the model
+// wrote it. An unqualified name only a Systemica extension declares gives a
+// typed error naming the import that makes the call legal.
+func unresolvedLibraryFunction(qn *ast.QualifiedName, written string) (*libraryFunction, error) {
 	if fn, ok := libraryFunctions[written]; ok {
-		return fn, true
+		return fn, nil
 	}
 	if qn == nil || qn.Global || len(qn.Parts) != 1 {
-		return nil, false
+		return nil, nil
 	}
-	fn, ok := libraryFunctionsByLocalName[written]
-	return fn, ok
+	if fn, ok := libraryFunctionsByLocalName[written]; ok {
+		return fn, nil
+	}
+	if pkg, ok := extensionLocalNames[written]; ok {
+		return nil, fmt.Errorf(
+			"%w: %s is declared by %s, a Systemica extension no OMG library declares: write `import %s::*;` to call it",
+			ErrUnimportedExtensionFunction, written, pkg, pkg,
+		)
+	}
+	return nil, nil
 }
 
 // libraryFunctionFor returns the built-in implementation of sym when sym is a
