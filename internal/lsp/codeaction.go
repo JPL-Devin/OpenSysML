@@ -5,8 +5,8 @@ import (
 
 	"go.lsp.dev/protocol"
 
-	"github.com/Open-MBEE/Systemica/internal/core/quickfix"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/quickfix"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 // CodeAction answers the quick fixes for the diagnostics in a range: the fixes

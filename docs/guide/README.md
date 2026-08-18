@@ -1,4 +1,4 @@
-# The Systemica guide
+# The OpenSysML guide
 
 Read in order the first time; each chapter assumes the ones before it.
 

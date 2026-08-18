@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/passes"
+	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
 )
 
 var updateTraining = flag.Bool("update-training", false,
@@ -22,7 +22,7 @@ const (
 	trainingSkipHint = "training examples not downloaded (run ./scripts/download-training-examples.sh)"
 
 	// Set in CI so that an absent corpus fails the gate instead of skipping it.
-	trainingRequiredEnv = "SYSTEMICA_REQUIRE_TRAINING_CORPUS"
+	trainingRequiredEnv = "OPENSYSML_REQUIRE_TRAINING_CORPUS"
 )
 
 // skipWithoutTrainingCorpus skips the calling test locally, but fails it when
@@ -40,7 +40,7 @@ func skipWithoutTrainingCorpus(t *testing.T, reason string) {
 // testdata/training_examples_expected.txt, so a file that starts failing, stops
 // failing, or changes its number of errors fails this test. The corpus itself is
 // not vendored (see scripts/download-training-examples.sh), so the test skips
-// when it is absent — unless SYSTEMICA_REQUIRE_TRAINING_CORPUS is set, as CI does.
+// when it is absent — unless OPENSYSML_REQUIRE_TRAINING_CORPUS is set, as CI does.
 func TestTrainingExamplesSemanticErrors(t *testing.T) {
 	files := trainingFiles(t)
 

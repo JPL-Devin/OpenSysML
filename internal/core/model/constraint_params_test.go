@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/passes"
+	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
 )
 
 // A constraint that declares its parameters still states its conditions with

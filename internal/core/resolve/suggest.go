@@ -3,8 +3,8 @@ package resolve
 import (
 	"strings"
 
-	"github.com/Open-MBEE/Systemica/internal/core/suggest"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/suggest"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // suggestKey identifies a suggestion by the name that did not resolve and the

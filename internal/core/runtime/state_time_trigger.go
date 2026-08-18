@@ -3,7 +3,7 @@ package runtime
 import (
 	"fmt"
 
-	"github.com/Open-MBEE/Systemica/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 )
 
 // secondFQN names the unit the machine's virtual clock counts in, so a duration

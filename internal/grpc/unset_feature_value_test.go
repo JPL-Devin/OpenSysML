@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	pb "github.com/Open-MBEE/Systemica/api/proto"
+	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 )
 
 const unsetFeatureValueModel = `

@@ -3,7 +3,7 @@ package semantics
 import (
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // TestScaleStaysExact: a conversion factor is kept as a ratio, so converting at

@@ -1,4 +1,4 @@
-; Systemica SMT-LIB2 translation of constraint BudgetConstraint
+; OpenSysML SMT-LIB2 translation of constraint BudgetConstraint
 ; the runtime evaluator remains normative; solving is an optional extension
 ; each assertion is named, so an unsat core names the conditions that conflict
 (set-option :produce-unsat-cores true)

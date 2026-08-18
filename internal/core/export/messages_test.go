@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/export"
+	"github.com/Open-MBEE/OpenSysML/internal/core/export"
 )
 
 // TestUnsupportedConversionMessages pins the text of a conversion refusal: the

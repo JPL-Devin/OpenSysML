@@ -1,4 +1,4 @@
-; Systemica SMT-LIB2 translation of satisfaction satisfy touchdown by lander
+; OpenSysML SMT-LIB2 translation of satisfaction satisfy touchdown by lander
 ; the runtime evaluator remains normative; solving is an optional extension
 (set-logic QF_LRA)
 ; test::TouchdownRequirement::craft.verticalSpeed, declared at satisfy_touchdown.sysml:7:3

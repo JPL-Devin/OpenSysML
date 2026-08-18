@@ -26,7 +26,7 @@ if _version_not_supported:
 
 
 class SysMLServiceStub:
-    """SysMLService provides programmatic access to Systemica's parser and runtime
+    """SysMLService provides programmatic access to OpenSysML's parser and runtime
     """
 
     def __init__(self, channel):
@@ -113,7 +113,7 @@ class SysMLServiceStub:
 
 
 class SysMLServiceServicer:
-    """SysMLService provides programmatic access to Systemica's parser and runtime
+    """SysMLService provides programmatic access to OpenSysML's parser and runtime
     """
 
     def GetServerInfo(self, request, context):
@@ -172,7 +172,7 @@ class SysMLServiceServicer:
         raise NotImplementedError('Method not implemented!')
 
     def Convert(self, request, context):
-        """Convert a model between the representations Systemica writes — SysML
+        """Convert a model between the representations OpenSysML writes — SysML
         textual notation and RDF Turtle — so a client can write a model back out
         rather than only read it. Reported as the "convert" capability.
         """
@@ -316,7 +316,7 @@ def add_SysMLServiceServicer_to_server(servicer, server):
 
  # This class is part of an EXPERIMENTAL API.
 class SysMLService:
-    """SysMLService provides programmatic access to Systemica's parser and runtime
+    """SysMLService provides programmatic access to OpenSysML's parser and runtime
     """
 
     @staticmethod

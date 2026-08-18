@@ -1,6 +1,6 @@
 ---
 name: testing-sysml-repl
-description: How to build, drive, and record end-to-end tests of the Systemica sysml REPL (bin/sysml) and the sysml-grpc service with its pysysml Python client — meta-command behavior, symbol lookup, action/state debugging, gRPC slot serialization, and GUI-terminal recording setup.
+description: How to build, drive, and record end-to-end tests of the OpenSysML sysml REPL (bin/sysml) and the sysml-grpc service with its pysysml Python client — meta-command behavior, symbol lookup, action/state debugging, gRPC slot serialization, and GUI-terminal recording setup.
 ---
 
 # Testing the `sysml` REPL end-to-end
@@ -1464,7 +1464,7 @@ worth asserting, with the wording each produces:
 | absent | `v0.0.8` | `… was not downloaded by this client, so which release it is cannot be told` |
 | `v0.0.7` + **true** sha256 of the file | `v0.0.8` | `… is v0.0.7, but v0.0.8 was asked for` |
 | `v0.0.7` + wrong sha256 (hand-swapped binary) | `v0.0.8` | falls back to the "not downloaded by this client" wording |
-| `v0.0.8` but `"repo":"someone/Systemica-fork"` | `v0.0.8` | `… was downloaded from someone/Systemica-fork, but v0.0.8 of Open-MBEE/Systemica was asked for` |
+| `v0.0.8` but `"repo":"someone/OpenSysML-fork"` | `v0.0.8` | `… was downloaded from someone/OpenSysML-fork, but v0.0.8 of Open-MBEE/OpenSysML was asked for` |
 
 - The digest is re-verified (`cached_release`), so a *true* sha256 in the sidecar is what makes the
   "is v0.0.7" branch reachable — a placeholder digest silently tests the wrong branch.
@@ -1821,7 +1821,7 @@ definition deriving from `pysysml.typed.TypedObject`. Useful facts when testing 
 The runtime supplies bodies for the function-library declarations in
 `internal/core/runtime/library_functions.go`; the non-normative extensions
 (`exp`, `ln`, `log`, `atan2`) live in
-`internal/core/libs/stdlib/Systemica Libraries/SystemicaMathFunctions.kerml`.
+`internal/core/libs/stdlib/OpenSysML Libraries/OpenSysMLMathFunctions.kerml`.
 Testing notes that generalize to any future built-in:
 
 - The fastest end-to-end surface is the batch flag, which loads a model *and* evaluates
@@ -1844,7 +1844,7 @@ Testing notes that generalize to any future built-in:
 - A **bare** call with no `import` still evaluates (the unqualified-name table is always in force)
   but the checker prints `error: unresolved reference: <name>` for the same call inside a
   declaration. That divergence is a known rough edge of the built-in dispatch, not a new bug —
-  report it as expected, and use `import SystemicaMathFunctions::*;` in fixtures to avoid it.
+  report it as expected, and use `import OpenSysMLMathFunctions::*;` in fixtures to avoid it.
 - Fixture gotchas when writing action fixtures by hand: `done` is a reserved keyword (use another
   name), a body has one start so only one `first` end (chain the rest as `first a then b; then b c;`
   — two `first` ends yield `action has multiple initial nodes`), and `and`/`or` are
@@ -2140,7 +2140,7 @@ Traps found while testing it:
 The GUI is on `DISPLAY=:0` (`:1` does not exist here — `wmctrl` will say "Cannot open display").
 
 ```bash
-cd /home/ubuntu/repos/Systemica && (DISPLAY=:0 konsole --hide-menubar >/dev/null 2>&1 &)
+cd /home/ubuntu/repos/OpenSysML && (DISPLAY=:0 konsole --hide-menubar >/dev/null 2>&1 &)
 DISPLAY=:0 wmctrl -a "Konsole"
 DISPLAY=:0 wmctrl -r :ACTIVE: -b add,maximized_vert,maximized_horz
 ```
@@ -2781,7 +2781,7 @@ number rather than quoting the table.
   `nohup ~/.pysysml/bin/sysml-grpc -port 50051 >/tmp/svc.log 2>&1 &`.
 - **`PINNED_SHA256` is nested `repo -> version -> asset`.** To exercise the *contradicted* digest arm
   you must inject the key for the repository actually in use, e.g.
-  `binary.PINNED_SHA256['Open-MBEE/Systemica'] = {'v0.0.8': {'sysml-grpc-linux-amd64': 'de'*32}}`
+  `binary.PINNED_SHA256['Open-MBEE/OpenSysML'] = {'v0.0.8': {'sysml-grpc-linux-amd64': 'de'*32}}`
   (`DEFAULT_GITHUB_REPO`, looked up case-sensitively, so the spelling must match exactly);
   a mis-cased, flat or `in`-substring patch leaves the pin absent and you silently re-test the *unpinned* arm
   (`UnpinnedReleaseError` + kept cache) while believing you tested the contradiction.
@@ -3228,7 +3228,7 @@ mypy cannot resolve the editable-installed `pysysml`, silently treats `_t.Quanti
 reports *no* errors on obvious misuse (a false pass that looks like a passing test):
 
 ```bash
-cd /tmp/qw && MYPYPATH=/home/ubuntu/repos/Systemica/python \
+cd /tmp/qw && MYPYPATH=/home/ubuntu/repos/OpenSysML/python \
   $HOME/pv/bin/python -m mypy --no-incremental --no-error-summary --follow-imports=silent misuse.py
 # -> Unsupported operand types for + ("Quantity" and "float")  [operator]
 # -> Incompatible types in assignment (expression has type "Quantity", variable has type "float")
@@ -3741,16 +3741,16 @@ Two cases need process work rather than a Python call:
 ## `%check` and the SMT solver driver (PR #285)
 
 `%check <name>` asks an external solver about a constraint def, requirement def or satisfaction
-assertion. z3 may already be installed (`/usr/bin/z3`, 4.8.12 seen); discovery is `SYSTEMICA_SMT`
-(path to an executable) → `z3` → `cvc5` on PATH, and `SYSTEMICA_SMT_TIMEOUT` (default `10s`) bounds
+assertion. z3 may already be installed (`/usr/bin/z3`, 4.8.12 seen); discovery is `OPENSYSML_SMT`
+(path to an executable) → `z3` → `cvc5` on PATH, and `OPENSYSML_SMT_TIMEOUT` (default `10s`) bounds
 one query. Every solver-availability path is reachable from the shell without touching code, so
 drive each in its own REPL and show the env on camera:
 
 ```bash
-SYSTEMICA_SMT_TIMEOUT=1ms ./bin/sysml            # "? … is undecided (z3, 1ms)" + "Reason: the solver ran out of time after 1ms"
-SYSTEMICA_SMT=/tmp/fake_unknown.sh ./bin/sysml   # sh script: printf 'unknown\n(:reason-unknown "incomplete")\n'; then `while read -r line; do :; done`
-SYSTEMICA_SMT=/tmp/fake_fail.sh ./bin/sysml      # sh script: exit 3 → "error: the SMT solver did not answer: … failed at check-sat"
-env -u SYSTEMICA_SMT PATH=/tmp/emptybin ./bin/sysml   # "error: no SMT solver found: install z3 …"
+OPENSYSML_SMT_TIMEOUT=1ms ./bin/sysml            # "? … is undecided (z3, 1ms)" + "Reason: the solver ran out of time after 1ms"
+OPENSYSML_SMT=/tmp/fake_unknown.sh ./bin/sysml   # sh script: printf 'unknown\n(:reason-unknown "incomplete")\n'; then `while read -r line; do :; done`
+OPENSYSML_SMT=/tmp/fake_fail.sh ./bin/sysml      # sh script: exit 3 → "error: the SMT solver did not answer: … failed at check-sat"
+env -u OPENSYSML_SMT PATH=/tmp/emptybin ./bin/sysml   # "error: no SMT solver found: install z3 …"
 ```
 
 The fake-unknown script *must* keep draining stdin after printing, or the driver's later writes hit
@@ -3773,7 +3773,7 @@ Fixture shapes that actually discriminate:
   solving: …` (no verdict). Incommensurable units are refused the same way (`L against M`).
 - **Read-only:** start `%action <A>`, run `%check`, then `%step` — the token must still advance
   (`Token 1 @ start` → `Token 1 @ step1`).
-- **Assignments use qualified Systemica names** (`Check::Satisfiable::i = 4`,
+- **Assignments use qualified OpenSysML names** (`Check::Satisfiable::i = 4`,
   `Check::SpeedReq::'craft.topSpeed' = 100`, enum as `Check::Gear::high`). A quantity is a magnitude
   in the *base units* a written unit reduces to, named as such (`1500.0 [kg]` comes back as
   `1500000.0 [gram]`), so don't expect the unit as written.
@@ -3824,7 +3824,7 @@ Things that look like bugs but are not, and traps:
   the subset`) and an **unresolved reference** (→ `it resolves to nothing`).
 - **z3 decides nonlinear reals**, so `x*y == 7.5 and x*x + y*y == 2.0` comes back `unsat` with a
   real core, not `unknown`. The `? … is undecided, so there is nothing to explain` branch is hard
-  to reach on purpose; use `SYSTEMICA_SMT_CORE_BUDGET` (a tiny value) if you need to exercise the
+  to reach on purpose; use `OPENSYSML_SMT_CORE_BUDGET` (a tiny value) if you need to exercise the
   non-minimal `Note` wording instead.
 - **Header durations include core-reduction time** (since 04d0c4b), so an unsat `%explain` reads
   ~3x the matching `%check` (24–30ms vs 7ms). Never assert exact milliseconds.
@@ -3835,5 +3835,5 @@ Things that look like bugs but are not, and traps:
 
 The no-solver path is the one case needing a special launch: `mkdir -p /tmp/nosolver` and run
 `env PATH=/tmp/nosolver ./bin/sysml`, which yields `error: no SMT solver found: install z3 … or set
-SYSTEMICA_SMT …; looked for [z3 cvc5] on PATH`. Note `Discover()` is consulted per command, so this
+OPENSYSML_SMT …; looked for [z3 cvc5] on PATH`. Note `Discover()` is consulted per command, so this
 must be set on the process, not toggled mid-session.

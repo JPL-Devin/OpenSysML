@@ -5,7 +5,7 @@ import (
 
 	"go.lsp.dev/protocol"
 
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // Definition returns the declaration location of the reference under the cursor.

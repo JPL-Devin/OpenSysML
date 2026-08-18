@@ -1,7 +1,7 @@
 // Package lexer is a hand-written pull-based scanner for SysML v2 / KerML.
 package lexer
 
-import "github.com/Open-MBEE/Systemica/internal/core/source"
+import "github.com/Open-MBEE/OpenSysML/internal/core/source"
 
 // Kind enumerates token categories.
 type Kind int

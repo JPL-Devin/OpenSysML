@@ -1,6 +1,6 @@
 package semantics
 
-import "github.com/Open-MBEE/Systemica/internal/core/symbols"
+import "github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 
 // MembersOf returns the members visible on sym: those declared directly in its
 // owned scope plus members inherited from what it specializes and what it

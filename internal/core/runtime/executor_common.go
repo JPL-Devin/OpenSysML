@@ -4,8 +4,8 @@ import (
 	"container/heap"
 	"fmt"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/lower"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 )
 
 // Token represents a control token in action execution. It carries no values of

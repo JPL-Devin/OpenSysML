@@ -560,7 +560,7 @@ class Connection:
     
     def convert(self, to_format, file_path=None, content=None, model_hash=None,
                 from_format='', tolerate_syntax_errors=False):
-        """Write a model out in another of the formats Systemica writes.
+        """Write a model out in another of the formats OpenSysML writes.
 
         The source is a loaded model, named by its hash, or one named the way
         :meth:`load` names it: a path the service opens, or content carried

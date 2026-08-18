@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Open-MBEE/Systemica/internal/core/runtime"
-	"github.com/Open-MBEE/Systemica/internal/core/solve"
+	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
+	"github.com/Open-MBEE/OpenSysML/internal/core/solve"
 )
 
 // SolveStatus is what a solver answered about an element's conditions. It is

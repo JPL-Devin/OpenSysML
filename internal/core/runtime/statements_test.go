@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 )
 
 // A `for` visits a sequence in the order the expression that built it produced,

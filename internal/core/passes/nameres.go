@@ -3,7 +3,7 @@ package passes
 import (
 	"strings"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 )
 
 // NameResolutionPass resolves every reference in a document via the Plan-3

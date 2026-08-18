@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Open-MBEE/Systemica/internal/repl"
+	"github.com/Open-MBEE/OpenSysML/internal/repl"
 )
 
 // The prefix this command reports a failure under, as `prog: ` does in any Unix

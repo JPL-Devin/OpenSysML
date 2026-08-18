@@ -1,4 +1,4 @@
-; Systemica SMT-LIB2 translation of constraint safeWindow
+; OpenSysML SMT-LIB2 translation of constraint safeWindow
 ; the runtime evaluator remains normative; solving is an optional extension
 ; the element asserts that its required conditions do not all hold
 ; each assertion is named, so an unsat core names the conditions that conflict

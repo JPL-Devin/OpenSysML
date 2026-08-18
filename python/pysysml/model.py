@@ -113,7 +113,7 @@ class Model:
         return self._source_path
 
     def convert(self, to_format, tolerate_syntax_errors=False):
-        """Write this model out in one of the formats Systemica writes.
+        """Write this model out in one of the formats OpenSysML writes.
 
         Converts the source this model was parsed from, not the file as it
         stands now, so what is written is the model that was inspected: notation

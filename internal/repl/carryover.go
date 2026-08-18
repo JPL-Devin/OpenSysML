@@ -3,7 +3,7 @@ package repl
 import (
 	"sort"
 
-	"github.com/Open-MBEE/Systemica/internal/core/runtime"
+	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
 )
 
 // carried is one object the session materialized, together with the shapes it

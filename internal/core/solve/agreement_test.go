@@ -8,13 +8,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/runtime"
-	"github.com/Open-MBEE/Systemica/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 )
 
 // solverRequiredEnv is set in CI so that an absent solver fails these tests
 // instead of skipping them, as the training corpus gate is required there.
-const solverRequiredEnv = "SYSTEMICA_REQUIRE_SMT"
+const solverRequiredEnv = "OPENSYSML_REQUIRE_SMT"
 
 // requireSolver returns the discovered solver, skipping the calling test when no
 // solver is installed — unless one is declared mandatory, when it fails.

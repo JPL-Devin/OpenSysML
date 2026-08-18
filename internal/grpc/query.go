@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"strings"
 
-	pb "github.com/Open-MBEE/Systemica/api/proto"
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	pb "github.com/Open-MBEE/OpenSysML/api/proto"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -172,7 +172,7 @@ func QueryPropertyNames() []string {
 	return out
 }
 
-// metamodelTypeNames maps Systemica's symbol kinds onto the metamodel type names
+// metamodelTypeNames maps OpenSysML's symbol kinds onto the metamodel type names
 // the standard's clients write as `@type`, and is the single source of truth for
 // that mapping. Where the metamodel has no distinct type — an individual is an
 // occurrence with isIndividual set — the closest one it has is used; docs/reference/api.md

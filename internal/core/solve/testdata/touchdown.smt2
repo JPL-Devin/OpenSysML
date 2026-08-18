@@ -1,4 +1,4 @@
-; Systemica SMT-LIB2 translation of requirement TouchdownRequirement
+; OpenSysML SMT-LIB2 translation of requirement TouchdownRequirement
 ; the runtime evaluator remains normative; solving is an optional extension
 (set-logic QF_LRA)
 ; test::TouchdownRequirement::actualVerticalSpeed in base units of L·T^-1, declared at touchdown.sysml:9:3

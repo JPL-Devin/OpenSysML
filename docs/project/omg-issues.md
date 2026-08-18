@@ -8,7 +8,7 @@ records defects in the **vendored specification libraries**
 model using it.
 
 Each row quotes the vendored declaration verbatim so a reviewer can judge it
-without opening the library, and names what Systemica implements instead. Every
+without opening the library, and names what OpenSysML implements instead. Every
 divergence is also a row in [spec-compliance.md](spec-compliance.md).
 
 | Library file | Declaration | What the vendored body says | What we implement | Why |
@@ -31,6 +31,6 @@ function includingAt{ in seq: Anything[0..*] ordered nonunique; in values: Anyth
 `subsequence(1, index - 1)` is the prefix ending before `index`, and
 `subsequence(index + 1)` is the tail starting after `index`; the element at
 `index` appears in neither, so evaluating the body as written *replaces* it with
-`values` rather than inserting before it. Systemica implements insertion
+`values` rather than inserting before it. OpenSysML implements insertion
 (maintainer ruling, PR for task S4), so `includingAt` is a divergence from the
 vendored body and is recorded here for review against a future OMG release.

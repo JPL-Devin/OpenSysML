@@ -1,8 +1,8 @@
 package edit
 
 import (
-	"github.com/Open-MBEE/Systemica/internal/core/passes"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 // Failure is why edits were refused. Every refusal carries one: an edit is

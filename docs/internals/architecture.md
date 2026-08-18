@@ -1,6 +1,6 @@
 # SysML v2 Execution Environment — Architecture
 
-**Module:** `github.com/Open-MBEE/Systemica`  
+**Module:** `github.com/Open-MBEE/OpenSysML`  
 **Language:** Go 1.23+
 
 ## Overview
@@ -17,7 +17,7 @@ A complete, production-grade SysML v2 implementation delivering the integrated t
 ### Design Principles
 
 - **Performance:** Sub-millisecond parsing, single static binary, no JVM/Eclipse runtime
-- **Completeness:** SysML v2 textual notation support (95/95 stdlib files parse clean: 94 vendored OMG files and 1 Systemica extension)
+- **Completeness:** SysML v2 textual notation support (95/95 stdlib files parse clean: 94 vendored OMG files and 1 OpenSysML extension)
 - **Executable models:** Not just validation—runtime that instantiates, evaluates, simulates
 - **Incremental & lazy:** Parse immediately, resolve semantics on-demand (gopls/rust-analyzer precedent)
 - **Immutable AST:** All semantic state lives in side tables keyed by node/symbol
@@ -47,7 +47,7 @@ A complete, production-grade SysML v2 implementation delivering the integrated t
 ## Module Structure
 
 ```
-github.com/Open-MBEE/Systemica
+github.com/Open-MBEE/OpenSysML
 ├── cmd/
 │   ├── sysml-lsp/          # LSP server binary
 │   ├── sysml-grpc/         # gRPC server binary
@@ -491,7 +491,7 @@ See [the guide](../guide/) for VS Code configuration.
 | Standard library bundling | ✅ Complete |
 | LSP server implementation | ✅ Complete |
 
-**Parser coverage:** 95/95 bundled library files parse cleanly — the 94 official SysML v2 standard library files and the non-normative `Systemica Libraries/SystemicaMathFunctions.kerml` extension. Conformance verified by [stdlib_conformance_test.go](../../internal/core/libs/stdlib_conformance_test.go). Grammar reference available at [OMG Xtext grammar](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/org.omg.kerml.xtext/src/org/omg/kerml/xtext).
+**Parser coverage:** 95/95 bundled library files parse cleanly — the 94 official SysML v2 standard library files and the non-normative `OpenSysML Libraries/OpenSysMLMathFunctions.kerml` extension. Conformance verified by [stdlib_conformance_test.go](../../internal/core/libs/stdlib_conformance_test.go). Grammar reference available at [OMG Xtext grammar](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/org.omg.kerml.xtext/src/org/omg/kerml/xtext).
 
 ---
 

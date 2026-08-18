@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	pb "github.com/Open-MBEE/Systemica/api/proto"
+	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 )
 
 // quotedNamesModel declares a package whose name needs quoting, as the OMG

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/parser"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 // TestStdlibConformance is the gating conformance test per PARSER_ROBUSTNESS_PLAN.md Phase 1.

@@ -5,8 +5,8 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/Open-MBEE/Systemica/internal/core/suggest"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/suggest"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // qualifiedScan bounds how many same-simple-name registrations are ranked; the

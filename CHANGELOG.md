@@ -6,6 +6,34 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ## Unreleased
 
+### The project is now OpenSysML
+
+The rename is a clean break with no compatibility aliases: every name below has exactly one
+spelling from this release on. Entries for earlier releases keep the old names, because the
+artifacts they describe really were called that.
+
+- **Go module path is `github.com/Open-MBEE/OpenSysML`.** `go install
+  github.com/Open-MBEE/OpenSysML/cmd/sysml@latest`; the old path resolves only for `v0.0.x`.
+- **The binaries are unchanged** — `sysml`, `sysml-lsp` and `sysml-grpc` keep their names, as does
+  the `pysysml` Python package.
+- **Release archives are `opensysml-<os>-<arch>.tar.gz`** (`.zip` on Windows), and the Homebrew
+  formula is `opensysml`: `brew install Open-MBEE/tap/opensysml`. Assets already published under
+  `v0.0.x` keep their old names.
+- **The RDF extension namespace is `urn:opensysml:sysml:`**, still bound to the `sysx:` prefix. A
+  `.ttl` file written before this release carries `urn:systemica:sysml:` properties, and reading one
+  is refused rather than silently dropping what those properties said — re-export it from its
+  notation source.
+- **The non-normative math library is `OpenSysMLMathFunctions`**, in
+  `OpenSysML Libraries/OpenSysMLMathFunctions.kerml`. A model that writes
+  `import SystemicaMathFunctions::*;` must be updated; the unqualified `exp`, `ln`, `log` and
+  `atan2` aliases are unaffected.
+- **Environment variables are `OPENSYSML_*`** (`OPENSYSML_SMT`, `OPENSYSML_SMT_TIMEOUT`,
+  `OPENSYSML_REQUIRE_SMT`, `OPENSYSML_REQUIRE_TRAINING_CORPUS`, `OPENSYSML_SMT_CORE_BUDGET`). The
+  `SYSTEMICA_*` names are not read.
+- **The VS Code extension is `opensysml-sysml`** and its settings are `opensysml.server.path`,
+  `opensysml.server.args`, `opensysml.server.enabled` and `opensysml.trace.server`, with the
+  command `opensysml.restartServer`. Existing settings must be re-set under the new keys.
+
 ### `%slots` is now `%features`, the name SysML v2 uses
 
 - **`%features <name>` lists what an object holds for each feature of its type**, which is what

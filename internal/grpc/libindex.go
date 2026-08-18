@@ -7,8 +7,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/Open-MBEE/Systemica/internal/core/libs"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // IndexPoolEnvVar names the variable holding how many prewarmed library indexes

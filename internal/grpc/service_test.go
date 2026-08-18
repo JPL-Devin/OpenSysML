@@ -7,7 +7,7 @@ import (
 	"slices"
 	"testing"
 
-	pb "github.com/Open-MBEE/Systemica/api/proto"
+	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 )
 
 // TestGetServerInfo verifies the service reports its build version and the

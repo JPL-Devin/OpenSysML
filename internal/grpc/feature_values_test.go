@@ -5,7 +5,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	pb "github.com/Open-MBEE/Systemica/api/proto"
+	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 )
 
 // Instance.feature_values is the current spelling of Instance.slots, so every

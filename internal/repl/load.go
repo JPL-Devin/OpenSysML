@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 
-	"github.com/Open-MBEE/Systemica/internal/core/project"
+	"github.com/Open-MBEE/OpenSysML/internal/core/project"
 )
 
 // LoadPaths loads model files into the session. Each path names a file, a

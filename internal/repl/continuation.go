@@ -1,8 +1,8 @@
 package repl
 
 import (
-	"github.com/Open-MBEE/Systemica/internal/core/lexer"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 // needsContinuation reports whether buf has unbalanced open brackets, i.e. the

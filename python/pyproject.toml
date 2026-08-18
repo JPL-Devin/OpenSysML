@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "pysysml"
 dynamic = ["version"]
-description = "Python client library for Systemica, a SysML v2 parser and execution runtime"
+description = "Python client library for OpenSysML, a SysML v2 parser and execution runtime"
 readme = "README.md"
 # grpcio 1.83 and protobuf 7.35 publish wheels for CPython 3.10 and later only,
 # so anything older cannot install the dependency set below.
@@ -59,11 +59,11 @@ dev = [
 pysysml-generate = "pysysml.generate:main"
 
 [project.urls]
-Homepage = "https://github.com/Open-MBEE/Systemica"
-Repository = "https://github.com/Open-MBEE/Systemica"
-Documentation = "https://github.com/Open-MBEE/Systemica/blob/main/python/README.md"
-Changelog = "https://github.com/Open-MBEE/Systemica/blob/main/CHANGELOG.md"
-Issues = "https://github.com/Open-MBEE/Systemica/issues"
+Homepage = "https://github.com/Open-MBEE/OpenSysML"
+Repository = "https://github.com/Open-MBEE/OpenSysML"
+Documentation = "https://github.com/Open-MBEE/OpenSysML/blob/main/python/README.md"
+Changelog = "https://github.com/Open-MBEE/OpenSysML/blob/main/CHANGELOG.md"
+Issues = "https://github.com/Open-MBEE/OpenSysML/issues"
 
 [tool.setuptools.dynamic]
 version = { attr = "pysysml._version.VERSION" }

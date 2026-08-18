@@ -77,7 +77,7 @@ func indexSet(include []int) map[int]bool {
 
 // writeScript writes the script itself; every form of script shares it.
 func writeScript(b *strings.Builder, q *Query, opts scriptOptions) {
-	fmt.Fprintf(b, "; Systemica SMT-LIB2 translation of %s %s\n", q.Kind, comment(q.Element))
+	fmt.Fprintf(b, "; OpenSysML SMT-LIB2 translation of %s %s\n", q.Kind, comment(q.Element))
 	b.WriteString("; the runtime evaluator remains normative; solving is an optional extension\n")
 	if q.Negated {
 		b.WriteString("; the element asserts that its required conditions do not all hold\n")

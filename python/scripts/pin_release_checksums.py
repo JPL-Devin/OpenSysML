@@ -31,7 +31,7 @@ import urllib.request
 BINARY_FILE = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pysysml", "binary.py"
 )
-DEFAULT_REPO = "Open-MBEE/Systemica"
+DEFAULT_REPO = "Open-MBEE/OpenSysML"
 ASSET_PREFIX = "sysml-grpc-"
 NETWORK_TIMEOUT = 60
 

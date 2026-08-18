@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/export"
-	"github.com/Open-MBEE/Systemica/internal/core/parser"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/export"
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 // behavioralModels are the models whose whole point is behavior: every action
@@ -186,7 +186,7 @@ func TestStateMembersRoundTrip(t *testing.T) {
 func TestUnsupportedBehavioralShapesAreReported(t *testing.T) {
 	prologue := "@prefix elmt: <urn:sysmlv2:element:> .\n" +
 		"@prefix sysml: <https://www.omg.org/spec/SysML#> .\n" +
-		"@prefix sysx: <urn:systemica:sysml:> .\n" +
+		"@prefix sysx: <urn:opensysml:sysml:> .\n" +
 		"@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n\n" +
 		"elmt:P a sysml:Package ; sysml:qualifiedName \"P\" ; sysml:declaredName \"P\" ;\n" +
 		"    sysx:memberIndex \"0\"^^xsd:integer ; sysx:hasBody \"true\"^^xsd:boolean .\n\n" +
@@ -233,7 +233,7 @@ func TestUnsupportedBehavioralShapesAreReported(t *testing.T) {
 }
 
 // The `else` branch is marked with a term the SysML metamodel does not define,
-// so it belongs to the Systemica namespace and is read from there on its own —
+// so it belongs to the OpenSysML namespace and is read from there on its own —
 // without the branch's keyword having to say `else` as well.
 func TestElseBranchIsMarkedUnderTheExtensionNamespace(t *testing.T) {
 	src := "package P {\n\taction def A {\n\t\tdecision d;\n\t\tif x then a;\n\t\telse b;\n\t\taction a;\n\t\taction b;\n\t\tattribute x : Boolean;\n\t}\n}"

@@ -15,11 +15,11 @@ import (
 
 // scenarioEnv names the environment variable that turns this test binary into a
 // fake solver, which is how the driver is tested without a real solver.
-const scenarioEnv = "SYSTEMICA_TEST_SOLVER_SCENARIO"
+const scenarioEnv = "OPENSYSML_TEST_SOLVER_SCENARIO"
 
 // coreEnv names the environment variable holding the reply a fake solver gives to
 // `get-unsat-core`, which is how a refused or malformed core is tested.
-const coreEnv = "SYSTEMICA_TEST_SOLVER_CORE"
+const coreEnv = "OPENSYSML_TEST_SOLVER_CORE"
 
 // TestHelperSolverProcess is the fake solver: with scenarioEnv set it plays that
 // scenario and exits before the framework prints, so stdout is only SMT-LIB.
@@ -81,7 +81,7 @@ func playScenario(scenario string, in *os.File, out, errOut *os.File) int {
 			}
 			fmt.Fprintln(out, os.Getenv(coreEnv))
 		case strings.HasPrefix(cmd, "(get-value"):
-			fmt.Fprintln(out, os.Getenv("SYSTEMICA_TEST_SOLVER_MODEL"))
+			fmt.Fprintln(out, os.Getenv("OPENSYSML_TEST_SOLVER_MODEL"))
 		case strings.HasPrefix(cmd, "(get-info"):
 			fmt.Fprintln(out, "(:reason-unknown \"incomplete arithmetic\")")
 		case strings.HasPrefix(cmd, "(exit"):
@@ -190,7 +190,7 @@ func TestSolverVerdicts(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.scenario, func(t *testing.T) {
 			solver := fakeSolver(t, tc.scenario)
-			solver.Env = append(solver.Env, "SYSTEMICA_TEST_SOLVER_MODEL=((|test::C::i| 4))")
+			solver.Env = append(solver.Env, "OPENSYSML_TEST_SOLVER_MODEL=((|test::C::i| 4))")
 			result, err := solver.Solve(context.Background(), q)
 			if err != nil {
 				t.Fatalf("solve: %v", err)
@@ -232,7 +232,7 @@ func TestSolverProcessFailures(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.scenario, func(t *testing.T) {
 			solver := fakeSolver(t, tc.scenario)
-			solver.Env = append(solver.Env, "SYSTEMICA_TEST_SOLVER_MODEL=((|test::C::i| 4))")
+			solver.Env = append(solver.Env, "OPENSYSML_TEST_SOLVER_MODEL=((|test::C::i| 4))")
 			result, err := solver.Solve(context.Background(), q)
 			if err == nil {
 				t.Fatalf("solve answered %s, want a process failure", result.Status)
@@ -264,7 +264,7 @@ func TestSolverBadModel(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			solver := fakeSolver(t, "sat")
-			solver.Env = append(solver.Env, "SYSTEMICA_TEST_SOLVER_MODEL="+tc.model)
+			solver.Env = append(solver.Env, "OPENSYSML_TEST_SOLVER_MODEL="+tc.model)
 			if _, err := solver.Solve(context.Background(), q); err == nil {
 				t.Fatal("solve accepted the model, want a process failure")
 			} else if !strings.Contains(err.Error(), tc.want) {

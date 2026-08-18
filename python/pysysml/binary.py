@@ -16,7 +16,7 @@ from pysysml.errors import (
 
 # Releases publish sysml-grpc-<goos>-<goarch> raw, with a .sha256 sidecar.
 # PYSYSML_GITHUB_REPO overrides the repository they are fetched from.
-DEFAULT_GITHUB_REPO = 'Open-MBEE/Systemica'
+DEFAULT_GITHUB_REPO = 'Open-MBEE/OpenSysML'
 
 # A cached binary is now checked against the releases API before being reused, and
 # that happens while the service-start lock is held, so it must not hang there.
@@ -28,7 +28,7 @@ NETWORK_TIMEOUT = 15
 #: refused rather than trusted. Produced by python/scripts/pin_release_checksums.py;
 #: see "Pinned release digests" in python/README.md for the release procedure.
 PINNED_SHA256 = {
-    'Open-MBEE/Systemica': {
+    'Open-MBEE/OpenSysML': {
         'v0.0.5': {
             'sysml-grpc-darwin-amd64': 'ab2933f168341bed3157bac0026d2c5a51bdb1c4629618178123f7ca8e071e72',
             'sysml-grpc-darwin-arm64': '6e839899c93954671d39ebc91a751302d8329864e9671fc38f7549aa52bddde9',

@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 )
 
 // fqnEntry records one symbol registered under a fully-qualified name.

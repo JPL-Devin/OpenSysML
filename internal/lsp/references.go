@@ -5,9 +5,9 @@ import (
 
 	"go.lsp.dev/protocol"
 
-	"github.com/Open-MBEE/Systemica/internal/core/model"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/model"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // References returns every location naming the symbol under the cursor, in all
