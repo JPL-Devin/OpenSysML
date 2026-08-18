@@ -8,7 +8,8 @@ import (
 )
 
 // ErrNotTranslatable is returned when a condition uses a construct outside the
-// translatable subset; a query failing one conjunct fails as a whole.
+// translatable subset. A query that cannot encode one conjunct fails as a whole:
+// a partial script would answer sat or unsat about conditions it does not hold.
 var ErrNotTranslatable = errors.New("not translatable for solving")
 
 // ErrNoConditions is returned for an element that states no condition to
