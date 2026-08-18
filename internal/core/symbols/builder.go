@@ -2,6 +2,7 @@ package symbols
 
 import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 // Build constructs the immutable scope tree for a parsed document.
@@ -234,10 +235,30 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 		child.markBodyLocal()
 		scope.AddChild(child)
 		buildMembers(child, d.Body)
-	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
-		// Control flow nodes without explicit names in AST - skip indexing
-		// (If these nodes gain name fields in future, register them here)
+	case *ast.ForkNode:
+		// A control node is an action usage (Actions::ForkAction et al.), so a
+		// named one is a member a succession may name as source or target.
+		buildControlNode(scope, d, d.Name, d.NameSpan, vis, trivia)
+	case *ast.JoinNode:
+		buildControlNode(scope, d, d.Name, d.NameSpan, vis, trivia)
+	case *ast.MergeNode:
+		buildControlNode(scope, d, d.Name, d.NameSpan, vis, trivia)
+	case *ast.DecisionNode:
+		buildControlNode(scope, d, d.Name, d.NameSpan, vis, trivia)
 	}
+}
+
+// buildControlNode registers a named fork/join/merge/decision node the way a
+// final node is registered, at its name's span; an unnamed one declares none.
+func buildControlNode(scope *Scope, decl ast.Node, name string, nameSpan source.Span, vis ast.Visibility, trivia []ast.Trivia) {
+	if name == "" {
+		return
+	}
+	id := ast.Identification{Name: name, NameSpan: nameSpan}
+	child := NewScope(scope, decl)
+	sym := newSymbol(id, SymbolActionUsage, decl, vis, child, scope, trivia)
+	defineIdent(scope, id, sym)
+	scope.AddChild(child)
 }
 
 // buildConstraintBodyScope links the scope a require/assume body declares into.

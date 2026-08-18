@@ -5,6 +5,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 // parseCalcBody parses the body of a calc def/usage.
@@ -537,17 +538,20 @@ func (p *Parser) parseFinalNode(tok lexer.Token) ast.Node {
 func (p *Parser) parseForkNode(tok lexer.Token) ast.Node {
 	start := tok.Span.Offset
 	var name string
+	var nameSpan source.Span
 
 	if p.at(lexer.Identifier) {
 		nameToken := p.peek()
 		name = p.src.Text(nameToken.Span)
+		nameSpan = nameToken.Span
 		p.advance()
 	}
 
 	p.expect(lexer.Semicolon, "expected ';' after fork node")
 
 	node := &ast.ForkNode{
-		Name: name,
+		Name:     name,
+		NameSpan: nameSpan,
 	}
 	node.NodeSpan = p.spanFrom(start)
 	return node
@@ -556,17 +560,20 @@ func (p *Parser) parseForkNode(tok lexer.Token) ast.Node {
 func (p *Parser) parseJoinNode(tok lexer.Token) ast.Node {
 	start := tok.Span.Offset
 	var name string
+	var nameSpan source.Span
 
 	if p.at(lexer.Identifier) {
 		nameToken := p.peek()
 		name = p.src.Text(nameToken.Span)
+		nameSpan = nameToken.Span
 		p.advance()
 	}
 
 	p.expect(lexer.Semicolon, "expected ';' after join node")
 
 	node := &ast.JoinNode{
-		Name: name,
+		Name:     name,
+		NameSpan: nameSpan,
 	}
 	node.NodeSpan = p.spanFrom(start)
 	return node
@@ -575,17 +582,20 @@ func (p *Parser) parseJoinNode(tok lexer.Token) ast.Node {
 func (p *Parser) parseMergeNode(tok lexer.Token) ast.Node {
 	start := tok.Span.Offset
 	var name string
+	var nameSpan source.Span
 
 	if p.at(lexer.Identifier) {
 		nameToken := p.peek()
 		name = p.src.Text(nameToken.Span)
+		nameSpan = nameToken.Span
 		p.advance()
 	}
 
 	p.expect(lexer.Semicolon, "expected ';' after merge node")
 
 	node := &ast.MergeNode{
-		Name: name,
+		Name:     name,
+		NameSpan: nameSpan,
 	}
 	node.NodeSpan = p.spanFrom(start)
 	return node
@@ -594,17 +604,20 @@ func (p *Parser) parseMergeNode(tok lexer.Token) ast.Node {
 func (p *Parser) parseDecisionNode(tok lexer.Token) ast.Node {
 	start := tok.Span.Offset
 	var name string
+	var nameSpan source.Span
 
 	if p.at(lexer.Identifier) {
 		nameToken := p.peek()
 		name = p.src.Text(nameToken.Span)
+		nameSpan = nameToken.Span
 		p.advance()
 	}
 
 	p.expect(lexer.Semicolon, "expected ';' after decision node")
 
 	node := &ast.DecisionNode{
-		Name: name,
+		Name:     name,
+		NameSpan: nameSpan,
 	}
 	node.NodeSpan = p.spanFrom(start)
 	return node
