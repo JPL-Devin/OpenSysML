@@ -7,7 +7,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/Open-MBEE/Systemica/internal/core/runtime"
+	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
 )
 
 // completionLimit bounds a completion answer: the library registers tens of

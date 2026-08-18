@@ -1,4 +1,4 @@
-module github.com/Open-MBEE/Systemica
+module github.com/Open-MBEE/OpenSysML
 
 go 1.25.0
 

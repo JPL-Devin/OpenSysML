@@ -1,7 +1,7 @@
 package passes
 
 import (
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 )
 
 // checkExposeOwners reports every `expose` whose owning namespace is not a view

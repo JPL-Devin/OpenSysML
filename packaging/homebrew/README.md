@@ -21,7 +21,7 @@ version scanned from URL` if it is also stated explicitly.
 The tap lives in the separate repository [`Open-MBEE/homebrew-tap`][tap] (public, default
 branch `master`), holding one generated file, `Formula/systemica.rb`. That repository updates
 itself: a workflow there runs on a schedule (and on `workflow_dispatch`), resolves the latest
-`Open-MBEE/Systemica` release tag, fetches `scripts/render-homebrew-formula.sh` and
+`Open-MBEE/OpenSysML` release tag, fetches `scripts/render-homebrew-formula.sh` and
 `packaging/homebrew/Formula/systemica.rb` from this repository *at that tag*, renders
 `Formula/systemica.rb`, and commits only when the file changed. It uses the tap repository's
 own `GITHUB_TOKEN`, so there is no cross-repository secret and nothing here triggers it.

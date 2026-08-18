@@ -1,6 +1,6 @@
 # SysML v2 Execution Environment — Architecture
 
-**Module:** `github.com/Open-MBEE/Systemica`  
+**Module:** `github.com/Open-MBEE/OpenSysML`  
 **Language:** Go 1.23+
 
 ## Overview
@@ -47,7 +47,7 @@ A complete, production-grade SysML v2 implementation delivering the integrated t
 ## Module Structure
 
 ```
-github.com/Open-MBEE/Systemica
+github.com/Open-MBEE/OpenSysML
 ├── cmd/
 │   ├── sysml-lsp/          # LSP server binary
 │   ├── sysml-grpc/         # gRPC server binary

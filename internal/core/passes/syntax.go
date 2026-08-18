@@ -1,6 +1,6 @@
 package passes
 
-import "github.com/Open-MBEE/Systemica/internal/core/ast"
+import "github.com/Open-MBEE/OpenSysML/internal/core/ast"
 
 // SyntaxPass surfaces the parser-produced diagnostics carried on the Context.
 // The passes package does not import parser; the caller adapts parser

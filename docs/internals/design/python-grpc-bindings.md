@@ -724,7 +724,7 @@ def ensure_binary():
         return binary_path
         
     # Download from GitHub releases
-    url = f"https://github.com/Open-MBEE/Systemica/releases/download/v{VERSION}/sysml-grpc-{PLATFORM}"
+    url = f"https://github.com/Open-MBEE/OpenSysML/releases/download/v{VERSION}/sysml-grpc-{PLATFORM}"
     download(url, binary_path)
     
     # Verify checksum

@@ -56,11 +56,11 @@ dev = [
 pysysml-generate = "pysysml.generate:main"
 
 [project.urls]
-Homepage = "https://github.com/Open-MBEE/Systemica"
-Repository = "https://github.com/Open-MBEE/Systemica"
-Documentation = "https://github.com/Open-MBEE/Systemica/blob/main/python/README.md"
-Changelog = "https://github.com/Open-MBEE/Systemica/blob/main/CHANGELOG.md"
-Issues = "https://github.com/Open-MBEE/Systemica/issues"
+Homepage = "https://github.com/Open-MBEE/OpenSysML"
+Repository = "https://github.com/Open-MBEE/OpenSysML"
+Documentation = "https://github.com/Open-MBEE/OpenSysML/blob/main/python/README.md"
+Changelog = "https://github.com/Open-MBEE/OpenSysML/blob/main/CHANGELOG.md"
+Issues = "https://github.com/Open-MBEE/OpenSysML/issues"
 
 [tool.setuptools.dynamic]
 version = { attr = "pysysml._version.VERSION" }

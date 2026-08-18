@@ -11,7 +11,7 @@ A complete, production-grade SysML v2 implementation in Go—providing language 
 **Download pre-built binaries:**
 ```bash
 # Linux x64 (use systemica-linux-arm64.tar.gz on arm64)
-wget https://github.com/Open-MBEE/Systemica/releases/latest/download/systemica-linux-amd64.tar.gz
+wget https://github.com/Open-MBEE/OpenSysML/releases/latest/download/systemica-linux-amd64.tar.gz
 tar xzf systemica-linux-amd64.tar.gz && sudo mv sysml sysml-lsp /usr/local/bin/
 
 # macOS (Intel or Apple Silicon) — see the note below
@@ -20,8 +20,8 @@ brew install Open-MBEE/tap/systemica
 
 **With a Go toolchain (no download, never quarantined):**
 ```bash
-go install github.com/Open-MBEE/Systemica/cmd/sysml@latest
-go install github.com/Open-MBEE/Systemica/cmd/sysml-lsp@latest
+go install github.com/Open-MBEE/OpenSysML/cmd/sysml@latest
+go install github.com/Open-MBEE/OpenSysML/cmd/sysml-lsp@latest
 ```
 
 **Or build from source:**
@@ -206,7 +206,7 @@ sysml> %advance 30
 ## Module Structure
 
 ```
-github.com/Open-MBEE/Systemica
+github.com/Open-MBEE/OpenSysML
 ├── cmd/
 │   ├── sysml-lsp/          # LSP server binary
 │   ├── sysml-grpc/         # gRPC server binary (Python bindings)
@@ -243,7 +243,7 @@ github.com/Open-MBEE/Systemica
 
 ## Releases
 
-Pre-built binaries for Linux, macOS, and Windows are available on the [Releases page](https://github.com/Open-MBEE/Systemica/releases).
+Pre-built binaries for Linux, macOS, and Windows are available on the [Releases page](https://github.com/Open-MBEE/OpenSysML/releases).
 
 **Supported platforms:**
 - Linux (x64, ARM64)

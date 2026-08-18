@@ -13,7 +13,7 @@ Thank you for your interest in contributing to Systemica!
 ### Clone and Build
 
 ```bash
-git clone https://github.com/Open-MBEE/Systemica.git
+git clone https://github.com/Open-MBEE/OpenSysML.git
 cd Systemica
 make build  # builds bin/sysml, bin/sysml-lsp, and bin/sysml-grpc with version info
 make test   # runs all tests
@@ -218,7 +218,7 @@ PRs must pass:
 ## Project Structure
 
 ```
-github.com/Open-MBEE/Systemica
+github.com/Open-MBEE/OpenSysML
 ├── cmd/                    # Binaries (sysml, sysml-lsp, sysml-grpc)
 ├── internal/core/          # Core implementation
 │   ├── source/            # Source file handling

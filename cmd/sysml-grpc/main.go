@@ -17,8 +17,8 @@ import (
 	"syscall"
 	"time"
 
-	pb "github.com/Open-MBEE/Systemica/api/proto"
-	sysmlgrpc "github.com/Open-MBEE/Systemica/internal/grpc"
+	pb "github.com/Open-MBEE/OpenSysML/api/proto"
+	sysmlgrpc "github.com/Open-MBEE/OpenSysML/internal/grpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )

@@ -453,7 +453,7 @@ git commit -m "feat(connection): add reference-counted service shutdown"
 **Objective:** Verify downloaded binaries against checksums before using them.
 
 **Design:**
-- Checksum file: `https://github.com/Open-MBEE/Systemica/releases/download/{version}/{binary_name}.sha256`
+- Checksum file: `https://github.com/Open-MBEE/OpenSysML/releases/download/{version}/{binary_name}.sha256`
 - Download checksum file alongside binary
 - Verify before marking download complete
 - Fail if checksum mismatch
@@ -467,7 +467,7 @@ git commit -m "feat(connection): add reference-counted service shutdown"
 def test_download_binary_verifies_checksum():
     """Test that download_binary fetches and verifies checksum."""
     version = 'v0.1.0'
-    github_repo = 'Open-MBEE/Systemica'
+    github_repo = 'Open-MBEE/OpenSysML'
     
     # Mock binary download
     mock_binary_data = b'fake binary content'
@@ -497,7 +497,7 @@ def test_download_binary_verifies_checksum():
 def test_download_binary_fails_on_checksum_mismatch():
     """Test that download fails if checksum doesn't match."""
     version = 'v0.1.0'
-    github_repo = 'Open-MBEE/Systemica'
+    github_repo = 'Open-MBEE/OpenSysML'
     
     # Mock binary download
     mock_binary_data = b'fake binary content'
@@ -528,7 +528,7 @@ Expected: FAIL (checksum not downloaded/verified)
 # pysysml/binary.py
 import hashlib
 
-def download_binary(version='v0.1.0', github_repo='Open-MBEE/Systemica'):
+def download_binary(version='v0.1.0', github_repo='Open-MBEE/OpenSysML'):
     """Download sysml-grpc binary from GitHub releases with checksum verification.
     
     Args:

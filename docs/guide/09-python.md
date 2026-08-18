@@ -36,7 +36,7 @@ make build-grpc && mkdir -p ~/.pysysml/bin && cp bin/sysml-grpc ~/.pysysml/bin/
 
 Without one of those, `connect()` raises `ConnectionError` rather than
 downloading anything unasked. `PYSYSML_GITHUB_REPO` overrides the repository
-releases are fetched from (default `Open-MBEE/Systemica`).
+releases are fetched from (default `Open-MBEE/OpenSysML`).
 
 A download records its release tag, repository and digest beside the binary
 (`~/.pysysml/bin/sysml-grpc.json`), so a cache left by an earlier release — or by

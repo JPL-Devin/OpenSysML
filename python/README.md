@@ -177,10 +177,10 @@ export `PYSYSML_REQUIRE_SERVICE=1`, and its absence fails instead of skipping.
 ## Documentation
 
 - Using the client:
-  [docs/guide/09-python.md](https://github.com/Open-MBEE/Systemica/blob/main/docs/guide/09-python.md)
+  [docs/guide/09-python.md](https://github.com/Open-MBEE/OpenSysML/blob/main/docs/guide/09-python.md)
   — installing the service binary, loading a model, instances, verification, conversion
   and queries
 - The API surface, generated typed classes, latency and the module map:
-  [docs/reference/python-api.md](https://github.com/Open-MBEE/Systemica/blob/main/docs/reference/python-api.md)
+  [docs/reference/python-api.md](https://github.com/Open-MBEE/OpenSysML/blob/main/docs/reference/python-api.md)
 - Installing from source and running the tests:
-  [INSTALL.md](https://github.com/Open-MBEE/Systemica/blob/main/python/INSTALL.md)
+  [INSTALL.md](https://github.com/Open-MBEE/OpenSysML/blob/main/python/INSTALL.md)

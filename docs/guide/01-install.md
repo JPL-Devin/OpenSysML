@@ -5,11 +5,11 @@ this guide needs anything else on the machine.
 
 ## From a release build (recommended)
 
-Download the latest release for your platform from [GitHub Releases](https://github.com/Open-MBEE/Systemica/releases):
+Download the latest release for your platform from [GitHub Releases](https://github.com/Open-MBEE/OpenSysML/releases):
 
 **Linux (x64; use `systemica-linux-arm64.tar.gz` on arm64):**
 ```bash
-wget https://github.com/Open-MBEE/Systemica/releases/latest/download/systemica-linux-amd64.tar.gz
+wget https://github.com/Open-MBEE/OpenSysML/releases/latest/download/systemica-linux-amd64.tar.gz
 tar xzf systemica-linux-amd64.tar.gz
 sudo mv sysml sysml-lsp /usr/local/bin/
 chmod +x /usr/local/bin/sysml /usr/local/bin/sysml-lsp
@@ -33,13 +33,13 @@ brew install systemica
 **macOS, direct download (fallback):** use `curl`, not a browser.
 ```bash
 # Apple Silicon; use systemica-darwin-amd64.tar.gz on Intel
-curl -fL -o systemica.tar.gz https://github.com/Open-MBEE/Systemica/releases/latest/download/systemica-darwin-arm64.tar.gz
+curl -fL -o systemica.tar.gz https://github.com/Open-MBEE/OpenSysML/releases/latest/download/systemica-darwin-arm64.tar.gz
 tar xzf systemica.tar.gz
 sudo mv sysml sysml-lsp /usr/local/bin/
 ```
 
 **Windows:**
-Download `systemica-windows-amd64.zip` from [releases](https://github.com/Open-MBEE/Systemica/releases/latest), extract, and add to PATH. Windows SmartScreen may warn that the publisher is unrecognized; the binaries are not Authenticode-signed.
+Download `systemica-windows-amd64.zip` from [releases](https://github.com/Open-MBEE/OpenSysML/releases/latest), extract, and add to PATH. Windows SmartScreen may warn that the publisher is unrecognized; the binaries are not Authenticode-signed.
 
 **Available binaries:**
 - `sysml` — Interactive REPL
@@ -59,7 +59,7 @@ next release onward, and `SHA256SUMS.txt` covers every archive and every publish
 `sysml-grpc` binary:
 
 ```bash
-curl -fLO https://github.com/Open-MBEE/Systemica/releases/latest/download/SHA256SUMS.txt
+curl -fLO https://github.com/Open-MBEE/OpenSysML/releases/latest/download/SHA256SUMS.txt
 shasum -a 256 -c SHA256SUMS.txt --ignore-missing   # macOS; use sha256sum -c on Linux
 ```
 
@@ -79,8 +79,8 @@ Ways to avoid it, best first:
    attribute, so no prompt appears.
 3. **Install with a Go toolchain** — built locally, never quarantined:
    ```bash
-   go install github.com/Open-MBEE/Systemica/cmd/sysml@latest
-   go install github.com/Open-MBEE/Systemica/cmd/sysml-lsp@latest
+   go install github.com/Open-MBEE/OpenSysML/cmd/sysml@latest
+   go install github.com/Open-MBEE/OpenSysML/cmd/sysml-lsp@latest
    ```
 4. **Clear the attribute** if you already downloaded the archive in a browser. Verify the
    checksum first — you are turning off a security check, so make sure you have the file we
@@ -105,7 +105,7 @@ signing + notarizing the releases would require.
 
 **Build:**
 ```bash
-git clone https://github.com/Open-MBEE/Systemica.git
+git clone https://github.com/Open-MBEE/OpenSysML.git
 cd Systemica
 make build       # builds bin/sysml, bin/sysml-lsp, and bin/sysml-grpc
 # OR

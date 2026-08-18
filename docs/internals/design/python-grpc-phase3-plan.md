@@ -177,7 +177,7 @@ def test_download_binary():
                     mock_urlopen.assert_called_once()
                     # Verify URL format
                     call_args = mock_urlopen.call_args[0][0]
-                    assert 'github.com/Open-MBEE/Systemica/releases/download/v0.1.0' in call_args
+                    assert 'github.com/Open-MBEE/OpenSysML/releases/download/v0.1.0' in call_args
 ```
 
 - [ ] **Step 9: Implement download_binary**
@@ -188,7 +188,7 @@ import urllib.request
 import os
 import stat
 
-def download_binary(version='latest', github_repo='Open-MBEE/Systemica'):
+def download_binary(version='latest', github_repo='Open-MBEE/OpenSysML'):
     """Download sysml-grpc binary from GitHub releases.
     
     Args:
@@ -205,7 +205,7 @@ def download_binary(version='latest', github_repo='Open-MBEE/Systemica'):
     binary_path = get_binary_path()
     
     # Construct GitHub release URL
-    # Format: https://github.com/Open-MBEE/Systemica/releases/download/v0.1.0/sysml-grpc-linux-amd64
+    # Format: https://github.com/Open-MBEE/OpenSysML/releases/download/v0.1.0/sysml-grpc-linux-amd64
     if version == 'latest':
         # For now, use a fixed version (latest API requires extra request)
         version = 'v0.1.0'
@@ -1008,7 +1008,7 @@ with Connection() as conn:
 
 ### Configuration
 
-Binary downloads from: `https://github.com/Open-MBEE/Systemica/releases`
+Binary downloads from: `https://github.com/Open-MBEE/OpenSysML/releases`
 Binary stored in: `~/.pysysml/bin/sysml-grpc`
 
 To use a different service:

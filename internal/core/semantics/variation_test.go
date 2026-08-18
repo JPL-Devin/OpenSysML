@@ -3,7 +3,7 @@ package semantics
 import (
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // member looks up a member of a symbol, for a variant declared in a variation.

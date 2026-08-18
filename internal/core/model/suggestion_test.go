@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/passes"
+	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
 )
 
 // The did-you-mean hint belongs to the diagnostic, so every surface that shows

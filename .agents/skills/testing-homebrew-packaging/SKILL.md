@@ -56,7 +56,7 @@ sandboxing!`, and ``AllCops/UseProjectIndex` is enabled but the `rubydex` gem is
   copy and rerun the audit — it must fail with exactly that wording, then restore the file.
   Just seeing a green audit does not prove the fix.
 - **Checksums match the release**, not merely "look like hashes". Download
-  `https://github.com/Open-MBEE/Systemica/releases/download/<tag>/SHA256SUMS.txt` and compare
+  `https://github.com/Open-MBEE/OpenSysML/releases/download/<tag>/SHA256SUMS.txt` and compare
   the four `systemica-<os>-<arch>.tar.gz` entries against the `url`/`sha256` pairs parsed out
   of the rendered file. Note the manifest also contains per-binary `sysml-*` / `sysml-lsp-*`
   entries — the formula only uses the `systemica-*` bundles.

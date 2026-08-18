@@ -9,7 +9,7 @@ Systemica is organized into core packages under `internal/core/`, with frontends
 **Package Organization:**
 
 ```
-github.com/Open-MBEE/Systemica
+github.com/Open-MBEE/OpenSysML
 ├── internal/core/          # Core language implementation
 │   ├── source/             # Source files and position tracking
 │   ├── lexer/              # Tokenization
@@ -723,8 +723,8 @@ not Systemica's expressive query story:
 
 ```go
 import (
-    "github.com/Open-MBEE/Systemica/internal/core/source"
-    "github.com/Open-MBEE/Systemica/internal/core/parser"
+    "github.com/Open-MBEE/OpenSysML/internal/core/source"
+    "github.com/Open-MBEE/OpenSysML/internal/core/parser"
 )
 
 src := source.New("example.sysml", []byte(`
@@ -742,7 +742,7 @@ root := p.ParseFile()
 
 ```go
 import (
-    "github.com/Open-MBEE/Systemica/internal/core/symbols"
+    "github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 idx := symbols.NewIndex()
@@ -755,7 +755,7 @@ sym, ok := scope.LookupLocal("Wheel")
 
 ```go
 import (
-    "github.com/Open-MBEE/Systemica/internal/core/resolve"
+    "github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 )
 
 res := resolve.New(idx)
@@ -766,7 +766,7 @@ sym, ok := res.ResolveQualified(scope, qualifiedName)
 
 ```go
 import (
-    "github.com/Open-MBEE/Systemica/internal/core/semantics"
+    "github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 )
 
 model := semantics.NewModel(res)
@@ -778,7 +778,7 @@ conforms := model.Conforms(wheelSym, vehiclePartSym)
 
 ```go
 import (
-    "github.com/Open-MBEE/Systemica/internal/core/passes"
+    "github.com/Open-MBEE/OpenSysML/internal/core/passes"
 )
 
 // Analyze wires up the default pass registry and context internally.
@@ -789,7 +789,7 @@ diagnostics := passes.Analyze("example.sysml", root, parseDiags, idx)
 
 ```go
 import (
-    "github.com/Open-MBEE/Systemica/internal/core/runtime"
+    "github.com/Open-MBEE/OpenSysML/internal/core/runtime"
 )
 
 rtCtx := runtime.NewContext(model, resolver, runtime.DefaultMaxSteps)

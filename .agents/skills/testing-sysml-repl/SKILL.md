@@ -1464,7 +1464,7 @@ worth asserting, with the wording each produces:
 | absent | `v0.0.8` | `… was not downloaded by this client, so which release it is cannot be told` |
 | `v0.0.7` + **true** sha256 of the file | `v0.0.8` | `… is v0.0.7, but v0.0.8 was asked for` |
 | `v0.0.7` + wrong sha256 (hand-swapped binary) | `v0.0.8` | falls back to the "not downloaded by this client" wording |
-| `v0.0.8` but `"repo":"someone/Systemica-fork"` | `v0.0.8` | `… was downloaded from someone/Systemica-fork, but v0.0.8 of Open-MBEE/Systemica was asked for` |
+| `v0.0.8` but `"repo":"someone/Systemica-fork"` | `v0.0.8` | `… was downloaded from someone/Systemica-fork, but v0.0.8 of Open-MBEE/OpenSysML was asked for` |
 
 - The digest is re-verified (`cached_release`), so a *true* sha256 in the sidecar is what makes the
   "is v0.0.7" branch reachable — a placeholder digest silently tests the wrong branch.
@@ -2781,7 +2781,7 @@ number rather than quoting the table.
   `nohup ~/.pysysml/bin/sysml-grpc -port 50051 >/tmp/svc.log 2>&1 &`.
 - **`PINNED_SHA256` is nested `repo -> version -> asset`.** To exercise the *contradicted* digest arm
   you must inject the key for the repository actually in use, e.g.
-  `binary.PINNED_SHA256['Open-MBEE/Systemica'] = {'v0.0.8': {'sysml-grpc-linux-amd64': 'de'*32}}`
+  `binary.PINNED_SHA256['Open-MBEE/OpenSysML'] = {'v0.0.8': {'sysml-grpc-linux-amd64': 'de'*32}}`
   (`DEFAULT_GITHUB_REPO`, looked up case-sensitively, so the spelling must match exactly);
   a mis-cased, flat or `in`-substring patch leaves the pin absent and you silently re-test the *unpinned* arm
   (`UnpinnedReleaseError` + kept cache) while believing you tested the contradiction.

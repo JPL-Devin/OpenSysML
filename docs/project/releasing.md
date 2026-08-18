@@ -70,7 +70,7 @@ git push origin v0.0.5
 ```
 
 The tag belongs on the repository the releases live on. v0.0.1–v0.0.7 are
-releases of `Open-MBEE/Systemica`, while development happens on
+releases of `Open-MBEE/OpenSysML`, while development happens on
 `JPL-Devin/Systemica`, which has no tags at all — so cutting a release means
 promoting `main` upstream first (v0.0.4 came through Open-MBEE PR #47) and
 tagging there. Tagging the development repository would build a release nobody
@@ -121,8 +121,8 @@ one alongside it).
 1. **Verify a download** on at least one platform:
 
    ```bash
-   curl -fLO https://github.com/Open-MBEE/Systemica/releases/download/v0.0.5/systemica-linux-amd64.tar.gz
-   curl -fLO https://github.com/Open-MBEE/Systemica/releases/download/v0.0.5/SHA256SUMS.txt
+   curl -fLO https://github.com/Open-MBEE/OpenSysML/releases/download/v0.0.5/systemica-linux-amd64.tar.gz
+   curl -fLO https://github.com/Open-MBEE/OpenSysML/releases/download/v0.0.5/SHA256SUMS.txt
    sha256sum -c SHA256SUMS.txt --ignore-missing
    tar xzf systemica-linux-amd64.tar.gz && ./sysml --version
    ```
@@ -133,7 +133,7 @@ one alongside it).
    `SHA256SUMS.txt`:
 
    ```bash
-   PYSYSML_GITHUB_REPO=Open-MBEE/Systemica python -c \
+   PYSYSML_GITHUB_REPO=Open-MBEE/OpenSysML python -c \
      "from pysysml.binary import download_binary; print(download_binary('latest'))"
    ~/.pysysml/bin/sysml-grpc -version
    ```
@@ -143,7 +143,7 @@ one alongside it).
 
 2. **Let the Homebrew tap pick the release up.** The tap repository
    `Open-MBEE/homebrew-tap` updates itself: a scheduled workflow there resolves
-   the latest `Open-MBEE/Systemica` release, renders `Formula/systemica.rb` from
+   the latest `Open-MBEE/OpenSysML` release, renders `Formula/systemica.rb` from
    this repository's `scripts/render-homebrew-formula.sh` and formula template at
    that tag, and commits only when the file changed. Nothing here triggers it, so
    the formula follows the release within the workflow's schedule interval.

@@ -4,7 +4,7 @@
 # Per release, exactly four fields change: the `sha256` values. Get them from
 # the release's SHA256SUMS.txt, e.g. for v0.0.4:
 #
-#   curl -fL https://github.com/Open-MBEE/Systemica/releases/download/v0.0.4/SHA256SUMS.txt
+#   curl -fL https://github.com/Open-MBEE/OpenSysML/releases/download/v0.0.4/SHA256SUMS.txt
 #
 # and take the line for each systemica-<os>-<arch>.tar.gz. The four URLs change
 # only in the tag path component; Homebrew scans `version` from that tag, and
@@ -18,27 +18,27 @@
 # committed here is the source template. Do not commit it to the tap unrendered.
 class Systemica < Formula
   desc "SysML v2 toolchain: interactive REPL and language server"
-  homepage "https://github.com/Open-MBEE/Systemica"
+  homepage "https://github.com/Open-MBEE/OpenSysML"
   license "Apache-2.0"
 
   on_macos do
     on_arm do
-      url "https://github.com/Open-MBEE/Systemica/releases/download/__TAG__/systemica-darwin-arm64.tar.gz"
+      url "https://github.com/Open-MBEE/OpenSysML/releases/download/__TAG__/systemica-darwin-arm64.tar.gz"
       sha256 "__SHA256_DARWIN_ARM64__"
     end
     on_intel do
-      url "https://github.com/Open-MBEE/Systemica/releases/download/__TAG__/systemica-darwin-amd64.tar.gz"
+      url "https://github.com/Open-MBEE/OpenSysML/releases/download/__TAG__/systemica-darwin-amd64.tar.gz"
       sha256 "__SHA256_DARWIN_AMD64__"
     end
   end
 
   on_linux do
     on_arm do
-      url "https://github.com/Open-MBEE/Systemica/releases/download/__TAG__/systemica-linux-arm64.tar.gz"
+      url "https://github.com/Open-MBEE/OpenSysML/releases/download/__TAG__/systemica-linux-arm64.tar.gz"
       sha256 "__SHA256_LINUX_ARM64__"
     end
     on_intel do
-      url "https://github.com/Open-MBEE/Systemica/releases/download/__TAG__/systemica-linux-amd64.tar.gz"
+      url "https://github.com/Open-MBEE/OpenSysML/releases/download/__TAG__/systemica-linux-amd64.tar.gz"
       sha256 "__SHA256_LINUX_AMD64__"
     end
   end

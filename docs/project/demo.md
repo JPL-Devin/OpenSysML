@@ -12,7 +12,7 @@ independent, so drop any of them to fit the time you have.
 ## 0. Setup (one minute)
 
 ```bash
-git clone https://github.com/Open-MBEE/Systemica.git && cd Systemica
+git clone https://github.com/Open-MBEE/OpenSysML.git && cd Systemica
 make build-sysml          # -> ./bin/sysml
 export PATH="$PWD/bin:$PATH"
 ```

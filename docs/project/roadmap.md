@@ -3,7 +3,7 @@
 Baseline: `main` @ `32f5a03`, verified locally on 2026-08-17 with Go 1.25.13.
 Read `AGENTS.md` first; it governs everything below.
 
-0.0.7 is released from `Open-MBEE/Systemica`, carrying `sysml`, `sysml-lsp` and `sysml-grpc`
+0.0.7 is released from `Open-MBEE/OpenSysML`, carrying `sysml`, `sysml-lsp` and `sysml-grpc`
 archives. `main` now carries the whole 0.0.8 batch — the post-0.0.7 fixes, the documentation
 reorganization, the release-publishing fix, and the Track A/B/P work below — all listed under
 0.0.8 in `CHANGELOG.md`, which is cut and awaiting its tag. Everything in "Release
@@ -72,12 +72,12 @@ runs the suite with that variable set, and it runs on `v*` tags as well as on br
 
 ## R1 — tag the next release (maintainer, blocking everything else in this section)
 
-Releases live on `Open-MBEE/Systemica`; development happens on `JPL-Devin/Systemica`, which
+Releases live on `Open-MBEE/OpenSysML`; development happens on `JPL-Devin/Systemica`, which
 has no tags at all. So the tag is preceded by promoting `main` upstream, as 0.0.4 was through
 Open-MBEE PR #47:
 
 ```bash
-# on Open-MBEE/Systemica, after main carries the release commit
+# on Open-MBEE/OpenSysML, after main carries the release commit
 git tag -a v0.0.8 -m "v0.0.8"
 git push origin v0.0.8
 ```
@@ -109,7 +109,7 @@ the restricted CircleCI context `PyPI` holding `PYPI_API_TOKEN` (and optionally
 `TEST_PYPI_API_TOKEN` for pre-release tags).
 
 Also decide the default download repository. `python/pysysml/binary.py` defaults to
-`Open-MBEE/Systemica`, releases are currently cut from `JPL-Devin/Systemica`, and
+`Open-MBEE/OpenSysML`, releases are currently cut from `JPL-Devin/Systemica`, and
 `PYSYSML_GITHUB_REPO` is the override. `sysml-grpc` assets ship from 0.0.5 onward,
 so `pysysml` can fetch a binary from a released tag; `pip install pysysml` still waits on the
 PyPI project above.

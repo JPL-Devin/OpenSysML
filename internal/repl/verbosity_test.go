@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/passes"
+	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
 )
 
 // A source that analyses to exactly one warning and no error.

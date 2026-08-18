@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package sysml;
 
-option go_package = "github.com/Open-MBEE/Systemica/api/proto";
+option go_package = "github.com/Open-MBEE/OpenSysML/api/proto";
 
 // SysMLService provides programmatic access to Systemica's parser and runtime
 service SysMLService {

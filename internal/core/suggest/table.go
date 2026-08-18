@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // Table indexes what an index registers, once, so a suggestion costs a lookup

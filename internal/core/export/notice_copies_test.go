@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/export"
+	"github.com/Open-MBEE/OpenSysML/internal/core/export"
 )
 
 // The Python client cannot import the Go constant, so it keeps a fallback copy

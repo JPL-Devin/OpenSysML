@@ -566,9 +566,9 @@ import (
 	"context"
 	"testing"
 	
-	"github.com/Open-MBEE/Systemica/internal/core/lexer"
-	"github.com/Open-MBEE/Systemica/internal/core/parser"
-	pb "github.com/Open-MBEE/Systemica/api/proto"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
+	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 )
 
 func TestEvaluate_SimpleExpression(t *testing.T) {

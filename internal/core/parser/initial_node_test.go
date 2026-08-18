@@ -1,7 +1,7 @@
 package parser
 
 import (
-	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"testing"
 )
 
