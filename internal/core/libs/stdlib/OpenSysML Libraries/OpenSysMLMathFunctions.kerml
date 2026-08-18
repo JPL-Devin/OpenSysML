@@ -1,7 +1,7 @@
 library package OpenSysMLMathFunctions {
 	doc
 	/*
-	 * NON-NORMATIVE. This package is a OpenSysML extension, not part of the OMG KerML
+	 * NON-NORMATIVE. This package is an OpenSysML extension, not part of the OMG KerML
 	 * standard library: it declares the exponential, logarithmic and two-argument
 	 * arctangent functions the Kernel Function Library omits. The vendored OMG files are
 	 * unmodified. A model that needs these writes `import OpenSysMLMathFunctions::*;`.
