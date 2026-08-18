@@ -95,7 +95,7 @@ jobs:
       - name: Solver gate
         run: |
           set -o pipefail
-          go test -count=1 -v ./internal/core/solve ./internal/repl -run 'TestSolver|TestDiscovery|TestSolved|TestDivisor|TestCheck|TestSolve|TestConfigure|TestSynthesis|TestPinned|TestFixed' | tee solver-gate.log
+          go test -count=1 -v ./internal/core/solve ./internal/repl -run 'TestSolver|TestDiscovery|TestSolved|TestDivisor|TestCheck|TestSolve|TestConfigure|TestSynthesis|TestPinned|TestFixed|TestOptimize|TestOptimum' | tee solver-gate.log
           if grep -qE '^\s*--- SKIP' solver-gate.log; then
             echo "error: a solver-dependent test skipped" >&2
             exit 1
