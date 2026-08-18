@@ -165,6 +165,44 @@ script against `bin/sysml-lsp` (initialize → didOpen → semanticTokens/full �
 - Undo a stray edit with Command Palette **"File: Revert File"** — it is far more reliable than
   counting Ctrl+Z presses, and leaves the git tree clean.
 
+## Multi-file / workspace-indexing testing (`internal/lsp/files.go`, `sync.go`)
+
+The cleanest fixture is a **throwaway folder outside the repo** (e.g. `/home/ubuntu/ws-multifile`)
+holding only a couple of tiny models, so the Problems count is entirely about the feature:
+
+```
+lib.sysml   package Lib { part def Widget; }
+main.sysml  package Main { import Lib::*; part w : Widget; }
+```
+
+- A workspace outside the repo has no `bin/sysml-lsp`, so point `systemica.server.path` at
+  `/home/ubuntu/repos/Systemica/bin/sysml-lsp` (User `settings.json` or the Settings UI) — the
+  setting takes precedence and restarts the server on change.
+- Writing `~/.config/Code/User/settings.json` with `"security.workspace.trust.enabled": false` and
+  `"workbench.startupEditor": "none"` avoids the trust banner and the Welcome tab entirely.
+- The **Problems panel (`ctrl+shift+m`) plus the status-bar error count** is the high-signal oracle
+  for indexing tests: "unresolved reference: Lib/Widget" appearing/disappearing is the whole test.
+- A convincing negative control is a one-line switch of `systemica.server.path` to a binary built
+  from `origin/main` (`git worktree add /tmp/wt-main origin/main && go build -C /tmp/wt-main -o
+  /tmp/sysml-lsp-main ./cmd/sysml-lsp` — build *in the worktree*, or you rebuild the branch);
+  the pre-indexing server shows the unresolved references on the same file.
+  Switching the setting back auto-restarts — no window reload needed. Remember `git worktree remove`.
+- Watcher tests (create/change/delete a `.sysml` outside the editor) are driven from the shell with
+  `printf > file` / `rm`; VS Code's `**/*.{sysml,kerml}` watcher forwards them and the Problems panel
+  updates within ~1-2 s. A deleted file whose tab is still open keeps the buffer authoritative — the
+  diagnostics only change when that tab is closed.
+- Verify the server was not silently restarted between steps: `pgrep -af sysml-lsp` pid must be
+  unchanged (put it in `/tmp/lspcheck.sh` per the note above).
+
+### More GUI driving pitfalls found here
+- `shift+F12` (Find All References) does not reach VS Code through xdotool — use Command Palette
+  **"References: Find All References"**. `F12` (go to definition) does work.
+- Closing an editor tab: **middle-click the tab**. Clicking the tab's little `x` needs a hover first
+  and the coordinates shift whenever the sidebar collapses; `ctrl+w` is risky (can close the window).
+- `key` actions take ONE combo: `"shift+Down shift+Down"` errors with `unknown key`; send two actions.
+- Opening a file by name with `ctrl+p` → type `lib.sysml` → Enter is far more reliable than clicking
+  the Explorer tree, especially after the sidebar has been toggled.
+
 ## Recording tips
 
 Record the VS Code window maximized (wmctrl above). Verify visual claims by `zoom`ing the status bar
