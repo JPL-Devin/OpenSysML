@@ -102,15 +102,31 @@ func BehaviorMembers(decl ast.Node) ([]ast.Node, error) {
 }
 
 // StatesBehaviorBody reports whether members state a behavior body rather than
-// only binding the behavior's parameters (`exhibit m { in x = y; }`).
+// only annotating the declaration or binding the behavior's parameters
+// (`exhibit m { in x = y; }`, `exhibit m : M { doc /* … */ }`).
 func StatesBehaviorBody(members []ast.Node) bool {
 	for _, member := range members {
-		if usage, ok := unwrapMembership(member).(*ast.Usage); ok && isBehaviorArgument(usage) {
-			continue
+		if statesBehaviorBodyMember(unwrapMembership(member)) {
+			return true
 		}
-		return true
 	}
 	return false
+}
+
+// statesBehaviorBodyMember reports whether one member of an `exhibit`/`perform`
+// declaration is body syntax: annotations describe the declaration and
+// directional usages bind the behavior's parameters, so neither is.
+func statesBehaviorBodyMember(member ast.Node) bool {
+	switch member := member.(type) {
+	case *ast.Comment, *ast.Documentation, *ast.TextualRepresentation:
+		return false
+	case *ast.Usage:
+		return !isBehaviorArgument(member) && member.Kind != ast.UsageMetadata
+	case *ast.Definition:
+		return member.Kind != ast.DefMetadata
+	default:
+		return true
+	}
 }
 
 // behaviorArguments are the values a binding member supplies to the behavior's

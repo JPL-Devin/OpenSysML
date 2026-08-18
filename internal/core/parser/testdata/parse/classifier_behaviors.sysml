@@ -21,6 +21,10 @@ package test {
 
 		exhibit state named : Modes;
 
+		exhibit state documented : Modes {
+			doc /* the modes it is in */
+		}
+
 		perform action report : Report;
 
 		perform action sample {

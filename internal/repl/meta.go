@@ -2053,14 +2053,20 @@ func (s *Session) startStateMachine(name string, performer []string) ([]string, 
 		return nil, lerr
 	}
 
+	isMachine := sym.Kind == symbols.SymbolStateDef || sym.Kind == symbols.SymbolStateUsage
+
 	// A name the session materialized denotes that object, whose exhibited
 	// machine is already running: the debugger drives that machine rather than a
-	// detached run of the shared usage.
+	// detached run of the shared usage. A materialized state machine exhibits
+	// none, so it stays debuggable — including as a machine another object
+	// performs.
 	if inst, ok := s.instances[fqn]; ok {
-		return s.debugExhibitedMachine(ctx, name, fqn, inst, performer)
+		if _, exhibits := inst.ExhibitedState(); exhibits || !isMachine {
+			return s.debugExhibitedMachine(ctx, name, fqn, inst, performer)
+		}
 	}
 
-	if sym.Kind != symbols.SymbolStateDef && sym.Kind != symbols.SymbolStateUsage {
+	if !isMachine {
 		return nil, fmt.Errorf("%q is not a state machine", name)
 	}
 

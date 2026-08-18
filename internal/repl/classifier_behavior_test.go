@@ -140,6 +140,25 @@ func TestRewritingTheExhibitedMachineDropsTheObject(t *testing.T) {
 	wants(t, run(t, s, "%features Obj::Monitor"), "count = 5")
 }
 
+// A machine is not something an object exhibits, so materializing the machine
+// itself leaves it debuggable as a machine another object performs.
+func TestStateDebugsAMachineMaterializedByName(t *testing.T) {
+	s := loadFixture(t, "../core/runtime/testdata/conformance/variant_connection_per_owner.sysml")
+	run(t, s, "%instantiate VariantRouting::alpha")
+	run(t, s, "%instantiate VariantRouting::Router::Route")
+
+	wants(t, run(t, s, "%state VariantRouting::Router::Route VariantRouting::alpha"), "Started state machine executor")
+	wants(t, run(t, s, "%advance 1"), "Current state: arrived")
+}
+
+// A part exhibiting no machine is reported as such rather than debugged.
+func TestStateReportsAnObjectExhibitingNoMachine(t *testing.T) {
+	s := loadFixture(t, "../core/runtime/testdata/conformance/variant_connection_per_owner.sysml")
+	run(t, s, "%instantiate VariantRouting::alpha")
+
+	wants(t, run(t, s, "%state VariantRouting::alpha"), "exhibits no state machine")
+}
+
 // objectIDIn reports the object identity a command's output names, written either
 // as `#<n>` or as `ID: <n>`.
 func objectIDIn(t *testing.T, out string) string {

@@ -27,6 +27,11 @@
               (Relationship kind="typing" target=Modes
                 (*ast.QualifiedName))))
           (Membership visibility="default"
+            (Usage kind="state" name="documented" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="exhibit state"
+              (Relationship kind="typing" target=Modes
+                (*ast.QualifiedName))
+              (Documentation locale="")))
+          (Membership visibility="default"
             (Usage kind="action" name="report" ref=false direction="none" composite=false derived=false ordered=false nonunique=false prefix="perform"
               (Relationship kind="typing" target=Report
                 (*ast.QualifiedName))))
