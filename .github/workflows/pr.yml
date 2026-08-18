@@ -95,7 +95,7 @@ jobs:
       - name: Solver gate
         run: |
           set -o pipefail
-          go test -count=1 -v ./internal/core/solve ./internal/repl -run 'TestSolver|TestDiscovery|TestSolved|TestDivisor|TestCheck' | tee solver-gate.log
+          go test -count=1 -v ./internal/core/solve ./internal/repl -run 'TestSolver|TestDiscovery|TestSolved|TestDivisor|TestCheck|TestSolve|TestConfigure|TestSynthesis|TestPinned|TestFixed' | tee solver-gate.log
           if grep -qE '^\s*--- SKIP' solver-gate.log; then
             echo "error: a solver-dependent test skipped" >&2
             exit 1
@@ -112,6 +112,24 @@ jobs:
             echo "error: a differential gate skipped" >&2
             exit 1
           fi
+
+      # The other half of the contract: with no solver to be found, every
+      # solver-dependent test must skip with a reason and the absent-solver paths
+      # must still report one. OPENSYSML_SMT names an executable that does not
+      # exist, which is discovery's absent case, and the requirement flag is
+      # dropped so a skip is the expected outcome here.
+      - name: Solver-absent gate
+        run: |
+          set -o pipefail
+          env -u OPENSYSML_REQUIRE_SMT OPENSYSML_SMT=/nonexistent/no-such-solver \
+            go test -count=1 -v ./internal/core/solve ./internal/repl | tee no-solver-gate.log
+          for name in TestCheckReportsAnAbsentSolver TestExplainReportsAnAbsentSolver \
+            TestSolveReportsAnAbsentSolver TestConfigureReportsAnAbsentSolver; do
+            grep -qE "^\s*--- PASS: $name" no-solver-gate.log || {
+              echo "error: $name did not run without a solver" >&2
+              exit 1
+            }
+          done
 
       - name: Build binaries
         run: |

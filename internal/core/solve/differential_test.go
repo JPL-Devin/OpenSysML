@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"math/big"
 	"sort"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -557,19 +556,6 @@ func ratOfValue(val runtime.Value) (*big.Rat, bool) {
 			return nil, false
 		}
 		return magnitude.Mul(magnitude, scale), true
-	}
-	return nil, false
-}
-
-// ratOfConst reads an integer or a real as an exact rational. A real goes
-// through its shortest round-tripping decimal, which is the literal the model
-// wrote and so the rational the translation asserts about it.
-func ratOfConst(val semantics.Value) (*big.Rat, bool) {
-	switch val.Kind {
-	case semantics.ValInt:
-		return new(big.Rat).SetInt64(val.Int), true
-	case semantics.ValReal:
-		return new(big.Rat).SetString(strconv.FormatFloat(val.Real, 'g', -1, 64))
 	}
 	return nil, false
 }

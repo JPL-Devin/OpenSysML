@@ -95,6 +95,23 @@ jobs:
             OPENSYSML_REQUIRE_TRAINING_CORPUS: "1"
             OPENSYSML_REQUIRE_SMT: "1"
       
+      # The other half of the solver contract: with discovery pointed at an
+      # executable that does not exist, solver-dependent tests skip and the
+      # absent-solver paths must still report one.
+      - run:
+          name: Run the solve and REPL tests with no solver
+          command: |
+            set -o pipefail
+            env -u OPENSYSML_REQUIRE_SMT OPENSYSML_SMT=/nonexistent/no-such-solver \
+              go test -count=1 -v ./internal/core/solve ./internal/repl | tee no-solver-gate.log
+            for name in TestCheckReportsAnAbsentSolver TestExplainReportsAnAbsentSolver \
+              TestSolveReportsAnAbsentSolver TestConfigureReportsAnAbsentSolver; do
+              grep -qE "^\s*--- PASS: $name" no-solver-gate.log || {
+                echo "error: $name did not run without a solver" >&2
+                exit 1
+              }
+            done
+
       - run:
           name: Build binaries
           command: |

@@ -145,6 +145,8 @@ var metaCommandTable = []metaCommand{
 	{group: "Behavioral commands:", name: "%satisfy", args: "[name]", desc: "evaluate the satisfaction assertions of the model, or of one element"},
 	{group: "Behavioral commands:", name: "%check", args: "<name>", desc: "ask an SMT solver whether a constraint, requirement or satisfaction can be satisfied (experimental)"},
 	{group: "Behavioral commands:", name: "%explain", args: "<name>", desc: "ask an SMT solver which conditions of an unsatisfiable element conflict (experimental)"},
+	{group: "Behavioral commands:", name: "%solve", args: "<name>", desc: "ask an SMT solver for values satisfying an element, keeping what is already fixed (experimental)"},
+	{group: "Behavioral commands:", name: "%configure", args: "<name> [<variation>=<variant>...] [all [<count>]]", desc: "ask an SMT solver which variants an element's conditions permit (experimental)"},
 
 	{group: "Action debugging:", name: "%action", args: "<name> [<object>]", desc: "start action executor debugging session, performed by an object"},
 	{group: "Action debugging:", name: "%step", desc: "advance one token step"},
@@ -354,6 +356,16 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 			return []string{"usage: %explain <name>"}, false, nil
 		}
 		return s.doExplain(fields[1])
+	case "%solve":
+		if len(fields) < 2 {
+			return []string{"usage: %solve <name>"}, false, nil
+		}
+		return s.doSolve(fields[1])
+	case "%configure":
+		if len(fields) < 2 {
+			return []string{"usage: %configure <name> [<variation>=<variant>...] [all [<count>]]"}, false, nil
+		}
+		return s.doConfigure(fields[1], fields[2:])
 	// Action debugging
 	case "%action":
 		if len(fields) < 2 {
