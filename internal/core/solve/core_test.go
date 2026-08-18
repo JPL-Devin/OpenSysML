@@ -256,6 +256,11 @@ func TestExplainedTwoConditionConflict(t *testing.T) {
 			t.Errorf("core member %+v does not carry its role and location", m.From)
 		}
 	}
+	result := explained(t, solver, q, StatusUnsat)
+	if result.Elapsed < result.Core.Elapsed {
+		t.Errorf("explaining took %s, less than the %s it spent shrinking the core",
+			result.Elapsed, result.Core.Elapsed)
+	}
 }
 
 // A conflict that only exists because of a declared domain names that domain: the

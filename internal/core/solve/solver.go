@@ -128,7 +128,8 @@ type Result struct {
 	// is nil for every other verdict and for a plain Solve.
 	Core *Core
 
-	// Elapsed is how long the solver took.
+	// Elapsed is how long the solver took, for an Explain every round of
+	// shrinking the core included.
 	Elapsed time.Duration
 }
 

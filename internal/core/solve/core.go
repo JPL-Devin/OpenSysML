@@ -73,6 +73,8 @@ func (s *Solver) Explain(ctx context.Context, q *Query) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Elapsed covers the whole explanation, shrinking the core included.
+	result.Elapsed += core.Elapsed
 	result.Core = core
 	return result, nil
 }
