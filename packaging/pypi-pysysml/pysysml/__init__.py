@@ -22,8 +22,8 @@ changed with it are the names built on the old one:
 The service binary is still sysml-grpc, and the wire protocol is unchanged, so \
 a new client talks to an old service.
 
-Pinning `pysysml<0.3` keeps the last real release (0.2.0) working, but it is \
-the end of that line: no fix will be published under this name.\
+Pinning `pysysml==0.2.0` keeps the last real release working, but it is the end \
+of that line: no fix will be published under this name.\
 """
 
 raise ImportError(MESSAGE)

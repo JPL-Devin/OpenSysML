@@ -38,8 +38,8 @@ wire protocol, so a new client talks to an already-installed service. A
 `~/.pysysml` left behind by an old install is never read again and can be
 deleted.
 
-Pinning `pysysml<0.3` keeps 0.2.0 working, but nothing further will be published
-under this name.
+Pinning `pysysml==0.2.0` keeps the last real release working, but nothing further
+will be published under this name.
 
 - Project: https://github.com/Open-MBEE/OpenSysML
 - Package: https://pypi.org/project/opensysml/

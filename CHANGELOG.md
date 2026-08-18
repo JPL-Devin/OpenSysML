@@ -21,10 +21,12 @@ artifacts they describe really were called that.
   `OPENSYSML_REQUIRE_SERVICE`), the base error is `OpenSysMLError`, the generator entry point is
   `opensysml-generate`, the state directory is `~/.opensysml` and the release tag is
   `opensysml-v*`. Nothing reads the `pysysml` names, so a `~/.pysysml` left behind by an older
-  install is dead weight and can be deleted. `pysysml` on PyPI gets one last version, 0.3.0,
-  which contains no client: it raises on import naming `opensysml`, so `pip install pysysml`
-  reports the rename instead of resolving to the pre-rename 0.2.0. Pin `pysysml<0.3` to keep
-  0.2.0 while migrating; nothing further is published under that name.
+  install is dead weight and can be deleted. The first release under the new name is 0.3.0,
+  carrying on from `pysysml` 0.2.0 rather than restarting, and `pysysml` gets one last version,
+  0.2.1, which contains no client: it raises on import naming `opensysml`, so `pip install
+  pysysml` reports the rename instead of resolving to the pre-rename 0.2.0. Pin
+  `pysysml==0.2.0` to keep that release while migrating; nothing further is published under
+  that name.
 - **Release archives are `opensysml-<os>-<arch>.tar.gz`** (`.zip` on Windows), and the Homebrew
   formula is `opensysml`: `brew install Open-MBEE/tap/opensysml`. Assets already published under
   `v0.0.x` keep their old names.

@@ -192,7 +192,9 @@ API. Without either variable the script fails immediately with
 
 The Python client in `python/` is published to PyPI as
 [`opensysml`](https://pypi.org/project/opensysml/) by the `release-python` workflow,
-which runs on a tag matching `/^opensysml-v.*/` — for example `opensysml-v0.1.0`.
+which runs on a tag matching `/^opensysml-v.*/` — for example `opensysml-v0.3.0`.
+The first release under the new name is 0.3.0: the version line carries on from
+`pysysml` 0.2.0, which was the same client, so no version number is reused.
 Nothing is uploaded from a laptop, and a `v*` core release tag publishes no
 package.
 
@@ -236,7 +238,7 @@ The tag must name the declared version. `python/scripts/check_version.py` is run
 by the job before anything is built, and fails loudly otherwise:
 
 ```bash
-python python/scripts/check_version.py --tag opensysml-v0.1.0   # prints 0.1.0
+python python/scripts/check_version.py --tag opensysml-v0.3.0   # prints 0.3.0
 ```
 
 So a release is: bump `VERSION` in `python/opensysml/_version.py`, land it, then
@@ -326,7 +328,7 @@ release:
 # 1. Declare a pre-release version, e.g. VERSION = "0.1.0rc1"
 $EDITOR python/opensysml/_version.py
 # 2. Land it, then tag it
-git tag -a opensysml-v0.1.0rc1 -m "opensysml 0.1.0rc1" && git push origin opensysml-v0.1.0rc1
+git tag -a opensysml-v0.3.0rc1 -m "opensysml 0.3.0rc1" && git push origin opensysml-v0.3.0rc1
 ```
 
 The job resolves the version, sees a PEP 440 pre-release, requires
@@ -341,7 +343,7 @@ pip install --index-url https://test.pypi.org/simple/ \
 python -c "import opensysml; print(opensysml.__version__)"
 ```
 
-Then set `VERSION` to the final version and tag `opensysml-v0.1.0`.
+Then set `VERSION` to the final version and tag `opensysml-v0.3.0`.
 
 Nothing about the pre-release path is required for a normal release; if you skip
 it, no TestPyPI token is needed at all.
@@ -382,19 +384,23 @@ The client was published as [`pysysml`](https://pypi.org/project/pysysml/) up to
 version still installs and works, so `pip install pysysml` would otherwise go on
 silently handing out a pre-rename client indefinitely.
 
-`packaging/pypi-pysysml/` is the answer: a distribution of the same name whose
-only module raises `ImportError` naming `opensysml`, published once as a version
-above 0.2.0 so resolvers prefer it. It is not a compatibility shim — it does not
-re-export `opensysml`, and it declares no dependency on it, since installing the
-new client as a side effect would keep the old import working. `pip install
-'pysysml<0.3'` is the escape hatch for anyone who needs 0.2.0 while they migrate.
+`packaging/pypi-pysysml/` is the answer: `pysysml` 0.2.1, a distribution of the
+same name whose only module raises `ImportError` naming `opensysml`. Being above
+0.2.0 is what makes resolvers prefer it. It is not a compatibility shim — it does
+not re-export `opensysml`, and it declares no dependency on it, since installing
+the new client as a side effect would keep the old import working.
+
+`pip install pysysml==0.2.0` is the escape hatch while migrating. An exact pin is
+the only one that avoids the placeholder whatever version it carries: any range
+that does not exclude it (`>=0.2`, `~=0.2.0`, `<1.0`) resolves to it, which is
+the whole point.
 
 It is released by its own tag, which runs the `release-pysysml-placeholder`
 workflow:
 
 ```bash
-git tag pysysml-v0.3.0    # must match the version in packaging/pypi-pysysml/pyproject.toml
-git push origin pysysml-v0.3.0
+git tag pysysml-v0.2.1    # must match the version in packaging/pypi-pysysml/pyproject.toml
+git push origin pysysml-v0.2.1
 ```
 
 The job resolves the version from the tag, refuses a version PyPI already has,
