@@ -148,7 +148,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: vscode-extension
-          path: editors/vscode/systemica-sysml.vsix
+          path: editors/vscode/opensysml-sysml.vsix
 
   python-test:
     name: Python client tests

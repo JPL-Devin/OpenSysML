@@ -117,7 +117,7 @@ vscode-build: ## Type-check and bundle the VS Code extension
 vscode-package: ## Package the VS Code extension as a .vsix for side-loading
 	@echo "Packaging the VS Code extension..."
 	cd $(VSCODE_DIR) && npm ci && npm run package
-	@echo "✓ Packaged $(VSCODE_DIR)/systemica-sysml.vsix"
+	@echo "✓ Packaged $(VSCODE_DIR)/opensysml-sysml.vsix"
 
 help: ## Show this help message
 	@echo "Available targets:"

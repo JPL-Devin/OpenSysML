@@ -1,7 +1,7 @@
 {
-  "name": "systemica-sysml",
-  "displayName": "SysML v2 (Systemica)",
-  "description": "SysML v2 and KerML syntax highlighting and language support backed by the Systemica language server.",
+  "name": "opensysml-sysml",
+  "displayName": "SysML v2 (OpenSysML)",
+  "description": "SysML v2 and KerML syntax highlighting and language support backed by the OpenSysML language server.",
   "version": "0.1.0",
   "publisher": "open-mbee",
   "license": "Apache-2.0",
@@ -59,14 +59,14 @@
       }
     ],
     "configuration": {
-      "title": "SysML v2 (Systemica)",
+      "title": "SysML v2 (OpenSysML)",
       "properties": {
-        "systemica.server.path": {
+        "opensysml.server.path": {
           "type": "string",
           "default": "",
           "markdownDescription": "Absolute path to the `sysml-lsp` executable. When empty, `sysml-lsp` is looked up on `PATH`."
         },
-        "systemica.server.args": {
+        "opensysml.server.args": {
           "type": "array",
           "items": {
             "type": "string"
@@ -74,12 +74,12 @@
           "default": [],
           "description": "Extra arguments passed to the language server."
         },
-        "systemica.server.enabled": {
+        "opensysml.server.enabled": {
           "type": "boolean",
           "default": true,
           "description": "Start the language server. Turn this off to keep syntax highlighting only."
         },
-        "systemica.trace.server": {
+        "opensysml.trace.server": {
           "type": "string",
           "enum": [
             "off",
@@ -93,7 +93,7 @@
     },
     "commands": [
       {
-        "command": "systemica.restartServer",
+        "command": "opensysml.restartServer",
         "title": "SysML: Restart Language Server"
       }
     ]
@@ -103,7 +103,7 @@
     "build": "node esbuild.mjs",
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc --noEmit",
-    "package": "npm run typecheck && npm run build -- --production && vsce package --no-dependencies --out systemica-sysml.vsix"
+    "package": "npm run typecheck && npm run build -- --production && vsce package --no-dependencies --out opensysml-sysml.vsix"
   },
   "dependencies": {
     "vscode-languageclient": "9.0.1"
