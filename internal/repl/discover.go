@@ -93,8 +93,9 @@ func (s *Session) doSearch(substr string) ([]string, bool, error) {
 	return out, false, nil
 }
 
-// doBuiltins lists the library functions this build implements directly, which
-// are callable whether or not the model imports the function libraries.
+// doBuiltins lists the library functions this build implements directly, the
+// OMG ones callable whatever the model imports and an extension one marked with
+// the import its unqualified name needs.
 func (s *Session) doBuiltins() ([]string, bool, error) {
 	all := runtime.Builtins()
 	scalar := make([]string, 0, len(all))
@@ -104,7 +105,11 @@ func (s *Session) doBuiltins() ([]string, bool, error) {
 			collection = append(collection, fmt.Sprintf("x->%s()  %s", b.Name, b.FQN))
 			continue
 		}
-		scalar = append(scalar, fmt.Sprintf("%s(%s)  %s", b.Name, strings.Join(b.Params, ", "), b.FQN))
+		line := fmt.Sprintf("%s(%s)  %s", b.Name, strings.Join(b.Params, ", "), b.FQN)
+		if b.RequiresImport != "" {
+			line += fmt.Sprintf("  (needs `import %s::*;`)", b.RequiresImport)
+		}
+		scalar = append(scalar, line)
 	}
 	out := []string{"Scalar functions:"}
 	out = append(out, scalar...)

@@ -179,6 +179,10 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 		}
 		scope.AddChild(regionScope)
 		buildMembers(regionScope, d.States)
+	case *ast.AssumeMember:
+		buildConstraintBodyScope(scope, d, d.Body)
+	case *ast.RequireMember:
+		buildConstraintBodyScope(scope, d, d.Body)
 	case *ast.EntryMember:
 		// An entry/do/exit action is a feature of the state declaring it, so a
 		// named one (`entry action entryAction :>> 'entry';`) is a member of the
@@ -234,6 +238,32 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 		// Control flow nodes without explicit names in AST - skip indexing
 		// (If these nodes gain name fields in future, register them here)
 	}
+}
+
+// buildConstraintBodyScope links the scope a require/assume body declares into.
+// The body states the requirement its member references (SysML v2 §7.20.5), so
+// its declarations are visible inside it and are no members of the namespace the
+// member itself is declared in.
+func buildConstraintBodyScope(scope *Scope, decl ast.Node, body []ast.Node) {
+	if len(body) == 0 {
+		return
+	}
+	child := NewScope(scope, decl)
+	child.markBodyLocal()
+	scope.AddChild(child)
+	buildMembers(child, body)
+}
+
+// ConstraintBodyScope returns the scope a require/assume body resolves against:
+// the one its declarations were built into, or parent for a body declaring none.
+func ConstraintBodyScope(parent *Scope, decl ast.Node) *Scope {
+	if parent == nil {
+		return nil
+	}
+	if child := parent.ChildFor(decl); child != nil {
+		return child
+	}
+	return parent
 }
 
 // buildConnectorEnds registers a symbol for every end of a connector usage that

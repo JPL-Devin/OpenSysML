@@ -1,0 +1,22 @@
+{
+  "type": "instance",
+  "instantiate": "test::r",
+  "libraries": true,
+  "slots": {
+    "cost": {"type": "Instance"},
+    "kept": {"type": "Instance"},
+    "plain": {"type": "Instance"},
+    "template": {"type": "Instance"},
+    "deepTemplate": {"type": "Instance"},
+    "deepKept": {"type": "Instance"},
+    "deepGoverned": {"type": "Instance"}
+  },
+  "constraints": {
+    "bodyGovernsInheritedValue": true,
+    "featureNotValuedTakesItsTypesDefault": true,
+    "reDeclarationKeepsInheritedValue": true,
+    "valueBindsWithoutABody": true,
+    "deepReDeclarationKeepsInheritedValue": true,
+    "valueStatedAtDepthGoverns": true
+  }
+}

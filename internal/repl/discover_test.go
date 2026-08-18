@@ -94,6 +94,16 @@ func TestBuiltinsCommand(t *testing.T) {
 	)
 }
 
+// An extension function is implemented, so it is listed — marked with the import
+// its unqualified name needs rather than left out as if unsupported.
+func TestBuiltinsListsAnExtensionFunctionWithItsImport(t *testing.T) {
+	out := run(t, NewSession(), "%builtins")
+	wants(t, out,
+		"exp(x)  OpenSysMLMathFunctions::exp  (needs `import OpenSysMLMathFunctions::*;`)",
+		"atan2(y, x)  OpenSysMLMathFunctions::atan2  (needs `import OpenSysMLMathFunctions::*;`)",
+	)
+}
+
 // TestQualifiedNameSuggestion covers the hint an unresolved bare library name
 // gets: the qualified name the symbol index already knows it under.
 func TestQualifiedNameSuggestion(t *testing.T) {

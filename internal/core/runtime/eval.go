@@ -1334,8 +1334,13 @@ func (ec *EvalContext) evalInvocation(n *ast.InvocationExpr) (Value, error) {
 	if !ok || calcSym == nil {
 		// A KerML function library function is evaluable even where the model
 		// imports no part of the library, so a name that denotes no declaration
-		// still denotes the library function of that name.
-		if fn, isLib := unresolvedLibraryFunction(n.Type, qualName); isLib {
+		// still denotes the library function of that name. A name only a
+		// OpenSysML extension declares is in scope under its import alone.
+		fn, libErr := unresolvedLibraryFunction(n.Type, qualName)
+		if libErr != nil {
+			return Value{}, libErr
+		}
+		if fn != nil {
 			return fn.invoke(ec.ctx, calcArgs{positional: args, named: named})
 		}
 		// The same holds of the collection functions: `seq->size()` and `size(seq)`

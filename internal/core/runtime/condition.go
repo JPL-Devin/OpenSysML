@@ -45,10 +45,14 @@ func (c Condition) Label() string { return conditionLabel(c) }
 // Owner is the element declaring the condition, which is the supertype it was
 // inherited from for an inherited one, or nil when the scope has no owner.
 func (c Condition) Owner() *symbols.Symbol {
-	if c.Scope == nil {
-		return nil
+	// A body-local scope owns no symbol, so the declaring element is the
+	// nearest enclosing scope that does.
+	for s := c.Scope; s != nil; s = s.Parent() {
+		if owner := s.Owner(); owner != nil {
+			return owner
+		}
 	}
-	return c.Scope.Owner()
+	return nil
 }
 
 // ConditionsOf returns the conditions sym states, its inherited ones first: the
@@ -120,15 +124,19 @@ func appendConditions(out []Condition, node ast.Node, scope *symbols.Scope, requ
 		if m.Expression != nil {
 			out = append(out, Condition{Expr: m.Expression, Scope: scope, Required: true})
 		}
+		// The body is a scope of its own, which is where a condition it states
+		// reads the names it declares.
+		body := symbols.ConstraintBodyScope(scope, m)
 		for _, nested := range m.Body {
-			out = appendConditions(out, nested, scope, true, false)
+			out = appendConditions(out, nested, body, true, false)
 		}
 	case *ast.AssumeMember:
 		if m.Expression != nil {
 			out = append(out, Condition{Expr: m.Expression, Scope: scope})
 		}
+		body := symbols.ConstraintBodyScope(scope, m)
 		for _, nested := range m.Body {
-			out = appendConditions(out, nested, scope, false, false)
+			out = appendConditions(out, nested, body, false, false)
 		}
 	}
 	return out
@@ -581,11 +589,19 @@ func (ctx *Context) conditionFeatures(sym *symbols.Symbol) map[string]scopedExpr
 		return nil
 	}
 	out := make(map[string]scopedExpr, len(features))
-	for _, feat := range features {
+	for i := range features {
+		feat := &features[i]
 		if feat.Name == "" {
 			continue
 		}
-		out[feat.Name] = scopedExpr{expr: feat.DefaultValue, scope: feat.DefaultScope()}
+		expr := feat.DefaultValue
+		if !ctx.valueBinds(feat) {
+			// A body governing over the inherited value supersedes it, so a
+			// condition read without an object reports the feature
+			// uninitialized rather than the value materializing replaces.
+			expr = nil
+		}
+		out[feat.Name] = scopedExpr{expr: expr, scope: feat.DefaultScope()}
 	}
 	return out
 }

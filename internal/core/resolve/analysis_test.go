@@ -86,8 +86,7 @@ func TestResolveRequiredRequirementUnknownPlainName(t *testing.T) {
 
 // Only the direct members of a require body inherit from the requirement it
 // references, so a nested declaration never redefines that requirement's
-// feature — its own type holds it. Such a nested body is not walked yet (a
-// known limitation), so the target may also stay unresolved.
+// feature — its own type holds it.
 func TestResolveNestedRedefinitionPrefersOwnType(t *testing.T) {
 	src := `package Starkit {
 		requirement def R { attribute mass; }
@@ -118,7 +117,7 @@ func TestResolveNestedRedefinitionPrefersOwnType(t *testing.T) {
 	qn := nestedRedefinitionTarget(t, root)
 	sym, ok := r.PartSymbol(qn, 0)
 	if !ok {
-		return
+		t.Fatalf("the nested redefinition target was not resolved")
 	}
 	owner, _ := sym.OwnerScope.Node().(*ast.Definition)
 	if owner == nil || owner.Ident.Name != "Payload" {
