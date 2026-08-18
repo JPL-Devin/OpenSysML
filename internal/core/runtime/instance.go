@@ -142,15 +142,27 @@ func (ctx *Context) instantiateOwnedBy(sym *symbols.Symbol, id int64, owner *Ins
 	// A creation that fails leaves none of the objects it reached behind, however
 	// deeply nested or however a behavior of it addressed them.
 	existing := ctx.liveInstanceIDs()
-	inst, err := ctx.materialize(sym, id)
+	inst, err := ctx.materializeOwnedBy(sym, id, owner, feature)
 	if err != nil {
 		ctx.abandonInstancesSince(existing)
 		return nil, err
 	}
-	inst.owner, inst.ownerFeature = owner, feature
 	if err := ctx.startClassifierBehaviors(inst, existing); err != nil {
 		return nil, err
 	}
+	return inst, nil
+}
+
+// materializeOwnedBy materializes an object held by owner as the feature value
+// named feature, without starting its behaviors: a holder records the object it
+// holds before those behaviors run, so one addressing it back through its holder
+// reaches this object rather than materializing a second.
+func (ctx *Context) materializeOwnedBy(sym *symbols.Symbol, id int64, owner *Instance, feature string) (*Instance, error) {
+	inst, err := ctx.materialize(sym, id)
+	if err != nil {
+		return nil, err
+	}
+	inst.owner, inst.ownerFeature = owner, feature
 	return inst, nil
 }
 
@@ -426,12 +438,19 @@ func (inst *Instance) materializeFeatureValue(ctx *Context, name string) (*Featu
 		}
 
 		if !mult.Upper.Infinite && mult.Upper.Value == 1 {
-			// Scalar: instantiate one
-			childInst, err := ctx.instantiateOwnedBy(composite, 0, inst, name)
+			// Scalar: instantiate one, held by this feature before its behaviors
+			// start, so one addressing it back reads the object held here.
+			existing := ctx.liveInstanceIDs()
+			childInst, err := ctx.materializeOwnedBy(composite, 0, inst, name)
 			if err != nil {
+				ctx.abandonInstancesSince(existing)
 				return nil, err
 			}
 			fv.Value = Value{Kind: ValInstance, Instance: childInst.ID}
+			fv.Materialized = true
+			if err := ctx.startClassifierBehaviors(childInst, existing); err != nil {
+				return nil, err
+			}
 		} else {
 			// Guard against infinite/huge lower bound (C3)
 			if mult.Lower.Infinite || mult.Lower.Value > maxMaterializedLowerBound {
@@ -459,14 +478,24 @@ func (inst *Instance) materializeFeatureValue(ctx *Context, name string) (*Featu
 			for _, val := range contributed {
 				seq.Append(val)
 			}
+			// The whole collection is held before any of its objects starts, so a
+			// behavior reading the feature back reads the objects held in it.
+			existing := ctx.liveInstanceIDs()
+			children := make([]*Instance, 0, count)
 			for i := 0; i < count; i++ {
-				childInst, err := ctx.instantiateOwnedBy(composite, 0, inst, name)
+				childInst, err := ctx.materializeOwnedBy(composite, 0, inst, name)
 				if err != nil {
+					ctx.abandonInstancesSince(existing)
 					return nil, err
 				}
 				seq.Append(Value{Kind: ValInstance, Instance: childInst.ID})
+				children = append(children, childInst)
 			}
 			fv.Values = Value{Kind: ValSequence, Sequence: seq}
+			fv.Materialized = true
+			if err := ctx.startClassifierBehaviorsOf(children, existing); err != nil {
+				return nil, err
+			}
 		}
 		fv.Materialized = true
 	}

@@ -124,8 +124,14 @@ func (ctx *Context) classifierBehaviorsOf(typeSym *symbols.Symbol) []classifierB
 // inside a running behavior only attaches, leaving the run to the outermost
 // start, so materializing objects that exhibit each other terminates.
 func (ctx *Context) startClassifierBehaviors(inst *Instance, existing map[int64]bool) error {
+	return ctx.startClassifierBehaviorsOf([]*Instance{inst}, existing)
+}
+
+// startClassifierBehaviorsOf starts the behaviors of every one of the objects as
+// one collective run, so objects materialized together exchange messages.
+func (ctx *Context) startClassifierBehaviorsOf(objects []*Instance, existing map[int64]bool) error {
 	attached := len(ctx.objectBehaviors)
-	if err := ctx.startBehaviorsOf(inst); err != nil {
+	if err := ctx.startBehaviorsOfAll(objects); err != nil {
 		// A creation that failed leaves nothing behind: neither the objects its
 		// behaviors materialized nor any behavior of theirs survives into the next,
 		// unrelated command.
@@ -150,16 +156,63 @@ func (ctx *Context) liveInstanceIDs() map[int64]bool {
 // which a failed creation would otherwise leave running nothing, along with the
 // occurrences naming them: a later read materializes the usage afresh.
 func (ctx *Context) abandonInstancesSince(existing map[int64]bool) {
+	abandoned := make(map[int64]bool)
 	for id := range ctx.instances {
 		if !existing[id] {
+			abandoned[id] = true
 			delete(ctx.instances, id)
 		}
+	}
+	if len(abandoned) == 0 {
+		return
 	}
 	for sym, id := range ctx.occurrences {
 		if _, live := ctx.instances[id]; !live {
 			delete(ctx.occurrences, sym)
 		}
 	}
+	ctx.forgetValuesNaming(abandoned)
+	ctx.forgetMessagesTo(abandoned)
+}
+
+// forgetValuesNaming unmaterializes every feature value of a surviving object
+// that names an abandoned one, so a later read materializes an object the
+// session holds rather than reading one it does not.
+func (ctx *Context) forgetValuesNaming(abandoned map[int64]bool) {
+	for _, inst := range ctx.instances {
+		for _, fv := range inst.FeatureValues {
+			if !fv.Materialized || !namesAbandoned(fv, abandoned) {
+				continue
+			}
+			fv.Value, fv.Values = Value{}, Value{}
+			fv.Materialized, fv.Written = false, false
+		}
+	}
+}
+
+// namesAbandoned reports whether a feature value holds an object that is gone.
+func namesAbandoned(fv *FeatureValue, abandoned map[int64]bool) bool {
+	if fv.Value.Kind == ValInstance && abandoned[fv.Value.Instance] {
+		return true
+	}
+	for _, val := range elementsOf(fv.Values) {
+		if val.Kind == ValInstance && abandoned[val.Instance] {
+			return true
+		}
+	}
+	return false
+}
+
+// forgetMessagesTo drops the messages addressed to an abandoned object, which
+// nothing can consume once the object holding its consumers is gone.
+func (ctx *Context) forgetMessagesTo(abandoned map[int64]bool) {
+	kept := make([]Message, 0, len(ctx.messages))
+	for _, msg := range ctx.messages {
+		if !abandoned[msg.Object] {
+			kept = append(kept, msg)
+		}
+	}
+	ctx.messages = kept
 }
 
 // restartClassifierBehaviors gives every object a fresh execution of the

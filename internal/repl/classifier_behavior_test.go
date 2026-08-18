@@ -151,6 +151,21 @@ func TestStateDebugsAMachineMaterializedByName(t *testing.T) {
 	wants(t, run(t, s, "%advance 1"), "Current state: arrived")
 }
 
+// A session over a machine an object merely performs stays on that machine: only
+// a session over the object's own exhibited machine follows a restart.
+func TestStateOverAPerformedMachineStaysOnIt(t *testing.T) {
+	s := loadFixture(t, "testdata/performed_machine.sysml")
+	run(t, s, "%instantiate Two::g")
+	wants(t, run(t, s, "%state Two::Check Two::g"), "Started state machine executor")
+
+	if res := s.Submit("package Other { part def Unrelated; }"); len(res.Diagnostics) > 0 {
+		t.Fatalf("unrelated declaration has diagnostics: %v", res.Diagnostics)
+	}
+
+	wants(t, run(t, s, "%current"), "checking")
+	wants(t, run(t, s, "%advance 5"), "Current state: checked")
+}
+
 // A part exhibiting no machine is reported as such rather than debugged.
 func TestStateReportsAnObjectExhibitingNoMachine(t *testing.T) {
 	s := loadFixture(t, "../core/runtime/testdata/conformance/variant_connection_per_owner.sysml")

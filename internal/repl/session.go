@@ -740,7 +740,10 @@ func (s *Session) keepIdentitiesOf(prev *runtime.Context) {
 // carry-over restarted, so %step and %current drive the object's live machine
 // rather than the one discarded with the previous analysis.
 func (s *Session) rebindRestartedMachine() {
-	if s.stateExec == nil || s.stateExec.selfFQN == "" {
+	// Only a session over an object's own exhibited machine follows the restart:
+	// a machine the object merely performs is the debugger's own execution, which
+	// no restart replaced.
+	if s.stateExec == nil || s.stateExec.selfFQN == "" || s.stateExec.fqn != s.stateExec.selfFQN {
 		return
 	}
 	inst, ok := s.instances[s.stateExec.selfFQN]

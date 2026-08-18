@@ -470,6 +470,118 @@ func TestFailedMaterializationLeavesNoNeighbourBehind(t *testing.T) {
 	}
 }
 
+// Two nested objects addressing each other are materialized once each: an object
+// is held by the feature that materializes it before its behaviors start, so a
+// reply addressed back reaches it instead of materializing a second copy.
+func TestMutuallyAddressedObjectsAreMaterializedOnce(t *testing.T) {
+	src := `
+		package test {
+			item def Ping;
+			item def Pong;
+
+			part def Node;
+
+			part def Pair {
+				part a : Node {
+					exhibit state pinging {
+						entry; then sending;
+						state sending {
+							entry send Ping() to b;
+							accept Pong then answered;
+						}
+						state answered;
+					}
+				}
+				part b : Node {
+					exhibit state replying {
+						entry; then waiting;
+						state waiting { accept Ping then replied; }
+						state replied { entry send Pong() to a; }
+					}
+				}
+			}
+		}
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	pkg := resolveSymbol(t, root, "test")
+	ctx := NewContext(model, resolver, 10000)
+
+	pair, err := ctx.Instantiate(resolveSymbol(t, pkg.Scope, "Pair"))
+	if err != nil {
+		t.Fatalf("Instantiate Pair: %v", err)
+	}
+	a := instanceAtPath(t, ctx, pair, "a")
+	b := instanceAtPath(t, ctx, pair, "b")
+
+	if got := len(ctx.instances); got != 3 {
+		t.Errorf("%d objects materialized, want the pair and its two parts", got)
+	}
+	assertCurrentState(t, machineOf(t, a, "pinging").State, "answered")
+	assertCurrentState(t, machineOf(t, b, "replying").State, "replied")
+}
+
+// machineOf is the object's execution of the named state machine.
+func machineOf(t *testing.T, inst *Instance, name string) *ObjectBehavior {
+	t.Helper()
+	behavior, ok := inst.Behavior(name)
+	if !ok || behavior.State == nil {
+		t.Fatalf("object #%d runs no state machine %q", inst.ID, name)
+	}
+	return behavior
+}
+
+// A failed creation leaves no object holding a neighbour it removed: the feature
+// that reached the removed object is read again against the objects that remain.
+func TestFailedMaterializationLeavesNoDanglingHolder(t *testing.T) {
+	src := `
+		package test {
+			item def Ping;
+
+			part def Listener {
+				exhibit state listening {
+					entry; then waiting;
+					state waiting { accept Ping then heard; }
+					state heard;
+				}
+			}
+
+			part def Broken {
+				exhibit state sending {
+					entry; then sent;
+					state sent { entry send Ping() to good; }
+				}
+				exhibit state empty { }
+			}
+
+			part def Group {
+				part good : Listener;
+				part bad : Broken;
+			}
+		}
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	pkg := resolveSymbol(t, root, "test")
+	ctx := NewContext(model, resolver, 10000)
+
+	group, err := ctx.Instantiate(resolveSymbol(t, pkg.Scope, "Group"))
+	if err != nil {
+		t.Fatalf("Instantiate Group: %v", err)
+	}
+	if _, err := group.GetFeatureValue(ctx, "bad"); err == nil {
+		t.Fatal("expected the machine with no initial state to fail materialization")
+	}
+
+	// The neighbour the failed creation materialized is gone, so reading it again
+	// materializes an object the session holds.
+	good := instanceAtPath(t, ctx, group, "good")
+	if _, held := ctx.Instance(good.ID); !held {
+		t.Errorf("good names object %d, which the context does not hold", good.ID)
+	}
+	if _, ok := good.ExhibitedState(); !ok {
+		t.Error("the object materialized again exhibits no machine")
+	}
+}
+
 // A machine that reached its final state takes no step, so a message still
 // addressed to it does not make a later materialization spin to its budget.
 func TestMessageLeftForACompletedMachineDoesNotBlockANewObject(t *testing.T) {

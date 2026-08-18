@@ -102,6 +102,14 @@ artifacts they describe really were called that.
 - **Rewriting a behavior drops the objects running it.** Re-declaring the machine or action an object
   runs changes what the object is, so the object itself is dropped with a reported reason instead of
   being carried over at all.
+- **A feature holds the object it materializes before that object's behaviors start**, so two nested
+  objects addressing each other reach one another instead of materializing a fresh copy per message
+  until the event budget runs out.
+- **A creation that fails leaves nothing naming what it removed**: a feature of a surviving object
+  that reached one of the removed objects is read again, and messages addressed to them are dropped
+  with them.
+- **A `%state` session over a machine an object merely performs stays on that machine** across an
+  unrelated declaration; only a session over the object's own exhibited machine follows a restart.
 
 ### `%slots` is now `%features`, the name SysML v2 uses
 
