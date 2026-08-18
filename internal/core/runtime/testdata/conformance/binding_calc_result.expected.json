@@ -1,0 +1,8 @@
+{
+  "type": "calc",
+  "evaluate": "test::D2",
+  "inputs": [
+    {"type": "Integer", "value": 11}
+  ],
+  "result": {"type": "Integer", "value": 11}
+}

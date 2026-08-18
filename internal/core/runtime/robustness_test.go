@@ -64,6 +64,22 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("calc_output_assigned_in_a_branch_not_taken", testCalcOutputAssignedInABranchNotTaken)
 	t.Run("calc_output_valued_and_assigned", testCalcOutputValuedAndAssigned)
 	t.Run("calc_output_assigned_twice", testCalcOutputAssignedTwice)
+	t.Run("binding_conflict", testBindingConflict)
+	t.Run("binding_collection_conflicts_do_not_use_hashes", testBindingCollectionConflictsDoNotUseHashes)
+	t.Run("binding_multiple_scalar_contributors", testBindingMultipleScalarContributors)
+	t.Run("binding_multiple_collection_contributors", testBindingMultipleCollectionContributors)
+	t.Run("binding_propagation_spends_element_budget", testBindingPropagationSpendsElementBudget)
+	t.Run("binding_distinct_materialized_objects_conflict", testBindingDistinctMaterializedObjectsConflict)
+	t.Run("binding_named_single_end_does_not_poison_read", testBindingNamedSingleEndDoesNotPoisonRead)
+	t.Run("binding_incomplete_end_does_not_poison_read", testBindingIncompleteEndDoesNotPoisonRead)
+	t.Run("binding_single_valueless", testBindingSingleValueless)
+	t.Run("binding_cycle", testBindingCycle)
+	t.Run("binding_three_binding_ring", testBindingThreeBindingRing)
+	t.Run("binding_cycle_with_value", testBindingCycleWithValue)
+	t.Run("binding_unrelated_expression_does_not_poison_read", testBindingUnrelatedExpressionDoesNotPoisonRead)
+	t.Run("binding_expression_end_cannot_receive", testBindingExpressionEndCannotReceive)
+	t.Run("binding_result_tracks_later_mutation", testBindingResultTracksLaterMutation)
+	t.Run("binding_nested_container_is_not_a_cycle", testBindingNestedContainerIsNotACycle)
 	t.Run("nested_calc_usage_unbound_input", testNestedCalcUsageUnboundInput)
 	t.Run("nested_calc_usage_unknown_output", testNestedCalcUsageUnknownOutput)
 	t.Run("nested_calc_usage_self_cycle", testNestedCalcUsageSelfCycle)
@@ -198,6 +214,537 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("object_exhibited_machine_without_an_initial_state", testObjectExhibitedMachineWithoutAnInitialState)
 	t.Run("operation_invoked_with_unbound_parameters", testOperationInvokedWithUnboundParameters)
 	t.Run("second_instantiation_of_one_type", testSecondInstantiationOfOneType)
+}
+
+func testBindingConflict(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<binding-conflict>", parseAndBuild(t, `package P {
+		part def Sys {
+			attribute a = 1;
+			attribute b = 2;
+			binding bind b = a;
+		}
+	}`))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	_, err = inst.GetFeatureValue(ctx, "b")
+	if !errors.Is(err, ErrBindingConflict) {
+		t.Fatalf("GetFeatureValue(b) = %v, want ErrBindingConflict", err)
+	}
+	if got, want := err.Error(), "binding conflict: b = 2, a = 1"; got != want {
+		t.Errorf("conflict error = %q, want %q", got, want)
+	}
+}
+
+func testBindingCollectionConflictsDoNotUseHashes(t *testing.T) {
+	t.Run("strings", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-string-conflict>", parseAndBuild(t, `package P {
+			part def Sys {
+				attribute a : ScalarValues::String[*] = ("a");
+				attribute b : ScalarValues::String[*] = ("b");
+				binding bind b = a;
+			}
+		}`))
+		inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+		if err != nil {
+			t.Fatalf("instantiate: %v", err)
+		}
+		_, err = inst.GetFeatureValue(ctx, "b")
+		if !errors.Is(err, ErrBindingConflict) {
+			t.Fatalf("GetFeatureValue(b) = %v, want ErrBindingConflict", err)
+		}
+		if got, want := err.Error(),
+			`binding conflict: b = ["b"], a = ["a"]`; got != want {
+			t.Errorf("conflict error = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("integers", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-integer-conflict>", parseAndBuild(t, `package P {
+			part def Sys {
+				attribute a : Integer[*] = (1);
+				attribute b : Integer[*] = (65537);
+				binding bind b = a;
+			}
+		}`))
+		inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+		if err != nil {
+			t.Fatalf("instantiate: %v", err)
+		}
+		_, err = inst.GetFeatureValue(ctx, "b")
+		if !errors.Is(err, ErrBindingConflict) {
+			t.Fatalf("GetFeatureValue(b) = %v, want ErrBindingConflict", err)
+		}
+		if got, want := err.Error(),
+			"binding conflict: b = [65537], a = [1]"; got != want {
+			t.Errorf("conflict error = %q, want %q", got, want)
+		}
+	})
+}
+
+func testBindingMultipleScalarContributors(t *testing.T) {
+	t.Run("unequal", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-multiple-scalar-conflict>", parseAndBuild(t, `package P {
+			part def Sys {
+				attribute a;
+				attribute b = 1;
+				attribute c = 2;
+				bind a = b;
+				bind a = c;
+			}
+		}`))
+		inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+		if err != nil {
+			t.Fatalf("instantiate: %v", err)
+		}
+		_, err = inst.GetFeatureValue(ctx, "a")
+		if !errors.Is(err, ErrBindingConflict) {
+			t.Fatalf("GetFeatureValue(a) = %v, want ErrBindingConflict", err)
+		}
+		if got, want := err.Error(), "binding conflict at Sys.a: b = 1, c = 2"; got != want {
+			t.Errorf("conflict error = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("equal", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-multiple-scalar-equal>", parseAndBuild(t, `package P {
+			part def Sys {
+				attribute a;
+				attribute b = 1;
+				attribute c = 1;
+				bind a = b;
+				bind a = c;
+			}
+		}`))
+		inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+		if err != nil {
+			t.Fatalf("instantiate: %v", err)
+		}
+		fv, err := inst.GetFeatureValue(ctx, "a")
+		if err != nil {
+			t.Fatalf("GetFeatureValue(a): %v", err)
+		}
+		if got := fv.HeldValue().Const.Int; got != 1 {
+			t.Errorf("a = %d, want 1", got)
+		}
+	})
+}
+
+func testBindingMultipleCollectionContributors(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<binding-multiple-collection-contributors>", parseAndBuild(t, `package P {
+		part def Sys {
+			attribute edges : Integer[*];
+			attribute leftEdge : Integer[0..1] = (1);
+			attribute rightEdge : Integer[0..1] = (2);
+			binding [1] bind [0..1] edges = [0..1] leftEdge;
+			binding [1] bind [0..1] edges = [0..1] rightEdge;
+		}
+	}`))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	_, err = inst.GetFeatureValue(ctx, "edges")
+	if !errors.Is(err, ErrBindingEnd) {
+		t.Fatalf("GetFeatureValue(edges) = %v, want ErrBindingEnd", err)
+	}
+	if !strings.Contains(err.Error(), "multiple bindings contribute to multi-valued endpoint") ||
+		!strings.Contains(err.Error(), "edges") {
+		t.Errorf("error %q does not name the unsupported multiple-contributor endpoint", err)
+	}
+	fv := inst.FeatureValues["edges"]
+	if fv.Materialized || fv.Written || fv.BindingDerived || fv.HeldValue().Kind != ValInvalid {
+		t.Errorf("unsupported binding left an assignment behind: %+v", *fv)
+	}
+}
+
+func testBindingPropagationSpendsElementBudget(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<binding-element-budget>", parseAndBuild(t, `package P {
+		part def Sys {
+			attribute a : Integer[*] = (1, 2, 3);
+			attribute b : Integer[*];
+			bind b = a;
+		}
+	}`))
+	ctx.maxElements = 2
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	_, err = inst.GetFeatureValue(ctx, "b")
+	if !errors.Is(err, ErrElementLimitExceeded) {
+		t.Fatalf("GetFeatureValue(b) = %v, want ErrElementLimitExceeded", err)
+	}
+}
+
+func testBindingDistinctMaterializedObjectsConflict(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<binding-distinct-objects>", parseAndBuild(t, `package P {
+		part def A {
+			attribute q = 1;
+		}
+		part def Sys {
+			part p1 : A;
+			part p2 : A;
+			binding bind p1 = p2;
+		}
+	}`))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	if _, err := inst.materializeFeatureValueIntrinsic(ctx, "p1"); err != nil {
+		t.Fatalf("materialize p1: %v", err)
+	}
+	if _, err := inst.materializeFeatureValueIntrinsic(ctx, "p2"); err != nil {
+		t.Fatalf("materialize p2: %v", err)
+	}
+	_, err = inst.GetFeatureValue(ctx, "p1")
+	if !errors.Is(err, ErrBindingConflict) {
+		t.Fatalf("GetFeatureValue(p1) = %v, want ErrBindingConflict", err)
+	}
+}
+
+func testBindingNamedSingleEndDoesNotPoisonRead(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<binding-named-single-end>", parseAndBuild(t, `package P {
+		part def Sys {
+			attribute a = 5;
+			binding bnd = a;
+		}
+	}`))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	fv, err := inst.GetFeatureValue(ctx, "a")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(a) = %v, want 5", err)
+	}
+	if got := fv.HeldValue(); got.Kind != ValConst || got.Const.Int != 5 {
+		t.Errorf("a = %#v, want integer 5", got)
+	}
+}
+
+func testBindingCycle(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<binding-cycle>", parseAndBuild(t, `package P {
+		part def Sys {
+			attribute a;
+			attribute b;
+			binding bind a = b;
+			binding bind b = a;
+		}
+	}`))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	_, err = inst.GetFeatureValue(ctx, "a")
+	if !errors.Is(err, ErrBindingCycle) {
+		t.Fatalf("GetFeatureValue(a) = %v, want ErrBindingCycle", err)
+	}
+	if !strings.Contains(err.Error(), "a") || !strings.Contains(err.Error(), "b") {
+		t.Errorf("cycle error %q does not name both ends", err)
+	}
+}
+
+func testBindingSingleValueless(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<binding-single-valueless>", parseAndBuild(t, `package P {
+		part def Sys {
+			attribute a;
+			attribute b;
+			binding bind b = a;
+		}
+	}`))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	for _, name := range []string{"a", "b"} {
+		fv, err := inst.GetFeatureValue(ctx, name)
+		if err != nil {
+			t.Fatalf("GetFeatureValue(%s): %v", name, err)
+		}
+		if got := fv.HeldValue(); got.Kind != ValInvalid {
+			t.Errorf("%s = %#v, want an unknown value", name, got)
+		}
+	}
+	sym := oneSymbol(t, idx, "P::Sys")
+	expr := parser.New(source.New("<binding-single-valueless-eval>", []byte("b"))).ParseExpression()
+	if _, err := ctx.EvalWithScopeOn(expr, sym.Scope, inst); !errors.Is(err, ErrUninitializedFeatureValue) {
+		t.Fatalf("evaluating b = %v, want ErrUninitializedFeatureValue", err)
+	}
+}
+
+func testBindingThreeBindingRing(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<binding-three-ring>", parseAndBuild(t, `package P {
+		part def Sys {
+			attribute a;
+			attribute b;
+			attribute c;
+			binding bind a = b;
+			binding bind b = c;
+			binding bind c = a;
+		}
+	}`))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	_, err = inst.GetFeatureValue(ctx, "a")
+	if !errors.Is(err, ErrBindingCycle) {
+		t.Fatalf("GetFeatureValue(a) = %v, want ErrBindingCycle", err)
+	}
+	for _, name := range []string{"a", "c"} {
+		if !strings.Contains(err.Error(), name) {
+			t.Errorf("cycle error %q does not name %s", err, name)
+		}
+	}
+}
+
+func testBindingCycleWithValue(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<binding-cycle-value>", parseAndBuild(t, `package P {
+		part def Sys {
+			attribute a = 4;
+			attribute b;
+			binding bind a = b;
+			binding bind b = a;
+		}
+	}`))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	for _, name := range []string{"a", "b"} {
+		fv, err := inst.GetFeatureValue(ctx, name)
+		if err != nil {
+			t.Fatalf("GetFeatureValue(%s): %v", name, err)
+		}
+		if fv.HeldValue().Kind != ValConst || fv.HeldValue().Const.Int != 4 {
+			t.Errorf("%s = %#v, want integer 4", name, fv.HeldValue())
+		}
+	}
+}
+
+func testBindingUnrelatedExpressionDoesNotPoisonRead(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<binding-unrelated-expression>", parseAndBuild(t, `package P {
+		part def Sys {
+			attribute a = 5;
+			attribute b;
+			attribute sibling = 8;
+			binding bind b = a + 1;
+		}
+	}`))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	fv, err := inst.GetFeatureValue(ctx, "sibling")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(sibling): %v", err)
+	}
+	if got := fv.HeldValue().Const.Int; got != 8 {
+		t.Errorf("sibling = %d, want 8", got)
+	}
+	fv, err = inst.GetFeatureValue(ctx, "b")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(b): %v", err)
+	}
+	if got := fv.HeldValue().Const.Int; got != 6 {
+		t.Errorf("b = %d, want 6", got)
+	}
+}
+
+func testBindingExpressionEndCannotReceive(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<binding-expression-end>", parseAndBuild(t, `package P {
+		part def Sys {
+			attribute a;
+			attribute b = 7;
+			binding bind b = a + 1;
+		}
+	}`))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	_, err = inst.GetFeatureValue(ctx, "b")
+	if !errors.Is(err, ErrBindingEnd) {
+		t.Fatalf("GetFeatureValue(b) = %v, want ErrBindingEnd", err)
+	}
+	if !strings.Contains(err.Error(), "a + 1") || !strings.Contains(err.Error(), "b") {
+		t.Errorf("binding endpoint error %q does not name both ends", err)
+	}
+}
+
+func testBindingResultTracksLaterMutation(t *testing.T) {
+	t.Run("initially_unresolved", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-late-value>", parseAndBuild(t, `package P {
+			part def Sys {
+				attribute a;
+				attribute b;
+				binding bind b = a;
+			}
+		}`))
+		inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+		if err != nil {
+			t.Fatalf("instantiate: %v", err)
+		}
+		if fv, err := inst.GetFeatureValue(ctx, "b"); err != nil {
+			t.Fatalf("initial GetFeatureValue(b): %v", err)
+		} else if got := fv.HeldValue(); got.Kind != ValInvalid {
+			t.Fatalf("initial b = %#v, want an unknown value", got)
+		}
+		if err := inst.SetFeatureValue(ctx, "a", constInt(9)); err != nil {
+			t.Fatalf("assign a: %v", err)
+		}
+		fv, err := inst.GetFeatureValue(ctx, "b")
+		if err != nil {
+			t.Fatalf("later GetFeatureValue(b): %v", err)
+		}
+		if got := fv.HeldValue().Const.Int; got != 9 {
+			t.Errorf("later b = %d, want 9", got)
+		}
+	})
+
+	t.Run("cached_value", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-late-change>", parseAndBuild(t, `package P {
+			part def Sys {
+				attribute a = 3;
+				attribute b;
+				binding bind b = a;
+			}
+		}`))
+		inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+		if err != nil {
+			t.Fatalf("instantiate: %v", err)
+		}
+		if fv, err := inst.GetFeatureValue(ctx, "b"); err != nil {
+			t.Fatalf("initial GetFeatureValue(b): %v", err)
+		} else if got := fv.HeldValue().Const.Int; got != 3 {
+			t.Fatalf("initial b = %d, want 3", got)
+		}
+		if err := inst.SetFeatureValue(ctx, "a", constInt(9)); err != nil {
+			t.Fatalf("assign a: %v", err)
+		}
+		fv, err := inst.GetFeatureValue(ctx, "b")
+		if err != nil {
+			t.Fatalf("later GetFeatureValue(b): %v", err)
+		}
+		if got := fv.HeldValue().Const.Int; got != 9 {
+			t.Errorf("later b = %d, want 9", got)
+		}
+	})
+
+	t.Run("derived_binding_chain", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-late-chain>", parseAndBuild(t, `package P {
+			part def Sys {
+				attribute a = 3;
+				attribute b;
+				attribute c;
+				binding bind b = a;
+				binding bind c = b;
+			}
+		}`))
+		inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+		if err != nil {
+			t.Fatalf("instantiate: %v", err)
+		}
+		if fv, err := inst.GetFeatureValue(ctx, "c"); err != nil {
+			t.Fatalf("initial GetFeatureValue(c): %v", err)
+		} else if got := fv.HeldValue().Const.Int; got != 3 {
+			t.Fatalf("initial c = %d, want 3", got)
+		}
+		if err := inst.SetFeatureValue(ctx, "a", constInt(9)); err != nil {
+			t.Fatalf("assign a: %v", err)
+		}
+		fv, err := inst.GetFeatureValue(ctx, "c")
+		if err != nil {
+			t.Fatalf("later GetFeatureValue(c): %v", err)
+		}
+		if got := fv.HeldValue().Const.Int; got != 9 {
+			t.Errorf("later c = %d, want 9", got)
+		}
+	})
+
+	t.Run("written_both_ends_conflict", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-written-both-ends>", parseAndBuild(t, `package P {
+			part def Sys {
+				attribute a;
+				attribute b;
+				binding bind b = a;
+			}
+		}`))
+		inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+		if err != nil {
+			t.Fatalf("instantiate: %v", err)
+		}
+		if err := inst.SetFeatureValue(ctx, "a", constInt(1)); err != nil {
+			t.Fatalf("assign a: %v", err)
+		}
+		if err := inst.SetFeatureValue(ctx, "b", constInt(2)); err != nil {
+			t.Fatalf("assign b: %v", err)
+		}
+		_, err = inst.GetFeatureValue(ctx, "b")
+		if !errors.Is(err, ErrBindingConflict) {
+			t.Fatalf("GetFeatureValue(b) = %v, want ErrBindingConflict", err)
+		}
+	})
+}
+
+func testBindingIncompleteEndDoesNotPoisonRead(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<binding-incomplete-end>", parseAndBuild(t, `package P {
+		part def Sys {
+			attribute x = 4;
+			bind x;
+			binding bb of x;
+		}
+	}`))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	fv, err := inst.GetFeatureValue(ctx, "x")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(x) = %v, want 4", err)
+	}
+	if got := fv.HeldValue().Const.Int; got != 4 {
+		t.Errorf("x = %d, want 4", got)
+	}
+}
+
+func testBindingNestedContainerIsNotACycle(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<binding-nested-container>", parseAndBuild(t, `package P {
+		part def Child {
+			attribute b;
+		}
+		part def Sys {
+			attribute x = 9;
+			part child : Child;
+			binding bind child.b = x;
+		}
+	}`))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	childValue, err := inst.GetFeatureValue(ctx, "child")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(child) = %v, want no binding cycle", err)
+	}
+	id, isObject := childValue.HeldValue().Object()
+	if !isObject {
+		t.Fatalf("child holds %s, want an object", childValue.HeldValue().Kind)
+	}
+	child, ok := ctx.Instance(id)
+	if !ok {
+		t.Fatalf("child instance %d is not materialized", id)
+	}
+	b, err := child.GetFeatureValue(ctx, "b")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(child.b) = %v, want 9", err)
+	}
+	if got := b.HeldValue().Const.Int; got != 9 {
+		t.Fatalf("child.b = %d, want 9", got)
+	}
 }
 
 // testSuccessionGuardFailureModes: a guard on a succession leaving an ordinary

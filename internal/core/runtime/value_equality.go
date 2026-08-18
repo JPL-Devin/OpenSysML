@@ -6,7 +6,7 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// valueKey is a comparable projection of Value for use as map key.
+// valueKey is a comparable projection of Value for use as a map key.
 type valueKey struct {
 	kind    ValueKind
 	intVal  int64
@@ -44,13 +44,10 @@ func valueKeyFunc(v Value) valueKey {
 	case ValSet:
 		key.colHash = hashSet(v.Set)
 	case ValVariant:
-		// A selection is the variant it names, whatever object it materialized.
 		key.variant = v.Variant
 	case ValEnumLiteral:
-		// A literal is its own identity, so it keys on the declaration it names.
 		key.literal = v.Literal
 	case ValQuantity:
-		// Keyed on the base-unit form, so `1 [km]` and `1000 [m]` are one element.
 		if v.Quantity != nil {
 			key.realVal = v.Quantity.baseMagnitude()
 			key.strVal = v.Quantity.Unit.Term.DimensionKey()
@@ -70,7 +67,6 @@ func hashSequence(seq *Sequence) uint64 {
 		// #nosec G115 G104 -- truncation is deliberate for a hash, and
 		// hash.Hash.Write is documented never to return an error.
 		h.Write([]byte{byte(k.kind)})
-		// Simplified: hash intVal, strVal, instID (full implementation in later task)
 		if k.intVal != 0 {
 			// #nosec G115 G104 -- see above.
 			h.Write([]byte{byte(k.intVal), byte(k.intVal >> 8)})
@@ -84,11 +80,13 @@ func hashSet(set *Set) uint64 {
 	if set == nil {
 		return 0
 	}
-	// Sum hashes of elements (order-invariant)
 	var sum uint64
-	for k := range set.elements {
-		// #nosec G115 -- wrapping is intended: this is a hash, not arithmetic.
-		sum += uint64(k.intVal)
+	for _, bucket := range set.elements {
+		for _, elem := range bucket {
+			k := valueKeyFunc(elem)
+			// #nosec G115 -- wrapping is intended: this is a hash, not arithmetic.
+			sum += uint64(k.intVal)
+		}
 	}
 	return sum
 }

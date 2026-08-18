@@ -88,6 +88,7 @@ var notKindPrefixKeywords = map[string]bool{
 	"actor": true, "expose": true, "render": true, "perform": true,
 	"include": true, "exhibit": true, "variant": true, "event": true,
 	"timeslice": true, "snapshot": true, "transition": true, "bind": true,
+	"binding": true,
 	// `individual part p` keeps the modifier; the prefix path would drop it.
 	"individual": true,
 	"in":         true, "out": true, "inout": true,
@@ -721,6 +722,10 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 			mods.isVariant = true
 		}
 		isAll := p.acceptKeyword("all")
+		if kw == "bind" {
+			u := p.parseUsage(start, usageKindKeywords[kw], kw, mods, isAll)
+			return applyPrefixes(normalizeAnonymousBindingEnd(u))
+		}
 
 		// `render` names the rendering a view uses (ViewRenderingMember) and
 		// `frame` the concern a requirement frames (FramedConcernMember). Each
@@ -2783,6 +2788,19 @@ func (p *Parser) parseReferenceMemberUsage(start int, kind ast.UsageKind, kw, no
 // it resolves outside the connector rather than as an inherited redefinition.
 func bindingEnd(target ast.Node) *ast.Relationship {
 	return &ast.Relationship{Kind: ast.RelReferences, Target: target}
+}
+
+func normalizeAnonymousBindingEnd(u *ast.Usage) *ast.Usage {
+	if u == nil || u.Kind != ast.UsageBinding || u.Ident.Name == "" || len(u.Relationships) != 0 {
+		return u
+	}
+	target := &ast.QualifiedName{
+		Parts: []ast.NameSegment{{Text: u.Ident.Name, Span: u.Ident.NameSpan}},
+	}
+	target.NodeSpan = u.Ident.NameSpan
+	u.Relationships = append(u.Relationships, bindingEnd(target))
+	u.Ident = ast.Identification{}
+	return u
 }
 
 // parseRelationshipTarget parses a relationship target which can be either:

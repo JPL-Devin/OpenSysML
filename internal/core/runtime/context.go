@@ -70,6 +70,16 @@ type Context struct {
 	// of, which a behavior that object performs routes over.
 	objectConns map[*symbols.Symbol][]lower.Connection
 
+	// objectBindings memoizes binding connectors declared by each materialized
+	// object type, including bindings inherited from its supertypes.
+	bindingIR map[*symbols.Symbol][]lower.Binding
+
+	// resolvingBindings guards binding endpoint resolution for one instance
+	// feature, so a valueless binding cycle is reported rather than recursed.
+	resolvingBindings map[featureValueRef]bool
+	bindingOwners     map[featureValueRef]*ast.Usage
+	bindingFeatures   map[*symbols.Symbol]map[string][]lower.Binding
+
 	// classifierBehaviors memoizes the behaviors each type binds to its objects:
 	// the machines it exhibits and the actions it performs.
 	classifierBehaviors map[*symbols.Symbol][]classifierBehaviorDecl
@@ -173,8 +183,12 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 
 		materializingConnectors: make(map[connectorRef]bool),
 		objectConns:             make(map[*symbols.Symbol][]lower.Connection),
+		bindingIR:               make(map[*symbols.Symbol][]lower.Binding),
 		classifierBehaviors:     make(map[*symbols.Symbol][]classifierBehaviorDecl),
 		derivingFeatureValues:   make(map[featureValueRef]bool),
+		resolvingBindings:       make(map[featureValueRef]bool),
+		bindingOwners:           make(map[featureValueRef]*ast.Usage),
+		bindingFeatures:         make(map[*symbols.Symbol]map[string][]lower.Binding),
 		collectingSubsets:       make(map[featureValueRef]bool),
 		sources:                 make(map[string]*source.SourceFile),
 	}

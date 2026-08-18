@@ -102,6 +102,8 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		// names are not all references (see resolveTrigger).
 		if d.IsAccept {
 			r.resolveTrigger(scope, d.Value)
+		} else if d.Kind == ast.UsageBinding && isImplicitCalcResult(scope, d.Value) {
+			// A calc binding may name its implicit result feature as the value end.
 		} else {
 			r.resolveExpr(scope, d.Value)
 		}
@@ -282,6 +284,41 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 	}
 }
 
+func isImplicitCalcResult(scope *symbols.Scope, node ast.Node) bool {
+	owner := scope.Owner()
+	if owner == nil {
+		return false
+	}
+	switch decl := owner.Decl.(type) {
+	case *ast.Definition:
+		if decl.Kind != ast.DefCalc {
+			return false
+		}
+	case *ast.Usage:
+		if decl.Kind != ast.UsageCalc {
+			return false
+		}
+	default:
+		return false
+	}
+	var name string
+	switch ref := node.(type) {
+	case *ast.FeatureReference:
+		if ref.Name == nil || len(ref.Name.Parts) != 1 {
+			return false
+		}
+		name = ref.Name.Parts[0].Text
+	case *ast.QualifiedName:
+		if len(ref.Parts) != 1 {
+			return false
+		}
+		name = ref.Parts[0].Text
+	default:
+		return false
+	}
+	return name == "result"
+}
+
 // resolveTrigger resolves the references a transition trigger carries.
 //
 // A bare name after `when` is classified by lowering as a signal, and signals
@@ -438,6 +475,9 @@ func (r *Resolver) resolveRelationships(scope *symbols.Scope, decl ast.Node, rel
 					r.resolveRedefinition(scope, qn, decl)
 					continue
 				}
+			}
+			if rel.Kind == ast.RelReferences && isImplicitCalcResult(scope, target) {
+				continue
 			}
 
 			// A reference subsetting resolves its leading segment past the

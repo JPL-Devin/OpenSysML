@@ -1445,7 +1445,7 @@ func sequenceEqual(a, b *Sequence) bool {
 	return true
 }
 
-// setEqual checks set equality (same keys via valueKey).
+// setEqual checks set equality as an unordered multiset of exact values.
 func setEqual(a, b *Set) bool {
 	if a == nil || b == nil {
 		return a == b
@@ -1453,8 +1453,18 @@ func setEqual(a, b *Set) bool {
 	if a.Size() != b.Size() {
 		return false
 	}
-	for key := range a.elements {
-		if _, exists := b.elements[key]; !exists {
+	used := make([]bool, b.Size())
+	rights := b.Elements()
+	for _, left := range a.Elements() {
+		found := false
+		for i, right := range rights {
+			if !used[i] && valueEqual(left, right) {
+				used[i] = true
+				found = true
+				break
+			}
+		}
+		if !found {
 			return false
 		}
 	}

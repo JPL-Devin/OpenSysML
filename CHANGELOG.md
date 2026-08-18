@@ -6,14 +6,21 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ## Unreleased
 
+### Binding connector runtime semantics
+
+- **Bindings declared in materialized type and usage bodies now propagate values in both
+  directions**, including inherited and nested ends, with typed conflict and cycle errors;
+  calc result bindings such as `bind result = x` are also evaluated. Package-owned bindings
+  remain a documented limitation.
+
 ### A named control node is a member, and a chained binding declares none
 
 - **`fork`, `join`, `merge` and `decision` register the name they declare**, the way `first`/`done`
   already do, so `first Jump then Land;` names a control node as source or target instead of
   reporting it unresolved. An unnamed control node declares no name and registers nothing.
-- **A binding's end no longer names the binding.** `bind a.b.c = d;` records `a.b.c` as a reference
-  subsetting — the end it binds, not a name the binding answers to — so `%search` and the symbol
-  table no longer carry a stray `c` in the binding's owner.
+ - **A binding's end no longer names the binding.** `bind a.b.c = d;` records `a.b.c` as a reference
+   subsetting — the end it binds, not a name the binding answers to — so `%search` and the symbol
+   table no longer carry a stray `c` in the binding's owner.
 
 ### A view renders
 

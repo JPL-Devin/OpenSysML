@@ -849,7 +849,7 @@ func runInstanceConformance(t *testing.T, ctx *Context, idx *symbols.Index, expe
 	}
 
 	for name, expectedVal := range expected.FeatureValues {
-		fv, err := inst.GetFeatureValue(ctx, name)
+		fv, err := featureValueAtPath(t, ctx, inst, name)
 		if expectedVal.Error != "" {
 			requireError(t, "feature value "+name, err, expectedVal.Error)
 			continue
@@ -879,6 +879,29 @@ func runInstanceConformance(t *testing.T, ctx *Context, idx *symbols.Index, expe
 			t.Errorf("constraint %q: satisfied = %v, want %v", name, satisfied, wantSatisfied)
 		}
 	}
+}
+
+// featureValueAtPath reads a slot on the instance or on a nested object.
+func featureValueAtPath(t *testing.T, ctx *Context, inst *Instance, path string) (*FeatureValue, error) {
+	t.Helper()
+	current := inst
+	parts := strings.Split(path, ".")
+	for i, name := range parts {
+		fv, err := current.GetFeatureValue(ctx, name)
+		if err != nil || i == len(parts)-1 {
+			return fv, err
+		}
+		id, ok := fv.HeldValue().Object()
+		if !ok {
+			return nil, fmt.Errorf("%s: %q holds %s, want an object", path, name, fv.HeldValue().Kind)
+		}
+		next, ok := ctx.Instance(id)
+		if !ok {
+			return nil, fmt.Errorf("%s: object %d is not materialized", path, id)
+		}
+		current = next
+	}
+	return nil, fmt.Errorf("empty feature path %q", path)
 }
 
 // validateIdentity checks the identity a case states between the objects two

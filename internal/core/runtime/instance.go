@@ -69,11 +69,12 @@ func (inst *Instance) keepConnector(fv *FeatureValue, id int64) {
 
 // Feature value holds the runtime value(s) for one feature.
 type FeatureValue struct {
-	Feature      *EffectiveFeature
-	Value        Value // scalar feature value (multiplicity [1])
-	Values       Value // collection feature value (Sequence or Set)
-	Materialized bool  // lazy flag: has this feature value been instantiated?
-	Written      bool  // a run assigned this value, so no default derives it again
+	Feature        *EffectiveFeature
+	Value          Value // scalar feature value (multiplicity [1])
+	Values         Value // collection feature value (Sequence or Set)
+	Materialized   bool  // lazy flag: has this feature value been instantiated?
+	Written        bool  // a run assigned this value, so no default derives it again
+	BindingDerived bool  // value came from binding propagation rather than a write
 }
 
 // HeldValue is the value the feature value reads as: its collection when the feature is
@@ -348,6 +349,7 @@ func (inst *Instance) SetFeatureValue(ctx *Context, name string, value Value) er
 		fv.Value = Value{}
 	}
 	fv.Materialized, fv.Written = true, true
+	fv.BindingDerived = false
 	return nil
 }
 
@@ -358,10 +360,27 @@ func (inst *Instance) materializeFeatureValue(ctx *Context, name string) (*Featu
 
 	fv := inst.FeatureValues[name]
 
+	if val, found, err := ctx.resolveBindingValue(inst, name); err != nil {
+		return nil, err
+	} else if found {
+		if err := ctx.assignBindingValue(inst, fv, name, val); err != nil {
+			return nil, err
+		}
+		return fv, nil
+	}
+
 	// If already materialized, return
 	if fv.Materialized {
 		return fv, nil
 	}
+
+	return inst.materializeFeatureValueIntrinsic(ctx, name)
+}
+
+// materializeFeatureValueIntrinsic evaluates a feature without following
+// binding connectors; binding resolution calls it to inspect an endpoint.
+func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string) (*FeatureValue, error) {
+	fv := inst.FeatureValues[name]
 
 	// A variation holds the variant it was bound to, and nothing until it is
 	// bound: it classifies its variants abstractly, so it is no object of itself.
