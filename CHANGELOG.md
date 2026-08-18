@@ -100,6 +100,16 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   `ErrValuedFeatureRestated` (two values, neither more specific), and a body that only re-declares
   features (`attribute :>> kept { attribute :>> v; }`) still reads the inherited value.
 
+### Names nested inside a `require`/`assume` body are resolved
+
+- **A `require`/`assume` body now resolves to whatever depth it is written to.** Where only its
+  direct members resolved, a declaration nested in it (`require Q::r { part p : P { :>> f; } }`)
+  had its own body left unwalked, so a typo there produced no diagnostic at all; such a name is
+  now resolved and, if it names nothing, reported at its own span.
+- The body is a scope of its own: what it declares is visible to what nests inside it but is no
+  member of the namespace that declares the member, and the referenced requirement's features stay
+  offered to the body's direct members, which is what the reference subsetting inherits them to.
+
 ## 0.1.0 — 2026-08-17
 
 ### RDF conversion is experimental

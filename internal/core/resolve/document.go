@@ -189,10 +189,10 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		r.walkMembers(scope, d.Body)
 	case *ast.AssumeMember:
 		r.resolveExpr(scope, d.Expression)
-		r.walkConstraintBody(scope, r.resolveConstraintReference(scope, d.Reference), d.Body)
+		r.walkConstraintBody(scope, d, r.resolveConstraintReference(scope, d.Reference), d.Body)
 	case *ast.RequireMember:
 		r.resolveExpr(scope, d.Expression)
-		r.walkConstraintBody(scope, r.resolveConstraintReference(scope, d.Reference), d.Body)
+		r.walkConstraintBody(scope, d, r.resolveConstraintReference(scope, d.Reference), d.Body)
 	case *ast.EntryMember:
 		r.walkMembers(scope, d.Actions)
 	case *ast.DoMember:
@@ -470,15 +470,20 @@ func (r *Resolver) resolveConstraintReference(scope *symbols.Scope, ref *ast.Qua
 	return sym
 }
 
-// walkConstraintBody walks the body of a require/assume member. The member
+// walkConstraintBody walks the body of a require/assume member, in the scope its
+// declarations were built into so that nested bodies resolve too. The member
 // reference-subsets the requirement ref, so the body may redefine that
 // requirement's features by plain name (SysML.xtext RequirementConstraintUsage).
-func (r *Resolver) walkConstraintBody(scope *symbols.Scope, ref *symbols.Symbol, body []ast.Node) {
+func (r *Resolver) walkConstraintBody(scope *symbols.Scope, decl ast.Node, ref *symbols.Symbol, body []ast.Node) {
+	scope = symbols.ConstraintBodyScope(scope, decl)
+	if scope == nil {
+		return
+	}
 	if ref != nil {
 		members := make(map[ast.Node]bool, len(body))
 		for _, m := range body {
-			decl, _ := unwrapForResolve(m)
-			members[decl] = true
+			member, _ := unwrapForResolve(m)
+			members[member] = true
 		}
 		r.constraintRefs = append(r.constraintRefs, constraintRef{ref: ref, members: members})
 		defer func() { r.constraintRefs = r.constraintRefs[:len(r.constraintRefs)-1] }()
