@@ -202,6 +202,16 @@ main.sysml  package Main { import Lib::*; part w : Widget; }
 - `key` actions take ONE combo: `"shift+Down shift+Down"` errors with `unknown key`; send two actions.
 - Opening a file by name with `ctrl+p` → type `lib.sysml` → Enter is far more reliable than clicking
   the Explorer tree, especially after the sidebar has been toggled.
+- **Do not use "completion after `Qualifier::`" as the completion oracle.** As of 0b239642 typing
+  `attribute a : ScalarValues::` and pressing `ctrl+space` yields "No suggestions", and with a
+  trailing `::` the file is also a syntax error (`expected a name after '::'`), which suppresses
+  semantic completion. Use a *plain* name prefix instead: in a syntactically valid file, `Wh` +
+  `ctrl+space` returns LSP items with a type detail (e.g. `Wheel  partDef`) — the detail column is
+  what distinguishes real LSP items from VS Code's word-based (`abc` icon) suggestions.
+- A stray `u` from `ctrl+shift+u` is easiest to remove by selecting the whole buffer (`ctrl+a`) and
+  retyping the fixture; `ctrl+z` after an LSP-driven edit sometimes only reverts part of it.
+- After rebuilding `bin/sysml-lsp`, run Command Palette **"Developer: Reload Window"** so the client
+  respawns against the new binary; killing the server process alone can leave the old one in use.
 
 ## Recording tips
 
