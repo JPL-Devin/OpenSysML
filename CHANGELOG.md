@@ -17,8 +17,7 @@ artifacts they describe really were called that.
 - **The binaries are unchanged** — `sysml`, `sysml-lsp` and `sysml-grpc` keep their names.
 - **The Python client is `opensysml`**, on PyPI and as the import: `pip install opensysml`,
   `import opensysml`. Its environment variables are `OPENSYSML_*` (`OPENSYSML_GRPC_VERSION`,
-  `OPENSYSML_STATE_DIR`, `OPENSYSML_GITHUB_REPO`, `OPENSYSML_GRPC_BINARY`, `OPENSYSML_VERSION`,
-  `OPENSYSML_REQUIRE_VERSION`, `OPENSYSML_PRE_RELEASE`, `OPENSYSML_ALLOW_UNPINNED_DOWNLOAD`,
+  `OPENSYSML_STATE_DIR`, `OPENSYSML_GITHUB_REPO`, `OPENSYSML_ALLOW_UNPINNED_DOWNLOAD`,
   `OPENSYSML_REQUIRE_SERVICE`), the base error is `OpenSysMLError`, the generator entry point is
   `opensysml-generate`, the state directory is `~/.opensysml` and the release tag is
   `opensysml-v*`. Nothing reads the `pysysml` names, so a `~/.pysysml` left behind by an older
