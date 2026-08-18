@@ -24,7 +24,7 @@ func synthesised(result *Result) map[string]string {
 // any height under the bound is as good an answer.
 func TestSynthesisFillsWhatIsNotFixed(t *testing.T) {
 	solver := requireSolver(t)
-	_, _, q := pinnedQuery(t, "test::Panel::fits")
+	_, _, q := fixedQuery(t, "test::Panel::fits")
 	result, err := solver.Solve(context.Background(), q)
 	if err != nil {
 		t.Fatalf("solve: %v", err)
@@ -50,7 +50,7 @@ func TestSynthesisFillsWhatIsNotFixed(t *testing.T) {
 // than the constraint being unsatisfiable on its own.
 func TestSynthesisIsUnsatWhenTheFixedValuesForbidIt(t *testing.T) {
 	solver := requireSolver(t)
-	_, _, q := pinnedQuery(t, "test::Panel::polishedIsWide")
+	_, _, q := fixedQuery(t, "test::Panel::polishedIsWide")
 	result, err := solver.Solve(context.Background(), q)
 	if err != nil {
 		t.Fatalf("solve: %v", err)
@@ -78,7 +78,7 @@ func TestSynthesisIsUnsatWhenTheFixedValuesForbidIt(t *testing.T) {
 // values taking part, which is what tells a reader which of them to change.
 func TestFixedValuesInAConflictAreNamed(t *testing.T) {
 	solver := requireSolver(t)
-	_, _, q := pinnedQuery(t, "test::Panel::polishedIsWide")
+	_, _, q := fixedQuery(t, "test::Panel::polishedIsWide")
 	result, err := solver.Explain(context.Background(), q)
 	if err != nil {
 		t.Fatalf("explain: %v", err)
