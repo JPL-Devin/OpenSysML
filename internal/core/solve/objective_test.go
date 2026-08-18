@@ -249,6 +249,9 @@ func TestObjectiveWithGuardedDivision(t *testing.T) {
 	if got := writeTerm(q.Objectives[0].Term); got != "|test::GuardedRatio::parts|" {
 		t.Errorf("objective term is %s", got)
 	}
+	if !q.Nonlinear {
+		t.Error("a query dividing by a variable is not marked nonlinear")
+	}
 }
 
 // TestObjectiveRefusals: every objective outside the translatable subset refuses
@@ -260,6 +263,9 @@ func TestObjectiveRefusals(t *testing.T) {
 		says     []string
 	}{
 		{"NonlinearGain", ErrNotOptimizable, []string{"objective bestGain", "nonlinear", "objectives.sysml:"}},
+		// The nonlinearity is judged of the objective, not of the conditions it
+		// is optimized within, which are nonlinear here too.
+		{"GuardedNonlinearGain", ErrNotOptimizable, []string{"objective bestGain", "nonlinear"}},
 		{"UndirectedGoal", ErrNotOptimizable, []string{"objective goal", "no direction",
 			"TradeStudies::MinimizeObjective"}},
 		{"ValuelessGoal", ErrNotOptimizable, []string{"objective goal", "no value", "attribute :>> best"}},

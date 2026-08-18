@@ -88,8 +88,13 @@ func (t *translator) objective(obj runtime.Objective) (Objective, error) {
 			"state the value to optimize as the objective's best one (`objective o : "+
 				directionTypeName(direction)+" { attribute :>> best = expression; }`)")
 	}
-	linear := !t.nonlinear
+	// The flag is query-wide, so it is judged of the objective's own term alone:
+	// a condition that is already nonlinear says nothing about the objective.
+	outer := t.nonlinear
+	t.nonlinear = false
 	term, err := t.expr(obj.Value, obj.Scope)
+	nonlinear := t.nonlinear
+	t.nonlinear = outer || nonlinear
 	if err != nil {
 		return Objective{}, err
 	}
@@ -97,7 +102,7 @@ func (t *translator) objective(obj runtime.Objective) (Objective, error) {
 		return Objective{}, t.refuseObjective(obj,
 			"states a value of sort "+term.Sort.Name+" rather than a number", "")
 	}
-	if linear && t.nonlinear {
+	if nonlinear {
 		return Objective{}, t.refuseObjective(obj, "states a nonlinear value",
 			"an optimizer improves a linear objective; a product or quotient of two "+
 				"computed values is not one")

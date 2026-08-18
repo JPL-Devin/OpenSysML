@@ -148,6 +148,22 @@ package test {
 		}
 	}
 
+	// A nonlinear objective in a case whose conditions are already nonlinear
+	// through a guarded division, which says nothing about the objective.
+	analysis def GuardedNonlinearGain {
+		attribute total : Integer;
+		attribute parts : Integer;
+		require constraint {
+			total / parts >= 2
+		}
+		require constraint {
+			parts >= 1 and parts <= 4
+		}
+		objective bestGain : MaximizeObjective {
+			attribute :>> best = total * parts;
+		}
+	}
+
 	// An objective whose value is a product of two computed values, which an
 	// optimizer does not improve.
 	analysis def NonlinearGain {
