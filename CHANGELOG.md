@@ -12,18 +12,21 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   into a containment tree where it states none. The kinds produced are a tree (the exposed elements
   with their kinds and names, nested views as subtrees), an interconnection diagram (the exposed
   parts and the connections between them, read from the model's own connector and flow ends), a
-  state machine (states and transitions) and an action flow (nodes and successions). State and
+  state machine (states and transitions), an action flow (nodes and successions) and a table (the
+  exposed elements, what they declare and the views nested in the rendered one, as rows). State and
   action renderings read the lowered `StateGraph`/`ActionGraph` the runtime executes, so a rendering
   cannot drift from what runs.
-- **`%render <name> mermaid` writes the same rendering as a Mermaid diagram** — `flowchart TD` for a
-  tree or an action, `flowchart LR` for an interconnection, `stateDiagram-v2` for a state machine —
-  which pastes into Markdown, a documentation site or an editor as-is. Text stays the default at the
-  prompt.
-- **`sysml model.sysml -render <view>` renders without the prompt**: the artifact on stdout, Mermaid
-  by default and `-render-form text` for the indented form, `-o` writing it to a file, and every
-  human notice — what was loaded, an empty rendering, an element the rendering cannot represent — on
-  stderr. Rendering decides nothing about the model, so it is not asked for together with `-convert`
-  or a check flag.
+- **`%render <name> <form>` writes the machine-readable form of the rendering**: `mermaid` for the
+  graph-shaped kinds — `flowchart TD` for a tree or an action, `flowchart LR` for an
+  interconnection, `stateDiagram-v2` for a state machine — and `markdown` for a table, which Mermaid
+  has no grammar for. Either pastes into Markdown, a documentation site or an editor as-is, and text
+  stays the default at the prompt. A form the kind is not written in is a typed error naming the one
+  it is.
+- **`sysml model.sysml -render <view>` renders without the prompt**: the artifact on stdout, the
+  kind's machine-readable form by default and `-render-form text` for the read form, `-o` writing it
+  to a file, and every human notice — what was loaded, an empty rendering, an element the rendering
+  cannot represent — on stderr. Rendering decides nothing about the model, so it is not asked for
+  together with `-convert` or a check flag.
 - **Rendering is a read.** `%render` materializes no object, registers nothing in the session and
   leaves an `%action`/`%state` debugging session stepping the same graph and the same objects, so it
   can be asked between two `%step`s. `%view`'s report is unchanged.

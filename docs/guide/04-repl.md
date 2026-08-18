@@ -172,8 +172,8 @@ nested inside another element — and at most three of them.
 
 `%render <name>` turns the exposed set into the rendering the view's `render` member states —
 a containment tree with nested views as subtrees, an interconnection diagram of the exposed parts and
-the connections between them, a state machine's states and transitions, or an action's nodes and
-successions — and a tree where the view states none:
+the connections between them, a state machine's states and transitions, an action's nodes and
+successions, or a table of the exposed elements — and a tree where the view states none:
 
 ```
 sysml> %render Demo::summary
@@ -185,10 +185,15 @@ view Demo::summary::detail
   part def Demo::Wheel
 ```
 
-`%render <name> mermaid` writes the same rendering as a Mermaid diagram, which pastes into
-Markdown or an editor as-is. State and action renderings read the lowered graphs the runtime
-executes, so what is drawn is what runs; the rendering itself is this tool's output, since SysML v2
-§10.2 specifies the notation, not how a tool draws it.
+A view stating `render asElementTable;` renders as rows instead — the exposed elements, what they
+declare, and the views nested in the rendered one — as aligned columns.
+
+`%render <name> mermaid` writes a graph-shaped rendering as a Mermaid diagram, and
+`%render <name> markdown` writes a table as a Markdown table; either pastes into Markdown or an
+editor as-is, and asking for a form the kind is not written in names the one it is. State and action
+renderings read the lowered graphs the runtime executes, so what is drawn is what runs; the
+rendering itself is this tool's output, since SysML v2 §10.2 specifies the notation, not how a tool
+draws it.
 
 Rendering reads the model and nothing else: it creates no object, and a `%render` between two
 `%step`s leaves an action or state debugging session exactly where it was. A view exposing nothing

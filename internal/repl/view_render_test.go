@@ -75,9 +75,35 @@ func TestRenderOfANonViewIsTyped(t *testing.T) {
 // rather than rendering something else.
 func TestRenderOfAnUnsupportedKindNamesIt(t *testing.T) {
 	s := viewSession(t)
+	res := s.Submit(`package Sequenced {
+    private import StandardViewDefinitions::*;
+    view messages : SequenceView {
+        expose Demo::Vehicle;
+    }
+}`)
+	for _, d := range res.Diagnostics {
+		if d.Severity == passes.SeverityError {
+			t.Fatalf("the view did not load: %v", res.Diagnostics)
+		}
+	}
+	_, err := s.ViewRendering("Sequenced::messages")
+	if !errors.Is(err, view.ErrUnsupportedKind) {
+		t.Fatalf("err = %v, want view.ErrUnsupportedKind", err)
+	}
+	for _, want := range []string{"Sequenced::messages", "sequence"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("err = %q, want it to name %q", err, want)
+		}
+	}
+}
+
+// A view stating the tabular rendering renders rows: aligned columns as text, a
+// Markdown table as the machine-readable form, and a typed error for Mermaid.
+func TestRenderOfATabularView(t *testing.T) {
+	s := viewSession(t)
 	res := s.Submit(`package Tabular {
     private import Views::*;
-    view table {
+    view parts {
         expose Demo::Vehicle;
         render asElementTable;
     }
@@ -87,14 +113,17 @@ func TestRenderOfAnUnsupportedKindNamesIt(t *testing.T) {
 			t.Fatalf("the view did not load: %v", res.Diagnostics)
 		}
 	}
-	_, err := s.ViewRendering("Tabular::table")
-	if !errors.Is(err, view.ErrUnsupportedKind) {
-		t.Fatalf("err = %v, want view.ErrUnsupportedKind", err)
-	}
-	for _, want := range []string{"Tabular::table", "table"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("err = %q, want it to name %q", err, want)
+	text := run(t, s, "%render Tabular::parts")
+	for _, want := range []string{"Tabular::parts", "table rendering", "Element", "Declared in", "Demo::Vehicle"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the table is missing %q:\n%s", want, text)
 		}
+	}
+	if markdown := run(t, s, "%render Tabular::parts markdown"); !strings.Contains(markdown, "| Element | Kind | Type | Declared in |") {
+		t.Errorf("the Markdown form is no table:\n%s", markdown)
+	}
+	if out := run(t, s, "%render Tabular::parts mermaid"); !strings.Contains(out, "error: ") {
+		t.Errorf("Mermaid of a table = %v, want an error line naming the form", out)
 	}
 }
 
@@ -136,8 +165,50 @@ func TestRenderIsInHelpAndCompletion(t *testing.T) {
 	if got := s.Complete("%render Demo::sum", len("%render Demo::sum")); !slices.Contains(got.Candidates, "Demo::summary") {
 		t.Errorf("completing a view name offered %v", got.Candidates)
 	}
-	if got := s.Complete("%render Demo::summary ", len("%render Demo::summary ")); !slices.Contains(got.Candidates, "mermaid") {
-		t.Errorf("completing the form offered %v, want mermaid", got.Candidates)
+	for _, form := range []string{"text", "mermaid", "markdown"} {
+		if got := s.Complete("%render Demo::summary ", len("%render Demo::summary ")); !slices.Contains(got.Candidates, form) {
+			t.Errorf("completing the form offered %v, want %s", got.Candidates, form)
+		}
+	}
+}
+
+// A view whose name is unrestricted is rendered, named and completed with its
+// quotes: the name holding a space stays one argument, and the form is offered
+// only once that name is closed.
+func TestRenderOfAViewWithAnUnrestrictedName(t *testing.T) {
+	s := viewSession(t)
+	res := s.Submit(`package Quoted {
+    view 'My Summary' {
+        expose Demo::Vehicle;
+    }
+    view 'frame' {
+        expose Demo::Wheel;
+    }
+}`)
+	for _, d := range res.Diagnostics {
+		if d.Severity == passes.SeverityError {
+			t.Fatalf("the views did not load: %v", res.Diagnostics)
+		}
+	}
+	if text := run(t, s, "%render Quoted::'My Summary'"); !strings.Contains(text, "Quoted::'My Summary' — tree rendering") {
+		t.Errorf("a quoted view name is not rendered under its written name:\n%s", text)
+	}
+	// A name spelling a keyword is written with its quotes, so it can be typed back.
+	if text := run(t, s, "%render Quoted::'frame'"); !strings.Contains(text, "Quoted::'frame' — tree rendering") {
+		t.Errorf("a keyword view name is not written with its quotes:\n%s", text)
+	}
+	// A quoted name still being typed is not yet the form position, so the
+	// space inside it offers no form.
+	head := "%render Quoted::'My Sum"
+	for _, form := range renderForms() {
+		if got := s.Complete(head, len(head)); slices.Contains(got.Candidates, form) {
+			t.Errorf("completing inside an unfinished quoted name offered the form %s: %v", form, got.Candidates)
+		}
+	}
+	// A closed quoted name holding a space is one argument, so the form follows it.
+	head = "%render Quoted::'My Summary' "
+	if got := s.Complete(head, len(head)); !slices.Contains(got.Candidates, "mermaid") {
+		t.Errorf("completing the form after a quoted name offered %v", got.Candidates)
 	}
 }
 

@@ -4,28 +4,19 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/export"
 	"github.com/Open-MBEE/Systemica/internal/core/view"
 )
 
-// renderForms are the forms -render-form takes: the Mermaid diagram a tool reads,
-// and the indented text a person reads.
-const (
-	formMermaid = "mermaid"
-	formText    = "text"
-)
-
 // runRender renders the view -render names of the model named on the command
 // line, writing the artifact to -o or to stdout and every notice to stderr.
 func runRender(files []string) error {
-	form := renderForm
-	if form == "" {
-		form = formMermaid
-	}
-	if form != formMermaid && form != formText {
-		return fmt.Errorf("unknown rendering form %q; -render-form takes %s or %s", renderForm, formMermaid, formText)
+	form := view.Form(renderForm)
+	if renderForm != "" && !slices.Contains(view.Forms(), form) {
+		return fmt.Errorf("unknown rendering form %q; -render-form takes %s", renderForm, formList())
 	}
 	if len(files) == 0 {
 		return errors.New("no model to render; name the file the view is declared in, as `sysml model.sysml -render MyView`")
@@ -51,12 +42,26 @@ func runRender(files []string) error {
 	if err != nil {
 		return err
 	}
-	artifact := rendering.Text()
-	if form == formMermaid {
-		artifact = rendering.Mermaid()
+	// No form named writes the machine-readable one of the kind rendered: a
+	// Mermaid diagram of a graph, a Markdown table of a table.
+	if form == "" {
+		form = rendering.Kind.MachineForm()
+	}
+	artifact, err := rendering.Write(form)
+	if err != nil {
+		return err
 	}
 	reportRenderNotices(rendering)
 	return writeArtifact(artifact, form)
+}
+
+// formList names the forms -render-form takes, as its help and errors spell them.
+func formList() string {
+	names := make([]string, 0, len(view.Forms()))
+	for _, form := range view.Forms() {
+		names = append(names, string(form))
+	}
+	return strings.Join(names, ", ")
 }
 
 // reportRenderNotices reports on stderr what the rendering says about itself: an
@@ -71,7 +76,7 @@ func reportRenderNotices(rendering *view.Rendering) {
 }
 
 // writeArtifact writes the rendering to -o, or to stdout when no file was named.
-func writeArtifact(artifact, form string) error {
+func writeArtifact(artifact string, form view.Form) error {
 	out := []byte(strings.TrimRight(artifact, "\n") + "\n")
 	if outputPath == "" {
 		_, err := os.Stdout.Write(out)

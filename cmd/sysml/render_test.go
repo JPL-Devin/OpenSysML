@@ -13,6 +13,7 @@ const renderModel = `package Demo {
     part def Vehicle { part wheel : Wheel; }
     part def Wheel;
     view overview { expose Demo::Vehicle; }
+    view parts { expose Demo::Vehicle; render Views::asElementTable; }
     view empty;
 }
 `
@@ -56,6 +57,30 @@ func TestRenderTextFormAndOutputFile(t *testing.T) {
 	}
 	if strings.Contains(string(written), "wrote ") {
 		t.Errorf("the file carries a line about the run:\n%s", written)
+	}
+}
+
+// A tabular view writes a Markdown table by default and aligned columns as text,
+// since a table is no Mermaid diagram.
+func TestRenderOfATabularView(t *testing.T) {
+	binary := buildCLI(t)
+
+	got := runStreams(t, binary, renderModel, "-render", "Demo::parts")
+	if got.status != exitHolds {
+		t.Fatalf("exit status = %d, want %d\n%s", got.status, exitHolds, got.output())
+	}
+	for _, want := range []string{"| Element | Kind | Type | Declared in |", "| Demo::Vehicle | part def |"} {
+		if !strings.Contains(got.stdout, want) {
+			t.Errorf("stdout is missing %q:\n%s", want, got.stdout)
+		}
+	}
+	text := runStreams(t, binary, renderModel, "-render", "Demo::parts", "-render-form", "text")
+	if !strings.Contains(text.stdout, "Declared in") || !strings.Contains(text.stdout, "\n-----") {
+		t.Errorf("the text form is no aligned table:\n%s", text.stdout)
+	}
+	mermaid := runStreams(t, binary, renderModel, "-render", "Demo::parts", "-render-form", "mermaid")
+	if mermaid.status != exitUnevaluable || !strings.Contains(mermaid.stderr, "ask for text or markdown") {
+		t.Errorf("Mermaid of a table = %d\n%s", mermaid.status, mermaid.output())
 	}
 }
 

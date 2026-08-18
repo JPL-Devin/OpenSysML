@@ -11,12 +11,6 @@ package ErrorViews {
 		private import Kit::*;
 	}
 
-	// A rendering kind Systemica does not produce.
-	view tabularView {
-		expose Kit::Widget;
-		render asElementTable;
-	}
-
 	// A sequence view: the notation is understood, the rendering is not produced.
 	view sequenceView : SequenceView {
 		expose Kit::Widget;

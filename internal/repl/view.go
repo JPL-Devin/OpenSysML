@@ -72,25 +72,35 @@ func (s *Session) View(name string) ([]string, error) {
 }
 
 // doRender renders a view, reporting a name the session cannot find, an element
-// that is no view, or a rendering kind not produced, as a line.
-func (s *Session) doRender(name string, mermaid bool) ([]string, bool, error) {
-	lines, err := s.renderLines(name, mermaid)
+// that is no view, a rendering kind not produced, or a form the kind is not
+// written in, as a line.
+func (s *Session) doRender(name string, form view.Form) ([]string, bool, error) {
+	lines, err := s.renderLines(name, form)
 	if err != nil {
 		return []string{"error: " + err.Error()}, false, nil
 	}
 	return lines, false, nil
 }
 
-// renderLines renders a view in the form its `render` member states, as text or
-// as Mermaid, one line per line of the artifact.
-func (s *Session) renderLines(name string, mermaid bool) ([]string, error) {
+// renderForms are the forms %render writes, as its second argument spells them.
+func renderForms() []string {
+	out := make([]string, 0, len(view.Forms()))
+	for _, form := range view.Forms() {
+		out = append(out, string(form))
+	}
+	return out
+}
+
+// renderLines renders a view in the kind its `render` member states and the form
+// asked for, one line per line of the artifact.
+func (s *Session) renderLines(name string, form view.Form) ([]string, error) {
 	rendering, err := s.viewRendering(name)
 	if err != nil {
 		return nil, err
 	}
-	artifact := rendering.Text()
-	if mermaid {
-		artifact = rendering.Mermaid()
+	artifact, err := rendering.Write(form)
+	if err != nil {
+		return nil, err
 	}
 	return strings.Split(strings.TrimRight(artifact, "\n"), "\n"), nil
 }

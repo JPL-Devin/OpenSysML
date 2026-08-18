@@ -49,7 +49,7 @@ func (s *Session) Complete(line string, pos int) Completion {
 	// %render takes the form after the view name, which is no name to look up.
 	if command == "%render" && atSecondArgument(head) {
 		word := lastField(head)
-		return completion(word, matchingPrefix([]string{"mermaid"}, word))
+		return completion(word, matchingPrefix(renderForms(), word))
 	}
 	word := nameWord(head)
 	return completion(word, s.nameCompletions(word))
@@ -94,10 +94,15 @@ func sharedPrefix(candidates []string) string {
 }
 
 // atSecondArgument reports whether the word being typed is the second argument
-// of the command, the first one having been typed and followed by a space.
+// of the command, the first one having been typed and followed by a space. The
+// arguments are counted the way dispatch splits them, so a quoted name holding a
+// space ('My View') is one argument, and one still being typed is not yet past.
 func atSecondArgument(head string) bool {
-	fields := strings.Fields(head)
-	return len(fields) >= 3 || (len(fields) == 2 && strings.HasSuffix(head, " "))
+	if strings.Count(head, "'")%2 == 1 {
+		return false
+	}
+	args := parseArgs(head)
+	return len(args) >= 3 || (len(args) == 2 && strings.HasSuffix(head, " "))
 }
 
 // firstToken returns the first whitespace-separated token of a line.

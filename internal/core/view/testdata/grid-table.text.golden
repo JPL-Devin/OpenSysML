@@ -1,0 +1,11 @@
+TableViews::fleetTable — table rendering (view def GridView)
+
+Element                                Kind       Type      Declared in
+-------------------------------------  ---------  --------  -------------------------------------
+Fleet::Engine                          part def
+power                                  attribute            Fleet::Engine
+cylinder                               part       Cylinder  Fleet::Engine
+TableViews::fleetTable::partsSubtable  view                 TableViews::fleetTable
+Fleet::Truck                           part def             TableViews::fleetTable::partsSubtable
+engine                                 part       Engine    Fleet::Truck
+wheels                                 part       Wheel     Fleet::Truck

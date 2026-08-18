@@ -17,17 +17,19 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/lexer"
 	"github.com/Open-MBEE/Systemica/internal/core/resolve"
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
-// Kind is a rendering a view can state. The four kinds this package produces
-// are tree, interconnection, state and action; the rest are recognized so that a
-// view stating one is told it is unsupported rather than rendered as something
-// else. A rendering the standard library does not declare is carried as the name
-// the model gives it, so an error about it names what the view asked for.
+// Kind is a rendering a view can state. The kinds this package produces are
+// tree, interconnection, state, action and table; the rest are recognized so
+// that a view stating one is told it is unsupported rather than rendered as
+// something else. A rendering the standard library does not declare is carried
+// as the name the model gives it, so an error about it names what the view
+// asked for.
 type Kind string
 
 const (
@@ -43,7 +45,8 @@ const (
 	// KindTextual is Views::asTextualNotation, which writes the model back as
 	// notation: `sysml -convert sysml` does that, so no rendering is produced.
 	KindTextual Kind = "textual"
-	// KindTable is Views::asElementTable and StandardViewDefinitions::GridView.
+	// KindTable renders the exposed elements as rows of a table, which is
+	// Views::asElementTable and StandardViewDefinitions::GridView.
 	KindTable Kind = "table"
 	// KindSequence is StandardViewDefinitions::SequenceView.
 	KindSequence Kind = "sequence"
@@ -54,7 +57,7 @@ const (
 // Supported reports whether this package produces a rendering of the kind.
 func (k Kind) Supported() bool {
 	switch k {
-	case KindTree, KindInterconnection, KindState, KindAction:
+	case KindTree, KindInterconnection, KindState, KindAction, KindTable:
 		return true
 	}
 	return false
@@ -172,6 +175,12 @@ type Rendering struct {
 	Roots []*Node
 	// Edges join nodes, in the order the model and the lowered graphs give them.
 	Edges []Edge
+	// Columns are the headings of a tabular rendering, empty for every other
+	// kind.
+	Columns []string
+	// Rows are the rows of a tabular rendering, each holding one cell per
+	// column, in the order the view exposes the elements.
+	Rows [][]string
 	// Notices are what the rendering could not represent, reported rather than
 	// dropped: an exposed element with no place in this kind of rendering, a
 	// connection to something the view does not expose, a behavior that does not
@@ -180,7 +189,9 @@ type Rendering struct {
 }
 
 // Empty reports whether the rendering has nothing to show.
-func (r *Rendering) Empty() bool { return len(r.Roots) == 0 && len(r.Edges) == 0 }
+func (r *Rendering) Empty() bool {
+	return len(r.Roots) == 0 && len(r.Edges) == 0 && len(r.Rows) == 0
+}
 
 // Render renders view in the kind it states, defaulting to a tree when it
 // states none. A view that is no view is semantics.ErrNotAView, and a
@@ -195,6 +206,7 @@ func (r *Renderer) Render(view *symbols.Symbol) (*Rendering, error) {
 	if err != nil {
 		return nil, err
 	}
+	exposed = dedupe(exposed)
 	out := &Rendering{View: r.notationName(view), Kind: kind, Stated: stated}
 	switch kind {
 	case KindTree:
@@ -205,6 +217,8 @@ func (r *Renderer) Render(view *symbols.Symbol) (*Rendering, error) {
 		r.renderStates(exposed, out)
 	case KindAction:
 		r.renderActions(exposed, out)
+	case KindTable:
+		r.renderTable(view, exposed, out)
 	default:
 		// Unreachable: KindOf refuses an unsupported kind.
 		return nil, &UnsupportedKindError{Kind: kind, View: r.notationName(view), Stated: stated}
@@ -257,14 +271,28 @@ func (r *Renderer) KindOf(view *symbols.Symbol) (Kind, string, error) {
 	return KindTree, "", nil
 }
 
+// dedupe drops the elements an exposed set names more than once — a filtered
+// recursive expose inherited from a view definition can — so nothing is
+// rendered twice.
+func dedupe(syms []*symbols.Symbol) []*symbols.Symbol {
+	out := make([]*symbols.Symbol, 0, len(syms))
+	seen := map[*symbols.Symbol]bool{}
+	for _, sym := range syms {
+		if sym == nil || seen[sym] {
+			continue
+		}
+		seen[sym] = true
+		out = append(out, sym)
+	}
+	return out
+}
+
 // remedyFor is what to do instead of a rendering kind this package does not
 // produce, empty for one nothing else answers.
 func remedyFor(kind Kind) string {
 	switch kind {
 	case KindTextual:
 		return "the notation itself is written by `sysml <model> -convert sysml`"
-	case KindTable:
-		return "render the view as a tree, or read the exposed set with %view"
 	}
 	return ""
 }
@@ -430,37 +458,11 @@ func simpleName(fqn string) string {
 	return fqn
 }
 
-// notationName writes a qualified name as the notation does, quoting each
-// segment that is not a plain identifier.
+// notationName writes a qualified name as the notation does, with the one
+// quoting rule the REPL prints names by, so `%render` and `%view` spell the same
+// element identically.
 func notationName(fqn string) string {
-	if fqn == "" {
-		return ""
-	}
-	parts := strings.Split(fqn, "::")
-	for i, part := range parts {
-		parts[i] = quoteSegment(part)
-	}
-	return strings.Join(parts, "::")
-}
-
-// quoteSegment quotes one name segment when it is not a plain identifier.
-func quoteSegment(name string) string {
-	if name == "" {
-		return name
-	}
-	plain := true
-	for i, ch := range name {
-		switch {
-		case ch >= 'a' && ch <= 'z', ch >= 'A' && ch <= 'Z', ch == '_':
-		case ch >= '0' && ch <= '9' && i > 0:
-		default:
-			plain = false
-		}
-	}
-	if plain {
-		return name
-	}
-	return "'" + strings.ReplaceAll(name, "'", "\\'") + "'"
+	return lexer.QualifiedNameText(fqn)
 }
 
 // qualifiedText renders a name reference as it was written, dotted chains

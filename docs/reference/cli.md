@@ -138,7 +138,7 @@ echo "%load model.sysml
 | `--convert <format>` | | Convert the model instead of running it: `sysml`, `kerml`, `ttl`, `turtle` or `rdf`. RDF is [experimental](rdf-mapping.md#status-experimental) and every run that converts it says so on stderr (see [the RDF mapping](rdf-mapping.md)) |
 | `--from <format>` | | Input format for `--convert` (default: from the input's extension) |
 | `--render <view>` | | Render this view of the model instead of running it, in the form its `render` member states (see [Rendering a view](#rendering-a-view)) |
-| `--render-form <form>` | | Form `--render` writes: `mermaid` (default) or `text` |
+| `--render-form <form>` | | Form `--render` writes: `text`, `mermaid` or `markdown` (default: the machine-readable form of the kind rendered) |
 | `--output <file>` | `-o` | Write the conversion or the rendering to a file instead of stdout |
 | `--version` | `-v` | Show version information |
 | `--help` | `-h` | Show usage information |
@@ -197,14 +197,17 @@ sysml -e "result" file1.sysml file2.sysml
 
 `-render <view>` renders one view of the model and exits. The rendering is the one the view's
 `render` member states, and a containment tree where it states none; the kinds this build produces
-are a tree, an interconnection diagram, a state machine and an action flow.
+are a tree, an interconnection diagram, a state machine, an action flow and a table.
 
 ```bash
-# The view as a Mermaid diagram, on stdout
+# The view in the machine-readable form of its kind, on stdout
 sysml model.sysml -render Views::vehicleView
 
 # The indented text form a person reads
 sysml model.sysml -render Views::vehicleView -render-form text
+
+# A tabular view as a Markdown table
+sysml model.sysml -render Views::partsTable -o parts.md
 
 # Write the rendering to a file
 sysml model.sysml -render Views::vehicleView -o view.mmd
@@ -213,14 +216,16 @@ sysml model.sysml -render Views::vehicleView -o view.mmd
 The artifact is the run's result, so it goes on stdout alone — what was loaded, what the model
 analysed to, an empty rendering, and any element the rendering cannot represent all go on stderr,
 and `-o` writes the artifact only. A view exposing nothing renders an empty artifact and says so; a
-name that is no view, a rendering kind this build does not produce, and a model that did not
-analyse cleanly each stop the run with status 2. Rendering decides nothing about the model, so it
-is not asked for together with a check flag or with `-convert`.
+name that is no view, a rendering kind this build does not produce, a form the kind is not written
+in, and a model that did not analyse cleanly each stop the run with status 2. Rendering decides
+nothing about the model, so it is not asked for together with a check flag or with `-convert`.
 
 The rendering is **tool-defined output**: SysML v2 §10.2 specifies the notation a view is written
-in, not how a tool draws it. Mermaid is the machine-readable form because it renders as-is in
-Markdown, documentation sites and editors without a separate rendering tool, and has a dedicated
-state diagram grammar.
+in, not how a tool draws it. Mermaid is the machine-readable form of the graph-shaped kinds because
+it renders as-is in Markdown, documentation sites and editors without a separate rendering tool, and
+has a dedicated state diagram grammar; a table is written as a Markdown table, which Mermaid has no
+grammar for, so `-render-form mermaid` of a table names Markdown rather than drawing a diagram of
+rows.
 
 ## Output Format
 

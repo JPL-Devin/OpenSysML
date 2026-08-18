@@ -3,6 +3,7 @@ package view
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 )
 
 // Text is the human-readable form of a rendering: a header saying what was
@@ -23,6 +24,11 @@ func (r *Rendering) Text() string {
 		return b.String()
 	}
 	b.WriteString("\n")
+	if r.Kind == KindTable {
+		writeTableText(&b, r.Columns, r.Rows)
+		writeNotices(&b, r.Notices)
+		return b.String()
+	}
 	labels := map[string]string{}
 	for _, root := range r.Roots {
 		writeNodeText(&b, root, 0, labels)
@@ -66,6 +72,42 @@ func writeNodeText(b *strings.Builder, node *Node, depth int, labels map[string]
 	for _, child := range node.Children {
 		writeNodeText(b, child, depth+1, labels)
 	}
+}
+
+// writeTableText writes a tabular rendering as aligned columns, padding each
+// cell to the widest one in its column. A trailing empty cell is left off, so no
+// row ends in padding.
+func writeTableText(b *strings.Builder, columns []string, rows [][]string) {
+	widths := make([]int, len(columns))
+	for i, column := range columns {
+		widths[i] = utf8.RuneCountInString(column)
+	}
+	for _, row := range rows {
+		for i, cell := range row {
+			if i < len(widths) && utf8.RuneCountInString(cell) > widths[i] {
+				widths[i] = utf8.RuneCountInString(cell)
+			}
+		}
+	}
+	writeTableRow(b, columns, widths)
+	rule := make([]string, len(columns))
+	for i := range rule {
+		rule[i] = strings.Repeat("-", widths[i])
+	}
+	writeTableRow(b, rule, widths)
+	for _, row := range rows {
+		writeTableRow(b, row, widths)
+	}
+}
+
+// writeTableRow writes one row, its cells padded to the column widths.
+func writeTableRow(b *strings.Builder, cells []string, widths []int) {
+	line := ""
+	for i, cell := range cells {
+		pad := widths[i] - utf8.RuneCountInString(cell)
+		line += cell + strings.Repeat(" ", pad) + "  "
+	}
+	b.WriteString(strings.TrimRight(line, " ") + "\n")
 }
 
 // writeNotices writes what the rendering could not represent, so nothing is

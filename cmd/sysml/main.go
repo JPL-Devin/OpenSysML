@@ -240,7 +240,7 @@ func runCLI() int {
 	flag.StringVar(&outputPath, "o", "", "Write conversion output to this file (shorthand)")
 	flag.StringVar(&fromFormat, "from", "", "Input format for -convert: sysml, kerml, ttl, turtle or rdf (default: from the input's extension)")
 	flag.StringVar(&renderView, "render", "", "Render this view of the model instead of running it, in the form its render member states")
-	flag.StringVar(&renderForm, "render-form", "", "Form -render writes: mermaid (default) or text")
+	flag.StringVar(&renderForm, "render-form", "", "Form -render writes: text, mermaid or markdown (default: the kind's machine-readable form)")
 	flag.Var(&deprecatedFlag{instead: "-to has been replaced by -convert, as `sysml model.sysml -convert ttl`"}, "to", "Replaced by -convert, which names the output format")
 	flag.Var(&modelChecks.instantiate, "instantiate", "Create an object of this definition before the checks, so a verdict is about it (repeatable)")
 	flag.Var(&modelChecks.constraints, "constraint", "Evaluate this constraint and exit (repeatable)")

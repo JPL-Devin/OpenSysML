@@ -16,7 +16,7 @@ import (
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
 
-var update = flag.Bool("update", false, "rewrite the .text.golden and .mermaid.golden files in testdata")
+var update = flag.Bool("update", false, "rewrite the golden artifacts in testdata")
 
 // loadFixture indexes a testdata model over the standard library, the way the
 // REPL and the CLI do, and returns a renderer over it.
@@ -84,6 +84,8 @@ func TestGoldenRenderings(t *testing.T) {
 		{"state", "state.sysml", "MachineViews::vehicleStates", KindState},
 		{"action", "action.sysml", "FlowViews::driveView", KindAction},
 		{"filters", "filters.sysml", "FilteredViews::safetyView", KindTree},
+		{"table", "table.sysml", "TableViews::partsTable", KindTable},
+		{"grid-table", "table.sysml", "TableViews::fleetTable", KindTable},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -92,7 +94,12 @@ func TestGoldenRenderings(t *testing.T) {
 				t.Errorf("kind = %q, want %q", rendering.Kind, tc.kind)
 			}
 			checkGolden(t, filepath.Join("testdata", tc.name+".text.golden"), rendering.Text())
-			checkGolden(t, filepath.Join("testdata", tc.name+".mermaid.golden"), rendering.Mermaid())
+			form := tc.kind.MachineForm()
+			machine, err := rendering.Write(form)
+			if err != nil {
+				t.Fatalf("write %s: %v", form, err)
+			}
+			checkGolden(t, filepath.Join("testdata", tc.name+"."+string(form)+".golden"), machine)
 		})
 	}
 }
@@ -203,6 +210,71 @@ func TestRenderingUsesFilteredAndInheritedExposure(t *testing.T) {
 	}
 }
 
+// A tabular rendering is rows rather than nodes: one per exposed element, one per
+// element declared in it, and one per nested view with its own exposed elements.
+func TestTableRenderingRows(t *testing.T) {
+	rendering := render(t, "table.sysml", "TableViews::fleetTable")
+	if len(rendering.Roots) != 0 || len(rendering.Edges) != 0 {
+		t.Errorf("a table rendering has %d nodes and %d edges, want neither", len(rendering.Roots), len(rendering.Edges))
+	}
+	if strings.Join(rendering.Columns, "|") != strings.Join(tableColumns, "|") {
+		t.Errorf("Columns = %v, want %v", rendering.Columns, tableColumns)
+	}
+	owners := map[string]string{}
+	for _, row := range rendering.Rows {
+		if len(row) != len(tableColumns) {
+			t.Fatalf("row %v has %d cells, want %d", row, len(row), len(tableColumns))
+		}
+		owners[row[0]] = row[3]
+	}
+	for name, owner := range map[string]string{
+		"Fleet::Engine":                         "",
+		"power":                                 "Fleet::Engine",
+		"cylinder":                              "Fleet::Engine",
+		"TableViews::fleetTable::partsSubtable": "TableViews::fleetTable",
+		"Fleet::Truck":                          "TableViews::fleetTable::partsSubtable",
+		"engine":                                "Fleet::Truck",
+	} {
+		got, ok := owners[name]
+		if !ok {
+			t.Errorf("table has no row for %q; rows: %v", name, sortedKeys(rowNames(rendering.Rows)))
+			continue
+		}
+		if got != owner {
+			t.Errorf("row %q is declared in %q, want %q", name, got, owner)
+		}
+	}
+}
+
+// A table is written as a Markdown table, and asking for the Mermaid a diagram is
+// written as is a typed error naming the form the kind is written in.
+func TestTableFormsAreMarkdownNotMermaid(t *testing.T) {
+	rendering := render(t, "table.sysml", "TableViews::partsTable")
+	markdown, err := rendering.Write(FormMarkdown)
+	if err != nil {
+		t.Fatalf("write markdown: %v", err)
+	}
+	if !strings.Contains(markdown, "| Element | Kind | Type | Declared in |") {
+		t.Errorf("Markdown carries no table header:\n%s", markdown)
+	}
+	text := rendering.Text()
+	if !strings.Contains(text, "Element ") || !strings.Contains(text, "\n------") {
+		t.Errorf("text is no aligned table:\n%s", text)
+	}
+	_, err = rendering.Write(FormMermaid)
+	var wrong *WrongFormError
+	if !errors.As(err, &wrong) || !errors.Is(err, ErrWrongForm) {
+		t.Fatalf("write mermaid error = %v, want a *WrongFormError", err)
+	}
+	if !strings.Contains(err.Error(), string(FormMarkdown)) {
+		t.Errorf("error %q does not name the form a table is written in", err)
+	}
+	// The graph-shaped kinds are the other way round.
+	if _, err := render(t, "tree.sysml", "VehicleViews::vehicleView").Write(FormMarkdown); !errors.Is(err, ErrWrongForm) {
+		t.Errorf("markdown of a tree error = %v, want ErrWrongForm", err)
+	}
+}
+
 // A rendering kind Systemica does not produce is a typed error naming the kind
 // and the view, never another kind's rendering.
 func TestUnsupportedRenderingKinds(t *testing.T) {
@@ -212,7 +284,6 @@ func TestUnsupportedRenderingKinds(t *testing.T) {
 		kind Kind
 		says string
 	}{
-		{"ErrorViews::tabularView", KindTable, "render asElementTable"},
 		{"ErrorViews::sequenceView", KindSequence, "view def SequenceView"},
 	}
 	for _, tc := range cases {
@@ -316,6 +387,17 @@ func nodeNames(nodes []*Node) map[string]bool {
 		}
 	}
 	walk(nodes)
+	return out
+}
+
+// rowNames collects the element each row of a table is about.
+func rowNames(rows [][]string) map[string]bool {
+	out := map[string]bool{}
+	for _, row := range rows {
+		if len(row) > 0 {
+			out[row[0]] = true
+		}
+	}
 	return out
 }
 
