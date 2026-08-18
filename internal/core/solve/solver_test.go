@@ -49,6 +49,9 @@ func playScenario(scenario string, in *os.File, out, errOut *os.File) int {
 		time.Sleep(time.Minute)
 		return 0
 	}
+	if scenario == capabilityScenario {
+		return playCapabilities(in, out)
+	}
 	var labels []string
 	checks := 0
 	for cmd := range readCommands(in) {
@@ -190,6 +193,9 @@ func fakeSolver(t *testing.T, scenario string) *Solver {
 		Args:    []string{"-test.run=TestHelperSolverProcess"},
 		Timeout: 20 * time.Second,
 		Env:     []string{scenarioEnv + "=" + scenario},
+		// A scenario answers the driver's dialogue rather than a probe, so the
+		// capabilities are declared: what a probe reports is tested separately.
+		Declared: DeclaredCapabilities("fake", AllCapabilities...),
 	}
 }
 

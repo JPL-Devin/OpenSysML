@@ -136,40 +136,105 @@ func TestTermConstructorsFold(t *testing.T) {
 	}
 }
 
-// TestLogicSelection names the logic from the sorts and operators used, so a
-// solver is not asked for more theory than the script needs.
+// TestLogicSelection names the narrowest standard logic the sorts and operators
+// used need, and falls back to a non-standard name only for what the SMT-LIB
+// logic list has no logic for.
 func TestLogicSelection(t *testing.T) {
-	logic := func(vars []*Var, nonlinear bool, terms ...*Term) string {
+	query := func(vars []*Var, nonlinear bool, terms ...*Term) *Query {
 		q := &Query{Vars: vars, Nonlinear: nonlinear}
 		for _, term := range terms {
 			q.Assertions = append(q.Assertions, Assertion{Term: term})
 		}
-		return q.Logic()
+		return q
 	}
 	boolVar := &Var{Name: "b", Sort: Bool}
 	intVar := &Var{Name: "i", Sort: Int}
+	intVar2 := &Var{Name: "j", Sort: Int}
 	realVar := &Var{Name: "r", Sort: Real}
 	strVar := &Var{Name: "s", Sort: String}
-	dtVar := &Var{Name: "d", Sort: Sort{Kind: SortDatatype, Name: "test::Finish"}}
+	finish := Sort{Kind: SortDatatype, Name: "test::Finish", Values: []string{"test::Finish::matte"}}
+	dtVar := &Var{Name: "d", Sort: finish}
 
 	cases := []struct {
-		got, want string
+		name     string
+		query    *Query
+		want     string
+		standard bool
 	}{
-		{logic([]*Var{boolVar}, false, VarTerm(boolVar)), "QF_UF"},
-		{logic([]*Var{intVar}, false, Binary(OpGe, Bool, VarTerm(intVar), IntTerm(0))), "QF_LIA"},
-		{logic([]*Var{realVar}, false, Binary(OpGe, Bool, VarTerm(realVar), RealTerm(big.NewRat(1, 2)))), "QF_LRA"},
-		{logic([]*Var{intVar, realVar}, false, VarTerm(intVar), VarTerm(realVar)), "QF_LIRA"},
-		{logic([]*Var{intVar}, true, VarTerm(intVar)), "QF_NIA"},
-		{logic([]*Var{realVar}, true, VarTerm(realVar)), "QF_NRA"},
-		{logic([]*Var{intVar, realVar}, true, VarTerm(intVar), VarTerm(realVar)), "QF_NIRA"},
-		{logic([]*Var{strVar}, false, VarTerm(strVar)), "ALL"},
-		{logic([]*Var{dtVar}, false, VarTerm(dtVar)), "ALL"},
+		{"booleans only", query([]*Var{boolVar}, false, VarTerm(boolVar)), "QF_UF", true},
+		{"linear integers", query([]*Var{intVar}, false, Binary(OpGe, Bool, VarTerm(intVar), IntTerm(0))), "QF_LIA", true},
+		{"linear reals", query([]*Var{realVar}, false, Binary(OpGe, Bool, VarTerm(realVar), RealTerm(big.NewRat(1, 2)))), "QF_LRA", true},
+		{"nonlinear integers", query([]*Var{intVar, intVar2}, false,
+			Binary(OpEq, Bool, Binary(OpMul, Int, VarTerm(intVar), VarTerm(intVar2)), IntTerm(6))), "QF_NIA", true},
+		{"nonlinear reals", query([]*Var{realVar}, false,
+			Binary(OpEq, Bool, Binary(OpMul, Real, VarTerm(realVar), VarTerm(realVar)), RealTerm(big.NewRat(2, 1)))), "QF_NRA", true},
+		// Reals_Ints has no quantifier-free logic in the list, so mixed arithmetic
+		// takes the narrowest logic that has it, not a non-standard name.
+		{"mixed linear arithmetic", query([]*Var{intVar, realVar}, false,
+			Binary(OpLe, Bool, ToReal(VarTerm(intVar)), VarTerm(realVar))), "AUFLIRA", true},
+		{"mixed nonlinear arithmetic", query([]*Var{intVar, realVar}, false,
+			Binary(OpLe, Bool, Binary(OpMul, Real, ToReal(VarTerm(intVar)), VarTerm(realVar)), RealTerm(big.NewRat(1, 1)))),
+			"AUFNIRA", true},
+		// Truncating integer division by a literal stays inside the linear logic,
+		// where it used to widen the script to ALL.
+		{"integer division by a literal", query([]*Var{intVar}, false,
+			Binary(OpEq, Bool, Binary(OpIntDiv, Int, VarTerm(intVar), IntTerm(2)), IntTerm(3))), "QF_LIA", true},
+		{"integer division by a term", query([]*Var{intVar, intVar2}, false,
+			Binary(OpEq, Bool, Binary(OpIntDiv, Int, VarTerm(intVar), VarTerm(intVar2)), IntTerm(3))), "QF_NIA", true},
+		{"strings", query([]*Var{strVar}, false, Binary(OpEq, Bool, VarTerm(strVar), StringTerm("descent"))), "ALL", false},
+		{"datatypes", &Query{Sorts: []Sort{finish}, Vars: []*Var{dtVar},
+			Assertions: []Assertion{{Term: Binary(OpEq, Bool, VarTerm(dtVar), ValueTerm(finish, "test::Finish::matte"))}}},
+			"ALL", false},
+		{"a declared nonlinear flag is honoured", query([]*Var{intVar}, true, VarTerm(intVar)), "QF_NIA", true},
 	}
 	for _, c := range cases {
-		if c.got != c.want {
-			t.Errorf("logic is %s, want %s", c.got, c.want)
+		t.Run(c.name, func(t *testing.T) {
+			choice := c.query.LogicChoice()
+			if choice.Name != c.want {
+				t.Errorf("logic is %s, want %s", choice.Name, c.want)
+			}
+			if choice.Name != c.query.Logic() {
+				t.Errorf("Logic() is %s, want %s", c.query.Logic(), choice.Name)
+			}
+			if choice.Standard != c.standard {
+				t.Errorf("logic %s standard is %t, want %t", choice.Name, choice.Standard, c.standard)
+			}
+			if choice.Why == "" {
+				t.Errorf("logic %s says nothing about why it was chosen", choice.Name)
+			}
+			if !choice.Standard && !strings.Contains(Script(c.query), "; no SMT-LIB logic covers ") {
+				t.Errorf("a script setting the non-standard %s does not say why", choice.Name)
+			}
+		})
+	}
+}
+
+// TestNonStandardLogicIsExplained: a script that must set a non-standard logic
+// says which feature no SMT-LIB logic covers, and needs that of a backend.
+func TestNonStandardLogicIsExplained(t *testing.T) {
+	strVar := &Var{Name: "s", Sort: String}
+	q := &Query{Vars: []*Var{strVar}, Assertions: []Assertion{
+		{Term: Binary(OpEq, Bool, VarTerm(strVar), StringTerm("descent"))},
+	}}
+	script := Script(q)
+	for _, want := range []string{"the strings theory", "which the SMT-LIB logic list does not define", "(set-logic ALL)"} {
+		if !strings.Contains(script, want) {
+			t.Errorf("script does not mention %q:\n%s", want, script)
 		}
 	}
+	if !hasCapability(q.Requires(), CapNonStandardLogic) || !hasCapability(q.Requires(), CapStrings) {
+		t.Errorf("a strings query requires %v, want the strings and non-standard-logic capabilities", q.Requires())
+	}
+}
+
+// hasCapability reports whether the capability is in the list.
+func hasCapability(caps []Capability, want Capability) bool {
+	for _, c := range caps {
+		if c == want {
+			return true
+		}
+	}
+	return false
 }
 
 // TestScriptShape: a script sets its logic, declares each datatype and variable
@@ -194,6 +259,7 @@ func TestScriptShape(t *testing.T) {
 	want := strings.Join([]string{
 		"; OpenSysML SMT-LIB2 translation of constraint Polished",
 		"; the runtime evaluator remains normative; solving is an optional extension",
+		"; no SMT-LIB logic covers algebraic datatypes (declare-datatypes), so the logic set below is ALL, which the SMT-LIB logic list does not define",
 		"(set-logic ALL)",
 		"; |test::Finish| of test::Finish",
 		"(declare-datatypes ((|test::Finish| 0)) (((|test::Finish::matte|) (|test::Finish::polished|))))",

@@ -32,6 +32,19 @@ jobs:
             sudo apt-get install -y z3
             z3 --version
 
+      # The second verified backend, for the portability gate below: cvc5 has no
+      # apt package, so the official static release is what CI runs, pinned by
+      # digest so a substituted asset is not run.
+      - run:
+          name: Install cvc5
+          command: |
+            curl -fsSL -o /tmp/cvc5.zip \
+              https://github.com/cvc5/cvc5/releases/download/cvc5-1.3.4/cvc5-Linux-x86_64-static.zip
+            echo "dcdbfada0ce493ee98259c0816e0daafc561c223aadb3af298c2968e73ea39c6  /tmp/cvc5.zip" | sha256sum --check --strict
+            unzip -p /tmp/cvc5.zip '*/bin/cvc5' > /tmp/cvc5-bin
+            sudo install -m 0755 /tmp/cvc5-bin /usr/local/bin/cvc5
+            cvc5 --version | head -1
+
       - run:
           name: Check gofmt
           command: |
@@ -95,6 +108,41 @@ jobs:
             OPENSYSML_REQUIRE_TRAINING_CORPUS: "1"
             OPENSYSML_REQUIRE_SMT: "1"
       
+      # Portability: the same subset against both verified backends, so a feature
+      # one of them refuses is reported here rather than found by a user. The
+      # requirement flag makes an absent solver a failure rather than a skip.
+      - run:
+          name: Portability gate
+          command: |
+            set -o pipefail
+            for solver in z3 cvc5; do
+              OPENSYSML_SMT="$solver" go test -count=1 -v ./internal/core/solve \
+                -run 'TestPortability' | tee "portability-$solver.log"
+              grep -E "portability of $solver" "portability-$solver.log"
+              if grep -qE '^\s*--- SKIP' "portability-$solver.log"; then
+                echo "error: the portability gate skipped for $solver" >&2
+                exit 1
+              fi
+            done
+          environment:
+            OPENSYSML_REQUIRE_SMT: "1"
+
+      # The solver gate against the second backend: what z3 answers, cvc5 must
+      # answer too, the portability subset alone not being the whole contract.
+      - run:
+          name: Second backend gate
+          command: |
+            set -o pipefail
+            OPENSYSML_SMT=cvc5 go test -count=1 -v ./internal/core/solve ./internal/repl \
+              -run 'TestSolver|TestDiscovery|TestSolved|TestDivisor|TestCheck|TestSolve|TestConfigure|TestSynthesis|TestPinned|TestFixed|TestExplain|TestCore' \
+              | tee cvc5-gate.log
+            if grep -qE '^\s*--- SKIP' cvc5-gate.log; then
+              echo "error: a solver-dependent test skipped under cvc5" >&2
+              exit 1
+            fi
+          environment:
+            OPENSYSML_REQUIRE_SMT: "1"
+
       # The other half of the solver contract: with discovery pointed at an
       # executable that does not exist, solver-dependent tests skip and the
       # absent-solver paths must still report one.

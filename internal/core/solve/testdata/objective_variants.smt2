@@ -3,6 +3,7 @@
 ; objectives are optimized lexicographically, in the order the analysis declares them:
 ; each is optimized within what the ones before it already settled
 (set-option :opt.priority lex)
+; no SMT-LIB logic covers algebraic datatypes (declare-datatypes), so the logic set below is ALL, which the SMT-LIB logic list does not define
 (set-logic ALL)
 ; |test::WheelChoice::wheel::rim| of test::WheelChoice::wheel::rim
 (declare-datatypes ((|test::WheelChoice::wheel::rim| 0)) (((|test::WheelChoice::wheel::rim::steel|) (|test::WheelChoice::wheel::rim::carbon|))))

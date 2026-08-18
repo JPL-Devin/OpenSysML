@@ -23,8 +23,11 @@ The three `OPENSYSML_SMT*` variables belong to the experimental solving extensio
 [1. Install: installing a solver](../guide/01-install.md#installing-a-solver-optional).
 `OPENSYSML_SMT` takes an executable name or a path and is consulted before `PATH`, where `z3`
 is preferred over `cvc5`; a value naming no executable file is reported rather than falling
-back to the search. Nothing else in the toolchain reads them, and the concrete evaluator needs
-no solver.
+back to the search. It may name **any** solver that speaks SMT-LIB2 on standard input, not only
+those two: the feature subset a backend must support, what z3 and cvc5 were each measured to
+support, and how a backend that lacks a feature is reported are
+[1. Install: solver compatibility](../guide/01-install.md#solver-compatibility--pointing-the-driver-at-another-solver).
+Nothing else in the toolchain reads them, and the concrete evaluator needs no solver.
 
 Each budget is what turns a non-terminating run into a reported error instead of
 a hang. They count incommensurable things — expression evaluations, action token

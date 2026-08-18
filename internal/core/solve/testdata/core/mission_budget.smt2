@@ -2,6 +2,7 @@
 ; the runtime evaluator remains normative; solving is an optional extension
 ; each assertion is named, so an unsat core names the conditions that conflict
 (set-option :produce-unsat-cores true)
+; no SMT-LIB logic covers the strings theory, so the logic set below is ALL, which the SMT-LIB logic list does not define
 (set-logic ALL)
 ; test::BudgetConstraint::crewCount, declared at mission_budget.sysml:7:3
 (declare-const |test::BudgetConstraint::crewCount| Int)

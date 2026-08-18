@@ -62,6 +62,9 @@ func Explain(ctx context.Context, q *Query) (*Result, error) {
 // refuses cores or names an assertion the query did not assert is an error
 // rather than an empty or invented core.
 func (s *Solver) Explain(ctx context.Context, q *Query) (*Result, error) {
+	if err := s.require(ctx, q, "explaining a conflict", CapUnsatCores); err != nil {
+		return nil, err
+	}
 	result, err := s.check(ctx, q, nil, true)
 	if err != nil {
 		return nil, err

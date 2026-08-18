@@ -31,6 +31,11 @@ func TestGolden(t *testing.T) {
 		{"objectives.sysml", "test::CostThenMargin", "analysis", "objective_lexicographic.smt2"},
 		{"objectives.sysml", "test::WheelChoice", "analysis", "objective_variants.smt2"},
 		{"objectives.sysml", "test::GuardedRatio", "analysis", "objective_guarded.smt2"},
+		// One per logic the feature set can select, so a change of logic shows here.
+		{"logic_selection.sysml", "test::CratesPerPallet", "constraint", "crates_per_pallet.smt2"},
+		{"logic_selection.sysml", "test::CratesPerRun", "constraint", "crates_per_run.smt2"},
+		{"logic_selection.sysml", "test::MassAndCrates", "constraint", "mass_and_crates.smt2"},
+		{"logic_selection.sysml", "test::MassPerCrate", "constraint", "mass_per_crate.smt2"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.golden, func(t *testing.T) {
