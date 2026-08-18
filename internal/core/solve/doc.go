@@ -35,7 +35,10 @@
 //   - Division by zero, which SMT-LIB leaves underspecified while the evaluator
 //     refuses it: a literal zero divisor refuses translation, and any other
 //     divisor, integer or real, is asserted non-zero as a RoleDefined side
-//     condition.
+//     condition. That assertion constrains the whole query, so it is only made
+//     where the division is always evaluated and read unnegated; a computed
+//     divisor under `not`, `or`, `xor`, `implies`, a conditional branch or a
+//     denied element refuses instead, since the evaluator may never divide there.
 //   - Literals: boolean, integer, real, string.
 //   - Quantity expressions (`450.0 [km/h]`), normalized to the base units their
 //     unit reduces to through semantics.UnitTermOf — magnitudes are exact

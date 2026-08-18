@@ -158,6 +158,9 @@ func TestQuantityScaleKeepsVariableComparable(t *testing.T) {
 	if mass == nil || mass.Dimension == "" {
 		t.Fatalf("the variable records no dimension: %+v", mass)
 	}
+	if mass.Unit != "gram" {
+		t.Errorf("the variable is expressed in %q, want the base unit its magnitudes are scaled to", mass.Unit)
+	}
 }
 
 // TestRolesAndOrder: assumptions stay assumptions, required conditions stay

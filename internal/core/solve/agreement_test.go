@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/Systemica/internal/core/runtime"
@@ -171,6 +172,49 @@ func TestDivisorGuardRulesOutDivisionByZero(t *testing.T) {
 			solved(t, solver, q, StatusUnsat)
 		})
 	}
+}
+
+// A condition that guards its own division leaves the division unevaluated when
+// the divisor is zero, so the query cannot assert the divisor non-zero and the
+// translation refuses rather than denying assignments the evaluator accepts.
+func TestComputedDivisorRefusedWhereItMayGoUnevaluated(t *testing.T) {
+	cases := map[string]string{
+		"under or":        `assert constraint { b == 0 or a / b > 1 }`,
+		"under implies":   `assert constraint { b != 0 implies a / b > 1 }`,
+		"under not":       `assert constraint { not (a / b > 1) }`,
+		"under a branch":  `assert constraint { (if b != 0 ? a / b else 0) > 1 }`,
+		"negated written": `assert not constraint { a / b > 1 }`,
+	}
+	for name, body := range cases {
+		t.Run(name, func(t *testing.T) {
+			refused := refusal(t, fmt.Sprintf(`
+				package test {
+					private import ScalarValues::Integer;
+					constraint def C {
+						in a : Integer; in b : Integer;
+						%s
+					}
+				}`, body), "test::C")
+			if !strings.Contains(refused.Construct, "computed divisor") {
+				t.Errorf("refusal names %q, want the computed-divisor case", refused.Construct)
+			}
+		})
+	}
+}
+
+// The same conditions hold for the evaluator with a zero divisor, which is why the
+// hoisted guard would be wrong: it is only asserted where a division always runs.
+func TestGuardedDivisionSatisfiableWithALiteralDivisor(t *testing.T) {
+	solver := requireSolver(t)
+	q := constraintQuery(t, `
+		package test {
+			private import ScalarValues::Integer;
+			constraint def C {
+				in a : Integer;
+				assert constraint { a / 2 > 1 }
+			}
+		}`, "test::C")
+	solved(t, solver, q, StatusSat)
 }
 
 // evaluatedDivision is what internal/core/runtime computes for `a / b` and `a %

@@ -90,13 +90,14 @@ func Translate(ctx *runtime.Context, subject Subject, conds []runtime.Condition)
 		return nil, fmt.Errorf("%s %s: %w", subject.Kind, subject.Name, ErrNoConditions)
 	}
 	t := &translator{
-		ctx:      ctx,
-		model:    ctx.Model(),
-		subject:  subject,
-		features: effectiveFeatures(ctx, subject.Symbol),
-		vars:     map[string]*Var{},
-		sorts:    map[string]Sort{},
-		guarded:  map[string]bool{},
+		ctx:       ctx,
+		model:     ctx.Model(),
+		subject:   subject,
+		features:  effectiveFeatures(ctx, subject.Symbol),
+		vars:      map[string]*Var{},
+		sorts:     map[string]Sort{},
+		guarded:   map[string]bool{},
+		baseUnits: map[string]string{},
 	}
 	if err := t.translate(conds); err != nil {
 		return nil, err
@@ -125,6 +126,14 @@ type translator struct {
 	// guarded remembers the divisors already asserted non-zero, by their term, so
 	// a divisor read twice is guarded once.
 	guarded map[string]bool
+
+	// baseUnits names the base units magnitudes of a dimension are scaled to, as
+	// the quantities written in the conditions reduce to them.
+	baseUnits map[string]string
+
+	// branched counts the enclosing contexts a subexpression may go unevaluated in,
+	// where a definedness assertion over the whole query would not be equivalent.
+	branched int
 
 	nonlinear bool
 	intDiv    bool
@@ -205,6 +214,9 @@ func (t *translator) query() *Query {
 		IntegerDivision: t.intDiv,
 	}
 	for _, v := range t.vars {
+		if v.Unit == "" {
+			v.Unit = t.baseUnits[v.Dimension]
+		}
 		q.Vars = append(q.Vars, v)
 	}
 	sortVars(q.Vars)
@@ -223,6 +235,10 @@ func (t *translator) query() *Query {
 // A group stands for the conjunction of its conditions, so negating a group
 // negates that conjunction.
 func (t *translator) condition(cond runtime.Condition) (*Term, error) {
+	if cond.Negated {
+		t.branched++
+		defer func() { t.branched-- }()
+	}
 	if cond.Group != nil {
 		parts := make([]*Term, 0, len(cond.Group))
 		for _, sub := range cond.Group {
@@ -292,6 +308,41 @@ func (t *translator) expr(node ast.Node, scope *symbols.Scope) (*Term, error) {
 	return nil, t.refuse(node, describe(node), "it is outside the subset")
 }
 
+// recordBaseUnits remembers the base units a dimension's magnitudes are scaled
+// to, so a model reports one in the units it is expressed in rather than bare.
+func (t *translator) recordBaseUnits(dim semantics.Dimension, unit semantics.UnitTerm) {
+	key := dimensionUnits(dim)
+	if key == "" || t.baseUnits[key] != "" {
+		return
+	}
+	t.baseUnits[key] = baseUnitsText(unit)
+}
+
+// baseUnitsText names a reduced unit's base units as declared ("gram",
+// "metre·second^-1"), its scale factor left out since a magnitude scaled to them
+// carries none.
+func baseUnitsText(unit semantics.UnitTerm) string {
+	out := ""
+	for _, f := range unit.Factors {
+		if out != "" {
+			out += "·"
+		}
+		out += leafName(f.Unit.Name)
+		if f.Exponent != 1 {
+			out += fmt.Sprintf("^%g", f.Exponent)
+		}
+	}
+	return out
+}
+
+// leafName is the declared name at the end of a qualified one.
+func leafName(name string) string {
+	if i := strings.LastIndex(name, "::"); i >= 0 {
+		return name[i+2:]
+	}
+	return name
+}
+
 // quantity translates `magnitude [unit]`, scaling the magnitude to the base units
 // its unit reduces to so that magnitudes of one dimension are comparable.
 func (t *translator) quantity(n *ast.IndexExpr, scope *symbols.Scope) (*Term, error) {
@@ -300,9 +351,11 @@ func (t *translator) quantity(n *ast.IndexExpr, scope *symbols.Scope) (*Term, er
 		return nil, t.refuse(n, "quantity", err.Error())
 	}
 	unit = unit.Normalized()
-	if _, ok := t.model.DimensionOfExpr(scope, n); !ok {
+	dim, ok := t.model.DimensionOfExpr(scope, n)
+	if !ok {
 		return nil, t.refuse(n, "quantity", "the dimension of its unit is not determined statically")
 	}
+	t.recordBaseUnits(dim, unit)
 	scale, ok := ratOfScale(unit.Scale)
 	if !ok {
 		return nil, t.refuse(n, "quantity", "its unit reduces to a scale factor that is not an exact ratio")
@@ -401,8 +454,10 @@ func operatorReason(op ast.OperatorKind) string {
 	return "it is outside the subset"
 }
 
-// unaryBool translates `not e`.
+// unaryBool translates `not e`, whose operand is read in a negated position.
 func (t *translator) unaryBool(n *ast.OperatorExpr, scope *symbols.Scope) (*Term, error) {
+	t.branched++
+	defer func() { t.branched-- }()
 	arg, err := t.operandOfSort(n, scope, 0, Bool)
 	if err != nil {
 		return nil, err
@@ -410,8 +465,13 @@ func (t *translator) unaryBool(n *ast.OperatorExpr, scope *symbols.Scope) (*Term
 	return Not(arg), nil
 }
 
-// binaryBool translates a boolean connective.
+// binaryBool translates a boolean connective. Every connective but `and` may
+// leave an operand unevaluated, or reads it negated, so its operands are branched.
 func (t *translator) binaryBool(n *ast.OperatorExpr, scope *symbols.Scope, op Op) (*Term, error) {
+	if op != OpAnd {
+		t.branched++
+		defer func() { t.branched-- }()
+	}
 	left, err := t.operandOfSort(n, scope, 0, Bool)
 	if err != nil {
 		return nil, err
@@ -534,9 +594,21 @@ func (t *translator) divisor(n *ast.OperatorExpr, divisor *Term) error {
 		}
 		return nil
 	}
+	if !t.hoistable() {
+		return t.refuse(n, "operator `"+n.Operator.String()+"` by a computed divisor",
+			"asserting the divisor non-zero would deny assignments the evaluator accepts, "+
+				"as this division may go unevaluated")
+	}
 	t.nonlinear = true
 	t.guard(Binary(OpNe, Bool, divisor, zeroOf(divisor.Sort)), n)
 	return nil
+}
+
+// hoistable reports whether a definedness assertion over the whole query says
+// what the evaluator says: only where the expression is always evaluated and read
+// unnegated, since a division the evaluator never performs cannot constrain it.
+func (t *translator) hoistable() bool {
+	return t.branched == 0 && !t.subject.Negated
 }
 
 // guard asserts a side condition a translated condition needs to mean what the
@@ -630,6 +702,8 @@ func (t *translator) conditional(n *ast.OperatorExpr, scope *symbols.Scope) (*Te
 	if err != nil {
 		return nil, err
 	}
+	t.branched++
+	defer func() { t.branched-- }()
 	then, err := t.expr(n.Operands[1], scope)
 	if err != nil {
 		return nil, err

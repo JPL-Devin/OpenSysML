@@ -43,19 +43,23 @@ func renderValue(v *Var, value sexpr) (string, bool) {
 		}
 	case SortReal:
 		if rat, ok := ratOfSexpr(value); ok {
-			return withUnit(renderRat(rat), v.Dimension), true
+			return withUnit(renderRat(rat), v), true
 		}
 	}
 	return "", false
 }
 
-// withUnit writes a magnitude with the base unit it is expressed in, as a
-// quantity is written, and bare when it has none.
-func withUnit(magnitude, dimension string) string {
-	if dimension == "" {
-		return magnitude
+// withUnit writes a magnitude in the base units it is expressed in, as a quantity
+// is written; a dimension whose base units are unnamed is named as the dimension
+// it is, since the magnitude is not in the unit any literal was written in.
+func withUnit(magnitude string, v *Var) string {
+	switch {
+	case v.Unit != "":
+		return magnitude + " [" + v.Unit + "]"
+	case v.Dimension != "":
+		return magnitude + " (in the base units of " + v.Dimension + ")"
 	}
-	return magnitude + " [" + dimension + "]"
+	return magnitude
 }
 
 // renderRat writes an exact rational as the notation writes a number: a decimal

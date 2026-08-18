@@ -62,6 +62,10 @@ type Var struct {
 	// base units, empty for a value that has none.
 	Dimension string
 
+	// Unit names the base units its magnitude is expressed in ("g", "m·s^-1"),
+	// empty when no quantity of that dimension was written to name them.
+	Unit string
+
 	// File and Span are where the feature was declared.
 	File string
 	Span source.Span
