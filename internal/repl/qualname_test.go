@@ -73,7 +73,7 @@ func TestParseArgsKeepsQuotedNamesWhole(t *testing.T) {
 		want []string
 	}{
 		{"%instantiate 'My Pkg'::Car", []string{"%instantiate", "'My Pkg'::Car"}},
-		{"%slots Top::'My Pkg'::Car", []string{"%slots", "Top::'My Pkg'::Car"}},
+		{"%features Top::'My Pkg'::Car", []string{"%features", "Top::'My Pkg'::Car"}},
 		{"%calc 'My Pkg'::'add up' 2 3", []string{"%calc", "'My Pkg'::'add up'", "2", "3"}},
 		{"%action 'My Pkg'::'run it' 'My Pkg'::Car", []string{"%action", "'My Pkg'::'run it'", "'My Pkg'::Car"}},
 		{`%load "dir with space/model.sysml"`, []string{"%load", "dir with space/model.sysml"}},
@@ -100,7 +100,7 @@ func TestQuotedNamesAcceptedByNameTakingCommands(t *testing.T) {
 		want []string
 	}{
 		{"%instances", []string{"'My Pkg'::Car", "Top::'My Pkg'::Car"}},
-		{"%slots 'My Pkg'::Car", []string{"Instance: 'My Pkg'::Car", "m = 5"}},
+		{"%features 'My Pkg'::Car", []string{"Instance: 'My Pkg'::Car", "m = 5"}},
 		{"%eval 'My Pkg'::Car::m", []string{"= 5"}},
 		{"%eval 'My Pkg'::Car::'curb mass'", []string{"= 1200"}},
 		{"%eval in 'My Pkg'::Car : m * 2", []string{"= 10"}},
@@ -110,7 +110,7 @@ func TestQuotedNamesAcceptedByNameTakingCommands(t *testing.T) {
 		{"%action 'My Pkg'::'run it'", []string{"run it"}},
 		{"%state 'My Pkg'::'spin up'", []string{"spin up"}},
 		{"%instantiate Top::'My Pkg'::Car", []string{"✓ Created instance of Top::'My Pkg'::Car"}},
-		{"%slots Top::'My Pkg'::Car", []string{"Instance: Top::'My Pkg'::Car", "m = 7"}},
+		{"%features Top::'My Pkg'::Car", []string{"Instance: Top::'My Pkg'::Car", "m = 7"}},
 		{"%instantiate 'part'::Widget", []string{"✓ Created instance of 'part'::Widget"}},
 		{"%instantiate 'a-b.c'::Gadget", []string{"✓ Created instance of 'a-b.c'::Gadget"}},
 		{"%satisfy 'Sat Pkg'::'the analysis'", []string{"holds (on 'Sat Pkg'::'slow lander'"}},
@@ -134,7 +134,7 @@ func TestQuotedNamesAcceptedByNameTakingCommands(t *testing.T) {
 func TestQuotedNameNamesTheSameObjectThroughout(t *testing.T) {
 	s := loadFixture(t, "testdata/quoted_names.sysml")
 	wants(t, run(t, s, "%instantiate 'My Pkg'::Car"), "✓ Created instance of 'My Pkg'::Car", "ID: 1")
-	wants(t, run(t, s, "%slots 'My Pkg'::Car"), "ID: 1")
+	wants(t, run(t, s, "%features 'My Pkg'::Car"), "ID: 1")
 	wants(t, run(t, s, "%eval 'My Pkg'::Car::m"), "(on 'My Pkg'::Car ID: 1)")
 	wants(t, run(t, s, "%eval in 'My Pkg'::Car : m"), "(on 'My Pkg'::Car ID: 1)")
 }
@@ -148,7 +148,7 @@ func TestQuotedNameFailuresAreReportedNotPanics(t *testing.T) {
 		"%instantiate 'My Pkg",
 		"%instantiate ''",
 		"%instantiate 'My Pkg'::",
-		"%slots 'My Pkg'Car",
+		"%features 'My Pkg'Car",
 		"%calc 'My Pkg'::'add up",
 		"%eval in 'My Pkg' : ",
 		"%constraint '",

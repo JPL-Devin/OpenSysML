@@ -74,7 +74,7 @@ func TestREPLPackagedModelWorkflow(t *testing.T) {
 	script := []string{
 		"%load testdata/vehicle_package.sysml",
 		"%instantiate Vehicle",
-		"%slots Vehicle",
+		"%features Vehicle",
 		"%eval Demo::Vehicle::mass",
 		"%calc add 2 3",
 		"%constraint withinMassLimit",
@@ -110,8 +110,8 @@ func TestInstantiateFindsPackageMemberBySimpleAndQualifiedName(t *testing.T) {
 
 			// Instances are keyed by the resolved name, so either spelling
 			// reaches the instance the other created.
-			wants(t, run(t, s, "%slots Vehicle"), "mass = 1500.00")
-			wants(t, run(t, s, "%slots Demo::Vehicle"), "mass = 1500.00")
+			wants(t, run(t, s, "%features Vehicle"), "mass = 1500.00")
+			wants(t, run(t, s, "%features Demo::Vehicle"), "mass = 1500.00")
 		})
 	}
 }
@@ -134,7 +134,7 @@ package B { part def Widget { attribute size = 2.0; } }`)
 
 	// The qualified name disambiguates.
 	wants(t, run(t, s, "%instantiate B::Widget"), "✓ Created instance of B::Widget")
-	wants(t, run(t, s, "%slots B::Widget"), "size = 2.00")
+	wants(t, run(t, s, "%features B::Widget"), "size = 2.00")
 }
 
 // Declarations submitted after a lookup must be visible: the symbol index and
@@ -146,7 +146,7 @@ func TestLookupSeesDeclarationsAddedAfterFirstLookup(t *testing.T) {
 
 	s.Submit(`package Demo { part def Trailer { attribute mass = 900.0; } }`)
 	wants(t, run(t, s, "%instantiate Demo::Trailer"), "✓ Created instance of Demo::Trailer")
-	wants(t, run(t, s, "%slots Trailer"), "mass = 900.00")
+	wants(t, run(t, s, "%features Trailer"), "mass = 900.00")
 	wants(t, run(t, s, "%eval Demo::Trailer::mass"), "900.00")
 }
 
@@ -163,12 +163,12 @@ func TestInstancesDoNotOutliveTheirDeclaration(t *testing.T) {
 	wants(t, run(t, s, "%instances"),
 		"no instances created", "1 instance was dropped when the declarations changed at submission 2")
 	wants(t, run(t, s, "%instantiate Demo::Vehicle"), "ID: 1")
-	wants(t, run(t, s, "%slots Demo::Vehicle"), "mass = 900.00")
+	wants(t, run(t, s, "%features Demo::Vehicle"), "mass = 900.00")
 }
 
 func TestFeatureValuesWithoutInstance(t *testing.T) {
 	s := loadFixture(t, "testdata/vehicle_package.sysml")
-	wants(t, run(t, s, "%slots Vehicle"), "no instance of", "%instantiate")
+	wants(t, run(t, s, "%features Vehicle"), "no instance of", "%instantiate")
 }
 
 func TestInstancesEmptyAndPopulated(t *testing.T) {

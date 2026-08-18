@@ -58,7 +58,7 @@ func TestRepeatedSatisfyKeepsItsSubject(t *testing.T) {
 	first := "✓ satisfy touchdown by slowLander holds (on Landing::slowLander ID: 1)"
 	wants(t, run(t, s, "%satisfy Landing::analysisContext"), first)
 	wants(t, run(t, s, "%satisfy Landing::analysisContext"), first)
-	wants(t, run(t, s, "%slots Landing::slowLander"), "verticalSpeed")
+	wants(t, run(t, s, "%features Landing::slowLander"), "verticalSpeed")
 }
 
 // TestSatisfyQuotesInnerNames checks that the prose naming an assertion quotes

@@ -30,10 +30,7 @@ __all__ = [
     "as_typed",
     "feature_value",
     "list_feature_value",
-    "list_slot",
     "optional_feature_value",
-    "optional_slot",
-    "slot",
 ]
 
 T = TypeVar("T")
@@ -149,7 +146,7 @@ def as_int(feature_name: str, value: object) -> int:
 
 
 def as_float(feature_name: str, value: object) -> float:
-    """Decode a Real/Rational slot value; an integer value widens to float."""
+    """Decode a Real/Rational feature value; an integer value widens to float."""
     if isinstance(value, bool):
         raise _mismatch(feature_name, "float", value)
     if isinstance(value, float):
@@ -167,7 +164,7 @@ def as_str(feature_name: str, value: object) -> str:
 
 
 def as_quantity(feature_name: str, value: object) -> Quantity:
-    """Decode a quantity slot value: a magnitude and the unit it is expressed in."""
+    """Decode a quantity feature value: a magnitude and the unit it is expressed in."""
     if isinstance(value, Quantity):
         return value
     raise _mismatch(feature_name, "Quantity", value)
@@ -251,9 +248,3 @@ def _require(obj: TypedObject, feature_name: str) -> object:
     if value is None:
         raise _mismatch(feature_name, "a value", None)
     return value
-
-
-#: Deprecated spellings of the decoders above, kept for generated modules.
-slot = feature_value
-optional_slot = optional_feature_value
-list_slot = list_feature_value

@@ -418,7 +418,7 @@ def feature_value_to_python(feature_name, pb_value_msg, resolve_instance=None):
 
     Args:
         feature_name (str): Feature name, used for error reporting
-        pb_value_msg: sysml_pb2.FeatureValue message (or the deprecated SlotValue)
+        pb_value_msg: sysml_pb2.FeatureValue message
         resolve_instance: optional callable mapping an instance id to an object
 
     Returns:
@@ -448,6 +448,3 @@ def feature_value_to_python(feature_name, pb_value_msg, resolve_instance=None):
 
     raise FeatureValueError(feature_name, "feature value is not materialized")
 
-
-#: Deprecated spelling of :func:`feature_value_to_python`.
-slot_to_python = feature_value_to_python

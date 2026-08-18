@@ -258,14 +258,7 @@ class EvaluateResponse(_message.Message):
     def __init__(self, result: _Optional[_Union[Value, _Mapping]] = ..., error: _Optional[str] = ..., diagnostics: _Optional[_Iterable[_Union[Diagnostic, _Mapping]]] = ...) -> None: ...
 
 class Instance(_message.Message):
-    __slots__ = ("id", "type_symbol_id", "slots", "feature_values")
-    class SlotsEntry(_message.Message):
-        __slots__ = ("key", "value")
-        KEY_FIELD_NUMBER: _ClassVar[int]
-        VALUE_FIELD_NUMBER: _ClassVar[int]
-        key: str
-        value: SlotValue
-        def __init__(self, key: _Optional[str] = ..., value: _Optional[_Union[SlotValue, _Mapping]] = ...) -> None: ...
+    __slots__ = ("id", "type_symbol_id", "feature_values")
     class FeatureValuesEntry(_message.Message):
         __slots__ = ("key", "value")
         KEY_FIELD_NUMBER: _ClassVar[int]
@@ -275,29 +268,13 @@ class Instance(_message.Message):
         def __init__(self, key: _Optional[str] = ..., value: _Optional[_Union[FeatureValue, _Mapping]] = ...) -> None: ...
     ID_FIELD_NUMBER: _ClassVar[int]
     TYPE_SYMBOL_ID_FIELD_NUMBER: _ClassVar[int]
-    SLOTS_FIELD_NUMBER: _ClassVar[int]
     FEATURE_VALUES_FIELD_NUMBER: _ClassVar[int]
     id: int
     type_symbol_id: str
-    slots: _containers.MessageMap[str, SlotValue]
     feature_values: _containers.MessageMap[str, FeatureValue]
-    def __init__(self, id: _Optional[int] = ..., type_symbol_id: _Optional[str] = ..., slots: _Optional[_Mapping[str, SlotValue]] = ..., feature_values: _Optional[_Mapping[str, FeatureValue]] = ...) -> None: ...
+    def __init__(self, id: _Optional[int] = ..., type_symbol_id: _Optional[str] = ..., feature_values: _Optional[_Mapping[str, FeatureValue]] = ...) -> None: ...
 
 class FeatureValue(_message.Message):
-    __slots__ = ("feature_name", "value", "values", "materialized", "error")
-    FEATURE_NAME_FIELD_NUMBER: _ClassVar[int]
-    VALUE_FIELD_NUMBER: _ClassVar[int]
-    VALUES_FIELD_NUMBER: _ClassVar[int]
-    MATERIALIZED_FIELD_NUMBER: _ClassVar[int]
-    ERROR_FIELD_NUMBER: _ClassVar[int]
-    feature_name: str
-    value: Value
-    values: _containers.RepeatedCompositeFieldContainer[Value]
-    materialized: bool
-    error: str
-    def __init__(self, feature_name: _Optional[str] = ..., value: _Optional[_Union[Value, _Mapping]] = ..., values: _Optional[_Iterable[_Union[Value, _Mapping]]] = ..., materialized: _Optional[bool] = ..., error: _Optional[str] = ...) -> None: ...
-
-class SlotValue(_message.Message):
     __slots__ = ("feature_name", "value", "values", "materialized", "error")
     FEATURE_NAME_FIELD_NUMBER: _ClassVar[int]
     VALUE_FIELD_NUMBER: _ClassVar[int]

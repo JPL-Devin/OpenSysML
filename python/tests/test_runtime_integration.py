@@ -96,7 +96,7 @@ class TestRuntimeIntegration:
         assert vehicle.mass == 1500.0
         assert vehicle["mass"] == 1500.0
         # Raw protobuf stays reachable.
-        assert vehicle.get_slot("mass").materialized is True
+        assert vehicle.get_feature("mass").materialized is True
 
     def test_instantiate_resolves_nested_instances(self):
         """A part slot resolves to a nested Instance, not a bare id."""
@@ -122,8 +122,8 @@ class TestRuntimeIntegration:
         assert vehicle.engine.power == 300.0
 
     def test_instantiate_cyclic_attribute_reports_error(self):
-        """A cyclic derived attribute surfaces as SlotError, never as None."""
-        from opensysml.errors import SlotError
+        """A cyclic derived attribute surfaces as FeatureValueError, never as None."""
+        from opensysml.errors import FeatureValueError
 
         src = '''
         package Demo {
@@ -137,9 +137,9 @@ class TestRuntimeIntegration:
 
         inst = self.conn.instantiate("Demo::Cyclic", model.hash)
 
-        with pytest.raises(SlotError, match="cyclic"):
+        with pytest.raises(FeatureValueError, match="cyclic"):
             inst.a
-        assert isinstance(inst.slots["a"], SlotError)
+        assert isinstance(inst.features["a"], FeatureValueError)
 
     def test_enum_typed_slot_and_eval_return_the_literal(self):
         """An enumeration literal reaches the client as the literal it is."""

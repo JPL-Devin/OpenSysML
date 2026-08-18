@@ -33,7 +33,7 @@ from opensysml.errors import (
     RenameReferencedError,
     InstanceTypeError, InvalidRequestError, ModelError,
     ModelFileNotFoundError, ModelNotFoundError, ServiceError,
-    ServiceTimeoutError, SlotError, StaleServiceError, SymbolNotFoundError,
+    ServiceTimeoutError, StaleServiceError, SymbolNotFoundError,
     TypeMismatchError, UnpinnedReleaseError, UnsupportedOperationError,
     UnsupportedValueError, WrongKindError,
 )
@@ -55,7 +55,7 @@ __all__ = [
     "RenameReferencedError", "OverlappingEditsError", "EditResultError",
     "InstanceTypeError", "InvalidRequestError", "MissingCapabilityError",
     "ModelError", "ModelFileNotFoundError", "ModelNotFoundError",
-    "ServiceError", "ServiceTimeoutError", "SlotError", "StaleServiceError",
+    "ServiceError", "ServiceTimeoutError", "StaleServiceError",
     "SymbolNotFoundError",
     "TypeMismatchError", "UnpinnedReleaseError",
     "UnsupportedOperationError", "UnsupportedValueError",

@@ -39,7 +39,7 @@ def test_instantiate_returns_instance():
                 instance=sysml_pb2.Instance(
                     id=123,
                     type_symbol_id="Test::Part",
-                    slots={}
+                    feature_values={}
                 ),
                 error=""
             )

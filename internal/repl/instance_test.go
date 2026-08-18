@@ -12,7 +12,7 @@ func TestInstantiatedModelEvaluatesDerivedFeatureValues(t *testing.T) {
 	s := loadFixture(t, "testdata/derived_package.sysml")
 	run(t, s, "%instantiate Derived::Vehicle")
 
-	got := run(t, s, "%slots Derived::Vehicle")
+	got := run(t, s, "%features Derived::Vehicle")
 	wants(t, got,
 		"mass = 1500.00",    // declared constant
 		"doubled = 3000.00", // derived from a sibling feature
@@ -62,25 +62,25 @@ func TestConstraintBindsToInstance(t *testing.T) {
 	rejects(t, failed, "Error:")
 }
 
-// %slots renders a constraint feature as a verdict; a feature value would be
+// %features renders a constraint feature as a verdict; a feature value would be
 // meaningless for it.
 func TestFeatureValuesRendersConstraintVerdict(t *testing.T) {
 	s := loadFixture(t, "testdata/derived_package.sysml")
 	run(t, s, "%instantiate Derived::Vehicle")
 	run(t, s, "%instantiate Derived::Heavy")
 
-	wants(t, run(t, s, "%slots Derived::Vehicle"), "massOK: <constraint: satisfied>")
-	wants(t, run(t, s, "%slots Derived::Heavy"), "massOK: <constraint: violated>")
+	wants(t, run(t, s, "%features Derived::Vehicle"), "massOK: <constraint: satisfied>")
+	wants(t, run(t, s, "%features Derived::Heavy"), "massOK: <constraint: violated>")
 }
 
-// A requirement usage is a verdict too, and %slots must agree with what
+// A requirement usage is a verdict too, and %features must agree with what
 // %requirement says about the same feature of the same instance.
 func TestFeatureValuesAgreesWithRequirementOnSameInstance(t *testing.T) {
 	s := loadFixture(t, "testdata/derived_package.sysml")
 	run(t, s, "%instantiate Derived::Vehicle")
 
 	wants(t, run(t, s, "%requirement Derived::Vehicle::lightEnough"), "satisfied")
-	got := run(t, s, "%slots Derived::Vehicle")
+	got := run(t, s, "%features Derived::Vehicle")
 	wants(t, got, "lightEnough: <requirement: satisfied>")
 	rejects(t, got, "<unknown>")
 }
@@ -94,7 +94,7 @@ func TestRequirementViolationIsAVerdictNotAnError(t *testing.T) {
 	got := run(t, s, "%requirement Derived::Heavy::lightEnough")
 	wants(t, got, "✗ Requirement Derived::Heavy::lightEnough failed", "Required condition evaluated to false")
 	rejects(t, got, "Error:")
-	wants(t, run(t, s, "%slots Derived::Heavy"), "lightEnough: <requirement: violated>")
+	wants(t, run(t, s, "%features Derived::Heavy"), "lightEnough: <requirement: violated>")
 }
 
 // A constraint over a feature nothing declares is still an error, distinct from
@@ -228,7 +228,7 @@ func TestInstanceSurvivesUnrelatedDeclaration(t *testing.T) {
 	wants(t, listing, "Demo::Vehicle (ID: 1)")
 	rejects(t, listing, "dropped")
 
-	wants(t, run(t, s, "%slots Demo::Vehicle"), "mass = 1500.00")
+	wants(t, run(t, s, "%features Demo::Vehicle"), "mass = 1500.00")
 	wants(t, run(t, s, "%eval Demo::Vehicle::mass"), "1500.00")
 	// The carried objects hold their identities in the new context — the vehicle
 	// and the engine part inside it — so the next object built does not reuse one.
@@ -247,7 +247,7 @@ func TestInstanceOwningAnAnonymousConnectorSurvives(t *testing.T) {
 		part def Sys { part a : A; part b : B; connect a.p to b.q; }
 	}`)
 	wants(t, run(t, s, "%instantiate Demo::Sys"), "ID: 1")
-	fvs := run(t, s, "%slots Demo::Sys")
+	fvs := run(t, s, "%features Demo::Sys")
 	wants(t, fvs, "(anonymous connector)")
 	connector := connectorLine(t, fvs)
 
@@ -260,7 +260,7 @@ func TestInstanceOwningAnAnonymousConnectorSurvives(t *testing.T) {
 		rejects(t, listing, "dropped")
 		// The same connector of the same object is named the same, submission
 		// after submission, rather than costing an identity each time.
-		if got := connectorLine(t, run(t, s, "%slots Demo::Sys")); got != connector {
+		if got := connectorLine(t, run(t, s, "%features Demo::Sys")); got != connector {
 			t.Errorf("after %s the connector reads %q, want %q", decl, got, connector)
 		}
 	}
@@ -270,12 +270,12 @@ func TestInstanceOwningAnAnonymousConnectorSurvives(t *testing.T) {
 	// Submissions nothing reads the connectors between keep the identity too.
 	s.Submit("part def Gizmo;")
 	s.Submit("part def Doodad;")
-	if got := connectorLine(t, run(t, s, "%slots Demo::Sys")); got != connector {
+	if got := connectorLine(t, run(t, s, "%features Demo::Sys")); got != connector {
 		t.Errorf("after two unread submissions the connector reads %q, want %q", got, connector)
 	}
 }
 
-// connectorLine returns the line of a %slots listing that holds the object's
+// connectorLine returns the line of a %features listing that holds the object's
 // anonymous connector.
 func connectorLine(t *testing.T, listing string) string {
 	t.Helper()
@@ -312,13 +312,13 @@ func TestInstanceRederivesAValueWhenAnExpressionItReadsChanges(t *testing.T) {
 	s.Submit("calc def double { in x; return : ScalarValues::Real = x * 2.0; }")
 	s.Submit("part def A { attribute m = double(3.0); }")
 	wants(t, run(t, s, "%instantiate A"), "ID: 1")
-	wants(t, run(t, s, "%slots A"), "m = 6.00")
+	wants(t, run(t, s, "%features A"), "m = 6.00")
 
 	res := s.Submit("calc def double { in x; return : ScalarValues::Real = x * 3.0; }")
 	if hasNotice(res, "instance was dropped") {
 		t.Fatalf("notices = %v, want the object kept", res.Notices)
 	}
-	wants(t, run(t, s, "%slots A"), "m = 9.00")
+	wants(t, run(t, s, "%features A"), "m = 9.00")
 }
 
 // A connector holds the features it connects rather than values of its own, so
@@ -333,11 +333,11 @@ func TestConnectorEndsAreReadAgainAfterADependencyChanges(t *testing.T) {
 		part def Sys { part a : A; part b : B; connection c1 connect a.x to b.y; }
 	}`)
 	wants(t, run(t, s, "%instantiate Demo::Sys"), "ID: 1")
-	wants(t, run(t, s, "%slots Demo::Sys"), "x = 6.00", "c1 = Instance(ID: 4)", "source = 6.00")
+	wants(t, run(t, s, "%features Demo::Sys"), "x = 6.00", "c1 = Instance(ID: 4)", "source = 6.00")
 
 	s.Submit("calc def double { in x; return : ScalarValues::Real = x * 3.0; }")
 	// The end reads the new value, under the identity the connector kept.
-	wants(t, run(t, s, "%slots Demo::Sys"), "x = 9.00", "c1 = Instance(ID: 4)", "source = 9.00")
+	wants(t, run(t, s, "%features Demo::Sys"), "x = 9.00", "c1 = Instance(ID: 4)", "source = 9.00")
 
 	// Nothing else took that identity.
 	wants(t, run(t, s, "%instantiate Demo::A"), "ID: 5")
@@ -350,17 +350,17 @@ func TestCollectionIsCollectedAgainAfterADependencyChanges(t *testing.T) {
 	s.Submit("calc def double { in x; return : ScalarValues::Real = x * 2.0; }")
 	s.Submit("part def A { attribute pool : ScalarValues::Real[*]; attribute one :> pool = double(3.0); }")
 	wants(t, run(t, s, "%instantiate A"), "ID: 1")
-	wants(t, run(t, s, "%slots A"), "pool = [6.00]", "one = 6.00")
+	wants(t, run(t, s, "%features A"), "pool = [6.00]", "one = 6.00")
 
 	s.Submit("calc def double { in x; return : ScalarValues::Real = x * 3.0; }")
-	wants(t, run(t, s, "%slots A"), "pool = [9.00]", "one = 9.00")
+	wants(t, run(t, s, "%features A"), "pool = [9.00]", "one = 9.00")
 
 	// A collection of objects is kept, so its members keep their identities.
 	s.Submit("package D { part def B; part def C { part xs : B[3]; } }")
 	wants(t, run(t, s, "%instantiate D::C"), "ID:")
-	held := run(t, s, "%slots D::C")
+	held := run(t, s, "%features D::C")
 	s.Submit("part def Widget;")
-	if got := run(t, s, "%slots D::C"); got != held {
+	if got := run(t, s, "%features D::C"); got != held {
 		t.Errorf("the objects of the collection read\n%s\nwant\n%s", got, held)
 	}
 }
@@ -381,12 +381,12 @@ func TestSelectedVariantKeepsItsIdentity(t *testing.T) {
 		part sedan :> family { part :>> engine = engine::electric; }
 	}`)
 	wants(t, run(t, s, "%instantiate Demo::sedan"), "ID: 1")
-	wants(t, run(t, s, "%slots Demo::sedan"), "engine = electric (Instance ID: 2)")
+	wants(t, run(t, s, "%features Demo::sedan"), "engine = electric (Instance ID: 2)")
 
 	if res := s.Submit("part def Widget;"); len(res.Notices) != 0 {
 		t.Fatalf("an unrelated declaration reported %v", res.Notices)
 	}
-	wants(t, run(t, s, "%slots Demo::sedan"), "engine = electric (Instance ID: 2)")
+	wants(t, run(t, s, "%features Demo::sedan"), "engine = electric (Instance ID: 2)")
 	wants(t, run(t, s, "%instantiate Demo::Engine"), "ID: 3")
 
 	// A change to which variant is selected still invalidates the object.
@@ -413,19 +413,19 @@ func TestInstanceRederivesAValueThroughAChainOfReads(t *testing.T) {
 	s.Submit("calc def outer { in y; return : ScalarValues::Real = inner(y) + 1.0; }")
 	s.Submit("part def A { attribute m = outer(3.0); }")
 	wants(t, run(t, s, "%instantiate A"), "ID: 1")
-	wants(t, run(t, s, "%slots A"), "m = 7.00")
+	wants(t, run(t, s, "%features A"), "m = 7.00")
 
 	s.Submit("calc def inner { in x; return : ScalarValues::Real = x * 3.0; }")
-	wants(t, run(t, s, "%slots A"), "m = 10.00")
+	wants(t, run(t, s, "%features A"), "m = 10.00")
 
 	s.Submit("attribute g = 5.0;")
 	s.Submit("attribute h = g * 2.0;")
 	s.Submit("part def B { attribute m = h + 1.0; }")
 	wants(t, run(t, s, "%instantiate B"), "ID:")
-	wants(t, run(t, s, "%slots B"), "m = 11.00")
+	wants(t, run(t, s, "%features B"), "m = 11.00")
 
 	s.Submit("attribute g = 7.0;")
-	wants(t, run(t, s, "%slots B"), "m = 15.00")
+	wants(t, run(t, s, "%features B"), "m = 15.00")
 }
 
 // A submission that invalidates some of what the session holds says so even
@@ -559,19 +559,19 @@ func TestCollectionFeatureValuesShowTheirContents(t *testing.T) {
 	s := loadFixture(t, "testdata/collection_slots.sysml")
 	run(t, s, "%instantiate Coll::Rig")
 
-	got := run(t, s, "%slots Coll::Rig")
+	got := run(t, s, "%features Coll::Rig")
 	wants(t, got, "doubles = [200.00]", "wheels = [Instance(ID: 2), Instance(ID: 3)]")
 	rejects(t, got, "<unknown>")
 	wants(t, run(t, s, "%eval Coll::Rig::doubles"), "= [200.00]")
 }
 
-// A part held in a feature value is worth nothing to the reader as an opaque ID: %slots
+// A part held in a feature value is worth nothing to the reader as an opaque ID: %features
 // shows what the nested object holds, indented under the feature value that holds it.
 func TestFeatureValuesExpandNestedInstances(t *testing.T) {
 	s := loadFixture(t, "testdata/nested_part.sysml")
 	run(t, s, "%instantiate Nested::Car")
 
-	wants(t, run(t, s, "%slots Nested::Car"),
+	wants(t, run(t, s, "%features Nested::Car"),
 		"  engine = Instance(ID: 2)",
 		"    mass = 5.00",
 		"    light: <constraint: satisfied>",
@@ -583,7 +583,7 @@ func TestFeatureValuesExpandCollectionElements(t *testing.T) {
 	s := loadFixture(t, "testdata/collection_slots.sysml")
 	run(t, s, "%instantiate Coll::Rig")
 
-	got := run(t, s, "%slots Coll::Rig")
+	got := run(t, s, "%features Coll::Rig")
 	wants(t, got, "wheels = [Instance(ID: 2), Instance(ID: 3)]")
 	if strings.Count(got, "    radius") != 2 {
 		t.Errorf("expected both wheels expanded, got:\n%s", got)
@@ -597,7 +597,7 @@ func TestFeatureValuesStopAtRecursiveContainment(t *testing.T) {
 	s.Submit("part def Node { attribute v = 1.0; part child : Node; }")
 	run(t, s, "%instantiate Node")
 
-	got := run(t, s, "%slots Node")
+	got := run(t, s, "%features Node")
 	wants(t, got, "v = 1.00", "child : Node (not expanded: contains its own kind)")
 	if n := strings.Count(got, "\n"); n > 5 {
 		t.Errorf("expected a bounded listing, got %d lines:\n%s", n, got)
@@ -611,7 +611,7 @@ func TestFeatureValuesTruncateWideNesting(t *testing.T) {
 	s.Submit("part def Leaf { attribute v = 1.0; } part def Mid { part leaves : Leaf[20]; } part def Top { part mids : Mid[20]; }")
 	run(t, s, "%instantiate Top")
 
-	got := run(t, s, "%slots Top")
+	got := run(t, s, "%features Top")
 	wants(t, got, "… (listing truncated)")
 	if n := strings.Count(got, "\n"); n > maxFeatureValueLines+10 {
 		t.Errorf("listing ran to %d lines, want it bounded near %d:\n%.400s", n, maxFeatureValueLines, got)

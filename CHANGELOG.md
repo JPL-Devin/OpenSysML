@@ -153,10 +153,10 @@ artifacts they describe really were called that.
   `%slots` listed. "Slot" is UML/SysML v1 vocabulary (`InstanceSpecification::slot`); the v2/KerML
   pair for this concept is `Feature` and `FeatureValue`, and the listing's heading now reads
   `Features:` to match. `%instantiate` points at the new spelling too.
-- **`%slots <name>` still works**, as a deprecated alias: the same listing, led by
-  `note: %slots is deprecated — use %features`. Nothing else about it changed — the nested
-  expansion, its bounds, the error lines and the exit status a non-interactive run takes from a
-  feature value that could not be materialized are all as they were.
+- **`%slots` is gone**, not kept as an alias: since it never shipped in a release, 0.1.0 takes the
+  clean break rather than carrying the v1 spelling forward. Nothing else about the listing changed —
+  the nested expansion, its bounds, the error lines and the exit status a non-interactive run takes
+  from a feature value that could not be materialized are all as they were.
 - **The vocabulary behind the command is v2 too.** What was printed and named as a "slot" is now a
   *feature value* (`FeatureValue`, `KerML.kerml`), and a state's `do` behavior is a *do action*
   (`States.sysml`) rather than a "do activity":
@@ -166,13 +166,13 @@ artifacts they describe really were called that.
     `state machine exceeded max do action steps (…)`. The `%budget` label reads `do action steps`.
     `SYSML_MAX_DO_STEPS` and every exit status are unchanged, but a script matching the old text
     needs updating.
-  - The gRPC interface gained `Instance.feature_values` (`FeatureValue`) and the
-    `feature-values` capability. The deprecated `Instance.slots` (`SlotValue`) is still populated
-    identically, so an existing client keeps working.
-  - `opensysml` gained `Instance.features`, `raw_features`, `get_feature`, `FeatureValueError`, and
-    `typed.feature_value`/`optional_feature_value`/`list_feature_value`, which generated modules now
-    emit (emission schema `3`). `slots`, `raw_slots`, `get_slot`, `SlotError` and the `slot`
-    decoders remain as deprecated spellings, and `SlotError is FeatureValueError`.
+  - The gRPC interface carries `Instance.feature_values` (`FeatureValue`) and the `feature-values`
+    capability. `Instance.slots` and `SlotValue` are removed; field number 3 and the name `slots`
+    stay reserved in `sysml.proto`, so the number is never reused.
+  - `opensysml` exposes `Instance.features`, `raw_features`, `get_feature`, `FeatureValueError`, and
+    `typed.feature_value`/`optional_feature_value`/`list_feature_value`, which generated modules
+    emit (emission schema `3`). The `slots`, `raw_slots`, `get_slot`, `SlotError`, `slot_to_python`
+    and `slot` decoder spellings are removed.
   - The Go runtime API is renamed to match (`runtime.FeatureValue`, `Instance.FeatureValues`,
     `GetFeatureValue`, `FeatureValueError`, `ErrFeatureValueMaterialization`, `ErrCyclicFeatureValue`,
     `ErrUninitializedFeatureValue`). It is internal, so nothing outside the module depends on it.

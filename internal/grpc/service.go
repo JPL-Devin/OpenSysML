@@ -60,8 +60,7 @@ const CapabilityUnsetValue = "unset_value"
 const CapabilityApplyEdits = "apply_edits"
 
 // CapabilityFeatureValues names the capability of populating
-// Instance.feature_values, the current spelling of the deprecated
-// Instance.slots, which is still populated identically.
+// Instance.feature_values, which replaced the pre-0.1.0 Instance.slots.
 const CapabilityFeatureValues = "feature_values"
 
 // capabilities is what this build supports, in report order. A capability is

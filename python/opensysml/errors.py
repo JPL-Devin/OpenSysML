@@ -113,11 +113,6 @@ class FeatureValueError(OpenSysMLError):
         self.message = message
 
 
-#: Deprecated spelling of :class:`FeatureValueError`; ``except SlotError`` still
-#: catches it, since it is the same class.
-SlotError = FeatureValueError
-
-
 class TypeMismatchError(OpenSysMLError):
     """Raised when a feature holds a value of another type than its generated view declares.
 
@@ -488,7 +483,6 @@ __all__ = [
     "ServiceError",
     "FeatureValueError",
     "ServiceTimeoutError",
-    "SlotError",
     "StaleServiceError",
     "SymbolNotFoundError",
     "TypeMismatchError",

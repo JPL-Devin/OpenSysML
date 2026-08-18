@@ -17,14 +17,14 @@ in this directory, so adding a case is a data-only change.
 | `rpc` | all | `GetSymbol`, `Evaluate`, `Instantiate`, `ExecuteAction` or `ExecuteState` |
 | `expression` | Evaluate | expression source to evaluate |
 | `context_symbol_id` | Evaluate | optional FQN whose scope the expression is evaluated in |
-| `subject_symbol_id` | Evaluate | optional FQN of a part/usage instantiated and evaluated against, so features read its slots |
+| `subject_symbol_id` | Evaluate | optional FQN of a part/usage instantiated and evaluated against, so features read its feature values |
 | `symbol_id` | GetSymbol, Instantiate, ExecuteAction, ExecuteState | FQN of the subject |
 | `inputs` | ExecuteAction | parameter name → value, bound before execution |
 | `events` | ExecuteState | event names injected, in order |
 | `expected_result` | Evaluate | expected `Value` |
 | `expected_attribute_names` | GetSymbol | full ordered attribute name list, own then inherited |
 | `expected_attributes` | GetSymbol | attribute name → `{type, value_kind, value, unit}`; no `value_kind` requires no value |
-| `expected_slots` | Instantiate | slot name → `{materialized, value_kind, value, error}` |
+| `expected_feature_values` | Instantiate | feature name → `{materialized, value_kind, value, error}` |
 | `expected_instance_count` | Instantiate | number of reachable instances in the response graph |
 | `expected_outputs` | ExecuteAction | output name → expected `Value` |
 | `expected_states_visited` | ExecuteState | full ordered state-visit trace |
@@ -35,12 +35,12 @@ A case without `expected_error` requires an empty `error` field. A case with `ex
 asserts only the error, and is how failure modes (for example an action with no initial node)
 are pinned.
 
-A slot's `error` is a substring its `SlotValue.error` must contain; a slot without one must
-carry no error.
+A feature value's `error` is a substring its `FeatureValue.error` must contain; one without an
+error must carry none.
 
 A value is `{"kind": <oneof field of pb.Value>, "value": <literal>}`, where `kind` is one of
 `int_value`, `real_value`, `bool_value`, `string_value`, `instance_id`, `quantity`, `null` or
-`unset` — the last being a materialized slot holding no value, as a valueless feature of a
+`unset` — the last being a materialized feature value holding no value, as a valueless feature of a
 value type does. The assertion checks the oneof arm as well as the payload, so a value returned
 with the wrong type fails; `instance_id`, `null` and `unset` assert the arm only, since instance
 ids are assigned at runtime.

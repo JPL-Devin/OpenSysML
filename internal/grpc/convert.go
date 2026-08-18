@@ -654,26 +654,5 @@ func InstanceToProto(rt *runtime.Context, inst *runtime.Instance, idx *symbols.I
 		Id:            inst.ID,
 		TypeSymbolId:  idx.GetFQN(inst.Type),
 		FeatureValues: pbValues,
-		Slots:         deprecatedSlots(pbValues),
 	}
-}
-
-// deprecatedSlots mirrors the feature values into the deprecated `slots` map, so
-// a client generated before the rename still reads them.
-//
-//lint:ignore SA1019 populating the deprecated map is the point of this helper.
-func deprecatedSlots(values map[string]*pb.FeatureValue) map[string]*pb.SlotValue {
-	//lint:ignore SA1019 the deprecated message is what this map holds, deliberately.
-	fvs := make(map[string]*pb.SlotValue, len(values))
-	for name, fv := range values {
-		//lint:ignore SA1019 the deprecated message is what this map holds, deliberately.
-		fvs[name] = &pb.SlotValue{
-			FeatureName:  fv.FeatureName,
-			Value:        fv.Value,
-			Values:       fv.Values,
-			Materialized: fv.Materialized,
-			Error:        fv.Error,
-		}
-	}
-	return fvs
 }

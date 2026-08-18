@@ -195,9 +195,6 @@ cyclic.features["a"]   # FeatureValueError(...)
 rather than returning `False`; use `features` to inspect an instance whose feature values may
 have failed.
 
-`slots`, `raw_slots`, `get_slot` and `SlotError` remain as deprecated spellings of
-`features`, `raw_features`, `get_feature` and `FeatureValueError`.
-
 `eval` returns a single value, so a result the wire format cannot represent raises
 `UnsupportedValueError` rather than being reported per entry.
 
