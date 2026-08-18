@@ -12,7 +12,7 @@ import (
 
 // pinnedQuery translates one constraint of the panel fixture with the values the
 // model declares for the part fixed.
-func pinnedQuery(t *testing.T, element string) (*runtime.Context, *symbols.Index, *Query) {
+func fixedQuery(t *testing.T, element string) (*runtime.Context, *symbols.Index, *Query) {
 	t.Helper()
 	ctx, idx := fixtureFile(t, "panel_pins.sysml")
 	panel := symbolNamed(t, idx, "test::Panel")
@@ -38,7 +38,7 @@ func TestGoldenWithFixedValues(t *testing.T) {
 	}
 	for golden, element := range cases {
 		t.Run(golden, func(t *testing.T) {
-			_, _, q := pinnedQuery(t, element)
+			_, _, q := fixedQuery(t, element)
 			compareGolden(t, golden, Script(q))
 		})
 	}
@@ -103,7 +103,7 @@ func TestNoPinsTranslateAsBefore(t *testing.T) {
 // equality the query asserts, at the position the pin records, and the variable
 // it fixes is no longer one the solver is free to choose.
 func TestPinnedValueIsAssertedAndReported(t *testing.T) {
-	_, _, q := pinnedQuery(t, "test::Panel::fits")
+	_, _, q := fixedQuery(t, "test::Panel::fits")
 	if len(q.Pinned) != 1 || q.Pinned[0].Var.Name != "test::Panel::width" {
 		t.Fatalf("fixed %+v, want the declared width alone:\n%s", q.Pinned, Script(q))
 	}
@@ -128,7 +128,7 @@ func TestPinnedValueIsAssertedAndReported(t *testing.T) {
 // magnitude the same quantity written in the condition scales to — 5.4 [km/h] is
 // exactly 1.5 [m/s], with no rounding of the binary float it was read as.
 func TestPinnedQuantityIsScaledExactly(t *testing.T) {
-	_, _, q := pinnedQuery(t, "test::Panel::speedIsBounded")
+	_, _, q := fixedQuery(t, "test::Panel::speedIsBounded")
 	script := Script(q)
 	if !strings.Contains(script, "(assert (= |test::Panel::maxSpeed| 1.5))") {
 		t.Errorf("the fixed speed is not exactly 1.5 in base units:\n%s", script)
@@ -141,7 +141,7 @@ func TestPinnedQuantityIsScaledExactly(t *testing.T) {
 // TestPinnedEnumerationNamesItsConstructor: an enumeration literal fixes the
 // value of the datatype sort the writer declares for it.
 func TestPinnedEnumerationNamesItsConstructor(t *testing.T) {
-	_, _, q := pinnedQuery(t, "test::Panel::polishedIsWide")
+	_, _, q := fixedQuery(t, "test::Panel::polishedIsWide")
 	script := Script(q)
 	if !strings.Contains(script, "(assert (= |test::Panel::finish| |test::Finish::polished|))") {
 		t.Errorf("the fixed finish is not the datatype's own value:\n%s", script)
@@ -151,7 +151,7 @@ func TestPinnedEnumerationNamesItsConstructor(t *testing.T) {
 // TestPinnedStringIsAsserted: a declared string fixes the string the writer
 // quotes.
 func TestPinnedStringIsAsserted(t *testing.T) {
-	_, _, q := pinnedQuery(t, "test::Panel::labelled")
+	_, _, q := fixedQuery(t, "test::Panel::labelled")
 	if !strings.Contains(Script(q), `(assert (= |test::Panel::label| "left"))`) {
 		t.Errorf("the fixed label is not asserted:\n%s", Script(q))
 	}
@@ -161,7 +161,7 @@ func TestPinnedStringIsAsserted(t *testing.T) {
 // condition of the element reads is reported as unread rather than dropped, and
 // asserts nothing about conditions that say nothing about it.
 func TestPinnedValueNoConditionReadsIsReported(t *testing.T) {
-	_, _, q := pinnedQuery(t, "test::Panel::labelled")
+	_, _, q := fixedQuery(t, "test::Panel::labelled")
 	unread := map[string]bool{}
 	for _, u := range q.Unread {
 		unread[u.Pin.Name] = true
