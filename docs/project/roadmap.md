@@ -87,19 +87,19 @@ Without one the tag builds artifacts and then fails at publish, having created n
 Nobody has verified which is set. Full procedure and post-tag verification:
 `docs/project/releasing.md`.
 
-## R2 — publish `pysysml` to PyPI (account-gated remainder)
+## R2 — publish `opensysml` to PyPI (account-gated remainder)
 
-The job exists: `publish-pypi` in the `release-python` workflow, filtered to `pysysml-v*`,
+The job exists: `publish-pypi` in the `release-python` workflow, filtered to `opensysml-v*`,
 building a wheel and an sdist, checking them with `twine check --strict`, installing the wheel
 into a clean virtualenv and only then uploading. The version is declared once, in
-`python/pysysml/_version.py`, and a tag that disagrees with it fails before upload. The
+`python/opensysml/_version.py`, and a tag that disagrees with it fails before upload. The
 package keeps its own version line on purpose: it resolves a `sysml-grpc` binary at runtime
 from whichever release the caller names, so its version and the core's are not lockstep.
 See `docs/project/releasing.md`.
 
-One decision precedes the upload, found in the 0.0.8 pre-release audit: `python/pysysml/_version.py`
+One decision precedes the upload, found in the 0.0.8 pre-release audit: `python/opensysml/_version.py`
 declares `0.2.0` while the newest published artifact is `0.1.1`, so the first upload has to be
-`pysysml-v0.2.0` (the tag-versus-source check refuses anything else) and 0.2.0's Python-side
+`opensysml-v0.2.0` (the tag-versus-source check refuses anything else) and 0.2.0's Python-side
 changes — `evaluate`/`ExecutionError`, pinned checksums, subject-aware `eval`, generated typed
 classes — all land in that one release rather than incrementally.
 
@@ -108,10 +108,10 @@ first release with an account-scoped token, then replace it with a project-scope
 the restricted CircleCI context `PyPI` holding `PYPI_API_TOKEN` (and optionally
 `TEST_PYPI_API_TOKEN` for pre-release tags).
 
-Also decide the default download repository. `python/pysysml/binary.py` defaults to
+Also decide the default download repository. `python/opensysml/binary.py` defaults to
 `Open-MBEE/OpenSysML`, releases are currently cut from `JPL-Devin/OpenSysML`, and
-`PYSYSML_GITHUB_REPO` is the override. `sysml-grpc` assets ship from 0.0.5 onward,
-so `pysysml` can fetch a binary from a released tag; `pip install pysysml` still waits on the
+`OPENSYSML_GITHUB_REPO` is the override. `sysml-grpc` assets ship from 0.0.5 onward,
+so `opensysml` can fetch a binary from a released tag; `pip install opensysml` still waits on the
 PyPI project above.
 
 ## R3 — Homebrew tap
@@ -161,7 +161,7 @@ Every engineering item below is on `main`; what remains for a Python user is R2,
 wheel, which is account-gated rather than work.
 
 This is where the release just changed shape: `sysml-grpc-<os>-<arch>` binaries now ship with a
-`.sha256` sidecar, and `pysysml` downloads and verifies one, so a Python user no longer needs a
+`.sha256` sidecar, and `opensysml` downloads and verifies one, so a Python user no longer needs a
 Go toolchain. That makes the following gaps user-visible for the first time.
 
 ## P1 — the integration tests skip in CI — done
@@ -172,16 +172,16 @@ client↔service path was never exercised there. Starting one was not the fix on
 ownership model shut down services the process had not spawned, so
 `test_service_shuts_down_when_last_process_exits` failed as soon as a service ran.
 
-The ownership rule decided and implemented: **pysysml never stops a service it did not spawn.**
+The ownership rule decided and implemented: **opensysml never stops a service it did not spawn.**
 A connection attaching to a service already listening takes no reference and leaves it running;
-a service `pysysml` starts is refcounted within the starting process only (`_OWNED_SERVICES`,
+a service `opensysml` starts is refcounted within the starting process only (`_OWNED_SERVICES`,
 keyed by state dir and port), against the `(pid, create_time)` the reference was taken on, and
 stopped once when its last reference goes. That test now spawns its own service on its own port
 and state dir and asserts *that* one dies (`TestOwnershipOfASpawnedService`).
 
 Both `python-test` jobs (`.github/workflows/pr.yml` is the gate that runs on a PR;
 `.circleci/config.yml` matches it) start `sysml-grpc` on 50051, wait for the port and run with
-`PYSYSML_REQUIRE_SERVICE=1`, which turns "no service, so skip" into a failure — a developer
+`OPENSYSML_REQUIRE_SERVICE=1`, which turns "no service, so skip" into a failure — a developer
 without a binary still skips.
 
 ## P2 — a nested object is unreachable over gRPC — done
@@ -200,9 +200,9 @@ in `docs/project/spec-compliance.md`.
 
 ## P3 — generated typed classes for a parsed model — done
 
-`python -m pysysml.generate model.sysml -o model_types.py` emits one class per SysML definition,
+`python -m opensysml.generate model.sysml -o model_types.py` emits one class per SysML definition,
 each a typed view over the `Instance` P2 made navigable, so `v.mass` completes in an editor and
-`v.mass + "x"` is a mypy error; `pysysml` ships `py.typed`. Codegen reads facts the service now
+`v.mass + "x"` is a mypy error; `opensysml` ships `py.typed`. Codegen reads facts the service now
 resolves rather than scraping them: `SymbolInfo` carries `type_info` (declared and resolved type,
 the library scalar it reduces to, and whether it is a quantity), `multiplicity`, and *every*
 generalization edge in `specializations` — `extractMetadata` exported only the first `specializes`
@@ -220,8 +220,8 @@ class rather than dropped silently.
   **Done:** the spawner writes the service's pid *and* process start time (plus its own), and a
   pid is trusted only while `psutil.Process(pid).create_time()` still matches; a reused pid or a
   lookalike cmdline is a stale record, cleaned up and never signalled.
-- ~~`pysysml.eval` and `pysysml.RuntimeError` shadow builtins.~~ **Done:** the module-level function
-  is `pysysml.evaluate` and the error class is `pysysml.ExecutionError`; both old names resolve to
+- ~~`opensysml.eval` and `opensysml.RuntimeError` shadow builtins.~~ **Done:** the module-level function
+  is `opensysml.evaluate` and the error class is `opensysml.ExecutionError`; both old names resolve to
   the new object through `__getattr__` with a `DeprecationWarning` and are out of `__all__`, so a
   star-import shadows neither built-in. Removal in 1.0.0.
 - ~~`SymbolToProto.Attributes` is always empty (`convert.go:40`), so `Symbol.attributes()` and
@@ -234,7 +234,7 @@ class rather than dropped silently.
   **Done:** `PINNED_SHA256` in `binary.py` pins every asset's SHA-256 per release, generated from
   the published assets by `python/scripts/pin_release_checksums.py`; an unpinned release is
   refused rather than falling back to the sidecar, unless
-  `$PYSYSML_ALLOW_UNPINNED_DOWNLOAD=<owner/repo>` (or `=1`) accepts same-origin trust
+  `$OPENSYSML_ALLOW_UNPINNED_DOWNLOAD=<owner/repo>` (or `=1`) accepts same-origin trust
   explicitly, for the repository it names.
 - ~~`Model.eval` takes a scope, not a subject, so an expression cannot be evaluated against an
   object the way `%eval` does after `%instantiate`: `verify_constraint` takes a subject, `eval`
@@ -262,9 +262,9 @@ with identical diagnostics. What a model resolves against is pinned by test rath
 `TestPooledIndexMatchesFreshlyBuiltIndex` compares diagnostics and every qualified lookup of a
 pooled index against one built on the request path.
 
-## P6 — pysysml was read-only: a change could not be persisted — done
+## P6 — opensysml was read-only: a change could not be persisted — done
 
-Nothing in the Python surface could change a model. No RPC accepted one, no `pysysml` object was
+Nothing in the Python surface could change a model. No RPC accepted one, no `opensysml` object was
 mutable, and the only writing path (`Convert`) re-emits the source it parsed, so the loop a
 modeling script wants — read a value, compute, write it back — ended at "read".
 
@@ -275,7 +275,7 @@ result before returning it. The AST stays immutable and nothing is reformatted, 
 back with its comments, blank lines and indentation byte-identical outside the edited spans:
 
 ```python
-model = pysysml.load("spacecraft.sysml")
+model = opensysml.load("spacecraft.sysml")
 edit = model.edit()
 edit.set_value("Demo::sc::unitMass", "1050.0[SI::kg]")
 edit.apply().save("spacecraft.sysml")
@@ -378,7 +378,7 @@ representation, and a `FeatureValue` is optional (a feature has at most one). So
 ruling stands: the empty object stays what materialization holds, and every surface that reports a
 value says so. `Context.HoldsNoValue` (`runtime/instance.go`) recognizes an empty object of a value
 type, and `-instantiate`/`-e`, `%slots`, the JSON report and the gRPC/Python view all spell it
-`<unset>` — `pb.Value.unset` on the wire, `pysysml.UNSET` in Python — while a valued attribute, an
+`<unset>` — `pb.Value.unset` on the wire, `opensysml.UNSET` in Python — while a valued attribute, an
 object of a class, and a value type that does have features are unchanged. Unset is sent, never
 accepted: `ProtoToValueIn` rejects it with `ErrUnsetNotAccepted`.
 

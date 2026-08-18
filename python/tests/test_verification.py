@@ -9,11 +9,11 @@ import grpc
 import pytest
 from unittest.mock import Mock, patch
 
-from pysysml.capabilities import CAPABILITY_VERIFICATION, MissingCapabilityError
-from pysysml.connection import Connection
-from pysysml.errors import ExecutionError, ModelNotFoundError, WrongKindError
-from pysysml.proto import sysml_pb2
-from pysysml.verdict import CalcResult, Verdict
+from opensysml.capabilities import CAPABILITY_VERIFICATION, MissingCapabilityError
+from opensysml.connection import Connection
+from opensysml.errors import ExecutionError, ModelNotFoundError, WrongKindError
+from opensysml.proto import sysml_pb2
+from opensysml.verdict import CalcResult, Verdict
 
 
 def make_connection(stub):
@@ -24,7 +24,7 @@ def make_connection(stub):
     )
     with patch('grpc.insecure_channel'):
         with patch(
-            'pysysml.proto.sysml_pb2_grpc.SysMLServiceStub',
+            'opensysml.proto.sysml_pb2_grpc.SysMLServiceStub',
             return_value=stub,
         ):
             return Connection(auto_start=False)
@@ -264,7 +264,7 @@ def test_verification_requires_the_capability():
     )
     with patch('grpc.insecure_channel'):
         with patch(
-            'pysysml.proto.sysml_pb2_grpc.SysMLServiceStub',
+            'opensysml.proto.sysml_pb2_grpc.SysMLServiceStub',
             return_value=stub,
         ):
             conn = Connection(auto_start=False)

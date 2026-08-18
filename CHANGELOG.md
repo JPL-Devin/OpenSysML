@@ -14,8 +14,16 @@ artifacts they describe really were called that.
 
 - **Go module path is `github.com/Open-MBEE/OpenSysML`.** `go install
   github.com/Open-MBEE/OpenSysML/cmd/sysml@latest`; the old path resolves only for `v0.0.x`.
-- **The binaries are unchanged** — `sysml`, `sysml-lsp` and `sysml-grpc` keep their names, as does
-  the `pysysml` Python package.
+- **The binaries are unchanged** — `sysml`, `sysml-lsp` and `sysml-grpc` keep their names.
+- **The Python client is `opensysml`**, on PyPI and as the import: `pip install opensysml`,
+  `import opensysml`. Its environment variables are `OPENSYSML_*` (`OPENSYSML_GRPC_VERSION`,
+  `OPENSYSML_STATE_DIR`, `OPENSYSML_GITHUB_REPO`, `OPENSYSML_GRPC_BINARY`, `OPENSYSML_VERSION`,
+  `OPENSYSML_REQUIRE_VERSION`, `OPENSYSML_PRE_RELEASE`, `OPENSYSML_ALLOW_UNPINNED_DOWNLOAD`,
+  `OPENSYSML_REQUIRE_SERVICE`), the base error is `OpenSysMLError`, the generator entry point is
+  `opensysml-generate`, the state directory is `~/.opensysml` and the release tag is
+  `opensysml-v*`. Nothing reads the `pysysml` names, so a `~/.pysysml` left behind by an older
+  install is dead weight and can be deleted. `pysysml` on PyPI stops at the versions already
+  published.
 - **Release archives are `opensysml-<os>-<arch>.tar.gz`** (`.zip` on Windows), and the Homebrew
   formula is `opensysml`: `brew install Open-MBEE/tap/opensysml`. Assets already published under
   `v0.0.x` keep their old names.
@@ -56,7 +64,7 @@ artifacts they describe really were called that.
   - The gRPC interface gained `Instance.feature_values` (`FeatureValue`) and the
     `feature-values` capability. The deprecated `Instance.slots` (`SlotValue`) is still populated
     identically, so an existing client keeps working.
-  - `pysysml` gained `Instance.features`, `raw_features`, `get_feature`, `FeatureValueError`, and
+  - `opensysml` gained `Instance.features`, `raw_features`, `get_feature`, `FeatureValueError`, and
     `typed.feature_value`/`optional_feature_value`/`list_feature_value`, which generated modules now
     emit (emission schema `3`). `slots`, `raw_slots`, `get_slot`, `SlotError` and the `slot`
     decoders remain as deprecated spellings, and `SlotError is FeatureValueError`.
