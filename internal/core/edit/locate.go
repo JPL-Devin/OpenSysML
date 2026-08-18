@@ -74,7 +74,12 @@ func (m Model) valueSplice(i int, op Operation, sym *symbols.Symbol) (splice, er
 		return splice{}, err
 	}
 	if usage.Value != nil {
-		return splice{span: usage.Value.Span(), text: op.Value, opIndex: i, target: op.Target}, nil
+		return splice{
+			span:    m.tokenSpan(usage.Value.Span()),
+			text:    op.Value,
+			opIndex: i,
+			target:  op.Target,
+		}, nil
 	}
 	if usage.ConnectorEnds != nil || usage.FlowEnds != nil {
 		return splice{}, &Error{
@@ -102,6 +107,29 @@ func (m Model) valueSplice(i int, op Operation, sym *symbols.Symbol) (splice, er
 		opIndex: i,
 		target:  op.Target,
 	}, nil
+}
+
+// tokenSpan narrows a node's span to the bytes its own tokens cover. A span ends
+// at the next token's start, so whitespace and comments written after the node
+// fall inside it and would be spliced away with it.
+func (m Model) tokenSpan(span source.Span) source.Span {
+	end := span.Offset
+	lx := lexer.New(m.Source)
+	for tok := lx.Next(); tok.Kind != lexer.EOF; tok = lx.Next() {
+		if tok.Span.Offset >= span.End() {
+			break
+		}
+		if tok.Span.Offset < span.Offset || tok.IsTrivia() || tok.Kind == lexer.RegularComment {
+			continue
+		}
+		if e := tok.Span.End(); e > end && e <= span.End() {
+			end = e
+		}
+	}
+	if end <= span.Offset {
+		return span
+	}
+	return source.Span{Offset: span.Offset, Len: end - span.Offset}
 }
 
 func isSpace(c byte) bool {

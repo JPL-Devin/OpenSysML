@@ -174,6 +174,29 @@ func TestSetValuePreservesCommentsAndBlankLines(t *testing.T) {
 	}
 }
 
+// A comment or a line break written between a value and its `;` survives the
+// value being changed: only the value's own tokens are spliced, not the node
+// span, which runs on to the next token.
+func TestSetValueKeepsWhatFollowsTheValue(t *testing.T) {
+	m := loadContent(t, "trivia.sysml",
+		"package Demo {\n\tattribute mass = 1000.0 /* measured on the bench */ ;\n"+
+			"\tattribute count = 2\n\t\t;\n}\n")
+	requireClean(t, m)
+
+	res := applyOne(t, m, SetValue("Demo::mass", "2000.0"))
+	if got := res.Applied[0].OldText; got != "1000.0" {
+		t.Fatalf("replaced %q, want just the value", got)
+	}
+	if !strings.Contains(string(res.Content), "= 2000.0 /* measured on the bench */ ;") {
+		t.Fatalf("the comment after the value was lost:\n%s", res.Content)
+	}
+
+	res = applyOne(t, m, SetValue("Demo::count", "3"))
+	if !strings.Contains(string(res.Content), "attribute count = 3\n\t\t;") {
+		t.Fatalf("the layout before the ';' was lost:\n%s", res.Content)
+	}
+}
+
 func TestSetValueAddsValueToValuelessFeature(t *testing.T) {
 	m := load(t, "spacecraft.sysml")
 	requireClean(t, m)
@@ -480,7 +503,8 @@ func TestEditRepairingTheOnlySyntaxErrorIsNotRefused(t *testing.T) {
 	}
 
 	res := applyOne(t, m, SetValue("Demo::z", "2"))
-	if !strings.Contains(string(res.Content), "attribute z = 2;") {
+	// The space the fixture wrote before its ';' is not the value's, so it stays.
+	if !strings.Contains(string(res.Content), "attribute z = 2 ;") {
 		t.Fatalf("value not set:\n%s", res.Content)
 	}
 	if strings.Contains(string(res.Content), "Missing::Type = ") {
