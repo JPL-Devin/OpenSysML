@@ -1,5 +1,6 @@
 ; OpenSysML SMT-LIB2 translation of constraint BudgetConstraint
 ; the runtime evaluator remains normative; solving is an optional extension
+; no SMT-LIB logic covers the strings theory, so the logic set below is ALL, which the SMT-LIB logic list does not define
 (set-logic ALL)
 ; test::BudgetConstraint::crewCount, declared at mission_budget.sysml:7:3
 (declare-const |test::BudgetConstraint::crewCount| Int)

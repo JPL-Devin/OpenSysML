@@ -103,6 +103,9 @@ type NoOptimizationError struct {
 
 	// Detail says how it turned out not to implement optimization.
 	Detail string
+
+	// Cause is the capability refusal this was settled by, when one settled it.
+	Cause error
 }
 
 // Error reports that the solver cannot optimize, naming what can.
@@ -114,8 +117,14 @@ func (e *NoOptimizationError) Error() string {
 	return msg + fmt.Sprintf("; install z3 or set %s to it", SolverEnv)
 }
 
-// Unwrap returns ErrNoOptimization.
-func (e *NoOptimizationError) Unwrap() error { return ErrNoOptimization }
+// Unwrap returns ErrNoOptimization, and the capability refusal behind it when the
+// capability model settled it.
+func (e *NoOptimizationError) Unwrap() []error {
+	if e.Cause != nil {
+		return []error{ErrNoOptimization, e.Cause}
+	}
+	return []error{ErrNoOptimization}
+}
 
 // OptimumError says which solver would not report an optimum it had found, and
 // how. It unwraps to both ErrNoOptimum and ErrSolverProcess, as the solver did
@@ -162,6 +171,55 @@ var ErrSolverProcess = errors.New("the SMT solver did not answer")
 // assertions conflict, or named assertions the query never asserted. No core is
 // invented in its place.
 var ErrNoCore = errors.New("the SMT solver did not report an unsat core")
+
+// ErrUnsupportedCapability is returned when the backend found lacks a feature the
+// query needs. It is a refusal, not a verdict: nothing is degraded and no answer
+// is guessed from a script the backend would not accept.
+var ErrUnsupportedCapability = errors.New("the SMT solver does not support a feature this query needs")
+
+// UnsupportedCapabilityError names the backend, the features it lacks, and what
+// was being asked of it. It unwraps to ErrUnsupportedCapability.
+type UnsupportedCapabilityError struct {
+	// Solver is the backend that lacks the capability.
+	Solver string
+
+	// Operation is what was being asked of it: "solving", "explaining a
+	// conflict", "enumerating configurations".
+	Operation string
+
+	// Missing are the capabilities it lacks, the first being the one reported.
+	Missing []Capability
+
+	// Detail is what it answered when probed for the first missing capability.
+	Detail string
+}
+
+// Error names the missing feature, the backend, and how to get a backend that has
+// it, since the choice of solver is the operator's.
+func (e *UnsupportedCapabilityError) Error() string {
+	msg := fmt.Sprintf("%s: %s does not support %s, which %s needs",
+		ErrUnsupportedCapability, e.Solver, e.feature(), e.Operation)
+	if e.Detail != "" {
+		msg += ": " + e.Detail
+	}
+	return msg + fmt.Sprintf("; install a solver that supports it or set %s to one", SolverEnv)
+}
+
+// feature names the missing capabilities, the first with what SMT-LIB feature it
+// is and the rest by name.
+func (e *UnsupportedCapabilityError) feature() string {
+	if len(e.Missing) == 0 {
+		return "a feature it was not asked about"
+	}
+	out := e.Missing[0].Feature() + " (" + e.Missing[0].String() + ")"
+	for _, capability := range e.Missing[1:] {
+		out += ", nor " + capability.String()
+	}
+	return out
+}
+
+// Unwrap returns ErrUnsupportedCapability.
+func (e *UnsupportedCapabilityError) Unwrap() error { return ErrUnsupportedCapability }
 
 // CoreError says which solver would not explain its unsat verdict and how. It
 // unwraps to both ErrNoCore and ErrSolverProcess, as the solver did not answer

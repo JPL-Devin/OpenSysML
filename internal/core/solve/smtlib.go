@@ -92,7 +92,12 @@ func writeScript(b *strings.Builder, q *Query, opts scriptOptions) {
 		b.WriteString("; each is optimized within what the ones before it already settled\n")
 		b.WriteString("(set-option :opt.priority lex)\n")
 	}
-	fmt.Fprintf(b, "(set-logic %s)\n", q.Logic())
+	logic := q.LogicChoice()
+	if !logic.Standard {
+		fmt.Fprintf(b, "; no SMT-LIB logic covers %s, so the logic set below is %s, "+
+			"which the SMT-LIB logic list does not define\n", comment(logic.Why), logic.Name)
+	}
+	fmt.Fprintf(b, "(set-logic %s)\n", logic.Name)
 
 	for _, s := range q.Sorts {
 		values := make([]string, 0, len(s.Values))

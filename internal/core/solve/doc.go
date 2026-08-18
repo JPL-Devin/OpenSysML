@@ -13,6 +13,43 @@
 // solving semantics, so this is an advertised extension, not a conformance
 // claim.
 //
+// # Solver compatibility
+//
+// OPENSYSML_SMT names any executable that speaks SMT-LIB2 on standard input, so
+// what a backend must support is stated rather than assumed of z3.
+//
+// Logic selection emits the narrowest logic of the SMT-LIB 2.6 logic list
+// (https://smt-lib.org/logics.shtml) that covers what a query actually uses:
+// QF_UF for constants alone, QF_LIA/QF_NIA over Int, QF_LRA/QF_NRA over Real, and
+// AUFLIRA/AUFNIRA for a query over both, the list defining no quantifier-free
+// mixed logic to narrow to. Truncating integer division by a literal divisor stays
+// in the linear logic — `div` and `mod` are the Ints theory's, which those logics
+// include — and a variable divisor selects the nonlinear one it really needs.
+// Datatypes and strings have no logic in the list, so a query using either sets
+// the non-standard NonStandardLogic ("ALL"), which both verified backends accept;
+// the script says so in a comment, and LogicChoice.Standard reports it. No logic is
+// widened to dodge a hard case.
+//
+// What a backend is required to support is a Capability, and a Solver is probed
+// once per executable (cached, one small script per form of the feature the writer
+// emits — QF_NIA and QF_NRA for nonlinear, AUFLIRA and AUFNIRA for mixed — and only
+// for the capabilities a query and operation actually need) or declared capable by
+// the caller (Solver.Declared). A capability the backend rejects — an `(error …)`
+// reply or `unsupported` — makes the request an UnsupportedCapabilityError naming
+// the backend, the feature and the operation, refused before any query is run: no
+// silent degrade and no fabricated verdict. A check the backend neither answered
+// nor rejected settles nothing, so the query proceeds and its own verdict or
+// SolverProcessError is reported.
+//
+// Probed against z3 4.8.12 and cvc5 1.3.4: both support models, unsat cores,
+// incremental checks, datatypes, strings, div/mod, nonlinear and mixed arithmetic
+// and the non-standard logic. cvc5 rejects `(maximize …)` as a parse error and
+// answers `unsupported` to `:opt.priority`, both z3 extensions, so objective
+// optimization is z3-only. internal/core/solve's portability harness
+// (portability_test.go, TestPortability) runs one query per feature against
+// whatever OPENSYSML_SMT names and reports each as pass, refuse or fail, a
+// rejected script being ours to fix in the writer.
+//
 // # Conflict explanation
 //
 // Explain answers an unsat verdict with the assertions that conflict. The script
@@ -197,12 +234,14 @@
 // attaining only one of them, which would make "the assignments achieving the
 // optimum" untrue.
 //
-// `(minimize e)`/`(maximize e)` and `(get-objectives)` are a z3 extension, not
-// SMT-LIB2; cvc5 does not implement them. Solver.Optimize settles the backend's
-// capability before sending a query — by family for z3 and cvc5, and by probing
-// any other with a tiny optimizing script of its own — and reports a backend
-// without it as NoOptimizationError wrapping ErrNoOptimization. Nothing is ever
-// degraded to a plain check-sat and presented as an optimum.
+// `(minimize e)`/`(maximize e)`, `(get-objectives)` and `:opt.priority` are
+// solver extensions rather than SMT-LIB2; cvc5 implements none of them.
+// Solver.Optimize settles them through the capability model below before sending
+// a query — CapOptimization and CapOptimizationPriority, probed once per backend
+// and cached — and reports a backend without them as NoOptimizationError, which
+// wraps both ErrNoOptimization and the ErrUnsupportedCapability refusal it was
+// settled by. Nothing is ever degraded to a plain check-sat and presented as an
+// optimum.
 //
 // # What an optimum is, and is not
 //

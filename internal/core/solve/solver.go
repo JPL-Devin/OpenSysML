@@ -81,6 +81,10 @@ type Solver struct {
 	// MaxCoreMembers is the largest core shrinking is attempted over; zero means
 	// DefaultMaxCoreMembers.
 	MaxCoreMembers int
+
+	// Declared states what this backend supports instead of probing it, which is
+	// how a caller that already knows a backend skips the probe; nil probes.
+	Declared *Capabilities
 }
 
 // Assignment is one variable's value in a satisfying model, rendered in the
@@ -224,9 +228,22 @@ func Solve(ctx context.Context, q *Query) (*Result, error) {
 }
 
 // Solve writes the query's script to the solver and reads its verdict, plus the
-// model on `sat`. Failing to obtain a verdict is an error, not `unknown`.
+// model on `sat`. Failing to obtain a verdict is an error, not `unknown`, and a
+// backend lacking a feature the query needs refuses before it is run.
 func (s *Solver) Solve(ctx context.Context, q *Query) (*Result, error) {
+	if err := s.require(ctx, q, "solving", modelCapabilities(q)...); err != nil {
+		return nil, err
+	}
 	return s.solve(ctx, q, func(sess *session) (*Result, error) { return sess.run(q) })
+}
+
+// modelCapabilities are what reading an assignment back needs, which is nothing
+// for a query declaring no variable to report.
+func modelCapabilities(q *Query) []Capability {
+	if q == nil || len(q.Vars) == 0 {
+		return nil
+	}
+	return []Capability{CapModels}
 }
 
 // solve runs one dialogue in a fresh solver process, turning the run's own
@@ -310,6 +327,9 @@ func (s *Solver) start(ctx context.Context) (*session, error) {
 	if err := cmd.Start(); err != nil {
 		return nil, s.processError("start", "it could not be run", "", err)
 	}
+	// SMT-LIB acknowledges every command by default, so every read looks past those
+	// acknowledgements: an option silencing them would itself be answered, and a
+	// backend declining it would have that answer read as its verdict.
 	return &session{solver: s, cmd: cmd, stdin: stdin, out: bufio.NewReader(stdout), stderr: stderr}, nil
 }
 
@@ -453,6 +473,10 @@ func (s *session) reasonUnknown() string {
 // read reads one reply, reporting a solver that stopped as a process failure.
 func (s *session) read(stage string) (sexpr, error) {
 	reply, err := readSexpr(s.out)
+	// A backend that acknowledges commands anyway is not answering yet.
+	for err == nil && reply.Atom == "success" {
+		reply, err = readSexpr(s.out)
+	}
 	if err == nil {
 		return reply, nil
 	}

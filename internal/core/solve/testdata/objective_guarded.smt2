@@ -3,7 +3,7 @@
 ; objectives are optimized lexicographically, in the order the analysis declares them:
 ; each is optimized within what the ones before it already settled
 (set-option :opt.priority lex)
-(set-logic ALL)
+(set-logic QF_NIA)
 ; test::GuardedRatio::parts, declared at objectives.sysml:133:3
 (declare-const |test::GuardedRatio::parts| Int)
 ; test::GuardedRatio::total, declared at objectives.sysml:132:3

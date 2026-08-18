@@ -191,13 +191,15 @@ func TestOptimizeRefusesABackendWithoutOptimization(t *testing.T) {
 		unwanted string
 	}{
 		{
-			name: "known not to implement it",
+			name: "declared not to implement it",
 			solver: func(t *testing.T) *Solver {
 				s := optimizingFake(t, "optimal", "(objectives (|test::Small::size| 4))", "")
 				s.Name = "cvc5"
+				// What a caller knowing its backend declares, probing nothing.
+				s.Declared = DeclaredCapabilities("cvc5", CapModels, CapIncremental)
 				return s
 			},
-			says: "z3 extension rather than SMT-LIB",
+			says: "declared not to support this",
 		},
 		{
 			name: "rejects the optimization commands",
@@ -227,6 +229,55 @@ func TestOptimizeRefusesABackendWithoutOptimization(t *testing.T) {
 				t.Errorf("error %q does not say %q", err, tc.says)
 			}
 		})
+	}
+}
+
+// TestOptimizeReportsANonOptimizationRefusalAsItself: a capability the query needs
+// anyway keeps its own report rather than being relabelled as no optimization.
+func TestOptimizeReportsANonOptimizationRefusalAsItself(t *testing.T) {
+	q := fakeOptimizeQuery(t)
+	q.Vars = append(q.Vars, &Var{Name: "label", Sort: String})
+	solver := optimizingFake(t, "optimal", "(objectives (|test::Small::size| 4))", "")
+	solver.Declared = DeclaredCapabilities("fake", CapOptimization, CapOptimizationPriority)
+	_, err := solver.Optimize(context.Background(), q)
+	if !Unsupported(err) {
+		t.Fatalf("error is %v, want a capability refusal", err)
+	}
+	if errors.Is(err, ErrNoOptimization) {
+		t.Errorf("a refused string sort is reported as no optimization: %v", err)
+	}
+	var unsupported *UnsupportedCapabilityError
+	if errors.As(err, &unsupported) && unsupported.Missing[0] != CapStrings {
+		t.Errorf("refusal is about %v, want the strings capability", unsupported.Missing)
+	}
+}
+
+// TestOptimizeRefusesABackendWithoutTheOptimizationCapability: a probed refusal of
+// `(maximize …)` stops the query with the typed refusal, not a process failure.
+func TestOptimizeRefusesABackendWithoutTheOptimizationCapability(t *testing.T) {
+	solver := capabilitySolver(t, "maximize", "minimize")
+	_, err := solver.Optimize(context.Background(), fakeOptimizeQuery(t))
+	if err == nil {
+		t.Fatal("a backend refusing optimization reported an optimum")
+	}
+	if !errors.Is(err, ErrNoOptimization) || !Unsupported(err) {
+		t.Errorf("error is %v, want a refusal of the optimization capability", err)
+	}
+	if errors.Is(err, ErrSolverProcess) {
+		t.Errorf("a refusal is reported as a process failure: %v", err)
+	}
+	var unsupported *UnsupportedCapabilityError
+	if !errors.As(err, &unsupported) {
+		t.Fatalf("error is %T, want one wrapping *UnsupportedCapabilityError", err)
+	}
+	if unsupported.Operation != "optimizing" || unsupported.Missing[0] != CapOptimization {
+		t.Errorf("refusal is about %s %v, want optimizing and the optimization capability",
+			unsupported.Operation, unsupported.Missing)
+	}
+	for _, want := range []string{"fake", "unsupported", "install z3"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("refusal %q does not mention %q", err, want)
+		}
 	}
 }
 

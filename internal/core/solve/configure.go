@@ -157,6 +157,9 @@ func (s *Solver) Configurations(ctx context.Context, q *Query, limit int) (*Resu
 	if limit <= 0 {
 		limit = MaxConfigurationsFromEnv()
 	}
+	if err := s.require(ctx, q, "enumerating configurations", CapModels, CapIncremental); err != nil {
+		return nil, err
+	}
 	return s.solve(ctx, q, func(sess *session) (*Result, error) { return sess.enumerate(q, vars, limit) })
 }
 

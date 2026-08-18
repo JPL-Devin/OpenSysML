@@ -200,12 +200,11 @@ type Query struct {
 	Assertions []Assertion
 
 	// Nonlinear is set when a product or a quotient of two non-literal terms was
-	// asserted, which decides the logic the script sets.
+	// asserted, which is what a nonlinear logic is set for.
 	Nonlinear bool
 
-	// IntegerDivision is set when integer division or remainder was encoded.
-	// SMT-LIB's arithmetic logics do not admit `div`, so such a query is written
-	// with the unrestricted logic even when it is linear.
+	// IntegerDivision is set when integer division or remainder was encoded,
+	// which needs `div` and `mod` from the Ints theory of a backend.
 	IntegerDivision bool
 
 	// Pinned are the values the query fixes rather than leaves free, each naming
@@ -244,55 +243,6 @@ func (q *Query) Free() []*Var {
 		}
 	}
 	return out
-}
-
-// Logic returns the SMT-LIB logic the sorts and operators used need: "ALL" once
-// a datatype, a string or integer division is involved, the narrowest arithmetic
-// logic otherwise.
-func (q *Query) Logic() string {
-	usesInt, usesReal, usesString, usesDatatype := false, false, false, false
-	note := func(s Sort) {
-		switch s.Kind {
-		case SortInt:
-			usesInt = true
-		case SortReal:
-			usesReal = true
-		case SortString:
-			usesString = true
-		case SortDatatype:
-			usesDatatype = true
-		}
-	}
-	for _, v := range q.Vars {
-		note(v.Sort)
-	}
-	for _, a := range q.Assertions {
-		a.Term.walk(func(t *Term) { note(t.Sort) })
-	}
-	for _, o := range q.Objectives {
-		o.Term.walk(func(t *Term) { note(t.Sort) })
-	}
-	switch {
-	case usesDatatype || usesString || q.IntegerDivision:
-		return "ALL"
-	case usesInt && usesReal:
-		if q.Nonlinear {
-			return "QF_NIRA"
-		}
-		return "QF_LIRA"
-	case usesReal:
-		if q.Nonlinear {
-			return "QF_NRA"
-		}
-		return "QF_LRA"
-	case usesInt:
-		if q.Nonlinear {
-			return "QF_NIA"
-		}
-		return "QF_LIA"
-	default:
-		return "QF_UF"
-	}
 }
 
 // sortVars orders variables by name, which is what makes a script deterministic.

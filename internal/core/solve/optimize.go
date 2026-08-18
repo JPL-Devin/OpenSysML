@@ -2,6 +2,7 @@ package solve
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 	"strings"
@@ -101,77 +102,36 @@ func (s *Solver) Optimize(ctx context.Context, q *Query) (*Result, error) {
 	if !q.Optimizes() {
 		return nil, &NoObjectiveError{Element: q.Element}
 	}
-	if err := s.requireOptimization(ctx); err != nil {
+	if err := s.requireOptimization(ctx, q); err != nil {
 		return nil, err
 	}
 	return s.solve(ctx, q, func(sess *session) (*Result, error) { return sess.optimize(q) })
 }
 
-// requireOptimization settles whether the solver implements optimization before a
-// query is sent to it, so an unsupported backend is never asked and its answer
-// never misread. A solver of neither known family is probed for it.
-func (s *Solver) requireOptimization(ctx context.Context) error {
-	switch {
-	case strings.Contains(s.Name, "z3"):
-		return nil
-	case strings.Contains(s.Name, "cvc5"):
+// requireOptimization settles from the capability model, before a query is sent,
+// whether the backend implements the optimization commands the script emits, so
+// an unsupported backend is never asked and its answer never misread.
+func (s *Solver) requireOptimization(ctx context.Context, q *Query) error {
+	err := s.require(ctx, q, "optimizing", CapOptimization, CapOptimizationPriority)
+	var unsupported *UnsupportedCapabilityError
+	// A capability the query needs for another reason keeps its own report: only an
+	// optimization extension makes this a solver that does not optimize.
+	if errors.As(err, &unsupported) && optimizationCapability(unsupported.Missing[0]) {
+		// A backend refusing optimization is reported as the extension it lacks,
+		// which says which solver to run instead.
 		return &NoOptimizationError{
-			Solver: s.Name,
-			Detail: "implements no (minimize …)/(maximize …), which is a z3 extension rather than SMT-LIB",
+			Solver: unsupported.Solver,
+			Detail: "lacks " + unsupported.Missing[0].Feature() + ": " + unsupported.Detail,
+			Cause:  err,
 		}
 	}
-	return s.probeOptimization(ctx)
+	return err
 }
 
-// probeScript is the smallest optimizing script: a solver that answers its
-// objectives implements optimization.
-const probeScript = "(set-logic QF_LRA)\n" +
-	"(declare-const sy!probe Real)\n" +
-	"(assert (>= sy!probe 0.0))\n" +
-	"(minimize sy!probe)\n" +
-	"(check-sat)\n" +
-	"(get-objectives)\n"
-
-// probeOptimization asks a solver of no known family whether it optimizes, in a
-// process of its own so a refusal cannot disturb the query itself.
-func (s *Solver) probeOptimization(ctx context.Context) error {
-	timeout := s.Timeout
-	if timeout <= 0 {
-		timeout = DefaultTimeout
-	}
-	runCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-	sess, err := s.start(runCtx)
-	if err != nil {
-		return err
-	}
-	defer sess.close()
-	if err := sess.send(probeScript); err != nil {
-		return err
-	}
-	unsupported := func(detail string) error {
-		return &NoOptimizationError{Solver: s.Name, Detail: detail}
-	}
-	// A solver that answers intelligibly but not the optimization commands does
-	// not optimize; one that dies or falls silent is the process failure it is.
-	verdict, err := sess.read("check-sat")
-	if err != nil {
-		return err
-	}
-	if msg, isErr := verdict.isError(); isErr {
-		return unsupported("rejected an optimizing script: " + msg)
-	}
-	reply, err := sess.read("get-objectives")
-	if err != nil {
-		return err
-	}
-	if msg, isErr := reply.isError(); isErr {
-		return unsupported("rejected (get-objectives): " + msg)
-	}
-	if !reply.IsList || len(reply.List) == 0 || reply.List[0].Atom != "objectives" {
-		return unsupported("answered " + quoteReply(reply) + " to (get-objectives)")
-	}
-	return nil
+// optimizationCapability reports whether the capability is one of the optimization
+// extensions rather than something the query needs anyway.
+func optimizationCapability(c Capability) bool {
+	return c == CapOptimization || c == CapOptimizationPriority
 }
 
 // optimize holds the optimizing dialogue: the script with its objectives, the
@@ -229,6 +189,11 @@ func (s *session) reportedOptima(q *Query) ([]sexpr, error) {
 	}
 	if msg, ok := reply.isError(); ok {
 		return nil, &NoOptimizationError{Solver: s.solver.Name, Detail: "rejected (get-objectives): " + msg}
+	}
+	// SMT-LIB's own answer for a command a backend does not implement.
+	if reply.Atom == "unsupported" {
+		return nil, &NoOptimizationError{Solver: s.solver.Name,
+			Detail: "answered " + quoteReply(reply) + " to (get-objectives)"}
 	}
 	if !reply.IsList || len(reply.List) == 0 || reply.List[0].Atom != "objectives" {
 		return nil, s.optimumError("", "answered "+quoteReply(reply)+" rather than its objectives")

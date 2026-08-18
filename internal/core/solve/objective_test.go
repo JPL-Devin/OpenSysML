@@ -178,8 +178,8 @@ func TestObjectiveDecidesLogic(t *testing.T) {
 	}
 	// Without the objective the query is integer arithmetic; the real-valued
 	// objective is what makes it mixed.
-	if got := q.Logic(); got != "QF_LIRA" {
-		t.Errorf("logic is %s, want QF_LIRA", got)
+	if got := q.Logic(); got != "AUFLIRA" {
+		t.Errorf("logic is %s, want AUFLIRA", got)
 	}
 }
 

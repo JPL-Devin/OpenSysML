@@ -163,6 +163,61 @@ its default build links GMP under LGPL-3, and it can be configured against GPL l
 `*-gpl` archives are those builds). That matters if you **redistribute** cvc5; it does not
 change how you may use OpenSysML, which links neither solver.
 
+### Solver compatibility — pointing the driver at another solver
+
+`OPENSYSML_SMT` takes **any** executable that reads SMT-LIB2 on standard input and answers on
+standard output, not only z3 and cvc5. What such a backend has to support is the subset the
+scripts use:
+
+| Feature | What is emitted | z3 4.8.12 | cvc5 1.3.4 |
+|---|---|---|---|
+| Model output | `(set-option :produce-models true)` with `(get-value …)` | yes | yes |
+| Unsat cores | `(set-option :produce-unsat-cores true)`, `:named` assertions, `(get-unsat-core)` | yes | yes |
+| Incremental dialogue | more than one `(check-sat)` in a script, for `%configure … all` | yes | yes |
+| Enumerations and variants | `(declare-datatypes …)` with nullary constructors | yes | yes |
+| Strings | the `String` sort, compared for equality | yes | yes |
+| Integer division | `div` and `mod` from the Ints theory | yes | yes |
+| Nonlinear arithmetic | a product or quotient of two non-literal terms | yes | yes |
+| Mixed arithmetic | the `AUFLIRA`/`AUFNIRA` logics, for a query over `Int` and `Real` | yes | yes |
+| Non-standard logic | `(set-logic ALL)`, which datatypes and strings need | yes | yes |
+| Objective optimization | `(maximize …)`/`(minimize …)`, for `%optimize` | yes | **no** — parse error |
+| Objective priority | `:opt.priority`, a z3 extension | yes | **no** — answers `unsupported` |
+
+The two columns are what each solver answered when probed on this machine, not what its
+documentation claims. The last two rows are the only part of the subset cvc5 lacks, and
+`%optimize` is the only command that needs them: on cvc5 it refuses by naming the extension
+the solver lacks, and every other command works on either solver.
+
+Every logic a script sets other than that non-standard `ALL` is a standard SMT-LIB 2.6 one
+([the logic list](https://smt-lib.org/logics.shtml)): `QF_UF`, `QF_LIA`, `QF_NIA`, `QF_LRA`,
+`QF_NRA`, `AUFLIRA`, `AUFNIRA` — the narrowest that covers what the query actually uses. `ALL`
+is set only where the list defines no logic for the feature at all (datatypes, strings), which
+the script says in a comment on the line above `(set-logic ALL)`.
+
+A backend is probed the first time it is used — one small script per feature it is asked for,
+cached for the process — and what it refuses is reported rather than worked around:
+
+```
+sysml> %explain P::C
+error: the SMT solver does not support a feature this query needs: mysolver does not support
+SMT-LIB 2.6 unsat cores: `:produce-unsat-cores` with `:named` assertions and `(get-unsat-core)`
+(unsat-cores), which explaining a conflict needs: it rejected the script: unsupported;
+install a solver that supports it or set OPENSYSML_SMT to one
+```
+
+Which is distinct from the other two ways a solver run ends without a verdict: a solver that
+crashes, exits, or answers unreadably is a solver *process* error naming the stage it failed at,
+and a solver that answers but does not decide is the verdict `unknown` with the reason it gave.
+No verdict is ever invented from any of the three.
+
+To check a solver of your own end to end, run the portability harness against it — it reports
+each feature as `pass`, `refuse` (the backend lacks it and said so) or `fail` (a script it
+rejected, which is a bug to report):
+
+```bash
+OPENSYSML_SMT=/path/to/mysolver go test ./internal/core/solve -run TestPortability -v
+```
+
 ### Verifying the solver is found
 
 `%check` names the solver it used, so the verdict line is the verification:
