@@ -31,9 +31,10 @@
 // widened to dodge a hard case.
 //
 // What a backend is required to support is a Capability, and a Solver is probed
-// once per executable (cached, one small script per capability, and only for the
-// capabilities a query and operation actually need) or declared capable by the
-// caller (Solver.Declared). A capability the backend rejects — an `(error …)`
+// once per executable (cached, one small script per form of the feature the writer
+// emits — QF_NIA and QF_NRA for nonlinear, AUFLIRA and AUFNIRA for mixed — and only
+// for the capabilities a query and operation actually need) or declared capable by
+// the caller (Solver.Declared). A capability the backend rejects — an `(error …)`
 // reply or `unsupported` — makes the request an UnsupportedCapabilityError naming
 // the backend, the feature and the operation, refused before any query is run: no
 // silent degrade and no fabricated verdict. A check the backend neither answered

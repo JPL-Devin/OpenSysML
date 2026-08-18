@@ -264,9 +264,27 @@ var probes = []probe{{
 	script:     "(set-logic QF_NIA)\n(declare-const x Int)\n(declare-const y Int)\n(assert (= (* x y) 6))\n(check-sat)\n",
 	want:       []reply{replyDecided},
 }, {
+	capability: CapNonlinearArith,
+	// The nonlinear real logic, which a query over reals is set to instead.
+	script: "(set-logic QF_NRA)\n(declare-const x Real)\n(declare-const y Real)\n" +
+		"(assert (= (* x y) 6.0))\n(check-sat)\n",
+	want: []reply{replyDecided},
+}, {
+	capability: CapNonlinearArith,
+	// Division by a variable, which is what makes such a query nonlinear.
+	script: "(set-logic QF_NIA)\n(declare-const x Int)\n(declare-const d Int)\n" +
+		"(assert (and (> d 0) (= (div x d) 3)))\n(check-sat)\n",
+	want: []reply{replyDecided},
+}, {
 	capability: CapMixedArith,
 	script: "(set-logic AUFLIRA)\n(declare-const i Int)\n(declare-const r Real)\n" +
 		"(assert (> (+ (to_real i) r) 1.0))\n(check-sat)\n",
+	want: []reply{replyDecided},
+}, {
+	capability: CapMixedArith,
+	// The nonlinear mixed logic, which a nonlinear query over both is set to.
+	script: "(set-logic AUFNIRA)\n(declare-const i Int)\n(declare-const r Real)\n" +
+		"(assert (> (* (to_real i) r) 1.0))\n(check-sat)\n",
 	want: []reply{replyDecided},
 }, {
 	capability: CapNonStandardLogic,
@@ -436,26 +454,37 @@ func (r *capabilityRecord) probe(ctx context.Context, s *Solver, capability Capa
 	if result, ok := r.results[capability]; ok {
 		return result, nil
 	}
-	check, ok := probeFor(capability)
-	if !ok {
+	checks := probesFor(capability)
+	if len(checks) == 0 {
 		return capabilityResult{detail: "no check is defined for it"}, nil
 	}
-	result, err := s.runProbe(ctx, check)
-	if err != nil {
-		return capabilityResult{}, err
+	// Every form the writer emits of the feature is checked, and the first answer
+	// short of support is the capability's: a backend taking one form and refusing
+	// another does not support what a query may ask of it.
+	result := capabilityResult{state: capSupported}
+	for _, check := range checks {
+		got, err := s.runProbe(ctx, check)
+		if err != nil {
+			return capabilityResult{}, err
+		}
+		if got.state != capSupported {
+			result = got
+			break
+		}
 	}
 	r.results[capability] = result
 	return result, nil
 }
 
-// probeFor is the check for a capability.
-func probeFor(capability Capability) (probe, bool) {
+// probesFor are the checks for a capability, one per form of it that is emitted.
+func probesFor(capability Capability) []probe {
+	var out []probe
 	for _, p := range probes {
 		if p.capability == capability {
-			return p, true
+			out = append(out, p)
 		}
 	}
-	return probe{}, false
+	return out
 }
 
 // capabilityEntry is the cache record for a backend, created on first ask.
@@ -473,7 +502,7 @@ func capabilityEntry(key string) *capabilityRecord {
 // cacheKey identifies the backend a probe answers about: the executable, the
 // arguments it is run with, and the environment added to it.
 func (s *Solver) cacheKey() string {
-	return strings.Join(append([]string{s.Path}, append(s.Args, s.Env...)...), "\x00")
+	return strings.Join(append(append([]string{s.Path}, s.Args...), s.Env...), "\x00")
 }
 
 // require refuses a query the backend cannot answer, naming the missing feature

@@ -114,7 +114,9 @@ func (s *Solver) Optimize(ctx context.Context, q *Query) (*Result, error) {
 func (s *Solver) requireOptimization(ctx context.Context, q *Query) error {
 	err := s.require(ctx, q, "optimizing", CapOptimization, CapOptimizationPriority)
 	var unsupported *UnsupportedCapabilityError
-	if errors.As(err, &unsupported) {
+	// A capability the query needs for another reason keeps its own report: only an
+	// optimization extension makes this a solver that does not optimize.
+	if errors.As(err, &unsupported) && optimizationCapability(unsupported.Missing[0]) {
 		// A backend refusing optimization is reported as the extension it lacks,
 		// which says which solver to run instead.
 		return &NoOptimizationError{
@@ -124,6 +126,12 @@ func (s *Solver) requireOptimization(ctx context.Context, q *Query) error {
 		}
 	}
 	return err
+}
+
+// optimizationCapability reports whether the capability is one of the optimization
+// extensions rather than something the query needs anyway.
+func optimizationCapability(c Capability) bool {
+	return c == CapOptimization || c == CapOptimizationPriority
 }
 
 // optimize holds the optimizing dialogue: the script with its objectives, the

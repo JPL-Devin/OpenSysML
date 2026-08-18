@@ -232,6 +232,26 @@ func TestOptimizeRefusesABackendWithoutOptimization(t *testing.T) {
 	}
 }
 
+// TestOptimizeReportsANonOptimizationRefusalAsItself: a capability the query needs
+// anyway keeps its own report rather than being relabelled as no optimization.
+func TestOptimizeReportsANonOptimizationRefusalAsItself(t *testing.T) {
+	q := fakeOptimizeQuery(t)
+	q.Vars = append(q.Vars, &Var{Name: "label", Sort: String})
+	solver := optimizingFake(t, "optimal", "(objectives (|test::Small::size| 4))", "")
+	solver.Declared = DeclaredCapabilities("fake", CapOptimization, CapOptimizationPriority)
+	_, err := solver.Optimize(context.Background(), q)
+	if !Unsupported(err) {
+		t.Fatalf("error is %v, want a capability refusal", err)
+	}
+	if errors.Is(err, ErrNoOptimization) {
+		t.Errorf("a refused string sort is reported as no optimization: %v", err)
+	}
+	var unsupported *UnsupportedCapabilityError
+	if errors.As(err, &unsupported) && unsupported.Missing[0] != CapStrings {
+		t.Errorf("refusal is about %v, want the strings capability", unsupported.Missing)
+	}
+}
+
 // TestOptimizeRefusesABackendWithoutTheOptimizationCapability: a probed refusal of
 // `(maximize …)` stops the query with the typed refusal, not a process failure.
 func TestOptimizeRefusesABackendWithoutTheOptimizationCapability(t *testing.T) {
