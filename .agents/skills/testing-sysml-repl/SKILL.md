@@ -3708,6 +3708,36 @@ Two cases need process work rather than a Python call:
 "old name is gone after a rename" assertion must compare against `None`; a `try/except` around
 `find` passes even when the rename did nothing.
 
+### Traps that cost time when re-testing the edit surface
+
+- **`python/tests/test_edit.py`'s `real_service` fixture prefers `<repo>/bin/sysml-grpc` over
+  `~/.pysysml/bin/sysml-grpc`** (`GRPC_BINARIES`, test_edit.py:61). A stale `bin/sysml-grpc` left
+  from an earlier snapshot therefore fails all 13 `TestEditRoundTripAgainstRealService` cases with
+  `MissingCapabilityError('apply_edits')` / `assert has('apply_edits') == False`, which reads like a
+  product bug. Always `make build-grpc` and check `./bin/sysml-grpc -version` prints the current
+  commit *before* running the suite; the same applies to the copy in `~/.pysysml/bin`.
+- `MissingCapabilityError` lives in **`pysysml.capabilities`**, not `pysysml.errors`
+  (`pysysml.errors.__getattr__` raises `AttributeError` for it). It is still a `PySysMLError` and is
+  *not* an `UnsupportedOperationError`.
+- `test_generate_golden.py::test_typed_codegen_modules_are_mypy_clean` may fail for reasons unrelated
+  to any change: with mypy 2.3.x and the venv's numpy stubs it reports
+  `numpy/__init__.pyi:737: error: Type statement is only supported in Python 3.12 and greater`.
+  Reproduce with `echo 'import numpy' > /tmp/nm.py; $HOME/pv/bin/python -m mypy --no-incremental
+  /tmp/nm.py` before blaming a PR; pinning/refreshing numpy stubs is the likely fix.
+- Non-ASCII **identifiers** (`package Démo`) do not parse, so a Unicode fixture must keep the
+  accents/emoji in comments and strings only. That still exercises the byte-vs-rune offset risk:
+  assert `saved == orig[:a.offset] + a.new_text.encode() + orig[a.offset + a.length:]`, which is the
+  strongest single assertion available for `AppliedEdit` (it proves offsets are byte offsets and
+  that nothing outside the span moved).
+- CRLF: build the fixture as `orig.replace(b"\n", b"\r\n")` and assert the saved file has the same
+  `\r` count, **zero bare LFs** (`b.count(b"\n") - b.count(b"\r\n") == 0`) and no `\r\r`. Test the
+  *insertion* case (a feature with no value) on CRLF too, not just replacement.
+- Unwritable targets: `save()` raises plain `PermissionError`/`FileNotFoundError` from `open()`, so
+  sha256 the victim file before/after — the point of the case is that it is not truncated first.
+- An edit is allowed on a file that already has errors elsewhere (name *or* syntax), and the saved
+  file keeps exactly those pre-existing diagnostics; a refusal there is the regression the
+  "baseline diagnostics" fixes in PR #282 were about.
+
 ## `%check` and the SMT solver driver (PR #285)
 
 `%check <name>` asks an external solver about a constraint def, requirement def or satisfaction
@@ -3747,3 +3777,63 @@ Fixture shapes that actually discriminate:
   `Check::SpeedReq::'craft.topSpeed' = 100`, enum as `Check::Gear::high`). A quantity is a magnitude
   in the *base units* a written unit reduces to, named as such (`1500.0 [kg]` comes back as
   `1500000.0 [gram]`), so don't expect the unit as written.
+
+## `%explain <name>` — unsat cores (PR #291)
+
+`%explain` asks the solver which conditions of an unsatisfiable constraint/requirement/satisfy
+element conflict. It shares `solveQueries` with `%check` (`internal/repl/check.go:149`), so the two
+must always reach the same verdict; the split is that `%check` prints a satisfying assignment and
+`%explain` never does. Rendering lives in `internal/repl/explain.go`, core reduction in
+`internal/core/solve/core.go`.
+
+`internal/repl/testdata/explain_conflicts.sysml` is the fixture that covers every core-row shape at
+once, so prefer it over hand-rolled models. Values observed at 04d0c4b with z3 4.8.12, loading that
+file **alone** (locations are buffer-relative — see below):
+
+| `%explain Conflicts::…` | header | rows |
+|---|---|---|
+| `Contradictory` | `✗ … 2 conditions conflict` | `required condition: \`i > 8\`` @10:29, `\`i < 3\`` @11:29 |
+| `NatBound` | `✗ … 2 conditions conflict` | `declared domain: \`a Natural is not negative\` — declaration Conflicts::NatBound::n` @20:9, `required condition: \`n < 0\`` @21:29 |
+| `ZeroDivisor` | `✗ … 2 conditions conflict` | `well-definedness: \`a / b == 1\`` @28:29 **then** `required condition: \`b == 0\`` @27:29 |
+| `Derived` | `✗ Requirement … 2 conditions conflict` | `\`x > 10\` — requirement Derived, declared by Base` @34:30, `\`x < 1\` — requirement Derived` (no "declared by") @38:30 |
+| `Satisfiable` | `✓ … is satisfiable, so no conditions conflict` | none, plus `Use %check … for a satisfying assignment.` |
+| `rig::always` | `✗ Constraint always (negated) … 1 condition conflicts with itself` | `denied conditions: \`not (i == i)\`` @47:9 |
+
+Every unsat header is followed by one minimality line before the numbered rows.
+
+Things that look like bugs but are not, and traps:
+
+- **Rows are in query-assertion order, not source order.** `ZeroDivisor` lists the hoisted
+  divisor guard (line 28) before the condition that sets the divisor to zero (line 27). Don't
+  report this as mis-ordering without checking `translate.go`'s assertion order first.
+- **The location column always names `<repl>`, never the loaded file, and counts lines from the
+  start of the joined buffer.** With one file loaded the numbers happen to match the file; load a
+  second file first and the same condition moves (`<repl>:23:29` for what is really
+  `explain_conflicts.sysml:10:29`), while load-time *analysis* diagnostics in the same session do
+  name the real file and count from its start. The unit tests assert `<repl>`, so this is the
+  REPL's implicit-document convention rather than a regression — but it is misleading, and any
+  location assertion must therefore fix the load order. Always `%load` the fixture **alone**, or
+  pass it as a CLI argument (`./bin/sysml <fixture>`), when asserting line/col.
+- **A 1-member core has its own minimality wording**: `The condition below is the whole conflict:
+  nothing else is needed for it.` (`internal/repl/explain.go` `minimality`), not the multi-condition
+  `dropping any one leaves the rest satisfiable`. `rig::always` is the case that exercises it.
+- **`String` IS in the translatable subset** (`SortString`, `internal/core/solve/reference.go:214`),
+  so `constraint { s == "x" }` answers `satisfiable` and is useless as an "outside the subset" case.
+  Untranslatable cases that do work: a **calc invocation** in a condition
+  (`assert constraint { Twice(i) > 4 }` → `invocation not translatable for solving: it is outside
+  the subset`) and an **unresolved reference** (→ `it resolves to nothing`).
+- **z3 decides nonlinear reals**, so `x*y == 7.5 and x*x + y*y == 2.0` comes back `unsat` with a
+  real core, not `unknown`. The `? … is undecided, so there is nothing to explain` branch is hard
+  to reach on purpose; use `SYSTEMICA_SMT_CORE_BUDGET` (a tiny value) if you need to exercise the
+  non-minimal `Note` wording instead.
+- **Header durations include core-reduction time** (since 04d0c4b), so an unsat `%explain` reads
+  ~3x the matching `%check` (24–30ms vs 7ms). Never assert exact milliseconds.
+- **`%explain` is read-only.** An `%action Debug::tally` session (fixture
+  `internal/repl/testdata/action_debug.sysml`) must survive it: `%step` after `%explain` still
+  prints `✓ Step complete` and the run ends `total = 5`. A regression here shows up as
+  `error: no active action session`.
+
+The no-solver path is the one case needing a special launch: `mkdir -p /tmp/nosolver` and run
+`env PATH=/tmp/nosolver ./bin/sysml`, which yields `error: no SMT solver found: install z3 … or set
+SYSTEMICA_SMT …; looked for [z3 cvc5] on PATH`. Note `Discover()` is consulted per command, so this
+must be set on the process, not toggled mid-session.
