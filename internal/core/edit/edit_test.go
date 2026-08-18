@@ -373,7 +373,7 @@ func TestRefusals(t *testing.T) {
 			name:    "new name is a sibling's name",
 			ops:     []Operation{Rename("Demo::SC::margin", "label")},
 			failure: FailureInvalidName,
-			message: "already declared",
+			message: "already means Demo::SC::label",
 		},
 	}
 	for _, tc := range cases {
@@ -485,6 +485,25 @@ func TestEditRepairingTheOnlySyntaxErrorIsNotRefused(t *testing.T) {
 	}
 	if strings.Contains(string(res.Content), "Missing::Type = ") {
 		t.Fatalf("the wrong declaration was edited:\n%s", res.Content)
+	}
+}
+
+// A rename onto a name the element's own position already resolves to is
+// refused: the name would resolve to the renamed element instead, so expressions
+// the caller never mentioned would quietly read something else. Re-analysis
+// cannot catch it, because the name still resolves.
+func TestRenameShadowingAnOuterNameIsRefused(t *testing.T) {
+	m := loadContent(t, "shadow.sysml", "package Demo {\n\tattribute x = 1;\n\tpart def P {\n"+
+		"\t\tattribute y = 2;\n\t\tattribute z = x;\n\t}\n}\n")
+	requireClean(t, m)
+
+	_, err := Apply(m, []Operation{Rename("Demo::P::y", "x")})
+	e := editError(t, err)
+	if e.Failure != FailureInvalidName {
+		t.Fatalf("failure is %s, want invalid-name", e.Failure)
+	}
+	if !strings.Contains(e.Message, "already means Demo::x") {
+		t.Fatalf("refusal does not name what the new name already means: %s", e.Message)
 	}
 }
 

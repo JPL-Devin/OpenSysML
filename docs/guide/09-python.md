@@ -503,7 +503,7 @@ Every refusal is a typed error, never a silent no-op:
 | --- | --- |
 | No operation was added to the editor | `NoEditsError` |
 | No such element, an ambiguous name, or an element that cannot carry a value or a name | `EditTargetError` |
-| A new value that does not parse as one expression, or a new name that is not an identifier or is already declared beside the element | `InvalidEditError` |
+| A new value that does not parse as one expression, or a new name that is not an identifier or already means something where the element is declared | `InvalidEditError` |
 | A rename of an element that is referenced | `RenameReferencedError` |
 | Two operations that would edit overlapping bytes | `OverlappingEditsError` |
 | The edited model does not read back cleanly — a value naming something that does not resolve, say | `EditResultError` |
@@ -526,7 +526,11 @@ Known limitations, by design:
 - **A rename does not update references.** It rewrites the declaration's name
   token; a rename whose element is referenced anywhere is refused rather than
   leaving the model unresolvable. Rename an element nothing refers to, or make
-  the reference edits yourself.
+  the reference edits yourself. A new name that already means something where the
+  element is declared — a sibling of that name, or one reached through an
+  enclosing namespace, an import or a supertype — is refused too: it would either
+  be ambiguous or shadow what is already there, and either way expressions you
+  did not name would start reading the renamed element.
 - **Elements are not created or deleted**, and a model is not built from Python:
   editing changes the source of a model that already says what it says.
 - An editor is applied **once** — it describes an edit of the model it was made
