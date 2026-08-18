@@ -973,6 +973,11 @@ func (ec *EvalContext) evalArithmetic(n *ast.OperatorExpr) (Value, error) {
 	case ast.OpMul:
 		result = leftReal * rightReal
 	case ast.OpDiv:
+		// A real quotient by zero is reported, as an integer one, a quantity one
+		// and the constant folder all report it, rather than carried as an infinity.
+		if rightReal == 0 {
+			return Value{}, ErrDivisionByZero
+		}
 		result = leftReal / rightReal
 	case ast.OpMod:
 		if rightReal == 0 {

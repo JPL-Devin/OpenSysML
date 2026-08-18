@@ -494,3 +494,30 @@ func TestVariationPointIsAFiniteSort(t *testing.T) {
 		}
 	}
 }
+
+// TestVariationSortIsShared: a usage selecting a variant reads the same finite
+// sort as the variation declaring it, so comparing the two translates.
+func TestVariationSortIsShared(t *testing.T) {
+	q := constraintQuery(t, `
+		package test {
+			attribute def Nesting { attribute cost : ScalarValues::Real; }
+			part def Ring { attribute nesting : Nesting; }
+			abstract part ringFamily : Ring {
+				variation attribute :>> nesting {
+					variant attribute nestingTrue { :>> cost = 100.0; }
+					variant attribute nestingFalse { :>> cost = 200.0; }
+				}
+			}
+			part chosen :> ringFamily {
+				attribute :>> nesting = nesting::nestingTrue;
+				assert constraint selected { nesting == nesting::nestingTrue }
+			}
+		}
+	`, "test::chosen::selected")
+	if len(q.Sorts) != 1 {
+		t.Fatalf("declared %d datatype sorts, want the one variation:\n%s", len(q.Sorts), Script(q))
+	}
+	if len(q.Sorts[0].Values) != 2 {
+		t.Errorf("sort %s has values %v, want the two variants", q.Sorts[0].Name, q.Sorts[0].Values)
+	}
+}

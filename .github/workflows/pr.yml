@@ -101,6 +101,18 @@ jobs:
             exit 1
           fi
 
+      # The differential gate compares the solver against the normative
+      # evaluator; its summary counts make coverage drift reviewable in the log.
+      - name: Differential agreement gate
+        run: |
+          set -o pipefail
+          go test -count=1 -v ./internal/core/solve -run TestDifferential | tee differential-gate.log
+          grep -E 'differential gate .*: .* elements:' differential-gate.log
+          if grep -qE '^\s*--- SKIP' differential-gate.log; then
+            echo "error: a differential gate skipped" >&2
+            exit 1
+          fi
+
       - name: Build binaries
         run: |
           make build \

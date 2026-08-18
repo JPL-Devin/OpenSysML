@@ -143,6 +143,18 @@ func (t *translator) datatype(origin *symbols.Symbol, values []*symbols.Symbol) 
 	return sort
 }
 
+// variationDeclaring is the variation point whose variants these are: a usage
+// redefining a variation selects among the variants the redefined one declares,
+// so both read the same finite sort a variant's name stands for.
+func (t *translator) variationDeclaring(sym *symbols.Symbol, variants []*symbols.Symbol) *symbols.Symbol {
+	for _, variant := range variants {
+		if owner := t.model.VariationPointOwning(variant); owner != nil {
+			return owner
+		}
+	}
+	return sym
+}
+
 // variableOf returns the variable a reference to a feature reads, declaring it
 // the first time the feature is read. A feature whose type determines no scalar
 // sort, or that holds more than one value, refuses.
@@ -199,7 +211,7 @@ func (t *translator) sortOf(
 		if len(variants) == 0 {
 			return Sort{}, "", t.refuse(node, written, "the variation point offers no variant")
 		}
-		return t.datatype(sym, variants), "", nil
+		return t.datatype(t.variationDeclaring(sym, variants), variants), "", nil
 	}
 	if enum := t.enumerationTypeOf(sym); enum != nil {
 		literals := t.model.LiteralsOf(enum)
