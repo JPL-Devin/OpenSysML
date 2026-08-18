@@ -3,6 +3,7 @@ package repl
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -396,20 +397,21 @@ func matchVariant(v *solve.Var, written string) (string, error) {
 }
 
 // namesFeature reports whether a written name denotes a qualified name: the whole
-// of it, or its last segments, as any name the prompt takes may be written.
+// of it, or its trailing segments, as any name the prompt takes may be written.
+// Segments are compared whole, so a name ending part of one does not name it.
 func namesFeature(qualified, written string) bool {
-	if qualified == written || notationName(qualified) == written {
-		return true
+	segments := strings.Split(written, "::")
+	return trailingSegments(qualified, segments) || trailingSegments(notationName(qualified), segments)
+}
+
+// trailingSegments reports whether the segments written are a qualified name's
+// last ones, each segment matching in full.
+func trailingSegments(qualified string, written []string) bool {
+	have := strings.Split(qualified, "::")
+	if len(written) == 0 || len(written) > len(have) {
+		return false
 	}
-	suffix := written
-	if i := strings.LastIndex(written, "::"); i >= 0 {
-		suffix = written[i+2:]
-	}
-	last := qualified
-	if i := strings.LastIndexAny(qualified, ":."); i >= 0 {
-		last = qualified[i+1:]
-	}
-	return last == suffix && strings.HasSuffix(notationName(qualified), notationName(written))
+	return slices.Equal(have[len(have)-len(written):], written)
 }
 
 // featureNames names variables as the notation writes them.
