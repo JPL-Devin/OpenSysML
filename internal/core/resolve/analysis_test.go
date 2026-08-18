@@ -1,6 +1,7 @@
 package resolve
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 
@@ -297,6 +298,117 @@ func TestResolveQualifiedBindingChain(t *testing.T) {
 	if got := resolvedSegments(t, r, binding.Value); !equalStrings(got, wantTarget) {
 		t.Errorf("target end resolved to %v, want %v", got, wantTarget)
 	}
+}
+
+func TestResolveLongFeatureChain(t *testing.T) {
+	const segments = 50
+	src := longFeatureChainSource(segments, -1, "")
+	p := parser.New(source.New("long-chain.sysml", []byte(src)))
+	root := p.ParseFile()
+	if len(p.Diagnostics) != 0 {
+		t.Fatalf("parse diagnostics: %v", p.Diagnostics)
+	}
+	r := New(symbols.NewIndexFromDoc("long-chain.sysml", root))
+	r.ResolveDocument("long-chain.sysml", root)
+	if len(r.Diagnostics) != 0 {
+		t.Fatalf("expected no diagnostics, got %v", r.Diagnostics)
+	}
+
+	binding := findBindingUsage(t, root.Members)
+	got := resolvedSegments(t, r, binding.Relationships[0].Target)
+	want := []string{"A"}
+	for i := 0; i < segments-2; i++ {
+		want = append(want, "p"+strconv.Itoa(i))
+	}
+	want = append(want, "leaf")
+	if !equalStrings(got, want) {
+		t.Fatalf("chain resolved to %v, want %v", got, want)
+	}
+}
+
+func TestResolveLongFeatureChainLookupCountIsLinear(t *testing.T) {
+	counts := make(map[int]int)
+	for _, segments := range []int{25, 50} {
+		src := longFeatureChainSource(segments, -1, "")
+		p := parser.New(source.New("count-chain.sysml", []byte(src)))
+		root := p.ParseFile()
+		if len(p.Diagnostics) != 0 {
+			t.Fatalf("parse diagnostics for %d segments: %v", segments, p.Diagnostics)
+		}
+		r := New(symbols.NewIndexFromDoc("count-chain.sysml", root))
+		model := &countingMemberLookup{}
+		r.SetModel(model)
+		r.ResolveDocument("count-chain.sysml", root)
+		if len(r.Diagnostics) != 0 {
+			t.Fatalf("resolve diagnostics for %d segments: %v", segments, r.Diagnostics)
+		}
+		counts[segments] = model.calls
+		t.Logf("segments=%d member lookups=%d", segments, model.calls)
+	}
+	if counts[50] >= 3*counts[25] {
+		t.Fatalf("member lookups grew too quickly: 25=%d, 50=%d", counts[25], counts[50])
+	}
+}
+
+func TestResolveLongFeatureChainMissReportsItsOwnSpanOnce(t *testing.T) {
+	const (
+		segments = 30
+		badAt    = 15
+	)
+	const missing = "missingSegment"
+	src := longFeatureChainSource(segments, badAt, missing)
+	p := parser.New(source.New("bad-long-chain.sysml", []byte(src)))
+	root := p.ParseFile()
+	if len(p.Diagnostics) != 0 {
+		t.Fatalf("parse diagnostics: %v", p.Diagnostics)
+	}
+	r := New(symbols.NewIndexFromDoc("bad-long-chain.sysml", root))
+	r.ResolveDocument("bad-long-chain.sysml", root)
+	if len(r.Diagnostics) != 1 {
+		t.Fatalf("expected one diagnostic, got %d: %v", len(r.Diagnostics), r.Diagnostics)
+	}
+	if got, want := r.Diagnostics[0].Span.Offset, strings.LastIndex(src, missing); got != want {
+		t.Fatalf("diagnostic starts at %d, want bad segment offset %d", got, want)
+	}
+}
+
+type countingMemberLookup struct {
+	calls int
+}
+
+func (m *countingMemberLookup) LookupMember(*symbols.Symbol, string) (*symbols.Symbol, bool) {
+	m.calls++
+	return nil, false
+}
+
+func (m *countingMemberLookup) LookupContributedMember(*symbols.Symbol, string) (*symbols.Symbol, bool) {
+	return nil, false
+}
+
+func longFeatureChainSource(segments, missingAt int, missing string) string {
+	var b strings.Builder
+	b.WriteString("package C { part A {")
+	for i := 0; i < segments-2; i++ {
+		b.WriteString(" part p")
+		b.WriteString(strconv.Itoa(i))
+		b.WriteString(" {")
+	}
+	b.WriteString(" part leaf;")
+	for i := 0; i < segments-2; i++ {
+		b.WriteString(" }")
+	}
+	b.WriteString(" } part b; binding bind A")
+	for i := 0; i < segments-2; i++ {
+		b.WriteString(".")
+		if missing != "" && i == missingAt {
+			b.WriteString(missing)
+		} else {
+			b.WriteString("p")
+			b.WriteString(strconv.Itoa(i))
+		}
+	}
+	b.WriteString(".leaf = b; }")
+	return b.String()
 }
 
 // A misspelled chain segment is one mistake, so it is reported once: the
