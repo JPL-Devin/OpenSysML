@@ -369,6 +369,12 @@ func TestRefusals(t *testing.T) {
 			ops:     []Operation{Rename("Demo::SC::avionics::board::count", "")},
 			failure: FailureInvalidName,
 		},
+		{
+			name:    "new name is a sibling's name",
+			ops:     []Operation{Rename("Demo::SC::margin", "label")},
+			failure: FailureInvalidName,
+			message: "already declared",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

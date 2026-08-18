@@ -294,6 +294,19 @@ def test_a_refusal_becomes_its_own_error(fake_service, failure, expected):
     ]
 
 
+def test_a_refusal_kind_newer_than_this_client_stays_an_edit_error(fake_service):
+    """proto3 enums are open: an unnamed kind is still an EditError, named by number."""
+    unknown = max(sysml_pb2.EditFailure.values()) + 1
+    port, _ = fake_service(error="refused for a newer reason", failure=unknown)
+    with Connection(port=port, auto_start=False) as conn:
+        edit = conn.load_from_content(MODEL).edit()
+        edit.set_value("Demo::SC::unitMass", "1050.0[SI::kg]")
+        with pytest.raises(EditError) as excinfo:
+            edit.apply()
+    assert excinfo.value.failure == f"EDIT_FAILURE_{unknown}"
+    assert "newer reason" in str(excinfo.value)
+
+
 def test_a_refused_rename_names_where_the_references_are(fake_service):
     """The refusal carries the referrers, which is what makes it actionable."""
     port, _ = fake_service(

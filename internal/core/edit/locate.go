@@ -144,6 +144,15 @@ func (m Model) renameSplice(i int, op Operation, sym *symbols.Symbol) (splice, e
 	if err := checkName(i, op.NewName); err != nil {
 		return splice{}, err
 	}
+	if taken, ok := m.nameTaken(sym, op.Target, op.NewName); ok {
+		return splice{}, &Error{
+			Failure:        FailureInvalidName,
+			OperationIndex: i,
+			Message: fmt.Sprintf("%s cannot be renamed to %q: %s is already declared,"+
+				" and two members of one namespace sharing a name make that name ambiguous",
+				op.Target, op.NewName, taken),
+		}
+	}
 	if referring := m.referringTo(sym, ident.NameSpan); len(referring) > 0 {
 		return splice{}, &Error{
 			Failure:        FailureRenameReferenced,
@@ -155,6 +164,23 @@ func (m Model) renameSplice(i int, op Operation, sym *symbols.Symbol) (splice, e
 		}
 	}
 	return splice{span: ident.NameSpan, text: op.NewName, opIndex: i, target: op.Target}, nil
+}
+
+// nameTaken returns the FQN a rename would produce when a member of the same
+// namespace already declares that name: two members sharing a name make the
+// qualified name ambiguous for every later lookup.
+func (m Model) nameTaken(sym *symbols.Symbol, target, newName string) (string, bool) {
+	fqn := newName
+	if i := strings.LastIndex(target, "::"); i >= 0 {
+		fqn = target[:i+len("::")] + newName
+	}
+	for _, other := range m.Index.LookupQualifiedFrom(fqn, fqn) {
+		if other == nil || m.Index.GetFQN(other) != fqn || sameSymbol(other, sym) {
+			continue
+		}
+		return fqn, true
+	}
+	return "", false
 }
 
 // declIdent returns the identification a declaration node carries.

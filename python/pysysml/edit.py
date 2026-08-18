@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from typing import List
 
 from pysysml.conversion import Conversion, FORMAT_SYSML
+from pysysml.proto import sysml_pb2
 from pysysml.errors import (
     EditError,
     EditResultError,
@@ -41,6 +42,25 @@ _FAILURE_ERRORS = {
     "EDIT_FAILURE_OVERLAPPING_EDITS": OverlappingEditsError,
     "EDIT_FAILURE_RESULT_INVALID": EditResultError,
 }
+
+
+def failure_name(failure):
+    """Name a refusal kind, including one this client's enum has no name for.
+
+    proto3 enums are open, so a newer service can refuse an edit for a reason
+    this build has never heard of; that must still raise an :class:`EditError`
+    rather than fail on the enum lookup.
+
+    Args:
+        failure (int): EditFailure number as the service sent it
+
+    Returns:
+        str: The enum's name, or a name naming the unknown number
+    """
+    try:
+        return sysml_pb2.EditFailure.Name(failure)
+    except ValueError:
+        return f"EDIT_FAILURE_{failure}"
 
 
 def error_for_failure(failure, message, diagnostics=None, referring_elements=None):

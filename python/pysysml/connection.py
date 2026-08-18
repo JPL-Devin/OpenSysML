@@ -31,7 +31,7 @@ from pysysml.conversion import (
     is_experimental,
 )
 from pysysml.diagnostic import Diagnostic
-from pysysml.edit import error_for_failure, result_of
+from pysysml.edit import error_for_failure, failure_name, result_of
 from pysysml.enumeration import EnumLiteral
 from pysysml.errors import (
     ChecksumMismatchError,
@@ -709,7 +709,7 @@ class Connection:
             response = self._stub.ApplyEdits(request)
         if response.error:
             raise error_for_failure(
-                sysml_pb2.EditFailure.Name(response.failure),
+                failure_name(response.failure),
                 response.error,
                 diagnostics=[Diagnostic(d) for d in response.diagnostics],
                 referring_elements=list(response.referring_elements),

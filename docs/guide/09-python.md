@@ -503,7 +503,7 @@ Every refusal is a typed error, never a silent no-op:
 | --- | --- |
 | No operation was added to the editor | `NoEditsError` |
 | No such element, an ambiguous name, or an element that cannot carry a value or a name | `EditTargetError` |
-| A new value that does not parse as one expression, or a new name that is not an identifier | `InvalidEditError` |
+| A new value that does not parse as one expression, or a new name that is not an identifier or is already declared beside the element | `InvalidEditError` |
 | A rename of an element that is referenced | `RenameReferencedError` |
 | Two operations that would edit overlapping bytes | `OverlappingEditsError` |
 | The edited model does not read back cleanly — a value naming something that does not resolve, say | `EditResultError` |
