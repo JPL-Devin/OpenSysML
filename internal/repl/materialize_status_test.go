@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/runtime"
+	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
 )
 
 // unmaterializableModel binds two values to a feature declaring no multiplicity,

@@ -112,7 +112,7 @@ def test_concurrent_ensure_service_blocks():
 
 - [ ] **Step 4: Run tests to verify they fail**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_connection.py::test_ensure_service_uses_lockfile -v`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_connection.py::test_ensure_service_uses_lockfile -v`
 Expected: FAIL with "FileNotFoundError: lockfile_path"
 
 - [ ] **Step 5: Implement lockfile coordination in _ensure_service**
@@ -194,7 +194,7 @@ def _ensure_service(self):
 
 - [ ] **Step 6: Run tests to verify they pass**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_connection.py::test_ensure_service_uses_lockfile tests/test_connection.py::test_concurrent_ensure_service_blocks -v`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_connection.py::test_ensure_service_uses_lockfile tests/test_connection.py::test_concurrent_ensure_service_blocks -v`
 Expected: PASS (2 tests)
 
 - [ ] **Step 7: Commit lockfile coordination**
@@ -263,7 +263,7 @@ def test_service_shuts_down_when_last_process_exits():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_lifecycle.py::test_service_shuts_down_when_last_process_exits -v`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_lifecycle.py::test_service_shuts_down_when_last_process_exits -v`
 Expected: FAIL (service doesn't shut down)
 
 - [ ] **Step 3: Implement reference counting**
@@ -402,7 +402,7 @@ Expected: Package installed successfully
 
 - [ ] **Step 6: Run test to verify it passes**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_lifecycle.py::test_service_shuts_down_when_last_process_exits -v`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_lifecycle.py::test_service_shuts_down_when_last_process_exits -v`
 Expected: PASS
 
 - [ ] **Step 7: Update existing persistence tests**
@@ -432,7 +432,7 @@ def test_service_survives_connection_close():
 
 - [ ] **Step 8: Run full test suite**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/ -v`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/ -v`
 Expected: All tests pass
 
 - [ ] **Step 9: Commit reference counting**
@@ -453,7 +453,7 @@ git commit -m "feat(connection): add reference-counted service shutdown"
 **Objective:** Verify downloaded binaries against checksums before using them.
 
 **Design:**
-- Checksum file: `https://github.com/Open-MBEE/Systemica/releases/download/{version}/{binary_name}.sha256`
+- Checksum file: `https://github.com/Open-MBEE/OpenSysML/releases/download/{version}/{binary_name}.sha256`
 - Download checksum file alongside binary
 - Verify before marking download complete
 - Fail if checksum mismatch
@@ -467,7 +467,7 @@ git commit -m "feat(connection): add reference-counted service shutdown"
 def test_download_binary_verifies_checksum():
     """Test that download_binary fetches and verifies checksum."""
     version = 'v0.1.0'
-    github_repo = 'Open-MBEE/Systemica'
+    github_repo = 'Open-MBEE/OpenSysML'
     
     # Mock binary download
     mock_binary_data = b'fake binary content'
@@ -497,7 +497,7 @@ def test_download_binary_verifies_checksum():
 def test_download_binary_fails_on_checksum_mismatch():
     """Test that download fails if checksum doesn't match."""
     version = 'v0.1.0'
-    github_repo = 'Open-MBEE/Systemica'
+    github_repo = 'Open-MBEE/OpenSysML'
     
     # Mock binary download
     mock_binary_data = b'fake binary content'
@@ -519,7 +519,7 @@ def test_download_binary_fails_on_checksum_mismatch():
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_binary.py::test_download_binary_verifies_checksum tests/test_binary.py::test_download_binary_fails_on_checksum_mismatch -v`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_binary.py::test_download_binary_verifies_checksum tests/test_binary.py::test_download_binary_fails_on_checksum_mismatch -v`
 Expected: FAIL (checksum not downloaded/verified)
 
 - [ ] **Step 3: Update download_binary to fetch and verify checksum**
@@ -528,7 +528,7 @@ Expected: FAIL (checksum not downloaded/verified)
 # pysysml/binary.py
 import hashlib
 
-def download_binary(version='v0.1.0', github_repo='Open-MBEE/Systemica'):
+def download_binary(version='v0.1.0', github_repo='Open-MBEE/OpenSysML'):
     """Download sysml-grpc binary from GitHub releases with checksum verification.
     
     Args:
@@ -599,7 +599,7 @@ def download_binary(version='v0.1.0', github_repo='Open-MBEE/Systemica'):
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_binary.py::test_download_binary_verifies_checksum tests/test_binary.py::test_download_binary_fails_on_checksum_mismatch -v`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_binary.py::test_download_binary_verifies_checksum tests/test_binary.py::test_download_binary_fails_on_checksum_mismatch -v`
 Expected: PASS (2 tests)
 
 - [ ] **Step 5: Verify verify_checksum is no longer dead code**
@@ -609,7 +609,7 @@ Expected: Should show both definition (line ~102) and call site (in download_bin
 
 - [ ] **Step 6: Run full test suite**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/ -v`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/ -v`
 Expected: All tests pass
 
 - [ ] **Step 7: Commit checksum verification**
@@ -625,7 +625,7 @@ git commit -m "feat(binary): add checksum verification for downloaded binaries"
 
 - [ ] **Run full test suite**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/ -v`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/ -v`
 Expected: All tests pass
 
 - [ ] **Run Go tests**

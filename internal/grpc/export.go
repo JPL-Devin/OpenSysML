@@ -5,8 +5,8 @@ import (
 	"errors"
 	"os"
 
-	pb "github.com/Open-MBEE/Systemica/api/proto"
-	"github.com/Open-MBEE/Systemica/internal/core/export"
+	pb "github.com/Open-MBEE/OpenSysML/api/proto"
+	"github.com/Open-MBEE/OpenSysML/internal/core/export"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Open-MBEE/Systemica/internal/core/solve"
+	"github.com/Open-MBEE/OpenSysML/internal/core/solve"
 )
 
 // ExplainSolve asks a solver which of an element's conditions conflict, for a

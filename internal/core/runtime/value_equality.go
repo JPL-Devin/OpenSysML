@@ -3,7 +3,7 @@ package runtime
 import (
 	"hash/fnv"
 
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // valueKey is a comparable projection of Value for use as map key.

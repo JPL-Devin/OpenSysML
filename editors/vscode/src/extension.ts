@@ -27,14 +27,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(watcher);
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("systemica.restartServer", () => restart()),
+    vscode.commands.registerCommand("opensysml.restartServer", () => restart()),
   );
 
   // The server binary is resolved at start, so pointing the setting at a fresh
   // build takes effect on the next restart rather than on reload.
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration("systemica.server")) {
+      if (event.affectsConfiguration("opensysml.server")) {
         void restart();
       }
     }),
@@ -62,16 +62,16 @@ function enqueue(work: () => Promise<void>): Promise<void> {
 }
 
 async function startClient(): Promise<void> {
-  const config = vscode.workspace.getConfiguration("systemica");
+  const config = vscode.workspace.getConfiguration("opensysml");
   if (!config.get<boolean>("server.enabled", true)) {
-    output.appendLine("Language server disabled by systemica.server.enabled; highlighting only.");
+    output.appendLine("Language server disabled by opensysml.server.enabled; highlighting only.");
     return;
   }
 
   const command = resolveServer(config.get<string>("server.path", "").trim());
   if (!command) {
     void vscode.window.showWarningMessage(
-      `Could not find ${EXECUTABLE}. Build it with \`make build\` and set "systemica.server.path", or put it on your PATH. Syntax highlighting still works.`,
+      `Could not find ${EXECUTABLE}. Build it with \`make build\` and set "opensysml.server.path", or put it on your PATH. Syntax highlighting still works.`,
     );
     return;
   }
@@ -91,7 +91,7 @@ async function startClient(): Promise<void> {
     synchronize: { fileEvents: watcher },
   };
 
-  client = new LanguageClient("systemica", "SysML v2 Language Server", serverOptions, clientOptions);
+  client = new LanguageClient("opensysml", "SysML v2 Language Server", serverOptions, clientOptions);
   try {
     await client.start();
   } catch (err) {

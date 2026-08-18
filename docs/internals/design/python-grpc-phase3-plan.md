@@ -66,7 +66,7 @@ def test_detect_platform():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_binary.py::test_detect_platform -v`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_binary.py::test_detect_platform -v`
 Expected: FAIL with "cannot import name 'detect_platform'"
 
 - [ ] **Step 3: Implement platform detection**
@@ -110,7 +110,7 @@ def detect_platform():
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_binary.py::test_detect_platform -v`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_binary.py::test_detect_platform -v`
 Expected: PASS
 
 - [ ] **Step 5: Write failing test for binary path**
@@ -148,7 +148,7 @@ def get_binary_path():
 
 - [ ] **Step 7: Run test to verify it passes**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_binary.py::test_get_binary_path -v`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_binary.py::test_get_binary_path -v`
 Expected: PASS
 
 - [ ] **Step 8: Write failing test for binary download**
@@ -177,7 +177,7 @@ def test_download_binary():
                     mock_urlopen.assert_called_once()
                     # Verify URL format
                     call_args = mock_urlopen.call_args[0][0]
-                    assert 'github.com/Open-MBEE/Systemica/releases/download/v0.1.0' in call_args
+                    assert 'github.com/Open-MBEE/OpenSysML/releases/download/v0.1.0' in call_args
 ```
 
 - [ ] **Step 9: Implement download_binary**
@@ -188,7 +188,7 @@ import urllib.request
 import os
 import stat
 
-def download_binary(version='latest', github_repo='Open-MBEE/Systemica'):
+def download_binary(version='latest', github_repo='Open-MBEE/OpenSysML'):
     """Download sysml-grpc binary from GitHub releases.
     
     Args:
@@ -205,7 +205,7 @@ def download_binary(version='latest', github_repo='Open-MBEE/Systemica'):
     binary_path = get_binary_path()
     
     # Construct GitHub release URL
-    # Format: https://github.com/Open-MBEE/Systemica/releases/download/v0.1.0/sysml-grpc-linux-amd64
+    # Format: https://github.com/Open-MBEE/OpenSysML/releases/download/v0.1.0/sysml-grpc-linux-amd64
     if version == 'latest':
         # For now, use a fixed version (latest API requires extra request)
         version = 'v0.1.0'
@@ -238,7 +238,7 @@ def download_binary(version='latest', github_repo='Open-MBEE/Systemica'):
 
 - [ ] **Step 10: Run test to verify it passes**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_binary.py::test_download_binary -v`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_binary.py::test_download_binary -v`
 Expected: PASS
 
 - [ ] **Step 11: Write failing test for checksum verification**
@@ -289,7 +289,7 @@ def verify_checksum(binary_path, expected_sha256):
 
 - [ ] **Step 13: Run test to verify it passes**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_binary.py::test_verify_checksum -v`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_binary.py::test_verify_checksum -v`
 Expected: PASS
 
 - [ ] **Step 14: Write failing test for ensure_binary**
@@ -345,7 +345,7 @@ def ensure_binary(force_download=False):
 
 - [ ] **Step 16: Run tests to verify they pass**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_binary.py -v`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_binary.py -v`
 Expected: All 5 tests PASS
 
 - [ ] **Step 17: Commit**
@@ -392,7 +392,7 @@ def test_probe_service_not_running():
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_connection.py::test_probe_service_running -v`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_connection.py::test_probe_service_running -v`
 Expected: FAIL with "AttributeError: 'Connection' object has no attribute '_probe_service'"
 
 - [ ] **Step 3: Implement _probe_service method**
@@ -429,7 +429,7 @@ def _probe_service(self, host, port, timeout=1.0):
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_connection.py::test_probe_service_running tests/test_connection.py::test_probe_service_not_running -v`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_connection.py::test_probe_service_running tests/test_connection.py::test_probe_service_not_running -v`
 Expected: Both tests PASS
 
 - [ ] **Step 5: Write failing test for service auto-start**
@@ -546,7 +546,7 @@ def _cleanup_service(self):
 
 - [ ] **Step 7: Run tests to verify they pass**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_connection.py::test_ensure_service_starts tests/test_connection.py::test_ensure_service_reuses_existing -v`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_connection.py::test_ensure_service_starts tests/test_connection.py::test_ensure_service_reuses_existing -v`
 Expected: Both tests PASS
 
 - [ ] **Step 8: Update existing Connection tests**
@@ -569,7 +569,7 @@ Apply `auto_start=False` to all existing Connection() calls in tests to avoid tr
 
 - [ ] **Step 9: Run all connection tests**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_connection.py -v`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_connection.py -v`
 Expected: All tests PASS (including new auto-start tests)
 
 - [ ] **Step 10: Commit**
@@ -611,14 +611,14 @@ def test_pysysml_load():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_api.py::test_pysysml_load -v`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_api.py::test_pysysml_load -v`
 Expected: FAIL with "AttributeError: module 'pysysml' has no attribute 'load'"
 
 - [ ] **Step 3: Implement module-level load() function**
 
 ```python
 # pysysml/__init__.py (modify existing file)
-"""pysysml - Python bindings for Systemica SysML v2 implementation."""
+"""pysysml - Python bindings for OpenSysML SysML v2 implementation."""
 
 __version__ = "0.1.0"
 
@@ -668,7 +668,7 @@ __all__ = ['Connection', 'Model', 'Symbol', 'Diagnostic', 'load', '__version__']
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_api.py::test_pysysml_load -v`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_api.py::test_pysysml_load -v`
 Expected: PASS
 
 - [ ] **Step 5: Write failing test for connect() function**
@@ -714,7 +714,7 @@ __all__ = ['Connection', 'Model', 'Symbol', 'Diagnostic', 'load', 'connect', '__
 
 - [ ] **Step 7: Run test to verify it passes**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_api.py::test_pysysml_connect -v`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_api.py::test_pysysml_connect -v`
 Expected: PASS
 
 - [ ] **Step 8: Write test for default connection reuse**
@@ -741,12 +741,12 @@ def test_default_connection_reuse():
 
 - [ ] **Step 9: Run test to verify it passes**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_api.py::test_default_connection_reuse -v`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_api.py::test_default_connection_reuse -v`
 Expected: PASS
 
 - [ ] **Step 10: Run all API tests**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_api.py -v`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_api.py -v`
 Expected: All 3 tests PASS
 
 - [ ] **Step 11: Commit**
@@ -925,7 +925,7 @@ def test_download_binary_checksum():
 
 - [ ] **Step 6: Run integration tests**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_lifecycle.py tests/test_binary.py::test_download_binary_checksum -v -m integration`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_lifecycle.py tests/test_binary.py::test_download_binary_checksum -v -m integration`
 Expected: Tests PASS or SKIP (if network unavailable)
 
 **Note:** Integration tests may skip if:
@@ -935,14 +935,14 @@ Expected: Tests PASS or SKIP (if network unavailable)
 
 - [ ] **Step 7: Run full test suite**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/ -v`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/ -v`
 Expected: All unit tests PASS, integration tests PASS or SKIP
 
 - [ ] **Step 8: Manual end-to-end verification**
 
 ```bash
 # In a fresh Python environment (or remove ~/.pysysml/bin/ first)
-cd /home/han/IdeaProjects/Systemica
+cd /home/han/IdeaProjects/OpenSysML
 rm -rf ~/.pysysml  # Clean slate
 
 python3 -c "
@@ -1008,7 +1008,7 @@ with Connection() as conn:
 
 ### Configuration
 
-Binary downloads from: `https://github.com/Open-MBEE/Systemica/releases`
+Binary downloads from: `https://github.com/Open-MBEE/OpenSysML/releases`
 Binary stored in: `~/.pysysml/bin/sysml-grpc`
 
 To use a different service:

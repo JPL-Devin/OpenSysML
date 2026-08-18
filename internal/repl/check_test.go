@@ -5,15 +5,15 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/solve"
+	"github.com/Open-MBEE/OpenSysML/internal/core/solve"
 )
 
 // solverRequiredEnv makes an absent solver a failure rather than a skip, so CI
 // runs these checks instead of quietly passing without a solver.
-const solverRequiredEnv = "SYSTEMICA_REQUIRE_SMT"
+const solverRequiredEnv = "OPENSYSML_REQUIRE_SMT"
 
 // requireSolver skips a solver-dependent check when no solver is installed,
-// unless SYSTEMICA_REQUIRE_SMT says one must be.
+// unless OPENSYSML_REQUIRE_SMT says one must be.
 func requireSolver(t *testing.T) {
 	t.Helper()
 	if _, err := solve.Discover(); err != nil {

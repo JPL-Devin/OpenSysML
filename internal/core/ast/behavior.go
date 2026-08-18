@@ -442,7 +442,7 @@ type SubstateMember struct {
 //	transition [<name>] first <source> [accept <trigger>] [if <guard>]
 //	    [do <effect>] then <target>;
 //
-// or the `transition <source> to <target> …` spelling Systemica also accepts.
+// or the `transition <source> to <target> …` spelling OpenSysML also accepts.
 type TransitionMember struct {
 	NodeBase
 	Name    string         // the transition's own name, empty when anonymous

@@ -3,7 +3,7 @@ package model
 import (
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/passes"
+	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
 )
 
 // The two OMG training models that a performed action's members are reachable

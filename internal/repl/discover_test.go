@@ -99,8 +99,8 @@ func TestBuiltinsCommand(t *testing.T) {
 func TestBuiltinsListsAnExtensionFunctionWithItsImport(t *testing.T) {
 	out := run(t, NewSession(), "%builtins")
 	wants(t, out,
-		"exp(x)  SystemicaMathFunctions::exp  (needs `import SystemicaMathFunctions::*;`)",
-		"atan2(y, x)  SystemicaMathFunctions::atan2  (needs `import SystemicaMathFunctions::*;`)",
+		"exp(x)  OpenSysMLMathFunctions::exp  (needs `import OpenSysMLMathFunctions::*;`)",
+		"atan2(y, x)  OpenSysMLMathFunctions::atan2  (needs `import OpenSysMLMathFunctions::*;`)",
 	)
 }
 

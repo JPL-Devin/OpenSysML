@@ -1,9 +1,9 @@
 package model
 
 import (
-	"github.com/Open-MBEE/Systemica/internal/core/highlight"
-	"github.com/Open-MBEE/Systemica/internal/core/resolve"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/highlight"
+	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // HighlightTokens returns the semantic tokens of a document, ordered by source

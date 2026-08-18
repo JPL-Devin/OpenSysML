@@ -11,7 +11,7 @@ import (
 
 // CoreBudgetEnv names the environment variable that overrides how long a core
 // may be shrunk for, as a Go duration ("5s", "500ms").
-const CoreBudgetEnv = "SYSTEMICA_SMT_CORE_BUDGET"
+const CoreBudgetEnv = "OPENSYSML_SMT_CORE_BUDGET"
 
 // DefaultCoreBudget is how long reduction is given in total, in the spirit of
 // the runtime's step budgets: past it the solver's own core is reported as it

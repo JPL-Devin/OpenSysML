@@ -3,7 +3,7 @@
 // that IR as an SMT-LIB2 script.
 //
 // It also runs an external solver over that script — z3 or cvc5, found on PATH
-// or named by SYSTEMICA_SMT — as a process speaking SMT-LIB2 on standard input,
+// or named by OPENSYSML_SMT — as a process speaking SMT-LIB2 on standard input,
 // so no library is linked in and releases stay pure Go. The verdicts sat, unsat
 // and unknown stay distinct: a timeout or arithmetic the solver gave up on is
 // unknown, and a solver that crashes, is absent, or replies unusably is a typed
@@ -28,7 +28,7 @@
 // fresh solver process, and Core.Minimal says every remaining member was shown to
 // be needed: dropping any one left the rest satisfiable. Reduction is bounded, in
 // the spirit of the runtime's step budgets, by DefaultMaxCoreMembers members and
-// DefaultCoreBudget of wall time (SYSTEMICA_SMT_CORE_BUDGET overrides it); a core
+// DefaultCoreBudget of wall time (OPENSYSML_SMT_CORE_BUDGET overrides it); a core
 // too large, out of budget, or whose round the solver did not decide is reported
 // as it stands with Minimal false and Core.Note saying why. A solver that refuses
 // cores, names an assertion the query did not assert, answers unreadably or

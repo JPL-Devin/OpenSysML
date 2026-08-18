@@ -15,14 +15,14 @@ marketplace, so build and side-load it:
 make build                                    # builds bin/sysml-lsp
 cd editors/vscode
 npm install
-npm run package                               # -> systemica-sysml.vsix
-code --install-extension systemica-sysml.vsix
+npm run package                               # -> opensysml-sysml.vsix
+code --install-extension opensysml-sysml.vsix
 ```
 
 Open any `.sysml` file: it is highlighted immediately, and the extension starts
 the server it finds, in order:
 
-1. `systemica.server.path`, if set;
+1. `opensysml.server.path`, if set;
 2. `bin/sysml-lsp` inside an open workspace folder (a checkout that ran `make build`);
 3. `sysml-lsp` on `PATH`.
 
@@ -31,8 +31,8 @@ build one. Point the extension at a specific build with `.vscode/settings.json`:
 
 ```json
 {
-  "systemica.server.path": "/absolute/path/to/bin/sysml-lsp",
-  "systemica.trace.server": "messages"
+  "opensysml.server.path": "/absolute/path/to/bin/sysml-lsp",
+  "opensysml.trace.server": "messages"
 }
 ```
 

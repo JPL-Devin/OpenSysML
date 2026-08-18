@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 // ErrNotTranslatable is returned when a condition uses a construct outside the
@@ -59,7 +59,7 @@ func (e *CoreError) Unwrap() []error { return []error{ErrNoCore, ErrSolverProces
 // NoSolverError names the candidates looked for and what to install. It unwraps
 // to ErrNoSolver.
 type NoSolverError struct {
-	// Override is the value of the SYSTEMICA_SMT override, empty when unset.
+	// Override is the value of the OPENSYSML_SMT override, empty when unset.
 	Override string
 
 	// Looked lists the executables looked for on PATH, in order.

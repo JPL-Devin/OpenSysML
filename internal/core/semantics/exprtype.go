@@ -1,6 +1,6 @@
 package semantics
 
-import "github.com/Open-MBEE/Systemica/internal/core/symbols"
+import "github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 
 // PrimType classifies a symbol against the stdlib scalar value types
 // (`ScalarValues`). It is the lattice the expression type checker reasons over;

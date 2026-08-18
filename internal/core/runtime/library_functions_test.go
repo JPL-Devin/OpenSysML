@@ -6,13 +6,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/libs"
-	"github.com/Open-MBEE/Systemica/internal/core/parser"
-	"github.com/Open-MBEE/Systemica/internal/core/resolve"
-	"github.com/Open-MBEE/Systemica/internal/core/semantics"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
+	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // libCtx returns a runtime context over an empty model, enough to apply a
@@ -84,24 +84,24 @@ func TestLibraryFunctionValues(t *testing.T) {
 		{"TrigFunctions::arcsin", []Value{constReal(1)}, semantics.Value{Kind: semantics.ValReal, Real: math.Pi / 2}},
 		{"TrigFunctions::arccos", []Value{constReal(1)}, semantics.Value{Kind: semantics.ValReal, Real: 0}},
 		{"TrigFunctions::arctan", []Value{constReal(1)}, semantics.Value{Kind: semantics.ValReal, Real: math.Pi / 4}},
-		{"SystemicaMathFunctions::exp", []Value{constReal(0)}, semantics.Value{Kind: semantics.ValReal, Real: 1}},
-		{"SystemicaMathFunctions::exp", []Value{constReal(1)}, semantics.Value{Kind: semantics.ValReal, Real: math.E}},
-		{"SystemicaMathFunctions::exp", []Value{constInt(0)}, semantics.Value{Kind: semantics.ValReal, Real: 1}},
-		{"SystemicaMathFunctions::exp", []Value{constReal(-1)}, semantics.Value{Kind: semantics.ValReal, Real: 1 / math.E}},
-		{"SystemicaMathFunctions::ln", []Value{constReal(1)}, semantics.Value{Kind: semantics.ValReal, Real: 0}},
-		{"SystemicaMathFunctions::ln", []Value{constReal(math.E)}, semantics.Value{Kind: semantics.ValReal, Real: 1}},
-		{"SystemicaMathFunctions::ln", []Value{constInt(1)}, semantics.Value{Kind: semantics.ValReal, Real: 0}},
-		{"SystemicaMathFunctions::log", []Value{constReal(8), constReal(2)}, semantics.Value{Kind: semantics.ValReal, Real: 3}},
-		{"SystemicaMathFunctions::log", []Value{constReal(1000), constReal(10)}, semantics.Value{Kind: semantics.ValReal, Real: 3}},
-		{"SystemicaMathFunctions::log", []Value{constInt(8), constInt(2)}, semantics.Value{Kind: semantics.ValReal, Real: 3}},
+		{"OpenSysMLMathFunctions::exp", []Value{constReal(0)}, semantics.Value{Kind: semantics.ValReal, Real: 1}},
+		{"OpenSysMLMathFunctions::exp", []Value{constReal(1)}, semantics.Value{Kind: semantics.ValReal, Real: math.E}},
+		{"OpenSysMLMathFunctions::exp", []Value{constInt(0)}, semantics.Value{Kind: semantics.ValReal, Real: 1}},
+		{"OpenSysMLMathFunctions::exp", []Value{constReal(-1)}, semantics.Value{Kind: semantics.ValReal, Real: 1 / math.E}},
+		{"OpenSysMLMathFunctions::ln", []Value{constReal(1)}, semantics.Value{Kind: semantics.ValReal, Real: 0}},
+		{"OpenSysMLMathFunctions::ln", []Value{constReal(math.E)}, semantics.Value{Kind: semantics.ValReal, Real: 1}},
+		{"OpenSysMLMathFunctions::ln", []Value{constInt(1)}, semantics.Value{Kind: semantics.ValReal, Real: 0}},
+		{"OpenSysMLMathFunctions::log", []Value{constReal(8), constReal(2)}, semantics.Value{Kind: semantics.ValReal, Real: 3}},
+		{"OpenSysMLMathFunctions::log", []Value{constReal(1000), constReal(10)}, semantics.Value{Kind: semantics.ValReal, Real: 3}},
+		{"OpenSysMLMathFunctions::log", []Value{constInt(8), constInt(2)}, semantics.Value{Kind: semantics.ValReal, Real: 3}},
 		// A base below 1 gives a decreasing logarithm: log(0.5, 0.5) is 1.
-		{"SystemicaMathFunctions::log", []Value{constReal(0.5), constReal(0.5)}, semantics.Value{Kind: semantics.ValReal, Real: 1}},
-		{"SystemicaMathFunctions::atan2", []Value{constReal(1), constReal(1)}, semantics.Value{Kind: semantics.ValReal, Real: math.Pi / 4}},
+		{"OpenSysMLMathFunctions::log", []Value{constReal(0.5), constReal(0.5)}, semantics.Value{Kind: semantics.ValReal, Real: 1}},
+		{"OpenSysMLMathFunctions::atan2", []Value{constReal(1), constReal(1)}, semantics.Value{Kind: semantics.ValReal, Real: math.Pi / 4}},
 		// The quadrant arctan(y/x) loses: (1, -1) and (-1, 1) share the ratio -1.
-		{"SystemicaMathFunctions::atan2", []Value{constReal(1), constReal(-1)}, semantics.Value{Kind: semantics.ValReal, Real: 3 * math.Pi / 4}},
-		{"SystemicaMathFunctions::atan2", []Value{constReal(-1), constReal(1)}, semantics.Value{Kind: semantics.ValReal, Real: -math.Pi / 4}},
-		{"SystemicaMathFunctions::atan2", []Value{constReal(-1), constReal(-1)}, semantics.Value{Kind: semantics.ValReal, Real: -3 * math.Pi / 4}},
-		{"SystemicaMathFunctions::atan2", []Value{constInt(1), constInt(0)}, semantics.Value{Kind: semantics.ValReal, Real: math.Pi / 2}},
+		{"OpenSysMLMathFunctions::atan2", []Value{constReal(1), constReal(-1)}, semantics.Value{Kind: semantics.ValReal, Real: 3 * math.Pi / 4}},
+		{"OpenSysMLMathFunctions::atan2", []Value{constReal(-1), constReal(1)}, semantics.Value{Kind: semantics.ValReal, Real: -math.Pi / 4}},
+		{"OpenSysMLMathFunctions::atan2", []Value{constReal(-1), constReal(-1)}, semantics.Value{Kind: semantics.ValReal, Real: -3 * math.Pi / 4}},
+		{"OpenSysMLMathFunctions::atan2", []Value{constInt(1), constInt(0)}, semantics.Value{Kind: semantics.ValReal, Real: math.Pi / 2}},
 	}
 
 	for _, tc := range cases {
@@ -143,22 +143,22 @@ func TestLibraryFunctionErrors(t *testing.T) {
 		{"string argument", "RealFunctions::sqrt", []Value{{Kind: ValString, Str: "4"}}, ErrTypeMismatch},
 		{"Real argument to an Integer parameter", "IntegerFunctions::abs", []Value{constReal(1.5)}, ErrTypeMismatch},
 		{"negative argument to a Natural parameter", "NaturalFunctions::max", []Value{constInt(-1), constInt(2)}, ErrTypeMismatch},
-		{"logarithm of zero", "SystemicaMathFunctions::ln", []Value{constReal(0)}, semantics.ErrArithmeticDomain},
-		{"logarithm of a negative", "SystemicaMathFunctions::ln", []Value{constReal(-1)}, semantics.ErrArithmeticDomain},
-		{"logarithm to base 1", "SystemicaMathFunctions::log", []Value{constReal(8), constReal(1)}, semantics.ErrArithmeticDomain},
-		{"logarithm of a negative to a base", "SystemicaMathFunctions::log", []Value{constReal(-1), constReal(10)}, semantics.ErrArithmeticDomain},
-		{"logarithm of zero to a base", "SystemicaMathFunctions::log", []Value{constReal(0), constReal(10)}, semantics.ErrArithmeticDomain},
-		{"logarithm to a negative base", "SystemicaMathFunctions::log", []Value{constReal(8), constReal(-2)}, semantics.ErrArithmeticDomain},
-		{"logarithm to base zero", "SystemicaMathFunctions::log", []Value{constReal(8), constReal(0)}, semantics.ErrArithmeticDomain},
-		{"angle at the origin", "SystemicaMathFunctions::atan2", []Value{constReal(0), constReal(0)}, semantics.ErrArithmeticDomain},
-		{"exponential beyond the Real range", "SystemicaMathFunctions::exp", []Value{constReal(1000)}, semantics.ErrArithmeticOverflow},
-		{"exponential with no argument", "SystemicaMathFunctions::exp", nil, ErrCalcArity},
-		{"logarithm with one argument", "SystemicaMathFunctions::log", []Value{constReal(8)}, ErrCalcArity},
-		{"angle with three arguments", "SystemicaMathFunctions::atan2", []Value{constReal(1), constReal(1), constReal(1)}, ErrCalcArity},
-		{"boolean argument to the exponential", "SystemicaMathFunctions::exp", []Value{boolValue(true)}, ErrTypeMismatch},
-		{"string argument to the logarithm", "SystemicaMathFunctions::ln", []Value{{Kind: ValString, Str: "1"}}, ErrTypeMismatch},
-		{"string base", "SystemicaMathFunctions::log", []Value{constReal(8), {Kind: ValString, Str: "2"}}, ErrTypeMismatch},
-		{"boolean argument to the angle", "SystemicaMathFunctions::atan2", []Value{constReal(1), boolValue(false)}, ErrTypeMismatch},
+		{"logarithm of zero", "OpenSysMLMathFunctions::ln", []Value{constReal(0)}, semantics.ErrArithmeticDomain},
+		{"logarithm of a negative", "OpenSysMLMathFunctions::ln", []Value{constReal(-1)}, semantics.ErrArithmeticDomain},
+		{"logarithm to base 1", "OpenSysMLMathFunctions::log", []Value{constReal(8), constReal(1)}, semantics.ErrArithmeticDomain},
+		{"logarithm of a negative to a base", "OpenSysMLMathFunctions::log", []Value{constReal(-1), constReal(10)}, semantics.ErrArithmeticDomain},
+		{"logarithm of zero to a base", "OpenSysMLMathFunctions::log", []Value{constReal(0), constReal(10)}, semantics.ErrArithmeticDomain},
+		{"logarithm to a negative base", "OpenSysMLMathFunctions::log", []Value{constReal(8), constReal(-2)}, semantics.ErrArithmeticDomain},
+		{"logarithm to base zero", "OpenSysMLMathFunctions::log", []Value{constReal(8), constReal(0)}, semantics.ErrArithmeticDomain},
+		{"angle at the origin", "OpenSysMLMathFunctions::atan2", []Value{constReal(0), constReal(0)}, semantics.ErrArithmeticDomain},
+		{"exponential beyond the Real range", "OpenSysMLMathFunctions::exp", []Value{constReal(1000)}, semantics.ErrArithmeticOverflow},
+		{"exponential with no argument", "OpenSysMLMathFunctions::exp", nil, ErrCalcArity},
+		{"logarithm with one argument", "OpenSysMLMathFunctions::log", []Value{constReal(8)}, ErrCalcArity},
+		{"angle with three arguments", "OpenSysMLMathFunctions::atan2", []Value{constReal(1), constReal(1), constReal(1)}, ErrCalcArity},
+		{"boolean argument to the exponential", "OpenSysMLMathFunctions::exp", []Value{boolValue(true)}, ErrTypeMismatch},
+		{"string argument to the logarithm", "OpenSysMLMathFunctions::ln", []Value{{Kind: ValString, Str: "1"}}, ErrTypeMismatch},
+		{"string base", "OpenSysMLMathFunctions::log", []Value{constReal(8), {Kind: ValString, Str: "2"}}, ErrTypeMismatch},
+		{"boolean argument to the angle", "OpenSysMLMathFunctions::atan2", []Value{constReal(1), boolValue(false)}, ErrTypeMismatch},
 	}
 
 	for _, tc := range cases {
@@ -187,19 +187,19 @@ func TestLibraryFunctionNamedArguments(t *testing.T) {
 // atan2 takes its arguments in the order y then x, so a named argument that
 // names them the other way round still computes the angle to (x, y).
 func TestLibraryFunctionAtan2NamedArguments(t *testing.T) {
-	fn, _ := libraryFunctionByName("SystemicaMathFunctions::atan2")
+	fn, _ := libraryFunctionByName("OpenSysMLMathFunctions::atan2")
 	got, err := fn.invoke(libCtx(t), calcArgs{named: map[string]Value{"x": constReal(-1), "y": constReal(1)}})
 	if err != nil || got.Const.Real != 3*math.Pi/4 {
 		t.Fatalf("atan2(x = -1.0, y = 1.0) = %+v, %v; want 3pi/4", got, err)
 	}
 }
 
-// The Systemica extension library ships the declarations these implementations
+// The OpenSysML extension library ships the declarations these implementations
 // are registered against, so the shipped signatures and the registry cannot
 // drift: every function the file declares has an implementation whose parameters
 // carry the declared names in the declared order.
-func TestSystemicaMathFunctionsMatchTheShippedDeclarations(t *testing.T) {
-	const path = "Systemica Libraries/SystemicaMathFunctions.kerml"
+func TestOpenSysMLMathFunctionsMatchTheShippedDeclarations(t *testing.T) {
+	const path = "OpenSysML Libraries/OpenSysMLMathFunctions.kerml"
 	data, err := libs.DefaultSource().Read(path)
 	if err != nil {
 		t.Fatalf("Read(%q): %v", path, err)
@@ -216,7 +216,7 @@ func TestSystemicaMathFunctionsMatchTheShippedDeclarations(t *testing.T) {
 	ctx := NewContext(semantics.NewModel(resolver), resolver, 10000)
 
 	declared := 0
-	for _, sym := range idx.LookupDirectChildren("SystemicaMathFunctions") {
+	for _, sym := range idx.LookupDirectChildren("OpenSysMLMathFunctions") {
 		if !isCalcSymbol(sym) {
 			continue
 		}
@@ -285,15 +285,15 @@ func TestUnimportedExtensionFunctionCallIsATypedError(t *testing.T) {
 	if !errors.Is(err, ErrUnimportedExtensionFunction) {
 		t.Fatalf("error = %v, want %v", err, ErrUnimportedExtensionFunction)
 	}
-	for _, want := range []string{"exp", "import SystemicaMathFunctions::*;"} {
+	for _, want := range []string{"exp", "import OpenSysMLMathFunctions::*;"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q does not mention %q", err, want)
 		}
 	}
 
 	// The qualified name is the model's own reading and stays dispatchable.
-	qualified := &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "SystemicaMathFunctions"}, {Text: "exp"}}}
-	if fn, err := unresolvedLibraryFunction(qualified, "SystemicaMathFunctions::exp"); fn == nil || err != nil {
+	qualified := &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "OpenSysMLMathFunctions"}, {Text: "exp"}}}
+	if fn, err := unresolvedLibraryFunction(qualified, "OpenSysMLMathFunctions::exp"); fn == nil || err != nil {
 		t.Fatalf("qualified exp = %v, %v; want the implementation", fn, err)
 	}
 }

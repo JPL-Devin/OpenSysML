@@ -6,6 +6,34 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ## Unreleased
 
+### The project is now OpenSysML
+
+The rename is a clean break with no compatibility aliases: every name below has exactly one
+spelling from this release on. Entries for earlier releases keep the old names, because the
+artifacts they describe really were called that.
+
+- **Go module path is `github.com/Open-MBEE/OpenSysML`.** `go install
+  github.com/Open-MBEE/OpenSysML/cmd/sysml@latest`; the old path resolves only for `v0.0.x`.
+- **The binaries are unchanged** — `sysml`, `sysml-lsp` and `sysml-grpc` keep their names, as does
+  the `pysysml` Python package.
+- **Release archives are `opensysml-<os>-<arch>.tar.gz`** (`.zip` on Windows), and the Homebrew
+  formula is `opensysml`: `brew install Open-MBEE/tap/opensysml`. Assets already published under
+  `v0.0.x` keep their old names.
+- **The RDF extension namespace is `urn:opensysml:sysml:`**, still bound to the `sysx:` prefix. A
+  `.ttl` file written before this release carries `urn:systemica:sysml:` properties, and reading one
+  is refused rather than silently dropping what those properties said — re-export it from its
+  notation source.
+- **The non-normative math library is `OpenSysMLMathFunctions`**, in
+  `OpenSysML Libraries/OpenSysMLMathFunctions.kerml`. A model that writes
+  `import SystemicaMathFunctions::*;` must be updated; the unqualified `exp`, `ln`, `log` and
+  `atan2` aliases are unaffected.
+- **Environment variables are `OPENSYSML_*`** (`OPENSYSML_SMT`, `OPENSYSML_SMT_TIMEOUT`,
+  `OPENSYSML_REQUIRE_SMT`, `OPENSYSML_REQUIRE_TRAINING_CORPUS`, `OPENSYSML_SMT_CORE_BUDGET`). The
+  `SYSTEMICA_*` names are not read.
+- **The VS Code extension is `opensysml-sysml`** and its settings are `opensysml.server.path`,
+  `opensysml.server.args`, `opensysml.server.enabled` and `opensysml.trace.server`, with the
+  command `opensysml.restartServer`. Existing settings must be re-set under the new keys.
+
 ### `%slots` is now `%features`, the name SysML v2 uses
 
 - **`%features <name>` lists what an object holds for each feature of its type**, which is what
@@ -120,14 +148,14 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   declaration outside the body — and a condition stated in the body could not read a name the body
   declares.
 
-### An unimported Systemica extension function no longer answers a call it is reported unresolved on
+### An unimported OpenSysML extension function no longer answers a call it is reported unresolved on
 
 - **`exp`, `ln`, `log` and `atan2` now require the import that declares them.** They are declared by
-  the non-normative `SystemicaMathFunctions` extension, which no OMG library carries, so a bare
+  the non-normative `OpenSysMLMathFunctions` extension, which no OMG library carries, so a bare
   `exp(x)` is reported `unresolved reference: exp` — and used to be evaluated anyway by dispatch on
   the local name, which meant the diagnostic and the behavior disagreed: ignore the error and the
   model computed, trust it and the model looked broken. Such a call now fails with a typed error
-  (`ErrUnimportedExtensionFunction`) naming the function and the `import SystemicaMathFunctions::*;`
+  (`ErrUnimportedExtensionFunction`) naming the function and the `import OpenSysMLMathFunctions::*;`
   that makes it legal.
 - **A model that imports the package, or writes the call qualified, is unaffected**, as is a bare
   call to an OMG function library (`sqrt`, `sin`, …), which every model may write whatever it
@@ -135,10 +163,10 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 - **`%builtins` still lists them, marked with the import they need.** Dropping the four names from
   the unqualified-dispatch registry also dropped them from the listing and from name completion,
   which made implemented functions look unsupported; the listing is now taken from what the build
-  implements, and an extension function is listed with a `(needs import SystemicaMathFunctions::*;)`
+  implements, and an extension function is listed with a `(needs import OpenSysMLMathFunctions::*;)`
   marker rather than silently omitted.
 - **A root-level import in a document that declares nothing else now surfaces its names**, which is
-  what a bare `import SystemicaMathFunctions::*;` at the REPL prompt is: the editor's own scope tree
+  what a bare `import OpenSysMLMathFunctions::*;` at the REPL prompt is: the editor's own scope tree
   is identified by the document name stamped on it, and a document with no member had no symbol left
   to carry that name, so its own import was read as another document's private re-export.
 

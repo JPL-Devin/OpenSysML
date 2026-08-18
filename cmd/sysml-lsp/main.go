@@ -10,8 +10,8 @@ import (
 	"net"
 	"os"
 
-	"github.com/Open-MBEE/Systemica/internal/core/model"
-	"github.com/Open-MBEE/Systemica/internal/lsp"
+	"github.com/Open-MBEE/OpenSysML/internal/core/model"
+	"github.com/Open-MBEE/OpenSysML/internal/lsp"
 )
 
 var (

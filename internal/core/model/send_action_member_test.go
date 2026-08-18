@@ -3,7 +3,7 @@ package model
 import (
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/passes"
+	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
 )
 
 func TestSendActionSentMessageAccess(t *testing.T) {

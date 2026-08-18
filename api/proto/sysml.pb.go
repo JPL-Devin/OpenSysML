@@ -4807,7 +4807,7 @@ const file_sysml_proto_rawDesc = "" +
 	"\x11VerifyRequirement\x12\x1f.sysml.VerifyRequirementRequest\x1a .sysml.VerifyRequirementResponse\x12Y\n" +
 	"\x12VerifySatisfaction\x12 .sysml.VerifySatisfactionRequest\x1a!.sysml.VerifySatisfactionResponse\x12G\n" +
 	"\fEvaluateCalc\x12\x1a.sysml.EvaluateCalcRequest\x1a\x1b.sysml.EvaluateCalcResponse\x122\n" +
-	"\x05Query\x12\x13.sysml.QueryRequest\x1a\x14.sysml.QueryResponseB*Z(github.com/Open-MBEE/Systemica/api/protob\x06proto3"
+	"\x05Query\x12\x13.sysml.QueryRequest\x1a\x14.sysml.QueryResponseB*Z(github.com/Open-MBEE/OpenSysML/api/protob\x06proto3"
 
 var (
 	file_sysml_proto_rawDescOnce sync.Once

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // coreLabels names the assertions a core reported, for comparing against what a
@@ -103,7 +103,7 @@ func TestCoreScriptShape(t *testing.T) {
 		},
 	}
 	want := strings.Join([]string{
-		"; Systemica SMT-LIB2 translation of constraint C",
+		"; OpenSysML SMT-LIB2 translation of constraint C",
 		"; the runtime evaluator remains normative; solving is an optional extension",
 		"; each assertion is named, so an unsat core names the conditions that conflict",
 		"(set-option :produce-unsat-cores true)",

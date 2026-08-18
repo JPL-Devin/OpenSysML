@@ -2,7 +2,7 @@
 // by the layer that reported it and rendered by an editor as a quick fix.
 package quickfix
 
-import "github.com/Open-MBEE/Systemica/internal/core/source"
+import "github.com/Open-MBEE/OpenSysML/internal/core/source"
 
 // Edit replaces the text a span covers. A zero-length span is an insertion at
 // its offset.

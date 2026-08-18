@@ -7,13 +7,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/lower"
-	"github.com/Open-MBEE/Systemica/internal/core/parser"
-	"github.com/Open-MBEE/Systemica/internal/core/resolve"
-	"github.com/Open-MBEE/Systemica/internal/core/semantics"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
+	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // TestRuntimeRobustness exercises failure modes: graceful errors, no panics, no hangs.
@@ -2645,7 +2645,7 @@ func testCalcUnboundParameter(t *testing.T) {
 }
 
 // testCalcCallsAnUnimportedExtensionFunction: `exp(x)` with no import of the
-// Systemica extension library is reported unresolved by name resolution, so the
+// OpenSysML extension library is reported unresolved by name resolution, so the
 // call fails with a typed error naming the import rather than being answered.
 func testCalcCallsAnUnimportedExtensionFunction(t *testing.T) {
 	src := `
@@ -2671,7 +2671,7 @@ func testCalcCallsAnUnimportedExtensionFunction(t *testing.T) {
 	if !errors.Is(err, ErrUnimportedExtensionFunction) {
 		t.Fatalf("expected ErrUnimportedExtensionFunction, got: %v", err)
 	}
-	if !strings.Contains(err.Error(), "import SystemicaMathFunctions::*;") {
+	if !strings.Contains(err.Error(), "import OpenSysMLMathFunctions::*;") {
 		t.Errorf("error %q does not name the import that makes the call legal", err)
 	}
 }
@@ -4127,14 +4127,14 @@ func testLibraryFunctionWrongArity(t *testing.T) {
 	}
 }
 
-// testExtensionLibraryFunctionOutsideItsDomain: a Systemica extension library
+// testExtensionLibraryFunctionOutsideItsDomain: an OpenSysML extension library
 // function reports a domain error the same way a vendored one does — the
 // logarithm of zero has no Real value, and is not returned as an infinity.
 func testExtensionLibraryFunctionOutsideItsDomain(t *testing.T) {
 	src := `
 		package test {
 			import ScalarValues::*;
-			import SystemicaMathFunctions::*;
+			import OpenSysMLMathFunctions::*;
 			calc root {
 				in x : Real;
 				return : Real = ln(x);

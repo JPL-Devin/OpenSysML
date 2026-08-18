@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/semantics"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // EvalContext is the lexical environment during evaluation (Tier 3).
@@ -1330,7 +1330,7 @@ func (ec *EvalContext) evalInvocation(n *ast.InvocationExpr) (Value, error) {
 		// A KerML function library function is evaluable even where the model
 		// imports no part of the library, so a name that denotes no declaration
 		// still denotes the library function of that name. A name only a
-		// Systemica extension declares is in scope under its import alone.
+		// OpenSysML extension declares is in scope under its import alone.
 		fn, libErr := unresolvedLibraryFunction(n.Type, qualName)
 		if libErr != nil {
 			return Value{}, libErr

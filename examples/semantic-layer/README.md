@@ -1,6 +1,6 @@
 # Semantic Layer Feature Demo
 
-This demo showcases all semantic layer features implemented in the Systemica SysML v2 compiler.
+This demo showcases all semantic layer features implemented in the OpenSysML SysML v2 compiler.
 
 ## Features Demonstrated
 
@@ -182,7 +182,7 @@ All tests should pass with this demo loaded.
 
 - [Architecture](../../docs/internals/architecture.md) - the pipeline this demo exercises
 - [Spec compliance](../../docs/project/spec-compliance.md) - semantic rule to implementation to test
-- [PR #11](https://github.com/Open-MBEE/Systemica/pull/11) - Pull request with all changes
+- [PR #11](https://github.com/Open-MBEE/OpenSysML/pull/11) - Pull request with all changes
 
 ## Contributing
 

@@ -1,7 +1,7 @@
 package symbols
 
 import (
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 )
 
 // Scope is a node in the immutable per-document scope tree. It owns the

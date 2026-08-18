@@ -82,15 +82,15 @@ archive from a tampered one. It is documented in `docs/guide/01-install.md` as a
 ## 4. What this change actually lands
 
 1. **Docs** (`README.md`, `docs/guide/01-install.md`): a macOS section that recommends
-   `brew install Open-MBEE/tap/systemica`, with `curl`/`go install` and the
+   `brew install Open-MBEE/tap/opensysml`, with `curl`/`go install` and the
    quarantine-clearing + checksum-verification commands as fallbacks.
 2. **Release artifacts** (`.circleci/config.yml`): in addition to the existing per-binary
    archives (unchanged, so existing links keep working), the `build-release` job now
-   publishes `systemica-<os>-<arch>.tar.gz`/`.zip` bundles containing `sysml` and
+   publishes `opensysml-<os>-<arch>.tar.gz`/`.zip` bundles containing `sysml` and
    `sysml-lsp` under their plain names, plus a `SHA256SUMS.txt` covering every archive.
    Both are prerequisites for a Homebrew formula and for users who want to verify a
    download.
-3. **Homebrew formula** (`packaging/homebrew/Formula/systemica.rb`) plus
+3. **Homebrew formula** (`packaging/homebrew/Formula/opensysml.rb`) plus
    `scripts/render-homebrew-formula.sh`, which renders it for a tag from `SHA256SUMS.txt`.
    Homebrew is the accepted macOS install path until notarization exists. The tap repository
    `Open-MBEE/homebrew-tap` now exists and carries the rendered 0.0.4 formula; per-release

@@ -3,7 +3,7 @@ package parser
 import (
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 // TestCalcConditionalExpressionWithBodyCondition covers the `if` a calculation

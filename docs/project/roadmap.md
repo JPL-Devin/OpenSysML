@@ -1,9 +1,9 @@
-# Systemica — Roadmap
+# OpenSysML — Roadmap
 
 Baseline: `main` @ `32f5a03`, verified locally on 2026-08-17 with Go 1.25.13.
 Read `AGENTS.md` first; it governs everything below.
 
-0.0.7 is released from `Open-MBEE/Systemica`, carrying `sysml`, `sysml-lsp` and `sysml-grpc`
+0.0.7 is released from `Open-MBEE/OpenSysML`, carrying `sysml`, `sysml-lsp` and `sysml-grpc`
 archives. `main` now carries the whole 0.0.8 batch — the post-0.0.7 fixes, the documentation
 reorganization, the release-publishing fix, and the Track A/B/P work below — all listed under
 0.0.8 in `CHANGELOG.md`, which is cut and awaiting its tag. Everything in "Release
@@ -25,7 +25,7 @@ Full gate green: `gofmt -l .` empty, `go build ./...`, `go vet ./...`,
 | Gate | Count |
 |---|---|
 | OMG training corpus | **98/100 clean** — 2 files / 4 errors, both pinned OMG source bugs (the ceiling) |
-| Stdlib parser conformance | 95/95 clean — 94 vendored OMG files and 1 non-normative Systemica extension |
+| Stdlib parser conformance | 95/95 clean — 94 vendored OMG files and 1 non-normative OpenSysML extension |
 | Execution conformance cases | 297 |
 | gRPC conformance fixtures | 14 |
 | Golden execution traces | 98 |
@@ -61,7 +61,7 @@ re-baseline `internal/core/model/testdata/training_examples_expected.txt`: adjud
 drifted file and record the verdict in `docs/project/training-examples.md`.
 
 The gap found in the 0.0.8 pre-release audit — only the GitHub Actions PR workflow downloaded the
-corpus and set `SYSTEMICA_REQUIRE_TRAINING_CORPUS=1`, so `.circleci/config.yml`, the pipeline that
+corpus and set `OPENSYSML_REQUIRE_TRAINING_CORPUS=1`, so `.circleci/config.yml`, the pipeline that
 *builds release tags*, skipped the gate silently and a tag could be cut over a corpus
 regression — is closed: `build-and-test` downloads the corpus (cached on the download script) and
 runs the suite with that variable set, and it runs on `v*` tags as well as on branches.
@@ -72,12 +72,12 @@ runs the suite with that variable set, and it runs on `v*` tags as well as on br
 
 ## R1 — tag the next release (maintainer, blocking everything else in this section)
 
-Releases live on `Open-MBEE/Systemica`; development happens on `JPL-Devin/Systemica`, which
+Releases live on `Open-MBEE/OpenSysML`; development happens on `JPL-Devin/OpenSysML`, which
 has no tags at all. So the tag is preceded by promoting `main` upstream, as 0.0.4 was through
 Open-MBEE PR #47:
 
 ```bash
-# on Open-MBEE/Systemica, after main carries the release commit
+# on Open-MBEE/OpenSysML, after main carries the release commit
 git tag -a v0.0.8 -m "v0.0.8"
 git push origin v0.0.8
 ```
@@ -109,7 +109,7 @@ the restricted CircleCI context `PyPI` holding `PYPI_API_TOKEN` (and optionally
 `TEST_PYPI_API_TOKEN` for pre-release tags).
 
 Also decide the default download repository. `python/pysysml/binary.py` defaults to
-`Open-MBEE/Systemica`, releases are currently cut from `JPL-Devin/Systemica`, and
+`Open-MBEE/OpenSysML`, releases are currently cut from `JPL-Devin/OpenSysML`, and
 `PYSYSML_GITHUB_REPO` is the override. `sysml-grpc` assets ship from 0.0.5 onward,
 so `pysysml` can fetch a binary from a released tag; `pip install pysysml` still waits on the
 PyPI project above.
@@ -119,7 +119,7 @@ PyPI project above.
 `packaging/homebrew/` holds a template with `__TAG__`/`__SHA256_*__` placeholders and
 `scripts/render-homebrew-formula.sh` renders it from a tag's `SHA256SUMS.txt`. The tap
 `Open-MBEE/homebrew-tap` exists and carries the 0.0.4 formula: `brew install
-Open-MBEE/tap/systemica` has been verified end to end on Linux (install, `brew test`,
+Open-MBEE/tap/opensysml` has been verified end to end on Linux (install, `brew test`,
 `brew audit --strict --online`). Two things remain:
 
 - **Install it on a real Mac.** The darwin archives have never been executed on macOS; their
@@ -467,15 +467,15 @@ Both remaining bullets are statements of fact rather than gaps:
 
 - **An unqualified library function call is reported unresolved, and conformantly so.** Written
   with no import in force the name is genuinely unresolved (A6), so the diagnostic is right. For a
-  name only the Systemica extension declares the behavior now agrees with it: an unimported
+  name only the OpenSysML extension declares the behavior now agrees with it: an unimported
   `exp(x)` fails with `ErrUnimportedExtensionFunction` naming the import, rather than being
   answered by dispatch on the local name. An OMG function library name still evaluates unimported,
-  the rough edge A6 addresses. `import SystemicaMathFunctions::*;` (or `MathFunctions` for the OMG
+  the rough edge A6 addresses. `import OpenSysMLMathFunctions::*;` (or `MathFunctions` for the OMG
   ones) clears the diagnostic and is the spelling a model should use.
-- **`exp`, `ln`, `log` and `atan2` are a Systemica extension, not OMG.** The vendored library
+- **`exp`, `ln`, `log` and `atan2` are an OpenSysML extension, not OMG.** The vendored library
   declares no signature for any of them, and the vendored files stay byte-identical, so they are
-  declared in `internal/core/libs/stdlib/Systemica Libraries/SystemicaMathFunctions.kerml` — a
-  non-normative package a model reaches with `import SystemicaMathFunctions::*;`. A model meant
+  declared in `internal/core/libs/stdlib/OpenSysML Libraries/OpenSysMLMathFunctions.kerml` — a
+  non-normative package a model reaches with `import OpenSysMLMathFunctions::*;`. A model meant
   to be portable to another SysML v2 tool cannot rely on it.
 
 ## A11 — string operators and the string function library — done
@@ -521,7 +521,7 @@ Landed: a literal declaring no value evaluates to itself — `runtime.Value{Kind
 holding the literal's declaration symbol, so identity is the declaration and nothing else (not an
 ordinal, not its name as a string). Two literals are equal exactly when they are the same
 declaration, so a literal of another enumeration compares false rather than reporting, matching how
-Systemica compares any two values of unrelated types; the static type checker is the tier that
+OpenSysML compares any two values of unrelated types; the static type checker is the tier that
 reports the mismatch (`passes/typecheck_value.go`, `cannot bind a value of type Size to a feature
 typed by Color`). A literal specializing a scalar type (`enum def GradePoints :> Real { A = 4.0; }`)
 evaluates to the value it declares, since such a literal *is* that value and has to compute as one.
@@ -543,7 +543,7 @@ literal (`Level::high.n`), and an enum-typed default materializes: the reproduct
 - ~~**`validateExposeOwningNamespace`**~~ **Done**, on the maintainer's usage-only reading:
   `passes/expose.go` `checkExposeOwners` reports every `expose` whose owning namespace is not a
   view usage (SysML v2 8.3.26.2, and the normative Xtext grammar admits an Expose in
-  `ViewBodyItem` only). A `view def` body is a **warning**, not an error, because Systemica
+  `ViewBodyItem` only). A `view def` body is a **warning**, not an error, because OpenSysML
   resolves an `expose` there (`resolve/expose_test.go` `TestExposeInViewDefinitionBody`,
   `parse/view_expose.sysml`) and the OMG corpus (`42. Views`) never writes one; any other owner
   is an error. A package or namespace body rejects `expose` in the parser already.

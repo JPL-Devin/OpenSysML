@@ -3,7 +3,7 @@ package grpc
 import (
 	"testing"
 
-	pb "github.com/Open-MBEE/Systemica/api/proto"
+	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 )
 
 // attributeModel exercises own, inherited, redefined and non-constant attributes.

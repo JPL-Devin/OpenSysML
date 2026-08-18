@@ -1,4 +1,4 @@
-; Systemica SMT-LIB2 translation of requirement TouchdownRequirement
+; OpenSysML SMT-LIB2 translation of requirement TouchdownRequirement
 ; the runtime evaluator remains normative; solving is an optional extension
 ; each assertion is named, so an unsat core names the conditions that conflict
 (set-option :produce-unsat-cores true)

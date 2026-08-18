@@ -36,7 +36,7 @@ make build-grpc && mkdir -p ~/.pysysml/bin && cp bin/sysml-grpc ~/.pysysml/bin/
 
 Without one of those, `connect()` raises `ConnectionError` rather than
 downloading anything unasked. `PYSYSML_GITHUB_REPO` overrides the repository
-releases are fetched from (default `Open-MBEE/Systemica`).
+releases are fetched from (default `Open-MBEE/OpenSysML`).
 
 A download records its release tag, repository and digest beside the binary
 (`~/.pysysml/bin/sysml-grpc.json`), so a cache left by an earlier release — or by
@@ -587,7 +587,7 @@ negotiated: a service too old to report the `query` capability raises
 
 The standard's query model has **no graph traversal and no transitive closure**:
 "everything under this part" is a `scope`, and "everything specializing this
-definition" is not expressible at all. It is an interop surface, not Systemica's
+definition" is not expressible at all. It is an interop surface, not OpenSysML's
 expressive query story — [the API reference](../reference/api.md) states exactly what is
 supported.
 
