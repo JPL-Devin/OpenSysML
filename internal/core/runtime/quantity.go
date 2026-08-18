@@ -48,6 +48,12 @@ func (q *Quantity) TextWithMagnitude(magnitude string) string {
 	return fmt.Sprintf("%s [%s]", magnitude, q.Unit)
 }
 
+// baseMagnitude is the quantity's magnitude expressed over the base units its
+// unit reduces to, which is the form two commensurable quantities compare in.
+func (q *Quantity) baseMagnitude() float64 {
+	return semantics.ConvertMagnitude(toReal(q.Num), q.Unit.Term.Scale, semantics.UnitScale(1))
+}
+
 // constText renders a numeric constant without a unit.
 func constText(v semantics.Value) string {
 	switch v.Kind {
