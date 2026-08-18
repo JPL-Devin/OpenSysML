@@ -101,6 +101,7 @@ jobs:
       - run:
           name: Run the solve and REPL tests with no solver
           command: |
+            set -o pipefail
             env -u OPENSYSML_REQUIRE_SMT OPENSYSML_SMT=/nonexistent/no-such-solver \
               go test -count=1 -v ./internal/core/solve ./internal/repl | tee no-solver-gate.log
             for name in TestCheckReportsAnAbsentSolver TestExplainReportsAnAbsentSolver \
