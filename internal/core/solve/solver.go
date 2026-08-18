@@ -144,6 +144,10 @@ type Result struct {
 	// solutions found stand, and whether others exist is unknown.
 	Undecided bool
 
+	// Optima are what came of asking for each objective's optimum, in the order
+	// they are optimized; nil for a query that states none.
+	Optima []Optimum
+
 	// Core holds the conflicting assertions for a query Explain found unsat, and
 	// is nil for every other verdict and for a plain Solve.
 	Core *Core

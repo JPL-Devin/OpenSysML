@@ -697,6 +697,7 @@ func (s *Session) submitFiles(files []SourceFile) Result {
 	notices := dropNotices(drops)
 	notices = append(notices, s.carryOverObjects(over)...)
 	notices = append(notices, s.dropStaleDebugSessions(gone, over)...)
+	s.rebindRestartedMachine()
 	s.keepIdentitiesOf(over.prev)
 	// The diagnostics already carry their own "did you mean" hints.
 	diags := s.diagnostics()
@@ -733,6 +734,31 @@ func (s *Session) keepIdentitiesOf(prev *runtime.Context) {
 	if s.rtCtx != nil {
 		s.rtCtx.AdoptIdentities(prev)
 	}
+}
+
+// rebindRestartedMachine points a debugging session at the execution the
+// carry-over restarted, so %step and %current drive the object's live machine
+// rather than the one discarded with the previous analysis.
+func (s *Session) rebindRestartedMachine() {
+	// Only a session over an object's own exhibited machine follows the restart:
+	// a machine the object merely performs is the debugger's own execution, which
+	// no restart replaced.
+	if s.stateExec == nil || s.stateExec.selfFQN == "" || s.stateExec.fqn != s.stateExec.selfFQN {
+		return
+	}
+	inst, ok := s.instances[s.stateExec.selfFQN]
+	if !ok {
+		return
+	}
+	behavior, ok := inst.ExhibitedState()
+	if !ok || behavior.State == s.stateExec.executor {
+		return
+	}
+	behavior.State.SetTrace(s.trace)
+	s.stateExec.symbol = behavior.Symbol
+	s.stateExec.executor = behavior.State
+	s.stateExec.rtCtx = s.rtCtx
+	s.stateExec.now = behavior.State.CurrentTime()
 }
 
 // dropStaleDebugSessions ends the debugging sessions this submission

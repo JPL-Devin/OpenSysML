@@ -1,0 +1,16 @@
+{
+  "type": "instance",
+  "instantiate": "test::Pair",
+  "objects": [
+    {
+      "path": "a",
+      "finalState": "ready",
+      "slots": {"id": {"type": "Integer", "value": 1}, "seen": {"type": "Integer", "value": 1}}
+    },
+    {
+      "path": "b",
+      "finalState": "ready",
+      "slots": {"id": {"type": "Integer", "value": 2}, "seen": {"type": "Integer", "value": 2}}
+    }
+  ]
+}

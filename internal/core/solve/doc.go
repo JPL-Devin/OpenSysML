@@ -152,6 +152,86 @@
 // materialized and features a variant would only have once bound are not
 // constrained; and the enumeration order is the solver's, not a defined one.
 //
+// # Objective optimization
+//
+// Analysis and AnalysisWith translate an `analysis def` as an optimization query:
+// what its conditions permit, and the objectives to improve within that.
+// Solver.Optimize then asks a backend for each objective's optimum.
+//
+// SysML v2 states no direction, value or solving semantics for `objective`, so
+// this layer states the contract it reads (an OpenSysML extension, not a
+// conformance claim):
+//
+//   - Direction comes from the trade-study definition the objective is typed by:
+//     TradeStudies::MinimizeObjective or MaximizeObjective, specializations
+//     included. An objective typed by neither refuses with ErrNotOptimizable.
+//   - The value to improve is the expression the objective states for the
+//     library's `best` feature — `objective o : MinimizeObjective { attribute
+//     :>> best = expression; }` — since an objective is a requirement usage and
+//     carries no scalar value of its own. A value bound directly to the objective
+//     is read too, where a model can write one.
+//   - What is feasible is the case's own conditions (CaseConditionsOf: `require`,
+//     `assume`, `assert`, `inv`, inherited ones included) together with the
+//     conditions each objective states: its own body's, and the ones it inherits
+//     from the model's own objective definitions, read where they are inherited.
+//     Only the trade-study library's own conditions are left out, being about
+//     choosing among alternatives rather than about which values are feasible. A
+//     condition an inherited definition states over `best` bounds the value
+//     improved, since the objective's `best` is asserted equal to it (RoleDefined).
+//     A case stating no condition is legitimately unbounded, not refused.
+//   - Objectives, values and conditions are read through the runtime's own
+//     surfaces (runtime.Context.ObjectivesOf), so what is optimized is what the
+//     evaluator would evaluate; no declaration is re-parsed and no AST mutated.
+//
+// The objective term must be numeric and linear: an optimizer improves a linear
+// objective, so a product or quotient of two computed values refuses with
+// ErrNotOptimizable rather than being sent and misread. Divisor guards therefore
+// sit in the conditions, where a computed divisor is asserted non-zero as usual.
+//
+// # Multiple objectives, and backend requirements
+//
+// Several objectives are optimized lexicographically in declaration order: each
+// within what the ones before it already settled. The script says so itself with
+// `(set-option :opt.priority lex)` rather than relying on a backend default —
+// z3's `box` mode reports each objective's optimum separately and returns a model
+// attaining only one of them, which would make "the assignments achieving the
+// optimum" untrue.
+//
+// `(minimize e)`/`(maximize e)` and `(get-objectives)` are a z3 extension, not
+// SMT-LIB2; cvc5 does not implement them. Solver.Optimize settles the backend's
+// capability before sending a query — by family for z3 and cvc5, and by probing
+// any other with a tiny optimizing script of its own — and reports a backend
+// without it as NoOptimizationError wrapping ErrNoOptimization. Nothing is ever
+// degraded to a plain check-sat and presented as an optimum.
+//
+// # What an optimum is, and is not
+//
+// Optimum.Status keeps the cases apart, and no case fabricates a number:
+//
+//   - OptimumAttained: the value reported is the optimum and an assignment
+//     attains it. Both are checked here rather than taken on the backend's word:
+//     the objective's value in the reported model is read back, and a further
+//     check asks whether any assignment does lexicographically better — better in
+//     an earlier objective, or equal there and better in a later one. Unsat is
+//     what makes the answer an optimum.
+//   - OptimumUnbounded: the conditions permit arbitrarily better values (`oo`).
+//   - OptimumBounded: the objective approaches a bound no assignment attains, as
+//     a strict inequality over the reals does. Backends report this as an
+//     infinitesimal (`(+ 10.5 (* (- 1.0) epsilon))`) or an interval; the bound is
+//     reported as a bound, never as an attained value.
+//   - OptimumUnverified: the backend reported a value a better feasible value
+//     refutes. z3 4.8.12 does this for open real suprema — maximizing x under
+//     x < 10.5 reports 9.5 — which is why every optimum is verified rather than
+//     trusted.
+//   - OptimumUndecided: verification did not decide, or the answer was no number.
+//
+// Optimum.Feasible is always a value the reported assignment attains: a witness
+// the conditions permit, not an optimum. A solver answering sat but refusing to
+// report its objectives readably is an OptimumError wrapping ErrNoOptimum and
+// ErrSolverProcess; unsat and unknown stay the verdicts they are, with no optima
+// invented for them, and a query stating no objective is a NoObjectiveError
+// wrapping ErrNoObjective rather than a satisfiability check.
+//
 // # Deliberately out of subset
 //
 // Everything else refuses with ErrNotTranslatable, and one refused conjunct

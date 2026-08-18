@@ -1,0 +1,544 @@
+package runtime
+
+import (
+	"fmt"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
+)
+
+// classifierBehaviorDecl is a behavior a type binds to its objects, paired with
+// the member symbol that binds it.
+type classifierBehaviorDecl struct {
+	behavior lower.ClassifierBehavior
+	member   *symbols.Symbol
+}
+
+// ObjectBehavior is a behavior one object runs because its type exhibits or
+// performs it: an execution of its own, bound to that object's identity.
+type ObjectBehavior struct {
+	// Name is the name the behavior answers to on the object.
+	Name string
+	Kind lower.ClassifierBehaviorKind
+	// Symbol is the state machine or action holding the body being run, which is
+	// the binding declaration itself when it states one.
+	Symbol *symbols.Symbol
+	// Object is the object performing the behavior.
+	Object *Instance
+	// member is the declaration binding the behavior to the object's type, which
+	// tells two behaviors apart even when neither is named.
+	member *symbols.Symbol
+	// State is the machine the object exhibits, nil for a performed action.
+	State *StateExecutor
+	// Action is the action the object performs, nil for an exhibited machine.
+	Action *ActionExecutor
+}
+
+// Describe names the behavior and the object running it, for diagnostics.
+func (b *ObjectBehavior) Describe() string {
+	name := b.Name
+	if name == "" {
+		name = symbolText(b.Symbol)
+	}
+	return fmt.Sprintf("%s %s of object #%d", b.Kind, name, b.Object.ID)
+}
+
+// forgetBehaviorWrites drops what a run wrote, so a restarted behavior reads the
+// object's declared initial values instead of what the discarded run left.
+func (inst *Instance) forgetBehaviorWrites() {
+	for _, fv := range inst.FeatureValues {
+		if !fv.Written {
+			continue
+		}
+		fv.Value, fv.Values = Value{}, Value{}
+		fv.Materialized, fv.Written = false, false
+	}
+}
+
+// Behaviors are the behaviors the object runs, in declaration order.
+func (inst *Instance) Behaviors() []*ObjectBehavior {
+	return inst.behaviors
+}
+
+// Behavior returns the behavior of the given name the object runs. An unnamed
+// behavior answers to no name and so is never returned.
+func (inst *Instance) Behavior(name string) (*ObjectBehavior, bool) {
+	if name == "" {
+		return nil, false
+	}
+	for _, b := range inst.behaviors {
+		if b.Name == name {
+			return b, true
+		}
+	}
+	return nil, false
+}
+
+// runsBound reports whether the object already runs the behavior a declaration
+// binds, so a start reached twice attaches it once.
+func (inst *Instance) runsBound(member *symbols.Symbol) bool {
+	for _, b := range inst.behaviors {
+		if b.member == member {
+			return true
+		}
+	}
+	return false
+}
+
+// ExhibitedState returns the machine the object exhibits, and false when it
+// exhibits none. With several, it returns the first declared.
+func (inst *Instance) ExhibitedState() (*ObjectBehavior, bool) {
+	for _, b := range inst.behaviors {
+		if b.Kind == lower.ExhibitedState {
+			return b, true
+		}
+	}
+	return nil, false
+}
+
+// classifierBehaviorsOf reports the behaviors every object of a type runs:
+// those its own declaration binds and those it inherits.
+func (ctx *Context) classifierBehaviorsOf(typeSym *symbols.Symbol) []classifierBehaviorDecl {
+	if typeSym == nil {
+		return nil
+	}
+	if cached, ok := ctx.classifierBehaviors[typeSym]; ok {
+		return cached
+	}
+	var out []classifierBehaviorDecl
+	for _, member := range ctx.model.MembersOf(typeSym) {
+		if member.Decl == nil {
+			continue
+		}
+		if behavior, ok := lower.ClassifierBehaviorOf(member.Decl); ok {
+			out = append(out, classifierBehaviorDecl{behavior: behavior, member: member})
+		}
+	}
+	ctx.classifierBehaviors[typeSym] = out
+	return out
+}
+
+// startClassifierBehaviors gives the object an execution of every behavior its
+// type exhibits or performs, and runs those executions to quiescence: no due
+// event, no runnable do action, no deliverable message. A start reached from
+// inside a running behavior only attaches, leaving the run to the outermost
+// start, so materializing objects that exhibit each other terminates.
+func (ctx *Context) startClassifierBehaviors(inst *Instance, existing map[int64]bool) error {
+	return ctx.startClassifierBehaviorsOf([]*Instance{inst}, existing)
+}
+
+// startClassifierBehaviorsOf starts the behaviors of every one of the objects as
+// one collective run, so objects materialized together exchange messages.
+func (ctx *Context) startClassifierBehaviorsOf(objects []*Instance, existing map[int64]bool) error {
+	attached := len(ctx.objectBehaviors)
+	if err := ctx.startBehaviorsOfAll(objects); err != nil {
+		// A creation that failed leaves nothing behind: neither the objects its
+		// behaviors materialized nor any behavior of theirs survives into the next,
+		// unrelated command.
+		ctx.forgetBehaviorsFrom(attached)
+		ctx.abandonInstancesSince(existing)
+		return err
+	}
+	return nil
+}
+
+// liveInstanceIDs are the objects the session holds, so a failed start can tell
+// what it materialized from what was already there.
+func (ctx *Context) liveInstanceIDs() map[int64]bool {
+	live := make(map[int64]bool, len(ctx.instances))
+	for id := range ctx.instances {
+		live[id] = true
+	}
+	return live
+}
+
+// abandonInstancesSince removes every object materialized since the snapshot,
+// which a failed creation would otherwise leave running nothing, along with the
+// occurrences naming them: a later read materializes the usage afresh.
+func (ctx *Context) abandonInstancesSince(existing map[int64]bool) {
+	abandoned := make(map[int64]bool)
+	for id := range ctx.instances {
+		if !existing[id] {
+			abandoned[id] = true
+			delete(ctx.instances, id)
+		}
+	}
+	if len(abandoned) == 0 {
+		return
+	}
+	for sym, id := range ctx.occurrences {
+		if _, live := ctx.instances[id]; !live {
+			delete(ctx.occurrences, sym)
+		}
+	}
+	ctx.forgetValuesNaming(abandoned)
+	ctx.forgetMessagesTo(abandoned)
+}
+
+// forgetValuesNaming unmaterializes every feature value of a surviving object
+// that names an abandoned one, so a later read materializes an object the
+// session holds rather than reading one it does not.
+func (ctx *Context) forgetValuesNaming(abandoned map[int64]bool) {
+	for _, inst := range ctx.instances {
+		for _, fv := range inst.FeatureValues {
+			if !fv.Materialized || !namesAbandoned(fv, abandoned) {
+				continue
+			}
+			fv.Value, fv.Values = Value{}, Value{}
+			fv.Materialized, fv.Written = false, false
+		}
+	}
+}
+
+// namesAbandoned reports whether a feature value holds an object that is gone.
+func namesAbandoned(fv *FeatureValue, abandoned map[int64]bool) bool {
+	if fv.Value.Kind == ValInstance && abandoned[fv.Value.Instance] {
+		return true
+	}
+	for _, val := range elementsOf(fv.Values) {
+		if val.Kind == ValInstance && abandoned[val.Instance] {
+			return true
+		}
+	}
+	return false
+}
+
+// forgetMessagesTo drops the messages addressed to an abandoned object, which
+// nothing can consume once the object holding its consumers is gone.
+func (ctx *Context) forgetMessagesTo(abandoned map[int64]bool) {
+	kept := make([]Message, 0, len(ctx.messages))
+	for _, msg := range ctx.messages {
+		if !abandoned[msg.Object] {
+			kept = append(kept, msg)
+		}
+	}
+	ctx.messages = kept
+}
+
+// restartClassifierBehaviors gives every object a fresh execution of the
+// behaviors its type binds, run as one start so machines restarted alongside
+// each other still exchange messages. A failure attaches nothing, leaving the
+// objects running no behavior at all.
+func (ctx *Context) restartClassifierBehaviors(objects []*Instance) error {
+	attached := len(ctx.objectBehaviors)
+	err := ctx.startBehaviorsOfAll(objects)
+	if err != nil {
+		ctx.forgetBehaviorsFrom(attached)
+	}
+	return err
+}
+
+// startBehaviorsOfAll attaches the behaviors of every object before running any
+// of them, so their starts are one collective run.
+func (ctx *Context) startBehaviorsOfAll(objects []*Instance) error {
+	ctx.behaviorRunDepth++
+	for _, inst := range objects {
+		if err := ctx.startBehaviorsOf(inst); err != nil {
+			ctx.behaviorRunDepth--
+			return err
+		}
+	}
+	ctx.behaviorRunDepth--
+	return ctx.runAttachedBehaviors()
+}
+
+// startBehaviorsOf attaches the object's behaviors and, at the outermost start,
+// runs everything attached.
+func (ctx *Context) startBehaviorsOf(inst *Instance) error {
+	for _, decl := range ctx.classifierBehaviorsOf(inst.Type) {
+		if inst.runsBound(decl.member) {
+			continue
+		}
+		if ctx.trace != nil {
+			ctx.trace.RecordBehaviorStart(decl.behavior.Kind.String(), decl.behavior.Name, inst.ID)
+		}
+		behavior, err := ctx.attachClassifierBehavior(inst, decl)
+		if err != nil {
+			return err
+		}
+		inst.behaviors = append(inst.behaviors, behavior)
+		ctx.pendingBehaviors = append(ctx.pendingBehaviors, behavior)
+		ctx.objectBehaviors = append(ctx.objectBehaviors, behavior)
+	}
+
+	return ctx.runAttachedBehaviors()
+}
+
+// runAttachedBehaviors runs everything attached, at the outermost start: a start
+// reached from inside a running behavior leaves the run to that one.
+func (ctx *Context) runAttachedBehaviors() error {
+	if ctx.behaviorRunDepth > 0 {
+		return nil
+	}
+	ctx.behaviorRunDepth++
+	defer func() { ctx.behaviorRunDepth-- }()
+	return ctx.drainObjectBehaviors()
+}
+
+// forgetBehaviorsFrom drops the behaviors attached since a start began, and the
+// work queued for them: a start that failed queues nothing for a later one.
+func (ctx *Context) forgetBehaviorsFrom(attached int) {
+	if attached > len(ctx.objectBehaviors) {
+		return
+	}
+	dropped := make(map[*ObjectBehavior]bool, len(ctx.objectBehaviors)-attached)
+	for _, behavior := range ctx.objectBehaviors[attached:] {
+		dropped[behavior] = true
+	}
+	for behavior := range dropped {
+		behavior.Object.behaviors = behaviorsExcept(behavior.Object.behaviors, dropped)
+	}
+	ctx.objectBehaviors = ctx.objectBehaviors[:attached]
+	ctx.pendingBehaviors = behaviorsExcept(ctx.pendingBehaviors, dropped)
+}
+
+// behaviorsExcept returns the behaviors none of which is one being dropped.
+func behaviorsExcept(behaviors []*ObjectBehavior, dropped map[*ObjectBehavior]bool) []*ObjectBehavior {
+	kept := make([]*ObjectBehavior, 0, len(behaviors))
+	for _, behavior := range behaviors {
+		if !dropped[behavior] {
+			kept = append(kept, behavior)
+		}
+	}
+	return kept
+}
+
+// drainObjectBehaviors runs the attached behaviors until the objects are
+// collectively quiescent: nothing left to start, and no behavior holding an
+// event a sibling's send put in flight. Bounded by the event budget, so
+// endlessly signalling objects report a typed error instead of spinning.
+func (ctx *Context) drainObjectBehaviors() error {
+	for rounds := int64(0); ; rounds++ {
+		if rounds >= ctx.maxStateEvents {
+			return fmt.Errorf("%w: exceeded max events (%d rounds; raise %s to allow more), possible non-terminating exchange between objects",
+				ErrBehaviorBudget, ctx.maxStateEvents, MaxStateEventsEnvVar)
+		}
+		behavior, ok := ctx.nextRunnableBehavior()
+		if !ok {
+			return nil
+		}
+		if ctx.trace != nil {
+			ctx.trace.RecordBehaviorRun(behavior.Kind.String(), behavior.Name, behavior.Object.ID)
+		}
+		if err := behavior.run(); err != nil {
+			return fmt.Errorf("%s: %w", behavior.Describe(), err)
+		}
+	}
+}
+
+// nextRunnableBehavior returns the next behavior with work to do: one not yet
+// started, else one holding an event delivered while it was suspended.
+func (ctx *Context) nextRunnableBehavior() (*ObjectBehavior, bool) {
+	if len(ctx.pendingBehaviors) > 0 {
+		behavior := ctx.pendingBehaviors[0]
+		ctx.pendingBehaviors = ctx.pendingBehaviors[1:]
+		return behavior, true
+	}
+	for _, behavior := range ctx.objectBehaviors {
+		if behavior.hasPendingWork() {
+			return behavior, true
+		}
+	}
+	return nil, false
+}
+
+// hasPendingWork reports whether running the behavior again would advance it: a
+// machine woken by an event due now or a signal in flight, or an action whose
+// awaited message a sibling has since sent. An event scheduled for a later time
+// is not work materialization waits for, and an execution that reached its end
+// takes no step whatever is left addressed to it.
+func (b *ObjectBehavior) hasPendingWork() bool {
+	switch {
+	case b.State != nil:
+		return b.State.State() != StateCompleted && (b.State.HasDueEvent() || b.State.HasPendingSignal())
+	case b.Action != nil:
+		return b.Action.State() != StateCompleted && b.Action.HasPendingSignal()
+	default:
+		return false
+	}
+}
+
+// attachClassifierBehavior builds the object's own execution of one behavior its
+// type binds, seeded with the values the binding declaration supplies, and
+// initializes it so its start is reported where every other behavior's is.
+func (ctx *Context) attachClassifierBehavior(inst *Instance, decl classifierBehaviorDecl) (*ObjectBehavior, error) {
+	sym, err := ctx.classifierBehaviorSymbol(decl)
+	if err != nil {
+		return nil, err
+	}
+
+	arguments, err := ctx.classifierBehaviorArguments(inst, decl)
+	if err != nil {
+		return nil, err
+	}
+
+	behavior := &ObjectBehavior{
+		Name:   decl.behavior.Name,
+		Kind:   decl.behavior.Kind,
+		Symbol: sym,
+		Object: inst,
+		member: decl.member,
+	}
+
+	switch decl.behavior.Kind {
+	case lower.ExhibitedState:
+		exec, err := newStateExecutor(ctx, sym, inst)
+		if err != nil {
+			return nil, fmt.Errorf("exhibited state machine %s of %s: %w", decl.behavior.Name, symbolText(inst.Type), err)
+		}
+		for name, value := range arguments {
+			exec.stateData[name] = value
+		}
+		if err := exec.initialize(); err != nil {
+			return nil, fmt.Errorf("exhibited state machine %s of %s: %w", decl.behavior.Name, symbolText(inst.Type), err)
+		}
+		behavior.State = exec
+	case lower.PerformedAction:
+		exec, err := newActionExecutor(ctx, sym, inst)
+		if err != nil {
+			return nil, fmt.Errorf("performed action %s of %s: %w", decl.behavior.Name, symbolText(inst.Type), err)
+		}
+		if len(arguments) > 0 {
+			exec.SetInputs(arguments)
+		}
+		// An action stating no flow performs no step; the object still performs it,
+		// with nothing to run, rather than failing to be created.
+		if exec.hasFlow() {
+			if err := exec.initialize(); err != nil {
+				return nil, fmt.Errorf("performed action %s of %s: %w", decl.behavior.Name, symbolText(inst.Type), err)
+			}
+		}
+		behavior.Action = exec
+	default:
+		return nil, fmt.Errorf("%w: %s", ErrUnsupportedClassifierBehavior, decl.behavior.Kind)
+	}
+	return behavior, nil
+}
+
+// run advances the object's behavior until it is quiescent: an action until it
+// completes or waits for a message, a machine until no event is due and no do
+// action is runnable.
+func (b *ObjectBehavior) run() error {
+	switch {
+	case b.State != nil:
+		return b.State.RunToQuiescence()
+	case b.Action != nil:
+		if !b.Action.hasFlow() {
+			return nil
+		}
+		return b.Action.RunToQuiescence()
+	default:
+		return fmt.Errorf("%w: %s has no execution", ErrUnsupportedClassifierBehavior, b.Name)
+	}
+}
+
+// classifierBehaviorSymbol resolves the element holding the body a binding
+// declaration runs: the declaration itself when it states one, otherwise what it
+// names — the feature it refers to or the definition it is typed by.
+func (ctx *Context) classifierBehaviorSymbol(decl classifierBehaviorDecl) (*symbols.Symbol, error) {
+	sym := decl.member
+	for depth := 0; depth < maxBehaviorBindingDepth; depth++ {
+		stated := sym == decl.member && decl.behavior.StatesBody
+		if !stated && sym != decl.member {
+			stated = statesBehaviorBody(sym)
+		}
+		if stated {
+			return sym, nil
+		}
+		next := ctx.namedBehavior(sym)
+		if next == nil || next == sym {
+			// A declaration naming nothing that holds a body is not executable:
+			// the type binds a behavior no element states.
+			if sym != decl.member {
+				return sym, nil
+			}
+			return nil, fmt.Errorf("%w: %s %s of %s names no behavior body",
+				ErrUnresolvedClassifierBehavior, decl.behavior.Kind, decl.behavior.Name, symbolText(decl.member))
+		}
+		sym = next
+	}
+	return nil, fmt.Errorf("%w: %s %s of %s names itself through %d bindings",
+		ErrUnresolvedClassifierBehavior, decl.behavior.Kind, decl.behavior.Name, symbolText(decl.member), maxBehaviorBindingDepth)
+}
+
+// namedBehavior reports the element a binding declaration names: what it
+// reference-subsets, the type it states, or — for `exhibit m;`, whose name is
+// the state usage declared elsewhere — that usage.
+func (ctx *Context) namedBehavior(sym *symbols.Symbol) *symbols.Symbol {
+	if ref := ctx.model.ReferencedFeature(sym); ref != nil {
+		return ref
+	}
+	if typ := ctx.extractType(sym); typ != nil {
+		return typ
+	}
+	if sym.Name != "" && sym.OwnerScope != nil {
+		if named, ok := ctx.resolver.LookupNameExcluding(sym.OwnerScope, sym.Name, sym.Decl); ok {
+			return named
+		}
+	}
+	return nil
+}
+
+// classifierBehaviorArguments evaluates the values a binding declaration
+// supplies to the behavior's parameters, against the object running it.
+func (ctx *Context) classifierBehaviorArguments(inst *Instance, decl classifierBehaviorDecl) (map[string]Value, error) {
+	if len(decl.behavior.Arguments) == 0 {
+		return nil, nil
+	}
+	scope := declScope(decl.member)
+	if scope == nil {
+		scope = declScope(inst.Type)
+	}
+	args := make(map[string]Value, len(decl.behavior.Arguments))
+	for _, arg := range decl.behavior.Arguments {
+		ec := NewEvalContextIn(ctx, scope, inst)
+		value, err := ec.Eval(arg.Value)
+		if err != nil {
+			return nil, fmt.Errorf("%s %s of %s: bind %s: %w",
+				decl.behavior.Kind, decl.behavior.Name, symbolText(inst.Type), arg.Name, err)
+		}
+		args[arg.Name] = value
+	}
+	return args, nil
+}
+
+// statesBehaviorBody reports whether a symbol's declaration states a behavior
+// body of its own rather than naming an element that holds one.
+func statesBehaviorBody(sym *symbols.Symbol) bool {
+	if sym == nil || sym.Decl == nil {
+		return false
+	}
+	members, err := lower.BehaviorMembers(sym.Decl)
+	if err != nil {
+		return false
+	}
+	return lower.StatesBehaviorBody(members)
+}
+
+// assignPerformerFeature writes a value to the feature of that name of the
+// object performing a behavior, and reports whether the object has one: a body
+// that assigns a feature of its object writes that object, not shared data.
+func assignPerformerFeature(ctx *Context, self *Instance, name string, value Value) (bool, error) {
+	if self == nil {
+		return false, nil
+	}
+	if _, ok := self.FeatureValues[name]; !ok {
+		return false, nil
+	}
+	if err := self.SetFeatureValue(ctx, name, value); err != nil {
+		return true, fmt.Errorf("write %s of object #%d: %w", name, self.ID, err)
+	}
+	return true, nil
+}
+
+// symbolText names a symbol in diagnostics, falling back to its kind when it is
+// anonymous.
+func symbolText(sym *symbols.Symbol) string {
+	if sym == nil {
+		return "<unknown>"
+	}
+	if sym.Name != "" {
+		return sym.Name
+	}
+	return sym.Kind.String()
+}

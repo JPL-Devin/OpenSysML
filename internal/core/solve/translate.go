@@ -116,16 +116,7 @@ func TranslateWith(ctx *runtime.Context, subject Subject, conds []runtime.Condit
 	if len(conds) == 0 {
 		return nil, fmt.Errorf("%s %s: %w", subject.Kind, subject.Name, ErrNoConditions)
 	}
-	t := &translator{
-		ctx:       ctx,
-		model:     ctx.Model(),
-		subject:   subject,
-		features:  effectiveFeatures(ctx, subject.Symbol),
-		vars:      map[string]*Var{},
-		sorts:     map[string]Sort{},
-		guarded:   map[string]bool{},
-		baseUnits: map[string]string{},
-	}
+	t := newTranslator(ctx, subject)
 	if err := t.translate(conds); err != nil {
 		return nil, err
 	}
@@ -171,11 +162,28 @@ type translator struct {
 	// where a definedness assertion over the whole query would not be equivalent.
 	branched int
 
+	// objectives are the translated objectives, in the order they are optimized.
+	objectives []Objective
+
 	nonlinear bool
 	intDiv    bool
 
 	condLabel string
 	condFile  string
+}
+
+// newTranslator starts a translation of what subject states.
+func newTranslator(ctx *runtime.Context, subject Subject) *translator {
+	return &translator{
+		ctx:       ctx,
+		model:     ctx.Model(),
+		subject:   subject,
+		features:  effectiveFeatures(ctx, subject.Symbol),
+		vars:      map[string]*Var{},
+		sorts:     map[string]Sort{},
+		guarded:   map[string]bool{},
+		baseUnits: map[string]string{},
+	}
 }
 
 // effectiveFeatures maps the name a condition may use to the feature it reads,
@@ -267,6 +275,12 @@ func (t *translator) query() *Query {
 	q.Assertions = append(q.Assertions, t.asserts...)
 	q.Pinned = t.pinned
 	q.Unread = t.unread
+	for _, obj := range t.objectives {
+		if obj.Unit == "" {
+			obj.Unit = t.baseUnits[obj.Dimension]
+		}
+		q.Objectives = append(q.Objectives, obj)
+	}
 	return q
 }
 

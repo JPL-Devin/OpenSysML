@@ -87,6 +87,11 @@ func writeScript(b *strings.Builder, q *Query, opts scriptOptions) {
 		// The option must precede set-logic, as a solver decides then what to track.
 		b.WriteString("(set-option :produce-unsat-cores true)\n")
 	}
+	if q.Optimizes() {
+		b.WriteString("; objectives are optimized lexicographically, in the order the analysis declares them:\n")
+		b.WriteString("; each is optimized within what the ones before it already settled\n")
+		b.WriteString("(set-option :opt.priority lex)\n")
+	}
 	fmt.Fprintf(b, "(set-logic %s)\n", q.Logic())
 
 	for _, s := range q.Sorts {
@@ -115,10 +120,34 @@ func writeScript(b *strings.Builder, q *Query, opts scriptOptions) {
 		fmt.Fprintf(b, "(assert %s)\n", writeTerm(a.Term))
 	}
 
+	for _, obj := range q.Objectives {
+		b.WriteString("; " + objectiveComment(obj) + "\n")
+		fmt.Fprintf(b, "(%s %s)\n", obj.Direction, writeTerm(obj.Term))
+	}
+
 	b.WriteString("(check-sat)\n")
 	if opts.request {
 		b.WriteString("(get-unsat-core)\n")
 	}
+}
+
+// objectiveComment describes an objective: which way it is improved, the value
+// as written, the units its magnitude is expressed in, and where it was written.
+func objectiveComment(obj Objective) string {
+	out := obj.Direction.String() + ": "
+	if obj.Name != "" {
+		out += comment(obj.Name) + " = "
+	}
+	out += comment(obj.Expression)
+	if obj.Unit != "" {
+		out += " in " + comment(obj.Unit)
+	} else if obj.Dimension != "" {
+		out += " in base units of " + comment(obj.Dimension)
+	}
+	if obj.Location != "" {
+		out += ", at " + comment(obj.Location)
+	}
+	return out
 }
 
 // coreLabelPrefix starts every assertion label. No name from a model is written

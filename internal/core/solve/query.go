@@ -111,6 +111,59 @@ type Provenance struct {
 	Location string
 }
 
+// Direction is the way an objective's value is to be improved.
+type Direction int
+
+const (
+	// Minimize asks for the least value the conditions permit.
+	Minimize Direction = iota
+	// Maximize asks for the greatest value the conditions permit.
+	Maximize
+)
+
+// String names the direction as the emitted objective form reads.
+func (d Direction) String() string {
+	if d == Maximize {
+		return "maximize"
+	}
+	return "minimize"
+}
+
+// Objective is one objective a query optimizes: which way its value is to be
+// improved, the term stating that value, and where the objective was written.
+type Objective struct {
+	// Direction is the way its value is to be improved.
+	Direction Direction
+
+	// Term is the translated objective expression, of an arithmetic sort.
+	Term *Term
+
+	// Name is the objective's name as the model wrote it, empty for an anonymous
+	// one.
+	Name string
+
+	// Symbol is the objective usage it came from.
+	Symbol *symbols.Symbol
+
+	// Expression is the objective expression as written.
+	Expression string
+
+	// Dimension is the quantity dimension its value is expressed in over base
+	// units, empty for a value that has none.
+	Dimension string
+
+	// Unit names the base units its magnitude is expressed in ("g", "m·s^-1"),
+	// empty when the value is no quantity or no quantity named them.
+	Unit string
+
+	// File and Span are where the objective was written.
+	File string
+	Span source.Span
+
+	// Location renders File and Span as `file:line:col`.
+	Location string
+}
+
 // Assertion is one term the query asserts, with where it came from.
 type Assertion struct {
 	// Term is the boolean term asserted.
@@ -162,7 +215,16 @@ type Query struct {
 	// Unread are the values that were to be fixed but that no variable of the
 	// query reads, reported rather than dropped.
 	Unread []Unread
+
+	// Objectives are the objectives to optimize, in the order the analysis case
+	// declares them, which is the order they are optimized in; nil for a query
+	// that only asks about satisfiability.
+	Objectives []Objective
 }
+
+// Optimizes reports whether the query asks for an optimum rather than only for
+// satisfiability.
+func (q *Query) Optimizes() bool { return len(q.Objectives) > 0 }
 
 // Fixes reports whether the query fixes any value, which is what makes an unsat
 // verdict about it a verdict about those values too.
@@ -206,6 +268,9 @@ func (q *Query) Logic() string {
 	}
 	for _, a := range q.Assertions {
 		a.Term.walk(func(t *Term) { note(t.Sort) })
+	}
+	for _, o := range q.Objectives {
+		o.Term.walk(func(t *Term) { note(t.Sort) })
 	}
 	switch {
 	case usesDatatype || usesString || q.IntegerDivision:

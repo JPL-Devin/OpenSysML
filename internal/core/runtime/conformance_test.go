@@ -122,6 +122,31 @@ type ExpectedOutcome struct {
 	// case pinning that two connectors attached to different features are
 	// told apart.
 	Distinct [][]string `json:"distinct,omitempty"`
+	// Objects are the behaviors materialized objects run because their type
+	// exhibits or performs them, one entry per object whose performance the case
+	// states.
+	Objects []ObjectRun `json:"objects,omitempty"`
+}
+
+// ObjectRun is the performance a case expects of one materialized object's
+// exhibited machine: which object it is, the events sent to that object's
+// machine, and what the machine and the object hold afterwards.
+type ObjectRun struct {
+	// Instance selects which materialization of the case's type the run is of,
+	// counted from 1. A case naming more than one materializes that many
+	// objects, which is how two objects of one type are stated to run
+	// independently.
+	Instance int `json:"instance,omitempty"`
+	// Path reaches a nested object from that materialization by dotted feature
+	// names; empty is the materialized object itself.
+	Path string `json:"path,omitempty"`
+	// Behavior names the behavior run, for an object running more than one.
+	// Empty is the machine the object exhibits.
+	Behavior    string                   `json:"behavior,omitempty"`
+	Events      []ExpectedEvent          `json:"events,omitempty"`
+	FinalState  string                   `json:"finalState,omitempty"`
+	StateVisits []string                 `json:"stateVisits,omitempty"`
+	Values      map[string]ExpectedValue `json:"slots,omitempty"`
 }
 
 // TestExecutionConformance runs all behavioral execution conformance tests.
@@ -472,63 +497,8 @@ func runOneStatePerformance(t *testing.T, ctx *Context, stateSym *symbols.Symbol
 		t.Fatalf("run state machine: %v", err)
 	}
 
-	// Validate final state
-	if expected.FinalState != "" {
-		// Get final state from executor
-		// For orthogonal regions, build "State1+State2+..." string (sorted by region name)
-		var finalState string
-		if len(exec.activeConfig.regionStates) > 0 {
-			// Multi-region: collect all region states, sort by region name
-			type regionStatePair struct {
-				regionName string
-				stateName  string
-			}
-			var pairs []regionStatePair
-			for region, regionState := range exec.activeConfig.regionStates {
-				pairs = append(pairs, regionStatePair{region.Name, regionState.Name})
-			}
-			sort.Slice(pairs, func(i, j int) bool {
-				return pairs[i].regionName < pairs[j].regionName
-			})
-			var stateNames []string
-			for _, pair := range pairs {
-				stateNames = append(stateNames, pair.stateName)
-			}
-			finalState = strings.Join(stateNames, "+")
-		} else {
-			// Simple state
-			finalStateNode := exec.CurrentState()
-			if finalStateNode == nil {
-				finalState = ""
-			} else if stateNode, ok := finalStateNode.(*ast.StateNode); ok {
-				finalState = stateNode.Name
-			} else {
-				t.Errorf("expected StateNode, got %T", finalStateNode)
-			}
-		}
-
-		if finalState == "" {
-			t.Errorf("expected finalState %q, got empty", expected.FinalState)
-		} else if finalState != expected.FinalState {
-			t.Errorf("finalState mismatch: expected %q, got %q", expected.FinalState, finalState)
-		}
-	}
-
-	// Validate state visits
-	if len(expected.StateVisits) > 0 {
-		actual := exec.GetStateVisits()
-		if len(actual) != len(expected.StateVisits) {
-			t.Errorf("stateVisits length mismatch: expected %d, got %d", len(expected.StateVisits), len(actual))
-			t.Logf("  expected: %v", expected.StateVisits)
-			t.Logf("  actual:   %v", actual)
-		} else {
-			for i, expectedName := range expected.StateVisits {
-				if actual[i] != expectedName {
-					t.Errorf("stateVisits[%d] mismatch: expected %q, got %q", i, expectedName, actual[i])
-				}
-			}
-		}
-	}
+	validateFinalState(t, exec, expected.FinalState)
+	validateStateVisits(t, exec, expected.StateVisits)
 
 	// Validate outputs
 	if expected.Outputs != nil {
@@ -539,6 +509,72 @@ func runOneStatePerformance(t *testing.T, ctx *Context, stateSym *symbols.Symbol
 				continue
 			}
 			validateValue(t, ctx, name, expectedVal, actual)
+		}
+	}
+}
+
+// validateFinalState checks the state a machine came to rest in, named as the
+// case names it: orthogonal regions as "State1+State2", sorted by region name.
+func validateFinalState(t *testing.T, exec *StateExecutor, want string) {
+	t.Helper()
+	if want == "" {
+		return
+	}
+	got := finalStateName(t, exec)
+	if got == "" {
+		t.Errorf("expected finalState %q, got empty", want)
+	} else if got != want {
+		t.Errorf("finalState mismatch: expected %q, got %q", want, got)
+	}
+}
+
+// finalStateName is the active configuration as a case writes it.
+func finalStateName(t *testing.T, exec *StateExecutor) string {
+	t.Helper()
+	if len(exec.activeConfig.regionStates) > 0 {
+		type regionStatePair struct {
+			regionName string
+			stateName  string
+		}
+		var pairs []regionStatePair
+		for region, regionState := range exec.activeConfig.regionStates {
+			pairs = append(pairs, regionStatePair{region.Name, regionState.Name})
+		}
+		sort.Slice(pairs, func(i, j int) bool { return pairs[i].regionName < pairs[j].regionName })
+		var names []string
+		for _, pair := range pairs {
+			names = append(names, pair.stateName)
+		}
+		return strings.Join(names, "+")
+	}
+	current := exec.CurrentState()
+	if current == nil {
+		return ""
+	}
+	stateNode, ok := current.(*ast.StateNode)
+	if !ok {
+		t.Errorf("expected StateNode, got %T", current)
+		return ""
+	}
+	return stateNode.Name
+}
+
+// validateStateVisits checks the states a machine entered, in order.
+func validateStateVisits(t *testing.T, exec *StateExecutor, want []string) {
+	t.Helper()
+	if len(want) == 0 {
+		return
+	}
+	got := exec.GetStateVisits()
+	if len(got) != len(want) {
+		t.Errorf("stateVisits length mismatch: expected %d, got %d", len(want), len(got))
+		t.Logf("  expected: %v", want)
+		t.Logf("  actual:   %v", got)
+		return
+	}
+	for i, name := range want {
+		if got[i] != name {
+			t.Errorf("stateVisits[%d] mismatch: expected %q, got %q", i, name, got[i])
 		}
 	}
 }
@@ -826,6 +862,7 @@ func runInstanceConformance(t *testing.T, ctx *Context, idx *symbols.Index, expe
 	}
 
 	validateIdentity(t, ctx, inst, expected)
+	validateObjectRuns(t, ctx, typeSym, inst, expected)
 
 	for name, wantSatisfied := range expected.Constraints {
 		feat := featureNamed(ctx, typeSym, name)
@@ -863,6 +900,110 @@ func validateIdentity(t *testing.T, ctx *Context, inst *Instance, expected Expec
 				pair[0], pair[1], left)
 		}
 	}
+}
+
+// validateObjectRuns drives the behaviors materialized objects run because
+// their type exhibits them, and checks each object's own machine and values: a
+// case naming several materializations states that they run independently.
+func validateObjectRuns(t *testing.T, ctx *Context, typeSym *symbols.Symbol, first *Instance, expected ExpectedOutcome) {
+	t.Helper()
+	if len(expected.Objects) == 0 {
+		return
+	}
+	objects := materializations(t, ctx, typeSym, first, expected.Objects)
+	for _, run := range expected.Objects {
+		obj := objects[instanceIndexOf(run)]
+		if run.Path != "" {
+			obj = instanceAtPath(t, ctx, obj, run.Path)
+		}
+		t.Run(runName(run), func(t *testing.T) {
+			exec := objectMachine(t, obj, run.Behavior)
+			injectEvents(t, exec, run.Events)
+			if err := exec.RunToCompletion(); err != nil {
+				t.Fatalf("run machine of object #%d: %v", obj.ID, err)
+			}
+			validateFinalState(t, exec, run.FinalState)
+			validateStateVisits(t, exec, run.StateVisits)
+			for name, want := range run.Values {
+				fv, err := obj.GetFeatureValue(ctx, name)
+				if err != nil {
+					t.Errorf("feature value %q of object #%d: %v", name, obj.ID, err)
+					continue
+				}
+				validateValue(t, ctx, name, want, fv.HeldValue())
+			}
+		})
+	}
+}
+
+// materializations returns the objects the runs name, materializing as many of
+// the case's type as the highest instance number asks for.
+func materializations(t *testing.T, ctx *Context, typeSym *symbols.Symbol, first *Instance, runs []ObjectRun) []*Instance {
+	t.Helper()
+	count := 1
+	for _, run := range runs {
+		if n := instanceIndexOf(run) + 1; n > count {
+			count = n
+		}
+	}
+	objects := []*Instance{first}
+	for i := 1; i < count; i++ {
+		next, err := ctx.Instantiate(typeSym)
+		if err != nil {
+			t.Fatalf("instantiate object %d: %v", i+1, err)
+		}
+		objects = append(objects, next)
+	}
+	return objects
+}
+
+// instanceIndexOf is the zero-based materialization a run names.
+func instanceIndexOf(run ObjectRun) int {
+	if run.Instance <= 0 {
+		return 0
+	}
+	return run.Instance - 1
+}
+
+// runName names a run in subtest output.
+func runName(run ObjectRun) string {
+	name := fmt.Sprintf("object%d", instanceIndexOf(run)+1)
+	if run.Path != "" {
+		name += "." + run.Path
+	}
+	if run.Behavior != "" {
+		name += "/" + run.Behavior
+	}
+	return name
+}
+
+// objectMachine is the executor of the machine a run names on an object: the one
+// it exhibits when the run names none.
+func objectMachine(t *testing.T, obj *Instance, name string) *StateExecutor {
+	t.Helper()
+	behavior, ok := obj.ExhibitedState()
+	if name != "" {
+		behavior, ok = obj.Behavior(name)
+	}
+	if !ok {
+		t.Fatalf("object #%d runs no behavior %q", obj.ID, name)
+	}
+	if behavior.State == nil {
+		t.Fatalf("behavior %q of object #%d is not a state machine", behavior.Name, obj.ID)
+	}
+	return behavior.State
+}
+
+// instanceAtPath walks a dotted path of feature names from inst to the object it
+// reaches.
+func instanceAtPath(t *testing.T, ctx *Context, inst *Instance, path string) *Instance {
+	t.Helper()
+	id := objectAtPath(t, ctx, inst, path)
+	obj, held := ctx.Instance(id)
+	if !held {
+		t.Fatalf("%s names object %d, which the context does not hold", path, id)
+	}
+	return obj
 }
 
 // identityPair resolves the two paths of an identity assertion to the objects

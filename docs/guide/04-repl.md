@@ -35,7 +35,9 @@ Two properties of the session model are worth knowing before a long session:
 - **A submission only invalidates what it changed.** Objects created with `%instantiate` are
   carried over while the declarations they were built from are untouched, and an
   `%action`/`%state` debugging session over a declaration the submission left alone keeps
-  running. What is dropped is reported as a `note:` line saying what to re-run.
+  running. What a carried object keeps is its identity, not its execution: the behaviors its
+  type exhibits or performs are restarted from their initial states in the rebuilt analysis.
+  Everything dropped or restarted is reported as a `note:` line saying what happened.
 
 `%list` shows the session's declarations, `%clear` resets it, and `%save` writes it out
 ([chapter 7](07-saving-and-rdf.md)). `%clear` replaces every declaration, so nothing it held can be
@@ -234,6 +236,7 @@ separator.
 | which conditions conflict when it cannot (experimental, needs [z3 or cvc5](01-install.md#installing-a-solver-optional)) | `%explain` | [reference](../reference/repl-commands.md) |
 | what values satisfy it, keeping what is already fixed (experimental, needs [z3 or cvc5](01-install.md#installing-a-solver-optional)) | `%solve` | [reference](../reference/repl-commands.md) |
 | which variants its conditions permit (experimental, needs [z3 or cvc5](01-install.md#installing-a-solver-optional)) | `%configure` | [reference](../reference/repl-commands.md) |
+| which values are best for an analysis case's objectives (experimental, needs [z3](01-install.md#installing-a-solver-optional)) | `%optimize` | [reference](../reference/repl-commands.md) |
 | what a behavior does, step by step | `%action`, `%state`, `%step`, `%tokens`, `%advance` | [6](06-behavior.md) |
 | where a run stopped and why | `%trace`, `%budget`, `%verbosity` | [10](10-troubleshooting.md) |
 

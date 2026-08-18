@@ -227,6 +227,21 @@ func (e *StateExecutor) ChangeWaits() []string {
 	return waits
 }
 
+// WatchesChangeCondition reports whether the active configuration watches a
+// change condition, which data written outside the machine can make true.
+func (e *StateExecutor) WatchesChangeCondition() bool {
+	for _, leaf := range e.activeLeaves() {
+		for _, source := range e.getParentChain(leaf) {
+			for _, trans := range e.graph.Transitions[source] {
+				if _, ok := trans.Trigger.(*ast.ChangeEvent); ok {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
 // canStillProgress reports whether a step is left to take. A suspended machine's
 // do activities are registered but exhausted, so what is left there is a queued
 // event, a signal in flight or a do action still to run.

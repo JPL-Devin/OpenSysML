@@ -202,6 +202,10 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("classification_outside_the_evaluable_subset", testClassificationOutsideTheEvaluableSubset)
 	t.Run("expression_over_a_feature_value_holding_no_value", testExpressionOverAFeatureValueHoldingNoValue)
 	t.Run("succession_guard_failure_modes", testSuccessionGuardFailureModes)
+	t.Run("object_exhibited_machine_never_settles", testObjectExhibitedMachineNeverSettles)
+	t.Run("object_exhibited_machine_without_an_initial_state", testObjectExhibitedMachineWithoutAnInitialState)
+	t.Run("operation_invoked_with_unbound_parameters", testOperationInvokedWithUnboundParameters)
+	t.Run("second_instantiation_of_one_type", testSecondInstantiationOfOneType)
 }
 
 func testBindingConflict(t *testing.T) {
@@ -5911,4 +5915,153 @@ func testChainThroughALiteralWithoutThatAttribute(t *testing.T) {
 	if !strings.Contains(err.Error(), "label") {
 		t.Errorf("error %q does not name the unknown member", err)
 	}
+}
+
+// testObjectExhibitedMachineNeverSettles: a machine an object exhibits is bounded
+// by the same event budget as one run on its own, so materializing an object whose
+// machine never settles reports a budget error rather than spinning.
+func testObjectExhibitedMachineNeverSettles(t *testing.T) {
+	src := `
+	package test {
+		part def Spinner {
+			attribute ticks : Integer = 0;
+			exhibit state modes {
+				entry; then spin;
+				state spin {
+					do action tick { assign ticks := ticks + 1; }
+				}
+				transition again first spin then spin;
+			}
+		}
+	}`
+	_, _, err := instantiateInSource(t, src, "test::Spinner")
+	if err == nil {
+		t.Fatal("expected a budget error for an exhibited machine that never settles")
+	}
+	if !strings.Contains(err.Error(), "exceeded max") {
+		t.Errorf("error = %v, want a budget error", err)
+	}
+}
+
+// testObjectExhibitedMachineWithoutAnInitialState: a machine stating states but no
+// entry into them is reported when the object's execution of it initializes, with
+// the behavior and the type named.
+func testObjectExhibitedMachineWithoutAnInitialState(t *testing.T) {
+	src := `
+	package test {
+		part def Controller {
+			exhibit state modes {
+				state off;
+				state on;
+			}
+		}
+	}`
+	_, _, err := instantiateInSource(t, src, "test::Controller")
+	if err == nil {
+		t.Fatal("expected an error for a machine with no initial state")
+	}
+	if !strings.Contains(err.Error(), "modes") || !strings.Contains(err.Error(), "initial") {
+		t.Errorf("error = %v, want one naming the machine and its missing initial state", err)
+	}
+}
+
+// testOperationInvokedWithUnboundParameters: an operation invoked without a value
+// for a parameter, or with an argument naming none, is reported rather than run
+// against values the invocation never stated.
+func testOperationInvokedWithUnboundParameters(t *testing.T) {
+	src := `
+	package test {
+		part def Adder {
+			attribute total : Integer = 0;
+			action add {
+				in addend : Integer;
+				assign total := total + addend;
+			}
+		}
+	}`
+	ctx, inst, err := instantiateInSource(t, src, "test::Adder")
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+
+	if _, err := ctx.InvokeOperation(inst, "add", nil); !errors.Is(err, ErrUnboundParameter) {
+		t.Errorf("invoke without an argument = %v, want ErrUnboundParameter", err)
+	}
+	args := map[string]Value{"addend": integerValue(1), "extra": integerValue(2)}
+	if _, err := ctx.InvokeOperation(inst, "add", args); !errors.Is(err, ErrUnboundParameter) {
+		t.Errorf("invoke with an unknown argument = %v, want ErrUnboundParameter", err)
+	}
+	if _, err := ctx.InvokeOperation(inst, "missing", nil); !errors.Is(err, ErrNoSuchBehavior) {
+		t.Errorf("invoke of an unknown operation = %v, want ErrNoSuchBehavior", err)
+	}
+	if _, err := ctx.InvokeOperation(inst, "total", nil); !errors.Is(err, ErrNotABehavior) {
+		t.Errorf("invoke of an attribute = %v, want ErrNotABehavior", err)
+	}
+}
+
+// testSecondInstantiationOfOneType: materializing a type twice builds two objects,
+// each with its own execution of the machine the type exhibits, rather than reusing
+// or replacing the first object's.
+func testSecondInstantiationOfOneType(t *testing.T) {
+	src := `
+	package test {
+		part def Light {
+			attribute lit : Integer = 0;
+			exhibit state modes {
+				entry; then on;
+				state on { entry action mark { assign lit := 1; } }
+			}
+		}
+	}`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	sym := oneSymbol(t, idx, "test::Light")
+
+	first, err := ctx.Instantiate(sym)
+	if err != nil {
+		t.Fatalf("first instantiate: %v", err)
+	}
+	second, err := ctx.Instantiate(sym)
+	if err != nil {
+		t.Fatalf("second instantiate: %v", err)
+	}
+	if first.ID == second.ID {
+		t.Fatalf("both objects have identity %d", first.ID)
+	}
+	firstMachine, ok := first.ExhibitedState()
+	if !ok {
+		t.Fatal("first object exhibits no machine")
+	}
+	secondMachine, ok := second.ExhibitedState()
+	if !ok {
+		t.Fatal("second object exhibits no machine")
+	}
+	if firstMachine.State == secondMachine.State {
+		t.Error("both objects share one machine execution")
+	}
+	for _, obj := range []*Instance{first, second} {
+		fv, err := obj.GetFeatureValue(ctx, "lit")
+		if err != nil {
+			t.Fatalf("lit of object #%d: %v", obj.ID, err)
+		}
+		if fv.HeldValue().Const.Int != 1 {
+			t.Errorf("lit of object #%d = %v, want 1", obj.ID, fv.HeldValue().Const)
+		}
+	}
+}
+
+// instantiateInSource materializes the named type declared in src, so a case can
+// state the failure materializing an object reports.
+func instantiateInSource(t *testing.T, src, fqn string) (*Context, *Instance, error) {
+	t.Helper()
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, fqn))
+	return ctx, inst, err
 }

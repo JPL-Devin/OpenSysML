@@ -1,0 +1,9 @@
+{
+  "type": "instance",
+  "instantiate": "test::Group",
+  "objects": [
+    {"path": "a", "finalState": "sent"},
+    {"path": "b", "finalState": "heard"},
+    {"path": "c", "finalState": "waiting"}
+  ]
+}

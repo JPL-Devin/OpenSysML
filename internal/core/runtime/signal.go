@@ -344,13 +344,15 @@ func (ctx *Context) featureAddress(scope *symbols.Scope, self *Instance, segment
 }
 
 // addressOwner answers which object a target's leading segments belong to: the
-// sending object where the first names one of its features, else the occurrence
+// sending object, or one holding it, where the first names a feature of it, else the occurrence
 // the shortest prefix names in the send's scope — a prefix rather than one name,
 // since a namespace qualifies the occurrence in `P::alpha.inPort`.
 func (ctx *Context) addressOwner(scope *symbols.Scope, self *Instance, segments []string) (*Instance, []string, bool, error) {
-	if self != nil {
-		if fv, held := self.FeatureValues[segments[0]]; held && ctx.namesFeature(scope, self, fv, segments[0]) {
-			return self, segments, true, nil
+	// A name is a feature of the sending object, or of an object holding it: a
+	// nested object addresses a sibling through the object they belong to.
+	for up := self; up != nil; up = up.owner {
+		if fv, held := up.FeatureValues[segments[0]]; held && ctx.namesFeature(scope, up, fv, segments[0]) {
+			return up, segments, true, nil
 		}
 	}
 	if scope == nil || ctx.resolver == nil {
