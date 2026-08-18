@@ -7,17 +7,17 @@ this guide needs anything else on the machine.
 
 Download the latest release for your platform from [GitHub Releases](https://github.com/Open-MBEE/OpenSysML/releases):
 
-**Linux (x64; use `systemica-linux-arm64.tar.gz` on arm64):**
+**Linux (x64; use `opensysml-linux-arm64.tar.gz` on arm64):**
 ```bash
-wget https://github.com/Open-MBEE/OpenSysML/releases/latest/download/systemica-linux-amd64.tar.gz
-tar xzf systemica-linux-amd64.tar.gz
+wget https://github.com/Open-MBEE/OpenSysML/releases/latest/download/opensysml-linux-amd64.tar.gz
+tar xzf opensysml-linux-amd64.tar.gz
 sudo mv sysml sysml-lsp /usr/local/bin/
 chmod +x /usr/local/bin/sysml /usr/local/bin/sysml-lsp
 ```
 
 **macOS (Intel or Apple Silicon) — Homebrew is the recommended path:**
 ```bash
-brew install Open-MBEE/tap/systemica
+brew install Open-MBEE/tap/opensysml
 ```
 This avoids the Gatekeeper prompt described in [macOS: Gatekeeper](#macos-gatekeeper).
 
@@ -26,20 +26,20 @@ to be trusted before their code is loaded; installing by fully-qualified name tr
 formula, whereas the two-step form needs a trust step in between:
 ```bash
 brew tap Open-MBEE/tap
-brew trust --formula Open-MBEE/tap/systemica   # or: brew trust Open-MBEE/tap, for the whole tap
-brew install systemica
+brew trust --formula Open-MBEE/tap/opensysml   # or: brew trust Open-MBEE/tap, for the whole tap
+brew install opensysml
 ```
 
 **macOS, direct download (fallback):** use `curl`, not a browser.
 ```bash
-# Apple Silicon; use systemica-darwin-amd64.tar.gz on Intel
-curl -fL -o systemica.tar.gz https://github.com/Open-MBEE/OpenSysML/releases/latest/download/systemica-darwin-arm64.tar.gz
-tar xzf systemica.tar.gz
+# Apple Silicon; use opensysml-darwin-amd64.tar.gz on Intel
+curl -fL -o opensysml.tar.gz https://github.com/Open-MBEE/OpenSysML/releases/latest/download/opensysml-darwin-arm64.tar.gz
+tar xzf opensysml.tar.gz
 sudo mv sysml sysml-lsp /usr/local/bin/
 ```
 
 **Windows:**
-Download `systemica-windows-amd64.zip` from [releases](https://github.com/Open-MBEE/OpenSysML/releases/latest), extract, and add to PATH. Windows SmartScreen may warn that the publisher is unrecognized; the binaries are not Authenticode-signed.
+Download `opensysml-windows-amd64.zip` from [releases](https://github.com/Open-MBEE/OpenSysML/releases/latest), extract, and add to PATH. Windows SmartScreen may warn that the publisher is unrecognized; the binaries are not Authenticode-signed.
 
 **Available binaries:**
 - `sysml` — Interactive REPL
@@ -50,7 +50,7 @@ Download `systemica-windows-amd64.zip` from [releases](https://github.com/Open-M
 `pysysml` downloads and verifies it itself (see [python/README.md](../../python/README.md)).
 `make build-grpc` builds it from source.
 
-**Archive layout:** `systemica-<os>-<arch>.tar.gz` bundles contain both binaries under their
+**Archive layout:** `opensysml-<os>-<arch>.tar.gz` bundles contain both binaries under their
 plain names (`sysml`, `sysml-lsp`); the older single-binary `sysml-<os>-<arch>.tar.gz` and
 `sysml-lsp-<os>-<arch>.tar.gz` archives are still published. The bundles and
 `SHA256SUMS.txt` are published from v0.0.4 onward; for earlier releases use the
@@ -72,7 +72,7 @@ an Apple Developer ID or notarized. It is not a broken binary.
 
 Ways to avoid it, best first:
 
-1. **Install with Homebrew** (`brew install Open-MBEE/tap/systemica`). Homebrew
+1. **Install with Homebrew** (`brew install Open-MBEE/tap/opensysml`). Homebrew
    downloads with `curl` and does not quarantine formula binaries. This is the recommended
    path, and the accepted stopgap until the releases are signed and notarized.
 2. **Download with `curl` or `wget`** (as shown above). They do not set the quarantine
@@ -86,7 +86,7 @@ Ways to avoid it, best first:
    checksum first — you are turning off a security check, so make sure you have the file we
    published:
    ```bash
-   shasum -a 256 systemica-darwin-arm64.tar.gz   # compare against SHA256SUMS.txt
+   shasum -a 256 opensysml-darwin-arm64.tar.gz   # compare against SHA256SUMS.txt
    xattr -d com.apple.quarantine /usr/local/bin/sysml /usr/local/bin/sysml-lsp
    ```
    `xattr -d: No such xattr` simply means the file was not quarantined. Use
@@ -106,7 +106,7 @@ signing + notarizing the releases would require.
 **Build:**
 ```bash
 git clone https://github.com/Open-MBEE/OpenSysML.git
-cd Systemica
+cd OpenSysML
 make build       # builds bin/sysml, bin/sysml-lsp, and bin/sysml-grpc
 # OR
 go build -o sysml ./cmd/sysml

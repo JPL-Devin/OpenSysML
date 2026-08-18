@@ -10,12 +10,12 @@ A complete, production-grade SysML v2 implementation in Go—providing language 
 
 **Download pre-built binaries:**
 ```bash
-# Linux x64 (use systemica-linux-arm64.tar.gz on arm64)
-wget https://github.com/Open-MBEE/OpenSysML/releases/latest/download/systemica-linux-amd64.tar.gz
-tar xzf systemica-linux-amd64.tar.gz && sudo mv sysml sysml-lsp /usr/local/bin/
+# Linux x64 (use opensysml-linux-arm64.tar.gz on arm64)
+wget https://github.com/Open-MBEE/OpenSysML/releases/latest/download/opensysml-linux-amd64.tar.gz
+tar xzf opensysml-linux-amd64.tar.gz && sudo mv sysml sysml-lsp /usr/local/bin/
 
 # macOS (Intel or Apple Silicon) — see the note below
-brew install Open-MBEE/tap/systemica
+brew install Open-MBEE/tap/opensysml
 ```
 
 **With a Go toolchain (no download, never quarantined):**
@@ -34,15 +34,15 @@ make build
 > so a tarball downloaded *in a browser* carries `com.apple.quarantine` and Gatekeeper shows
 > "cannot be opened because the developer cannot be verified". Homebrew downloads with
 > `curl`, which never sets that attribute, so `brew install` avoids the prompt entirely.
-> Fallback if you download the tarball directly (`curl -fL ... systemica-darwin-arm64.tar.gz`,
+> Fallback if you download the tarball directly (`curl -fL ... opensysml-darwin-arm64.tar.gz`,
 > then `xattr -d com.apple.quarantine`): see
 > [the guide](docs/guide/01-install.md#macos-gatekeeper). Signing/notarization is the eventual
 > fix — [docs/project/macos-distribution.md](docs/project/macos-distribution.md).
 >
 > Install by the **fully-qualified** name. Homebrew 6 requires third-party taps to be trusted
-> before their Ruby is loaded, and `brew install Open-MBEE/tap/systemica` trusts just that
-> formula. `brew tap Open-MBEE/tap && brew install systemica` needs
-> `brew trust --formula Open-MBEE/tap/systemica` in between.
+> before their Ruby is loaded, and `brew install Open-MBEE/tap/opensysml` trusts just that
+> formula. `brew tap Open-MBEE/tap && brew install opensysml` needs
+> `brew trust --formula Open-MBEE/tap/opensysml` in between.
 
 ### Try it
 
@@ -142,7 +142,7 @@ sysml> %advance 30
 ## Goals
 
 - **Performance:** Sub-millisecond parsing, single static binary, no JVM/Eclipse runtime
-- **Completeness:** SysML v2 textual notation support (95/95 stdlib files parse clean: 94 vendored OMG files and 1 Systemica extension)
+- **Completeness:** SysML v2 textual notation support (95/95 stdlib files parse clean: 94 vendored OMG files and 1 OpenSysML extension)
 - **Executable models:** Instantiate, evaluate, simulate—turn specifications into running systems
 - **Real-world ergonomics:** Multi-file workspaces, incremental analysis, rich diagnostics
 
@@ -261,7 +261,7 @@ Pre-built binaries for Linux, macOS, and Windows are available on the [Releases 
   at runtime from whichever release the caller names
 
 **Release artifacts:** per-binary archives (`sysml-<os>-<arch>.tar.gz`,
-`sysml-lsp-<os>-<arch>.tar.gz`), `systemica-<os>-<arch>.tar.gz` bundles containing both
+`sysml-lsp-<os>-<arch>.tar.gz`), `opensysml-<os>-<arch>.tar.gz` bundles containing both
 binaries, and `SHA256SUMS.txt`. macOS binaries are not Developer ID signed or notarized and
 Windows binaries are not Authenticode signed — see
 [docs/project/macos-distribution.md](docs/project/macos-distribution.md).
@@ -287,7 +287,7 @@ go build -o bin/sysml-grpc ./cmd/sysml-grpc
 
 ## Python Client
 
-**pysysml** provides a Python client library for programmatic access to Systemica's parsing and runtime capabilities via gRPC.
+**pysysml** provides a Python client library for programmatic access to OpenSysML's parsing and runtime capabilities via gRPC.
 
 **Installation:**
 ```bash

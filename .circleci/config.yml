@@ -384,12 +384,12 @@ jobs:
               mkdir -p "$stage"
               cp "sysml-${platform}" "${stage}/sysml"
               cp "sysml-lsp-${platform}" "${stage}/sysml-lsp"
-              tar czf "systemica-${platform}.tar.gz" -C "$stage" sysml sysml-lsp
+              tar czf "opensysml-${platform}.tar.gz" -C "$stage" sysml sysml-lsp
             done
             mkdir -p stage/windows-amd64
             cp sysml-windows-amd64.exe stage/windows-amd64/sysml.exe
             cp sysml-lsp-windows-amd64.exe stage/windows-amd64/sysml-lsp.exe
-            (cd stage/windows-amd64 && zip -q ../../systemica-windows-amd64.zip sysml.exe sysml-lsp.exe)
+            (cd stage/windows-amd64 && zip -q ../../opensysml-windows-amd64.zip sysml.exe sysml-lsp.exe)
             rm -rf stage
             
             # Checksums over every published archive, so a Homebrew formula

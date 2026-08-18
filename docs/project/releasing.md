@@ -1,4 +1,4 @@
-# Releasing Systemica
+# Releasing OpenSysML
 
 A release is cut by pushing a `v*` tag. Everything after that is CircleCI: the
 `release` workflow runs the test suite, cross-compiles `sysml`, `sysml-lsp` and
@@ -71,7 +71,7 @@ git push origin v0.0.5
 
 The tag belongs on the repository the releases live on. v0.0.1–v0.0.7 are
 releases of `Open-MBEE/OpenSysML`, while development happens on
-`JPL-Devin/Systemica`, which has no tags at all — so cutting a release means
+`JPL-Devin/OpenSysML`, which has no tags at all — so cutting a release means
 promoting `main` upstream first (v0.0.4 came through Open-MBEE PR #47) and
 tagging there. Tagging the development repository would build a release nobody
 consumes.
@@ -85,7 +85,7 @@ fails the suite fails the release workflow before anything is published.
 
 - per-binary archives — `sysml-<os>-<arch>.tar.gz`,
   `sysml-lsp-<os>-<arch>.tar.gz` (`.zip` on Windows);
-- bundle archives — `systemica-<os>-<arch>.tar.gz` holding both binaries under
+- bundle archives — `opensysml-<os>-<arch>.tar.gz` holding both binaries under
   their plain names, which is the layout Homebrew and a PATH install expect;
 - `sysml-grpc-<os>-<arch>`, published raw with a `.sha256` sidecar rather than
   archived, because that is what `pysysml` downloads and verifies
@@ -121,10 +121,10 @@ one alongside it).
 1. **Verify a download** on at least one platform:
 
    ```bash
-   curl -fLO https://github.com/Open-MBEE/OpenSysML/releases/download/v0.0.5/systemica-linux-amd64.tar.gz
+   curl -fLO https://github.com/Open-MBEE/OpenSysML/releases/download/v0.0.5/opensysml-linux-amd64.tar.gz
    curl -fLO https://github.com/Open-MBEE/OpenSysML/releases/download/v0.0.5/SHA256SUMS.txt
    sha256sum -c SHA256SUMS.txt --ignore-missing
-   tar xzf systemica-linux-amd64.tar.gz && ./sysml --version
+   tar xzf opensysml-linux-amd64.tar.gz && ./sysml --version
    ```
 
    `--version` must report the tag, not `dev`.
@@ -143,19 +143,19 @@ one alongside it).
 
 2. **Let the Homebrew tap pick the release up.** The tap repository
    `Open-MBEE/homebrew-tap` updates itself: a scheduled workflow there resolves
-   the latest `Open-MBEE/OpenSysML` release, renders `Formula/systemica.rb` from
+   the latest `Open-MBEE/OpenSysML` release, renders `Formula/opensysml.rb` from
    this repository's `scripts/render-homebrew-formula.sh` and formula template at
    that tag, and commits only when the file changed. Nothing here triggers it, so
    the formula follows the release within the workflow's schedule interval.
 
    If it does not, check the workflow run in the tap repository. The render reads
    the release's `SHA256SUMS.txt`, so a release missing that asset (or missing a
-   `systemica-<os>-<arch>.tar.gz` line in it) fails the run loudly instead of
+   `opensysml-<os>-<arch>.tar.gz` line in it) fails the run loudly instead of
    committing a broken formula — re-run `publish-github-release` for the tag and
    then the tap workflow (`workflow_dispatch`). Rendering by hand still works:
 
    ```bash
-   scripts/render-homebrew-formula.sh v0.0.5 > Formula/systemica.rb
+   scripts/render-homebrew-formula.sh v0.0.5 > Formula/opensysml.rb
    ```
 
    See [packaging/homebrew/README.md](../../packaging/homebrew/README.md).
