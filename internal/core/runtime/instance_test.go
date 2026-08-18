@@ -321,6 +321,43 @@ func TestUntypedNestedPartMaterializes(t *testing.T) {
 	}
 }
 
+// A redefining declaration whose body values a feature the value it inherits
+// would supply governs over that value: the more specific declaration holds, so
+// the body is neither dropped nor read alongside the inherited value.
+func TestBodyGovernsAnInheritedValue(t *testing.T) {
+	src := `
+		attribute def Cost {
+			attribute v = 1.0;
+			attribute w = 2.0;
+		}
+		part def Ring {
+			attribute template : Cost { attribute :>> v = 9.0; attribute :>> w = 8.0; }
+			attribute cost : Cost = template;
+		}
+		part def Band :> Ring {
+			attribute :>> cost { attribute :>> v = 11.0; }
+		}
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	ctx := NewContext(model, resolver, 1000)
+
+	band, err := ctx.Instantiate(resolveSymbol(t, root, "Band"))
+	if err != nil {
+		t.Fatalf("Instantiate failed: %v", err)
+	}
+	if got := nestedReal(t, ctx, band, "cost", "v"); got != 11.0 {
+		t.Errorf("cost.v = %v, want 11 (the body's value, not the inherited one)", got)
+	}
+	if got := nestedReal(t, ctx, band, "cost", "w"); got != 2.0 {
+		t.Errorf("cost.w = %v, want 2 (Cost's own default, the inherited value being governed over)", got)
+	}
+	for _, feat := range ctx.FeaturesOf(resolveSymbol(t, root, "Ring")) {
+		if feat.Name == "cost" && ctx.CompositeTypeOf(&feat) != nil {
+			t.Error("Ring::cost is bound to template, want it reported as no composite")
+		}
+	}
+}
+
 // nestedReal reads a Real out of the instance held by one of inst's feature values.
 func nestedReal(t *testing.T, ctx *Context, inst *Instance, featureName, nestedName string) float64 {
 	t.Helper()

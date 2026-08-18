@@ -1,0 +1,17 @@
+{
+  "type": "instance",
+  "instantiate": "test::r",
+  "libraries": true,
+  "slots": {
+    "cost": {"type": "Instance"},
+    "kept": {"type": "Instance"},
+    "plain": {"type": "Instance"},
+    "template": {"type": "Instance"}
+  },
+  "constraints": {
+    "bodyGovernsInheritedValue": true,
+    "featureNotValuedTakesItsTypesDefault": true,
+    "reDeclarationKeepsInheritedValue": true,
+    "valueBindsWithoutABody": true
+  }
+}

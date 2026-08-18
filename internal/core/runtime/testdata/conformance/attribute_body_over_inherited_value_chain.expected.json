@@ -1,0 +1,13 @@
+{
+  "type": "instance",
+  "instantiate": "test::leaf",
+  "libraries": true,
+  "slots": {
+    "cost": {"type": "Instance"},
+    "template": {"type": "Instance"}
+  },
+  "constraints": {
+    "innermostBodyWins": true,
+    "keepsTheBodyAboveIt": true
+  }
+}

@@ -178,7 +178,7 @@ func (obj *Instance) carried(ctx *Context) []Value {
 // reads. What a variation's default states is a variant rather than a value, so
 // the object bound to it is carried instead of bound again.
 func (ctx *Context) derivedFeatureValue(s *FeatureValue) bool {
-	if s.Feature == nil || s.Feature.DefaultValue == nil {
+	if s.Feature == nil || !ctx.valueBinds(s.Feature) {
 		return false
 	}
 	return !ctx.model.IsVariationFeature(s.Feature.Symbol)

@@ -87,6 +87,19 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   the `ConvertResponse.experimental` comment and the guide pages were brought back in step. A test
   pins the Python copy byte-identical to the constant, since Python cannot import it.
 
+### A nested value body governs over an inherited value
+
+- **A redefining declaration whose body values features holds those values.** `part def Ring
+  { attribute cost : Cost = template; }` re-opened as `part r : Ring { attribute :>> cost
+  { attribute :>> v = 11.0; } }` now reads `r.cost.v` as `11.0`: the more specific declaration of
+  the feature governs (KerML 1.0 §7.3.4.5), where the inherited value used to win and the body's
+  restatements were dropped with no diagnostic. A feature the body does not value takes its type's
+  own default, the inherited value binding nothing there — the body supersedes that value rather
+  than merging with it, since a `FeatureValue` binds a feature as a whole.
+- Unchanged: a body on the *same* declaration that writes the value still reports
+  `ErrValuedFeatureRestated` (two values, neither more specific), and a body that only re-declares
+  features (`attribute :>> kept { attribute :>> v; }`) still reads the inherited value.
+
 ## 0.1.0 — 2026-08-17
 
 ### RDF conversion is experimental
