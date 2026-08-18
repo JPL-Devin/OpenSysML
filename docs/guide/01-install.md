@@ -96,6 +96,96 @@ Ways to avoid it, best first:
 See [MACOS_DISTRIBUTION.md](../project/macos-distribution.md) for the root-cause analysis and for what
 signing + notarizing the releases would require.
 
+## Installing a solver (optional)
+
+Nothing above needs an SMT solver: the whole guide, and every normative check —
+`%constraint`, `%requirement`, `%satisfy`, `%eval` — runs on the concrete evaluator, which is
+the normative implementation. A solver is needed only by the **experimental** extension
+`%check`/`%explain`, which asks whether a constraint *can* be satisfied rather than whether it
+holds of an object (see [reference/repl-commands.md](../reference/repl-commands.md)).
+
+The solver is a separate program, run as a process and spoken to in SMT-LIB2 — nothing is
+linked in and nothing is bundled in the release archives, which stay single static binaries.
+Either [z3](https://github.com/Z3Prover/z3) (MIT) or [cvc5](https://github.com/cvc5/cvc5)
+works; z3 is the one to install unless you have a reason to prefer cvc5.
+
+**macOS and Linux, Homebrew — automatic:** z3 is a dependency of the formula, so the
+recommended install already brings a working `%check`:
+```bash
+brew install Open-MBEE/tap/opensysml   # installs z3 too
+brew install z3                        # or just the solver, next to a non-brew sysml
+```
+
+**Debian and Ubuntu:**
+```bash
+sudo apt install z3          # provides /usr/bin/z3
+```
+
+**Other Linux distributions** — each of these packages provides a `z3` executable:
+```bash
+sudo dnf install z3          # Fedora
+sudo pacman -S z3            # Arch (extra/z3)
+sudo apk add z3              # Alpine (community repository)
+nix-shell -p z3              # nixpkgs, for one shell; or: nix profile install nixpkgs#z3
+```
+Of these, apt is the one run while writing this; the rest were read off their package indexes
+(Fedora's `z3`, `extra/z3`, Alpine `community/z3`, and nixpkgs' `z3`, all shipping a `z3`
+program), so a distribution that has renamed or dropped the package is the case to expect
+trouble from.
+
+**Windows:** take the official prebuilt archive from
+[z3's releases](https://github.com/Z3Prover/z3/releases) — `z3-<version>-x64-win.zip` (for
+example `z3-5.1.0-x64-win.zip`; `arm64` and `x86` builds are published too). Unzip it and
+either add the archive's `bin` directory to `PATH`, or point `OPENSYSML_SMT` at the executable:
+```powershell
+$env:OPENSYSML_SMT = "C:\tools\z3-5.1.0-x64-win\bin\z3.exe"
+```
+[Scoop](https://scoop.sh) packages the same archive, so `scoop install z3` puts `z3.exe` on
+`PATH` for you.
+
+**Any platform with Python — the `pip` fallback:** the `z3-solver` wheels (MIT) are published
+for Linux, macOS and Windows and carry the executable, not just the Python module:
+```bash
+python3 -m venv .venv
+.venv/bin/pip install z3-solver     # z3 lands in .venv/bin/z3
+```
+An activated virtual environment therefore puts `z3` on `PATH` and needs nothing else. Without
+activating it, name the executable instead:
+```bash
+OPENSYSML_SMT=$PWD/.venv/bin/z3 sysml model.sysml
+```
+
+**cvc5, the alternative backend:** there is no Homebrew formula and no Debian/Ubuntu package;
+take a prebuilt archive from [cvc5's releases](https://github.com/cvc5/cvc5/releases)
+(`cvc5-Linux-x86_64-static.zip`, `cvc5-macOS-arm64-static.zip`, `cvc5-Win64-x86_64-static.zip`
+and so on), whose `bin/cvc5` is what goes on `PATH`. cvc5 is under a modified BSD licence, but
+its default build links GMP under LGPL-3, and it can be configured against GPL libraries (the
+`*-gpl` archives are those builds). That matters if you **redistribute** cvc5; it does not
+change how you may use OpenSysML, which links neither solver.
+
+### Verifying the solver is found
+
+`%check` names the solver it used, so the verdict line is the verification:
+
+```
+sysml> %check P::C
+✗ Constraint C is unsatisfiable (z3, 8ms)
+```
+
+Discovery order: `OPENSYSML_SMT` first — an executable name or a path, and a value naming no
+executable is an error rather than a silent fallback — then `z3` on `PATH`, then `cvc5`. z3 wins
+when both are installed, wherever they sit in `PATH`. `OPENSYSML_SMT_TIMEOUT` (default `10s`)
+bounds one query, after which the verdict is `unknown` rather than an error; see
+[reference/environment.md](../reference/environment.md).
+
+With no solver anywhere, `%check` and `%explain` report that instead of a verdict, and every
+other command is unaffected:
+
+```
+sysml> %check P::C
+error: no SMT solver found: install z3 (`apt install z3`, `brew install z3`) or cvc5, or set OPENSYSML_SMT to a solver executable; looked for [z3 cvc5] on PATH
+```
+
 ## From source
 
 **Prerequisites:**

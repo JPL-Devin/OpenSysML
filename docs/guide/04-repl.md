@@ -195,8 +195,8 @@ separator.
 | what an expression is worth | `%eval`, `%eval in … : …` | [5](05-checking.md) |
 | what an object holds for each feature | `%instantiate`, `%features`, `%instances` | [5](05-checking.md) |
 | whether a check holds | `%constraint`, `%requirement`, `%satisfy`, `%calc` | [5](05-checking.md) |
-| whether a check *can* hold at all (experimental, needs z3 or cvc5) | `%check` | [reference](../reference/repl-commands.md) |
-| which conditions conflict when it cannot (experimental, needs z3 or cvc5) | `%explain` | [reference](../reference/repl-commands.md) |
+| whether a check *can* hold at all (experimental, needs [z3 or cvc5](01-install.md#installing-a-solver-optional)) | `%check` | [reference](../reference/repl-commands.md) |
+| which conditions conflict when it cannot (experimental, needs [z3 or cvc5](01-install.md#installing-a-solver-optional)) | `%explain` | [reference](../reference/repl-commands.md) |
 | what a behavior does, step by step | `%action`, `%state`, `%step`, `%tokens`, `%advance` | [6](06-behavior.md) |
 | where a run stopped and why | `%trace`, `%budget`, `%verbosity` | [10](10-troubleshooting.md) |
 
