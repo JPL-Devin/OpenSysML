@@ -220,13 +220,14 @@ func (ctx *Context) nextRunnableBehavior() (*ObjectBehavior, bool) {
 // hasPendingWork reports whether running the behavior again would advance it: a
 // machine woken by an event due now or a signal in flight, or an action whose
 // awaited message a sibling has since sent. An event scheduled for a later time
-// is not work materialization waits for.
+// is not work materialization waits for, and an execution that reached its end
+// takes no step whatever is left addressed to it.
 func (b *ObjectBehavior) hasPendingWork() bool {
 	switch {
 	case b.State != nil:
-		return b.State.HasDueEvent() || b.State.HasPendingSignal()
+		return b.State.State() != StateCompleted && (b.State.HasDueEvent() || b.State.HasPendingSignal())
 	case b.Action != nil:
-		return b.Action.HasPendingSignal()
+		return b.Action.State() != StateCompleted && b.Action.HasPendingSignal()
 	default:
 		return false
 	}

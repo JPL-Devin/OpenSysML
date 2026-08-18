@@ -427,3 +427,49 @@ func TestFailedMaterializationLeavesNoBehaviorBehind(t *testing.T) {
 		t.Error("the new object exhibits no machine")
 	}
 }
+
+// A machine that reached its final state takes no step, so a message still
+// addressed to it does not make a later materialization spin to its budget.
+func TestMessageLeftForACompletedMachineDoesNotBlockANewObject(t *testing.T) {
+	src := `
+		part def Chirp {
+			exhibit state modes {
+				entry; then working;
+				state working {
+					entry; then inner;
+					state inner;
+					final wrapped;
+					accept Ping then working;
+					inner then wrapped;
+				}
+			}
+		}
+		attribute def Ping;
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	ctx := NewContext(model, resolver, 10000)
+	sym := resolveSymbol(t, root, "Chirp")
+
+	first, err := ctx.Instantiate(sym)
+	if err != nil {
+		t.Fatalf("Instantiate first: %v", err)
+	}
+	behavior, ok := first.ExhibitedState()
+	if !ok {
+		t.Fatal("the object exhibits no machine")
+	}
+	if got := behavior.State.State(); got != StateCompleted {
+		t.Fatalf("machine state = %v, want it completed at its final state", got)
+	}
+	// The completed machine's enclosing state still accepts Ping, so the message
+	// stays in flight with no consumer able to take it.
+	ctx.PostMessage(Message{SignalType: "Ping", Target: "modes", Object: first.ID})
+
+	second, err := ctx.Instantiate(sym)
+	if err != nil {
+		t.Fatalf("Instantiate second: %v", err)
+	}
+	if second.ID == first.ID {
+		t.Errorf("the second object took identity %d", second.ID)
+	}
+}
