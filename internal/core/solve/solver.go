@@ -327,18 +327,11 @@ func (s *Solver) start(ctx context.Context) (*session, error) {
 	if err := cmd.Start(); err != nil {
 		return nil, s.processError("start", "it could not be run", "", err)
 	}
-	sess := &session{solver: s, cmd: cmd, stdin: stdin, out: bufio.NewReader(stdout), stderr: stderr}
-	// SMT-LIB turns :print-success on by default, so a strictly conforming backend
-	// would acknowledge every command and offset every reply read after it.
-	if err := sess.send(printSuccessOff); err != nil {
-		return nil, err
-	}
-	return sess, nil
+	// SMT-LIB acknowledges every command by default, so every read looks past those
+	// acknowledgements: an option silencing them would itself be answered, and a
+	// backend declining it would have that answer read as its verdict.
+	return &session{solver: s, cmd: cmd, stdin: stdin, out: bufio.NewReader(stdout), stderr: stderr}, nil
 }
-
-// printSuccessOff silences the acknowledgement SMT-LIB has a backend print per
-// command, which this driver reads no replies for.
-const printSuccessOff = "(set-option :print-success false)\n"
 
 // run holds the dialogue: the script, `check-sat`, and then the model or the
 // reason the solver gives for not deciding.

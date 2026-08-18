@@ -117,7 +117,11 @@ func (s *Solver) requireOptimization(ctx context.Context, q *Query) error {
 	if errors.As(err, &unsupported) {
 		// A backend refusing optimization is reported as the extension it lacks,
 		// which says which solver to run instead.
-		return &NoOptimizationError{Solver: unsupported.Solver, Detail: unsupported.Detail, Cause: err}
+		return &NoOptimizationError{
+			Solver: unsupported.Solver,
+			Detail: "lacks " + unsupported.Missing[0].Feature() + ": " + unsupported.Detail,
+			Cause:  err,
+		}
 	}
 	return err
 }

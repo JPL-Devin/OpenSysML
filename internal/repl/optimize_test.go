@@ -250,9 +250,11 @@ func TestOptimizeReportsAnAbsentSolver(t *testing.T) {
 // never degraded to a plain satisfiability check presented as an optimum.
 func TestOptimizeReportsABackendWithoutOptimization(t *testing.T) {
 	script := t.TempDir() + "/cvc5"
-	// Answers `sat` to everything, which is what makes silently degrading a
-	// risk: without the capability check its answer would read as an optimum.
-	fake := "#!/bin/sh\nwhile read -r line; do case \"$line\" in *check-sat*) echo sat;; esac; done\n"
+	// Answers `sat` but rejects the optimization commands, as cvc5 does: without
+	// the capability check its `sat` would read as an optimum.
+	fake := "#!/bin/sh\nwhile read -r line; do case \"$line\" in " +
+		"*maximize*|*minimize*|*get-objectives*|*opt.priority*) echo unsupported;; " +
+		"*check-sat*) echo sat;; esac; done\n"
 	if err := os.WriteFile(script, []byte(fake), 0o700); err != nil { // #nosec G306 -- a test's own executable
 		t.Fatalf("write fake solver: %v", err)
 	}

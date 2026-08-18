@@ -171,6 +171,9 @@ func TestOptimumIsVerifiedIndependently(t *testing.T) {
 	q := analysisQuery(t, "CrewSizing")
 	result, err := solver.Optimize(context.Background(), q)
 	if err != nil {
+		if errors.Is(err, ErrNoOptimization) {
+			t.Skipf("%s implements no optimization: %v", solver.Name, err)
+		}
 		t.Fatalf("optimize: %v", err)
 	}
 	got := result.Optima[0]
