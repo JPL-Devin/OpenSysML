@@ -50,12 +50,6 @@ type bindingEndpoint struct {
 	scope    *symbols.Scope
 }
 
-type bindingResult struct {
-	value Value
-	found bool
-	err   error
-}
-
 func (ctx *Context) objectBindings(typeSym *symbols.Symbol) []lower.Binding {
 	if typeSym == nil {
 		return nil
@@ -75,8 +69,30 @@ func (ctx *Context) objectBindings(typeSym *symbols.Symbol) []lower.Binding {
 	return bindings
 }
 
-func (ctx *Context) resolveBindingValue(inst *Instance, name string) (value Value, found bool, err error) {
-	bindings := ctx.objectBindings(inst.Type)
+func (ctx *Context) bindingsForFeature(typeSym *symbols.Symbol, name string) []lower.Binding {
+	if typeSym == nil {
+		return nil
+	}
+	byFeature, ok := ctx.bindingFeatures[typeSym]
+	if !ok {
+		byFeature = make(map[string][]lower.Binding)
+		ctx.bindingFeatures[typeSym] = byFeature
+	}
+	if bindings, ok := byFeature[name]; ok {
+		return bindings
+	}
+	var bindings []lower.Binding
+	for _, binding := range ctx.objectBindings(typeSym) {
+		if bindingInvolvesFeature(binding, name) {
+			bindings = append(bindings, binding)
+		}
+	}
+	byFeature[name] = bindings
+	return bindings
+}
+
+func (ctx *Context) resolveBindingValue(inst *Instance, name string) (Value, bool, error) {
+	bindings := ctx.bindingsForFeature(inst.Type, name)
 	if len(bindings) == 0 {
 		return Value{}, false, nil
 	}
@@ -85,24 +101,15 @@ func (ctx *Context) resolveBindingValue(inst *Instance, name string) (value Valu
 		return Value{}, false, nil
 	}
 	key := featureValueRef{instance: inst.ID, feature: name}
-	if cached, ok := ctx.bindingResults[key]; ok {
-		return cached.value, cached.found, cached.err
-	}
 	if ctx.resolvingBindings[key] {
 		return Value{}, false, &BindingCycleError{Features: []string{bindingLocationText(bindingLocation{instance: inst, name: name})}}
 	}
 	ctx.resolvingBindings[key] = true
-	defer func() {
-		delete(ctx.resolvingBindings, key)
-		ctx.bindingResults[key] = bindingResult{value: value, found: found, err: err}
-	}()
+	defer delete(ctx.resolvingBindings, key)
 
 	cycleSeen := false
 	var cycleFeatures []string
 	for _, binding := range bindings {
-		if !bindingInvolvesFeature(binding, name) {
-			continue
-		}
 		left, err := ctx.resolveBindingEndpoint(inst, binding, 0)
 		if err != nil {
 			return Value{}, false, err
