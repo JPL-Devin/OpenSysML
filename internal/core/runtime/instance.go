@@ -457,7 +457,7 @@ func (ctx *Context) restatedValueInBody(sym, typ *symbols.Symbol) string {
 	}
 	for _, member := range declMembers(sym.Decl) {
 		usage, ok := member.(*ast.Usage)
-		if !ok || (usage.Value == nil && len(declMembers(usage)) == 0) {
+		if !ok || !valuesAFeature(usage) {
 			continue
 		}
 		if name := restatedFeatureName(usage); name != "" {
@@ -468,6 +468,20 @@ func (ctx *Context) restatedValueInBody(sym, typ *symbols.Symbol) string {
 		}
 	}
 	return ""
+}
+
+// valuesAFeature reports whether a usage states a value: its own, or one its
+// body states at any depth. A body that only re-declares features states none.
+func valuesAFeature(usage *ast.Usage) bool {
+	if usage.Value != nil {
+		return true
+	}
+	for _, member := range declMembers(usage) {
+		if nested, ok := member.(*ast.Usage); ok && valuesAFeature(nested) {
+			return true
+		}
+	}
+	return false
 }
 
 // restatedFeatureName returns the name a usage restates with `:>>` or `:>`, or

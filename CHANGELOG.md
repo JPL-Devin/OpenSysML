@@ -126,7 +126,8 @@ artifacts they describe really were called that.
   than merging with it, since a `FeatureValue` binds a feature as a whole.
 - Unchanged: a body on the *same* declaration that writes the value still reports
   `ErrValuedFeatureRestated` (two values, neither more specific), and a body that only re-declares
-  features (`attribute :>> kept { attribute :>> v; }`) still reads the inherited value.
+  features (`attribute :>> kept { attribute :>> v; }`) still reads the inherited value — at any
+  depth of nesting, a value stated anywhere in the body being what makes it govern.
 - **A check made without an object agrees with materializing one.** A condition naming a feature a
   body governs over reads it as uninitialized rather than against the superseded value, so the same
   model no longer passes or fails a check depending on whether an object was built for it, and an
