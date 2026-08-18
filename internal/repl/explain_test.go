@@ -70,7 +70,9 @@ func TestExplainNamesTheDeclaringSupertype(t *testing.T) {
 func TestExplainReportsADeniedElement(t *testing.T) {
 	requireSolver(t)
 	got := run(t, conflictFixture(t), "%explain Conflicts::rig::always")
-	wants(t, got, "unsatisfiable", "denied conditions: `not (i == i)`")
+	wants(t, got, "1 condition conflicts with itself",
+		"The condition below is the whole conflict: nothing else is needed for it.",
+		"denied conditions: `not (i == i)`")
 }
 
 // There is nothing to explain about a satisfiable element, so no core is printed

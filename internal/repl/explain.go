@@ -66,7 +66,7 @@ func conflictLines(subject string, result *solve.Result) []string {
 	lines := []string{
 		fmt.Sprintf("✗ %s is unsatisfiable: %s (%s)",
 			subject, conflicting(len(core.Members)), solveDetail(result)),
-		"  " + minimality(core),
+		"  " + minimality(core, len(core.Members)),
 	}
 	for i, member := range core.Members {
 		lines = append(lines, fmt.Sprintf("  %d. %s", i+1, conflictRow(member.From)))
@@ -76,8 +76,11 @@ func conflictLines(subject string, result *solve.Result) []string {
 
 // minimality says what the reported core is: one every member of was shown to be
 // needed, or the solver's own, which need not be.
-func minimality(core *solve.Core) string {
+func minimality(core *solve.Core, members int) string {
 	if core.Minimal {
+		if members == 1 {
+			return "The condition below is the whole conflict: nothing else is needed for it."
+		}
 		return "Every condition below is needed: dropping any one leaves the rest satisfiable."
 	}
 	msg := "These conditions conflict, but are not necessarily the smallest such set"
