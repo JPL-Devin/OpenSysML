@@ -925,16 +925,21 @@ func (r *Resolver) resolveExpr(scope *symbols.Scope, e ast.Node) {
 	// Literals (LiteralBool/String/Integer/Real/Infinity, NullExpr) have no refs.
 }
 
-// resolveFeatureChain resolves a FeatureChainExpr by resolving the operand
-// then walking each member part explicitly, assigning symbols to each part.
-func (r *Resolver) resolveFeatureChain(scope *symbols.Scope, fc *ast.FeatureChainExpr) {
-	// Resolve operand first
-	r.resolveExpr(scope, fc.Operand)
+// resolveFeatureChain resolves a FeatureChainExpr and returns its final symbol.
+func (r *Resolver) resolveFeatureChain(scope *symbols.Scope, fc *ast.FeatureChainExpr) *symbols.Symbol {
+	if fc == nil {
+		return nil
+	}
+	key := featureChainKey{scope: scope, node: fc}
+	if res, done := r.featureChains[key]; done {
+		return res.sym
+	}
 
-	// Get operand symbol WITHOUT following type (we need usage scope for inline members)
+	// Get the operand symbol without following its type for inline members.
 	operandSym := r.getOperandSymbol(scope, fc.Operand)
 	if operandSym == nil || fc.Member == nil {
-		return
+		r.memoizeFeatureChain(scope, fc, resolution{})
+		return nil
 	}
 	if featuring := r.featuringOf(scope, operandSym); featuring != nil {
 		operandSym = featuring
@@ -947,18 +952,24 @@ func (r *Resolver) resolveFeatureChain(scope *symbols.Scope, fc *ast.FeatureChai
 	// keeps its own diagnostics and per-segment symbols (see probe).
 	if len(fc.Member.Parts) > 1 {
 		if _, ok := r.chainMember(operandSym, fc.Member.Parts[0].Text); !ok {
+			var outwardSym *symbols.Symbol
 			outward := r.probe(fc.Member, func() bool {
-				_, ok := r.ResolveQualified(scope, fc.Member)
+				var ok bool
+				outwardSym, ok = r.ResolveQualified(scope, fc.Member)
 				return ok
 			})
 			if outward {
-				return
+				outwardSym = r.followChainMemberType(outwardSym)
+				r.memoizeFeatureChain(scope, fc, resolution{sym: outwardSym, ok: outwardSym != nil})
+				return outwardSym
 			}
 		}
 	}
 
-	// Walk member parts explicitly, assigning symbols to each part
-	r.resolveMemberChain(operandSym, fc.Member)
+	memberSym := r.resolveMemberChain(operandSym, fc.Member)
+	memberSym = r.followChainMemberType(memberSym)
+	r.memoizeFeatureChain(scope, fc, resolution{sym: memberSym, ok: memberSym != nil})
+	return memberSym
 }
 
 // chainMember looks a chain segment up as the member walk does: as a member of
@@ -975,9 +986,9 @@ func (r *Resolver) chainMember(sym *symbols.Symbol, name string) (*symbols.Symbo
 
 // resolveMemberChain walks a qualified name member-by-member in the given scope,
 // assigning each part's symbol explicitly (for feature chain member access).
-func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.QualifiedName) {
+func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.QualifiedName) *symbols.Symbol {
 	if qn == nil || len(qn.Parts) == 0 {
-		return
+		return nil
 	}
 
 	// Resolve first part using model.LookupMember if available, else scope.LookupLocal
@@ -990,7 +1001,7 @@ func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.Qualifi
 				Span:    qn.Parts[0].Span,
 				Message: "no scope for member lookup in " + parentSym.Name,
 			})
-			return
+			return nil
 		}
 		cur, ok = parentSym.Scope.LookupLocal(qn.Parts[0].Text)
 	}
@@ -1000,7 +1011,7 @@ func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.Qualifi
 			Span:    qn.Parts[0].Span,
 			Message: "unresolved member: " + qn.Parts[0].Text,
 		})
-		return
+		return nil
 	}
 	r.recordPart(qn, 0, cur)
 
@@ -1015,7 +1026,7 @@ func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.Qualifi
 					Span:    qn.Parts[i].Span,
 					Message: "no members in " + cur.Name,
 				})
-				return
+				return nil
 			}
 			next, found = cur.Scope.LookupLocal(qn.Parts[i].Text)
 		}
@@ -1025,7 +1036,7 @@ func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.Qualifi
 				Span:    qn.Parts[i].Span,
 				Message: "unresolved member: " + qn.Parts[i].Text + " in " + cur.Name,
 			})
-			return
+			return nil
 		}
 
 		r.recordPart(qn, i, next)
@@ -1034,6 +1045,7 @@ func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.Qualifi
 
 	// Store final resolution in memo
 	r.memoize(qn, resolution{cur, true})
+	return cur
 }
 
 // getOperandSymbol returns the symbol of an expression operand WITHOUT following
@@ -1063,38 +1075,29 @@ func (r *Resolver) getOperandSymbol(scope *symbols.Scope, e ast.Node) *symbols.S
 		}
 		return sym
 	case *ast.FeatureChainExpr:
-		// For chained access, get the final member's symbol
-		if v.Member == nil {
-			return nil
-		}
-		// First resolve the chain
-		r.resolveFeatureChain(scope, v)
-		// Get the operand's symbol, then lookup member
-		operandSym := r.getOperandSymbol(scope, v.Operand)
-		if featuring := r.featuringOf(scope, operandSym); featuring != nil {
-			operandSym = featuring
-		}
-		if operandSym == nil || operandSym.Scope == nil {
-			return nil
-		}
-		memberSym, ok := r.ResolveQualified(operandSym.Scope, v.Member)
-		if !ok {
-			return nil
-		}
-		// Same logic: check if member has inline content
-		if usage, isUsage := memberSym.Decl.(*ast.Usage); isUsage {
-			if memberSym.Scope != nil && len(memberSym.Scope.Members()) > 0 {
-				return memberSym
-			}
-			typeSym := r.getUsageType(memberSym.OwnerScope, usage)
-			if typeSym != nil {
-				return typeSym
-			}
-		}
-		return memberSym
+		return r.resolveFeatureChain(scope, v)
 	default:
+		r.resolveExpr(scope, e)
 		return nil
 	}
+}
+
+// followChainMemberType follows a usage's type when it has no inline members.
+func (r *Resolver) followChainMemberType(sym *symbols.Symbol) *symbols.Symbol {
+	if sym == nil {
+		return nil
+	}
+	usage, isUsage := sym.Decl.(*ast.Usage)
+	if !isUsage {
+		return sym
+	}
+	if sym.Scope != nil && len(sym.Scope.Members()) > 0 {
+		return sym
+	}
+	if typeSym := r.getUsageType(sym.OwnerScope, usage); typeSym != nil {
+		return typeSym
+	}
+	return sym
 }
 
 // baseThatFQN is the implicit `that` feature every usage takes from the base

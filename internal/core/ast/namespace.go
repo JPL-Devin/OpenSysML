@@ -85,6 +85,11 @@ func NamingFeature(u *Usage) *Relationship {
 		}
 		switch rel.Kind {
 		case RelReferences:
+			// A binding's reference subsetting is the end it binds, not a name
+			// it answers to: `bind a.b.c = d` declares no member `c`.
+			if u.Kind == UsageBinding {
+				continue
+			}
 			if name, _ := TargetName(rel.Target); name != "" {
 				return rel
 			}

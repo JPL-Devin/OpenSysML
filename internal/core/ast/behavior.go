@@ -1,5 +1,7 @@
 package ast
 
+import "github.com/Open-MBEE/OpenSysML/internal/core/source"
+
 // Behavioral AST nodes for SysML v2 actions and state machines.
 // These nodes implement the Node interface and populate Usage.Members
 // for action and state usages (UsageAction, UsageState).
@@ -21,25 +23,29 @@ type FinalNode struct {
 // ForkNode splits execution into concurrent flows (1 incoming → N outgoing).
 type ForkNode struct {
 	NodeBase
-	Name string
+	Name     string
+	NameSpan source.Span // span of Name, empty for an unnamed node
 }
 
 // JoinNode synchronizes concurrent flows (N incoming → 1 outgoing).
 type JoinNode struct {
 	NodeBase
-	Name string
+	Name     string
+	NameSpan source.Span // span of Name, empty for an unnamed node
 }
 
 // MergeNode merges alternative flows (N incoming → 1 outgoing, first-wins).
 type MergeNode struct {
 	NodeBase
-	Name string
+	Name     string
+	NameSpan source.Span // span of Name, empty for an unnamed node
 }
 
 // DecisionNode is a conditional branch point (1 incoming → N guarded outgoing).
 type DecisionNode struct {
 	NodeBase
-	Name string
+	Name     string
+	NameSpan source.Span // span of Name, empty for an unnamed node
 }
 
 // ActionExecutionNode performs action work: invokes nested action or evaluates inline expression.
