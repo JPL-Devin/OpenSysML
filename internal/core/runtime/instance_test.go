@@ -358,6 +358,33 @@ func TestBodyGovernsAnInheritedValue(t *testing.T) {
 	}
 }
 
+// A condition read without an object agrees with materializing: a value a body
+// governs over is not the value the condition sees, so the feature is reported
+// uninitialized rather than judged against the superseded value.
+func TestConditionsDoNotReadAGovernedOverValue(t *testing.T) {
+	src := `
+		attribute def Cost { attribute v = 1.0; }
+		part def Ring {
+			attribute template : Cost { attribute :>> v = 9.0; }
+			attribute cost : Cost = template;
+			attribute plain : Cost = template;
+		}
+		part def Band :> Ring {
+			attribute :>> cost { attribute :>> v = 11.0; }
+		}
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	ctx := NewContext(model, resolver, 1000)
+
+	features := ctx.conditionFeatures(resolveSymbol(t, root, "Band"))
+	if got, ok := features["cost"]; !ok || got.expr != nil {
+		t.Errorf("cost reads %v, want no expression: its body governs over the inherited value", got.expr)
+	}
+	if got, ok := features["plain"]; !ok || got.expr == nil {
+		t.Error("plain reads no expression, want the inherited value it is still bound to")
+	}
+}
+
 // nestedReal reads a Real out of the instance held by one of inst's feature values.
 func nestedReal(t *testing.T, ctx *Context, inst *Instance, featureName, nestedName string) float64 {
 	t.Helper()

@@ -268,6 +268,11 @@ func (ctx *Context) writeShape(b *strings.Builder, sym *symbols.Symbol, open map
 			}
 			fmt.Fprintf(b, "=%s", ctx.declText(owner, feat.DefaultValue.Span()))
 		}
+		// A body governing over an inherited value is what materializing reads,
+		// so the shape follows edits confined to that body.
+		if feat.DefaultValue != nil && ctx.bodyGovernsInheritedValue(feat) && feat.Symbol.Decl != nil {
+			fmt.Fprintf(b, "|body:%s", ctx.declText(feat.Symbol, feat.Symbol.Decl.Span()))
+		}
 		b.WriteString("@")
 		ctx.writeShape(b, feat.Type, open)
 		b.WriteString(";")

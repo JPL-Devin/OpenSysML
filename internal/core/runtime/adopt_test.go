@@ -250,6 +250,25 @@ func TestChangedNamesTheDeclarationThatMoved(t *testing.T) {
 	}
 }
 
+// An edit confined to a body governing over an inherited value changes what
+// instantiating produces, so the shape follows it and the object is not carried
+// with the value that body replaced.
+func TestShapeFollowsAGoverningValueBody(t *testing.T) {
+	const src = `package Demo {
+	attribute def Cost { attribute v = 1.0; }
+	part def Ring { attribute template : Cost { attribute :>> v = 9.0; } attribute cost : Cost = template; }
+	part def Band :> Ring { attribute :>> cost { attribute :>> v = 11.0; } }
+}`
+	prev := contextOver(t, src)
+	sym := lookupOne(t, prev.resolver.Index(), "Demo::Band")
+	before := prev.ShapeDigest(sym)
+
+	ctx := contextOver(t, strings.Replace(src, "v = 11.0", "v = 12.0", 1))
+	if after := ctx.ShapeDigest(lookupOne(t, ctx.resolver.Index(), "Demo::Band")); after == before {
+		t.Errorf("shape unchanged by an edit to the governing body: %s", after)
+	}
+}
+
 // indexOfFeature is the position of the named effective feature.
 func indexOfFeature(t *testing.T, features []EffectiveFeature, name string) int {
 	t.Helper()

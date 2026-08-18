@@ -99,6 +99,11 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 - Unchanged: a body on the *same* declaration that writes the value still reports
   `ErrValuedFeatureRestated` (two values, neither more specific), and a body that only re-declares
   features (`attribute :>> kept { attribute :>> v; }`) still reads the inherited value.
+- **A check made without an object agrees with materializing one.** A condition naming a feature a
+  body governs over reads it as uninitialized rather than against the superseded value, so the same
+  model no longer passes or fails a check depending on whether an object was built for it, and an
+  edit confined to a governing body changes the type's shape, so a carried-over object is
+  re-materialized instead of keeping the value the body replaced.
 
 ### Names nested inside a `require`/`assume` body are resolved
 
@@ -122,6 +127,10 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 - **A model that imports the package, or writes the call qualified, is unaffected**, as is a bare
   call to an OMG function library (`sqrt`, `sin`, …), which every model may write whatever it
   imports.
+- **A root-level import in a document that declares nothing else now surfaces its names**, which is
+  what a bare `import SystemicaMathFunctions::*;` at the REPL prompt is: the editor's own scope tree
+  is identified by the document name stamped on it, and a document with no member had no symbol left
+  to carry that name, so its own import was read as another document's private re-export.
 
 ### The corpus notation two verdicts were open on is adjudicated legal
 

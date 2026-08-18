@@ -581,11 +581,19 @@ func (ctx *Context) conditionFeatures(sym *symbols.Symbol) map[string]scopedExpr
 		return nil
 	}
 	out := make(map[string]scopedExpr, len(features))
-	for _, feat := range features {
+	for i := range features {
+		feat := &features[i]
 		if feat.Name == "" {
 			continue
 		}
-		out[feat.Name] = scopedExpr{expr: feat.DefaultValue, scope: feat.DefaultScope()}
+		expr := feat.DefaultValue
+		if !ctx.valueBinds(feat) {
+			// A body governing over the inherited value supersedes it, so a
+			// condition read without an object reports the feature
+			// uninitialized rather than the value materializing replaces.
+			expr = nil
+		}
+		out[feat.Name] = scopedExpr{expr: expr, scope: feat.DefaultScope()}
 	}
 	return out
 }
