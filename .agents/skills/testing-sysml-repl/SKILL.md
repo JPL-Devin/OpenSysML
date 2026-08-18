@@ -3778,6 +3778,56 @@ Fixture shapes that actually discriminate:
   in the *base units* a written unit reduces to, named as such (`1500.0 [kg]` comes back as
   `1500000.0 [gram]`), so don't expect the unit as written.
 
+## `%optimize` and the optimization queries (PR #305)
+
+`%optimize <name>` optimizes an `analysis def`'s (or analysis *usage*'s) `objective`s. Everything
+below was observed at 41dc35cb with `/usr/bin/z3` 4.8.12; `bin/sysml` needs no extra setup beyond
+`make build-sysml` and z3, both already in the blueprint.
+
+- **Model contract for writing fixtures:** direction comes from the type
+  (`TradeStudies::MinimizeObjective` / `MaximizeObjective`), the optimized value from
+  `attribute :>> best = <expr>;` inside the objective body, and feasibility from the case's
+  `require`/`assume` conditions plus the objective's own. `private import TradeStudies::*;` is
+  needed. A ready fixture with a dozen discriminating cases is
+  `internal/core/solve/testdata/objectives.sysml` — start there rather than hand-writing one.
+- **The three headers are the fastest read:** `✓ … is optimized`, `! … has no optimum: an objective
+  improves without limit`, `! … is satisfiable, but its optimum was not established`, and
+  `✗ … has no values satisfying its conditions` for unsat. A number must never appear on the
+  objective line for the two `!` cases; a feasible witness is labelled
+  `the assignment below attains <v>` instead, which is the tell that no optimum was fabricated.
+- **z3 4.8.12 is wrong on strict inequalities** — for `margin < 10.5` maximized it answers `9.5`.
+  The verification step catches this and reports `no optimum reported — the solver reported 9.5,
+  but a strictly greater value is feasible, so it is no optimum`. This is the single most valuable
+  assertion in the area: a build that skipped verification would print `9.5` as the optimum.
+- **Lexicographic order needs a coupled pair to be visible.** Two independent objectives look the
+  same either way. Use `cost` in `[3,9]` and `margin` in `[0, cost*2]` with `minimize cost` declared
+  first: lex gives `cost 3` then `margin 6`, while any other priority gives `cost 9`/`margin 18` or
+  `margin 0`. (`CostThenMargin` in the fixture is exactly this shape.)
+- **Refusals are per-reason and carry a `<repl>:line:col` location.** Worth covering each, since they
+  are distinct code paths: a nonlinear value (`a * b`) → `it states a nonlinear value`; an objective
+  typed by something that is not a Minimize/Maximize objective → `it states no direction to improve
+  its value in`; `objective goal : MinimizeObjective;` with no body → `it states no value to
+  improve`; a case with conditions but no `objective` → `error: analysis X: states no objective`.
+- **Quantities come back in base units**, as with `%check`: `10 [kg] .. 90 [kg]` minimized reads
+  `10000.0 [gram]`. Mixed units in one case (`>= 500 [g]`, `<= 2 [kg]`) are reconciled correctly
+  (`2000.0 [gram]`) — a good adversarial case that a naive translation would get wrong.
+- **Bad input:** `%optimize` alone → `usage: %optimize <name>`; an unknown name →
+  `error: unresolved reference: X`; a package/part def/constraint def →
+  `error: not an analysis case: X is a <kind>, not an analysis case definition or usage`
+  (the article follows the kind's first letter, `articleFor` in `internal/core/runtime/describe.go`).
+- **Read-only check that actually discriminates:** `%action <A>`, `%instances`
+  (`(no instances created)`), `%optimize <case>`, then `%step` twice to `State: Completed` with the
+  right `Results:` — and `%instances` still `(no instances created)`. Run `%optimize` twice in a row
+  too; answers must be byte-identical.
+- **Absent solver** is one env var: `OPENSYSML_SMT=/nonexistent/x ./bin/sysml <f>` then `%optimize` →
+  `error: no SMT solver found: OPENSYSML_SMT names "/nonexistent/x", which is not an executable
+  file`. cvc5 (in `$HOME/.local/cvc5/bin`) is the other interesting backend: optimization is a z3
+  extension, so it must be a typed error rather than a plain check-sat presented as an optimum.
+- Writing an `action` fixture to host the read-only test: successions are
+  `first s1 then s2;` (see `internal/core/runtime/testdata/conformance/action_succession_guard_holds.sysml`).
+  `then first second;` / `first then second;` do **not** parse or lower — budget a minute for this
+  rather than inventing syntax.
+
 ## Value bodies over inherited values, require bodies, and the extension math functions (PR #296)
 
 - **A nested value body over an inherited value** (`part def Ring { attribute cost : Cost = template; }`
