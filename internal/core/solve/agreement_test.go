@@ -235,19 +235,20 @@ func evaluatedDivision(t *testing.T, a, b int) (quotient, remainder string) {
 	if err != nil {
 		t.Fatalf("instantiate eval::P: %v", err)
 	}
-	return slotInteger(t, ctx, inst, "q"), slotInteger(t, ctx, inst, "r")
+	return featureInteger(t, ctx, inst, "q"), featureInteger(t, ctx, inst, "r")
 }
 
-// slotInteger is the integer a slot holds, materializing it as any reader does.
-func slotInteger(t *testing.T, ctx *runtime.Context, inst *runtime.Instance, name string) string {
+// featureInteger is the integer a feature value holds, materialized as any reader
+// materializes it.
+func featureInteger(t *testing.T, ctx *runtime.Context, inst *runtime.Instance, name string) string {
 	t.Helper()
-	slot, err := inst.GetSlot(ctx, name)
+	fv, err := inst.GetFeatureValue(ctx, name)
 	if err != nil {
-		t.Fatalf("read slot %s: %v", name, err)
+		t.Fatalf("read feature value %s: %v", name, err)
 	}
-	val := slot.HeldValue()
+	val := fv.HeldValue()
 	if val.Kind != runtime.ValConst || val.Const.Kind != semantics.ValInt {
-		t.Fatalf("slot %s holds %v, want an integer", name, val)
+		t.Fatalf("feature value %s holds %v, want an integer", name, val)
 	}
 	return fmt.Sprintf("%d", val.Const.Int)
 }
