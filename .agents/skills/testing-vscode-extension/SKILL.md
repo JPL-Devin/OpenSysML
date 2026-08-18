@@ -183,8 +183,9 @@ main.sysml  package Main { import Lib::*; part w : Widget; }
 - The **Problems panel (`ctrl+shift+m`) plus the status-bar error count** is the high-signal oracle
   for indexing tests: "unresolved reference: Lib/Widget" appearing/disappearing is the whole test.
 - A convincing negative control is a one-line switch of `systemica.server.path` to a binary built
-  from `origin/main` (`git worktree add /tmp/wt-main main && go build -o /tmp/sysml-lsp-main
-  ./cmd/sysml-lsp`); the pre-indexing server shows the unresolved references on the same file.
+  from `origin/main` (`git worktree add /tmp/wt-main origin/main && go build -C /tmp/wt-main -o
+  /tmp/sysml-lsp-main ./cmd/sysml-lsp` — build *in the worktree*, or you rebuild the branch);
+  the pre-indexing server shows the unresolved references on the same file.
   Switching the setting back auto-restarts — no window reload needed. Remember `git worktree remove`.
 - Watcher tests (create/change/delete a `.sysml` outside the editor) are driven from the shell with
   `printf > file` / `rm`; VS Code's `**/*.{sysml,kerml}` watcher forwards them and the Problems panel
