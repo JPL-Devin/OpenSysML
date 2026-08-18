@@ -47,6 +47,21 @@ func TestSecondInstantiateIsAnotherObject(t *testing.T) {
 	}
 }
 
+// A machine parked on a change condition is stepped again once something else
+// makes the condition true: %step polls the watched conditions rather than
+// reporting the machine as suspended forever.
+func TestStepDispatchesAConditionMadeTrueElsewhere(t *testing.T) {
+	s := loadFixture(t, "testdata/change_condition_object.sysml")
+	run(t, s, "%instantiate Watch::Sensor")
+	run(t, s, "%state Watch::Sensor")
+
+	wants(t, run(t, s, "%current"), "idle")
+	wants(t, run(t, s, "%step"), "waiting on change condition")
+
+	run(t, s, "%invoke Watch::Sensor trip")
+	wants(t, run(t, s, "%step"), "Change event dispatched", "Current state: alerted")
+}
+
 // An operation of the object's type runs with the object as its performer, so
 // what it writes is that object's feature value.
 func TestInvokeRunsAnOperationOnTheObject(t *testing.T) {

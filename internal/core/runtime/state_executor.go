@@ -2173,6 +2173,16 @@ func (e *StateExecutor) Resume() bool {
 	return true
 }
 
+// Suspend parks a running machine back at quiescence, for a driver that resumed
+// it, found nothing to do and must not report it as running.
+func (e *StateExecutor) Suspend() bool {
+	if e.state != StateRunning {
+		return false
+	}
+	e.state = StateSuspended
+	return true
+}
+
 // State returns current execution state.
 func (e *StateExecutor) State() ExecutionState {
 	return e.state

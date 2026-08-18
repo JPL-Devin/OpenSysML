@@ -2143,7 +2143,9 @@ func (s *Session) debugExhibitedMachine(
 // true, the event due next, or one round of the do behaviors active now.
 func (s *Session) stepState() ([]string, bool, error) {
 	exec := s.stateExec.executor
-	if exec.HasPendingWork() {
+	// A machine parked on a change condition becomes runnable when data written
+	// outside it makes the condition true, so resume it and let the poll decide.
+	if exec.HasPendingWork() || exec.WatchesChangeCondition() {
 		exec.Resume()
 	}
 	if exec.State() != runtime.StateRunning {
@@ -2185,6 +2187,8 @@ func (s *Session) stateStep(exec *runtime.StateExecutor) (string, error) {
 		}
 		return fmt.Sprintf("Ran %d do action(s)", ran), nil
 	}
+	// Nothing progressed, so a machine resumed for this step parks again.
+	exec.Suspend()
 	if reason := exec.SuspendReason(); reason != "" {
 		return "Nothing to do: " + reason, nil
 	}

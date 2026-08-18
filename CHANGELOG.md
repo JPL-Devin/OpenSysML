@@ -110,6 +110,9 @@ artifacts they describe really were called that.
   with them.
 - **A `%state` session over a machine an object merely performs stays on that machine** across an
   unrelated declaration; only a session over the object's own exhibited machine follows a restart.
+- **`%step` wakes a machine parked on a change condition**, so a condition made true from outside it
+  — by `%invoke`, by another object, or by a later declaration — is dispatched instead of the machine
+  reporting itself suspended forever.
 
 ### `%slots` is now `%features`, the name SysML v2 uses
 
