@@ -3646,3 +3646,43 @@ part def Machine {
 with the typed `initialize state machine: schedule events: time duration must be constant, got
 quantity`, while the unitless `accept after 5` fires at t=5 — that pair is the cheapest way to show
 the feature is absent-but-typed rather than half-present.
+
+## `%check` and the SMT solver driver (PR #285)
+
+`%check <name>` asks an external solver about a constraint def, requirement def or satisfaction
+assertion. z3 may already be installed (`/usr/bin/z3`, 4.8.12 seen); discovery is `SYSTEMICA_SMT`
+(path to an executable) → `z3` → `cvc5` on PATH, and `SYSTEMICA_SMT_TIMEOUT` (default `10s`) bounds
+one query. Every solver-availability path is reachable from the shell without touching code, so
+drive each in its own REPL and show the env on camera:
+
+```bash
+SYSTEMICA_SMT_TIMEOUT=1ms ./bin/sysml            # "? … is undecided (z3, 1ms)" + "Reason: the solver ran out of time after 1ms"
+SYSTEMICA_SMT=/tmp/fake_unknown.sh ./bin/sysml   # sh script: printf 'unknown\n(:reason-unknown "incomplete")\n'; then `while read -r line; do :; done`
+SYSTEMICA_SMT=/tmp/fake_fail.sh ./bin/sysml      # sh script: exit 3 → "error: the SMT solver did not answer: … failed at check-sat"
+env -u SYSTEMICA_SMT PATH=/tmp/emptybin ./bin/sysml   # "error: no SMT solver found: install z3 …"
+```
+
+The fake-unknown script *must* keep draining stdin after printing, or the driver's later writes hit
+a closed pipe and you get a process error instead of `unknown`. Note `env -u … PATH=/tmp/emptybin`
+also removes `timeout` from PATH — call `/usr/bin/timeout` by absolute path in piped dry runs.
+
+Fixture shapes that actually discriminate:
+
+- **Naming a satisfaction:** `%check` on a `requirement usage` reports the *requirement*, not the
+  assertion. To reach a satisfaction, `%check` the element whose body holds `assert satisfy r by o;`
+  (e.g. a `part context { assert satisfy fastEnough by car; }`) → `✓ Satisfaction satisfy fastEnough
+  by car is satisfiable`. Bare `satisfy X by y;` at package level is rejected at parse/semantics
+  ("satisfy target must be a requirement usage") — always go through a named requirement usage.
+- **Truncating `/` and `%`:** use a *symbolic* dividend/divisor (`a == -7 and b == 2 and q == a / b`),
+  because a constant `-7 / 2` is const-folded to the evaluator's real quotient (`%eval -7 / 2` = `-3.50`),
+  so `q : Integer == -7 / 2` is reported **unsatisfiable** by design. The discriminating pair is
+  `q == a / b and q == -3` (sat) vs `q == -4` (unsat, the floor answer); same for `r == a % b` with
+  `-1` vs `1`. A literal zero divisor is refused with "operator `/` by zero not translatable".
+- **Untranslatable:** `i ** 2 == 4` → `error: constraint X: operator `**` not translatable for
+  solving: …` (no verdict). Incommensurable units are refused the same way (`L against M`).
+- **Read-only:** start `%action <A>`, run `%check`, then `%step` — the token must still advance
+  (`Token 1 @ start` → `Token 1 @ step1`).
+- **Assignments use qualified Systemica names** (`Check::Satisfiable::i = 4`,
+  `Check::SpeedReq::'craft.topSpeed' = 100`, enum as `Check::Gear::high`). A quantity is a magnitude
+  in the *base units* a written unit reduces to, named as such (`1500.0 [kg]` comes back as
+  `1500000.0 [gram]`), so don't expect the unit as written.
