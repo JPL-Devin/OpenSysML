@@ -39,6 +39,24 @@
 // `require` versus `assume`, negation, and a body meaning the conjunction of
 // its conditions.
 //
+// # Differential agreement gate
+//
+// The translation is evidence-backed rather than asserted: for an element whose
+// conditions translate, and for a concrete assignment of the features they read,
+// the gate (differential_test.go and the corpus and randomized gates beside it)
+// requires the query conjoined with that assignment to be sat exactly when the
+// evaluator says the conditions hold, and unsat exactly when it says they do
+// not. Every other outcome is classified, never averaged away: unknown is
+// recorded, a typed evaluator error is no verdict, and ErrDivisionByZero is
+// required to correspond to the guarded query being unsat for that assignment.
+//
+// It runs over the runtime conformance corpus, the bundled standard library, the
+// OMG training corpus and deterministic randomized models, and reports how much
+// of each it reached — translated, refused, agreed, disagreed, unknown — so
+// coverage drift is reviewable. What it proves is that the translation is
+// faithful to the evaluator on the cases it covered; it is not a conformance
+// claim, and the evaluator remains normative where the two ever differ.
+//
 // # Translatable subset
 //
 // A condition is translatable when every part of it is:

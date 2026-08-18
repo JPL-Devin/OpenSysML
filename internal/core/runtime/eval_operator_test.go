@@ -149,3 +149,30 @@ func TestStringOperatorErrors(t *testing.T) {
 		}
 	}
 }
+
+// TestRealDivisionByZeroIsReported: a real quotient or remainder by zero has no
+// value and is reported as such, as the integer and quantity ones are, rather
+// than answering an infinity a condition would then read as a number.
+func TestRealDivisionByZeroIsReported(t *testing.T) {
+	const src = `
+package test {
+	calc def quotient { in a : Real; in b : Real; return : Real = a / b; }
+	calc def remainder { in a : Real; in b : Real; return : Real = a % b; }
+}`
+	model, resolver, root := parseAndBuildModel(t, src)
+	ctx := NewContext(model, resolver, 1000)
+	for _, name := range []string{"quotient", "remainder"} {
+		sym := resolveSymbol(t, root, "test")
+		if sym.Scope == nil {
+			t.Fatal("package test has no scope")
+		}
+		calc, ok := sym.Scope.LookupLocal(name)
+		if !ok || calc == nil {
+			t.Fatalf("calc %s not found", name)
+		}
+		got, err := ctx.InvokeCalc(calc, []Value{constReal(2), constReal(0)}, sym.Scope)
+		if !errors.Is(err, ErrDivisionByZero) {
+			t.Errorf("%s(2.0, 0.0) = (%v, %v), want ErrDivisionByZero", name, got, err)
+		}
+	}
+}
