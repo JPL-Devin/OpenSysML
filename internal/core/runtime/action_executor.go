@@ -426,6 +426,12 @@ func (e *ActionExecutor) initializeAttributes() error {
 	return nil
 }
 
+// hasFlow reports whether the action states a flow to start: an action with no
+// initial node has no step to perform.
+func (e *ActionExecutor) hasFlow() bool {
+	return e.graph != nil && e.graph.Initial != nil
+}
+
 // initialize spawns initial token at InitialNode.
 func (e *ActionExecutor) initialize() error {
 	defer e.ctx.beginExecutorRun(&e.runStarted)()

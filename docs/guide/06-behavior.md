@@ -163,7 +163,8 @@ is what moves it on. Objects that signal each other are drained together, bounde
 do-step budgets in [reference/environment.md](../reference/environment.md): an exchange that never
 settles reports a budget error rather than hanging. Materializing the same name twice makes a second
 object with its own identity and its own machines; `%instantiate` reports the new object, and the
-name then denotes it.
+name then denotes it. An exhibited machine with no initial state is reported; a performed action that
+states no flow simply has no step to perform, so the object is still created.
 
 **Invoking an operation.** `%invoke <object> <op> [<p>=<expr>]` runs an action the object's type
 owns, performed by that object:

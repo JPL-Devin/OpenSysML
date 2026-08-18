@@ -317,6 +317,15 @@ func (inst *Instance) SetFeatureValue(ctx *Context, name string, value Value) er
 		fv.Value = value
 		fv.Values = Value{}
 	} else {
+		// A multi-valued feature holds a collection however it was written, so a
+		// single value written to one is that collection's one element.
+		if value.Kind != ValSequence && value.Kind != ValSet {
+			elements := elementsOf(value)
+			if err := ctx.chargeElements(int64(len(elements))); err != nil {
+				return err
+			}
+			value = sequenceOf(elements)
+		}
 		fv.Values = value
 		fv.Value = Value{}
 	}

@@ -25,6 +25,9 @@ type ObjectBehavior struct {
 	Symbol *symbols.Symbol
 	// Object is the object performing the behavior.
 	Object *Instance
+	// member is the declaration binding the behavior to the object's type, which
+	// tells two behaviors apart even when neither is named.
+	member *symbols.Symbol
 	// State is the machine the object exhibits, nil for a performed action.
 	State *StateExecutor
 	// Action is the action the object performs, nil for an exhibited machine.
@@ -33,7 +36,11 @@ type ObjectBehavior struct {
 
 // Describe names the behavior and the object running it, for diagnostics.
 func (b *ObjectBehavior) Describe() string {
-	return fmt.Sprintf("%s %s of object #%d", b.Kind, b.Name, b.Object.ID)
+	name := b.Name
+	if name == "" {
+		name = symbolText(b.Symbol)
+	}
+	return fmt.Sprintf("%s %s of object #%d", b.Kind, name, b.Object.ID)
 }
 
 // Behaviors are the behaviors the object runs, in declaration order.
@@ -41,14 +48,29 @@ func (inst *Instance) Behaviors() []*ObjectBehavior {
 	return inst.behaviors
 }
 
-// Behavior returns the behavior of the given name the object runs.
+// Behavior returns the behavior of the given name the object runs. An unnamed
+// behavior answers to no name and so is never returned.
 func (inst *Instance) Behavior(name string) (*ObjectBehavior, bool) {
+	if name == "" {
+		return nil, false
+	}
 	for _, b := range inst.behaviors {
 		if b.Name == name {
 			return b, true
 		}
 	}
 	return nil, false
+}
+
+// runsBound reports whether the object already runs the behavior a declaration
+// binds, so a start reached twice attaches it once.
+func (inst *Instance) runsBound(member *symbols.Symbol) bool {
+	for _, b := range inst.behaviors {
+		if b.member == member {
+			return true
+		}
+	}
+	return false
 }
 
 // ExhibitedState returns the machine the object exhibits, and false when it
@@ -91,7 +113,7 @@ func (ctx *Context) classifierBehaviorsOf(typeSym *symbols.Symbol) []classifierB
 // start, so materializing objects that exhibit each other terminates.
 func (ctx *Context) startClassifierBehaviors(inst *Instance) error {
 	for _, decl := range ctx.classifierBehaviorsOf(inst.Type) {
-		if _, ok := inst.Behavior(decl.behavior.Name); ok {
+		if inst.runsBound(decl.member) {
 			continue
 		}
 		if ctx.trace != nil {
@@ -182,6 +204,7 @@ func (ctx *Context) attachClassifierBehavior(inst *Instance, decl classifierBeha
 		Kind:   decl.behavior.Kind,
 		Symbol: sym,
 		Object: inst,
+		member: decl.member,
 	}
 
 	switch decl.behavior.Kind {
@@ -205,8 +228,12 @@ func (ctx *Context) attachClassifierBehavior(inst *Instance, decl classifierBeha
 		if len(arguments) > 0 {
 			exec.SetInputs(arguments)
 		}
-		if err := exec.initialize(); err != nil {
-			return nil, fmt.Errorf("performed action %s of %s: %w", decl.behavior.Name, symbolText(inst.Type), err)
+		// An action stating no flow performs no step; the object still performs it,
+		// with nothing to run, rather than failing to be created.
+		if exec.hasFlow() {
+			if err := exec.initialize(); err != nil {
+				return nil, fmt.Errorf("performed action %s of %s: %w", decl.behavior.Name, symbolText(inst.Type), err)
+			}
 		}
 		behavior.Action = exec
 	default:
@@ -222,6 +249,9 @@ func (b *ObjectBehavior) run() error {
 	case b.State != nil:
 		return b.State.RunToQuiescence()
 	case b.Action != nil:
+		if !b.Action.hasFlow() {
+			return nil
+		}
 		return b.Action.RunToCompletion()
 	default:
 		return fmt.Errorf("%w: %s has no execution", ErrUnsupportedClassifierBehavior, b.Name)

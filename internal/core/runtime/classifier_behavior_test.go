@@ -193,6 +193,65 @@ func TestInvokeOperationFailureModes(t *testing.T) {
 	}
 }
 
+// An action stating no flow performs no step, so an object of a type performing
+// one is still created, with that behavior of its own and nothing to run.
+func TestPerformedActionWithoutAFlowStillMaterializes(t *testing.T) {
+	src := `
+		action def Report;
+		part def Camera {
+			perform action report : Report;
+		}
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	ctx := NewContext(model, resolver, 10000)
+
+	inst, err := ctx.Instantiate(resolveSymbol(t, root, "Camera"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	behavior, ok := inst.Behavior("report")
+	if !ok {
+		t.Fatalf("object performs no report action, behaviors: %v", inst.Behaviors())
+	}
+	if behavior.Action == nil {
+		t.Error("performed action has no execution")
+	}
+}
+
+// A single value written to a many-valued feature is that collection's one
+// element, the shape materialization gives such a feature.
+func TestWritingOneValueToAManyValuedFeatureHoldsACollection(t *testing.T) {
+	src := `
+		part def Log {
+			attribute entries: String[*];
+			exhibit state modes {
+				entry; then open;
+				state open {
+					entry action note { assign entries := "first"; }
+				}
+			}
+		}
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	ctx := NewContext(model, resolver, 10000)
+
+	inst, err := ctx.Instantiate(resolveSymbol(t, root, "Log"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	fv, err := inst.GetFeatureValue(ctx, "entries")
+	if err != nil {
+		t.Fatalf("GetFeatureValue: %v", err)
+	}
+	held := fv.HeldValue()
+	if held.Kind != ValSequence && held.Kind != ValSet {
+		t.Fatalf("entries holds %v, want a collection", held.Kind)
+	}
+	if got := elementsOf(held); len(got) != 1 || got[0].Str != "first" {
+		t.Errorf("entries = %v, want one element \"first\"", got)
+	}
+}
+
 // A type that exhibits a machine no element states is reported, not ignored.
 func TestExhibitedMachineNamingNoBodyIsReported(t *testing.T) {
 	src := `
