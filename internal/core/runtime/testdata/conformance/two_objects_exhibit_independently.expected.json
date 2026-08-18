@@ -1,0 +1,20 @@
+{
+  "type": "instance",
+  "trace": true,
+  "instantiate": "test::Counter",
+  "objects": [
+    {
+      "instance": 1,
+      "events": [{"signal": "tick"}],
+      "finalState": "ticked",
+      "stateVisits": ["idle", "ticked"],
+      "slots": {"count": {"type": "Integer", "value": 1}}
+    },
+    {
+      "instance": 2,
+      "finalState": "idle",
+      "stateVisits": ["idle"],
+      "slots": {"count": {"type": "Integer", "value": 0}}
+    }
+  ]
+}

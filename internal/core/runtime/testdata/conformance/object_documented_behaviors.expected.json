@@ -1,0 +1,14 @@
+{
+  "type": "instance",
+  "instantiate": "test::Counter",
+  "objects": [
+    {
+      "finalState": "idle",
+      "stateVisits": ["idle"],
+      "slots": {
+        "count": {"type": "Integer", "value": 1},
+        "reported": {"type": "Boolean", "value": true}
+      }
+    }
+  ]
+}

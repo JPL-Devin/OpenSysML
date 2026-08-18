@@ -324,6 +324,15 @@ func (s *Session) InstantiateNamed(name string) ([]string, error) {
 	return append(s.drainTrace(), lines...), nil
 }
 
+// behaviorsDropped names what the object being unnamed was running, so a machine
+// left behind by a second instantiation is not lost quietly.
+func behaviorsDropped(inst *runtime.Instance) string {
+	if n := len(inst.Behaviors()); n > 0 {
+		return fmt.Sprintf(", with %s", countOf(n, "behavior of its own", "behaviors of its own"))
+	}
+	return ""
+}
+
 func (s *Session) instantiateNamed(name string) ([]string, error) {
 	// Resolved before the runtime is built, so a misspelling is reported as one
 	// even when the session has nothing to instantiate from.
@@ -344,11 +353,18 @@ func (s *Session) instantiateNamed(name string) ([]string, error) {
 
 	// Keyed by the resolved name, so %features finds the instance whichever
 	// spelling of the name created it.
+	previous, again := s.instances[fqn]
 	s.instances[fqn] = inst
 	s.lost = instanceLoss{}
-	return []string{
+	out := []string{
 		fmt.Sprintf("✓ Created instance of %s", notationName(fqn)),
 		fmt.Sprintf("  ID: %d", inst.ID),
-		fmt.Sprintf("  Use %%features %s to inspect", name),
-	}, nil
+	}
+	// A second instantiation is a second object, so say which one the name now
+	// denotes rather than let the earlier one look like it was reused.
+	if again && previous != nil && previous.ID != inst.ID {
+		out = append(out, fmt.Sprintf("  note: %s now denotes this object; object #%d is no longer named%s",
+			notationName(fqn), previous.ID, behaviorsDropped(previous)))
+	}
+	return append(out, fmt.Sprintf("  Use %%features %s to inspect", name)), nil
 }

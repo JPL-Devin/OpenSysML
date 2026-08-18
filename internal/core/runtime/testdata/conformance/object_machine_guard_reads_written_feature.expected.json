@@ -1,0 +1,11 @@
+{
+  "type": "instance",
+  "instantiate": "test::Monitor",
+  "objects": [
+    {
+      "finalState": "tripped",
+      "stateVisits": ["armed", "tripped"],
+      "slots": {"count": {"type": "Integer", "value": 1}}
+    }
+  ]
+}

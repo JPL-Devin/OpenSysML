@@ -62,26 +62,34 @@ func (s *Session) carryOverObjects(over carryover) []string {
 	}
 	kept := make(map[string]*runtime.Instance, len(over.objects))
 	ctx, err := s.getOrCreateRuntime()
+	var restarted []string
 	for _, c := range over.objects {
 		if err != nil {
 			continue
 		}
-		if ctx.Adopt(over.prev, c.shapes, c.obj) == nil {
-			kept[c.fqn] = c.obj
+		again, adoptErr := ctx.Adopt(over.prev, c.shapes, c.obj)
+		if adoptErr != nil {
+			continue
 		}
+		kept[c.fqn] = c.obj
+		restarted = append(restarted, again...)
 	}
 	// Anything not carried over is gone, including an object whose resolution was
 	// not there to record.
 	dropped := len(s.instances) - len(kept)
 	s.instances = kept
+	var notices []string
+	if note := behaviorsRestartedNotice(restarted); note != "" {
+		notices = append(notices, note)
+	}
 	if dropped == 0 {
 		// Nothing went this time, so an earlier loss is no longer what a listing of
 		// the survivors has to explain: it was reported when it happened.
 		s.lost = instanceLoss{}
-		return nil
+		return notices
 	}
 	s.lost = lossAtSubmission(dropped, s.version)
-	return []string{instancesDroppedNotice(dropped)}
+	return append(notices, instancesDroppedNotice(dropped))
 }
 
 // goneNames collects the declarations a submission superseded.

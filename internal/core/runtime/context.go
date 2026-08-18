@@ -70,6 +70,22 @@ type Context struct {
 	// of, which a behavior that object performs routes over.
 	objectConns map[*symbols.Symbol][]lower.Connection
 
+	// classifierBehaviors memoizes the behaviors each type binds to its objects:
+	// the machines it exhibits and the actions it performs.
+	classifierBehaviors map[*symbols.Symbol][]classifierBehaviorDecl
+
+	// pendingBehaviors are the object behaviors attached but not yet run, drained
+	// by the outermost materialization so a start reached from inside a running
+	// behavior does not run it recursively.
+	pendingBehaviors []*ObjectBehavior
+
+	// behaviorRunDepth is the number of classifier-behavior starts under way.
+	behaviorRunDepth int
+
+	// objectBehaviors are every behavior an object of this context runs, so a
+	// drain to quiescence can re-run one a sibling's send woke.
+	objectBehaviors []*ObjectBehavior
+
 	// trace records evaluation, nil when not tracing.
 	trace *TraceRecorder
 
@@ -157,6 +173,7 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 
 		materializingConnectors: make(map[connectorRef]bool),
 		objectConns:             make(map[*symbols.Symbol][]lower.Connection),
+		classifierBehaviors:     make(map[*symbols.Symbol][]classifierBehaviorDecl),
 		derivingFeatureValues:   make(map[featureValueRef]bool),
 		collectingSubsets:       make(map[featureValueRef]bool),
 		sources:                 make(map[string]*source.SourceFile),

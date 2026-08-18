@@ -57,6 +57,12 @@ func (h *calcStmtHost) acceptReturn(value Value, _ lower.Return) error {
 	return nil
 }
 
+// performer is no object: a calculation is invoked as an expression, not
+// performed by something, so its names read what its invocation supplies.
+func (h *calcStmtHost) performer() *Instance {
+	return nil
+}
+
 func (h *calcStmtHost) effect(s lower.Effect) error {
 	return fmt.Errorf("%w: a calculation cannot state '%s'", ErrCalcSideEffect, s.Kind)
 }

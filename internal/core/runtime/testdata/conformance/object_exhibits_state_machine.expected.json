@@ -1,0 +1,12 @@
+{
+  "type": "instance",
+  "trace": true,
+  "instantiate": "test::Counter",
+  "objects": [
+    {
+      "finalState": "idle",
+      "stateVisits": ["idle"],
+      "slots": {"count": {"type": "Integer", "value": 1}}
+    }
+  ]
+}

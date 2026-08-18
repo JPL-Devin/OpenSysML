@@ -285,6 +285,46 @@ func (e *ActionExecutor) RunToCompletion() error {
 	return nil
 }
 
+// RunToQuiescence runs the action until it completes, stops at a breakpoint, or
+// parks every remaining token at an accept. Unlike RunToCompletion, a parked
+// action is quiescence rather than a deadlock: this is what an object performing
+// an action is run with, where a sibling object may still send the awaited
+// message.
+func (e *ActionExecutor) RunToQuiescence() error {
+	if err := e.RunToCompletion(); err != nil && !errors.Is(err, ErrAcceptDeadlock) {
+		return err
+	}
+	return nil
+}
+
+// HasPendingSignal reports whether a message in flight would let a parked token
+// proceed, without consuming it.
+func (e *ActionExecutor) HasPendingSignal() bool {
+	for _, token := range e.tokens {
+		if token.Wait == nil {
+			continue
+		}
+		usage, ok := token.Location.(*ast.Usage)
+		if !ok {
+			continue
+		}
+		accept, isAccept := e.graph.Accepts[usage]
+		if !isAccept || accept.Trigger != nil {
+			continue
+		}
+		want := accept.SignalType
+		if want == "" {
+			want = accept.SubsetsEvent
+		}
+		for _, msg := range e.ctx.PendingMessages() {
+			if msg.reaches(ActionNodeName(usage), accept.ViaPort, objectID(e.self)) && msg.carriesSignal(want) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // breakpointHit returns the name of a breakpoint node a token sits on and has
 // not yet stopped the run at, or "" if none does. Firing once per token and
 // visit means a resumed run continues past the node it stopped at, while a
@@ -413,7 +453,7 @@ func (e *ActionExecutor) NodeNames() []string {
 // initializeAttributes populates the feature space with the attribute defaults
 // lowering recorded, evaluated in the scope the action's body was declared in.
 func (e *ActionExecutor) initializeAttributes() error {
-	ec := NewEvalContext(e.ctx, e.graph.Scope)
+	ec := NewEvalContextIn(e.ctx, e.graph.Scope, e.self)
 	defer ec.beginStep()()
 	for _, attr := range e.graph.Attributes {
 		value, err := ec.Eval(attr.Value)
@@ -424,6 +464,26 @@ func (e *ActionExecutor) initializeAttributes() error {
 	}
 
 	return nil
+}
+
+// hasFlow reports whether the action states a flow to start: an action with no
+// initial node has no step to perform.
+func (e *ActionExecutor) hasFlow() bool {
+	return e.graph != nil && e.graph.Initial != nil
+}
+
+// declaresParameter reports whether the action declares a parameter of this
+// name, which its own feature space holds rather than the performing object.
+func (e *ActionExecutor) declaresParameter(name string) bool {
+	if e.action == nil || e.action.Decl == nil {
+		return false
+	}
+	for _, param := range actionParameterDecls(e.action.Decl) {
+		if param.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 // initialize spawns initial token at InitialNode.
@@ -509,7 +569,7 @@ func (e *ActionExecutor) enabledSuccessions(node ast.Node) ([]ast.Node, error) {
 		return declared, nil
 	}
 
-	ec := NewEvalContext(e.ctx, e.graph.Scope)
+	ec := NewEvalContextIn(e.ctx, e.graph.Scope, e.self)
 	ec.Push(e.data)
 	defer ec.beginStep()()
 
@@ -758,7 +818,7 @@ func (e *ActionExecutor) stepDecisionNode(tokenIdx int) error {
 
 	// A guard resolves in the action's scope, with the action's current feature
 	// values pushed over it so they shadow same-named declarations.
-	ec := NewEvalContext(e.ctx, e.graph.Scope)
+	ec := NewEvalContextIn(e.ctx, e.graph.Scope, e.self)
 	ec.Push(e.data)
 	defer ec.beginStep()()
 
@@ -811,7 +871,7 @@ func (e *ActionExecutor) stepActionExecutionNode(tokenIdx int) error {
 
 	if node.Expression != nil {
 		// Evaluate in the action's scope, its feature values shadowing it.
-		ec := NewEvalContext(e.ctx, e.graph.Scope)
+		ec := NewEvalContextIn(e.ctx, e.graph.Scope, e.self)
 		ec.Push(e.data)
 		defer ec.beginStep()()
 		result, err := ec.Eval(node.Expression)
@@ -980,7 +1040,7 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 func (e *ActionExecutor) triggerHolds(accept lower.Accept) (bool, error) {
 	switch t := accept.Trigger.(type) {
 	case *ast.ChangeEvent:
-		ec := NewEvalContext(e.ctx, e.graph.Scope)
+		ec := NewEvalContextIn(e.ctx, e.graph.Scope, e.self)
 		ec.Push(e.data)
 		defer ec.beginStep()()
 		result, err := ec.Eval(t.Condition)

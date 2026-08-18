@@ -148,6 +148,27 @@ var (
 	// resolves to nothing.
 	ErrNoRequirement = errors.New("no requirement to satisfy")
 
+	// ErrUnresolvedClassifierBehavior is returned when a type exhibits or
+	// performs a behavior whose body no element states, so the objects of that
+	// type have nothing to run.
+	ErrUnresolvedClassifierBehavior = errors.New("classifier behavior names no body")
+
+	// ErrUnsupportedClassifierBehavior is returned when a type binds a behavior
+	// the runtime does not execute on an object.
+	ErrUnsupportedClassifierBehavior = errors.New("unsupported classifier behavior")
+
+	// ErrNoSuchBehavior is returned when a behavior asked of an object is none
+	// the object's type owns, exhibits or performs.
+	ErrNoSuchBehavior = errors.New("object has no such behavior")
+
+	// ErrNotABehavior is returned when a name invoked on an object resolves to an
+	// element that states no behavior to run.
+	ErrNotABehavior = errors.New("not a behavior")
+
+	// ErrBehaviorBudget is returned when the behaviors of materialized objects
+	// never reach quiescence within the event budget.
+	ErrBehaviorBudget = errors.New("object behaviors exceeded their budget")
+
 	// ErrNotACalcUsage is returned when an output feature is read from a symbol
 	// that is not a calc usage: only a usage carries an evaluation whose outputs
 	// are features.

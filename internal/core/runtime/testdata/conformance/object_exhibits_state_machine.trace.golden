@@ -1,0 +1,9 @@
+materialize: Counter #1
+start: exhibited state machine counting of #1
+enter: idle (entry action)
+stmt action body
+  stmt assign count
+      eval feature count -> 0
+      eval literal 1 -> 1
+    eval operator + -> 1
+run: exhibited state machine counting of #1

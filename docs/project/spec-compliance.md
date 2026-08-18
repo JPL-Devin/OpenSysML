@@ -475,7 +475,20 @@ and no golden AST fixture of their own. `calc_defaults_and_invocation.sysml`
 | A transition's accept payload is bound for its guard and effect (`accept w : Warning do assign level := w`) | `lower/state_graph.go` `classifyTrigger` (`AcceptEvent.Payload`); `runtime/state_executor.go` `bindAcceptPayload` | `conformance/state_transition_accept_payload.sysml` | ✅ Faithful (bound while the transition is taken and unbound if it does not fire, as a call trigger's arguments are) |
 | A transition triggered by a subsetted event (`accept :> shutDown`) | `lower/state_graph.go` `classifyTrigger` (`AcceptEvent.Subsets`); `runtime/state_executor.go` `triggerMatches`/`acceptsSignal` | `parse/behavior_accept_subsets.golden`, `conformance/action_accept_subsets_event.sysml` (the same matching rule in an action body) | ✅ Faithful |
 | A transition's `do` effect written as a statement is terminated by the transition's own `;` (SysML.xtext `TransitionUsage` ends with `ActionBody`, while `EffectBehaviorUsage` carries no `;`), in the standard `first … then` spelling and in OpenSysML's compact `<source> to <target>` spelling alike | `parser/behavior.go` `expectStatementEnd`/`atTransitionEffectStatement`/`atEffectEnd`; `parser/defusage.go` `parseUsage`/`parseReferenceMemberUsage` | `parse/state_transition_effect_statement.golden`, `conformance/state_transition_effect_assign.sysml`, `conformance/state_transition_effect_assign_first_then.sysml` (with their `.trace.golden`), `negative_test.go:transition_effect_perform_two_semicolons`, `:transition_effect_assign_two_semicolons`, `:transition_effect_no_semicolon`, `:body_assignment_no_semicolon` | ✅ Faithful (a second `;` is an error, as `ActionBody` takes one terminator; a statement outside a transition effect still needs its own `;`) |
-| Bodied `exhibit state` (`exhibit state spacecraftModes { … }`, SysML.xtext `ExhibitStateUsage`) | `parser/behavior.go` (the exhibited state's body is parsed as a state body); `ast/dump.go` (the `exhibit state` keyword is recorded) | `parse/behavior_exhibit_state_body.golden`, `negative_test.go:exhibit_state_unclosed_body` | ⚠️ Approximate (the body parses, resolves and lowers as a state machine; executing a part's exhibited state machine from the part itself is not driven by the runtime — `%state` on the state usage runs it) |
+| Bodied `exhibit state` (`exhibit state spacecraftModes { … }`, SysML.xtext `ExhibitStateUsage`) | `parser/behavior.go` (the exhibited state's body is parsed as a state body); `ast/dump.go` (the `exhibit state` keyword is recorded) | `parse/behavior_exhibit_state_body.golden`, `parse/classifier_behaviors.golden`, `negative_test.go:exhibit_state_unclosed_body` | ✅ Faithful (the body parses, resolves and lowers as a state machine, and an object of the type runs it — see the Classifier Behaviors map) |
+
+### Classifier Behaviors (KerML §8.4.4.3 Behaviors / `performances`; SysML v2 §7.16 `exhibit`/`perform`)
+
+| Semantic Rule | Implementation | Test Case | Status |
+|--------------|----------------|-----------|--------|
+| A behavior a type exhibits or performs is bound to every object of the type: materializing the object gives it an execution of its own, and two objects of one type run independently | `lower/classifier_behavior.go` `ClassifierBehaviorOf`/`BehaviorMembers`; `runtime/classifier_behavior.go` `startClassifierBehaviors`/`attachClassifierBehavior`; `runtime/instance.go` `instantiateOwnedBy` | `conformance/object_exhibits_state_machine.sysml`, `conformance/two_objects_exhibit_independently.sysml` (with their `.trace.golden`), `runtime/classifier_behavior_test.go`, `repl/classifier_behavior_test.go:TestStateDebugsTheMachineAnObjectExhibits` | ✅ Faithful |
+| A body of the behavior reads and writes the performing object's own feature values, and a message addressed to one object reaches that object's machine and not a sibling's | `runtime/classifier_behavior.go` `assignPerformerFeature`; `runtime/state_statements.go`, `runtime/action_statements.go` (assignment through the performer); `runtime/signal.go` `addressOwner` (the owner chain an address is resolved against) | `conformance/object_machine_writes_own_features.sysml`, `conformance/object_addressed_send_one_sibling.sysml` | ✅ Faithful |
+| Startup and quiescence are tool-defined (KerML gives no clock): feature values and constant defaults come first, then the behavior is initialized and run until no event is due at the current time, no do action is runnable and no message is in flight, bounded by the event and do-step budgets | `runtime/classifier_behavior.go` `startClassifierBehaviors`/`drainObjectBehaviors`; `runtime/state_executor.go` `RunToQuiescence` | `robustness_test.go:object_exhibited_machine_never_settles`, `:object_exhibited_machine_without_an_initial_state`, `conformance/object_exhibits_state_machine.trace.golden` | ⚠️ Approximate (tool-defined: an exhausted budget is `ErrBehaviorBudget`, and a machine waiting on a timer is quiescent — advancing time drives it) |
+| A performed action parked at an `accept` is quiescent rather than deadlocked, and a message a sibling object sends later wakes it | `runtime/action_executor.go` `RunToQuiescence`/`HasPendingSignal`; `runtime/classifier_behavior.go` `hasPendingWork` | `runtime/classifier_behavior_test.go:TestPerformedActionAwaitingAMessageIsWokenByASibling`, `:TestPerformedActionWithoutAFlowStillMaterializes` | ⚠️ Approximate (tool-defined: a standalone `%action` run still reports `ErrAcceptDeadlock`, where nothing can post the awaited message) |
+| An object's parameter space is its own: an action's `out` parameter answers the caller even where the performing object declares a feature of that name | `runtime/action_statements.go` `assignOuter`; `runtime/action_executor.go` `declaresParameter` | `runtime/classifier_behavior_test.go:TestOperationOutputNamedLikeAFeatureAnswersTheCaller` | ✅ Faithful |
+| A failed materialization leaves no behavior of the object attached or queued, and an edited model drops an object whose behavior body changed rather than resuming it on the values the old body wrote | `runtime/classifier_behavior.go` `startClassifierBehaviors`/`forgetBehaviorsFrom`; `runtime/adopt.go` `writeBoundBehaviors` | `runtime/classifier_behavior_test.go:TestFailedMaterializationLeavesNoBehaviorBehind`, `repl/classifier_behavior_test.go:TestRewritingTheExhibitedMachineDropsTheObject`, `:TestObjectMachineSurvivesAnUnrelatedDeclaration` | ⚠️ Approximate (tool-defined: the spec describes one fixed model, so what a live execution does when the model is edited is a REPL policy) |
+| A second materialization of one name is a second object, with its own identity and its own behaviors; `occurrenceOf` remains the reuse path for a named occurrence | `runtime/instance.go` `instantiateOwnedBy`; `repl/query.go` `instantiateNamed` (which object the name now denotes) | `robustness_test.go:second_instantiation_of_one_type`, `repl/classifier_behavior_test.go:TestSecondInstantiateIsAnotherObject` | ⚠️ Approximate (tool-defined; the spec leaves object creation semantics open) |
+| Invoking an operation of an object's type runs it with that object as performer, binding named arguments as the call machinery binds them | `runtime/invoke_operation.go` `InvokeOperation`; `repl/meta.go` `%invoke` | `runtime/classifier_behavior_test.go:TestInvokeOperationPerformedByTheObject`, `:TestInvokeOperationFailureModes`, `robustness_test.go:operation_invoked_with_unbound_parameters`, `repl/classifier_behavior_test.go:TestInvokeRunsAnOperationOnTheObject`, `:TestInvokeReportsItsFailureModes` | ⚠️ Approximate (actions only, with named arguments: an operation given as a `calc` or `constraint`, and positional arguments, return `ErrUnsupportedClassifierBehavior` — see Known Limitations) |
 
 ### Expression Evaluation
 
@@ -975,9 +988,8 @@ are tracked here):
 - Protocol state machines
 
 **Object Model:**
-- Dynamic object creation/destruction
-- Classifier behaviors
-- Operation invocation on instances
+- Dynamic object creation/destruction (an object is materialized once, and nothing destroys it)
+- Operation invocation given as a `calc` or `constraint`, or with positional arguments (an action operation with named arguments runs — see the Classifier Behaviors map)
 - Routing to a second object of one usage (a `via` send follows the connections and an addressed send resolves an object, but the object reached is the one this context holds as its target's occurrence — see Known Limitations)
 
 **Type System:**
@@ -1262,6 +1274,17 @@ the `@type` mapping and the comparison choices.
 - a calc whose only computation is rebinding an `inout` in its body, with no `out` and no
   return, is still reported as having no result expression: an `inout` is bound by the
   invocation, so it does not count as an output the body computes
+- an object carried over an unrelated declaration keeps its identity but not its execution:
+  an execution belongs to the analysis it started in, so its behaviors are started again from
+  their initial states in the rebuilt analysis, what the discarded run wrote is dropped, and
+  the restart is reported. Re-declaring what the object runs drops the object itself with a
+  reported reason instead (`runtime/adopt.go` `Adopt`/`restartBehaviors`, `writeBoundBehaviors`;
+  `repl/session.go` `rebindRestartedMachine`;
+  `runtime/adopt_test.go:TestAdoptRestartsACarriedObjectsBehavior`,
+  `:TestAdoptRefusesAnObjectWhoseBehaviorCannotRestart`,
+  `repl/classifier_behavior_test.go:TestObjectMachineRestartsOverAnUnrelatedDeclaration`,
+  `:TestRestartedMachineRunsInTheNewContext`, `:TestRewritingTheExhibitedMachineDropsTheObject`).
+  Tool-defined: the spec has no notion of re-analysing an edited model
 - a nested body over a value the *redefined* declaration wrote governs over that value, but supersedes it whole: a feature the body does not value takes its type's own default rather than the bound value's, since a `FeatureValue` binds a feature as a whole
 
 **Python bindings:**

@@ -1,0 +1,16 @@
+materialize: Counter #1
+start: exhibited state machine counting of #1
+enter: idle
+run: exhibited state machine counting of #1
+materialize: Counter #2
+start: exhibited state machine counting of #2
+enter: idle
+run: exhibited state machine counting of #2
+exit: idle
+enter: ticked (entry action)
+stmt action body
+  stmt assign count
+      eval feature count -> 0
+      eval literal 1 -> 1
+    eval operator + -> 1
+transition: idle -> ticked (event: accept tick)
