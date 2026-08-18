@@ -1272,13 +1272,17 @@ the `@type` mapping and the comparison choices.
 - a calc whose only computation is rebinding an `inout` in its body, with no `out` and no
   return, is still reported as having no result expression: an `inout` is bound by the
   invocation, so it does not count as an output the body computes
-- an object carried over an unrelated declaration keeps running the execution it started,
-  which belongs to the analysis it started in: its identity, current state and written
-  feature values all survive, but it exchanges no message with an object materialized after
-  the edit, and its own body resolves names against the analysis it began with. Re-declaring
-  what the object runs drops it with a reported reason instead (`runtime/adopt.go`
-  `writeBoundBehaviors`, `repl/classifier_behavior_test.go:TestObjectMachineSurvivesAnUnrelatedDeclaration`,
-  `:TestRewritingTheExhibitedMachineDropsTheObject`); `%instantiate` again to run the edited model
+- an object carried over an unrelated declaration keeps its identity but not its execution:
+  an execution belongs to the analysis it started in, so its behaviors are started again from
+  their initial states in the rebuilt analysis, what the discarded run wrote is dropped, and
+  the restart is reported. Re-declaring what the object runs drops the object itself with a
+  reported reason instead (`runtime/adopt.go` `Adopt`/`restartBehaviors`, `writeBoundBehaviors`;
+  `repl/session.go` `rebindRestartedMachine`;
+  `runtime/adopt_test.go:TestAdoptRestartsACarriedObjectsBehavior`,
+  `:TestAdoptRefusesAnObjectWhoseBehaviorCannotRestart`,
+  `repl/classifier_behavior_test.go:TestObjectMachineRestartsOverAnUnrelatedDeclaration`,
+  `:TestRestartedMachineRunsInTheNewContext`, `:TestRewritingTheExhibitedMachineDropsTheObject`).
+  Tool-defined: the spec has no notion of re-analysing an edited model
 - a nested body over a value the *redefined* declaration wrote governs over that value, but supersedes it whole: a feature the body does not value takes its type's own default rather than the bound value's, since a `FeatureValue` binds a feature as a whole
 
 **Python bindings:**

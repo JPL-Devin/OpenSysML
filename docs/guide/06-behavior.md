@@ -167,13 +167,16 @@ name then denotes it. An exhibited machine with no initial state is reported; a 
 states no flow simply has no step to perform, so the object is still created. A performed action
 parked at an `accept` is quiescent too, and a message a sibling object sends later wakes it.
 
-**Editing the model while an object runs.** An unrelated declaration leaves an object and its
-behaviors alone: identity, current state and the values the behaviors wrote all survive the rebuilt
-analysis. Re-declaring what the object runs — its type's features or the body of a machine or action
-it runs — makes it a different object, so it is dropped with a reported reason instead of resuming a
-new body on values the old one wrote. Re-run `%instantiate` to start from the edited model — a
-carried-over object runs the execution it started, so it exchanges no message with an object
-materialized after the edit.
+**Editing the model while an object runs.** An unrelated declaration keeps the object — its identity
+survives the rebuilt analysis — but not the execution it was running: an execution belongs to the
+graph, names and message bus of the analysis it started in, so the object's behaviors are **started
+again from their initial states** in the rebuilt analysis and what the discarded run wrote is
+dropped with them. The restart is reported (`note: the exhibited state machine modes of object #1 was
+restarted from its initial state because the model was rebuilt`), and a `%state` session follows the
+object onto its restarted machine, so a restarted behavior exchanges messages with objects
+materialized after the edit like any other. Re-declaring what the object runs — its type's features
+or the body of a machine or action it runs — makes it a different object, so it is dropped with a
+reported reason and `%instantiate` starts a fresh one.
 
 **Invoking an operation.** `%invoke <object> <op> [<p>=<expr>]` runs an action the object's type
 owns, performed by that object:

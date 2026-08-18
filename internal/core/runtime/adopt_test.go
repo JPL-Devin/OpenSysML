@@ -49,7 +49,7 @@ func TestAdoptCarriesAnObjectIntoAReanalysis(t *testing.T) {
 	}
 
 	ctx := contextOver(t, adoptSrc+"\npart def Widget;")
-	if err := ctx.Adopt(prev, shapes, obj); err != nil {
+	if _, err := ctx.Adopt(prev, shapes, obj); err != nil {
 		t.Fatalf("Adopt: %v", err)
 	}
 
@@ -105,7 +105,7 @@ func TestAdoptDerivesAValueAgainstTheNewDeclarations(t *testing.T) {
 	shapes := prev.ShapesOf(obj)
 
 	ctx := contextOver(t, strings.Replace(adoptCalcSrc, "x * 2.0", "x * 3.0", 1))
-	if err := ctx.Adopt(prev, shapes, obj); err != nil {
+	if _, err := ctx.Adopt(prev, shapes, obj); err != nil {
 		t.Fatalf("Adopt: %v", err)
 	}
 	fv, err := obj.GetFeatureValue(ctx, "reading")
@@ -142,7 +142,7 @@ func TestAdoptCarriesAnObjectOwningAnAnonymousConnector(t *testing.T) {
 	shapes := prev.ShapesOf(obj)
 
 	ctx := contextOver(t, adoptConnectSrc+"\npart def Widget;")
-	if err := ctx.Adopt(prev, shapes, obj); err != nil {
+	if _, err := ctx.Adopt(prev, shapes, obj); err != nil {
 		t.Fatalf("Adopt: %v", err)
 	}
 	conns, err := obj.OwnedConnectors(ctx)
@@ -180,7 +180,7 @@ func TestAdoptRefusesAChangedShape(t *testing.T) {
 	shapes := prev.ShapesOf(obj)
 
 	ctx := contextOver(t, strings.Replace(adoptSrc, "mass = 1500.0", "mass = 900.0", 1))
-	err := ctx.Adopt(prev, shapes, obj)
+	_, err := ctx.Adopt(prev, shapes, obj)
 	if err == nil {
 		t.Fatal("Adopt accepted an object of a declaration that changed")
 	}
@@ -197,7 +197,7 @@ func TestAdoptRefusesAChangedDependency(t *testing.T) {
 	shapes := prev.ShapesOf(obj)
 
 	ctx := contextOver(t, strings.Replace(adoptSrc, "power = 300.0", "power = 100.0", 1))
-	if err := ctx.Adopt(prev, shapes, obj); err == nil {
+	if _, err := ctx.Adopt(prev, shapes, obj); err == nil {
 		t.Fatal("Adopt accepted an object whose engine declaration changed")
 	}
 }
@@ -214,7 +214,7 @@ func TestAdoptSharesTheIdentitySequence(t *testing.T) {
 	ctx := first
 	for _, extra := range []string{"\npart def Widget;", "\npart def Gadget;"} {
 		next := contextOver(t, adoptSrc+extra)
-		if err := next.Adopt(ctx, shapes, obj); err != nil {
+		if _, err := next.Adopt(ctx, shapes, obj); err != nil {
 			t.Fatalf("Adopt: %v", err)
 		}
 		ctx = next
@@ -229,6 +229,88 @@ func TestAdoptSharesTheIdentitySequence(t *testing.T) {
 			t.Errorf("identity %d was handed out twice", id)
 		}
 		handed[id] = true
+	}
+}
+
+const adoptBehaviorSrc = `package Demo {
+	part def Monitor {
+		attribute count = 0;
+		exhibit state modes {
+			entry; then idle;
+			state idle { entry action bump { assign count := count + 1; } }
+		}
+	}
+}`
+
+// A carried object's behavior is started again in the context carrying it: the
+// object keeps its identity, its execution is a new one bound to the new
+// analysis, and what the discarded run wrote is not read by the new one.
+func TestAdoptRestartsACarriedObjectsBehavior(t *testing.T) {
+	prev := contextOver(t, adoptBehaviorSrc)
+	obj, err := prev.Instantiate(lookupOne(t, prev.resolver.Index(), "Demo::Monitor"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	before, ok := obj.ExhibitedState()
+	if !ok {
+		t.Fatal("the object exhibits no machine")
+	}
+	id, shapes := obj.ID, prev.ShapesOf(obj)
+
+	ctx := contextOver(t, adoptBehaviorSrc+"\npart def Widget;")
+	restarted, err := ctx.Adopt(prev, shapes, obj)
+	if err != nil {
+		t.Fatalf("Adopt: %v", err)
+	}
+	if len(restarted) != 1 || !strings.Contains(restarted[0], "modes") {
+		t.Errorf("Adopt reported %v restarted, want the machine modes", restarted)
+	}
+	if obj.ID != id {
+		t.Errorf("the carried object has identity %d, want %d", obj.ID, id)
+	}
+	after, ok := obj.ExhibitedState()
+	if !ok {
+		t.Fatal("the carried object runs no machine after the carry-over")
+	}
+	if after.State == before.State {
+		t.Error("the carried object still runs the execution of the previous analysis")
+	}
+	// The entry action ran once in the new execution, over the declared initial
+	// value rather than over the 1 the discarded run left.
+	count, err := obj.GetFeatureValue(ctx, "count")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(count): %v", err)
+	}
+	if got := count.Value; got.Kind != ValConst || got.Const.Int != 1 {
+		t.Errorf("count = %v, want 1: the restarted machine read the declared initial value", got)
+	}
+}
+
+// A behavior that cannot be started again in the new context refuses the
+// carry-over rather than leaving an object running nothing, and the object is not
+// left registered in a context that cannot offer it.
+func TestAdoptRefusesAnObjectWhoseBehaviorCannotRestart(t *testing.T) {
+	prev := contextOver(t, adoptBehaviorSrc)
+	obj, err := prev.Instantiate(lookupOne(t, prev.resolver.Index(), "Demo::Monitor"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	shapes := prev.ShapesOf(obj)
+
+	ctx := contextOver(t, adoptBehaviorSrc+"\npart def Widget;")
+	tight := DefaultBudgets()
+	tight.MaxSteps = 1
+	if err := ctx.SetBudgets(tight); err != nil {
+		t.Fatalf("SetBudgets: %v", err)
+	}
+	if _, err := ctx.Adopt(prev, shapes, obj); err == nil {
+		t.Fatal("Adopt accepted an object whose behavior could not be started")
+	}
+	if _, found := ctx.Instance(obj.ID); found {
+		t.Error("the refused object was left in the context")
+	}
+	if len(obj.Behaviors()) != 0 {
+		t.Errorf("the refused object still holds %d behaviors", len(obj.Behaviors()))
 	}
 }
 

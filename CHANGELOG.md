@@ -92,12 +92,16 @@ artifacts they describe really were called that.
   limitation: only an action member is executable this way — an operation written as a `calc` or
   `constraint` is evaluated as an expression rather than performed, and reports that.
 - **`%state <object>` attaches to the object's exhibited machine**, so `%step`, `%advance`,
-  `%current`, `%events` and `%features` all describe that object. A behavior-written feature value
-  now survives an unrelated declaration too, along with the object's identity and the debug session.
-- **Rewriting a behavior drops the objects running it.** A behavior-written value survives an
-  unrelated declaration, but re-declaring the machine or action an object runs changes what the
-  object is, so the object is dropped with a reported reason rather than resuming a new body on the
-  values the old one wrote.
+  `%current`, `%events` and `%features` all describe that object. The object's identity and the debug
+  session both survive an unrelated declaration.
+- **A carried object's behaviors restart in the rebuilt analysis, and it is reported.** An execution
+  belongs to the graph, names and message bus of the analysis it started in, so an object carried
+  over an unrelated declaration keeps its identity but starts its behaviors again from their initial
+  states — dropping what the discarded run wrote — with a `note:` naming what restarted. A `%state`
+  session follows the object onto its restarted machine.
+- **Rewriting a behavior drops the objects running it.** Re-declaring the machine or action an object
+  runs changes what the object is, so the object itself is dropped with a reported reason instead of
+  being carried over at all.
 
 ### `%slots` is now `%features`, the name SysML v2 uses
 

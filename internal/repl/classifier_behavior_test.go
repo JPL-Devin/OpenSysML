@@ -71,19 +71,44 @@ func TestInvokeReportsItsFailureModes(t *testing.T) {
 }
 
 // An unrelated declaration submitted while an object's machine is being debugged
-// leaves the session on the same object, with its identity and its state kept.
-func TestObjectMachineSurvivesAnUnrelatedDeclaration(t *testing.T) {
+// keeps the object and its identity, and restarts its machine from the initial
+// state with a reported reason: an execution belongs to the analysis it started
+// in, so it is never resumed on the values the discarded run left behind.
+func TestObjectMachineRestartsOverAnUnrelatedDeclaration(t *testing.T) {
 	s := loadFixture(t, "testdata/exhibited_machine.sysml")
 	run(t, s, "%instantiate Obj::Monitor")
 	started := run(t, s, "%state Obj::Monitor")
 	id := objectIDIn(t, started)
+	// Drive the machine on, so a resumed execution would be visible as `awake`
+	// and `count = 11` rather than the initial state below.
+	run(t, s, "%step")
+	wants(t, run(t, s, "%features Obj::Monitor"), "count = 11")
+
+	res := s.Submit("package Other { part def Unrelated; }")
+	if len(res.Diagnostics) > 0 {
+		t.Fatalf("unrelated declaration has diagnostics: %v", res.Diagnostics)
+	}
+	wants(t, strings.Join(res.Notices, "\n"), "restarted from its initial state")
+
+	wants(t, run(t, s, "%current"), "idle")
+	wants(t, run(t, s, "%features Obj::Monitor"), "count = 1", "ID: "+id)
+}
+
+// A restarted machine runs in the context the submission built, so the debugger
+// drives its queue there rather than the discarded one.
+func TestRestartedMachineRunsInTheNewContext(t *testing.T) {
+	s := loadFixture(t, "testdata/exhibited_machine.sysml")
+	run(t, s, "%instantiate Obj::Monitor")
+	run(t, s, "%state Obj::Monitor")
 
 	if res := s.Submit("package Other { part def Unrelated; }"); len(res.Diagnostics) > 0 {
 		t.Fatalf("unrelated declaration has diagnostics: %v", res.Diagnostics)
 	}
-
-	wants(t, run(t, s, "%current"), "idle")
-	wants(t, run(t, s, "%features Obj::Monitor"), "count = 1", "ID: "+id)
+	// The restarted machine's own timer is queued in the new context, so the
+	// debugger drives it there instead of reporting nothing to do.
+	wants(t, run(t, s, "%events"), "1 events")
+	wants(t, run(t, s, "%step"), "Event dispatched", "Current state: awake")
+	wants(t, run(t, s, "%features Obj::Monitor"), "count = 11")
 }
 
 // Re-declaring the machine an object exhibits drops that object and says so: a

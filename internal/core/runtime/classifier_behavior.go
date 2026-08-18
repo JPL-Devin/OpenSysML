@@ -43,6 +43,18 @@ func (b *ObjectBehavior) Describe() string {
 	return fmt.Sprintf("%s %s of object #%d", b.Kind, name, b.Object.ID)
 }
 
+// forgetBehaviorWrites drops what a run wrote, so a restarted behavior reads the
+// object's declared initial values instead of what the discarded run left.
+func (inst *Instance) forgetBehaviorWrites() {
+	for _, fv := range inst.FeatureValues {
+		if !fv.Written {
+			continue
+		}
+		fv.Value, fv.Values = Value{}, Value{}
+		fv.Materialized, fv.Written = false, false
+	}
+}
+
 // Behaviors are the behaviors the object runs, in declaration order.
 func (inst *Instance) Behaviors() []*ObjectBehavior {
 	return inst.behaviors
@@ -123,6 +135,33 @@ func (ctx *Context) startClassifierBehaviors(inst *Instance) error {
 	return nil
 }
 
+// restartClassifierBehaviors gives every object a fresh execution of the
+// behaviors its type binds, run as one start so machines restarted alongside
+// each other still exchange messages. A failure attaches nothing, leaving the
+// objects running no behavior at all.
+func (ctx *Context) restartClassifierBehaviors(objects []*Instance) error {
+	attached := len(ctx.objectBehaviors)
+	err := ctx.startBehaviorsOfAll(objects)
+	if err != nil {
+		ctx.forgetBehaviorsFrom(attached)
+	}
+	return err
+}
+
+// startBehaviorsOfAll attaches the behaviors of every object before running any
+// of them, so their starts are one collective run.
+func (ctx *Context) startBehaviorsOfAll(objects []*Instance) error {
+	ctx.behaviorRunDepth++
+	for _, inst := range objects {
+		if err := ctx.startBehaviorsOf(inst); err != nil {
+			ctx.behaviorRunDepth--
+			return err
+		}
+	}
+	ctx.behaviorRunDepth--
+	return ctx.runAttachedBehaviors()
+}
+
 // startBehaviorsOf attaches the object's behaviors and, at the outermost start,
 // runs everything attached.
 func (ctx *Context) startBehaviorsOf(inst *Instance) error {
@@ -142,6 +181,12 @@ func (ctx *Context) startBehaviorsOf(inst *Instance) error {
 		ctx.objectBehaviors = append(ctx.objectBehaviors, behavior)
 	}
 
+	return ctx.runAttachedBehaviors()
+}
+
+// runAttachedBehaviors runs everything attached, at the outermost start: a start
+// reached from inside a running behavior leaves the run to that one.
+func (ctx *Context) runAttachedBehaviors() error {
 	if ctx.behaviorRunDepth > 0 {
 		return nil
 	}

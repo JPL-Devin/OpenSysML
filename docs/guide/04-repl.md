@@ -35,7 +35,9 @@ Two properties of the session model are worth knowing before a long session:
 - **A submission only invalidates what it changed.** Objects created with `%instantiate` are
   carried over while the declarations they were built from are untouched, and an
   `%action`/`%state` debugging session over a declaration the submission left alone keeps
-  running. What is dropped is reported as a `note:` line saying what to re-run.
+  running. What a carried object keeps is its identity, not its execution: the behaviors its
+  type exhibits or performs are restarted from their initial states in the rebuilt analysis.
+  Everything dropped or restarted is reported as a `note:` line saying what happened.
 
 `%list` shows the session's declarations, `%clear` resets it, and `%save` writes it out
 ([chapter 7](07-saving-and-rdf.md)). `%clear` replaces every declaration, so nothing it held can be

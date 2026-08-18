@@ -345,22 +345,26 @@ func (ctx *Context) fqnOf(sym *symbols.Symbol) string {
 // The objects are moved rather than copied, so prev holds them too afterwards
 // and this context takes over its identity sequence; nothing new should be
 // materialized through prev, which registers it there alone.
-func (ctx *Context) Adopt(prev *Context, shapes *Shapes, obj *Instance) error {
+//
+// A behavior a carried object ran belongs to the analysis it started in, so it is
+// started again here from its initial state rather than continued. The behaviors
+// restarted are returned, so the carry-over reports what it cost.
+func (ctx *Context) Adopt(prev *Context, shapes *Shapes, obj *Instance) ([]string, error) {
 	if prev == nil || shapes == nil || obj == nil {
-		return &AdoptError{Reason: "there is nothing to carry over"}
+		return nil, &AdoptError{Reason: "there is nothing to carry over"}
 	}
 	if shapes.unnamed {
-		return &AdoptError{Reason: "it is of a declaration with no qualified name"}
+		return nil, &AdoptError{Reason: "it is of a declaration with no qualified name"}
 	}
 	a := &adoption{ctx: ctx, prev: prev, shapes: shapes,
 		plans:   make(map[int64]*adoptPlan),
 		rebound: make(map[*symbols.Symbol]*symbols.Symbol),
 	}
 	if err := a.plan(obj); err != nil {
-		return err
+		return nil, err
 	}
 	a.commit()
-	return nil
+	return a.restartBehaviors()
 }
 
 // adoption is one carry-over: what it has planned, and the symbols it rebound
@@ -600,6 +604,62 @@ func (a *adoption) commit() {
 		a.ctx.ids.atLeast(id + 1)
 	}
 	a.carryDerived(adopted)
+}
+
+// restartBehaviors runs the carried objects' behaviors again in this context, from
+// their initial states, since an execution holds the graph, symbols and message bus
+// of the analysis it started in. A start that fails takes the objects with it.
+func (a *adoption) restartBehaviors() ([]string, error) {
+	var objects []*Instance
+	var restarted []string
+	carried := make([]*Instance, 0, len(a.plans))
+	for _, id := range a.plannedIDs() {
+		obj := a.plans[id].obj
+		carried = append(carried, obj)
+		if len(obj.behaviors) == 0 {
+			continue
+		}
+		for _, behavior := range obj.behaviors {
+			restarted = append(restarted, behavior.Describe())
+		}
+		obj.behaviors = nil
+		objects = append(objects, obj)
+	}
+	if len(objects) == 0 {
+		return nil, nil
+	}
+	// A behavior writes the feature values of its own object and of the objects that
+	// one holds, so the whole carried closure forgets what the discarded run wrote.
+	for _, obj := range carried {
+		obj.forgetBehaviorWrites()
+	}
+	if err := a.ctx.restartClassifierBehaviors(objects); err != nil {
+		a.abandon()
+		return nil, &AdoptError{Type: a.ctx.fqnOf(objects[0].Type),
+			Reason: "the behavior it runs could not be started again: " + err.Error()}
+	}
+	return restarted, nil
+}
+
+// plannedIDs lists the carried identities in order, so what is done over them
+// does not depend on map order.
+func (a *adoption) plannedIDs() []int64 {
+	ids := make([]int64, 0, len(a.plans))
+	for id := range a.plans {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	return ids
+}
+
+// abandon takes the carried objects back out of this context, for a carry-over
+// that cannot be completed after the objects were moved.
+func (a *adoption) abandon() {
+	for id, plan := range a.plans {
+		if a.ctx.instances[id] == plan.obj {
+			delete(a.ctx.instances, id)
+		}
+	}
 }
 
 // carryDerived takes over the state the previous context derived about the
