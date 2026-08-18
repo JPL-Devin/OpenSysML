@@ -132,6 +132,11 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 - **A model that imports the package, or writes the call qualified, is unaffected**, as is a bare
   call to an OMG function library (`sqrt`, `sin`, …), which every model may write whatever it
   imports.
+- **`%builtins` still lists them, marked with the import they need.** Dropping the four names from
+  the unqualified-dispatch registry also dropped them from the listing and from name completion,
+  which made implemented functions look unsupported; the listing is now taken from what the build
+  implements, and an extension function is listed with a `(needs import SystemicaMathFunctions::*;)`
+  marker rather than silently omitted.
 - **A root-level import in a document that declares nothing else now surfaces its names**, which is
   what a bare `import SystemicaMathFunctions::*;` at the REPL prompt is: the editor's own scope tree
   is identified by the document name stamped on it, and a document with no member had no symbol left

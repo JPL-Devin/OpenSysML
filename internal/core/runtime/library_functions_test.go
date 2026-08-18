@@ -1206,3 +1206,29 @@ func TestLibraryFunctionAnswersALibraryDeclarationWithABody(t *testing.T) {
 		t.Fatalf("InvokeCalc(TrigFunctions::deg, pi) = %+v, %v; want 180.0", got, err)
 	}
 }
+
+// The listing covers every implemented function, an extension one carrying the
+// import its unqualified name needs, so a working function is never advertised
+// as unsupported nor as callable bare.
+func TestBuiltinsListExtensionFunctionsWithTheirImport(t *testing.T) {
+	listed := make(map[string]Builtin)
+	for _, b := range Builtins() {
+		listed[b.Name] = b
+	}
+	for local, pkg := range extensionLocalNames {
+		b, ok := listed[local]
+		if !ok {
+			t.Errorf("extension function %q is implemented but not listed", local)
+			continue
+		}
+		if b.RequiresImport != pkg {
+			t.Errorf("%q requires import %q, want %q", local, b.RequiresImport, pkg)
+		}
+		if want := pkg + "::" + local; b.FQN != want {
+			t.Errorf("%q is listed as %q, want %q", local, b.FQN, want)
+		}
+	}
+	if b, ok := listed["sqrt"]; !ok || b.RequiresImport != "" {
+		t.Errorf("sqrt is listed as %+v, want an OMG function needing no import", b)
+	}
+}
