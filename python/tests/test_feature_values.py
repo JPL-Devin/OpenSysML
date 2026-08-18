@@ -1,9 +1,9 @@
 """Tests for the feature-value names and their deprecated slot aliases."""
 import pytest
 from google.protobuf import descriptor_pb2, descriptor_pool, message_factory
-from pysysml.errors import FeatureValueError, SlotError
-from pysysml.instance import Instance
-from pysysml.proto import sysml_pb2
+from opensysml.errors import FeatureValueError, SlotError
+from opensysml.instance import Instance
+from opensysml.proto import sysml_pb2
 
 
 def feature_value(name, **value_kwargs):

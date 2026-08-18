@@ -2,10 +2,10 @@
 
 import pytest
 
-from pysysml import typed as _t
-from pysysml.errors import InstanceTypeError, SlotError, TypeMismatchError
-from pysysml.instance import Instance
-from pysysml.proto import sysml_pb2
+from opensysml import typed as _t
+from opensysml.errors import InstanceTypeError, SlotError, TypeMismatchError
+from opensysml.instance import Instance
+from opensysml.proto import sysml_pb2
 
 
 class Engine(_t.TypedObject):
@@ -168,7 +168,7 @@ def sports_car_instance():
 
 def test_as_quantity_decodes_a_quantity_and_rejects_a_bare_number():
     """A quantity slot decodes to a Quantity; a unitless value is a mismatch."""
-    from pysysml.values import Unit
+    from opensysml.values import Unit
 
     quantity = _t.Quantity(5.0, Unit(text="SI::kg"))
 
@@ -180,10 +180,10 @@ def test_as_quantity_decodes_a_quantity_and_rejects_a_bare_number():
 
 def test_the_type_errors_are_reachable_from_the_package():
     """A caller catches these the documented way, through the package namespace."""
-    import pysysml
+    import opensysml
 
-    assert pysysml.InstanceTypeError is InstanceTypeError
-    assert issubclass(pysysml.MissingCapabilityError, pysysml.PySysMLError)
+    assert opensysml.InstanceTypeError is InstanceTypeError
+    assert issubclass(opensysml.MissingCapabilityError, opensysml.OpenSysMLError)
 
 
 def test_from_instance_rejects_an_instance_of_another_type():
@@ -243,7 +243,7 @@ def test_nested_slot_of_the_wrong_type_is_rejected():
 
 def test_as_enum_literal_decodes_a_literal_and_rejects_its_rendering():
     """An enumeration slot holds the literal itself, not the text of it."""
-    from pysysml import EnumLiteral
+    from opensysml import EnumLiteral
 
     red = EnumLiteral("D::Color::red", "D::Color", "Color::red")
     assert _t.as_enum_literal("c", red) is red
