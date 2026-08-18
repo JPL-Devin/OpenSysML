@@ -17,7 +17,13 @@ not exist yet, so everything below uses a throwaway **local** tap.
   If it is absent, install it (`/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"`).
 - Network access to `github.com` is required (release archives + `brew audit --online`).
 - No Go build is needed: the formula installs **prebuilt release binaries**, so this path is
-  independent of `make build`.
+  independent of `make build`. But release binaries can *predate* a REPL feature (the v0.0.9
+  `sysml` answers `unknown command "%check"`), so never test a new runtime feature through the
+  brew-installed binary — build it with `make build` and test brew's *environment* instead.
+- Release asset names have drifted across renames (`systemica-*` in v0.0.9 vs the formula's
+  `opensysml-*`). When `render-homebrew-formula.sh <tag>` fails with `error: no checksum for
+  opensysml-darwin-arm64.tar.gz`, that is the release, not the PR — confirm by fetching the
+  release's `SHA256SUMS.txt` and reading the names.
 
 ## Always start from a clean slate
 
@@ -44,7 +50,30 @@ brew install local/<fresh>/opensysml && brew test local/<fresh>/opensysml
 brew audit --strict --online local/<fresh>/opensysml
 ```
 
-All four must exit 0. Benign noise to ignore: `fatal: ambiguous argument
+All four must exit 0.
+
+### When the release has no `opensysml-*` assets (install/test without a real release)
+
+Render from a **hand-made manifest** and serve a renamed copy of a real archive over local HTTP:
+
+```bash
+mkdir -p /tmp/bc/serve/Open-MBEE/OpenSysML/releases/download/<tag>
+cp <real systemica-linux-amd64.tar.gz> /tmp/bc/serve/Open-MBEE/OpenSysML/releases/download/<tag>/opensysml-linux-amd64.tar.gz
+SUM=$(sha256sum .../opensysml-linux-amd64.tar.gz | cut -d' ' -f1)
+for a in darwin-arm64 darwin-amd64 linux-arm64 linux-amd64; do echo "$SUM  opensysml-$a.tar.gz"; done > /tmp/bc/sums.txt
+./scripts/render-homebrew-formula.sh <tag> /tmp/bc/sums.txt > /tmp/opensysml.rb
+(cd /tmp/bc/serve && python3 -m http.server 8099 --bind 127.0.0.1 &)
+# in the tap copy only: s|https://github.com/Open-MBEE/OpenSysML/releases/download|http://127.0.0.1:8099/Open-MBEE/OpenSysML/releases/download|g
+```
+
+Caveat: with a `127.0.0.1` URL Homebrew's version scanner no longer sees the tag — it installs
+as `Cellar/opensysml/64` (from `…-amd64`), so `assert_match version.to_s` in `test do` becomes
+meaningless (it can pass by accident on a commit hash containing `64`). Run
+`brew audit --strict` (offline) against the **unmodified github.com** rendering, and report the
+`--online` audit separately: it fails with `The source URL … is not reachable (HTTP status code
+404)` whenever the release lacks `opensysml-*` assets.
+
+Benign noise to ignore: `fatal: ambiguous argument
 'refs/remotes/origin/main'` during auto-update, `Sandbox unavailable: building without
 sandboxing!`, and ``AllCops/UseProjectIndex` is enabled but the `rubydex` gem is not installed``.
 
@@ -62,6 +91,15 @@ sandboxing!`, and ``AllCops/UseProjectIndex` is enabled but the `rubydex` gem is
   entries — the formula only uses the `opensysml-*` bundles.
 - **Zero placeholders**: `grep -c '__[A-Z0-9_]*__' /tmp/opensysml.rb` → `0`. The script has its
   own guard for this (exit 1), so a rendering regression usually surfaces as a script failure.
+- **`depends_on "z3"`** (the solver dependency): a green `brew test` proves nothing on a box
+  that already has apt's `/usr/bin/z3`. Two checks that do discriminate: (1) uninstall brew z3
+  first, then the install log must say `==> Installing local/<tap>/opensysml dependency: z3`
+  and `brew deps opensysml` must list `z3`; (2) temporarily replace the tested executable in
+  the `test do` block with a nonexistent name — `brew test` must fail — then restore. To see
+  *which* z3 `brew test` puts on PATH, temporarily assert a never-matching string against
+  `shell_output("/bin/sh -c 'command -v z3'")`; the Minitest failure prints the real value
+  (`/home/linuxbrew/.linuxbrew/bin/z3`). Note `shell_output("command -v z3")` fails with
+  `Errno::ENOENT` — `command` is a shell builtin, so wrap it in `/bin/sh -c`.
 - **The installed binaries are the brew ones**: check `which sysml` resolves under
   `/home/linuxbrew/...`, not `./bin/sysml`, before smoke-testing. `sysml --version` must print
   the release tag (`sysml v0.0.4`), not a dev/commit string.
@@ -84,6 +122,29 @@ Homebrew 6 requires tap trust. Taps you create locally with `brew tap-new` are t
 automatically (`==> Trusted formula local/<tap>/opensysml`), but installing from tap B will warn
 that tap A "is not trusted" if A is still tapped. That warning is cosmetic for this workflow;
 untap old taps to silence it, or `brew trust local/<tap>`.
+
+## Proving the solver stays optional at runtime (companion to `depends_on "z3"`)
+
+Discovery lives in `internal/core/solve/solver.go` (`OPENSYSML_SMT`, then `z3`, then `cvc5`) and
+its messages in `errors.go`. Drive `bin/sysml` with a scrubbed PATH — one directory per
+scenario, symlinking only the solver you want — and feed meta-commands on stdin:
+
+```bash
+mkdir -p /tmp/pz3 /tmp/pcvc5 /tmp/pnone
+ln -sf /usr/bin/z3 /tmp/pz3/z3; ln -sf <cvc5 dir>/bin/cvc5 /tmp/pcvc5/cvc5
+timeout 60 env -i HOME=$HOME PATH=/tmp/pnone /bin/sh -c 'bin/sysml model.sysml < cmds.txt'
+```
+
+Gotchas: `env -i` without a PATH containing `sh` fails with `env: 'sh': No such file or
+directory` (use `/bin/sh`); and put the meta-commands in a **file** rather than
+`printf "%check …"` — `printf` eats `%c`/`%r` as directives and silently corrupts the input.
+A good discriminating matrix: z3 only → verdict names `z3`; cvc5 only → names `cvc5`; both with
+cvc5 first in PATH → still `z3`; `OPENSYSML_SMT=cvc5` (bare name) → `cvc5`;
+`OPENSYSML_SMT=<non-executable file>` → `error: no SMT solver found: OPENSYSML_SMT names "…",
+which is not an executable file` and *no* fallback verdict; `OPENSYSML_SMT_TIMEOUT=1ms` →
+`? … is undecided (z3, 1ms)` + `Reason: the solver ran out of time after 1ms`; no solver →
+the long `install z3 (…)` error, and `%eval`/`%requirement`/`%satisfy` output byte-identical to
+a run with z3 present (`diff` the two runs — that is the real "solver is optional" proof).
 
 ## Recording
 
