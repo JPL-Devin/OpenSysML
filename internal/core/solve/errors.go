@@ -16,6 +16,140 @@ var ErrNotTranslatable = errors.New("not translatable for solving")
 // translate, as evaluating it reports the same.
 var ErrNoConditions = errors.New("states no condition")
 
+// ErrNoObjective is returned for an analysis case that states no objective, so
+// there is nothing to optimize: what it permits is still a satisfiability
+// question, which checking it plainly answers.
+var ErrNoObjective = errors.New("states no objective")
+
+// ErrNotOptimizable is returned for an objective that cannot be optimized as
+// written: it states no direction, no value, or a value an optimizer cannot
+// improve. It is a refusal about the objective rather than about the subset a
+// condition is translated in.
+var ErrNotOptimizable = errors.New("not optimizable")
+
+// ErrNoOptimization is returned when the solver found does not implement
+// optimization. `(maximize …)` is a z3 extension rather than SMT-LIB, so this is
+// reported rather than degraded to a plain satisfiability check.
+var ErrNoOptimization = errors.New("the SMT solver does not implement optimization")
+
+// ErrNoOptimum is returned when a solver answered sat but did not report the
+// optimum readably. No optimum is invented in its place.
+var ErrNoOptimum = errors.New("the SMT solver did not report the optimum")
+
+// NoObjectiveError says which analysis case states no objective. It unwraps to
+// ErrNoObjective.
+type NoObjectiveError struct {
+	// Element names the analysis case asked about.
+	Element string
+}
+
+// Error reports that the case states no objective.
+func (e *NoObjectiveError) Error() string {
+	return fmt.Sprintf("analysis %s: %s", e.Element, ErrNoObjective)
+}
+
+// Unwrap returns ErrNoObjective.
+func (e *NoObjectiveError) Unwrap() error { return ErrNoObjective }
+
+// ObjectiveError says which objective cannot be optimized, why, and where it was
+// written. It unwraps to ErrNotOptimizable.
+type ObjectiveError struct {
+	// Objective names the objective as the model writes it.
+	Objective string
+
+	// Reason says what about it cannot be optimized.
+	Reason string
+
+	// Remedy says what the model would have to state instead, empty when there
+	// is nothing to suggest.
+	Remedy string
+
+	// Element is the analysis case stating the objective.
+	Element string
+
+	// File is the document it was written in, empty when unknown.
+	File string
+
+	// Span is where in File it was written.
+	Span source.Span
+
+	// Location renders File and Span as `file:line:col`, empty when unknown.
+	Location string
+}
+
+// Error reports the refusal, naming the objective and where it was written.
+func (e *ObjectiveError) Error() string {
+	msg := fmt.Sprintf("%s: %s %s", e.Element, e.Objective, ErrNotOptimizable)
+	if e.Reason != "" {
+		msg += ": it " + e.Reason
+	}
+	if e.Remedy != "" {
+		msg += " (" + e.Remedy + ")"
+	}
+	if e.Location != "" {
+		msg += " at " + e.Location
+	}
+	return msg
+}
+
+// Unwrap returns ErrNotOptimizable.
+func (e *ObjectiveError) Unwrap() error { return ErrNotOptimizable }
+
+// NoOptimizationError names the solver that does not implement optimization and
+// what to run instead. It unwraps to ErrNoOptimization.
+type NoOptimizationError struct {
+	// Solver is the executable that was run.
+	Solver string
+
+	// Detail says how it turned out not to implement optimization.
+	Detail string
+}
+
+// Error reports that the solver cannot optimize, naming what can.
+func (e *NoOptimizationError) Error() string {
+	msg := fmt.Sprintf("%s: %s", ErrNoOptimization, e.Solver)
+	if e.Detail != "" {
+		msg += " " + e.Detail
+	}
+	return msg + fmt.Sprintf("; install z3 or set %s to it", SolverEnv)
+}
+
+// Unwrap returns ErrNoOptimization.
+func (e *NoOptimizationError) Unwrap() error { return ErrNoOptimization }
+
+// OptimumError says which solver would not report an optimum it had found, and
+// how. It unwraps to both ErrNoOptimum and ErrSolverProcess, as the solver did
+// not answer what it was asked.
+type OptimumError struct {
+	// Solver is the executable that was run.
+	Solver string
+
+	// Objective names the objective it was asked about.
+	Objective string
+
+	// Detail says what it answered instead of an optimum.
+	Detail string
+
+	// Stderr is what the solver wrote on standard error, trimmed.
+	Stderr string
+}
+
+// Error reports the failure, naming the solver and what it answered.
+func (e *OptimumError) Error() string {
+	msg := fmt.Sprintf("%s: %s answered sat but %s", ErrNoOptimum, e.Solver, e.Detail)
+	if e.Objective != "" {
+		msg += " for " + e.Objective
+	}
+	if e.Stderr != "" {
+		msg += ": " + e.Stderr
+	}
+	return msg
+}
+
+// Unwrap returns both kinds this failure is, so either is testable with
+// errors.Is.
+func (e *OptimumError) Unwrap() []error { return []error{ErrNoOptimum, ErrSolverProcess} }
+
 // ErrNoSolver is returned when no SMT solver could be found to run a query.
 // Solving is optional, so its absence is reported rather than passed over.
 var ErrNoSolver = errors.New("no SMT solver found")

@@ -46,6 +46,11 @@ var (
 	// request, not the model.
 	ErrNotARequirement = errors.New("not a requirement")
 
+	// ErrNotAnAnalysis is returned when a symbol asked for its objectives is not
+	// an analysis case. Like ErrNotAConstraint it reports the request, not the
+	// model.
+	ErrNotAnAnalysis = errors.New("not an analysis case")
+
 	// ErrCalcArity is returned when a calc invocation passes more arguments than
 	// the calc declares input parameters.
 	ErrCalcArity = errors.New("calc argument count mismatch")

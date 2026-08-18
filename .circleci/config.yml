@@ -105,7 +105,8 @@ jobs:
             env -u OPENSYSML_REQUIRE_SMT OPENSYSML_SMT=/nonexistent/no-such-solver \
               go test -count=1 -v ./internal/core/solve ./internal/repl | tee no-solver-gate.log
             for name in TestCheckReportsAnAbsentSolver TestExplainReportsAnAbsentSolver \
-              TestSolveReportsAnAbsentSolver TestConfigureReportsAnAbsentSolver; do
+              TestSolveReportsAnAbsentSolver TestConfigureReportsAnAbsentSolver \
+              TestOptimizeReportsAnAbsentSolver; do
               grep -qE "^\s*--- PASS: $name" no-solver-gate.log || {
                 echo "error: $name did not run without a solver" >&2
                 exit 1
