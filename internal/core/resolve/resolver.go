@@ -273,6 +273,7 @@ func (r *Resolver) memoize(at ast.Node, res resolution) {
 	r.memo[at] = res
 }
 
+// memoizeFeatureChain caches a chain result unless condition or quiet rules forbid it.
 func (r *Resolver) memoizeFeatureChain(scope *symbols.Scope, fc *ast.FeatureChainExpr, res resolution) {
 	if fc == nil || r.inCondition > 0 || (!res.ok && r.quiet > 0) {
 		return

@@ -1051,10 +1051,12 @@ func (r *Resolver) getOperandSymbol(scope *symbols.Scope, e ast.Node) *symbols.S
 	case *ast.FeatureChainExpr:
 		return r.resolveFeatureChain(scope, v)
 	default:
+		r.resolveExpr(scope, e)
 		return nil
 	}
 }
 
+// followChainMemberType follows a usage's type when it has no inline members.
 func (r *Resolver) followChainMemberType(sym *symbols.Symbol) *symbols.Symbol {
 	if sym == nil {
 		return nil

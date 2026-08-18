@@ -372,6 +372,48 @@ func TestResolveLongFeatureChainMissReportsItsOwnSpanOnce(t *testing.T) {
 	}
 }
 
+func TestResolveChainResolvesNonReferenceOperands(t *testing.T) {
+	src := `package P {
+		attribute indexed = missing[1].b;
+		attribute invoked = missing(1).b;
+	}`
+	p := parser.New(source.New("non-reference-chain.sysml", []byte(src)))
+	root := p.ParseFile()
+	if len(p.Diagnostics) != 0 {
+		t.Fatalf("parse diagnostics: %v", p.Diagnostics)
+	}
+	idx := symbols.NewIndexFromDoc("non-reference-chain.sysml", root)
+	r := New(idx)
+	r.ResolveDocument("non-reference-chain.sysml", root)
+	if len(r.Diagnostics) != 2 {
+		t.Fatalf("expected two unresolved diagnostics, got %d: %v", len(r.Diagnostics), r.Diagnostics)
+	}
+	for _, d := range r.Diagnostics {
+		if !strings.Contains(d.Message, "missing") {
+			t.Errorf("diagnostic %q does not name the unresolved operand", d.Message)
+		}
+	}
+
+	pkg, ok := idx.DocumentRoot("non-reference-chain.sysml").LookupLocal("P")
+	if !ok {
+		t.Fatal("package P was not indexed")
+	}
+	indexed, ok := pkg.Scope.LookupLocal("indexed")
+	if !ok {
+		t.Fatal("indexed attribute was not indexed")
+	}
+	if _, ok := indexed.Decl.(*ast.Usage).Value.(*ast.FeatureChainExpr).Operand.(*ast.IndexExpr); !ok {
+		t.Fatal("indexed chain operand was not parsed as IndexExpr")
+	}
+	invoked, ok := pkg.Scope.LookupLocal("invoked")
+	if !ok {
+		t.Fatal("invoked attribute was not indexed")
+	}
+	if _, ok := invoked.Decl.(*ast.Usage).Value.(*ast.FeatureChainExpr).Operand.(*ast.InvocationExpr); !ok {
+		t.Fatal("invoked chain operand was not parsed as InvocationExpr")
+	}
+}
+
 type countingMemberLookup struct {
 	calls int
 }
