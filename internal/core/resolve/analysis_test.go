@@ -322,6 +322,35 @@ func TestResolveChainBadQualifiedSegmentReportedOnce(t *testing.T) {
 	}
 }
 
+// A segment reported unresolved leaves no symbol behind for a reader to jump to.
+func TestResolveChainUnresolvedSegmentRecordsNoSymbol(t *testing.T) {
+	src := `package P {
+		part a;
+		part B { part right; }
+		part c;
+		binding bind a.B::wrong = c;
+	}`
+	p := parser.New(source.New("probe.sysml", []byte(src)))
+	root := p.ParseFile()
+	if len(p.Diagnostics) != 0 {
+		t.Fatalf("parse diagnostics: %v", p.Diagnostics)
+	}
+	r := New(symbols.NewIndexFromDoc("probe.sysml", root))
+	r.ResolveDocument("probe.sysml", root)
+	if len(r.Diagnostics) == 0 {
+		t.Fatal("expected the chain to be reported unresolved")
+	}
+
+	binding := findBindingUsage(t, root.Members)
+	chain, ok := binding.Relationships[0].Target.(*ast.FeatureChainExpr)
+	if !ok {
+		t.Fatalf("expected a feature chain end, got %T", binding.Relationships[0].Target)
+	}
+	if sym, ok := r.PartSymbol(chain.Member, 0); ok {
+		t.Errorf("discarded reading left segment B pointing at %s", sym.Name)
+	}
+}
+
 // A qualified chain segment names a member of the previous element when it has
 // one, even where an outer declaration spells the same name.
 func TestResolveChainPrefersMemberOverOuterDeclaration(t *testing.T) {

@@ -232,6 +232,28 @@ func (r *Resolver) aside(f func()) {
 	f()
 }
 
+// probe runs a trial reading of qn, reported by f as resolved or not. Its
+// diagnostics are suppressed, and the per-segment resolutions it records are
+// kept only where it resolved: a reading not adopted leaves nothing behind for a
+// caller to read back.
+func (r *Resolver) probe(qn *ast.QualifiedName, f func() bool) bool {
+	saved, had := r.parts[qn]
+	if had {
+		saved = append([]*symbols.Symbol(nil), saved...)
+	}
+	resolved := false
+	r.aside(func() { resolved = f() })
+	if resolved {
+		return true
+	}
+	if had {
+		r.parts[qn] = saved
+	} else {
+		delete(r.parts, qn)
+	}
+	return false
+}
+
 // memoize remembers a reference's resolution, except one reached while a filter
 // condition's names were resolved: those lookups are unfiltered (see
 // InCondition), and an ordinary reference must not inherit an unjudged answer.
