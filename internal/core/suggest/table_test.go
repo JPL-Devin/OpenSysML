@@ -3,7 +3,7 @@ package suggest_test
 import (
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/suggest"
+	"github.com/Open-MBEE/OpenSysML/internal/core/suggest"
 )
 
 // A table swept once answers what the per-name scans answer, so the cheaper

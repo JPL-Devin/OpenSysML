@@ -1,15 +1,15 @@
-# Installing pysysml
+# Installing opensysml
 
 ## From PyPI
 
 ```bash
-pip install pysysml
+pip install opensysml
 ```
 
-Published from CircleCI on a `pysysml-v*` tag; the first such release creates the
+Published from CircleCI on a `opensysml-v*` tag; the first such release creates the
 project on PyPI, so until it is cut this installs nothing and the source install
 below is the only route. See
-[docs/project/releasing.md](../docs/project/releasing.md#releasing-pysysml-to-pypi).
+[docs/project/releasing.md](../docs/project/releasing.md#releasing-opensysml-to-pypi).
 
 ## From source
 
@@ -45,7 +45,7 @@ pytest -m integration python/tests/
 
 ```
 python/
-├── pysysml/          # Package source
+├── opensysml/          # Package source
 │   ├── *.py          # Core modules (connection, model, symbol, etc.)
 │   └── proto/        # Generated protobuf stubs
 ├── tests/            # Test suite

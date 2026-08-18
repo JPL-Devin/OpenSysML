@@ -1,6 +1,6 @@
 # `sysml` in fifteen minutes — a live demo script
 
-A single page of runnable material for showing Systemica to someone who has never seen it: each
+A single page of runnable material for showing OpenSysML to someone who has never seen it: each
 section is a model you can paste, a command you can run, and the output it produces. Sections are
 independent, so drop any of them to fit the time you have.
 
@@ -12,12 +12,12 @@ independent, so drop any of them to fit the time you have.
 ## 0. Setup (one minute)
 
 ```bash
-git clone https://github.com/Open-MBEE/Systemica.git && cd Systemica
+git clone https://github.com/Open-MBEE/OpenSysML.git && cd OpenSysML
 make build-sysml          # -> ./bin/sysml
 export PATH="$PWD/bin:$PATH"
 ```
 
-macOS listeners can instead run `brew install Open-MBEE/tap/systemica`.
+macOS listeners can instead run `brew install Open-MBEE/tap/opensysml`.
 
 Show the audience what is running — the version line carries the commit:
 
@@ -120,11 +120,11 @@ SysML v2 REPL — %help for commands, Ctrl-D to exit
 sysml> %instantiate Rover::Rover
 ✓ Created instance of Rover::Rover
   ID: 1
-  Use %slots Rover::Rover to inspect
+  Use %features Rover::Rover to inspect
 
-sysml> %slots Rover::Rover
+sysml> %features Rover::Rover
 Instance: Rover::Rover (ID: 1)
-Slots:
+Features:
   wheels = [Instance(ID: 2), Instance(ID: 3), Instance(ID: 4), Instance(ID: 5), Instance(ID: 6), Instance(ID: 7)]
     diameter = 0.25
     mass = 1.20
@@ -148,7 +148,7 @@ Instances:
   Rover::Rover (ID: 1)
 ```
 
-`part wheels : Wheel[6]` became six objects with their own slots — nobody had to write them out.
+`part wheels : Wheel[6]` became six objects with their own feature values — nobody had to write them out.
 
 ---
 
@@ -401,7 +401,7 @@ Point out the token position (`@ rollForward`, then `@ takeSample`) and the data
 `metersDriven` is `0` before the assignment ran and `10` at the breakpoint.
 
 The two attributes inside a `%tokens` or `Results:` block may print in either order from run to run —
-read the values, not the line order. (`%slots` in §3 is stable.)
+read the values, not the line order. (`%features` in §3 is stable.)
 
 ---
 
@@ -504,7 +504,7 @@ $ head -14 structure.ttl
 @prefix elmt: <urn:sysmlv2:element:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
-@prefix sysx: <urn:systemica:sysml:> .
+@prefix sysx: <urn:opensysml:sysml:> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
 elmt:Structure
@@ -549,7 +549,7 @@ budgets (each bounds one run, not the session):
   evaluation steps     10000000   SYSML_MAX_STEPS
   action steps         1000000    SYSML_MAX_ACTION_STEPS
   state events         1000000    SYSML_MAX_EVENTS
-  do activity steps    5000000    SYSML_MAX_DO_STEPS
+  do action steps      5000000    SYSML_MAX_DO_STEPS
   collection elements  1000000    SYSML_MAX_ELEMENTS
 
 sysml> %eval 1..2000000
@@ -566,7 +566,7 @@ that raises it.
 The REPL reads a script on stdin, which is how you rehearse a demo or wire a model check into CI:
 
 ```bash
-printf '%%load rover.sysml\n%%instantiate Rover::Rover\n%%slots Rover::Rover\n%%constraint Rover::MassBudget\n%%quit\n' | sysml
+printf '%%load rover.sysml\n%%instantiate Rover::Rover\n%%features Rover::Rover\n%%constraint Rover::MassBudget\n%%quit\n' | sysml
 ```
 
 `%save session.sysml` writes the session's model back out (atomically, comments preserved); `%list`

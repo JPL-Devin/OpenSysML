@@ -5,19 +5,19 @@ this guide needs anything else on the machine.
 
 ## From a release build (recommended)
 
-Download the latest release for your platform from [GitHub Releases](https://github.com/Open-MBEE/Systemica/releases):
+Download the latest release for your platform from [GitHub Releases](https://github.com/Open-MBEE/OpenSysML/releases):
 
-**Linux (x64; use `systemica-linux-arm64.tar.gz` on arm64):**
+**Linux (x64; use `opensysml-linux-arm64.tar.gz` on arm64):**
 ```bash
-wget https://github.com/Open-MBEE/Systemica/releases/latest/download/systemica-linux-amd64.tar.gz
-tar xzf systemica-linux-amd64.tar.gz
+wget https://github.com/Open-MBEE/OpenSysML/releases/latest/download/opensysml-linux-amd64.tar.gz
+tar xzf opensysml-linux-amd64.tar.gz
 sudo mv sysml sysml-lsp /usr/local/bin/
 chmod +x /usr/local/bin/sysml /usr/local/bin/sysml-lsp
 ```
 
 **macOS (Intel or Apple Silicon) — Homebrew is the recommended path:**
 ```bash
-brew install Open-MBEE/tap/systemica
+brew install Open-MBEE/tap/opensysml
 ```
 This avoids the Gatekeeper prompt described in [macOS: Gatekeeper](#macos-gatekeeper).
 
@@ -26,20 +26,20 @@ to be trusted before their code is loaded; installing by fully-qualified name tr
 formula, whereas the two-step form needs a trust step in between:
 ```bash
 brew tap Open-MBEE/tap
-brew trust --formula Open-MBEE/tap/systemica   # or: brew trust Open-MBEE/tap, for the whole tap
-brew install systemica
+brew trust --formula Open-MBEE/tap/opensysml   # or: brew trust Open-MBEE/tap, for the whole tap
+brew install opensysml
 ```
 
 **macOS, direct download (fallback):** use `curl`, not a browser.
 ```bash
-# Apple Silicon; use systemica-darwin-amd64.tar.gz on Intel
-curl -fL -o systemica.tar.gz https://github.com/Open-MBEE/Systemica/releases/latest/download/systemica-darwin-arm64.tar.gz
-tar xzf systemica.tar.gz
+# Apple Silicon; use opensysml-darwin-amd64.tar.gz on Intel
+curl -fL -o opensysml.tar.gz https://github.com/Open-MBEE/OpenSysML/releases/latest/download/opensysml-darwin-arm64.tar.gz
+tar xzf opensysml.tar.gz
 sudo mv sysml sysml-lsp /usr/local/bin/
 ```
 
 **Windows:**
-Download `systemica-windows-amd64.zip` from [releases](https://github.com/Open-MBEE/Systemica/releases/latest), extract, and add to PATH. Windows SmartScreen may warn that the publisher is unrecognized; the binaries are not Authenticode-signed.
+Download `opensysml-windows-amd64.zip` from [releases](https://github.com/Open-MBEE/OpenSysML/releases/latest), extract, and add to PATH. Windows SmartScreen may warn that the publisher is unrecognized; the binaries are not Authenticode-signed.
 
 **Available binaries:**
 - `sysml` — Interactive REPL
@@ -47,10 +47,10 @@ Download `systemica-windows-amd64.zip` from [releases](https://github.com/Open-M
 
 `sysml-grpc` — the service the Python bindings talk to — is published as a raw
 `sysml-grpc-<os>-<arch>` file with a `.sha256` sidecar rather than in an archive, because
-`pysysml` downloads and verifies it itself (see [python/README.md](../../python/README.md)).
+`opensysml` downloads and verifies it itself (see [python/README.md](../../python/README.md)).
 `make build-grpc` builds it from source.
 
-**Archive layout:** `systemica-<os>-<arch>.tar.gz` bundles contain both binaries under their
+**Archive layout:** `opensysml-<os>-<arch>.tar.gz` bundles contain both binaries under their
 plain names (`sysml`, `sysml-lsp`); the older single-binary `sysml-<os>-<arch>.tar.gz` and
 `sysml-lsp-<os>-<arch>.tar.gz` archives are still published. The bundles and
 `SHA256SUMS.txt` are published from v0.0.4 onward; for earlier releases use the
@@ -59,7 +59,7 @@ next release onward, and `SHA256SUMS.txt` covers every archive and every publish
 `sysml-grpc` binary:
 
 ```bash
-curl -fLO https://github.com/Open-MBEE/Systemica/releases/latest/download/SHA256SUMS.txt
+curl -fLO https://github.com/Open-MBEE/OpenSysML/releases/latest/download/SHA256SUMS.txt
 shasum -a 256 -c SHA256SUMS.txt --ignore-missing   # macOS; use sha256sum -c on Linux
 ```
 
@@ -72,21 +72,21 @@ an Apple Developer ID or notarized. It is not a broken binary.
 
 Ways to avoid it, best first:
 
-1. **Install with Homebrew** (`brew install Open-MBEE/tap/systemica`). Homebrew
+1. **Install with Homebrew** (`brew install Open-MBEE/tap/opensysml`). Homebrew
    downloads with `curl` and does not quarantine formula binaries. This is the recommended
    path, and the accepted stopgap until the releases are signed and notarized.
 2. **Download with `curl` or `wget`** (as shown above). They do not set the quarantine
    attribute, so no prompt appears.
 3. **Install with a Go toolchain** — built locally, never quarantined:
    ```bash
-   go install github.com/Open-MBEE/Systemica/cmd/sysml@latest
-   go install github.com/Open-MBEE/Systemica/cmd/sysml-lsp@latest
+   go install github.com/Open-MBEE/OpenSysML/cmd/sysml@latest
+   go install github.com/Open-MBEE/OpenSysML/cmd/sysml-lsp@latest
    ```
 4. **Clear the attribute** if you already downloaded the archive in a browser. Verify the
    checksum first — you are turning off a security check, so make sure you have the file we
    published:
    ```bash
-   shasum -a 256 systemica-darwin-arm64.tar.gz   # compare against SHA256SUMS.txt
+   shasum -a 256 opensysml-darwin-arm64.tar.gz   # compare against SHA256SUMS.txt
    xattr -d com.apple.quarantine /usr/local/bin/sysml /usr/local/bin/sysml-lsp
    ```
    `xattr -d: No such xattr` simply means the file was not quarantined. Use
@@ -95,6 +95,151 @@ Ways to avoid it, best first:
 
 See [MACOS_DISTRIBUTION.md](../project/macos-distribution.md) for the root-cause analysis and for what
 signing + notarizing the releases would require.
+
+## Installing a solver (optional)
+
+Nothing above needs an SMT solver: the whole guide, and every normative check —
+`%constraint`, `%requirement`, `%satisfy`, `%eval` — runs on the concrete evaluator, which is
+the normative implementation. A solver is needed only by the **experimental** extension
+`%check`/`%explain`, which asks whether a constraint *can* be satisfied rather than whether it
+holds of an object (see [reference/repl-commands.md](../reference/repl-commands.md)).
+
+The solver is a separate program, run as a process and spoken to in SMT-LIB2 — nothing is
+linked in and nothing is bundled in the release archives, which stay single static binaries.
+Either [z3](https://github.com/Z3Prover/z3) (MIT) or [cvc5](https://github.com/cvc5/cvc5)
+works; z3 is the one to install unless you have a reason to prefer cvc5.
+
+**macOS and Linux, Homebrew — automatic:** z3 is a dependency of the formula, so the
+recommended install already brings a working `%check`:
+```bash
+brew install Open-MBEE/tap/opensysml   # installs z3 too
+brew install z3                        # or just the solver, next to a non-brew sysml
+```
+
+**Debian and Ubuntu:**
+```bash
+sudo apt install z3          # provides /usr/bin/z3
+```
+
+**Other Linux distributions** — each of these packages provides a `z3` executable:
+```bash
+sudo dnf install z3          # Fedora
+sudo pacman -S z3            # Arch (extra/z3)
+sudo apk add z3              # Alpine (community repository)
+nix-shell -p z3              # nixpkgs, for one shell; or: nix profile install nixpkgs#z3
+```
+Of these, apt is the one run while writing this; the rest were read off their package indexes
+(Fedora's `z3`, `extra/z3`, Alpine `community/z3`, and nixpkgs' `z3`, all shipping a `z3`
+program), so a distribution that has renamed or dropped the package is the case to expect
+trouble from.
+
+**Windows:** take the official prebuilt archive from
+[z3's releases](https://github.com/Z3Prover/z3/releases) — `z3-<version>-x64-win.zip` (for
+example `z3-5.1.0-x64-win.zip`; `arm64` and `x86` builds are published too). Unzip it and
+either add the archive's `bin` directory to `PATH`, or point `OPENSYSML_SMT` at the executable:
+```powershell
+$env:OPENSYSML_SMT = "C:\tools\z3-5.1.0-x64-win\bin\z3.exe"
+```
+[Scoop](https://scoop.sh) packages the same archive, so `scoop install z3` puts `z3.exe` on
+`PATH` for you.
+
+**Any platform with Python — the `pip` fallback:** the `z3-solver` wheels (MIT) are published
+for Linux, macOS and Windows and carry the executable, not just the Python module:
+```bash
+python3 -m venv .venv
+.venv/bin/pip install z3-solver     # z3 lands in .venv/bin/z3
+```
+An activated virtual environment therefore puts `z3` on `PATH` and needs nothing else. Without
+activating it, name the executable instead:
+```bash
+OPENSYSML_SMT=$PWD/.venv/bin/z3 sysml model.sysml
+```
+
+**cvc5, the alternative backend:** there is no Homebrew formula and no Debian/Ubuntu package;
+take a prebuilt archive from [cvc5's releases](https://github.com/cvc5/cvc5/releases)
+(`cvc5-Linux-x86_64-static.zip`, `cvc5-macOS-arm64-static.zip`, `cvc5-Win64-x86_64-static.zip`
+and so on), whose `bin/cvc5` is what goes on `PATH`. cvc5 is under a modified BSD licence, but
+its default build links GMP under LGPL-3, and it can be configured against GPL libraries (the
+`*-gpl` archives are those builds). That matters if you **redistribute** cvc5; it does not
+change how you may use OpenSysML, which links neither solver.
+
+### Solver compatibility — pointing the driver at another solver
+
+`OPENSYSML_SMT` takes **any** executable that reads SMT-LIB2 on standard input and answers on
+standard output, not only z3 and cvc5. What such a backend has to support is the subset the
+scripts use:
+
+| Feature | What is emitted | z3 4.8.12 | cvc5 1.3.4 |
+|---|---|---|---|
+| Model output | `(set-option :produce-models true)` with `(get-value …)` | yes | yes |
+| Unsat cores | `(set-option :produce-unsat-cores true)`, `:named` assertions, `(get-unsat-core)` | yes | yes |
+| Incremental dialogue | more than one `(check-sat)` in a script, for `%configure … all` | yes | yes |
+| Enumerations and variants | `(declare-datatypes …)` with nullary constructors | yes | yes |
+| Strings | the `String` sort, compared for equality | yes | yes |
+| Integer division | `div` and `mod` from the Ints theory | yes | yes |
+| Nonlinear arithmetic | a product or quotient of two non-literal terms | yes | yes |
+| Mixed arithmetic | the `AUFLIRA`/`AUFNIRA` logics, for a query over `Int` and `Real` | yes | yes |
+| Non-standard logic | `(set-logic ALL)`, which datatypes and strings need | yes | yes |
+| Objective optimization | `(maximize …)`/`(minimize …)`, for `%optimize` | yes | **no** — parse error |
+| Objective priority | `:opt.priority`, a z3 extension | yes | **no** — answers `unsupported` |
+
+The two columns are what each solver answered when probed on this machine, not what its
+documentation claims. The last two rows are the only part of the subset cvc5 lacks, and
+`%optimize` is the only command that needs them: on cvc5 it refuses by naming the extension
+the solver lacks, and every other command works on either solver.
+
+Every logic a script sets other than that non-standard `ALL` is a standard SMT-LIB 2.6 one
+([the logic list](https://smt-lib.org/logics.shtml)): `QF_UF`, `QF_LIA`, `QF_NIA`, `QF_LRA`,
+`QF_NRA`, `AUFLIRA`, `AUFNIRA` — the narrowest that covers what the query actually uses. `ALL`
+is set only where the list defines no logic for the feature at all (datatypes, strings), which
+the script says in a comment on the line above `(set-logic ALL)`.
+
+A backend is probed the first time it is used — one small script per feature it is asked for,
+cached for the process — and what it refuses is reported rather than worked around:
+
+```
+sysml> %explain P::C
+error: the SMT solver does not support a feature this query needs: mysolver does not support
+SMT-LIB 2.6 unsat cores: `:produce-unsat-cores` with `:named` assertions and `(get-unsat-core)`
+(unsat-cores), which explaining a conflict needs: it rejected the script: unsupported;
+install a solver that supports it or set OPENSYSML_SMT to one
+```
+
+Which is distinct from the other two ways a solver run ends without a verdict: a solver that
+crashes, exits, or answers unreadably is a solver *process* error naming the stage it failed at,
+and a solver that answers but does not decide is the verdict `unknown` with the reason it gave.
+No verdict is ever invented from any of the three.
+
+To check a solver of your own end to end, run the portability harness against it — it reports
+each feature as `pass`, `refuse` (the backend lacks it and said so) or `fail` (a script it
+rejected, which is a bug to report):
+
+```bash
+OPENSYSML_SMT=/path/to/mysolver go test ./internal/core/solve -run TestPortability -v
+```
+
+### Verifying the solver is found
+
+`%check` names the solver it used, so the verdict line is the verification:
+
+```
+sysml> %check P::C
+✗ Constraint C is unsatisfiable (z3, 8ms)
+```
+
+Discovery order: `OPENSYSML_SMT` first — an executable name or a path, and a value naming no
+executable is an error rather than a silent fallback — then `z3` on `PATH`, then `cvc5`. z3 wins
+when both are installed, wherever they sit in `PATH`. `OPENSYSML_SMT_TIMEOUT` (default `10s`)
+bounds one query, after which the verdict is `unknown` rather than an error; see
+[reference/environment.md](../reference/environment.md).
+
+With no solver anywhere, `%check` and `%explain` report that instead of a verdict, and every
+other command is unaffected:
+
+```
+sysml> %check P::C
+error: no SMT solver found: install z3 (`apt install z3`, `brew install z3`) or cvc5, or set OPENSYSML_SMT to a solver executable; looked for [z3 cvc5] on PATH
+```
 
 ## From source
 
@@ -105,8 +250,8 @@ signing + notarizing the releases would require.
 
 **Build:**
 ```bash
-git clone https://github.com/Open-MBEE/Systemica.git
-cd Systemica
+git clone https://github.com/Open-MBEE/OpenSysML.git
+cd OpenSysML
 make build       # builds bin/sysml, bin/sysml-lsp, and bin/sysml-grpc
 # OR
 go build -o sysml ./cmd/sysml

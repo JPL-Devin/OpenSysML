@@ -1,0 +1,402 @@
+@prefix elmt: <urn:sysmlv2:element:> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix sysx: <urn:opensysml:sysml:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+elmt:StateMachine
+    a sysml:Package ;
+    sysml:qualifiedName "StateMachine" ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "StateMachine" ;
+    sysx:hasBody "true"^^xsd:boolean .
+
+elmt:StateMachine::Signal
+    a sysml:AttributeDefinition ;
+    sysml:qualifiedName "StateMachine::Signal" ;
+    sysml:owningNamespace elmt:StateMachine ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "Signal" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:StateMachine::Warm
+    a sysml:ActionDefinition ;
+    sysml:qualifiedName "StateMachine::Warm" ;
+    sysml:owningNamespace elmt:StateMachine ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:declaredName "Warm" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:StateMachine::Bus
+    a sysml:PortDefinition ;
+    sysml:qualifiedName "StateMachine::Bus" ;
+    sysml:owningNamespace elmt:StateMachine ;
+    sysx:memberIndex "2"^^xsd:integer ;
+    sysml:declaredName "Bus" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:StateMachine::VehicleStates
+    a sysml:StateDefinition ;
+    sysml:qualifiedName "StateMachine::VehicleStates" ;
+    sysml:owningNamespace elmt:StateMachine ;
+    sysx:memberIndex "3"^^xsd:integer ;
+    sysml:declaredName "VehicleStates" ;
+    sysx:hasBody "true"^^xsd:boolean .
+
+<urn:sysmlv2:element:StateMachine::VehicleStates::@0>
+    a sysml:StateSubactionMembership ;
+    sysml:qualifiedName "StateMachine::VehicleStates::@0" ;
+    sysml:owningNamespace elmt:StateMachine::VehicleStates ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysx:subactionKind "entry" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:StateMachine::VehicleStates::off
+    a sysml:StateUsage ;
+    sysml:qualifiedName "StateMachine::VehicleStates::off" ;
+    sysml:owningNamespace elmt:StateMachine::VehicleStates ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:declaredName "off" ;
+    sysx:hasBody "true"^^xsd:boolean .
+
+<urn:sysmlv2:element:StateMachine::VehicleStates::off::@0>
+    a sysml:StateSubactionMembership ;
+    sysml:qualifiedName "StateMachine::VehicleStates::off::@0" ;
+    sysml:owningNamespace elmt:StateMachine::VehicleStates::off ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysx:subactionKind "entry" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+<urn:sysmlv2:element:StateMachine::VehicleStates::off::@0::@0>
+    a sysml:ActionUsage ;
+    sysml:qualifiedName "StateMachine::VehicleStates::off::@0::@0" ;
+    sysml:owningNamespace <urn:sysmlv2:element:StateMachine::VehicleStates::off::@0> ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysx:declaredKeyword "perform" ;
+    sysml:references elmt:StateMachine::Warm ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:StateMachine::VehicleStates::starting
+    a sysml:StateUsage ;
+    sysml:qualifiedName "StateMachine::VehicleStates::starting" ;
+    sysml:owningNamespace elmt:StateMachine::VehicleStates ;
+    sysx:memberIndex "2"^^xsd:integer ;
+    sysml:declaredName "starting" ;
+    sysx:hasBody "true"^^xsd:boolean .
+
+<urn:sysmlv2:element:StateMachine::VehicleStates::starting::@0>
+    a sysml:StateSubactionMembership ;
+    sysml:qualifiedName "StateMachine::VehicleStates::starting::@0" ;
+    sysml:owningNamespace elmt:StateMachine::VehicleStates::starting ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysx:subactionKind "entry" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+<urn:sysmlv2:element:StateMachine::VehicleStates::starting::@0::ready>
+    a sysml:ActionUsage ;
+    sysml:qualifiedName "StateMachine::VehicleStates::starting::@0::ready" ;
+    sysml:owningNamespace <urn:sysmlv2:element:StateMachine::VehicleStates::starting::@0> ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "ready" ;
+    sysml:type elmt:StateMachine::Warm ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+<urn:sysmlv2:element:StateMachine::VehicleStates::starting::@1>
+    a sysml:StateSubactionMembership ;
+    sysml:qualifiedName "StateMachine::VehicleStates::starting::@1" ;
+    sysml:owningNamespace elmt:StateMachine::VehicleStates::starting ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysx:subactionKind "do" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+<urn:sysmlv2:element:StateMachine::VehicleStates::starting::@1::running>
+    a sysml:ActionUsage ;
+    sysml:qualifiedName "StateMachine::VehicleStates::starting::@1::running" ;
+    sysml:owningNamespace <urn:sysmlv2:element:StateMachine::VehicleStates::starting::@1> ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "running" ;
+    sysml:type elmt:StateMachine::Warm ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+<urn:sysmlv2:element:StateMachine::VehicleStates::starting::@2>
+    a sysml:StateSubactionMembership ;
+    sysml:qualifiedName "StateMachine::VehicleStates::starting::@2" ;
+    sysml:owningNamespace elmt:StateMachine::VehicleStates::starting ;
+    sysx:memberIndex "2"^^xsd:integer ;
+    sysx:subactionKind "exit" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+<urn:sysmlv2:element:StateMachine::VehicleStates::starting::@2::@0>
+    a sysml:ActionUsage ;
+    sysml:qualifiedName "StateMachine::VehicleStates::starting::@2::@0" ;
+    sysml:owningNamespace <urn:sysmlv2:element:StateMachine::VehicleStates::starting::@2> ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysx:declaredKeyword "perform" ;
+    sysml:references elmt:StateMachine::Warm ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:StateMachine::VehicleStates::active
+    a sysml:StateUsage ;
+    sysml:qualifiedName "StateMachine::VehicleStates::active" ;
+    sysml:owningNamespace elmt:StateMachine::VehicleStates ;
+    sysx:memberIndex "3"^^xsd:integer ;
+    sysml:declaredName "active" ;
+    sysx:hasBody "true"^^xsd:boolean .
+
+<urn:sysmlv2:element:StateMachine::VehicleStates::active::@0>
+    a sysml:StateSubactionMembership ;
+    sysml:qualifiedName "StateMachine::VehicleStates::active::@0" ;
+    sysml:owningNamespace elmt:StateMachine::VehicleStates::active ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysx:subactionKind "do" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+<urn:sysmlv2:element:StateMachine::VehicleStates::active::@0::monitor>
+    a sysml:ActionUsage ;
+    sysml:qualifiedName "StateMachine::VehicleStates::active::@0::monitor" ;
+    sysml:owningNamespace <urn:sysmlv2:element:StateMachine::VehicleStates::active::@0> ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "monitor" ;
+    sysml:type elmt:StateMachine::Warm ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+<urn:sysmlv2:element:StateMachine::VehicleStates::active::@1>
+    a sysml:TransitionUsage ;
+    sysml:qualifiedName "StateMachine::VehicleStates::active::@1" ;
+    sysml:owningNamespace elmt:StateMachine::VehicleStates::active ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysx:transitionSyntax "accept" ;
+    sysml:targetFeature elmt:StateMachine::VehicleStates::off ;
+    sysx:trigger "sig : Signal" ;
+    sysx:triggerKeyword "accept" .
+
+elmt:StateMachine::VehicleStates::off_to_start
+    a sysml:TransitionUsage ;
+    sysml:qualifiedName "StateMachine::VehicleStates::off_to_start" ;
+    sysml:owningNamespace elmt:StateMachine::VehicleStates ;
+    sysx:memberIndex "4"^^xsd:integer ;
+    sysml:declaredName "off_to_start" ;
+    sysx:transitionSyntax "first" ;
+    sysml:sourceFeature elmt:StateMachine::VehicleStates::off ;
+    sysml:targetFeature elmt:StateMachine::VehicleStates::starting ;
+    sysx:trigger "sig : Signal" ;
+    sysx:triggerKeyword "accept" .
+
+<urn:sysmlv2:element:StateMachine::VehicleStates::@5>
+    a sysml:TransitionUsage ;
+    sysml:qualifiedName "StateMachine::VehicleStates::@5" ;
+    sysml:owningNamespace elmt:StateMachine::VehicleStates ;
+    sysx:memberIndex "5"^^xsd:integer ;
+    sysx:transitionSyntax "first" ;
+    sysml:sourceFeature elmt:StateMachine::VehicleStates::starting ;
+    sysml:targetFeature elmt:StateMachine::VehicleStates::active ;
+    sysx:guard "ready" .
+
+elmt:StateMachine::VehicleStates::active_to_off
+    a sysml:TransitionUsage ;
+    sysml:qualifiedName "StateMachine::VehicleStates::active_to_off" ;
+    sysml:owningNamespace elmt:StateMachine::VehicleStates ;
+    sysx:memberIndex "6"^^xsd:integer ;
+    sysml:declaredName "active_to_off" ;
+    sysx:transitionSyntax "first" ;
+    sysml:sourceFeature elmt:StateMachine::VehicleStates::active ;
+    sysml:targetFeature elmt:StateMachine::VehicleStates::off ;
+    sysx:trigger "sig : Signal" ;
+    sysx:triggerKeyword "accept" ;
+    sysml:via elmt:StateMachine::VehicleStates::lane ;
+    sysx:guard "monitor" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:StateMachine::VehicleStates::active_to_off::stop
+    a sysml:ActionUsage ;
+    sysml:qualifiedName "StateMachine::VehicleStates::active_to_off::stop" ;
+    sysml:owningNamespace elmt:StateMachine::VehicleStates::active_to_off ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "stop" ;
+    sysml:type elmt:StateMachine::Warm ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:StateMachine::VehicleStates::lane
+    a sysml:PortUsage ;
+    sysml:qualifiedName "StateMachine::VehicleStates::lane" ;
+    sysml:owningNamespace elmt:StateMachine::VehicleStates ;
+    sysx:memberIndex "7"^^xsd:integer ;
+    sysml:declaredName "lane" ;
+    sysml:type elmt:StateMachine::Bus ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:StateMachine::Nested
+    a sysml:StateDefinition ;
+    sysml:qualifiedName "StateMachine::Nested" ;
+    sysml:owningNamespace elmt:StateMachine ;
+    sysx:memberIndex "4"^^xsd:integer ;
+    sysml:declaredName "Nested" ;
+    sysx:hasBody "true"^^xsd:boolean .
+
+elmt:StateMachine::Nested::idle
+    a sysml:StateUsage ;
+    sysml:qualifiedName "StateMachine::Nested::idle" ;
+    sysml:owningNamespace elmt:StateMachine::Nested ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "idle" ;
+    sysx:hasBody "true"^^xsd:boolean .
+
+elmt:StateMachine::Nested::idle::substate
+    a sysml:StateUsage ;
+    sysml:qualifiedName "StateMachine::Nested::idle::substate" ;
+    sysml:owningNamespace elmt:StateMachine::Nested::idle ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "substate" ;
+    sysx:hasBody "true"^^xsd:boolean .
+
+<urn:sysmlv2:element:StateMachine::Nested::idle::substate::@0>
+    a sysml:StateSubactionMembership ;
+    sysml:qualifiedName "StateMachine::Nested::idle::substate::@0" ;
+    sysml:owningNamespace elmt:StateMachine::Nested::idle::substate ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysx:subactionKind "entry" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+<urn:sysmlv2:element:StateMachine::Nested::idle::substate::@0::@0>
+    a sysml:ActionUsage ;
+    sysml:qualifiedName "StateMachine::Nested::idle::substate::@0::@0" ;
+    sysml:owningNamespace <urn:sysmlv2:element:StateMachine::Nested::idle::substate::@0> ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysx:declaredKeyword "perform" ;
+    sysml:references elmt:StateMachine::Warm ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:StateMachine::Composite
+    a sysml:StateDefinition ;
+    sysml:qualifiedName "StateMachine::Composite" ;
+    sysml:owningNamespace elmt:StateMachine ;
+    sysx:memberIndex "5"^^xsd:integer ;
+    sysml:declaredName "Composite" ;
+    sysx:hasBody "true"^^xsd:boolean .
+
+elmt:StateMachine::Composite::launch
+    a sysml:StateUsage ;
+    sysml:qualifiedName "StateMachine::Composite::launch" ;
+    sysml:owningNamespace elmt:StateMachine::Composite ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "launch" ;
+    sysx:declaredKeyword "initial" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:StateMachine::Composite::stopped
+    a sysml:StateUsage ;
+    sysml:qualifiedName "StateMachine::Composite::stopped" ;
+    sysml:owningNamespace elmt:StateMachine::Composite ;
+    sysx:memberIndex "1"^^xsd:integer ;
+    sysml:declaredName "stopped" ;
+    sysx:declaredKeyword "final" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+elmt:StateMachine::Composite::waiting
+    a sysml:StateUsage ;
+    sysml:qualifiedName "StateMachine::Composite::waiting" ;
+    sysml:owningNamespace elmt:StateMachine::Composite ;
+    sysx:memberIndex "2"^^xsd:integer ;
+    sysml:declaredName "waiting" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+<urn:sysmlv2:element:StateMachine::Composite::@3>
+    a sysml:StateSubactionMembership ;
+    sysml:qualifiedName "StateMachine::Composite::@3" ;
+    sysml:owningNamespace elmt:StateMachine::Composite ;
+    sysx:memberIndex "3"^^xsd:integer ;
+    sysx:subactionKind "entry" ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+<urn:sysmlv2:element:StateMachine::Composite::@3::@0>
+    a sysml:ActionUsage ;
+    sysml:qualifiedName "StateMachine::Composite::@3::@0" ;
+    sysml:owningNamespace <urn:sysmlv2:element:StateMachine::Composite::@3> ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysx:hasBody "true"^^xsd:boolean .
+
+<urn:sysmlv2:element:StateMachine::Composite::@3::@0::@0>
+    a sysml:ActionUsage ;
+    sysml:qualifiedName "StateMachine::Composite::@3::@0::@0" ;
+    sysml:owningNamespace <urn:sysmlv2:element:StateMachine::Composite::@3::@0> ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysx:declaredKeyword "perform" ;
+    sysml:references elmt:StateMachine::Warm ;
+    sysx:hasBody "false"^^xsd:boolean .
+
+<urn:sysmlv2:element:StateMachine::Composite::@4>
+    a sysx:DeferMember ;
+    sysml:qualifiedName "StateMachine::Composite::@4" ;
+    sysml:owningNamespace elmt:StateMachine::Composite ;
+    sysx:memberIndex "4"^^xsd:integer ;
+    sysx:deferredEvent "sig", "other" .
+
+elmt:StateMachine::Composite::pick
+    a sysx:Pseudostate ;
+    sysml:qualifiedName "StateMachine::Composite::pick" ;
+    sysml:owningNamespace elmt:StateMachine::Composite ;
+    sysx:memberIndex "5"^^xsd:integer ;
+    sysml:declaredName "pick" ;
+    sysx:pseudostateKind "choice" ;
+    sysx:declaredKeyword "choice" .
+
+elmt:StateMachine::Composite::meet
+    a sysx:Pseudostate ;
+    sysml:qualifiedName "StateMachine::Composite::meet" ;
+    sysml:owningNamespace elmt:StateMachine::Composite ;
+    sysx:memberIndex "6"^^xsd:integer ;
+    sysml:declaredName "meet" ;
+    sysx:pseudostateKind "junction" ;
+    sysx:declaredKeyword "junction" .
+
+elmt:StateMachine::Composite::split
+    a sysx:Pseudostate ;
+    sysml:qualifiedName "StateMachine::Composite::split" ;
+    sysml:owningNamespace elmt:StateMachine::Composite ;
+    sysx:memberIndex "7"^^xsd:integer ;
+    sysml:declaredName "split" ;
+    sysx:pseudostateKind "fork" ;
+    sysx:declaredKeyword "fork" .
+
+elmt:StateMachine::Composite::sync
+    a sysx:Pseudostate ;
+    sysml:qualifiedName "StateMachine::Composite::sync" ;
+    sysml:owningNamespace elmt:StateMachine::Composite ;
+    sysx:memberIndex "8"^^xsd:integer ;
+    sysml:declaredName "sync" ;
+    sysx:pseudostateKind "join" ;
+    sysx:declaredKeyword "join" .
+
+elmt:StateMachine::Composite::recent
+    a sysx:Pseudostate ;
+    sysml:qualifiedName "StateMachine::Composite::recent" ;
+    sysml:owningNamespace elmt:StateMachine::Composite ;
+    sysx:memberIndex "9"^^xsd:integer ;
+    sysml:declaredName "recent" ;
+    sysx:pseudostateKind "shallow history" ;
+    sysx:declaredKeyword "shallow history" .
+
+elmt:StateMachine::Composite::deepest
+    a sysx:Pseudostate ;
+    sysml:qualifiedName "StateMachine::Composite::deepest" ;
+    sysml:owningNamespace elmt:StateMachine::Composite ;
+    sysx:memberIndex "10"^^xsd:integer ;
+    sysml:declaredName "deepest" ;
+    sysx:pseudostateKind "deep history" ;
+    sysx:declaredKeyword "deep history" .
+
+elmt:StateMachine::Composite::primary
+    a sysx:StateRegion ;
+    sysml:qualifiedName "StateMachine::Composite::primary" ;
+    sysml:owningNamespace elmt:StateMachine::Composite ;
+    sysx:memberIndex "11"^^xsd:integer ;
+    sysml:declaredName "primary" ;
+    sysx:hasBody "true"^^xsd:boolean .
+
+elmt:StateMachine::Composite::primary::ready
+    a sysml:StateUsage ;
+    sysml:qualifiedName "StateMachine::Composite::primary::ready" ;
+    sysml:owningNamespace elmt:StateMachine::Composite::primary ;
+    sysx:memberIndex "0"^^xsd:integer ;
+    sysml:declaredName "ready" ;
+    sysx:hasBody "false"^^xsd:boolean .

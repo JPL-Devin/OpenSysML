@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/Open-MBEE/Systemica/internal/core/export"
-	"github.com/Open-MBEE/Systemica/internal/core/project"
+	"github.com/Open-MBEE/OpenSysML/internal/core/export"
+	"github.com/Open-MBEE/OpenSysML/internal/core/project"
 )
 
 // deprecatedFlag rejects a flag that has been replaced, so the old spelling
@@ -45,6 +45,11 @@ func runConvert(files []string) error {
 	name, data, err := project.ReadFile(input)
 	if err != nil {
 		return err
+	}
+	// Reported before the conversion, so a refusal carries it too, and on stderr,
+	// where it cannot land in the converted model written to stdout.
+	if export.IsExperimental(from, to) {
+		fmt.Fprintf(os.Stderr, "note: %s\n", export.ExperimentalNotice)
 	}
 	out, err := export.Convert(name, data, from, to)
 	if err != nil {

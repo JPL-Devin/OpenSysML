@@ -1,0 +1,8 @@
+{
+  "type": "instance",
+  "instantiate": "test::Pair",
+  "objects": [
+    {"path": "a", "finalState": "answered"},
+    {"path": "b", "finalState": "replied"}
+  ]
+}

@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/runtime"
-	"github.com/Open-MBEE/Systemica/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 )
 
 // loadFixture submits a testdata model into a fresh session.
@@ -74,7 +74,7 @@ func TestREPLPackagedModelWorkflow(t *testing.T) {
 	script := []string{
 		"%load testdata/vehicle_package.sysml",
 		"%instantiate Vehicle",
-		"%slots Vehicle",
+		"%features Vehicle",
 		"%eval Demo::Vehicle::mass",
 		"%calc add 2 3",
 		"%constraint withinMassLimit",
@@ -110,8 +110,8 @@ func TestInstantiateFindsPackageMemberBySimpleAndQualifiedName(t *testing.T) {
 
 			// Instances are keyed by the resolved name, so either spelling
 			// reaches the instance the other created.
-			wants(t, run(t, s, "%slots Vehicle"), "mass = 1500.00")
-			wants(t, run(t, s, "%slots Demo::Vehicle"), "mass = 1500.00")
+			wants(t, run(t, s, "%features Vehicle"), "mass = 1500.00")
+			wants(t, run(t, s, "%features Demo::Vehicle"), "mass = 1500.00")
 		})
 	}
 }
@@ -134,7 +134,7 @@ package B { part def Widget { attribute size = 2.0; } }`)
 
 	// The qualified name disambiguates.
 	wants(t, run(t, s, "%instantiate B::Widget"), "✓ Created instance of B::Widget")
-	wants(t, run(t, s, "%slots B::Widget"), "size = 2.00")
+	wants(t, run(t, s, "%features B::Widget"), "size = 2.00")
 }
 
 // Declarations submitted after a lookup must be visible: the symbol index and
@@ -146,12 +146,12 @@ func TestLookupSeesDeclarationsAddedAfterFirstLookup(t *testing.T) {
 
 	s.Submit(`package Demo { part def Trailer { attribute mass = 900.0; } }`)
 	wants(t, run(t, s, "%instantiate Demo::Trailer"), "✓ Created instance of Demo::Trailer")
-	wants(t, run(t, s, "%slots Trailer"), "mass = 900.00")
+	wants(t, run(t, s, "%features Trailer"), "mass = 900.00")
 	wants(t, run(t, s, "%eval Demo::Trailer::mass"), "900.00")
 }
 
 // An instance does not outlive the declaration it is of: redeclaring that
-// definition rewrites what its slots mean, so the object built from the old one
+// definition rewrites what its feature values mean, so the object built from the old one
 // goes, and the listing says why rather than reading like a fresh session.
 func TestInstancesDoNotOutliveTheirDeclaration(t *testing.T) {
 	s := NewSession()
@@ -163,12 +163,12 @@ func TestInstancesDoNotOutliveTheirDeclaration(t *testing.T) {
 	wants(t, run(t, s, "%instances"),
 		"no instances created", "1 instance was dropped when the declarations changed at submission 2")
 	wants(t, run(t, s, "%instantiate Demo::Vehicle"), "ID: 1")
-	wants(t, run(t, s, "%slots Demo::Vehicle"), "mass = 900.00")
+	wants(t, run(t, s, "%features Demo::Vehicle"), "mass = 900.00")
 }
 
-func TestSlotsWithoutInstance(t *testing.T) {
+func TestFeatureValuesWithoutInstance(t *testing.T) {
 	s := loadFixture(t, "testdata/vehicle_package.sysml")
-	wants(t, run(t, s, "%slots Vehicle"), "no instance of", "%instantiate")
+	wants(t, run(t, s, "%features Vehicle"), "no instance of", "%instantiate")
 }
 
 func TestInstancesEmptyAndPopulated(t *testing.T) {
@@ -279,6 +279,15 @@ func TestRequirement(t *testing.T) {
 }
 
 func TestFormatValue(t *testing.T) {
+	sequence := runtime.NewSequence()
+	sequence.Append(runtime.Value{
+		Kind:  runtime.ValConst,
+		Const: semantics.Value{Kind: semantics.ValInt, Int: 1},
+	})
+	sequence.Append(runtime.Value{Kind: runtime.ValString, Str: "hi"})
+	set := runtime.NewSet()
+	set.Add(runtime.Value{Kind: runtime.ValString, Str: "z"})
+	set.Add(runtime.Value{Kind: runtime.ValString, Str: "a"})
 	cases := []struct {
 		name string
 		val  runtime.Value
@@ -291,6 +300,8 @@ func TestFormatValue(t *testing.T) {
 		{"null", runtime.Value{Kind: runtime.ValNull}, "null"},
 		{"string", runtime.Value{Kind: runtime.ValString, Str: "hi"}, `"hi"`},
 		{"instance", runtime.Value{Kind: runtime.ValInstance, Instance: 3}, "Instance(ID: 3)"},
+		{"sequence", runtime.Value{Kind: runtime.ValSequence, Sequence: sequence}, `[1, "hi"]`},
+		{"set", runtime.Value{Kind: runtime.ValSet, Set: set}, `Set{"z", "a"}`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -432,6 +443,33 @@ func TestAdvanceCountsDoWorkSeparatelyFromEvents(t *testing.T) {
 	// are reported as do work; counting them as events reported four.
 	wants(t, out, "Advanced to 1.00 (2 event(s) processed)", "Do behavior actions run: 3")
 	wants(t, run(t, s, "%current"), "count = 3")
+}
+
+// A change condition a do action has just made true is taken in the same
+// advance, and a condition that never holds is reported rather than read as a
+// machine that settled.
+func TestAdvanceTakesChangeTriggerAndReportsAFalseCondition(t *testing.T) {
+	s := loadFixture(t, "testdata/state_change_trigger.sysml")
+	run(t, s, "%state Watch")
+
+	wants(t, run(t, s, "%advance 1"), "Current state: armed", "Do behavior actions run: 1")
+	wants(t, run(t, s, "%advance 1"),
+		"No pending work",
+		"waiting on change condition: armed: accept when blocked (condition is false)")
+	wants(t, run(t, s, "%current"), "Current state: armed", "Cannot progress: waiting on change condition")
+}
+
+// Advancing less than the next event's timestamp is not "no pending work": the
+// event is still queued, so the drain is reported with the state and what is left.
+func TestAdvanceShorterThanNextEventReportsRemainingWork(t *testing.T) {
+	s := loadFixture(t, "testdata/state_debug.sysml")
+	run(t, s, "%state Cycle")
+	run(t, s, "%advance 1") // leaves the transition out of `waiting` queued at 10
+
+	wants(t, run(t, s, "%advance 1"),
+		"Advanced to 2.00 (0 event(s) processed)",
+		"Current state: waiting",
+		"Remaining events: 1")
 }
 
 func TestAdvanceRejectsBadDuration(t *testing.T) {

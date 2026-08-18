@@ -15,7 +15,7 @@ specification library rather than a model using it — are recorded in
 These training examples are from the official OMG pilot implementation and are not vendored here. Run `./scripts/download-training-examples.sh` to fetch the pinned (`2026-05`) copy into `examples/sysml-v2-training/`; the tests that read it skip while it is absent.
 
 CI is not allowed that skip. `.github/workflows/pr.yml` runs the download script before the
-suite and exports `SYSTEMICA_REQUIRE_TRAINING_CORPUS=1`, under which a missing or empty
+suite and exports `OPENSYSML_REQUIRE_TRAINING_CORPUS=1`, under which a missing or empty
 corpus fails the gate instead of skipping it, and a dedicated `Corpus gate` step prints the
 `N/100 training files clean` line and fails on a `--- SKIP`. The corpus directory is cached
 between runs, keyed on the download script, but the cache cannot mask an absent corpus:

@@ -1,6 +1,6 @@
 # SysML v2 Execution Environment — Architecture
 
-**Module:** `github.com/Open-MBEE/Systemica`  
+**Module:** `github.com/Open-MBEE/OpenSysML`  
 **Language:** Go 1.23+
 
 ## Overview
@@ -17,7 +17,7 @@ A complete, production-grade SysML v2 implementation delivering the integrated t
 ### Design Principles
 
 - **Performance:** Sub-millisecond parsing, single static binary, no JVM/Eclipse runtime
-- **Completeness:** SysML v2 textual notation support (95/95 stdlib files parse clean: 94 vendored OMG files and 1 Systemica extension)
+- **Completeness:** SysML v2 textual notation support (95/95 stdlib files parse clean: 94 vendored OMG files and 1 OpenSysML extension)
 - **Executable models:** Not just validation—runtime that instantiates, evaluates, simulates
 - **Incremental & lazy:** Parse immediately, resolve semantics on-demand (gopls/rust-analyzer precedent)
 - **Immutable AST:** All semantic state lives in side tables keyed by node/symbol
@@ -47,7 +47,7 @@ A complete, production-grade SysML v2 implementation delivering the integrated t
 ## Module Structure
 
 ```
-github.com/Open-MBEE/Systemica
+github.com/Open-MBEE/OpenSysML
 ├── cmd/
 │   ├── sysml-lsp/          # LSP server binary
 │   ├── sysml-grpc/         # gRPC server binary
@@ -68,7 +68,7 @@ github.com/Open-MBEE/Systemica
 ├── internal/lsp/           # LSP protocol implementation
 ├── internal/repl/          # REPL loop implementation
 ├── internal/grpc/          # gRPC service implementation
-├── python/                 # Python client bindings (pysysml)
+├── python/                 # Python client bindings (opensysml)
 ├── api/proto/              # Protobuf service definitions
 ├── testdata/               # Test fixtures (.sysml, .kerml)
 ├── examples/               # Example models and demos
@@ -180,16 +180,16 @@ Harden `MembersOf` into stable, ordered **effective-feature list** per type:
 ### Tier 2 — Instance Model ✅
 
 - **Value:** Extends `semantics.Value` → `null`, strings, **instance references**, **collections** (sequences/sets)
-- **Instance:** Typed object with one slot per effective feature (Tier 1)
+- **Instance:** Typed object with one feature value per effective feature (Tier 1)
 - **Instantiation:** Materialize instance graph from `part`/`item` usage
   - Recursively instantiate composite features
-  - Multiplicity governs slot cardinality
-  - Lazy slot materialization
+  - Multiplicity governs feature value cardinality
+  - Lazy feature value materialization
 
 ### Tier 3 — Expression Evaluator ✅
 
 Full evaluator with **user-defined calc invocation**, **constraint evaluation**, and **requirement evaluation**:
-- Feature access `x.y.z` resolved against instance slots
+- Feature access `x.y.z` resolved against instance feature values
 - KerML operator library (`->select`, `->collect`, `size`, string ops)
 - **Calc invocation:** Resolve calc symbol → extract params/return → bind args to parameters → evaluate return expression
 - **Constraint evaluation:** Extract `assert`/`assume` members → evaluate boolean expressions → check satisfaction (with optional `not` negation)
@@ -288,18 +288,28 @@ Parse + model all behavioral bodies with unified fallback grammar:
 ### Features
 
 **Lifecycle:**
-- `initialize` — Advertise server capabilities
-- `initialized` — Acknowledge client ready
+- `initialize` — Advertise server capabilities, record the session's folders
+- `initialized` — Scan those folders and index every `.sysml`/`.kerml` file they
+  hold, so cross-file names resolve without the editor opening each file
 - `shutdown` / `exit` — Graceful termination
 
 **Document Synchronization:**
-- `textDocument/didOpen` — Track opened documents
+- `textDocument/didOpen` — Track opened documents (the buffer becomes authoritative)
 - `textDocument/didChange` — Incremental updates (UTF-8 byte offsets)
-- `textDocument/didClose` — Remove from workspace
-- `textDocument/didSave` — No-op (diagnostics on change)
+- `textDocument/didClose` — Revert to the file's on-disk content; the document
+  stays indexed, since other documents resolve names through it, but its markers
+  are withdrawn — only open documents carry diagnostics
+- `textDocument/didSave` — Refresh diagnostics for every open document
+- `workspace/didChangeWatchedFiles` — Reindex files created, edited or deleted
+  outside the editor; a deletion leaves an open buffer alone
+- `workspace/didChangeWorkspaceFolders` — Walk a folder added mid-session and
+  unindex what a removed one contributed, open buffers aside
 
 **Diagnostics:**
-- Publish on document open/change
+- Publish on document open/change; the edited document immediately, the other
+  open ones on a coalesced sweep once the edit burst settles, since each sweep
+  re-analyzes them
+- Withdrawn (empty set) for a document the workspace no longer holds
 - Syntax errors (parser)
 - Semantic errors (name resolution, type checking, validation passes)
 - Real-time feedback
@@ -315,9 +325,9 @@ Parse + model all behavioral bodies with unified fallback grammar:
 - Cross-document navigation
 
 **Find References (textDocument/references):**
-- Find all usages of symbol
-- Workspace-wide search
-- Include declaration option
+- Find all usages of symbol, in every workspace document, at whichever segment
+  of a qualified name denotes it
+- Include declaration option, reported in the declaring document
 
 **Completion (textDocument/completion):**
 - Trigger characters: `:`, `.`
@@ -343,7 +353,7 @@ Parse + model all behavioral bodies with unified fallback grammar:
 **Workspace Symbols (workspace/symbol):**
 - Global symbol search
 - Fuzzy matching
-- Aggregates across all documents
+- Aggregates across every indexed document, opened or not
 
 ### Implementation
 
@@ -351,7 +361,8 @@ Parse + model all behavioral bodies with unified fallback grammar:
 - `server.go` — Server lifecycle, stdio transport
 - `base.go` — Stub handlers for unimplemented LSP methods
 - `handler.go` — Custom didChange with pointer-valued Range (full vs incremental edits)
-- `sync.go` — Document synchronization (didOpen/didChange/didClose)
+- `sync.go` — Document synchronization (didOpen/didChange/didClose/didSave)
+- `files.go` — Folder scan and watched-file events (the on-disk half of the workspace)
 - `lifecycle.go` — Initialize capabilities advertisement
 - `diagnostics.go` — Error publishing
 - `hover.go`, `completion.go`, `definition.go`, `references.go`, `symbols.go` — Feature implementations
@@ -395,7 +406,7 @@ See [the guide](../guide/) for VS Code configuration.
 **Runtime execution:**
 - `%instantiate <name>` — Create instance from part def
 - `%eval <expr>` — Evaluate expression (feature refs + literals)
-- `%slots <name>` — Show instance slots with values
+- `%features <name>` — Show an object's features and their values
 - `%instances` — List all created instances
 
 **Behavioral execution:**
@@ -480,7 +491,7 @@ See [the guide](../guide/) for VS Code configuration.
 | Standard library bundling | ✅ Complete |
 | LSP server implementation | ✅ Complete |
 
-**Parser coverage:** 95/95 bundled library files parse cleanly — the 94 official SysML v2 standard library files and the non-normative `Systemica Libraries/SystemicaMathFunctions.kerml` extension. Conformance verified by [stdlib_conformance_test.go](../../internal/core/libs/stdlib_conformance_test.go). Grammar reference available at [OMG Xtext grammar](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/org.omg.kerml.xtext/src/org/omg/kerml/xtext).
+**Parser coverage:** 95/95 bundled library files parse cleanly — the 94 official SysML v2 standard library files and the non-normative `OpenSysML Libraries/OpenSysMLMathFunctions.kerml` extension. Conformance verified by [stdlib_conformance_test.go](../../internal/core/libs/stdlib_conformance_test.go). Grammar reference available at [OMG Xtext grammar](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/org.omg.kerml.xtext/src/org/omg/kerml/xtext).
 
 ---
 
@@ -576,7 +587,7 @@ New behavioral features (actions, states, calc, constraints, requirements) requi
 - Action: token flow, outputs, nested invocation, send/accept, port communication, `perform` reference and shorthand, accept...then, flows, loops and decisions
 - State: simple, do behavior, concurrent do, transition effect, choice/junction/fork-join pseudostates, orthogonal regions and region pseudostates, shallow/deep history, entry/exit points, deferred/undeferred events, call and timed triggers, signal discrimination/unmatched, self signal
 - Requirement: require/subject/actor/assume satisfaction, nested
-- Instance: derived slots, constraint binding, inherited constraints, nested usage bodies
+- Instance: derived feature values, constraint binding, inherited constraints, nested usage bodies
 - Unit and quantity evaluation
 - Constraint: assert/assume satisfaction, negation
 - Satisfy assertions, variations, redefinitions, variants, feature chains, string operations, nested behaviors, element filters, the ball-and-chain model, and one each of attribute, connector, cubesat and view

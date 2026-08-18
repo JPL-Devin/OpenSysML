@@ -35,7 +35,9 @@ Two properties of the session model are worth knowing before a long session:
 - **A submission only invalidates what it changed.** Objects created with `%instantiate` are
   carried over while the declarations they were built from are untouched, and an
   `%action`/`%state` debugging session over a declaration the submission left alone keeps
-  running. What is dropped is reported as a `note:` line saying what to re-run.
+  running. What a carried object keeps is its identity, not its execution: the behaviors its
+  type exhibits or performs are restarted from their initial states in the rebuilt analysis.
+  Everything dropped or restarted is reported as a `note:` line saying what happened.
 
 `%list` shows the session's declarations, `%clear` resets it, and `%save` writes it out
 ([chapter 7](07-saving-and-rdf.md)). `%clear` replaces every declaration, so nothing it held can be
@@ -50,6 +52,35 @@ sysml> %instances
 (no instances created; 1 instance was dropped when the session was reset — re-run %instantiate)
 ```
 
+## Seeing the model
+
+`%print` writes the session back as notation, at the prompt — the whole model, or one element and
+its body when a name is given:
+
+```
+sysml> package Demo {
+  ...>   // how heavy it is
+  ...>   part def Vehicle {
+  ...>     attribute mass = 1500.0;
+  ...>   }
+  ...> }
+✓ package Demo
+sysml> %print Demo::Vehicle
+// how heavy it is
+part def Vehicle {
+    attribute mass = 1500.0;
+}
+```
+
+It is the writer `%save` writes a `.sysml` file with, so a print keeps comments and the text as it
+was written, re-indented the way a save would be, and what it prints can be typed or loaded back to
+rebuild the same model.
+Names are spelled as every other command spells them (`%print 'My Pkg'::Car`). Printing reads the
+session and nothing more: no object is created, and an `%action`/`%state` session keeps running
+across it. An empty session, a name nothing declares, and a name whose element this session holds
+no source of each say so in one line. RDF is `%save`'s `.ttl` path ([chapter 7](07-saving-and-rdf.md));
+a print is notation only.
+
 ## A name that needs quotes
 
 A name the notation has to quote — one containing a space, a keyword used as a name, punctuation —
@@ -59,7 +90,7 @@ can sit anywhere in the chain:
 ```
 sysml> package 'My Pkg' { part def Car { attribute m = 5.0; } }
 sysml> %instantiate 'My Pkg'::Car
-sysml> %slots 'My Pkg'::Car
+sysml> %features 'My Pkg'::Car
 sysml> %eval 'My Pkg'::Car::m
 ```
 
@@ -113,10 +144,65 @@ sysml> %builtins
 sysml> %view Demo::summary
 ```
 
-`%view <name>` reports what a view exposes and the views nested in it. A name the session cannot
-find is offered the qualified names it is known under, nearest scope first — what the session
-itself declares before the library, and a package's member before a name nested inside another
-element — and at most three of them.
+`%view <name>` reports what a view exposes, the views nested in it, and whether it conforms to the
+viewpoints it satisfies. Conformance is read-only and reported in declaration order: each `satisfy`
+carries a verdict — `conforms`, `violated` or `unevaluable` — then each concern the viewpoint frames
+carries its own, and a concern whose condition fails names the exposed element it failed for with
+the reason. A `satisfy` inherited from a specialized view is marked `(from <view>)`, a concern the
+viewpoint frames but the view does not is `violated`, and a concern stating no condition, or naming
+one that does not resolve, is `unevaluable` with the reason rather than a pass.
+The verdicts and the treatment of a nested view's framing are this tool's choice: SysML v2 leaves
+verification verdict semantics non-normative.
+
+```
+sysml> %view Demo::report
+view Demo::report
+  exposes
+    Demo::vehicle (partUsage)
+  viewpoint conformance
+    satisfy structure (from Demo::StructureView): violated
+      concern budget: violated
+        Demo::vehicle: satisfaction satisfy MassBudget by Demo::vehicle: require condition evaluated to false: s.mass < 1000.0
+      concern modularity: conforms
+```
+
+A name the session cannot find is offered the qualified names it is known under, nearest scope
+first — what the session itself declares before the library, and a package's member before a name
+nested inside another element — and at most three of them.
+
+## Rendering a view
+
+`%render <name>` turns the exposed set into the rendering the view's `render` member states —
+a containment tree with nested views as subtrees, an interconnection diagram of the exposed parts and
+the connections between them, a state machine's states and transitions, an action's nodes and
+successions, or a table of the exposed elements — and a tree where the view states none:
+
+```
+sysml> %render Demo::summary
+Demo::summary — tree rendering (the view states no rendering; a tree is the default)
+
+part def Demo::Vehicle
+part Demo::v (Vehicle)
+view Demo::summary::detail
+  part def Demo::Wheel
+```
+
+A view stating `render asElementTable;` renders as rows instead — the exposed elements, what they
+declare, and the views nested in the rendered one — as aligned columns.
+
+`%render <name> mermaid` writes a graph-shaped rendering as a Mermaid diagram, and
+`%render <name> markdown` writes a table as a Markdown table; either pastes into Markdown or an
+editor as-is, and asking for a form the kind is not written in names the one it is. State and action
+renderings read the lowered graphs the runtime executes, so what is drawn is what runs; the
+rendering itself is this tool's output, since SysML v2 §10.2 specifies the notation, not how a tool
+draws it.
+
+Rendering reads the model and nothing else: it creates no object, and a `%render` between two
+`%step`s leaves an action or state debugging session exactly where it was. A view exposing nothing
+renders empty and says so, a rendering kind this build does not produce names the kind and the view
+rather than drawing something else, and an element the rendering cannot represent is reported
+rather than dropped. Outside the prompt the same rendering is
+[`sysml -render`](../reference/cli.md#rendering-a-view).
 
 ## Where an expression is evaluated
 
@@ -134,7 +220,7 @@ sysml> %eval in Demo::Vehicle : mass * 2
 ```
 
 The pinned name may be an element, whose namespace the expression then reads, or a name an object
-was materialized under, whose slots it reads — the same values an unpinned `%eval` reads after
+was materialized under, whose feature values it reads — the same values an unpinned `%eval` reads after
 `%instantiate`. The `:` separates the context from the expression; `::` inside the name is not a
 separator.
 
@@ -142,9 +228,15 @@ separator.
 
 | To ask | Use | Chapter |
 |--------|-----|---------|
+| what a view shows | `%view`, `%render` | this chapter |
 | what an expression is worth | `%eval`, `%eval in … : …` | [5](05-checking.md) |
-| what an object's slots hold | `%instantiate`, `%slots`, `%instances` | [5](05-checking.md) |
+| what an object holds for each feature | `%instantiate`, `%features`, `%instances` | [5](05-checking.md) |
 | whether a check holds | `%constraint`, `%requirement`, `%satisfy`, `%calc` | [5](05-checking.md) |
+| whether a check *can* hold at all (experimental, needs [z3 or cvc5](01-install.md#installing-a-solver-optional)) | `%check` | [reference](../reference/repl-commands.md) |
+| which conditions conflict when it cannot (experimental, needs [z3 or cvc5](01-install.md#installing-a-solver-optional)) | `%explain` | [reference](../reference/repl-commands.md) |
+| what values satisfy it, keeping what is already fixed (experimental, needs [z3 or cvc5](01-install.md#installing-a-solver-optional)) | `%solve` | [reference](../reference/repl-commands.md) |
+| which variants its conditions permit (experimental, needs [z3 or cvc5](01-install.md#installing-a-solver-optional)) | `%configure` | [reference](../reference/repl-commands.md) |
+| which values are best for an analysis case's objectives (experimental, needs [z3](01-install.md#installing-a-solver-optional)) | `%optimize` | [reference](../reference/repl-commands.md) |
 | what a behavior does, step by step | `%action`, `%state`, `%step`, `%tokens`, `%advance` | [6](06-behavior.md) |
 | where a run stopped and why | `%trace`, `%budget`, `%verbosity` | [10](10-troubleshooting.md) |
 

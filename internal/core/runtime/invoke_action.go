@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // maxActionNestingDepth bounds how deep action-in-action invocation may go. An
@@ -57,7 +57,9 @@ func nestedInvocation(usage *ast.Usage) (actionInvocation, bool) {
 }
 
 // invokeAction runs the action named by inv to completion as a sub-execution of
-// the caller, and returns the values its output parameters ended with.
+// the caller, and returns the values its output parameters ended with. The
+// performed action runs as self, the object performing the caller, so what it
+// accepts and sends carries that object's identity.
 //
 // The callee gets a fresh executor with its own tokens, so values cross the
 // boundary only through parameters: arguments (or, for an argument-less
@@ -69,6 +71,7 @@ func invokeAction(
 	scope *symbols.Scope,
 	inv actionInvocation,
 	data map[string]Value,
+	self *Instance,
 ) (map[string]Value, error) {
 	sym, err := resolveActionSymbol(ctx, scope, inv)
 	if err != nil {
@@ -90,7 +93,7 @@ func invokeAction(
 		return nil, err
 	}
 
-	results, err := ctx.ExecuteActionWithInputs(sym, inputs)
+	results, err := ctx.ExecuteActionPerformedBy(sym, self, inputs)
 	if err != nil {
 		return nil, fmt.Errorf("invoke action %s: %w", qualifiedNameText(inv.target), err)
 	}
@@ -196,9 +199,20 @@ func bindArguments(
 	return inputs, nil
 }
 
-// actionParameters returns the names of an action's parameters that the caller
-// writes (`in`, `inout`) and that it reads back (`out`, `inout`).
-func actionParameters(decl ast.Node) (in, out []string) {
+// actionParameter is one parameter an action declares.
+type actionParameter struct {
+	Name string
+	// Direction is the parameter's declared direction, which decides whether the
+	// caller writes it, reads it back, or both.
+	Direction ast.FeatureDirection
+	// HasDefault reports whether the declaration gives the parameter a value, so
+	// an invocation binding no argument to it still binds a value.
+	HasDefault bool
+}
+
+// actionParameterDecls returns the parameters an action declares, in declaration
+// order.
+func actionParameterDecls(decl ast.Node) []actionParameter {
 	var members []ast.Node
 	switch d := decl.(type) {
 	case *ast.Usage:
@@ -206,9 +220,10 @@ func actionParameters(decl ast.Node) (in, out []string) {
 	case *ast.Definition:
 		members = d.Members
 	default:
-		return nil, nil
+		return nil
 	}
 
+	var params []actionParameter
 	for _, member := range members {
 		if membership, ok := member.(*ast.Membership); ok {
 			member = membership.Member
@@ -217,20 +232,36 @@ func actionParameters(decl ast.Node) (in, out []string) {
 		if !ok {
 			continue
 		}
+		if usage.Direction == ast.DirNone {
+			continue
+		}
 		// A parameter may be written as a redefinition of the one it overrides
 		// (`in redefines ifTest;`), naming it by that redefinition.
 		name, _ := ast.EffectiveName(usage)
 		if name == "" {
 			continue
 		}
-		switch usage.Direction {
+		params = append(params, actionParameter{
+			Name:       name,
+			Direction:  usage.Direction,
+			HasDefault: usage.Value != nil,
+		})
+	}
+	return params
+}
+
+// actionParameters returns the names of an action's parameters that the caller
+// writes (`in`, `inout`) and that it reads back (`out`, `inout`).
+func actionParameters(decl ast.Node) (in, out []string) {
+	for _, param := range actionParameterDecls(decl) {
+		switch param.Direction {
 		case ast.DirIn:
-			in = append(in, name)
+			in = append(in, param.Name)
 		case ast.DirOut:
-			out = append(out, name)
+			out = append(out, param.Name)
 		case ast.DirInOut:
-			in = append(in, name)
-			out = append(out, name)
+			in = append(in, param.Name)
+			out = append(out, param.Name)
 		}
 	}
 	return in, out

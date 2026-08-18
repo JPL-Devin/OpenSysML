@@ -19,10 +19,14 @@ func (s *Scope) Members() []*Symbol {
 }
 
 // DocNameOf is the document a scope belongs to, read from the name SetDocName
-// stamped on its symbols. It identifies a scope tree the index does not hold —
-// a document builds its own for the editor — by name rather than by identity.
+// stamped on the scope and its symbols. It identifies a scope tree the index does
+// not hold — a document builds its own for the editor — by name rather than by
+// identity, a document declaring nothing but an import included.
 func DocNameOf(scope *Scope) string {
 	for s := scope; s != nil; s = s.Parent() {
+		if s.docName != "" {
+			return s.docName
+		}
 		if owner := s.Owner(); owner != nil && owner.DocName != "" {
 			return owner.DocName
 		}
@@ -43,6 +47,7 @@ func SetDocName(scope *Scope, name string) {
 	if scope == nil {
 		return
 	}
+	scope.docName = name
 	for _, sym := range scope.Members() {
 		sym.DocName = name
 	}

@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/lower"
-	"github.com/Open-MBEE/Systemica/internal/core/semantics"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // instantiatePart instantiates the named part def, for a case about the
@@ -27,21 +27,21 @@ func instantiatePart(t *testing.T, name, src string) (*Instance, *Context) {
 	return inst, ctx
 }
 
-// slotInstance reads a slot expected to hold one object and returns it.
-func slotInstance(t *testing.T, ctx *Context, inst *Instance, path ...string) *Instance {
+// featureValueInstance reads a feature value expected to hold one object and returns it.
+func fvInstance(t *testing.T, ctx *Context, inst *Instance, path ...string) *Instance {
 	t.Helper()
 	cur := inst
 	for _, name := range path {
-		slot, err := cur.GetSlot(ctx, name)
+		fv, err := cur.GetFeatureValue(ctx, name)
 		if err != nil {
-			t.Fatalf("GetSlot %s: %v", name, err)
+			t.Fatalf("GetFeatureValue %s: %v", name, err)
 		}
-		if slot.Value.Kind != ValInstance && slot.Value.Kind != ValVariant {
-			t.Fatalf("slot %s holds %s, want an object", name, slot.Value.Kind)
+		if fv.Value.Kind != ValInstance && fv.Value.Kind != ValVariant {
+			t.Fatalf("feature value %s holds %s, want an object", name, fv.Value.Kind)
 		}
-		next, ok := ctx.Instance(slot.Value.Instance)
+		next, ok := ctx.Instance(fv.Value.Instance)
 		if !ok {
-			t.Fatalf("slot %s names object %d, which the context does not hold", name, slot.Value.Instance)
+			t.Fatalf("feature value %s names object %d, which the context does not hold", name, fv.Value.Instance)
 		}
 		cur = next
 	}
@@ -72,14 +72,14 @@ const twoPortSystem = `
 // at `link.source` is the very object `a.p` holds (KerML 1.0 §7.4.6).
 func TestConnectorEndsAreTheConnectedFeatures(t *testing.T) {
 	inst, ctx := instantiatePart(t, "Sys", twoPortSystem)
-	port := slotInstance(t, ctx, inst, "a", "p")
-	peer := slotInstance(t, ctx, inst, "b", "q")
+	port := fvInstance(t, ctx, inst, "a", "p")
+	peer := fvInstance(t, ctx, inst, "b", "q")
 
-	link := slotInstance(t, ctx, inst, "link")
-	if got := slotInstance(t, ctx, link, "source"); got.ID != port.ID {
+	link := fvInstance(t, ctx, inst, "link")
+	if got := fvInstance(t, ctx, link, "source"); got.ID != port.ID {
 		t.Errorf("link.source is object %d, want a.p (%d)", got.ID, port.ID)
 	}
-	if got := slotInstance(t, ctx, link, "target"); got.ID != peer.ID {
+	if got := fvInstance(t, ctx, link, "target"); got.ID != peer.ID {
 		t.Errorf("link.target is object %d, want b.q (%d)", got.ID, peer.ID)
 	}
 }
@@ -88,17 +88,17 @@ func TestConnectorEndsAreTheConnectedFeatures(t *testing.T) {
 // sharing identity is what makes the connection observable.
 func TestWritingAConnectedPortIsReadThroughTheEnd(t *testing.T) {
 	inst, ctx := instantiatePart(t, "Sys", twoPortSystem)
-	port := slotInstance(t, ctx, inst, "a", "p")
-	slot, err := port.GetSlot(ctx, "rate")
+	port := fvInstance(t, ctx, inst, "a", "p")
+	fv, err := port.GetFeatureValue(ctx, "rate")
 	if err != nil {
-		t.Fatalf("GetSlot rate: %v", err)
+		t.Fatalf("GetFeatureValue rate: %v", err)
 	}
-	slot.Value = Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 9.5}}
+	fv.Value = Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 9.5}}
 
-	end := slotInstance(t, ctx, slotInstance(t, ctx, inst, "link"), "source")
-	read, err := end.GetSlot(ctx, "rate")
+	end := fvInstance(t, ctx, fvInstance(t, ctx, inst, "link"), "source")
+	read, err := end.GetFeatureValue(ctx, "rate")
 	if err != nil {
-		t.Fatalf("GetSlot rate through the end: %v", err)
+		t.Fatalf("GetFeatureValue rate through the end: %v", err)
 	}
 	if read.Value.Const.Real != 9.5 {
 		t.Errorf("link.source.rate = %v, want the 9.5 written on a.p", read.Value)
@@ -110,27 +110,27 @@ func TestWritingAConnectedPortIsReadThroughTheEnd(t *testing.T) {
 // at its ends, rather than reading as an unknown value.
 func TestUntypedConnectorUsageMaterializes(t *testing.T) {
 	inst, ctx := instantiatePart(t, "Sys", twoPortSystem)
-	port := slotInstance(t, ctx, inst, "a", "p")
-	peer := slotInstance(t, ctx, inst, "b", "q")
+	port := fvInstance(t, ctx, inst, "a", "p")
+	peer := fvInstance(t, ctx, inst, "b", "q")
 
-	iface := slotInstance(t, ctx, inst, "iface")
+	iface := fvInstance(t, ctx, inst, "iface")
 	if len(iface.Ends) != 2 {
 		t.Fatalf("iface has %d ends, want 2", len(iface.Ends))
 	}
-	if got := slotInstance(t, ctx, iface, "source"); got.ID != port.ID {
+	if got := fvInstance(t, ctx, iface, "source"); got.ID != port.ID {
 		t.Errorf("iface.source is object %d, want a.p (%d)", got.ID, port.ID)
 	}
-	if got := slotInstance(t, ctx, iface, "target"); got.ID != peer.ID {
+	if got := fvInstance(t, ctx, iface, "target"); got.ID != peer.ID {
 		t.Errorf("iface.target is object %d, want b.q (%d)", got.ID, peer.ID)
 	}
 }
 
-// An anonymous `connect a.p to b.q` is a member of the object no slot names, and
+// An anonymous `connect a.p to b.q` is a member of the object no feature names, and
 // joins its ends exactly as a named connector does.
 func TestAnonymousConnectorJoinsItsEnds(t *testing.T) {
 	inst, ctx := instantiatePart(t, "Sys", twoPortSystem)
-	port := slotInstance(t, ctx, inst, "a", "p")
-	peer := slotInstance(t, ctx, inst, "b", "q")
+	port := fvInstance(t, ctx, inst, "a", "p")
+	peer := fvInstance(t, ctx, inst, "b", "q")
 
 	conns, err := inst.OwnedConnectors(ctx)
 	if err != nil {
@@ -190,9 +190,9 @@ const nestedSystem = `
 // port of the nested part, not a port of `a`.
 func TestConnectorEndFollowsAFeatureChain(t *testing.T) {
 	inst, ctx := instantiatePart(t, "Sys", nestedSystem)
-	port := slotInstance(t, ctx, inst, "a", "inner", "p")
-	nested := slotInstance(t, ctx, inst, "nested")
-	if got := slotInstance(t, ctx, nested, "source"); got.ID != port.ID {
+	port := fvInstance(t, ctx, inst, "a", "inner", "p")
+	nested := fvInstance(t, ctx, inst, "nested")
+	if got := fvInstance(t, ctx, nested, "source"); got.ID != port.ID {
 		t.Errorf("nested.source is object %d, want a.inner.p (%d)", got.ID, port.ID)
 	}
 }
@@ -201,13 +201,13 @@ func TestConnectorEndFollowsAFeatureChain(t *testing.T) {
 // features, of whatever kind.
 func TestConnectorEndAttachesToAPart(t *testing.T) {
 	inst, ctx := instantiatePart(t, "Sys", nestedSystem)
-	a := slotInstance(t, ctx, inst, "a")
-	b := slotInstance(t, ctx, inst, "b")
-	parts := slotInstance(t, ctx, inst, "parts")
-	if got := slotInstance(t, ctx, parts, "source"); got.ID != a.ID {
+	a := fvInstance(t, ctx, inst, "a")
+	b := fvInstance(t, ctx, inst, "b")
+	parts := fvInstance(t, ctx, inst, "parts")
+	if got := fvInstance(t, ctx, parts, "source"); got.ID != a.ID {
 		t.Errorf("parts.source is object %d, want a (%d)", got.ID, a.ID)
 	}
-	if got := slotInstance(t, ctx, parts, "target"); got.ID != b.ID {
+	if got := fvInstance(t, ctx, parts, "target"); got.ID != b.ID {
 		t.Errorf("parts.target is object %d, want b (%d)", got.ID, b.ID)
 	}
 }
@@ -217,19 +217,19 @@ func TestConnectorEndAttachesToAPart(t *testing.T) {
 func TestNaryConnectorKeepsEveryEnd(t *testing.T) {
 	inst, ctx := instantiatePart(t, "Sys", nestedSystem)
 	want := []int64{
-		slotInstance(t, ctx, inst, "a").ID,
-		slotInstance(t, ctx, inst, "b").ID,
-		slotInstance(t, ctx, inst, "a", "inner").ID,
+		fvInstance(t, ctx, inst, "a").ID,
+		fvInstance(t, ctx, inst, "b").ID,
+		fvInstance(t, ctx, inst, "a", "inner").ID,
 	}
-	tri := slotInstance(t, ctx, inst, "tri")
-	slot, err := tri.GetSlot(ctx, participantEndName)
+	tri := fvInstance(t, ctx, inst, "tri")
+	fv, err := tri.GetFeatureValue(ctx, participantEndName)
 	if err != nil {
-		t.Fatalf("GetSlot participant: %v", err)
+		t.Fatalf("GetFeatureValue participant: %v", err)
 	}
-	if slot.Values.Kind != ValSequence {
-		t.Fatalf("participant holds %s, want a sequence of the ends", slot.Values.Kind)
+	if fv.Values.Kind != ValSequence {
+		t.Fatalf("participant holds %s, want a sequence of the ends", fv.Values.Kind)
 	}
-	got := slot.Values.Sequence.Elements()
+	got := fv.Values.Sequence.Elements()
 	if len(got) != len(want) {
 		t.Fatalf("participant holds %d ends, want %d", len(got), len(want))
 	}
@@ -242,18 +242,18 @@ func TestNaryConnectorKeepsEveryEnd(t *testing.T) {
 
 // A connector declared in a specialization redefines the inherited ends by
 // position (SysML v2 §8.3.13), so both names read the one end.
-func TestRedefinedEndSharesTheInheritedSlot(t *testing.T) {
+func TestRedefinedEndSharesTheInheritedFeatureValue(t *testing.T) {
 	inst, ctx := instantiatePart(t, "Sys", nestedSystem)
-	port := slotInstance(t, ctx, inst, "a", "inner", "p")
-	peer := slotInstance(t, ctx, inst, "b", "q")
-	sub := slotInstance(t, ctx, inst, "sub")
+	port := fvInstance(t, ctx, inst, "a", "inner", "p")
+	peer := fvInstance(t, ctx, inst, "b", "q")
+	sub := fvInstance(t, ctx, inst, "sub")
 	for _, name := range []string{"s2", "source"} {
-		if got := slotInstance(t, ctx, sub, name); got.ID != port.ID {
+		if got := fvInstance(t, ctx, sub, name); got.ID != port.ID {
 			t.Errorf("sub.%s is object %d, want a.inner.p (%d)", name, got.ID, port.ID)
 		}
 	}
 	for _, name := range []string{"t2", "target"} {
-		if got := slotInstance(t, ctx, sub, name); got.ID != peer.ID {
+		if got := fvInstance(t, ctx, sub, name); got.ID != peer.ID {
 			t.Errorf("sub.%s is object %d, want b.q (%d)", name, got.ID, peer.ID)
 		}
 	}
@@ -276,7 +276,7 @@ const variationSystem = `
 `
 
 // The connection a selected `variant interface` declares is realized: the
-// variation's slot holds that variant's connector, with the features it connects
+// variation's feature value holds that variant's connector, with the features it connects
 // at its ends. Selecting the other variant realizes the other connection.
 func TestSelectedVariantInterfaceIsRealized(t *testing.T) {
 	for _, tt := range []struct {
@@ -295,22 +295,22 @@ func TestSelectedVariantInterfaceIsRealized(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Instantiate %s: %v", tt.usage, err)
 		}
-		source := slotInstance(t, ctx, inst, "x", "p1")
-		want := slotInstance(t, ctx, inst, "x", tt.target)
+		source := fvInstance(t, ctx, inst, "x", "p1")
+		want := fvInstance(t, ctx, inst, "x", tt.target)
 		other := "p3"
 		if tt.target == "p3" {
 			other = "p2"
 		}
-		unselected := slotInstance(t, ctx, inst, "x", other)
+		unselected := fvInstance(t, ctx, inst, "x", other)
 
-		link := slotInstance(t, ctx, inst, "link")
+		link := fvInstance(t, ctx, inst, "link")
 		if len(link.Ends) != 2 {
 			t.Fatalf("%s: the realized connection has %d ends, want 2", tt.usage, len(link.Ends))
 		}
-		if got := slotInstance(t, ctx, link, "source"); got.ID != source.ID {
+		if got := fvInstance(t, ctx, link, "source"); got.ID != source.ID {
 			t.Errorf("%s: link.source is object %d, want x.p1 (%d)", tt.usage, got.ID, source.ID)
 		}
-		got := slotInstance(t, ctx, link, "target")
+		got := fvInstance(t, ctx, link, "target")
 		if got.ID != want.ID {
 			t.Errorf("%s: link.target is object %d, want x.%s (%d)", tt.usage, got.ID, tt.target, want.ID)
 		}
@@ -335,7 +335,7 @@ func testUnattachableConnectorEnd(t *testing.T) {
 			}
 		}
 	`)
-	_, err := inst.GetSlot(ctx, "link")
+	_, err := inst.GetFeatureValue(ctx, "link")
 	if !errors.Is(err, ErrConnectorEnd) {
 		t.Fatalf("expected ErrConnectorEnd, got: %v", err)
 	}
@@ -367,7 +367,7 @@ func testMultiplicityOnAConnector(t *testing.T) {
 			}
 		}
 	`)
-	_, err := inst.GetSlot(ctx, "links")
+	_, err := inst.GetFeatureValue(ctx, "links")
 	if !errors.Is(err, ErrConnectorEnd) {
 		t.Fatalf("expected ErrConnectorEnd, got: %v", err)
 	}
@@ -393,13 +393,13 @@ func testConnectorAttachedToItself(t *testing.T) {
 			}
 		}
 	`)
-	if _, err := inst.GetSlot(ctx, "link"); !errors.Is(err, ErrCyclicSlot) {
-		t.Fatalf("expected ErrCyclicSlot, got: %v", err)
+	if _, err := inst.GetFeatureValue(ctx, "link"); !errors.Is(err, ErrCyclicFeatureValue) {
+		t.Fatalf("expected ErrCyclicFeatureValue, got: %v", err)
 	}
 }
 
 // testMutuallyAttachedConnectors: two connectors each naming the other as an end
-// are a cycle across slots, reported the same way as a self-attached one.
+// are a cycle across feature values, reported the same way as a self-attached one.
 func testMutuallyAttachedConnectors(t *testing.T) {
 	inst, ctx := instantiatePart(t, "Sys", `
 		package test {
@@ -412,8 +412,8 @@ func testMutuallyAttachedConnectors(t *testing.T) {
 			}
 		}
 	`)
-	if _, err := inst.GetSlot(ctx, "here"); !errors.Is(err, ErrCyclicSlot) {
-		t.Fatalf("expected ErrCyclicSlot, got: %v", err)
+	if _, err := inst.GetFeatureValue(ctx, "here"); !errors.Is(err, ErrCyclicFeatureValue) {
+		t.Fatalf("expected ErrCyclicFeatureValue, got: %v", err)
 	}
 }
 
@@ -472,7 +472,7 @@ func TestVariantSelectionIsPerOwner(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", usage, err)
 		}
-		if _, err := inst.GetSlot(ctx, "engine"); err != nil {
+		if _, err := inst.GetFeatureValue(ctx, "engine"); err != nil {
 			t.Fatalf("%s.engine: %v", usage, err)
 		}
 		owners[want] = inst
@@ -532,14 +532,14 @@ func TestEveryConnectorKindAttachesItsEnds(t *testing.T) {
 			}
 		}
 	`)
-	port := slotInstance(t, ctx, inst, "a", "p")
-	peer := slotInstance(t, ctx, inst, "b", "q")
+	port := fvInstance(t, ctx, inst, "a", "p")
+	peer := fvInstance(t, ctx, inst, "b", "q")
 	for _, name := range []string{"alloc", "wire"} {
-		conn := slotInstance(t, ctx, inst, name)
-		if got := slotInstance(t, ctx, conn, "source"); got.ID != port.ID {
+		conn := fvInstance(t, ctx, inst, name)
+		if got := fvInstance(t, ctx, conn, "source"); got.ID != port.ID {
 			t.Errorf("%s.source is object %d, want a.p (%d)", name, got.ID, port.ID)
 		}
-		if got := slotInstance(t, ctx, conn, "target"); got.ID != peer.ID {
+		if got := fvInstance(t, ctx, conn, "target"); got.ID != peer.ID {
 			t.Errorf("%s.target is object %d, want b.q (%d)", name, got.ID, peer.ID)
 		}
 	}

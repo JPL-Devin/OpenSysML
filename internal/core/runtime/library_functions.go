@@ -9,15 +9,19 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/semantics"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // ErrUnevaluableLibraryFunction is returned for a function library declaration
 // this runtime has no representation for the values of. It names the function,
 // so a model is told which declaration it is rather than answered wrongly.
 var ErrUnevaluableLibraryFunction = errors.New("library function is not evaluable")
+
+// ErrUnimportedExtensionFunction is returned for an unqualified call to a
+// OpenSysML extension function the model imports no declaration of.
+var ErrUnimportedExtensionFunction = errors.New("function is not in scope")
 
 // noVectorCollection and noComplexCollection are why the aggregations over a
 // collection of vectors or of Complex values are not evaluable: a sequence of
@@ -57,11 +61,21 @@ type libraryApply func(name string, ctx *Context, args []Value) (Value, error)
 var libraryFunctions = map[string]*libraryFunction{}
 
 // libraryFunctionsByLocalName maps an unqualified name to the implementation a
-// call denotes when the name resolves to no declaration in the model — the
+// call denotes when the name resolves to no declaration in the model — the OMG
 // function libraries are always in force, even in a model that imports no part
 // of them. A name only appears here when every library declaration of it
 // means the same operation.
 var libraryFunctionsByLocalName = map[string]*libraryFunction{}
+
+// extensionLocalNames maps the unqualified name of an OpenSysML extension
+// function to the package an import must name for such a call to be legal. No
+// OMG library declares these names, so nothing puts them in scope on its own.
+var extensionLocalNames = map[string]string{
+	"exp":   "OpenSysMLMathFunctions",
+	"ln":    "OpenSysMLMathFunctions",
+	"log":   "OpenSysMLMathFunctions",
+	"atan2": "OpenSysMLMathFunctions",
+}
 
 func init() {
 	// RealFunctions (Kernel Function Library). `abs`, `max` and `min` take Real
@@ -116,14 +130,14 @@ func init() {
 	registerComplexFunctions()
 	registerStringFunctions()
 
-	// SystemicaMathFunctions is the non-normative Systemica extension library
-	// (internal/core/libs/stdlib/Systemica Libraries/SystemicaMathFunctions.kerml),
+	// OpenSysMLMathFunctions is the non-normative OpenSysML extension library
+	// (internal/core/libs/stdlib/OpenSysML Libraries/OpenSysMLMathFunctions.kerml),
 	// which declares the exponential, logarithmic and two-argument arctangent
 	// functions the OMG Kernel Function Library omits.
-	registerLibraryFunction("SystemicaMathFunctions::exp", []string{"x"}, realUnary(math.Exp))
-	registerLibraryFunction("SystemicaMathFunctions::ln", []string{"x"}, naturalLog)
-	registerLibraryFunction("SystemicaMathFunctions::log", []string{"x", "base"}, logToBase)
-	registerLibraryFunction("SystemicaMathFunctions::atan2", []string{"y", "x"}, atan2Real)
+	registerLibraryFunction("OpenSysMLMathFunctions::exp", []string{"x"}, realUnary(math.Exp))
+	registerLibraryFunction("OpenSysMLMathFunctions::ln", []string{"x"}, naturalLog)
+	registerLibraryFunction("OpenSysMLMathFunctions::log", []string{"x", "base"}, logToBase)
+	registerLibraryFunction("OpenSysMLMathFunctions::atan2", []string{"y", "x"}, atan2Real)
 
 	// The unqualified names, each mapped to the declaration a bare call denotes.
 	// `abs`, `max` and `min` map to the kind-preserving NumericalFunctions
@@ -144,10 +158,6 @@ func init() {
 		"arcsin": "TrigFunctions::arcsin",
 		"arccos": "TrigFunctions::arccos",
 		"arctan": "TrigFunctions::arctan",
-		"exp":    "SystemicaMathFunctions::exp",
-		"ln":     "SystemicaMathFunctions::ln",
-		"log":    "SystemicaMathFunctions::log",
-		"atan2":  "SystemicaMathFunctions::atan2",
 
 		"deg": "TrigFunctions::deg",
 		"rad": "TrigFunctions::rad",
@@ -325,17 +335,26 @@ func libraryFunctionByName(fqn string) (*libraryFunction, bool) {
 
 // unresolvedLibraryFunction returns the library function a call denotes when its
 // name resolves to no declaration: the library's own qualified name, or an
-// unqualified name, which denotes the library function of that name. written is
-// the name as the model wrote it.
-func unresolvedLibraryFunction(qn *ast.QualifiedName, written string) (*libraryFunction, bool) {
+// unqualified name of an OMG library function. written is the name as the model
+// wrote it. An unqualified name only an OpenSysML extension declares gives a
+// typed error naming the import that makes the call legal.
+func unresolvedLibraryFunction(qn *ast.QualifiedName, written string) (*libraryFunction, error) {
 	if fn, ok := libraryFunctions[written]; ok {
-		return fn, true
+		return fn, nil
 	}
 	if qn == nil || qn.Global || len(qn.Parts) != 1 {
-		return nil, false
+		return nil, nil
 	}
-	fn, ok := libraryFunctionsByLocalName[written]
-	return fn, ok
+	if fn, ok := libraryFunctionsByLocalName[written]; ok {
+		return fn, nil
+	}
+	if pkg, ok := extensionLocalNames[written]; ok {
+		return nil, fmt.Errorf(
+			"%w: %s is declared by %s, an OpenSysML extension no OMG library declares: write `import %s::*;` to call it",
+			ErrUnimportedExtensionFunction, written, pkg, pkg,
+		)
+	}
+	return nil, nil
 }
 
 // libraryFunctionFor returns the built-in implementation of sym when sym is a
@@ -518,7 +537,7 @@ func tanReal(theta float64) float64 { return math.Sin(theta) / math.Cos(theta) }
 // cotReal is cos/sin, the ratio TrigFunctions::cot declares as its body.
 func cotReal(theta float64) float64 { return math.Cos(theta) / math.Sin(theta) }
 
-// naturalLog is SystemicaMathFunctions::ln. The logarithm is defined for a
+// naturalLog is OpenSysMLMathFunctions::ln. The logarithm is defined for a
 // positive argument only: zero and a negative have no Real logarithm, so both
 // are reported rather than returned as an infinity or a NaN.
 func naturalLog(args []semantics.Value) (semantics.Value, error) {
@@ -529,7 +548,7 @@ func naturalLog(args []semantics.Value) (semantics.Value, error) {
 	return realResult(math.Log(x))
 }
 
-// logToBase is SystemicaMathFunctions::log, the logarithm of x to the given
+// logToBase is OpenSysMLMathFunctions::log, the logarithm of x to the given
 // base, computed as ln(x)/ln(base). Base 1.0 has no logarithm — every power of
 // it is 1.0 — and neither the argument nor the base may be zero or negative.
 func logToBase(args []semantics.Value) (semantics.Value, error) {
@@ -554,7 +573,7 @@ func logToBase(args []semantics.Value) (semantics.Value, error) {
 	return realResult(math.Log(x) / math.Log(base))
 }
 
-// atan2Real is SystemicaMathFunctions::atan2, the angle to the point (x, y)
+// atan2Real is OpenSysMLMathFunctions::atan2, the angle to the point (x, y)
 // with the parameters ordered y then x as math.Atan2 orders them. The origin has
 // no angle, which math.Atan2 answers 0 for, so it is reported instead.
 func atan2Real(args []semantics.Value) (semantics.Value, error) {

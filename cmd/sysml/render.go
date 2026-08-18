@@ -1,0 +1,96 @@
+package main
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"slices"
+	"strings"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/export"
+	"github.com/Open-MBEE/OpenSysML/internal/core/view"
+)
+
+// runRender renders the view -render names of the model named on the command
+// line, writing the artifact to -o or to stdout and every notice to stderr.
+func runRender(files []string) error {
+	form := view.Form(renderForm)
+	if renderForm != "" && !slices.Contains(view.Forms(), form) {
+		return fmt.Errorf("unknown rendering form %q; -render-form takes %s", renderForm, formList())
+	}
+	if len(files) == 0 {
+		return errors.New("no model to render; name the file the view is declared in, as `sysml model.sysml -render MyView`")
+	}
+	if len(files) > 1 {
+		return fmt.Errorf("-render renders a view of one model; unexpected extra argument %q", files[1])
+	}
+
+	sess := newSession()
+	// Loaded onto stderr rather than through loadFiles: stdout carries the
+	// artifact alone, so it can be piped into a tool that reads it.
+	report, err := sess.LoadPathsReport(files)
+	if err != nil {
+		return err
+	}
+	writeLines(os.Stderr, report.Loaded)
+	writeLines(os.Stderr, report.Found)
+	writeLines(os.Stderr, report.Declared)
+	if report.Errors {
+		return fmt.Errorf("%s did not analyse cleanly; nothing was rendered", files[0])
+	}
+
+	rendering, err := sess.ViewRendering(renderView)
+	if err != nil {
+		return err
+	}
+	// No form named writes the machine-readable one of the kind rendered: a
+	// Mermaid diagram of a graph, a Markdown table of a table.
+	if form == "" {
+		form = rendering.Kind.MachineForm()
+	}
+	artifact, err := rendering.Write(form)
+	if err != nil {
+		return err
+	}
+	reportRenderNotices(rendering)
+	return writeArtifact(artifact, form)
+}
+
+// formList names the forms -render-form takes, as its help and errors spell them.
+func formList() string {
+	names := make([]string, 0, len(view.Forms()))
+	for _, form := range view.Forms() {
+		names = append(names, string(form))
+	}
+	return strings.Join(names, ", ")
+}
+
+// reportRenderNotices reports on stderr what the rendering says about itself: an
+// empty artifact, and every element it could not represent.
+func reportRenderNotices(rendering *view.Rendering) {
+	if rendering.Empty() {
+		fmt.Fprintf(os.Stderr, "note: %s renders empty\n", rendering.View)
+	}
+	for _, notice := range rendering.Notices {
+		fmt.Fprintf(os.Stderr, "note: %s\n", notice)
+	}
+}
+
+// writeArtifact writes the rendering to -o, or to stdout when no file was named.
+func writeArtifact(artifact string, form view.Form) error {
+	out := []byte(strings.TrimRight(artifact, "\n") + "\n")
+	if outputPath == "" {
+		_, err := os.Stdout.Write(out)
+		return err
+	}
+	replaced, err := export.WriteFile(outputPath, out)
+	if err != nil {
+		return err
+	}
+	what := ""
+	if replaced {
+		what = ", replaced the existing file"
+	}
+	fmt.Fprintf(os.Stderr, "wrote %s (%s, %d bytes%s)\n", outputPath, form, len(out), what)
+	return nil
+}

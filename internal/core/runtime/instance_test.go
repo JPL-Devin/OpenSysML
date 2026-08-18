@@ -24,21 +24,21 @@ func TestInstantiate_SimplePartDef(t *testing.T) {
 		t.Errorf("expected ID=1, got %d", inst.ID)
 	}
 
-	if len(inst.Slots) != 1 {
-		t.Fatalf("expected 1 slot, got %d", len(inst.Slots))
+	if len(inst.FeatureValues) != 1 {
+		t.Fatalf("expected 1 feature value, got %d", len(inst.FeatureValues))
 	}
 
-	diameterSlot, ok := inst.Slots["diameter"]
+	diameterFeatureValue, ok := inst.FeatureValues["diameter"]
 	if !ok {
-		t.Fatal("expected 'diameter' slot")
+		t.Fatal("expected 'diameter' feature value")
 	}
 
 	// Check default value evaluated
-	if diameterSlot.Value.Kind != ValConst {
-		t.Errorf("expected ValConst, got %v", diameterSlot.Value.Kind)
+	if diameterFeatureValue.Value.Kind != ValConst {
+		t.Errorf("expected ValConst, got %v", diameterFeatureValue.Value.Kind)
 	}
-	if diameterSlot.Value.Const.Real != 0.5 {
-		t.Errorf("expected Real=0.5, got %f", diameterSlot.Value.Const.Real)
+	if diameterFeatureValue.Value.Const.Real != 0.5 {
+		t.Errorf("expected Real=0.5, got %f", diameterFeatureValue.Value.Const.Real)
 	}
 }
 
@@ -60,15 +60,15 @@ func TestInstantiate_UnboundedDefaultIsNotAScalar(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Instantiate failed: %v", err)
 	}
-	slot, err := inst.GetSlot(ctx, "wheels")
+	fv, err := inst.GetFeatureValue(ctx, "wheels")
 	if err != nil {
-		t.Fatalf("GetSlot failed: %v", err)
+		t.Fatalf("GetFeatureValue failed: %v", err)
 	}
-	if slot.Value.Kind != ValInvalid {
-		t.Errorf("unbounded slot holds a scalar value %v", slot.Value)
+	if fv.Value.Kind != ValInvalid {
+		t.Errorf("unbounded feature value holds a scalar value %v", fv.Value)
 	}
-	if slot.Values.Kind != ValSequence {
-		t.Errorf("expected a sequence, got %v", slot.Values.Kind)
+	if fv.Values.Kind != ValSequence {
+		t.Errorf("expected a sequence, got %v", fv.Values.Kind)
 	}
 }
 
@@ -87,7 +87,7 @@ func TestInstantiate_IDAllocation(t *testing.T) {
 	}
 }
 
-func TestGetSlot_LazyComposite(t *testing.T) {
+func TestGetFeatureValue_LazyComposite(t *testing.T) {
 	src := `
 		part def Engine {}
 		part def Car {
@@ -103,31 +103,31 @@ func TestGetSlot_LazyComposite(t *testing.T) {
 		t.Fatalf("Instantiate failed: %v", err)
 	}
 
-	// Verify engine slot NOT materialized initially
-	engineSlot := inst.Slots["engine"]
-	if engineSlot == nil {
-		t.Fatal("expected engine slot")
+	// Verify engine feature value NOT materialized initially
+	engineFeatureValue := inst.FeatureValues["engine"]
+	if engineFeatureValue == nil {
+		t.Fatal("expected engine feature value")
 	}
-	if engineSlot.Materialized {
-		t.Error("expected engine slot NOT materialized after Instantiate")
+	if engineFeatureValue.Materialized {
+		t.Error("expected engine feature value NOT materialized after Instantiate")
 	}
 
-	// Call GetSlot → should lazy-materialize
-	slot, err := inst.GetSlot(ctx, "engine")
+	// Call GetFeatureValue → should lazy-materialize
+	fv, err := inst.GetFeatureValue(ctx, "engine")
 	if err != nil {
-		t.Fatalf("GetSlot failed: %v", err)
+		t.Fatalf("GetFeatureValue failed: %v", err)
 	}
 
-	if !slot.Materialized {
-		t.Error("expected engine slot materialized after GetSlot")
+	if !fv.Materialized {
+		t.Error("expected engine feature value materialized after GetFeatureValue")
 	}
 
-	if slot.Value.Kind != ValInstance {
-		t.Errorf("expected ValInstance, got %v", slot.Value.Kind)
+	if fv.Value.Kind != ValInstance {
+		t.Errorf("expected ValInstance, got %v", fv.Value.Kind)
 	}
 
 	// Verify child instance exists in registry
-	childInst, ok := ctx.getInstance(slot.Value.Instance)
+	childInst, ok := ctx.getInstance(fv.Value.Instance)
 	if !ok {
 		t.Error("expected child instance registered")
 	}
@@ -152,14 +152,14 @@ func TestMultiValuedDefaultMaterializes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Instantiate failed: %v", err)
 	}
-	slot, err := inst.GetSlot(ctx, "doubles")
+	fv, err := inst.GetFeatureValue(ctx, "doubles")
 	if err != nil {
-		t.Fatalf("GetSlot failed: %v", err)
+		t.Fatalf("GetFeatureValue failed: %v", err)
 	}
-	if slot.Values.Kind != ValSequence {
-		t.Fatalf("Values.Kind = %v, want a sequence", slot.Values.Kind)
+	if fv.Values.Kind != ValSequence {
+		t.Fatalf("Values.Kind = %v, want a sequence", fv.Values.Kind)
 	}
-	elements := slot.Values.Sequence.Elements()
+	elements := fv.Values.Sequence.Elements()
 	if len(elements) != 1 || elements[0].Const.Real != 200.0 {
 		t.Errorf("doubles = %v, want [200]", elements)
 	}
@@ -190,11 +190,11 @@ func TestTypedMultiValuedDefaultHoldsItsContents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Instantiate: %v", err)
 	}
-	slot, err := inst.GetSlot(ctx, "volumes")
+	fv, err := inst.GetFeatureValue(ctx, "volumes")
 	if err != nil {
-		t.Fatalf("GetSlot(volumes): %v", err)
+		t.Fatalf("GetFeatureValue(volumes): %v", err)
 	}
-	if got := FormatTraceValue(slot.HeldValue()); got != "(2.0, 3.5)" {
+	if got := FormatTraceValue(fv.HeldValue()); got != "(2.0, 3.5)" {
 		t.Errorf("volumes = %s, want (2.0, 3.5)", got)
 	}
 }
@@ -224,17 +224,17 @@ func TestCompositeMultiValuedDefaultHoldsTheNamedObjects(t *testing.T) {
 	}
 	var want []int64
 	for _, name := range []string{"left", "right"} {
-		slot, err := inst.GetSlot(ctx, name)
+		fv, err := inst.GetFeatureValue(ctx, name)
 		if err != nil {
-			t.Fatalf("GetSlot(%s): %v", name, err)
+			t.Fatalf("GetFeatureValue(%s): %v", name, err)
 		}
-		want = append(want, slot.Value.Instance)
+		want = append(want, fv.Value.Instance)
 	}
-	slot, err := inst.GetSlot(ctx, "stowed")
+	fv, err := inst.GetFeatureValue(ctx, "stowed")
 	if err != nil {
-		t.Fatalf("GetSlot(stowed): %v", err)
+		t.Fatalf("GetFeatureValue(stowed): %v", err)
 	}
-	elements := elementsOf(slot.HeldValue())
+	elements := elementsOf(fv.HeldValue())
 	if len(elements) != 2 {
 		t.Fatalf("stowed holds %d element(s), want 2", len(elements))
 	}
@@ -270,7 +270,7 @@ func TestNestedUsageBodyOverridesItsType(t *testing.T) {
 	}
 }
 
-// A written default takes precedence over instantiation in GetSlot, so the
+// A written default takes precedence over instantiation in GetFeatureValue, so the
 // feature holds that value and is not something to materialize an object from.
 func TestCompositeTypeOfIgnoresDefaultedFeature(t *testing.T) {
 	src := `
@@ -321,29 +321,93 @@ func TestUntypedNestedPartMaterializes(t *testing.T) {
 	}
 }
 
-// nestedReal reads a Real out of the instance held by one of inst's slots.
-func nestedReal(t *testing.T, ctx *Context, inst *Instance, slotName, nestedName string) float64 {
+// A redefining declaration whose body values a feature the value it inherits
+// would supply governs over that value: the more specific declaration holds, so
+// the body is neither dropped nor read alongside the inherited value.
+func TestBodyGovernsAnInheritedValue(t *testing.T) {
+	src := `
+		attribute def Cost {
+			attribute v = 1.0;
+			attribute w = 2.0;
+		}
+		part def Ring {
+			attribute template : Cost { attribute :>> v = 9.0; attribute :>> w = 8.0; }
+			attribute cost : Cost = template;
+		}
+		part def Band :> Ring {
+			attribute :>> cost { attribute :>> v = 11.0; }
+		}
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	ctx := NewContext(model, resolver, 1000)
+
+	band, err := ctx.Instantiate(resolveSymbol(t, root, "Band"))
+	if err != nil {
+		t.Fatalf("Instantiate failed: %v", err)
+	}
+	if got := nestedReal(t, ctx, band, "cost", "v"); got != 11.0 {
+		t.Errorf("cost.v = %v, want 11 (the body's value, not the inherited one)", got)
+	}
+	if got := nestedReal(t, ctx, band, "cost", "w"); got != 2.0 {
+		t.Errorf("cost.w = %v, want 2 (Cost's own default, the inherited value being governed over)", got)
+	}
+	for _, feat := range ctx.FeaturesOf(resolveSymbol(t, root, "Ring")) {
+		if feat.Name == "cost" && ctx.CompositeTypeOf(&feat) != nil {
+			t.Error("Ring::cost is bound to template, want it reported as no composite")
+		}
+	}
+}
+
+// A condition read without an object agrees with materializing: a value a body
+// governs over is not the value the condition sees, so the feature is reported
+// uninitialized rather than judged against the superseded value.
+func TestConditionsDoNotReadAGovernedOverValue(t *testing.T) {
+	src := `
+		attribute def Cost { attribute v = 1.0; }
+		part def Ring {
+			attribute template : Cost { attribute :>> v = 9.0; }
+			attribute cost : Cost = template;
+			attribute plain : Cost = template;
+		}
+		part def Band :> Ring {
+			attribute :>> cost { attribute :>> v = 11.0; }
+		}
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	ctx := NewContext(model, resolver, 1000)
+
+	features := ctx.conditionFeatures(resolveSymbol(t, root, "Band"))
+	if got, ok := features["cost"]; !ok || got.expr != nil {
+		t.Errorf("cost reads %v, want no expression: its body governs over the inherited value", got.expr)
+	}
+	if got, ok := features["plain"]; !ok || got.expr == nil {
+		t.Error("plain reads no expression, want the inherited value it is still bound to")
+	}
+}
+
+// nestedReal reads a Real out of the instance held by one of inst's feature values.
+func nestedReal(t *testing.T, ctx *Context, inst *Instance, featureName, nestedName string) float64 {
 	t.Helper()
-	slot, err := inst.GetSlot(ctx, slotName)
+	fv, err := inst.GetFeatureValue(ctx, featureName)
 	if err != nil {
-		t.Fatalf("GetSlot(%q) failed: %v", slotName, err)
+		t.Fatalf("GetFeatureValue(%q) failed: %v", featureName, err)
 	}
-	if slot.Value.Kind != ValInstance {
-		t.Fatalf("slot %q holds %v, want a nested instance", slotName, slot.Value.Kind)
+	if fv.Value.Kind != ValInstance {
+		t.Fatalf("feature value %q holds %v, want a nested instance", featureName, fv.Value.Kind)
 	}
-	nested, ok := ctx.Instance(slot.Value.Instance)
+	nested, ok := ctx.Instance(fv.Value.Instance)
 	if !ok {
-		t.Fatalf("slot %q references unknown instance %d", slotName, slot.Value.Instance)
+		t.Fatalf("feature value %q references unknown instance %d", featureName, fv.Value.Instance)
 	}
-	nestedSlot, err := nested.GetSlot(ctx, nestedName)
+	nestedFeatureValue, err := nested.GetFeatureValue(ctx, nestedName)
 	if err != nil {
-		t.Fatalf("GetSlot(%q) failed: %v", nestedName, err)
+		t.Fatalf("GetFeatureValue(%q) failed: %v", nestedName, err)
 	}
-	return nestedSlot.Value.Const.Real
+	return nestedFeatureValue.Value.Const.Real
 }
 
 // A default that is no value at all holds nothing, so what the multiplicity
-// check counted is what the slot stores.
+// check counted is what the feature value stores.
 func TestNullDefaultHoldsNoElements(t *testing.T) {
 	model, resolver, root := parseAndBuildModel(t, `
 		part def Rig {
@@ -355,11 +419,11 @@ func TestNullDefaultHoldsNoElements(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Instantiate: %v", err)
 	}
-	slot, err := inst.GetSlot(ctx, "nothing")
+	fv, err := inst.GetFeatureValue(ctx, "nothing")
 	if err != nil {
-		t.Fatalf("GetSlot: %v", err)
+		t.Fatalf("GetFeatureValue: %v", err)
 	}
-	if elements := elementsOf(slot.HeldValue()); len(elements) != 0 {
+	if elements := elementsOf(fv.HeldValue()); len(elements) != 0 {
 		t.Errorf("nothing holds %v, want no elements", elements)
 	}
 }

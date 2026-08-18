@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/libs"
+	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
 )
 
 var update = flag.Bool("update", false, "rewrite the .golden files in testdata")

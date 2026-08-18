@@ -1,7 +1,7 @@
 package symbols
 
 import (
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 )
 
 // buildBodyScopes links the scope each body expression declares its parameters
@@ -123,10 +123,10 @@ func bodyScopesInDecl(scope *Scope, decl ast.Node) {
 		buildBodyScopes(scope, d.Body)
 	case *ast.AssumeMember:
 		bodyScopesInExpr(scope, d.Expression)
-		buildBodyScopes(scope, d.Body)
+		buildBodyScopes(ConstraintBodyScope(scope, d), d.Body)
 	case *ast.RequireMember:
 		bodyScopesInExpr(scope, d.Expression)
-		buildBodyScopes(scope, d.Body)
+		buildBodyScopes(ConstraintBodyScope(scope, d), d.Body)
 	case *ast.EntryMember:
 		buildBodyScopes(scope, d.Actions)
 	case *ast.DoMember:

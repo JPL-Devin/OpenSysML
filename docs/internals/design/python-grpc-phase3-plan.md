@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Enable zero-config usage - `import pysysml; model = pysysml.load("file.sysml")` works without manual server setup.
+**Goal:** Enable zero-config usage - `import opensysml; model = opensysml.load("file.sysml")` works without manual server setup.
 
 **Architecture:** Binary management module downloads sysml-grpc from GitHub releases, Connection auto-starts service with lockfile coordination, module-level API provides convenience functions.
 
@@ -13,13 +13,13 @@
 ## File Structure
 
 **New files:**
-- `pysysml/binary.py` - Binary download, platform detection, checksum verification
+- `opensysml/binary.py` - Binary download, platform detection, checksum verification
 - `tests/test_binary.py` - Unit tests for binary management
 - `tests/test_lifecycle.py` - Integration tests for auto-start
 
 **Modified files:**
-- `pysysml/connection.py` - Add auto-start logic, health checks, process management
-- `pysysml/__init__.py` - Add module-level convenience API
+- `opensysml/connection.py` - Add auto-start logic, health checks, process management
+- `opensysml/__init__.py` - Add module-level convenience API
 - `tests/test_connection.py` - Add auto-start tests
 
 ---
@@ -27,7 +27,7 @@
 ## Task Outline
 
 ### Task 1: Binary Management Module
-[Platform detection, GitHub release download, checksum verification, storage in ~/.pysysml/bin/]
+[Platform detection, GitHub release download, checksum verification, storage in ~/.opensysml/bin/]
 
 ### Task 2: Service Auto-Start in Connection
 [Health check probing, subprocess management, lockfile coordination, atexit cleanup]
@@ -45,17 +45,17 @@
 ### Task 1: Binary Management Module
 
 **Files:**
-- Create: `pysysml/binary.py`
+- Create: `opensysml/binary.py`
 - Create: `tests/test_binary.py`
 
-**Objective:** Detect platform, download sysml-grpc from GitHub releases, verify checksum, store in ~/.pysysml/bin/
+**Objective:** Detect platform, download sysml-grpc from GitHub releases, verify checksum, store in ~/.opensysml/bin/
 
 - [ ] **Step 1: Write failing test for platform detection**
 
 ```python
 # tests/test_binary.py
 import platform
-from pysysml.binary import detect_platform
+from opensysml.binary import detect_platform
 
 def test_detect_platform():
     """Test platform detection returns valid tuple."""
@@ -66,13 +66,13 @@ def test_detect_platform():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_binary.py::test_detect_platform -v`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_binary.py::test_detect_platform -v`
 Expected: FAIL with "cannot import name 'detect_platform'"
 
 - [ ] **Step 3: Implement platform detection**
 
 ```python
-# pysysml/binary.py
+# opensysml/binary.py
 """Binary management for sysml-grpc service."""
 
 import platform
@@ -110,7 +110,7 @@ def detect_platform():
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_binary.py::test_detect_platform -v`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_binary.py::test_detect_platform -v`
 Expected: PASS
 
 - [ ] **Step 5: Write failing test for binary path**
@@ -118,37 +118,37 @@ Expected: PASS
 ```python
 # tests/test_binary.py
 import os
-from pysysml.binary import get_binary_path
+from opensysml.binary import get_binary_path
 
 def test_get_binary_path():
     """Test binary path construction."""
     path = get_binary_path()
-    assert path.startswith(os.path.expanduser('~/.pysysml/bin/'))
+    assert path.startswith(os.path.expanduser('~/.opensysml/bin/'))
     assert path.endswith('sysml-grpc') or path.endswith('sysml-grpc.exe')
 ```
 
 - [ ] **Step 6: Implement get_binary_path**
 
 ```python
-# pysysml/binary.py (add to existing file)
+# opensysml/binary.py (add to existing file)
 import os
 
 def get_binary_path():
     """Get the local path where sysml-grpc binary should be stored.
     
     Returns:
-        str: Absolute path to binary (e.g. ~/.pysysml/bin/sysml-grpc)
+        str: Absolute path to binary (e.g. ~/.opensysml/bin/sysml-grpc)
     """
     os_name, _ = detect_platform()
     binary_name = 'sysml-grpc.exe' if os_name == 'windows' else 'sysml-grpc'
     
-    base_dir = os.path.expanduser('~/.pysysml/bin')
+    base_dir = os.path.expanduser('~/.opensysml/bin')
     return os.path.join(base_dir, binary_name)
 ```
 
 - [ ] **Step 7: Run test to verify it passes**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_binary.py::test_get_binary_path -v`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_binary.py::test_get_binary_path -v`
 Expected: PASS
 
 - [ ] **Step 8: Write failing test for binary download**
@@ -156,7 +156,7 @@ Expected: PASS
 ```python
 # tests/test_binary.py
 from unittest.mock import patch, Mock, mock_open
-from pysysml.binary import download_binary
+from opensysml.binary import download_binary
 
 def test_download_binary():
     """Test binary download from GitHub releases."""
@@ -173,22 +173,22 @@ def test_download_binary():
                 with patch('os.chmod'):
                     result = download_binary(version='v0.1.0')
                     
-                    assert result == os.path.expanduser('~/.pysysml/bin/sysml-grpc')
+                    assert result == os.path.expanduser('~/.opensysml/bin/sysml-grpc')
                     mock_urlopen.assert_called_once()
                     # Verify URL format
                     call_args = mock_urlopen.call_args[0][0]
-                    assert 'github.com/Open-MBEE/Systemica/releases/download/v0.1.0' in call_args
+                    assert 'github.com/Open-MBEE/OpenSysML/releases/download/v0.1.0' in call_args
 ```
 
 - [ ] **Step 9: Implement download_binary**
 
 ```python
-# pysysml/binary.py (add to existing file)
+# opensysml/binary.py (add to existing file)
 import urllib.request
 import os
 import stat
 
-def download_binary(version='latest', github_repo='Open-MBEE/Systemica'):
+def download_binary(version='latest', github_repo='Open-MBEE/OpenSysML'):
     """Download sysml-grpc binary from GitHub releases.
     
     Args:
@@ -205,7 +205,7 @@ def download_binary(version='latest', github_repo='Open-MBEE/Systemica'):
     binary_path = get_binary_path()
     
     # Construct GitHub release URL
-    # Format: https://github.com/Open-MBEE/Systemica/releases/download/v0.1.0/sysml-grpc-linux-amd64
+    # Format: https://github.com/Open-MBEE/OpenSysML/releases/download/v0.1.0/sysml-grpc-linux-amd64
     if version == 'latest':
         # For now, use a fixed version (latest API requires extra request)
         version = 'v0.1.0'
@@ -238,7 +238,7 @@ def download_binary(version='latest', github_repo='Open-MBEE/Systemica'):
 
 - [ ] **Step 10: Run test to verify it passes**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_binary.py::test_download_binary -v`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_binary.py::test_download_binary -v`
 Expected: PASS
 
 - [ ] **Step 11: Write failing test for checksum verification**
@@ -246,7 +246,7 @@ Expected: PASS
 ```python
 # tests/test_binary.py
 import hashlib
-from pysysml.binary import verify_checksum
+from opensysml.binary import verify_checksum
 
 def test_verify_checksum():
     """Test SHA-256 checksum verification."""
@@ -261,7 +261,7 @@ def test_verify_checksum():
 - [ ] **Step 12: Implement verify_checksum**
 
 ```python
-# pysysml/binary.py (add to existing file)
+# opensysml/binary.py (add to existing file)
 import hashlib
 
 def verify_checksum(binary_path, expected_sha256):
@@ -289,26 +289,26 @@ def verify_checksum(binary_path, expected_sha256):
 
 - [ ] **Step 13: Run test to verify it passes**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_binary.py::test_verify_checksum -v`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_binary.py::test_verify_checksum -v`
 Expected: PASS
 
 - [ ] **Step 14: Write failing test for ensure_binary**
 
 ```python
 # tests/test_binary.py
-from pysysml.binary import ensure_binary
+from opensysml.binary import ensure_binary
 
 def test_ensure_binary_exists():
     """Test ensure_binary returns path when binary exists."""
     with patch('os.path.exists', return_value=True):
         with patch('os.access', return_value=True):
             path = ensure_binary()
-            assert path == os.path.expanduser('~/.pysysml/bin/sysml-grpc')
+            assert path == os.path.expanduser('~/.opensysml/bin/sysml-grpc')
 
 def test_ensure_binary_downloads():
     """Test ensure_binary downloads if binary missing."""
     with patch('os.path.exists', return_value=False):
-        with patch('pysysml.binary.download_binary') as mock_download:
+        with patch('opensysml.binary.download_binary') as mock_download:
             mock_download.return_value = '/fake/path/sysml-grpc'
             path = ensure_binary()
             assert path == '/fake/path/sysml-grpc'
@@ -318,7 +318,7 @@ def test_ensure_binary_downloads():
 - [ ] **Step 15: Implement ensure_binary**
 
 ```python
-# pysysml/binary.py (add to existing file)
+# opensysml/binary.py (add to existing file)
 
 def ensure_binary(force_download=False):
     """Ensure sysml-grpc binary is available, downloading if necessary.
@@ -345,20 +345,20 @@ def ensure_binary(force_download=False):
 
 - [ ] **Step 16: Run tests to verify they pass**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_binary.py -v`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_binary.py -v`
 Expected: All 5 tests PASS
 
 - [ ] **Step 17: Commit**
 
 ```bash
-git add pysysml/binary.py tests/test_binary.py
+git add opensysml/binary.py tests/test_binary.py
 git commit -m "feat(python): implement binary management with platform detection and GitHub downloads"
 ```
 
 ### Task 2: Service Auto-Start in Connection
 
 **Files:**
-- Modify: `pysysml/connection.py`
+- Modify: `opensysml/connection.py`
 - Modify: `tests/test_connection.py`
 
 **Objective:** Auto-start sysml-grpc service when Connection created, with health checks and multi-process coordination
@@ -367,7 +367,7 @@ git commit -m "feat(python): implement binary management with platform detection
 
 ```python
 # tests/test_connection.py (add to existing file)
-from pysysml.connection import Connection
+from opensysml.connection import Connection
 
 def test_probe_service_running():
     """Test health check detects running service."""
@@ -375,7 +375,7 @@ def test_probe_service_running():
         mock_stub = Mock()
         mock_stub.GetDiagnostics.return_value = Mock()  # Success
         
-        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub', return_value=mock_stub):
+        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub', return_value=mock_stub):
             conn = Connection()
             assert conn._probe_service('localhost', 50051) == True
 
@@ -385,22 +385,22 @@ def test_probe_service_not_running():
         mock_stub = Mock()
         mock_stub.GetDiagnostics.side_effect = grpc.RpcError()
         
-        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub', return_value=mock_stub):
+        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub', return_value=mock_stub):
             conn = Connection()
             assert conn._probe_service('localhost', 50051) == False
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_connection.py::test_probe_service_running -v`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_connection.py::test_probe_service_running -v`
 Expected: FAIL with "AttributeError: 'Connection' object has no attribute '_probe_service'"
 
 - [ ] **Step 3: Implement _probe_service method**
 
 ```python
-# pysysml/connection.py (add to Connection class)
+# opensysml/connection.py (add to Connection class)
 import grpc
-from pysysml.proto import sysml_pb2
+from opensysml.proto import sysml_pb2
 
 def _probe_service(self, host, port, timeout=1.0):
     """Check if sysml-grpc service is running and responsive.
@@ -429,7 +429,7 @@ def _probe_service(self, host, port, timeout=1.0):
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_connection.py::test_probe_service_running tests/test_connection.py::test_probe_service_not_running -v`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_connection.py::test_probe_service_running tests/test_connection.py::test_probe_service_not_running -v`
 Expected: Both tests PASS
 
 - [ ] **Step 5: Write failing test for service auto-start**
@@ -437,12 +437,12 @@ Expected: Both tests PASS
 ```python
 # tests/test_connection.py
 import subprocess
-from pysysml.connection import Connection
+from opensysml.connection import Connection
 
 def test_ensure_service_starts():
     """Test _ensure_service starts service if not running."""
-    with patch('pysysml.connection.Connection._probe_service', side_effect=[False, True]):
-        with patch('pysysml.binary.ensure_binary', return_value='/fake/sysml-grpc'):
+    with patch('opensysml.connection.Connection._probe_service', side_effect=[False, True]):
+        with patch('opensysml.binary.ensure_binary', return_value='/fake/sysml-grpc'):
             with patch('subprocess.Popen') as mock_popen:
                 mock_process = Mock()
                 mock_process.pid = 12345
@@ -456,7 +456,7 @@ def test_ensure_service_starts():
 
 def test_ensure_service_reuses_existing():
     """Test _ensure_service doesn't start if already running."""
-    with patch('pysysml.connection.Connection._probe_service', return_value=True):
+    with patch('opensysml.connection.Connection._probe_service', return_value=True):
         with patch('subprocess.Popen') as mock_popen:
             conn = Connection()
             conn._ensure_service()
@@ -467,11 +467,11 @@ def test_ensure_service_reuses_existing():
 - [ ] **Step 6: Implement _ensure_service method**
 
 ```python
-# pysysml/connection.py (add to Connection class)
+# opensysml/connection.py (add to Connection class)
 import subprocess
 import time
 import atexit
-from pysysml.binary import ensure_binary
+from opensysml.binary import ensure_binary
 
 def __init__(self, host='localhost', port=50051, auto_start=True):
     """Initialize connection to sysml-grpc service.
@@ -546,7 +546,7 @@ def _cleanup_service(self):
 
 - [ ] **Step 7: Run tests to verify they pass**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_connection.py::test_ensure_service_starts tests/test_connection.py::test_ensure_service_reuses_existing -v`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_connection.py::test_ensure_service_starts tests/test_connection.py::test_ensure_service_reuses_existing -v`
 Expected: Both tests PASS
 
 - [ ] **Step 8: Update existing Connection tests**
@@ -558,7 +558,7 @@ Modify existing tests to handle auto_start parameter:
 def test_connection_init():
     """Test Connection initializes with default host/port."""
     with patch('grpc.insecure_channel') as mock_channel:
-        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
+        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
             conn = Connection(auto_start=False)  # Add auto_start=False
             assert conn._host == 'localhost'
             assert conn._port == 50051
@@ -569,40 +569,40 @@ Apply `auto_start=False` to all existing Connection() calls in tests to avoid tr
 
 - [ ] **Step 9: Run all connection tests**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_connection.py -v`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_connection.py -v`
 Expected: All tests PASS (including new auto-start tests)
 
 - [ ] **Step 10: Commit**
 
 ```bash
-git add pysysml/connection.py tests/test_connection.py
+git add opensysml/connection.py tests/test_connection.py
 git commit -m "feat(python): add auto-start service capability to Connection"
 ```
 
 ### Task 3: Module-Level Convenience API
 
 **Files:**
-- Modify: `pysysml/__init__.py`
+- Modify: `opensysml/__init__.py`
 - Create: `tests/test_api.py`
 
-**Objective:** Provide simple `pysysml.load()` API with auto-initialization
+**Objective:** Provide simple `opensysml.load()` API with auto-initialization
 
 - [ ] **Step 1: Write failing test for module-level load()**
 
 ```python
 # tests/test_api.py
-import pysysml
+import opensysml
 from unittest.mock import patch, Mock
 
-def test_pysysml_load():
-    """Test pysysml.load() convenience function."""
-    with patch('pysysml.Connection') as mock_conn_class:
+def test_opensysml_load():
+    """Test opensysml.load() convenience function."""
+    with patch('opensysml.Connection') as mock_conn_class:
         mock_conn = Mock()
         mock_model = Mock()
         mock_conn.load.return_value = mock_model
         mock_conn_class.return_value = mock_conn
         
-        result = pysysml.load('test.sysml')
+        result = opensysml.load('test.sysml')
         
         assert result == mock_model
         mock_conn_class.assert_called_once_with(host='localhost', port=50051, auto_start=True)
@@ -611,22 +611,22 @@ def test_pysysml_load():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_api.py::test_pysysml_load -v`
-Expected: FAIL with "AttributeError: module 'pysysml' has no attribute 'load'"
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_api.py::test_opensysml_load -v`
+Expected: FAIL with "AttributeError: module 'opensysml' has no attribute 'load'"
 
 - [ ] **Step 3: Implement module-level load() function**
 
 ```python
-# pysysml/__init__.py (modify existing file)
-"""pysysml - Python bindings for Systemica SysML v2 implementation."""
+# opensysml/__init__.py (modify existing file)
+"""opensysml - Python bindings for OpenSysML SysML v2 implementation."""
 
 __version__ = "0.1.0"
 
 # Import core classes
-from pysysml.connection import Connection
-from pysysml.model import Model
-from pysysml.symbol import Symbol
-from pysysml.diagnostic import Diagnostic
+from opensysml.connection import Connection
+from opensysml.model import Model
+from opensysml.symbol import Symbol
+from opensysml.diagnostic import Diagnostic
 
 # Module-level default connection
 _default_connection = None
@@ -656,8 +656,8 @@ def load(file_path, host='localhost', port=50051):
         Model: Parsed model
     
     Example:
-        >>> import pysysml
-        >>> model = pysysml.load("spacecraft.sysml")
+        >>> import opensysml
+        >>> model = opensysml.load("spacecraft.sysml")
         >>> print(model.root.name)
     """
     conn = _get_default_connection()
@@ -668,20 +668,20 @@ __all__ = ['Connection', 'Model', 'Symbol', 'Diagnostic', 'load', '__version__']
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_api.py::test_pysysml_load -v`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_api.py::test_opensysml_load -v`
 Expected: PASS
 
 - [ ] **Step 5: Write failing test for connect() function**
 
 ```python
 # tests/test_api.py
-def test_pysysml_connect():
-    """Test pysysml.connect() returns Connection."""
-    with patch('pysysml.Connection') as mock_conn_class:
+def test_opensysml_connect():
+    """Test opensysml.connect() returns Connection."""
+    with patch('opensysml.Connection') as mock_conn_class:
         mock_conn = Mock()
         mock_conn_class.return_value = mock_conn
         
-        result = pysysml.connect(host='remote', port=9000)
+        result = opensysml.connect(host='remote', port=9000)
         
         assert result == mock_conn
         mock_conn_class.assert_called_once_with(host='remote', port=9000, auto_start=True)
@@ -690,7 +690,7 @@ def test_pysysml_connect():
 - [ ] **Step 6: Implement connect() function**
 
 ```python
-# pysysml/__init__.py (add to existing file)
+# opensysml/__init__.py (add to existing file)
 def connect(host='localhost', port=50051, auto_start=True):
     """Create a new Connection to sysml-grpc service.
     
@@ -703,8 +703,8 @@ def connect(host='localhost', port=50051, auto_start=True):
         Connection: New connection instance
     
     Example:
-        >>> import pysysml
-        >>> conn = pysysml.connect()
+        >>> import opensysml
+        >>> conn = opensysml.connect()
         >>> model = conn.load("model.sysml")
     """
     return Connection(host=host, port=port, auto_start=auto_start)
@@ -714,7 +714,7 @@ __all__ = ['Connection', 'Model', 'Symbol', 'Diagnostic', 'load', 'connect', '__
 
 - [ ] **Step 7: Run test to verify it passes**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_api.py::test_pysysml_connect -v`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_api.py::test_opensysml_connect -v`
 Expected: PASS
 
 - [ ] **Step 8: Write test for default connection reuse**
@@ -724,14 +724,14 @@ Expected: PASS
 def test_default_connection_reuse():
     """Test load() reuses same connection instance."""
     # Reset module state
-    pysysml._default_connection = None
+    opensysml._default_connection = None
     
-    with patch('pysysml.Connection') as mock_conn_class:
+    with patch('opensysml.Connection') as mock_conn_class:
         mock_conn = Mock()
         mock_conn_class.return_value = mock_conn
         
-        pysysml.load('file1.sysml')
-        pysysml.load('file2.sysml')
+        opensysml.load('file1.sysml')
+        opensysml.load('file2.sysml')
         
         # Connection created only once
         assert mock_conn_class.call_count == 1
@@ -741,18 +741,18 @@ def test_default_connection_reuse():
 
 - [ ] **Step 9: Run test to verify it passes**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_api.py::test_default_connection_reuse -v`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_api.py::test_default_connection_reuse -v`
 Expected: PASS
 
 - [ ] **Step 10: Run all API tests**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_api.py -v`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_api.py -v`
 Expected: All 3 tests PASS
 
 - [ ] **Step 11: Commit**
 
 ```bash
-git add pysysml/__init__.py tests/test_api.py
+git add opensysml/__init__.py tests/test_api.py
 git commit -m "feat(python): add module-level convenience API (load, connect)"
 ```
 
@@ -771,8 +771,8 @@ git commit -m "feat(python): add module-level convenience API (load, connect)"
 """Integration tests for auto-lifecycle management."""
 import os
 import pytest
-import pysysml
-from pysysml.binary import get_binary_path
+import opensysml
+from opensysml.binary import get_binary_path
 
 @pytest.mark.integration
 def test_binary_download_and_service_start():
@@ -794,7 +794,7 @@ def test_binary_download_and_service_start():
         with open(test_file, 'w') as f:
             f.write('package TestModel;')
         
-        model = pysysml.load(test_file)
+        model = opensysml.load(test_file)
         
         assert model is not None
         assert os.path.exists(binary_path)
@@ -826,11 +826,11 @@ def test_service_persists_across_loads():
     
     try:
         # First load
-        model1 = pysysml.load(test_file1)
+        model1 = opensysml.load(test_file1)
         assert model1 is not None
         
         # Second load (service should still be running)
-        model2 = pysysml.load(test_file2)
+        model2 = opensysml.load(test_file2)
         assert model2 is not None
         
         # Both models should be different
@@ -858,7 +858,7 @@ def test_custom_port():
         f.write('package CustomPortTest;')
     
     try:
-        conn = pysysml.connect(port=test_port)
+        conn = opensysml.connect(port=test_port)
         
         # Give service time to start
         time.sleep(1)
@@ -878,7 +878,7 @@ def test_custom_port():
 def test_load_nonexistent_file():
     """Test load() handles missing files gracefully."""
     with pytest.raises(Exception):  # grpc.RpcError
-        pysysml.load("/nonexistent/file.sysml")
+        opensysml.load("/nonexistent/file.sysml")
 ```
 
 - [ ] **Step 5: Add test for binary checksum verification**
@@ -887,7 +887,7 @@ def test_load_nonexistent_file():
 # tests/test_binary.py (add to existing file)
 import tempfile
 import hashlib
-from pysysml.binary import verify_checksum, download_binary
+from opensysml.binary import verify_checksum, download_binary
 
 def test_download_binary_checksum():
     """Test downloaded binary checksum verification (if available).
@@ -901,7 +901,7 @@ def test_download_binary_checksum():
         # Download to temp location
         with tempfile.TemporaryDirectory() as tmpdir:
             # Mock get_binary_path to use temp dir
-            with patch('pysysml.binary.get_binary_path', return_value=os.path.join(tmpdir, 'sysml-grpc')):
+            with patch('opensysml.binary.get_binary_path', return_value=os.path.join(tmpdir, 'sysml-grpc')):
                 binary_path = download_binary(version='v0.1.0')
                 
                 # Verify file exists
@@ -925,7 +925,7 @@ def test_download_binary_checksum():
 
 - [ ] **Step 6: Run integration tests**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_lifecycle.py tests/test_binary.py::test_download_binary_checksum -v -m integration`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_lifecycle.py tests/test_binary.py::test_download_binary_checksum -v -m integration`
 Expected: Tests PASS or SKIP (if network unavailable)
 
 **Note:** Integration tests may skip if:
@@ -935,19 +935,19 @@ Expected: Tests PASS or SKIP (if network unavailable)
 
 - [ ] **Step 7: Run full test suite**
 
-Run: `PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/ -v`
+Run: `PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/ -v`
 Expected: All unit tests PASS, integration tests PASS or SKIP
 
 - [ ] **Step 8: Manual end-to-end verification**
 
 ```bash
-# In a fresh Python environment (or remove ~/.pysysml/bin/ first)
-cd /home/han/IdeaProjects/Systemica
-rm -rf ~/.pysysml  # Clean slate
+# In a fresh Python environment (or remove ~/.opensysml/bin/ first)
+cd /home/han/IdeaProjects/OpenSysML
+rm -rf ~/.opensysml  # Clean slate
 
 python3 -c "
-import pysysml
-model = pysysml.load('/home/han/Downloads/A1.sysml')
+import opensysml
+model = opensysml.load('/home/han/Downloads/A1.sysml')
 print(f'Loaded: {model.root.name}')
 print(f'Diagnostics: {len(model.diagnostics)}')
 "
@@ -961,24 +961,24 @@ Diagnostics: 0
 
 And binary should exist:
 ```bash
-ls -lh ~/.pysysml/bin/sysml-grpc
+ls -lh ~/.opensysml/bin/sysml-grpc
 ```
 
 - [ ] **Step 9: Update README with zero-config usage**
 
 ```python
-# pysysml/README.md (update "Usage" section)
+# opensysml/README.md (update "Usage" section)
 ## Usage
 
 ### Zero-Config (Phase 3)
 
-The simplest way to use pysysml - just import and load:
+The simplest way to use opensysml - just import and load:
 
 ```python
-import pysysml
+import opensysml
 
 # First use downloads binary and starts service automatically
-model = pysysml.load("spacecraft.sysml")
+model = opensysml.load("spacecraft.sysml")
 
 print(f"Model: {model.root.name}")
 print(f"Diagnostics: {len(model.diagnostics)}")
@@ -998,7 +998,7 @@ if part:
 For more control over service lifecycle:
 
 ```python
-from pysysml import Connection
+from opensysml import Connection
 
 # Start service manually or connect to existing
 with Connection() as conn:
@@ -1008,19 +1008,19 @@ with Connection() as conn:
 
 ### Configuration
 
-Binary downloads from: `https://github.com/Open-MBEE/Systemica/releases`
-Binary stored in: `~/.pysysml/bin/sysml-grpc`
+Binary downloads from: `https://github.com/Open-MBEE/OpenSysML/releases`
+Binary stored in: `~/.opensysml/bin/sysml-grpc`
 
 To use a different service:
 ```python
-conn = pysysml.connect(host='remote-server', port=50051, auto_start=False)
+conn = opensysml.connect(host='remote-server', port=50051, auto_start=False)
 ```
 ```
 
 - [ ] **Step 10: Commit**
 
 ```bash
-git add tests/test_lifecycle.py tests/test_binary.py pysysml/README.md
+git add tests/test_lifecycle.py tests/test_binary.py opensysml/README.md
 git commit -m "test(python): add integration tests for auto-lifecycle and update README"
 ```
 
@@ -1028,8 +1028,8 @@ git commit -m "test(python): add integration tests for auto-lifecycle and update
 
 ## Definition of Done
 
-- [ ] `import pysysml` auto-downloads binary on first use
-- [ ] `model = pysysml.load("A1.sysml")` works without manual service start
+- [ ] `import opensysml` auto-downloads binary on first use
+- [ ] `model = opensysml.load("A1.sysml")` works without manual service start
 - [ ] Multiple Python processes can import concurrently (lockfile prevents conflicts)
 - [ ] Service shuts down when last process exits (reference counting)
 - [ ] All unit tests pass: `pytest tests/test_binary.py`

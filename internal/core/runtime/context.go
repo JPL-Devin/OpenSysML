@@ -3,12 +3,12 @@ package runtime
 import (
 	"fmt"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/lower"
-	"github.com/Open-MBEE/Systemica/internal/core/resolve"
-	"github.com/Open-MBEE/Systemica/internal/core/semantics"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
+	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // Context carries runtime execution state. One per workspace session.
@@ -23,7 +23,7 @@ type Context struct {
 	instances map[int64]*Instance
 
 	// maxActionSteps, maxStateEvents and maxDoSteps bound the executors this
-	// context runs: token-flow steps, dispatched events, and do activity actions.
+	// context runs: token-flow steps, dispatched events, and do actions.
 	// Unlike maxSteps they are counted by the executor, not here.
 	maxActionSteps int64
 	maxStateEvents int64
@@ -70,6 +70,32 @@ type Context struct {
 	// of, which a behavior that object performs routes over.
 	objectConns map[*symbols.Symbol][]lower.Connection
 
+	// objectBindings memoizes binding connectors declared by each materialized
+	// object type, including bindings inherited from its supertypes.
+	bindingIR map[*symbols.Symbol][]lower.Binding
+
+	// resolvingBindings guards binding endpoint resolution for one instance
+	// feature, so a valueless binding cycle is reported rather than recursed.
+	resolvingBindings map[featureValueRef]bool
+	bindingOwners     map[featureValueRef]*ast.Usage
+	bindingFeatures   map[*symbols.Symbol]map[string][]lower.Binding
+
+	// classifierBehaviors memoizes the behaviors each type binds to its objects:
+	// the machines it exhibits and the actions it performs.
+	classifierBehaviors map[*symbols.Symbol][]classifierBehaviorDecl
+
+	// pendingBehaviors are the object behaviors attached but not yet run, drained
+	// by the outermost materialization so a start reached from inside a running
+	// behavior does not run it recursively.
+	pendingBehaviors []*ObjectBehavior
+
+	// behaviorRunDepth is the number of classifier-behavior starts under way.
+	behaviorRunDepth int
+
+	// objectBehaviors are every behavior an object of this context runs, so a
+	// drain to quiescence can re-run one a sibling's send woke.
+	objectBehaviors []*ObjectBehavior
+
 	// trace records evaluation, nil when not tracing.
 	trace *TraceRecorder
 
@@ -90,13 +116,13 @@ type Context struct {
 	// so a message one behavior sends can be accepted in another.
 	messages []Message
 
-	// derivingSlots holds the slots whose defaults are being evaluated, so a
-	// default that refers back to its own slot is reported as a cycle.
-	derivingSlots map[slotRef]bool
+	// derivingFeatureValues holds the feature values whose defaults are being evaluated, so a
+	// default that refers back to its own feature value is reported as a cycle.
+	derivingFeatureValues map[featureValueRef]bool
 
-	// collectingSubsets holds the slots whose subsetting features are being read,
+	// collectingSubsets holds the feature values whose subsetting features are being read,
 	// so features that subset each other are reported as a cycle.
-	collectingSubsets map[slotRef]bool
+	collectingSubsets map[featureValueRef]bool
 
 	// sources holds the text of the files the model was read from, by name, so an
 	// error about a declaration can say where it was written. A file no caller
@@ -104,8 +130,8 @@ type Context struct {
 	sources map[string]*source.SourceFile
 }
 
-// slotRef identifies one slot of one instance.
-type slotRef struct {
+// featureValueRef identifies one feature value of one instance.
+type featureValueRef struct {
 	instance int64
 	feature  string
 }
@@ -157,8 +183,13 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 
 		materializingConnectors: make(map[connectorRef]bool),
 		objectConns:             make(map[*symbols.Symbol][]lower.Connection),
-		derivingSlots:           make(map[slotRef]bool),
-		collectingSubsets:       make(map[slotRef]bool),
+		bindingIR:               make(map[*symbols.Symbol][]lower.Binding),
+		classifierBehaviors:     make(map[*symbols.Symbol][]classifierBehaviorDecl),
+		derivingFeatureValues:   make(map[featureValueRef]bool),
+		resolvingBindings:       make(map[featureValueRef]bool),
+		bindingOwners:           make(map[featureValueRef]*ast.Usage),
+		bindingFeatures:         make(map[*symbols.Symbol]map[string][]lower.Binding),
+		collectingSubsets:       make(map[featureValueRef]bool),
 		sources:                 make(map[string]*source.SourceFile),
 	}
 }
@@ -208,6 +239,17 @@ func (ctx *Context) SetTrace(tr *TraceRecorder) {
 // Model returns the semantic model this context operates over.
 func (ctx *Context) Model() *semantics.Model {
 	return ctx.model
+}
+
+// Resolver returns the name resolver this context resolves references with.
+func (ctx *Context) Resolver() *resolve.Resolver {
+	return ctx.resolver
+}
+
+// SourceLocation renders where a span in a file was written, as `file:line:col`,
+// falling back to a byte offset for a file whose text was not registered.
+func (ctx *Context) SourceLocation(file string, span source.Span) string {
+	return ctx.sourceLocation(file, span)
 }
 
 // idSequence hands out instance identities, one per object over the contexts
@@ -388,7 +430,7 @@ func RequireRequirement(sym *symbols.Symbol) error {
 }
 
 // EvaluateConstraintOn evaluates a constraint against a concrete instance: a
-// feature the constraint names resolves to that instance's slot, so the same
+// feature the constraint names resolves to that instance's feature value, so the same
 // constraint can pass for one instance and fail for another. An instance that
 // does not carry the constraint itself is searched for the nested object that
 // does; a nil instance leaves the subject to EvaluateConstraint's rule.
@@ -418,7 +460,7 @@ func (ctx *Context) CheckConstraintOn(sym *symbols.Symbol, scope *symbols.Scope,
 		kind:    "constraint",
 		what:    "assertion",
 		self:    subject.instance,
-		negated: negatedDecl(sym),
+		negated: NegatedDecl(sym),
 	}, conds)
 	return ctx.checkResultOf(holds, subject), err
 }
@@ -509,9 +551,9 @@ func effectiveName(u *ast.Usage) string {
 	return name
 }
 
-// negatedDecl reports whether sym's declaration asserts that its conditions do
+// NegatedDecl reports whether sym's declaration asserts that its conditions do
 // not hold (`assert not constraint { … }`, `assert not satisfy … by …`).
-func negatedDecl(sym *symbols.Symbol) bool {
+func NegatedDecl(sym *symbols.Symbol) bool {
 	usage, ok := sym.Decl.(*ast.Usage)
 	return ok && usage.IsNegated
 }
@@ -563,7 +605,7 @@ func (ctx *Context) EvaluateRequirement(sym *symbols.Symbol, scope *symbols.Scop
 }
 
 // EvaluateRequirementOn evaluates a requirement against a concrete instance,
-// binding the features it names to that instance's slots. The subject is chosen
+// binding the features it names to that instance's feature values. The subject is chosen
 // as EvaluateConstraintOn chooses it, and the subject/actor bindings are
 // evaluated against that same object.
 func (ctx *Context) EvaluateRequirementOn(sym *symbols.Symbol, scope *symbols.Scope, self *Instance) (bool, error) {
@@ -603,7 +645,7 @@ func (ctx *Context) CheckRequirementOn(sym *symbols.Symbol, scope *symbols.Scope
 		what:     "require condition",
 		self:     subject.instance,
 		bindings: reqBindings,
-		negated:  negatedDecl(sym),
+		negated:  NegatedDecl(sym),
 	}, conds)
 	return ctx.checkResultOf(holds, subject), err
 }

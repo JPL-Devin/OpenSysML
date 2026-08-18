@@ -9,10 +9,10 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from pysysml.errors import ExecutionError, SlotError, UnsupportedValueError
-from pysysml.instance import Instance
-from pysysml.proto import sysml_pb2
-from pysysml.values import (
+from opensysml.errors import ExecutionError, FeatureValueError, UnsupportedValueError
+from opensysml.instance import Instance
+from opensysml.proto import sysml_pb2
+from opensysml.values import (
     IncommensurableUnitsError,
     Quantity,
     Unit,
@@ -179,10 +179,10 @@ def test_a_magnitude_that_is_not_a_number_is_refused():
 
 def test_a_quantity_argument_is_encoded_as_a_quantity_value():
     """The request carries the quantity itself, not a bare magnitude."""
-    from pysysml import Connection
+    from opensysml import Connection
 
     with patch('grpc.insecure_channel'), \
-            patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub') as stub_cls:
+            patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub') as stub_cls:
         stub_cls.return_value = Mock()
         conn = Connection(auto_start=False)
 
@@ -200,8 +200,8 @@ def test_a_quantity_slot_reads_off_an_instance():
     pb_inst = sysml_pb2.Instance(
         id=1,
         type_symbol_id="P::Car",
-        slots={
-            "m": sysml_pb2.SlotValue(
+        feature_values={
+            "m": sysml_pb2.FeatureValue(
                 feature_name="m",
                 materialized=True,
                 value=sysml_pb2.Value(
@@ -210,7 +210,7 @@ def test_a_quantity_slot_reads_off_an_instance():
                     )
                 ),
             ),
-            "n": sysml_pb2.SlotValue(
+            "n": sysml_pb2.FeatureValue(
                 feature_name="n",
                 materialized=True,
                 value=sysml_pb2.Value(real_value=2.0),
@@ -226,7 +226,7 @@ def test_a_quantity_slot_reads_off_an_instance():
 
 def test_a_quantity_in_a_collection_slot_decodes_per_element():
     """Every element of a collection slot is decoded, quantities included."""
-    pb_slot = sysml_pb2.SlotValue(
+    pb_slot = sysml_pb2.FeatureValue(
         feature_name="masses",
         materialized=True,
         values=[
@@ -234,7 +234,7 @@ def test_a_quantity_in_a_collection_slot_decodes_per_element():
             sysml_pb2.Value(quantity=pb_quantity("SI::m", real_magnitude=2.0)),
         ],
     )
-    pb_inst = sysml_pb2.Instance(id=1, type_symbol_id="P::Car", slots={"masses": pb_slot})
+    pb_inst = sysml_pb2.Instance(id=1, type_symbol_id="P::Car", feature_values={"masses": pb_slot})
 
     assert Instance(pb_inst).masses == [
         Quantity(1.0, unit("SI::m")),
@@ -353,14 +353,14 @@ def test_a_slot_that_failed_is_still_an_error():
     pb_inst = sysml_pb2.Instance(
         id=1,
         type_symbol_id="P::Car",
-        slots={
-            "m": sysml_pb2.SlotValue(
+        feature_values={
+            "m": sysml_pb2.FeatureValue(
                 feature_name="m", materialized=True, error="incommensurable units"
             )
         },
     )
 
-    with pytest.raises(SlotError, match="incommensurable units"):
+    with pytest.raises(FeatureValueError, match="incommensurable units"):
         Instance(pb_inst).m
 
 
@@ -417,7 +417,7 @@ class TestQuantityAgainstTheService:
     def setup_method(self):
         import grpc
 
-        from pysysml import Connection
+        from opensysml import Connection
 
         try:
             self.conn = Connection(auto_start=False)

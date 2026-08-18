@@ -7,10 +7,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/format"
-	"github.com/Open-MBEE/Systemica/internal/core/lexer"
-	"github.com/Open-MBEE/Systemica/internal/core/rdf"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/format"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
+	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
 )
 
 // annotationMetaclasses are the elements whose notation is a comment body,
@@ -44,7 +44,13 @@ func ToSysML(graph *rdf.Graph) ([]byte, error) {
 	if graph == nil || graph.Len() == 0 {
 		return nil, &UnsupportedError{What: "an empty graph", Note: "nothing to convert"}
 	}
-	d := &decoder{graph: graph, byIRI: map[string]*element{}}
+	if err := checkExtensionNamespace(graph); err != nil {
+		return nil, err
+	}
+	d := &decoder{
+		graph: graph,
+		byIRI: map[string]*element{},
+	}
 	roots, err := d.build()
 	if err != nil {
 		return nil, err
@@ -62,6 +68,30 @@ func ToSysML(graph *rdf.Graph) ([]byte, error) {
 		return nil, fmt.Errorf("converted source is not valid SysML: %w", err)
 	}
 	return out, nil
+}
+
+// checkExtensionNamespace refuses a graph written with the pre-rename extension
+// namespace. Its properties would otherwise read as absent and the elements they
+// describe would be written back without them.
+func checkExtensionNamespace(graph *rdf.Graph) error {
+	for _, triple := range graph.Triples() {
+		for _, term := range []rdf.Term{triple.Subject, triple.Predicate, triple.Object} {
+			if term.Kind == rdf.TermIRI && strings.HasPrefix(term.Value, rdf.LegacyExtension) {
+				return legacyNamespaceError(term.Value)
+			}
+		}
+		if strings.HasPrefix(triple.Object.Datatype, rdf.LegacyExtension) {
+			return legacyNamespaceError(triple.Object.Datatype)
+		}
+	}
+	return nil
+}
+
+func legacyNamespaceError(iri string) error {
+	return &UnsupportedError{
+		What: fmt.Sprintf("the term <%s>", iri),
+		Note: fmt.Sprintf("it is in the pre-rename extension namespace %s, which this version does not read; convert the model from source again to write %s", rdf.LegacyExtension, rdf.OpenSysML),
+	}
 }
 
 type decoder struct {
@@ -87,7 +117,7 @@ func (d *decoder) build() ([]*element, error) {
 		el := &element{
 			iri:         subject.Value,
 			metaclass:   metaclass,
-			memberIndex: d.intOf(subject, rdf.Systemica+xMemberIndex),
+			memberIndex: d.intOf(subject, rdf.OpenSysML+xMemberIndex),
 		}
 		d.byIRI[el.iri] = el
 		order = append(order, el)
@@ -168,10 +198,13 @@ func sortByIndex(elements []*element) {
 // print writes one element and, recursively, its members.
 func (d *decoder) print(b *strings.Builder, el *element, depth int) error {
 	indent := strings.Repeat("    ", depth)
-	if text, ok := d.stringOf(el, rdf.Systemica+xSourceText); ok {
+	if text, ok := d.stringOf(el, rdf.OpenSysML+xSourceText); ok {
 		// A declaration whose head this mapping keeps verbatim.
 		b.WriteString(indent + strings.TrimSpace(text) + "\n")
 		return nil
+	}
+	if handled, err := d.printBehavior(b, el, depth); handled {
+		return err
 	}
 	head, err := d.head(el)
 	if err != nil {
@@ -194,7 +227,7 @@ func (d *decoder) print(b *strings.Builder, el *element, depth int) error {
 			}
 		}
 	}
-	if len(children) == 0 && !d.boolOf(el, rdf.Systemica+xHasBody) {
+	if len(children) == 0 && !d.boolOf(el, rdf.OpenSysML+xHasBody) {
 		b.WriteString(";\n")
 		return nil
 	}
@@ -228,14 +261,14 @@ func (d *decoder) head(el *element) (string, error) {
 	case mMultiplicity:
 		return d.multiplicityHead(el), nil
 	case mFilter:
-		condition, ok := d.stringOf(el, rdf.Systemica+xFilter)
+		condition, ok := d.stringOf(el, rdf.OpenSysML+xFilter)
 		if !ok {
 			return "", d.missing(el, "sysx:"+xFilter, "a filter is its condition")
 		}
 		return "filter " + condition, nil
 	case mConstraint:
 		// A bare condition states no keyword of its own; it asserts implicitly.
-		keyword, _ := d.stringOf(el, rdf.Systemica+xDeclaredKeyword)
+		keyword, _ := d.stringOf(el, rdf.OpenSysML+xDeclaredKeyword)
 		return d.conditionHead(el, keyword)
 	case mAssume:
 		return d.conditionHead(el, "assume")
@@ -253,18 +286,13 @@ func (d *decoder) head(el *element) (string, error) {
 	// sequences the two members it names wherever they are declared, so the
 	// order survives the round trip. A `succession` declaration whose head was
 	// kept verbatim never reaches here — print() writes its source text.
-	if el.metaclass == "SuccessionAsUsage" {
-		source := d.referenceText(el, rdf.SysML+pSourceFeature)
-		target := d.referenceText(el, rdf.SysML+pTargetFeature)
-		if source != "" && target != "" {
-			return "then " + source + " " + target, nil
-		}
-		// A half-named succession states no order, so it is reported rather than
-		// written back as a bare `succession;` the notation reads as nothing.
-		return "", &UnsupportedError{
-			What: fmt.Sprintf("the succession <%s>", el.iri),
-			Note: "it does not name both of the members it sequences, so the order it declares cannot be written back",
-		}
+	if el.metaclass == mSuccession {
+		return d.successionHead(el)
+	}
+	// A control node, statement, state or region: the behavioral half of the
+	// mapping writes the ones whose notation is a head and a terminator.
+	if head, handled, err := d.behaviorHead(el); handled {
+		return head, err
 	}
 	if kind, ok := metaclassDefinition[el.metaclass]; ok {
 		return d.definitionHead(el, kind), nil
@@ -285,10 +313,10 @@ func (d *decoder) namespaceHead(el *element) string {
 		words = append(words, keyword)
 	}
 	if el.metaclass == "Package" {
-		if d.boolOf(el, rdf.Systemica+"isStandardLibraryPackage") {
+		if d.boolOf(el, rdf.OpenSysML+"isStandardLibraryPackage") {
 			words = append(words, "standard")
 		}
-		if d.boolOf(el, rdf.Systemica+"isLibraryPackage") {
+		if d.boolOf(el, rdf.OpenSysML+"isLibraryPackage") {
 			words = append(words, "library")
 		}
 		words = append(words, "package")
@@ -349,6 +377,11 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 		words = append(words, direction)
 	}
 	keyword := d.keywordOr(el, usageKeyword(kind))
+	// An accept written without the `action` keyword its kind states carries
+	// `accept` as the keyword it was written with; the shorthand writes it.
+	if keyword == "accept" {
+		keyword = ""
+	}
 	for _, flag := range []struct {
 		property string
 		keyword  string
@@ -377,7 +410,7 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 	// A prefix qualifies the kind keyword after it, and the `not` of
 	// `assert not constraint c` negates the declaration that prefix introduces.
 	// Negation on its own has no notation, so it is reported rather than dropped.
-	prefix, hasPrefix := d.stringOf(el, rdf.Systemica+xDeclaredPrefix)
+	prefix, hasPrefix := d.stringOf(el, rdf.OpenSysML+xDeclaredPrefix)
 	negated := d.boolOf(el, rdf.SysML+"isNegated")
 	switch {
 	case hasPrefix:
@@ -388,7 +421,10 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 	case negated:
 		return "", d.missing(el, "sysx:"+xDeclaredPrefix, "the `not` of a negated declaration qualifies the prefix keyword it follows")
 	}
-	words = append(words, keyword)
+	keywordAt := len(words)
+	if keyword != "" {
+		words = append(words, keyword)
+	}
 	// `chain` qualifies the kind keyword it follows, unlike the modifiers above.
 	if d.boolOf(el, rdf.SysML+"isChain") {
 		words = append(words, "chain")
@@ -408,13 +444,42 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 			words = append(words, noun)
 		}
 	}
-	words = append(words, d.identWords(el)...)
+	// `include` states the use case a case performs: `include <ref>;` names an
+	// existing one, `include use case <name> : T` declares one that includes T
+	// (SysML.xtext PerformedUseCaseUsage). Both carry the inclusion as a
+	// relationship, which the keyword itself writes.
+	if included := d.referenceList(el, rdf.SysML+relationshipProperty[ast.RelIncludes]); len(included) > 0 {
+		skip = append(skip, ast.RelIncludes)
+		if len(d.identWords(el)) == 0 {
+			// `include <ref>;` states no kind keyword and takes the inclusion in
+			// its place; the typing the parser derives from it is that same target.
+			words = append(words[:keywordAt:keywordAt], "include", strings.Join(included, ", "))
+			skip = append(skip, ast.RelTyping)
+		} else {
+			words = append(words[:keywordAt:keywordAt], append([]string{"include"}, words[keywordAt:]...)...)
+		}
+	}
+	// A `perform` or a state's `entry`/`do`/`exit` names the action it performs,
+	// declaring no name of its own (SysML.xtext PerformActionUsageDeclaration).
+	identWords := d.identWords(el)
+	if len(identWords) == 0 && referenceMemberKeyword(keyword) {
+		if targets := d.referenceList(el, rdf.SysML+relationshipProperty[ast.RelReferences]); len(targets) > 0 {
+			words = append(words, strings.Join(targets, ", "))
+			skip = append(skip, ast.RelReferences)
+		}
+	}
+	words = append(words, identWords...)
 	// The accept shorthand writes its parameter into the head, ahead of the
 	// `via` clause the parent's relationships supply.
 	if accept := d.acceptParam(el); accept != nil {
 		words = append(words, "accept")
 		words = append(words, d.identWords(accept)...)
 		words = append(words, d.relationshipWords(accept, "")...)
+		// A trigger (`when`/`at`/`after` …) is what the payload accepts, written
+		// in place of a type rather than as a value clause.
+		if trigger, ok := d.stringOf(accept, rdf.SysML+pValue); ok {
+			words = append(words, trigger)
+		}
 	}
 	// The multiplicity part (`[1] ordered nonunique`) qualifies the type it
 	// follows, so it goes with the typing clause and ahead of any further
@@ -450,12 +515,12 @@ func (d *decoder) conditionHead(el *element, keyword string) (string, error) {
 	if d.boolOf(el, rdf.SysML+"isNegated") {
 		words = append(words, "not")
 	}
-	switch condition, ok := d.stringOf(el, rdf.Systemica+xCondition); {
+	switch condition, ok := d.stringOf(el, rdf.OpenSysML+xCondition); {
 	case ok:
 		words = append(words, condition)
 	case d.referenceText(el, rdf.SysML+relationshipProperty[ast.RelReferences]) != "":
 		words = append(words, d.referenceText(el, rdf.SysML+relationshipProperty[ast.RelReferences]))
-	case d.boolOf(el, rdf.Systemica+xHasBody):
+	case d.boolOf(el, rdf.OpenSysML+xHasBody):
 		// The nested-constraint form spells out the kind it declares, so the
 		// braces that follow are read as a constraint body rather than a name.
 		words = append(words, "constraint")
@@ -490,7 +555,7 @@ func (d *decoder) importHead(el *element) (string, error) {
 	var words []string
 	// An expose is always protected and always imports all (SysML v2 8.3.26.2),
 	// so its keyword states both: writing them as well does not parse.
-	expose := d.boolOf(el, rdf.Systemica+xExpose)
+	expose := d.boolOf(el, rdf.OpenSysML+xExpose)
 	if keyword := d.visibility(el); keyword != "" && !expose {
 		words = append(words, keyword)
 	}
@@ -508,13 +573,13 @@ func (d *decoder) importHead(el *element) (string, error) {
 	}
 	imported = qualifiedNameText(imported)
 	switch {
-	case d.boolOf(el, rdf.Systemica+xRecursive):
+	case d.boolOf(el, rdf.OpenSysML+xRecursive):
 		imported += "::**"
-	case d.boolOf(el, rdf.Systemica+xNamespaceImport):
+	case d.boolOf(el, rdf.OpenSysML+xNamespaceImport):
 		imported += "::*"
 	}
 	words = append(words, imported)
-	if filter, ok := d.stringOf(el, rdf.Systemica+xFilter); ok {
+	if filter, ok := d.stringOf(el, rdf.OpenSysML+xFilter); ok {
 		words = append(words, "["+filter+"]")
 	}
 	return strings.Join(words, " "), nil
@@ -613,8 +678,12 @@ func (d *decoder) localeWords(el *element) []string {
 // keywordOr returns the kind keyword the author wrote, falling back to the
 // canonical one when the graph does not record a synonym.
 func (d *decoder) keywordOr(el *element, canonical string) string {
-	if written, ok := d.stringOf(el, rdf.Systemica+xDeclaredKeyword); ok && written != "" {
+	if written, ok := d.stringOf(el, rdf.OpenSysML+xDeclaredKeyword); ok && written != "" {
 		return written
+	}
+	// A declaration that wrote no kind keyword takes its kind from its owner.
+	if d.boolOf(el, rdf.OpenSysML+xImplicitKind) {
+		return ""
 	}
 	return canonical
 }
@@ -683,7 +752,7 @@ func qualifiedNameText(qname string) string {
 
 func (d *decoder) prefixWords(el *element) []string {
 	var words []string
-	for _, term := range d.graph.Objects(rdf.IRI(el.iri), rdf.Systemica+xPrefixMetadata) {
+	for _, term := range d.graph.Objects(rdf.IRI(el.iri), rdf.OpenSysML+xPrefixMetadata) {
 		words = append(words, term.Value)
 	}
 	return words
@@ -767,7 +836,7 @@ func (d *decoder) referenceList(el *element, property string) []string {
 // full qualified name when the target is not in scope.
 func (d *decoder) referenceName(term rdf.Term, scope string) string {
 	if term.IsLiteral() {
-		if term.Datatype == rdf.Systemica+dtExpression {
+		if term.Datatype == rdf.OpenSysML+dtExpression {
 			return term.Value
 		}
 		return qualifiedNameText(term.Value)

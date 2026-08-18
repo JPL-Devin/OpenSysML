@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/parser"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 // dropReport records what one submission did to a declaration already in the
@@ -149,6 +149,20 @@ func instancesResetNotice(n int) string {
 		return ""
 	}
 	return fmt.Sprintf("note: %s dropped because the session was reset; re-run %%instantiate", countOf(n, "instance was", "instances were"))
+}
+
+// behaviorsRestartedNotice reports the behaviors a carry-over started again. An
+// execution belongs to the analysis it started in, so a rebuilt model runs the
+// behavior from its initial state rather than continuing it on stale values.
+func behaviorsRestartedNotice(restarted []string) string {
+	switch len(restarted) {
+	case 0:
+		return ""
+	case 1:
+		return fmt.Sprintf("note: the %s was restarted from its initial state because the model was rebuilt", restarted[0])
+	default:
+		return fmt.Sprintf("note: %d behaviors of carried-over objects were restarted from their initial states because the model was rebuilt", len(restarted))
+	}
 }
 
 // instanceLoss records the objects the session no longer holds and what took

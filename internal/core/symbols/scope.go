@@ -1,7 +1,7 @@
 package symbols
 
 import (
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 )
 
 // Scope is a node in the immutable per-document scope tree. It owns the
@@ -17,7 +17,11 @@ type Scope struct {
 	children         []*Scope
 	childByNode      map[ast.Node]*Scope // declaration node -> the child scope it owns
 	bodyLocal        bool                // declarations live only inside the owning body
+	docName          string              // document this scope tree belongs to (stamped by SetDocName)
 }
+
+// DocName is the document this scope belongs to, or "" when none was stamped.
+func (s *Scope) DocName() string { return s.docName }
 
 // NewScope creates an empty scope with the given parent and owning node.
 func NewScope(parent *Scope, node ast.Node) *Scope {

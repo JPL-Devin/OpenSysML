@@ -4,10 +4,10 @@ import inspect
 
 import pytest
 from unittest.mock import Mock
-from pysysml.connection import Connection
-from pysysml.proto import sysml_pb2
-from pysysml.errors import ExecutionError
-from pysysml.model import Model
+from opensysml.connection import Connection
+from opensysml.proto import sysml_pb2
+from opensysml.errors import ExecutionError
+from opensysml.model import Model
 
 
 def test_model_properties():
@@ -394,8 +394,9 @@ class TestModelRuntimeCalls:
 
 
 #: Connection calls whose model-level counterpart is named differently:
-#: get_symbol is the raw protobuf lookup behind Model.get and model[name].
-MODEL_LEVEL_ALIASES = {"get_symbol": "get"}
+#: get_symbol is the raw protobuf lookup behind Model.get and model[name], and
+#: apply_edits is the call Model.edit()'s editor makes.
+MODEL_LEVEL_ALIASES = {"get_symbol": "get", "apply_edits": "edit"}
 
 
 def test_every_call_about_a_loaded_model_is_reachable_on_the_model():

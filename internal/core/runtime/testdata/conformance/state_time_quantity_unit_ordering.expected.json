@@ -1,0 +1,9 @@
+{
+  "type": "state",
+  "libraries": true,
+  "trace": true,
+  "finalState": "fDone+sDone",
+  "outputs": {
+    "log": {"type": "Integer", "value": 12}
+  }
+}

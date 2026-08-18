@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 const adoptSrc = `package Demo {
@@ -30,8 +30,8 @@ func vehicleIn(t *testing.T, ctx *Context) *Instance {
 	if err != nil {
 		t.Fatalf("Instantiate: %v", err)
 	}
-	if _, err := obj.GetSlot(ctx, "engine"); err != nil {
-		t.Fatalf("GetSlot(engine): %v", err)
+	if _, err := obj.GetFeatureValue(ctx, "engine"); err != nil {
+		t.Fatalf("GetFeatureValue(engine): %v", err)
 	}
 	return obj
 }
@@ -43,13 +43,13 @@ func TestAdoptCarriesAnObjectIntoAReanalysis(t *testing.T) {
 	prev := contextOver(t, adoptSrc)
 	obj := vehicleIn(t, prev)
 	shapes := prev.ShapesOf(obj)
-	nested, ok := obj.Slots["engine"].Value.Object()
+	nested, ok := obj.FeatureValues["engine"].Value.Object()
 	if !ok {
-		t.Fatalf("engine slot holds %v, want an object", obj.Slots["engine"].Value)
+		t.Fatalf("engine feature value holds %v, want an object", obj.FeatureValues["engine"].Value)
 	}
 
 	ctx := contextOver(t, adoptSrc+"\npart def Widget;")
-	if err := ctx.Adopt(prev, shapes, obj); err != nil {
+	if _, err := ctx.Adopt(prev, shapes, obj); err != nil {
 		t.Fatalf("Adopt: %v", err)
 	}
 
@@ -62,13 +62,13 @@ func TestAdoptCarriesAnObjectIntoAReanalysis(t *testing.T) {
 	if want := lookupOne(t, ctx.resolver.Index(), "Demo::Vehicle"); obj.Type != want {
 		t.Error("the object is still of the declaration it was built against")
 	}
-	feat := obj.Slots["mass"].Feature
+	feat := obj.FeatureValues["mass"].Feature
 	if features := ctx.FeaturesOf(obj.Type); feat != &features[indexOfFeature(t, features, "mass")] {
-		t.Error("a slot still fills a feature of the analysis the object was built against")
+		t.Error("a feature value still fills a feature of the analysis the object was built against")
 	}
-	mass, err := obj.GetSlot(ctx, "mass")
+	mass, err := obj.GetFeatureValue(ctx, "mass")
 	if err != nil {
-		t.Fatalf("GetSlot(mass): %v", err)
+		t.Fatalf("GetFeatureValue(mass): %v", err)
 	}
 	if got := mass.Value; got.Kind != ValConst || !strings.Contains(fmt.Sprint(got.Const), "1500") {
 		t.Errorf("mass = %v, want the value its declaration states", got)
@@ -88,7 +88,7 @@ const adoptCalcSrc = `package Demo {
 	part def Gauge { attribute reading = double(3.0); }
 }`
 
-// A slot holding what a value expression states is derived again in the context
+// A feature value that holds what a value expression states is derived again in the context
 // it is carried into, so it reads the declarations that expression names as they
 // are now rather than keeping what they said when it was materialized.
 func TestAdoptDerivesAValueAgainstTheNewDeclarations(t *testing.T) {
@@ -97,22 +97,22 @@ func TestAdoptDerivesAValueAgainstTheNewDeclarations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Instantiate: %v", err)
 	}
-	if slot, err := obj.GetSlot(prev, "reading"); err != nil {
-		t.Fatalf("GetSlot(reading): %v", err)
-	} else if got := fmt.Sprint(slot.Value.Const); !strings.Contains(got, "6") {
+	if fv, err := obj.GetFeatureValue(prev, "reading"); err != nil {
+		t.Fatalf("GetFeatureValue(reading): %v", err)
+	} else if got := fmt.Sprint(fv.Value.Const); !strings.Contains(got, "6") {
 		t.Fatalf("reading = %s, want 6", got)
 	}
 	shapes := prev.ShapesOf(obj)
 
 	ctx := contextOver(t, strings.Replace(adoptCalcSrc, "x * 2.0", "x * 3.0", 1))
-	if err := ctx.Adopt(prev, shapes, obj); err != nil {
+	if _, err := ctx.Adopt(prev, shapes, obj); err != nil {
 		t.Fatalf("Adopt: %v", err)
 	}
-	slot, err := obj.GetSlot(ctx, "reading")
+	fv, err := obj.GetFeatureValue(ctx, "reading")
 	if err != nil {
-		t.Fatalf("GetSlot(reading): %v", err)
+		t.Fatalf("GetFeatureValue(reading): %v", err)
 	}
-	if got := fmt.Sprint(slot.Value.Const); !strings.Contains(got, "9") {
+	if got := fmt.Sprint(fv.Value.Const); !strings.Contains(got, "9") {
 		t.Errorf("reading = %s, want 9 from the calc as it is declared now", got)
 	}
 }
@@ -142,7 +142,7 @@ func TestAdoptCarriesAnObjectOwningAnAnonymousConnector(t *testing.T) {
 	shapes := prev.ShapesOf(obj)
 
 	ctx := contextOver(t, adoptConnectSrc+"\npart def Widget;")
-	if err := ctx.Adopt(prev, shapes, obj); err != nil {
+	if _, err := ctx.Adopt(prev, shapes, obj); err != nil {
 		t.Fatalf("Adopt: %v", err)
 	}
 	conns, err := obj.OwnedConnectors(ctx)
@@ -159,7 +159,7 @@ func TestAdoptCarriesAnObjectOwningAnAnonymousConnector(t *testing.T) {
 	if conns[0].ID != before {
 		t.Errorf("the connector object is %d after the carry-over, want the identity %d it had", conns[0].ID, before)
 	}
-	port := slotInstance(t, ctx, obj, "a", "p")
+	port := fvInstance(t, ctx, obj, "a", "p")
 	if end := conns[0].Ends[0].Value; !holdsObject(end, port.ID) {
 		t.Errorf("the connector end holds %v, want the port object %d of the carried object", end, port.ID)
 	}
@@ -173,14 +173,14 @@ func holdsObject(val Value, id int64) bool {
 
 // A declaration that no longer resolves to the shape an object was materialized
 // against cannot hold that object, so it is refused rather than rebound onto
-// slots that no longer mean the same thing.
+// feature values that no longer mean the same thing.
 func TestAdoptRefusesAChangedShape(t *testing.T) {
 	prev := contextOver(t, adoptSrc)
 	obj := vehicleIn(t, prev)
 	shapes := prev.ShapesOf(obj)
 
 	ctx := contextOver(t, strings.Replace(adoptSrc, "mass = 1500.0", "mass = 900.0", 1))
-	err := ctx.Adopt(prev, shapes, obj)
+	_, err := ctx.Adopt(prev, shapes, obj)
 	if err == nil {
 		t.Fatal("Adopt accepted an object of a declaration that changed")
 	}
@@ -190,14 +190,14 @@ func TestAdoptRefusesAChangedShape(t *testing.T) {
 }
 
 // A change to a declaration an object only depends on invalidates it too: its
-// slots hold what that declaration says.
+// feature values hold what that declaration says.
 func TestAdoptRefusesAChangedDependency(t *testing.T) {
 	prev := contextOver(t, adoptSrc)
 	obj := vehicleIn(t, prev)
 	shapes := prev.ShapesOf(obj)
 
 	ctx := contextOver(t, strings.Replace(adoptSrc, "power = 300.0", "power = 100.0", 1))
-	if err := ctx.Adopt(prev, shapes, obj); err == nil {
+	if _, err := ctx.Adopt(prev, shapes, obj); err == nil {
 		t.Fatal("Adopt accepted an object whose engine declaration changed")
 	}
 }
@@ -214,7 +214,7 @@ func TestAdoptSharesTheIdentitySequence(t *testing.T) {
 	ctx := first
 	for _, extra := range []string{"\npart def Widget;", "\npart def Gadget;"} {
 		next := contextOver(t, adoptSrc+extra)
-		if err := next.Adopt(ctx, shapes, obj); err != nil {
+		if _, err := next.Adopt(ctx, shapes, obj); err != nil {
 			t.Fatalf("Adopt: %v", err)
 		}
 		ctx = next
@@ -229,6 +229,88 @@ func TestAdoptSharesTheIdentitySequence(t *testing.T) {
 			t.Errorf("identity %d was handed out twice", id)
 		}
 		handed[id] = true
+	}
+}
+
+const adoptBehaviorSrc = `package Demo {
+	part def Monitor {
+		attribute count = 0;
+		exhibit state modes {
+			entry; then idle;
+			state idle { entry action bump { assign count := count + 1; } }
+		}
+	}
+}`
+
+// A carried object's behavior is started again in the context carrying it: the
+// object keeps its identity, its execution is a new one bound to the new
+// analysis, and what the discarded run wrote is not read by the new one.
+func TestAdoptRestartsACarriedObjectsBehavior(t *testing.T) {
+	prev := contextOver(t, adoptBehaviorSrc)
+	obj, err := prev.Instantiate(lookupOne(t, prev.resolver.Index(), "Demo::Monitor"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	before, ok := obj.ExhibitedState()
+	if !ok {
+		t.Fatal("the object exhibits no machine")
+	}
+	id, shapes := obj.ID, prev.ShapesOf(obj)
+
+	ctx := contextOver(t, adoptBehaviorSrc+"\npart def Widget;")
+	restarted, err := ctx.Adopt(prev, shapes, obj)
+	if err != nil {
+		t.Fatalf("Adopt: %v", err)
+	}
+	if len(restarted) != 1 || !strings.Contains(restarted[0], "modes") {
+		t.Errorf("Adopt reported %v restarted, want the machine modes", restarted)
+	}
+	if obj.ID != id {
+		t.Errorf("the carried object has identity %d, want %d", obj.ID, id)
+	}
+	after, ok := obj.ExhibitedState()
+	if !ok {
+		t.Fatal("the carried object runs no machine after the carry-over")
+	}
+	if after.State == before.State {
+		t.Error("the carried object still runs the execution of the previous analysis")
+	}
+	// The entry action ran once in the new execution, over the declared initial
+	// value rather than over the 1 the discarded run left.
+	count, err := obj.GetFeatureValue(ctx, "count")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(count): %v", err)
+	}
+	if got := count.Value; got.Kind != ValConst || got.Const.Int != 1 {
+		t.Errorf("count = %v, want 1: the restarted machine read the declared initial value", got)
+	}
+}
+
+// A behavior that cannot be started again in the new context refuses the
+// carry-over rather than leaving an object running nothing, and the object is not
+// left registered in a context that cannot offer it.
+func TestAdoptRefusesAnObjectWhoseBehaviorCannotRestart(t *testing.T) {
+	prev := contextOver(t, adoptBehaviorSrc)
+	obj, err := prev.Instantiate(lookupOne(t, prev.resolver.Index(), "Demo::Monitor"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	shapes := prev.ShapesOf(obj)
+
+	ctx := contextOver(t, adoptBehaviorSrc+"\npart def Widget;")
+	tight := DefaultBudgets()
+	tight.MaxSteps = 1
+	if err := ctx.SetBudgets(tight); err != nil {
+		t.Fatalf("SetBudgets: %v", err)
+	}
+	if _, err := ctx.Adopt(prev, shapes, obj); err == nil {
+		t.Fatal("Adopt accepted an object whose behavior could not be started")
+	}
+	if _, found := ctx.Instance(obj.ID); found {
+		t.Error("the refused object was left in the context")
+	}
+	if len(obj.Behaviors()) != 0 {
+		t.Errorf("the refused object still holds %d behaviors", len(obj.Behaviors()))
 	}
 }
 
@@ -247,6 +329,25 @@ func TestChangedNamesTheDeclarationThatMoved(t *testing.T) {
 	fqn, ok := ctx.Changed(shapes)
 	if !ok || fqn != "Demo::Engine" {
 		t.Errorf("Changed() = %q, %v; want Demo::Engine", fqn, ok)
+	}
+}
+
+// An edit confined to a body governing over an inherited value changes what
+// instantiating produces, so the shape follows it and the object is not carried
+// with the value that body replaced.
+func TestShapeFollowsAGoverningValueBody(t *testing.T) {
+	const src = `package Demo {
+	attribute def Cost { attribute v = 1.0; }
+	part def Ring { attribute template : Cost { attribute :>> v = 9.0; } attribute cost : Cost = template; }
+	part def Band :> Ring { attribute :>> cost { attribute :>> v = 11.0; } }
+}`
+	prev := contextOver(t, src)
+	sym := lookupOne(t, prev.resolver.Index(), "Demo::Band")
+	before := prev.ShapeDigest(sym)
+
+	ctx := contextOver(t, strings.Replace(src, "v = 11.0", "v = 12.0", 1))
+	if after := ctx.ShapeDigest(lookupOne(t, ctx.resolver.Index(), "Demo::Band")); after == before {
+		t.Errorf("shape unchanged by an edit to the governing body: %s", after)
 	}
 }
 

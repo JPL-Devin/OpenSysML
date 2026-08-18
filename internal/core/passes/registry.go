@@ -3,7 +3,7 @@ package passes
 import (
 	"sort"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 )
 
 // Registry holds an ordered set of validation passes.

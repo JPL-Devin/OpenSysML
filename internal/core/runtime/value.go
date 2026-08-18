@@ -2,10 +2,12 @@ package runtime
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/semantics"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // ValueKind distinguishes runtime value types.
@@ -24,6 +26,74 @@ const (
 	ValVariant     // the variant selected for a variation, and the object it materializes
 	ValEnumLiteral // one literal of an enumeration definition, identified by itself
 )
+
+// FormatConst renders a scalar constant using the runtime's user-facing
+// numeric convention.
+func FormatConst(c semantics.Value) string {
+	switch c.Kind {
+	case semantics.ValInt:
+		return fmt.Sprintf("%d", c.Int)
+	case semantics.ValReal:
+		return fmt.Sprintf("%.2f", c.Real)
+	case semantics.ValBool:
+		return fmt.Sprintf("%v", c.Bool)
+	case semantics.ValInfinity:
+		return "∞"
+	default:
+		return "<unknown const>"
+	}
+}
+
+// FormatValue renders a value with the notation used by user-facing runtime
+// results and diagnostics.
+func FormatValue(v Value) string {
+	switch v.Kind {
+	case ValConst:
+		return FormatConst(v.Const)
+	case ValNull:
+		return "null"
+	case ValString:
+		return strconv.Quote(v.Str)
+	case ValInstance:
+		return fmt.Sprintf("instance(%d)", v.Instance)
+	case ValSequence:
+		if v.Sequence == nil {
+			return "[]"
+		}
+		return "[" + strings.Join(formatValueElements(v.Sequence.Elements()), ", ") + "]"
+	case ValSet:
+		if v.Set == nil {
+			return "Set{}"
+		}
+		parts := formatValueElements(v.Set.Elements())
+		return "Set{" + strings.Join(parts, ", ") + "}"
+	case ValVariant:
+		if v.Variant == nil {
+			return "<unknown variant>"
+		}
+		if v.Instance != 0 {
+			return fmt.Sprintf("%s (Instance ID: %d)", v.Variant.Name, v.Instance)
+		}
+		return v.Variant.Name
+	case ValEnumLiteral:
+		return v.LiteralText()
+	case ValQuantity:
+		if v.Quantity == nil {
+			return "<unknown>"
+		}
+		return v.Quantity.TextWithMagnitude(FormatConst(v.Quantity.Num))
+	default:
+		return "<unknown>"
+	}
+}
+
+func formatValueElements(elements []Value) []string {
+	parts := make([]string, len(elements))
+	for i, element := range elements {
+		parts[i] = FormatValue(element)
+	}
+	return parts
+}
 
 // String names the kind, so diagnostics quoting it read as more than an index.
 func (k ValueKind) String() string {
@@ -136,46 +206,52 @@ func (s *Sequence) Elements() []Value {
 	return s.elements
 }
 
-// Set is a unique collection (map-backed, using valueKey for equality). A set
+// Set is a unique collection backed by hash buckets and exact comparisons. A set
 // has no inherent order, but enumerating one has to answer in some order, and
 // insertion order is the one order a set does carry: it makes a sequence
 // derived from a set — what `select` and `collect` over a set return —
 // reproducible instead of dependent on map iteration.
 type Set struct {
-	elements map[valueKey]Value
-	order    []valueKey
+	elements map[valueKey][]Value
+	order    []Value
+	size     int
 }
 
 // NewSet creates an empty Set.
 func NewSet() *Set {
-	return &Set{elements: make(map[valueKey]Value)}
+	return &Set{elements: make(map[valueKey][]Value)}
 }
 
-// Add inserts a value into the set (deduplicates by valueKey).
+// Add inserts a value into the set (deduplicates by exact value equality).
 func (s *Set) Add(val Value) {
 	key := valueKeyFunc(val)
-	if _, exists := s.elements[key]; !exists {
-		s.order = append(s.order, key)
+	bucket := s.elements[key]
+	for _, elem := range bucket {
+		if valueEqual(elem, val) {
+			return
+		}
 	}
-	s.elements[key] = val
+	s.elements[key] = append(bucket, val)
+	s.order = append(s.order, val)
+	s.size++
 }
 
 // Contains checks if the value is in the set.
 func (s *Set) Contains(val Value) bool {
-	_, ok := s.elements[valueKeyFunc(val)]
-	return ok
+	for _, elem := range s.elements[valueKeyFunc(val)] {
+		if valueEqual(elem, val) {
+			return true
+		}
+	}
+	return false
 }
 
 // Size returns the number of unique elements.
 func (s *Set) Size() int {
-	return len(s.elements)
+	return s.size
 }
 
 // Elements returns all elements, in the order they were added.
 func (s *Set) Elements() []Value {
-	result := make([]Value, 0, len(s.elements))
-	for _, key := range s.order {
-		result = append(result, s.elements[key])
-	}
-	return result
+	return append([]Value(nil), s.order...)
 }

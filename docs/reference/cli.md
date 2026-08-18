@@ -123,7 +123,7 @@ Load a file and use meta commands:
 ```bash
 echo "%load model.sysml
 %instantiate Vehicle
-%slots Vehicle
+%features Vehicle
 %eval speedLimit" | sysml
 ```
 
@@ -135,9 +135,11 @@ echo "%load model.sysml
 | `--debug` | | Report every diagnostic over the whole session buffer, with the pass that produced it |
 | `--quiet` | | Report errors only, suppressing warnings |
 | `--trace` | | Report each execution step: expression evaluation, calc invocation, action tokens, state transitions |
-| `--convert <format>` | | Convert the model instead of running it: `sysml`, `kerml`, `ttl`, `turtle` or `rdf` (see [the RDF mapping](rdf-mapping.md)) |
+| `--convert <format>` | | Convert the model instead of running it: `sysml`, `kerml`, `ttl`, `turtle` or `rdf`. RDF is [experimental](rdf-mapping.md#status-experimental) and every run that converts it says so on stderr (see [the RDF mapping](rdf-mapping.md)) |
 | `--from <format>` | | Input format for `--convert` (default: from the input's extension) |
-| `--output <file>` | `-o` | Write the conversion to a file instead of stdout |
+| `--render <view>` | | Render this view of the model instead of running it, in the form its `render` member states (see [Rendering a view](#rendering-a-view)) |
+| `--render-form <form>` | | Form `--render` writes: `text`, `mermaid` or `markdown` (default: the machine-readable form of the kind rendered) |
+| `--output <file>` | `-o` | Write the conversion or the rendering to a file instead of stdout |
 | `--version` | `-v` | Show version information |
 | `--help` | `-h` | Show usage information |
 
@@ -190,6 +192,40 @@ sysml -e "x" -e "y" file.sysml
 # Multiple files
 sysml -e "result" file1.sysml file2.sysml
 ```
+
+## Rendering a view
+
+`-render <view>` renders one view of the model and exits. The rendering is the one the view's
+`render` member states, and a containment tree where it states none; the kinds this build produces
+are a tree, an interconnection diagram, a state machine, an action flow and a table.
+
+```bash
+# The view in the machine-readable form of its kind, on stdout
+sysml model.sysml -render Views::vehicleView
+
+# The indented text form a person reads
+sysml model.sysml -render Views::vehicleView -render-form text
+
+# A tabular view as a Markdown table
+sysml model.sysml -render Views::partsTable -o parts.md
+
+# Write the rendering to a file
+sysml model.sysml -render Views::vehicleView -o view.mmd
+```
+
+The artifact is the run's result, so it goes on stdout alone — what was loaded, what the model
+analysed to, an empty rendering, and any element the rendering cannot represent all go on stderr,
+and `-o` writes the artifact only. A view exposing nothing renders an empty artifact and says so; a
+name that is no view, a rendering kind this build does not produce, a form the kind is not written
+in, and a model that did not analyse cleanly each stop the run with status 2. Rendering decides
+nothing about the model, so it is not asked for together with a check flag or with `-convert`.
+
+The rendering is **tool-defined output**: SysML v2 §10.2 specifies the notation a view is written
+in, not how a tool draws it. Mermaid is the machine-readable form of the graph-shaped kinds because
+it renders as-is in Markdown, documentation sites and editors without a separate rendering tool, and
+has a dedicated state diagram grammar; a table is written as a Markdown table, which Mermaid has no
+grammar for, so `-render-form mermaid` of a table names Markdown rather than drawing a diagram of
+rows.
 
 ## Output Format
 
@@ -271,7 +307,7 @@ links here.
 |--------|-------|
 | `0` | What was asked for was done: every file loaded and analysed cleanly, every `-e` expression produced a value, every check held, a conversion was written. Warnings leave the status `0`. |
 | `1` | The model answered false: a constraint, requirement or satisfaction assertion the model decided did not hold. Only a verdict reports this status. |
-| `2` | What was asked for could not be done, so the model answered nothing: a file that could not be read, a model that did not analyse cleanly, an object whose slots did not materialize, an unresolved name, a check that could not be made, a conversion that could not be written, a misused flag or an invalid `SYSML_MAX_*` value. |
+| `2` | What was asked for could not be done, so the model answered nothing: a file that could not be read, a model that did not analyse cleanly, an object whose feature values did not materialize, an unresolved name, a check that could not be made, a conversion that could not be written, a misused flag or an invalid `SYSML_MAX_*` value. |
 
 ```bash
 $ sysml -constraint MassBudget model.sysml; echo $?      # a verdict the model decided
@@ -292,35 +328,35 @@ sysml: cannot convert the substate member at examples/state-machine-demo.sysml:7
 ```
 
 Materializing an object is part of the run, so what it finds is a diagnostic
-about the model: `-instantiate` reports every slot it could not materialize —
+about the model: `-instantiate` reports every feature value it could not materialize —
 a default whose value count does not conform to the multiplicity governing its
 feature, which is the assumed `1..1` for a feature that declares none — and
 `-validate` reports `no errors` only for a run that found none. The prompt surface
-follows the same rule: a command that rendered a slot it could not materialize —
-a `%slots` listing carrying `<error: …>`, or an `%eval` of such a slot, pinned to
+follows the same rule: a command that rendered a feature value it could not materialize —
+a `%features` listing carrying `<error: …>`, or an `%eval` of such a value, pinned to
 a context (`%eval in <name> : <expr>`) or not — answered nothing about it, so a
 session driven from a pipe exits `2` rather than reporting success, whatever
-analysis found. A name that is no slot of the object is a request the command got
-wrong, not a slot that failed to materialize, and does not change the status.
+analysis found. A name that is no feature of the object is a request the command got
+wrong, not a feature value that failed to materialize, and does not change the status.
 
 ```bash
 $ sysml model.sysml -instantiate test::craft -validate; echo $?
-error: slot craft.volumes: multiplicity violation: 2 value(s) bound to a feature with multiplicity upper bound 1
+error: feature value craft.volumes: multiplicity violation: 2 value(s) bound to a feature with multiplicity upper bound 1
 sysml: model.sysml did not materialize cleanly
 2
 
-$ printf '%%instantiate test::craft\n%%slots test::craft\n' | sysml model.sysml; echo $?
+$ printf '%%instantiate test::craft\n%%features test::craft\n' | sysml model.sysml; echo $?
 Instance: test::craft (ID: 1)
-Slots:
-  volumes: <error: slot craft.volumes: multiplicity violation: 2 value(s) bound to a feature with multiplicity upper bound 1>
+Features:
+  volumes: <error: feature value craft.volumes: multiplicity violation: 2 value(s) bound to a feature with multiplicity upper bound 1>
 2
 ```
 
-Nesting multiplies, and reading a slot materializes the objects it holds, so the
-check is bounded, as the `%slots` listing is: a model wide enough to spend that
+Nesting multiplies, and reading a feature value materializes the objects it holds, so the
+check is bounded, as the `%features` listing is: a model wide enough to spend that
 budget, deeper than the walk descends, or one whose part holds its own kind is
 reported as checked in part (`warning: … materialization is bounded; not every
-slot was checked`, and `no errors in the slots checked`) rather than read to the
+feature value was checked`, and `no errors in the feature values checked`) rather than read to the
 end. Being no model error, that leaves the status `0`.
 
 The prompt is the exception: a line it could not carry out is reported and the
@@ -328,7 +364,7 @@ session goes on, and `%quit` or Ctrl-D exits `0`. `sysml model.sysml` at a
 terminal loads the model, reports what analysis found, and opens the prompt with
 status `0` — the prompt is where the model gets fixed. The same command with its
 lines coming from a pipe or a file gates: it exits `2` for a model that did not
-analyse cleanly, and for one whose slots a command could not materialize.
+analyse cleanly, and for one whose feature values a command could not materialize.
 
 ## Use Cases
 

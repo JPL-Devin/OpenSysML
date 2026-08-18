@@ -3,9 +3,9 @@ package parser
 import (
 	"fmt"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/lexer"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 // definitionKindKeywords maps a single kind keyword to its DefinitionKind.
@@ -88,6 +88,7 @@ var notKindPrefixKeywords = map[string]bool{
 	"actor": true, "expose": true, "render": true, "perform": true,
 	"include": true, "exhibit": true, "variant": true, "event": true,
 	"timeslice": true, "snapshot": true, "transition": true, "bind": true,
+	"binding": true,
 	// `individual part p` keeps the modifier; the prefix path would drop it.
 	"individual": true,
 	"in":         true, "out": true, "inout": true,
@@ -690,7 +691,10 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 	// Pattern: perform action generateTorque: GenerateTorque;
 	// Skip "perform" and parse as regular "action" usage
 	if kw == "perform" && p.peekN(1).Kind == lexer.Keyword && p.peekN(1).KeywordID == "action" {
-		p.advance()   // consume 'perform'
+		p.advance() // consume 'perform'
+		// The prefix says the action is performed by whatever declares it, which
+		// the kind keyword alone would lose (PerformActionUsage, SysML v2 §7.17.6).
+		mods.prefixKeyword = "perform"
 		kw = "action" // treat as regular action keyword
 		// Continue to dual-keyword path (don't enter usage-only block)
 	} else if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" || kw == "bind" || kw == "satisfy" || kw == "verify" || kw == "include" || kw == "step" || kw == "expr" || kw == "interaction" || kw == "require" || kw == "transition" || kw == "perform" || kw == "exhibit" || kw == "variant" || kw == "assert" || kw == "assume" || kw == "event" || kw == "stakeholder" || kw == "frame" || kw == "actor" || kw == "expose" || kw == "render" {
@@ -718,6 +722,10 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 			mods.isVariant = true
 		}
 		isAll := p.acceptKeyword("all")
+		if kw == "bind" {
+			u := p.parseUsage(start, usageKindKeywords[kw], kw, mods, isAll)
+			return applyPrefixes(normalizeAnonymousBindingEnd(u))
+		}
 
 		// `render` names the rendering a view uses (ViewRenderingMember) and
 		// `frame` the concern a requirement frames (FramedConcernMember). Each
@@ -1380,12 +1388,9 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 				p.parseMultiplicity() // end multiplicity, not the connector's
 			}
 			if source := p.parseRelationshipTarget(); source != nil {
-				u.Relationships = append(u.Relationships, &ast.Relationship{
-					Kind:   ast.RelRedefines, // Use redefines to mark binding source
-					Target: source,
-				})
+				u.Relationships = append(u.Relationships, bindingEnd(source))
 			}
-		} else if p.atNameOrKeyword() && p.peekN(1).Kind != lexer.Dot && p.peekN(1).Kind != lexer.LBracket {
+		} else if p.atNameOrKeyword() && p.peekN(1).Kind != lexer.Dot && p.peekN(1).Kind != lexer.ColonColon && p.peekN(1).Kind != lexer.LBracket {
 			// Parse source (name or feature chain like x.field)
 			// Check if simple name or feature chain
 			// Simple name - use as identification
@@ -1396,14 +1401,11 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 			u.Ident = p.parseIdentification()
 			// Don't parse multiplicity yet, handle after checking for "of"
 		} else {
-			// Feature chain or qualified name - parse as relationship target
-			// Store in relationships as source (redefines relationship to indicate binding source)
+			// A qualified name or feature chain here states the binding's first
+			// end, not the connector's name.
 			source := p.parseRelationshipTarget()
 			if source != nil {
-				u.Relationships = append(u.Relationships, &ast.Relationship{
-					Kind:   ast.RelRedefines, // Use redefines to mark binding source
-					Target: source,
-				})
+				u.Relationships = append(u.Relationships, bindingEnd(source))
 			}
 		}
 
@@ -1420,10 +1422,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 				p.parseMultiplicity() // end multiplicity, not the connector's
 			}
 			if source := p.parseRelationshipTarget(); source != nil {
-				u.Relationships = append(u.Relationships, &ast.Relationship{
-					Kind:   ast.RelRedefines, // Use redefines to mark binding source
-					Target: source,
-				})
+				u.Relationships = append(u.Relationships, bindingEnd(source))
 			}
 		}
 
@@ -1433,10 +1432,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 			// Parse source as relationship target
 			source := p.parseRelationshipTarget()
 			if source != nil {
-				u.Relationships = append(u.Relationships, &ast.Relationship{
-					Kind:   ast.RelRedefines, // Use redefines to mark binding source
-					Target: source,
-				})
+				u.Relationships = append(u.Relationships, bindingEnd(source))
 			}
 		}
 
@@ -2787,6 +2783,26 @@ func (p *Parser) parseReferenceMemberUsage(start int, kind ast.UsageKind, kw, no
 	return u
 }
 
+// bindingEnd records the first end of a binding connector. A connector end
+// reference-subsets the feature it names (KerML OwnedReferenceSubsetting), so
+// it resolves outside the connector rather than as an inherited redefinition.
+func bindingEnd(target ast.Node) *ast.Relationship {
+	return &ast.Relationship{Kind: ast.RelReferences, Target: target}
+}
+
+func normalizeAnonymousBindingEnd(u *ast.Usage) *ast.Usage {
+	if u == nil || u.Kind != ast.UsageBinding || u.Ident.Name == "" || len(u.Relationships) != 0 {
+		return u
+	}
+	target := &ast.QualifiedName{
+		Parts: []ast.NameSegment{{Text: u.Ident.Name, Span: u.Ident.NameSpan}},
+	}
+	target.NodeSpan = u.Ident.NameSpan
+	u.Relationships = append(u.Relationships, bindingEnd(target))
+	u.Ident = ast.Identification{}
+	return u
+}
+
 // parseRelationshipTarget parses a relationship target which can be either:
 // - A qualified name (A::B::C)
 // - A feature chain (A.B.C or A::B.C.D - mix of :: and .)
@@ -2813,16 +2829,16 @@ func (p *Parser) parseRelationshipTarget() ast.Node {
 
 	for p.at(lexer.Dot) {
 		p.advance() // consume '.'
-		// Parse member name
-		seg, ok := p.parseNameSegmentRelaxed()
-		if !ok {
+		// Each chaining feature of a chain is itself a qualified name
+		// (KerML OwnedFeatureChaining: chainingFeature = [Feature|QualifiedName]).
+		if !p.atNameOrKeyword() && !(p.at(lexer.Dollar) && p.peekN(1).Kind == lexer.ColonColon) {
 			p.error(p.peek().Span, "expected a name after '.'")
 			break
 		}
-
-		// Create member name as QualifiedName
-		memberName := &ast.QualifiedName{Parts: []ast.NameSegment{seg}}
-		memberName.NodeSpan = seg.Span
+		memberName := p.parseQualifiedNameRelaxed()
+		if memberName == nil {
+			break
+		}
 
 		chain := &ast.FeatureChainExpr{
 			Operand: operand,

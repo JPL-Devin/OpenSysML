@@ -12,7 +12,7 @@ func TestTracingReportsExecutionPerCommand(t *testing.T) {
 	wants(t, run(t, s, "%trace on"), "trace: on")
 	run(t, s, "%instantiate Derived::Vehicle")
 
-	got := run(t, s, "%slots Derived::Vehicle")
+	got := run(t, s, "%features Derived::Vehicle")
 	wants(t, got, "[trace] ", "eval feature mass", "doubled = 3000.00")
 
 	if again := run(t, s, "%instances"); strings.Contains(again, "[trace] ") {
@@ -30,7 +30,7 @@ func TestTracingIsOffByDefaultAndSwitchable(t *testing.T) {
 	if s.Tracing() {
 		t.Error("tracing stayed on")
 	}
-	rejects(t, run(t, s, "%slots Derived::Vehicle"), "[trace] ")
+	rejects(t, run(t, s, "%features Derived::Vehicle"), "[trace] ")
 	wants(t, run(t, s, "%trace loud"), `error: unknown trace setting "loud"`)
 }
 

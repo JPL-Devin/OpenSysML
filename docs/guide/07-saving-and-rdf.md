@@ -7,6 +7,12 @@ No JSON is involved anywhere in this path, not even as an intermediate form.
 The vocabulary each triple uses, and what the mapping does not cover, is
 [reference/rdf-mapping.md](../reference/rdf-mapping.md).
 
+> **RDF conversion is experimental.** It covers model structure and the behavior
+> its bodies state, refuses what it cannot write back, and its vocabulary may
+> change without a compatibility path, so every run that converts RDF says so.
+> Saving to `.sysml` or `.kerml` is stable and exact. See
+> [reference/rdf-mapping.md § Status](../reference/rdf-mapping.md#status-experimental).
+
 ## Saving a session
 
 `%save` writes the session out. The format follows the extension — `.sysml` for
@@ -17,6 +23,7 @@ sysml> %save my_model.sysml
 saved 181 bytes of sysml to my_model.sysml (replaced the existing file)
 
 sysml> %save my_model.ttl
+note: RDF conversion is experimental: the mapping covers model structure and the behavior its bodies state, refuses what it cannot write back, and its vocabulary may change without a compatibility path; see docs/reference/rdf-mapping.md § Status
 saved 1872 bytes of ttl to my_model.ttl
 ```
 
@@ -94,12 +101,24 @@ it. `tolerate_syntax_errors` writes notation despite syntax errors, and is
 rejected for any direction that builds a graph, where an unparsed declaration
 would go missing without saying so.
 
+A response whose conversion went through the RDF mapping sets `experimental` and
+`experimental_notice`, on a refusal as well as on a success, so a client learns
+the status from the response rather than from this page. opensysml raises it as an
+`ExperimentalFeatureWarning`, which `warnings.simplefilter` can silence:
+
+```python
+import warnings
+from opensysml import ExperimentalFeatureWarning
+
+warnings.simplefilter("ignore", ExperimentalFeatureWarning)
+```
+
 From Python:
 
 ```python
-model = pysysml.load("model.sysml")
+model = opensysml.load("model.sysml")
 model.save("model.ttl")                          # SysML notation to RDF
-pysysml.convert("sysml", file_path="model.ttl")  # and back
+opensysml.convert("sysml", file_path="model.ttl")  # and back
 ```
 
 The client API is [reference/python-api.md](../reference/python-api.md), and using it as a task is
@@ -132,8 +151,10 @@ documentation — all inside the mapping — so it converts and comes back:
 
 ```bash
 $ sysml examples/rdf-interop-demo.sysml -convert ttl -o /tmp/rover.ttl
+note: RDF conversion is experimental: the mapping covers model structure and the behavior its bodies state, refuses what it cannot write back, and its vocabulary may change without a compatibility path; see docs/reference/rdf-mapping.md § Status
 wrote /tmp/rover.ttl (ttl, 7937 bytes)
 $ sysml /tmp/rover.ttl -convert sysml -o /tmp/rover-back.sysml
+note: RDF conversion is experimental: the mapping covers model structure and the behavior its bodies state, refuses what it cannot write back, and its vocabulary may change without a compatibility path; see docs/reference/rdf-mapping.md § Status
 wrote /tmp/rover-back.sysml (sysml, 877 bytes)
 ```
 
@@ -144,17 +165,20 @@ declarations and survive.
 
 [`examples/semantic-layer/demo.sysml`](../../examples/semantic-layer/demo.sysml)
 and [`examples/repl-behavioral-demo.sysml`](../../examples/repl-behavioral-demo.sysml)
-convert too, as do the structure-only `parser_features_demo_*.kerml` files
-(except `..._advanced_bodies.kerml`, which computes a value, and three that each
-declare one name twice). What converts is structure; a model whose point is a
-behavior does not, the conversion stopping at a state, a region, an assignment,
-an action node or a name two members of one body share (how much of `examples/`
-that leaves converting is measured in
+convert too, as do most `parser_features_demo_*.kerml` files (except
+`..._advanced_bodies.kerml`, which computes a value, and two that each declare
+one name twice). The behavior a body states converts as well — states, regions,
+substates, action nodes, assignments and transitions all have a mapping. What is
+refused is what the notation could not be rebuilt from: an expression the graph
+would have to compute, a name two members of one body share, or an order whose
+ends the notation leaves implicit (how much of `examples/` converts is measured
+in
 [project/roadmap.md](../project/roadmap.md#d6--a-behavioral-node-has-no-metaclass-so-a-model-stating-steps-cannot-convert)):
 
 ```bash
-$ sysml examples/state-machine-demo.sysml -convert ttl
-sysml: cannot convert the substate member at examples/state-machine-demo.sysml:7:13: save to .sysml or .kerml instead, which writes the source exactly; see docs/reference/rdf-mapping.md § Limitations
+$ sysml examples/parser_features_demo_action_semantics.sysml -convert ttl
+note: RDF conversion is experimental: the mapping covers model structure and the behavior its bodies state, refuses what it cannot write back, and its vocabulary may change without a compatibility path; see docs/reference/rdf-mapping.md § Status
+sysml: cannot convert the succession at examples/parser_features_demo_action_semantics.sysml:41:9: it does not name both of the members it sequences, so the order it declares cannot be written back
 ```
 
 ---

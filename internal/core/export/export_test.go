@@ -9,10 +9,10 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/export"
-	"github.com/Open-MBEE/Systemica/internal/core/parser"
-	"github.com/Open-MBEE/Systemica/internal/core/rdf"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/export"
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
+	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 var update = flag.Bool("update", false, "rewrite the .golden.ttl and .golden.sysml files")
@@ -117,6 +117,71 @@ part def R;
 		if !strings.Contains(string(out), want) {
 			t.Errorf("save dropped %q:\n%s", want, out)
 		}
+	}
+}
+
+// One element of a document is written through the same notation path a whole
+// save goes through: the source at the span, comments included, re-indented.
+func TestSysMLElementWritesOneElement(t *testing.T) {
+	src := `package P {
+	// which wheel
+	part def Q {
+attribute d = 16.0;
+}
+	part def R;
+}`
+	file := source.New("session.sysml", []byte(src))
+	span := source.Span{Offset: strings.Index(src, "// which wheel")}
+	span.Len = strings.Index(src, "\tpart def R;") - span.Offset
+
+	out, syntax, err := export.SysMLElement(file, span)
+	if err != nil || syntax != nil {
+		t.Fatalf("element: err=%v syntax=%v", err, syntax)
+	}
+	got := string(out)
+	for _, want := range []string{"// which wheel", "part def Q {", "    attribute d = 16.0;"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("element output is missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "part def R") || strings.Contains(got, "package P") {
+		t.Errorf("element output covers more than the element:\n%s", got)
+	}
+}
+
+// A span running past the element into the comments written for what follows
+// writes the element alone: trailing trivia is not part of it.
+func TestSysMLElementDropsTrailingComments(t *testing.T) {
+	src := "part def Q { attribute d = 16.0; }\n\n// which wheel\n/* and another */\npart def R;"
+	file := source.New("session.sysml", []byte(src))
+	span := source.Span{Offset: 0, Len: strings.Index(src, "part def R;")}
+
+	out, _, err := export.SysMLElement(file, span)
+	if err != nil {
+		t.Fatalf("element: %v", err)
+	}
+	if got := strings.TrimRight(string(out), "\n"); got != "part def Q { attribute d = 16.0; }" {
+		t.Errorf("element output carries trailing trivia:\n%q", got)
+	}
+	if _, _, err := export.SysMLElement(file, source.Span{
+		Offset: strings.Index(src, "// which wheel"),
+		Len:    len("// which wheel\n"),
+	}); !errors.Is(err, export.ErrNoNotation) {
+		t.Errorf("a span holding only a comment: err=%v, want ErrNoNotation", err)
+	}
+}
+
+// A span naming no source is reported as such rather than written as an empty
+// document, so a caller can explain it instead of printing nothing.
+func TestSysMLElementWithoutSource(t *testing.T) {
+	file := source.New("session.sysml", []byte("part def Q;"))
+	for _, span := range []source.Span{{}, {Offset: 0, Len: 99}, {Offset: -1, Len: 2}} {
+		if _, _, err := export.SysMLElement(file, span); !errors.Is(err, export.ErrNoNotation) {
+			t.Errorf("span %+v: err=%v, want ErrNoNotation", span, err)
+		}
+	}
+	if _, _, err := export.SysMLElement(nil, source.Span{Len: 1}); !errors.Is(err, export.ErrNoNotation) {
+		t.Errorf("no file: err=%v, want ErrNoNotation", err)
 	}
 }
 
@@ -304,6 +369,34 @@ func TestCommentInHeadDoesNotChangeKeyword(t *testing.T) {
 	}
 }
 
+// A directed usage records no keyword, so whether it wrote its kind out is read
+// from the source — where a comment naming a kind must not count as one written.
+func TestCommentedKindKeywordIsNotWrittenBack(t *testing.T) {
+	// One case per comment shape the lexer distinguishes, plus a keyword the
+	// declaration really does write.
+	for name, tt := range map[string]struct{ src, want string }{
+		"regular comment":     {"package P {\n\tpart p {\n\t\tin /* attribute */ x : Real;\n\t}\n}", "in x : Real;"},
+		"single-line note":    {"package P {\n\tpart p {\n\t\tout // attribute\n\t\t\ty : Real;\n\t}\n}", "out y : Real;"},
+		"multi-line note":     {"package P {\n\tpart p {\n\t\tin //* a note\n\t\t\tattribute */ w : Real;\n\t}\n}", "in w : Real;"},
+		"note over two lines": {"package P {\n\tpart p {\n\t\tin /* a note\n\t\t\tattribute */ v : Real;\n\t}\n}", "in v : Real;"},
+		"keyword written":     {"package P {\n\tpart p {\n\t\tin attribute z : Real;\n\t}\n}", "in attribute z : Real;"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			turtle, err := export.Convert("m.sysml", []byte(tt.src), export.FormatSysML, export.FormatTurtle)
+			if err != nil {
+				t.Fatalf("to turtle: %v", err)
+			}
+			back, err := export.Convert("m.ttl", turtle, export.FormatTurtle, export.FormatSysML)
+			if err != nil {
+				t.Fatalf("back to notation: %v", err)
+			}
+			if !strings.Contains(string(back), tt.want) {
+				t.Errorf("wanted %q written back from %q:\n%s", tt.want, tt.src, back)
+			}
+		})
+	}
+}
+
 // A usage whose head is kept verbatim comes back as written, so a synonym
 // keyword on it needs no rebuilding and is not refused.
 func TestVerbatimSynonymConverts(t *testing.T) {
@@ -321,18 +414,76 @@ func TestVerbatimSynonymConverts(t *testing.T) {
 	}
 }
 
-// A synonym keyword whose declaration names no element of its own takes an
-// inline reference, a shape the graph cannot rebuild, so it is reported rather
-// than written back as the canonical keyword — a different declaration.
-func TestUnrebuildableSynonymIsUnsupported(t *testing.T) {
+// A `perform` declares an action of its own, so the graph carries the keyword
+// it was written with: the canonical `action` would be a different declaration.
+func TestPerformedActionKeepsItsKeyword(t *testing.T) {
 	src := "package P {\n\taction def A;\n\tpart def Q {\n\t\tperform a : A;\n\t}\n}"
-	_, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
-	var unsupported *export.UnsupportedError
-	if !errors.As(err, &unsupported) {
-		t.Fatalf("want an UnsupportedError for a `perform` reference, got %v", err)
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
 	}
-	if !strings.Contains(err.Error(), "perform") {
-		t.Errorf("the error should name the keyword: %v", err)
+	back, err := export.Convert("m.ttl", turtle, export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation: %v", err)
+	}
+	if !strings.Contains(string(back), "perform a : A;") {
+		t.Errorf("the `perform` did not survive the round trip:\n%s", back)
+	}
+}
+
+// A kind keyword written as one word of a two-word kind (`verification def`
+// for a verification case) comes back as written: the canonical spelling
+// reparses as a plain `case`, a different kind.
+func TestShortKindKeywordSurvivesTheRoundTrip(t *testing.T) {
+	src := "package P {\n\tverification def V;\n\tanalysis def A;\n\tanalysis a : A;\n}"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	back, err := export.Convert("m.ttl", turtle, export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation: %v", err)
+	}
+	for _, want := range []string{"verification def V;", "analysis def A;", "analysis a : A;"} {
+		if !strings.Contains(string(back), want) {
+			t.Errorf("`%s` did not survive the round trip:\n%s", want, back)
+		}
+	}
+}
+
+// A metadata annotation states what the element it prefixes is, so the graph
+// carries the notation it was written as rather than dropping it.
+func TestPrefixMetadataSurvivesTheRoundTrip(t *testing.T) {
+	src := "package P {\n\tmetadata def Safety;\n\t#Safety part def Car;\n}"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	back, err := export.Convert("m.ttl", turtle, export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation: %v", err)
+	}
+	if !strings.Contains(string(back), "#Safety part def Car;") {
+		t.Errorf("the annotation did not survive the round trip:\n%s", back)
+	}
+}
+
+// A feature that wrote no kind keyword takes its kind from its owner, so the
+// graph must not put a keyword back that the author never wrote.
+func TestImplicitKindStaysImplicitThroughTheRoundTrip(t *testing.T) {
+	src := "package P {\n\taction def Drive {\n\t\tin x : Real;\n\t\tin attribute y : Real;\n\t\tout result : Real;\n\t}\n}"
+	turtle, err := export.Convert("m.sysml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	back, err := export.Convert("m.ttl", turtle, export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation: %v", err)
+	}
+	for _, want := range []string{"in x : Real;", "in attribute y : Real;", "out result : Real;"} {
+		if !strings.Contains(string(back), want) {
+			t.Errorf("`%s` did not survive the round trip:\n%s", want, back)
+		}
 	}
 }
 
@@ -429,7 +580,7 @@ func TestSuccessionRoundTripsInEveryBody(t *testing.T) {
 func TestHalfNamedSuccessionInAGraphIsReported(t *testing.T) {
 	const graph = `@prefix elmt: <urn:sysmlv2:element:> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
-@prefix sysx: <urn:systemica:sysml:> .
+@prefix sysx: <urn:opensysml:sysml:> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
 elmt:P
@@ -643,7 +794,7 @@ func TestForeignGraph(t *testing.T) {
 // written: reporting it beats emitting notation that will not parse.
 func TestMissingRequiredPropertyIsUnsupported(t *testing.T) {
 	const head = `@prefix sysml: <https://www.omg.org/spec/SysML#> .
-@prefix sysx: <urn:systemica:sysml:> .
+@prefix sysx: <urn:opensysml:sysml:> .
 @prefix elmt: <urn:sysmlv2:element:> .
 
 <urn:sysmlv2:element:P> a sysml:Package ; sysml:declaredName "P" .
@@ -725,6 +876,37 @@ func TestEmptyInputs(t *testing.T) {
 	}
 	if _, err := export.ToRDF(nil, nil); err == nil {
 		t.Error("expected an error for a nil document")
+	}
+}
+
+// A graph written before the rename carries the old extension namespace, whose
+// properties this version would read as absent; it must be refused instead.
+func TestLegacyExtensionNamespaceIsRefused(t *testing.T) {
+	for name, src := range map[string]string{
+		"property": "@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n" +
+			"@prefix sysml: <https://www.omg.org/spec/SysML#> .\n" +
+			"@prefix elmt: <urn:sysmlv2:element:> .\n" +
+			"@prefix sysx: <urn:systemica:sysml:> .\n" +
+			"@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n" +
+			"elmt:Demo rdf:type sysml:Package ; sysml:declaredName \"Demo\" ;\n" +
+			"    sysx:memberIndex \"0\"^^xsd:integer .\n",
+		"metaclass": "@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n" +
+			"@prefix sysml: <https://www.omg.org/spec/SysML#> .\n" +
+			"@prefix elmt: <urn:sysmlv2:element:> .\n" +
+			"@prefix sysx: <urn:systemica:sysml:> .\n" +
+			"elmt:Demo rdf:type sysx:InitialNode ; sysml:declaredName \"Demo\" .\n",
+	} {
+		graph, err := rdf.ParseTurtle([]byte(src))
+		if err != nil {
+			t.Fatalf("%s: parse: %v", name, err)
+		}
+		_, err = export.ToSysML(graph)
+		if err == nil {
+			t.Fatalf("%s: expected the legacy namespace to be refused", name)
+		}
+		if !strings.Contains(err.Error(), rdf.LegacyExtension) {
+			t.Errorf("%s: error does not name the legacy namespace: %v", name, err)
+		}
 	}
 }
 

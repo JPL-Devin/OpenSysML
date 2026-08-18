@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/lower"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // ErrUnroutableSend is returned when a `send … via p` reaches no end able to
@@ -18,13 +18,18 @@ var ErrUnroutableSend = errors.New("send reaches no receiving port")
 
 // UnroutableSendError reports a send that could not be delivered, naming the
 // port it was sent through and the ends joined to it that refused it, so the
-// model can be corrected.
+// model can be corrected. An addressed send names a target rather than a port it
+// routes through, so it reports the path that reached no port of any object.
 type UnroutableSendError struct {
-	Port     string   // the port the send named, as written
+	Port     string   // the port or target the send named, as written
 	Outbound []string // ends joined to Port that only carry outward
+	Address  bool     // the send addressed a target rather than routing through a port
 }
 
 func (e *UnroutableSendError) Error() string {
+	if e.Address {
+		return fmt.Sprintf("%s: %q names no port of an object the sender can address", ErrUnroutableSend, e.Port)
+	}
 	if len(e.Outbound) == 0 {
 		return fmt.Sprintf("%s: port %q is joined to no port that can receive it", ErrUnroutableSend, e.Port)
 	}
@@ -153,17 +158,17 @@ func (ctx *Context) selectedVariant(conn lower.Connection, self *Instance) strin
 	return ""
 }
 
-// heldVariant reads the variant an object's variation slot holds, which is that
+// heldVariant reads the variant an object's variation feature value holds, which is that
 // object's own selection whether or not it was read before the message was sent.
 func (ctx *Context) heldVariant(inst *Instance, variation string) string {
-	slot, err := inst.GetSlot(ctx, variation)
-	if err != nil || slot == nil {
+	fv, err := inst.GetFeatureValue(ctx, variation)
+	if err != nil || fv == nil {
 		return ""
 	}
-	if slot.Value.Kind != ValVariant || slot.Value.Variant == nil {
+	if fv.Value.Kind != ValVariant || fv.Value.Variant == nil {
 		return ""
 	}
-	return slot.Value.Variant.Name
+	return fv.Value.Variant.Name
 }
 
 // receivingEnds sorts the ends joined to sendingPort into the ones a message can
@@ -221,10 +226,15 @@ func (ctx *Context) endReceives(scope *symbols.Scope, end string) bool {
 // port it declares, each segment after the first being a member of the one
 // before it.
 func (ctx *Context) portSymbol(scope *symbols.Scope, path string) (*symbols.Symbol, bool) {
-	if scope == nil || ctx.resolver == nil || path == "" {
+	return ctx.pathSymbol(scope, strings.Split(path, "."))
+}
+
+// pathSymbol resolves the first segment in scope and every later one as a member
+// of the one before it, whichever separator the segments were written with.
+func (ctx *Context) pathSymbol(scope *symbols.Scope, segments []string) (*symbols.Symbol, bool) {
+	if scope == nil || ctx.resolver == nil || len(segments) == 0 || segments[0] == "" {
 		return nil, false
 	}
-	segments := strings.Split(path, ".")
 	sym, ok := ctx.resolver.LookupName(scope, segments[0])
 	for _, segment := range segments[1:] {
 		if !ok || sym == nil {

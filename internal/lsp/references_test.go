@@ -8,7 +8,7 @@ import (
 	"go.lsp.dev/protocol"
 	"go.lsp.dev/uri"
 
-	"github.com/Open-MBEE/Systemica/internal/core/model"
+	"github.com/Open-MBEE/OpenSysML/internal/core/model"
 )
 
 func TestReferencesFindsUses(t *testing.T) {
@@ -84,6 +84,59 @@ func TestReferencesFromUseSiteIncludingDeclaration(t *testing.T) {
 	// Declaration + two references = 3 locations.
 	if len(locs) != 3 {
 		t.Fatalf("references = %d, want 3", len(locs))
+	}
+}
+
+func TestReferencesSpanDocuments(t *testing.T) {
+	s, _, _, lib, main := multiFileWorkspace(t)
+	openFile(t, s, main, mainSource)
+
+	// Cursor on the declaration of Widget in lib.sysml, which main.sysml uses.
+	pos := offsetToPosition([]byte(libSource), strings.Index(libSource, "Widget"))
+	locs, err := s.References(context.Background(), &protocol.ReferenceParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri.File(lib)},
+			Position:     pos,
+		},
+		Context: protocol.ReferenceContext{IncludeDeclaration: false},
+	})
+	if err != nil {
+		t.Fatalf("References err = %v", err)
+	}
+	if len(locs) != 1 {
+		t.Fatalf("references = %d (%v), want 1 in main.sysml", len(locs), locs)
+	}
+	if locs[0].URI != uri.File(main) {
+		t.Errorf("URI = %q, want %q", locs[0].URI, uri.File(main))
+	}
+	off := positionToOffset([]byte(mainSource), locs[0].Range.Start)
+	if got := mainSource[off : off+len("Widget")]; got != "Widget" {
+		t.Errorf("reference range covers %q, want %q", got, "Widget")
+	}
+}
+
+func TestReferencesFromUseSiteSpanDocuments(t *testing.T) {
+	s, _, _, lib, main := multiFileWorkspace(t)
+	openFile(t, s, main, mainSource)
+
+	// Cursor on the use of Widget in main.sysml: the declaration it resolves to
+	// lives in another document, and is reported there.
+	pos := offsetToPosition([]byte(mainSource), strings.Index(mainSource, "Widget"))
+	locs, err := s.References(context.Background(), &protocol.ReferenceParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: uri.File(main)},
+			Position:     pos,
+		},
+		Context: protocol.ReferenceContext{IncludeDeclaration: true},
+	})
+	if err != nil {
+		t.Fatalf("References err = %v", err)
+	}
+	if len(locs) != 2 {
+		t.Fatalf("references = %d (%v), want declaration + one use", len(locs), locs)
+	}
+	if locs[0].URI != uri.File(lib) {
+		t.Errorf("declaration URI = %q, want %q", locs[0].URI, uri.File(lib))
 	}
 }
 

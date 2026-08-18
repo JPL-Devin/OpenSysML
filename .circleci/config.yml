@@ -23,6 +23,28 @@ jobs:
       - go/mod-download
       - go/save-cache
       
+      # The solver is an external process: without one on PATH the
+      # solver-dependent tests would skip rather than run.
+      - run:
+          name: Install z3
+          command: |
+            sudo apt-get update
+            sudo apt-get install -y z3
+            z3 --version
+
+      # The second verified backend, for the portability gate below: cvc5 has no
+      # apt package, so the official static release is what CI runs, pinned by
+      # digest so a substituted asset is not run.
+      - run:
+          name: Install cvc5
+          command: |
+            curl -fsSL -o /tmp/cvc5.zip \
+              https://github.com/cvc5/cvc5/releases/download/cvc5-1.3.4/cvc5-Linux-x86_64-static.zip
+            echo "dcdbfada0ce493ee98259c0816e0daafc561c223aadb3af298c2968e73ea39c6  /tmp/cvc5.zip" | sha256sum --check --strict
+            unzip -p /tmp/cvc5.zip '*/bin/cvc5' > /tmp/cvc5-bin
+            sudo install -m 0755 /tmp/cvc5-bin /usr/local/bin/cvc5
+            cvc5 --version | head -1
+
       - run:
           name: Check gofmt
           command: |
@@ -45,10 +67,100 @@ jobs:
           name: Run static analysis (staticcheck + gosec)
           command: make lint
       
+      # The corpus is not vendored and the gate skips while it is absent, so a
+      # release tag could be cut over a corpus regression without it.
+      - restore_cache:
+          keys:
+            - training-corpus-v1-{{ checksum "scripts/download-training-examples.sh" }}
+
+      - run:
+          name: Download the OMG training corpus
+          command: ./scripts/download-training-examples.sh
+
+      - save_cache:
+          key: training-corpus-v1-{{ checksum "scripts/download-training-examples.sh" }}
+          paths:
+            - examples/sysml-v2-training
+
       - run:
           name: Run tests
           command: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+          environment:
+            # Turns "corpus absent" into a failure rather than a skip, as the
+            # GitHub Actions PR workflow already does.
+            OPENSYSML_REQUIRE_TRAINING_CORPUS: "1"
+            # Same for the solver installed above: absent means failure, not skip.
+            OPENSYSML_REQUIRE_SMT: "1"
+
+      # Re-run the differential gate alone so its summary counts, which make
+      # coverage drift reviewable, are visible rather than buried in the suite.
+      - run:
+          name: Differential agreement gate
+          command: |
+            set -o pipefail
+            go test -count=1 -v ./internal/core/solve -run TestDifferential | tee differential-gate.log
+            grep -E 'differential gate .*: .* elements:' differential-gate.log
+            if grep -qE '^\s*--- SKIP' differential-gate.log; then
+              echo "error: a differential gate skipped" >&2
+              exit 1
+            fi
+          environment:
+            OPENSYSML_REQUIRE_TRAINING_CORPUS: "1"
+            OPENSYSML_REQUIRE_SMT: "1"
       
+      # Portability: the same subset against both verified backends, so a feature
+      # one of them refuses is reported here rather than found by a user. The
+      # requirement flag makes an absent solver a failure rather than a skip.
+      - run:
+          name: Portability gate
+          command: |
+            set -o pipefail
+            for solver in z3 cvc5; do
+              OPENSYSML_SMT="$solver" go test -count=1 -v ./internal/core/solve \
+                -run 'TestPortability' | tee "portability-$solver.log"
+              grep -E "portability of $solver" "portability-$solver.log"
+              if grep -qE '^\s*--- SKIP' "portability-$solver.log"; then
+                echo "error: the portability gate skipped for $solver" >&2
+                exit 1
+              fi
+            done
+          environment:
+            OPENSYSML_REQUIRE_SMT: "1"
+
+      # The solver gate against the second backend: what z3 answers, cvc5 must
+      # answer too, the portability subset alone not being the whole contract.
+      - run:
+          name: Second backend gate
+          command: |
+            set -o pipefail
+            OPENSYSML_SMT=cvc5 go test -count=1 -v ./internal/core/solve ./internal/repl \
+              -run 'TestSolver|TestDiscovery|TestSolved|TestDivisor|TestCheck|TestSolve|TestConfigure|TestSynthesis|TestPinned|TestFixed|TestExplain|TestCore' \
+              | tee cvc5-gate.log
+            if grep -qE '^\s*--- SKIP' cvc5-gate.log; then
+              echo "error: a solver-dependent test skipped under cvc5" >&2
+              exit 1
+            fi
+          environment:
+            OPENSYSML_REQUIRE_SMT: "1"
+
+      # The other half of the solver contract: with discovery pointed at an
+      # executable that does not exist, solver-dependent tests skip and the
+      # absent-solver paths must still report one.
+      - run:
+          name: Run the solve and REPL tests with no solver
+          command: |
+            set -o pipefail
+            env -u OPENSYSML_REQUIRE_SMT OPENSYSML_SMT=/nonexistent/no-such-solver \
+              go test -count=1 -v ./internal/core/solve ./internal/repl | tee no-solver-gate.log
+            for name in TestCheckReportsAnAbsentSolver TestExplainReportsAnAbsentSolver \
+              TestSolveReportsAnAbsentSolver TestConfigureReportsAnAbsentSolver \
+              TestOptimizeReportsAnAbsentSolver; do
+              grep -qE "^\s*--- PASS: $name" no-solver-gate.log || {
+                echo "error: $name did not run without a solver" >&2
+                exit 1
+              }
+            done
+
       - run:
           name: Build binaries
           command: |
@@ -89,9 +201,9 @@ jobs:
       - run:
           name: Install sysml-grpc binary
           command: |
-            mkdir -p ~/.pysysml/bin
-            cp bin/sysml-grpc ~/.pysysml/bin/
-            chmod +x ~/.pysysml/bin/sysml-grpc
+            mkdir -p ~/.opensysml/bin
+            cp bin/sysml-grpc ~/.opensysml/bin/
+            chmod +x ~/.opensysml/bin/sysml-grpc
       
       - run:
           name: Install Python package
@@ -104,7 +216,7 @@ jobs:
       # which exercises nothing, so one runs here for the rest of the job.
       - run:
           name: Start sysml-grpc service
-          command: ~/.pysysml/bin/sysml-grpc -port 50051
+          command: ~/.opensysml/bin/sysml-grpc -port 50051
           background: true
 
       - run:
@@ -125,20 +237,20 @@ jobs:
             sys.exit("sysml-grpc never listened on 50051")
             PY
 
-      # PYSYSML_REQUIRE_SERVICE turns "no service, so skip" into a failure: a
+      # OPENSYSML_REQUIRE_SERVICE turns "no service, so skip" into a failure: a
       # service is provided here, so its absence is the bug, not a pass.
       - run:
           name: Run Python tests
           command: |
             cd python
-            PYSYSML_REQUIRE_SERVICE=1 pytest tests/ -v
+            OPENSYSML_REQUIRE_SERVICE=1 pytest tests/ -v
       
       - run:
           name: Verify import
           command: |
-            python3 -c "import pysysml; print(f'pysysml {pysysml.__version__} imported successfully')"
+            python3 -c "import opensysml; print(f'opensysml {opensysml.__version__} imported successfully')"
 
-  # Publishes pysysml to PyPI on a `pysysml-v<version>` tag. PyPI has no
+  # Publishes opensysml to PyPI on a `opensysml-v<version>` tag. PyPI has no
   # trusted-publishing (OIDC) support for CircleCI — the supported providers are
   # GitHub Actions, Google Cloud, ActiveState and GitLab CI/CD, and
   # pypi/warehouse#13888 is the open request — so this authenticates with an API
@@ -187,31 +299,31 @@ jobs:
             # package would publish, before anything is built.
             VERSION="$(python python/scripts/check_version.py)"
             PRE_RELEASE="$(python python/scripts/check_version.py --pre-release)"
-            echo "export PYSYSML_VERSION=${VERSION}" >> "$BASH_ENV"
-            echo "export PYSYSML_PRE_RELEASE=${PRE_RELEASE}" >> "$BASH_ENV"
-            echo "Publishing pysysml ${VERSION} (pre-release: ${PRE_RELEASE})"
+            echo "export OPENSYSML_VERSION=${VERSION}" >> "$BASH_ENV"
+            echo "export OPENSYSML_PRE_RELEASE=${PRE_RELEASE}" >> "$BASH_ENV"
+            echo "Publishing opensysml ${VERSION} (pre-release: ${PRE_RELEASE})"
 
       - run:
           name: Refuse a version the index already has
           command: |
-            if [ "$PYSYSML_PRE_RELEASE" = "yes" ]; then
+            if [ "$OPENSYSML_PRE_RELEASE" = "yes" ]; then
               INDEX_HOST="test.pypi.org"
             else
               INDEX_HOST="pypi.org"
             fi
             STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
-              "https://${INDEX_HOST}/pypi/pysysml/${PYSYSML_VERSION}/json")
+              "https://${INDEX_HOST}/pypi/opensysml/${OPENSYSML_VERSION}/json")
             if [ "$STATUS" = "200" ]; then
-              echo "Error: pysysml ${PYSYSML_VERSION} is already on ${INDEX_HOST}."
+              echo "Error: opensysml ${OPENSYSML_VERSION} is already on ${INDEX_HOST}."
               echo "A PyPI version is immutable: it can be yanked but never replaced,"
               echo "so this job fails rather than half-publishing. Re-running a"
               echo "release for the same version is therefore not an operation PyPI"
               echo "supports, unlike publish-github-release, which replaces assets"
               echo "with 'ghr -replace'. Bump the version in"
-              echo "python/pysysml/_version.py and tag pysysml-v<new version>."
+              echo "python/opensysml/_version.py and tag opensysml-v<new version>."
               exit 1
             fi
-            echo "${INDEX_HOST} has no pysysml ${PYSYSML_VERSION} (HTTP ${STATUS}); continuing"
+            echo "${INDEX_HOST} has no opensysml ${OPENSYSML_VERSION} (HTTP ${STATUS}); continuing"
 
       - run:
           name: Build the wheel and the sdist
@@ -235,12 +347,12 @@ jobs:
             # in a 2.1 config; the shell sees a plain heredoc.
             /tmp/verify-wheel/bin/python - \<<'EOF'
             import os
-            import pysysml
-            expected = os.environ["PYSYSML_VERSION"]
-            assert pysysml.__version__ == expected, (
-                f"installed wheel reports {pysysml.__version__}, expected {expected}"
+            import opensysml
+            expected = os.environ["OPENSYSML_VERSION"]
+            assert opensysml.__version__ == expected, (
+                f"installed wheel reports {opensysml.__version__}, expected {expected}"
             )
-            print(f"pysysml {pysysml.__version__} imported from the built wheel")
+            print(f"opensysml {opensysml.__version__} imported from the built wheel")
             EOF
 
       - run:
@@ -249,13 +361,13 @@ jobs:
             # The token is read straight into twine's environment: nothing here
             # echoes it, and nothing in this job prints the environment.
             export TWINE_USERNAME=__token__
-            if [ "$PYSYSML_PRE_RELEASE" = "yes" ]; then
+            if [ "$OPENSYSML_PRE_RELEASE" = "yes" ]; then
               export TWINE_REPOSITORY_URL=https://test.pypi.org/legacy/
               export TWINE_PASSWORD="$TEST_PYPI_API_TOKEN"
-              echo "Uploading pysysml ${PYSYSML_VERSION} to TestPyPI"
+              echo "Uploading opensysml ${OPENSYSML_VERSION} to TestPyPI"
             else
               export TWINE_PASSWORD="$PYPI_API_TOKEN"
-              echo "Uploading pysysml ${PYSYSML_VERSION} to PyPI"
+              echo "Uploading opensysml ${OPENSYSML_VERSION} to PyPI"
             fi
             # No --skip-existing: a version that appeared since the check above
             # must fail the job rather than pass silently.
@@ -263,7 +375,96 @@ jobs:
 
       - store_artifacts:
           path: python/dist
-          destination: pysysml-dist
+          destination: opensysml-dist
+
+  # Publishes packaging/pypi-pysysml on a `pysysml-v<version>` tag: the final
+  # release of the pre-rename name, which raises on import to point at
+  # opensysml. It shares the `PyPI` context, and like publish-pypi refuses to
+  # run without a token or to overwrite a version the index already has.
+  publish-pypi-pysysml:
+    executor: python-executor
+    steps:
+      - checkout
+
+      - run:
+          name: Install build tooling
+          command: python -m pip install --upgrade pip build twine packaging
+
+      - run:
+          name: Require the publishing token
+          command: |
+            if [ -z "${PYPI_API_TOKEN:-}" ]; then
+              echo "Error: PYPI_API_TOKEN is not set. Add it to the 'PyPI' context"
+              echo "(Organization Settings -> Contexts). See docs/project/releasing.md."
+              exit 1
+            fi
+
+      - run:
+          name: Resolve the version from the tag
+          command: |
+            # The placeholder has no _version.py to read, so the version comes
+            # from its pyproject and the tag has to name it.
+            DECLARED=$(sed -n 's/^version = "\(.*\)"/\1/p' packaging/pypi-pysysml/pyproject.toml)
+            TAGGED=${CIRCLE_TAG#pysysml-v}
+            if [ -z "$DECLARED" ] || [ "$DECLARED" != "$TAGGED" ]; then
+              echo "Error: ${CIRCLE_TAG} names ${TAGGED}, but"
+              echo "packaging/pypi-pysysml/pyproject.toml declares '${DECLARED}'."
+              exit 1
+            fi
+            echo "export PYSYSML_PLACEHOLDER_VERSION=${DECLARED}" >> "$BASH_ENV"
+
+      - run:
+          name: Refuse a version the index already has
+          command: |
+            STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
+              "https://pypi.org/pypi/pysysml/${PYSYSML_PLACEHOLDER_VERSION}/json")
+            if [ "$STATUS" = "200" ]; then
+              echo "Error: pysysml ${PYSYSML_PLACEHOLDER_VERSION} is already on PyPI,"
+              echo "and a version can be yanked but never re-uploaded."
+              exit 1
+            fi
+            echo "pypi.org has no pysysml ${PYSYSML_PLACEHOLDER_VERSION} (HTTP ${STATUS}); continuing"
+
+      - run:
+          name: Build the wheel and the sdist
+          command: |
+            rm -rf packaging/pypi-pysysml/dist
+            python -m build --outdir packaging/pypi-pysysml/dist packaging/pypi-pysysml/
+            ls -l packaging/pypi-pysysml/dist
+
+      - run:
+          name: Check the metadata (twine check --strict)
+          command: python -m twine check --strict packaging/pypi-pysysml/dist/*
+
+      - run:
+          name: Install the built wheel and require the import to fail
+          command: |
+            # The artifact is only correct if importing it raises: a wheel that
+            # imported cleanly would be the alias this release refuses to be.
+            python -m venv /tmp/verify-placeholder
+            /tmp/verify-placeholder/bin/python -m pip install --upgrade pip
+            /tmp/verify-placeholder/bin/python -m pip install packaging/pypi-pysysml/dist/*.whl
+            /tmp/verify-placeholder/bin/python - \<<'EOF'
+            try:
+                import pysysml
+            except ImportError as err:
+                assert "pip install opensysml" in str(err), str(err)
+                print("pysysml placeholder raises ImportError as intended")
+            else:
+                raise SystemExit("the placeholder imported cleanly; it must raise")
+            EOF
+
+      - run:
+          name: Upload to PyPI
+          command: |
+            export TWINE_USERNAME=__token__
+            export TWINE_PASSWORD="$PYPI_API_TOKEN"
+            echo "Uploading pysysml ${PYSYSML_PLACEHOLDER_VERSION} to PyPI"
+            python -m twine upload packaging/pypi-pysysml/dist/*
+
+      - store_artifacts:
+          path: packaging/pypi-pysysml/dist
+          destination: pysysml-placeholder-dist
 
   build-release:
     executor: go-executor
@@ -354,12 +555,12 @@ jobs:
               mkdir -p "$stage"
               cp "sysml-${platform}" "${stage}/sysml"
               cp "sysml-lsp-${platform}" "${stage}/sysml-lsp"
-              tar czf "systemica-${platform}.tar.gz" -C "$stage" sysml sysml-lsp
+              tar czf "opensysml-${platform}.tar.gz" -C "$stage" sysml sysml-lsp
             done
             mkdir -p stage/windows-amd64
             cp sysml-windows-amd64.exe stage/windows-amd64/sysml.exe
             cp sysml-lsp-windows-amd64.exe stage/windows-amd64/sysml-lsp.exe
-            (cd stage/windows-amd64 && zip -q ../../systemica-windows-amd64.zip sysml.exe sysml-lsp.exe)
+            (cd stage/windows-amd64 && zip -q ../../opensysml-windows-amd64.zip sysml.exe sysml-lsp.exe)
             rm -rf stage
             
             # Checksums over every published archive, so a Homebrew formula
@@ -367,7 +568,7 @@ jobs:
             sha256sum ./*.tar.gz ./*.zip | sed 's|\./||' > SHA256SUMS.txt
             
             # Same for the raw gRPC binaries, plus a per-file sidecar, which is
-            # the only checksum pysysml reads.
+            # the only checksum opensysml reads.
             (cd grpc && sha256sum sysml-grpc-* >> ../SHA256SUMS.txt)
             (cd grpc && for f in sysml-grpc-*; do sha256sum "$f" > "$f.sha256"; done)
             cat SHA256SUMS.txt
@@ -517,15 +718,55 @@ workflows:
             tags:
               only: /^v.*/
 
-  # Publish pysysml to PyPI on its own tag. The package's version is not
+  # Publish opensysml to PyPI on its own tag. The package's version is not
   # lockstep with the core's: it resolves a sysml-grpc binary at runtime from
-  # whichever release the caller asks for (PYSYSML_GRPC_VERSION, or 'latest'),
+  # whichever release the caller asks for (OPENSYSML_GRPC_VERSION, or 'latest'),
   # not from a release matching its own version, so a client fix should not need
   # a core release and a core release should not need a PyPI upload. Keeping the
   # irreversible half on its own tag also keeps `v*` re-runnable, which
   # publish-github-release relies on ('ghr -replace').
   release-python:
     jobs:
+      - build-and-test:
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /^opensysml-v.*/
+
+      - python-test:
+          requires:
+            - build-and-test
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /^opensysml-v.*/
+
+      - publish-pypi:
+          # Last, and only after the Go suite and the Python client's own tests
+          # have passed on this revision: an upload cannot be undone.
+          # The organization context is named 'PyPI'; a context reference is
+          # matched exactly, so the case here has to match it.
+          context:
+            - PyPI
+          requires:
+            - build-and-test
+            - python-test
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /^opensysml-v.*/
+
+  # Publishes the final release of the pre-rename PyPI name on a `pysysml-v*`
+  # tag. It is its own workflow because the artifact shares no code with the
+  # client: the Python suite is what proves it, and the placeholder can be
+  # published without a client release (or ever again).
+  release-pysysml-placeholder:
+    jobs:
+      # python-test attaches the workspace this job persists (it needs a
+      # sysml-grpc to talk to), so it cannot run on its own.
       - build-and-test:
           filters:
             branches:
@@ -542,15 +783,10 @@ workflows:
             tags:
               only: /^pysysml-v.*/
 
-      - publish-pypi:
-          # Last, and only after the Go suite and the Python client's own tests
-          # have passed on this revision: an upload cannot be undone.
-          # The organization context is named 'PyPI'; a context reference is
-          # matched exactly, so the case here has to match it.
+      - publish-pypi-pysysml:
           context:
             - PyPI
           requires:
-            - build-and-test
             - python-test
           filters:
             branches:

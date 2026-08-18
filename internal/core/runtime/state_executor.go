@@ -5,10 +5,10 @@ import (
 	"math"
 	"sort"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/lower"
-	"github.com/Open-MBEE/Systemica/internal/core/semantics"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // StateConfiguration represents the active state configuration (simple or multi-region).
@@ -50,10 +50,10 @@ type StateExecutor struct {
 	// transition of the active configuration handled.
 	deferred []Event
 
-	// doActivities are the running do behaviors, in the order their states were
+	// doActions are the running do behaviors, in the order their states were
 	// entered. Concurrently active states interleave one action per round, so this
 	// order — not map iteration order — decides the interleaving.
-	doActivities []*doActivity
+	doActions []*doAction
 
 	// runStarted marks this executor's run as begun, so the step budget is reset
 	// once however many calls the run is driven over.
@@ -62,12 +62,28 @@ type StateExecutor struct {
 	// timerScheduled holds the time-triggered transitions whose timer is already
 	// running, so a state's timer is not restarted while it stays active.
 	timerScheduled map[*lower.Transition]bool
+
+	// changeFired holds the change-triggered transitions already taken on a
+	// condition that has stayed true, so an unchanged one does not re-fire.
+	changeFired map[*lower.Transition]bool
+
+	// firingChange is the change-triggered transition being taken, whose latch the
+	// state entries it causes must leave alone.
+	firingChange *lower.Transition
+
+	// changeRearmed collects, while a poll runs, the watches a state entry armed
+	// for a new activation, so the poll's earlier observation does not latch them.
+	changeRearmed map[*lower.Transition]bool
+
+	// changeWaits are the change conditions the last poll found could not fire,
+	// telling a machine waiting on one from a quiesced machine.
+	changeWaits []changeWait
 }
 
-// doActivity is the part of a state's do behavior that has still to run. The
+// doAction is the part of a state's do behavior that has still to run. The
 // behavior runs while its state is active rather than at entry, and is abandoned
 // when the state is exited.
-type doActivity struct {
+type doAction struct {
 	state   *ast.StateNode
 	pending []lower.StateBehavior
 }
@@ -116,6 +132,7 @@ func newStateExecutor(ctx *Context, stateMachine *symbols.Symbol, self *Instance
 		history:        make(map[*ast.StateNode]*historyRecord),
 		deferred:       make([]Event, 0),
 		timerScheduled: make(map[*lower.Transition]bool),
+		changeFired:    make(map[*lower.Transition]bool),
 		activeConfig: &StateConfiguration{
 			regionStates: make(map[*ast.StateRegion]*ast.StateNode),
 		},
@@ -132,7 +149,7 @@ func newStateExecutor(ctx *Context, stateMachine *symbols.Symbol, self *Instance
 // initializeAttributes populates stateData with the attribute defaults lowering
 // recorded, evaluated in the scope the machine's body was declared in.
 func (e *StateExecutor) initializeAttributes() error {
-	ec := NewEvalContext(e.ctx, e.graph.Scope)
+	ec := NewEvalContextIn(e.ctx, e.graph.Scope, e.self)
 	defer ec.beginStep()()
 	for _, attr := range e.graph.Attributes {
 		value, err := ec.Eval(attr.Value)
@@ -147,9 +164,10 @@ func (e *StateExecutor) initializeAttributes() error {
 
 // evalStep evaluates one expression of a step - a guard, a change condition, a
 // duration, an inline expression - in scope with the machine's data shadowing it,
-// in an activation of its own (see beginStep).
+// in an activation of its own (see beginStep). What the machine reads is bound to
+// the object exhibiting it, so a guard sees the values its own bodies wrote.
 func (e *StateExecutor) evalStep(node ast.Node, scope *symbols.Scope) (Value, error) {
-	ec := NewEvalContext(e.ctx, scope)
+	ec := NewEvalContextIn(e.ctx, scope, e.self)
 	ec.Push(e.stateData)
 	defer ec.beginStep()()
 	return ec.Eval(node)
@@ -238,7 +256,7 @@ func (e *StateExecutor) scheduleFromLeaf(leaf *ast.StateNode) error {
 // so a state still running one is skipped here and scheduled by runDoRound when
 // the behavior ends.
 func (e *StateExecutor) scheduleCompletionTransitions(state *ast.StateNode) error {
-	if e.hasRunningDoActivity(state) {
+	if e.hasRunningDoAction(state) {
 		return nil
 	}
 
@@ -289,23 +307,12 @@ func (e *StateExecutor) scheduleTimeTransitions(state *ast.StateNode) error {
 				return fmt.Errorf("eval time duration: %w", err)
 			}
 
-			// Extract numeric duration
-			var duration float64
-			if durationVal.Kind == ValConst {
-				switch durationVal.Const.Kind {
-				case semantics.ValInt:
-					duration = float64(durationVal.Const.Int)
-				case semantics.ValReal:
-					duration = durationVal.Const.Real
-				default:
-					return fmt.Errorf("time duration must be numeric, got %v", durationVal.Const.Kind)
-				}
-			} else {
-				return fmt.Errorf("time duration must be constant, got %v", durationVal.Kind)
-			}
-
 			// `accept at t` names an instant, `accept after d` an offset from
 			// entering the state. An instant already past fires immediately.
+			duration, err := e.timeMagnitude(durationVal, "time duration")
+			if err != nil {
+				return err
+			}
 			timestamp := e.currentTime + duration
 			if timeEvent.Absolute {
 				timestamp = math.Max(duration, e.currentTime)
@@ -839,7 +846,7 @@ func (e *StateExecutor) matchesEvent(trans *lower.Transition, event *Event) bool
 			return true
 		}
 		msg, ok := event.Payload.(Message)
-		return ok && msg.arrivedAt(trans.Via) && msg.reachedObject(objectID(e.self))
+		return ok && msg.reaches(e.stateMachine.Name, trans.Via, objectID(e.self))
 
 	case EventTime:
 		// Time events carry the specific transition in Payload
@@ -1477,11 +1484,36 @@ func (e *StateExecutor) enterHierarchyInto(state *ast.StateNode, branches map[*a
 // so concurrently active states interleave instead of one running to the end at
 // entry, and leaving a state abandons the rest of its do behavior.
 //
-// The run is bounded by the context's event and do activity budgets
+// Change conditions are re-tested per micro-step — after the do round, before
+// the next queued event, and again at quiescence — a tool-defined cadence, since
+// KerML has no clock (docs/project/spec-compliance.md).
+//
+// The run is bounded by the context's event and do action budgets
 // (SYSML_MAX_EVENTS, SYSML_MAX_DO_STEPS), so a cyclic machine reports a typed
-// error instead of spinning forever.
+// error instead of spinning forever. A poll that fires nothing costs no budget;
+// a change transition taken counts as one step, like a dispatched event.
 func (e *StateExecutor) RunToCompletion() error {
+	return e.run(false)
+}
+
+// RunToQuiescence runs the machine as RunToCompletion does, but leaves an event
+// scheduled for a later time queued rather than advancing to it: the
+// configuration an object settles into is the one reached at the time it was
+// materialized, and a timer it is waiting on is driven by advancing time.
+func (e *StateExecutor) RunToQuiescence() error {
+	return e.run(true)
+}
+
+// run is the run-to-completion loop, holding simulation time where it is when
+// atCurrentTime is set.
+func (e *StateExecutor) run(atCurrentTime bool) error {
 	defer e.ctx.beginExecutorRun(&e.runStarted)()
+
+	// Suspension is derived at quiescence, so re-running is allowed: a run that
+	// finds nothing to do suspends again.
+	if e.state == StateSuspended {
+		e.state = StateRunning
+	}
 
 	maxStateEvents, maxDoSteps := e.ctx.maxStateEvents, e.ctx.maxDoSteps
 	var events, doSteps int64
@@ -1492,9 +1524,20 @@ func (e *StateExecutor) RunToCompletion() error {
 		}
 		doSteps += int64(ran)
 		if doSteps >= maxDoSteps {
-			return fmt.Errorf("state machine exceeded max do activity steps (%d steps; raise %s to allow more), possible non-terminating do behavior", maxDoSteps, MaxDoStepsEnvVar)
+			return fmt.Errorf("state machine exceeded max do action steps (%d steps; raise %s to allow more), possible non-terminating do behavior", maxDoSteps, MaxDoStepsEnvVar)
 		}
-		if e.eventQueue.Len() == 0 && !e.deliverPendingSignal() {
+		fired, err := e.pollChangeEvents()
+		if err != nil {
+			return fmt.Errorf("poll change conditions: %w", err)
+		}
+		if fired {
+			if events >= maxStateEvents {
+				return fmt.Errorf("state machine exceeded max events (%d events; raise %s to allow more), possible infinite loop", maxStateEvents, MaxStateEventsEnvVar)
+			}
+			events++
+			continue
+		}
+		if !e.hasDueEvent(atCurrentTime) && !e.deliverPendingSignal() {
 			if ran > 0 {
 				continue // do behaviors are still running; they may yet queue events
 			}
@@ -1512,15 +1555,15 @@ func (e *StateExecutor) RunToCompletion() error {
 	return nil
 }
 
-// startDoActivity registers a state's do behavior as running. Re-entering a
+// startDoAction registers a state's do behavior as running. Re-entering a
 // state restarts its do behavior rather than resuming the abandoned one.
-func (e *StateExecutor) startDoActivity(state *ast.StateNode) {
+func (e *StateExecutor) startDoAction(state *ast.StateNode) {
 	doBehaviors := e.behaviorsOf(state).Do
 	if len(doBehaviors) == 0 {
 		return
 	}
-	e.stopDoActivity(state)
-	e.doActivities = append(e.doActivities, &doActivity{
+	e.stopDoAction(state)
+	e.doActions = append(e.doActions, &doAction{
 		state:   state,
 		pending: append([]lower.StateBehavior(nil), doBehaviors...),
 	})
@@ -1535,19 +1578,19 @@ func (e *StateExecutor) behaviorsOf(state *ast.StateNode) *lower.StateBehaviors 
 	return &lower.StateBehaviors{}
 }
 
-// stopDoActivity abandons whatever is left of a state's do behavior, which is
+// stopDoAction abandons whatever is left of a state's do behavior, which is
 // what exiting the state does to it.
-func (e *StateExecutor) stopDoActivity(state *ast.StateNode) {
-	kept := e.doActivities[:0]
-	for _, activity := range e.doActivities {
-		if activity.state != state {
-			kept = append(kept, activity)
+func (e *StateExecutor) stopDoAction(state *ast.StateNode) {
+	kept := e.doActions[:0]
+	for _, act := range e.doActions {
+		if act.state != state {
+			kept = append(kept, act)
 		}
 	}
-	for i := len(kept); i < len(e.doActivities); i++ {
-		e.doActivities[i] = nil
+	for i := len(kept); i < len(e.doActions); i++ {
+		e.doActions[i] = nil
 	}
-	e.doActivities = kept
+	e.doActions = kept
 }
 
 // runDoRound advances every running do behavior by one action, in the order the
@@ -1555,43 +1598,43 @@ func (e *StateExecutor) stopDoActivity(state *ast.StateNode) {
 // concurrently active states share the machine: each performs one action before
 // any performs its next.
 func (e *StateExecutor) runDoRound() (int, error) {
-	if len(e.doActivities) == 0 {
+	if len(e.doActions) == 0 {
 		return 0, nil
 	}
-	round := make([]*doActivity, len(e.doActivities))
-	copy(round, e.doActivities)
+	round := make([]*doAction, len(e.doActions))
+	copy(round, e.doActions)
 
 	ran := 0
-	for _, activity := range round {
-		if len(activity.pending) == 0 || !e.isRunningDoActivity(activity) {
+	for _, act := range round {
+		if len(act.pending) == 0 || !e.isRunningDoAction(act) {
 			continue
 		}
-		behavior := activity.pending[0]
-		activity.pending = activity.pending[1:]
+		behavior := act.pending[0]
+		act.pending = act.pending[1:]
 		if e.trace() != nil {
-			e.trace().RecordDoStep(activity.state.Name)
+			e.trace().RecordDoStep(act.state.Name)
 		}
 		if err := e.executeBehavior(behavior); err != nil {
-			return ran, fmt.Errorf("do action in state %s: %w", activity.state.Name, err)
+			return ran, fmt.Errorf("do action in state %s: %w", act.state.Name, err)
 		}
 		ran++
 	}
 
-	// Drop the behaviors that have finished; an activity an action exited the
-	// state of is already gone.
-	finished := make([]*ast.StateNode, 0, len(e.doActivities))
-	kept := e.doActivities[:0]
-	for _, activity := range e.doActivities {
-		if len(activity.pending) > 0 {
-			kept = append(kept, activity)
+	// Drop the behaviors that have finished; a do action whose state was exited
+	// is already gone.
+	finished := make([]*ast.StateNode, 0, len(e.doActions))
+	kept := e.doActions[:0]
+	for _, act := range e.doActions {
+		if len(act.pending) > 0 {
+			kept = append(kept, act)
 			continue
 		}
-		finished = append(finished, activity.state)
+		finished = append(finished, act.state)
 	}
-	for i := len(kept); i < len(e.doActivities); i++ {
-		e.doActivities[i] = nil
+	for i := len(kept); i < len(e.doActions); i++ {
+		e.doActions[i] = nil
 	}
-	e.doActivities = kept
+	e.doActions = kept
 
 	// A state completes once its do behavior has finished, which is when its
 	// completion transitions become eligible.
@@ -1603,21 +1646,21 @@ func (e *StateExecutor) runDoRound() (int, error) {
 	return ran, nil
 }
 
-// isRunningDoActivity reports whether an activity is still registered, which it
+// isRunningDoAction reports whether a do action is still registered, which it
 // is not once its state has been exited.
-func (e *StateExecutor) isRunningDoActivity(activity *doActivity) bool {
-	for _, running := range e.doActivities {
-		if running == activity {
+func (e *StateExecutor) isRunningDoAction(act *doAction) bool {
+	for _, running := range e.doActions {
+		if running == act {
 			return true
 		}
 	}
 	return false
 }
 
-// hasRunningDoActivity reports whether a state's do behavior is still running.
-func (e *StateExecutor) hasRunningDoActivity(state *ast.StateNode) bool {
-	for _, activity := range e.doActivities {
-		if activity.state == state {
+// hasRunningDoAction reports whether a state's do behavior is still running.
+func (e *StateExecutor) hasRunningDoAction(state *ast.StateNode) bool {
+	for _, act := range e.doActions {
+		if act.state == state {
 			return true
 		}
 	}
@@ -1675,7 +1718,7 @@ func (e *StateExecutor) acceptableMessage(m Message) bool {
 	if m.Port != "" {
 		return e.acceptsSignal(m)
 	}
-	return m.addressedTo(e.stateMachine.Name) && e.acceptsSignal(m)
+	return m.reaches(e.stateMachine.Name, "", objectID(e.self)) && e.acceptsSignal(m)
 }
 
 // HasPendingSignal reports whether a signal this machine accepts is in flight.
@@ -1717,7 +1760,7 @@ func (e *StateExecutor) acceptsSignalFrom(state *ast.StateNode, msg Message) boo
 		if !ok {
 			continue
 		}
-		if !msg.arrivedAt(trans.Via) || !msg.reachedObject(objectID(e.self)) {
+		if !msg.reaches(e.stateMachine.Name, trans.Via, objectID(e.self)) {
 			continue
 		}
 		signal := ast.SimpleName(accept.SignalType)
@@ -1842,6 +1885,18 @@ func (e *StateExecutor) enterStateInto(state *ast.StateNode, branches map[*ast.S
 		return nil
 	}
 
+	// Change watches are created fresh per activation, so a condition that stayed
+	// true rises again; the firing transition keeps its latch so the entry it
+	// caused does not re-enable it.
+	for _, trans := range e.graph.Transitions[state] {
+		if trans != e.firingChange {
+			delete(e.changeFired, trans)
+			if e.changeRearmed != nil {
+				e.changeRearmed[trans] = true
+			}
+		}
+	}
+
 	// Track state visit
 	e.stateVisits = append(e.stateVisits, state.Name)
 
@@ -1879,7 +1934,7 @@ func (e *StateExecutor) enterStateInto(state *ast.StateNode, branches map[*ast.S
 
 	// The do behavior runs while the state is active, interleaved with the do
 	// behaviors of the states active alongside it, rather than at entry.
-	e.startDoActivity(state)
+	e.startDoAction(state)
 
 	// Don't schedule transitions here - let the caller decide when to schedule
 	// This prevents double-scheduling in region transitions
@@ -1979,7 +2034,7 @@ func (e *StateExecutor) exitState(state *ast.StateNode) error {
 
 	// Leaving the state abandons whatever is left of its do behavior, before the
 	// exit behavior runs.
-	e.stopDoActivity(state)
+	e.stopDoAction(state)
 
 	// Record trace
 	if e.trace() != nil {
@@ -2003,7 +2058,7 @@ func (e *StateExecutor) exitState(state *ast.StateNode) error {
 // passing state data in through the callee's input parameters and merging its
 // output parameters back into state data.
 func (e *StateExecutor) invokeNested(inv actionInvocation) error {
-	outputs, err := invokeAction(e.ctx, e.stateMachine.Scope, inv, e.stateData)
+	outputs, err := invokeAction(e.ctx, e.stateMachine.Scope, inv, e.stateData, e.self)
 	if err != nil {
 		return err
 	}
@@ -2033,63 +2088,6 @@ func stateActionName(u *ast.Usage) string {
 		}
 	}
 	return "<anonymous>"
-}
-
-// pollChangeEvents checks ChangeEvent conditions for the outgoing transitions of
-// the active configuration, walking outward from each active leaf so that a
-// condition on an enclosing composite state is watched while a substate is
-// active. Selection and conflict resolution are the ones an event dispatch uses,
-// so a poll resolves an inner against an outer transition the way the equivalent
-// signal would, and every region moves on the conditions it watches.
-func (e *StateExecutor) pollChangeEvents() error {
-	candidates, err := e.selectCandidates(e.enabledChangeTransition)
-	if err != nil {
-		return err
-	}
-	for _, candidate := range candidates {
-		if e.losesToNestedTransition(candidates, candidate) || !e.isActive(candidate.leaf) {
-			continue
-		}
-		if err := e.fireFrom(candidate.source, candidate.trans); err != nil {
-			return fmt.Errorf("fire transition out of %s: %w", candidate.source.Name, err)
-		}
-		if e.state == StateCompleted {
-			return nil
-		}
-	}
-	return nil
-}
-
-// enabledChangeTransition returns the state's first change-triggered transition
-// whose condition holds and whose guard does not block it. A blocked one consumes
-// nothing, so the walk carries on past it.
-func (e *StateExecutor) enabledChangeTransition(state *ast.StateNode) (*lower.Transition, error) {
-	for _, trans := range e.graph.Transitions[state] {
-		changeEvent, ok := trans.Trigger.(*ast.ChangeEvent)
-		if !ok {
-			continue
-		}
-		// Evaluate the condition in the scope the transition was written in, the
-		// machine's data shadowing it.
-		condVal, err := e.evalStep(changeEvent.Condition, trans.Scope)
-		if err != nil {
-			return nil, fmt.Errorf("eval change condition: %w", err)
-		}
-		if condVal.Kind != ValConst || condVal.Const.Kind != semantics.ValBool {
-			return nil, fmt.Errorf("change condition must be boolean, got %v", condVal.Kind)
-		}
-		if !condVal.Const.Bool {
-			continue
-		}
-		satisfied, err := e.passesGuard(trans)
-		if err != nil {
-			return nil, fmt.Errorf("eval change guard: %w", err)
-		}
-		if satisfied {
-			return trans, nil
-		}
-	}
-	return nil, nil
 }
 
 // --- Public accessor methods for REPL debugging ---
@@ -2164,6 +2162,27 @@ func (e *StateExecutor) CurrentTime() float64 {
 	return e.currentTime
 }
 
+// Resume returns a machine suspended at quiescence to running, so a driver that
+// makes work available — advancing time, or delivering an event — can step it
+// again. A completed or failed machine is left as it is.
+func (e *StateExecutor) Resume() bool {
+	if e.state != StateSuspended {
+		return false
+	}
+	e.state = StateRunning
+	return true
+}
+
+// Suspend parks a running machine back at quiescence, for a driver that resumed
+// it, found nothing to do and must not report it as running.
+func (e *StateExecutor) Suspend() bool {
+	if e.state != StateRunning {
+		return false
+	}
+	e.state = StateSuspended
+	return true
+}
+
 // State returns current execution state.
 func (e *StateExecutor) State() ExecutionState {
 	return e.state
@@ -2186,6 +2205,14 @@ func (e *StateExecutor) ProcessNextEvent() error {
 	if err != nil {
 		return err
 	}
+	// A condition risen in the do round is taken here, as RunToCompletion does.
+	fired, err := e.pollChangeEvents()
+	if err != nil {
+		return fmt.Errorf("poll change conditions: %w", err)
+	}
+	if fired {
+		return nil
+	}
 	// A signal sent by a behavior sharing this context is dispatched by the same
 	// step RunToCompletion takes, so stepping and running agree.
 	if e.eventQueue.Len() == 0 && !e.deliverPendingSignal() && ran > 0 {
@@ -2194,11 +2221,26 @@ func (e *StateExecutor) ProcessNextEvent() error {
 	return e.processNextEvent()
 }
 
+// hasDueEvent reports whether an event the run may dispatch is queued: with time
+// held where it is, one scheduled for later is not yet due.
+func (e *StateExecutor) hasDueEvent(atCurrentTime bool) bool {
+	if e.eventQueue.Len() == 0 {
+		return false
+	}
+	return !atCurrentTime || e.eventQueue.Peek().Timestamp <= e.currentTime
+}
+
+// HasDueEvent reports whether an event scheduled no later than the machine's
+// current time is queued, which a run holding time where it is dispatches.
+func (e *StateExecutor) HasDueEvent() bool {
+	return e.hasDueEvent(true)
+}
+
 // HasPendingWork reports whether stepping the machine can still make progress:
 // an event is queued, a signal this machine accepts is in flight, or a state's
 // do behavior has actions left to run.
 func (e *StateExecutor) HasPendingWork() bool {
-	return e.eventQueue.Len() > 0 || len(e.doActivities) > 0 || e.hasPendingSignal()
+	return e.eventQueue.Len() > 0 || len(e.doActions) > 0 || e.hasPendingSignal()
 }
 
 // RunDoRound advances every active state's do behavior by one action, without
@@ -2212,8 +2254,8 @@ func (e *StateExecutor) RunDoRound() (int, error) {
 // HasPendingDoWork reports whether some active state's do behavior still has an
 // action to run. Such work is due now, unlike a queued event's timestamp.
 func (e *StateExecutor) HasPendingDoWork() bool {
-	for _, activity := range e.doActivities {
-		if len(activity.pending) > 0 {
+	for _, act := range e.doActions {
+		if len(act.pending) > 0 {
 			return true
 		}
 	}

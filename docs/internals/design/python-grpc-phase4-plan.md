@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Expose Systemica runtime capabilities (eval, instantiate, execute actions/state machines) via Python client
+**Goal:** Expose OpenSysML runtime capabilities (eval, instantiate, execute actions/state machines) via Python client
 
 **Architecture:** Extend protobuf schema with 4 new RPCs (Evaluate, Instantiate, ExecuteAction, ExecuteState), implement gRPC service handlers calling existing `internal/core/runtime` functions, add Python wrapper methods in Connection class plus new Instance class
 
-**Tech Stack:** Go 1.23+, protobuf 7.35.1+, grpcio 1.83.0+, existing Systemica runtime (eval.go, instance.go, action_executor.go, state_executor.go)
+**Tech Stack:** Go 1.23+, protobuf 7.35.1+, grpcio 1.83.0+, existing OpenSysML runtime (eval.go, instance.go, action_executor.go, state_executor.go)
 
 ---
 
@@ -18,10 +18,10 @@
 - `internal/grpc/convert.go` - Add Value → protobuf conversion (ValueToProto), Instance → protobuf conversion (InstanceToProto)
 
 **Python (Client):**
-- `pysysml/instance.py` - New Instance class wrapping protobuf Instance message
-- `pysysml/connection.py` - Add `eval()`, `instantiate()`, `execute_action()`, `execute_state()` methods
-- `pysysml/errors.py` - New RuntimeError exception for execution failures
-- `pysysml/__init__.py` - Export Instance, RuntimeError, add module-level eval()/instantiate() helpers
+- `opensysml/instance.py` - New Instance class wrapping protobuf Instance message
+- `opensysml/connection.py` - Add `eval()`, `instantiate()`, `execute_action()`, `execute_state()` methods
+- `opensysml/errors.py` - New RuntimeError exception for execution failures
+- `opensysml/__init__.py` - Export Instance, RuntimeError, add module-level eval()/instantiate() helpers
 
 **Tests:**
 - `internal/grpc/runtime_test.go` - Go unit tests for 4 new RPCs
@@ -49,25 +49,25 @@
 - Create: `internal/grpc/runtime_test.go` (unit tests for 4 RPCs)
 
 ### Task 3: Implement Python Instance Class
-**Objective:** Create pysysml/instance.py wrapping protobuf Instance message
+**Objective:** Create opensysml/instance.py wrapping protobuf Instance message
 
 **Files:**
-- Create: `pysysml/instance.py`
+- Create: `opensysml/instance.py`
 - Create: `tests/test_instance.py` (unit tests)
 
 ### Task 4: Add Python Runtime Methods to Connection
 **Objective:** Add eval(), instantiate(), execute_action(), execute_state() methods to Connection class
 
 **Files:**
-- Create: `pysysml/errors.py` (RuntimeError exception)
-- Modify: `pysysml/connection.py` (add 4 runtime methods)
+- Create: `opensysml/errors.py` (RuntimeError exception)
+- Modify: `opensysml/connection.py` (add 4 runtime methods)
 - Create: `tests/test_runtime.py` (unit tests with mocked RPCs)
 
 ### Task 5: Add Module-Level Runtime Helpers
-**Objective:** Add pysysml.eval(), pysysml.instantiate() convenience functions
+**Objective:** Add opensysml.eval(), opensysml.instantiate() convenience functions
 
 **Files:**
-- Modify: `pysysml/__init__.py` (add eval/instantiate, export Instance/RuntimeError)
+- Modify: `opensysml/__init__.py` (add eval/instantiate, export Instance/RuntimeError)
 - Modify: `tests/test_api.py` (add tests for module-level helpers)
 
 ### Task 6: Integration Testing
@@ -81,10 +81,10 @@
 
 ## Definition of Done
 
-- [ ] `pysysml.eval("2 + 2")` returns `4`
-- [ ] `instance = pysysml.instantiate("PartName")` returns Instance object
+- [ ] `opensysml.eval("2 + 2")` returns `4`
+- [ ] `instance = opensysml.instantiate("PartName")` returns Instance object
 - [ ] `result = conn.execute_action("ActionName", inputs={})` returns outputs dict
-- [ ] Runtime errors raise `pysysml.RuntimeError` with message + diagnostics
+- [ ] Runtime errors raise `opensysml.RuntimeError` with message + diagnostics
 - [ ] Integration tests pass for all 4 runtime operations
 - [ ] All existing tests still pass (no regressions)
 - [ ] Go tests pass: `go test ./...`
@@ -242,20 +242,20 @@ This runs `protoc` to generate:
 ### Step 8: Regenerate Python stubs
 
 ```bash
-cd /home/han/IdeaProjects/Systemica
+cd /home/han/IdeaProjects/OpenSysML
 python -m grpc_tools.protoc -I api/proto \
-  --python_out=pysysml/proto \
-  --grpc_python_out=pysysml/proto \
+  --python_out=opensysml/proto \
+  --grpc_python_out=opensysml/proto \
   api/proto/sysml.proto
 ```
 
 Generates:
-- `pysysml/proto/sysml_pb2.py`
-- `pysysml/proto/sysml_pb2_grpc.py`
+- `opensysml/proto/sysml_pb2.py`
+- `opensysml/proto/sysml_pb2_grpc.py`
 
 ### Step 9: Fix Python import paths
 
-Edit `pysysml/proto/sysml_pb2_grpc.py` line 6:
+Edit `opensysml/proto/sysml_pb2_grpc.py` line 6:
 ```python
 # Change: import sysml_pb2 as sysml__pb2
 # To:     from . import sysml_pb2 as sysml__pb2
@@ -269,7 +269,7 @@ go build ./api/proto
 go build ./internal/grpc
 
 # Python
-PYTHONPATH=/home/han/IdeaProjects/Systemica python -c "from pysysml.proto import sysml_pb2, sysml_pb2_grpc; print('OK')"
+PYTHONPATH=/home/han/IdeaProjects/OpenSysML python -c "from opensysml.proto import sysml_pb2, sysml_pb2_grpc; print('OK')"
 ```
 
 Expected: All compile cleanly.
@@ -277,7 +277,7 @@ Expected: All compile cleanly.
 ### Step 11: Commit
 
 ```bash
-git add api/proto/sysml.proto api/proto/*.go pysysml/proto/*.py
+git add api/proto/sysml.proto api/proto/*.go opensysml/proto/*.py
 git commit -m "feat(proto): add runtime RPC messages (Evaluate, Instantiate, ExecuteAction, ExecuteState)"
 ```
 
@@ -566,9 +566,9 @@ import (
 	"context"
 	"testing"
 	
-	"github.com/Open-MBEE/Systemica/internal/core/lexer"
-	"github.com/Open-MBEE/Systemica/internal/core/parser"
-	pb "github.com/Open-MBEE/Systemica/api/proto"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
+	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 )
 
 func TestEvaluate_SimpleExpression(t *testing.T) {
@@ -663,10 +663,10 @@ git commit -m "feat(grpc): implement runtime RPC handlers (Evaluate, Instantiate
 
 ## Task 3: Implement Python Instance Class
 
-**Objective:** Create pysysml/instance.py wrapping protobuf Instance message
+**Objective:** Create opensysml/instance.py wrapping protobuf Instance message
 
 **Files:**
-- Create: `pysysml/instance.py`
+- Create: `opensysml/instance.py`
 - Create: `tests/test_instance.py`
 
 ### Step 1: Create instance.py
@@ -729,8 +729,8 @@ class Instance:
 ```python
 """Tests for Instance class."""
 import pytest
-from pysysml.proto import sysml_pb2
-from pysysml.instance import Instance
+from opensysml.proto import sysml_pb2
+from opensysml.instance import Instance
 
 def test_instance_properties():
     """Test Instance wraps protobuf correctly."""
@@ -780,7 +780,7 @@ def test_instance_str():
 ### Step 3: Run tests
 
 ```bash
-PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_instance.py -v
+PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_instance.py -v
 ```
 
 Expected: 3 tests pass.
@@ -788,7 +788,7 @@ Expected: 3 tests pass.
 ### Step 4: Commit
 
 ```bash
-git add pysysml/instance.py tests/test_instance.py
+git add opensysml/instance.py tests/test_instance.py
 git commit -m "feat(python): implement Instance class for runtime objects"
 ```
 
@@ -799,8 +799,8 @@ git commit -m "feat(python): implement Instance class for runtime objects"
 **Objective:** Add eval(), instantiate(), execute_action(), execute_state() methods to Connection class
 
 **Files:**
-- Create: `pysysml/errors.py`
-- Modify: `pysysml/connection.py`
+- Create: `opensysml/errors.py`
+- Modify: `opensysml/connection.py`
 - Create: `tests/test_runtime.py`
 
 ### Step 1: Create errors.py
@@ -825,7 +825,7 @@ class RuntimeError(Exception):
 ### Step 2: Add eval() method to Connection
 
 ```python
-# pysysml/connection.py (add after get_symbol method)
+# opensysml/connection.py (add after get_symbol method)
 
 def eval(self, expression, model_hash, context_symbol_id=None):
     """Evaluate a SysML expression.
@@ -841,8 +841,8 @@ def eval(self, expression, model_hash, context_symbol_id=None):
     Raises:
         RuntimeError: If evaluation fails
     """
-    from pysysml.proto import sysml_pb2
-    from pysysml.errors import RuntimeError as PyRuntimeError
+    from opensysml.proto import sysml_pb2
+    from opensysml.errors import RuntimeError as PyRuntimeError
     
     req = sysml_pb2.EvaluateRequest(
         model_hash=model_hash,
@@ -895,9 +895,9 @@ def instantiate(self, symbol_id, model_hash):
     Raises:
         RuntimeError: If instantiation fails
     """
-    from pysysml.proto import sysml_pb2
-    from pysysml.errors import RuntimeError as PyRuntimeError
-    from pysysml.instance import Instance
+    from opensysml.proto import sysml_pb2
+    from opensysml.errors import RuntimeError as PyRuntimeError
+    from opensysml.instance import Instance
     
     req = sysml_pb2.InstantiateRequest(
         model_hash=model_hash,
@@ -929,8 +929,8 @@ def execute_action(self, action_symbol_id, model_hash, inputs=None):
     Raises:
         RuntimeError: If execution fails
     """
-    from pysysml.proto import sysml_pb2
-    from pysysml.errors import RuntimeError as PyRuntimeError
+    from opensysml.proto import sysml_pb2
+    from opensysml.errors import RuntimeError as PyRuntimeError
     
     req = sysml_pb2.ExecuteActionRequest(
         model_hash=model_hash,
@@ -960,8 +960,8 @@ def execute_state(self, state_machine_symbol_id, model_hash, events=None):
     Raises:
         RuntimeError: If execution fails
     """
-    from pysysml.proto import sysml_pb2
-    from pysysml.errors import RuntimeError as PyRuntimeError
+    from opensysml.proto import sysml_pb2
+    from opensysml.errors import RuntimeError as PyRuntimeError
     
     req = sysml_pb2.ExecuteStateRequest(
         model_hash=model_hash,
@@ -987,14 +987,14 @@ def execute_state(self, state_machine_symbol_id, model_hash, events=None):
 """Tests for runtime methods (eval, instantiate, etc.)."""
 import pytest
 from unittest.mock import Mock, patch
-from pysysml.connection import Connection
-from pysysml.proto import sysml_pb2
-from pysysml.errors import RuntimeError
+from opensysml.connection import Connection
+from opensysml.proto import sysml_pb2
+from opensysml.errors import RuntimeError
 
 def test_eval_simple_expression():
     """Test eval() with mocked RPC."""
     with patch('grpc.insecure_channel'):
-        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub') as mock_stub_cls:
+        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub') as mock_stub_cls:
             mock_stub = Mock()
             mock_stub_cls.return_value = mock_stub
             
@@ -1014,7 +1014,7 @@ def test_eval_simple_expression():
 def test_instantiate_returns_instance():
     """Test instantiate() with mocked RPC."""
     with patch('grpc.insecure_channel'):
-        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub') as mock_stub_cls:
+        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub') as mock_stub_cls:
             mock_stub = Mock()
             mock_stub_cls.return_value = mock_stub
             
@@ -1038,7 +1038,7 @@ def test_instantiate_returns_instance():
 def test_eval_raises_on_error():
     """Test eval() raises RuntimeError on failure."""
     with patch('grpc.insecure_channel'):
-        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub') as mock_stub_cls:
+        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub') as mock_stub_cls:
             mock_stub = Mock()
             mock_stub_cls.return_value = mock_stub
             
@@ -1057,7 +1057,7 @@ def test_eval_raises_on_error():
 ### Step 6: Run tests
 
 ```bash
-PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_runtime.py -v
+PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_runtime.py -v
 ```
 
 Expected: 3 tests pass.
@@ -1065,7 +1065,7 @@ Expected: 3 tests pass.
 ### Step 7: Commit
 
 ```bash
-git add pysysml/errors.py pysysml/connection.py tests/test_runtime.py
+git add opensysml/errors.py opensysml/connection.py tests/test_runtime.py
 git commit -m "feat(python): add runtime methods (eval, instantiate, execute_action, execute_state) to Connection"
 ```
 
@@ -1073,16 +1073,16 @@ git commit -m "feat(python): add runtime methods (eval, instantiate, execute_act
 
 ## Task 5: Add Module-Level Runtime Helpers
 
-**Objective:** Add pysysml.eval(), pysysml.instantiate() convenience functions
+**Objective:** Add opensysml.eval(), opensysml.instantiate() convenience functions
 
 **Files:**
-- Modify: `pysysml/__init__.py`
+- Modify: `opensysml/__init__.py`
 - Modify: `tests/test_api.py`
 
 ### Step 1: Add eval() helper to __init__.py
 
 ```python
-# pysysml/__init__.py (add after load/connect functions)
+# opensysml/__init__.py (add after load/connect functions)
 
 def eval(expression, file_path=None, model_hash=None, context_symbol_id=None):
     """Evaluate a SysML expression (module-level convenience).
@@ -1100,8 +1100,8 @@ def eval(expression, file_path=None, model_hash=None, context_symbol_id=None):
         RuntimeError: If evaluation fails
         
     Example:
-        >>> import pysysml
-        >>> result = pysysml.eval("2 + 2", file_path="test.sysml")
+        >>> import opensysml
+        >>> result = opensysml.eval("2 + 2", file_path="test.sysml")
         >>> print(result)  # 4
     """
     conn = _get_default_connection()
@@ -1127,8 +1127,8 @@ def instantiate(symbol_id, file_path=None, model_hash=None):
         Instance object
         
     Example:
-        >>> import pysysml
-        >>> instance = pysysml.instantiate("SPACECRAFT_WET", file_path="A1.sysml")
+        >>> import opensysml
+        >>> instance = opensysml.instantiate("SPACECRAFT_WET", file_path="A1.sysml")
         >>> print(instance.id)
     """
     conn = _get_default_connection()
@@ -1146,7 +1146,7 @@ def instantiate(symbol_id, file_path=None, model_hash=None):
 ### Step 2: Update __all__ exports
 
 ```python
-# pysysml/__init__.py (update __all__)
+# opensysml/__init__.py (update __all__)
 __all__ = [
     'Connection', 'Model', 'Symbol', 'Diagnostic', 'Instance',
     'RuntimeError',  # New
@@ -1160,10 +1160,10 @@ __all__ = [
 ```python
 # tests/test_api.py (add tests)
 
-def test_pysysml_eval_with_file():
+def test_opensysml_eval_with_file():
     """Test module-level eval() loads file."""
-    with patch('pysysml._default_connection', None):
-        with patch('pysysml.Connection') as mock_conn_cls:
+    with patch('opensysml._default_connection', None):
+        with patch('opensysml.Connection') as mock_conn_cls:
             mock_conn = Mock()
             mock_conn_cls.return_value = mock_conn
             
@@ -1172,16 +1172,16 @@ def test_pysysml_eval_with_file():
             mock_conn.load.return_value = mock_model
             mock_conn.eval.return_value = 42
             
-            result = pysysml.eval("6 * 7", file_path="test.sysml")
+            result = opensysml.eval("6 * 7", file_path="test.sysml")
             
             assert result == 42
             mock_conn.load.assert_called_once_with("test.sysml")
             mock_conn.eval.assert_called_once_with("6 * 7", "model-abc", None)
 
-def test_pysysml_instantiate_with_hash():
+def test_opensysml_instantiate_with_hash():
     """Test module-level instantiate() with model_hash."""
-    with patch('pysysml._default_connection', None):
-        with patch('pysysml.Connection') as mock_conn_cls:
+    with patch('opensysml._default_connection', None):
+        with patch('opensysml.Connection') as mock_conn_cls:
             mock_conn = Mock()
             mock_conn_cls.return_value = mock_conn
             
@@ -1189,7 +1189,7 @@ def test_pysysml_instantiate_with_hash():
             mock_instance.id = 999
             mock_conn.instantiate.return_value = mock_instance
             
-            result = pysysml.instantiate("Part", model_hash="hash-xyz")
+            result = opensysml.instantiate("Part", model_hash="hash-xyz")
             
             assert result.id == 999
             mock_conn.instantiate.assert_called_once_with("Part", "hash-xyz")
@@ -1198,7 +1198,7 @@ def test_pysysml_instantiate_with_hash():
 ### Step 4: Run tests
 
 ```bash
-PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_api.py -v
+PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_api.py -v
 ```
 
 Expected: All tests pass (including 2 new ones).
@@ -1206,7 +1206,7 @@ Expected: All tests pass (including 2 new ones).
 ### Step 5: Commit
 
 ```bash
-git add pysysml/__init__.py tests/test_api.py
+git add opensysml/__init__.py tests/test_api.py
 git commit -m "feat(python): add module-level eval() and instantiate() helpers"
 ```
 
@@ -1225,8 +1225,8 @@ git commit -m "feat(python): add module-level eval() and instantiate() helpers"
 """Integration tests for runtime operations against real service."""
 import pytest
 import os
-from pysysml import Connection
-from pysysml.errors import RuntimeError
+from opensysml import Connection
+from opensysml.errors import RuntimeError
 
 @pytest.mark.integration
 class TestRuntimeIntegration:
@@ -1237,7 +1237,7 @@ class TestRuntimeIntegration:
         try:
             self.conn = Connection(auto_start=False)
             # Probe health
-            from pysysml.proto import sysml_pb2
+            from opensysml.proto import sysml_pb2
             req = sysml_pb2.DiagnosticsRequest(model_hash="")
             self.conn._stub.GetDiagnostics(req)
         except Exception:
@@ -1299,7 +1299,7 @@ class TestRuntimeIntegration:
 ### Step 2: Add load_from_content helper to Connection
 
 ```python
-# pysysml/connection.py (add helper method)
+# opensysml/connection.py (add helper method)
 
 def load_from_content(self, content):
     """Load a model from inline SysML content.
@@ -1310,8 +1310,8 @@ def load_from_content(self, content):
     Returns:
         Model object
     """
-    from pysysml.proto import sysml_pb2
-    from pysysml.model import Model
+    from opensysml.proto import sysml_pb2
+    from opensysml.model import Model
     
     req = sysml_pb2.ParseFileRequest(
         input=sysml_pb2.ParseFileRequest.Content(content=content)
@@ -1328,7 +1328,7 @@ def load_from_content(self, content):
 - Or let auto-start handle it
 
 ```bash
-PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_runtime_integration.py -v
+PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_runtime_integration.py -v
 ```
 
 Expected: 5 tests pass (or skip if service not running).
@@ -1340,7 +1340,7 @@ Expected: 5 tests pass (or skip if service not running).
 go test ./...
 
 # Python tests (all)
-PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/ -v
+PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/ -v
 ```
 
 Expected: All tests pass.
@@ -1348,7 +1348,7 @@ Expected: All tests pass.
 ### Step 5: Commit
 
 ```bash
-git add tests/test_runtime_integration.py pysysml/connection.py
+git add tests/test_runtime_integration.py opensysml/connection.py
 git commit -m "test(python): add integration tests for runtime operations"
 ```
 
@@ -1361,7 +1361,7 @@ git commit -m "test(python): add integration tests for runtime operations"
 ```bash
 # Verify Definition of Done
 python3 << 'VERIFY_EOF'
-import pysysml
+import opensysml
 
 # DoD 1: eval works
 try:
@@ -1377,11 +1377,11 @@ except Exception as e:
     print(f"✗ instantiate() failed: {e}")
 
 # DoD 3: RuntimeError exists
-from pysysml.errors import RuntimeError
+from opensysml.errors import RuntimeError
 print("✓ RuntimeError exception available")
 
 # DoD 4: Instance class exists
-from pysysml.instance import Instance
+from opensysml.instance import Instance
 print("✓ Instance class available")
 
 print("\nPhase 4 APIs ready!")

@@ -3,9 +3,9 @@ package parser
 import (
 	"fmt"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/lexer"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 // atName reports whether the current token can begin a name segment.
@@ -452,7 +452,7 @@ func (p *Parser) errorNodeSkip(start int, msg string) *ast.ErrorNode {
 }
 
 // expectCommentBody consumes a trailing /* */ regular comment and returns its
-// span. It peeks first to force any trailing comment into the pending slot.
+// span. It peeks first to force any trailing comment into the pending feature value.
 func (p *Parser) expectCommentBody(start int) source.Span {
 	p.peek()
 	if sp, ok := p.takePendingComment(); ok {

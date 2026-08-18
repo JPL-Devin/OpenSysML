@@ -1,6 +1,6 @@
-# Contributing to Systemica
+# Contributing to OpenSysML
 
-Thank you for your interest in contributing to Systemica!
+Thank you for your interest in contributing to OpenSysML!
 
 ## Development Setup
 
@@ -13,8 +13,8 @@ Thank you for your interest in contributing to Systemica!
 ### Clone and Build
 
 ```bash
-git clone https://github.com/Open-MBEE/Systemica.git
-cd Systemica
+git clone https://github.com/Open-MBEE/OpenSysML.git
+cd OpenSysML
 make build  # builds bin/sysml, bin/sysml-lsp, and bin/sysml-grpc with version info
 make test   # runs all tests
 make lint   # runs staticcheck and gosec, as CI does
@@ -24,7 +24,7 @@ make lint   # runs staticcheck and gosec, as CI does
 
 The OMG training-corpus gate (`internal/core/model/training_examples_test.go`) skips while
 `examples/sysml-v2-training/` is absent, so run the download script once before trusting a
-local `make test`. CI runs the script itself and sets `SYSTEMICA_REQUIRE_TRAINING_CORPUS=1`,
+local `make test`. CI runs the script itself and sets `OPENSYSML_REQUIRE_TRAINING_CORPUS=1`,
 which makes a missing corpus a failure there instead of a skip.
 
 ## Development Workflow
@@ -45,7 +45,7 @@ make install
 
 # Python gRPC bindings
 make python-proto    # regenerate protobuf stubs
-make python-install  # install pysysml package
+make python-install  # install opensysml package
 make python-test     # run Python binding tests
 
 # Clean build artifacts
@@ -218,7 +218,7 @@ PRs must pass:
 ## Project Structure
 
 ```
-github.com/Open-MBEE/Systemica
+github.com/Open-MBEE/OpenSysML
 ├── cmd/                    # Binaries (sysml, sysml-lsp, sysml-grpc)
 ├── internal/core/          # Core implementation
 │   ├── source/            # Source file handling
@@ -236,7 +236,7 @@ github.com/Open-MBEE/Systemica
 ├── internal/lsp/          # LSP implementation
 ├── internal/grpc/         # gRPC service implementation
 ├── internal/repl/         # REPL implementation
-├── python/                # Python client bindings (pysysml)
+├── python/                # Python client bindings (opensysml)
 ├── docs/                  # Documentation
 │   ├── guide/             # The handbook, in reading order
 │   ├── reference/         # CLI, REPL, environment, APIs, RDF mapping
@@ -314,4 +314,4 @@ By contributing, you agree that your contributions will be licensed under the sa
 
 ---
 
-**Thank you for contributing to Systemica!** 🚀
+**Thank you for contributing to OpenSysML!** 🚀

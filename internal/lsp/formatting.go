@@ -7,7 +7,7 @@ import (
 
 	"go.lsp.dev/protocol"
 
-	"github.com/Open-MBEE/Systemica/internal/core/format"
+	"github.com/Open-MBEE/OpenSysML/internal/core/format"
 )
 
 // Formatting re-indents the whole document. A document that does not parse is

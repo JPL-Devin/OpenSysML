@@ -5,9 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/lower"
-	"github.com/Open-MBEE/Systemica/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // executeActionSource executes the named action declared in src.
@@ -615,4 +616,589 @@ func TestRoutingIsPerOwnerVariantSelection(t *testing.T) {
 		}
 		ctx.messages = nil
 	}
+}
+
+// A `send … to r` naming a receiving node is for the object performing the
+// sending behavior, not another object declaring the same node.
+func TestAddressedSendStaysWithinTheSendingObject(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
+	package test {
+		item def Ping;
+		part def Node {
+			action listen {
+				first start;
+				action sender { send Ping() to reader; }
+				action reader accept ping : Ping;
+				done end;
+				then start sender;
+				then sender reader;
+				then reader end;
+			}
+		}
+		part alpha : Node;
+		part beta : Node;
+	}`))
+	alpha, beta := instanceOfUsage(t, ctx, idx, "test::alpha"), instanceOfUsage(t, ctx, idx, "test::beta")
+	send := lower.Send{Target: "reader", Scope: declScope(oneSymbol(t, idx, "test::Node::listen"))}
+	if err := ctx.post(nil, Message{SignalType: "Ping"}, send, alpha); err != nil {
+		t.Fatalf("post: %v", err)
+	}
+	pending := ctx.PendingMessages()
+	if len(pending) != 1 {
+		t.Fatalf("posted %d messages, want 1", len(pending))
+	}
+	if got := pending[0]; !got.reaches("reader", "", alpha.ID) || got.reaches("reader", "", beta.ID) {
+		t.Errorf("message %+v is not confined to the sending object %d", got, alpha.ID)
+	}
+}
+
+// An addressed target resolves through the instance graph: `alpha.inPort` names
+// that object's port, not a same-named port of the sender.
+func TestAddressedSendResolvesPortOfNamedObject(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
+	package test {
+		item def Ping;
+		port def PingPort { in item ping : Ping; }
+		part def Node {
+			port inPort : PingPort;
+			action listen { first start; done end; then start end; }
+		}
+		part alpha : Node;
+		part beta : Node;
+	}`))
+	alpha, beta := instanceOfUsage(t, ctx, idx, "test::alpha"), instanceOfUsage(t, ctx, idx, "test::beta")
+	send := lower.Send{Target: "alpha.inPort", TargetPath: true, Scope: declScope(oneSymbol(t, idx, "test::Node::listen"))}
+	if err := ctx.post(nil, Message{SignalType: "Ping"}, send, beta); err != nil {
+		t.Fatalf("post: %v", err)
+	}
+	pending := ctx.PendingMessages()
+	if len(pending) != 1 {
+		t.Fatalf("posted %d messages, want 1", len(pending))
+	}
+	got := pending[0]
+	if got.Port != "inPort" || got.Object != alpha.ID {
+		t.Errorf("addressed alpha.inPort delivered as %+v, want port inPort of object %d", got, alpha.ID)
+	}
+	if got.reaches("", "inPort", beta.ID) {
+		t.Errorf("message %+v reached the sending object %d, which owns a same-named port", got, beta.ID)
+	}
+}
+
+// A target descends composite features to the object owning the port: the
+// addressee of `inner.inPort` is that part of the sending object, not the sender.
+func TestAddressedSendDescendsToNestedPort(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
+	package test {
+		item def Ping;
+		port def PingPort { in item ping : Ping; }
+		part def Leaf { port inPort : PingPort; }
+		part def Node {
+			part inner : Leaf;
+			action listen { first start; done end; then start end; }
+		}
+		part alpha : Node;
+	}`))
+	alpha := instanceOfUsage(t, ctx, idx, "test::alpha")
+	send := lower.Send{Target: "inner.inPort", TargetPath: true, Scope: declScope(oneSymbol(t, idx, "test::Node::listen"))}
+	if err := ctx.post(nil, Message{SignalType: "Ping"}, send, alpha); err != nil {
+		t.Fatalf("post: %v", err)
+	}
+	inner, ok, err := ctx.fvObject(alpha, "inner")
+	if err != nil {
+		t.Fatalf("alpha.inner: %v", err)
+	}
+	if !ok {
+		t.Fatal("part inner materialized no object")
+	}
+	got := ctx.PendingMessages()[0]
+	if got.Port != "inPort" || got.Object != inner.ID {
+		t.Errorf("addressed inner.inPort delivered as %+v, want port inPort of object %d", got, inner.ID)
+	}
+}
+
+// A target reaching no port of an addressable object is a typed error, not a
+// delivery to whatever else carries the last segment's name.
+func TestAddressedSendToUnreachablePortIsTyped(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
+	package test {
+		import ScalarValues::*;
+		item def Ping;
+		part def Node {
+			attribute count : Integer = 0;
+			action listen { first start; done end; then start end; }
+		}
+		part alpha : Node;
+	}`))
+	send := lower.Send{Target: "alpha.count", TargetPath: true, Scope: declScope(oneSymbol(t, idx, "test::Node::listen"))}
+	err := ctx.post(nil, Message{SignalType: "Ping"}, send, instanceOfUsage(t, ctx, idx, "test::alpha"))
+	if !errors.Is(err, ErrUnroutableSend) {
+		t.Fatalf("post to alpha.count: %v, want ErrUnroutableSend", err)
+	}
+	if len(ctx.PendingMessages()) != 0 {
+		t.Errorf("an unroutable send posted %+v", ctx.PendingMessages())
+	}
+}
+
+// A receiver named by a qualified name is the element the name resolves to, not
+// a path through the sender's features: `::` separates namespaces, `.` chains
+// features.
+func TestAddressedSendToQualifiedNameReachesReceiver(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package P {
+		item def Ping;
+		action pipeline {
+			first start;
+			action sender { send Ping to P::Driver; }
+			done end;
+			then start sender;
+			then sender end;
+		}
+		state Driver {
+			initial init;
+			state waiting;
+			final done;
+			init then waiting;
+			transition waiting to done when Ping;
+		}
+	}`))
+	root := idx.DocumentRoot("<test>")
+	if _, err := ctx.ExecuteAction(findSymbolByName(root, "pipeline", ast.DefAction)); err != nil {
+		t.Fatalf("execute action: %v", err)
+	}
+	_, visits, err := ctx.ExecuteStateWithEvents(findSymbolByName(root, "Driver", ast.DefState), nil)
+	if err != nil {
+		t.Fatalf("execute state machine: %v", err)
+	}
+	assertVisits(t, visits, "init", "waiting", "done")
+}
+
+// A qualified name addresses the element it resolves to, so a same-named feature
+// of the sending object is not the addressee: no object owns a receiver declared
+// in a package, so a sending object cannot address it rather than reach its own.
+func TestAddressedSendToQualifiedNameSkipsSameNamedFeature(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
+		import ScalarValues::*;
+		package Other {
+			action reader accept n : Integer;
+		}
+		part def Node {
+			action reader accept n : Integer;
+			action listen { first start; done end; then start end; }
+		}
+		part alpha : Node;
+	}`))
+	alpha := instanceOfUsage(t, ctx, idx, "test::alpha")
+	send := lower.Send{Target: "Other::reader", Scope: declScope(oneSymbol(t, idx, "test::Node::listen"))}
+	err := ctx.post(nil, Message{SignalType: "Integer"}, send, alpha)
+	if !errors.Is(err, ErrUnroutableSend) {
+		t.Errorf("`send to Other::reader` from an object: %v, want %v", err, ErrUnroutableSend)
+	}
+	for _, msg := range ctx.PendingMessages() {
+		if msg.reaches("reader", "", alpha.ID) {
+			t.Errorf("%+v is deliverable to the sender's own reader", msg)
+		}
+	}
+}
+
+// A behavior no object performs has no object of its own to reach instead, so it
+// still addresses a receiver of a package by name.
+func TestAddressedSendToQualifiedNameFromNoObjectIsDelivered(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
+		import ScalarValues::*;
+		package Other {
+			action reader accept n : Integer;
+		}
+		action listen { first start; done end; then start end; }
+	}`))
+	send := lower.Send{Target: "Other::reader", Scope: declScope(oneSymbol(t, idx, "test::listen"))}
+	if err := ctx.post(nil, Message{SignalType: "Integer"}, send, nil); err != nil {
+		t.Fatalf("post: %v", err)
+	}
+	if got := ctx.PendingMessages()[0]; got.Target != "reader" || !got.reaches("reader", "", 0) {
+		t.Errorf("`send to Other::reader` delivered as %+v, want the reader of Other", got)
+	}
+}
+
+// An address naming an object alone names no receiver within it, so only that
+// object's own accepts take it — not a behavior of unknown performer.
+func TestAddressedSendToAnObjectNeedsThatObject(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
+		import ScalarValues::*;
+		part def Leaf { attribute count : Integer = 0; }
+		part def Node {
+			part leaf : Leaf;
+			action talk { first start; done end; then start end; }
+		}
+		part alpha : Node;
+	}`))
+	alpha := instanceOfUsage(t, ctx, idx, "test::alpha")
+	send := lower.Send{Target: "leaf", Scope: declScope(oneSymbol(t, idx, "test::Node::talk"))}
+	if err := ctx.post(nil, Message{SignalType: "Integer"}, send, alpha); err != nil {
+		t.Fatalf("post: %v", err)
+	}
+	got := ctx.PendingMessages()[0]
+	if got.Target != "" || got.Object == 0 || got.Object == alpha.ID {
+		t.Errorf("`send to leaf` delivered as %+v, want the object of leaf alone", got)
+	}
+	if got.reaches("anything", "", 0) {
+		t.Errorf("%+v is deliverable to a behavior no object performs", got)
+	}
+}
+
+// A receiver of another object carries that object's identity, so the sender's
+// own same-named receiver cannot take the message.
+func TestAddressedSendToReceiverOfAnotherObjectCarriesItsIdentity(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
+		import ScalarValues::*;
+		part def Node { action reader accept n : Integer; }
+		part def Talker {
+			action reader accept n : Integer;
+			action talk { first start; done end; then start end; }
+		}
+		part alpha : Node;
+		part beta : Talker;
+	}`))
+	alpha, beta := instanceOfUsage(t, ctx, idx, "test::alpha"), instanceOfUsage(t, ctx, idx, "test::beta")
+	send := lower.Send{Target: "alpha::reader", Scope: declScope(oneSymbol(t, idx, "test::Talker::talk"))}
+	if err := ctx.post(nil, Message{SignalType: "Integer"}, send, beta); err != nil {
+		t.Fatalf("post: %v", err)
+	}
+	got := ctx.PendingMessages()[0]
+	if got.Target != "reader" || got.Object != alpha.ID {
+		t.Errorf("`send to alpha::reader` delivered as %+v, want receiver reader of object %d", got, alpha.ID)
+	}
+	if got.reaches("reader", "", beta.ID) {
+		t.Errorf("%+v is deliverable to the sending object %d", got, beta.ID)
+	}
+}
+
+// A node of the sending behavior is nearer than a feature of the object, and a
+// name resolving to it addresses that node rather than the object's feature.
+func TestAddressedSendPrefersTheNearerDeclaration(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
+		import ScalarValues::*;
+		part def Leaf { attribute count : Integer = 0; }
+		part def Node {
+			part reader : Leaf;
+			action listen {
+				first start;
+				action reader accept n : Integer;
+				then start reader;
+				then reader done;
+				done done;
+			}
+		}
+		part alpha : Node;
+	}`))
+	alpha := instanceOfUsage(t, ctx, idx, "test::alpha")
+	send := lower.Send{Target: "reader", Scope: declScope(oneSymbol(t, idx, "test::Node::listen"))}
+	if err := ctx.post(nil, Message{SignalType: "Integer"}, send, alpha); err != nil {
+		t.Fatalf("post: %v", err)
+	}
+	got := ctx.PendingMessages()[0]
+	if got.Target != "reader" || got.Object != alpha.ID || got.Port != "" {
+		t.Errorf("`send to reader` delivered as %+v, want node reader of object %d", got, alpha.ID)
+	}
+}
+
+// A port a qualified name resolves to that the sender owns no occurrence of is
+// unroutable, not a delivery to the sender's same-named port.
+func TestAddressedSendToQualifiedPortOfAnotherTypeIsTyped(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
+		item def Ping;
+		port def PingPort { in item ping : Ping; }
+		part def Other { port inPort : PingPort; }
+		part def Node {
+			port inPort : PingPort;
+			action listen { first start; done end; then start end; }
+		}
+		part alpha : Node;
+	}`))
+	send := lower.Send{Target: "Other::inPort", Scope: declScope(oneSymbol(t, idx, "test::Node::listen"))}
+	err := ctx.post(nil, Message{SignalType: "Ping"}, send, instanceOfUsage(t, ctx, idx, "test::alpha"))
+	if !errors.Is(err, ErrUnroutableSend) {
+		t.Fatalf("post to Other::inPort: %v, want ErrUnroutableSend", err)
+	}
+	if len(ctx.PendingMessages()) != 0 {
+		t.Errorf("an unroutable send posted %+v", ctx.PendingMessages())
+	}
+}
+
+// A namespace qualifies the object a path starts from, so `test::alpha.inPort`
+// reaches alpha's port rather than being read as a port of the sender.
+func TestAddressedSendThroughNamespaceQualifiedPathReachesObject(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
+		item def Ping;
+		port def PingPort { in item ping : Ping; }
+		part def Node {
+			port inPort : PingPort;
+			action listen { first start; done end; then start end; }
+		}
+		part alpha : Node;
+		part beta : Node;
+	}`))
+	alpha, beta := instanceOfUsage(t, ctx, idx, "test::alpha"), instanceOfUsage(t, ctx, idx, "test::beta")
+	send := lower.Send{
+		Target:     "test.alpha.inPort",
+		TargetPath: true,
+		Scope:      declScope(oneSymbol(t, idx, "test::Node::listen")),
+	}
+	if err := ctx.post(nil, Message{SignalType: "Ping"}, send, beta); err != nil {
+		t.Fatalf("post: %v", err)
+	}
+	got := ctx.PendingMessages()[0]
+	if got.Port != "inPort" || got.Object != alpha.ID {
+		t.Errorf("addressed test::alpha.inPort delivered as %+v, want port inPort of object %d", got, alpha.ID)
+	}
+}
+
+// A run that cannot build the object a target names fails as that: an exhausted
+// budget is not an address naming nothing.
+func TestAddressedSendReportsWhyTheObjectCouldNotBeBuilt(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
+		item def Ping;
+		port def PingPort { in item ping : Ping; }
+		part def Node {
+			port inPort : PingPort;
+			action listen { first start; done end; then start end; }
+		}
+		part alpha : Node;
+	}`))
+	send := lower.Send{
+		Target:     "alpha.inPort",
+		TargetPath: true,
+		Scope:      declScope(oneSymbol(t, idx, "test::Node::listen")),
+	}
+	ctx.maxSteps = 0
+	err := ctx.post(nil, Message{SignalType: "Ping"}, send, nil)
+	if !errors.Is(err, ErrStepLimitExceeded) {
+		t.Fatalf("post to alpha.inPort: %v, want ErrStepLimitExceeded", err)
+	}
+	if errors.Is(err, ErrUnroutableSend) {
+		t.Errorf("an exhausted budget was reported as a bad address: %v", err)
+	}
+}
+
+// A path led by a part naming several occurrences reaches no one object, so it
+// is unroutable rather than attributed to the sending object.
+func TestAddressedSendThroughMultiplePartIsTyped(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
+		item def Ping;
+		port def PingPort { in item ping : Ping; }
+		part def Leaf { port inPort : PingPort; }
+		part def Node {
+			part nodes : Leaf[3];
+			action listen { first start; done end; then start end; }
+		}
+		part alpha : Node;
+	}`))
+	send := lower.Send{
+		Target:     "nodes.inPort",
+		TargetPath: true,
+		Scope:      declScope(oneSymbol(t, idx, "test::Node::listen")),
+	}
+	err := ctx.post(nil, Message{SignalType: "Ping"}, send, nil)
+	if !errors.Is(err, ErrUnroutableSend) {
+		t.Fatalf("post to nodes.inPort: %v, want ErrUnroutableSend", err)
+	}
+	if len(ctx.PendingMessages()) != 0 {
+		t.Errorf("an unroutable send posted %+v", ctx.PendingMessages())
+	}
+}
+
+// An object's behavior addresses a receiving node of an action it performs: the
+// performance is no object of its own, so identity must not exclude it.
+func TestAddressedSendReachesPerformedAction(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
+		import ScalarValues::*;
+		action listener {
+			first start;
+			action reader accept n : Integer;
+			done fin;
+			then start reader;
+			then reader fin;
+		}
+		part def Node {
+			action main {
+				first start;
+				action sender { send 7 to reader; }
+				perform listener;
+				done fin;
+				then start sender;
+				then sender listener;
+				then listener fin;
+			}
+		}
+		part solo : Node;
+	}`))
+	main := oneSymbol(t, idx, "test::Node::main")
+	solo := instanceOfUsage(t, ctx, idx, "test::solo")
+	if _, err := ctx.ExecuteActionPerformedBy(main, solo, nil); err != nil {
+		t.Fatalf("performed by an object: %v", err)
+	}
+}
+
+// An object performs a behavior as itself however deeply it is performed, so an
+// accept two performances down takes a message addressed to that object; the
+// same behavior performed by no object has no identity to present and waits.
+func TestPerformedBehaviorRunsAsItsPerformer(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
+		import ScalarValues::*;
+		action inner {
+			first start;
+			action reader accept n : Integer;
+			done fin;
+			then start reader;
+			then reader fin;
+		}
+		action outer {
+			first start;
+			perform inner;
+			done fin;
+			then start inner;
+			then inner fin;
+		}
+		part def Node {
+			action main {
+				first start;
+				action sender { send 7 to solo; }
+				perform outer;
+				done fin;
+				then start sender;
+				then sender outer;
+				then outer fin;
+			}
+		}
+		part solo : Node;
+	}`))
+	main := oneSymbol(t, idx, "test::Node::main")
+	solo := instanceOfUsage(t, ctx, idx, "test::solo")
+	if _, err := ctx.ExecuteActionPerformedBy(main, solo, nil); err != nil {
+		t.Fatalf("performed by the object addressed: %v", err)
+	}
+
+	idx, _, ctx = buildRuntime(t, "<test>", parseAndBuild(t, `package test {
+		import ScalarValues::*;
+		action inner {
+			first start;
+			action reader accept n : Integer;
+			done fin;
+			then start reader;
+			then reader fin;
+		}
+		part def Node {
+			action main {
+				first start;
+				action sender { send 7 to solo; }
+				perform inner;
+				done fin;
+				then start sender;
+				then sender inner;
+				then inner fin;
+			}
+		}
+		part solo : Node;
+	}`))
+	main = oneSymbol(t, idx, "test::Node::main")
+	if _, err := ctx.ExecuteActionPerformedBy(main, nil, nil); !errors.Is(err, ErrAcceptDeadlock) {
+		t.Errorf("performed by no object: %v, want %v", err, ErrAcceptDeadlock)
+	}
+}
+
+// A qualifier naming another object of the sender's own type chooses that
+// object: the element resolved through it is a declaration the sender shares, so
+// its identity has to come from the qualifier rather than from the sender.
+func TestAddressedSendToQualifiedElementOfATwinObject(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
+		import ScalarValues::*;
+		port def PingPort { in item ping : Integer; }
+		part def Node {
+			port inPort : PingPort;
+			action reader accept n : Integer;
+			action listen { first start; done end; then start end; }
+		}
+		part alpha : Node;
+		part beta : Node;
+	}`))
+	alpha, beta := instanceOfUsage(t, ctx, idx, "test::alpha"), instanceOfUsage(t, ctx, idx, "test::beta")
+	scope := declScope(oneSymbol(t, idx, "test::Node::listen"))
+	for _, tc := range []struct{ target, port, receiver string }{
+		{"alpha::inPort", "inPort", ""},
+		{"alpha::reader", "", "reader"},
+	} {
+		ctx.messages = nil
+		if err := ctx.post(nil, Message{SignalType: "Integer"}, lower.Send{Target: tc.target, Scope: scope}, beta); err != nil {
+			t.Fatalf("post to %s: %v", tc.target, err)
+		}
+		got := ctx.PendingMessages()[0]
+		if got.Object != alpha.ID || got.Port != tc.port || got.Target != tc.receiver {
+			t.Errorf("`send to %s` from beta delivered as %+v, want object %d", tc.target, got, alpha.ID)
+		}
+		if got.reaches(tc.receiver, tc.port, beta.ID) {
+			t.Errorf("`send to %s` is deliverable to the sending object %d", tc.target, beta.ID)
+		}
+	}
+}
+
+// A message injected from outside the model names its destination in its fields
+// alone, so it is held to that destination rather than open to any consumer.
+func TestInjectedMessageIsHeldToTheDestinationItNames(t *testing.T) {
+	ctx := &Context{}
+	ctx.PostMessage(Message{SignalType: "Integer", Target: "reader"})
+	ctx.PostMessage(Message{SignalType: "Integer", Port: "inPort", Object: 1})
+	ctx.PostMessage(Message{SignalType: "Integer"})
+	pending := ctx.PendingMessages()
+	if got := pending[0]; got.Delivery != DeliverReceiver || got.reaches("other", "", 0) {
+		t.Errorf("injected for reader: %+v, taken by an unrelated consumer", got)
+	}
+	if !pending[0].reaches("reader", "", 0) {
+		t.Errorf("injected for reader: %+v, not taken by reader", pending[0])
+	}
+	if got := pending[1]; got.Delivery != DeliverPort || got.reaches("", "inPort", 2) {
+		t.Errorf("injected for a port of object 1: %+v, taken elsewhere", got)
+	}
+	if got := pending[2]; got.Delivery != DeliverAnyone || !got.reaches("other", "", 3) {
+		t.Errorf("injected for no one: %+v, want any consumer to take it", got)
+	}
+}
+
+// A consumer takes a message only by satisfying every part of the destination it
+// carries; a behavior no object performs is the one identity that cannot tell.
+func TestDeliveryHoldsAConsumerToTheWholeDestination(t *testing.T) {
+	tests := []struct {
+		name    string
+		msg     Message
+		who     string
+		port    string
+		object  int64
+		reached bool
+	}{
+		{"unaddressed", Message{}, "reader", "", 2, true},
+		{"unaddressed on a port", Message{}, "reader", "inPort", 2, false},
+		{"receiver of the same object", Message{Target: "reader", Object: 1, Delivery: DeliverReceiver}, "reader", "", 1, true},
+		{"receiver of another object", Message{Target: "reader", Object: 1, Delivery: DeliverReceiver}, "reader", "", 2, false},
+		{"another receiver", Message{Target: "reader", Object: 1, Delivery: DeliverReceiver}, "other", "", 1, false},
+		{"receiver of no object performer", Message{Target: "reader", Object: 1, Delivery: DeliverReceiver}, "reader", "", 0, true},
+		{"receiver addressed by no object", Message{Target: "reader", Delivery: DeliverReceiver}, "reader", "", 1, true},
+		{"port of the same object", Message{Port: "inPort", Object: 1, Delivery: DeliverPort}, "", "inPort", 1, true},
+		{"port of another object", Message{Port: "inPort", Object: 1, Delivery: DeliverPort}, "", "inPort", 2, false},
+		{"another port", Message{Port: "inPort", Object: 1, Delivery: DeliverPort}, "", "outPort", 1, false},
+		{"object itself", Message{Object: 1, Delivery: DeliverObject}, "reader", "", 1, true},
+		{"object and no object performer", Message{Object: 1, Delivery: DeliverObject}, "reader", "", 0, false},
+	}
+	for _, tc := range tests {
+		if got := tc.msg.reaches(tc.who, tc.port, tc.object); got != tc.reached {
+			t.Errorf("%s: %+v reaches(%q, %q, %d) = %v, want %v", tc.name, tc.msg, tc.who, tc.port, tc.object, got, tc.reached)
+		}
+	}
+}
+
+// instanceOfUsage materializes the object a part usage occurs as, which is what
+// an address naming that usage resolves to.
+func instanceOfUsage(t *testing.T, ctx *Context, idx *symbols.Index, fqn string) *Instance {
+	t.Helper()
+	inst, err := ctx.occurrenceOf(oneSymbol(t, idx, fqn))
+	if err != nil {
+		t.Fatalf("instantiate %s: %v", fqn, err)
+	}
+	return inst
 }

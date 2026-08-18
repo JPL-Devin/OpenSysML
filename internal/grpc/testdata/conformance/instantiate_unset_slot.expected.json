@@ -1,7 +1,7 @@
 {
   "rpc": "Instantiate",
   "symbol_id": "test::Vehicle",
-  "expected_slots": {
+  "expected_feature_values": {
     "d": {
       "materialized": true,
       "value_kind": "unset"

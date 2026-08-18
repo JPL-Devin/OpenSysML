@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 )
 
 // traceIndent is one nesting level of evaluation depth in a recorded trace.
@@ -211,6 +211,36 @@ func (tr *TraceRecorder) RecordEvent(event string, time float64) {
 	}
 
 	tr.entries = append(tr.entries, fmt.Sprintf("event: %s (t=%.1f)", event, time))
+}
+
+// RecordObjectMaterialized records an object being materialized, before any
+// behavior of it starts.
+func (tr *TraceRecorder) RecordObjectMaterialized(typeName string, id int64) {
+	if !tr.enabled {
+		return
+	}
+
+	tr.entries = append(tr.entries, fmt.Sprintf("materialize: %s #%d", typeName, id))
+}
+
+// RecordBehaviorStart records an object's own execution of a behavior its type
+// exhibits or performs starting.
+func (tr *TraceRecorder) RecordBehaviorStart(kind, name string, id int64) {
+	if !tr.enabled {
+		return
+	}
+
+	tr.entries = append(tr.entries, fmt.Sprintf("start: %s %s of #%d", kind, name, id))
+}
+
+// RecordBehaviorRun records an object's behavior being advanced, which is how
+// the interleaving of several objects' behaviors becomes visible.
+func (tr *TraceRecorder) RecordBehaviorRun(kind, name string, id int64) {
+	if !tr.enabled {
+		return
+	}
+
+	tr.entries = append(tr.entries, fmt.Sprintf("run: %s %s of #%d", kind, name, id))
 }
 
 // Entries returns all recorded trace entries.

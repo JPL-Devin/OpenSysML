@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // Library elements the quantity-dimension model is written in terms of, and the
@@ -99,6 +99,28 @@ func (m *Model) DimensionOfExpr(scope *symbols.Scope, node ast.Node) (Dimension,
 		return m.dimensionOfOperator(scope, n)
 	}
 	return Dimension{}, false
+}
+
+// DimensionOfFeature reports the dimension a feature's values are measured in,
+// as its declared quantity type fixes it.
+func (m *Model) DimensionOfFeature(sym *symbols.Symbol) (Dimension, bool) {
+	if m == nil {
+		return Dimension{}, false
+	}
+	return m.dimensionOfFeature(sym)
+}
+
+// DimensionOfUnit reports the dimension a reduced unit measures in, so a value
+// carrying a unit can be checked against the dimension a feature declares.
+func (m *Model) DimensionOfUnit(unit UnitTerm) (Dimension, bool) {
+	if m == nil {
+		return Dimension{}, false
+	}
+	term, ok := m.dimensionOfUnitTerm(unit)
+	if !ok {
+		return Dimension{}, false
+	}
+	return Dimension{Term: term}, true
 }
 
 // dimensionOfQuantity reports the dimension of a magnitude with a unit

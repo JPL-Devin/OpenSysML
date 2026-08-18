@@ -1,0 +1,10 @@
+{
+  "type": "instance",
+  "instantiate": "test::Sys",
+  "slots": {
+    "x": {"type": "Integer", "value": 9},
+    "child": {"type": "Instance"},
+    "child.b": {"type": "Integer", "value": 9},
+    "mirror": {"type": "Integer", "value": 9}
+  }
+}

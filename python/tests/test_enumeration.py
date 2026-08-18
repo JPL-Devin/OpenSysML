@@ -7,11 +7,11 @@ string attribute, and not as an unsupported null.
 
 import pytest
 
-from pysysml import EnumLiteral
-from pysysml.connection import Connection
-from pysysml.errors import SlotError, UnsupportedValueError
-from pysysml.proto import sysml_pb2
-from pysysml.values import slot_to_python, value_to_python
+from opensysml import EnumLiteral
+from opensysml.connection import Connection
+from opensysml.errors import FeatureValueError, UnsupportedValueError
+from opensysml.proto import sysml_pb2
+from opensysml.values import feature_value_to_python, value_to_python
 
 RED = sysml_pb2.EnumLiteral(
     literal_id="D::Color::red", enumeration_id="D::Color", name="Color::red"
@@ -68,11 +68,11 @@ def test_a_sequence_of_literals_keeps_them():
 
 
 def test_an_enum_slot_is_no_longer_unsupported():
-    slot = sysml_pb2.SlotValue(
+    slot = sysml_pb2.FeatureValue(
         feature_name="c", value=sysml_pb2.Value(enum_literal=RED), materialized=True
     )
 
-    assert slot_to_python("c", slot) == EnumLiteral(
+    assert feature_value_to_python("c", slot) == EnumLiteral(
         "D::Color::red", "D::Color", "Color::red"
     )
 
@@ -94,8 +94,8 @@ def test_a_service_without_the_capability_still_reports_unsupported():
     with pytest.raises(UnsupportedValueError):
         value_to_python(sysml_pb2.Value(null="unsupported"))
 
-    slot = sysml_pb2.SlotValue(
+    slot = sysml_pb2.FeatureValue(
         feature_name="c", value=sysml_pb2.Value(null="unsupported"), materialized=True
     )
-    with pytest.raises(SlotError):
-        slot_to_python("c", slot)
+    with pytest.raises(FeatureValueError):
+        feature_value_to_python("c", slot)

@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Create Python package (pysysml) that connects to sysml-grpc service and provides Pythonic API for parsing SysML models.
+**Goal:** Create Python package (opensysml) that connects to sysml-grpc service and provides Pythonic API for parsing SysML models.
 
-**Architecture:** Pure Python client using grpc/protobuf. Package structure: pysysml/ with proto/, connection, model, symbol, diagnostic modules. Manual service connection only (Phase 3 will add auto-start).
+**Architecture:** Pure Python client using grpc/protobuf. Package structure: opensysml/ with proto/, connection, model, symbol, diagnostic modules. Manual service connection only (Phase 3 will add auto-start).
 
 **Tech Stack:** Python 3.8+, grpcio, grpcio-tools, protobuf, pytest
 
@@ -13,7 +13,7 @@
 ## File Structure
 
 ```
-pysysml/                          # Python package root
+opensysml/                          # Python package root
   __init__.py                     # Package exports
   connection.py                   # Connection class - manual service connection
   model.py                        # Model class - wraps ParseFileResponse
@@ -40,23 +40,23 @@ README.md                         # Python package documentation
 **Goal:** Create Python package structure and generate protobuf stubs from api/proto/sysml.proto
 
 **Files:**
-- Create: `pysysml/__init__.py`
-- Create: `pysysml/proto/__init__.py`
+- Create: `opensysml/__init__.py`
+- Create: `opensysml/proto/__init__.py`
 - Create: `setup.py`
 - Create: `pyproject.toml`
 - Create: `README.md`
 
 ---
 
-- [ ] **Step 1: Create pysysml package directory structure**
+- [ ] **Step 1: Create opensysml package directory structure**
 
 ```bash
-mkdir -p pysysml/proto
-touch pysysml/__init__.py
-touch pysysml/proto/__init__.py
+mkdir -p opensysml/proto
+touch opensysml/__init__.py
+touch opensysml/proto/__init__.py
 ```
 
-Run: `ls -la pysysml/`
+Run: `ls -la opensysml/`
 Expected: `__init__.py` and `proto/` directory exist
 
 ---
@@ -67,9 +67,9 @@ Expected: `__init__.py` and `proto/` directory exist
 from setuptools import setup, find_packages
 
 setup(
-    name="pysysml",
+    name="opensysml",
     version="0.1.0",
-    description="Python client library for Systemica SysML v2 parser",
+    description="Python client library for OpenSysML SysML v2 parser",
     author="Open-MBEE",
     packages=find_packages(),
     python_requires=">=3.8",
@@ -100,9 +100,9 @@ requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_backend"
 
 [project]
-name = "pysysml"
+name = "opensysml"
 version = "0.1.0"
-description = "Python client library for Systemica SysML v2 parser"
+description = "Python client library for OpenSysML SysML v2 parser"
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
@@ -126,9 +126,9 @@ Expected: File content matches above
 - [ ] **Step 4: Create README.md**
 
 ```markdown
-# pysysml
+# opensysml
 
-Python client library for Systemica SysML v2 parser.
+Python client library for OpenSysML SysML v2 parser.
 
 ## Installation
 
@@ -139,7 +139,7 @@ pip install -e .
 ## Usage
 
 ```python
-from pysysml import Connection
+from opensysml import Connection
 
 # Connect to manually-started sysml-grpc service
 conn = Connection(port=50051)
@@ -194,12 +194,12 @@ Expected: File content matches above
 ```bash
 python -m grpc_tools.protoc \
   -I api/proto \
-  --python_out=pysysml/proto \
-  --grpc_python_out=pysysml/proto \
+  --python_out=opensysml/proto \
+  --grpc_python_out=opensysml/proto \
   api/proto/sysml.proto
 ```
 
-Run: `ls -la pysysml/proto/`
+Run: `ls -la opensysml/proto/`
 Expected: `sysml_pb2.py` and `sysml_pb2_grpc.py` generated
 
 ---
@@ -207,17 +207,17 @@ Expected: `sysml_pb2.py` and `sysml_pb2_grpc.py` generated
 - [ ] **Step 6: Verify protobuf imports work**
 
 ```bash
-python -c "from pysysml.proto import sysml_pb2, sysml_pb2_grpc; print('OK')"
+python -c "from opensysml.proto import sysml_pb2, sysml_pb2_grpc; print('OK')"
 ```
 
 Expected: Output `OK` (no import errors)
 
 ---
 
-- [ ] **Step 7: Create empty pysysml/__init__.py with version**
+- [ ] **Step 7: Create empty opensysml/__init__.py with version**
 
 ```python
-"""pysysml - Python client library for Systemica SysML v2 parser."""
+"""opensysml - Python client library for OpenSysML SysML v2 parser."""
 
 __version__ = "0.1.0"
 
@@ -225,7 +225,7 @@ __version__ = "0.1.0"
 __all__ = []
 ```
 
-Run: `python -c "import pysysml; print(pysysml.__version__)"`
+Run: `python -c "import opensysml; print(opensysml.__version__)"`
 Expected: Output `0.1.0`
 
 ---
@@ -233,7 +233,7 @@ Expected: Output `0.1.0`
 - [ ] **Step 8: Commit**
 
 ```bash
-git add pysysml/ setup.py pyproject.toml README.md
+git add opensysml/ setup.py pyproject.toml README.md
 git commit -m "feat(python): add package structure and protobuf stubs"
 ```
 
@@ -244,7 +244,7 @@ git commit -m "feat(python): add package structure and protobuf stubs"
 **Goal:** Implement Diagnostic class wrapping protobuf diagnostic message with Python properties
 
 **Files:**
-- Create: `pysysml/diagnostic.py`
+- Create: `opensysml/diagnostic.py`
 - Create: `tests/test_diagnostic.py`
 
 ---
@@ -253,8 +253,8 @@ git commit -m "feat(python): add package structure and protobuf stubs"
 
 ```python
 # tests/test_diagnostic.py
-from pysysml.proto import sysml_pb2
-from pysysml.diagnostic import Diagnostic
+from opensysml.proto import sysml_pb2
+from opensysml.diagnostic import Diagnostic
 
 
 def test_diagnostic_properties():
@@ -328,14 +328,14 @@ def test_diagnostic_span_property():
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_diagnostic.py -v`
-Expected: FAIL with "ModuleNotFoundError: No module named 'pysysml.diagnostic'"
+Expected: FAIL with "ModuleNotFoundError: No module named 'opensysml.diagnostic'"
 
 ---
 
 - [ ] **Step 3: Implement Diagnostic class**
 
 ```python
-# pysysml/diagnostic.py
+# opensysml/diagnostic.py
 """Diagnostic class wrapping protobuf diagnostic message."""
 
 
@@ -430,7 +430,7 @@ Expected: 3 tests PASS
 - [ ] **Step 5: Commit**
 
 ```bash
-git add pysysml/diagnostic.py tests/test_diagnostic.py
+git add opensysml/diagnostic.py tests/test_diagnostic.py
 git commit -m "feat(python): implement Diagnostic class"
 ```
 
@@ -441,7 +441,7 @@ git commit -m "feat(python): implement Diagnostic class"
 **Goal:** Implement Symbol class as lazy proxy for symbol navigation with on-demand child loading
 
 **Files:**
-- Create: `pysysml/symbol.py`
+- Create: `opensysml/symbol.py`
 - Create: `tests/test_symbol.py`
 
 ---
@@ -450,8 +450,8 @@ git commit -m "feat(python): implement Diagnostic class"
 
 ```python
 # tests/test_symbol.py
-from pysysml.proto import sysml_pb2
-from pysysml.symbol import Symbol
+from opensysml.proto import sysml_pb2
+from opensysml.symbol import Symbol
 
 
 def test_symbol_properties():
@@ -498,14 +498,14 @@ def test_symbol_str():
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_symbol.py::test_symbol_properties -v`
-Expected: FAIL with "ModuleNotFoundError: No module named 'pysysml.symbol'"
+Expected: FAIL with "ModuleNotFoundError: No module named 'opensysml.symbol'"
 
 ---
 
 - [ ] **Step 3: Implement Symbol class (basic properties only)**
 
 ```python
-# pysysml/symbol.py
+# opensysml/symbol.py
 """Symbol class for lazy symbol navigation."""
 
 
@@ -694,7 +694,7 @@ Expected: FAIL with "AttributeError: 'Symbol' object has no attribute 'children'
 - [ ] **Step 7: Implement children() method**
 
 ```python
-# Add to pysysml/symbol.py after metadata property
+# Add to opensysml/symbol.py after metadata property
 
     def children(self):
         """Get list of child symbols (lazy loaded, cached).
@@ -797,7 +797,7 @@ Expected: FAIL with "AttributeError: 'Symbol' object has no attribute 'attribute
 - [ ] **Step 11: Implement attributes() method**
 
 ```python
-# Add to pysysml/symbol.py after children() method
+# Add to opensysml/symbol.py after children() method
 
     def attributes(self):
         """Get list of attribute child symbols (filtered children).
@@ -832,7 +832,7 @@ Expected: All 6 tests PASS
 - [ ] **Step 14: Commit**
 
 ```bash
-git add pysysml/symbol.py tests/test_symbol.py
+git add opensysml/symbol.py tests/test_symbol.py
 git commit -m "feat(python): implement Symbol class with lazy loading"
 ```
 
@@ -843,7 +843,7 @@ git commit -m "feat(python): implement Symbol class with lazy loading"
 **Goal:** Implement Model class wrapping ParseFileResponse with root symbol and diagnostics
 
 **Files:**
-- Create: `pysysml/model.py`
+- Create: `opensysml/model.py`
 - Create: `tests/test_model.py`
 
 ---
@@ -853,8 +853,8 @@ git commit -m "feat(python): implement Symbol class with lazy loading"
 ```python
 # tests/test_model.py
 from unittest.mock import Mock
-from pysysml.proto import sysml_pb2
-from pysysml.model import Model
+from opensysml.proto import sysml_pb2
+from opensysml.model import Model
 
 
 def test_model_properties():
@@ -932,18 +932,18 @@ def test_model_str():
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_model.py::test_model_properties -v`
-Expected: FAIL with "ModuleNotFoundError: No module named 'pysysml.model'"
+Expected: FAIL with "ModuleNotFoundError: No module named 'opensysml.model'"
 
 ---
 
 - [ ] **Step 3: Implement Model class (basic properties)**
 
 ```python
-# pysysml/model.py
+# opensysml/model.py
 """Model class wrapping parsed SysML model."""
 
-from pysysml.symbol import Symbol
-from pysysml.diagnostic import Diagnostic
+from opensysml.symbol import Symbol
+from opensysml.diagnostic import Diagnostic
 
 
 class Model:
@@ -1143,7 +1143,7 @@ Expected: FAIL with "AttributeError: 'Model' object has no attribute 'find'"
 - [ ] **Step 7: Implement find() method**
 
 ```python
-# Add to pysysml/model.py after diagnostics property
+# Add to opensysml/model.py after diagnostics property
 
     def find(self, name):
         """Find symbol by short name (breadth-first search).
@@ -1194,7 +1194,7 @@ Expected: All 4 tests PASS
 - [ ] **Step 10: Commit**
 
 ```bash
-git add pysysml/model.py tests/test_model.py
+git add opensysml/model.py tests/test_model.py
 git commit -m "feat(python): implement Model class with find() method"
 ```
 
@@ -1205,7 +1205,7 @@ git commit -m "feat(python): implement Model class with find() method"
 **Goal:** Implement Connection class managing gRPC channel and providing high-level API
 
 **Files:**
-- Create: `pysysml/connection.py`
+- Create: `opensysml/connection.py`
 - Create: `tests/test_connection.py`
 
 ---
@@ -1216,13 +1216,13 @@ git commit -m "feat(python): implement Model class with find() method"
 # tests/test_connection.py
 import grpc
 from unittest.mock import Mock, patch
-from pysysml.connection import Connection
+from opensysml.connection import Connection
 
 
 def test_connection_init():
     with patch('grpc.insecure_channel') as mock_channel:
         mock_stub = Mock()
-        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub', return_value=mock_stub):
+        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub', return_value=mock_stub):
             conn = Connection(port=50051)
             
             assert conn.port == 50051
@@ -1231,7 +1231,7 @@ def test_connection_init():
 
 def test_connection_custom_host():
     with patch('grpc.insecure_channel') as mock_channel:
-        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
+        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
             conn = Connection(host='example.com', port=9000)
             
             mock_channel.assert_called_once_with('example.com:9000')
@@ -1242,18 +1242,18 @@ def test_connection_custom_host():
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_connection.py::test_connection_init -v`
-Expected: FAIL with "ModuleNotFoundError: No module named 'pysysml.connection'"
+Expected: FAIL with "ModuleNotFoundError: No module named 'opensysml.connection'"
 
 ---
 
 - [ ] **Step 3: Implement Connection class (initialization only)**
 
 ```python
-# pysysml/connection.py
+# opensysml/connection.py
 """Connection class for communicating with sysml-grpc service."""
 
 import grpc
-from pysysml.proto import sysml_pb2, sysml_pb2_grpc
+from opensysml.proto import sysml_pb2, sysml_pb2_grpc
 
 
 class Connection:
@@ -1308,7 +1308,7 @@ Expected: 2 tests PASS
 ```python
 # Add to tests/test_connection.py
 
-from pysysml.proto import sysml_pb2
+from opensysml.proto import sysml_pb2
 
 
 def test_connection_load():
@@ -1333,7 +1333,7 @@ def test_connection_load():
         
         mock_stub.ParseFile.return_value = pb_response
         
-        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub', return_value=mock_stub):
+        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub', return_value=mock_stub):
             conn = Connection()
             model = conn.load("test.sysml")
             
@@ -1374,7 +1374,7 @@ def test_connection_load_with_diagnostics():
         
         mock_stub.ParseFile.return_value = pb_response
         
-        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub', return_value=mock_stub):
+        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub', return_value=mock_stub):
             conn = Connection()
             model = conn.load("bad.sysml")
             
@@ -1389,7 +1389,7 @@ def test_connection_load_grpc_error():
         # Simulate gRPC error (e.g., file not found)
         mock_stub.ParseFile.side_effect = grpc.RpcError()
         
-        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub', return_value=mock_stub):
+        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub', return_value=mock_stub):
             conn = Connection()
             
             try:
@@ -1411,9 +1411,9 @@ Expected: FAIL with "AttributeError: 'Connection' object has no attribute 'load'
 - [ ] **Step 7: Implement load() method**
 
 ```python
-# Add to pysysml/connection.py after close() method
+# Add to opensysml/connection.py after close() method
 
-from pysysml.model import Model
+from opensysml.model import Model
 
     def load(self, file_path):
         """Load a SysML model from file.
@@ -1466,7 +1466,7 @@ def test_connection_get_symbol():
         
         mock_stub.GetSymbol.return_value = pb_response
         
-        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub', return_value=mock_stub):
+        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub', return_value=mock_stub):
             conn = Connection()
             pb_result = conn.get_symbol("model_hash", "Vehicle::Engine")
             
@@ -1492,7 +1492,7 @@ def test_connection_get_symbol_not_found():
         
         mock_stub.GetSymbol.return_value = pb_response
         
-        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub', return_value=mock_stub):
+        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub', return_value=mock_stub):
             conn = Connection()
             pb_result = conn.get_symbol("hash", "NonExistent")
             
@@ -1512,7 +1512,7 @@ Expected: FAIL with "AttributeError: 'Connection' object has no attribute 'get_s
 - [ ] **Step 11: Implement get_symbol() method**
 
 ```python
-# Add to pysysml/connection.py after load() method
+# Add to opensysml/connection.py after load() method
 
     def get_symbol(self, model_hash, symbol_id):
         """Fetch symbol by ID from cached model.
@@ -1556,7 +1556,7 @@ Expected: All 7 tests PASS
 - [ ] **Step 14: Commit**
 
 ```bash
-git add pysysml/connection.py tests/test_connection.py
+git add opensysml/connection.py tests/test_connection.py
 git commit -m "feat(python): implement Connection class with load() and get_symbol()"
 ```
 
@@ -1567,22 +1567,22 @@ git commit -m "feat(python): implement Connection class with load() and get_symb
 **Goal:** Wire up package exports and verify end-to-end functionality with real sysml-grpc service
 
 **Files:**
-- Modify: `pysysml/__init__.py`
+- Modify: `opensysml/__init__.py`
 
 ---
 
-- [ ] **Step 1: Update pysysml/__init__.py with public API**
+- [ ] **Step 1: Update opensysml/__init__.py with public API**
 
 ```python
-# pysysml/__init__.py
-"""pysysml - Python client library for Systemica SysML v2 parser."""
+# opensysml/__init__.py
+"""opensysml - Python client library for OpenSysML SysML v2 parser."""
 
 __version__ = "0.1.0"
 
-from pysysml.connection import Connection
-from pysysml.model import Model
-from pysysml.symbol import Symbol
-from pysysml.diagnostic import Diagnostic
+from opensysml.connection import Connection
+from opensysml.model import Model
+from opensysml.symbol import Symbol
+from opensysml.diagnostic import Diagnostic
 
 __all__ = [
     "Connection",
@@ -1597,7 +1597,7 @@ __all__ = [
 - [ ] **Step 2: Verify package imports work**
 
 ```bash
-python -c "from pysysml import Connection, Model, Symbol, Diagnostic; print('OK')"
+python -c "from opensysml import Connection, Model, Symbol, Diagnostic; print('OK')"
 ```
 
 Expected: Output `OK` (no import errors)
@@ -1617,7 +1617,7 @@ Expected: Package installed successfully
 - [ ] **Step 4: Verify CLI import works**
 
 ```bash
-python -c "import pysysml; print(pysysml.__version__)"
+python -c "import opensysml; print(opensysml.__version__)"
 ```
 
 Expected: Output `0.1.0`
@@ -1639,7 +1639,7 @@ Expected: Service starts and listens on port 50051
 
 ```python
 # test_manual.py (temporary file, not committed)
-from pysysml import Connection
+from opensysml import Connection
 
 # Connect to service
 conn = Connection(port=50051)
@@ -1690,7 +1690,7 @@ Expected:
 
 ```python
 # test_context.py (temporary file, not committed)
-from pysysml import Connection
+from opensysml import Connection
 
 with Connection(port=50051) as conn:
     model = conn.load("testdata/A1.sysml")
@@ -1715,7 +1715,7 @@ rm test_manual.py test_context.py
 - [ ] **Step 10: Commit**
 
 ```bash
-git add pysysml/__init__.py
+git add opensysml/__init__.py
 git commit -m "feat(python): export public API from package"
 ```
 
@@ -1735,7 +1735,7 @@ git commit -m "feat(python): export public API from package"
 
 ```python
 # tests/__init__.py
-"""Unit tests for pysysml package."""
+"""Unit tests for opensysml package."""
 ```
 
 ---
@@ -1744,11 +1744,11 @@ git commit -m "feat(python): export public API from package"
 
 ```python
 # tests/conftest.py
-"""Pytest fixtures for pysysml tests."""
+"""Pytest fixtures for opensysml tests."""
 
 import pytest
 from unittest.mock import Mock
-from pysysml.proto import sysml_pb2
+from opensysml.proto import sysml_pb2
 
 
 @pytest.fixture
@@ -1811,7 +1811,7 @@ Expected: All tests PASS (should be 15+ tests total across all modules)
 - [ ] **Step 4: Run tests with coverage**
 
 ```bash
-pytest tests/ --cov=pysysml --cov-report=term-missing
+pytest tests/ --cov=opensysml --cov-report=term-missing
 ```
 
 Expected: 
@@ -1835,7 +1835,7 @@ Review coverage report. If any important code paths are uncovered, add tests:
 
 ```bash
 python -c "
-from pysysml import Connection, Model, Symbol, Diagnostic
+from opensysml import Connection, Model, Symbol, Diagnostic
 print('All imports successful')
 "
 ```
@@ -1854,8 +1854,8 @@ pip install -e ".[dev]"
 pytest tests/ -v
 
 # Check code style (if tools available)
-python -m pylint pysysml/ || true
-python -m mypy pysysml/ || true
+python -m pylint opensysml/ || true
+python -m mypy opensysml/ || true
 ```
 
 Expected: Tests pass, code quality checks clean (or warnings only)
@@ -1877,7 +1877,7 @@ Test the exact example from README.md:
 
 ```python
 # final_test.py
-from pysysml import Connection
+from opensysml import Connection
 
 # Note: Requires sysml-grpc running on port 50051
 # and testdata/A1.sysml to exist

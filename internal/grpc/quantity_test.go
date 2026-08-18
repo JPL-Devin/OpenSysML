@@ -6,13 +6,13 @@ import (
 	"strings"
 	"testing"
 
-	pb "github.com/Open-MBEE/Systemica/api/proto"
-	"github.com/Open-MBEE/Systemica/internal/core/runtime"
-	"github.com/Open-MBEE/Systemica/internal/core/semantics"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	pb "github.com/Open-MBEE/OpenSysML/api/proto"
+	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// quantityModel exercises every shape of quantity a slot can hold: one written
+// quantityModel exercises every shape of quantity a feature value can hold: one written
 // with a simple unit, one computed into a compound unit, one written in a scaled
 // compound unit, and one inside a nested part.
 const quantityModel = `
@@ -272,9 +272,9 @@ func TestQuantityOverSomethingThatIsNotAUnit(t *testing.T) {
 	}
 }
 
-// TestQuantitySlotsAndNestedQuantities drives Instantiate: every quantity slot
+// TestQuantityFeatureValuesAndNestedQuantities drives Instantiate: every quantity feature value
 // of a part, and the quantity inside the part it holds, cross as quantities.
-func TestQuantitySlotsAndNestedQuantities(t *testing.T) {
+func TestQuantityFeatureValuesAndNestedQuantities(t *testing.T) {
 	srv, modelHash, _, _ := mustQuantityModel(t)
 
 	resp, err := srv.Instantiate(context.Background(), &pb.InstantiateRequest{
@@ -294,28 +294,28 @@ func TestQuantitySlotsAndNestedQuantities(t *testing.T) {
 		"writtenSpeed": "5.4 [SI::km/SI::h] = 5/18·SI::metre·SI::second^-1",
 		"count":        "3 [SI::m] = SI::metre",
 	} {
-		slot, ok := resp.Instance.Slots[name]
+		fv, ok := resp.Instance.FeatureValues[name]
 		if !ok {
-			t.Errorf("missing slot %q", name)
+			t.Errorf("missing feature value %q", name)
 			continue
 		}
-		if slot.Error != "" {
-			t.Errorf("slot %q: %s", name, slot.Error)
+		if fv.Error != "" {
+			t.Errorf("feature value %q: %s", name, fv.Error)
 			continue
 		}
-		if got := describeQuantity(slot.Value.GetQuantity()); got != want {
-			t.Errorf("slot %q = %q, want %q", name, got, want)
+		if got := describeQuantity(fv.Value.GetQuantity()); got != want {
+			t.Errorf("feature value %q = %q, want %q", name, got, want)
 		}
 	}
 
-	// The ordinary real slot is untouched by the quantity arm.
-	if got := resp.Instance.Slots["n"].GetValue().GetRealValue(); got != 2.0 {
-		t.Errorf("slot n = %v, want 2", got)
+	// The ordinary real feature value is untouched by the quantity arm.
+	if got := resp.Instance.FeatureValues["n"].GetValue().GetRealValue(); got != 2.0 {
+		t.Errorf("feature value n = %v, want 2", got)
 	}
 
-	engineID := resp.Instance.Slots["engine"].GetValue().GetInstanceId()
+	engineID := resp.Instance.FeatureValues["engine"].GetValue().GetInstanceId()
 	if engineID == 0 {
-		t.Fatal("slot engine holds no instance")
+		t.Fatal("feature value engine holds no instance")
 	}
 	var engine *pb.Instance
 	for _, inst := range resp.Instances {
@@ -327,8 +327,8 @@ func TestQuantitySlotsAndNestedQuantities(t *testing.T) {
 		t.Fatalf("instance %d is not in the response graph", engineID)
 	}
 	wantPower := "300 [SI::W] = 1000/1·SI::gram·SI::metre^2·SI::second^-3"
-	if got := describeQuantity(engine.Slots["power"].GetValue().GetQuantity()); got != wantPower {
-		t.Errorf("nested slot power = %q, want %q", got, wantPower)
+	if got := describeQuantity(engine.FeatureValues["power"].GetValue().GetQuantity()); got != wantPower {
+		t.Errorf("nested feature value power = %q, want %q", got, wantPower)
 	}
 }
 
@@ -469,7 +469,7 @@ package V {
 		t.Fatalf("verdict = %v, want one that holds", resp.Verdict)
 	}
 
-	// The subject's quantity slot reads back from the verdict, which is what makes
+	// The subject's quantity feature value reads back from the verdict, which is what makes
 	// a verdict over quantities diagnosable from a client.
 	var subject *pb.Instance
 	for _, inst := range resp.Instances {
@@ -481,7 +481,7 @@ package V {
 		t.Fatalf("verdict instance %d is not in the response", resp.Verdict.InstanceId)
 	}
 	wantMass := "2500 [SI::kg] = 1000/1·SI::gram"
-	if got := describeQuantity(subject.Slots["mass"].GetValue().GetQuantity()); got != wantMass {
+	if got := describeQuantity(subject.FeatureValues["mass"].GetValue().GetQuantity()); got != wantMass {
 		t.Errorf("subject mass = %q, want %q", got, wantMass)
 	}
 }

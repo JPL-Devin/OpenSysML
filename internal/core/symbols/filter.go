@@ -3,8 +3,8 @@ package symbols
 import (
 	"sort"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 // ElementFilter is one element-filter condition, as it applies to the elements

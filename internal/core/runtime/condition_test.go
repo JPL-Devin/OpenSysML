@@ -5,11 +5,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/parser"
-	"github.com/Open-MBEE/Systemica/internal/core/resolve"
-	"github.com/Open-MBEE/Systemica/internal/core/semantics"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
+	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // conditionFixture loads src and returns the runtime context and the scope of
@@ -325,7 +325,7 @@ func TestParameterBoundToSameNamedFeature(t *testing.T) {
 
 // An inherited parameter nothing binds still reads a same-named value of the
 // object being checked.
-func TestUnboundParameterFallsBackToInstanceSlot(t *testing.T) {
+func TestUnboundParameterFallsBackToInstanceFeatureValue(t *testing.T) {
 	src := `
 		package test {
 			constraint def MassLimit {
@@ -432,5 +432,29 @@ func TestViolationRendersQuantityOperands(t *testing.T) {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("%s: err = %v; want it to render the condition as %q", name, err, want)
 		}
+	}
+}
+
+// A condition stated inside a require body reads the names that body declares,
+// which live in the body's own scope rather than the enclosing element's.
+func TestRequireBodyConditionReadsABodyLocalName(t *testing.T) {
+	ctx, pkg := conditionFixture(t, `
+		package test {
+			requirement def Limit { attribute cap; }
+			requirement lim : Limit { attribute :>> cap = 5; }
+			requirement study {
+				require lim {
+					attribute margin = 2;
+					require constraint { margin > 1 }
+				}
+			}
+		}
+	`)
+	satisfied, err := ctx.EvaluateRequirement(requirementNamed(t, pkg, "study"), pkg)
+	if err != nil {
+		t.Fatalf("study: %v", err)
+	}
+	if !satisfied {
+		t.Error("study: not satisfied")
 	}
 }

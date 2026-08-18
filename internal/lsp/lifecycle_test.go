@@ -11,7 +11,7 @@ import (
 	"go.lsp.dev/jsonrpc2"
 	"go.lsp.dev/protocol"
 
-	"github.com/Open-MBEE/Systemica/internal/core/model"
+	"github.com/Open-MBEE/OpenSysML/internal/core/model"
 )
 
 func TestInitializeAdvertisesCapabilities(t *testing.T) {
@@ -29,6 +29,10 @@ func TestInitializeAdvertisesCapabilities(t *testing.T) {
 	}
 	if sync.Change != protocol.TextDocumentSyncKindIncremental {
 		t.Errorf("Change = %v, want Incremental", sync.Change)
+	}
+	// A client only sends didSave when the server asks for it.
+	if sync.Save == nil {
+		t.Error("Save not advertised, so didSave never arrives")
 	}
 	if res.Capabilities.HoverProvider != true {
 		t.Error("HoverProvider not advertised")

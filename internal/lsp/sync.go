@@ -6,11 +6,14 @@ import (
 	"go.lsp.dev/protocol"
 )
 
-// DidOpen registers a newly opened document with the workspace.
+// DidOpen registers a newly opened document with the workspace. The buffer the
+// editor sends can differ from what was read from disk, so the other open
+// documents are refreshed too.
 func (s *Server) DidOpen(ctx context.Context, params *protocol.DidOpenTextDocumentParams) error {
 	name := uriToName(params.TextDocument.URI)
 	s.ws.Open(name, []byte(params.TextDocument.Text), int(params.TextDocument.Version))
 	s.publishDiagnostics(ctx, name)
+	s.queueOpenDiagnostics(ctx, name)
 	return nil
 }
 
@@ -34,15 +37,24 @@ func (s *Server) DidChange(ctx context.Context, params *protocol.DidChangeTextDo
 	return nil
 }
 
-// DidClose marks the document closed in the workspace.
+// DidClose marks the document closed, re-reading its on-disk content first so
+// closing a tab does not unindex names other documents resolve through it. Its
+// markers are withdrawn: only an open document has a set that keeps pace with
+// the workspace.
 func (s *Server) DidClose(ctx context.Context, params *protocol.DidCloseTextDocumentParams) error {
-	s.ws.Close(uriToName(params.TextDocument.URI))
+	name := uriToName(params.TextDocument.URI)
+	s.loadFromDisk(name)
+	s.ws.Close(name)
+	s.clearDiagnostics(ctx, name)
+	s.queueOpenDiagnostics(ctx, name)
 	return nil
 }
 
-// DidSave refreshes diagnostics for the saved document.
+// DidSave refreshes diagnostics for every open document, since an edit to one
+// file changes what the others resolve.
 func (s *Server) DidSave(ctx context.Context, params *protocol.DidSaveTextDocumentParams) error {
 	name := uriToName(params.TextDocument.URI)
 	s.publishDiagnostics(ctx, name)
+	s.refreshOpenDiagnostics(ctx, name)
 	return nil
 }

@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Open-MBEE/Systemica/internal/repl"
+	"github.com/Open-MBEE/OpenSysML/internal/repl"
 )
 
 // checks are the model checks and runs named on the command line, in the order
@@ -189,9 +189,9 @@ func runChecks(files []string, exprs []string, c checks) int {
 
 	// An object first: a constraint, requirement or expression about a feature of
 	// a part is answered about the object that carries it, and only an existing
-	// one can be. Creating it materializes its slots, so a default that does not
+	// one can be. Creating it materializes its feature values, so a default that does not
 	// conform to its feature's multiplicity is a diagnostic of this run rather
-	// than one left to whoever reads the slot next.
+	// than one left to whoever reads the feature value next.
 	bounded := false
 	for _, name := range c.instantiate {
 		report, err := sess.InstantiateReport(name)
@@ -200,14 +200,14 @@ func runChecks(files []string, exprs []string, c checks) int {
 			return rep.finish()
 		}
 		rep.info(report.Lines)
-		for _, slotErr := range report.SlotErrors {
-			rep.finding(slotErr)
+		for _, fvErr := range report.FeatureValueErrors {
+			rep.finding(fvErr)
 		}
 		// Materializing a wide or recursive model costs an object per value, so the
 		// check is bounded; what it did not reach is unchecked rather than clean.
 		if report.Bounded {
 			bounded = true
-			rep.warn(fmt.Sprintf("%s: materialization is bounded; not every slot was checked", name))
+			rep.warn(fmt.Sprintf("%s: materialization is bounded; not every feature value was checked", name))
 		}
 	}
 
@@ -217,7 +217,7 @@ func runChecks(files []string, exprs []string, c checks) int {
 	if c.validate {
 		switch {
 		case rep.clean() && bounded:
-			rep.info([]string{fmt.Sprintf("✓ %s: no errors in the slots checked", namedModels(files))})
+			rep.info([]string{fmt.Sprintf("✓ %s: no errors in the feature values checked", namedModels(files))})
 		case rep.clean():
 			rep.info([]string{fmt.Sprintf("✓ %s: no errors", namedModels(files))})
 		default:

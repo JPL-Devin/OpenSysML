@@ -1,23 +1,23 @@
 package runtime
 
-import "github.com/Open-MBEE/Systemica/internal/core/symbols"
+import "github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 
 const (
 	// maxMaterializeDepth bounds how deep a materialization walk descends into the
-	// objects an object holds, as a slot listing is bounded.
+	// objects an object holds, as a feature value listing is bounded.
 	maxMaterializeDepth = 8
-	// maxMaterializeBudget bounds the walk as a whole, charged per slot read and
-	// per object a slot holds: nesting multiplies, and reading a slot materializes
+	// maxMaterializeBudget bounds the walk as a whole, charged per feature value read and
+	// per object a feature value holds: nesting multiplies, and reading a feature value materializes
 	// the objects it holds, so breadth costs objects rather than only time.
 	maxMaterializeBudget = 1000
 )
 
-// MaterializationErrors reads every slot of an object, and of the objects its
-// slots hold, and returns what materializing them reported, in the order the
-// slots were read. Slots are lazy, so a default that does not conform to its
+// MaterializationErrors reads every feature value of an object, and of the objects its
+// feature values hold, and returns what materializing them reported, in the order the
+// feature values were read. Feature values are lazy, so a default that does not conform to its
 // feature's multiplicity is only found by reading it: a caller reporting on an
 // object it created calls this rather than leaving those diagnostics to whoever
-// reads a slot next. bounded is true when the walk did not read every slot —
+// reads a feature value next. bounded is true when the walk did not read every feature value —
 // its budget was spent, or nesting it does not descend into was elided — so
 // what it did not reach is unreported rather than clean.
 func (ctx *Context) MaterializationErrors(inst *Instance) (errs []error, bounded bool) {
@@ -28,24 +28,24 @@ func (ctx *Context) MaterializationErrors(inst *Instance) (errs []error, bounded
 		ctx:     ctx,
 		onPath:  map[*symbols.Symbol]bool{inst.Type: true},
 		visited: map[int64]bool{inst.ID: true},
-		read:    map[*Slot]bool{},
+		read:    map[*FeatureValue]bool{},
 		budget:  maxMaterializeBudget,
 	}
 	w.walk(inst, 0)
 	return w.errs, w.bounded
 }
 
-// materializeWalk reads an object graph under the bounds a slot listing uses:
+// materializeWalk reads an object graph under the bounds a feature value listing uses:
 // onPath holds the types being expanded above the current one, since a part
 // containing its own kind materializes a fresh object per descent; depth bounds
 // the descent and budget the walk as a whole. visited keeps an object two
-// features hold from being reported twice, and read the one slot a feature and
+// features hold from being reported twice, and read the one feature value a feature and
 // the feature redefining it share.
 type materializeWalk struct {
 	ctx     *Context
 	onPath  map[*symbols.Symbol]bool
 	visited map[int64]bool
-	read    map[*Slot]bool
+	read    map[*FeatureValue]bool
 	budget  int
 	bounded bool
 	errs    []error
@@ -71,20 +71,20 @@ func (w *materializeWalk) walk(inst *Instance, depth int) {
 			continue
 		}
 		// A redefinition names the redefined feature again, and the two names read
-		// one slot, so reading it once reports what it holds once.
-		if shared := inst.Slots[feat.Name]; shared != nil {
+		// one feature value, so reading it once reports what it holds once.
+		if shared := inst.FeatureValues[feat.Name]; shared != nil {
 			if w.read[shared] {
 				continue
 			}
 			w.read[shared] = true
 		}
 		w.budget--
-		slot, err := inst.GetSlot(w.ctx, feat.Name)
+		fv, err := inst.GetFeatureValue(w.ctx, feat.Name)
 		if err != nil {
 			w.errs = append(w.errs, err)
 			continue
 		}
-		nested := heldInstances(w.ctx, slot)
+		nested := heldInstances(w.ctx, fv)
 		w.budget -= len(nested)
 		for _, held := range nested {
 			if w.budget <= 0 {
@@ -116,10 +116,10 @@ func holdsVerdict(feat *EffectiveFeature) bool {
 	}
 }
 
-// heldInstances returns the objects a slot holds, whether it carries one value
+// heldInstances returns the objects a feature value holds, whether it carries one value
 // or a collection of them.
-func heldInstances(ctx *Context, slot *Slot) []*Instance {
-	held := slot.HeldValue()
+func heldInstances(ctx *Context, fv *FeatureValue) []*Instance {
+	held := fv.HeldValue()
 	values := []Value{held}
 	switch held.Kind {
 	case ValSequence:

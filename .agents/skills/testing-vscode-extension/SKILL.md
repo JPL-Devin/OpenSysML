@@ -1,9 +1,9 @@
 ---
 name: testing-vscode-extension
-description: How to build, install, drive and record end-to-end GUI tests of the Systemica VS Code extension (editors/vscode) and its sysml-lsp language client — server discovery, completion, diagnostics, and the xdotool pitfalls that waste time.
+description: How to build, install, drive and record end-to-end GUI tests of the OpenSysML VS Code extension (editors/vscode) and its sysml-lsp language client — server discovery, completion, diagnostics, and the xdotool pitfalls that waste time.
 ---
 
-# Testing the Systemica VS Code extension
+# Testing the OpenSysML VS Code extension
 
 ## Build & install (always rebuild; a stale vsix looks identical)
 
@@ -25,9 +25,9 @@ Launch it detached or it dies with the shell that started it:
 
 ```bash
 make build                # produces bin/sysml-lsp (the server the client discovers)
-make vscode-package       # npm ci + typecheck + esbuild + vsce -> editors/vscode/systemica-sysml.vsix
-DISPLAY=:0 code --no-sandbox --disable-gpu --install-extension editors/vscode/systemica-sysml.vsix --force
-DISPLAY=:0 code --no-sandbox --list-extensions --show-versions   # expect open-mbee.systemica-sysml@<ver>
+make vscode-package       # npm ci + typecheck + esbuild + vsce -> editors/vscode/opensysml-sysml.vsix
+DISPLAY=:0 code --no-sandbox --disable-gpu --install-extension editors/vscode/opensysml-sysml.vsix --force
+DISPLAY=:0 code --no-sandbox --list-extensions --show-versions   # expect open-mbee.opensysml-sysml@<ver>
 ```
 
 Restart VS Code after installing, otherwise the old extension host keeps running:
@@ -59,26 +59,26 @@ server. Launch with the repo root as the argument, then open the file from the E
 feature under test produces no diagnostics" — always check `pgrep` before believing that).
 Reproduce outside the editor with `./bin/sysml-lsp --stdio </dev/null`.
 Workaround for testing (no repo edit needed): a wrapper that drops argv, pointed at from the
-**Settings UI** (`Ctrl+,` → search `systemica.server.path`, User scope) — the setting has an
+**Settings UI** (`Ctrl+,` → search `opensysml.server.path`, User scope) — the setting has an
 `onDidChangeConfiguration` handler, so the server restarts on Enter and
 `Starting /tmp/lsp-wrap.sh` appears in the channel:
 
 ```bash
-printf '#!/bin/sh\nexec /home/ubuntu/repos/Systemica/bin/sysml-lsp\n' > /tmp/lsp-wrap.sh
+printf '#!/bin/sh\nexec /home/ubuntu/repos/OpenSysML/bin/sysml-lsp\n' > /tmp/lsp-wrap.sh
 chmod +x /tmp/lsp-wrap.sh
 ```
 
 The proper fix (report it, do not apply it while testing) is either accepting/ignoring `-stdio` in
 `cmd/sysml-lsp/main.go` or dropping `transport` from the `ServerOptions` in `extension.ts`.
 
-Order is `systemica.server.path` → `<workspace>/bin/sysml-lsp` → `sysml-lsp` on PATH. On this box
+Order is `opensysml.server.path` → `<workspace>/bin/sysml-lsp` → `sysml-lsp` on PATH. On this box
 `sysml-lsp` is normally NOT on PATH, so a green run genuinely exercises the workspace `bin/` fallback.
 Proof lives in the **"SysML v2" output channel**: `Starting /home/.../bin/sysml-lsp`.
 Cross-check the process with `pgrep -a sysml-lsp` — the pid is the cheapest, most reliable signal for
 "did the server restart/crash?" (the fixed double-read-loop bug manifested as repeated restarts and
 `missing Content-Length header` lines in that channel).
 
-Setting `systemica.server.path` to a bogus path is expected to show a warning
+Setting `opensysml.server.path` to a bogus path is expected to show a warning
 ("Could not find sysml-lsp ... Syntax highlighting still works"), kill the server (pgrep empty),
 empty the Outline view, but keep TextMate colors. Clearing the setting auto-restarts (there is an
 `onDidChangeConfiguration` handler), and `SysML: Restart Language Server` restarts it too.
@@ -164,6 +164,54 @@ script against `bin/sysml-lsp` (initialize → didOpen → semanticTokens/full �
   (X at its top-right) before triggering completion so the popup has room.
 - Undo a stray edit with Command Palette **"File: Revert File"** — it is far more reliable than
   counting Ctrl+Z presses, and leaves the git tree clean.
+
+## Multi-file / workspace-indexing testing (`internal/lsp/files.go`, `sync.go`)
+
+The cleanest fixture is a **throwaway folder outside the repo** (e.g. `/home/ubuntu/ws-multifile`)
+holding only a couple of tiny models, so the Problems count is entirely about the feature:
+
+```
+lib.sysml   package Lib { part def Widget; }
+main.sysml  package Main { import Lib::*; part w : Widget; }
+```
+
+- A workspace outside the repo has no `bin/sysml-lsp`, so point `opensysml.server.path` at
+  `/home/ubuntu/repos/OpenSysML/bin/sysml-lsp` (User `settings.json` or the Settings UI) — the
+  setting takes precedence and restarts the server on change.
+- Writing `~/.config/Code/User/settings.json` with `"security.workspace.trust.enabled": false` and
+  `"workbench.startupEditor": "none"` avoids the trust banner and the Welcome tab entirely.
+- The **Problems panel (`ctrl+shift+m`) plus the status-bar error count** is the high-signal oracle
+  for indexing tests: "unresolved reference: Lib/Widget" appearing/disappearing is the whole test.
+- A convincing negative control is a one-line switch of `opensysml.server.path` to a binary built
+  from `origin/main` (`git worktree add /tmp/wt-main origin/main && go build -C /tmp/wt-main -o
+  /tmp/sysml-lsp-main ./cmd/sysml-lsp` — build *in the worktree*, or you rebuild the branch);
+  the pre-indexing server shows the unresolved references on the same file.
+  Switching the setting back auto-restarts — no window reload needed. Remember `git worktree remove`.
+- Watcher tests (create/change/delete a `.sysml` outside the editor) are driven from the shell with
+  `printf > file` / `rm`; VS Code's `**/*.{sysml,kerml}` watcher forwards them and the Problems panel
+  updates within ~1-2 s. A deleted file whose tab is still open keeps the buffer authoritative — the
+  diagnostics only change when that tab is closed.
+- Verify the server was not silently restarted between steps: `pgrep -af sysml-lsp` pid must be
+  unchanged (put it in `/tmp/lspcheck.sh` per the note above).
+
+### More GUI driving pitfalls found here
+- `shift+F12` (Find All References) does not reach VS Code through xdotool — use Command Palette
+  **"References: Find All References"**. `F12` (go to definition) does work.
+- Closing an editor tab: **middle-click the tab**. Clicking the tab's little `x` needs a hover first
+  and the coordinates shift whenever the sidebar collapses; `ctrl+w` is risky (can close the window).
+- `key` actions take ONE combo: `"shift+Down shift+Down"` errors with `unknown key`; send two actions.
+- Opening a file by name with `ctrl+p` → type `lib.sysml` → Enter is far more reliable than clicking
+  the Explorer tree, especially after the sidebar has been toggled.
+- **Do not use "completion after `Qualifier::`" as the completion oracle.** As of 0b239642 typing
+  `attribute a : ScalarValues::` and pressing `ctrl+space` yields "No suggestions", and with a
+  trailing `::` the file is also a syntax error (`expected a name after '::'`), which suppresses
+  semantic completion. Use a *plain* name prefix instead: in a syntactically valid file, `Wh` +
+  `ctrl+space` returns LSP items with a type detail (e.g. `Wheel  partDef`) — the detail column is
+  what distinguishes real LSP items from VS Code's word-based (`abc` icon) suggestions.
+- A stray `u` from `ctrl+shift+u` is easiest to remove by selecting the whole buffer (`ctrl+a`) and
+  retyping the fixture; `ctrl+z` after an LSP-driven edit sometimes only reverts part of it.
+- After rebuilding `bin/sysml-lsp`, run Command Palette **"Developer: Reload Window"** so the client
+  respawns against the new binary; killing the server process alone can leave the old one in use.
 
 ## Recording tips
 

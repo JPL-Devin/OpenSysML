@@ -1,0 +1,11 @@
+{
+  "type": "instance",
+  "instantiate": "test::Sys",
+  "slots": {
+    "p1": {"type": "Instance"},
+    "p2": {"type": "Instance"}
+  },
+  "identical": [
+    ["p1", "p2"]
+  ]
+}

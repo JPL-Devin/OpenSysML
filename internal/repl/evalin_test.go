@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/runtime"
+	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
 )
 
 // joinLines is a command's output as one string, to assert fragments against.
@@ -30,7 +30,7 @@ func TestEvalInPackageResolvesThroughIt(t *testing.T) {
 
 // Pinned to an object, the expression reads the values that object holds, as an
 // unpinned %eval does after %instantiate.
-func TestEvalInInstanceReadsItsSlots(t *testing.T) {
+func TestEvalInInstanceReadsItsFeatureValues(t *testing.T) {
 	s := loadFixture(t, "testdata/vehicle_package.sysml")
 	run(t, s, "%instantiate Demo::Vehicle")
 	got := run(t, s, "%eval in Demo::Vehicle : mass + 1.0")
@@ -113,7 +113,7 @@ func TestHelpDocumentsPinnedEval(t *testing.T) {
 }
 
 // A pinned evaluation is one run, so the step budget bounds it as it bounds an
-// unpinned one: a slot read inside it does not reset the counter.
+// unpinned one: a feature value read inside it does not reset the counter.
 func TestEvalInInstanceIsBoundedByTheStepBudget(t *testing.T) {
 	s := loadFixture(t, "testdata/vehicle_package.sysml")
 	budgets := runtime.DefaultBudgets()
@@ -123,7 +123,7 @@ func TestEvalInInstanceIsBoundedByTheStepBudget(t *testing.T) {
 	}
 	run(t, s, "%instantiate Demo::Vehicle")
 
-	// Nested to the right, so the slot read is reached on the second step, long
+	// Nested to the right, so the feature value read is reached on the second step, long
 	// before the budget runs out.
 	expr := "mass"
 	for i := 0; i < 60; i++ {

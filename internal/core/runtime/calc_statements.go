@@ -3,7 +3,7 @@ package runtime
 import (
 	"fmt"
 
-	"github.com/Open-MBEE/Systemica/internal/core/lower"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 )
 
 // calcStmtHost runs a calculation body's statements: it owns its locals, its
@@ -54,6 +54,12 @@ func (h *calcStmtHost) assignOuter(env *stmtEnv, name string, value Value, _ low
 
 func (h *calcStmtHost) acceptReturn(value Value, _ lower.Return) error {
 	h.result = value
+	return nil
+}
+
+// performer is no object: a calculation is invoked as an expression, not
+// performed by something, so its names read what its invocation supplies.
+func (h *calcStmtHost) performer() *Instance {
 	return nil
 }
 

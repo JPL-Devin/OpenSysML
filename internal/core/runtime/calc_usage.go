@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/lower"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // A calc computes as many values as it declares output features, but an
@@ -192,6 +192,9 @@ func (shape *calcShape) outputNames() string {
 // none, so its values are read from a calc usage's output features instead of
 // being narrowed to whichever output comes first.
 func (shape *calcShape) designatedOutput() (calcOutput, error) {
+	if shape.ResultExpr != nil {
+		return calcOutput{Name: "result", Value: shape.ResultExpr, Owner: shape.Sym, IsResult: true}, nil
+	}
 	var valued []calcOutput
 	for _, out := range shape.Outputs {
 		if out.IsResult {
@@ -268,7 +271,7 @@ type calcRun struct {
 	// output written in terms of itself is reported as a cycle rather than
 	// evaluated until the step budget runs out.
 	computing map[string]bool
-	// onStack reports whether this evaluation already holds a nesting slot, so
+	// onStack reports whether this evaluation already holds a nesting feature value, so
 	// the outputs of it that name each other do not count a level apiece.
 	onStack bool
 	// activation is the execution this run is, so a usage its outputs read is
@@ -298,7 +301,7 @@ type CalcOutputValue struct {
 // CalcUsageOutput evaluates a calc usage and returns the value of one of its
 // output features. The usage's inputs bind from its own member values, falling
 // back to the defaults declared along its specialization chain; self, when
-// non-null, is the object the usage is a feature of, whose slots the inputs may
+// non-null, is the object the usage is a feature of, whose feature values the inputs may
 // name. Reading several outputs of the same usage runs its body once.
 func (ctx *Context) CalcUsageOutput(sym *symbols.Symbol, name string, scope *symbols.Scope, self *Instance) (Value, error) {
 	defer ctx.beginRun()()
@@ -706,7 +709,7 @@ func (ec *EvalContext) calcUsageOperand(operand ast.Node) (*symbols.Symbol, bool
 }
 
 // occurrenceOperand reports whether the operand of a feature chain names one
-// occurrence — a part or item — that no local binding, and no slot of the object
+// occurrence — a part or item — that no local binding, and no feature value of the object
 // being evaluated, already answers with.
 func (ec *EvalContext) occurrenceOperand(operand ast.Node) (*symbols.Symbol, bool) {
 	ref, ok := operand.(*ast.FeatureReference)
@@ -719,7 +722,7 @@ func (ec *EvalContext) occurrenceOperand(operand ast.Node) (*symbols.Symbol, boo
 			return nil, false
 		}
 		if ec.self != nil {
-			if _, carried := ec.self.Slots[name]; carried {
+			if _, carried := ec.self.FeatureValues[name]; carried {
 				return nil, false
 			}
 		}
@@ -737,7 +740,7 @@ func (ec *EvalContext) occurrenceOperand(operand ast.Node) (*symbols.Symbol, boo
 }
 
 // calcUsageMemberValue reads parts from a calc usage a part declares, running it
-// against that object so its inputs read the object's slots. Naming the usage
+// against that object so its inputs read the object's feature values. Naming the usage
 // itself names no value: its outputs are what it computes.
 func (ec *EvalContext) calcUsageMemberValue(sym *symbols.Symbol, self *Instance, parts []ast.NameSegment) (Value, error) {
 	if len(parts) == 0 {

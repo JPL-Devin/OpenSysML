@@ -3,8 +3,8 @@ package parser
 import (
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 // `binding b of f = v` names the feature the binding binds, so the `of` target
@@ -31,6 +31,57 @@ func TestBindingOfTargetIsAReference(t *testing.T) {
 	}
 	if !hasKind(kinds, ast.RelReferences) {
 		t.Errorf("`of` target is not a reference relationship: %v", kinds)
+	}
+}
+
+func TestAnonymousBindingSimpleEndsAreReferences(t *testing.T) {
+	const code = `package P {
+		binding bind b = a;
+		bind b = a;
+	}`
+
+	sf := source.New("test.sysml", []byte(code))
+	file := New(sf).ParseFile()
+	var bindings []*ast.Usage
+	var collect func([]ast.Node)
+	collect = func(nodes []ast.Node) {
+		for _, node := range nodes {
+			switch v := node.(type) {
+			case *ast.Membership:
+				collect([]ast.Node{v.Member})
+			case *ast.Package:
+				collect(v.Members)
+			case *ast.Usage:
+				if v.Kind == ast.UsageBinding {
+					bindings = append(bindings, v)
+				}
+				collect(v.Members)
+			}
+		}
+	}
+	collect(file.Members)
+	if len(bindings) != 2 {
+		t.Fatalf("parsed %d bindings, want 2", len(bindings))
+	}
+	for _, binding := range bindings {
+		if binding.Ident.Name != "" {
+			t.Errorf("binding ident = %q, want empty", binding.Ident.Name)
+		}
+		if len(binding.Relationships) != 1 {
+			t.Fatalf("binding has %d relationships, want 1", len(binding.Relationships))
+		}
+		rel := binding.Relationships[0]
+		if rel.Kind != ast.RelReferences {
+			t.Errorf("binding relationship kind = %v, want references", rel.Kind)
+		}
+		target, ok := rel.Target.(*ast.QualifiedName)
+		if !ok || len(target.Parts) != 1 || target.Parts[0].Text != "b" {
+			t.Errorf("binding target = %#v, want qualified name b", rel.Target)
+			continue
+		}
+		if sf.Text(target.Parts[0].Span) != "b" {
+			t.Errorf("binding target span = %#v, want source span for b", target)
+		}
 	}
 }
 

@@ -12,8 +12,9 @@ import (
 
 	"github.com/chzyer/readline"
 
-	"github.com/Open-MBEE/Systemica/internal/core/runtime"
-	"github.com/Open-MBEE/Systemica/internal/repl"
+	"github.com/Open-MBEE/OpenSysML/internal/core/export"
+	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
+	"github.com/Open-MBEE/OpenSysML/internal/repl"
 )
 
 var (
@@ -105,6 +106,8 @@ var (
 	convertFormat string
 	outputPath    string
 	fromFormat    string
+	renderView    string
+	renderForm    string
 	modelChecks   checks
 )
 
@@ -125,6 +128,25 @@ func (s *stringSlice) Set(value string) error {
 
 func main() {
 	os.Exit(runCLI())
+}
+
+// wrapped breaks text into lines of at most width characters, so a sentence the
+// help prints rather than restates still reads as a paragraph.
+func wrapped(text string, width int) string {
+	var lines []string
+	line := ""
+	for _, word := range strings.Fields(text) {
+		switch {
+		case line == "":
+			line = word
+		case len(line)+1+len(word) <= width:
+			line += " " + word
+		default:
+			lines = append(lines, line)
+			line = word
+		}
+	}
+	return strings.Join(append(lines, line), "\n")
 }
 
 // printUsage writes the help to w: the caller chooses the stream, since help
@@ -172,6 +194,19 @@ func printUsage(w io.Writer) {
 	fmt.Fprintf(w, "\nThe input format is taken from the file extension (.sysml, .kerml, .ttl) unless\n")
 	fmt.Fprintf(w, "-from names it. Converting to the format it is already in rewrites the input:\n")
 	fmt.Fprintf(w, "notation is reformatted, Turtle is normalized.\n")
+	// The notice is printed, not restated, so the help cannot drift from what a
+	// conversion reports.
+	fmt.Fprintf(w, "\n%s\n", wrapped(export.ExperimentalNotice, 78))
+	fmt.Fprintf(w, "Every run that converts RDF says so on stderr. Saving to .sysml or .kerml is\n")
+	fmt.Fprintf(w, "stable.\n")
+	fmt.Fprintf(w, "\nRendering a view:\n")
+	fmt.Fprintf(w, "  sysml model.sysml -render Views::vehicleView   # As a Mermaid diagram, on stdout\n")
+	fmt.Fprintf(w, "  sysml model.sysml -render Views::vehicleView -render-form text\n")
+	fmt.Fprintf(w, "  sysml model.sysml -render Views::vehicleView -o view.mmd\n")
+	fmt.Fprintf(w, "\nThe rendering is the one the view's render member states, and a containment tree\n")
+	fmt.Fprintf(w, "where it states none. It is tool-defined output: SysML v2 specifies the notation,\n")
+	fmt.Fprintf(w, "not how a tool draws it. Notices — an empty view, an element the rendering cannot\n")
+	fmt.Fprintf(w, "represent — go on stderr.\n")
 	fmt.Fprintf(w, "\nFlags may be written before or after the model they apply to. A file named like\n")
 	fmt.Fprintf(w, "a flag is read as a file after --, which ends the flags: sysml -trace -- -m.sysml\n")
 	fmt.Fprintf(w, "\nReading from standard input:\n")
@@ -200,10 +235,12 @@ func runCLI() int {
 	flag.BoolVar(&debugMode, "debug", false, "Report every diagnostic over the whole session buffer, with the pass that produced it")
 	flag.BoolVar(&quietMode, "quiet", false, "Report errors only, suppressing warnings")
 	flag.BoolVar(&traceMode, "trace", false, "Report each execution step: expression evaluation, calc invocation, action tokens, state transitions")
-	flag.StringVar(&convertFormat, "convert", "", "Convert the model to this format instead of running it: sysml, kerml, ttl, turtle or rdf")
+	flag.StringVar(&convertFormat, "convert", "", "Convert the model to this format instead of running it: sysml, kerml, ttl, turtle or rdf (RDF is experimental)")
 	flag.StringVar(&outputPath, "output", "", "Write conversion output to this file (default: stdout)")
 	flag.StringVar(&outputPath, "o", "", "Write conversion output to this file (shorthand)")
 	flag.StringVar(&fromFormat, "from", "", "Input format for -convert: sysml, kerml, ttl, turtle or rdf (default: from the input's extension)")
+	flag.StringVar(&renderView, "render", "", "Render this view of the model instead of running it, in the form its render member states")
+	flag.StringVar(&renderForm, "render-form", "", "Form -render writes: text, mermaid or markdown (default: the kind's machine-readable form)")
 	flag.Var(&deprecatedFlag{instead: "-to has been replaced by -convert, as `sysml model.sysml -convert ttl`"}, "to", "Replaced by -convert, which names the output format")
 	flag.Var(&modelChecks.instantiate, "instantiate", "Create an object of this definition before the checks, so a verdict is about it (repeatable)")
 	flag.Var(&modelChecks.constraints, "constraint", "Evaluate this constraint and exit (repeatable)")
@@ -254,12 +291,32 @@ func runCLI() int {
 	// Get positional arguments (files to load)
 	args := flag.Args()
 
+	if renderForm != "" && renderView == "" {
+		fmt.Fprintln(os.Stderr, "sysml: -render-form is the form -render writes; name the view to render with -render")
+		return 2
+	}
+
 	if convertFormat != "" {
 		if modelChecks.requested() {
 			return refuse(modelChecks,
 				"-convert writes the model out and decides nothing about it; check it in its own run")
 		}
+		if renderView != "" {
+			fmt.Fprintln(os.Stderr, "sysml: -convert and -render each write a document out; ask for one per run")
+			return 2
+		}
 		if err := runConvert(args); err != nil {
+			return fail(err)
+		}
+		return exitHolds
+	}
+
+	if renderView != "" {
+		if modelChecks.requested() {
+			return refuse(modelChecks,
+				"-render writes a view out and decides nothing about the model; check it in its own run")
+		}
+		if err := runRender(args); err != nil {
 			return fail(err)
 		}
 		return exitHolds
@@ -308,7 +365,7 @@ func newSession() *repl.Session {
 }
 
 // runInteractiveWithFiles loads what was named and takes lines from the prompt.
-// A model that did not analyse, or a slot a command could not materialize, leaves
+// A model that did not analyse, or a feature value a command could not materialize, leaves
 // the status of a run that decided nothing, except at a terminal, where the
 // prompt that opens is where it gets fixed.
 func runInteractiveWithFiles(files []string) int {
@@ -340,7 +397,7 @@ func runInteractiveWithFiles(files []string) int {
 
 // sessionStatus is the status a prompt session leaves: at a terminal the session
 // is where an unusable model gets fixed, so it decides nothing, and otherwise the
-// run is undecided if the model did not analyse or a command reported a slot it
+// run is undecided if the model did not analyse or a command reported a feature value it
 // could not materialize.
 func sessionStatus(loaded int, terminal bool, materializeFailures []error) int {
 	if terminal {

@@ -1,7 +1,7 @@
 package runtime
 
 import (
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"strings"
 	"testing"
 )
@@ -95,7 +95,7 @@ func TestPartChainReadsTheObjectInHand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("instantiate Car: %v", err)
 	}
-	wheel, err := inst.GetSlot(ctx, "wheel")
+	wheel, err := inst.GetFeatureValue(ctx, "wheel")
 	if err != nil {
 		t.Fatalf("Car.wheel: %v", err)
 	}
@@ -103,17 +103,17 @@ func TestPartChainReadsTheObjectInHand(t *testing.T) {
 	if !ok {
 		t.Fatalf("Car.wheel = %s, want the object of this car's wheel", FormatTraceValue(wheel.Value))
 	}
-	if _, err := this.GetSlot(ctx, "radius"); err != nil {
+	if _, err := this.GetFeatureValue(ctx, "radius"); err != nil {
 		t.Fatalf("Car.wheel.radius: %v", err)
 	}
-	this.Slots["radius"].Value = constReal(5.0)
+	this.FeatureValues["radius"].Value = constReal(5.0)
 
-	slot, err := inst.GetSlot(ctx, "r")
+	fv, err := inst.GetFeatureValue(ctx, "r")
 	if err != nil {
 		t.Fatalf("Car.r: %v", err)
 	}
-	if slot.Value.Const.Real != 5.0 {
-		t.Errorf("Car.r = %s, want 5 (the radius this car's wheel carries)", FormatTraceValue(slot.Value))
+	if fv.Value.Const.Real != 5.0 {
+		t.Errorf("Car.r = %s, want 5 (the radius this car's wheel carries)", FormatTraceValue(fv.Value))
 	}
 }
 

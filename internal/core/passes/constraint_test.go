@@ -4,10 +4,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/parser"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // constraintDiags parses src, indexes it, runs the full default registry, and
@@ -689,5 +689,67 @@ func TestConstraintVariantUnderInheritedVariationOK(t *testing.T) {
 	`
 	if diags := constraintDiags(t, src); hasCode(diags, "variant-outside-variation") {
 		t.Fatalf("unexpected variant-outside-variation, got %v", diags)
+	}
+}
+
+// A view body's satisfy must name a viewpoint: only a viewpoint frames concerns,
+// so a satisfy naming a plain requirement claims a conformance nothing checks.
+func TestConstraintViewSatisfyNonViewpointRequirement(t *testing.T) {
+	src := `
+		part def Vehicle;
+		part vehicle : Vehicle;
+		requirement spec { subject s : Vehicle; }
+		view v { expose vehicle; satisfy spec; }
+	`
+	diags := constraintDiags(t, src)
+	if !hasCode(diags, "view-satisfy-viewpoint") {
+		t.Fatalf("expected view-satisfy-viewpoint diagnostic, got %v", diags)
+	}
+}
+
+func TestConstraintViewSatisfyViewpointOK(t *testing.T) {
+	src := `
+		part def Vehicle;
+		part vehicle : Vehicle;
+		viewpoint def VP;
+		viewpoint vp : VP;
+		view v { expose vehicle; satisfy vp; }
+	`
+	if diags := constraintDiags(t, src); hasCode(diags, "view-satisfy-viewpoint") {
+		t.Fatalf("unexpected view-satisfy-viewpoint, got %v", diags)
+	}
+}
+
+// A view body may satisfy a requirement of a stated subject — the stdlib's
+// `View` does, as `satisfy requirement viewpointConformance by that` — which
+// asserts that requirement rather than conformance to a viewpoint.
+func TestConstraintViewSatisfyRequirementBySubjectOK(t *testing.T) {
+	src := `
+		part def Vehicle;
+		part vehicle : Vehicle;
+		requirement def VehicleSpecification { subject s : Vehicle; }
+		requirement spec : VehicleSpecification;
+		view v {
+			expose vehicle;
+			satisfy requirement conformance : VehicleSpecification by vehicle;
+			satisfy spec by vehicle;
+		}
+	`
+	if diags := constraintDiags(t, src); hasCode(diags, "view-satisfy-viewpoint") {
+		t.Fatalf("unexpected view-satisfy-viewpoint, got %v", diags)
+	}
+}
+
+// A satisfy outside a view body is an ordinary requirement satisfaction, which
+// this rule says nothing about.
+func TestConstraintSatisfyOutsideAViewIsNotChecked(t *testing.T) {
+	src := `
+		part def Vehicle;
+		part vehicle : Vehicle;
+		requirement spec { subject s : Vehicle; }
+		part holder { satisfy spec by vehicle; }
+	`
+	if diags := constraintDiags(t, src); hasCode(diags, "view-satisfy-viewpoint") {
+		t.Fatalf("unexpected view-satisfy-viewpoint, got %v", diags)
 	}
 }

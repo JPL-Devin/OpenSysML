@@ -19,7 +19,7 @@ package FlowsAndViews {
     }
     action def Measure {
         in part measured subsets Tank;
-        out part mass : Real;
+        out mass : Real;
     }
     view def StructureView {
         filter @SysML::PartUsage;

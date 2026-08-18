@@ -2,7 +2,7 @@
 
 ## Overview
 
-Implement orthogonal regions (concurrent substates) for state machines. `region` is a Systemica
+Implement orthogonal regions (concurrent substates) for state machines. `region` is an OpenSysML
 extension: SysML v2 has no notation for it, and the bundled libraries have no region performance,
 so UML 2.5.1 §14.2.3.3 is the reference semantics. The nearest library anchor is that only
 `States.sysml` `exclusiveStates` are sequenced (`succession stateSequencing first [0..1]

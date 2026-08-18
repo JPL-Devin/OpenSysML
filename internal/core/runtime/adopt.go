@@ -5,9 +5,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Open-MBEE/Systemica/internal/core/semantics"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // Shapes records the resolved shape of every type a set of objects was
@@ -35,7 +35,7 @@ func (e *AdoptError) Error() string {
 }
 
 // ShapesOf records the shapes obj and everything it holds were materialized
-// against: the objects reachable through its slots and connector ends, plus the
+// against: the objects reachable through its feature values and connector ends, plus the
 // variants its values selected. A connector no name reaches is materialized
 // again rather than carried, so it is no part of this.
 func (ctx *Context) ShapesOf(obj *Instance) *Shapes {
@@ -130,24 +130,24 @@ func (ctx *Context) recordReached(sym *symbols.Symbol, shapes *Shapes) {
 	}
 }
 
-// slotNames lists the object's slot names in a fixed order, so what is done
-// over its slots does not depend on map order.
-func (obj *Instance) slotNames() []string {
-	names := make([]string, 0, len(obj.Slots))
-	for name := range obj.Slots {
+// featureNames lists the object's feature names in a fixed order, so what is done
+// over its feature values does not depend on map order.
+func (obj *Instance) featureNames() []string {
+	names := make([]string, 0, len(obj.FeatureValues))
+	for name := range obj.FeatureValues {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 	return names
 }
 
-// held returns the values the object carries: its slots and its connector ends.
+// held returns the values the object carries: its feature values and its connector ends.
 func (obj *Instance) held() []Value {
-	names := obj.slotNames()
+	names := obj.featureNames()
 	out := make([]Value, 0, 2*len(names)+len(obj.Ends))
 	for _, name := range names {
-		slot := obj.Slots[name]
-		out = append(out, slot.Value, slot.Values)
+		fv := obj.FeatureValues[name]
+		out = append(out, fv.Value, fv.Values)
 	}
 	for _, end := range obj.Ends {
 		out = append(out, end.Value)
@@ -158,14 +158,14 @@ func (obj *Instance) held() []Value {
 // carried returns the values the object keeps across a carry-over: what a value
 // expression states is left out, since it is derived again rather than kept.
 func (obj *Instance) carried(ctx *Context) []Value {
-	names := obj.slotNames()
+	names := obj.featureNames()
 	out := make([]Value, 0, 2*len(names)+len(obj.Ends))
 	for _, name := range names {
-		slot := obj.Slots[name]
-		if ctx.derivedSlot(slot) || ctx.connectorSlot(slot) {
+		fv := obj.FeatureValues[name]
+		if ctx.derivedFeatureValue(fv) || ctx.connectorFeatureValue(fv) {
 			continue
 		}
-		out = append(out, slot.Value, slot.Values)
+		out = append(out, fv.Value, fv.Values)
 	}
 	for _, end := range obj.Ends {
 		out = append(out, end.Value)
@@ -173,22 +173,23 @@ func (obj *Instance) carried(ctx *Context) []Value {
 	return out
 }
 
-// derivedSlot reports whether the slot holds what a value expression states,
+// derivedFeatureValue reports whether the feature value holds what a value expression states,
 // which a new context computes again from the declarations that expression now
 // reads. What a variation's default states is a variant rather than a value, so
-// the object bound to it is carried instead of bound again.
-func (ctx *Context) derivedSlot(s *Slot) bool {
-	if s.Feature == nil || s.Feature.DefaultValue == nil {
+// the object bound to it is carried instead of bound again. A value a run wrote
+// is the object's own state, which no default derives again.
+func (ctx *Context) derivedFeatureValue(s *FeatureValue) bool {
+	if s.Written || s.Feature == nil || !ctx.valueBinds(s.Feature) {
 		return false
 	}
 	return !ctx.model.IsVariationFeature(s.Feature.Symbol)
 }
 
-// collectedSlot reports whether the slot holds values copied out of the features
+// collectedFeatureValue reports whether the feature value holds values copied out of the features
 // subsetting it, which are read again here since one of them may be derived from
 // a declaration that changed. A collection of objects is kept: they are carried.
-func (ctx *Context) collectedSlot(s *Slot) bool {
-	if !s.Materialized || (s.Values.Kind != ValSequence && s.Values.Kind != ValSet) {
+func (ctx *Context) collectedFeatureValue(s *FeatureValue) bool {
+	if s.Written || !s.Materialized || (s.Values.Kind != ValSequence && s.Values.Kind != ValSet) {
 		return false
 	}
 	object := false
@@ -200,9 +201,9 @@ func (ctx *Context) collectedSlot(s *Slot) bool {
 	return !object
 }
 
-// connectorSlot reports whether the slot holds the object of a connector, whose
+// connectorFeatureValue reports whether the feature value holds the object of a connector, whose
 // ends a new context attaches again rather than keeping what they read before.
-func (ctx *Context) connectorSlot(s *Slot) bool {
+func (ctx *Context) connectorFeatureValue(s *FeatureValue) bool {
 	return s.Feature != nil && ctx.model.IsConnectorUsage(s.Feature.Symbol)
 }
 
@@ -268,11 +269,36 @@ func (ctx *Context) writeShape(b *strings.Builder, sym *symbols.Symbol, open map
 			}
 			fmt.Fprintf(b, "=%s", ctx.declText(owner, feat.DefaultValue.Span()))
 		}
+		// A body governing over an inherited value is what materializing reads,
+		// so the shape follows edits confined to that body.
+		if feat.DefaultValue != nil && ctx.bodyGovernsInheritedValue(feat) && feat.Symbol.Decl != nil {
+			fmt.Fprintf(b, "|body:%s", ctx.declText(feat.Symbol, feat.Symbol.Decl.Span()))
+		}
 		b.WriteString("@")
 		ctx.writeShape(b, feat.Type, open)
 		b.WriteString(";")
 	}
+	ctx.writeBoundBehaviors(b, sym)
 	b.WriteString("}")
+}
+
+// writeBoundBehaviors renders the behaviors a type binds to its objects as the
+// bodies they now state: an object of a type whose machine was rewritten runs a
+// behavior the one carried over does not, so it is not the same object.
+func (ctx *Context) writeBoundBehaviors(b *strings.Builder, sym *symbols.Symbol) {
+	for _, decl := range ctx.classifierBehaviorsOf(sym) {
+		fmt.Fprintf(b, "!%s %s=%s;", decl.behavior.Kind, decl.behavior.Name, ctx.behaviorText(decl))
+	}
+}
+
+// behaviorText renders the body a binding declaration runs as written, or says
+// that it names none.
+func (ctx *Context) behaviorText(decl classifierBehaviorDecl) string {
+	body, err := ctx.classifierBehaviorSymbol(decl)
+	if err != nil || body == nil || body.Decl == nil {
+		return "<unresolved>"
+	}
+	return ctx.declText(body, body.Decl.Span())
 }
 
 func bound(b semantics.Bound) string {
@@ -319,22 +345,26 @@ func (ctx *Context) fqnOf(sym *symbols.Symbol) string {
 // The objects are moved rather than copied, so prev holds them too afterwards
 // and this context takes over its identity sequence; nothing new should be
 // materialized through prev, which registers it there alone.
-func (ctx *Context) Adopt(prev *Context, shapes *Shapes, obj *Instance) error {
+//
+// A behavior a carried object ran belongs to the analysis it started in, so it is
+// started again here from its initial state rather than continued. The behaviors
+// restarted are returned, so the carry-over reports what it cost.
+func (ctx *Context) Adopt(prev *Context, shapes *Shapes, obj *Instance) ([]string, error) {
 	if prev == nil || shapes == nil || obj == nil {
-		return &AdoptError{Reason: "there is nothing to carry over"}
+		return nil, &AdoptError{Reason: "there is nothing to carry over"}
 	}
 	if shapes.unnamed {
-		return &AdoptError{Reason: "it is of a declaration with no qualified name"}
+		return nil, &AdoptError{Reason: "it is of a declaration with no qualified name"}
 	}
 	a := &adoption{ctx: ctx, prev: prev, shapes: shapes,
 		plans:   make(map[int64]*adoptPlan),
 		rebound: make(map[*symbols.Symbol]*symbols.Symbol),
 	}
 	if err := a.plan(obj); err != nil {
-		return err
+		return nil, err
 	}
 	a.commit()
-	return nil
+	return a.restartBehaviors()
 }
 
 // adoption is one carry-over: what it has planned, and the symbols it rebound
@@ -348,19 +378,19 @@ type adoption struct {
 }
 
 // adoptPlan is what one object becomes in the new context: the declaration it is
-// of, and the feature each of its slots fills.
+// of, and the feature each of its feature values fills.
 type adoptPlan struct {
 	obj      *Instance
 	typeSym  *symbols.Symbol
 	features map[string]*EffectiveFeature
 }
 
-// featureFor returns the feature a slot reached under name fills: the one its
-// own name gives, which for a slot shared by several names of one feature is the
+// featureFor returns the feature a feature value reached under name fills: the one its
+// own name gives, which for a feature value shared by several names of one feature is the
 // name it was created under.
-func (p *adoptPlan) featureFor(name string, slot *Slot) *EffectiveFeature {
-	if slot.Feature != nil {
-		if feat, ok := p.features[slot.Feature.Name]; ok {
+func (p *adoptPlan) featureFor(name string, fv *FeatureValue) *EffectiveFeature {
+	if fv.Feature != nil {
+		if feat, ok := p.features[fv.Feature.Name]; ok {
 			return feat
 		}
 	}
@@ -400,9 +430,9 @@ func (a *adoption) plan(obj *Instance) error {
 	for i := range features {
 		byName[features[i].Name] = &features[i]
 	}
-	plan := &adoptPlan{obj: obj, typeSym: typeSym, features: make(map[string]*EffectiveFeature, len(obj.Slots))}
-	for _, name := range obj.slotNames() {
-		feat, err := a.planFeature(fqn, typeSym, name, obj.Slots[name], byName)
+	plan := &adoptPlan{obj: obj, typeSym: typeSym, features: make(map[string]*EffectiveFeature, len(obj.FeatureValues))}
+	for _, name := range obj.featureNames() {
+		feat, err := a.planFeature(fqn, typeSym, name, obj.FeatureValues[name], byName)
 		if err != nil {
 			return err
 		}
@@ -417,17 +447,17 @@ func (a *adoption) plan(obj *Instance) error {
 	return nil
 }
 
-// planFeature is the feature a slot fills in this context: the effective feature
-// of the rebound declaration, or — for a slot a connector added, which no
+// planFeature is the feature a feature value fills in this context: the effective feature
+// of the rebound declaration, or — for a feature value a connector added, which no
 // declaration of the type carries — the recorded one with its symbols rebound.
-func (a *adoption) planFeature(owner string, typeSym *symbols.Symbol, name string, slot *Slot, byName map[string]*EffectiveFeature) (*EffectiveFeature, error) {
+func (a *adoption) planFeature(owner string, typeSym *symbols.Symbol, name string, fv *FeatureValue, byName map[string]*EffectiveFeature) (*EffectiveFeature, error) {
 	if feat, ok := byName[name]; ok {
 		return feat, nil
 	}
-	if slot.Feature == nil || slot.Feature.DefaultValue != nil {
+	if fv.Feature == nil || fv.Feature.DefaultValue != nil {
 		return nil, &AdoptError{Type: owner, Reason: fmt.Sprintf("it no longer has a feature %q", name)}
 	}
-	feat := *slot.Feature
+	feat := *fv.Feature
 	feat.OwnerType = typeSym
 	for _, ref := range []**symbols.Symbol{&feat.Symbol, &feat.Type} {
 		if *ref == nil {
@@ -528,38 +558,38 @@ func (a *adoption) commit() {
 	for id, plan := range a.plans {
 		adopted[id] = true
 		plan.obj.Type = plan.typeSym
-		// Names of one redefined feature share a slot, which is rebound once, to
-		// the feature of the name the shared slot was created under.
-		done := make(map[*Slot]bool, len(plan.obj.Slots))
-		for _, name := range plan.obj.slotNames() {
-			slot := plan.obj.Slots[name]
-			if done[slot] {
+		// Names of one redefined feature share a feature value, which is rebound once, to
+		// the feature of the name the shared feature value was created under.
+		done := make(map[*FeatureValue]bool, len(plan.obj.FeatureValues))
+		for _, name := range plan.obj.featureNames() {
+			fv := plan.obj.FeatureValues[name]
+			if done[fv] {
 				continue
 			}
-			done[slot] = true
-			slot.Feature = plan.featureFor(name, slot)
+			done[fv] = true
+			fv.Feature = plan.featureFor(name, fv)
 			// A value an expression states is derived again here, so it cannot go
 			// stale against what that expression now reads.
-			if a.ctx.derivedSlot(slot) {
-				slot.Value, slot.Values, slot.Materialized = Value{}, Value{}, false
+			if a.ctx.derivedFeatureValue(fv) {
+				fv.Value, fv.Values, fv.Materialized = Value{}, Value{}, false
 				continue
 			}
-			if a.ctx.collectedSlot(slot) {
-				slot.Value, slot.Values, slot.Materialized = Value{}, Value{}, false
+			if a.ctx.collectedFeatureValue(fv) {
+				fv.Value, fv.Values, fv.Materialized = Value{}, Value{}, false
 				continue
 			}
 			// A connector reads the features the `connect` clause names, which are
 			// read again here — under the identity its object had, which names the
 			// same connector.
-			if a.ctx.connectorSlot(slot) {
-				if id, held := slot.Value.Object(); held {
-					plan.obj.keepConnector(slot, id)
+			if a.ctx.connectorFeatureValue(fv) {
+				if id, held := fv.Value.Object(); held {
+					plan.obj.keepConnector(fv, id)
 				}
-				slot.Value, slot.Values, slot.Materialized = Value{}, Value{}, false
+				fv.Value, fv.Values, fv.Materialized = Value{}, Value{}, false
 				continue
 			}
-			slot.Value = a.rewrite(slot.Value)
-			slot.Values = a.rewrite(slot.Values)
+			fv.Value = a.rewrite(fv.Value)
+			fv.Values = a.rewrite(fv.Values)
 		}
 		for i := range plan.obj.Ends {
 			plan.obj.Ends[i].Value = a.rewrite(plan.obj.Ends[i].Value)
@@ -574,6 +604,62 @@ func (a *adoption) commit() {
 		a.ctx.ids.atLeast(id + 1)
 	}
 	a.carryDerived(adopted)
+}
+
+// restartBehaviors runs the carried objects' behaviors again in this context, from
+// their initial states, since an execution holds the graph, symbols and message bus
+// of the analysis it started in. A start that fails takes the objects with it.
+func (a *adoption) restartBehaviors() ([]string, error) {
+	var objects []*Instance
+	var restarted []string
+	carried := make([]*Instance, 0, len(a.plans))
+	for _, id := range a.plannedIDs() {
+		obj := a.plans[id].obj
+		carried = append(carried, obj)
+		if len(obj.behaviors) == 0 {
+			continue
+		}
+		for _, behavior := range obj.behaviors {
+			restarted = append(restarted, behavior.Describe())
+		}
+		obj.behaviors = nil
+		objects = append(objects, obj)
+	}
+	if len(objects) == 0 {
+		return nil, nil
+	}
+	// A behavior writes the feature values of its own object and of the objects that
+	// one holds, so the whole carried closure forgets what the discarded run wrote.
+	for _, obj := range carried {
+		obj.forgetBehaviorWrites()
+	}
+	if err := a.ctx.restartClassifierBehaviors(objects); err != nil {
+		a.abandon()
+		return nil, &AdoptError{Type: a.ctx.fqnOf(objects[0].Type),
+			Reason: "the behavior it runs could not be started again: " + err.Error()}
+	}
+	return restarted, nil
+}
+
+// plannedIDs lists the carried identities in order, so what is done over them
+// does not depend on map order.
+func (a *adoption) plannedIDs() []int64 {
+	ids := make([]int64, 0, len(a.plans))
+	for id := range a.plans {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	return ids
+}
+
+// abandon takes the carried objects back out of this context, for a carry-over
+// that cannot be completed after the objects were moved.
+func (a *adoption) abandon() {
+	for id, plan := range a.plans {
+		if a.ctx.instances[id] == plan.obj {
+			delete(a.ctx.instances, id)
+		}
+	}
 }
 
 // carryDerived takes over the state the previous context derived about the

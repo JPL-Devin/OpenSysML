@@ -98,12 +98,12 @@ func TestCheckReportsTheChosenSubject(t *testing.T) {
 	if result.Subject == nil || result.Subject.ID == top.ID {
 		t.Fatalf("subject = %v, want the nested leaf object rather than top #%d", result.Subject, top.ID)
 	}
-	slot, err := result.Subject.GetSlot(ctx, "value")
+	fv, err := result.Subject.GetFeatureValue(ctx, "value")
 	if err != nil {
 		t.Fatalf("value of the subject: %v", err)
 	}
-	if slot == nil || slot.Value.Const.Real != 99.0 {
-		t.Errorf("subject's value = %v, want the redefined 99", slot)
+	if fv == nil || fv.Value.Const.Real != 99.0 {
+		t.Errorf("subject's value = %v, want the redefined 99", fv)
 	}
 }
 

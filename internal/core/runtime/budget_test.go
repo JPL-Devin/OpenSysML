@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 )
 
 // TestBudgetFromValue covers what each variable resolves to: unset, empty,
@@ -341,7 +341,7 @@ func TestActionStepBudgetIsConfigurable(t *testing.T) {
 	}
 }
 
-// TestStateBudgetsAreConfigurable: the event and do activity bounds come from
+// TestStateBudgetsAreConfigurable: the event and do action bounds come from
 // the context too, each naming its own variable.
 func TestStateBudgetsAreConfigurable(t *testing.T) {
 	// A machine whose state is re-entered every round never settles, so whichever
@@ -566,8 +566,8 @@ func TestStepBudgetIsPerRunForInstancesAndCalcs(t *testing.T) {
 		if err != nil {
 			t.Fatalf("instantiation %d failed: %v", i, err)
 		}
-		if _, err := inst.GetSlot(ctx, "m"); err != nil {
-			t.Fatalf("slot read %d failed: %v", i, err)
+		if _, err := inst.GetFeatureValue(ctx, "m"); err != nil {
+			t.Fatalf("feature value read %d failed: %v", i, err)
 		}
 		args := []Value{{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 21}}}
 		if _, err := ctx.InvokeCalc(calcSym, args, scope); err != nil {

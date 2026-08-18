@@ -4,6 +4,481 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Cutting a release
 is described in [docs/project/releasing.md](docs/project/releasing.md).
 
+## 0.1.0 — 2026-08-18
+
+### The project is now OpenSysML
+
+The rename is a clean break with no compatibility aliases: every name below has exactly one
+spelling from this release on. Entries for earlier releases keep the old names, because the
+artifacts they describe really were called that.
+
+- **Go module path is `github.com/Open-MBEE/OpenSysML`.** `go install
+  github.com/Open-MBEE/OpenSysML/cmd/sysml@latest`; the old path resolves only for `v0.0.x`.
+- **The binaries are unchanged** — `sysml`, `sysml-lsp` and `sysml-grpc` keep their names.
+- **The Python client is `opensysml`**, on PyPI and as the import: `pip install opensysml`,
+  `import opensysml`. Its environment variables are `OPENSYSML_*` (`OPENSYSML_GRPC_VERSION`,
+  `OPENSYSML_STATE_DIR`, `OPENSYSML_GITHUB_REPO`, `OPENSYSML_ALLOW_UNPINNED_DOWNLOAD`,
+  `OPENSYSML_REQUIRE_SERVICE`), the base error is `OpenSysMLError`, the generator entry point is
+  `opensysml-generate`, the state directory is `~/.opensysml` and the release tag is
+  `opensysml-v*`. Nothing reads the `pysysml` names, so a `~/.pysysml` left behind by an older
+  install is dead weight and can be deleted. The first release under the new name is 0.3.0,
+  carrying on from `pysysml` 0.2.0 rather than restarting, and `pysysml` gets one last version,
+  0.2.1, which contains no client: it raises on import naming `opensysml`, so `pip install
+  pysysml` reports the rename instead of resolving to the pre-rename 0.2.0. Pin
+  `pysysml==0.2.0` to keep that release while migrating; nothing further is published under
+  that name.
+- **Release archives are `opensysml-<os>-<arch>.tar.gz`** (`.zip` on Windows), and the Homebrew
+  formula is `opensysml`: `brew install Open-MBEE/tap/opensysml`. Assets already published under
+  `v0.0.x` keep their old names.
+- **The RDF extension namespace is `urn:opensysml:sysml:`**, still bound to the `sysx:` prefix. A
+  `.ttl` file written before this release carries `urn:systemica:sysml:` properties, and reading one
+  is refused rather than silently dropping what those properties said — re-export it from its
+  notation source.
+- **The non-normative math library is `OpenSysMLMathFunctions`**, in
+  `OpenSysML Libraries/OpenSysMLMathFunctions.kerml`. A model that writes
+  `import SystemicaMathFunctions::*;` must be updated; the unqualified `exp`, `ln`, `log` and
+  `atan2` aliases are unaffected.
+- **Environment variables are `OPENSYSML_*`** (`OPENSYSML_SMT`, `OPENSYSML_SMT_TIMEOUT`,
+  `OPENSYSML_REQUIRE_SMT`, `OPENSYSML_REQUIRE_TRAINING_CORPUS`, `OPENSYSML_SMT_CORE_BUDGET`,
+  `OPENSYSML_SMT_MAX_CONFIGURATIONS`). The
+  `SYSTEMICA_*` names are not read.
+- **The VS Code extension is `opensysml-sysml`** and its settings are `opensysml.server.path`,
+  `opensysml.server.args`, `opensysml.server.enabled` and `opensysml.trace.server`, with the
+  command `opensysml.restartServer`. Existing settings must be re-set under the new keys.
+
+### Binding connector runtime semantics
+
+- **Bindings declared in materialized type and usage bodies now propagate values in both
+  directions**, including inherited and nested ends, with typed conflict and cycle errors;
+  calc result bindings such as `bind result = x` are also evaluated. Package-owned bindings
+  remain a documented limitation.
+
+### A named control node is a member, and a chained binding declares none
+
+- **`fork`, `join`, `merge` and `decision` register the name they declare**, the way `first`/`done`
+  already do, so `first Jump then Land;` names a control node as source or target instead of
+  reporting it unresolved. An unnamed control node declares no name and registers nothing.
+ - **A binding's end no longer names the binding.** `bind a.b.c = d;` records `a.b.c` as a reference
+   subsetting — the end it binds, not a name the binding answers to — so `%search` and the symbol
+   table no longer carry a stray `c` in the binding's owner.
+
+### A view renders
+
+- **`%render <name>` turns a view's exposed set into the rendering its `render` member states**, and
+  into a containment tree where it states none. The kinds produced are a tree (the exposed elements
+  with their kinds and names, nested views as subtrees), an interconnection diagram (the exposed
+  parts and the connections between them, read from the model's own connector and flow ends), a
+  state machine (states and transitions), an action flow (nodes and successions) and a table (the
+  exposed elements, what they declare and the views nested in the rendered one, as rows). State and
+  action renderings read the lowered `StateGraph`/`ActionGraph` the runtime executes, so a rendering
+  cannot drift from what runs.
+- **`%render <name> <form>` writes the machine-readable form of the rendering**: `mermaid` for the
+  graph-shaped kinds — `flowchart TD` for a tree or an action, `flowchart LR` for an
+  interconnection, `stateDiagram-v2` for a state machine — and `markdown` for a table, which Mermaid
+  has no grammar for. Either pastes into Markdown, a documentation site or an editor as-is, and text
+  stays the default at the prompt. A form the kind is not written in is a typed error naming the one
+  it is.
+- **`sysml model.sysml -render <view>` renders without the prompt**: the artifact on stdout, the
+  kind's machine-readable form by default and `-render-form text` for the read form, `-o` writing it
+  to a file, and every human notice — what was loaded, an empty rendering, an element the rendering
+  cannot represent — on stderr. Rendering decides nothing about the model, so it is not asked for
+  together with `-convert` or a check flag.
+- **Rendering is a read.** `%render` materializes no object, registers nothing in the session and
+  leaves an `%action`/`%state` debugging session stepping the same graph and the same objects, so it
+  can be asked between two `%step`s. `%view`'s report is unchanged.
+- **The empty and error paths say what happened**: a view exposing nothing renders an empty artifact
+  and says so, a rendering kind this build does not produce is a typed error naming the kind and the
+  view rather than a substituted rendering, a name that is no view is `semantics.ErrNotAView` as
+  `%view` answers, and an exposed element a rendering cannot draw is reported rather than dropped.
+- The rendering itself is **tool-defined output**: SysML v2 §10.2 leaves rendering to the tool, so
+  the notation is what is supported and the artifact is OpenSysML's own — recorded as such in
+  [docs/project/spec-compliance.md](docs/project/spec-compliance.md).
+- **An element reached twice is exposed and rendered once.** A wildcard or filtered `expose` walks
+  the document's own scope tree and the global index, which build a symbol each for one
+  declaration, so `expose P::*` and `expose P::**[@T]` used to show an element as many times as it
+  was reached. The declaration a symbol was built from is now its identity, so exposure, filtering,
+  rename and reference lookup all agree on when two symbols are one element.
+
+### An object runs the behavior its type exhibits
+
+- **Materializing an object starts the behaviors its type exhibits or performs.** An
+  `exhibit state` machine written in a part definition is now that part's own machine: each object
+  gets an execution of its own, so two objects of one type hold two current states, two event queues
+  and two sets of feature values. Until now the body only parsed, resolved and lowered — running it
+  meant `%state` on the state usage itself, detached from any object.
+- **Identity carries through the run.** What an entry, `do`, exit or effect body reads and writes is
+  the performing object's feature values, and a send addressed to an object reaches that object's
+  machine and not a sibling's — a nested object now knows the object that owns it, so
+  `send … to sibling` finds the sibling instead of materializing a second one.
+- **Startup and quiescence are defined.** Feature values and constant defaults come first, so an
+  entry action sees declared initial values; then the behaviors are initialized and run until
+  nothing is due at the current time — a machine waiting on a timer is quiescent, and `%step` or
+  `%advance` drives it. Cross-object messages are drained collectively, bounded by the state-event
+  and do-step budgets, so a machine that never settles reports
+  `object behaviors exceeded their budget` rather than hanging.
+- **A second `%instantiate` of one name is a second object**, with its own identity and its own
+  behaviors, and the command now says so (`note: P now denotes this object; object #1 is no longer
+  named, with 1 behavior of its own`) instead of silently replacing the name. `occurrenceOf` is
+  still the reuse path for a named occurrence.
+- **`%invoke <object> <op> [<p>=<expr>]` runs an operation of the object's type**, performed by that
+  object, binding arguments to its `in`/`inout` parameters by name and printing its outputs. Known
+  limitation: only an action member is executable this way — an operation written as a `calc` or
+  `constraint` is evaluated as an expression rather than performed, and reports that.
+- **`%state <object>` attaches to the object's exhibited machine**, so `%step`, `%advance`,
+  `%current`, `%events` and `%features` all describe that object. The object's identity and the debug
+  session both survive an unrelated declaration.
+- **A carried object's behaviors restart in the rebuilt analysis, and it is reported.** An execution
+  belongs to the graph, names and message bus of the analysis it started in, so an object carried
+  over an unrelated declaration keeps its identity but starts its behaviors again from their initial
+  states — dropping what the discarded run wrote — with a `note:` naming what restarted. A `%state`
+  session follows the object onto its restarted machine.
+- **Rewriting a behavior drops the objects running it.** Re-declaring the machine or action an object
+  runs changes what the object is, so the object itself is dropped with a reported reason instead of
+  being carried over at all.
+- **A feature holds the object it materializes before that object's behaviors start**, so two nested
+  objects addressing each other reach one another instead of materializing a fresh copy per message
+  until the event budget runs out.
+- **A creation that fails leaves nothing naming what it removed**: a feature of a surviving object
+  that reached one of the removed objects is read again, and messages addressed to them are dropped
+  with them.
+- **A `%state` session over a machine an object merely performs stays on that machine** across an
+  unrelated declaration; only a session over the object's own exhibited machine follows a restart.
+- **`%step` wakes a machine parked on a change condition**, so a condition made true from outside it
+  — by `%invoke`, by another object, or by a later declaration — is dispatched instead of the machine
+  reporting itself suspended forever.
+
+### `%slots` is now `%features`, the name SysML v2 uses
+
+- **`%features <name>` lists what an object holds for each feature of its type**, which is what
+  `%slots` listed. "Slot" is UML/SysML v1 vocabulary (`InstanceSpecification::slot`); the v2/KerML
+  pair for this concept is `Feature` and `FeatureValue`, and the listing's heading now reads
+  `Features:` to match. `%instantiate` points at the new spelling too.
+- **`%slots` is gone**, not kept as an alias: since it never shipped in a release, 0.1.0 takes the
+  clean break rather than carrying the v1 spelling forward. Nothing else about the listing changed —
+  the nested expansion, its bounds, the error lines and the exit status a non-interactive run takes
+  from a feature value that could not be materialized are all as they were.
+- **The vocabulary behind the command is v2 too.** What was printed and named as a "slot" is now a
+  *feature value* (`FeatureValue`, `KerML.kerml`), and a state's `do` behavior is a *do action*
+  (`States.sysml`) rather than a "do activity":
+  - Message text changed: `feature value craft.volumes: multiplicity violation: …`,
+    `cyclic feature value dependency`, `uninitialized feature value`,
+    `no errors in the feature values checked`, and
+    `state machine exceeded max do action steps (…)`. The `%budget` label reads `do action steps`.
+    `SYSML_MAX_DO_STEPS` and every exit status are unchanged, but a script matching the old text
+    needs updating.
+  - The gRPC interface carries `Instance.feature_values` (`FeatureValue`) and the `feature_values`
+    capability. `Instance.slots` and `SlotValue` are removed; field number 3 and the name `slots`
+    stay reserved in `sysml.proto`, so the number is never reused. `opensysml` requires that
+    capability before it hands back an object, so a service predating the rename — every published
+    release does — is named rather than answering with an object that appears to hold nothing.
+  - `opensysml` exposes `Instance.features`, `raw_features`, `get_feature`, `FeatureValueError`, and
+    `typed.feature_value`/`optional_feature_value`/`list_feature_value`, which generated modules
+    emit (emission schema `3`). The `slots`, `raw_slots`, `get_slot`, `SlotError`, `slot_to_python`
+    and `slot` decoder spellings are removed.
+  - The Go runtime API is renamed to match (`runtime.FeatureValue`, `Instance.FeatureValues`,
+    `GetFeatureValue`, `FeatureValueError`, `ErrFeatureValueMaterialization`, `ErrCyclicFeatureValue`,
+    `ErrUninitializedFeatureValue`). It is internal, so nothing outside the module depends on it.
+
+### The prompt prints the model it holds
+
+- **`%print` writes the session's model back as SysML notation at the prompt**, which until now
+  needed `%save <file>` and another program to open the file. `%print <name>` prints one element
+  and its body instead of the whole buffer, taking the quoted and qualified spellings every other
+  command takes (`%print 'My Pkg'::Car`, `%print Top::'My Pkg'::Car`), and tab completes both the
+  command and the names after it.
+- It is the writer `%save` writes `.sysml` with — `export.SysMLElement` renders one element's
+  source through the same `format.Source` path a whole-document save goes through — so comments and
+  the text as typed survive, and a print submitted again rebuilds the same model. Notation only: no
+  RDF notice follows a print.
+- Printing is a read. No object is materialized, `%instances` and the buffer are unchanged, and an
+  `%action`/`%state` debugging session keeps running across it. An empty session, a name nothing
+  declares, and a symbol this session holds no source of (a library name) each answer in one line.
+
+### An SMT solver decides what a model's conditions permit
+
+The whole path is **experimental** and every surface says so: the vocabulary of the reports may
+change, and a solver is optional at runtime — discovered on `PATH` or named by `OPENSYSML_SMT`,
+with a build that has none reporting that rather than a verdict.
+
+- **`%check <name>` asks an external SMT solver whether a constraint, requirement or satisfaction
+  assertion *can* be satisfied**, and prints an assignment on `sat`. Conditions are translated to
+  an SMT-LIB 2 script — one variable per logical feature with injective symbols, quantities in
+  named base units, and truncating integer division whose well-definedness guard is hoisted only
+  where the division always runs — and `sat`, `unsat` and `unknown` stay three distinct verdicts.
+  Satisfiability is not evaluation: `%constraint` and `%satisfy` still answer what holds of an
+  object.
+- **`%explain <name>` says which conditions conflict** behind an `unsat`: an unsat core reduced to
+  a minimal one by dropping a member at a time in fresh solver processes, bounded by member count
+  and `OPENSYSML_SMT_CORE_BUDGET`, printed as the role, the condition as written, the declaring
+  element and `file:line:col` in the query's assertion order. A declared domain (a `Natural` being
+  non-negative) or a division guard can be the conflicting condition, a one-member conflict says it
+  is the whole conflict, and a core that was refused, unreadable, empty, repeated or never issued is
+  a typed `CoreError` rather than a shorter core presented as minimal. The time reported covers the
+  reduction, not just the first verdict.
+- **`%solve <name>` synthesises values that satisfy an assertion**, keeping fixed what already is —
+  the values an object holds, else the ones the model declares — and reporting what was fixed and
+  by whom, the values chosen, and that they are one witness of possibly many. `unsat` there means
+  no values exist consistent with what is fixed, and names the fixed values that conflict; an
+  object's fixed values survive an unrelated submission.
+- **`%configure <name>` answers which variants an assertion permits**: with no argument one
+  consistent selection, with `<variation>=<variant>` the named selection checked and the conflict
+  named where it is not consistent, and with `all [<count>]` the selections enumerated up to
+  `OPENSYSML_SMT_MAX_CONFIGURATIONS`. The report says whether they are all of them or were cut
+  short — at the bound, or because the solver stopped deciding or ran out of time, in which case
+  the selections found so far are still reported. An element that reads no variation point is an
+  error pointing at `%check`.
+- **`%optimize <name>` improves the `objective`s an `analysis def` states**, which until now parsed
+  and then sat inert: the direction comes from the trade-study definition typing it
+  (`TradeStudies::MinimizeObjective` or `MaximizeObjective`), the value from the expression the
+  objective states for the library's `best` feature, and feasibility from the case's own conditions
+  together with each objective's — all read through the runtime's own surfaces, re-parsing no
+  declaration. Several objectives are improved lexicographically in declaration order, with
+  `(set-option :opt.priority lex)` written into the script rather than left to a backend default,
+  and every optimum is verified by asking whether anything does better, so an attained optimum, an
+  unbounded objective, a bound no assignment attains and an answer that could not be verified stay
+  four different reports and none of them fabricates a number.
+- **What a query needs of a backend is modelled as capabilities**, probed once per executable (or
+  declared by the caller) and cached, so a feature the backend lacks is an
+  `UnsupportedCapabilityError` naming the backend, the feature and the operation instead of a silent
+  degrade or a fabricated verdict. A query emits the narrowest standard SMT-LIB 2.6 logic it needs,
+  falling back to the non-standard `ALL` only for datatypes and strings, which the standard logics
+  cover with nothing. Optimization is a z3 extension, so cvc5 is refused there rather than answering
+  a plain `check-sat` presented as an optimum. "Lacks the feature", "cannot be run" and "did not
+  decide" are three distinct reports, an undecided probe settles nothing, and a reply SMT-LIB does
+  not define — `maybe` — is a `SolverProcessError` about the executable rather than a capability
+  refusal.
+- **The path is gated in CI both with a solver and without one.** A differential gate requires the
+  solver's `sat`/`unsat` to agree with the evaluator's verdict over the conformance corpus, the
+  standard library, the OMG training corpus and deterministic randomized models — it found and
+  fixed a real division by zero answered as an infinity, and a redefining variation usage given a
+  sort of its own — and a portability harness reports pass/refuse/fail per capability against
+  whatever `OPENSYSML_SMT` names, wired to both z3 and cvc5.
+- `brew install opensysml` brings z3 along, so the path works out of the box on a Homebrew
+  install, and the install guide, troubleshooting page, environment reference and REPL command
+  reference each say how to get a solver otherwise.
+
+### A model is edited through the source it was parsed from
+
+- **`ApplyEdits` edits a loaded model by rewriting the bytes of its own source.**
+  `internal/core/edit` is a span-level engine that sets a feature's value or renames a declaration
+  and leaves every untouched byte identical, so comments and the text as typed survive an edit the
+  way they survive a save. The edited source is re-parsed and re-analyzed before it is handed back,
+  and the edits of a request are applied all of them or none. The source edited is the one the parse
+  read, named by its hash, so a file changed since then is refused rather than edited blind.
+- **An edit is judged only by the tiers the original's parse reached.** A model whose parse had
+  errors was never analyzed, so its semantic baseline was empty and every pre-existing name or type
+  error counted as one the edit introduced — refusing a good edit to a file with a syntax error
+  elsewhere. Renaming a referenced element, and creating or deleting an element, are refused with a
+  typed error rather than approximated.
+- **`opensysml` exposes it as `model.edit()`** — `set_value(target, value)`, `rename(target, name)`
+  and `apply()`, whose result saves the way a `Conversion` does — behind the `apply_edits`
+  capability, so a service too old to offer it says so instead of failing as an unimplemented
+  method.
+
+### Resolution cost
+
+- **Resolving a feature chain is linear in its length**, where a chain's prefixes used to be
+  re-resolved per segment, and an operand of a chain that is no reference is preserved rather than
+  dropped on the way.
+
+### A model that states behavior converts to RDF
+
+- The behavioral nodes of an action or state body now have metaclasses and the properties their
+  notation is rebuilt from, so a model stating steps converts instead of being refused: the
+  initial and final node, `perform`, `send`, `accept`, `terminate`, `assign`, the
+  fork/join/merge/decision control nodes, `while`/`loop`/`for`, `if`/`else`, and the state
+  machine's states, substates, regions, `entry`/`do`/`exit`, `defer`, pseudostates and
+  transitions. Each category is covered by a `notation → RDF → notation` round trip asserting the
+  body comes back byte-identically. The mapping is tabulated in
+  [the RDF mapping](docs/reference/rdf-mapping.md) § Behavior; terms the OMG vocabulary has no
+  counterpart for are named under the `sysx:` extension namespace.
+- **102 of the 120 models under `examples/` now convert to Turtle, up from 71.** The remaining 18
+  are refused with the node named, not partly converted: nine successions that do not name both
+  of their ends, three prefix-metadata models, three duplicate declarations, two
+  operator-expression members and one anonymous `snapshot`.
+- A shorthand relationship no longer collides with the member it names: the `result` of
+  `bind result = x;` and the `x` of `first x;` are carried as references to that member rather
+  than as a name the element declares, which is what made those models fail as duplicate
+  declarations.
+- Two things the mapping used to lose quietly now survive it: a metadata annotation
+  (`#Safety part def Car;`) is carried as the notation it was written as, and a feature that wrote
+  no kind keyword (`in x : Real;`) comes back without one instead of gaining the kind's canonical
+  keyword. The two annotation shapes that still cannot be written back — one carrying a body, and
+  an `@` annotation the parser records on the declaration ahead of the one it prefixes — are
+  reported with the line named.
+- Two more shapes the mapping used to change quietly now come back as written: a combined state
+  subaction keeps its `do` whatever separates it from its body (`entry do{ … }`), and a kind
+  keyword named inside a comment in a declaration's head (`in /* attribute */ x : Real;`) is read
+  as the trivia it is rather than as a keyword the author wrote.
+- RDF conversion remains **experimental** — the vocabulary may still change, and no round trip
+  through a running triplestore has been demonstrated (roadmap D1–D3).
+- Every surface now states that status in one wording again: `-help` prints
+  `export.ExperimentalNotice` rather than a copy of it, and the Python client's fallback notice,
+  the `ConvertResponse.experimental` comment and the guide pages were brought back in step. A test
+  pins the Python copy byte-identical to the constant, since Python cannot import it.
+
+### A nested value body governs over an inherited value
+
+- **A redefining declaration whose body values features holds those values.** `part def Ring
+  { attribute cost : Cost = template; }` re-opened as `part r : Ring { attribute :>> cost
+  { attribute :>> v = 11.0; } }` now reads `r.cost.v` as `11.0`: the more specific declaration of
+  the feature governs (KerML 1.0 §7.3.4.5), where the inherited value used to win and the body's
+  restatements were dropped with no diagnostic. A feature the body does not value takes its type's
+  own default, the inherited value binding nothing there — the body supersedes that value rather
+  than merging with it, since a `FeatureValue` binds a feature as a whole.
+- Unchanged: a body on the *same* declaration that writes the value still reports
+  `ErrValuedFeatureRestated` (two values, neither more specific), and a body that only re-declares
+  features (`attribute :>> kept { attribute :>> v; }`) still reads the inherited value — at any
+  depth of nesting, a value stated anywhere in the body being what makes it govern.
+- **A check made without an object agrees with materializing one.** A condition naming a feature a
+  body governs over reads it as uninitialized rather than against the superseded value, so the same
+  model no longer passes or fails a check depending on whether an object was built for it, and an
+  edit confined to a governing body changes the type's shape, so a carried-over object is
+  re-materialized instead of keeping the value the body replaced.
+
+### Names nested inside a `require`/`assume` body are resolved
+
+- **A `require`/`assume` body now resolves to whatever depth it is written to.** Where only its
+  direct members resolved, a declaration nested in it (`require Q::r { part p : P { :>> f; } }`)
+  had its own body left unwalked, so a typo there produced no diagnostic at all; such a name is
+  now resolved and, if it names nothing, reported at its own span.
+- The body is a scope of its own: what it declares is visible to what nests inside it but is no
+  member of the namespace that declares the member, and the referenced requirement's features stay
+  offered to the body's direct members, which is what the reference subsetting inherits them to.
+- **Every tier reads the body in that same scope.** Type checking and condition evaluation walked
+  such a body in the *enclosing* scope, so a value written there was typed against the wrong set of
+  names — silently missing a genuine type error, or judging the name against an unrelated
+  declaration outside the body — and a condition stated in the body could not read a name the body
+  declares.
+
+### An unimported OpenSysML extension function no longer answers a call it is reported unresolved on
+
+- **`exp`, `ln`, `log` and `atan2` now require the import that declares them.** They are declared by
+  the non-normative `OpenSysMLMathFunctions` extension, which no OMG library carries, so a bare
+  `exp(x)` is reported `unresolved reference: exp` — and used to be evaluated anyway by dispatch on
+  the local name, which meant the diagnostic and the behavior disagreed: ignore the error and the
+  model computed, trust it and the model looked broken. Such a call now fails with a typed error
+  (`ErrUnimportedExtensionFunction`) naming the function and the `import OpenSysMLMathFunctions::*;`
+  that makes it legal.
+- **A model that imports the package, or writes the call qualified, is unaffected**, as is a bare
+  call to an OMG function library (`sqrt`, `sin`, …), which every model may write whatever it
+  imports.
+- **`%builtins` still lists them, marked with the import they need.** Dropping the four names from
+  the unqualified-dispatch registry also dropped them from the listing and from name completion,
+  which made implemented functions look unsupported; the listing is now taken from what the build
+  implements, and an extension function is listed with a `(needs import OpenSysMLMathFunctions::*;)`
+  marker rather than silently omitted.
+- **A root-level import in a document that declares nothing else now surfaces its names**, which is
+  what a bare `import OpenSysMLMathFunctions::*;` at the REPL prompt is: the editor's own scope tree
+  is identified by the document name stamped on it, and a document with no member had no symbol left
+  to carry that name, so its own import was read as another document's private re-export.
+
+### The corpus notation two verdicts were open on is adjudicated legal
+
+- **A conjugated end (`end spacePort : ~CommunicationPort`) and a portion prefixed onto a kind
+  keyword (`timeslice item item1`) are legal, and are accepted.** `ConjugatedPortTyping`
+  specializes `FeatureTyping`, so any feature typing — a connection or interface end among them —
+  may name a conjugated port definition, and `PortionKind` is an attribute of `OccurrenceUsage`,
+  which an item usage is. Both are pinned clean over every validation tier by
+  `testdata/passes/corpus_notation.golden`, so a regression is caught as the false positive on a
+  flagship model that it would be. What the Open-MBEE models still report is other notation: the
+  OMG-side `end;` outside an interface body and `'SysML Standard Diagrams'::gv`, and — in
+  `DesertKite.sysml`, which lives only on that repository's `InitialDesign` branch — 7 errors that
+  are ours: a qualified name refused as a `bind` end and `connection connect … ;` refused inside a
+  `requirement` body, both owned by a separate session.
+
+### A binding end may be a qualified name, and a requirement body takes a prefixed connector
+
+- **`bind` now accepts the notation a connector end is written in:** `binding bind R::a = c;` and a
+  feature chain whose chaining features are themselves qualified names
+  (`bind 'Kite Environment'::'Region Earth Surface'.'Kite System'::'Desert Kite'.'Wall Height' = …`)
+  parsed as far as the first `::` and then failed. A connector end names a feature by a
+  `QualifiedName` (SysML `ConnectorEndMember` → KerML `OwnedReferenceSubsetting`,
+  `OwnedFeatureChaining`), and every segment of the chain is now recorded and resolved, not
+  collapsed to its last one.
+- **The named form is no longer read as a redefinition:** `binding b1 bind R::a = c;` reported
+  "b1 redefines a, but a is not an inherited member of P". `b1` is the binding's name and `R::a` its
+  first end, which reference-subsets the feature it names, so it resolves where that feature is
+  declared rather than as an inherited member of the binding's owner.
+- **A connector, flow or message written with its kind keyword is a member of a requirement-like
+  body:** `requirement r { connection connect r to x; }` reported `expected a body member` at the
+  closing brace. A `requirement`, `constraint`, `concern`, `objective`, `use case` and `view` body
+  admits usage elements, and a connector usage declares no name — its ends are what make it a
+  declaration.
+- The Open-MBEE `DesertKite.sysml` model parses clean as a result. What it still reports is
+  recorded in [spec compliance](docs/project/spec-compliance.md) § Structural, Interface and
+  Analysis Notation: the tool-specific `'SysML Standard Diagrams'::gv` namespace, an `OOSEM::MOE`
+  reference to a member of `OOSEM::'OOSEM Measures'`, and references to a decision node whose name
+  is not registered as a symbol.
+
+### RDF conversion is experimental
+
+- SysML ↔ RDF Turtle conversion is labelled **experimental**, in both directions, on every
+  surface that offers it. The mapping covers a model's structure and behavior but not its
+  expressions, a model it cannot write is refused with the construct named (the counts are
+  above), its vocabulary may change without a compatibility path, and no round trip through a
+  running triplestore has been demonstrated (roadmap D1–D3, D6). Saving and converting notation
+  (`.sysml`, `.kerml`) is stable and unchanged.
+- `sysml -convert` writes the status as a `note:` on **stderr**, so a conversion piped to a file
+  or to stdout carries no extra bytes, and a refused conversion is labelled too. `-help` says
+  the same.
+- `%save model.ttl` prints the status before it writes, including when the model is refused.
+- `ConvertResponse` carries `experimental` and `experimental_notice`, set before the conversion
+  runs, so a client reads the status off a refusal as well as off a success. The `convert`
+  capability is unchanged: the status is per conversion, not per service.
+- `opensysml` raises the status as `ExperimentalFeatureWarning` and exposes it as
+  `Conversion.experimental`/`.experimental_notice`, plus `opensysml.is_experimental(from, to)`.
+  A service too old to send the fields is read from the formats it reports instead, so an RDF
+  conversion warns either way. Silence it with
+  `warnings.simplefilter("ignore", opensysml.ExperimentalFeatureWarning)` — no stable feature
+  warns with that class.
+- The wording lives once, in `export.ExperimentalNotice`, so no surface can drift from another.
+
+### Documentation
+
+- The RDF mapping reference opens with a **Status: experimental** section stating what the
+  mapping covers, that the vocabulary may change, and that interoperability is unverified.
+- The claim that a converted graph "loads into" Flexo MMS's triplestore is withdrawn from the
+  reference and from `docs/project/spec-compliance.md`: the vocabulary and element IRIs match
+  Flexo's `Namespaces.kt`, which is an addressing claim, not a demonstrated load.
+- The README capability table splits notation save (complete) from RDF conversion
+  (experimental), and the guide, CLI and REPL references, Python guide and roadmap say the same.
+- Two example models come with a walkthrough of the commands that exercise them:
+  [`examples/solver-demo.sysml`](examples/solver-demo.sysml) for `%check`, `%explain`, `%solve`,
+  `%configure` and `%optimize`, and [`examples/views-demo.sysml`](examples/views-demo.sysml) for
+  `%view` and `%render` across the five rendering kinds and the text, Mermaid and Markdown forms.
+
+### Release process
+
+- The CircleCI pipeline that builds release tags downloads the OMG training corpus and runs the
+  suite with `OPENSYSML_REQUIRE_TRAINING_CORPUS=1`, so the corpus gate can no longer skip
+  silently where a tag is cut. 0.0.9 listed that as a known limitation; it is closed.
+
+### Known limitations
+
+- Of what 0.0.9 listed, the untested tag pipeline is closed above and the RDF refusal of a model
+  stating behavior is closed by the mapping's behavior coverage. What stands: expressions are not
+  emitted as triples and end-binding heads depend on `sysx:sourceText`, so RDF conversion is
+  stated as a feature status rather than a footnote; a `that` written inside a nested `action`,
+  `constraint` or transition-guard body binds to the innermost enclosing usage; an unqualified
+  standard library name requires an import, which is conformant and recorded as won't-do; and a
+  port that accepts TCP but never answers gRPC costs the Python client about 9 s rather than the
+  nominal 2.5 s `START_TIMEOUT`.
+- A package-owned binding connector does not propagate values; a binding declared in a
+  materialized type or usage body does.
+- Constraint solving is experimental and needs an external solver: `%check`, `%explain`, `%solve`
+  and `%configure` want z3 or cvc5, and `%optimize` wants z3, since optimization is a z3 extension
+  cvc5 does not implement. A condition the translation has no SMT-LIB form for refuses the whole
+  query rather than dropping the condition, and the guide covers the commands by reference rather
+  than in a chapter of its own.
+- An edit sets a feature's value or renames a declaration; creating or deleting an element, and
+  renaming one that is referenced, are refused.
+- Only an action member of a type is executable through `%invoke`; an operation written as a
+  `calc` or `constraint` is evaluated as an expression and reports that.
+- A rendering is tool-defined output (SysML v2 §10.2 leaves rendering to the tool), so what
+  `%render` and `sysml -render` produce is OpenSysML's own notation rather than a standard
+  interchange form.
+
 ## 0.0.9 — 2026-08-17
 
 ### Language and semantics
@@ -821,7 +1296,8 @@ are listed here rather than under a heading of their own.
   metadata and `pysysml.__version__` both read — a tag that disagrees with it
   fails the job before anything is uploaded. `python/setup.py` is gone;
   `pyproject.toml` declares the build. See
-  [docs/project/releasing.md](docs/project/releasing.md#releasing-pysysml-to-pypi).
+  [docs/project/releasing.md](docs/project/releasing.md#releasing-opensysml-to-pypi)
+  (that section, and the package, are named `opensysml` since the rename).
 
 ### Known limitations
 

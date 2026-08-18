@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/resolve"
-	"github.com/Open-MBEE/Systemica/internal/core/semantics"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // ConstraintPass runs the depth-C semantic constraint checks over a document's
@@ -86,6 +86,34 @@ func (cc *constraintChecker) check(sym *symbols.Symbol) {
 	cc.checkRedefinition(sym)
 	cc.checkUnnamedRedefinitionValue(sym)
 	cc.checkVariantOutsideVariation(sym)
+	cc.checkViewSatisfyTarget(sym)
+}
+
+// checkViewSatisfyTarget flags a `satisfy` claiming a view's conformance to a
+// requirement that is no viewpoint (SysML v2 §8.3.20): only a viewpoint frames
+// concerns, so such a claim is one nothing can evaluate. A satisfy stating a
+// subject asserts its requirement of that subject, not conformance, and stands.
+func (cc *constraintChecker) checkViewSatisfyTarget(sym *symbols.Symbol) {
+	if sym.OwnerScope == nil || !semantics.IsViewpointSatisfy(sym) {
+		return
+	}
+	owner := sym.OwnerScope.Owner()
+	if owner == nil || !semantics.IsView(owner) {
+		return
+	}
+	target, ref := cc.model.SatisfyTarget(sym)
+	if target == nil || semantics.IsViewpoint(target) {
+		return
+	}
+	cc.diags = append(cc.diags, Diagnostic{
+		Severity: SeverityError,
+		Span:     sym.DeclSpan,
+		Message: fmt.Sprintf(
+			"satisfy in a view body must name a viewpoint: %s is a %s, which frames no concern for the view to conform to",
+			ref, target.Kind.String()),
+		Code:   "view-satisfy-viewpoint",
+		Source: "constraint",
+	})
 }
 
 // checkVariantOutsideVariation warns about a `variant` whose owner is not a

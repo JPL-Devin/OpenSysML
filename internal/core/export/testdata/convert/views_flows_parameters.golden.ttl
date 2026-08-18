@@ -1,7 +1,7 @@
 @prefix elmt: <urn:sysmlv2:element:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
-@prefix sysx: <urn:systemica:sysml:> .
+@prefix sysx: <urn:opensysml:sysml:> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
 elmt:FlowsAndViews
@@ -169,6 +169,7 @@ elmt:FlowsAndViews::Measure::mass
     sysml:owningNamespace elmt:FlowsAndViews::Measure ;
     sysx:memberIndex "1"^^xsd:integer ;
     sysml:declaredName "mass" ;
+    sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:direction "out" ;
     sysml:type "Real" ;
     sysx:hasBody "false"^^xsd:boolean .

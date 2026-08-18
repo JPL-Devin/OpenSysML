@@ -1,4 +1,4 @@
-# Systemica documentation
+# OpenSysML documentation
 
 ## Using it
 
@@ -16,8 +16,8 @@ Runnable models are in [examples/](../examples/), with a catalog of what each on
 - **[REPL commands](reference/repl-commands.md)** — every `%` command and its arguments
 - **[Environment variables](reference/environment.md)** — the bounds one run may spend, and paths
 - **[Go API](reference/api.md)** — the public API of every package
-- **[Python API](reference/python-api.md)** — `pysysml`, its generated typed classes and latency
-- **[RDF mapping](reference/rdf-mapping.md)** — which triples a model becomes, and what is not mapped
+- **[Python API](reference/python-api.md)** — `opensysml`, its generated typed classes and latency
+- **[RDF mapping](reference/rdf-mapping.md)** — which triples a model becomes, what is not mapped, and why the mapping is experimental
 - **[Grammar](reference/grammar/README.md)** — grammar production → parser implementation
 
 ## How it works

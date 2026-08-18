@@ -1,7 +1,7 @@
 # Pseudostates Design - Choice and Junction
 
 **Status:** Implemented — choice, junction, fork, join, entry/exit points and history, including pseudostates reached from inside an orthogonal region  
-**Semantic Reference:** choice and junction are KerML performances — `ControlPerformances::DecisionPerformance` (`outgoingHBLink: HappensBefore[1]`) and `MergePerformance` (`incomingHBLink: HappensBefore[1]`), with `StatePerformances::StatePerformance specializes DecisionPerformance`. Fork/join in a state body, history and entry/exit points have no SysML v2 notation and no KerML performance, so UML 2.5.1 §14.2.3.4 (Pseudostates) is their reference semantics only; the notation for all of them is a Systemica extension.
+**Semantic Reference:** choice and junction are KerML performances — `ControlPerformances::DecisionPerformance` (`outgoingHBLink: HappensBefore[1]`) and `MergePerformance` (`incomingHBLink: HappensBefore[1]`), with `StatePerformances::StatePerformance specializes DecisionPerformance`. Fork/join in a state body, history and entry/exit points have no SysML v2 notation and no KerML performance, so UML 2.5.1 §14.2.3.4 (Pseudostates) is their reference semantics only; the notation for all of them is an OpenSysML extension.
 
 ## Overview
 
@@ -71,7 +71,7 @@ state def SafetyMonitor {
 }
 ```
 
-**History, entry/exit points and deferral** (a Systemica extension — the OMG
+**History, entry/exit points and deferral** (an OpenSysML extension — the OMG
 textual notation has no production for pseudostates or for deferral; see
 `docs/reference/grammar/README.md`):
 ```sysml
@@ -420,6 +420,6 @@ region.
 - A junction's guards are evaluated when it is reached, like a choice's, rather
   than statically together with its incoming transition. The two differ only for
   guards over data an effect on the incoming transition changes.
-- Entry points, exit points and history are a Systemica extension to the OMG
+- Entry points, exit points and history are an OpenSysML extension to the OMG
   textual notation, which has no production for any pseudostate; see
   `docs/reference/grammar/README.md`.

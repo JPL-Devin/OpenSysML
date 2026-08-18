@@ -18,7 +18,7 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/Open-MBEE/Systemica/api/proto"
+	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -272,7 +272,7 @@ func TestServiceServesRPCsAndShutsDownCleanly(t *testing.T) {
 	if inst.Error != "" {
 		t.Fatalf("Instantiate reported %q", inst.Error)
 	}
-	mass := slotOf(t, inst, "mass")
+	mass := featureValueOf(t, inst, "mass")
 	if got := mass.GetValue().GetIntValue(); got != 1500 {
 		t.Errorf("mass = %v, want 1500", mass.GetValue())
 	}
@@ -283,15 +283,15 @@ func TestServiceServesRPCsAndShutsDownCleanly(t *testing.T) {
 	}
 }
 
-// slotOf returns the named slot of an instantiation response.
-func slotOf(t *testing.T, res *pb.InstantiateResponse, name string) *pb.SlotValue {
+// featureValueOf returns the named feature value of an instantiation response.
+func featureValueOf(t *testing.T, res *pb.InstantiateResponse, name string) *pb.FeatureValue {
 	t.Helper()
-	for _, slot := range res.GetInstance().GetSlots() {
-		if slot.GetFeatureName() == name {
-			return slot
+	for _, fv := range res.GetInstance().GetFeatureValues() {
+		if fv.GetFeatureName() == name {
+			return fv
 		}
 	}
-	t.Fatalf("no slot %q in %v", name, res.GetInstance())
+	t.Fatalf("no feature value %q in %v", name, res.GetInstance())
 	return nil
 }
 

@@ -1,9 +1,9 @@
-# AGENTS.md — Guide for AI Agents Working on Systemica
+# AGENTS.md — Guide for AI Agents Working on OpenSysML
 
 > **Prime directive:** If I wanted hacks, I'd write it myself. **Don't ever choose hacky over correct.**
 > Fix root causes upstream, not symptoms. Never weaken, skip, or delete tests to make them pass.
 
-Systemica is a production-grade SysML v2 implementation in **Go 1.23+** (module `github.com/Open-MBEE/Systemica`).
+OpenSysML is a production-grade SysML v2 implementation in **Go 1.23+** (module `github.com/Open-MBEE/OpenSysML`).
 It provides a hand-written lexer/parser, semantic engine, execution runtime, LSP server (`sysml-lsp`), and REPL (`sysml`).
 
 ---
@@ -50,7 +50,7 @@ gofmt -l .                                      # must print nothing (CI enforce
 The OMG training-corpus gate is part of that suite but skips while the corpus is absent, so
 fetch it once with `./scripts/download-training-examples.sh` and re-run
 `go test -count=1 ./internal/core/model -run TestTrainingExamples`. CI downloads the corpus
-too and sets `SYSTEMICA_REQUIRE_TRAINING_CORPUS=1`, so there an absent corpus fails rather
+too and sets `OPENSYSML_REQUIRE_TRAINING_CORPUS=1`, so there an absent corpus fails rather
 than skips.
 
 ---

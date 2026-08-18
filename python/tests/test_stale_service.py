@@ -18,22 +18,22 @@ import grpc
 import psutil
 import pytest
 
-from pysysml.capabilities import (
+from opensysml.capabilities import (
     CAPABILITY_CONVERT,
     CAPABILITY_QUERY,
     MissingCapabilityError,
     ServerInfo,
     mismatch_reason,
 )
-from pysysml.connection import (
+from opensysml.connection import (
     Connection,
     _OWNED_SERVICES,
     _get_pidfile_path,
     _service_key,
     _write_ownership_record,
 )
-from pysysml.errors import ChecksumMismatchError, ConnectionError, StaleServiceError
-from pysysml.proto import sysml_pb2, sysml_pb2_grpc
+from opensysml.errors import ChecksumMismatchError, ConnectionError, StaleServiceError
+from opensysml.proto import sysml_pb2, sysml_pb2_grpc
 
 
 class OldService(sysml_pb2_grpc.SysMLServiceServicer):
@@ -85,7 +85,7 @@ def tmp_home(tmp_path, monkeypatch):
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
-    monkeypatch.setenv("PYSYSML_STATE_DIR", str(home / ".pysysml"))
+    monkeypatch.setenv("OPENSYSML_STATE_DIR", str(home / ".opensysml"))
     before = set(_OWNED_SERVICES)
     yield home
     # Drop only what this test recorded: another test's connection still needs
@@ -104,7 +104,7 @@ def test_a_foreign_service_of_another_release_is_reported_not_killed(
     does have — the wrong error, several calls later.
     """
     port = running_service(version="v0.0.5")
-    monkeypatch.setenv("PYSYSML_GRPC_VERSION", "v0.0.7")
+    monkeypatch.setenv("OPENSYSML_GRPC_VERSION", "v0.0.7")
 
     with pytest.raises(StaleServiceError) as excinfo:
         Connection(port=port)
@@ -115,7 +115,7 @@ def test_a_foreign_service_of_another_release_is_reported_not_killed(
     assert f"stop the service listening on localhost:{port} yourself" in error.remedy
     assert error.info.version == "v0.0.5"
     # Still serving: nothing was killed.
-    monkeypatch.delenv("PYSYSML_GRPC_VERSION")
+    monkeypatch.delenv("OPENSYSML_GRPC_VERSION")
     with Connection(port=port, auto_start=False) as conn:
         assert conn.server_info().version == "v0.0.5"
     assert not os.path.exists(_get_pidfile_path(port))
@@ -127,7 +127,7 @@ def test_a_foreign_service_that_cannot_say_what_it_is_is_reported(
 ):
     """A service that cannot say what it is cannot be the release asked for."""
     port = running_service(answers_handshake=False)
-    monkeypatch.setenv("PYSYSML_GRPC_VERSION", "v0.0.7")
+    monkeypatch.setenv("OPENSYSML_GRPC_VERSION", "v0.0.7")
 
     with pytest.raises(StaleServiceError) as excinfo:
         Connection(port=port)
@@ -143,7 +143,7 @@ def test_a_foreign_service_lacking_a_required_capability_is_reported(
     Which process happens to be listening must not change the class a caller
     has to catch for one condition.
     """
-    monkeypatch.delenv("PYSYSML_GRPC_VERSION", raising=False)
+    monkeypatch.delenv("OPENSYSML_GRPC_VERSION", raising=False)
     port = running_service(capabilities=[CAPABILITY_CONVERT])
 
     with pytest.raises(MissingCapabilityError) as excinfo:
@@ -160,7 +160,7 @@ def test_a_handshake_that_fails_is_not_taken_for_an_answer(
     Recording it as a service reporting no capabilities would refuse every
     capability-gated call for the life of the connection.
     """
-    monkeypatch.delenv("PYSYSML_GRPC_VERSION", raising=False)
+    monkeypatch.delenv("OPENSYSML_GRPC_VERSION", raising=False)
     port = running_service(version="v0.0.5", capabilities=[CAPABILITY_QUERY],
                            handshake_failures=1)
 
@@ -178,7 +178,7 @@ def test_a_capability_asked_for_survives_a_handshake_that_fails_once(
     No release was asked for, so nothing could be started in place of this
     service anyway, and which error a caller catches must not turn on RPC luck.
     """
-    monkeypatch.delenv("PYSYSML_GRPC_VERSION", raising=False)
+    monkeypatch.delenv("OPENSYSML_GRPC_VERSION", raising=False)
     port = running_service(capabilities=[CAPABILITY_QUERY], handshake_failures=1)
 
     with Connection(port=port, require_capabilities=[CAPABILITY_QUERY]) as conn:
@@ -190,7 +190,7 @@ def test_a_handshake_that_fails_is_reported_when_a_release_was_asked_for(
 ):
     """A service that could not be asked is reported, not stopped."""
     port = running_service(handshake_failures=1)
-    monkeypatch.setenv("PYSYSML_GRPC_VERSION", "v0.0.7")
+    monkeypatch.setenv("OPENSYSML_GRPC_VERSION", "v0.0.7")
 
     with pytest.raises(StaleServiceError) as excinfo:
         Connection(port=port)
@@ -204,10 +204,10 @@ def test_a_refused_connection_releases_what_it_took(tmp_home, monkeypatch):
     The connection is never returned, so nothing else can close its channel or
     release the reference it took on the service it started.
     """
-    monkeypatch.delenv("PYSYSML_GRPC_VERSION", raising=False)
+    monkeypatch.delenv("OPENSYSML_GRPC_VERSION", raising=False)
     port = _free_port()
     monkeypatch.setattr(
-        "pysysml.connection.ensure_binary",
+        "opensysml.connection.ensure_binary",
         lambda **kwargs: _fake_service_binary(capabilities=()),
     )
 
@@ -255,7 +255,7 @@ def test_the_newest_release_is_looked_up_once_per_connection(
         return "v0.0.7"
 
     monkeypatch.setattr(
-        "pysysml.connection.resolve_latest_version", resolve_latest_version
+        "opensysml.connection.resolve_latest_version", resolve_latest_version
     )
 
     with pytest.raises(StaleServiceError) as excinfo:
@@ -273,7 +273,7 @@ def test_a_service_the_caller_has_not_started_yet_is_checked_at_the_first_call(
     Callers build the client before starting their own service, so the release
     is checked once the service answers rather than at construction.
     """
-    monkeypatch.setenv("PYSYSML_GRPC_VERSION", "v0.0.7")
+    monkeypatch.setenv("OPENSYSML_GRPC_VERSION", "v0.0.7")
 
     conn = Connection(port=_free_port(), auto_start=False)
 
@@ -310,7 +310,7 @@ def test_a_deferred_check_is_made_by_whichever_call_comes_first(
     reached only through server_info() would never be made for them.
     """
     port = running_service(version="v0.0.5")
-    monkeypatch.setenv("PYSYSML_GRPC_VERSION", "v0.0.7")
+    monkeypatch.setenv("OPENSYSML_GRPC_VERSION", "v0.0.7")
     # As if that service had come up only after the client was built.
     monkeypatch.setattr(
         Connection, "_running_service_info", lambda self, timeout=5.0: None
@@ -331,7 +331,7 @@ def test_a_matching_service_is_adopted(running_service, tmp_home, monkeypatch):
     recorded, and closing the connection cannot stop somebody else's service.
     """
     port = running_service(version="v0.0.7", capabilities=[CAPABILITY_CONVERT])
-    monkeypatch.setenv("PYSYSML_GRPC_VERSION", "v0.0.7")
+    monkeypatch.setenv("OPENSYSML_GRPC_VERSION", "v0.0.7")
 
     with Connection(port=port, require_capabilities=[CAPABILITY_CONVERT]) as conn:
         assert conn.server_info().version == "v0.0.7"
@@ -353,7 +353,7 @@ def test_a_service_asked_for_no_release_is_adopted_whatever_it_is(
     This is the same rule the binary cache follows: a binary the user put there
     is left alone until a client says which release it needs.
     """
-    monkeypatch.delenv("PYSYSML_GRPC_VERSION", raising=False)
+    monkeypatch.delenv("OPENSYSML_GRPC_VERSION", raising=False)
     port = running_service(version="v0.0.5")
 
     with Connection(port=port) as conn:
@@ -369,7 +369,7 @@ def test_a_service_this_client_started_is_replaced(
     the process, and no other connection holds a reference to it.
     """
     port = running_service(version="v0.0.5")
-    monkeypatch.setenv("PYSYSML_GRPC_VERSION", "v0.0.7")
+    monkeypatch.setenv("OPENSYSML_GRPC_VERSION", "v0.0.7")
 
     owned = _fake_owned_service(port)
     _own_service(port, owned.pid)
@@ -377,9 +377,9 @@ def test_a_service_this_client_started_is_replaced(
     # Starting the replacement then fails on the binary, which is beside the
     # point: what this test is about is that the mismatched one was stopped.
     monkeypatch.setattr(
-        "pysysml.connection.ensure_binary", lambda **kwargs: "/nonexistent/sysml-grpc"
+        "opensysml.connection.ensure_binary", lambda **kwargs: "/nonexistent/sysml-grpc"
     )
-    monkeypatch.setattr("pysysml.connection.cached_release", lambda: "v0.0.7")
+    monkeypatch.setattr("opensysml.connection.cached_release", lambda: "v0.0.7")
 
     with pytest.warns(RuntimeWarning, match="replaced the sysml-grpc service"):
         with pytest.raises(ConnectionError, match="Binary not found"):
@@ -395,7 +395,7 @@ def test_a_service_another_connection_holds_is_not_replaced(
 ):
     """A service this client started but another still uses is reported instead."""
     port = running_service(version="v0.0.5")
-    monkeypatch.setenv("PYSYSML_GRPC_VERSION", "v0.0.7")
+    monkeypatch.setenv("OPENSYSML_GRPC_VERSION", "v0.0.7")
 
     owned = _fake_owned_service(port)
     _own_service(port, owned.pid, refs=1)
@@ -403,7 +403,7 @@ def test_a_service_another_connection_holds_is_not_replaced(
     try:
         with pytest.raises(StaleServiceError) as excinfo:
             Connection(port=port)
-        assert "1 other pysysml connection(s)" in excinfo.value.remedy
+        assert "1 other opensysml connection(s)" in excinfo.value.remedy
         assert owned.poll() is None  # still running
     finally:
         owned.terminate()
@@ -419,14 +419,14 @@ def test_a_service_this_client_started_is_kept_when_replacing_it_gains_nothing(
     for, since a download that fails leaves the cache as it was.
     """
     port = running_service(version="v0.0.5")
-    monkeypatch.setenv("PYSYSML_GRPC_VERSION", "v0.0.7")
+    monkeypatch.setenv("OPENSYSML_GRPC_VERSION", "v0.0.7")
 
     owned = _fake_owned_service(port)
     _own_service(port, owned.pid)
     monkeypatch.setattr(
-        "pysysml.connection.ensure_binary", lambda **kwargs: "/nonexistent/sysml-grpc"
+        "opensysml.connection.ensure_binary", lambda **kwargs: "/nonexistent/sysml-grpc"
     )
-    monkeypatch.setattr("pysysml.connection.cached_release", lambda: "v0.0.5")
+    monkeypatch.setattr("opensysml.connection.cached_release", lambda: "v0.0.5")
 
     try:
         with pytest.raises(StaleServiceError) as excinfo:
@@ -447,7 +447,7 @@ def test_a_download_that_fails_its_checksum_is_raised_not_read_as_a_mismatch(
     refuses to treat as a transport failure must pass through it.
     """
     port = running_service(version="v0.0.5")
-    monkeypatch.setenv("PYSYSML_GRPC_VERSION", "v0.0.7")
+    monkeypatch.setenv("OPENSYSML_GRPC_VERSION", "v0.0.7")
 
     owned = _fake_owned_service(port)
     _own_service(port, owned.pid)
@@ -455,7 +455,7 @@ def test_a_download_that_fails_its_checksum_is_raised_not_read_as_a_mismatch(
     def refuse(**kwargs):
         raise ChecksumMismatchError("sha256 of the download does not match")
 
-    monkeypatch.setattr("pysysml.connection.ensure_binary", refuse)
+    monkeypatch.setattr("opensysml.connection.ensure_binary", refuse)
 
     try:
         with pytest.raises(ChecksumMismatchError):
@@ -474,7 +474,7 @@ def test_a_service_lacking_only_a_capability_is_never_stopped(
     The service is left running and the missing capability reported, rather
     than stopped to make room for a build reporting the same capabilities.
     """
-    monkeypatch.delenv("PYSYSML_GRPC_VERSION", raising=False)
+    monkeypatch.delenv("OPENSYSML_GRPC_VERSION", raising=False)
     port = running_service(capabilities=[CAPABILITY_CONVERT])
 
     owned = _fake_owned_service(port)
@@ -499,14 +499,14 @@ def test_a_replacement_that_could_not_take_the_address_is_reported(
     the health probe is answered by what was refused.
     """
     port = running_service(version="v0.0.5")
-    monkeypatch.setenv("PYSYSML_GRPC_VERSION", "v0.0.7")
+    monkeypatch.setenv("OPENSYSML_GRPC_VERSION", "v0.0.7")
 
     owned = _fake_owned_service(port)
     _own_service(port, owned.pid)
     monkeypatch.setattr(
-        "pysysml.connection.ensure_binary", lambda **kwargs: _exiting_binary()
+        "opensysml.connection.ensure_binary", lambda **kwargs: _exiting_binary()
     )
-    monkeypatch.setattr("pysysml.connection.cached_release", lambda: "v0.0.7")
+    monkeypatch.setattr("opensysml.connection.cached_release", lambda: "v0.0.7")
 
     with pytest.warns(RuntimeWarning, match="replaced the sysml-grpc service"):
         with pytest.raises(StaleServiceError) as excinfo:
@@ -532,7 +532,7 @@ class TestOwnershipIsAuthenticated:
     ):
         """A pid the record's start time does not match is another process."""
         port = running_service(version="v0.0.5")
-        monkeypatch.setenv("PYSYSML_GRPC_VERSION", "v0.0.7")
+        monkeypatch.setenv("OPENSYSML_GRPC_VERSION", "v0.0.7")
         unrelated = _fake_owned_service(port)
         # As if that pid had been the service's and been handed on since.
         _write_record(
@@ -555,7 +555,7 @@ class TestOwnershipIsAuthenticated:
     ):
         """Only the process that spawned a service may stop it."""
         port = running_service(version="v0.0.5")
-        monkeypatch.setenv("PYSYSML_GRPC_VERSION", "v0.0.7")
+        monkeypatch.setenv("OPENSYSML_GRPC_VERSION", "v0.0.7")
         spawned_elsewhere = _fake_owned_service(port)
         process = psutil.Process(spawned_elsewhere.pid)
         _write_record(
@@ -579,7 +579,7 @@ class TestOwnershipIsAuthenticated:
     ):
         """A command line is not identity: an unrecorded look-alike is not ours."""
         port = running_service(version="v0.0.5")
-        monkeypatch.setenv("PYSYSML_GRPC_VERSION", "v0.0.7")
+        monkeypatch.setenv("OPENSYSML_GRPC_VERSION", "v0.0.7")
         script = os.path.join(tempfile.mkdtemp(), "sysml-grpc")
         with open(script, "w") as f:
             f.write("import time\nwhile True:\n    time.sleep(1)\n")
@@ -637,7 +637,7 @@ def _fake_service_binary(capabilities=(), version="v0.0.7"):
 import sys
 from concurrent import futures
 import grpc
-from pysysml.proto import sysml_pb2, sysml_pb2_grpc
+from opensysml.proto import sysml_pb2, sysml_pb2_grpc
 
 
 class Service(sysml_pb2_grpc.SysMLServiceServicer):

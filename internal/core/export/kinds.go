@@ -1,6 +1,6 @@
 package export
 
-import "github.com/Open-MBEE/Systemica/internal/core/ast"
+import "github.com/Open-MBEE/OpenSysML/internal/core/ast"
 
 // The tables below are the single source of truth for the correspondence
 // between a SysML declaration keyword, the AST kind the parser produced for it,

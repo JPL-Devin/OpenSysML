@@ -4,8 +4,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // Element filters (KerML 8.2.4, SysML v2 7.4.4) restrict which imported
@@ -174,7 +174,7 @@ func (r *Resolver) ImportedElements(scope *symbols.Scope, imp *ast.Import) []*sy
 		return nil
 	}
 	admit := r.importAdmits(scope, imp)
-	out := &elementList{seen: map[*symbols.Symbol]bool{}}
+	out := newElementList()
 	if imp.Kind == ast.ImportMembership {
 		// `import P::x` surfaces x itself; the recursive form adds its subtree.
 		if admit(target) {
@@ -184,7 +184,7 @@ func (r *Resolver) ImportedElements(scope *symbols.Scope, imp *ast.Import) []*sy
 		r.appendNamespaceMembers(out, scope, target, imp, admit)
 	}
 	if imp.IsRecursive {
-		r.appendSubtree(out, scope, target, imp, admit, map[*symbols.Symbol]bool{})
+		r.appendSubtree(out, scope, target, imp, admit, map[symbols.ElementKey]bool{})
 	}
 	return out.elems
 }
@@ -203,7 +203,7 @@ func (r *Resolver) appendNamespaceMembers(out *elementList, scope *symbols.Scope
 // restored libraries populate the index rather than a scope. Reachability under
 // the name is decided here; visibility and element filters are not.
 func (r *Resolver) namespaceChildren(scope *symbols.Scope, target *symbols.Symbol, imp *ast.Import) []*symbols.Symbol {
-	children := &elementList{seen: map[*symbols.Symbol]bool{}}
+	children := newElementList()
 	if target.Scope != nil {
 		for _, sym := range target.Scope.Members() {
 			children.add(sym)
@@ -244,11 +244,15 @@ func (r *Resolver) indexedNameOf(target *symbols.Symbol) string {
 // walk descends into every member, admitted or not: a lookup through the import
 // reaches a nested element whatever its namespace was judged to be, so filtering
 // the descent would hide elements the import surfaces (see lookupInSubtree).
-func (r *Resolver) appendSubtree(out *elementList, scope *symbols.Scope, target *symbols.Symbol, imp *ast.Import, admit func(*symbols.Symbol) bool, seen map[*symbols.Symbol]bool) {
-	if target == nil || seen[target] || (target.Scope != nil && target.Scope.BodyLocal()) {
+func (r *Resolver) appendSubtree(out *elementList, scope *symbols.Scope, target *symbols.Symbol, imp *ast.Import, admit func(*symbols.Symbol) bool, seen map[symbols.ElementKey]bool) {
+	if target == nil || (target.Scope != nil && target.Scope.BodyLocal()) {
 		return
 	}
-	seen[target] = true
+	key := symbols.KeyOf(target)
+	if seen[key] {
+		return
+	}
+	seen[key] = true
 	children := r.namespaceChildren(scope, target, imp)
 	for _, sym := range children {
 		if visibleThroughImport(imp, sym) && admit(sym) {
@@ -260,17 +264,27 @@ func (r *Resolver) appendSubtree(out *elementList, scope *symbols.Scope, target 
 	}
 }
 
-// elementList collects elements in the order they were surfaced, once each.
+// elementList collects elements in the order they were surfaced, once each,
+// identified by declaration: a member reached through both its scope and the
+// index is one element, and the scope's symbol is kept since it is reached first.
 type elementList struct {
 	elems []*symbols.Symbol
-	seen  map[*symbols.Symbol]bool
+	seen  map[symbols.ElementKey]bool
+}
+
+func newElementList() *elementList {
+	return &elementList{seen: map[symbols.ElementKey]bool{}}
 }
 
 func (l *elementList) add(sym *symbols.Symbol) {
-	if sym == nil || l.seen[sym] {
+	if sym == nil {
 		return
 	}
-	l.seen[sym] = true
+	key := symbols.KeyOf(sym)
+	if l.seen[key] {
+		return
+	}
+	l.seen[key] = true
 	l.elems = append(l.elems, sym)
 }
 

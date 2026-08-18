@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/lower"
-	"github.com/Open-MBEE/Systemica/internal/core/semantics"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // Message is a signal instance in flight.
@@ -17,23 +17,40 @@ import (
 // typed consumes only messages of that type, so two sends of different types
 // reach different accepts regardless of the order they were posted in.
 //
-// Target names the receiver a `send m to r` addressed. A consumer accepts a
-// message addressed to itself or to no one; an empty Target is a broadcast.
+// Target names the receiving node of the sending behavior a `send m to r`
+// addressed; a consumer accepts a message addressed to itself or to no one.
 //
-// Port names the port a `send m via p` was routed to — the peer end of p, not p
-// itself, since that is where the message arrived. Only an accept on that port
-// consumes it, so port-routed traffic and addressed traffic stay separate.
-// Object identifies the object whose connection routed the message, 0 when no
-// object performed the sending behavior. Two objects of a type route over their
-// own connections, so a port-routed message is only for an accept of the object
-// it was routed within.
+// Port names the port the message reached — the peer end a `via p` send routed
+// to, or the port an addressed send resolved to — and only an accept on that
+// port consumes it, keeping port-routed and addressed traffic separate.
+//
+// Object identifies the object the message reached, 0 for none, and Delivery
+// what of that destination a consumer must satisfy to take the message.
 type Message struct {
 	SignalType string
 	Target     string
 	Port       string
 	Object     int64
+	Delivery   DeliveryKind
 	Payload    map[string]Value
 }
+
+// DeliveryKind is what a message's destination resolved to, and so what a
+// consumer must match: an unaddressed message resolved nothing and any consumer
+// may take it, while every addressed or routed one names a destination in full.
+type DeliveryKind uint8
+
+const (
+	// DeliverAnyone is a message no send addressed, such as one injected from
+	// outside the model: it has no destination to hold a consumer to.
+	DeliverAnyone DeliveryKind = iota
+	// DeliverPort is the port of an object, reached by a connection or addressed.
+	DeliverPort
+	// DeliverReceiver is the receiving node named within an object.
+	DeliverReceiver
+	// DeliverObject is an object itself, whichever of its consumers accepts.
+	DeliverObject
+)
 
 // Call is the payload of an EventCall: the operation invoked and its arguments.
 type Call struct {
@@ -45,8 +62,28 @@ type Call struct {
 // sharing this context can see it. Actions and state machines communicate
 // through this bus rather than through per-executor queues, so a message a
 // state machine's entry action sends can be accepted by one of its transitions.
+//
+// A message posted with a destination but no Delivery — one injected from
+// outside the model — is held to the destination it names.
 func (ctx *Context) PostMessage(msg Message) {
+	if msg.Delivery == DeliverAnyone {
+		msg.Delivery = deliveryOf(msg)
+	}
 	ctx.messages = append(ctx.messages, msg)
+}
+
+// deliveryOf is what the fields of a message name as its destination, most
+// specific first: only a message naming nothing is open to any consumer.
+func deliveryOf(msg Message) DeliveryKind {
+	switch {
+	case msg.Port != "":
+		return DeliverPort
+	case msg.Target != "":
+		return DeliverReceiver
+	case msg.Object != 0:
+		return DeliverObject
+	}
+	return DeliverAnyone
 }
 
 // TakeMessage removes and returns the oldest message satisfying match. Messages
@@ -69,24 +106,22 @@ func (ctx *Context) PendingMessages() []Message {
 	return out
 }
 
-// addressedTo reports whether a consumer named name may take this message.
-func (m Message) addressedTo(name string) bool {
-	return m.Target == "" || m.Target == name
-}
-
-// arrivedAt reports whether a consumer listening on port may take this message.
-// The two sides must agree: a message routed through a port is only for an
-// accept on that port, and an accept on a port takes nothing else — otherwise a
-// broadcast would be consumed by whichever accept ran first, regardless of the
-// connections the model declared.
-func (m Message) arrivedAt(port string) bool {
-	return m.Port == port
-}
-
-// reachedObject reports whether a message routed within one object reached the
-// object now accepting: a connection of one object never delivers into another.
-func (m Message) reachedObject(object int64) bool {
-	return m.Port == "" || m.Object == object
+// reaches reports whether a consumer named name, accepting on port and performed
+// by object, may take this message: every part of the destination must hold, the
+// ports always included, so port-routed and addressed traffic stay apart. A
+// behavior no object performs has no identity to compare, so a message naming
+// the receiver it is neither excludes it nor is excluded by it.
+func (m Message) reaches(name, port string, object int64) bool {
+	if m.Port != port {
+		return false
+	}
+	switch m.Delivery {
+	case DeliverPort, DeliverObject:
+		return m.Object == object
+	case DeliverReceiver:
+		return m.Target == name && (m.Object == object || m.Object == 0 || object == 0)
+	}
+	return true
 }
 
 // objectID is the identity of an object, 0 for none.
@@ -112,12 +147,295 @@ func (ctx *Context) postVia(conns []lower.Connection, msg Message, send lower.Se
 		routed := msg
 		routed.Target = ""
 		routed.Port = peer
-		if self != nil {
-			routed.Object = self.ID
-		}
+		routed.Object = objectID(self)
+		routed.Delivery = DeliverPort
 		ctx.PostMessage(routed)
 	}
 	return nil
+}
+
+// messageAddress is where an addressed send delivers: what the address resolved
+// to, and the object, port or receiving node naming it. Only the constructors
+// below build one, so no address can name a destination in part.
+type messageAddress struct {
+	Delivery DeliveryKind
+	Name     string
+	Port     string
+	Object   int64
+}
+
+// portAddress is a port of an object, refused where no port was resolved.
+func portAddress(port string, object int64) (messageAddress, bool) {
+	if port == "" {
+		return messageAddress{}, false
+	}
+	return messageAddress{Delivery: DeliverPort, Port: port, Object: object}, true
+}
+
+// receiverAddress is a receiving node of an object, refused where it is unnamed.
+func receiverAddress(name string, object int64) (messageAddress, bool) {
+	if name == "" {
+		return messageAddress{}, false
+	}
+	return messageAddress{Delivery: DeliverReceiver, Name: name, Object: object}, true
+}
+
+// objectAddress is an object itself, refused where no object was reached: a
+// destination confined to object 0 would confine the message to nothing.
+func objectAddress(object int64) (messageAddress, bool) {
+	if object == 0 {
+		return messageAddress{}, false
+	}
+	return messageAddress{Delivery: DeliverObject, Object: object}, true
+}
+
+// postTo delivers an addressed send to the object its target resolves to,
+// leaving the message for that object alone.
+func (ctx *Context) postTo(msg Message, send lower.Send, self *Instance) error {
+	addr, err := ctx.resolveAddress(send, self)
+	if err != nil {
+		return err
+	}
+	msg.Target, msg.Port, msg.Object = addr.Name, addr.Port, addr.Object
+	msg.Delivery = addr.Delivery
+	ctx.PostMessage(msg)
+	return nil
+}
+
+// resolveAddress answers what a `send m to t` addressed: the object t belongs to
+// and the port path within it, resolved through the instance graph. A chain the
+// graph does not reach is a port of the sender itself, and unroutable if it is
+// neither; a name reaching neither is the receiving node of that name.
+func (ctx *Context) resolveAddress(send lower.Send, self *Instance) (messageAddress, error) {
+	if send.Target == "" {
+		// A send addressing no one is for the sending object, or for whoever accepts
+		// it where no object sent it.
+		if addr, ok := objectAddress(objectID(self)); ok {
+			return addr, nil
+		}
+		return messageAddress{Delivery: DeliverAnyone}, nil
+	}
+	if !send.TargetPath {
+		return ctx.namedAddress(send, self)
+	}
+	segments := strings.Split(send.Target, ".")
+	addr, ok, err := ctx.featureAddress(send.Scope, self, segments)
+	if err != nil {
+		return messageAddress{}, err
+	}
+	if ok {
+		return addr, nil
+	}
+	if sym, ok := ctx.portSymbol(send.Scope, send.Target); ok &&
+		sym.Kind == symbols.SymbolPortUsage && ctx.ownPortPath(send.Scope, segments) {
+		if addr, ok := portAddress(send.Target, objectID(self)); ok {
+			return addr, nil
+		}
+	}
+	return messageAddress{}, &UnroutableSendError{Port: send.Target, Address: true}
+}
+
+// namedAddress resolves a target named rather than chained (`R`, `P::R`): an
+// unqualified name is a feature, port or receiving node of the sending object,
+// and a qualified one is the element its path names, never a same-named element
+// of the sender.
+func (ctx *Context) namedAddress(send lower.Send, self *Instance) (messageAddress, error) {
+	segments := strings.Split(send.Target, "::")
+	name := segments[len(segments)-1]
+	if len(segments) > 1 {
+		return ctx.qualifiedAddress(send, self, segments)
+	}
+	addr, ok, err := ctx.featureAddress(send.Scope, self, segments)
+	if err != nil {
+		return messageAddress{}, err
+	}
+	if ok {
+		return addr, nil
+	}
+	if sym, resolved := ctx.pathSymbol(send.Scope, segments); resolved &&
+		sym.Kind == symbols.SymbolPortUsage {
+		if addr, built := portAddress(name, objectID(self)); built {
+			return addr, nil
+		}
+		return messageAddress{}, &UnroutableSendError{Port: send.Target, Address: true}
+	}
+	if addr, built := receiverAddress(name, objectID(self)); built {
+		return addr, nil
+	}
+	return messageAddress{}, &UnroutableSendError{Port: send.Target, Address: true}
+}
+
+// qualifiedAddress resolves a target naming a namespace path (`alpha::reader`,
+// `P::Driver`) to the element that path names, never to a same-named feature of
+// the sender: the qualifier chooses the object, so the address is the occurrence
+// the path leads through, or unroutable where this run reaches none.
+func (ctx *Context) qualifiedAddress(send lower.Send, self *Instance, segments []string) (messageAddress, error) {
+	addr, ok, err := ctx.featureAddress(send.Scope, nil, segments)
+	if err != nil {
+		return messageAddress{}, err
+	}
+	if ok {
+		return addr, nil
+	}
+	target, resolved := ctx.pathSymbol(send.Scope, segments)
+	if !resolved {
+		return messageAddress{}, &UnroutableSendError{Port: send.Target, Address: true}
+	}
+	name := segments[len(segments)-1]
+	// A path leading through no occurrence names an element of the sending
+	// behavior's own namespace, where its bare name is that same element:
+	// `P::Node::Machine` is the sender's machine, `P::alpha::inPort` is alpha's.
+	if local, ok := ctx.pathSymbol(send.Scope, []string{name}); ok && local == target {
+		addr, ok, err := ctx.featureAddress(send.Scope, self, []string{name})
+		if err != nil {
+			return messageAddress{}, err
+		}
+		if ok {
+			return addr, nil
+		}
+		if target.Kind == symbols.SymbolPortUsage {
+			if addr, built := portAddress(name, objectID(self)); built {
+				return addr, nil
+			}
+		} else if addr, built := receiverAddress(name, objectID(self)); built {
+			return addr, nil
+		}
+	}
+	// A receiver no object owns has no identity of its own; a sender that has one
+	// cannot address it by name without reaching its own same-named element.
+	if self == nil && target.Kind != symbols.SymbolPortUsage {
+		if addr, built := receiverAddress(name, 0); built {
+			return addr, nil
+		}
+	}
+	return messageAddress{}, &UnroutableSendError{Port: send.Target, Address: true}
+}
+
+// featureAddress walks a target through the instance graph from the object its
+// first segment belongs to, reporting no address where a segment names no
+// feature, or one that is neither a port nor an occurrence to descend into. A
+// failure to read an object of the graph is that failure, not a bad address.
+func (ctx *Context) featureAddress(scope *symbols.Scope, self *Instance, segments []string) (messageAddress, bool, error) {
+	owner, rest, ok, err := ctx.addressOwner(scope, self, segments)
+	if err != nil || !ok {
+		return messageAddress{}, false, err
+	}
+	for i, segment := range rest {
+		fv, held := owner.FeatureValues[segment]
+		if !held {
+			return messageAddress{}, false, nil
+		}
+		if isPortFeature(fv.Feature) {
+			addr, built := portAddress(strings.Join(rest[i:], "."), owner.ID)
+			return addr, built, nil
+		}
+		// A behavior of an object is a receiving node of it, addressed by name.
+		if i == len(rest)-1 && isBehaviorFeature(fv.Feature) {
+			addr, built := receiverAddress(segment, owner.ID)
+			return addr, built, nil
+		}
+		owner, ok, err = ctx.fvObject(owner, segment)
+		if err != nil || !ok {
+			return messageAddress{}, false, err
+		}
+	}
+	addr, built := objectAddress(owner.ID)
+	return addr, built, nil
+}
+
+// addressOwner answers which object a target's leading segments belong to: the
+// sending object, or one holding it, where the first names a feature of it, else the occurrence
+// the shortest prefix names in the send's scope — a prefix rather than one name,
+// since a namespace qualifies the occurrence in `P::alpha.inPort`.
+func (ctx *Context) addressOwner(scope *symbols.Scope, self *Instance, segments []string) (*Instance, []string, bool, error) {
+	// A name is a feature of the sending object, or of an object holding it: a
+	// nested object addresses a sibling through the object they belong to.
+	for up := self; up != nil; up = up.owner {
+		if fv, held := up.FeatureValues[segments[0]]; held && ctx.namesFeature(scope, up, fv, segments[0]) {
+			return up, segments, true, nil
+		}
+	}
+	if scope == nil || ctx.resolver == nil {
+		return nil, nil, false, nil
+	}
+	for n := 1; n <= len(segments); n++ {
+		sym, ok := ctx.pathSymbol(scope, segments[:n])
+		if !ok || !isOccurrenceUsage(sym) || !ctx.occursOnce(sym) {
+			continue
+		}
+		if self != nil && self.Type == sym {
+			return self, segments[n:], true, nil
+		}
+		// A target that names an object this run cannot build fails as that, rather
+		// than being reported as an address naming nothing.
+		inst, err := ctx.occurrenceOf(sym)
+		if err != nil {
+			return nil, nil, false, err
+		}
+		return inst, segments[n:], true, nil
+	}
+	return nil, nil, false, nil
+}
+
+// namesFeature reports whether a feature value of the sending object is what a name in
+// the send's scope denotes: a nearer declaration, such as a node of the sending
+// behavior, shadows the object's feature as name resolution has it.
+func (ctx *Context) namesFeature(scope *symbols.Scope, self *Instance, fv *FeatureValue, name string) bool {
+	sym, ok := ctx.pathSymbol(scope, []string{name})
+	if !ok || (fv.Feature != nil && fv.Feature.Symbol == sym) {
+		return true
+	}
+	for _, feat := range ctx.FeaturesOf(self.Type) {
+		if feat.Symbol == sym {
+			return true
+		}
+	}
+	return false
+}
+
+// ownPortPath reports whether a port path names a port of the sending behavior
+// itself. A path led by a namespace or by an occurrence names a port of another
+// object, which is unroutable where the instance graph did not reach it.
+func (ctx *Context) ownPortPath(scope *symbols.Scope, segments []string) bool {
+	sym, ok := ctx.pathSymbol(scope, segments[:1])
+	if !ok || isOccurrenceUsage(sym) {
+		return false
+	}
+	return sym.Kind != symbols.SymbolPackage && sym.Kind != symbols.SymbolNamespace
+}
+
+// featureValueObject reads the object a feature of inst holds, materializing it, and
+// reports whether the feature holds one at all. A feature value that cannot be read is
+// that failure rather than a feature holding no object.
+func (ctx *Context) fvObject(inst *Instance, name string) (*Instance, bool, error) {
+	fv, err := inst.GetFeatureValue(ctx, name)
+	if err != nil {
+		return nil, false, err
+	}
+	if fv == nil || fv.Value.Kind != ValInstance {
+		return nil, false, nil
+	}
+	held, ok := ctx.instances[fv.Value.Instance]
+	return held, ok, nil
+}
+
+// isPortFeature reports whether a feature is a port, where an address stops: the
+// rest of its path is the port path within the object.
+func isPortFeature(feature *EffectiveFeature) bool {
+	return feature != nil && feature.Symbol != nil && feature.Symbol.Kind == symbols.SymbolPortUsage
+}
+
+// isBehaviorFeature reports whether a feature is a behavior an object performs,
+// which receives by name rather than being an object of its own.
+func isBehaviorFeature(feature *EffectiveFeature) bool {
+	if feature == nil || feature.Symbol == nil {
+		return false
+	}
+	switch feature.Symbol.Kind {
+	case symbols.SymbolActionUsage, symbols.SymbolStateUsage:
+		return true
+	}
+	return false
 }
 
 // post delivers a built message the way the send addressed it: routed through
@@ -128,8 +446,7 @@ func (ctx *Context) post(conns []lower.Connection, msg Message, send lower.Send,
 	if send.IsVia {
 		return ctx.postVia(conns, msg, send, self)
 	}
-	ctx.PostMessage(msg)
-	return nil
+	return ctx.postTo(msg, send, self)
 }
 
 // carriesSignal reports whether this message satisfies an accept of signalType.
@@ -146,7 +463,8 @@ func (m Message) carriesSignal(signalType string) bool {
 // and the message is typed by the value's type, carrying it as `value`.
 //
 // A `via` send addresses a port rather than a receiver, so the built message
-// carries no Target: postVia fills in the port the message reaches.
+// carries no Target: postVia fills in the port the message reaches, as postTo
+// fills in the object and port an addressed send resolved to.
 func (e *EvalContext) buildMessage(scope *symbols.Scope, send lower.Send) (Message, error) {
 	target := send.Target
 	if send.IsVia {

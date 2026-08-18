@@ -3,7 +3,7 @@ package repl
 import (
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/runtime"
+	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
 )
 
 // TestSessionBudgetsDefault: a fresh session runs on the default bounds.
@@ -106,6 +106,6 @@ func TestAdvanceIsBoundedBySessionBudgets(t *testing.T) {
 		}
 		run(t, s, "%state Spin")
 		wants(t, run(t, s, "%advance 1000"),
-			"Stopped at the do activity budget (5 steps; raise "+runtime.MaxDoStepsEnvVar)
+			"Stopped at the do action budget (5 steps; raise "+runtime.MaxDoStepsEnvVar)
 	})
 }

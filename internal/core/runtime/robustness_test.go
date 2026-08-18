@@ -7,12 +7,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/parser"
-	"github.com/Open-MBEE/Systemica/internal/core/resolve"
-	"github.com/Open-MBEE/Systemica/internal/core/semantics"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
+	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // TestRuntimeRobustness exercises failure modes: graceful errors, no panics, no hangs.
@@ -37,6 +38,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("state_cross_region_transitions_ping_pong", testStateCrossRegionTransitionsPingPong)
 	t.Run("sourceless_accept_at_top_level", testSourcelessAcceptAtTopLevel)
 	t.Run("calc_unbound_parameter", testCalcUnboundParameter)
+	t.Run("calc_calls_an_unimported_extension_function", testCalcCallsAnUnimportedExtensionFunction)
 	t.Run("calc_unbound_keyword_named_parameter", testCalcUnboundKeywordNamedParameter)
 	t.Run("calc_too_many_arguments", testCalcTooManyArguments)
 	t.Run("calc_unknown_named_argument", testCalcUnknownNamedArgument)
@@ -62,6 +64,22 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("calc_output_assigned_in_a_branch_not_taken", testCalcOutputAssignedInABranchNotTaken)
 	t.Run("calc_output_valued_and_assigned", testCalcOutputValuedAndAssigned)
 	t.Run("calc_output_assigned_twice", testCalcOutputAssignedTwice)
+	t.Run("binding_conflict", testBindingConflict)
+	t.Run("binding_collection_conflicts_do_not_use_hashes", testBindingCollectionConflictsDoNotUseHashes)
+	t.Run("binding_multiple_scalar_contributors", testBindingMultipleScalarContributors)
+	t.Run("binding_multiple_collection_contributors", testBindingMultipleCollectionContributors)
+	t.Run("binding_propagation_spends_element_budget", testBindingPropagationSpendsElementBudget)
+	t.Run("binding_distinct_materialized_objects_conflict", testBindingDistinctMaterializedObjectsConflict)
+	t.Run("binding_named_single_end_does_not_poison_read", testBindingNamedSingleEndDoesNotPoisonRead)
+	t.Run("binding_incomplete_end_does_not_poison_read", testBindingIncompleteEndDoesNotPoisonRead)
+	t.Run("binding_single_valueless", testBindingSingleValueless)
+	t.Run("binding_cycle", testBindingCycle)
+	t.Run("binding_three_binding_ring", testBindingThreeBindingRing)
+	t.Run("binding_cycle_with_value", testBindingCycleWithValue)
+	t.Run("binding_unrelated_expression_does_not_poison_read", testBindingUnrelatedExpressionDoesNotPoisonRead)
+	t.Run("binding_expression_end_cannot_receive", testBindingExpressionEndCannotReceive)
+	t.Run("binding_result_tracks_later_mutation", testBindingResultTracksLaterMutation)
+	t.Run("binding_nested_container_is_not_a_cycle", testBindingNestedContainerIsNotACycle)
 	t.Run("nested_calc_usage_unbound_input", testNestedCalcUsageUnboundInput)
 	t.Run("nested_calc_usage_unknown_output", testNestedCalcUsageUnknownOutput)
 	t.Run("nested_calc_usage_self_cycle", testNestedCalcUsageSelfCycle)
@@ -110,9 +128,16 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("region_pseudostate_without_satisfied_guard", testRegionPseudostateWithoutSatisfiedGuard)
 	t.Run("region_pseudostate_cycle", testRegionPseudostateCycle)
 	t.Run("non_numeric_time_trigger", testNonNumericTimeTrigger)
+	t.Run("time_trigger_of_a_non_time_dimension", testTimeTriggerOfANonTimeDimension)
+	t.Run("change_condition_that_never_holds", testChangeConditionThatNeverHolds)
 	t.Run("send_reaches_only_its_addressee", testSendReachesOnlyItsAddressee)
 	t.Run("accept_of_unsent_type", testAcceptOfUnsentTypeReports)
 	t.Run("send_via_unconnected_port", testSendViaUnconnectedPort)
+	t.Run("send_addressed_to_an_unreachable_target", testSendAddressedToAnUnreachableTarget)
+	t.Run("send_addressed_through_several_occurrences", testSendAddressedThroughSeveralOccurrences)
+	t.Run("send_addressed_to_an_object_that_cannot_be_built", testSendAddressedToAnObjectThatCannotBeBuilt)
+	t.Run("send_addressed_to_a_part_no_sibling_takes", testSendAddressedToAPartNoSiblingTakes)
+	t.Run("injected_message_names_a_receiver_no_accept_has", testInjectedMessageNamesAReceiverNoAcceptHas)
 	t.Run("accept_deadlock_never_satisfied", testAcceptDeadlockNeverSatisfied)
 	t.Run("accept_deadlock_reports_every_waiting_accept", testAcceptDeadlockReportsEveryWaitingAccept)
 	t.Run("history_outside_composite_state", testHistoryOutsideCompositeState)
@@ -146,8 +171,8 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("satisfy_unresolved_requirement", testSatisfyUnresolvedRequirement)
 	t.Run("satisfy_requirement_without_conditions", testSatisfyRequirementWithoutConditions)
 	t.Run("satisfy_bounded_by_the_step_budget", testSatisfyBoundedByTheStepBudget)
-	t.Run("cyclic_derived_slot", testCyclicDerivedSlot)
-	t.Run("derived_slot_over_missing_feature", testDerivedSlotOverMissingFeature)
+	t.Run("cyclic_derived_feature_value", testCyclicDerivedFeatureValue)
+	t.Run("derived_feature_value_over_missing_feature", testDerivedFeatureValueOverMissingFeature)
 	t.Run("sequence_index_names_no_position", testSequenceIndexNamesNoPosition)
 	t.Run("collection_operand_of_the_wrong_kind", testCollectionOperandOfTheWrongKind)
 	t.Run("numeric_library_call_that_has_no_value", testNumericLibraryCallThatHasNoValue)
@@ -173,7 +198,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("multiplicity_lower_bound_too_large", testMultiplicityLowerBoundTooLarge)
 	t.Run("default_not_conforming_to_multiplicity", testDefaultNotConformingToMultiplicity)
 	t.Run("default_against_an_undeclared_multiplicity", testDefaultAgainstAnUndeclaredMultiplicity)
-	t.Run("feature_chain_through_an_unset_slot", testFeatureChainThroughAnUnsetSlot)
+	t.Run("feature_chain_through_an_unset_feature_value", testFeatureChainThroughAnUnsetFeatureValue)
 	t.Run("feature_chain_spends_the_element_budget", testFeatureChainSpendsTheElementBudget)
 	t.Run("mutually_subsetting_features", testMutuallySubsettingFeatures)
 	t.Run("unattachable_connector_end", testUnattachableConnectorEnd)
@@ -183,13 +208,626 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("enumeration_name_that_is_not_a_literal", testEnumerationNameThatIsNotALiteral)
 	t.Run("chain_through_a_literal_without_that_attribute", testChainThroughALiteralWithoutThatAttribute)
 	t.Run("classification_outside_the_evaluable_subset", testClassificationOutsideTheEvaluableSubset)
-	t.Run("expression_over_a_slot_holding_no_value", testExpressionOverASlotHoldingNoValue)
+	t.Run("expression_over_a_feature_value_holding_no_value", testExpressionOverAFeatureValueHoldingNoValue)
+	t.Run("succession_guard_failure_modes", testSuccessionGuardFailureModes)
+	t.Run("object_exhibited_machine_never_settles", testObjectExhibitedMachineNeverSettles)
+	t.Run("object_exhibited_machine_without_an_initial_state", testObjectExhibitedMachineWithoutAnInitialState)
+	t.Run("operation_invoked_with_unbound_parameters", testOperationInvokedWithUnboundParameters)
+	t.Run("second_instantiation_of_one_type", testSecondInstantiationOfOneType)
 }
 
-// testExpressionOverASlotHoldingNoValue: a valueless feature of a value type is
+func testBindingConflict(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<binding-conflict>", parseAndBuild(t, `package P {
+		part def Sys {
+			attribute a = 1;
+			attribute b = 2;
+			binding bind b = a;
+		}
+	}`))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	_, err = inst.GetFeatureValue(ctx, "b")
+	if !errors.Is(err, ErrBindingConflict) {
+		t.Fatalf("GetFeatureValue(b) = %v, want ErrBindingConflict", err)
+	}
+	if got, want := err.Error(), "binding conflict: b = 2, a = 1"; got != want {
+		t.Errorf("conflict error = %q, want %q", got, want)
+	}
+}
+
+func testBindingCollectionConflictsDoNotUseHashes(t *testing.T) {
+	t.Run("strings", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-string-conflict>", parseAndBuild(t, `package P {
+			part def Sys {
+				attribute a : ScalarValues::String[*] = ("a");
+				attribute b : ScalarValues::String[*] = ("b");
+				binding bind b = a;
+			}
+		}`))
+		inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+		if err != nil {
+			t.Fatalf("instantiate: %v", err)
+		}
+		_, err = inst.GetFeatureValue(ctx, "b")
+		if !errors.Is(err, ErrBindingConflict) {
+			t.Fatalf("GetFeatureValue(b) = %v, want ErrBindingConflict", err)
+		}
+		if got, want := err.Error(),
+			`binding conflict: b = ["b"], a = ["a"]`; got != want {
+			t.Errorf("conflict error = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("integers", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-integer-conflict>", parseAndBuild(t, `package P {
+			part def Sys {
+				attribute a : Integer[*] = (1);
+				attribute b : Integer[*] = (65537);
+				binding bind b = a;
+			}
+		}`))
+		inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+		if err != nil {
+			t.Fatalf("instantiate: %v", err)
+		}
+		_, err = inst.GetFeatureValue(ctx, "b")
+		if !errors.Is(err, ErrBindingConflict) {
+			t.Fatalf("GetFeatureValue(b) = %v, want ErrBindingConflict", err)
+		}
+		if got, want := err.Error(),
+			"binding conflict: b = [65537], a = [1]"; got != want {
+			t.Errorf("conflict error = %q, want %q", got, want)
+		}
+	})
+}
+
+func testBindingMultipleScalarContributors(t *testing.T) {
+	t.Run("unequal", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-multiple-scalar-conflict>", parseAndBuild(t, `package P {
+			part def Sys {
+				attribute a;
+				attribute b = 1;
+				attribute c = 2;
+				bind a = b;
+				bind a = c;
+			}
+		}`))
+		inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+		if err != nil {
+			t.Fatalf("instantiate: %v", err)
+		}
+		_, err = inst.GetFeatureValue(ctx, "a")
+		if !errors.Is(err, ErrBindingConflict) {
+			t.Fatalf("GetFeatureValue(a) = %v, want ErrBindingConflict", err)
+		}
+		if got, want := err.Error(), "binding conflict at Sys.a: b = 1, c = 2"; got != want {
+			t.Errorf("conflict error = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("equal", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-multiple-scalar-equal>", parseAndBuild(t, `package P {
+			part def Sys {
+				attribute a;
+				attribute b = 1;
+				attribute c = 1;
+				bind a = b;
+				bind a = c;
+			}
+		}`))
+		inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+		if err != nil {
+			t.Fatalf("instantiate: %v", err)
+		}
+		fv, err := inst.GetFeatureValue(ctx, "a")
+		if err != nil {
+			t.Fatalf("GetFeatureValue(a): %v", err)
+		}
+		if got := fv.HeldValue().Const.Int; got != 1 {
+			t.Errorf("a = %d, want 1", got)
+		}
+	})
+}
+
+func testBindingMultipleCollectionContributors(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<binding-multiple-collection-contributors>", parseAndBuild(t, `package P {
+		part def Sys {
+			attribute edges : Integer[*];
+			attribute leftEdge : Integer[0..1] = (1);
+			attribute rightEdge : Integer[0..1] = (2);
+			binding [1] bind [0..1] edges = [0..1] leftEdge;
+			binding [1] bind [0..1] edges = [0..1] rightEdge;
+		}
+	}`))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	_, err = inst.GetFeatureValue(ctx, "edges")
+	if !errors.Is(err, ErrBindingEnd) {
+		t.Fatalf("GetFeatureValue(edges) = %v, want ErrBindingEnd", err)
+	}
+	if !strings.Contains(err.Error(), "multiple bindings contribute to multi-valued endpoint") ||
+		!strings.Contains(err.Error(), "edges") {
+		t.Errorf("error %q does not name the unsupported multiple-contributor endpoint", err)
+	}
+	fv := inst.FeatureValues["edges"]
+	if fv.Materialized || fv.Written || fv.BindingDerived || fv.HeldValue().Kind != ValInvalid {
+		t.Errorf("unsupported binding left an assignment behind: %+v", *fv)
+	}
+}
+
+func testBindingPropagationSpendsElementBudget(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<binding-element-budget>", parseAndBuild(t, `package P {
+		part def Sys {
+			attribute a : Integer[*] = (1, 2, 3);
+			attribute b : Integer[*];
+			bind b = a;
+		}
+	}`))
+	ctx.maxElements = 2
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	_, err = inst.GetFeatureValue(ctx, "b")
+	if !errors.Is(err, ErrElementLimitExceeded) {
+		t.Fatalf("GetFeatureValue(b) = %v, want ErrElementLimitExceeded", err)
+	}
+}
+
+func testBindingDistinctMaterializedObjectsConflict(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<binding-distinct-objects>", parseAndBuild(t, `package P {
+		part def A {
+			attribute q = 1;
+		}
+		part def Sys {
+			part p1 : A;
+			part p2 : A;
+			binding bind p1 = p2;
+		}
+	}`))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	if _, err := inst.materializeFeatureValueIntrinsic(ctx, "p1"); err != nil {
+		t.Fatalf("materialize p1: %v", err)
+	}
+	if _, err := inst.materializeFeatureValueIntrinsic(ctx, "p2"); err != nil {
+		t.Fatalf("materialize p2: %v", err)
+	}
+	_, err = inst.GetFeatureValue(ctx, "p1")
+	if !errors.Is(err, ErrBindingConflict) {
+		t.Fatalf("GetFeatureValue(p1) = %v, want ErrBindingConflict", err)
+	}
+}
+
+func testBindingNamedSingleEndDoesNotPoisonRead(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<binding-named-single-end>", parseAndBuild(t, `package P {
+		part def Sys {
+			attribute a = 5;
+			binding bnd = a;
+		}
+	}`))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	fv, err := inst.GetFeatureValue(ctx, "a")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(a) = %v, want 5", err)
+	}
+	if got := fv.HeldValue(); got.Kind != ValConst || got.Const.Int != 5 {
+		t.Errorf("a = %#v, want integer 5", got)
+	}
+}
+
+func testBindingCycle(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<binding-cycle>", parseAndBuild(t, `package P {
+		part def Sys {
+			attribute a;
+			attribute b;
+			binding bind a = b;
+			binding bind b = a;
+		}
+	}`))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	_, err = inst.GetFeatureValue(ctx, "a")
+	if !errors.Is(err, ErrBindingCycle) {
+		t.Fatalf("GetFeatureValue(a) = %v, want ErrBindingCycle", err)
+	}
+	if !strings.Contains(err.Error(), "a") || !strings.Contains(err.Error(), "b") {
+		t.Errorf("cycle error %q does not name both ends", err)
+	}
+}
+
+func testBindingSingleValueless(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<binding-single-valueless>", parseAndBuild(t, `package P {
+		part def Sys {
+			attribute a;
+			attribute b;
+			binding bind b = a;
+		}
+	}`))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	for _, name := range []string{"a", "b"} {
+		fv, err := inst.GetFeatureValue(ctx, name)
+		if err != nil {
+			t.Fatalf("GetFeatureValue(%s): %v", name, err)
+		}
+		if got := fv.HeldValue(); got.Kind != ValInvalid {
+			t.Errorf("%s = %#v, want an unknown value", name, got)
+		}
+	}
+	sym := oneSymbol(t, idx, "P::Sys")
+	expr := parser.New(source.New("<binding-single-valueless-eval>", []byte("b"))).ParseExpression()
+	if _, err := ctx.EvalWithScopeOn(expr, sym.Scope, inst); !errors.Is(err, ErrUninitializedFeatureValue) {
+		t.Fatalf("evaluating b = %v, want ErrUninitializedFeatureValue", err)
+	}
+}
+
+func testBindingThreeBindingRing(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<binding-three-ring>", parseAndBuild(t, `package P {
+		part def Sys {
+			attribute a;
+			attribute b;
+			attribute c;
+			binding bind a = b;
+			binding bind b = c;
+			binding bind c = a;
+		}
+	}`))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	_, err = inst.GetFeatureValue(ctx, "a")
+	if !errors.Is(err, ErrBindingCycle) {
+		t.Fatalf("GetFeatureValue(a) = %v, want ErrBindingCycle", err)
+	}
+	for _, name := range []string{"a", "c"} {
+		if !strings.Contains(err.Error(), name) {
+			t.Errorf("cycle error %q does not name %s", err, name)
+		}
+	}
+}
+
+func testBindingCycleWithValue(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<binding-cycle-value>", parseAndBuild(t, `package P {
+		part def Sys {
+			attribute a = 4;
+			attribute b;
+			binding bind a = b;
+			binding bind b = a;
+		}
+	}`))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	for _, name := range []string{"a", "b"} {
+		fv, err := inst.GetFeatureValue(ctx, name)
+		if err != nil {
+			t.Fatalf("GetFeatureValue(%s): %v", name, err)
+		}
+		if fv.HeldValue().Kind != ValConst || fv.HeldValue().Const.Int != 4 {
+			t.Errorf("%s = %#v, want integer 4", name, fv.HeldValue())
+		}
+	}
+}
+
+func testBindingUnrelatedExpressionDoesNotPoisonRead(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<binding-unrelated-expression>", parseAndBuild(t, `package P {
+		part def Sys {
+			attribute a = 5;
+			attribute b;
+			attribute sibling = 8;
+			binding bind b = a + 1;
+		}
+	}`))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	fv, err := inst.GetFeatureValue(ctx, "sibling")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(sibling): %v", err)
+	}
+	if got := fv.HeldValue().Const.Int; got != 8 {
+		t.Errorf("sibling = %d, want 8", got)
+	}
+	fv, err = inst.GetFeatureValue(ctx, "b")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(b): %v", err)
+	}
+	if got := fv.HeldValue().Const.Int; got != 6 {
+		t.Errorf("b = %d, want 6", got)
+	}
+}
+
+func testBindingExpressionEndCannotReceive(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<binding-expression-end>", parseAndBuild(t, `package P {
+		part def Sys {
+			attribute a;
+			attribute b = 7;
+			binding bind b = a + 1;
+		}
+	}`))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	_, err = inst.GetFeatureValue(ctx, "b")
+	if !errors.Is(err, ErrBindingEnd) {
+		t.Fatalf("GetFeatureValue(b) = %v, want ErrBindingEnd", err)
+	}
+	if !strings.Contains(err.Error(), "a + 1") || !strings.Contains(err.Error(), "b") {
+		t.Errorf("binding endpoint error %q does not name both ends", err)
+	}
+}
+
+func testBindingResultTracksLaterMutation(t *testing.T) {
+	t.Run("initially_unresolved", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-late-value>", parseAndBuild(t, `package P {
+			part def Sys {
+				attribute a;
+				attribute b;
+				binding bind b = a;
+			}
+		}`))
+		inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+		if err != nil {
+			t.Fatalf("instantiate: %v", err)
+		}
+		if fv, err := inst.GetFeatureValue(ctx, "b"); err != nil {
+			t.Fatalf("initial GetFeatureValue(b): %v", err)
+		} else if got := fv.HeldValue(); got.Kind != ValInvalid {
+			t.Fatalf("initial b = %#v, want an unknown value", got)
+		}
+		if err := inst.SetFeatureValue(ctx, "a", constInt(9)); err != nil {
+			t.Fatalf("assign a: %v", err)
+		}
+		fv, err := inst.GetFeatureValue(ctx, "b")
+		if err != nil {
+			t.Fatalf("later GetFeatureValue(b): %v", err)
+		}
+		if got := fv.HeldValue().Const.Int; got != 9 {
+			t.Errorf("later b = %d, want 9", got)
+		}
+	})
+
+	t.Run("cached_value", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-late-change>", parseAndBuild(t, `package P {
+			part def Sys {
+				attribute a = 3;
+				attribute b;
+				binding bind b = a;
+			}
+		}`))
+		inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+		if err != nil {
+			t.Fatalf("instantiate: %v", err)
+		}
+		if fv, err := inst.GetFeatureValue(ctx, "b"); err != nil {
+			t.Fatalf("initial GetFeatureValue(b): %v", err)
+		} else if got := fv.HeldValue().Const.Int; got != 3 {
+			t.Fatalf("initial b = %d, want 3", got)
+		}
+		if err := inst.SetFeatureValue(ctx, "a", constInt(9)); err != nil {
+			t.Fatalf("assign a: %v", err)
+		}
+		fv, err := inst.GetFeatureValue(ctx, "b")
+		if err != nil {
+			t.Fatalf("later GetFeatureValue(b): %v", err)
+		}
+		if got := fv.HeldValue().Const.Int; got != 9 {
+			t.Errorf("later b = %d, want 9", got)
+		}
+	})
+
+	t.Run("derived_binding_chain", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-late-chain>", parseAndBuild(t, `package P {
+			part def Sys {
+				attribute a = 3;
+				attribute b;
+				attribute c;
+				binding bind b = a;
+				binding bind c = b;
+			}
+		}`))
+		inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+		if err != nil {
+			t.Fatalf("instantiate: %v", err)
+		}
+		if fv, err := inst.GetFeatureValue(ctx, "c"); err != nil {
+			t.Fatalf("initial GetFeatureValue(c): %v", err)
+		} else if got := fv.HeldValue().Const.Int; got != 3 {
+			t.Fatalf("initial c = %d, want 3", got)
+		}
+		if err := inst.SetFeatureValue(ctx, "a", constInt(9)); err != nil {
+			t.Fatalf("assign a: %v", err)
+		}
+		fv, err := inst.GetFeatureValue(ctx, "c")
+		if err != nil {
+			t.Fatalf("later GetFeatureValue(c): %v", err)
+		}
+		if got := fv.HeldValue().Const.Int; got != 9 {
+			t.Errorf("later c = %d, want 9", got)
+		}
+	})
+
+	t.Run("written_both_ends_conflict", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-written-both-ends>", parseAndBuild(t, `package P {
+			part def Sys {
+				attribute a;
+				attribute b;
+				binding bind b = a;
+			}
+		}`))
+		inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+		if err != nil {
+			t.Fatalf("instantiate: %v", err)
+		}
+		if err := inst.SetFeatureValue(ctx, "a", constInt(1)); err != nil {
+			t.Fatalf("assign a: %v", err)
+		}
+		if err := inst.SetFeatureValue(ctx, "b", constInt(2)); err != nil {
+			t.Fatalf("assign b: %v", err)
+		}
+		_, err = inst.GetFeatureValue(ctx, "b")
+		if !errors.Is(err, ErrBindingConflict) {
+			t.Fatalf("GetFeatureValue(b) = %v, want ErrBindingConflict", err)
+		}
+	})
+}
+
+func testBindingIncompleteEndDoesNotPoisonRead(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<binding-incomplete-end>", parseAndBuild(t, `package P {
+		part def Sys {
+			attribute x = 4;
+			bind x;
+			binding bb of x;
+		}
+	}`))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	fv, err := inst.GetFeatureValue(ctx, "x")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(x) = %v, want 4", err)
+	}
+	if got := fv.HeldValue().Const.Int; got != 4 {
+		t.Errorf("x = %d, want 4", got)
+	}
+}
+
+func testBindingNestedContainerIsNotACycle(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<binding-nested-container>", parseAndBuild(t, `package P {
+		part def Child {
+			attribute b;
+		}
+		part def Sys {
+			attribute x = 9;
+			part child : Child;
+			binding bind child.b = x;
+		}
+	}`))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	childValue, err := inst.GetFeatureValue(ctx, "child")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(child) = %v, want no binding cycle", err)
+	}
+	id, isObject := childValue.HeldValue().Object()
+	if !isObject {
+		t.Fatalf("child holds %s, want an object", childValue.HeldValue().Kind)
+	}
+	child, ok := ctx.Instance(id)
+	if !ok {
+		t.Fatalf("child instance %d is not materialized", id)
+	}
+	b, err := child.GetFeatureValue(ctx, "b")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(child.b) = %v, want 9", err)
+	}
+	if got := b.HeldValue().Const.Int; got != 9 {
+		t.Fatalf("child.b = %d, want 9", got)
+	}
+}
+
+// testSuccessionGuardFailureModes: a guard on a succession leaving an ordinary
+// action node is evaluated, so its failure modes — a value that is not Boolean,
+// a guard nothing supplies a name for, and two guards holding at once — are each
+// reported as a typed error rather than a panic, a hang or a chosen branch.
+func testSuccessionGuardFailureModes(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body string
+		want error
+	}{
+		{
+			name: "guard is not a boolean",
+			body: `
+				attribute x : Integer = 1;
+				attribute y : Integer = 0;
+				action s1 assign x := 7;
+				action s2 assign y := 9;
+				first s1 if x + 1 then s2;
+			`,
+			want: ErrTypeMismatch,
+		},
+		{
+			name: "guard reads a name nothing supplies",
+			body: `
+				attribute y : Integer = 0;
+				action s1;
+				action s2 assign y := 9;
+				first s1 if missing > 5 then s2;
+			`,
+			want: ErrUnresolvedReference,
+		},
+		{
+			name: "two guards hold at once",
+			body: `
+				attribute level : Integer = 12;
+				attribute low : Integer = 0;
+				attribute high : Integer = 0;
+				action check assign level := level;
+				action alert assign high := 1;
+				action idle assign low := 1;
+				first check;
+				then check alert if level > 10;
+				then check idle if level > 5;
+			`,
+			want: ErrAmbiguousSuccession,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src := "package test {\n private import ScalarValues::*;\n action guarded {" + tc.body + "}\n}"
+			idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
+			sym := findSymbolByName(idx.DocumentRoot("<test>"), "guarded", ast.DefAction)
+			if sym == nil {
+				t.Fatal("action guarded not found")
+			}
+
+			done := make(chan error, 1)
+			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						done <- fmt.Errorf("panic: %v", r)
+					}
+				}()
+				_, err := ctx.ExecuteAction(sym)
+				done <- err
+			}()
+			select {
+			case err := <-done:
+				if !errors.Is(err, tc.want) {
+					t.Errorf("ExecuteAction err = %v, want %v", err, tc.want)
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("executing the guarded action did not terminate")
+			}
+		})
+	}
+}
+
+// testExpressionOverAFeatureValueHoldingNoValue: a valueless feature of a value type is
 // read without an error and reports that it holds no value, while an expression
 // computing over it reports a type mismatch rather than a number or a panic.
-func testExpressionOverASlotHoldingNoValue(t *testing.T) {
+func testExpressionOverAFeatureValueHoldingNoValue(t *testing.T) {
 	src := `
 		package test {
 			private import ScalarValues::*;
@@ -209,16 +847,16 @@ func testExpressionOverASlotHoldingNoValue(t *testing.T) {
 		t.Fatalf("Instantiate: %v", err)
 	}
 
-	slot, err := inst.GetSlot(ctx, "d")
+	fv, err := inst.GetFeatureValue(ctx, "d")
 	if err != nil {
-		t.Fatalf("slot d: %v", err)
+		t.Fatalf("feature value d: %v", err)
 	}
-	if !ctx.HoldsNoValue(slot.HeldValue()) {
-		t.Errorf("slot d holds %v, want no value", slot.HeldValue())
+	if !ctx.HoldsNoValue(fv.HeldValue()) {
+		t.Errorf("feature value d holds %v, want no value", fv.HeldValue())
 	}
 
-	if _, err := inst.GetSlot(ctx, "n"); !errors.Is(err, ErrTypeMismatch) {
-		t.Errorf("slot n err = %v, want ErrTypeMismatch", err)
+	if _, err := inst.GetFeatureValue(ctx, "n"); !errors.Is(err, ErrTypeMismatch) {
+		t.Errorf("feature value n err = %v, want ErrTypeMismatch", err)
 	}
 
 	// A value naming an object the context does not hold answers the question
@@ -261,7 +899,7 @@ func testClassificationOutsideTheEvaluableSubset(t *testing.T) {
 }
 
 // testMultiplicityInfiniteLowerBound: `[*..*]` requires unboundedly many objects,
-// which cannot be materialized, so the slot reports a multiplicity violation
+// which cannot be materialized, so the feature value reports a multiplicity violation
 // rather than allocating until memory runs out.
 func testMultiplicityInfiniteLowerBound(t *testing.T) {
 	inst, ctx := instantiateHolder(t, `
@@ -271,9 +909,9 @@ func testMultiplicityInfiniteLowerBound(t *testing.T) {
 			part def Holder { part p : C[*..*]; }
 		}
 	`)
-	_, err := inst.GetSlot(ctx, "p")
+	_, err := inst.GetFeatureValue(ctx, "p")
 	if err == nil {
-		t.Fatal("want a multiplicity violation, got a materialized slot")
+		t.Fatal("want a multiplicity violation, got a materialized feature value")
 	}
 	if !errors.Is(err, ErrMultiplicityViolation) {
 		t.Errorf("expected ErrMultiplicityViolation, got: %v", err)
@@ -290,9 +928,9 @@ func testMultiplicityLowerBoundTooLarge(t *testing.T) {
 			part def Holder { part p : C[5000]; }
 		}
 	`)
-	_, err := inst.GetSlot(ctx, "p")
+	_, err := inst.GetFeatureValue(ctx, "p")
 	if err == nil {
-		t.Fatal("want a multiplicity violation, got a materialized slot")
+		t.Fatal("want a multiplicity violation, got a materialized feature value")
 	}
 	if !errors.Is(err, ErrMultiplicityViolation) {
 		t.Errorf("expected ErrMultiplicityViolation, got: %v", err)
@@ -329,13 +967,13 @@ func testDefaultNotConformingToMultiplicity(t *testing.T) {
 						done <- fmt.Errorf("panic: %v", r)
 					}
 				}()
-				_, err := inst.GetSlot(ctx, "xs")
+				_, err := inst.GetFeatureValue(ctx, "xs")
 				done <- err
 			}()
 			select {
 			case err := <-done:
 				if err == nil {
-					t.Fatal("want a multiplicity violation, got a materialized slot")
+					t.Fatal("want a multiplicity violation, got a materialized feature value")
 				}
 				if !errors.Is(err, ErrMultiplicityViolation) {
 					t.Errorf("expected ErrMultiplicityViolation, got: %v", err)
@@ -370,7 +1008,7 @@ func testDefaultAgainstAnUndeclaredMultiplicity(t *testing.T) {
 					part def Holder { `+tc.decl+` }
 				}
 			`)
-			_, err := inst.GetSlot(ctx, "xs")
+			_, err := inst.GetFeatureValue(ctx, "xs")
 			switch {
 			case tc.reported && err == nil:
 				t.Fatalf("%s was held, want a multiplicity violation", tc.decl)
@@ -383,10 +1021,10 @@ func testDefaultAgainstAnUndeclaredMultiplicity(t *testing.T) {
 	}
 }
 
-// testFeatureChainThroughAnUnsetSlot: a chain over a collection whose objects
+// testFeatureChainThroughAnUnsetFeatureValue: a chain over a collection whose objects
 // hold no value for the last feature names that feature, rather than reading it
 // as an empty collection.
-func testFeatureChainThroughAnUnsetSlot(t *testing.T) {
+func testFeatureChainThroughAnUnsetFeatureValue(t *testing.T) {
 	inst, ctx := instantiateHolder(t, `
 		package test {
 			private import ScalarValues::Real;
@@ -398,12 +1036,12 @@ func testFeatureChainThroughAnUnsetSlot(t *testing.T) {
 			}
 		}
 	`)
-	_, err := inst.GetSlot(ctx, "total")
+	_, err := inst.GetFeatureValue(ctx, "total")
 	if err == nil {
-		t.Fatal("want the unset slot's error, got a value")
+		t.Fatal("want the unset feature value's error, got a value")
 	}
-	if !errors.Is(err, ErrUninitializedSlot) {
-		t.Errorf("expected ErrUninitializedSlot, got: %v", err)
+	if !errors.Is(err, ErrUninitializedFeatureValue) {
+		t.Errorf("expected ErrUninitializedFeatureValue, got: %v", err)
 	}
 	if !strings.Contains(err.Error(), "volume") {
 		t.Errorf("error %q does not name the unset feature", err)
@@ -425,7 +1063,7 @@ func testFeatureChainSpendsTheElementBudget(t *testing.T) {
 		}
 	`)
 	ctx.maxElements = 15
-	_, err := inst.GetSlot(ctx, "volumes")
+	_, err := inst.GetFeatureValue(ctx, "volumes")
 	if err == nil {
 		t.Fatal("want the element budget's error, got a value")
 	}
@@ -449,26 +1087,26 @@ func testMutuallySubsettingFeatures(t *testing.T) {
 		}
 	`)
 	done := make(chan struct{})
-	var slotErr error
+	var fvErr error
 	go func() {
 		defer close(done)
-		_, slotErr = inst.GetSlot(ctx, "a")
+		_, fvErr = inst.GetFeatureValue(ctx, "a")
 	}()
 	select {
 	case <-done:
 	case <-time.After(5 * time.Second):
-		t.Fatal("GetSlot hung on mutually subsetting features")
+		t.Fatal("GetFeatureValue hung on mutually subsetting features")
 	}
-	if slotErr == nil {
-		t.Fatal("want the cyclic slot's error, got a materialized slot")
+	if fvErr == nil {
+		t.Fatal("want the cyclic feature value's error, got a materialized feature value")
 	}
-	if !errors.Is(slotErr, ErrCyclicSlot) {
-		t.Errorf("expected ErrCyclicSlot, got: %v", slotErr)
+	if !errors.Is(fvErr, ErrCyclicFeatureValue) {
+		t.Errorf("expected ErrCyclicFeatureValue, got: %v", fvErr)
 	}
 }
 
 // instantiateHolder instantiates the `Holder` part def the source declares, for
-// a case whose failure surfaces when one of its slots is read.
+// a case whose failure surfaces when one of its feature values is read.
 func instantiateHolder(t *testing.T, src string) (*Instance, *Context) {
 	t.Helper()
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
@@ -744,9 +1382,9 @@ func testSatisfyBoundedByTheStepBudget(t *testing.T) {
 	}
 }
 
-// testCyclicDerivedSlot: two derived defaults that read each other are reported
+// testCyclicDerivedFeatureValue: two derived defaults that read each other are reported
 // as a cycle instead of recursing until the step budget runs out.
-func testCyclicDerivedSlot(t *testing.T) {
+func testCyclicDerivedFeatureValue(t *testing.T) {
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
 		package test {
 			part def Loop {
@@ -766,26 +1404,26 @@ func testCyclicDerivedSlot(t *testing.T) {
 	}
 
 	done := make(chan struct{})
-	var slotErr error
+	var fvErr error
 	go func() {
 		defer close(done)
-		_, slotErr = inst.GetSlot(ctx, "a")
+		_, fvErr = inst.GetFeatureValue(ctx, "a")
 	}()
 	select {
 	case <-done:
 	case <-time.After(5 * time.Second):
-		t.Fatal("GetSlot hung on a cyclic derived slot")
+		t.Fatal("GetFeatureValue hung on a cyclic derived feature value")
 	}
 
-	if !errors.Is(slotErr, ErrCyclicSlot) {
-		t.Fatalf("GetSlot error = %v, want ErrCyclicSlot", slotErr)
+	if !errors.Is(fvErr, ErrCyclicFeatureValue) {
+		t.Fatalf("GetFeatureValue error = %v, want ErrCyclicFeatureValue", fvErr)
 	}
 }
 
-// testDerivedSlotOverMissingFeature: a derived default that names something the
-// instance does not have fails with the slot named, rather than silently
-// leaving the slot empty.
-func testDerivedSlotOverMissingFeature(t *testing.T) {
+// testDerivedFeatureValueOverMissingFeature: a derived default that names something the
+// instance does not have fails with the feature value named, rather than silently
+// leaving the feature value empty.
+func testDerivedFeatureValueOverMissingFeature(t *testing.T) {
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
 		package test {
 			part def Broken {
@@ -803,12 +1441,12 @@ func testDerivedSlotOverMissingFeature(t *testing.T) {
 		t.Fatalf("Instantiate: %v", err)
 	}
 
-	_, err = inst.GetSlot(ctx, "derived")
+	_, err = inst.GetFeatureValue(ctx, "derived")
 	if err == nil {
-		t.Fatal("GetSlot succeeded on a default over an undeclared feature")
+		t.Fatal("GetFeatureValue succeeded on a default over an undeclared feature")
 	}
 	if !strings.Contains(err.Error(), "derived") {
-		t.Errorf("error %q does not name the slot", err)
+		t.Errorf("error %q does not name the feature value", err)
 	}
 }
 
@@ -1731,6 +2369,157 @@ func testSendViaUnconnectedPort(t *testing.T) {
 	}
 }
 
+// testSendAddressedToAnUnreachableTarget: a target reaching no port of an object
+// the sender can address is reported where it was written rather than delivered
+// to whatever else carries the last segment's name.
+func testSendAddressedToAnUnreachableTarget(t *testing.T) {
+	_, err := executeActionSource(t, "pipeline", `package P {
+		port def PingPort { in item ping : Integer; }
+		part def Leaf { attribute count : Integer = 0; }
+		part def Node {
+			port inPort : PingPort;
+			part leaf : Leaf;
+		}
+		part alpha : Node;
+		action pipeline {
+			first start;
+			action sender { send 42 to alpha.leaf.count; }
+			done end;
+			then start sender;
+			then sender end;
+		}
+	}`)
+	if err == nil {
+		t.Fatal("expected an error: alpha.leaf.count is no port of any object")
+	}
+	if !errors.Is(err, ErrUnroutableSend) {
+		t.Errorf("expected ErrUnroutableSend, got: %v", err)
+	}
+}
+
+// testSendAddressedThroughSeveralOccurrences: a path led by a part naming three
+// occurrences reaches no one object, which must be reported rather than
+// attributed to the sending object and delivered to nobody.
+func testSendAddressedThroughSeveralOccurrences(t *testing.T) {
+	_, err := executeActionSource(t, "pipeline", `package P {
+		port def PingPort { in item ping : Integer; }
+		part def Leaf { port inPort : PingPort; }
+		part nodes : Leaf[3];
+		action pipeline {
+			first start;
+			action sender { send 42 to nodes.inPort; }
+			done end;
+			then start sender;
+			then sender end;
+		}
+	}`)
+	if err == nil {
+		t.Fatal("expected an error: nodes names three occurrences, not one addressee")
+	}
+	if !errors.Is(err, ErrUnroutableSend) {
+		t.Errorf("expected ErrUnroutableSend, got: %v", err)
+	}
+}
+
+// testSendAddressedToAPartNoSiblingTakes: a message addressed to a part belongs
+// to that object, so a sibling accept of the sending behavior cannot take it and
+// the run reports the accept it is left waiting on.
+func testSendAddressedToAPartNoSiblingTakes(t *testing.T) {
+	_, err := executeActionSource(t, "main", `package P {
+		item def Ping;
+		part def R;
+		part receiver : R;
+		action main {
+			first start;
+			action s { send Ping() to receiver; }
+			action other accept p : Ping;
+			done end;
+			then start s;
+			then s other;
+			then other end;
+		}
+	}`)
+	if err == nil {
+		t.Fatal("expected an error: `other` is no addressee of the message sent to receiver")
+	}
+	if !errors.Is(err, ErrAcceptDeadlock) {
+		t.Errorf("expected ErrAcceptDeadlock, got: %v", err)
+	}
+}
+
+// testInjectedMessageNamesAReceiverNoAcceptHas: a message injected from outside
+// the model is held to the receiver it names, so an accept of another name waits
+// on rather than consumes it, and the run reports that wait.
+func testInjectedMessageNamesAReceiverNoAcceptHas(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package P {
+		import ScalarValues::*;
+		action pipeline {
+			first start;
+			action other accept n : Integer;
+			done end;
+			then start other;
+			then other end;
+		}
+	}`))
+	exec, err := ctx.CreateActionExecutor(oneSymbol(t, idx, "P::pipeline"))
+	if err != nil {
+		t.Fatalf("create action executor: %v", err)
+	}
+	ctx.PostMessage(Message{SignalType: "Integer", Target: "reader", Payload: map[string]Value{
+		"value": {Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 1}},
+	}})
+	err = exec.RunToCompletion()
+	if err == nil {
+		t.Fatal("expected an error: `other` is not the receiver the message names")
+	}
+	if !errors.Is(err, ErrAcceptDeadlock) {
+		t.Errorf("expected ErrAcceptDeadlock, got: %v", err)
+	}
+}
+
+// testSendAddressedToAnObjectThatCannotBeBuilt: locating an addressee can fail
+// on its own terms — an exhausted budget, or a feature value the walk cannot read — and
+// each must be reported as that rather than as an address naming no port.
+func testSendAddressedToAnObjectThatCannotBeBuilt(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
+		package test {
+			port def PingPort { in item ping : Integer; }
+			part def Node {
+				port inPort : PingPort;
+				attribute a = b + 1.0;
+				attribute b = a + 1.0;
+				action listen { first start; done end; then start end; }
+			}
+			part alpha : Node;
+		}
+	`))
+	scope := declScope(oneSymbol(t, idx, "test::Node::listen"))
+
+	ctx.maxSteps = 0
+	send := lower.Send{Target: "alpha.inPort", TargetPath: true, Scope: scope}
+	err := ctx.post(nil, Message{SignalType: "Integer"}, send, nil)
+	if !errors.Is(err, ErrStepLimitExceeded) {
+		t.Errorf("budget exhausted while building alpha: %v, want ErrStepLimitExceeded", err)
+	}
+	if errors.Is(err, ErrUnroutableSend) {
+		t.Errorf("an exhausted budget was reported as a bad address: %v", err)
+	}
+
+	ctx.maxSteps = DefaultMaxSteps
+	alpha := instanceOfUsage(t, ctx, idx, "test::alpha")
+	send = lower.Send{Target: "a.inPort", TargetPath: true, Scope: scope}
+	err = ctx.post(nil, Message{SignalType: "Integer"}, send, alpha)
+	if !errors.Is(err, ErrCyclicFeatureValue) {
+		t.Errorf("walking through a cyclic derived feature value: %v, want ErrCyclicFeatureValue", err)
+	}
+	if errors.Is(err, ErrUnroutableSend) {
+		t.Errorf("an unreadable feature value was reported as a bad address: %v", err)
+	}
+	if len(ctx.PendingMessages()) != 0 {
+		t.Errorf("a send that never found its addressee posted %+v", ctx.PendingMessages())
+	}
+}
+
 // testAcceptDeadlockNeverSatisfied: an accept nothing can ever satisfy suspends
 // the action, and a suspension that can never end must be reported as a typed
 // deadlock rather than hanging.
@@ -1826,6 +2615,60 @@ func testNonNumericTimeTrigger(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "time duration must be constant, got string") {
 		t.Errorf("expected a numeric-duration error, got: %v", err)
+	}
+}
+
+// testTimeTriggerOfANonTimeDimension: a duration whose unit measures something
+// other than time cannot be scheduled, and fails as the typed error it is.
+func testTimeTriggerOfANonTimeDimension(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `
+		package test {
+			private import SI::*;
+			state Machine {
+				initial init;
+				state waiting {
+					accept after 5 [kg] then done;
+				}
+				state done;
+				init then waiting;
+			}
+		}
+	`))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "Machine", ast.DefState)
+	if sym == nil {
+		t.Fatal("state Machine not found")
+	}
+
+	_, err := ctx.ExecuteState(sym)
+	if !errors.Is(err, ErrIncommensurableUnits) {
+		t.Fatalf("err = %v; want ErrIncommensurableUnits", err)
+	}
+}
+
+// testChangeConditionThatNeverHolds: a machine whose only outgoing transition
+// watches a false condition suspends within its budget and says what it waits
+// on, rather than hanging or reporting silent completion.
+func testChangeConditionThatNeverHolds(t *testing.T) {
+	exec := stateExecutorForSource(t, "Machine", `package test {
+		state Machine {
+			attribute ready : Boolean = false;
+			initial init;
+			state waiting {
+				accept when ready then done;
+			}
+			state done;
+			init then waiting;
+		}
+	}`)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if exec.State() != StateSuspended {
+		t.Fatalf("state = %v; want suspended", exec.State())
+	}
+	if reason := exec.SuspendReason(); !strings.Contains(reason, "when ready") ||
+		!strings.Contains(reason, "condition is false") {
+		t.Errorf("reason = %q; want the false condition it waits on", reason)
 	}
 }
 
@@ -2352,6 +3195,38 @@ func testCalcUnboundParameter(t *testing.T) {
 	}
 }
 
+// testCalcCallsAnUnimportedExtensionFunction: `exp(x)` with no import of the
+// OpenSysML extension library is reported unresolved by name resolution, so the
+// call fails with a typed error naming the import rather than being answered.
+func testCalcCallsAnUnimportedExtensionFunction(t *testing.T) {
+	src := `
+		package test {
+			calc grow {
+				in x: Real;
+				return exp(x);
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	rootScope := idx.DocumentRoot("<test>")
+	sym := findSymbolByName(rootScope, "grow", ast.DefCalc)
+	if sym == nil {
+		t.Fatal("grow calc not found")
+	}
+
+	arg := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValReal, Real: 1}}
+	result, err := ctx.InvokeCalc(sym, []Value{arg}, rootScope)
+	if err == nil {
+		t.Fatalf("expected an out-of-scope error, calc returned %+v", result)
+	}
+	if !errors.Is(err, ErrUnimportedExtensionFunction) {
+		t.Fatalf("expected ErrUnimportedExtensionFunction, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "import OpenSysMLMathFunctions::*;") {
+		t.Errorf("error %q does not name the import that makes the call legal", err)
+	}
+}
+
 // testCalcUnboundKeywordNamedParameter: a parameter named with a keyword is a
 // parameter like any other, so leaving it unbound reports, never panics.
 func testCalcUnboundKeywordNamedParameter(t *testing.T) {
@@ -2851,7 +3726,7 @@ func testDuplicateObjectsHoldingAPlainPart(t *testing.T) {
 	}
 }
 
-// testNestedPartHeldWithAMultiplicity: the objects one slot materializes for a
+// testNestedPartHeldWithAMultiplicity: the objects one feature value materializes for a
 // multiplicity are occurrences of one declaration, so a check answers a verdict
 // rather than calling its subject ambiguous.
 func testNestedPartHeldWithAMultiplicity(t *testing.T) {
@@ -3039,8 +3914,8 @@ func testRequirementFeaturesValuedFromEachOther(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected an error, got satisfied = %v", satisfied)
 	}
-	if !errors.Is(err, ErrCyclicSlot) {
-		t.Errorf("expected ErrCyclicSlot, got: %v", err)
+	if !errors.Is(err, ErrCyclicFeatureValue) {
+		t.Errorf("expected ErrCyclicFeatureValue, got: %v", err)
 	}
 }
 
@@ -3079,7 +3954,7 @@ func testStepBudgetExceeded(t *testing.T) {
 }
 
 // testEvalOnAnInstanceSpendsTheStepBudget: an expression evaluated against an
-// instance is one run, so reading a slot inside it does not start a run of its
+// instance is one run, so reading a feature value inside it does not start a run of its
 // own and reset the counter; an expression longer than the budget is refused.
 func testEvalOnAnInstanceSpendsTheStepBudget(t *testing.T) {
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
@@ -3097,7 +3972,7 @@ func testEvalOnAnInstanceSpendsTheStepBudget(t *testing.T) {
 		t.Fatalf("instantiating Car: %v", err)
 	}
 
-	// Nested to the right, so the slot read - which brackets a run of its own when
+	// Nested to the right, so the feature value read - which brackets a run of its own when
 	// the evaluation is not already one - is reached on the second step.
 	expr := "m"
 	for i := 0; i < 60; i++ {
@@ -3803,19 +4678,21 @@ func testLibraryFunctionWrongArity(t *testing.T) {
 	}
 }
 
-// testExtensionLibraryFunctionOutsideItsDomain: a Systemica extension library
+// testExtensionLibraryFunctionOutsideItsDomain: an OpenSysML extension library
 // function reports a domain error the same way a vendored one does — the
 // logarithm of zero has no Real value, and is not returned as an infinity.
 func testExtensionLibraryFunctionOutsideItsDomain(t *testing.T) {
 	src := `
 		package test {
+			import ScalarValues::*;
+			import OpenSysMLMathFunctions::*;
 			calc root {
 				in x : Real;
 				return : Real = ln(x);
 			}
 		}
 	`
-	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, src))
 	rootScope := idx.DocumentRoot("<test>")
 	sym := findSymbolByName(rootScope, "root", ast.DefCalc)
 	if sym == nil {
@@ -4656,8 +5533,8 @@ func testNestedCalcUsageSelfCycle(t *testing.T) {
 		}
 	`
 	err := calcUsageOutputInSource(t, src, "c", "d", 10000)
-	if !errors.Is(err, ErrCyclicSlot) {
-		t.Errorf("expected ErrCyclicSlot, got: %v", err)
+	if !errors.Is(err, ErrCyclicFeatureValue) {
+		t.Errorf("expected ErrCyclicFeatureValue, got: %v", err)
 	}
 }
 
@@ -4710,9 +5587,9 @@ func testNestedCalcUsageStepBudget(t *testing.T) {
 	}
 }
 
-// variationSlotInSource instantiates a usage and returns the value its named
-// slot holds, so a variation's failure modes are read where a model reads them.
-func variationSlotInSource(t *testing.T, src, usage, slot string) (Value, error) {
+// variationFeatureValueInSource instantiates a usage and returns the value its named
+// feature value holds, so a variation's failure modes are read where a model reads them.
+func variationFeatureValueInSource(t *testing.T, src, usage, fv string) (Value, error) {
 	t.Helper()
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
 	matches := idx.LookupQualified(usage)
@@ -4723,7 +5600,7 @@ func variationSlotInSource(t *testing.T, src, usage, slot string) (Value, error)
 	if err != nil {
 		return Value{}, err
 	}
-	got, err := inst.GetSlot(ctx, slot)
+	got, err := inst.GetFeatureValue(ctx, fv)
 	if err != nil {
 		return Value{}, err
 	}
@@ -4752,7 +5629,7 @@ const variationFamily = `
 // own empty object or one of the variants arbitrarily.
 func testVariationWithoutASelectedVariant(t *testing.T) {
 	src := fmt.Sprintf(variationFamily, `part unconfigured :> family;`)
-	got, err := variationSlotInSource(t, src, "test::unconfigured", "cut")
+	got, err := variationFeatureValueInSource(t, src, "test::unconfigured", "cut")
 	if !errors.Is(err, ErrVariationUnselected) {
 		t.Errorf("cut = (%v, %v), want ErrVariationUnselected", got, err)
 	}
@@ -4764,7 +5641,7 @@ func testVariationWithoutASelectedVariant(t *testing.T) {
 }
 
 // variationReadFromDeclaration evaluates a usage's value with no bound object,
-// so a variation is read through its declaration rather than through a slot.
+// so a variation is read through its declaration rather than through a feature value.
 func variationReadFromDeclaration(t *testing.T, src, probe string) (Value, error) {
 	t.Helper()
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
@@ -4780,7 +5657,7 @@ func variationReadFromDeclaration(t *testing.T, src, probe string) (Value, error
 }
 
 // testVariationReadThroughItsDeclaration: a variation read without a bound
-// object is bound the same way as one read from a slot, so what a legal
+// object is bound the same way as one read from a feature value, so what a legal
 // selection is does not depend on how the model is inspected.
 func testVariationReadThroughItsDeclaration(t *testing.T) {
 	for _, tt := range []struct {
@@ -4832,7 +5709,7 @@ func testChainThroughAnUnselectedVariationPart(t *testing.T) {
 		}
 		part probe { attribute p : Real = engine.power; }
 	}`
-	got, err := variationSlotInSource(t, src, "test::probe", "p")
+	got, err := variationFeatureValueInSource(t, src, "test::probe", "p")
 	if !errors.Is(err, ErrVariationUnselected) {
 		t.Errorf("p = (%v, %v), want ErrVariationUnselected", got, err)
 	}
@@ -4850,7 +5727,7 @@ func testVariationBoundToWhatIsNotAVariant(t *testing.T) {
 		{"variant_mixed_with_an_ordinary_value", `part chosen :> family { attribute :>> cut = (cut::cutIdeal, 250.0); }`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := variationSlotInSource(t, fmt.Sprintf(variationFamily, tt.selection), "test::chosen", "cut")
+			got, err := variationFeatureValueInSource(t, fmt.Sprintf(variationFamily, tt.selection), "test::chosen", "cut")
 			if !errors.Is(err, ErrNotAVariant) {
 				t.Errorf("cut = (%v, %v), want ErrNotAVariant", got, err)
 			}
@@ -4863,7 +5740,7 @@ func testVariationBoundToWhatIsNotAVariant(t *testing.T) {
 func testVariationBoundToTwoVariants(t *testing.T) {
 	src := fmt.Sprintf(variationFamily,
 		`part chosen :> family { attribute :>> cut = (cut::cutIdeal, cut::cutShallow); }`)
-	got, err := variationSlotInSource(t, src, "test::chosen", "cut")
+	got, err := variationFeatureValueInSource(t, src, "test::chosen", "cut")
 	if !errors.Is(err, ErrMultipleVariants) {
 		t.Fatalf("cut = (%v, %v), want ErrMultipleVariants", got, err)
 	}
@@ -4913,7 +5790,7 @@ func testRepeatedReadsOfAVariantObject(t *testing.T) {
 
 // testTwoOwnersSelectingOneVariant: a variant is selected per owning object, so
 // two owners of one variation each hold their own object of the variant rather
-// than sharing one whose materialized slots the other reads.
+// than sharing one whose materialized feature values the other reads.
 func testTwoOwnersSelectingOneVariant(t *testing.T) {
 	src := `
 	package test {
@@ -4934,13 +5811,13 @@ func testTwoOwnersSelectingOneVariant(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", usage, err)
 		}
-		slot, err := inst.GetSlot(ctx, "engine")
+		fv, err := inst.GetFeatureValue(ctx, "engine")
 		if err != nil {
 			t.Fatalf("%s.engine: %v", usage, err)
 		}
-		id, ok := slot.Value.Object()
+		id, ok := fv.Value.Object()
 		if !ok {
-			t.Fatalf("%s.engine = %v, want an object of the selected variant", usage, slot.Value)
+			t.Fatalf("%s.engine = %v, want an object of the selected variant", usage, fv.Value)
 		}
 		ids = append(ids, id)
 	}
@@ -4993,18 +5870,18 @@ func testVariantOutsideAVariation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Instantiate(test::widget): %v", err)
 	}
-	slot, err := inst.GetSlot(ctx, "misplaced")
+	fv, err := inst.GetFeatureValue(ctx, "misplaced")
 	if err != nil {
 		t.Fatalf("widget.misplaced: %v", err)
 	}
-	if slot.Value.Kind != ValConst || slot.Value.Const.Real != 1.0 {
-		t.Errorf("widget.misplaced = %v, want 1", slot.Value)
+	if fv.Value.Kind != ValConst || fv.Value.Const.Real != 1.0 {
+		t.Errorf("widget.misplaced = %v, want 1", fv.Value)
 	}
 }
 
 // testVariantUnderARedefinedVariation: a usage redefining a variation usage is a
 // variation point without restating the modifier, so the variants under it stay
-// choices that specialize it instead of materializing slots.
+// choices that specialize it instead of materializing feature values.
 func testVariantUnderARedefinedVariation(t *testing.T) {
 	src := `
 	package test {
@@ -5026,17 +5903,17 @@ func testVariantUnderARedefinedVariation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Instantiate(test::sedan): %v", err)
 	}
-	if slot, err := inst.GetSlot(ctx, "electric"); err == nil {
-		t.Errorf("sedan.electric materialized a slot: %v", slot.Value)
+	if fv, err := inst.GetFeatureValue(ctx, "electric"); err == nil {
+		t.Errorf("sedan.electric materialized a feature value: %v", fv.Value)
 	}
-	slot, err := inst.GetSlot(ctx, "engine")
+	fv, err := inst.GetFeatureValue(ctx, "engine")
 	if err != nil {
 		t.Fatalf("sedan.engine: %v", err)
 	}
-	if slot.Value.Kind != ValVariant || slot.Value.Instance == 0 {
-		t.Fatalf("sedan.engine = %v, want the selected variant's object", slot.Value)
+	if fv.Value.Kind != ValVariant || fv.Value.Instance == 0 {
+		t.Fatalf("sedan.engine = %v, want the selected variant's object", fv.Value)
 	}
-	power, err := ctx.instances[slot.Value.Instance].GetSlot(ctx, "power")
+	power, err := ctx.instances[fv.Value.Instance].GetFeatureValue(ctx, "power")
 	if err != nil {
 		t.Fatalf("sedan.engine.power: %v", err)
 	}
@@ -5075,7 +5952,7 @@ func testDeepSpecializationChainOfRedefinitions(t *testing.T) {
 	var err error
 	go func() {
 		defer close(done)
-		got, err = variationSlotInSource(t, b.String(), fmt.Sprintf("test::level%d", depth), "t")
+		got, err = variationFeatureValueInSource(t, b.String(), fmt.Sprintf("test::level%d", depth), "t")
 	}()
 	select {
 	case <-done:
@@ -5102,7 +5979,7 @@ func testConflictingRedefinitionsAtSeveralLevels(t *testing.T) {
 			part middle :> base { part :>> inner { attribute :>> b = 20.0; attribute :>> c = 200.0; } }
 			part leaf :> middle { part :>> inner { attribute :>> c = 300.0; } }
 		}`
-	got, err := variationSlotInSource(t, src, "test::leaf", "t")
+	got, err := variationFeatureValueInSource(t, src, "test::leaf", "t")
 	if err != nil {
 		t.Fatalf("t = %v", err)
 	}
@@ -5123,7 +6000,7 @@ func testOneFeatureValuedUnderTwoNames(t *testing.T) {
 				attribute :>> ringCost = 500.0;
 			}
 		}`
-	got, err := variationSlotInSource(t, src, "test::conflicted", "ringCost")
+	got, err := variationFeatureValueInSource(t, src, "test::conflicted", "ringCost")
 	if !errors.Is(err, ErrConflictingRedefinition) {
 		t.Fatalf("ringCost = %+v, err = %v, want ErrConflictingRedefinition", got, err)
 	}
@@ -5141,7 +6018,7 @@ func testValuedFeatureRestatedInABody(t *testing.T) {
 				attribute :>> ringCost = 400.0 { attribute :>> v = 9.0; }
 			}
 		}`
-	got, err := variationSlotInSource(t, src, "test::conflicted", "ringCost")
+	got, err := variationFeatureValueInSource(t, src, "test::conflicted", "ringCost")
 	if !errors.Is(err, ErrValuedFeatureRestated) {
 		t.Fatalf("ringCost = %+v, err = %v, want ErrValuedFeatureRestated", got, err)
 	}
@@ -5321,7 +6198,7 @@ func testEnumerationNameThatIsNotALiteral(t *testing.T) {
 		enum def Color { red; green; blue; }
 		part def Car { attribute c : Color = Color::purple; }
 	}`
-	got, err := variationSlotInSource(t, src, "test::Car", "c")
+	got, err := variationFeatureValueInSource(t, src, "test::Car", "c")
 	if !errors.Is(err, ErrNotALiteral) {
 		t.Fatalf("c = (%v, %v), want ErrNotALiteral", got, err)
 	}
@@ -5334,18 +6211,167 @@ func testEnumerationNameThatIsNotALiteral(t *testing.T) {
 
 // testChainThroughALiteralWithoutThatAttribute: a literal carries only the
 // features it declares, so reading another one off it is reported rather than
-// materializing an empty slot.
+// materializing an empty feature value.
 func testChainThroughALiteralWithoutThatAttribute(t *testing.T) {
 	src := `
 	package test {
 		enum def Level { low { attribute n = 1; } high { attribute n = 9; } }
 		part def Sensor { attribute missing = Level::low.label; }
 	}`
-	got, err := variationSlotInSource(t, src, "test::Sensor", "missing")
+	got, err := variationFeatureValueInSource(t, src, "test::Sensor", "missing")
 	if err == nil {
 		t.Fatalf("missing = %v, want an error naming the unknown member", got)
 	}
 	if !strings.Contains(err.Error(), "label") {
 		t.Errorf("error %q does not name the unknown member", err)
 	}
+}
+
+// testObjectExhibitedMachineNeverSettles: a machine an object exhibits is bounded
+// by the same event budget as one run on its own, so materializing an object whose
+// machine never settles reports a budget error rather than spinning.
+func testObjectExhibitedMachineNeverSettles(t *testing.T) {
+	src := `
+	package test {
+		part def Spinner {
+			attribute ticks : Integer = 0;
+			exhibit state modes {
+				entry; then spin;
+				state spin {
+					do action tick { assign ticks := ticks + 1; }
+				}
+				transition again first spin then spin;
+			}
+		}
+	}`
+	_, _, err := instantiateInSource(t, src, "test::Spinner")
+	if err == nil {
+		t.Fatal("expected a budget error for an exhibited machine that never settles")
+	}
+	if !strings.Contains(err.Error(), "exceeded max") {
+		t.Errorf("error = %v, want a budget error", err)
+	}
+}
+
+// testObjectExhibitedMachineWithoutAnInitialState: a machine stating states but no
+// entry into them is reported when the object's execution of it initializes, with
+// the behavior and the type named.
+func testObjectExhibitedMachineWithoutAnInitialState(t *testing.T) {
+	src := `
+	package test {
+		part def Controller {
+			exhibit state modes {
+				state off;
+				state on;
+			}
+		}
+	}`
+	_, _, err := instantiateInSource(t, src, "test::Controller")
+	if err == nil {
+		t.Fatal("expected an error for a machine with no initial state")
+	}
+	if !strings.Contains(err.Error(), "modes") || !strings.Contains(err.Error(), "initial") {
+		t.Errorf("error = %v, want one naming the machine and its missing initial state", err)
+	}
+}
+
+// testOperationInvokedWithUnboundParameters: an operation invoked without a value
+// for a parameter, or with an argument naming none, is reported rather than run
+// against values the invocation never stated.
+func testOperationInvokedWithUnboundParameters(t *testing.T) {
+	src := `
+	package test {
+		part def Adder {
+			attribute total : Integer = 0;
+			action add {
+				in addend : Integer;
+				assign total := total + addend;
+			}
+		}
+	}`
+	ctx, inst, err := instantiateInSource(t, src, "test::Adder")
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+
+	if _, err := ctx.InvokeOperation(inst, "add", nil); !errors.Is(err, ErrUnboundParameter) {
+		t.Errorf("invoke without an argument = %v, want ErrUnboundParameter", err)
+	}
+	args := map[string]Value{"addend": integerValue(1), "extra": integerValue(2)}
+	if _, err := ctx.InvokeOperation(inst, "add", args); !errors.Is(err, ErrUnboundParameter) {
+		t.Errorf("invoke with an unknown argument = %v, want ErrUnboundParameter", err)
+	}
+	if _, err := ctx.InvokeOperation(inst, "missing", nil); !errors.Is(err, ErrNoSuchBehavior) {
+		t.Errorf("invoke of an unknown operation = %v, want ErrNoSuchBehavior", err)
+	}
+	if _, err := ctx.InvokeOperation(inst, "total", nil); !errors.Is(err, ErrNotABehavior) {
+		t.Errorf("invoke of an attribute = %v, want ErrNotABehavior", err)
+	}
+}
+
+// testSecondInstantiationOfOneType: materializing a type twice builds two objects,
+// each with its own execution of the machine the type exhibits, rather than reusing
+// or replacing the first object's.
+func testSecondInstantiationOfOneType(t *testing.T) {
+	src := `
+	package test {
+		part def Light {
+			attribute lit : Integer = 0;
+			exhibit state modes {
+				entry; then on;
+				state on { entry action mark { assign lit := 1; } }
+			}
+		}
+	}`
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	sym := oneSymbol(t, idx, "test::Light")
+
+	first, err := ctx.Instantiate(sym)
+	if err != nil {
+		t.Fatalf("first instantiate: %v", err)
+	}
+	second, err := ctx.Instantiate(sym)
+	if err != nil {
+		t.Fatalf("second instantiate: %v", err)
+	}
+	if first.ID == second.ID {
+		t.Fatalf("both objects have identity %d", first.ID)
+	}
+	firstMachine, ok := first.ExhibitedState()
+	if !ok {
+		t.Fatal("first object exhibits no machine")
+	}
+	secondMachine, ok := second.ExhibitedState()
+	if !ok {
+		t.Fatal("second object exhibits no machine")
+	}
+	if firstMachine.State == secondMachine.State {
+		t.Error("both objects share one machine execution")
+	}
+	for _, obj := range []*Instance{first, second} {
+		fv, err := obj.GetFeatureValue(ctx, "lit")
+		if err != nil {
+			t.Fatalf("lit of object #%d: %v", obj.ID, err)
+		}
+		if fv.HeldValue().Const.Int != 1 {
+			t.Errorf("lit of object #%d = %v, want 1", obj.ID, fv.HeldValue().Const)
+		}
+	}
+}
+
+// instantiateInSource materializes the named type declared in src, so a case can
+// state the failure materializing an object reports.
+func instantiateInSource(t *testing.T, src, fqn string) (*Context, *Instance, error) {
+	t.Helper()
+	file := parseAndBuild(t, src)
+	if file == nil {
+		t.Fatal("parse failed")
+	}
+	idx, _, ctx := buildRuntime(t, "<test>", file)
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, fqn))
+	return ctx, inst, err
 }

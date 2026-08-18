@@ -1,11 +1,11 @@
 """Integration tests for runtime operations against real service.
 
 Without a service they skip, as a developer with no binary wants; with
-$PYSYSML_REQUIRE_SERVICE set, as CI sets it, an absent service fails instead.
+$OPENSYSML_REQUIRE_SERVICE set, as CI sets it, an absent service fails instead.
 """
 import pytest
-from pysysml import Connection
-from pysysml.errors import ExecutionError
+from opensysml import Connection
+from opensysml.errors import ExecutionError
 from tests.service_gate import skip_or_fail_without_service
 
 @pytest.mark.integration
@@ -18,7 +18,7 @@ class TestRuntimeIntegration:
         try:
             self.conn = Connection(auto_start=False)
             # Probe health
-            from pysysml.proto import sysml_pb2
+            from opensysml.proto import sysml_pb2
             req = sysml_pb2.DiagnosticsRequest(model_hash="")
             self.conn._stub.GetDiagnostics(req)
         except grpc.RpcError as e:
@@ -96,11 +96,11 @@ class TestRuntimeIntegration:
         assert vehicle.mass == 1500.0
         assert vehicle["mass"] == 1500.0
         # Raw protobuf stays reachable.
-        assert vehicle.get_slot("mass").materialized is True
+        assert vehicle.get_feature("mass").materialized is True
 
     def test_instantiate_resolves_nested_instances(self):
         """A part slot resolves to a nested Instance, not a bare id."""
-        from pysysml.instance import Instance
+        from opensysml.instance import Instance
 
         src = '''
         package Demo {
@@ -122,8 +122,8 @@ class TestRuntimeIntegration:
         assert vehicle.engine.power == 300.0
 
     def test_instantiate_cyclic_attribute_reports_error(self):
-        """A cyclic derived attribute surfaces as SlotError, never as None."""
-        from pysysml.errors import SlotError
+        """A cyclic derived attribute surfaces as FeatureValueError, never as None."""
+        from opensysml.errors import FeatureValueError
 
         src = '''
         package Demo {
@@ -137,13 +137,13 @@ class TestRuntimeIntegration:
 
         inst = self.conn.instantiate("Demo::Cyclic", model.hash)
 
-        with pytest.raises(SlotError, match="cyclic"):
+        with pytest.raises(FeatureValueError, match="cyclic"):
             inst.a
-        assert isinstance(inst.slots["a"], SlotError)
+        assert isinstance(inst.features["a"], FeatureValueError)
 
     def test_enum_typed_slot_and_eval_return_the_literal(self):
         """An enumeration literal reaches the client as the literal it is."""
-        from pysysml import EnumLiteral
+        from opensysml import EnumLiteral
 
         src = '''
         package D {
@@ -163,14 +163,14 @@ class TestRuntimeIntegration:
 
     def test_service_reports_the_enum_values_capability(self):
         """The wire form is a contract, so the service says it honours it."""
-        from pysysml.capabilities import CAPABILITY_ENUM_VALUES
+        from opensysml.capabilities import CAPABILITY_ENUM_VALUES
 
         assert self.conn.server_info().has(CAPABILITY_ENUM_VALUES)
 
     def test_a_valueless_feature_of_a_value_type_crosses_as_unset(self):
         """The service says it sends the unset arm, and does."""
-        from pysysml.capabilities import CAPABILITY_UNSET_VALUE
-        from pysysml.values import UNSET
+        from opensysml.capabilities import CAPABILITY_UNSET_VALUE
+        from opensysml.values import UNSET
 
         assert self.conn.server_info().has(CAPABILITY_UNSET_VALUE)
 

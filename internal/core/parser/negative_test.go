@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 // TestNegative verifies parser REJECTS malformed input (Phase 2, Task 2.3)
@@ -148,6 +148,7 @@ func TestNegative(t *testing.T) {
 		// body, and a portion usage declares what it portions.
 		{"conjugated_no_type", "part def P { port p : ~; }"},
 		{"conjugated_no_type_after_name", "port def P; port p ~;"},
+		{"conjugated_end_no_type", "connection def C { end e : ~; }"},
 		{"end_outside_connector", "part def P { end ; }"},
 		{"end_outside_connector_package", "package p { end ; }"},
 		{"end_in_package_nested_in_interface", "interface def I { package P { end ; } }"},
@@ -199,6 +200,13 @@ func TestNegative(t *testing.T) {
 		{"transition_effect_assign_two_semicolons", "state def S { attribute x; state a; state b; transition a to b do assign x := 1 ;; }"},
 		{"transition_effect_no_semicolon", "state def S { attribute x; state a; state b; transition a to b do assign x := 1 }"},
 		{"transition_braced_effect_no_semicolon", "state def S { attribute x; state a; state b; transition a to b do { assign x := 1; } }"},
+		// A binding end names a feature by a qualified name or a chain of them,
+		// so neither qualification nor chaining may end in nothing.
+		{"binding_end_qualification_no_name", "package P { part c; binding bind R:: = c; }"},
+		{"binding_end_chain_trailing_dot", "package P { part a; part c; binding bind a. = c; }"},
+		{"binding_end_chain_trailing_dot_qualified", "package P { part c; binding bind R::a. = c; }"},
+		{"binding_end_unterminated", "package P { part a; binding bind R::a }"},
+		{"binding_end_no_target", "package P { part a; binding bind R::a = ; }"},
 	}
 
 	for _, tt := range tests {

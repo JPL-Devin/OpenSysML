@@ -3,7 +3,8 @@ package resolve
 import (
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 func TestImportMembership(t *testing.T) {
@@ -141,5 +142,26 @@ func TestImportRecursiveSkipsBodyLocalNames(t *testing.T) {
 		if _, ok := r.ResolveName(appScope, name, &ast.FeatureReference{}); ok {
 			t.Errorf("%s is body-local and must not be importable", name)
 		}
+	}
+}
+
+// A root-level wildcard import surfaces its names in the editor's own scope tree
+// even when the document declares nothing else: the tree is identified by the
+// document name stamped on it, which no member is left to carry.
+func TestRootImportInDocumentDeclaringNothingElse(t *testing.T) {
+	idx := symbols.NewIndex()
+	idx.AddDocument("lib.sysml", parsedRoot(t, "lib.sysml", "package Lib { namespace Widget; }"))
+
+	const name = "repl.sysml"
+	root := parsedRoot(t, name, "import Lib::*;")
+	idx.AddDocument(name, root)
+	idx.ExpandWildcardImports()
+
+	scope := symbols.Build(root)
+	symbols.SetDocName(scope, name)
+
+	r := New(idx)
+	if _, ok := r.ResolveName(scope, "Widget", ident("Widget")); !ok {
+		t.Fatalf("Widget unresolved through the document's own root import; diags=%v", r.Diagnostics)
 	}
 }

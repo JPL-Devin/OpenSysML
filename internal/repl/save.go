@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Open-MBEE/Systemica/internal/core/export"
+	"github.com/Open-MBEE/OpenSysML/internal/core/export"
 )
 
 // formatAdvice is the remedy for a save path whose format cannot be told. The
@@ -39,13 +39,17 @@ func (s *Session) doSave(path string) ([]string, bool, error) {
 	if err != nil {
 		return []string{"error: " + export.Advise(err, formatAdvice).Error()}, false, nil
 	}
+	var lines []string
+	// Reported before the conversion, so a refused .ttl save carries it too.
+	if export.IsExperimental(export.FormatSysML, format) {
+		lines = append(lines, "note: "+export.ExperimentalNotice)
+	}
 	// Diagnostics are positions in the session buffer, not in the file about to
 	// be written, so they are labelled as such.
 	out, syntax, err := export.ConvertTolerant(sessionOrigin, []byte(src), export.FormatSysML, format)
 	if err != nil {
-		return []string{"error: " + err.Error()}, false, nil
+		return append(lines, "error: "+err.Error()), false, nil
 	}
-	var lines []string
 	if syntax != nil {
 		lines = append(lines, strings.Split("warning: "+syntax.Error(), "\n")...)
 		lines = append(lines, "warning: the file is saved as typed; fix these and save again")

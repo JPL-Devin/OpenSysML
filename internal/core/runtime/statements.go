@@ -5,10 +5,10 @@ import (
 	"maps"
 	"sort"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/lower"
-	"github.com/Open-MBEE/Systemica/internal/core/semantics"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // stmtEnv is the environment a body's statements execute in: the behavior's own
@@ -109,6 +109,9 @@ type stmtHost interface {
 	acceptReturn(value Value, s lower.Return) error
 	// effect states an effect on the world outside the body.
 	effect(s lower.Effect) error
+	// performer is the object running the behavior, nil when it runs outside any
+	// object: what the body's names read and write through.
+	performer() *Instance
 }
 
 // stmtEngine runs lowered body statements for a host: declarations,
@@ -139,7 +142,7 @@ func (e *stmtEngine) finish() {
 // statement was written in, reading the behavior's data and the frames entered,
 // innermost last so a block-local name shadows an outer one.
 func (e *stmtEngine) evalIn(scope *symbols.Scope) *EvalContext {
-	ec := NewEvalContext(e.ctx, scope)
+	ec := NewEvalContextIn(e.ctx, scope, e.host.performer())
 	ec.activation = e.activation
 	ec.Push(e.env.data)
 	for _, frame := range e.env.frames {

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/Open-MBEE/Systemica/api/proto"
+	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 )
 
 // instantiate parses content and instantiates symbolID, returning the response.
@@ -68,13 +68,13 @@ package Demo {
 		t.Error("root instance missing from Instances")
 	}
 
-	engine := resp.Instance.Slots["engine"]
+	engine := resp.Instance.FeatureValues["engine"]
 	if engine == nil {
-		t.Fatal("expected engine slot")
+		t.Fatal("expected engine feature value")
 	}
 	childID := engine.Value.GetInstanceId()
 	if childID == 0 {
-		t.Fatalf("expected engine slot to hold an instance id, got %v", engine.Value)
+		t.Fatalf("expected engine feature value to hold an instance id, got %v", engine.Value)
 	}
 
 	child, ok := graph[childID]
@@ -84,7 +84,7 @@ package Demo {
 	if child.TypeSymbolId != "Demo::Engine" {
 		t.Errorf("child type = %q, want Demo::Engine", child.TypeSymbolId)
 	}
-	if got := child.Slots["power"].Value.GetRealValue(); got != 300.0 {
+	if got := child.FeatureValues["power"].Value.GetRealValue(); got != 300.0 {
 		t.Errorf("child power = %v, want 300", got)
 	}
 }
@@ -112,21 +112,21 @@ package Demo {
 		t.Fatalf("expected 3 reachable instances, got %d", len(graph))
 	}
 
-	engine := graph[resp.Instance.Slots["engine"].Value.GetInstanceId()]
+	engine := graph[resp.Instance.FeatureValues["engine"].Value.GetInstanceId()]
 	if engine == nil {
 		t.Fatal("engine instance missing")
 	}
-	bolt := graph[engine.Slots["bolt"].Value.GetInstanceId()]
+	bolt := graph[engine.FeatureValues["bolt"].Value.GetInstanceId()]
 	if bolt == nil {
 		t.Fatal("bolt instance missing")
 	}
-	if got := bolt.Slots["size"].Value.GetIntValue(); got != 8 {
+	if got := bolt.FeatureValues["size"].Value.GetIntValue(); got != 8 {
 		t.Errorf("bolt size = %d, want 8", got)
 	}
 }
 
 // TestInstantiate_CollectionOfInstances verifies instances referenced from a
-// collection slot are also returned.
+// collection feature value are also returned.
 func TestInstantiate_CollectionOfInstances(t *testing.T) {
 	content := `
 package Demo {
@@ -140,22 +140,22 @@ package Demo {
 `
 	resp := instantiate(t, content, "graph-collection", "Demo::Vehicle")
 
-	slot := resp.Instance.Slots["wheels"]
-	if slot == nil {
-		t.Fatal("expected wheels slot")
+	fv := resp.Instance.FeatureValues["wheels"]
+	if fv == nil {
+		t.Fatal("expected wheels feature value")
 	}
 
 	var ids []int64
-	for _, v := range slot.Values {
+	for _, v := range fv.Values {
 		if id := v.GetInstanceId(); id != 0 {
 			ids = append(ids, id)
 		}
 	}
-	if id := slot.Value.GetInstanceId(); id != 0 {
+	if id := fv.Value.GetInstanceId(); id != 0 {
 		ids = append(ids, id)
 	}
 	if len(ids) != 4 {
-		t.Fatalf("expected 4 wheel instances, got %d: %v", len(ids), slot)
+		t.Fatalf("expected 4 wheel instances, got %d: %v", len(ids), fv)
 	}
 
 	graph := byID(resp)
@@ -166,10 +166,10 @@ package Demo {
 	}
 }
 
-// TestInstantiate_UnmaterializedScalarSlotHasNoValue verifies a scalar feature
-// with nothing to materialize is reported as an empty slot rather than as a
+// TestInstantiate_UnmaterializedScalarFeatureValueHasNoValue verifies a scalar feature
+// with nothing to materialize is reported as an empty feature value rather than as a
 // value the wire format could not represent.
-func TestInstantiate_UnmaterializedScalarSlotHasNoValue(t *testing.T) {
+func TestInstantiate_UnmaterializedScalarFeatureValueHasNoValue(t *testing.T) {
 	content := `
 package Demo {
   part def Sensor {
@@ -179,21 +179,21 @@ package Demo {
 `
 	resp := instantiate(t, content, "graph-unmaterialized", "Demo::Sensor")
 
-	slot := resp.Instance.Slots["reading"]
-	if slot == nil {
-		t.Fatal("expected reading slot")
+	fv := resp.Instance.FeatureValues["reading"]
+	if fv == nil {
+		t.Fatal("expected reading feature value")
 	}
-	if slot.Materialized {
-		t.Fatalf("expected an unmaterialized slot, got %v", slot)
+	if fv.Materialized {
+		t.Fatalf("expected an unmaterialized feature value, got %v", fv)
 	}
-	if slot.Value != nil {
-		t.Errorf("expected no value on an unmaterialized slot, got %v", slot.Value)
+	if fv.Value != nil {
+		t.Errorf("expected no value on an unmaterialized feature value, got %v", fv.Value)
 	}
 }
 
-// TestInstantiate_SlotErrorReported verifies a cyclic derived attribute is
-// reported through SlotValue.error rather than as a null value.
-func TestInstantiate_SlotErrorReported(t *testing.T) {
+// TestInstantiate_FeatureValueErrorReported verifies a cyclic derived attribute is
+// reported through FeatureValue.error rather than as a null value.
+func TestInstantiate_FeatureValueErrorReported(t *testing.T) {
 	content := `
 package Demo {
   part def Cyclic {
@@ -204,26 +204,26 @@ package Demo {
 `
 	resp := instantiate(t, content, "graph-cyclic", "Demo::Cyclic")
 
-	slot := resp.Instance.Slots["a"]
-	if slot == nil {
-		t.Fatal("expected slot a")
+	fv := resp.Instance.FeatureValues["a"]
+	if fv == nil {
+		t.Fatal("expected feature value a")
 	}
-	if slot.Error == "" {
-		t.Fatalf("expected slot error, got %v", slot)
+	if fv.Error == "" {
+		t.Fatalf("expected feature value error, got %v", fv)
 	}
-	if !strings.Contains(strings.ToLower(slot.Error), "cyclic") {
-		t.Errorf("slot error = %q, want a cyclic dependency error", slot.Error)
+	if !strings.Contains(strings.ToLower(fv.Error), "cyclic") {
+		t.Errorf("feature value error = %q, want a cyclic dependency error", fv.Error)
 	}
-	if slot.Value != nil {
-		t.Errorf("expected no value on an errored slot, got %v", slot.Value)
+	if fv.Value != nil {
+		t.Errorf("expected no value on an errored feature value, got %v", fv.Value)
 	}
-	if slot.Materialized {
-		t.Error("errored slot must not be reported as materialized")
+	if fv.Materialized {
+		t.Error("errored feature value must not be reported as materialized")
 	}
 }
 
 // TestInstantiate_SelfReferentialPartTerminates verifies a part that contains
-// its own kind is not expanded forever: reading a composite slot materializes
+// its own kind is not expanded forever: reading a composite feature value materializes
 // the object it holds, so the walk must stop at a type already on the path.
 func TestInstantiate_SelfReferentialPartTerminates(t *testing.T) {
 	content := `
@@ -244,7 +244,7 @@ package Demo {
 		if len(resp.Instances) != 1 {
 			t.Errorf("expected only the root instance, got %d", len(resp.Instances))
 		}
-		if id := resp.Instance.Slots["next"].Value.GetInstanceId(); id == 0 {
+		if id := resp.Instance.FeatureValues["next"].Value.GetInstanceId(); id == 0 {
 			t.Error("expected the unexpanded child to stay a bare instance id")
 		}
 	case <-time.After(30 * time.Second):

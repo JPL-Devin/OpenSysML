@@ -3,7 +3,7 @@ package lexer
 import (
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 // lex is a test helper: collects all tokens including trivia until EOF.

@@ -1,15 +1,15 @@
 # API Documentation
 
-Complete API reference for Systemica packages.
+Complete API reference for OpenSysML packages.
 
 ## Overview
 
-Systemica is organized into core packages under `internal/core/`, with frontends in `internal/lsp/` and `internal/repl/`.
+OpenSysML is organized into core packages under `internal/core/`, with frontends in `internal/lsp/` and `internal/repl/`.
 
 **Package Organization:**
 
 ```
-github.com/Open-MBEE/Systemica
+github.com/Open-MBEE/OpenSysML
 ├── internal/core/          # Core language implementation
 │   ├── source/             # Source files and position tracking
 │   ├── lexer/              # Tokenization
@@ -329,15 +329,13 @@ Execution runtime (Tiers 1-5: instances, expressions, behaviors).
 - **`Instance`** — Runtime instance
   - `ID int64` — Unique instance ID
   - `Type *symbols.Symbol` — Type symbol
-  - `Slots map[*symbols.Symbol]Value` — Feature values
+  - `FeatureValues map[string]*FeatureValue` — Feature values by feature name
 
 **Execution Context:**
 
 - **`Context`** — Runtime execution context
   - `Instantiate(sym *symbols.Symbol) (*Instance, error)` — Create instance
   - `Eval(expr ast.Node, env map[*symbols.Symbol]Value) (Value, error)` — Evaluate expression
-  - `GetSlot(inst *Instance, feature *symbols.Symbol) (Value, bool)` — Read slot
-  - `SetSlot(inst *Instance, feature *symbols.Symbol, val Value) error` — Write slot
   - `InvokeCalc(sym *symbols.Symbol, args []Value, scope *symbols.Scope) (Value, error)` — Invoke calculation
   - `EvaluateConstraint(sym *symbols.Symbol, scope *symbols.Scope) (bool, error)` — Evaluate constraint
   - `EvaluateRequirement(sym *symbols.Symbol, scope *symbols.Scope) (bool, error)` — Evaluate requirement
@@ -403,7 +401,7 @@ Tier 1-3 (Instances & Expressions):
 //   err = ctx.SetBudgets(budgets)
 ctx := runtime.NewContext(model, resolver, runtime.DefaultMaxSteps)
 inst, _ := ctx.Instantiate(wheelSym)
-val, _ := ctx.GetSlot(inst, diameterSym)
+fv, _ := inst.GetFeatureValue(ctx, "diameter")
 result, _ := ctx.InvokeCalc(addSym, []Value{v1, v2}, scope)
 ```
 
@@ -546,7 +544,7 @@ type LineReader interface {
 - `%help`, `%list`, `%clear`, `%load <file>`
 - `%search <substring>` — List the declared and library symbols whose qualified name contains the substring, with the kind of each
 - `%builtins` — List the library functions the runtime implements directly
-- `%instantiate <name>`, `%slots <name>`, `%instances`
+- `%instantiate <name>`, `%features <name>`, `%instances`
 - `%eval <expr>`
 - `%calc <name> [args...]` — Invoke calculation with arguments
 - `%constraint <name>` — Evaluate constraint
@@ -567,13 +565,13 @@ The gRPC service implements the query surface the **SysML v2 API & Services**
 standard defines, so a client that speaks that API — the
 [`SysML-v2-API-Java-Client`](https://github.com/Systems-Modeling/SysML-v2-API-Java-Client),
 the SysML v2 API Cookbook notebooks, MATLAB System Composer's `executeQuery` —
-can filter a model Systemica parsed. The standard's schema is authoritative:
+can filter a model OpenSysML parsed. The standard's schema is authoritative:
 `api/openapi.yaml` in the Java client, components `Query`, `Constraint`,
 `PrimitiveConstraint`, `CompositeConstraint`.
 
 **Implementation:** `internal/grpc/query.go` (`Service.Query`), reported from
 `GetServerInfo` as the `query` capability. Python: `model.query(...)`
-(`python/pysysml/query.py`).
+(`python/opensysml/query.py`).
 
 ### The query model
 
@@ -598,7 +596,7 @@ rpc Query(QueryRequest) returns (QueryResponse);   // api/proto/sysml.proto
 A cookbook payload, sent verbatim through the Python client:
 
 ```python
-model = pysysml.load("examples/vehicle.sysml")
+model = opensysml.load("examples/vehicle.sysml")
 model.query({"@type": "Query", "where": {
     "@type": "PrimitiveConstraint",
     "operator": "=", "property": "@type", "value": ["PartUsage"]}})
@@ -641,7 +639,7 @@ answer.
 
 ### `@type` — symbol kind → metamodel type
 
-Mapping Systemica's symbol kinds onto the standard's metamodel type names is the
+Mapping OpenSysML's symbol kinds onto the standard's metamodel type names is the
 substantive design decision here; `metamodelTypeNames`
 (`internal/grpc/query.go`) is the single source of truth, and
 `TestMetamodelTypeNameCoversEveryKind` keeps it total over every kind a parsed
@@ -649,7 +647,7 @@ declaration can have. A standard-library element restored from cache may carry n
 kind at all, and then reports **no** `@type`: it is answered, but never matches a
 `@type =` comparison (and is kept by the inverse of one).
 
-| Systemica kind | `@type` |
+| OpenSysML kind | `@type` |
 |---|---|
 | `package`, `namespace` | `Package`, `Namespace` |
 | `partDef` / `partUsage` | `PartDefinition` / `PartUsage` |
@@ -671,7 +669,7 @@ kind at all, and then reports **no** `@type`: it is answered, but never matches 
 Three kinds have no distinct metamodel type, and report the closest one that
 exists — documented as approximations rather than hidden:
 
-| Systemica kind | `@type` | Why |
+| OpenSysML kind | `@type` | Why |
 |---|---|---|
 | `individualDef` / `individualUsage` | `OccurrenceDefinition` / `OccurrenceUsage` | An individual is an occurrence with `isIndividual` set, not a type of its own |
 | `connectorEnd` | `Feature` | A connector end is a `Feature` with `isEnd` set |
@@ -707,7 +705,7 @@ Where the standard is vague, these are the choices this implementation makes:
 ### Not supported — by design of the standard
 
 The standard's query model is deliberately weak, and this is an interop surface,
-not Systemica's expressive query story:
+not OpenSysML's expressive query story:
 
 - **No graph traversal and no transitive closure.** There is no "all elements
   under X", no "everything that specializes Y", no path expressions and no joins.
@@ -725,8 +723,8 @@ not Systemica's expressive query story:
 
 ```go
 import (
-    "github.com/Open-MBEE/Systemica/internal/core/source"
-    "github.com/Open-MBEE/Systemica/internal/core/parser"
+    "github.com/Open-MBEE/OpenSysML/internal/core/source"
+    "github.com/Open-MBEE/OpenSysML/internal/core/parser"
 )
 
 src := source.New("example.sysml", []byte(`
@@ -744,7 +742,7 @@ root := p.ParseFile()
 
 ```go
 import (
-    "github.com/Open-MBEE/Systemica/internal/core/symbols"
+    "github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 idx := symbols.NewIndex()
@@ -757,7 +755,7 @@ sym, ok := scope.LookupLocal("Wheel")
 
 ```go
 import (
-    "github.com/Open-MBEE/Systemica/internal/core/resolve"
+    "github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 )
 
 res := resolve.New(idx)
@@ -768,7 +766,7 @@ sym, ok := res.ResolveQualified(scope, qualifiedName)
 
 ```go
 import (
-    "github.com/Open-MBEE/Systemica/internal/core/semantics"
+    "github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 )
 
 model := semantics.NewModel(res)
@@ -780,7 +778,7 @@ conforms := model.Conforms(wheelSym, vehiclePartSym)
 
 ```go
 import (
-    "github.com/Open-MBEE/Systemica/internal/core/passes"
+    "github.com/Open-MBEE/OpenSysML/internal/core/passes"
 )
 
 // Analyze wires up the default pass registry and context internally.
@@ -791,13 +789,13 @@ diagnostics := passes.Analyze("example.sysml", root, parseDiags, idx)
 
 ```go
 import (
-    "github.com/Open-MBEE/Systemica/internal/core/runtime"
+    "github.com/Open-MBEE/OpenSysML/internal/core/runtime"
 )
 
 rtCtx := runtime.NewContext(model, resolver, runtime.DefaultMaxSteps)
 inst, _ := rtCtx.Instantiate(wheelSym)
-diameterSlot, _ := inst.GetSlot(rtCtx, "diameter")
-fmt.Println(diameterSlot.Value) // Value{Kind: ValConst, Real: 16.0}
+diameter, _ := inst.GetFeatureValue(rtCtx, "diameter")
+fmt.Println(diameter.Value) // Value{Kind: ValConst, Real: 16.0}
 ```
 
 ---

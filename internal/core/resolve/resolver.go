@@ -1,10 +1,10 @@
 package resolve
 
 import (
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
-	"github.com/Open-MBEE/Systemica/internal/core/suggest"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/suggest"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // MemberLookup interface abstracts semantic model for inheritance-aware member resolution.
@@ -40,13 +40,21 @@ type resolution struct {
 	ok  bool
 }
 
+type featureChainKey struct {
+	scope *symbols.Scope
+	node  *ast.FeatureChainExpr
+}
+
 // Resolver performs lazy name resolution over a symbol index, memoizing results
 // keyed by the reference AST node and collecting diagnostics.
 type Resolver struct {
 	idx       *symbols.Index
 	memo      map[ast.Node]resolution
 	resolving map[ast.Node]bool // cycle detection
-	parts     map[*ast.QualifiedName][]*symbols.Symbol
+	// featureChains are resolved per scope because a chain's leading operand
+	// can resolve differently in different document scopes.
+	featureChains map[featureChainKey]resolution
+	parts         map[*ast.QualifiedName][]*symbols.Symbol
 	// endpoints are the vertices transition endpoints resolve to, memoized per
 	// name node: lowering consumes what this tier resolved (see ResolveEndpoint).
 	endpoints map[*ast.QualifiedName]resolution
@@ -86,15 +94,16 @@ type Resolver struct {
 // New creates a resolver over the given index.
 func New(idx *symbols.Index) *Resolver {
 	return &Resolver{
-		idx:       idx,
-		memo:      map[ast.Node]resolution{},
-		resolving: map[ast.Node]bool{},
-		parts:     map[*ast.QualifiedName][]*symbols.Symbol{},
-		endpoints: map[*ast.QualifiedName]resolution{},
-		imports:   map[ast.Node][]*ast.Import{},
-		naming:    map[*symbols.Symbol]bool{},
-		nsFilters: map[*symbols.Scope][]symbols.ElementFilter{},
-		payloads:  map[*symbols.Scope]map[string]*symbols.Symbol{},
+		idx:           idx,
+		memo:          map[ast.Node]resolution{},
+		resolving:     map[ast.Node]bool{},
+		featureChains: map[featureChainKey]resolution{},
+		parts:         map[*ast.QualifiedName][]*symbols.Symbol{},
+		endpoints:     map[*ast.QualifiedName]resolution{},
+		imports:       map[ast.Node][]*ast.Import{},
+		naming:        map[*symbols.Symbol]bool{},
+		nsFilters:     map[*symbols.Scope][]symbols.ElementFilter{},
+		payloads:      map[*symbols.Scope]map[string]*symbols.Symbol{},
 
 		suggestions: map[suggestKey][]string{},
 		suggesting:  map[suggestKey]bool{},
@@ -232,6 +241,28 @@ func (r *Resolver) aside(f func()) {
 	f()
 }
 
+// probe runs a trial reading of qn, reported by f as resolved or not. Its
+// diagnostics are suppressed, and the per-segment resolutions it records are
+// kept only where it resolved: a reading not adopted leaves nothing behind for a
+// caller to read back.
+func (r *Resolver) probe(qn *ast.QualifiedName, f func() bool) bool {
+	saved, had := r.parts[qn]
+	if had {
+		saved = append([]*symbols.Symbol(nil), saved...)
+	}
+	resolved := false
+	r.aside(func() { resolved = f() })
+	if resolved {
+		return true
+	}
+	if had {
+		r.parts[qn] = saved
+	} else {
+		delete(r.parts, qn)
+	}
+	return false
+}
+
 // memoize remembers a reference's resolution, except one reached while a filter
 // condition's names were resolved: those lookups are unfiltered (see
 // InCondition), and an ordinary reference must not inherit an unjudged answer.
@@ -240,6 +271,14 @@ func (r *Resolver) memoize(at ast.Node, res resolution) {
 		return
 	}
 	r.memo[at] = res
+}
+
+// memoizeFeatureChain caches a chain result unless condition or quiet rules forbid it.
+func (r *Resolver) memoizeFeatureChain(scope *symbols.Scope, fc *ast.FeatureChainExpr, res resolution) {
+	if fc == nil || r.inCondition > 0 || (!res.ok && r.quiet > 0) {
+		return
+	}
+	r.featureChains[featureChainKey{scope: scope, node: fc}] = res
 }
 
 // InCondition runs the resolution of a filter condition's own names, which its

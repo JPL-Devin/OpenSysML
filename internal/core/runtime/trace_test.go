@@ -8,12 +8,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/parser"
-	"github.com/Open-MBEE/Systemica/internal/core/resolve"
-	"github.com/Open-MBEE/Systemica/internal/core/semantics"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
+	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 var updateTraces = flag.Bool("update-traces", false, "Update golden trace files")
@@ -139,6 +139,17 @@ func runTraceTest(t *testing.T, conformanceDir, testName, goldenPath string, exp
 			t.Fatalf("evaluate calc usage: %v", err)
 		}
 		traceOutput = trace.String()
+	case "instance":
+		// Materializing the object records its own start: the objects built, the
+		// behaviors their types bind, and the bodies those behaviors run.
+		ctx.SetTrace(trace)
+		typeSym := oneSymbol(t, idx, expected.Instantiate)
+		inst, err := ctx.Instantiate(typeSym)
+		if err != nil {
+			t.Fatalf("instantiate %s: %v", expected.Instantiate, err)
+		}
+		traceObjectRuns(t, ctx, inst, expected)
+		traceOutput = trace.String()
 	case "constraint":
 		ctx.SetTrace(trace)
 		constraintSym := namedOrFoundSymbol(t, idx, expected.Evaluate, rootScope, ast.DefConstraint, ast.UsageConstraint)
@@ -203,6 +214,27 @@ func runTraceTest(t *testing.T, conformanceDir, testName, goldenPath string, exp
 
 		if got != want {
 			t.Errorf("trace mismatch for %s\n=== WANT ===\n%s\n=== GOT ===\n%s\n", testName, want, got)
+		}
+	}
+}
+
+// traceObjectRuns drives the object runs a case names, so the trace records how
+// several objects' behaviors interleave rather than only the first object's start.
+func traceObjectRuns(t *testing.T, ctx *Context, first *Instance, expected ExpectedOutcome) {
+	t.Helper()
+	if len(expected.Objects) == 0 {
+		return
+	}
+	objects := materializations(t, ctx, first.Type, first, expected.Objects)
+	for _, run := range expected.Objects {
+		obj := objects[instanceIndexOf(run)]
+		if run.Path != "" {
+			obj = instanceAtPath(t, ctx, obj, run.Path)
+		}
+		exec := objectMachine(t, obj, run.Behavior)
+		injectEvents(t, exec, run.Events)
+		if err := exec.RunToCompletion(); err != nil {
+			t.Fatalf("run machine of object #%d: %v", obj.ID, err)
 		}
 	}
 }

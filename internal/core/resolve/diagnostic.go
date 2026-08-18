@@ -1,8 +1,8 @@
 package resolve
 
 import (
-	"github.com/Open-MBEE/Systemica/internal/core/quickfix"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/quickfix"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 // Diagnostic is a name-resolution problem tied to a source span.

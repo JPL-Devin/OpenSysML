@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"math"
 
-	pb "github.com/Open-MBEE/Systemica/api/proto"
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/parser"
-	"github.com/Open-MBEE/Systemica/internal/core/passes"
-	"github.com/Open-MBEE/Systemica/internal/core/runtime"
-	"github.com/Open-MBEE/Systemica/internal/core/semantics"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	pb "github.com/Open-MBEE/OpenSysML/api/proto"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
+	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
+	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // SymbolToProto converts a Symbol to protobuf SymbolInfo.
@@ -380,7 +380,7 @@ var (
 	// which alone commensurability is decided.
 	ErrUnitNotReduced = errors.New("unit carries no reduction to base units")
 	// ErrUnsetNotAccepted reports the unset arm arriving as an input. It reports
-	// that a slot holds no value, which is something to read, not to supply.
+	// that a feature value holds no value, which is something to read, not to supply.
 	ErrUnsetNotAccepted = errors.New("unset is not a value a caller can supply")
 )
 
@@ -531,7 +531,7 @@ const (
 // request, so the whole reachable graph is serialized while the context is alive.
 //
 // Expansion stops at a child whose type is already on the path, at maxGraphDepth
-// and at maxGraphInstances: reading a composite slot materializes the object it
+// and at maxGraphInstances: reading a composite feature value materializes the object it
 // holds, so a self-referential part would otherwise instantiate forever. An
 // unexpanded child stays a bare instance id.
 func InstanceGraphToProto(rt *runtime.Context, inst *runtime.Instance, idx *symbols.Index) (*pb.Instance, []*pb.Instance) {
@@ -548,7 +548,7 @@ func InstanceGraphToProto(rt *runtime.Context, inst *runtime.Instance, idx *symb
 		onPath[cur.Type] = true
 		defer delete(onPath, cur.Type)
 
-		// InstanceToProto reads every slot through GetSlot, which is what
+		// InstanceToProto reads every feature value through GetFeatureValue, which is what
 		// lazily materializes the children the ids below resolve to.
 		pbInst := InstanceToProto(rt, cur, idx)
 		all = append(all, pbInst)
@@ -557,8 +557,8 @@ func InstanceGraphToProto(rt *runtime.Context, inst *runtime.Instance, idx *symb
 			return pbInst
 		}
 
-		for _, slot := range pbInst.Slots {
-			for _, id := range instanceRefs(slot) {
+		for _, fv := range pbInst.FeatureValues {
+			for _, id := range instanceRefs(fv) {
 				child, ok := rt.Instance(id)
 				if !ok || onPath[child.Type] {
 					continue
@@ -573,8 +573,8 @@ func InstanceGraphToProto(rt *runtime.Context, inst *runtime.Instance, idx *symb
 	return root, all
 }
 
-// instanceRefs collects the instance IDs a slot value references, scalar or not.
-func instanceRefs(slot *pb.SlotValue) []int64 {
+// instanceRefs collects the instance IDs a feature value references, scalar or not.
+func instanceRefs(fv *pb.FeatureValue) []int64 {
 	var ids []int64
 	var collect func(*pb.Value)
 	collect = func(v *pb.Value) {
@@ -587,16 +587,16 @@ func instanceRefs(slot *pb.SlotValue) []int64 {
 			}
 		}
 	}
-	if slot.Value != nil {
-		collect(slot.Value)
+	if fv.Value != nil {
+		collect(fv.Value)
 	}
-	for _, v := range slot.Values {
+	for _, v := range fv.Values {
 		collect(v)
 	}
 	return ids
 }
 
-// collectionElements returns what a collection slot holds; a multi-valued
+// collectionElements returns what a multi-valued feature holds; a multi-valued
 // feature's contents can be either a sequence or a set.
 func collectionElements(val runtime.Value) []runtime.Value {
 	switch val.Kind {
@@ -612,47 +612,47 @@ func collectionElements(val runtime.Value) []runtime.Value {
 	return nil
 }
 
-// InstanceToProto converts runtime.Instance to protobuf Instance. Slots are read
-// through Instance.GetSlot, so a derived default is evaluated against the
-// instance rather than reported as an unmaterialized slot.
+// InstanceToProto converts runtime.Instance to protobuf Instance. Feature values
+// are read through Instance.GetFeatureValue, so a derived default is evaluated against
+// the instance rather than reported as unmaterialized.
 func InstanceToProto(rt *runtime.Context, inst *runtime.Instance, idx *symbols.Index) *pb.Instance {
-	pbSlots := make(map[string]*pb.SlotValue)
+	pbValues := make(map[string]*pb.FeatureValue)
 
-	for name := range inst.Slots {
-		slot, err := inst.GetSlot(rt, name)
+	for name := range inst.FeatureValues {
+		fv, err := inst.GetFeatureValue(rt, name)
 		if err != nil {
-			pbSlots[name] = &pb.SlotValue{
+			pbValues[name] = &pb.FeatureValue{
 				FeatureName: name,
 				Error:       err.Error(),
 			}
 			continue
 		}
 
-		pbSlot := &pb.SlotValue{
+		pbValue := &pb.FeatureValue{
 			FeatureName:  name,
-			Materialized: slot.Materialized,
+			Materialized: fv.Materialized,
 		}
 
-		// Check multiplicity to determine scalar vs collection
-		mult := slot.Feature.Multiplicity
+		// Check multiplicity to determine single- vs multi-valued
+		mult := fv.Feature.Multiplicity
 		if !mult.Upper.Infinite && mult.Upper.Value <= 1 {
-			// Scalar slot. An unmaterialized one holds no value; marshalling it
+			// Single-valued. An unmaterialized one holds no value; marshalling it
 			// anyway would report the empty value as an unsupported null.
-			if slot.Materialized {
-				pbSlot.Value = ValueToProtoIn(rt, slot.Value, idx)
+			if fv.Materialized {
+				pbValue.Value = ValueToProtoIn(rt, fv.Value, idx)
 			}
 		} else {
-			for _, elem := range collectionElements(slot.Values) {
-				pbSlot.Values = append(pbSlot.Values, ValueToProtoIn(rt, elem, idx))
+			for _, elem := range collectionElements(fv.Values) {
+				pbValue.Values = append(pbValue.Values, ValueToProtoIn(rt, elem, idx))
 			}
 		}
 
-		pbSlots[name] = pbSlot
+		pbValues[name] = pbValue
 	}
 
 	return &pb.Instance{
-		Id:           inst.ID,
-		TypeSymbolId: idx.GetFQN(inst.Type),
-		Slots:        pbSlots,
+		Id:            inst.ID,
+		TypeSymbolId:  idx.GetFQN(inst.Type),
+		FeatureValues: pbValues,
 	}
 }

@@ -1,11 +1,12 @@
 package runtime
 
 import (
+	"errors"
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/semantics"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 func TestActionExecutor_Creation(t *testing.T) {
@@ -2279,5 +2280,355 @@ func TestActionExecutor_Integration_ParallelProcessing(t *testing.T) {
 	expected := int64(360) // (100+10) + (100+20) + (100+30)
 	if aggregateVal.Const.Int != expected {
 		t.Errorf("expected aggregate=%d, got %d", expected, aggregateVal.Const.Int)
+	}
+}
+
+// guardedSuccessionExecutor builds `start → s1 → s2` where the succession out of
+// s1 carries guard, which is the `GuardedSuccession` spelling of the graph.
+func guardedSuccessionExecutor(t *testing.T, guard ast.Node) *ActionExecutor {
+	t.Helper()
+
+	initial := &ast.InitialNode{Name: "start"}
+	s1 := &ast.ActionExecutionNode{Name: "s1", Expression: &ast.LiteralInteger{Value: "1"}}
+	s2 := &ast.ActionExecutionNode{Name: "s2", Expression: &ast.LiteralInteger{Value: "2"}}
+
+	actionSym := &symbols.Symbol{
+		Name: "GuardedSuccessionAction",
+		Kind: symbols.SymbolActionUsage,
+		Decl: &ast.Usage{
+			Kind:  ast.UsageAction,
+			Ident: ast.Identification{Name: "GuardedSuccessionAction"},
+			Members: []ast.Node{
+				initial, s1, s2,
+				&ast.SuccessionEdge{
+					Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "start"}}},
+					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "s1"}}},
+				},
+				&ast.ControlFlowEdge{
+					Source: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "s1"}}},
+					Target: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "s2"}}},
+					Guard:  guard,
+				},
+			},
+		},
+	}
+
+	exec, err := newActionExecutor(NewContext(semantics.NewModel(nil), nil, 1000), actionSym, nil)
+	if err != nil {
+		t.Fatalf("create executor: %v", err)
+	}
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+	return exec
+}
+
+// A guard on a succession out of a node that is not a decision is evaluated: it
+// holds, so the token passes to the successor.
+func TestActionExecutor_GuardedSuccession_GuardHolds(t *testing.T) {
+	exec := guardedSuccessionExecutor(t, &ast.LiteralBool{Value: true})
+
+	if err := exec.stepToken(0); err != nil { // start → s1
+		t.Fatalf("step initial: %v", err)
+	}
+	if err := exec.stepToken(0); err != nil { // s1 → s2
+		t.Fatalf("step s1: %v", err)
+	}
+
+	if len(exec.tokens) != 1 {
+		t.Fatalf("expected the token to live on, %d left", len(exec.tokens))
+	}
+	if name := ActionNodeName(exec.tokens[0].Location); name != "s2" {
+		t.Errorf("token at %s, want s2", name)
+	}
+}
+
+// The same succession with a guard that does not hold: the succession is pruned,
+// so s2 does not run and the flow ends at s1 rather than failing.
+func TestActionExecutor_GuardedSuccession_GuardFails(t *testing.T) {
+	exec := guardedSuccessionExecutor(t, &ast.LiteralBool{Value: false})
+
+	if err := exec.stepToken(0); err != nil { // start → s1
+		t.Fatalf("step initial: %v", err)
+	}
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run to completion: %v", err)
+	}
+
+	if exec.State() != StateCompleted {
+		t.Errorf("state = %s, want StateCompleted", exec.State())
+	}
+	if len(exec.tokens) != 0 {
+		t.Errorf("expected every token retired, %d left", len(exec.tokens))
+	}
+}
+
+// A guard that does not evaluate to a boolean is reported rather than read as
+// either verdict.
+func TestActionExecutor_GuardedSuccession_NonBooleanGuard(t *testing.T) {
+	exec := guardedSuccessionExecutor(t, &ast.LiteralInteger{Value: "42"})
+
+	if err := exec.stepToken(0); err != nil { // start → s1
+		t.Fatalf("step initial: %v", err)
+	}
+	err := exec.stepToken(0)
+	if err == nil {
+		t.Fatal("a non-boolean guard was accepted")
+	}
+	if !errors.Is(err, ErrTypeMismatch) {
+		t.Errorf("error = %v, want it to wrap ErrTypeMismatch", err)
+	}
+	if !containsText(err.Error(), "guard must evaluate to boolean") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+// A guard that cannot be evaluated is reported at the step that reaches it,
+// naming the node the succession leaves.
+func TestActionExecutor_GuardedSuccession_GuardErrors(t *testing.T) {
+	exec := guardedSuccessionExecutor(t, &ast.FeatureReference{
+		Name: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "missing"}}},
+	})
+
+	if err := exec.stepToken(0); err != nil { // start → s1
+		t.Fatalf("step initial: %v", err)
+	}
+	err := exec.stepToken(0)
+	if err == nil {
+		t.Fatal("a guard that cannot be evaluated was accepted")
+	}
+	if !containsText(err.Error(), "eval guard of node s1") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+// A guard on the succession the flow starts with is evaluated too: the initial
+// node's token retires where the guard does not hold.
+func TestActionExecutor_GuardedSuccession_OutOfInitialNode(t *testing.T) {
+	// `first start if false then s1;`
+	initial := &ast.InitialNode{
+		Name:      "start",
+		Successor: &ast.QualifiedName{Parts: []ast.NameSegment{{Text: "s1"}}},
+		Guard:     &ast.LiteralBool{Value: false},
+	}
+	s1 := &ast.ActionExecutionNode{Name: "s1", Expression: &ast.LiteralInteger{Value: "1"}}
+
+	actionSym := &symbols.Symbol{
+		Name: "GuardedStart",
+		Kind: symbols.SymbolActionUsage,
+		Decl: &ast.Usage{
+			Kind:  ast.UsageAction,
+			Ident: ast.Identification{Name: "GuardedStart"},
+			Members: []ast.Node{
+				initial, s1,
+			},
+		},
+	}
+
+	exec, err := newActionExecutor(NewContext(semantics.NewModel(nil), nil, 1000), actionSym, nil)
+	if err != nil {
+		t.Fatalf("create executor: %v", err)
+	}
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run to completion: %v", err)
+	}
+
+	if exec.State() != StateCompleted {
+		t.Errorf("state = %s, want StateCompleted", exec.State())
+	}
+	if _, ran := exec.data["result"]; ran {
+		t.Error("s1 ran although the succession into it was pruned")
+	}
+}
+
+// A guard on a branch out of a fork prunes that branch: the branches whose guard
+// holds, and the unguarded ones, still each get a token.
+func TestActionExecutor_GuardedSuccession_PrunesAForkBranch(t *testing.T) {
+	initial := &ast.InitialNode{Name: "start"}
+	fork := &ast.ForkNode{Name: "split"}
+	task1 := &ast.ActionExecutionNode{Name: "task1", Expression: &ast.LiteralInteger{Value: "1"}}
+	task2 := &ast.ActionExecutionNode{Name: "task2", Expression: &ast.LiteralInteger{Value: "2"}}
+	task3 := &ast.ActionExecutionNode{Name: "task3", Expression: &ast.LiteralInteger{Value: "3"}}
+
+	edge := func(source, target string, guard ast.Node) ast.Node {
+		ends := func() (*ast.QualifiedName, *ast.QualifiedName) {
+			return &ast.QualifiedName{Parts: []ast.NameSegment{{Text: source}}},
+				&ast.QualifiedName{Parts: []ast.NameSegment{{Text: target}}}
+		}
+		from, to := ends()
+		if guard == nil {
+			return &ast.SuccessionEdge{Source: from, Target: to}
+		}
+		return &ast.ControlFlowEdge{Source: from, Target: to, Guard: guard}
+	}
+
+	actionSym := &symbols.Symbol{
+		Name: "GuardedFork",
+		Kind: symbols.SymbolActionUsage,
+		Decl: &ast.Usage{
+			Kind:  ast.UsageAction,
+			Ident: ast.Identification{Name: "GuardedFork"},
+			Members: []ast.Node{
+				initial, fork, task1, task2, task3,
+				edge("start", "split", nil),
+				edge("split", "task1", &ast.LiteralBool{Value: true}),
+				edge("split", "task2", &ast.LiteralBool{Value: false}),
+				edge("split", "task3", nil),
+			},
+		},
+	}
+
+	exec, err := newActionExecutor(NewContext(semantics.NewModel(nil), nil, 1000), actionSym, nil)
+	if err != nil {
+		t.Fatalf("create executor: %v", err)
+	}
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+	if err := exec.stepToken(0); err != nil { // start → split
+		t.Fatalf("step initial: %v", err)
+	}
+	if err := exec.stepToken(0); err != nil { // split → branches
+		t.Fatalf("step fork: %v", err)
+	}
+
+	locations := make(map[ast.Node]bool, len(exec.tokens))
+	for _, token := range exec.tokens {
+		locations[token.Location] = true
+	}
+	if len(exec.tokens) != 2 || !locations[task1] || !locations[task3] {
+		t.Errorf("fork produced %d tokens at %v, want one each at task1 and task3", len(exec.tokens), locations)
+	}
+}
+
+// Two successions out of one node whose guards both hold state no order between
+// them, so the ambiguity is reported rather than resolved.
+func TestActionExecutor_GuardedSuccession_TwoGuardsHold(t *testing.T) {
+	initial := &ast.InitialNode{Name: "start"}
+	s1 := &ast.ActionExecutionNode{Name: "s1", Expression: &ast.LiteralInteger{Value: "1"}}
+	s2 := &ast.ActionExecutionNode{Name: "s2", Expression: &ast.LiteralInteger{Value: "2"}}
+	s3 := &ast.ActionExecutionNode{Name: "s3", Expression: &ast.LiteralInteger{Value: "3"}}
+
+	edge := func(source, target string, guard ast.Node) ast.Node {
+		ends := func() (*ast.QualifiedName, *ast.QualifiedName) {
+			return &ast.QualifiedName{Parts: []ast.NameSegment{{Text: source}}},
+				&ast.QualifiedName{Parts: []ast.NameSegment{{Text: target}}}
+		}
+		from, to := ends()
+		if guard == nil {
+			return &ast.SuccessionEdge{Source: from, Target: to}
+		}
+		return &ast.ControlFlowEdge{Source: from, Target: to, Guard: guard}
+	}
+
+	actionSym := &symbols.Symbol{
+		Name: "AmbiguousGuards",
+		Kind: symbols.SymbolActionUsage,
+		Decl: &ast.Usage{
+			Kind:  ast.UsageAction,
+			Ident: ast.Identification{Name: "AmbiguousGuards"},
+			Members: []ast.Node{
+				initial, s1, s2, s3,
+				edge("start", "s1", nil),
+				edge("s1", "s2", &ast.LiteralBool{Value: true}),
+				edge("s1", "s3", &ast.LiteralBool{Value: true}),
+			},
+		},
+	}
+
+	exec, err := newActionExecutor(NewContext(semantics.NewModel(nil), nil, 1000), actionSym, nil)
+	if err != nil {
+		t.Fatalf("create executor: %v", err)
+	}
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+	if err := exec.stepToken(0); err != nil { // start → s1
+		t.Fatalf("step initial: %v", err)
+	}
+
+	err = exec.stepToken(0)
+	if err == nil {
+		t.Fatal("two successions holding at once were traversed without an error")
+	}
+	if !containsText(err.Error(), "has multiple successors") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+// A token whose succession out of a merge is pruned does not consume the merge:
+// first-wins counts the token that traverses, so a later token still passes.
+func TestActionExecutor_GuardedSuccession_PrunedMergeStaysOpen(t *testing.T) {
+	initial := &ast.InitialNode{Name: "start"}
+	fork := &ast.ForkNode{Name: "split"}
+	low := &ast.ActionExecutionNode{Name: "low", Expression: &ast.LiteralInteger{Value: "1"}}
+	high := &ast.ActionExecutionNode{Name: "high", Expression: &ast.LiteralInteger{Value: "2"}}
+	merge := &ast.MergeNode{Name: "join"}
+	after := &ast.ActionExecutionNode{Name: "after", Expression: &ast.LiteralString{Value: "ran"}}
+
+	name := func(text string) *ast.QualifiedName {
+		return &ast.QualifiedName{Parts: []ast.NameSegment{{Text: text}}}
+	}
+	// The succession out of the merge holds only once `high` has written result.
+	guard := &ast.OperatorExpr{
+		Operator: ast.OpGt,
+		Operands: []ast.Node{
+			&ast.FeatureReference{Name: name("result")},
+			&ast.LiteralInteger{Value: "1"},
+		},
+	}
+
+	actionSym := &symbols.Symbol{
+		Name: "GuardedMerge",
+		Kind: symbols.SymbolActionUsage,
+		Decl: &ast.Usage{
+			Kind:  ast.UsageAction,
+			Ident: ast.Identification{Name: "GuardedMerge"},
+			Members: []ast.Node{
+				initial, fork, low, high, merge, after,
+				&ast.SuccessionEdge{Source: name("start"), Target: name("split")},
+				&ast.SuccessionEdge{Source: name("split"), Target: name("low")},
+				&ast.SuccessionEdge{Source: name("split"), Target: name("high")},
+				&ast.SuccessionEdge{Source: name("low"), Target: name("join")},
+				&ast.SuccessionEdge{Source: name("high"), Target: name("join")},
+				&ast.ControlFlowEdge{Source: name("join"), Target: name("after"), Guard: guard},
+			},
+		},
+	}
+
+	exec, err := newActionExecutor(NewContext(semantics.NewModel(nil), nil, 1000), actionSym, nil)
+	if err != nil {
+		t.Fatalf("create executor: %v", err)
+	}
+	if err := exec.initialize(); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+
+	step := func(at ast.Node) {
+		t.Helper()
+		for i := range exec.tokens {
+			if exec.tokens[i].Location == at {
+				if err := exec.stepToken(i); err != nil {
+					t.Fatalf("step %s: %v", ActionNodeName(at), err)
+				}
+				return
+			}
+		}
+		t.Fatalf("no token at %s", ActionNodeName(at))
+	}
+
+	step(initial) // start → split
+	step(fork)    // split → low, high
+	step(low)     // result = 1, low → join
+	step(merge)   // guard 1 > 1 does not hold: pruned, merge left open
+	step(high)    // result = 2, high → join
+	step(merge)   // guard 2 > 1 holds: join → after
+	step(after)
+
+	if value, ran := exec.data["result"]; !ran || value.Str != "ran" {
+		t.Errorf("after did not run: result = %v", value)
 	}
 }

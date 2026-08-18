@@ -1,6 +1,6 @@
 ---
 name: testing-sysml-repl
-description: How to build, drive, and record end-to-end tests of the Systemica sysml REPL (bin/sysml) and the sysml-grpc service with its pysysml Python client — meta-command behavior, symbol lookup, action/state debugging, gRPC slot serialization, and GUI-terminal recording setup.
+description: How to build, drive, and record end-to-end tests of the OpenSysML sysml REPL (bin/sysml) and the sysml-grpc service with its opensysml Python client — meta-command behavior, symbol lookup, action/state debugging, gRPC feature-value serialization, and GUI-terminal recording setup.
 ---
 
 # Testing the `sysml` REPL end-to-end
@@ -100,7 +100,7 @@ Fixtures that actually exercise the redefinition-owner path:
 1. **Non-interactive (fast, for exploration and expected-value discovery).** The REPL reads a
    script from stdin fine:
    ```bash
-   printf '%%load internal/repl/testdata/vehicle_package.sysml\n%%instantiate Vehicle\n%%slots Demo::Vehicle\n%%quit\n' | timeout 30 ./bin/sysml
+   printf '%%load internal/repl/testdata/vehicle_package.sysml\n%%instantiate Vehicle\n%%features Demo::Vehicle\n%%quit\n' | timeout 30 ./bin/sysml
    ```
    Note `%%` in `printf` format strings. Always wrap in `timeout` so a hang shows up as a
    non-zero exit rather than stalling the session.
@@ -194,6 +194,12 @@ for f in examples/*.sysml internal/repl/testdata/*.sysml; do
 done | sort | uniq -c
 ```
 
+### `bin/sysml-grpc` takes `-port`, not `-addr`
+
+`-addr` prints "flag provided but not defined" with a usage dump, so drive a freshly built service
+with `./bin/sysml-grpc -port 50123` and `opensysml.connect(port=50123, auto_start=False)` to keep
+`~/.opensysml/bin` out of it.
+
 ## Proving a Turtle round trip loses nothing
 
 `.sysml -> .ttl -> .sysml` is never byte-equal to the input (the back direction is a canonical AST
@@ -220,6 +226,112 @@ commit before reporting them as regressions):
   red for one unrelated printer bug.
 - `ref` on an `end` attribute is dropped and `redefines`/`typing` relationship order is swapped in a
   couple of models.
+
+### Behavioral bodies through RDF (PR #270)
+
+Since PR #270 an action or state body converts instead of being refused, so a round-trip sweep now
+reaches paths that used to stop at the first behavioral node. What to know:
+
+- **`-o` decides nothing about the format, but the *extension* of an input does.** A sweep that
+  writes intermediate files as `/tmp/x.rt` and feeds them back gets
+  `cannot tell the format` and every model looks refused. Always name intermediates `.sysml` /
+  `.ttl` (or pass `-from`).
+- A good adversarial single fixture: one `action def` with
+  `first/perform/assign/send … via/accept when/fork/join/merge/decision/while/loop-until/for/
+  if-else/terminate/done/succession` plus one `state def` with a nested substate, a `region`,
+  `entry`/`do`/`exit`, `defer`, choice/junction/shallow+deep history and a
+  `transition first a accept s : S via p if g do action … then b`. At 77abc565 it round-trips with
+  the *only* difference being that a state named `deep` comes back as `'deep'` (the writer quotes it
+  because `deep` is a keyword) — cosmetic, and stable on the next hop.
+- Corpus baseline at 77abc565: of the 110 `examples/**/*.sysml`, **95 convert to ttl and back, 15
+  are refused**, and the only model whose notation drifts between hop 1 and hop 2 is
+  `41. Language Extension/Model Library Example.sysml` (the documented `end [*] ref` parser gap).
+  Treat any other drift as a real defect.
+- Refusal probes that still work and print no file: two members of one namespace sharing a name, a
+  bare `snapshot`, and a succession whose end name needs quotes (`then 'my a' b;`). Note
+  `succession then b;` and `transition first a accept s : S;` (no `then`) are *parse* errors, so
+  they cannot be used as export-refusal fixtures.
+- Two silent-change classes were found in that sweep and fixed in the same PR: prefix metadata
+  (`#Safety part def Car;`) is now carried as `sysx:prefixMetadata "#Safety"`, and a feature that
+  wrote no kind keyword (`in x : Real`) is flagged `sysx:isKindImplicit` instead of gaining a kind
+  on the way back. An `@` annotation ahead of a definition is refused, because the parser records
+  it on the declaration before the one it prefixes — worth re-probing if the parser changes.
+- `export.ExperimentalNotice` (internal/core/export/experimental.go) is printed verbatim by the CLI
+  (stderr), `%save` and `ConvertResponse`, and the same wording is duplicated in
+  `cmd/sysml/main.go`, `python/opensysml/`, `api/proto/` and `docs/guide/`. Check every copy whenever
+  the mapping's coverage changes.
+
+### Checking the experimental notice's copies (PR #271)
+
+When a PR claims one wording is stated from one place, check the *runtime* copies mechanically and
+the *documented* claims by running them:
+
+- Extract the Go literal and compare collapsed whitespace, rather than eyeballing:
+  parse `internal/core/export/experimental.go` for the quoted pieces of `ExperimentalNotice`, join
+  them, then compare `" ".join(x.split())` against the paragraph `./bin/sysml -help` prints between
+  "Turtle is normalized." and "Every run that converts RDF". `cmd/sysml/main.go`'s `wrapped(…, 78)`
+  wraps on `strings.Fields`, so also assert every line's **rune** count ≤ 78 — the notice contains
+  `§` (2 bytes), so a byte-based wrapper would pass a naive byte check.
+- `python/opensysml/conversion.py:EXPERIMENTAL_NOTICE` should equal the same literal; compare it in
+  Python against the Go file directly.
+- The client fallback lives in `Connection.convert` (`connection.py`, `response.experimental_notice
+  or EXPERIMENTAL_NOTICE`). To exercise it, wrap the stub: `Connection._stub` is a read-only
+  property, so patch **`conn._service`** with an object that delegates via `__getattr__` and, in
+  `Convert`, calls the real stub then `response.ClearField("experimental_notice")` /
+  `ClearField("experimental")`. That is the only way to simulate an older service without touching
+  the Go side.
+- **Guide transcripts go stale silently.** `docs/guide/07-saving-and-rdf.md` and
+  `docs/guide/09-python.md` embed real byte counts and refusal messages. Re-run each fenced command:
+  the `%save` pair (guide 2's `MyModel` file → `181 bytes of sysml` / `1872 bytes of ttl`) and
+  `examples/rdf-interop-demo.sysml` (`7937` ttl / `877` sysml bytes) still hold at 493693a3, but the
+  page's refusal example (`examples/state-machine-demo.sysml -convert ttl` → "cannot convert the
+  substate member") and its prose "a model whose point is a behavior does not [convert]" are wrong
+  since #270 — the model converts, and all ten `examples/parser_features_demo_*.kerml` convert too.
+  Grep for the *old* wording (`model structure only`, `bodies state behavior`) across `docs/ cmd/
+  python/ api/proto/ internal/` to catch leftover copies, and check re-worded prose paragraphs did
+  not leave one line far wider than its siblings (`awk '{print NR": "length($0)}'`).
+
+### Round-trip fidelity of a declaration head (PR #272)
+
+Two narrow export paths decide whether a declaration comes back spelled the way it was written:
+`encodeSubaction`/`bareWord` (`internal/core/export/behavior.go`) for a combined state subaction, and
+`wroteKindKeyword`/`withoutComments` (`rdf_out.go`) for a kind keyword ahead of a name. Testing them:
+
+- **A fixture only exercises `wroteKindKeyword` when the commented word equals the keyword of the
+  kind the declaration would get implicitly.** `in /* attribute */ x : Real;` inside an `action def`
+  proves nothing: the inferred kind there is `part`, so the check looks for `part`, the ttl records
+  `sysx:isKindImplicit true`, and old and new binaries agree. Put the same members inside a
+  `part def` (where `in x : Real` infers *attribute*) and the pre-fix binary writes back
+  `in attribute x : Real;` while the fixed one writes `in x : Real;`. Always diff against a contrast
+  binary from the parent commit (§"A contrast binary from the previous commit") — an equal result
+  means the fixture missed the path, not that the fix is a no-op.
+- Useful fixture set for these paths, all inside one `part def`: `in /* attribute */ x`,
+  `out // attribute\n y`, `in //* a note\n attribute */ w`, the control `in attribute z`,
+  `in /* /* */ v`, `in //* same line note */ u`, plus quoted names that contain the markers
+  (`attribute 'a /* b */ c'`, `in 'x{y'`, `attribute 'do'`) — the quoted ones must come back
+  character-identical.
+- For subactions: `entry do { … }`, `entry do{ … }`, `entry do{perform A;}` must all come back
+  `entry do {` (the tight two were the bug), and `entry /* do */ { … }` must **not** gain a `do`.
+  A comment adjacent to a real `do` (`entry /*c*/ do { … }`, `entry do/*c*/{ … }`) keeps it too since
+  aa9fa5ab, which reads the subaction head through `withoutComments` as well; before that commit the
+  comment token took `do`'s place and the `do` was dropped, so use a pre-aa9fa5ab binary as the
+  contrast for these two.
+- An unterminated comment in a head (`in /* attribute x : Real;`) is a *parse* error
+  (`unterminated comment: missing */`), not an export refusal — so it cannot serve as a refusal
+  fixture, only as a "writes no output" check.
+- Corpus baseline at bf2f21e3: `converted=102 refused=18 total=120` over
+  `examples/**/*.{sysml,kerml}`; 97 of the converting models are byte-stable across two RDF round
+  trips, 0 drift. **5 models' RDF-written notation does not re-parse** (`parser_features_demo_
+  declarations.kerml`, `27. Occurrences/Interaction {Example-2,Realization-1,Realization-2}`,
+  `32. Requirements/Requirement Satisfaction`) — e.g. `event X;` comes back as
+  `event references X;`, which the parser then rejects. Pre-existing (identical on the parent
+  commit), so treat it as the baseline, not a regression.
+- A cheap way to separate printer formatting from RDF-hop changes: convert the model both ways
+  (`-convert ttl` → back, versus `-convert sysml` alone) and diff the two outputs token-per-line
+  (`tr -s ' \t\n' '\n'`). At bf2f21e3 76 of 102 examples still differ that way (`:>` written
+  `specializes`/`subsets`/`redefines`, `default 3` written `= 3`, `on;` written `'on';`, `doc`
+  comments dropped), **identically on the parent commit** — so use the old-vs-new diff of that report
+  as the regression gate rather than the raw count.
 
 Also note the parser rejects `require constraint <name> { … }` (a *named* nested constraint after
 `require`/`assume`): `expected '{' after 'require constraint'`. Only the anonymous form and the
@@ -277,7 +389,7 @@ Fixtures live in `internal/core/runtime/testdata/conformance/`: `variation_attri
 (`test::idealDiamond`), `variation_part_selection.sysml` (`test::electricVehicle`),
 `variation_interface_selection.sysml` (`test::nestedAssembly`), `variation_unselected.sysml`
 (`test::unconfiguredDiamond`) and `ballandchain_variant_configuration.sysml`. Each `.expected.json`
-is the cheapest source of the values `%slots` should print.
+is the cheapest source of the values `%features` should print.
 
 - **Variant rendering.** A bound variation slot prints `name = variantName (Instance ID: n)` with the
   variant's nested values indented under it (`engine = electric (Instance ID: 2)` / `power = 150.00`).
@@ -288,9 +400,9 @@ is the cheapest source of the values `%slots` should print.
 - **Always include a constraint that must be *violated*.** `variation_attribute_selection` asserts
   both `isIdeal` (satisfied) and `notShallow` (violated). An implementation where
   `x == x::variantName` returned true for any variant would still show `isIdeal: satisfied`, so the
-  violated one is the only real discriminator. `%slots` renders these inline as
+  violated one is the only real discriminator. `%features` renders these inline as
   `name: <constraint: satisfied|violated>` — note `%satisfy` answers
-  `no satisfaction assertion in the session` for `assert constraint` members, so use `%slots`.
+  `no satisfaction assertion in the session` for `assert constraint` members, so use `%features`.
 - **Error paths** (all are per-slot `<error: …>` lines, and the dependent computed slot repeats the
   cause): unselected → `variation has no variant selected: <usage>.<feature>`; a name that is not a
   variant → `not a variant of the variation: X is not a variant of Y (variants: a, b)`; two
@@ -321,11 +433,11 @@ is the cheapest source of the values `%slots` should print.
   diagnostic still says "an instance" rather than unset, i.e. the unset spelling has not reached the
   type-mismatch wording.
 - **Surfaces to check together for any value-rendering change**, since they share `formatValue`:
-  `%slots` / `%eval` in the REPL, `sysml <model> -instantiate <fqn> -e <expr>` (same text), the same
+  `%features` / `%eval` in the REPL, `sysml <model> -instantiate <fqn> -e <expr>` (same text), the same
   run with `-json` (the JSON encoder escapes it, so grep `\u003cunset\u003e`, not `<unset>`), and the
-  gRPC/pysysml path. On the Python side `pysysml.UNSET` is a falsy singleton spelled `<unset>` and
-  distinct from `None`: assert `inst.d is pysysml.UNSET`, `inst.d is not None`, `bool(inst.d) is
-  False`, `inst.get_slot('d').value.WhichOneof('kind') == 'unset'` with `materialized=True`, and
+  gRPC/opensysml path. On the Python side `opensysml.UNSET` is a falsy singleton spelled `<unset>` and
+  distinct from `None`: assert `inst.d is opensysml.UNSET`, `inst.d is not None`, `bool(inst.d) is
+  False`, `inst.get_feature('d').value.WhichOneof('kind') == 'unset'` with `materialized=True`, and
   `'&lt;unset&gt;' in inst._repr_html_()`. `Value.unset` is send-only: the client cannot build it
   through `_python_to_value`, so to prove the server refuses it, hand-build the request and call the
   stub directly —
@@ -342,13 +454,13 @@ is the cheapest source of the values `%slots` should print.
   no-instance path, not unset). In `-json`, grep `u003cunset` — a pattern like `u003cunset.003e`
   misses, because `\u` is two characters. And write the null case `attribute nul : Real[0..1] = null;`:
   `Real = null` is itself a multiplicity violation and you end up debugging that instead.
-- **Known limits, so don't plan around them:** `%slots` takes only the instantiated usage's own name
-  — `%slots test::electricVehicle::engine` answers `no instance of …`, and
+- **Known limits, so don't plan around them:** `%features` takes only the instantiated usage's own name
+  — `%features test::electricVehicle::engine` answers `no instance of …`, and
   `%eval test::electricVehicle.engine.power` answers `usage test::electricVehicle has no value`.
-  Nested traversal is only observable through the indented nested rendering of the top-level `%slots`.
+  Nested traversal is only observable through the indented nested rendering of the top-level `%features`.
 - **Careful with `clear` while recording:** typed at the `sysml>` prompt it is parsed as a
   declaration (`1:1: error: expected a namespace member`) *and* drops previously created instances,
-  so the next `%slots` says `no instance of …`. Use `%clear` to reset the session, and clear the
+  so the next `%features` says `no instance of …`. Use `%clear` to reset the session, and clear the
   screen before entering the REPL.
 
 ### `variant` used outside a variation, and per-variation-point variant objects
@@ -362,7 +474,7 @@ discriminators for changes in the variant/variation layer:
   `part p : P { attribute total : Real = k + x; }`. Correct behavior: loading prints a *warning*
   (code `variant-outside-variation`) —
   ``variant x is declared in P, which is not a variation, so it offers no choice; declare its owner `variation` or drop `variant` `` —
-  and `%slots M::p` still shows `k = 2.00`, `x = 1.00`, `total = 3.00`, with `%eval M::p.x` → `1.00`.
+  and `%features M::p` still shows `k = 2.00`, `x = 1.00`, `total = 3.00`, with `%eval M::p.x` → `1.00`.
   A build that skips every `DeclaresVariant` member instead prints no warning, omits `x`, reports
   `total: <error: slot p.total: type mismatch>` and `error: evaluation failed: member x not found in
   instance`. The same must hold for a package-level `variant` (warns, still readable through a
@@ -427,12 +539,19 @@ because the obvious ones cannot:
 ## Things to exercise (and their expected shapes)
 
 - There is **no `%what` command** — check `%help` before believing a task description. The lookup
-  surface for "does this name resolve?" is `%instantiate` / `%slots` / `%eval` (a `part def` is
+  surface for "does this name resolve?" is `%instantiate` / `%features` / `%eval` (a `part def` is
   easiest via `%instantiate`, an attribute via `%eval`), all funnelling through
   `internal/repl/lookup.go`. A request phrased as "`%what`/lookup" means those.
-- Symbol-taking commands: `%instantiate %slots %eval %calc %constraint %requirement %action %state`.
+- Symbol-taking commands: `%instantiate %features %eval %calc %constraint %requirement %action %state`.
   All go through one helper (`internal/repl/lookup.go`), so test each with a **simple** name and a
   **qualified** one.
+- `%slots`, the pre-0.1.0 spelling, is **removed**: it reads as `unknown command "%slots"` and is
+  offered by neither `%help` nor tab completion. `%features` is the only listing command, so a
+  script written against the old spelling has to be updated.
+- A part whose type contains its own kind does **not** print a "materialization is bounded" note; the
+  bounded walk renders the nested feature as `child : Node (not expanded: contains its own kind)`
+  after expanding one level. Don't grep for wording the binary never emits — capture the real line
+  over a pipe first. Follow it with `%eval 1 + 1` → `= 2` to show the session survived the walk.
 - `%step` is **action-only**. In a state session it answers
   `error: no active action session (use %action <name> first)`; drive a state machine with
   `%advance <time>` instead. That message during a state sweep is expected, not a broken session.
@@ -448,7 +567,7 @@ because the obvious ones cannot:
   separate turns, and `%clear` (or restart) if a stray line lands in the buffer.
 - `%satisfy` takes no argument (every satisfaction assertion the model states) or the name of the
   element stating them, since `assert satisfy … by …` is anonymous.
-- Instances are keyed by resolved FQN, so `%instantiate Vehicle` then `%slots Demo::Vehicle` must
+- Instances are keyed by resolved FQN, so `%instantiate Vehicle` then `%features Demo::Vehicle` must
   hit the same `ID`, and the reverse spelling too. Differing IDs = broken keying.
 - Qualified attribute access works with a full FQN (`%eval Demo::Engine::power` → `= 300.00`) but a
   **partial** qualification (`%eval Engine::power`) is `unresolved reference: …` — the qualified path
@@ -542,6 +661,62 @@ because check-clean alone never proves the runtime bound anything.
   and `examples/*.sysml` comparing `grep -c 'error:'` counts new vs old binary and print only files
   where new > old (~1 min).
 
+## Addressed sends and per-object message identity (`send S() to t`, PR #267)
+
+To observe *which object* consumed a message you must drive one performer at a time. `%state` and
+`%action` take an object argument (`%state <machine> <object>`, `internal/repl/meta.go:320`) but the
+object must already exist, so **`%instantiate <Pkg>::<part>` first** — otherwise every command
+answers `error: no instance of "…" (use %instantiate first)` followed by `no active state machine
+session`, which reads like a broken session.
+
+The fixture shape that distinguishes confined from leaking delivery is two structurally identical,
+unconnected parts of one type, each with a `via`-qualified accept **and** a catch-all:
+
+```
+transition first waiting accept Ping via inPort then received;   // the addressee
+transition first waiting accept Ping             then strayed;   // the leak detector
+```
+
+Run the same model once per performer: the addressee must reach `received`, every other object must
+stay in `waiting`. `strayed` is the pre-fix signature (a same-named port of another object consuming
+the message) and it appears for *both* objects on a pre-#267 binary — always A/B against a
+parent-commit binary, since "it ran and ended somewhere" proves nothing on its own.
+
+Limits worth knowing before writing fixtures:
+
+- **Nested performers cannot be driven from the prompt.** `%state <M> Pkg::one::mid::inner` fails
+  with `no instance of "Pkg::Mid::inner"` even after `%instantiate Pkg::one` materialized it (visible
+  in `%slots`). So a nested/composite target (`one.mid.inner.inPort`) is only observable *negatively*:
+  put the catch-all accept on the **sending outer** object and assert it stays `waiting` with no
+  error — the deep path resolved (else it would be a typed error) and did not leak outward.
+- **`accept … via <dotted.path>` does not parse** in a state transition (`expected a body member` /
+  `expected the target of the transition after 'then'`) nor in an action node (`expected ';' after
+  accept action`). Only `send … via p.q` takes a nested path. Don't design an accept-side nested-port
+  fixture; use `conformance/port_nested_port_path.sysml` (connect `p.q` to a simple `sink`) instead.
+- Addressing needs **no connector**: `send Ping() to two.inPort` from `one` delivers to `two`, and the
+  sender must not consume it. That cross-object case is the cheapest positive proof of identity.
+- `send X to self` resolves to nothing and is a silent no-op on both old and new binaries (no
+  receiver is named `self`) — expect `waiting`, not an error. A target naming a **part** rather than a
+  port (`one.mid.inner`) is also delivered-but-unaccepted, not an error.
+- The two unroutable wordings are distinct and both must stay reachable
+  (`internal/core/runtime/routing.go`): an addressed target gives
+  `send reaches no receiving port: "alpha.count" names no port of an object the sender can address`,
+  while a `via` port gives `port "lonely" is joined to no port that can receive it` /
+  `port "dst" is joined only to outbound ends (src)`. A pre-#267 binary **completes successfully**
+  (`✓ Action completed`) for the addressed-target cases, so assert the error text, not just non-zero
+  exit. From a state entry action it surfaces as
+  `error: event processing failed: enter state: entry action: send reaches no receiving port: …` with
+  `Current state: <none>`; the REPL session must survive it (`%tokens` still shows `Token 1 @ sender`,
+  `%eval 1 + 2` still answers `3`).
+- Regression set that must be byte-identical old vs new for any routing change:
+  `port_nested_port_path` (`got = 7`), `port_interface_typed_connection` (conjugated `~Chan`,
+  `got = 13`), `send_no_reachable_receiver`, `send_into_outbound_only_end`,
+  `state_send_self_signal` (`send Ping to Driver` → `done`), `action_send_accept` (accept-node target
+  → `n = 50`, `number = 50`).
+- Loading these conformance fixtures in the REPL prints pre-existing
+  `unresolved reference: Integer — did you mean ScalarValues::Integer?` noise; it reproduces on the
+  parent binary and does not stop execution.
+
 ## Standard SysML v2 behavioral notation (flows, triggers, sends, transition effects)
 
 Testing this family end-to-end has a few traps that cost a whole run if hit late:
@@ -582,8 +757,8 @@ Testing this family end-to-end has a few traps that cost a whole run if hit late
   `/home/ubuntu/corpus/apps/*.sysml` and `/home/ubuntu/corpus/dragon/Dragon.sysml`, counting
   `error:` lines, is a cheap high-signal gate — read each remaining message and classify it as
   structural/unresolved-library vs behavioral rather than trusting the count alone.
-- Don't name a pysysml probe script `grpc.py`: `sys.path[0]` shadows the real `grpc` package and
-  pysysml dies with `partially initialized module 'pysysml'`, which looks like a client bug.
+- Don't name a opensysml probe script `grpc.py`: `sys.path[0]` shadows the real `grpc` package and
+  opensysml dies with `partially initialized module 'opensysml'`, which looks like a client bug.
 
 ## Fork/join and an action's shared value space (PR #170)
 
@@ -742,7 +917,7 @@ about the others:
 | `SYSML_MAX_STEPS` | 10000000 | expression evaluations |
 | `SYSML_MAX_ACTION_STEPS` | 1000000 | action token-flow steps |
 | `SYSML_MAX_EVENTS` | 1000000 | state machine events, and the events one `%advance` drains |
-| `SYSML_MAX_DO_STEPS` | 5000000 | do-activity actions, ditto for `%advance` |
+| `SYSML_MAX_DO_STEPS` | 5000000 | do actions, ditto for `%advance` |
 | `SYSML_MAX_ELEMENTS` | 1000000 | collection elements one evaluation holds (~104 MB of `Value`s), the memory bound: `(1..2000000)` reports `collection element limit exceeded`, not the step limit, while a loop building a small collection many times is unaffected |
 
 `%budget` prints the five bounds in force with the variable raising each, so a test can read what a
@@ -769,17 +944,17 @@ printf '%%action loopn\n%%continue\n%%quit\n' | ./bin/sysml /tmp/loopn.sysml    
 
 Note the `sh -c` wrapper: `VAR=x cmd | …` only exports to the first process of the pipeline, so put
 the whole pipeline inside `sh -c` or the REPL will not see the variable. The gRPC side inherits the
-variable through the pysysml auto-start path (the client spawns `~/.pysysml/bin/sysml-grpc` as a
+variable through the opensysml auto-start path (the client spawns `~/.opensysml/bin/sysml-grpc` as a
 child), so `SYSML_MAX_STEPS=300000 python script.py` is enough — but `pkill -f sysml-grpc` first,
 otherwise an already-running service from an earlier value keeps serving.
 
-Tooling trap: running a pysysml script that auto-starts the service from a *non-tty* one-shot shell
+Tooling trap: running a opensysml script that auto-starts the service from a *non-tty* one-shot shell
 tends to return no output at all (the spawned service holds the pipe). Run such scripts with a tty
 shell (`tty: true`) or inside the GUI terminal, and use the venv interpreter
-(`~/pysysml-venv/bin/python`) — the default `python` in a plain shell has no `pysysml`.
-**The venv is not always at `~/pysysml-venv`**: some sessions ship `/home/ubuntu/sysml-venv`
+(`~/opensysml-venv/bin/python`) — the default `python` in a plain shell has no `opensysml`.
+**The venv is not always at `~/opensysml-venv`**: some sessions ship `/home/ubuntu/sysml-venv`
 instead, and the system `python` may have a protobuf too new for the generated stubs. Resolve it
-once with `ls -d /home/ubuntu/*venv*` and check `<venv>/bin/python -c 'import pysysml'` before
+once with `ls -d /home/ubuntu/*venv*` and check `<venv>/bin/python -c 'import opensysml'` before
 blaming the client. A one-shot non-tty `<venv>/bin/python script.py` did work in practice, so try
 it before falling back to a tty shell.
 
@@ -807,7 +982,7 @@ a pre-fix binary, so build the contrast binary from the merge-base first (see ab
   `conformance/calc_rk4_lunar_descent.sysml` (four body-local stage usages `k1..k4` in a `for` body
   plus a nested steering usage): `%calc test::Propagate 3` → `= 15001.72`, and the gRPC side gives
   the full-precision `15001.719185373526` that the `.expected.json` pins. **The REPL prints two
-  decimals**, so assert exactness through pysysml `eval`, not the prompt. Keep a two-line `while`
+  decimals**, so assert exactness through opensysml `eval`, not the prompt. Keep a two-line `while`
   variant around too — it shows the removed error message on camera, which the RK4 file cannot,
   because on a pre-fix binary RK4 dies earlier on `..`.
 - **`..` is the ordered integer sequence the stdlib declares**, not a value kind of its own
@@ -829,14 +1004,14 @@ a pre-fix binary, so build the contrast binary from the merge-base first (see ab
   it rather than inventing constants, and take the expected value from that test
   (`mDry = 100.0 + 250.0 * 0.4` → `200.00`); task descriptions quoting other magnitudes usually
   refer to an earlier draft of the model.
-- **`pysysml` `Model.find` must accept the FQN it reports**: `m.find("Rhs")` and
+- **`opensysml` `Model.find` must accept the FQN it reports**: `m.find("Rhs")` and
   `m.find("test::Rhs")` return the same symbol (`.id == 'test::Rhs'`) and `m.find("test::Missing")`
   is `None`. Remember the package name in the fixture decides the FQN spelling.
 
 Because all five reach the *same* statement engine, feature-chain evaluation and calc memoization,
 follow them with the cheap canaries: `%action tally` + `%continue` → `total = 5`, a
 `%state Debug::Cycle` + `%advance 1` + `%advance 9` sweep → `working` at `Time: 10.00`, and a gRPC
-`get_slot` on `Demo::Vehicle` (`mass` → `materialized=True kind=real_value`, `engine` →
+`get_feature` on `Demo::Vehicle` (`mass` → `materialized=True kind=real_value`, `engine` →
 `kind=instance_id`).
 
 ## Session-accumulation trap (bites both testers and features)
@@ -860,7 +1035,7 @@ forkJoin, action conditional no longer declared)` — every member it declared �
 
 `Submit` **carries instances over** what a submission did not change (`internal/repl/carryover.go`,
 `runtime.Adopt`): after an unrelated `part def B;`, `%instances` still lists the instance with the
-**same ID**, `%slots` still prints its values, and the next `%instantiate` gets a *fresh* ID rather
+**same ID**, `%features` still prints its values, and the next `%instantiate` gets a *fresh* ID rather
 than `ID: 1`. What the submission invalidated still goes — redeclaring the instance's own definition,
 or a declaration its features are typed by — and then the notice
 `note: N instance(s) … dropped because the declarations changed` is expected, with `%instances`
@@ -871,7 +1046,7 @@ notice naming the declaration, when what it depends on changes.
 Recipes that actually distinguish working from broken here (used to verify PR #168):
 
 - **Survival:** `part def A { attribute x : ScalarValues::Integer = 1; }` + `%instantiate A` +
-  `part def B;` → no drop notice, `%instances` → `A (ID: 1)`, `%slots A` → `x = 1`. The parent
+  `part def B;` → no drop notice, `%instances` → `A (ID: 1)`, `%features A` → `x = 1`. The parent
   commit's binary (see the contrast-binary recipe) prints the drop notice and
   `error: no instance of "A"` on the same input, so run both on camera.
 - **Partial loss:** instantiate two definitions, then redeclare only one → `note: 1 instance was
@@ -893,17 +1068,17 @@ Recipes that actually distinguish working from broken here (used to verify PR #1
   PR #168): a carried slot whose feature has a value expression (`attribute m = double(3.0);`) is
   reset to unmaterialized, so the new context recomputes it from the declarations the expression
   reads *now*. Redeclaring `calc def double` with `x * 3.0` therefore keeps `ID: 1` and prints **no**
-  drop notice, while `%slots A` moves `6.00 → 9.00`; the same holds through chains
+  drop notice, while `%features A` moves `6.00 → 9.00`; the same holds through chains
   (`outer` calling `inner`: `7.00 → 10.00`; `attribute h = g * 2.0` read by `m`: `11.00 → 15.00`).
-  The assertion that catches the earlier stale-value bug is **`%eval` must agree with `%slots`** after
-  every such change — a `%slots` that keeps the old number while `%eval` of the same expression
+  The assertion that catches the earlier stale-value bug is **`%eval` must agree with `%features`** after
+  every such change — a `%features` that keeps the old number while `%eval` of the same expression
   returns the new one is the failure signature. Composite parts keep their carried values *and*
   nested instance IDs (`w = Instance(ID: 2)`). Drops are still expected for the instance's own
   redeclared definition and for a change to a declaration one of its features is typed by.
 - **What is read again vs kept on carry-over** (`adopt.go` `derivedSlot`/`connectorSlot`/
   `collectedSlot`, as of 4947ca3 + 65b04ec). Four distinct classes, each with its own recipe:
   - *Connector slots are read again under the same identity.* `connection c1 connect a.x to b.y;`
-    where `a.x = double(3.0)`: after redeclaring `double` with `x * 3.0`, `%slots` must show
+    where `a.x = double(3.0)`: after redeclaring `double` with `x * 3.0`, `%features` must show
     `x = 9.00` **and** `c1 = Instance(ID: 4)` (unchanged) **and** `source = 9.00`. A `source` that
     stays `6.00` next to `x = 9.00` is the bug. This applies to named *and* anonymous connectors.
   - *A variation's selected variant is carried, not derived* — its default names a variant rather
@@ -918,13 +1093,13 @@ Recipes that actually distinguish working from broken here (used to verify PR #1
     `part xs : B[3]` must print the identical `[Instance(ID: 2), Instance(ID: 3), Instance(ID: 4)]`
     after an unrelated submission, and the next `%instantiate` must not reuse 2/3/4.
 - **A stale carried value only shows if the slot was materialized before the change.** These
-  carry-over slot bugs need a `%slots` (or other read) *between* `%instantiate` and the redeclaration:
+  carry-over slot bugs need a `%features` (or other read) *between* `%instantiate` and the redeclaration:
   without it the slot was never materialized, so there is nothing stale to keep and even a broken
   build prints the right number. Contrast runs against a binary built from the parent commit
   (`git worktree add /tmp/wt-old <parent> && go build -o /tmp/old-sysml ./cmd/sysml`) are the cheapest
   way to prove a case actually discriminates — but include that intermediate read in both runs.
   Conversely, the *anonymous* connector-id case must also be checked with **no** read in between
-  (two unrelated submissions back to back, then one `%slots`), which is a separate code path.
+  (two unrelated submissions back to back, then one `%features`), which is a separate code path.
 - **Never put a literal TAB in piped REPL input** (`printf '…\t…' | ./bin/sysml`): readline enters
   completion mode and the process dies with `panic: bytes: negative Repeat count`. Use spaces in
   one-line rehearsal snippets.
@@ -1024,7 +1199,7 @@ diagnostic with the pass that produced it (`[syntax/syntax]`, `[type/type.expr]`
 
 Tracing prefixes every recorded line with `[trace] `. Evaluation entries are **post-order and
 indented**: sub-expressions appear before, and one level deeper than, the expression that consumed
-them (`internal/core/runtime/trace.go`). `%slots` on a model with derived attributes is the easiest
+them (`internal/core/runtime/trace.go`). `%features` on a model with derived attributes is the easiest
 way to see a full tree — `derived_package.sysml` gives `eval operator * -> 3000.0` and a nested
 `eval feature power -> 300.0` / `eval operator * -> 270.0` / `eval operator + -> 1770.0`.
 
@@ -1083,9 +1258,9 @@ Traps worth re-checking after any doc or REPL edit:
 - Typing `clear` at the `sysml>` prompt pollutes the buffer (see the session-accumulation trap);
   restart the REPL rather than trying to recover mid-transcript.
 
-## The gRPC service and the `pysysml` Python client
+## The gRPC service and the `opensysml` Python client
 
-The REPL is not the only user-facing surface: `cmd/sysml-grpc` plus `python/pysysml` is the path a
+The REPL is not the only user-facing surface: `cmd/sysml-grpc` plus `python/opensysml` is the path a
 Python user takes, and the two can disagree. When a change touches `internal/grpc/convert.go` or
 the runtime's slot evaluation, **test both and diff them** — that comparison is the highest-value
 assertion available.
@@ -1093,12 +1268,12 @@ assertion available.
 ```bash
 export PATH=/usr/local/go/bin:$PATH
 make build && make build-grpc              # -> bin/sysml, bin/sysml-grpc
-mkdir -p ~/.pysysml/bin && cp bin/sysml-grpc ~/.pysysml/bin/   # where the client looks
+mkdir -p ~/.opensysml/bin && cp bin/sysml-grpc ~/.opensysml/bin/   # where the client looks
 pip install -e python/
 ```
 
 Do **not** start the service by hand. `Connection._ensure_service`
-(`python/pysysml/connection.py`) probes `localhost:50051` and spawns the binary itself; letting it
+(`python/opensysml/connection.py`) probes `localhost:50051` and spawns the binary itself; letting it
 auto-start is both the realistic user path and the only way it writes its pidfile. Attaching to a
 service you started yourself makes `test_lifecycle.py::test_service_shuts_down_when_last_process_exits`
 fail — that is the documented `docs/project/roadmap.md` §P1 gap, not a new bug.
@@ -1107,7 +1282,7 @@ fail — that is the documented `docs/project/roadmap.md` §P1 gap, not a new bu
 
 When the thing under test is the **process** (flags, exit status, graceful shutdown, leaks) rather
 than the model semantics, a hand-started service on `-port 0` is the right harness and
-`pysysml.connect(host, port, auto_start=False)` attaches to it without touching the pidfile
+`opensysml.connect(host, port, auto_start=False)` attaches to it without touching the pidfile
 machinery. Pass `-health-port` too: it defaults to 8081 and collides with an already-running
 service. **Never pipe a command whose exit code you are asserting** — `… | tail` reports `tail`'s
 status, which has produced a false pass on this very exit-code matrix; run it bare and echo `$?`.
@@ -1121,7 +1296,7 @@ real time:
   `${ADDR##*:}` — `cut -d: -f3` yields `]` for `[::]:41325`.
 - Expected values at 0cf94e80 for `internal/grpc/testdata/conformance/instantiate_derived_slot.sysml`:
   `mass` → `materialized=True kind=real_value 1500.0`, `doubled` → `real_value 3000.0`; a missing
-  model path raises `pysysml.errors.ModelFileNotFoundError` ("file not found: open …") and the
+  model path raises `opensysml.errors.ModelFileNotFoundError` ("file not found: open …") and the
   server logs `code = NotFound` for `/sysml.SysMLService/ParseFile` while staying alive. An already
   occupied `-port` exits **1** with `msg="Failed to listen" port=<port>`; `kill -TERM` exits **0**
   after `Shutting down gracefully...` / `gRPC server stopped`. `pgrep -x sysml-grpc` (never `-f`)
@@ -1129,38 +1304,38 @@ real time:
   `-cache-size 0` exits **1** with `cache maxSize must be positive`, raised in `NewService` *before*
   `net.Listen`; a bogus `model_hash` is `NOT_FOUND` / `ModelNotFoundError`. Shutdown with a client
   channel still open exits 0 and makes the client's next call raise `UNAVAILABLE`
-  (`pysysml.ConnectionError`) — bound that call with a timeout so a hang fails instead of hanging
+  (`opensysml.ConnectionError`) — bound that call with a timeout so a hang fails instead of hanging
   the run.
 
 <a id="venv-trap"></a>
-**Python interpreter trap on this box** (bites every pysysml section below): whatever `python3`
+**Python interpreter trap on this box** (bites every opensysml section below): whatever `python3`
 resolves to in a tool shell may be another project's venv, and a venv built from it gets a
 mismatched `sys.path` — `pyvenv.cfg` naming one minor version while `bin/python` runs another, so
-the editable install lands in a `site-packages` the interpreter never searches and `import pysysml`
+the editable install lands in a `site-packages` the interpreter never searches and `import opensysml`
 (or `import grpc`) fails right after a *successful* `pip install -e python/`. Always build the venv
 from an explicit real interpreter (`/home/ubuntu/.pyenv/versions/3.12.8/bin/python3.12 -m venv ~/pv`,
-or `/usr/bin/python3.10`) and verify `<venv>/bin/python -c 'import pysysml'` before blaming the
+or `/usr/bin/python3.10`) and verify `<venv>/bin/python -c 'import opensysml'` before blaming the
 client. `$HOME/pv` is created by the blueprint, so prefer reusing it.
 
 ### Service lifecycle, the stale-service check and `require_capabilities` (PR #181)
 
 Since PR #181 `Connection` interrogates whatever is *already* listening (`GetServerInfo`) and
-compares it against the release asked for (`connect(version=...)` or `$PYSYSML_GRPC_VERSION`) plus
-`require_capabilities=[...]`; a mismatch raises `pysysml.StaleServiceError`. To test that surface
+compares it against the release asked for (`connect(version=...)` or `$OPENSYSML_GRPC_VERSION`) plus
+`require_capabilities=[...]`; a mismatch raises `opensysml.StaleServiceError`. To test that surface
 you **do** need a hand-started service — that is precisely the "foreign process" case:
 
 ```bash
 ./bin/sysml-grpc -port 50099 &                   # a port other than 50051 keeps the auto-start
                                                  # tests independent
-PYSYSML_GRPC_VERSION=v0.0.7 python -c '...connect(port=50099)...'   # -> StaleServiceError
+OPENSYSML_GRPC_VERSION=v0.0.7 python -c '...connect(port=50099)...'   # -> StaleServiceError
 ```
 
-- Ownership is decided in `_started_by_this_client`: `~/.pysysml/sysml-grpc.pid` must name the
+- Ownership is decided in `_started_by_this_client`: `~/.opensysml/sysml-grpc.pid` must name the
   process **and** its cmdline must end `['-port', str(port)]`. A hand-started service has no
   pidfile, so it must be reported and left running — assert `psutil.pid_exists(pid)` *and* that a
   subsequent connect still serves (`model.instantiate(...)`), not just that an exception was raised.
 - A locally built binary reports the **commit** as its version (`version e695687`), not a `vX.Y.Z`
-  tag, so any `PYSYSML_GRPC_VERSION=v0.0.x` is a mismatch — handy, and it also means asking for a
+  tag, so any `OPENSYSML_GRPC_VERSION=v0.0.x` is a mismatch — handy, and it also means asking for a
   tag while a dev build runs will *always* raise.
 - Capability names the service reports today: `convert`, `query`, `type_facts`, `verification`.
   A bogus `require_capabilities=['time_travel']` surfaces as `MissingCapabilityError` whoever
@@ -1169,11 +1344,11 @@ PYSYSML_GRPC_VERSION=v0.0.7 python -c '...connect(port=50099)...'   # -> StaleSe
 - With `auto_start=False` the release check is lazy: a service that was not listening when the
   client was built is checked at the first call of *any* kind, so assert it through `conn.load(...)`
   and not only through `conn.server_info()`.
-- `pysysml` has **no module-level `load_from_content`**; use `conn.load_from_content(...)`.
-- Lifecycle state is per-port: `~/.pysysml/sysml-grpc-<port>.pid` (a JSON ownership record whose
-  `refs` is the in-process holder count) and `~/.pysysml/sysml-grpc-<port>.lock`. There is no
+- `opensysml` has **no module-level `load_from_content`**; use `conn.load_from_content(...)`.
+- Lifecycle state is per-port: `~/.opensysml/sysml-grpc-<port>.pid` (a JSON ownership record whose
+  `refs` is the in-process holder count) and `~/.opensysml/sysml-grpc-<port>.lock`. There is no
   `sysml-grpc.refcount` file. Reset a clean auto-start state with
-  `pkill -x sysml-grpc; rm -f ~/.pysysml/sysml-grpc-50051.pid ~/.pysysml/sysml-grpc-50051.lock`
+  `pkill -x sysml-grpc; rm -f ~/.opensysml/sysml-grpc-50051.pid ~/.opensysml/sysml-grpc-50051.lock`
   (`-x`, never `-f`, which matches your own shell — see the pkill trap below).
   Refcount behaviour worth asserting both within one process (two `connect()`s) and across two
   processes: 1 → 2 → 1, service still serving the remaining holder, and the pidfile removed
@@ -1188,26 +1363,27 @@ Client API shapes that are easy to get wrong:
 
 - `Model.find(name)` returns **one `Symbol` or `None`**, not a list — iterating it raises
   `TypeError: 'Symbol' object is not iterable`. Use `.id` (FQN), `.name`, `.kind`.
-- `pysysml.instantiate(fqn, file_path=...)` and `pysysml.evaluate(expr, file_path=..., context_symbol_id=...)`
+- `opensysml.instantiate(fqn, file_path=...)` and `opensysml.evaluate(expr, file_path=..., context_symbol_id=...)`
   each take *exactly one* of `file_path` / `model_hash`.
-- `Instance.get_slot(name)` returns the raw protobuf `SlotValue`. Read it as
+- `Instance.get_feature(name)` returns the raw protobuf `FeatureValue`. Read it as
   `sv.materialized` and `sv.value.WhichOneof('kind')` → `real_value` / `int_value` / `instance_id` /
   `null`. Printing the `Instance` alone hides exactly the detail under test.
 
-What the slot kinds mean (`ValueToProto`, `convert.go`):
+What the feature-value kinds mean (`ValueToProto`, `convert.go`):
 
 - A **derived** attribute (`attribute doubled = mass * 2.0;`) must arrive as
   `materialized=True kind=real_value`. `kind=null value='unsupported'` is the pre-fix signature.
-- `null: 'unsupported'` is the generic fallback arm for a slot `GetSlot` returned **unmaterialized
+- `null: 'unsupported'` is the generic fallback arm for a feature value returned **unmaterialized
   without an error** — a feature with no default and no composite type. Both a bare
   `attribute d : Real;` and a **constraint usage** land here, so the REPL's
   `massOK: <constraint: satisfied>` has no gRPC equivalent. Check whether that divergence is
   intended before filing it.
-- `SlotValue.error` is the real error arm (the value is left unset). Force it with cyclic derived
+- `FeatureValue.error` is the real error arm (the value is left unset). Force it with cyclic derived
   attributes (`attribute a = b + 1.0; attribute b = a + 1.0;`) — expect
-  `slot Loop.a: slot Loop.b: cyclic slot dependency: Loop.a`, promptly, raised as `SlotError` by
+  `feature value Loop.a: feature value Loop.b: cyclic feature value dependency: Loop.a`, promptly,
+  raised as `FeatureValueError` by
   the client, and prove the service is still alive afterwards with a follow-up
-  `pysysml.evaluate('1 + 1', ...)`.
+  `opensysml.evaluate('1 + 1', ...)`.
 - A nested `part engine : Engine;` still marshals as bare `instance_id=N`, but
   `InstantiateResponse.instances` carries every instance reachable from the root, so Python
   expands the child too (`inst.engine.power`). An id is only resolvable against the response that
@@ -1218,10 +1394,10 @@ to A/B the two surfaces on the same model. The call shapes are **not** the ones 
 suggest: there is no `parse_file` on `Connection` — use `c.load_from_content(src)` (or `c.load(path)`),
 which returns a `Model` whose hash is `model.hash` (not `.model_hash`). Then
 `c.execute_action("Pkg::action", model.hash)` returns a plain `{name: value}` dict, and a runtime
-failure raises `pysysml.errors.RuntimeError` with the executor's message
+failure raises `opensysml.errors.RuntimeError` with the executor's message
 (`action execution failed: execute action: …`). If you must attach to a service you started
-yourself, `pysysml.connect("localhost", 50551, auto_start=False)` avoids the
-`Binary not found at ~/.pysysml/bin/sysml-grpc` error — but prefer the auto-start path per above.
+yourself, `opensysml.connect("localhost", 50551, auto_start=False)` avoids the
+`Binary not found at ~/.opensysml/bin/sysml-grpc` error — but prefer the auto-start path per above.
 
 Fixture trap when proving `Model.execute_action` / `Model.execute_state` "exist and work": an action
 that only declares parameters (`action add : Add { in x = 2.0; out z = x + y; }`) validates clean but
@@ -1242,38 +1418,38 @@ work), and `158 passed, 14 skipped` with a service running. As of the 0.0.8 prep
 `test_a_cache_survives_a_replacement_that_cannot_be_downloaded` — re-measure rather than trusting an
 older count. The skips are the integration
 tests gating on a live service. `pytest` is **not**
-installed in `~/pysysml-venv` by default — `~/pysysml-venv/bin/pip install pytest` first, or
+installed in `~/opensysml-venv` by default — `~/opensysml-venv/bin/pip install pytest` first, or
 `python -m pytest` fails with `No module named pytest` (the `pytest` on `PATH` belongs to an
-unrelated venv and cannot import `pysysml`).
+unrelated venv and cannot import `opensysml`).
 
 A test that skips with no service and fails with one is never actually green — treat it as a
 reportable defect, not a known gap. Two lifecycle traps caused exactly that: a
 `Connection(auto_start=False)` used to release a refcount it never took (fixed), and any test
-that shells out to a pysysml subprocess lets that subprocess's exit decrement the shared
+that shells out to a opensysml subprocess lets that subprocess's exit decrement the shared
 refcount, so such tests must isolate `HOME` for the child.
 
 Liveness check: after `test_lifecycle` runs, `pgrep -af sysml-grpc` still lists a `<defunct>`
 zombie, so it lies. Use `ss -ltn | grep 50051` to decide whether a service is really listening.
 `pkill -9 -f sysml-grpc` matches your own shell's command line — use `pkill -9 -x sysml-grpc`.
 A full-suite run stops even a service another process owns, leaving a stale
-`~/.pysysml/sysml-grpc-<port>.pid`; clear it before the next liveness test.
+`~/.opensysml/sysml-grpc-<port>.pid`; clear it before the next liveness test.
 To hold a service alive for a whole test run, keep a client process open, e.g.
-`(setsid python -c "import pysysml,time; pysysml.connect(); time.sleep(300)" &)` — a plain
+`(setsid python -c "import opensysml,time; opensysml.connect(); time.sleep(300)" &)` — a plain
 backgrounded `python -c` from a non-tty shell may exit before it prints, so verify the port.
 
-Download paths (`python/pysysml/binary.py`) are testable without a real release: move
-`~/.pysysml/bin/sysml-grpc` aside, unset `PYSYSML_GRPC_VERSION`, and call `ensure_binary()`,
+Download paths (`python/opensysml/binary.py`) are testable without a real release: move
+`~/.opensysml/bin/sysml-grpc` aside, unset `OPENSYSML_GRPC_VERSION`, and call `ensure_binary()`,
 `resolve_latest_version()`, `download_binary('latest')`. All three must raise `ConnectionError`
-naming the path or URL. `PYSYSML_GITHUB_REPO` overrides the repo. Beware: these hit the
+naming the path or URL. `OPENSYSML_GITHUB_REPO` overrides the repo. Beware: these hit the
 unauthenticated GitHub API, so repeated runs flip from a truthful `HTTP Error 404: Not Found` to a
 misleading `HTTP Error 403: rate limit exceeded` — rehearse sparingly and report the 404 wording,
 not whichever one the recording happened to catch.
 
 #### The stale-*cache* decision is testable offline (PR #178)
 
-`stale_cache_reason(version, github_repo=None)` decides whether `~/.pysysml/bin/sysml-grpc` may
+`stale_cache_reason(version, github_repo=None)` decides whether `~/.opensysml/bin/sysml-grpc` may
 answer for a requested release, and it needs no network — drive it directly and write the sidecar
-`~/.pysysml/bin/sysml-grpc.json` (`{"version":…, "sha256":…, "repo":…}`) by hand. The four shapes
+`~/.opensysml/bin/sysml-grpc.json` (`{"version":…, "sha256":…, "repo":…}`) by hand. The four shapes
 worth asserting, with the wording each produces:
 
 | sidecar | asked for | reason |
@@ -1281,14 +1457,14 @@ worth asserting, with the wording each produces:
 | absent | `v0.0.8` | `… was not downloaded by this client, so which release it is cannot be told` |
 | `v0.0.7` + **true** sha256 of the file | `v0.0.8` | `… is v0.0.7, but v0.0.8 was asked for` |
 | `v0.0.7` + wrong sha256 (hand-swapped binary) | `v0.0.8` | falls back to the "not downloaded by this client" wording |
-| `v0.0.8` but `"repo":"someone/Systemica-fork"` | `v0.0.8` | `… was downloaded from someone/Systemica-fork, but v0.0.8 of Open-MBEE/Systemica was asked for` |
+| `v0.0.8` but `"repo":"someone/OpenSysML-fork"` | `v0.0.8` | `… was downloaded from someone/OpenSysML-fork, but v0.0.8 of Open-MBEE/OpenSysML was asked for` |
 
 - The digest is re-verified (`cached_release`), so a *true* sha256 in the sidecar is what makes the
   "is v0.0.7" branch reachable — a placeholder digest silently tests the wrong branch.
-- `stale_cache_reason(None)` is `None` **by design**: with `$PYSYSML_GRPC_VERSION` unset any cached
-  binary is taken on faith. So before any Python check, `cp bin/sysml-grpc ~/.pysysml/bin/` —
+- `stale_cache_reason(None)` is `None` **by design**: with `$OPENSYSML_GRPC_VERSION` unset any cached
+  binary is taken on faith. So before any Python check, `cp bin/sysml-grpc ~/.opensysml/bin/` —
   otherwise a binary from an older release answers as if it were your build, and
-  `~/.pysysml/bin/sysml-grpc -version` is the one-line way to confirm which build you are testing.
+  `~/.opensysml/bin/sysml-grpc -version` is the one-line way to confirm which build you are testing.
 - `ensure_binary(version=…)` on a stale cache emits `UserWarning: Replacing the cached sysml-grpc: …`
   and then, when the download fails (403/404 in a sandbox), a second
   `UserWarning: Keeping the cached sysml-grpc … could not be downloaded` and returns the old path.
@@ -1300,8 +1476,8 @@ worth asserting, with the wording each produces:
 `Connection._ensure_service` probes the service it spawns immediately and then backs off
 (`START_PROBE_INITIAL_DELAY` 10 ms, doubling to `START_PROBE_MAX_DELAY` 250 ms) until
 `START_TIMEOUT` (2.5 s). Timing claims here need a **contrast run against the parent revision**,
-which needs no rebuild since pysysml is pure Python: `git worktree add /tmp/mainwt main`, copy the
-generated `python/pysysml/proto/*.py` in if they are missing, then run the same script twice, once
+which needs no rebuild since opensysml is pure Python: `git worktree add /tmp/mainwt main`, copy the
+generated `python/opensysml/proto/*.py` in if they are missing, then run the same script twice, once
 plain and once with `PYTHONPATH=/tmp/mainwt/python`, on the *same* `$HOME/pv` venv. Numbers seen at
 c590253e on a free port with nothing listening: **21 ms on the branch vs 515 ms on main**; the
 connection must then really work (`conn.load_from_content(...)` + `Model.eval('1 + 1') == 2`), since
@@ -1310,9 +1486,9 @@ a fast connect to a dead service would look the same.
 Recipes for the failure paths, all with a port of their own so the :50051 tests stay independent:
 
 - **A binary that exits at once** — point `$HOME` at a throwaway dir holding
-  `.pysysml/bin/sysml-grpc` = `#!/bin/sh\nexit 3`. `get_binary_path()` is hard-coded to
-  `~/.pysysml/bin`, so `$HOME` is the only injection point (there is no `PYSYSML_GRPC_BINARY`);
-  `PYSYSML_STATE_DIR` moves the pid/lock files only. Expect
+  `.opensysml/bin/sysml-grpc` = `#!/bin/sh\nexit 3`. `get_binary_path()` is hard-coded to
+  `~/.opensysml/bin`, so `$HOME` is the only injection point (there is no `OPENSYSML_GRPC_BINARY`);
+  `OPENSYSML_STATE_DIR` moves the pid/lock files only. Expect
   `ConnectionError: Service exited with code 3 without serving localhost:<port>` in ~0.02 s.
 - **A port that accepts TCP but never speaks gRPC** — `nc -l` is wrong: it exits after the first
   connection closes, the spawned service then binds the port and the test silently *passes*. Use a
@@ -1327,13 +1503,13 @@ Recipes for the failure paths, all with a port of their own so the :50051 tests 
   `Connection._probe_service` with a timestamping function — that is also the cheapest proof of "no
   busy-spin".
 - **A replacement that could not bind** (the `_wait_for_a_service_that_could_not_bind` /
-  `START_CONFIRM_DELAY` path) — start a real service outside pysysml on the port, then push the
+  `START_CONFIRM_DELAY` path) — start a real service outside opensysml on the port, then push the
   client past the adopt step the way a release mismatch does — either
   `Connection._adopt_running_service = lambda self: False`, or without monkeypatching, ask for a
-  release the running service cannot be: `pysysml.connect(port=P, version="v9.9.9")` (there is no
-  `PYSYSML_REQUIRE_VERSION` env knob). Expect `StaleServiceError` ("the service
+  release the running service cannot be: `opensysml.connect(port=P, version="v9.9.9")` (there is no
+  `OPENSYSML_REQUIRE_VERSION` env knob). Expect `StaleServiceError` ("the service
   started here exited (1) while another one kept serving the address"), **no** ownership record
-  (`~/.pysysml/sysml-grpc-<port>.pid` absent, `_OWNED_SERVICES` empty), the foreign pid still alive
+  (`~/.opensysml/sysml-grpc-<port>.pid` absent, `_OWNED_SERVICES` empty), the foreign pid still alive
   and a follow-up `Connection(auto_start=False)` still evaluating. Asserting only "an exception was
   raised" would miss the real regression risk, which is silently adopting a service this client did
   not start and killing it on close.
@@ -1343,24 +1519,24 @@ Recipes for the failure paths, all with a port of their own so the :50051 tests 
   exits. Pair it with a test that closes an *adopted* connection and asserts the hand-started
   service is still serving.
 
-### Verification RPCs, typed errors and strict loading (`pysysml` Tier 3, PR #149)
+### Verification RPCs, typed errors and strict loading (`opensysml` Tier 3, PR #149)
 
 The verification questions the REPL answers with `%constraint`, `%requirement`, `%satisfy` and
 `%calc` are also RPCs (`internal/grpc/verify.go`), wrapped as `Model.verify_constraint /
 verify_requirement / verify_satisfaction / satisfied / calc`. Testing them from Python:
 
 - Use a **clean venv** — the box's default `python3` may carry an incompatible `protobuf`, which
-  fails at `import pysysml`. A venv with `pip install -e python/` (e.g. `~/pv`) is the reliable
+  fails at `import opensysml`. A venv with `pip install -e python/` (e.g. `~/pv`) is the reliable
   interpreter; rebuild with `make build-grpc` and **re-copy** `bin/sysml-grpc` to
-  `~/.pysysml/bin/` after every rebuild or the client silently auto-starts the old binary.
+  `~/.opensysml/bin/` after every rebuild or the client silently auto-starts the old binary.
 - Argument order bites: `Connection.eval(expression, model_hash)`,
   `Connection.instantiate(symbol_id, model_hash)`, `Connection.verify_constraint(symbol_id,
   model_hash, subject_symbol_id=…)`, `Connection.calc(symbol_id, model_hash, arguments=[…])` —
   hash **second**. On `Model` the hash is implicit and the kwarg is `subject=`. There is no
   `Connection.evaluate`. Getting the order wrong yields a confusing
   `ModelNotFoundError: model not found: Demo::sedan`.
-- `Instance.slots` is a **property** (a dict), not a method; unmaterialized slots (constraint and
-  requirement usages) appear as `SlotError` values inside it, which is expected.
+- `Instance.features` is a **property** (a dict), not a method; unmaterialized feature values
+  (constraint and requirement usages) appear as `FeatureValueError` values inside it, as expected.
 - The three-way semantics worth asserting separately: a condition evaluating **false** is a
   verdict (`holds False`, `.condition` set, `.error == ''`, `raise_for_error()` silent); a
   **failure to evaluate** is `.error` non-empty with `.evaluated False` and
@@ -1383,11 +1559,11 @@ verify_requirement / verify_satisfaction / satisfied / calc`. Testing them from 
   `conn._server_info = ServerInfo(version='old', capabilities=frozenset({'convert'}),
   answered=True, origin='simulated')` → the verify calls raise `MissingCapabilityError` before
   any RPC. Label it as simulated in the report.
-- gRPC status translation lives in `pysysml/errors.py`: assert both the pysysml class and the
+- gRPC status translation lives in `opensysml/errors.py`: assert both the opensysml class and the
   builtin it also is (`ModelFileNotFoundError`/`FileNotFoundError`,
   `InvalidRequestError`/`ValueError`, `ConnectionError`/`ConnectionError`,
   `ExecutionError`/`RuntimeError`) and that `__cause__` is the original `grpc.RpcError`. A dead
-  service is reproducible with `pysysml.connect(port=50123, auto_start=False)`.
+  service is reproducible with `opensysml.connect(port=50123, auto_start=False)`.
 
 ### The prewarmed library-index pool, `SYSML_GRPC_INDEX_POOL` (PR #252)
 
@@ -1404,9 +1580,9 @@ generalizes to any service-side perf change:
   pooled run: a tight client loop drains the 4 warm indexes faster than the background refill
   (~100 ms per index), and the drained request builds inline by design. Report the median plus the
   spikes rather than the mean, which the spikes dominate.
-- **The env var reaches the service through the pysysml auto-start path** (the client spawns the
+- **The env var reaches the service through the opensysml auto-start path** (the client spawns the
   child, so it inherits the env), so `SYSML_GRPC_INDEX_POOL=0 python sweep.py` is enough — but
-  `pkill -x sysml-grpc; rm -f ~/.pysysml/sysml-grpc-50051.pid ~/.pysysml/sysml-grpc-50051.lock`
+  `pkill -x sysml-grpc; rm -f ~/.opensysml/sysml-grpc-50051.pid ~/.opensysml/sysml-grpc-50051.lock`
   first, or you keep measuring the previously spawned service's configuration.
 - **Equivalence is the assertion that catches a wrong index.** Have one script print a sorted JSON
   blob (diagnostics, `find()` id/kind, `eval`, instantiate slot kind+value, `execute_action`,
@@ -1418,8 +1594,8 @@ generalizes to any service-side perf change:
   code *and* `ss -ltn | grep :<port>` empty — a service that started anyway is the real failure. An
   empty or all-whitespace value is treated as unset and the service starts normally.
 - Client-side shapes that break these sweeps: proto diagnostics carry severity as a **string**
-  (`d.severity == "error"`; there is no `sysml_pb2.SEVERITY_ERROR`), `Instance.slots` is a **map** so
-  iterate `inst.instance.slots.items()` (and prefer the public `inst.slots` over `inst._slots`), and
+  (`d.severity == "error"`; there is no `sysml_pb2.SEVERITY_ERROR`), `Instance.feature_values` is a
+  **map** so iterate `inst.instance.feature_values.items()` (and prefer the public `inst.features`), and
   `file_path="/virtual/…"` must never be passed together with `content=` — the service tries to open
   the path and answers `NOT_FOUND`. Keep a runner behind `if __name__ == "__main__":` so importing it
   to reuse its fixture generator does not execute the whole suite.
@@ -1436,7 +1612,7 @@ generalizes to any service-side perf change:
   models loaded (the 3 oldest hashes raise `ModelNotFoundError`, the 5 newest still evaluate) — an
   index handed to a model that is later evicted must not disturb the models still cached.
 - Interpreter trap: see [the venv trap](#venv-trap) above before blaming `import grpc`/`import
-  pysysml` on the change under test.
+  opensysml` on the change under test.
 
 #### The shared on-disk library index cache (`internal/core/libs/cache.go`)
 
@@ -1452,13 +1628,13 @@ exit 0), never an error mentioning the cache.
 
 ### The `Query` RPC / `model.query(...)` (SysML v2 API & Services, PR #155)
 
-`internal/grpc/query.go` + `python/pysysml/query.py` implement the standard's Query resource
+`internal/grpc/query.go` + `python/opensysml/query.py` implement the standard's Query resource
 (`scope`/`select`/`where`, `PrimitiveConstraint` with `=`/`>`/`<` and `inverse`,
 `CompositeConstraint` with `and`/`or`). Testing notes that generalize:
 
-- **Refresh `~/.pysysml/bin/sysml-grpc` or you test a stale service.** A missing capability shows
+- **Refresh `~/.opensysml/bin/sysml-grpc` or you test a stale service.** A missing capability shows
   up as a `MissingCapabilityError` or an "unimplemented" RPC rather than a build failure, so start
-  every run with `make build-grpc && cp bin/sysml-grpc ~/.pysysml/bin/sysml-grpc` and print
+  every run with `make build-grpc && cp bin/sysml-grpc ~/.opensysml/bin/sysml-grpc` and print
   `md5sum` of both plus `git log --oneline -1` on camera. `GetServerInfo().capabilities` should
   list `type_facts, convert, verification, query`.
 - **The Python layer validates before the wire, so client-path tests cannot reach service-side
@@ -1512,9 +1688,9 @@ so `eval("D::GradePoints::A")` must be the float `4.0`, not an `EnumLiteral`. A 
 attributes (`Level { low { :>> n = 1; } high { :>> n = 9; } }`), read as `eval("D::Level::high.n")`
 → `9`.
 
-- **Stale-binary trap (costs an hour if missed).** `pysysml` auto-start runs
-  `~/.pysysml/bin/sysml-grpc` and otherwise *downloads a release*, which lacks new capabilities.
-  Always `make build-grpc && cp bin/sysml-grpc ~/.pysysml/bin/` first and prove it on camera with
+- **Stale-binary trap (costs an hour if missed).** `opensysml` auto-start runs
+  `~/.opensysml/bin/sysml-grpc` and otherwise *downloads a release*, which lacks new capabilities.
+  Always `make build-grpc && cp bin/sysml-grpc ~/.opensysml/bin/` first and prove it on camera with
   `./bin/sysml-grpc --version` (prints `commit: <sha>`) plus `ls -l` on both paths. Capability check:
   `conn.server_info()` must list `enum_values`
   (`['convert','enum_values','query','type_facts','verification']`).
@@ -1529,15 +1705,15 @@ attributes (`Level { low { :>> n = 1; } high { :>> n = 9; } }`), read as `eval("
   it is called from `internal/grpc/service.go` (action inputs) and `internal/grpc/verify.go` (calc
   arguments). The error wording is layer-specific and worth asserting verbatim:
   calc → `calc argument could not be read: …`, action → `input "c" could not be read: …`.
-- **Identity is `literal_id` alone** (`python/pysysml/enumeration.py` marks `enumeration_id` and
+- **Identity is `literal_id` alone** (`python/opensysml/enumeration.py` marks `enumeration_id` and
   `name` `compare=False`). Comparing two *wire-populated* literals passes even when this is broken,
   so always include the bare-vs-populated cases: with `bare = EnumLiteral("D::Color::red")` and the
-  slot value, assert `bare == car.c`, `hash(bare) == hash(car.c)`,
+  feature value, assert `bare == car.c`, `hash(bare) == hash(car.c)`,
   `len({bare, car.c}) == 1`, `{car.c: "R"}[bare]` and `{bare: "R2"}[car.c]` both resolve, while
   `bare != EnumLiteral("D::Color::green")` and `len({bare, green}) == 2`. The broken shape reads
   `False False 2`. Also send a bare literal *to* the server (`calc IsRed([EnumLiteral(
   "D::Color::red")])` → `True`) — a description-free literal must still resolve against the index.
-- **Type, not text.** Assert `isinstance(car.c, pysysml.EnumLiteral)` **and**
+- **Type, not text.** Assert `isinstance(car.c, opensysml.EnumLiteral)` **and**
   `car.c != "Color::red"`; a string-shaped decode passes every `str()`-based check.
 - **Input round-trips need a real executable action.** An `action def` whose body is only `in`/`out`
   parameters is not executable (`initialize action: no initial node found`). Use
@@ -1561,52 +1737,52 @@ attributes (`Level { low { :>> n = 1; } high { :>> n = 9; } }`), read as `eval("
   yields the false-looking `incommensurable units: cannot express SI::kg (1000·SI::gram) in SI::kg
   (SI::kilogram)`. Echo back the reduction the service itself reported
   (`car.mass.unit` → `scale_num=1000.0`, `factors=(UnitFactor('SI::gram', 1.0),)`).
-- **Codegen and REPL cross-checks.** `python -m pysysml.generate` must emit
-  `def c(self) -> _t.EnumLiteral: return _t.slot(self, "c", _t.as_enum_literal)` and, for the
-  quantity slot, `_t.Quantity` / `_t.as_quantity`; then read both off a live instance
+- **Codegen and REPL cross-checks.** `python -m opensysml.generate` must emit
+  `def c(self) -> _t.EnumLiteral: return _t.feature_value(self, "c", _t.as_enum_literal)` and, for
+  the quantity feature, `_t.Quantity` / `_t.as_quantity`; then read both off a live instance
   (`Car.from_instance(conn.instantiate("D::Car")).c`) so a wrong decoder raises `TypeMismatchError`
-  instead of passing silently. In the REPL, `%slots` prints `name = value`, i.e.
+  instead of passing silently. In the REPL, `%features` prints `name = value`, i.e.
   `c = Color::red`, `palette = [Color::red, Color::green, Color::blue]`, `mass = 1500.00 [SI::kg]` —
   requests often phrase it as `c: Color::red`, which is the same thing.
 - **Set membership** is only observable through `->includes`/`union`; no REPL syntax builds a `Set`,
   and a sequence literal keeps duplicates by design.
 
-## Typed codegen (`python -m pysysml.generate`, Tier 2)
+## Typed codegen (`python -m opensysml.generate`, Tier 2)
 
-`python -m pysysml.generate <model.sysml> [-o out.py] [--host --port]` loads the model through
+`python -m opensysml.generate <model.sysml> [-o out.py] [--host --port]` loads the model through
 the **live service** (so it auto-starts `sysml-grpc`) and prints/writes one class per SysML
-definition deriving from `pysysml.typed.TypedObject`. Useful facts when testing it:
+definition deriving from `opensysml.typed.TypedObject`. Useful facts when testing it:
 
 - The reference fixture is `internal/repl/testdata/vehicle_package.sysml` and the committed
   golden is `python/tests/golden/vehicle_types.py`; `cmp` them for a byte-for-byte assertion and
   generate twice + `cmp` for determinism. Emission is FQN-ordered with base classes first.
-- Only instance-slot usages become properties (`attribute/part/item/occurrence/port/enum`);
+- Only instance feature usages become properties (`attribute/part/item/occurrence/port/enum`);
   `calc`, `constraint` and `requirement` members are deliberately absent — a generated class
   that grows a `withinMassLimit` property is a bug, not progress.
 - Annotations are the whole point: `attribute power = 300.0;` must render `-> float` and
   `part engine : Engine;` must render `-> Engine`. If everything renders `object`, the typefacts
   path (`internal/grpc/typefacts.go` → `SymbolInfo.type_info`) is broken.
 - Static-check evidence needs `MYPYPATH=<repo>/python mypy --follow-imports=silent script.py`
-  and the venv mypy (`~/pysysml-venv/bin/mypy`). Without `MYPYPATH`, mypy silently treats
+  and the venv mypy (`~/opensysml-venv/bin/mypy`). Without `MYPYPATH`, mypy silently treats
   `TypedObject` as `Any` and *misses* attribute-typo errors, so a "clean" mypy run proves nothing
   until you have seen it also flag a deliberate misuse (`v.mas`, `v.mass + "x"`).
 - Adversarial cases that distinguish working from broken, all reachable through a generated
-  property: cyclic derived attributes (`a = b + 1.0; b = a + 1.0;`) must raise pysysml
-  `SlotError` rather than returning `None`; and running *stale* generated code against a model
-  whose attribute type changed (e.g. `mass = "heavy"`) must raise
-  `TypeMismatchError: slot 'mass': expected float, got 'heavy'`.
+  property: cyclic derived attributes (`a = b + 1.0; b = a + 1.0;`) must raise opensysml
+  `FeatureValueError` rather than returning `None`; and running *stale* generated code against a
+  model whose attribute type changed (e.g. `mass = "heavy"`) must raise
+  `TypeMismatchError: feature value 'mass': expected float, got 'heavy'`.
 - **Pass the model path absolutely.** The path travels to the service, which opens it relative to
   *its own* CWD, so `-o` works but `../internal/...` fails with a gRPC `NOT_FOUND: file not found`
   traceback that looks like a client bug and is not one.
 - **Capability gate (`type_facts`).** Generation calls `GetServerInfo` first and exits 1 without
   writing anything unless the service reports `type_facts`. To simulate a stale service, keep a
-  pre-`GetServerInfo` binary around — `~/.pysysml/bin/sysml-grpc` from an older release is usually
+  pre-`GetServerInfo` binary around — `~/.opensysml/bin/sysml-grpc` from an older release is usually
   one; check it with a direct `stub.GetServerInfo(...)` (expect `StatusCode.UNIMPLEMENTED`), then
   run it on a spare port (`-port 50077 -health-port 8099`) and generate with `--port 50077`. Assert
   the negatives: target file still absent / identical sha256, and stdout mode piped to `wc -c`
   yields `0` (no silent all-`object` module). The message should name the capability, the service
   origin and `make build-grpc`. Note the repo blueprint copies the freshly built `bin/sysml-grpc`
-  into `~/.pysysml/bin/`, so in a clean session the cached binary is *current* and no longer serves
+  into `~/.opensysml/bin/`, so in a clean session the cached binary is *current* and no longer serves
   as the stale fixture — either keep a copy of an older release binary aside first, or stand up a
   stub gRPC server that answers `GetServerInfo` with `UNIMPLEMENTED`.
 - **`--check`** requires `-o` (exit 2 otherwise), writes nothing, and exits 1 when the target is
@@ -1625,7 +1801,7 @@ definition deriving from `pysysml.typed.TypedObject`. Useful facts when testing 
   command and kills your own session. Rebuilding leaves the old process serving a `(deleted)`
   binary, which silently tests the previous revision.
 - `python/tests/test_lifecycle.py::TestLifecycleRobustness::test_service_shuts_down_when_last_process_exits`
-  fails (`FileNotFoundError: ~/.pysysml/sysml-grpc.pid`) whenever an externally started service is
+  fails (`FileNotFoundError: ~/.opensysml/sysml-grpc.pid`) whenever an externally started service is
   already listening on 50051 — a known service-ownership gap, reproducible on `main`. Confirm on a
   `main` worktree before reporting it as a regression.
 - Do not try to force a type mismatch inside the model — the checker rejects
@@ -1638,7 +1814,7 @@ definition deriving from `pysysml.typed.TypedObject`. Useful facts when testing 
 The runtime supplies bodies for the function-library declarations in
 `internal/core/runtime/library_functions.go`; the non-normative extensions
 (`exp`, `ln`, `log`, `atan2`) live in
-`internal/core/libs/stdlib/Systemica Libraries/SystemicaMathFunctions.kerml`.
+`internal/core/libs/stdlib/OpenSysML Libraries/OpenSysMLMathFunctions.kerml`.
 Testing notes that generalize to any future built-in:
 
 - The fastest end-to-end surface is the batch flag, which loads a model *and* evaluates
@@ -1649,7 +1825,7 @@ Testing notes that generalize to any future built-in:
 - **`-e` is evaluated in the root scope, not inside the model's package.** So a model that declares
   its own `calc def exp` is *not* exercised by `-e "exp(2.0)"` (that hits the built-in). To prove
   shadowing, either use the FQN (`-e "OwnExp::exp(2.0)"`) or read it out of an attribute default
-  with `%instantiate`/`%slots`. Getting this wrong looks exactly like a shadowing bug.
+  with `%instantiate`/`%features`. Getting this wrong looks exactly like a shadowing bug.
 - Results print to **two decimals**, which hides precision differences. To assert exactness, compare
   in the model instead: `-e "log(1000.0, 10.0) == 3.0"` → `= true` (the naive `ln(x)/ln(base)`
   gives 2.9999999999999996 and would print `= 3.00` while being `false`).
@@ -1661,7 +1837,7 @@ Testing notes that generalize to any future built-in:
 - A **bare** call with no `import` still evaluates (the unqualified-name table is always in force)
   but the checker prints `error: unresolved reference: <name>` for the same call inside a
   declaration. That divergence is a known rough edge of the built-in dispatch, not a new bug —
-  report it as expected, and use `import SystemicaMathFunctions::*;` in fixtures to avoid it.
+  report it as expected, and use `import OpenSysMLMathFunctions::*;` in fixtures to avoid it.
 - Fixture gotchas when writing action fixtures by hand: `done` is a reserved keyword (use another
   name), a body has one start so only one `first` end (chain the rest as `first a then b; then b c;`
   — two `first` ends yield `action has multiple initial nodes`), and `and`/`or` are
@@ -1705,7 +1881,7 @@ Three cheap, high-signal sweeps:
    `redefines;`, `redefines = 5;`, `subsets ;`, `crosses ;` were accepted **silently** and their
    symbol twins `:>>;`, `:>> = 5;`, `:> ;`, `=> ;` all reported `expected a name`. A silently
    accepted member is invisible in a `✓ package T` line — always pair the load with
-   `%instantiate`/`%slots` to see what the member actually did (there, nothing).
+   `%instantiate`/`%features` to see what the member actually did (there, nothing).
 3. **LSP diagnostics without an editor** — drive `bin/sysml-lsp` over stdio with ~15 lines of Python
    (`initialize`, `initialized`, `textDocument/didOpen`, sleep 3, read stdout) and count
    `"severity":1` in the `publishDiagnostics` notification. A file with **no** diagnostics produces
@@ -1722,7 +1898,7 @@ Three cheap, high-signal sweeps:
    `NO RESPONSE`/zero diagnostics, which looks like a pass — re-run with a longer wait before
    believing an empty result.
 5. **Naming probes for a `<shortName>` change** — for `attribute <sn> redefines x = 5;` the
-   assertions that separate working from broken are: `%slots` lists the member as **`x = 5`**
+   assertions that separate working from broken are: `%features` lists the member as **`x = 5`**
    (broken revisions show `sn = 5` with `x = 1`, or a bogus `redefines = <unknown>` slot);
    `%eval T::A::x` **and** `%eval T::A::sn` both evaluate; and an action body doing
    `assign total := total + x` completes instead of `unresolved reference: x`. Load-level `✓ package T`
@@ -1763,7 +1939,7 @@ not a regression.
 
 Adversarial cases for name derivation: a member with two redefinitions
 (`attribute <sn> redefines x, y = 9;`) derives *no* name from them, so it answers to its short name
-(`%slots` shows `sn = 9` and leaves `x`/`y` at their inherited values) with no diagnostic — assert
+(`%features` shows `sn = 9` and leaves `x`/`y` at their inherited values) with no diagnostic — assert
 which key the value landed under rather than assuming it was dropped. REPL call syntax: named
 arguments work as `Scaled(x = 7, factor = 5)`, but *mixing* positional and named
 (`Scaled(7, factor = 5)`) is a parse error on every revision — don't read that as a
@@ -1775,7 +1951,7 @@ A name in the unit position of `x [u]` is an ordinary feature reference, so it r
 **nearest** declaration and then must conform to a measurement unit. Testing anything in this area:
 
 - There are **four** evaluator paths that reach a unit name and they must agree: a slot
-  (`%instantiate` + `%slots`), an action (`%action`), a calc (`%calc`), and a constraint
+  (`%instantiate` + `%features`), an action (`%action`), a calc (`%calc`), and a constraint
   (`%constraint`). The constraint path historically diverged — it reached past a nearer declaration
   and silently converted in metres, giving a *wrong answer with no error*, so always include
   `%constraint` and assert the diagnostic, never just "the other three agree".
@@ -1829,9 +2005,9 @@ formats the magnitude like a bare Real (`%action test::propagate` +`%continue` o
 `h = -0.42 [m]`, `v = -42.86 [m/s]`; raw floats such as `17.19999999999997 [s]` are the pre-fix
 signature). Note the action in that file is named **`propagate`**, not `descent`.
 
-## Multiplicity, subsetting and collection slots in `%slots`
+## Multiplicity, subsetting and collection slots in `%features`
 
-`%slots` is the cheapest window on instantiation semantics, and the interesting values are all in
+`%features` is the cheapest window on instantiation semantics, and the interesting values are all in
 its output rather than in an exit code — so assert on the exact rendered text:
 
 - `part xs : C[*]` should print `xs = []` (an empty collection). `<error: multiplicity violation:
@@ -1957,24 +2133,24 @@ Traps found while testing it:
 The GUI is on `DISPLAY=:0` (`:1` does not exist here — `wmctrl` will say "Cannot open display").
 
 ```bash
-cd /home/ubuntu/repos/Systemica && (DISPLAY=:0 konsole --hide-menubar >/dev/null 2>&1 &)
+cd /home/ubuntu/repos/OpenSysML && (DISPLAY=:0 konsole --hide-menubar >/dev/null 2>&1 &)
 DISPLAY=:0 wmctrl -a "Konsole"
 DISPLAY=:0 wmctrl -r :ACTIVE: -b add,maximized_vert,maximized_horz
 ```
 
 Enlarge the font before recording with the `ctrl+plus` key combo a few times (`ctrl+shift+plus`
 types literal `+` characters into the shell instead of zooming). Konsole starts a shell whose PATH
-lacks the Python that `pip install -e python/` installed into, so `import pysysml` fails there while
-it works from a tool shell; run `source ~/pysysml-venv/bin/activate` (or
+lacks the Python that `pip install -e python/` installed into, so `import opensysml` fails there while
+it works from a tool shell; run `source ~/opensysml-venv/bin/activate` (or
 whichever interpreter `python -c 'import sys; print(sys.executable)'` reports in the tool shell)
-as a setup step before recording. `~/pysysml-venv` may not exist at all, and the default `python3`
+as a setup step before recording. `~/opensysml-venv` may not exist at all, and the default `python3`
 on PATH can be another project's venv (e.g. `~/repos/fprime/fprime-venv`) whose older
-`google.protobuf` makes `import pysysml` die with
+`google.protobuf` makes `import opensysml` die with
 `cannot import name 'runtime_version' from 'google.protobuf'`. The reliable fallback is a throwaway
 venv off the system interpreter:
 `/usr/bin/python3 -m venv /tmp/pv && /tmp/pv/bin/pip install -e python/` (~1 min), then
 `source /tmp/pv/bin/activate` in Konsole. Also re-copy the freshly built service
-(`make build-grpc && cp bin/sysml-grpc ~/.pysysml/bin/`) or the auto-start path serves a stale
+(`make build-grpc && cp bin/sysml-grpc ~/.opensysml/bin/`) or the auto-start path serves a stale
 revision. Discover expected values with the
 piped-stdin form *before* recording, so the recorded run is one clean pass; anything only verified
 over a pipe is not visible in the video and should be reported as weaker evidence.
@@ -2018,7 +2194,7 @@ Two ways to drive it:
 
 Completion cases worth covering, and their shapes: a unique meta-command prefix completes in place
 (`%bui`+TAB → `%builtins`), an ambiguous one lists on the second TAB
-(`%s`+TAB TAB → `%satisfy %save %search %slots %state %step %stop`), names after `%eval` come from
+(`%s`+TAB TAB → `%satisfy %save %search %features %state %step %stop`), names after `%eval` come from
 session declarations, builtin function names and the library (`sqr`→`sqrt`), a qualified prefix
 offers **one segment at a time** (`ScalarValues::`+TAB lists only that package's members, never the
 whole library; `ScalarValues`+TAB inserts the `::` and lists the same members), and `%load`/`%save`
@@ -2055,7 +2231,7 @@ on `main`; the "old" shapes double as A/B canaries against the parent commit.
   copy would show as `3.00`.
 - **Untyped/anonymous connectors used to read `<unknown>`.** `interface iface connect a.p to b.q;`
   (and `connection untyped connect …`, `allocation alloc allocate a to b`, KerML `connector`)
-  materialize on the stdlib base. A bare `connect a.p to b.q;` has no slot name, so `%slots` renders
+  materialize on the stdlib base. A bare `connect a.p to b.q;` has no slot name, so `%features` renders
   it as a synthetic `(anonymous <keyword>) = Instance(ID: n)` line with its ends indented under it —
   those lines are printed *after* all the real features, and their ends are shown without nested
   values. Pre-fix, the named untyped usage printed `iface = <unknown>` and the bare one printed
@@ -2078,9 +2254,9 @@ on `main`; the "old" shapes double as A/B canaries against the parent commit.
 - **`flow f from a.p to b.p` and `binding bnd bind a.p = b.p` now parse as named declarations**
   (pre-fix: `expected 'to' between flow ends` / `expected '{' or ';' after declaration`). They are
   *not* connector usages for materialization purposes, so a named `flow` still renders
-  `f = <unknown>` and a named `binding` gets no `%slots` line at all. Don't plan an end-identity
+  `f = <unknown>` and a named `binding` gets no `%features` line at all. Don't plan an end-identity
   assertion on them.
-- **Variant-interface routing is only partly reachable from the REPL.** `%slots` proves the
+- **Variant-interface routing is only partly reachable from the REPL.** `%features` proves the
   *materialization* side: in
   `internal/core/runtime/testdata/conformance/ballandchain_variant_configuration.sysml` the selected
   `engagementRingToBand = engagementRingToBandConnected (Instance ID: 24)` holds
@@ -2098,7 +2274,7 @@ on `main`; the "old" shapes double as A/B canaries against the parent commit.
 - **Cheap end-to-end fixture for the whole family:** `internal/core/runtime/testdata/conformance/`
   `connector_end_identity.sysml`, `ballandchain_interface_connected.sysml` and
   `…_disconnected.sysml`; each `.expected.json` has an `identical` / `distinct` array that names
-  exactly which end must be which port — the cheapest source of the IDs `%slots` should tie together.
+  exactly which end must be which port — the cheapest source of the IDs `%features` should tie together.
 - Ball-and-chain reference numbers, for asserting the cost roll-up did not shift:
   `totalCost = 1450.00`, `band` `bandCost`/`ringCost` `= 400.00`, `engagementRing`
   `engagementRingCost`/`ringCost` `= 500.00`, `diamondCost = 550.00`, and
@@ -2242,8 +2418,8 @@ Discovered while testing inline `entry action { … }` bodies and calc `out` ass
   `perform` in the statement-form body `entry { … perform Work; }` executed). It is a good
   discriminating fixture whenever body lowering changes.
 - **Calc `out` features:** read them through a usage (`calc c : Def { in n = 5; } attribute a :
-  Integer = c.a;`) and inspect with `%slots <part>`; a failing read shows inline as
-  `a: <error: slot p.a: …>` rather than aborting the listing, so one `%slots` can carry several
+  Integer = c.a;`) and inspect with `%features <part>`; a failing read shows inline as
+  `a: <error: slot p.a: …>` rather than aborting the listing, so one `%features` can carry several
   independent negative assertions. Useful expected strings: `no value: output never assigned`,
   `output bound more than once` (declaration value plus a body assignment; two *body* assignments
   are legal, the last one winning), `assignment outside the calculation body: <name> is not declared
@@ -2325,7 +2501,7 @@ object whose type conforms to the type declaring the condition, else declared de
   `Assertion evaluated to false: <condition>`), `? … could not be evaluated` exit 2 — and grep the
   **verdict line only** for the old wording: the `Error:` reason legitimately contains the words
   "evaluation failed", so a bare `grep -c failed` over the whole output is a false positive.
-  `%slots` mirrors the three states as `<constraint: satisfied>` / `<constraint: violated>` /
+  `%features` mirrors the three states as `<constraint: satisfied>` / `<constraint: violated>` /
   `<constraint: not evaluated: …>` (the `not evaluated:` prefix is #180's). `-json` reports
   `"status": "unresolved"`, `"exit": 2` and the same `?` line.
 - CLI checks refuse to run at all on a model that does not analyse cleanly
@@ -2339,7 +2515,7 @@ object whose type conforms to the type declaring the condition, else declared de
   declared default and prints **no** `(on …)`. Subtype carriers (`part hotter :> hot`) work too.
 - Still a blind spot after #180: a **nested part** whose value is redefined on the instantiated
   object is not the subject. With `part o : Outer { part :>> b { attribute :>> c = 99.0; } }`,
-  `%slots A::o` shows `c = 99.00` and `small: <constraint: violated>`, yet `%eval A::Outer::b::c`
+  `%features A::o` shows `c = 99.00` and `small: <constraint: violated>`, yet `%eval A::Outer::b::c`
   answers `= 5.00` and `%constraint A::Inner::small` says `passed` (identical on the parent
   commit, so it is pre-existing, not a regression — but it reads as a contradiction and may be
   worth flagging). Also `%eval A::b::c` (skipping the def segment) is `unresolved reference` in
@@ -2348,12 +2524,12 @@ object whose type conforms to the type declaring the condition, else declared de
   `%requirement` and `%satisfy` evaluate the nested object and *name* it: with
   `part o : Outer { part :>> b { attribute :>> c = 50.0; } }`,
   `%constraint A::Inner::small` answers `✗ Constraint A::Inner::small failed (on A::o::b ID: 2)` —
-  `<session-held root>::<feature path>`, matching the `b = Instance(ID: 2)` line of `%slots A::o`.
+  `<session-held root>::<feature path>`, matching the `b = Instance(ID: 2)` line of `%features A::o`.
   Assert the *whole* suffix: a build that regressed to the outer holder still prints a `✗`, and the
   pre-#236 binary prints the same `✗` line with **no suffix at all**, so ✓/✗ alone proves nothing.
   Ordinary (non-nested) checks keep labelling the object handed in (`(on A::w ID: 3)`), and a
   no-object run still prints no suffix.
-  - Such a label is **descriptive, not addressable**: `%slots A::o::b` answers
+  - Such a label is **descriptive, not addressable**: `%features A::o::b` answers
     `error: no instance of "A::o::b"` and `%instances` lists only `A::o`. Worth reporting whenever
     label spelling changes, and a good adversarial step after any "name the subject" PR.
   - Multiplicity-materialized subjects read `(on A::car::wheels ID: 2)` in the REPL while gRPC still
@@ -2370,9 +2546,9 @@ object whose type conforms to the type declaring the condition, else declared de
   containment → `Leaf #2 (leaf), Leaf #5 (next::leaf)`. Always time the recursive/mutual fixtures
   (`time ./bin/sysml recursive.sysml < cmds`, ~0.22 s) whenever the occurrence key changes.
 - **gRPC classifies an ambiguity since PR #236:** `FailureReason.FAILURE_REASON_AMBIGUOUS_SUBJECT`
-  (enum 3, `api/proto/sysml.proto`). pysysml exposes **no public property** for it — read
+  (enum 3, `api/proto/sysml.proto`). opensysml exposes **no public property** for it — read
   `verdict._pb.failure_reason` and name it with
-  `from pysysml.proto import sysml_pb2 as pb; pb.FailureReason.Name(...)`; `Verdict` has no
+  `from opensysml.proto import sysml_pb2 as pb; pb.FailureReason.Name(...)`; `Verdict` has no
   `failure_reason` attribute and `connection._failure_of` maps only `WRONG_KIND`, so a client
   wanting to branch on ambiguity today reaches into a private field. An ordinary violated condition
   comes back `holds=False` with `FAILURE_REASON_UNSPECIFIED` (0), i.e. "plain violation" is the unset
@@ -2388,7 +2564,7 @@ object whose type conforms to the type declaring the condition, else declared de
 - Konsole typing trap: the `✗` glyph does not survive the computer tool's `type` action into a
   shell command (it arrives empty, and `grep -e ''` then matches every line). Build the pattern in
   the shell instead: `X=$(printf '\u2717'); … | grep -nE "$X|could not be evaluated"`.
-- `%slots <usage>` is the independent oracle — `inRange: <constraint: violated>` must agree with
+- `%features <usage>` is the independent oracle — `inRange: <constraint: violated>` must agree with
   the verdict for the same object. Declaring anything new in the REPL drops all instances, so a
   following check silently reverts to defaults (assert the missing `(on …)` suffix there).
 
@@ -2524,10 +2700,10 @@ number rather than quoting the table.
   state counts (`docs/project/spec-compliance.md`, `README.md`, `docs/project/roadmap.md`,
   `docs/project/training-examples.md`) and must be updated in one commit; anywhere else, link to
   spec-compliance rather than adding a fifth copy.
-- **Error-class claims: check the export path.** A class can exist in `pysysml.errors` and be absent
-  from the package surface — `hasattr(pysysml, name)` is the check, and
+- **Error-class claims: check the export path.** A class can exist in `opensysml.errors` and be absent
+  from the package surface — `hasattr(opensysml, name)` is the check, and
   `TestPackageSurface` in `python/tests/test_errors.py` now locks every exception in
-  `errors.__all__` onto `pysysml`.
+  `errors.__all__` onto `opensysml`.
 - **LSP capability claims** are cheap to check with a framed JSON-RPC driver: assert
   `semanticTokensProvider` has `full: true`, `range: true` and no `delta` key anywhere, that
   `range` returns strictly fewer tokens than `full`, that `semanticTokens/full/delta` answers
@@ -2548,8 +2724,8 @@ number rather than quoting the table.
   `m.eval('mass', subject='Demo::sedan')` must be `1200.0`. Without the redefinition both paths
   return the same number and the test proves nothing.
   - On `Model` the kwarg is `subject=`; on `Connection.eval` it is `subject_symbol_id=` and the
-    model hash comes **second**. Module-level `pysysml.evaluate` also takes `subject=`; the
-    deprecated `pysysml.eval` forwards to it and warns `DeprecationWarning`.
+    model hash comes **second**. Module-level `opensysml.evaluate` also takes `subject=`; the
+    deprecated `opensysml.eval` forwards to it and warns `DeprecationWarning`.
   - A `subject=` plus an explicit `context_symbol_id=` still reads the object, and derived slots
     (`attribute doubled = mass * 2.0`) follow the object too.
   - A *definition* as subject is accepted (it is instantiated and reads its own redefinition), and an
@@ -2560,7 +2736,7 @@ number rather than quoting the table.
 - **Cross-checking against the REPL needs fully-qualified expressions.** `%eval mass` on a model with
   several `mass` features fails with `symbol "mass" is ambiguous`, whereas gRPC `subject=` resolves
   the unqualified name inside the subject's scope. Use `%instantiate Demo::sedan` then
-  `%eval Demo::sedan::mass` / `%slots Demo::sedan` to compare; that is a surface divergence in name
+  `%eval Demo::sedan::mass` / `%features Demo::sedan` to compare; that is a surface divergence in name
   resolution, not a wrong value. Drive it non-interactively with
   `printf '%%load …\n%%instantiate …\n%%eval …\n%%quit\n' | ./bin/sysml`.
 - **Attribute metadata checks worth making**: own attributes come before inherited ones; a
@@ -2574,7 +2750,7 @@ number rather than quoting the table.
   `None`)**, so "attributes of a stdlib element" can only be covered indirectly: declare
   `attribute m : ISQBase::MassValue = 3.0 [kg];` in your own model and assert the *resolved* type
   string `ISQBase::MassValue`.
-- **Generated classes**: `python -m pysysml.generate model.sysml -o out.py` then actually `import` the
+- **Generated classes**: `python -m opensysml.generate model.sysml -o out.py` then actually `import` the
   module — an MRO bug only surfaces at import as
   `TypeError: Cannot create a consistent method resolution order`. Assert `cls.__mro__` names against
   the model (include multiple supertypes and a diamond), that a `:>>`/`subsets` feature inherits the
@@ -2584,21 +2760,21 @@ number rather than quoting the table.
   `# specializes ISQBase::MassValue, which has no generated class`.
 - **Quantity results carry the scalar on `Quantity.magnitude`, not `.value`** — a probe using `.value`
   reports a false failure even when the runtime is correct.
-- **A stale `~/.pysysml/bin/sysml-grpc` silently blocks the subject/attribute surface.** These features
-  are capability-gated (`evaluate_subject`, `symbol_attributes` in `pysysml/capabilities.py`), so a
+- **A stale `~/.opensysml/bin/sysml-grpc` silently blocks the subject/attribute surface.** These features
+  are capability-gated (`evaluate_subject`, `symbol_attributes` in `opensysml/capabilities.py`), so a
   service built before they landed makes `conn.eval(..., subject_symbol_id=…)` /
   `attribute_facts()` / `to_dataframe()` raise `MissingCapabilityError` instead of answering — which
   looks like a client bug. Always reinstall the binary before testing a merge:
-  `make build-grpc && pkill -x sysml-grpc && rm -f ~/.pysysml/sysml-grpc-50051.pid ~/.pysysml/sysml-grpc-50051.lock && cp bin/sysml-grpc ~/.pysysml/bin/`
+  `make build-grpc && pkill -x sysml-grpc && rm -f ~/.opensysml/sysml-grpc-50051.pid ~/.opensysml/sysml-grpc-50051.lock && cp bin/sysml-grpc ~/.opensysml/bin/`
   (the `cp` fails with `Text file busy` while the old one still runs), then assert
   `sorted(conn.server_info().capabilities)` contains both names before trusting any result.
 - **The auto-started service dies with the session that started it.** After an interactive
-  `pysysml` REPL exits, `PYSYSML_REQUIRE_SERVICE=1 pytest tests/` aborts during collection with
-  `$PYSYSML_REQUIRE_SERVICE is set … but none answers on localhost:50051`. Start one yourself first:
-  `nohup ~/.pysysml/bin/sysml-grpc -port 50051 >/tmp/svc.log 2>&1 &`.
+  `opensysml` REPL exits, `OPENSYSML_REQUIRE_SERVICE=1 pytest tests/` aborts during collection with
+  `$OPENSYSML_REQUIRE_SERVICE is set … but none answers on localhost:50051`. Start one yourself first:
+  `nohup ~/.opensysml/bin/sysml-grpc -port 50051 >/tmp/svc.log 2>&1 &`.
 - **`PINNED_SHA256` is nested `repo -> version -> asset`.** To exercise the *contradicted* digest arm
   you must inject the key for the repository actually in use, e.g.
-  `binary.PINNED_SHA256['Open-MBEE/Systemica'] = {'v0.0.8': {'sysml-grpc-linux-amd64': 'de'*32}}`
+  `binary.PINNED_SHA256['Open-MBEE/OpenSysML'] = {'v0.0.8': {'sysml-grpc-linux-amd64': 'de'*32}}`
   (`DEFAULT_GITHUB_REPO`, looked up case-sensitively, so the spelling must match exactly);
   a mis-cased, flat or `in`-substring patch leaves the pin absent and you silently re-test the *unpinned* arm
   (`UnpinnedReleaseError` + kept cache) while believing you tested the contradiction.
@@ -2661,7 +2837,7 @@ tiers**, and testing one proves nothing about the other:
 
 Consequences worth checking on every change here:
 
-- `%slots <instance>` renders a bad slot inline as `name: <error: slot …>` and the REPL still
+- `%features <instance>` renders a bad slot inline as `name: <error: slot …>` and the REPL still
   **exits 0** — a violation is not a session error. For an exit status you need a run that reads the
   slot, e.g. `sysml m.sysml -instantiate test::bad -eval 'test::bad.few'` → exit **2** with
   `evaluation failed: slot bad.few: multiplicity violation: …`.
@@ -2687,7 +2863,7 @@ Fixtures live in `internal/core/runtime/testdata/conformance/multiplicity_defaul
 (merged / composite / nonconforming / redefinition). Drive them over a pipe to discover values:
 
 ```bash
-printf '%%load internal/core/runtime/testdata/conformance/multiplicity_default_merged.sysml\n%%instantiate test::ranges\n%%slots test::ranges\n%%quit\n' | timeout 60 ./bin/sysml
+printf '%%load internal/core/runtime/testdata/conformance/multiplicity_default_merged.sysml\n%%instantiate test::ranges\n%%features test::ranges\n%%quit\n' | timeout 60 ./bin/sysml
 ```
 
 Expected: `exact = [1.00, 2.00, 3.00]`, `star = [1.00, 2.00]`, `empty = []`, `plus = [5.00]`,
@@ -2734,8 +2910,8 @@ Discriminators that separate a working string runtime from a broken one:
   reviewer exactly what ran.
 - At the `sysml>` prompt a bare expression like `("a","b")->includes("b")` is parsed as a
   declaration (`1:1: error: expected a namespace member`). Prefix expressions with `%eval`.
-- `%slots <PartDefName>` (not the part usage path) is what follows `%instantiate <PartDefName>`;
-  `%slots Msg::g` reports `no instance of "Msg::g"`.
+- `%features <PartDefName>` (not the part usage path) is what follows `%instantiate <PartDefName>`;
+  `%features Msg::g` reports `no instance of "Msg::g"`.
 - **Escapes are stored raw**, so `Length("a\"b")` is 4 and the value renders as `"a\\\"b"`. This is
   pre-existing lexer behavior (identical on the parent commit) — verify against a contrast binary
   before reporting it as a string-runtime defect.
@@ -2789,8 +2965,8 @@ checks shows up here and nowhere else.
   recursive calc; recursion through a calc named like a library function (`max`); mutual recursion
   (`isEven`/`isOdd`, whose result for an odd argument is `false`).
 - **There is no `%check` command.** To evaluate an `assert constraint` whose body calls a recursive
-  calc, use `%instantiate <DefName>` then `%slots <DefName>` — note both take the **def** name, not
-  the usage (`%slots P::w` answers `no instance of "P::w"`). A satisfied constraint renders
+  calc, use `%instantiate <DefName>` then `%features <DefName>` — note both take the **def** name, not
+  the usage (`%features P::w` answers `no instance of "P::w"`). A satisfied constraint renders
   `deepOK: <constraint: satisfied>`; a runaway one renders per-slot as
   `spinny: <constraint: not evaluated: … calc recursion limit exceeded …>` and the session survives.
 
@@ -2805,23 +2981,23 @@ checks shows up here and nowhere else.
 that over-reports would look identical otherwise. Because the pre-fix binary printed `no errors`
 for all three, the contrast binary from the parent commit is what makes this evidence conclusive.
 
-## pysysml service ownership and the require-service gate (PR #204)
+## opensysml service ownership and the require-service gate (PR #204)
 
 Ownership is the claim worth testing by hand, because pytest can pass while the invariant is
 broken. Three probes, each with a state dir of its own so nothing collides:
 
 ```bash
-PY=~/pysysml-venv/bin/python          # ls -d /home/ubuntu/*venv* if it is missing
-cp bin/sysml-grpc ~/.pysysml/bin/     # what CI does; otherwise ensure_binary downloads
+PY=~/opensysml-venv/bin/python          # ls -d /home/ubuntu/*venv* if it is missing
+cp bin/sysml-grpc ~/.opensysml/bin/     # what CI does; otherwise ensure_binary downloads
 PORT=$($PY -c 'import socket;s=socket.socket();s.bind(("localhost",0));print(s.getsockname()[1])')
 ```
 
 - **Foreign service:** start `bin/sysml-grpc -port $PORT` from the shell, then in one
-  `PYSYSML_STATE_DIR=/tmp/stateN` python process `Connection(port=P, auto_start=False)`,
-  `pysysml.connect(port=P)` (the adopt path) and a connection left open at exit. Expect the
+  `OPENSYSML_STATE_DIR=/tmp/stateN` python process `Connection(port=P, auto_start=False)`,
+  `opensysml.connect(port=P)` (the adopt path) and a connection left open at exit. Expect the
   shell's pid to still be alive and the state dir to hold **only** `sysml-grpc-<port>.lock` — a
-  `sysml-grpc-<port>.pid` for a service pysysml did not spawn is the bug.
-- **Own service:** `pysysml.connect(port=<free>)` writes
+  `sysml-grpc-<port>.pid` for a service opensysml did not spawn is the bug.
+- **Own service:** `opensysml.connect(port=<free>)` writes
   `{"pid","create_time","port","owner_pid","owner_create_time"}`; assert `create_time` equals
   `psutil.Process(pid).create_time()` and `owner_pid == os.getpid()`. Two connections must keep it
   alive when the first closes, and the last close (or plain interpreter exit, via `atexit`) must
@@ -2835,9 +3011,9 @@ PORT=$($PY -c 'import socket;s=socket.socket();s.bind(("localhost",0));print(s.g
 
 Suite counts as PR #204 merged (`cd python && $PY -m pytest tests/ -q`): **413 passed / 13 skipped**
 with no service; **423 passed / 3 skipped** with a service on 50051 and
-`PYSYSML_REQUIRE_SERVICE=1`, the
+`OPENSYSML_REQUIRE_SERVICE=1`, the
 3 remaining skips being mypy-not-installed and a manual-binary-cache case, never a service skip.
-With `PYSYSML_REQUIRE_SERVICE=1` and no service, collection must **error** (exit 2,
+With `OPENSYSML_REQUIRE_SERVICE=1` and no service, collection must **error** (exit 2,
 "none answers on localhost:50051"), never skip. A whole run must leave an operator-started service
 on 50051 with the same pid.
 
@@ -2964,21 +3140,22 @@ first, then clear at the shell (this also rules out `clear; %load …` as a one-
 asset and dies with `HTTP Error 403: rate limit exceeded` once the unauthenticated budget is spent;
 it reads `$GITHUB_TOKEN`. Set it without putting the token on camera:
 `read -rs GITHUB_TOKEN; export GITHUB_TOKEN`. Careful with `--version <tag> --write`: it edits
-`python/pysysml/binary.py`, so `git checkout python/pysysml/binary.py` afterwards. For the
+`python/opensysml/binary.py`, so `git checkout python/opensysml/binary.py` afterwards. For the
 "release publishes no assets" refusal use an old tag (`v0.0.4`) — v0.0.5..v0.0.8 all publish
 binaries now. The unpinned-download refusal is testable offline-ish with
 `HOME=/tmp/fakehome $PY -c "...ensure_binary(version='v9.9.9')"`, which keeps the real
-`~/.pysysml/bin` cache intact; the opt-in out of it is per repository
-(`PYSYSML_ALLOW_UNPINNED_DOWNLOAD=<owner/repo>`, or `=1` for any).
+`~/.opensysml/bin` cache intact; the opt-in out of it is per repository
+(`OPENSYSML_ALLOW_UNPINNED_DOWNLOAD=<owner/repo>`, or `=1` for any).
 
 ## Quantities on the wire: `Value.quantity` and the Python `Quantity` (PR #200)
 
-Once the service can marshal `runtime.ValQuantity`, a quantity slot no longer reads as
-`SlotError: slot 'm': unsupported: quantity value` but as `pysysml.values.Quantity`. The
+Once the service can marshal `runtime.ValQuantity`, a quantity feature no longer reads as
+`FeatureValueError: feature value 'm': unsupported: quantity value` but as
+`opensysml.values.Quantity`. The
 highest-value evidence is the **parent-commit contrast** (build `/tmp/old-sysml-grpc` from the
-commit before the change, swap it into `~/.pysysml/bin/sysml-grpc`, clear
-`~/.pysysml/sysml-grpc.{pid,refcount}`, run the same script): the old service raises the SlotError
-while a plain `ScalarValues::Real` slot still reads `2.0`, so the frame proves the delta.
+commit before the change, swap it into `~/.opensysml/bin/sysml-grpc`, clear
+`~/.opensysml/sysml-grpc.{pid,refcount}`, run the same script): the old service raises the error
+while a plain `ScalarValues::Real` feature still reads `2.0`, so the frame proves the delta.
 
 What to assert on the decoded value, and why each one distinguishes working from broken:
 
@@ -2997,7 +3174,7 @@ What to assert on the decoded value, and why each one distinguishes working from
 - Quantities also come back from `conn.eval("5.4 [SI::km/SI::h]", hash, context_symbol_id=pkg)`,
   from a nested child (`inst.engine.power`), inside sequences (`LengthValue[3]` → `list[Quantity]`),
   and on a `verify_constraint` verdict — filter `verdict.instances` on `verdict.instance_id` and
-  read the slot off that instance.
+  read the feature value off that instance.
 - Comparison semantics worth pinning: `1 [SI::km] == 1000.0 [SI::m]` is True and the two hash
   alike; ordering/adding incommensurable units raises `IncommensurableUnitsError` naming both
   reductions (`cannot order a quantity in [SI::km] and one in [SI::kg]: … 1000·SI::metre …
@@ -3034,41 +3211,41 @@ inside a `ValueSequence` input (the error still names the top-level input). Trap
 
 ### Generated typed classes and mypy
 
-`pysysml-generate <model> -o out.py` (or `python -m pysysml.generate`) types a quantity property
-`-> _t.Quantity` with `_t.slot(self, "x", _t.as_quantity)`. Only slots with a **declared** quantity
+`opensysml-generate <model> -o out.py` (or `python -m opensysml.generate`) types a quantity property
+`-> _t.Quantity` with `_t.feature_value(self, "x", _t.as_quantity)`. Only features with a **declared** quantity
 type get it: an untyped derived attribute (`attribute derivedSpeed = 10.0 [SI::m] / 2.0 [SI::s];`)
 has no type facts and still generates `-> object` / `_t.as_object`, even though the runtime value is
 a `Quantity`. Don't read that as a bug in the quantity typing.
 
 To make mypy actually enforce it, **set `MYPYPATH` to the repo's `python/` directory** — without it
-mypy cannot resolve the editable-installed `pysysml`, silently treats `_t.Quantity` as `Any` and
+mypy cannot resolve the editable-installed `opensysml`, silently treats `_t.Quantity` as `Any` and
 reports *no* errors on obvious misuse (a false pass that looks like a passing test):
 
 ```bash
-cd /tmp/qw && MYPYPATH=/home/ubuntu/repos/Systemica/python \
+cd /tmp/qw && MYPYPATH=/home/ubuntu/repos/OpenSysML/python \
   $HOME/pv/bin/python -m mypy --no-incremental --no-error-summary --follow-imports=silent misuse.py
 # -> Unsupported operand types for + ("Quantity" and "float")  [operator]
 # -> Incompatible types in assignment (expression has type "Quantity", variable has type "float")
 ```
 
-`mypy` must be present in the same venv as `pysysml` ($HOME/pv here); otherwise the typed-codegen
+`mypy` must be present in the same venv as `opensysml` ($HOME/pv here); otherwise the typed-codegen
 tests skip rather than fail.
 
 ## The evaluate/eval split and generated-base planning (PR #218)
 
-- **Since the rename, `pysysml.evaluate` is the real module-level evaluator and `pysysml.eval` is a
-  forwarder that emits `DeprecationWarning` and is out of `pysysml.__all__`.** Test both sides:
+- **Since the rename, `opensysml.evaluate` is the real module-level evaluator and `opensysml.eval` is a
+  forwarder that emits `DeprecationWarning` and is out of `opensysml.__all__`.** Test both sides:
   `evaluate(...)` must produce **zero** DeprecationWarnings (catch them with
   `warnings.catch_warnings(record=True)` + `simplefilter("always")`), `eval(...)` must return the
-  identical value and warn exactly once with a message naming `pysysml.evaluate`, and
-  `from pysysml import *` must bind `evaluate` but not `eval`. `subject` is the **last** parameter of
+  identical value and warn exactly once with a message naming `opensysml.evaluate`, and
+  `from opensysml import *` must bind `evaluate` but not `eval`. `subject` is the **last** parameter of
   `evaluate` precisely so a pre-rename positional call
   `eval(expr, None, hash, None, host, port)` still binds host/port — prove that argument really is the
   host by also calling it with a bogus address (`"203.0.113.9", 59999`) and requiring a
   `ConnectionError`; that call takes ~30-60s to time out, so give the runner a generous timeout.
-- **`pysysml.errors.RuntimeError` is a warn-on-access alias of `ExecutionError`** served by the module
+- **`opensysml.errors.RuntimeError` is a warn-on-access alias of `ExecutionError`** served by the module
   `__getattr__` and absent from `errors.__all__`. Check it by *catching a real failure* with it
-  (`except pysysml.errors.RuntimeError` around a cyclic-slot eval), not just by identity.
+  (`except opensysml.errors.RuntimeError` around a cyclic-slot eval), not just by identity.
 - **`generate.py` elides a base that another declared base already specializes, silently and by design**
   (`_without_implied`): `part def Backwards :> Vehicle, Hybrid` where `Hybrid :> Vehicle` emits
   `class Backwards(Hybrid):` with **no** comment, because `Vehicle` is still in the MRO. Only a base the
@@ -3269,3 +3446,615 @@ parent** before trusting it:
 - Keep probe files out of the repo tree before running the gates (`rm` it, keep a `.txt` copy in
   the fixtures dir) and confirm `git status --porcelain` is empty on camera, so the gates clearly
   reflect the committed tree.
+
+## Guarded successions in action flows (PR #266 and anything touching `enabledSuccessions`)
+
+Guards on successions out of *ordinary* nodes (`first s1 if c then s2;`, `then s1 s2 if c;`) are
+evaluated in `ActionExecutor.enabledSuccessions`; a failing guard prunes the edge and the flow just
+ends there (`Final state: Completed`, not an error). Test it end to end as
+`%load <file>` → `%action <pkg>::<action>` → `%continue` → read the `Results:` block.
+
+Traps and recipes:
+
+- **The result values are the only evidence.** A guarded flow that skips its successor still prints
+  `✓ Action completed / Final state: Completed`, identical to one that ran it — only the attribute
+  values differ. Always design the skipped branch to write a distinctive attribute (`y := 9`) that
+  stays at its initial value when the guard prunes the edge.
+- **Guards are evaluated when the token LEAVES the node**, so they see what that node wrote: with
+  `x = 3`, `action s1 assign x := x + 4;` and `first s1 if x > 5 then s2;` the branch is taken
+  (`x = 7`, `y = 9`). A "reads the pre-write value" regression shows up as `y = 0`.
+- **A/B against a binary from the parent commit is cheap and decisive here**, because a pre-fix
+  build silently ignores the guard: same file, `y = 9` / `ignited = 1` instead of `0`. Build it with
+  the worktree recipe above and run both in the recording.
+- **Restart the REPL between fixtures.** All the guard fixtures declare `package test`, so a second
+  `%load` in the same session makes `%action test::seq` ambiguous/unresolvable
+  (`unresolved reference: test::seq — did you mean SequenceFunctions::union::seq1 …`). Ctrl-D and
+  relaunch per model; do not chain loads.
+- Write fixtures with `import ScalarValues::*;`, otherwise every `attribute x : Integer` emits
+  `unresolved reference: Integer` noise on camera (execution still works).
+- **The REPL still executes a model with parse errors.** `first s1 if c;` (guard with no `then`) is
+  rejected at parse time with `expected 'then' after guard condition`, yet the rest of the model
+  loads and runs — read the diagnostics, don't just read the `Results:`.
+- Error wordings to assert: non-Boolean guard →
+  `error: execution failed: type mismatch: node s1: guard must evaluate to boolean, got constant`;
+  unresolvable name in a guard → `error: execution failed: eval guard of node s1: unresolved
+  reference: nosuch`. Two guards out of one action node that both hold →
+  `error: execution failed: more than one succession is enabled: action node check has multiple
+  successors` (wraps the `ErrAmbiguousSuccession` sentinel; the run stops with the token still on the
+  node and neither branch's attribute written — assert that with `%tokens`, not just the message).
+- Places a guard could still be silently ignored, all worth a one-liner fixture: succession out of a
+  real initial node (`then start s1 if …;`), out of a `merge`, out of a `join` (must not deadlock —
+  the branch tokens are consumed either way), and one whose target is `done`.
+- **A guard inside a nested action body is not observable**: an action declared inside an action body
+  that itself declares `first … then …` is never executed (pre-fix binaries behave identically), so
+  the enclosing flow's later nodes run while the inner writes never happen. Prove it is pre-existing
+  with the A/B binary and report it as untested rather than a failure.
+
+- **A guard on the succession out of a `merge` needs a token-ordering fixture to be tested at all.**
+  First-token-wins must count the token that *traverses*, not the one that arrives, so the
+  discriminating shape is a fork with one short branch (`a -> mg`) and one longer branch
+  (`b1 -> b2 -> b3 -> mg`) where only the last node of the long branch writes the feature the guard
+  reads. `%step` steps every live token per step, so a guard reading a value written by a *sibling*
+  branch node in the same step is not discriminating — put at least one extra node after the write.
+  Expected on a correct build: `%tokens` shows the short branch's token at `mg` with the guard still
+  false, that token disappears (retired), then the long branch's token traverses `mg` and the node
+  after it runs. A build that closes the merge on arrival instead discards the second token, never
+  runs the node after the merge, and then spins to
+  `error: execution failed: execution exceeded max steps (1000000 steps; ...)` — so "hangs to the
+  step budget", not just a wrong value, is the pre-fix signature here.
+
+## Verifying the RDF "experimental" marking, `%print`, `%view`, guards and addressed sends
+
+The wave-1/0.1.0 surfaces below were verified end to end at `870da1fd`. Each entry is the
+assertion that actually distinguishes working from broken.
+
+### The single experimental notice (`internal/core/export/experimental.go`)
+
+`export.ExperimentalNotice` is the one wording; `export.IsExperimental(from,to)` is true iff either
+side is Turtle (notation→notation is never experimental). **Read the constant from source at the
+start of a run instead of hardcoding it — the wording has already changed once** (220 chars on the
+#261 branch, 239 chars on main; the current text names "the behavior its bodies state").
+
+Assertions that hold, and how to word them:
+
+```bash
+./bin/sysml examples/rdf-interop-demo.sysml -convert ttl >out 2>err   # exit 0
+grep -c '^note:' err            # 1 — the notice is stderr-only
+grep -c experimental out        # 0 — the graph on stdout stays machine-readable
+./bin/sysml m.sysml -convert sysml -o n.sysml 2>&1 | grep -c '^note:'  # 0 (notation→notation)
+```
+
+- Do **not** assert "stderr is empty" for notation runs: the `wrote … (sysml, N bytes)` line also
+  goes to stderr. Assert *no `^note:` line*.
+- `-o /dev/stdout` still keeps the graph clean; refusals print the notice *before* the error, exit 2,
+  write nothing.
+- REPL: `%save x.ttl` prints the notice then `saved N bytes of ttl`; `%save x.sysml` prints none, and
+  neither written file contains a `note:` line.
+- Cross-surface identity is one diff: compare the CLI note (minus the `note: ` prefix) with
+  `opensysml.conversion.EXPERIMENTAL_NOTICE`, the gRPC `ConvertResponse.experimental_notice` and the
+  docs string. All four must be byte-equal.
+- opensysml: one `ExperimentalFeatureWarning` per RDF conversion, `Conversion.experimental` True with
+  the notice; sysml→sysml gives `False`/`""`/0 warnings; a refused RDF conversion warns *then* raises
+  `ConversionError`; `warnings.simplefilter("ignore", ExperimentalFeatureWarning)` silences it while
+  the conversion still returns the graph.
+
+### Corpus claim (`README.md`, `docs/reference/rdf-mapping.md`)
+
+The claim is a measured number and has moved (71/120 → **102/120** after behavioral nodes were
+mapped). Re-measure, never trust the doc:
+
+```bash
+ok=0; bad=0
+while IFS= read -r f; do
+  if ./bin/sysml "$f" -convert ttl -o /dev/null >/dev/null 2>&1; then ok=$((ok+1)); else bad=$((bad+1)); fi
+done < <(find examples \( -name '*.sysml' -o -name '*.kerml' \))
+echo "converted=$ok refused=$bad total=$((ok+bad))"     # 102 / 18 / 120 at 870da1fd
+```
+
+Use process substitution (not `basename`) — many training paths contain spaces. Every refusal must
+name a construct **and** `file:line:col` (`succession`, `operator expr`, `prefix metadata`,
+`` `snapshot` declaration``, `duplicate declaration of "X"`); a bare "cannot convert" or a silent
+drop is the failure shape.
+
+### Round-trip fidelity for behavior (`.sysml → .ttl → .sysml`)
+
+A subaction's `do` and comment contents are the fragile parts. Fixture shape that works:
+
+```
+state off { entry do { perform Warm; } }
+//* a note naming entry and do and exit */
+state starting {
+    // a line comment naming exit
+    do action running : Warm;
+    /* a block comment naming entry do */
+    exit perform Warm;
+}
+```
+
+`entry do { … }`, `do action running : Warm;` and `exit perform Warm;` must all come back, and the
+kind keywords inside the three comment styles must introduce **no** spurious members. Note plain
+comments themselves are not carried through RDF — that is expected, not a failure. `entry do action
+heat : Warm;` does **not** parse (`expected an action, an action reference or '{' after 'entry'`).
+
+### `%print`
+
+Read-only printer of the session buffer or one element:
+
+- `%print` → whole model with its comments; `%print Top::'My Pkg'::Car` → just that element (quoted
+  segments work). Empty session → `nothing to print: the session is empty`; a bad name →
+  `error: unresolved reference: …`. No RDF wording, no `note:` line.
+- Round trip without a GUI: pipe `%load f\n%print\n%quit`, strip the banner/`goodbye` lines with
+  `sed '1d;2d;$d'`, reload that output and print again — the two must be byte-identical.
+- Regression to keep: `%print` during a live `%action`/`%state` debugger leaves it alone —
+  `%instances` still reports none created and the next `%step`/`%continue` still works.
+
+### `%view` (viewpoint conformance)
+
+`%view Demo::report` prints `exposes` then `viewpoint conformance` with
+`satisfy structure (from Demo::StructureView): violated` and one line per concern
+(`conforms` / `violated (framed by the viewpoint but not by the view)` / `unevaluable` + reason).
+A satisfy target that is a `requirementUsage` is diagnosed at load *and* reported as
+`unevaluable (satisfy target spec is a requirementUsage, not a viewpoint)` — never a silent pass.
+`%view` registers no object: `%instances` afterwards says none created, a repeat is identical, and a
+following `%constraint`/`%satisfy` gives a typed message (`not a constraint: MassBudget is a concern
+def …`) rather than an ambiguity error.
+
+### Succession guards and addressed sends
+
+- A guard on a succession leaving an *ordinary* action node is evaluated: fixture with `level = 4`
+  and branches `if level > 10` / `else` must end with the false branch's counter at 0.
+- Fork fixtures under `internal/core/runtime/testdata/conformance/` (e.g.
+  `action_succession_guard_fork_branch_pruned.sysml`) run fine in the REPL but **emit unresolved
+  `Integer` diagnostics** because they rely on the test harness's implicit `ScalarValues` import.
+  Copy the fixture and add `import ScalarValues::*;` if you want a clean transcript.
+- Addressed sends carry object identity: a send to `Ident::alpha::reader` must **not** be consumed by
+  the sending object's own same-named `reader`. The proof of correctness is a *deadlock error*
+  (`accept deadlock in action talk … accept n waiting since step 3`); a broad-delivery bug would
+  complete instead. An unresolvable address gives the typed
+  `send reaches no receiving port: "Unrouted.alpha.count" names no port of an object the sender can
+  address`.
+- For the performed/indirect case use `send_identity_performed_object.sysml` (a state entry sends to
+  `worker`, a two-level `perform`ed action accepts it) and drive it with `%instantiate` + `%state` +
+  `%advance 1` → the machine reaches `heard`. Hand-writing this is easy to get wrong: `send 7 to
+  reader` from a package-level scope reports `unresolved reference: reader`, and a qualified
+  package-level receiver is *unroutable* because it belongs to no object.
+
+### Change/time triggers that are still absent (issue #268 at 870da1fd)
+
+Confirm absence rather than assuming it, and keep the fixture shape right — the body must hang off
+the **state usage**, not the `state def`, or you get
+`initialize state machine: no initial state found`:
+
+```
+part def Machine {
+    attribute ready : Boolean = true;
+    state def Modes;
+    state modes : Modes { entry; then idle; state idle; state done;
+        transition idle_to_done first idle accept when ready then done; }
+}
+```
+
+`%state …::modes`, `%advance 5`, `%current` → still `Current state: idle` (nothing in
+`RunToCompletion` polls change events; documented as ⚠️ Approximate in
+`docs/project/spec-compliance.md`). A unit-carrying time trigger (`accept after 5 [SI::s]`) fails
+with the typed `initialize state machine: schedule events: time duration must be constant, got
+quantity`, while the unitless `accept after 5` fires at t=5 — that pair is the cheapest way to show
+the feature is absent-but-typed rather than half-present.
+
+## Source-preserving edits: `ApplyEdits` / `model.edit()` (PR #282)
+
+The edit surface is only reachable through opensysml (`model.edit()` → `set_value` / `rename` →
+`apply()` → `save(path)`); there is no REPL meta-command for it, so the REPL is only useful
+afterwards, to prove the edited file still parses/instantiates.
+
+Setup that actually matters: the client auto-starts `~/.opensysml/bin/sysml-grpc`, so a stale copy
+there serves an old build and `apply()` fails as `MissingCapabilityError('apply_edits')` — which
+looks like a client bug. Always `go build -o bin/sysml-grpc ./cmd/sysml-grpc`, then
+`pkill -x sysml-grpc` (the file is `Text file busy` while it runs) before
+`cp bin/sysml-grpc ~/.opensysml/bin/`.
+
+Fixture shape that discriminates a broken implementation: one file with line comments, a block
+comment, blank lines and **deliberately mixed tab/space indentation** (some lines space-indented
+inconsistently). A reformatting implementation normalizes those lines, so the assertion is
+`diff -u orig edited` showing exactly **2** changed lines per operation (`diff | grep -c '^[<>]'`),
+never "the file still validates". `cat -A` the fixture on camera to show the tabs are real.
+
+Targets and evals worth using (they cover the interesting locate.go branches in one file):
+
+| target | notes |
+|---|---|
+| `Demo::sc::unitMass` (`attribute redefines unitMass = …;`) | the `redefines` shorthand path |
+| `Demo::SC::margin` (`attribute margin : ISQ::MassValue;`) | value **added**: `AppliedEdit.length == 0`, `new_text == ' = 5.0[SI::kg]'` (a space is inserted before `=`) |
+| `Demo::SC::avionics::board::count` | deeply nested; eval it as `eval("avionics.board.count", subject="Demo::sc")` |
+| `Demo::SC::total = unitMass * 2` | expression referencing another feature; evaluates against the *redefined* value (1200 → 2400) |
+
+Refusals and the exact class each raises (all leave the file byte-identical — sha256 it before and
+after every case, since "an exception was raised" says nothing about writes):
+
+| case | class / `failure` |
+|---|---|
+| unknown FQN, **and any stdlib element** (`ISQ::MassValue` reports `no element named … in this model`) | `EditTargetError` / `EDIT_FAILURE_UNKNOWN_TARGET` |
+| a `part def` target | `EditTargetError` / `EDIT_FAILURE_NOT_VALUED` |
+| `"1050.0[SI::kg"`, `""`, rename to `part` or `2bad` | `InvalidEditError` (`INVALID_VALUE` / `INVALID_NAME`) |
+| a value that parses but does not resolve (`Nope::missing`) | **`EditResultError` / `EDIT_FAILURE_RESULT_INVALID`** — not `InvalidEditError`; it is caught by re-analysis, and `diagnostics` names the *model* file and line |
+| two `set_value`s on one feature | `OverlappingEditsError` |
+| `apply()` twice | plain `builtins.RuntimeError` (client-side, **not** a `OpenSysMLError`) |
+| `apply()` with no ops | `NoEditsError` |
+| non-`str` value | `TypeError` |
+| renaming a referenced declaration | `RenameReferencedError`, `referring_elements == ['Demo::SC', 'Demo::sc']` |
+
+Two cases need process work rather than a Python call:
+
+- **Evicted model → `ModelNotFoundError`.** Hand-start the service (`bin/sysml-grpc -port 50123
+  -health-port 8123`) with `opensysml.connect(port=50123, auto_start=False)`, load, kill and restart
+  it, reconnect, then rebuild the editor against the *new* connection with the *old* hash:
+  `opensysml.edit.Editor(m._hash, c2)`. Killing the auto-started 50051 service mid-script instead
+  tends to hang the run — a `connect()` right after a `pkill -x sysml-grpc` did not return.
+- **`MissingCapabilityError` before the RPC.** Don't chase the v0.0.7 download; build the merge-base
+  with `git worktree add /tmp/oldmain main` + `go build -o /tmp/old-sysml-grpc ./cmd/sysml-grpc`
+  and run it on port 50099 (`-health-port 8099`; 8081 collides). Assert the old service still
+  serves reads (`load` + `eval`) and that the raise is `MissingCapabilityError`, not
+  `UnsupportedOperationError`/UNIMPLEMENTED — that class difference is the proof the check ran
+  client-side. The service logs no per-RPC lines at INFO, so "no ApplyEdits in the log" proves
+  nothing on its own.
+
+`Model.find` returns **None** for a missing symbol (only `model[name]` raises), so the
+"old name is gone after a rename" assertion must compare against `None`; a `try/except` around
+`find` passes even when the rename did nothing.
+
+### Traps that cost time when re-testing the edit surface
+
+- **`python/tests/test_edit.py`'s `real_service` fixture prefers `<repo>/bin/sysml-grpc` over
+  `~/.opensysml/bin/sysml-grpc`** (`GRPC_BINARIES`, test_edit.py:61). A stale `bin/sysml-grpc` left
+  from an earlier snapshot therefore fails all 13 `TestEditRoundTripAgainstRealService` cases with
+  `MissingCapabilityError('apply_edits')` / `assert has('apply_edits') == False`, which reads like a
+  product bug. Always `make build-grpc` and check `./bin/sysml-grpc -version` prints the current
+  commit *before* running the suite; the same applies to the copy in `~/.opensysml/bin`.
+- `MissingCapabilityError` lives in **`opensysml.capabilities`**, not `opensysml.errors`
+  (`opensysml.errors.__getattr__` raises `AttributeError` for it). It is still a `OpenSysMLError` and is
+  *not* an `UnsupportedOperationError`.
+- `test_generate_golden.py::test_typed_codegen_modules_are_mypy_clean` may fail for reasons unrelated
+  to any change: with mypy 2.3.x and the venv's numpy stubs it reports
+  `numpy/__init__.pyi:737: error: Type statement is only supported in Python 3.12 and greater`.
+  Reproduce with `echo 'import numpy' > /tmp/nm.py; $HOME/pv/bin/python -m mypy --no-incremental
+  /tmp/nm.py` before blaming a PR; pinning/refreshing numpy stubs is the likely fix.
+- Non-ASCII **identifiers** (`package Démo`) do not parse, so a Unicode fixture must keep the
+  accents/emoji in comments and strings only. That still exercises the byte-vs-rune offset risk:
+  assert `saved == orig[:a.offset] + a.new_text.encode() + orig[a.offset + a.length:]`, which is the
+  strongest single assertion available for `AppliedEdit` (it proves offsets are byte offsets and
+  that nothing outside the span moved).
+- CRLF: build the fixture as `orig.replace(b"\n", b"\r\n")` and assert the saved file has the same
+  `\r` count, **zero bare LFs** (`b.count(b"\n") - b.count(b"\r\n") == 0`) and no `\r\r`. Test the
+  *insertion* case (a feature with no value) on CRLF too, not just replacement.
+- Unwritable targets: `save()` raises plain `PermissionError`/`FileNotFoundError` from `open()`, so
+  sha256 the victim file before/after — the point of the case is that it is not truncated first.
+- An edit is allowed on a file that already has errors elsewhere (name *or* syntax), and the saved
+  file keeps exactly those pre-existing diagnostics; a refusal there is the regression the
+  "baseline diagnostics" fixes in PR #282 were about.
+
+## `%check` and the SMT solver driver (PR #285)
+
+`%check <name>` asks an external solver about a constraint def, requirement def or satisfaction
+assertion. z3 may already be installed (`/usr/bin/z3`, 4.8.12 seen); discovery is `OPENSYSML_SMT`
+(path to an executable) → `z3` → `cvc5` on PATH, and `OPENSYSML_SMT_TIMEOUT` (default `10s`) bounds
+one query. Every solver-availability path is reachable from the shell without touching code, so
+drive each in its own REPL and show the env on camera:
+
+```bash
+OPENSYSML_SMT_TIMEOUT=1ms ./bin/sysml            # "? … is undecided (z3, 1ms)" + "Reason: the solver ran out of time after 1ms"
+OPENSYSML_SMT=/tmp/fake_unknown.sh ./bin/sysml   # sh script: printf 'unknown\n(:reason-unknown "incomplete")\n'; then `while read -r line; do :; done`
+OPENSYSML_SMT=/tmp/fake_fail.sh ./bin/sysml      # sh script: exit 3 → "error: the SMT solver did not answer: … failed at check-sat"
+env -u OPENSYSML_SMT PATH=/tmp/emptybin ./bin/sysml   # "error: no SMT solver found: install z3 …"
+```
+
+The fake-unknown script *must* keep draining stdin after printing, or the driver's later writes hit
+a closed pipe and you get a process error instead of `unknown`. Note `env -u … PATH=/tmp/emptybin`
+also removes `timeout` from PATH — call `/usr/bin/timeout` by absolute path in piped dry runs.
+
+Fixture shapes that actually discriminate:
+
+- **Naming a satisfaction:** `%check` on a `requirement usage` reports the *requirement*, not the
+  assertion. To reach a satisfaction, `%check` the element whose body holds `assert satisfy r by o;`
+  (e.g. a `part context { assert satisfy fastEnough by car; }`) → `✓ Satisfaction satisfy fastEnough
+  by car is satisfiable`. Bare `satisfy X by y;` at package level is rejected at parse/semantics
+  ("satisfy target must be a requirement usage") — always go through a named requirement usage.
+- **Truncating `/` and `%`:** use a *symbolic* dividend/divisor (`a == -7 and b == 2 and q == a / b`),
+  because a constant `-7 / 2` is const-folded to the evaluator's real quotient (`%eval -7 / 2` = `-3.50`),
+  so `q : Integer == -7 / 2` is reported **unsatisfiable** by design. The discriminating pair is
+  `q == a / b and q == -3` (sat) vs `q == -4` (unsat, the floor answer); same for `r == a % b` with
+  `-1` vs `1`. A literal zero divisor is refused with "operator `/` by zero not translatable".
+- **Untranslatable:** `i ** 2 == 4` → `error: constraint X: operator `**` not translatable for
+  solving: …` (no verdict). Incommensurable units are refused the same way (`L against M`).
+- **Read-only:** start `%action <A>`, run `%check`, then `%step` — the token must still advance
+  (`Token 1 @ start` → `Token 1 @ step1`).
+- **Assignments use qualified OpenSysML names** (`Check::Satisfiable::i = 4`,
+  `Check::SpeedReq::'craft.topSpeed' = 100`, enum as `Check::Gear::high`). A quantity is a magnitude
+  in the *base units* a written unit reduces to, named as such (`1500.0 [kg]` comes back as
+  `1500000.0 [gram]`), so don't expect the unit as written.
+
+## `%optimize` and the optimization queries (PR #305)
+
+`%optimize <name>` optimizes an `analysis def`'s (or analysis *usage*'s) `objective`s. Everything
+below was observed at 41dc35cb with `/usr/bin/z3` 4.8.12; `bin/sysml` needs no extra setup beyond
+`make build-sysml` and z3, both already in the blueprint.
+
+- **Model contract for writing fixtures:** direction comes from the type
+  (`TradeStudies::MinimizeObjective` / `MaximizeObjective`), the optimized value from
+  `attribute :>> best = <expr>;` inside the objective body, and feasibility from the case's
+  `require`/`assume` conditions plus the objective's own. `private import TradeStudies::*;` is
+  needed. A ready fixture with a dozen discriminating cases is
+  `internal/core/solve/testdata/objectives.sysml` — start there rather than hand-writing one.
+- **The three headers are the fastest read:** `✓ … is optimized`, `! … has no optimum: an objective
+  improves without limit`, `! … is satisfiable, but its optimum was not established`, and
+  `✗ … has no values satisfying its conditions` for unsat. A number must never appear on the
+  objective line for the two `!` cases; a feasible witness is labelled
+  `the assignment below attains <v>` instead, which is the tell that no optimum was fabricated.
+- **z3 4.8.12 is wrong on strict inequalities** — for `margin < 10.5` maximized it answers `9.5`.
+  The verification step catches this and reports `no optimum reported — the solver reported 9.5,
+  but a strictly greater value is feasible, so it is no optimum`. This is the single most valuable
+  assertion in the area: a build that skipped verification would print `9.5` as the optimum.
+- **Lexicographic order needs a coupled pair to be visible.** Two independent objectives look the
+  same either way. Use `cost` in `[3,9]` and `margin` in `[0, cost*2]` with `minimize cost` declared
+  first: lex gives `cost 3` then `margin 6`, while any other priority gives `cost 9`/`margin 18` or
+  `margin 0`. (`CostThenMargin` in the fixture is exactly this shape.)
+- **Refusals are per-reason and carry a `<repl>:line:col` location.** Worth covering each, since they
+  are distinct code paths: a nonlinear value (`a * b`) → `it states a nonlinear value`; an objective
+  typed by something that is not a Minimize/Maximize objective → `it states no direction to improve
+  its value in`; `objective goal : MinimizeObjective;` with no body → `it states no value to
+  improve`; a case with conditions but no `objective` → `error: analysis X: states no objective`.
+- **Quantities come back in base units**, as with `%check`: `10 [kg] .. 90 [kg]` minimized reads
+  `10000.0 [gram]`. Mixed units in one case (`>= 500 [g]`, `<= 2 [kg]`) are reconciled correctly
+  (`2000.0 [gram]`) — a good adversarial case that a naive translation would get wrong.
+- **Bad input:** `%optimize` alone → `usage: %optimize <name>`; an unknown name →
+  `error: unresolved reference: X`; a package/part def/constraint def →
+  `error: not an analysis case: X is a <kind>, not an analysis case definition or usage`
+  (the article follows the kind's first letter, `articleFor` in `internal/core/runtime/describe.go`).
+- **Read-only check that actually discriminates:** `%action <A>`, `%instances`
+  (`(no instances created)`), `%optimize <case>`, then `%step` twice to `State: Completed` with the
+  right `Results:` — and `%instances` still `(no instances created)`. Run `%optimize` twice in a row
+  too; answers must be byte-identical.
+- **Absent solver** is one env var: `OPENSYSML_SMT=/nonexistent/x ./bin/sysml <f>` then `%optimize` →
+  `error: no SMT solver found: OPENSYSML_SMT names "/nonexistent/x", which is not an executable
+  file`. cvc5 (in `$HOME/.local/cvc5/bin`) is the other interesting backend: optimization is a z3
+  extension, so it must be a typed error rather than a plain check-sat presented as an optimum.
+- Writing an `action` fixture to host the read-only test: successions are
+  `first s1 then s2;` (see `internal/core/runtime/testdata/conformance/action_succession_guard_holds.sysml`).
+  `then first second;` / `first then second;` do **not** parse or lower — budget a minute for this
+  rather than inventing syntax.
+
+## Value bodies over inherited values, require bodies, and the extension math functions (PR #296)
+
+- **A nested value body over an inherited value** (`part def Ring { attribute cost : Cost = template; }`
+  plus `part r : Ring { attribute :>> cost { attribute :>> v = 11.0; } }`) is observable purely
+  through `%instantiate` + `%features`: the governing body shows `cost.v = 11.00` while the source
+  object (`template`) keeps its own values, and pre-fix builds show the inherited `9.00` *and* a
+  shared instance ID between `cost` and `template` — the **instance IDs in `%features` are the
+  cheapest tell** that a body materialized an object of its own rather than aliasing the source.
+  Ready-made fixtures with in-model `assert constraint`s live at
+  `internal/core/runtime/testdata/conformance/attribute_body_over_inherited_value*.sysml`; loading
+  one and reading `<constraint: satisfied>` / `<constraint: violated>` in `%features` is a stronger
+  frame than eyeballing numbers. Note `%satisfy` answers `no satisfaction assertion in the session`
+  for such a fixture (those are `assert constraint`, not `assert satisfy`) — not a failure.
+- Discriminating negatives to keep in any test of that area: a body that only *re-declares* a nested
+  feature (`attribute :>> kept { attribute :>> v; }`) must still read the inherited value, and a
+  value **plus** a restatement on the *same* declaration
+  (`attribute :>> ringCost = template { attribute :>> v = 5.0; }`) must still fail with
+  `feature value <inst>.<feat>: feature both valued and restated in a body: v` (exit 2).
+- **Names nested inside a `require`/`assume` body** are only checked through the CLI's analysis, so
+  test them with `sysml -validate <file>`, not the REPL: a typo at depth 2/3 inside
+  `require Q::r { part p : P { attribute x = typo; } }` must report
+  `unresolved reference: typo` with the caret under the name and exit 2. Pre-fix builds print
+  `no errors` and exit 0, so **only a contrast binary proves this class of fix**. Pair it with a
+  legal deep body (must stay clean) and a body-local name read from the enclosing namespace (must
+  still be reported as unresolved — the body is a scope of its own).
+- **The OpenSysML extension math functions (`exp`, `ln`, `log`, `atan2`)** are no longer answered
+  unimported: `%eval exp(1.0)` gives
+  `error: evaluation failed: function is not in scope: exp is declared by OpenSysMLMathFunctions, a
+  OpenSysML extension no OMG library declares: write \`import OpenSysMLMathFunctions::*;\` to call it`.
+  OMG names (`sqrt`, `sin`, …) and the qualified `OpenSysMLMathFunctions::exp(1.0)` still evaluate
+  unimported — check both, or a change that broke the OMG fallback looks like a pass.
+- A prompt-level `import OpenSysMLMathFunctions::*;` submitted **alone** used to leave `exp` out of
+  scope, because a document declaring nothing carried no symbol for the scope tree's document name
+  (fixed in PR #296, regression test `TestRootImportInDocumentDeclaringNothingElse`). Worth retesting
+  in that exact shape — an import followed by any declaration takes a different route and passes even
+  when the bare form is broken.
+
+## `%explain <name>` — unsat cores (PR #291)
+
+`%explain` asks the solver which conditions of an unsatisfiable constraint/requirement/satisfy
+element conflict. It shares `solveQueries` with `%check` (`internal/repl/check.go:149`), so the two
+must always reach the same verdict; the split is that `%check` prints a satisfying assignment and
+`%explain` never does. Rendering lives in `internal/repl/explain.go`, core reduction in
+`internal/core/solve/core.go`.
+
+`internal/repl/testdata/explain_conflicts.sysml` is the fixture that covers every core-row shape at
+once, so prefer it over hand-rolled models. Values observed at 04d0c4b with z3 4.8.12, loading that
+file **alone** (locations are buffer-relative — see below):
+
+| `%explain Conflicts::…` | header | rows |
+|---|---|---|
+| `Contradictory` | `✗ … 2 conditions conflict` | `required condition: \`i > 8\`` @10:29, `\`i < 3\`` @11:29 |
+| `NatBound` | `✗ … 2 conditions conflict` | `declared domain: \`a Natural is not negative\` — declaration Conflicts::NatBound::n` @20:9, `required condition: \`n < 0\`` @21:29 |
+| `ZeroDivisor` | `✗ … 2 conditions conflict` | `well-definedness: \`a / b == 1\`` @28:29 **then** `required condition: \`b == 0\`` @27:29 |
+| `Derived` | `✗ Requirement … 2 conditions conflict` | `\`x > 10\` — requirement Derived, declared by Base` @34:30, `\`x < 1\` — requirement Derived` (no "declared by") @38:30 |
+| `Satisfiable` | `✓ … is satisfiable, so no conditions conflict` | none, plus `Use %check … for a satisfying assignment.` |
+| `rig::always` | `✗ Constraint always (negated) … 1 condition conflicts with itself` | `denied conditions: \`not (i == i)\`` @47:9 |
+
+Every unsat header is followed by one minimality line before the numbered rows.
+
+Things that look like bugs but are not, and traps:
+
+- **Rows are in query-assertion order, not source order.** `ZeroDivisor` lists the hoisted
+  divisor guard (line 28) before the condition that sets the divisor to zero (line 27). Don't
+  report this as mis-ordering without checking `translate.go`'s assertion order first.
+- **The location column always names `<repl>`, never the loaded file, and counts lines from the
+  start of the joined buffer.** With one file loaded the numbers happen to match the file; load a
+  second file first and the same condition moves (`<repl>:23:29` for what is really
+  `explain_conflicts.sysml:10:29`), while load-time *analysis* diagnostics in the same session do
+  name the real file and count from its start. The unit tests assert `<repl>`, so this is the
+  REPL's implicit-document convention rather than a regression — but it is misleading, and any
+  location assertion must therefore fix the load order. Always `%load` the fixture **alone**, or
+  pass it as a CLI argument (`./bin/sysml <fixture>`), when asserting line/col.
+- **A 1-member core has its own minimality wording**: `The condition below is the whole conflict:
+  nothing else is needed for it.` (`internal/repl/explain.go` `minimality`), not the multi-condition
+  `dropping any one leaves the rest satisfiable`. `rig::always` is the case that exercises it.
+- **`String` IS in the translatable subset** (`SortString`, `internal/core/solve/reference.go:214`),
+  so `constraint { s == "x" }` answers `satisfiable` and is useless as an "outside the subset" case.
+  Untranslatable cases that do work: a **calc invocation** in a condition
+  (`assert constraint { Twice(i) > 4 }` → `invocation not translatable for solving: it is outside
+  the subset`) and an **unresolved reference** (→ `it resolves to nothing`).
+- **z3 decides nonlinear reals**, so `x*y == 7.5 and x*x + y*y == 2.0` comes back `unsat` with a
+  real core, not `unknown`. The `? … is undecided, so there is nothing to explain` branch is hard
+  to reach on purpose; use `OPENSYSML_SMT_CORE_BUDGET` (a tiny value) if you need to exercise the
+  non-minimal `Note` wording instead.
+- **Header durations include core-reduction time** (since 04d0c4b), so an unsat `%explain` reads
+  ~3x the matching `%check` (24–30ms vs 7ms). Never assert exact milliseconds.
+- **`%explain` is read-only.** An `%action Debug::tally` session (fixture
+  `internal/repl/testdata/action_debug.sysml`) must survive it: `%step` after `%explain` still
+  prints `✓ Step complete` and the run ends `total = 5`. A regression here shows up as
+  `error: no active action session`.
+
+The no-solver path is the one case needing a special launch: `mkdir -p /tmp/nosolver` and run
+`env PATH=/tmp/nosolver ./bin/sysml`, which yields `error: no SMT solver found: install z3 … or set
+OPENSYSML_SMT …; looked for [z3 cvc5] on PATH`. Note `Discover()` is consulted per command, so this
+must be set on the process, not toggled mid-session.
+
+## Rendering a view: `%render` and `sysml -render` (PR #288 class)
+
+A view's `render` member is consumed by `internal/core/view`. Kinds: **tree** (default when the view
+states no rendering), **interconnection**, **state**, **action**, **table**
+(`render asElementTable;` or a `StandardViewDefinitions::GridView`-typed view).
+
+Forms and defaults (`internal/core/view/form.go`):
+
+| kind | text | machine form (`Kind.MachineForm()`) |
+| --- | --- | --- |
+| tree, action | indented text | `mermaid` → `flowchart TD` |
+| interconnection | indented text | `mermaid` → `flowchart LR` |
+| state | indented text | `mermaid` → `stateDiagram-v2` |
+| table | space-aligned columns | `markdown` (pipe table) |
+
+- **REPL defaults to `text`; the CLI defaults to the kind's machine form.** Don't assume they match.
+- Wrong form for a kind is a typed `*WrongFormError`:
+  `<view>: a table rendering is not written as mermaid; ask for text or markdown`. An unknown form in
+  the REPL: `unknown form "svg"; usage: %render <name> [text|mermaid|markdown]`; via the CLI:
+  `unknown rendering form "svg"; -render-form takes text, mermaid, markdown`, exit 2.
+- Always assert **0 bytes on stdout** on refusals, not just the message.
+- CLI stream contract: artifact on **stdout only**; `✓ package …` load report, `note: … renders
+  empty`, "cannot represent" notices and `wrote <file> (form, N bytes)` on **stderr**.
+  `-render` with `-convert` → exit 2 `-convert and -render each write a document out; ask for one per
+  run`; with `-validate` → exit 2 "check it in its own run".
+- Table row shape: `Element | Kind | Type | Declared in`; exposed elements use qualified names,
+  elements declared inside them use local names; a nested view is a row followed by its own exposures.
+- **Empty state rendering must be `state "the view exposes nothing; the rendering is empty" as empty`,
+  never a bare `note "…"`** — a bare top-level `note` is invalid Mermaid. Fixture:
+  `internal/core/view/testdata/errors.sysml` → `ErrorViews::emptyStateView`. Proof pattern for this
+  class of fix: build the pre-fix commit with `git worktree add`, render the same view, and show
+  `mmdc` failing (`Parse error on line 2`, exit 1) on the old artifact and passing on the new one.
+- Mermaid grammar check (independent of Go tests):
+  `cd /tmp && npm install @mermaid-js/mermaid-cli`, write
+  `/tmp/pc.json` = `{"args":["--no-sandbox","--disable-setuid-sandbox"]}`, then
+  `/tmp/node_modules/.bin/mmdc -p /tmp/pc.json -i x.mmd -o x.svg`. **`/tmp` installs do not survive
+  between sessions — re-check `ls /tmp/node_modules/.bin/mmdc` before relying on it (a missing binary
+  shows up as `mmdc exit=127`).** Open the SVG in Chrome (Ctrl+A in the omnibox first, then
+  `file:///tmp/x.svg`) for visual proof.
+- **`%render` must be read-only.** Proof sequence: `%action Gear::Spin` → `%step` → `%tokens` →
+  `%render …` → `%tokens` (identical) → `%step` → `%continue` (completes) → `%instances`
+  (`(no instances created)`). `internal/core/view/testdata/action.sysml` is **unusable** for this —
+  its `action provide : Provide` has no initial node, so `%continue` fails there on `main` too; write
+  your own steppable action.
+- Byte-identity regression harness: build the previous commit via `git worktree add`, then loop the
+  four graph kinds × `text`/`mermaid` through both binaries and `diff` — expect all `IDENTICAL`.
+- Known nit (unfixed): completion of a *partially typed quoted* name offers nothing
+  (`%render Quoted::'My` + Tab) because `nameWord` keeps the leading `'` while the index holds
+  unquoted FQNs (`internal/repl/complete.go`); with a trailing space inside the open quote it dumps
+  every library name. Forms are correctly withheld until the quote closes.
+- `filters.sysml` → `FilteredViews::safetyView` duplicates `Systems::Airbag` and
+  `Systems::Braking::Brake` through the shipping CLI/REPL while the goldens list them once. It
+  reproduces on `main` via `%view`, so it is pre-existing exposed-set behavior, not a rendering bug.
+- Pitfall: never type `clear;` at a `sysml>` prompt — it parses as SysML, errors
+  (`expected a namespace member`) and pollutes the buffer, which later shows as
+  `note: deeper checks may not have run here: the error on buffer line N is unresolved`. Use
+  `ctrl+l`, and `%quit` before running shell commands.
+- After the OpenSysML rename the module is `github.com/Open-MBEE/OpenSysML` and env vars are
+  `OPENSYSML_*`, but the **checkout directory may still be named `Systemica`**. When grepping output
+  for stale branding, exclude build paths, and expect the deliberate legacy RDF namespace
+  `urn:systemica:sysml:` (`internal/core/rdf/vocab.go`) to remain — it exists so a pre-rename graph is
+  refused rather than misread.
+
+## SMT logic selection, the capability model, and `%optimize`
+
+The REPL never prints the logic a query set, so to test logic selection **wrap the real solver in a
+tee** rather than reading the goldens. `newSolver` picks the CLI flags from the wrapper's *base
+name*, so a wrapper whose name contains `z3` is invoked with z3's own `-smt2 -in`:
+
+```sh
+mkdir -p /tmp/fakesmt /tmp/smtlog     # tee fails if the log directory is absent
+cat > /tmp/fakesmt/z3-tee <<'EOF'
+#!/bin/sh
+tee /tmp/smtlog/script-$$.smt2 | /usr/bin/z3 "$@"
+EOF
+chmod +x /tmp/fakesmt/z3-tee
+```
+
+`OPENSYSML_SMT=/tmp/fakesmt/z3-tee ./bin/sysml <model>` answers normally and leaves one script per
+solver invocation. **Capability probes run through the same wrapper**, so the log also holds the
+probes' own scripts; select the real query's with `grep -l <ModelName> /tmp/smtlog/*.smt2` (each
+script starts `; OpenSysML SMT-LIB2 translation of constraint <Name>`). Expected logics from
+`internal/core/solve/testdata/logic_selection.sysml`: `CratesPerPallet` (`crates / 12`) → `QF_LIA`
+(integer division does **not** widen the logic); `CratesPerRun` (variable divisor) → `QF_NIA`;
+`MassAndCrates` (Int + Real) → `AUFLIRA`; a datatype/variant model (`ring_variants.sysml`) → `ALL`,
+preceded by `; no SMT-LIB logic covers algebraic datatypes (declare-datatypes), …`.
+
+### `%optimize`
+`%optimize <name>` takes an **analysis case** (`runtime.RequireAnalysis`), not a constraint — and
+conversely an analysis def is not a `%check`/`%explain` target (`%check test::SomeAnalysis` answers
+`error: no satisfaction assertion in …`). Fixtures live in
+`internal/core/solve/testdata/objectives.sysml`, e.g. `test::CrewSizing` → `maximize largestCrew =
+`crew`: 7`, `test::CostThenMargin` → `minimize cheapest = `cost`: 3` then `maximize widestMargin =
+`margin`: 6` (lexicographic, in declaration order), `test::UnboundedLoad` → `! … has no optimum: an
+objective improves without limit` plus `the assignment below attains 1.0` — a bound or a feasible
+value is never printed as an optimum.
+
+Optimization is a **z3 extension**, so only z3 can be used to prove the happy path. cvc5 must refuse
+through the capability model (`Solver.requireOptimization` preflights `CapOptimization` *and*
+`CapOptimizationPriority`), printing
+`error: the SMT solver does not implement optimization: cvc5 lacks `(maximize …)`/`(minimize …)`
+with `(get-objectives)`, a solver extension: it rejected the script: Parse Error: …; install z3 or
+set OPENSYSML_SMT to it`. Probe results are cached per executable+args, so a second `%optimize` in
+the same session must print the identical refusal — a differing second error means the cache is not
+holding. `internal/repl/optimize_test.go` skips its solver cases through
+`requireOptimizingSolver`, so **`go test` alone proves nothing about `%optimize` on cvc5**; drive the
+REPL, or read the `TestPortability -v` report, which must show `refuse objective optimization` for
+cvc5 and `pass` for z3.
+
+### Fake backends for the failure modes
+Name them so they contain neither `z3` nor `cvc5` (otherwise they inherit that family's flags); the
+name is also what the message reports as the solver.
+
+- **Refused feature** → typed `UnsupportedCapabilityError`: a python wrapper forwarding to z3 but
+  answering `unsupported` to `(get-unsat-core)`. `%explain` then names backend, feature and
+  operation while `%check` in the *same* session still answers — the refusal must be scoped to the
+  feature, not the backend.
+- **Dead backend** (`#!/bin/sh` + `exit 3` or `exit 0`) → `error: the SMT solver did not answer:
+  <name> failed at check-sat: it stopped without answering`, never a capability error. A dead
+  backend leaves the probe *undetermined* (`capUnknown`), which deliberately does not refuse.
+- **Hanging backend** (`cat > /dev/null; sleep 600`) → bound it with `OPENSYSML_SMT_TIMEOUT=5s` and
+  time the run: expect `? … is undecided … Reason: the solver ran out of time after 5s` in roughly
+  3× the timeout (probe + query + verification each get their own budget), not a hang.
+- **Garbage-echoing non-solver** (replies `i am not a solver` to everything) → a *process* error, not
+  a capability refusal: `error: the SMT solver did not answer: <name> failed at capability check: it
+  answered `i` rather than an SMT-LIB response`. Only an `(error …)` or `unsupported` reply is a
+  missing feature (`capability.go` `smtlibResponse`), so when checking a refusal message make sure the
+  fake backend answers one of those rather than arbitrary text.
+
+`OPENSYSML_SMT=/nonexistent/no-such-solver` gives `error: no SMT solver found: OPENSYSML_SMT names
+"…", which is not an executable file` for `%check`, `%explain`, `%configure` and `%optimize` alike —
+discovery precedes both the capability preflight and the "states no variation point" complaint.
+
+Cross-solver agreement worth asserting (z3 4.8.12 vs cvc5 1.3.4): the verdict line, the witness
+values (`crates = 36`; `MassPerCrate` → `crates = 1`, `mass = 0.0`), the unsat-core rows of
+`internal/repl/testdata/explain_conflicts.sysml`, and the **count and set** — not the order — of
+`%configure test::ringFamily::variantsAgree all` on `nested_variants.sysml` (3 selections; the
+solvers list them in different orders, which is not a defect). `%configure` names the **constraint**
+(`…::variantsAgree`), not the part.

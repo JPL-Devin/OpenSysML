@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 var (
@@ -26,11 +26,20 @@ var (
 	// divisor. It is the answer to the expression, not a missing declaration.
 	ErrDivisionByZero = errors.New("division by zero")
 
-	// ErrMultiplicityViolation is returned when a slot access/assignment violates multiplicity bounds.
+	// ErrMultiplicityViolation is returned when a feature value access/assignment violates multiplicity bounds.
 	ErrMultiplicityViolation = errors.New("multiplicity violation")
 
-	// ErrUninitializedSlot is returned when accessing a slot that has no value and no default.
-	ErrUninitializedSlot = errors.New("uninitialized slot")
+	// ErrUninitializedFeatureValue is returned when accessing a feature value that has no value and no default.
+	ErrUninitializedFeatureValue = errors.New("uninitialized feature value")
+
+	// ErrBindingConflict is returned when two binding ends hold unequal values.
+	ErrBindingConflict = errors.New("binding conflict")
+
+	// ErrBindingCycle is returned when a binding component has no value.
+	ErrBindingCycle = errors.New("binding cycle")
+
+	// ErrBindingEnd is returned when a binding endpoint cannot be resolved to a feature.
+	ErrBindingEnd = errors.New("binding end cannot be resolved")
 
 	// ErrNotACalc is returned when a calc invocation targets a symbol that is
 	// not a calc definition or usage.
@@ -45,6 +54,11 @@ var (
 	// requirement declares something else. Like ErrNotAConstraint it reports the
 	// request, not the model.
 	ErrNotARequirement = errors.New("not a requirement")
+
+	// ErrNotAnAnalysis is returned when a symbol asked for its objectives is not
+	// an analysis case. Like ErrNotAConstraint it reports the request, not the
+	// model.
+	ErrNotAnAnalysis = errors.New("not an analysis case")
 
 	// ErrCalcArity is returned when a calc invocation passes more arguments than
 	// the calc declares input parameters.
@@ -107,16 +121,16 @@ var (
 	ErrViolated = errors.New("evaluated to false")
 
 	// ErrNoValue is returned when a feature a condition names carries no value:
-	// neither a slot on the object being checked nor a declared default.
+	// neither a feature value on the object being checked nor a declared default.
 	ErrNoValue = errors.New("no value")
 
 	// ErrNoConditions is returned when a constraint or requirement carries no
 	// condition to evaluate: reporting a verdict would claim a check that never ran.
 	ErrNoConditions = errors.New("no condition to evaluate")
 
-	// ErrCyclicSlot is returned when a slot's default value depends, directly or
-	// through other slots, on the slot being computed.
-	ErrCyclicSlot = errors.New("cyclic slot dependency")
+	// ErrCyclicFeatureValue is returned when a feature value's default value depends, directly or
+	// through other feature values, on the one being computed.
+	ErrCyclicFeatureValue = errors.New("cyclic feature value dependency")
 
 	// ErrConnectorEnd is returned when a connector cannot be attached to the
 	// features its ends name: an end naming nothing reachable from the object
@@ -142,6 +156,27 @@ var (
 	// requirement to evaluate: it references none, or references one that
 	// resolves to nothing.
 	ErrNoRequirement = errors.New("no requirement to satisfy")
+
+	// ErrUnresolvedClassifierBehavior is returned when a type exhibits or
+	// performs a behavior whose body no element states, so the objects of that
+	// type have nothing to run.
+	ErrUnresolvedClassifierBehavior = errors.New("classifier behavior names no body")
+
+	// ErrUnsupportedClassifierBehavior is returned when a type binds a behavior
+	// the runtime does not execute on an object.
+	ErrUnsupportedClassifierBehavior = errors.New("unsupported classifier behavior")
+
+	// ErrNoSuchBehavior is returned when a behavior asked of an object is none
+	// the object's type owns, exhibits or performs.
+	ErrNoSuchBehavior = errors.New("object has no such behavior")
+
+	// ErrNotABehavior is returned when a name invoked on an object resolves to an
+	// element that states no behavior to run.
+	ErrNotABehavior = errors.New("not a behavior")
+
+	// ErrBehaviorBudget is returned when the behaviors of materialized objects
+	// never reach quiescence within the event budget.
+	ErrBehaviorBudget = errors.New("object behaviors exceeded their budget")
 
 	// ErrNotACalcUsage is returned when an output feature is read from a symbol
 	// that is not a calc usage: only a usage carries an evaluation whose outputs
@@ -214,11 +249,11 @@ var (
 	// those features, so the restatement could only be silently dropped.
 	ErrValuedFeatureRestated = errors.New("feature both valued and restated in a body")
 
-	// ErrSlotMaterialization marks an error as a slot that could not be
-	// materialized, whatever kept it from materializing. Reading a slot is what
+	// ErrFeatureValueMaterialization marks an error as a feature value that could not be
+	// materialized, whatever kept it from materializing. Reading a feature value is what
 	// finds such a failure, so a surface reporting one answered nothing about
-	// that slot rather than deciding anything about the model.
-	ErrSlotMaterialization = errors.New("slot could not be materialized")
+	// that feature value rather than deciding anything about the model.
+	ErrFeatureValueMaterialization = errors.New("feature value could not be materialized")
 
 	// ErrNoSubject is returned when the feature a satisfaction assertion names
 	// with `by` cannot supply a subject: it resolves to nothing, or no object of
@@ -242,16 +277,16 @@ func (e *ViolationError) Error() string {
 
 func (e *ViolationError) Unwrap() error { return ErrViolated }
 
-// SlotError marks a slot that could not be materialized. It reads as the error
-// that kept the slot from materializing and unwraps to it as well as to
-// ErrSlotMaterialization, so a caller tests either.
-type SlotError struct {
+// FeatureValueError marks a feature value that could not be materialized. It reads as the error
+// that kept the feature value from materializing and unwraps to it as well as to
+// ErrFeatureValueMaterialization, so a caller tests either.
+type FeatureValueError struct {
 	Err error
 }
 
-func (e *SlotError) Error() string { return e.Err.Error() }
+func (e *FeatureValueError) Error() string { return e.Err.Error() }
 
-func (e *SlotError) Unwrap() []error { return []error{ErrSlotMaterialization, e.Err} }
+func (e *FeatureValueError) Unwrap() []error { return []error{ErrFeatureValueMaterialization, e.Err} }
 
 // OperandTypeError reports an operator applied to operand types it is not
 // defined for, naming the operator and both operands and carrying the span of

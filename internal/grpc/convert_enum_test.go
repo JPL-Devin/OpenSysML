@@ -4,11 +4,11 @@ import (
 	"strings"
 	"testing"
 
-	pb "github.com/Open-MBEE/Systemica/api/proto"
-	"github.com/Open-MBEE/Systemica/internal/core/parser"
-	"github.com/Open-MBEE/Systemica/internal/core/runtime"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	pb "github.com/Open-MBEE/OpenSysML/api/proto"
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
+	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 const enumWireModel = `package D {
@@ -120,9 +120,9 @@ func TestEnumLiteralUnresolvedIsAnError(t *testing.T) {
 	}
 }
 
-// TestInstantiate_EnumTypedSlotCarriesLiteral verifies an enum-typed default
+// TestInstantiate_EnumTypedFeatureValueCarriesLiteral verifies an enum-typed default
 // reaches a client as the literal it is rather than as an unsupported null.
-func TestInstantiate_EnumTypedSlotCarriesLiteral(t *testing.T) {
+func TestInstantiate_EnumTypedFeatureValueCarriesLiteral(t *testing.T) {
 	content := `
 package D {
   enum def Color { red; green; blue; }
@@ -131,20 +131,20 @@ package D {
   }
 }
 `
-	resp := instantiate(t, content, "enum-slot", "D::Car")
-	slot := resp.Instance.Slots["c"]
-	if slot == nil {
-		t.Fatalf("slot c not present in %v", resp.Instance.Slots)
+	resp := instantiate(t, content, "enum-feature-value", "D::Car")
+	fv := resp.Instance.FeatureValues["c"]
+	if fv == nil {
+		t.Fatalf("feature value c not present in %v", resp.Instance.FeatureValues)
 	}
-	if slot.Error != "" {
-		t.Fatalf("slot c: %s", slot.Error)
+	if fv.Error != "" {
+		t.Fatalf("feature value c: %s", fv.Error)
 	}
-	lit := slot.Value.GetEnumLiteral()
+	lit := fv.Value.GetEnumLiteral()
 	if lit == nil {
-		t.Fatalf("slot c: got kind %T, want enum_literal", slot.Value.GetKind())
+		t.Fatalf("feature value c: got kind %T, want enum_literal", fv.Value.GetKind())
 	}
 	if lit.LiteralId != "D::Color::red" || lit.Name != "Color::red" {
-		t.Errorf("slot c: got %+v, want D::Color::red / Color::red", lit)
+		t.Errorf("feature value c: got %+v, want D::Color::red / Color::red", lit)
 	}
 }
 

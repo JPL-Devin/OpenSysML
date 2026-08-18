@@ -7,7 +7,7 @@ pre-existing types and check that bytes written by one schema parse back
 unchanged.
 """
 
-from pysysml.proto import sysml_pb2
+from opensysml.proto import sysml_pb2
 
 
 # Field numbers as of the schema before the verification RPCs were added. A
@@ -25,8 +25,10 @@ LEGACY_FIELD_NUMBERS = {
         "context_symbol_id": 3,
     },
     "EvaluateResponse": {"result": 1, "error": 2, "diagnostics": 3},
-    "Instance": {"id": 1, "type_symbol_id": 2, "slots": 3},
-    "SlotValue": {
+    # Field 3 held the pre-0.1.0 `slots` map, removed and reserved before the
+    # first release; see test_the_removed_slots_field_stays_reserved.
+    "Instance": {"id": 1, "type_symbol_id": 2, "feature_values": 4},
+    "FeatureValue": {
         "feature_name": 1,
         "value": 2,
         "values": 3,
@@ -71,6 +73,14 @@ def test_legacy_field_numbers_are_unchanged():
             if name in descriptor.fields_by_name
         }
         assert got == fields, f"{message_name} field numbers moved"
+
+
+def test_the_removed_slots_field_stays_reserved():
+    """`slots` went away before 0.1.0, and its number must not be reused."""
+    descriptor = sysml_pb2.Instance.DESCRIPTOR
+    assert "slots" not in descriptor.fields_by_name
+    assert not hasattr(sysml_pb2, "SlotValue")
+    assert all(field.number != 3 for field in descriptor.fields)
 
 
 def test_legacy_rpcs_are_still_declared():
@@ -124,13 +134,13 @@ def test_instance_graph_round_trips():
         instance=sysml_pb2.Instance(
             id=1,
             type_symbol_id="Demo::Vehicle",
-            slots={
-                "mass": sysml_pb2.SlotValue(
+            feature_values={
+                "mass": sysml_pb2.FeatureValue(
                     feature_name="mass",
                     value=sysml_pb2.Value(real_value=1200.0),
                     materialized=True,
                 ),
-                "wheels": sysml_pb2.SlotValue(
+                "wheels": sysml_pb2.FeatureValue(
                     feature_name="wheels",
                     values=[
                         sysml_pb2.Value(instance_id=2),
@@ -138,7 +148,7 @@ def test_instance_graph_round_trips():
                     ],
                     materialized=True,
                 ),
-                "broken": sysml_pb2.SlotValue(
+                "broken": sysml_pb2.FeatureValue(
                     feature_name="broken",
                     error="feature is unbound",
                 ),
@@ -153,7 +163,7 @@ def test_instance_graph_round_trips():
     again = sysml_pb2.InstantiateResponse()
     again.ParseFromString(response.SerializeToString())
     assert again == response
-    assert again.instance.slots["mass"].value.real_value == 1200.0
+    assert again.instance.feature_values["mass"].value.real_value == 1200.0
 
 
 def test_every_value_kind_round_trips():
@@ -232,6 +242,88 @@ def test_enum_literal_is_an_added_value_arm():
     assert again == value
 
     # A client whose schema predates the arm keeps the bytes intact.
+    older = sysml_pb2.ServerInfoRequest()
+    older.ParseFromString(payload)
+    assert older.SerializeToString() == payload
+
+
+def test_apply_edits_is_an_added_rpc():
+    """The edit RPC is new, so it displaces nothing a client already calls."""
+    service = sysml_pb2.DESCRIPTOR.services_by_name["SysMLService"]
+    methods = {method.name: method for method in service.methods}
+    assert "ApplyEdits" in methods
+    assert methods["ApplyEdits"].input_type.name == "ApplyEditsRequest"
+    assert methods["ApplyEdits"].output_type.name == "ApplyEditsResponse"
+
+
+def test_edit_messages_pin_their_field_numbers():
+    """The edit messages' own numbering, pinned from the release that added it."""
+    expected = {
+        "ApplyEditsRequest": {"model_hash": 1, "operations": 2},
+        "EditOperation": {"set_value": 1, "rename": 2},
+        "SetValueEdit": {"target": 1, "value": 2},
+        "RenameEdit": {"target": 1, "new_name": 2},
+        "ApplyEditsResponse": {
+            "content": 1,
+            "applied": 2,
+            "error": 3,
+            "failure": 4,
+            "diagnostics": 5,
+            "referring_elements": 6,
+        },
+        "AppliedEdit": {
+            "operation_index": 1,
+            "target": 2,
+            "offset": 3,
+            "length": 4,
+            "old_text": 5,
+            "new_text": 6,
+        },
+    }
+    for message_name, fields in expected.items():
+        descriptor = getattr(sysml_pb2, message_name).DESCRIPTOR
+        got = {
+            name: descriptor.fields_by_name[name].number
+            for name in descriptor.fields_by_name
+        }
+        assert got == fields, f"{message_name} field numbers moved"
+
+
+def test_edit_failure_kinds_keep_their_values():
+    """A refusal kind is read by number, so a value is never reassigned."""
+    assert {
+        value.name: value.number
+        for value in sysml_pb2.EditFailure.DESCRIPTOR.values
+    } == {
+        "EDIT_FAILURE_UNSPECIFIED": 0,
+        "EDIT_FAILURE_NO_OPERATIONS": 1,
+        "EDIT_FAILURE_UNKNOWN_TARGET": 2,
+        "EDIT_FAILURE_AMBIGUOUS_TARGET": 3,
+        "EDIT_FAILURE_NOT_VALUED": 4,
+        "EDIT_FAILURE_INVALID_VALUE": 5,
+        "EDIT_FAILURE_INVALID_NAME": 6,
+        "EDIT_FAILURE_NOT_NAMED": 7,
+        "EDIT_FAILURE_RENAME_REFERENCED": 8,
+        "EDIT_FAILURE_OVERLAPPING_EDITS": 9,
+        "EDIT_FAILURE_RESULT_INVALID": 10,
+    }
+
+
+def test_an_edit_response_survives_an_older_reader():
+    """An older client parses an edit response as unknown fields, intact."""
+    response = sysml_pb2.ApplyEditsResponse(
+        content="package Demo { part def SC; }\n",
+        applied=[sysml_pb2.AppliedEdit(
+            operation_index=0, target="Demo::SC::unitMass", offset=42, length=14,
+            old_text="1000.0[SI::kg]", new_text="1050.0[SI::kg]",
+        )],
+    )
+    payload = response.SerializeToString()
+
+    again = sysml_pb2.ApplyEditsResponse()
+    again.ParseFromString(payload)
+    assert again == response
+
     older = sysml_pb2.ServerInfoRequest()
     older.ParseFromString(payload)
     assert older.SerializeToString() == payload

@@ -3,9 +3,9 @@ package resolve
 import (
 	"fmt"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // ResolveDocument walks the document's references and resolves each, recording
@@ -102,6 +102,8 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		// names are not all references (see resolveTrigger).
 		if d.IsAccept {
 			r.resolveTrigger(scope, d.Value)
+		} else if d.Kind == ast.UsageBinding && isImplicitCalcResult(scope, d.Value) {
+			// A calc binding may name its implicit result feature as the value end.
 		} else {
 			r.resolveExpr(scope, d.Value)
 		}
@@ -189,10 +191,10 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		r.walkMembers(scope, d.Body)
 	case *ast.AssumeMember:
 		r.resolveExpr(scope, d.Expression)
-		r.walkConstraintBody(scope, r.resolveConstraintReference(scope, d.Reference), d.Body)
+		r.walkConstraintBody(scope, d, r.resolveConstraintReference(scope, d.Reference), d.Body)
 	case *ast.RequireMember:
 		r.resolveExpr(scope, d.Expression)
-		r.walkConstraintBody(scope, r.resolveConstraintReference(scope, d.Reference), d.Body)
+		r.walkConstraintBody(scope, d, r.resolveConstraintReference(scope, d.Reference), d.Body)
 	case *ast.EntryMember:
 		r.walkMembers(scope, d.Actions)
 	case *ast.DoMember:
@@ -280,6 +282,41 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		}
 		r.walkMembers(body, d.Body)
 	}
+}
+
+func isImplicitCalcResult(scope *symbols.Scope, node ast.Node) bool {
+	owner := scope.Owner()
+	if owner == nil {
+		return false
+	}
+	switch decl := owner.Decl.(type) {
+	case *ast.Definition:
+		if decl.Kind != ast.DefCalc {
+			return false
+		}
+	case *ast.Usage:
+		if decl.Kind != ast.UsageCalc {
+			return false
+		}
+	default:
+		return false
+	}
+	var name string
+	switch ref := node.(type) {
+	case *ast.FeatureReference:
+		if ref.Name == nil || len(ref.Name.Parts) != 1 {
+			return false
+		}
+		name = ref.Name.Parts[0].Text
+	case *ast.QualifiedName:
+		if len(ref.Parts) != 1 {
+			return false
+		}
+		name = ref.Parts[0].Text
+	default:
+		return false
+	}
+	return name == "result"
 }
 
 // resolveTrigger resolves the references a transition trigger carries.
@@ -439,6 +476,9 @@ func (r *Resolver) resolveRelationships(scope *symbols.Scope, decl ast.Node, rel
 					continue
 				}
 			}
+			if rel.Kind == ast.RelReferences && isImplicitCalcResult(scope, target) {
+				continue
+			}
 
 			// A reference subsetting resolves its leading segment past the
 			// name decl borrows from it; memoizing that result makes the
@@ -470,15 +510,20 @@ func (r *Resolver) resolveConstraintReference(scope *symbols.Scope, ref *ast.Qua
 	return sym
 }
 
-// walkConstraintBody walks the body of a require/assume member. The member
+// walkConstraintBody walks the body of a require/assume member, in the scope its
+// declarations were built into so that nested bodies resolve too. The member
 // reference-subsets the requirement ref, so the body may redefine that
 // requirement's features by plain name (SysML.xtext RequirementConstraintUsage).
-func (r *Resolver) walkConstraintBody(scope *symbols.Scope, ref *symbols.Symbol, body []ast.Node) {
+func (r *Resolver) walkConstraintBody(scope *symbols.Scope, decl ast.Node, ref *symbols.Symbol, body []ast.Node) {
+	scope = symbols.ConstraintBodyScope(scope, decl)
+	if scope == nil {
+		return
+	}
 	if ref != nil {
 		members := make(map[ast.Node]bool, len(body))
 		for _, m := range body {
-			decl, _ := unwrapForResolve(m)
-			members[decl] = true
+			member, _ := unwrapForResolve(m)
+			members[member] = true
 		}
 		r.constraintRefs = append(r.constraintRefs, constraintRef{ref: ref, members: members})
 		defer func() { r.constraintRefs = r.constraintRefs[:len(r.constraintRefs)-1] }()
@@ -894,30 +939,70 @@ func (r *Resolver) resolveExpr(scope *symbols.Scope, e ast.Node) {
 	// Literals (LiteralBool/String/Integer/Real/Infinity, NullExpr) have no refs.
 }
 
-// resolveFeatureChain resolves a FeatureChainExpr by resolving the operand
-// then walking each member part explicitly, assigning symbols to each part.
-func (r *Resolver) resolveFeatureChain(scope *symbols.Scope, fc *ast.FeatureChainExpr) {
-	// Resolve operand first
-	r.resolveExpr(scope, fc.Operand)
+// resolveFeatureChain resolves a FeatureChainExpr and returns its final symbol.
+func (r *Resolver) resolveFeatureChain(scope *symbols.Scope, fc *ast.FeatureChainExpr) *symbols.Symbol {
+	if fc == nil {
+		return nil
+	}
+	key := featureChainKey{scope: scope, node: fc}
+	if res, done := r.featureChains[key]; done {
+		return res.sym
+	}
 
-	// Get operand symbol WITHOUT following type (we need usage scope for inline members)
+	// Get the operand symbol without following its type for inline members.
 	operandSym := r.getOperandSymbol(scope, fc.Operand)
 	if operandSym == nil || fc.Member == nil {
-		return
+		r.memoizeFeatureChain(scope, fc, resolution{})
+		return nil
 	}
 	if featuring := r.featuringOf(scope, operandSym); featuring != nil {
 		operandSym = featuring
 	}
 
-	// Walk member parts explicitly, assigning symbols to each part
-	r.resolveMemberChain(operandSym, fc.Member)
+	// A chaining feature spelled as a qualified name resolves outward through the
+	// enclosing namespaces when the previous element has no such member (KerML
+	// §7.2.5): in `A::B.C::D`, `C::D` names a declaration, not a member of `B`.
+	// The outward reading is probed, so that a chain the walk below reads instead
+	// keeps its own diagnostics and per-segment symbols (see probe).
+	if len(fc.Member.Parts) > 1 {
+		if _, ok := r.chainMember(operandSym, fc.Member.Parts[0].Text); !ok {
+			var outwardSym *symbols.Symbol
+			outward := r.probe(fc.Member, func() bool {
+				var ok bool
+				outwardSym, ok = r.ResolveQualified(scope, fc.Member)
+				return ok
+			})
+			if outward {
+				outwardSym = r.followChainMemberType(outwardSym)
+				r.memoizeFeatureChain(scope, fc, resolution{sym: outwardSym, ok: outwardSym != nil})
+				return outwardSym
+			}
+		}
+	}
+
+	memberSym := r.resolveMemberChain(operandSym, fc.Member)
+	memberSym = r.followChainMemberType(memberSym)
+	r.memoizeFeatureChain(scope, fc, resolution{sym: memberSym, ok: memberSym != nil})
+	return memberSym
+}
+
+// chainMember looks a chain segment up as the member walk does: as a member of
+// sym when a model is attached, else in sym's own scope.
+func (r *Resolver) chainMember(sym *symbols.Symbol, name string) (*symbols.Symbol, bool) {
+	if found, ok := r.lookupMember(sym, name); ok {
+		return found, true
+	}
+	if sym == nil || sym.Scope == nil {
+		return nil, false
+	}
+	return sym.Scope.LookupLocal(name)
 }
 
 // resolveMemberChain walks a qualified name member-by-member in the given scope,
 // assigning each part's symbol explicitly (for feature chain member access).
-func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.QualifiedName) {
+func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.QualifiedName) *symbols.Symbol {
 	if qn == nil || len(qn.Parts) == 0 {
-		return
+		return nil
 	}
 
 	// Resolve first part using model.LookupMember if available, else scope.LookupLocal
@@ -930,7 +1015,7 @@ func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.Qualifi
 				Span:    qn.Parts[0].Span,
 				Message: "no scope for member lookup in " + parentSym.Name,
 			})
-			return
+			return nil
 		}
 		cur, ok = parentSym.Scope.LookupLocal(qn.Parts[0].Text)
 	}
@@ -940,7 +1025,7 @@ func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.Qualifi
 			Span:    qn.Parts[0].Span,
 			Message: "unresolved member: " + qn.Parts[0].Text,
 		})
-		return
+		return nil
 	}
 	r.recordPart(qn, 0, cur)
 
@@ -955,7 +1040,7 @@ func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.Qualifi
 					Span:    qn.Parts[i].Span,
 					Message: "no members in " + cur.Name,
 				})
-				return
+				return nil
 			}
 			next, found = cur.Scope.LookupLocal(qn.Parts[i].Text)
 		}
@@ -965,7 +1050,7 @@ func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.Qualifi
 				Span:    qn.Parts[i].Span,
 				Message: "unresolved member: " + qn.Parts[i].Text + " in " + cur.Name,
 			})
-			return
+			return nil
 		}
 
 		r.recordPart(qn, i, next)
@@ -974,6 +1059,7 @@ func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.Qualifi
 
 	// Store final resolution in memo
 	r.memoize(qn, resolution{cur, true})
+	return cur
 }
 
 // getOperandSymbol returns the symbol of an expression operand WITHOUT following
@@ -1003,38 +1089,29 @@ func (r *Resolver) getOperandSymbol(scope *symbols.Scope, e ast.Node) *symbols.S
 		}
 		return sym
 	case *ast.FeatureChainExpr:
-		// For chained access, get the final member's symbol
-		if v.Member == nil {
-			return nil
-		}
-		// First resolve the chain
-		r.resolveFeatureChain(scope, v)
-		// Get the operand's symbol, then lookup member
-		operandSym := r.getOperandSymbol(scope, v.Operand)
-		if featuring := r.featuringOf(scope, operandSym); featuring != nil {
-			operandSym = featuring
-		}
-		if operandSym == nil || operandSym.Scope == nil {
-			return nil
-		}
-		memberSym, ok := r.ResolveQualified(operandSym.Scope, v.Member)
-		if !ok {
-			return nil
-		}
-		// Same logic: check if member has inline content
-		if usage, isUsage := memberSym.Decl.(*ast.Usage); isUsage {
-			if memberSym.Scope != nil && len(memberSym.Scope.Members()) > 0 {
-				return memberSym
-			}
-			typeSym := r.getUsageType(memberSym.OwnerScope, usage)
-			if typeSym != nil {
-				return typeSym
-			}
-		}
-		return memberSym
+		return r.resolveFeatureChain(scope, v)
 	default:
+		r.resolveExpr(scope, e)
 		return nil
 	}
+}
+
+// followChainMemberType follows a usage's type when it has no inline members.
+func (r *Resolver) followChainMemberType(sym *symbols.Symbol) *symbols.Symbol {
+	if sym == nil {
+		return nil
+	}
+	usage, isUsage := sym.Decl.(*ast.Usage)
+	if !isUsage {
+		return sym
+	}
+	if sym.Scope != nil && len(sym.Scope.Members()) > 0 {
+		return sym
+	}
+	if typeSym := r.getUsageType(sym.OwnerScope, usage); typeSym != nil {
+		return typeSym
+	}
+	return sym
 }
 
 // baseThatFQN is the implicit `that` feature every usage takes from the base

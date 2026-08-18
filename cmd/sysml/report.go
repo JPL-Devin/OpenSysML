@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Open-MBEE/Systemica/internal/repl"
+	"github.com/Open-MBEE/OpenSysML/internal/repl"
 )
 
 // The prefix this command reports a failure under, as `prog: ` does in any Unix
@@ -144,7 +144,7 @@ func (r *reporter) failed(message string) {
 	}
 }
 
-// finding records a diagnostic the run itself produced — a slot whose value
+// finding records a diagnostic the run itself produced — a feature value whose value
 // could not be materialized — and reports it like one analysis found. It is a
 // model error rather than a verdict, so it leaves the run undecided.
 func (r *reporter) finding(message string) {

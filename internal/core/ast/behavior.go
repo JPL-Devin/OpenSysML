@@ -1,5 +1,7 @@
 package ast
 
+import "github.com/Open-MBEE/OpenSysML/internal/core/source"
+
 // Behavioral AST nodes for SysML v2 actions and state machines.
 // These nodes implement the Node interface and populate Usage.Members
 // for action and state usages (UsageAction, UsageState).
@@ -21,25 +23,29 @@ type FinalNode struct {
 // ForkNode splits execution into concurrent flows (1 incoming → N outgoing).
 type ForkNode struct {
 	NodeBase
-	Name string
+	Name     string
+	NameSpan source.Span // span of Name, empty for an unnamed node
 }
 
 // JoinNode synchronizes concurrent flows (N incoming → 1 outgoing).
 type JoinNode struct {
 	NodeBase
-	Name string
+	Name     string
+	NameSpan source.Span // span of Name, empty for an unnamed node
 }
 
 // MergeNode merges alternative flows (N incoming → 1 outgoing, first-wins).
 type MergeNode struct {
 	NodeBase
-	Name string
+	Name     string
+	NameSpan source.Span // span of Name, empty for an unnamed node
 }
 
 // DecisionNode is a conditional branch point (1 incoming → N guarded outgoing).
 type DecisionNode struct {
 	NodeBase
-	Name string
+	Name     string
+	NameSpan source.Span // span of Name, empty for an unnamed node
 }
 
 // ActionExecutionNode performs action work: invokes nested action or evaluates inline expression.
@@ -167,7 +173,7 @@ type StateNode struct {
 	IsInitial bool   // initial state marker
 	IsFinal   bool   // final state marker
 	Entry     []Node // entry behaviors (action sequence)
-	Do        []Node // do activity (ongoing action)
+	Do        []Node // do action (ongoing action)
 	Exit      []Node // exit behaviors (action sequence)
 	// Defer names the events the state defers while it is active: an event no
 	// transition of the active configuration handles is retained instead of
@@ -408,7 +414,7 @@ type EntryMember struct {
 	Actions []Node // action sequence
 }
 
-// DoMember represents ongoing activity in a state body.
+// DoMember represents an ongoing do action in a state body.
 // Syntax: do { <actions> }
 type DoMember struct {
 	NodeBase
@@ -442,7 +448,7 @@ type SubstateMember struct {
 //	transition [<name>] first <source> [accept <trigger>] [if <guard>]
 //	    [do <effect>] then <target>;
 //
-// or the `transition <source> to <target> …` spelling Systemica also accepts.
+// or the `transition <source> to <target> …` spelling OpenSysML also accepts.
 type TransitionMember struct {
 	NodeBase
 	Name    string         // the transition's own name, empty when anonymous

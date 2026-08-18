@@ -7,15 +7,15 @@ import (
 	"os"
 	"strings"
 
-	pb "github.com/Open-MBEE/Systemica/api/proto"
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/parser"
-	"github.com/Open-MBEE/Systemica/internal/core/passes"
-	"github.com/Open-MBEE/Systemica/internal/core/resolve"
-	"github.com/Open-MBEE/Systemica/internal/core/runtime"
-	"github.com/Open-MBEE/Systemica/internal/core/semantics"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	pb "github.com/Open-MBEE/OpenSysML/api/proto"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
+	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
+	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
+	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -25,7 +25,8 @@ import (
 const CapabilityTypeFacts = "type_facts"
 
 // CapabilityConvert names the capability of the Convert RPC, which writes a
-// model back out as SysML notation or RDF Turtle.
+// model back out as SysML notation or RDF Turtle. The RDF direction is
+// experimental, which the response says per conversion.
 const CapabilityConvert = "convert"
 
 // CapabilityVerification names the capability of the verification RPCs, which
@@ -54,12 +55,20 @@ const CapabilitySymbolAttributes = "symbol_attributes"
 // a value type as Value.unset, rather than as the empty object it materializes.
 const CapabilityUnsetValue = "unset_value"
 
+// CapabilityApplyEdits names the capability of the ApplyEdits RPC, which edits
+// a parsed model's own source, preserving everything the edit did not touch.
+const CapabilityApplyEdits = "apply_edits"
+
+// CapabilityFeatureValues names the capability of populating
+// Instance.feature_values, which replaced the pre-0.1.0 Instance.slots.
+const CapabilityFeatureValues = "feature_values"
+
 // capabilities is what this build supports, in report order. A capability is
 // only ever added: renaming or dropping one breaks clients that require it.
 var capabilities = []string{
 	CapabilityTypeFacts, CapabilityConvert, CapabilityVerification, CapabilityQuery,
 	CapabilityEnumValues, CapabilityEvaluateSubject, CapabilitySymbolAttributes,
-	CapabilityUnsetValue,
+	CapabilityUnsetValue, CapabilityFeatureValues, CapabilityApplyEdits,
 }
 
 // Capabilities returns the capability names this build of the service reports.

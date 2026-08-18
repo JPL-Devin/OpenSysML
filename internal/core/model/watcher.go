@@ -71,7 +71,7 @@ func (w *Watcher) Run() {
 }
 
 func (w *Watcher) handle(ev fsnotify.Event) {
-	if !isModelSource(ev.Name) {
+	if !IsModelSource(ev.Name) {
 		return
 	}
 	name := filepath.Base(ev.Name)
@@ -105,7 +105,7 @@ func (w *Watcher) handle(ev fsnotify.Event) {
 	}
 }
 
-// isModelSource reports whether path is a SysML/KerML source file.
-func isModelSource(path string) bool {
+// IsModelSource reports whether path is a SysML/KerML source file.
+func IsModelSource(path string) bool {
 	return strings.HasSuffix(path, ".sysml") || strings.HasSuffix(path, ".kerml")
 }

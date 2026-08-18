@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Open-MBEE/Systemica/internal/core/lexer"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 )
 
 // Grammar describes one generated TextMate grammar file.

@@ -1,0 +1,9 @@
+{
+  "type": "satisfy",
+  "evaluate": "test::analysisContext",
+  "assertions": {
+    "satisfy StructurePerspective::structure by lightVehicle": true,
+    "satisfy StructurePerspective::structure by heavyVehicle": false,
+    "satisfy StructurePerspective::structure by complexVehicle": false
+  }
+}

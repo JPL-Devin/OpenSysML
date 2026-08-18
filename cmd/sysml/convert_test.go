@@ -29,6 +29,13 @@ const sampleModel = `package Demo {
 }
 `
 
+// refusedModel carries inline metadata, which the RDF mapping refuses.
+const refusedModel = `package Demo {
+    metadata def Safety;
+    part seat {@Safety{isMandatory = true;}}
+}
+`
+
 func TestConvertRoundTripThroughCLI(t *testing.T) {
 	binary := buildCLI(t)
 	dir := t.TempDir()
@@ -177,6 +184,53 @@ func TestConvertErrors(t *testing.T) {
 				t.Errorf("expected %q in the error, got:\n%s", tc.want, out)
 			}
 		})
+	}
+}
+
+// TestConvertRDFIsMarkedExperimental checks every RDF conversion says so on
+// stderr — including one the mapping refuses — and that the notice never lands
+// in the converted model on stdout.
+func TestConvertRDFIsMarkedExperimental(t *testing.T) {
+	binary := buildCLI(t)
+	dir := t.TempDir()
+	model := filepath.Join(dir, "model.sysml")
+	behavior := filepath.Join(dir, "refused.sysml")
+	if err := os.WriteFile(model, []byte(sampleModel), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(behavior, []byte(refusedModel), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	to := runCommand(t, exec.Command(binary, model, "-convert", "ttl"))
+	if to.status != 0 {
+		t.Fatalf("converting to Turtle failed: %s%s", to.stdout, to.stderr)
+	}
+	if !strings.Contains(to.stderr, "RDF conversion is experimental") {
+		t.Errorf("no experimental notice on stderr:\n%s", to.stderr)
+	}
+	if strings.Contains(to.stdout, "experimental") {
+		t.Errorf("the notice landed in the converted model:\n%s", to.stdout)
+	}
+
+	turtle := filepath.Join(dir, "model.ttl")
+	run(t, binary, model, "-convert", "ttl", "-o", turtle)
+	from := runCommand(t, exec.Command(binary, turtle, "-convert", "sysml"))
+	if !strings.Contains(from.stderr, "RDF conversion is experimental") {
+		t.Errorf("reading RDF is experimental too, but was not marked:\n%s", from.stderr)
+	}
+
+	notation := runCommand(t, exec.Command(binary, model, "-convert", "sysml"))
+	if strings.Contains(notation.output(), "experimental") {
+		t.Errorf("a notation conversion is stable, but was marked:\n%s", notation.output())
+	}
+
+	refused := runCommand(t, exec.Command(binary, behavior, "-convert", "ttl"))
+	if refused.status == 0 {
+		t.Fatalf("expected the mapping to refuse inline metadata:\n%s", refused.stdout)
+	}
+	if !strings.Contains(refused.stderr, "RDF conversion is experimental") {
+		t.Errorf("a refusal is the experimental behavior, but was not marked:\n%s", refused.stderr)
 	}
 }
 

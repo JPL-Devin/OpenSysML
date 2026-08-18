@@ -268,6 +268,45 @@ func TestMetaSaveReportsOverwrite(t *testing.T) {
 	}
 }
 
+// TestMetaSaveTurtleIsMarkedExperimental checks a .ttl save reports the RDF
+// mapping's status, that a refused one reports it alongside the error, and that
+// a notation save does not.
+func TestMetaSaveTurtleIsMarkedExperimental(t *testing.T) {
+	dir := t.TempDir()
+
+	s := NewSession()
+	s.Submit("package Demo { part def Engine; }")
+	out, _, err := s.runMeta("%save " + filepath.Join(dir, "out.ttl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(out, "\n"), "RDF conversion is experimental") {
+		t.Errorf("expected an experimental notice, got %v", out)
+	}
+
+	out, _, err = s.runMeta("%save " + filepath.Join(dir, "out.sysml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(strings.Join(out, "\n"), "experimental") {
+		t.Errorf("a notation save is stable, but was marked: %v", out)
+	}
+
+	refusing := NewSession()
+	refusing.Submit("package P { metadata def Safety; part seat {@Safety{isMandatory = true;}} }")
+	out, _, err = refusing.runMeta("%save " + filepath.Join(dir, "refused.ttl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(out, "\n")
+	if !strings.Contains(joined, "error:") {
+		t.Fatalf("expected the mapping to refuse inline metadata, got %v", out)
+	}
+	if !strings.Contains(joined, "RDF conversion is experimental") {
+		t.Errorf("a refusal is the experimental behavior, but was not marked: %v", out)
+	}
+}
+
 // TestMetaSaveHelp checks the command is discoverable.
 func TestMetaSaveHelp(t *testing.T) {
 	s := NewSession()

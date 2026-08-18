@@ -1,7 +1,8 @@
 package symbols
 
 import (
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 // Build constructs the immutable scope tree for a parsed document.
@@ -179,6 +180,10 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 		}
 		scope.AddChild(regionScope)
 		buildMembers(regionScope, d.States)
+	case *ast.AssumeMember:
+		buildConstraintBodyScope(scope, d, d.Body)
+	case *ast.RequireMember:
+		buildConstraintBodyScope(scope, d, d.Body)
 	case *ast.EntryMember:
 		// An entry/do/exit action is a feature of the state declaring it, so a
 		// named one (`entry action entryAction :>> 'entry';`) is a member of the
@@ -230,10 +235,56 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 		child.markBodyLocal()
 		scope.AddChild(child)
 		buildMembers(child, d.Body)
-	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
-		// Control flow nodes without explicit names in AST - skip indexing
-		// (If these nodes gain name fields in future, register them here)
+	case *ast.ForkNode:
+		// A control node is an action usage (Actions::ForkAction et al.), so a
+		// named one is a member a succession may name as source or target.
+		buildControlNode(scope, d, d.Name, d.NameSpan, vis, trivia)
+	case *ast.JoinNode:
+		buildControlNode(scope, d, d.Name, d.NameSpan, vis, trivia)
+	case *ast.MergeNode:
+		buildControlNode(scope, d, d.Name, d.NameSpan, vis, trivia)
+	case *ast.DecisionNode:
+		buildControlNode(scope, d, d.Name, d.NameSpan, vis, trivia)
 	}
+}
+
+// buildControlNode registers a named fork/join/merge/decision node the way a
+// final node is registered, at its name's span; an unnamed one declares none.
+func buildControlNode(scope *Scope, decl ast.Node, name string, nameSpan source.Span, vis ast.Visibility, trivia []ast.Trivia) {
+	if name == "" {
+		return
+	}
+	id := ast.Identification{Name: name, NameSpan: nameSpan}
+	child := NewScope(scope, decl)
+	sym := newSymbol(id, SymbolActionUsage, decl, vis, child, scope, trivia)
+	defineIdent(scope, id, sym)
+	scope.AddChild(child)
+}
+
+// buildConstraintBodyScope links the scope a require/assume body declares into.
+// The body states the requirement its member references (SysML v2 §7.20.5), so
+// its declarations are visible inside it and are no members of the namespace the
+// member itself is declared in.
+func buildConstraintBodyScope(scope *Scope, decl ast.Node, body []ast.Node) {
+	if len(body) == 0 {
+		return
+	}
+	child := NewScope(scope, decl)
+	child.markBodyLocal()
+	scope.AddChild(child)
+	buildMembers(child, body)
+}
+
+// ConstraintBodyScope returns the scope a require/assume body resolves against:
+// the one its declarations were built into, or parent for a body declaring none.
+func ConstraintBodyScope(parent *Scope, decl ast.Node) *Scope {
+	if parent == nil {
+		return nil
+	}
+	if child := parent.ChildFor(decl); child != nil {
+		return child
+	}
+	return parent
 }
 
 // buildConnectorEnds registers a symbol for every end of a connector usage that

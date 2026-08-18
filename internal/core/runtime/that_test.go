@@ -3,10 +3,10 @@ package runtime
 import (
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 )
 
-// realValue reports the real a slot holds.
+// realValue reports the real a feature value holds.
 func realValue(t *testing.T, v Value) float64 {
 	t.Helper()
 	if v.Kind != ValConst || v.Const.Kind != semantics.ValReal {
@@ -16,7 +16,7 @@ func realValue(t *testing.T, v Value) float64 {
 }
 
 // A usage's `that` names the object featuring the usage's values, so a chain
-// from it reads that object's slots ([KerML, 8.4.2]).
+// from it reads that object's feature values ([KerML, 8.4.2]).
 func TestThatReadsTheFeaturingObject(t *testing.T) {
 	const src = `
 	package test {
@@ -25,12 +25,12 @@ func TestThatReadsTheFeaturingObject(t *testing.T) {
 		part def Holder { part p : P { attribute b : Real = that.a; } }
 	}`
 	inst, ctx := instantiatePart(t, "Holder", src)
-	p := slotInstance(t, ctx, inst, "p")
-	slot, err := p.GetSlot(ctx, "b")
+	p := fvInstance(t, ctx, inst, "p")
+	fv, err := p.GetFeatureValue(ctx, "b")
 	if err != nil {
-		t.Fatalf("GetSlot b: %v", err)
+		t.Fatalf("GetFeatureValue b: %v", err)
 	}
-	if got := realValue(t, slot.HeldValue()); got != 1.5 {
+	if got := realValue(t, fv.HeldValue()); got != 1.5 {
 		t.Errorf("b = %v, want the featuring object's a (1.5)", got)
 	}
 }
@@ -46,12 +46,12 @@ func TestThatReadsTheInnermostFeaturingObject(t *testing.T) {
 		part def Holder { part o : Outer; }
 	}`
 	inst, ctx := instantiatePart(t, "Holder", src)
-	i := slotInstance(t, ctx, inst, "o", "i")
-	slot, err := i.GetSlot(ctx, "b")
+	i := fvInstance(t, ctx, inst, "o", "i")
+	fv, err := i.GetFeatureValue(ctx, "b")
 	if err != nil {
-		t.Fatalf("GetSlot b: %v", err)
+		t.Fatalf("GetFeatureValue b: %v", err)
 	}
-	if got := realValue(t, slot.HeldValue()); got != 2.0 {
+	if got := realValue(t, fv.HeldValue()); got != 2.0 {
 		t.Errorf("b = %v, want the inner object's a (2.0)", got)
 	}
 }

@@ -7,24 +7,65 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/semantics"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // ErrAmbiguousSubject is returned when more than one object carries the checked
 // element, so which one the verdict would be about is a question, not an answer.
 var ErrAmbiguousSubject = errors.New("ambiguous subject")
 
-// condition is one boolean check a constraint or requirement states, with the
+// Condition is one boolean check a constraint or requirement states, with the
 // scope its expression resolves names in. A condition states either an
 // expression or a group, which holds when all of its conditions hold.
-type condition struct {
-	expr     ast.Node
-	scope    *symbols.Scope
-	group    []condition
-	negated  bool
-	required bool // an assumption is trusted rather than required to hold
+type Condition struct {
+	// Expr is the condition's expression, nil for a group.
+	Expr ast.Node
+
+	// Scope is where Expr's names resolve, nil for a group.
+	Scope *symbols.Scope
+
+	// Group is the conditions a body states, all of which must hold; nil for a
+	// condition stating an expression.
+	Group []Condition
+
+	// Negated is the negation the declaration wrote, applied to Expr or to the
+	// whole conjunction Group stands for.
+	Negated bool
+
+	// Required distinguishes a required condition from an assumption, which is
+	// trusted rather than required to hold.
+	Required bool
+}
+
+// Label renders the condition as written, negation and grouping included.
+func (c Condition) Label() string { return conditionLabel(c) }
+
+// Owner is the element declaring the condition, which is the supertype it was
+// inherited from for an inherited one, or nil when the scope has no owner.
+func (c Condition) Owner() *symbols.Symbol {
+	// A body-local scope owns no symbol, so the declaring element is the
+	// nearest enclosing scope that does.
+	for s := c.Scope; s != nil; s = s.Parent() {
+		if owner := s.Owner(); owner != nil {
+			return owner
+		}
+	}
+	return nil
+}
+
+// ConditionsOf returns the conditions sym states, its inherited ones first: the
+// same collection, in the same order, that evaluating sym checks. scope stands
+// in for sym's own scope when sym declares none.
+func (ctx *Context) ConditionsOf(sym *symbols.Symbol, scope *symbols.Scope) []Condition {
+	if sym == nil {
+		return nil
+	}
+	if scope == nil {
+		scope = sym.OwnerScope
+	}
+	return conditionsOf(ctx.chainMembers(sym, scope))
 }
 
 // scopedExpr is an expression with the scope its names resolve in.
@@ -36,8 +77,8 @@ type scopedExpr struct {
 // conditionsOf returns the conditions the members state, inherited ones first.
 // A member states its condition either directly (`require x < y;`, `assert x < y;`)
 // or through the body of an anonymous nested constraint (`require constraint { x < y }`).
-func conditionsOf(members []scopedMember) []condition {
-	var out []condition
+func conditionsOf(members []scopedMember) []Condition {
+	var out []Condition
 	for _, member := range members {
 		out = appendConditions(out, member.node, member.scope, true, false)
 	}
@@ -47,24 +88,24 @@ func conditionsOf(members []scopedMember) []condition {
 // appendConditions appends the conditions node states. required says whether the
 // enclosing member requires them to hold or only assumes them; negated is the
 // negation the enclosing member wrote, which a nested body inherits.
-func appendConditions(out []condition, node ast.Node, scope *symbols.Scope, required, negated bool) []condition {
+func appendConditions(out []Condition, node ast.Node, scope *symbols.Scope, required, negated bool) []Condition {
 	switch m := node.(type) {
 	case *ast.ConstraintMember:
 		negated = negated != m.IsNegated
 		required = required && m.IsAssert
 		if m.Expression != nil {
-			out = append(out, condition{expr: m.Expression, scope: scope, negated: negated, required: required})
+			out = append(out, Condition{Expr: m.Expression, Scope: scope, Negated: negated, Required: required})
 		}
 		if len(m.Body) == 0 {
 			return out
 		}
-		var body []condition
+		var body []Condition
 		for _, nested := range m.Body {
 			body = appendConditions(body, nested, scope, true, false)
 		}
 		if !negated {
 			for _, c := range body {
-				c.required = c.required && required
+				c.Required = c.Required && required
 				out = append(out, c)
 			}
 			return out
@@ -74,24 +115,28 @@ func appendConditions(out []condition, node ast.Node, scope *symbols.Scope, requ
 		// of one is that one condition.
 		if len(body) == 1 {
 			only := body[0]
-			only.negated = !only.negated
-			only.required = only.required && required
+			only.Negated = !only.Negated
+			only.Required = only.Required && required
 			return append(out, only)
 		}
-		out = append(out, condition{group: body, negated: true, required: required})
+		out = append(out, Condition{Group: body, Negated: true, Required: required})
 	case *ast.RequireMember:
 		if m.Expression != nil {
-			out = append(out, condition{expr: m.Expression, scope: scope, required: true})
+			out = append(out, Condition{Expr: m.Expression, Scope: scope, Required: true})
 		}
+		// The body is a scope of its own, which is where a condition it states
+		// reads the names it declares.
+		body := symbols.ConstraintBodyScope(scope, m)
 		for _, nested := range m.Body {
-			out = appendConditions(out, nested, scope, true, false)
+			out = appendConditions(out, nested, body, true, false)
 		}
 	case *ast.AssumeMember:
 		if m.Expression != nil {
-			out = append(out, condition{expr: m.Expression, scope: scope})
+			out = append(out, Condition{Expr: m.Expression, Scope: scope})
 		}
+		body := symbols.ConstraintBodyScope(scope, m)
 		for _, nested := range m.Body {
-			out = appendConditions(out, nested, scope, false, false)
+			out = appendConditions(out, nested, body, false, false)
 		}
 	}
 	return out
@@ -132,7 +177,7 @@ func (c conditionCheck) name() string {
 // evaluateConditions evaluates conds in order and reports whether every required
 // one holds, or — for a negated element — whether one of them fails. check.self
 // is the subject already, as checkSubject resolved it.
-func (ctx *Context) evaluateConditions(check conditionCheck, conds []condition) (bool, error) {
+func (ctx *Context) evaluateConditions(check conditionCheck, conds []Condition) (bool, error) {
 	if len(conds) == 0 {
 		return false, fmt.Errorf("%s %s: %w", check.kind, check.name(), ErrNoConditions)
 	}
@@ -144,12 +189,12 @@ func (ctx *Context) evaluateConditions(check conditionCheck, conds []condition) 
 	defer endStep()
 	required := false
 	for _, cond := range conds {
-		required = required || cond.required
+		required = required || cond.Required
 		holds, err := ctx.conditionHolds(activation, cond, features, self, check.bindings)
 		if err != nil {
 			return false, fmt.Errorf("%s %s: %s evaluation failed: %w", check.kind, check.name(), check.what, err)
 		}
-		if cond.required && !holds {
+		if cond.Required && !holds {
 			// A negated element asserts exactly this: one required condition
 			// failing makes the negated assertion hold.
 			if check.negated {
@@ -244,7 +289,7 @@ func (ctx *Context) readThrough(inst *Instance) bool {
 }
 
 // rootInstances returns the objects this runtime holds that stand on their own,
-// in identity order: an object a slot holds is reached through its holder, and one
+// in identity order: an object a feature value holds is reached through its holder, and one
 // materialized to read a nested declaration through is an occurrence of nothing,
 // while an object a caller asked for is a root whatever it materializes. One
 // declaration materialized twice is one object here, the latest.
@@ -268,8 +313,8 @@ func (ctx *Context) rootInstances() []*Instance {
 	return out
 }
 
-// heldObjectIDs returns the identities a slot of another object already holds, so
-// an object reached through its holder is no root of its own. Slots are read as
+// heldObjectIDs returns the identities a feature value of another object already holds, so
+// an object reached through its holder is no root of its own. Feature values are read as
 // they stand, since materializing one is the search that asked for these.
 func (ctx *Context) heldObjectIDs() map[int64]bool {
 	held := make(map[int64]bool)
@@ -277,8 +322,8 @@ func (ctx *Context) heldObjectIDs() map[int64]bool {
 		if inst == nil {
 			continue
 		}
-		for _, slot := range inst.Slots {
-			for _, id := range heldObjects(slot.HeldValue()) {
+		for _, fv := range inst.FeatureValues {
+			for _, id := range heldObjects(fv.HeldValue()) {
 				held[id] = true
 			}
 		}
@@ -354,7 +399,7 @@ type heldObject struct {
 }
 
 // nestedObjects returns the objects the object-valued features of inst hold,
-// materializing a lazy one as reading its slot does. A slot that cannot be read
+// materializing a lazy one as reading its feature value does. A feature value that cannot be read
 // yields no object: one that is not there is no subject either.
 func (ctx *Context) nestedObjects(inst *Instance) []heldObject {
 	features := ctx.FeaturesOf(inst.Type)
@@ -364,11 +409,11 @@ func (ctx *Context) nestedObjects(inst *Instance) []heldObject {
 		if feat.Name == "" || !holdsObjects(feat) {
 			continue
 		}
-		slot, err := inst.GetSlot(ctx, feat.Name)
-		if err != nil || slot == nil {
+		fv, err := inst.GetFeatureValue(ctx, feat.Name)
+		if err != nil || fv == nil {
 			continue
 		}
-		for _, id := range heldObjects(slot.HeldValue()) {
+		for _, id := range heldObjects(fv.HeldValue()) {
 			if child, ok := ctx.instances[id]; ok {
 				out = append(out, heldObject{feature: feat.Name, instance: child})
 			}
@@ -394,7 +439,7 @@ func holdsObjects(feat *EffectiveFeature) bool {
 	return false
 }
 
-// heldObjects returns the identities a slot value denotes, a collection's
+// heldObjects returns the identities a feature value denotes, a collection's
 // elements included.
 func heldObjects(val Value) []int64 {
 	if id, ok := val.Object(); ok {
@@ -485,10 +530,10 @@ func (ctx *Context) definitionOf(sym *symbols.Symbol) *symbols.Symbol {
 
 // conditionHolds evaluates one condition: an expression, or a group that holds
 // when all of its conditions hold. Its negation, if any, is applied last.
-func (ctx *Context) conditionHolds(activation int64, cond condition, features map[string]scopedExpr, self *Instance, bindings map[string]Value) (bool, error) {
+func (ctx *Context) conditionHolds(activation int64, cond Condition, features map[string]scopedExpr, self *Instance, bindings map[string]Value) (bool, error) {
 	holds := true
-	if cond.group != nil {
-		for _, sub := range cond.group {
+	if cond.Group != nil {
+		for _, sub := range cond.Group {
 			subHolds, err := ctx.conditionHolds(activation, sub, features, self, bindings)
 			if err != nil {
 				return false, err
@@ -496,13 +541,13 @@ func (ctx *Context) conditionHolds(activation int64, cond condition, features ma
 			holds = holds && subHolds
 		}
 	} else {
-		ec := NewEvalContextIn(ctx, cond.scope, self)
+		ec := NewEvalContextIn(ctx, cond.Scope, self)
 		ec.activation = activation
 		ec.features = features
 		if bindings != nil {
 			ec.Push(bindings)
 		}
-		result, err := ec.Eval(cond.expr)
+		result, err := ec.Eval(cond.Expr)
 		if err != nil {
 			return false, err
 		}
@@ -511,7 +556,7 @@ func (ctx *Context) conditionHolds(activation int64, cond condition, features ma
 		}
 		holds = result.Const.Bool
 	}
-	if cond.negated {
+	if cond.Negated {
 		holds = !holds
 	}
 	return holds, nil
@@ -519,10 +564,10 @@ func (ctx *Context) conditionHolds(activation int64, cond condition, features ma
 
 // negatedText renders what a negated element asserted and did not get: that not
 // every required condition holds.
-func negatedText(conds []condition) string {
+func negatedText(conds []Condition) string {
 	var texts []string
 	for _, cond := range conds {
-		if !cond.required {
+		if !cond.Required {
 			continue
 		}
 		texts = append(texts, conditionLabel(cond))
@@ -544,27 +589,35 @@ func (ctx *Context) conditionFeatures(sym *symbols.Symbol) map[string]scopedExpr
 		return nil
 	}
 	out := make(map[string]scopedExpr, len(features))
-	for _, feat := range features {
+	for i := range features {
+		feat := &features[i]
 		if feat.Name == "" {
 			continue
 		}
-		out[feat.Name] = scopedExpr{expr: feat.DefaultValue, scope: feat.DefaultScope()}
+		expr := feat.DefaultValue
+		if !ctx.valueBinds(feat) {
+			// A body governing over the inherited value supersedes it, so a
+			// condition read without an object reports the feature
+			// uninitialized rather than the value materializing replaces.
+			expr = nil
+		}
+		out[feat.Name] = scopedExpr{expr: expr, scope: feat.DefaultScope()}
 	}
 	return out
 }
 
 // conditionLabel renders a condition as written, so a violation names the
 // condition that failed, negation and grouping included.
-func conditionLabel(cond condition) string {
-	text := conditionText(cond.expr)
-	if cond.group != nil {
-		parts := make([]string, 0, len(cond.group))
-		for _, sub := range cond.group {
+func conditionLabel(cond Condition) string {
+	text := conditionText(cond.Expr)
+	if cond.Group != nil {
+		parts := make([]string, 0, len(cond.Group))
+		for _, sub := range cond.Group {
 			parts = append(parts, conditionLabel(sub))
 		}
 		text = "{ " + strings.Join(parts, "; ") + " }"
 	}
-	if cond.negated {
+	if cond.Negated {
 		text = "not " + text
 	}
 	return text

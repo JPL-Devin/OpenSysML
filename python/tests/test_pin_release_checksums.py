@@ -12,7 +12,7 @@ import re
 
 import pytest
 
-from pysysml.binary import PINNED_SHA256, pinned_digest
+from opensysml.binary import PINNED_SHA256, pinned_digest
 
 PYTHON_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PIN_SCRIPT = os.path.join(PYTHON_DIR, "scripts", "pin_release_checksums.py")
@@ -51,9 +51,9 @@ def test_rendering_the_table_it_read_changes_nothing():
 
 def test_a_pinned_version_is_reachable_through_the_package():
     """A digest written by the script is what the download check looks up."""
-    version = sorted(PINNED_SHA256["Open-MBEE/Systemica"])[-1]
-    for asset, digest in PINNED_SHA256["Open-MBEE/Systemica"][version].items():
-        assert pinned_digest(version, asset, "Open-MBEE/Systemica") == digest
+    version = sorted(PINNED_SHA256["Open-MBEE/OpenSysML"])[-1]
+    for asset, digest in PINNED_SHA256["Open-MBEE/OpenSysML"][version].items():
+        assert pinned_digest(version, asset, "Open-MBEE/OpenSysML") == digest
 
 
 def test_writing_a_release_adds_only_its_pins(tmp_path, monkeypatch):
@@ -70,9 +70,9 @@ def test_writing_a_release_adds_only_its_pins(tmp_path, monkeypatch):
     assert pin.main(["--version", "v9.9.9", "--write"]) == 0
 
     table = pin.pinned_table(str(binary_file))
-    assert table["Open-MBEE/Systemica"]["v9.9.9"] == {"sysml-grpc-linux-amd64": "ab" * 32}
-    assert table["Open-MBEE/Systemica"]["v0.0.7"] == (
-        PINNED_SHA256["Open-MBEE/Systemica"]["v0.0.7"]
+    assert table["Open-MBEE/OpenSysML"]["v9.9.9"] == {"sysml-grpc-linux-amd64": "ab" * 32}
+    assert table["Open-MBEE/OpenSysML"]["v0.0.7"] == (
+        PINNED_SHA256["Open-MBEE/OpenSysML"]["v0.0.7"]
     )
     # Only the table changed: the rest of the module is untouched.
     rest = re.sub(r"^PINNED_SHA256 = \{.*?^\}\n", "", binary_file.read_text(),
@@ -91,7 +91,7 @@ def test_a_release_whose_sidecar_disagrees_is_not_pinned(monkeypatch):
     monkeypatch.setattr(pin, "served_digest", lambda url: "cd" * 32)
 
     with pytest.raises(pin.PinError, match="the release is inconsistent"):
-        pin.digests_of("Open-MBEE/Systemica", "v9.9.9")
+        pin.digests_of("Open-MBEE/OpenSysML", "v9.9.9")
 
 
 def test_a_release_without_a_sidecar_is_still_pinned(monkeypatch):
@@ -103,7 +103,7 @@ def test_a_release_without_a_sidecar_is_still_pinned(monkeypatch):
     monkeypatch.setattr(pin, "download_digest", lambda url: "ab" * 32)
     monkeypatch.setattr(pin, "served_digest", lambda url: None)
 
-    assert pin.digests_of("Open-MBEE/Systemica", "v9.9.9") == {
+    assert pin.digests_of("Open-MBEE/OpenSysML", "v9.9.9") == {
         "sysml-grpc-linux-amd64": "ab" * 32
     }
 
@@ -113,7 +113,7 @@ def test_a_release_with_no_binaries_is_refused(monkeypatch):
     monkeypatch.setattr(pin.urllib.request, "urlopen", _fake_urlopen('{"assets": []}'))
 
     with pytest.raises(pin.PinError, match="publishes no"):
-        pin.release_assets("Open-MBEE/Systemica", "v9.9.9")
+        pin.release_assets("Open-MBEE/OpenSysML", "v9.9.9")
 
 
 def test_only_service_binaries_are_pinned(monkeypatch):
@@ -126,7 +126,7 @@ def test_only_service_binaries_are_pinned(monkeypatch):
     )
     monkeypatch.setattr(pin.urllib.request, "urlopen", _fake_urlopen(body))
 
-    assert pin.release_assets("Open-MBEE/Systemica", "v9.9.9") == {
+    assert pin.release_assets("Open-MBEE/OpenSysML", "v9.9.9") == {
         "sysml-grpc-linux-amd64": "u1"
     }
 
@@ -150,7 +150,7 @@ def _fake_urlopen(body):
 
 def test_checking_reports_a_republished_release(monkeypatch):
     """A pinned asset that now hashes differently is a republished release."""
-    table = {"Open-MBEE/Systemica": {"v0.0.7": {"sysml-grpc-linux-amd64": "ab" * 32}}}
+    table = {"Open-MBEE/OpenSysML": {"v0.0.7": {"sysml-grpc-linux-amd64": "ab" * 32}}}
     monkeypatch.setattr(
         pin, "digests_of", lambda repo, version: {"sysml-grpc-linux-amd64": "cd" * 32}
     )
@@ -162,17 +162,17 @@ def test_checking_reports_a_republished_release(monkeypatch):
 
 def test_checking_reports_an_asset_that_is_no_longer_published(monkeypatch):
     """A pin with nothing behind it can never be satisfied, so it is reported."""
-    table = {"Open-MBEE/Systemica": {"v0.0.7": {"sysml-grpc-linux-amd64": "ab" * 32}}}
+    table = {"Open-MBEE/OpenSysML": {"v0.0.7": {"sysml-grpc-linux-amd64": "ab" * 32}}}
     monkeypatch.setattr(pin, "digests_of", lambda repo, version: {})
 
     assert pin.check(table) == [
-        "sysml-grpc-linux-amd64 of v0.0.7 of Open-MBEE/Systemica is no longer published"
+        "sysml-grpc-linux-amd64 of v0.0.7 of Open-MBEE/OpenSysML is no longer published"
     ]
 
 
 def test_checking_reports_a_published_asset_nothing_pins(monkeypatch):
     """A platform added to a release without a pin would download unpinned."""
-    table = {"Open-MBEE/Systemica": {"v0.0.7": {"sysml-grpc-linux-amd64": "ab" * 32}}}
+    table = {"Open-MBEE/OpenSysML": {"v0.0.7": {"sysml-grpc-linux-amd64": "ab" * 32}}}
     monkeypatch.setattr(
         pin, "digests_of",
         lambda repo, version: {
@@ -183,13 +183,13 @@ def test_checking_reports_a_published_asset_nothing_pins(monkeypatch):
 
     problems = pin.check(table)
     assert problems == [
-        "sysml-grpc-linux-riscv64 of v0.0.7 of Open-MBEE/Systemica is published but unpinned"
+        "sysml-grpc-linux-riscv64 of v0.0.7 of Open-MBEE/OpenSysML is published but unpinned"
     ]
 
 
 def test_checking_passes_when_every_pin_still_holds(monkeypatch):
     """The release the package pins is the release being served."""
-    table = {"Open-MBEE/Systemica": {"v0.0.7": {"sysml-grpc-linux-amd64": "ab" * 32}}}
+    table = {"Open-MBEE/OpenSysML": {"v0.0.7": {"sysml-grpc-linux-amd64": "ab" * 32}}}
     monkeypatch.setattr(
         pin, "digests_of", lambda repo, version: {"sysml-grpc-linux-amd64": "ab" * 32}
     )
@@ -223,7 +223,7 @@ class TestGitHubToken:
         monkeypatch.setattr(pin.urllib.request, "urlopen",
                             lambda *a, **k: called.append(a) or None)
         with pytest.raises(pin.MissingTokenError):
-            pin.release_assets("Open-MBEE/Systemica", "v9.9.9")
+            pin.release_assets("Open-MBEE/OpenSysML", "v9.9.9")
         assert called == []
 
     def test_the_token_authenticates_the_request(self, monkeypatch):
@@ -238,7 +238,7 @@ class TestGitHubToken:
             )(request)
 
         monkeypatch.setattr(pin.urllib.request, "urlopen", urlopen)
-        pin.release_assets("Open-MBEE/Systemica", "v9.9.9")
+        pin.release_assets("Open-MBEE/OpenSysML", "v9.9.9")
         assert requests[0].get_header("Authorization") == "Bearer test-token"
 
     def test_the_command_reports_a_missing_token_as_an_error(self, monkeypatch, capsys):

@@ -6,9 +6,9 @@ import (
 
 	"go.lsp.dev/protocol"
 
-	"github.com/Open-MBEE/Systemica/internal/core/lexer"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // PrepareRename reports the range the client should offer for editing, and
@@ -69,7 +69,7 @@ func (s *Server) Rename(ctx context.Context, params *protocol.RenameParams) (*pr
 		for _, ref := range collectRefs(doc.AST, doc.Scope) {
 			segs := s.ws.ResolveReferenceSegmentsInDoc(docName, ref)
 			for i, seg := range segs {
-				if sameSymbol(seg, target) {
+				if symbols.SameElement(seg, target) {
 					addEdit(docName, doc.Content, ref.QN.Parts[i].Span)
 				}
 			}
@@ -123,22 +123,6 @@ func (s *Server) renameable(sym *symbols.Symbol, span source.Span) (*symbols.Sym
 		return nil, source.Span{}, fmt.Errorf("cannot rename %q: declared outside the workspace", sym.Name)
 	}
 	return sym, span, nil
-}
-
-// sameSymbol compares symbols across documents. Resolution inside the document
-// under the cursor yields Document-tree pointers, while resolution through the
-// global index yields the index's own, so identity falls back to the declaring
-// document and declaration span.
-func sameSymbol(a, b *symbols.Symbol) bool {
-	switch {
-	case a == nil || b == nil:
-		return false
-	case a == b:
-		return true
-	case a.DocName == "" || a.DocName != b.DocName:
-		return false
-	}
-	return a.DeclSpan == b.DeclSpan
 }
 
 // validateNewName rejects names that would not lex as the identifier they are

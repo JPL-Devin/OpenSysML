@@ -55,11 +55,11 @@ Instantiate and inspect:
 sysml> %instantiate Car
 ✓ Created instance of Car
   ID: 1
-  Use %slots Car to inspect
+  Use %features Car to inspect
 
-sysml> %slots Car
+sysml> %features Car
 Instance: Car (ID: 1)
-Slots:
+Features:
   engine = Instance(ID: 2)
     power = 250.00
 ```

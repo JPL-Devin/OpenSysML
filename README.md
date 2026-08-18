@@ -10,18 +10,18 @@ A complete, production-grade SysML v2 implementation in Go—providing language 
 
 **Download pre-built binaries:**
 ```bash
-# Linux x64 (use systemica-linux-arm64.tar.gz on arm64)
-wget https://github.com/Open-MBEE/Systemica/releases/latest/download/systemica-linux-amd64.tar.gz
-tar xzf systemica-linux-amd64.tar.gz && sudo mv sysml sysml-lsp /usr/local/bin/
+# Linux x64 (use opensysml-linux-arm64.tar.gz on arm64)
+wget https://github.com/Open-MBEE/OpenSysML/releases/latest/download/opensysml-linux-amd64.tar.gz
+tar xzf opensysml-linux-amd64.tar.gz && sudo mv sysml sysml-lsp /usr/local/bin/
 
 # macOS (Intel or Apple Silicon) — see the note below
-brew install Open-MBEE/tap/systemica
+brew install Open-MBEE/tap/opensysml
 ```
 
 **With a Go toolchain (no download, never quarantined):**
 ```bash
-go install github.com/Open-MBEE/Systemica/cmd/sysml@latest
-go install github.com/Open-MBEE/Systemica/cmd/sysml-lsp@latest
+go install github.com/Open-MBEE/OpenSysML/cmd/sysml@latest
+go install github.com/Open-MBEE/OpenSysML/cmd/sysml-lsp@latest
 ```
 
 **Or build from source:**
@@ -34,15 +34,15 @@ make build
 > so a tarball downloaded *in a browser* carries `com.apple.quarantine` and Gatekeeper shows
 > "cannot be opened because the developer cannot be verified". Homebrew downloads with
 > `curl`, which never sets that attribute, so `brew install` avoids the prompt entirely.
-> Fallback if you download the tarball directly (`curl -fL ... systemica-darwin-arm64.tar.gz`,
+> Fallback if you download the tarball directly (`curl -fL ... opensysml-darwin-arm64.tar.gz`,
 > then `xattr -d com.apple.quarantine`): see
 > [the guide](docs/guide/01-install.md#macos-gatekeeper). Signing/notarization is the eventual
 > fix — [docs/project/macos-distribution.md](docs/project/macos-distribution.md).
 >
 > Install by the **fully-qualified** name. Homebrew 6 requires third-party taps to be trusted
-> before their Ruby is loaded, and `brew install Open-MBEE/tap/systemica` trusts just that
-> formula. `brew tap Open-MBEE/tap && brew install systemica` needs
-> `brew trust --formula Open-MBEE/tap/systemica` in between.
+> before their Ruby is loaded, and `brew install Open-MBEE/tap/opensysml` trusts just that
+> formula. `brew tap Open-MBEE/tap && brew install opensysml` needs
+> `brew trust --formula Open-MBEE/tap/opensysml` in between.
 
 ### Try it
 
@@ -55,11 +55,11 @@ sysml> part def Wheel { attribute diameter = 16.0; }
 sysml> %instantiate Wheel
 ✓ Created instance of Wheel
   ID: 1
-  Use %slots Wheel to inspect
+  Use %features Wheel to inspect
 
-sysml> %slots Wheel
+sysml> %features Wheel
 Instance: Wheel (ID: 1)
-Slots:
+Features:
   diameter = 16.00
 ```
 
@@ -135,6 +135,7 @@ sysml> %advance 30
 
 - **Language Server** — A standard LSP server (`sysml-lsp`) with live diagnostics, semantic hover, go-to-definition, find references, completion, workspace-wide symbol search, formatting, rename, semantic tokens and quick fixes. A VS Code extension with TextMate grammars for `.sysml` and `.kerml` ships in [editors/vscode](editors/vscode), and any editor with a generic LSP client can drive the server directly — [guide chapter 8](docs/guide/08-editors.md) walks through both. *Not yet:* the extension is built from source rather than published to a marketplace, and the server answers no semantic token delta requests or signature help.
 - **Interactive REPL** — Exploratory modeling environment: define models incrementally, evaluate expressions on-the-fly, instantiate parts, run calculations, inspect runtime state—like IPython/Jupyter for systems engineering.
+- **Constraint Solving** *(experimental)* — Beyond evaluating what holds of an object: an external SMT solver answers whether a constraint, requirement or satisfaction assertion *can* hold, which conditions conflict when it cannot, what values would satisfy it, which variants a model permits, and what optimizes an `analysis def`'s objectives. The solver is optional and discovered at runtime — [the REPL command reference](docs/reference/repl-commands.md) documents each command and [installing a solver](docs/guide/01-install.md#installing-a-solver-optional) how to get one.
 - **Execution Runtime** — Not just a validator: instantiate parts, evaluate constraints against concrete values, execute calc/analysis cases. Action/state executor infrastructure complete (activity fork/join parallelism, decision guards, hierarchical/orthogonal states, choice/junction pseudostates, TimeEvent/ChangeEvent/AcceptEvent, sourceless transitions). See [spec compliance](docs/project/spec-compliance.md) for measured behavioral coverage.
 - **Python Client Library** — gRPC-based Python bindings for programmatic access: parse models, resolve symbols, evaluate expressions, instantiate parts, execute actions/state machines. Includes IPython display hooks for Jupyter notebooks and pandas DataFrame integration. Constraint, requirement, satisfaction and calc verdicts are available as RPCs (`verify_constraint`, `verify_requirement`, `verify_satisfaction`, `calc`).
 - **Modern Toolchain** — Incremental compilation, bundled standard library, persistent semantic caches. A model is a set of files, named on the command line or opened by the editor.
@@ -142,7 +143,7 @@ sysml> %advance 30
 ## Goals
 
 - **Performance:** Sub-millisecond parsing, single static binary, no JVM/Eclipse runtime
-- **Completeness:** SysML v2 textual notation support (95/95 stdlib files parse clean: 94 vendored OMG files and 1 Systemica extension)
+- **Completeness:** SysML v2 textual notation support (95/95 stdlib files parse clean: 94 vendored OMG files and 1 OpenSysML extension)
 - **Executable models:** Instantiate, evaluate, simulate—turn specifications into running systems
 - **Real-world ergonomics:** Multi-file workspaces, incremental analysis, rich diagnostics
 
@@ -165,15 +166,19 @@ sysml> %advance 30
 | Action execution engine (Tier 5) | ✅ Complete (56 conformance cases passing) |
 | State machine runtime (Tier 5) | ✅ Complete (64 conformance cases: transitions, accept events, sourceless) |
 | REPL debugging commands | ✅ Complete — `%constraint`, `%requirement`, `%satisfy` and `%calc` also answer from the command line (`-constraint`, `-requirement`, `-satisfy`, `-calc`) and over gRPC, on one evaluation |
-| Model save & SysML ↔ RDF Turtle conversion (`%save`, `sysml -convert`) | ✅ Complete for model **structure** (packages, definitions, usages, ports, connections, values, documentation) — a behavioral member is refused, see [the RDF mapping](docs/reference/rdf-mapping.md#limitations); worked example: [examples/rdf-interop-demo.sysml](examples/rdf-interop-demo.sysml) |
+| Model save to notation (`%save model.sysml`, `sysml -convert sysml`) | ✅ Complete — writes the source through the formatter, so comments and spacing survive |
+| SysML ↔ RDF Turtle conversion (`%save model.ttl`, `sysml -convert ttl`) | 🧪 **Experimental** — packages, definitions, usages, ports, connections, values, documentation, and the nodes an action or state body states (102 of 120 `examples/` models convert; what is not mapped is refused with the construct named), but the vocabulary may change without a compatibility path. Every run says so; see [the RDF mapping's status](docs/reference/rdf-mapping.md#status-experimental) and [worked example](examples/rdf-interop-demo.sysml) |
+| View rendering (`%render <view>`, `sysml -render`) | ✅ Complete for the kinds produced — containment tree, interconnection diagram, state machine, action flow and table, as indented text or in the kind's machine-readable form (Mermaid, Markdown). State and action renderings read the graph the runtime executes; the notation itself is tool-defined ([SysML v2 §10.2](docs/project/spec-compliance.md)) |
+| Constraint solving (`%check`, `%explain`, `%solve`, `%configure`, `%optimize`) | 🧪 **Experimental** — an external SMT-LIB 2 solver decides whether conditions *can* be satisfied, explains an `unsat` with a minimal unsat core, synthesises satisfying values, enumerates the variant selections a model permits and optimizes an `analysis def`'s objectives (optimization needs z3, which implements it). The solver is optional and discovered on `PATH` or through `OPENSYSML_SMT`; a build with none reports that rather than a verdict — see [installing a solver](docs/guide/01-install.md#installing-a-solver-optional) |
+| Source-preserving model edits (`ApplyEdits`, `model.edit()`) | ✅ Complete for the two operations offered — set a feature's value, rename a declaration — rewriting the bytes of the model's own source so every untouched byte is identical. A rename of a referenced element, and element creation or deletion, are refused rather than approximated |
 | Standard library bundling | ✅ Complete |
 | LSP server implementation | ✅ Diagnostics, hover, go-to-definition, references, symbols, completion, formatting, rename, semantic tokens (full + range), code actions (quick fixes) — semantic token deltas and signature help not implemented |
-| gRPC service layer | ✅ Complete (parse, symbols, diagnostics, runtime, verification, conversion and Query RPCs) |
-| Python client library | ✅ Complete for the RPCs that exist (connection lifecycle, parse/symbols/eval/instantiate/execute, constraint/requirement/satisfaction/calc verification, conversion, Query, IPython hooks, DataFrame) |
+| gRPC service layer | ✅ Complete (parse, symbols, diagnostics, runtime, verification, conversion, edit and Query RPCs) |
+| Python client library | ✅ Complete for the RPCs that exist (connection lifecycle, parse/symbols/eval/instantiate/execute, constraint/requirement/satisfaction/calc verification, conversion, edits, Query, IPython hooks, DataFrame) |
 
 **Current commit:** All tests pass (`go test -race ./...`), builds clean (`go build ./...`).
 **Test coverage:** 4,447 tests and subtests (4,440 pass, 7 skip themselves; 2,351 top-level `Test` functions) covering parsers, semantics, runtime (actions, states, instances, operators, validation). Behavioral robustness: 86 golden ASTs, 129 negatives, 297 conformance cases, 98 golden traces, 165 runtime robustness cases and 8 gRPC ones.
-**Parser coverage:** 95/95 bundled library files parse cleanly — the 94 official SysML v2 standard library files and the non-normative `Systemica Libraries/SystemicaMathFunctions.kerml` extension. Conformance verified by [stdlib_conformance_test.go](internal/core/libs/stdlib_conformance_test.go). Grammar reference: [OMG Xtext grammar](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/org.omg.kerml.xtext/src/org/omg/kerml/xtext).
+**Parser coverage:** 95/95 bundled library files parse cleanly — the 94 official SysML v2 standard library files and the non-normative `OpenSysML Libraries/OpenSysMLMathFunctions.kerml` extension. Conformance verified by [stdlib_conformance_test.go](internal/core/libs/stdlib_conformance_test.go). Grammar reference: [OMG Xtext grammar](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/org.omg.kerml.xtext/src/org/omg/kerml/xtext).
 **Behavioral execution:** Calc/constraint/requirement/satisfy fully functional. Action/state executors complete with nested invocation, control flow keywords, loop and conditional statements, send statement (297/297 conformance tests passing). See [spec compliance](docs/project/spec-compliance.md) for measured compliance (~98% faithful implementation).
 **Training examples:** 98/100 files clean (2 files, 4 errors), gated by `internal/core/model/testdata/training_examples_expected.txt`. Download with `./scripts/download-training-examples.sh` (from the [OMG training directory](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training)). See [training examples](docs/project/training-examples.md) for analysis.
 **Semantic layer:** Complete implementation of runtime operators, feature chains, and validation rules. See [examples/semantic-layer/](examples/semantic-layer/) for comprehensive demo.
@@ -205,7 +210,7 @@ sysml> %advance 30
 ## Module Structure
 
 ```
-github.com/Open-MBEE/Systemica
+github.com/Open-MBEE/OpenSysML
 ├── cmd/
 │   ├── sysml-lsp/          # LSP server binary
 │   ├── sysml-grpc/         # gRPC server binary (Python bindings)
@@ -226,7 +231,7 @@ github.com/Open-MBEE/Systemica
 ├── internal/lsp/           # LSP protocol implementation
 ├── internal/grpc/          # gRPC service implementation
 ├── internal/repl/          # REPL loop implementation
-├── python/                 # Python client bindings (pysysml)
+├── python/                 # Python client bindings (opensysml)
 ├── docs/                   # Design specs, architecture docs
 └── testdata/               # Test fixtures (.sysml, .kerml)
 ```
@@ -237,12 +242,12 @@ github.com/Open-MBEE/Systemica
 - **Parser:** Hand-written recursive descent (zero overhead, full error recovery, sub-ms parses)
 - **Grammar source:** OMG pilot Xtext grammars (`SysML.xtext` + `KerMLExpressions`)
 - **Spec compliance:** [OMG SysML v2.1 Beta 1 / KerML 1.1](https://www.omg.org/spec/SysML/2.0) (2026-05 release)
-- **Standard library:** 94 files from [SysML v2 Pilot Implementation 2026-05](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/releases/tag/2026-05), byte-identical, plus the non-normative `Systemica Libraries/SystemicaMathFunctions.kerml` extension
+- **Standard library:** 94 files from [SysML v2 Pilot Implementation 2026-05](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/releases/tag/2026-05), byte-identical, plus the non-normative `OpenSysML Libraries/OpenSysMLMathFunctions.kerml` extension
 - **CI/CD:** CircleCI for automated builds, tests, and releases
 
 ## Releases
 
-Pre-built binaries for Linux, macOS, and Windows are available on the [Releases page](https://github.com/Open-MBEE/Systemica/releases).
+Pre-built binaries for Linux, macOS, and Windows are available on the [Releases page](https://github.com/Open-MBEE/OpenSysML/releases).
 
 **Supported platforms:**
 - Linux (x64, ARM64)
@@ -255,12 +260,12 @@ Pre-built binaries for Linux, macOS, and Windows are available on the [Releases 
   binaries are published to GitHub Releases. Maintainer procedure:
   [docs/project/releasing.md](docs/project/releasing.md); what changed per release:
   [CHANGELOG.md](CHANGELOG.md)
-- The Python client is released on its own tag (`pysysml-v*`), which uploads `pysysml` to
+- The Python client is released on its own tag (`opensysml-v*`), which uploads `opensysml` to
   PyPI — its version is not coupled to the core's, since it resolves a `sysml-grpc` binary
   at runtime from whichever release the caller names
 
 **Release artifacts:** per-binary archives (`sysml-<os>-<arch>.tar.gz`,
-`sysml-lsp-<os>-<arch>.tar.gz`), `systemica-<os>-<arch>.tar.gz` bundles containing both
+`sysml-lsp-<os>-<arch>.tar.gz`), `opensysml-<os>-<arch>.tar.gz` bundles containing both
 binaries, and `SHA256SUMS.txt`. macOS binaries are not Developer ID signed or notarized and
 Windows binaries are not Authenticode signed — see
 [docs/project/macos-distribution.md](docs/project/macos-distribution.md).
@@ -286,11 +291,11 @@ go build -o bin/sysml-grpc ./cmd/sysml-grpc
 
 ## Python Client
 
-**pysysml** provides a Python client library for programmatic access to Systemica's parsing and runtime capabilities via gRPC.
+**opensysml** provides a Python client library for programmatic access to OpenSysML's parsing and runtime capabilities via gRPC.
 
 **Installation:**
 ```bash
-pip install pysysml          # from PyPI, once the first release is published
+pip install opensysml          # from PyPI, once the first release is published
 
 # Or from a checkout, in development mode
 pip install -e python/
@@ -298,17 +303,17 @@ pip install -e python/
 
 **Quick example:**
 ```python
-import pysysml
+import opensysml
 
 # Load and parse a SysML model
-model = pysysml.load("vehicle.sysml")
+model = opensysml.load("vehicle.sysml")
 
 # Evaluate expressions
 result = model.eval("2 + 2")
 print(result)  # 4
 
 # Instantiate parts
-instance = pysysml.instantiate("Vehicle", model_hash=model.hash)
+instance = opensysml.instantiate("Vehicle", model_hash=model.hash)
 print(instance.slots["mass"])
 ```
 

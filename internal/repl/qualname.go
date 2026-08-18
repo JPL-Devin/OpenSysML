@@ -3,10 +3,10 @@ package repl
 import (
 	"strings"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/lexer"
-	"github.com/Open-MBEE/Systemica/internal/core/parser"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 // plainName is a name spelled as the symbol index registers it: the notation
@@ -37,35 +37,9 @@ func plainName(text string) (string, bool) {
 	return strings.Join(segments, "::"), true
 }
 
-// notationName is a qualified name spelled as the notation writes it, quoting
-// every segment that is not a plain identifier so a name the prompt prints can
-// be typed back into a command.
+// notationName is a qualified name spelled as the notation writes it, so a name
+// the prompt prints can be typed back into a command. It is the one rule every
+// surface quotes with, `%render` included.
 func notationName(fqn string) string {
-	if fqn == "" {
-		return fqn
-	}
-	segments := strings.Split(fqn, "::")
-	for i, segment := range segments {
-		if !isPlainIdentifier(segment) {
-			// The text came from the notation, whose escapes it still carries, so
-			// quoting it is the exact inverse of parsing it.
-			segments[i] = "'" + segment + "'"
-		}
-	}
-	return strings.Join(segments, "::")
-}
-
-// isPlainIdentifier reports whether a name segment can be written unquoted: one
-// identifier token and nothing else, so a keyword or a name holding a space,
-// punctuation or nothing at all needs quoting.
-func isPlainIdentifier(segment string) bool {
-	if segment == "" {
-		return false
-	}
-	lx := lexer.New(source.New("name", []byte(segment)))
-	tok := lx.Next()
-	if tok.Kind != lexer.Identifier || tok.Span.Offset != 0 || tok.Span.Len != len(segment) {
-		return false
-	}
-	return lx.Next().Kind == lexer.EOF
+	return lexer.QualifiedNameText(fqn)
 }

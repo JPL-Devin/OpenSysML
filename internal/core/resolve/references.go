@@ -1,8 +1,8 @@
 package resolve
 
 import (
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // References walks a document's scope tree and AST, gathering every
@@ -191,11 +191,11 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 	case *ast.AssumeMember:
 		c.expr(scope, d.Expression)
 		c.add(scope, d.Reference)
-		c.walkMembers(scope, d.Body)
+		c.walkMembers(symbols.ConstraintBodyScope(scope, d), d.Body)
 	case *ast.RequireMember:
 		c.expr(scope, d.Expression)
 		c.add(scope, d.Reference)
-		c.walkMembers(scope, d.Body)
+		c.walkMembers(symbols.ConstraintBodyScope(scope, d), d.Body)
 	case *ast.EntryMember:
 		c.walkMembers(scope, d.Actions)
 	case *ast.DoMember:

@@ -5,8 +5,8 @@ import (
 	"errors"
 	"os"
 
-	pb "github.com/Open-MBEE/Systemica/api/proto"
-	"github.com/Open-MBEE/Systemica/internal/core/export"
+	pb "github.com/Open-MBEE/OpenSysML/api/proto"
+	"github.com/Open-MBEE/OpenSysML/internal/core/export"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -32,6 +32,12 @@ func (s *Service) Convert(ctx context.Context, req *pb.ConvertRequest) (*pb.Conv
 	}
 
 	resp := &pb.ConvertResponse{FromFormat: from.String(), ToFormat: to.String()}
+	// Marked on the response rather than left to the client to infer, so a caller
+	// that let a format be inferred learns the mapping it got is experimental.
+	if export.IsExperimental(from, to) {
+		resp.Experimental = true
+		resp.ExperimentalNotice = export.ExperimentalNotice
+	}
 	out, syntax, err := convertModel(name, data, from, to, req.TolerateSyntaxErrors)
 	if err != nil {
 		resp.Error = err.Error()

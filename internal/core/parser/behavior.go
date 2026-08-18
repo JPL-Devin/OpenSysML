@@ -3,8 +3,9 @@ package parser
 import (
 	"fmt"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/lexer"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 // parseCalcBody parses the body of a calc def/usage.
@@ -537,17 +538,20 @@ func (p *Parser) parseFinalNode(tok lexer.Token) ast.Node {
 func (p *Parser) parseForkNode(tok lexer.Token) ast.Node {
 	start := tok.Span.Offset
 	var name string
+	var nameSpan source.Span
 
 	if p.at(lexer.Identifier) {
 		nameToken := p.peek()
 		name = p.src.Text(nameToken.Span)
+		nameSpan = nameToken.Span
 		p.advance()
 	}
 
 	p.expect(lexer.Semicolon, "expected ';' after fork node")
 
 	node := &ast.ForkNode{
-		Name: name,
+		Name:     name,
+		NameSpan: nameSpan,
 	}
 	node.NodeSpan = p.spanFrom(start)
 	return node
@@ -556,17 +560,20 @@ func (p *Parser) parseForkNode(tok lexer.Token) ast.Node {
 func (p *Parser) parseJoinNode(tok lexer.Token) ast.Node {
 	start := tok.Span.Offset
 	var name string
+	var nameSpan source.Span
 
 	if p.at(lexer.Identifier) {
 		nameToken := p.peek()
 		name = p.src.Text(nameToken.Span)
+		nameSpan = nameToken.Span
 		p.advance()
 	}
 
 	p.expect(lexer.Semicolon, "expected ';' after join node")
 
 	node := &ast.JoinNode{
-		Name: name,
+		Name:     name,
+		NameSpan: nameSpan,
 	}
 	node.NodeSpan = p.spanFrom(start)
 	return node
@@ -575,17 +582,20 @@ func (p *Parser) parseJoinNode(tok lexer.Token) ast.Node {
 func (p *Parser) parseMergeNode(tok lexer.Token) ast.Node {
 	start := tok.Span.Offset
 	var name string
+	var nameSpan source.Span
 
 	if p.at(lexer.Identifier) {
 		nameToken := p.peek()
 		name = p.src.Text(nameToken.Span)
+		nameSpan = nameToken.Span
 		p.advance()
 	}
 
 	p.expect(lexer.Semicolon, "expected ';' after merge node")
 
 	node := &ast.MergeNode{
-		Name: name,
+		Name:     name,
+		NameSpan: nameSpan,
 	}
 	node.NodeSpan = p.spanFrom(start)
 	return node
@@ -594,17 +604,20 @@ func (p *Parser) parseMergeNode(tok lexer.Token) ast.Node {
 func (p *Parser) parseDecisionNode(tok lexer.Token) ast.Node {
 	start := tok.Span.Offset
 	var name string
+	var nameSpan source.Span
 
 	if p.at(lexer.Identifier) {
 		nameToken := p.peek()
 		name = p.src.Text(nameToken.Span)
+		nameSpan = nameToken.Span
 		p.advance()
 	}
 
 	p.expect(lexer.Semicolon, "expected ';' after decision node")
 
 	node := &ast.DecisionNode{
-		Name: name,
+		Name:     name,
+		NameSpan: nameSpan,
 	}
 	node.NodeSpan = p.spanFrom(start)
 	return node
@@ -1832,10 +1845,12 @@ func (p *Parser) parseRequirementMember() ast.Node {
 
 // usageIsSubstantive reports whether a usage declares anything: a name, a
 // relationship of any kind (`ref concern :>> self : ConcernCheck` takes its name
-// from its redefinition), a value or a body. A usage with none of those came
-// from a keyword the requirement body parser handles itself.
+// from its redefinition), a value, a body or connector/flow ends (an anonymous
+// `connection connect a to b`). A usage with none of those came from a keyword
+// the requirement body parser handles itself.
 func usageIsSubstantive(u *ast.Usage) bool {
-	return u.Ident.Name != "" || len(u.Relationships) > 0 || u.Value != nil || len(u.Members) > 0
+	return u.Ident.Name != "" || len(u.Relationships) > 0 || u.Value != nil || len(u.Members) > 0 ||
+		len(u.ConnectorEnds) > 0 || u.FlowEnds != nil
 }
 
 // parseSubjectMember parses: subject <name> : <Type>; OR subject = <expr>; OR subject <name> = <expr>;
@@ -2208,7 +2223,7 @@ func (p *Parser) parseStateMember() ast.Node {
 			return p.parsePseudostate(start, kw, ast.PseudostateJoin)
 		case "history":
 			// Bare `history <name>;` is shallow: SysML v2 has no history notation, so
-			// UML's H vs H* is the reference for this Systemica extension.
+			// UML's H vs H* is the reference for this OpenSysML extension.
 			p.advance()
 			return p.parsePseudostate(start, kw, ast.PseudostateShallowHistory)
 		case "shallow", "deep":
@@ -2628,7 +2643,7 @@ func (p *Parser) parseExitMember(start int) ast.Node {
 // usage (`entry action warmUp;`), a behavioral statement (`entry assign x := 1;`)
 // or a reference to an action declared elsewhere (`entry warmUp;`), the last
 // being the reference-subsetting form of PerformActionUsageDeclaration. The
-// braced form (`entry { ... }`) is a Systemica extension over that grammar.
+// braced form (`entry { ... }`) is an OpenSysML extension over that grammar.
 func (p *Parser) parseStateSubaction(start int, kind stateSubactionKind) ast.Node {
 	actions, err := p.parseStateSubactionActions(start, kind)
 	if err != nil {
@@ -2914,7 +2929,7 @@ func (p *Parser) parsePseudostate(start int, keyword string, kind ast.Pseudostat
 //	transition [<name>] <source> to <target> [accept …] [if …] [do …];
 //
 // The first is SysML.xtext `TransitionUsage`, which states the source with
-// `first` and the target with `then`; the second is the `to` spelling Systemica
+// `first` and the target with `then`; the second is the `to` spelling OpenSysML
 // also accepts. Both describe the same transition and give the same node.
 func (p *Parser) parseTransitionMember(start int) ast.Node {
 	var name string
@@ -2975,7 +2990,7 @@ func (p *Parser) parseTransitionTail(start int, name string, source, target *ast
 			}
 			continue
 		case p.atKeyword("when"):
-			// `when <event>`: the trigger spelling Systemica accepts alongside the
+			// `when <event>`: the trigger spelling OpenSysML accepts alongside the
 			// standard `accept`. What follows is read as an expression and
 			// classified when lowered, so a name states a signal and a condition a
 			// change, as it did before the standard spelling was added.
@@ -3027,7 +3042,7 @@ func (p *Parser) parseTransitionTail(start int, name string, source, target *ast
 // parseTransitionEffect parses the effect of a transition, whose `do` is already
 // consumed: a single action (`do action alarm send Alert() to op`, `do assign
 // x := 1`) as SysML.xtext `TransitionUsage` states it, or a braced sequence,
-// which Systemica also accepts.
+// which OpenSysML also accepts.
 func (p *Parser) parseTransitionEffect(start int) ([]ast.Node, ast.Node) {
 	if p.at(lexer.LBrace) {
 		p.advance() // consume '{'

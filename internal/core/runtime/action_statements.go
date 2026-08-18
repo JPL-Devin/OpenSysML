@@ -3,8 +3,8 @@ package runtime
 import (
 	"fmt"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/lower"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 )
 
 // actionStmtHost runs an action node's body statements: a send posts through
@@ -44,11 +44,24 @@ func (h *actionStmtHost) send(ec *EvalContext, s lower.Send) error {
 	return h.exec.ctx.post(h.exec.graph.Connections, msg, s, h.exec.self)
 }
 
-// assignOuter writes a name the body's blocks do not declare to the action's
-// features, which every one of its tokens shares.
+// assignOuter writes a name the body's blocks do not declare to the feature of
+// the object performing the action, and to the action's own features — which
+// every one of its tokens shares — when the object has no such feature. A
+// parameter the action declares is its own, so it is never redirected to the
+// object: an output binds for the caller even where the object has that feature.
 func (h *actionStmtHost) assignOuter(env *stmtEnv, name string, value Value, _ lower.Assign) error {
+	if !h.exec.declaresParameter(name) {
+		if written, err := assignPerformerFeature(h.exec.ctx, h.exec.self, name, value); written || err != nil {
+			return err
+		}
+	}
 	env.data[name] = value
 	return nil
+}
+
+// performer is the object performing the action this body belongs to.
+func (h *actionStmtHost) performer() *Instance {
+	return h.exec.self
 }
 
 // acceptReturn rejects a `return`: an action node computes no result to return.
@@ -69,7 +82,7 @@ func (h *actionStmtHost) effect(s lower.Effect) error {
 	// The performed action reads the values in scope where it is performed and its
 	// outputs come back to them, so a perform in a loop body sees that iteration.
 	env := h.engine.env
-	outputs, err := invokeAction(h.exec.ctx, s.Scope, inv, env.values())
+	outputs, err := invokeAction(h.exec.ctx, s.Scope, inv, env.values(), h.exec.self)
 	if err != nil {
 		return fmt.Errorf("%s: %w", h.describe(), err)
 	}

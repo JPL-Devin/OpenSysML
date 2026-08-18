@@ -1,0 +1,11 @@
+{
+  "type": "state",
+  "evaluate": "SendIdentityPerformed::Node::Listen",
+  "performers": [
+    {
+      "object": "SendIdentityPerformed::worker",
+      "finalState": "heard",
+      "stateVisits": ["start", "waiting", "heard"]
+    }
+  ]
+}

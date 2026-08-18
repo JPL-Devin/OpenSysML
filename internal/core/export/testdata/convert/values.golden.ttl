@@ -1,7 +1,7 @@
 @prefix elmt: <urn:sysmlv2:element:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
-@prefix sysx: <urn:systemica:sysml:> .
+@prefix sysx: <urn:opensysml:sysml:> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
 elmt:Values
@@ -25,6 +25,7 @@ elmt:Values::Total::x
     sysml:owningNamespace elmt:Values::Total ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "x" ;
+    sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:direction "in" ;
     sysml:type "Real" ;
     sysx:hasBody "false"^^xsd:boolean .
@@ -35,6 +36,7 @@ elmt:Values::Total::y
     sysml:owningNamespace elmt:Values::Total ;
     sysx:memberIndex "1"^^xsd:integer ;
     sysml:declaredName "y" ;
+    sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:direction "in" ;
     sysml:type "Real" ;
     sysx:hasBody "false"^^xsd:boolean .
@@ -45,6 +47,7 @@ elmt:Values::Total::result
     sysml:owningNamespace elmt:Values::Total ;
     sysx:memberIndex "2"^^xsd:integer ;
     sysml:declaredName "result" ;
+    sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:isResult "true"^^xsd:boolean ;
     sysml:direction "out" ;
     sysml:type "Real" ;

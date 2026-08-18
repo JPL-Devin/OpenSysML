@@ -41,6 +41,19 @@ func TestSearchCommand(t *testing.T) {
 			wants:   []string{"Wheel  partDef"},
 		},
 		{
+			name:    "a chained binding end declares no symbol",
+			declare: "package B { part R { part inner { attribute hhh; } } part ccc; binding bind R.inner.hhh = ccc; }",
+			line:    "%search hhh",
+			wants:   []string{"B::R::inner::hhh  attributeUsage"},
+			rejects: []string{"\nB::hhh", "unknown"},
+		},
+		{
+			name:    "a named control node is listed",
+			declare: "package B { action def F { first start; fork Jump; action S; first start then Jump; first Jump then S; } }",
+			line:    "%search Jump",
+			wants:   []string{"B::F::Jump  actionUsage"},
+		},
+		{
 			name:  "no match",
 			line:  "%search zzzznotasymbol",
 			wants: []string{`no symbol matches "zzzznotasymbol"`},
@@ -91,6 +104,16 @@ func TestBuiltinsCommand(t *testing.T) {
 		"floor(x)  ",
 		"x->isEmpty()  SequenceFunctions::isEmpty",
 		"x->sum()  NumericalFunctions::sum",
+	)
+}
+
+// An extension function is implemented, so it is listed — marked with the import
+// its unqualified name needs rather than left out as if unsupported.
+func TestBuiltinsListsAnExtensionFunctionWithItsImport(t *testing.T) {
+	out := run(t, NewSession(), "%builtins")
+	wants(t, out,
+		"exp(x)  OpenSysMLMathFunctions::exp  (needs `import OpenSysMLMathFunctions::*;`)",
+		"atan2(y, x)  OpenSysMLMathFunctions::atan2  (needs `import OpenSysMLMathFunctions::*;`)",
 	)
 }
 

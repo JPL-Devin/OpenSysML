@@ -3,9 +3,9 @@ package runtime
 import (
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/semantics"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 func TestStateExecutor_Creation(t *testing.T) {
@@ -401,7 +401,7 @@ func TestStateExecutor_ChangeEvent(t *testing.T) {
 	exec.stateData["x"] = Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 10}}
 
 	// Poll for change events
-	err = exec.pollChangeEvents()
+	_, err = exec.pollChangeEvents()
 	if err != nil {
 		t.Fatalf("poll change events: %v", err)
 	}
