@@ -11,6 +11,9 @@ The Python client is released separately, by a `opensysml-v*` tag, which runs th
 on purpose: `opensysml` resolves a `sysml-grpc` binary at runtime from whichever
 release the caller names, not from a release matching its own version.
 
+A third tag, `pysysml-v*`, publishes the one-off final release of the client's
+pre-rename PyPI name — see [The final `pysysml` release](#the-final-pysysml-release).
+
 ## Before tagging
 
 Run the full gate on the commit you intend to tag:
@@ -371,3 +374,35 @@ A PyPI version cannot be replaced. Yank it
 (PyPI → project → *Manage* → *Releases* → *Yank*, which hides it from resolvers
 without breaking a pin that already names it), bump `VERSION`, and tag again.
 Deleting a release frees nothing: the version number stays used.
+
+## The final `pysysml` release
+
+The client was published as [`pysysml`](https://pypi.org/project/pysysml/) up to
+0.2.0, before the project was renamed. That name cannot be deleted and its last
+version still installs and works, so `pip install pysysml` would otherwise go on
+silently handing out a pre-rename client indefinitely.
+
+`packaging/pypi-pysysml/` is the answer: a distribution of the same name whose
+only module raises `ImportError` naming `opensysml`, published once as a version
+above 0.2.0 so resolvers prefer it. It is not a compatibility shim — it does not
+re-export `opensysml`, and it declares no dependency on it, since installing the
+new client as a side effect would keep the old import working. `pip install
+'pysysml<0.3'` is the escape hatch for anyone who needs 0.2.0 while they migrate.
+
+It is released by its own tag, which runs the `release-pysysml-placeholder`
+workflow:
+
+```bash
+git tag pysysml-v0.3.0    # must match the version in packaging/pypi-pysysml/pyproject.toml
+git push origin pysysml-v0.3.0
+```
+
+The job resolves the version from the tag, refuses a version PyPI already has,
+builds the wheel and sdist, and — the check that matters — installs the wheel
+into a clean virtualenv and **fails if importing `pysysml` succeeds**. A
+placeholder that imports cleanly is the alias this release exists not to be.
+`python/tests/test_legacy_pysysml_placeholder.py` asserts the same contract from
+source on every run.
+
+This is expected to happen exactly once. Nothing further should be published
+under the old name; a client fix goes to `opensysml`.

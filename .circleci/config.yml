@@ -311,6 +311,95 @@ jobs:
           path: python/dist
           destination: opensysml-dist
 
+  # Publishes packaging/pypi-pysysml on a `pysysml-v<version>` tag: the final
+  # release of the pre-rename name, which raises on import to point at
+  # opensysml. It shares the `PyPI` context, and like publish-pypi refuses to
+  # run without a token or to overwrite a version the index already has.
+  publish-pypi-pysysml:
+    executor: python-executor
+    steps:
+      - checkout
+
+      - run:
+          name: Install build tooling
+          command: python -m pip install --upgrade pip build twine packaging
+
+      - run:
+          name: Require the publishing token
+          command: |
+            if [ -z "${PYPI_API_TOKEN:-}" ]; then
+              echo "Error: PYPI_API_TOKEN is not set. Add it to the 'PyPI' context"
+              echo "(Organization Settings -> Contexts). See docs/project/releasing.md."
+              exit 1
+            fi
+
+      - run:
+          name: Resolve the version from the tag
+          command: |
+            # The placeholder has no _version.py to read, so the version comes
+            # from its pyproject and the tag has to name it.
+            DECLARED=$(sed -n 's/^version = "\(.*\)"/\1/p' packaging/pypi-pysysml/pyproject.toml)
+            TAGGED=${CIRCLE_TAG#pysysml-v}
+            if [ -z "$DECLARED" ] || [ "$DECLARED" != "$TAGGED" ]; then
+              echo "Error: ${CIRCLE_TAG} names ${TAGGED}, but"
+              echo "packaging/pypi-pysysml/pyproject.toml declares '${DECLARED}'."
+              exit 1
+            fi
+            echo "export PYSYSML_PLACEHOLDER_VERSION=${DECLARED}" >> "$BASH_ENV"
+
+      - run:
+          name: Refuse a version the index already has
+          command: |
+            STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
+              "https://pypi.org/pypi/pysysml/${PYSYSML_PLACEHOLDER_VERSION}/json")
+            if [ "$STATUS" = "200" ]; then
+              echo "Error: pysysml ${PYSYSML_PLACEHOLDER_VERSION} is already on PyPI,"
+              echo "and a version can be yanked but never re-uploaded."
+              exit 1
+            fi
+            echo "pypi.org has no pysysml ${PYSYSML_PLACEHOLDER_VERSION} (HTTP ${STATUS}); continuing"
+
+      - run:
+          name: Build the wheel and the sdist
+          command: |
+            rm -rf packaging/pypi-pysysml/dist
+            python -m build --outdir packaging/pypi-pysysml/dist packaging/pypi-pysysml/
+            ls -l packaging/pypi-pysysml/dist
+
+      - run:
+          name: Check the metadata (twine check --strict)
+          command: python -m twine check --strict packaging/pypi-pysysml/dist/*
+
+      - run:
+          name: Install the built wheel and require the import to fail
+          command: |
+            # The artifact is only correct if importing it raises: a wheel that
+            # imported cleanly would be the alias this release refuses to be.
+            python -m venv /tmp/verify-placeholder
+            /tmp/verify-placeholder/bin/python -m pip install --upgrade pip
+            /tmp/verify-placeholder/bin/python -m pip install packaging/pypi-pysysml/dist/*.whl
+            /tmp/verify-placeholder/bin/python - \<<'EOF'
+            try:
+                import pysysml
+            except ImportError as err:
+                assert "pip install opensysml" in str(err), str(err)
+                print("pysysml placeholder raises ImportError as intended")
+            else:
+                raise SystemExit("the placeholder imported cleanly; it must raise")
+            EOF
+
+      - run:
+          name: Upload to PyPI
+          command: |
+            export TWINE_USERNAME=__token__
+            export TWINE_PASSWORD="$PYPI_API_TOKEN"
+            echo "Uploading pysysml ${PYSYSML_PLACEHOLDER_VERSION} to PyPI"
+            python -m twine upload packaging/pypi-pysysml/dist/*
+
+      - store_artifacts:
+          path: packaging/pypi-pysysml/dist
+          destination: pysysml-placeholder-dist
+
   build-release:
     executor: go-executor
     steps:
@@ -603,3 +692,38 @@ workflows:
               ignore: /.*/
             tags:
               only: /^opensysml-v.*/
+
+  # Publishes the final release of the pre-rename PyPI name on a `pysysml-v*`
+  # tag. It is its own workflow because the artifact shares no code with the
+  # client: the Python suite is what proves it, and the placeholder can be
+  # published without a client release (or ever again).
+  release-pysysml-placeholder:
+    jobs:
+      # python-test attaches the workspace this job persists (it needs a
+      # sysml-grpc to talk to), so it cannot run on its own.
+      - build-and-test:
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /^pysysml-v.*/
+
+      - python-test:
+          requires:
+            - build-and-test
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /^pysysml-v.*/
+
+      - publish-pypi-pysysml:
+          context:
+            - PyPI
+          requires:
+            - python-test
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /^pysysml-v.*/
