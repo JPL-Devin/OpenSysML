@@ -49,10 +49,8 @@ class Instance:
 
     @property
     def _values(self):
-        """The protobuf feature values, from a server of either spelling."""
-        if "feature_values" in self._pb.DESCRIPTOR.fields_by_name:
-            return self._pb.feature_values or self._pb.slots
-        return self._pb.slots
+        """The protobuf feature values."""
+        return self._pb.feature_values
 
     @property
     def features(self):
@@ -85,20 +83,6 @@ class Instance:
             sysml_pb2.FeatureValue or None if not found
         """
         return self._values.get(feature_name)
-
-    @property
-    def slots(self):
-        """Deprecated spelling of :attr:`features`."""
-        return self.features
-
-    @property
-    def raw_slots(self):
-        """Deprecated spelling of :attr:`raw_features`."""
-        return self.raw_features
-
-    def get_slot(self, feature_name):
-        """Deprecated spelling of :meth:`get_feature`."""
-        return self.get_feature(feature_name)
 
     def get(self, feature_name, default=None):
         """Get a feature's Python value, or default if the feature does not exist.

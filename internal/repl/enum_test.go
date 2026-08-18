@@ -8,7 +8,7 @@ func TestFeatureValuesEnumerationLiteral(t *testing.T) {
 	s := loadFixture(t, "testdata/enum_package.sysml")
 	run(t, s, "%instantiate D::Car")
 
-	got := run(t, s, "%slots D::Car")
+	got := run(t, s, "%features D::Car")
 	wants(t, got,
 		"c = Color::red",
 		"l = Level::high",

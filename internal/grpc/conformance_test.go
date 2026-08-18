@@ -20,7 +20,7 @@ type expectedValue struct {
 	Value interface{} `json:"value"`
 }
 
-// expectedSlot is the fixture encoding of a pb.SlotValue.
+// expectedFeatureValue is the fixture encoding of a pb.FeatureValue.
 type expectedFeatureValue struct {
 	Materialized bool        `json:"materialized"`
 	ValueKind    string      `json:"value_kind"`
@@ -57,7 +57,7 @@ type conformanceCase struct {
 	Events []string `json:"events,omitempty"`
 
 	ExpectedResult        *expectedValue                  `json:"expected_result,omitempty"`
-	ExpectedFeatureValues map[string]expectedFeatureValue `json:"expected_slots,omitempty"`
+	ExpectedFeatureValues map[string]expectedFeatureValue `json:"expected_feature_values,omitempty"`
 	ExpectedInstanceCount int                             `json:"expected_instance_count,omitempty"`
 	ExpectedOutputs       map[string]expectedValue        `json:"expected_outputs,omitempty"`
 	ExpectedStatesVisited []string                        `json:"expected_states_visited,omitempty"`

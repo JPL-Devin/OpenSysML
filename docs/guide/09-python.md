@@ -195,11 +195,13 @@ cyclic.features["a"]   # FeatureValueError(...)
 rather than returning `False`; use `features` to inspect an instance whose feature values may
 have failed.
 
-`slots`, `raw_slots`, `get_slot` and `SlotError` remain as deprecated spellings of
-`features`, `raw_features`, `get_feature` and `FeatureValueError`.
-
 `eval` returns a single value, so a result the wire format cannot represent raises
 `UnsupportedValueError` rather than being reported per entry.
+
+Instances are negotiated like conversion: a service too old to report the
+`feature_values` capability — every release published before 0.1.0 — raises
+`MissingCapabilityError` naming the upgrade, rather than handing back an object
+whose values all appear to be missing.
 
 Actions and state machines run on the model too:
 

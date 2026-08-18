@@ -113,7 +113,7 @@ func TestPrintRoundTripsThroughSubmit(t *testing.T) {
 	}
 	// The model still runs the same way, so the round trip carried the bodies.
 	wants(t, run(t, again, "%instantiate Demo::Vehicle"), "Demo::Vehicle")
-	wants(t, run(t, again, "%slots Demo::Vehicle"), "mass = 1500", "engine")
+	wants(t, run(t, again, "%features Demo::Vehicle"), "mass = 1500", "engine")
 }
 
 // An empty session says so rather than printing nothing at all.
@@ -183,7 +183,7 @@ func TestPrintLeavesInstancesAndBufferUntouched(t *testing.T) {
 	if got := run(t, s, "%list"); got != listBefore {
 		t.Errorf("%%print changed the declarations: %q, want %q", got, listBefore)
 	}
-	wants(t, run(t, s, "%slots Demo::Vehicle"), "ID: 1", "mass = 1500")
+	wants(t, run(t, s, "%features Demo::Vehicle"), "ID: 1", "mass = 1500")
 }
 
 // A print does not end an action debugging session, and the session steps on

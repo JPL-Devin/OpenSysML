@@ -60,6 +60,11 @@ CAPABILITY_SYMBOL_ATTRIBUTES = "symbol_attributes"
 #: class that declares no features.
 CAPABILITY_UNSET_VALUE = "unset_value"
 
+#: An object's values as ``Instance.feature_values``, which replaced the pre-0.1.0
+#: ``Instance.slots``. Without it every instance arrives with no values at all,
+#: which is indistinguishable from an object whose features are all unset.
+CAPABILITY_FEATURE_VALUES = "feature_values"
+
 #: The ``ApplyEdits`` RPC, which edits a loaded model's own source and hands back
 #: the edited notation. Without it an edit fails as an unimplemented method,
 #: which is indistinguishable from a broken channel.

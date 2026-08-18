@@ -39,7 +39,7 @@ func TestFeatureValuesCarriesMaterializationFailureIntoStatus(t *testing.T) {
 	}
 
 	run(t, s, "%instantiate Demo::R")
-	wants(t, run(t, s, "%slots Demo::R"), "bad: <error:", "multiplicity violation")
+	wants(t, run(t, s, "%features Demo::R"), "bad: <error:", "multiplicity violation")
 
 	if !s.HasErrors() {
 		t.Error("a rendered materialization failure did not reach the session status")
@@ -100,7 +100,7 @@ func TestEvalOfAnUnknownFeatureValueIsNoMaterializationFailure(t *testing.T) {
 func TestFeatureValuesOfAConformingModelLeaveNoFailure(t *testing.T) {
 	s := submitted(t, conformingModel)
 	run(t, s, "%instantiate Demo::R")
-	wants(t, run(t, s, "%slots Demo::R"), "b = 1")
+	wants(t, run(t, s, "%features Demo::R"), "b = 1")
 
 	if s.HasErrors() {
 		t.Errorf("a conforming model was reported wrong: %v", s.MaterializationFailures())
@@ -115,7 +115,7 @@ func TestFeatureValuesOfAConformingModelLeaveNoFailure(t *testing.T) {
 func TestMaterializationFailureStandsAfterALaterCommand(t *testing.T) {
 	s := submitted(t, unmaterializableModel)
 	run(t, s, "%instantiate Demo::R")
-	run(t, s, "%slots Demo::R")
+	run(t, s, "%features Demo::R")
 	run(t, s, "%list")
 
 	if !s.HasErrors() {
@@ -128,7 +128,7 @@ func TestMaterializationFailureStandsAfterALaterCommand(t *testing.T) {
 func TestPromptContinuesAfterAMaterializationFailure(t *testing.T) {
 	s := submitted(t, unmaterializableModel)
 	var out strings.Builder
-	if err := Loop(&scriptReader{lines: []string{"%instantiate Demo::R", "%slots Demo::R", "%eval 1 + 1"}}, &out, s); err != nil {
+	if err := Loop(&scriptReader{lines: []string{"%instantiate Demo::R", "%features Demo::R", "%eval 1 + 1"}}, &out, s); err != nil {
 		t.Fatalf("Loop error: %v", err)
 	}
 
@@ -144,7 +144,7 @@ func TestPromptContinuesAfterAMaterializationFailure(t *testing.T) {
 func TestLoadReportsAnalysisAlone(t *testing.T) {
 	s := submitted(t, unmaterializableModel)
 	run(t, s, "%instantiate Demo::R")
-	run(t, s, "%slots Demo::R")
+	run(t, s, "%features Demo::R")
 
 	path := filepath.Join(t.TempDir(), "model.sysml")
 	if err := os.WriteFile(path, []byte(conformingModel), 0o600); err != nil {

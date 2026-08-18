@@ -6,17 +6,17 @@ every other surface spells it, and distinct from ``None``, the model's ``null``.
 """
 
 import opensysml
-from opensysml.errors import SlotError
+from opensysml.errors import FeatureValueError
 from opensysml.instance import Instance
 from opensysml.proto import sysml_pb2
-from opensysml.values import UNSET, UnsetType, slot_to_python, value_to_python
+from opensysml.values import UNSET, UnsetType, feature_value_to_python, value_to_python
 
 import pytest
 
 
-def unset_slot(name):
+def unset_feature(name):
     """A materialized scalar slot holding no value, as the service sends one."""
-    return sysml_pb2.SlotValue(
+    return sysml_pb2.FeatureValue(
         feature_name=name,
         value=sysml_pb2.Value(unset=True),
         materialized=True,
@@ -45,34 +45,34 @@ def test_unset_in_a_sequence_is_read_element_by_element():
 
 
 def test_a_slot_holding_no_value_reads_unset():
-    assert slot_to_python("d", unset_slot("d")) is UNSET
+    assert feature_value_to_python("d", unset_feature("d")) is UNSET
 
 
 def test_a_valued_slot_and_an_object_valued_one_are_unaffected():
-    valued = sysml_pb2.SlotValue(
+    valued = sysml_pb2.FeatureValue(
         feature_name="k", value=sysml_pb2.Value(real_value=2.0), materialized=True
     )
-    assert slot_to_python("k", valued) == 2.0
+    assert feature_value_to_python("k", valued) == 2.0
 
-    object_valued = sysml_pb2.SlotValue(
+    object_valued = sysml_pb2.FeatureValue(
         feature_name="engine", value=sysml_pb2.Value(instance_id=7), materialized=True
     )
-    assert slot_to_python("engine", object_valued) == 7
+    assert feature_value_to_python("engine", object_valued) == 7
 
 
 def test_an_unmaterialized_slot_is_still_an_error():
     """Unset is what a materialized slot holds, not what an absent one is."""
-    with pytest.raises(SlotError):
-        slot_to_python("d", sysml_pb2.SlotValue(feature_name="d"))
+    with pytest.raises(FeatureValueError):
+        feature_value_to_python("d", sysml_pb2.FeatureValue(feature_name="d"))
 
 
-def test_an_instance_exposes_an_unset_slot_as_unset():
+def test_an_instance_exposes_an_unset_feature_as_unset():
     pb_inst = sysml_pb2.Instance(
         id=1,
         type_symbol_id="Demo::Vehicle",
-        slots={
-            "d": unset_slot("d"),
-            "k": sysml_pb2.SlotValue(
+        feature_values={
+            "d": unset_feature("d"),
+            "k": sysml_pb2.FeatureValue(
                 feature_name="k", value=sysml_pb2.Value(real_value=2.0), materialized=True
             ),
         },
@@ -80,7 +80,7 @@ def test_an_instance_exposes_an_unset_slot_as_unset():
     inst = Instance(pb_inst)
     assert inst.d is UNSET
     assert inst.k == 2.0
-    assert inst.slots == {"d": UNSET, "k": 2.0}
+    assert inst.features == {"d": UNSET, "k": 2.0}
     # The HTML view spells it the same, escaped for display.
     assert "&lt;unset&gt;" in inst._repr_html_()
 

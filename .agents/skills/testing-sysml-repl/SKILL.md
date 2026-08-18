@@ -1,6 +1,6 @@
 ---
 name: testing-sysml-repl
-description: How to build, drive, and record end-to-end tests of the OpenSysML sysml REPL (bin/sysml) and the sysml-grpc service with its opensysml Python client — meta-command behavior, symbol lookup, action/state debugging, gRPC slot serialization, and GUI-terminal recording setup.
+description: How to build, drive, and record end-to-end tests of the OpenSysML sysml REPL (bin/sysml) and the sysml-grpc service with its opensysml Python client — meta-command behavior, symbol lookup, action/state debugging, gRPC feature-value serialization, and GUI-terminal recording setup.
 ---
 
 # Testing the `sysml` REPL end-to-end
@@ -437,7 +437,7 @@ is the cheapest source of the values `%features` should print.
   run with `-json` (the JSON encoder escapes it, so grep `\u003cunset\u003e`, not `<unset>`), and the
   gRPC/opensysml path. On the Python side `opensysml.UNSET` is a falsy singleton spelled `<unset>` and
   distinct from `None`: assert `inst.d is opensysml.UNSET`, `inst.d is not None`, `bool(inst.d) is
-  False`, `inst.get_slot('d').value.WhichOneof('kind') == 'unset'` with `materialized=True`, and
+  False`, `inst.get_feature('d').value.WhichOneof('kind') == 'unset'` with `materialized=True`, and
   `'&lt;unset&gt;' in inst._repr_html_()`. `Value.unset` is send-only: the client cannot build it
   through `_python_to_value`, so to prove the server refuses it, hand-build the request and call the
   stub directly —
@@ -545,17 +545,9 @@ because the obvious ones cannot:
 - Symbol-taking commands: `%instantiate %features %eval %calc %constraint %requirement %action %state`.
   All go through one helper (`internal/repl/lookup.go`), so test each with a **simple** name and a
   **qualified** one.
-- `%slots` is a deprecated alias of `%features`, dispatched through the same code: the identical
-  listing, led by `note: %slots is deprecated — use %features`. It stays out of `%help` but tab
-  completion still offers it, so a script written against the old spelling keeps working.
-  Things worth asserting when the alias table (`metaCommand.instead`, `deprecationNote`) changes:
-  the note appears **exactly once** per invocation and only for the deprecated spelling; the no-arg
-  usage line names the spelling the *user typed* (`usage: %slots <name>`, not `%features`); and the
-  note must not shift the exit status — a listing carrying `<error: …>` still exits `2` over a pipe
-  under either spelling, so check `printf '%%instantiate X\n%%slots X\n' | ./bin/sysml m.sysml; echo $?`
-  next to the `%features` form. The cheapest strong evidence is a **byte-for-byte diff of the two
-  listings captured in one session** (run `%features N` then `%slots N`, drop the note line, compare):
-  a per-spelling code path that drifted shows up there and nowhere else.
+- `%slots`, the pre-0.1.0 spelling, is **removed**: it reads as `unknown command "%slots"` and is
+  offered by neither `%help` nor tab completion. `%features` is the only listing command, so a
+  script written against the old spelling has to be updated.
 - A part whose type contains its own kind does **not** print a "materialization is bounded" note; the
   bounded walk renders the nested feature as `child : Node (not expanded: contains its own kind)`
   after expanding one level. Don't grep for wording the binary never emits — capture the real line
@@ -1019,7 +1011,7 @@ a pre-fix binary, so build the contrast binary from the merge-base first (see ab
 Because all five reach the *same* statement engine, feature-chain evaluation and calc memoization,
 follow them with the cheap canaries: `%action tally` + `%continue` → `total = 5`, a
 `%state Debug::Cycle` + `%advance 1` + `%advance 9` sweep → `working` at `Time: 10.00`, and a gRPC
-`get_slot` on `Demo::Vehicle` (`mass` → `materialized=True kind=real_value`, `engine` →
+`get_feature` on `Demo::Vehicle` (`mass` → `materialized=True kind=real_value`, `engine` →
 `kind=instance_id`).
 
 ## Session-accumulation trap (bites both testers and features)
@@ -1373,22 +1365,23 @@ Client API shapes that are easy to get wrong:
   `TypeError: 'Symbol' object is not iterable`. Use `.id` (FQN), `.name`, `.kind`.
 - `opensysml.instantiate(fqn, file_path=...)` and `opensysml.evaluate(expr, file_path=..., context_symbol_id=...)`
   each take *exactly one* of `file_path` / `model_hash`.
-- `Instance.get_slot(name)` returns the raw protobuf `SlotValue`. Read it as
+- `Instance.get_feature(name)` returns the raw protobuf `FeatureValue`. Read it as
   `sv.materialized` and `sv.value.WhichOneof('kind')` → `real_value` / `int_value` / `instance_id` /
   `null`. Printing the `Instance` alone hides exactly the detail under test.
 
-What the slot kinds mean (`ValueToProto`, `convert.go`):
+What the feature-value kinds mean (`ValueToProto`, `convert.go`):
 
 - A **derived** attribute (`attribute doubled = mass * 2.0;`) must arrive as
   `materialized=True kind=real_value`. `kind=null value='unsupported'` is the pre-fix signature.
-- `null: 'unsupported'` is the generic fallback arm for a slot `GetSlot` returned **unmaterialized
+- `null: 'unsupported'` is the generic fallback arm for a feature value returned **unmaterialized
   without an error** — a feature with no default and no composite type. Both a bare
   `attribute d : Real;` and a **constraint usage** land here, so the REPL's
   `massOK: <constraint: satisfied>` has no gRPC equivalent. Check whether that divergence is
   intended before filing it.
-- `SlotValue.error` is the real error arm (the value is left unset). Force it with cyclic derived
+- `FeatureValue.error` is the real error arm (the value is left unset). Force it with cyclic derived
   attributes (`attribute a = b + 1.0; attribute b = a + 1.0;`) — expect
-  `slot Loop.a: slot Loop.b: cyclic slot dependency: Loop.a`, promptly, raised as `SlotError` by
+  `feature value Loop.a: feature value Loop.b: cyclic feature value dependency: Loop.a`, promptly,
+  raised as `FeatureValueError` by
   the client, and prove the service is still alive afterwards with a follow-up
   `opensysml.evaluate('1 + 1', ...)`.
 - A nested `part engine : Engine;` still marshals as bare `instance_id=N`, but
@@ -1542,8 +1535,8 @@ verify_requirement / verify_satisfaction / satisfied / calc`. Testing them from 
   hash **second**. On `Model` the hash is implicit and the kwarg is `subject=`. There is no
   `Connection.evaluate`. Getting the order wrong yields a confusing
   `ModelNotFoundError: model not found: Demo::sedan`.
-- `Instance.slots` is a **property** (a dict), not a method; unmaterialized slots (constraint and
-  requirement usages) appear as `SlotError` values inside it, which is expected.
+- `Instance.features` is a **property** (a dict), not a method; unmaterialized feature values
+  (constraint and requirement usages) appear as `FeatureValueError` values inside it, as expected.
 - The three-way semantics worth asserting separately: a condition evaluating **false** is a
   verdict (`holds False`, `.condition` set, `.error == ''`, `raise_for_error()` silent); a
   **failure to evaluate** is `.error` non-empty with `.evaluated False` and
@@ -1601,8 +1594,8 @@ generalizes to any service-side perf change:
   code *and* `ss -ltn | grep :<port>` empty — a service that started anyway is the real failure. An
   empty or all-whitespace value is treated as unset and the service starts normally.
 - Client-side shapes that break these sweeps: proto diagnostics carry severity as a **string**
-  (`d.severity == "error"`; there is no `sysml_pb2.SEVERITY_ERROR`), `Instance.slots` is a **map** so
-  iterate `inst.instance.slots.items()` (and prefer the public `inst.slots` over `inst._slots`), and
+  (`d.severity == "error"`; there is no `sysml_pb2.SEVERITY_ERROR`), `Instance.feature_values` is a
+  **map** so iterate `inst.instance.feature_values.items()` (and prefer the public `inst.features`), and
   `file_path="/virtual/…"` must never be passed together with `content=` — the service tries to open
   the path and answers `NOT_FOUND`. Keep a runner behind `if __name__ == "__main__":` so importing it
   to reuse its fixture generator does not execute the whole suite.
@@ -1715,7 +1708,7 @@ attributes (`Level { low { :>> n = 1; } high { :>> n = 9; } }`), read as `eval("
 - **Identity is `literal_id` alone** (`python/opensysml/enumeration.py` marks `enumeration_id` and
   `name` `compare=False`). Comparing two *wire-populated* literals passes even when this is broken,
   so always include the bare-vs-populated cases: with `bare = EnumLiteral("D::Color::red")` and the
-  slot value, assert `bare == car.c`, `hash(bare) == hash(car.c)`,
+  feature value, assert `bare == car.c`, `hash(bare) == hash(car.c)`,
   `len({bare, car.c}) == 1`, `{car.c: "R"}[bare]` and `{bare: "R2"}[car.c]` both resolve, while
   `bare != EnumLiteral("D::Color::green")` and `len({bare, green}) == 2`. The broken shape reads
   `False False 2`. Also send a bare literal *to* the server (`calc IsRed([EnumLiteral(
@@ -1745,8 +1738,8 @@ attributes (`Level { low { :>> n = 1; } high { :>> n = 9; } }`), read as `eval("
   (SI::kilogram)`. Echo back the reduction the service itself reported
   (`car.mass.unit` → `scale_num=1000.0`, `factors=(UnitFactor('SI::gram', 1.0),)`).
 - **Codegen and REPL cross-checks.** `python -m opensysml.generate` must emit
-  `def c(self) -> _t.EnumLiteral: return _t.slot(self, "c", _t.as_enum_literal)` and, for the
-  quantity slot, `_t.Quantity` / `_t.as_quantity`; then read both off a live instance
+  `def c(self) -> _t.EnumLiteral: return _t.feature_value(self, "c", _t.as_enum_literal)` and, for
+  the quantity feature, `_t.Quantity` / `_t.as_quantity`; then read both off a live instance
   (`Car.from_instance(conn.instantiate("D::Car")).c`) so a wrong decoder raises `TypeMismatchError`
   instead of passing silently. In the REPL, `%features` prints `name = value`, i.e.
   `c = Color::red`, `palette = [Color::red, Color::green, Color::blue]`, `mass = 1500.00 [SI::kg]` —
@@ -1763,7 +1756,7 @@ definition deriving from `opensysml.typed.TypedObject`. Useful facts when testin
 - The reference fixture is `internal/repl/testdata/vehicle_package.sysml` and the committed
   golden is `python/tests/golden/vehicle_types.py`; `cmp` them for a byte-for-byte assertion and
   generate twice + `cmp` for determinism. Emission is FQN-ordered with base classes first.
-- Only instance-slot usages become properties (`attribute/part/item/occurrence/port/enum`);
+- Only instance feature usages become properties (`attribute/part/item/occurrence/port/enum`);
   `calc`, `constraint` and `requirement` members are deliberately absent — a generated class
   that grows a `withinMassLimit` property is a bug, not progress.
 - Annotations are the whole point: `attribute power = 300.0;` must render `-> float` and
@@ -1775,9 +1768,9 @@ definition deriving from `opensysml.typed.TypedObject`. Useful facts when testin
   until you have seen it also flag a deliberate misuse (`v.mas`, `v.mass + "x"`).
 - Adversarial cases that distinguish working from broken, all reachable through a generated
   property: cyclic derived attributes (`a = b + 1.0; b = a + 1.0;`) must raise opensysml
-  `SlotError` rather than returning `None`; and running *stale* generated code against a model
-  whose attribute type changed (e.g. `mass = "heavy"`) must raise
-  `TypeMismatchError: slot 'mass': expected float, got 'heavy'`.
+  `FeatureValueError` rather than returning `None`; and running *stale* generated code against a
+  model whose attribute type changed (e.g. `mass = "heavy"`) must raise
+  `TypeMismatchError: feature value 'mass': expected float, got 'heavy'`.
 - **Pass the model path absolutely.** The path travels to the service, which opens it relative to
   *its own* CWD, so `-o` works but `../internal/...` fails with a gRPC `NOT_FOUND: file not found`
   traceback that looks like a client bug and is not one.
@@ -3156,12 +3149,13 @@ binaries now. The unpinned-download refusal is testable offline-ish with
 
 ## Quantities on the wire: `Value.quantity` and the Python `Quantity` (PR #200)
 
-Once the service can marshal `runtime.ValQuantity`, a quantity slot no longer reads as
-`SlotError: slot 'm': unsupported: quantity value` but as `opensysml.values.Quantity`. The
+Once the service can marshal `runtime.ValQuantity`, a quantity feature no longer reads as
+`FeatureValueError: feature value 'm': unsupported: quantity value` but as
+`opensysml.values.Quantity`. The
 highest-value evidence is the **parent-commit contrast** (build `/tmp/old-sysml-grpc` from the
 commit before the change, swap it into `~/.opensysml/bin/sysml-grpc`, clear
-`~/.opensysml/sysml-grpc.{pid,refcount}`, run the same script): the old service raises the SlotError
-while a plain `ScalarValues::Real` slot still reads `2.0`, so the frame proves the delta.
+`~/.opensysml/sysml-grpc.{pid,refcount}`, run the same script): the old service raises the error
+while a plain `ScalarValues::Real` feature still reads `2.0`, so the frame proves the delta.
 
 What to assert on the decoded value, and why each one distinguishes working from broken:
 
@@ -3180,7 +3174,7 @@ What to assert on the decoded value, and why each one distinguishes working from
 - Quantities also come back from `conn.eval("5.4 [SI::km/SI::h]", hash, context_symbol_id=pkg)`,
   from a nested child (`inst.engine.power`), inside sequences (`LengthValue[3]` → `list[Quantity]`),
   and on a `verify_constraint` verdict — filter `verdict.instances` on `verdict.instance_id` and
-  read the slot off that instance.
+  read the feature value off that instance.
 - Comparison semantics worth pinning: `1 [SI::km] == 1000.0 [SI::m]` is True and the two hash
   alike; ordering/adding incommensurable units raises `IncommensurableUnitsError` naming both
   reductions (`cannot order a quantity in [SI::km] and one in [SI::kg]: … 1000·SI::metre …
@@ -3218,7 +3212,7 @@ inside a `ValueSequence` input (the error still names the top-level input). Trap
 ### Generated typed classes and mypy
 
 `opensysml-generate <model> -o out.py` (or `python -m opensysml.generate`) types a quantity property
-`-> _t.Quantity` with `_t.slot(self, "x", _t.as_quantity)`. Only slots with a **declared** quantity
+`-> _t.Quantity` with `_t.feature_value(self, "x", _t.as_quantity)`. Only features with a **declared** quantity
 type get it: an untyped derived attribute (`attribute derivedSpeed = 10.0 [SI::m] / 2.0 [SI::s];`)
 has no type facts and still generates `-> object` / `_t.as_object`, even though the runtime value is
 a `Quantity`. Don't read that as a bug in the quantity typing.

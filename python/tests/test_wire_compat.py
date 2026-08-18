@@ -25,8 +25,10 @@ LEGACY_FIELD_NUMBERS = {
         "context_symbol_id": 3,
     },
     "EvaluateResponse": {"result": 1, "error": 2, "diagnostics": 3},
-    "Instance": {"id": 1, "type_symbol_id": 2, "slots": 3},
-    "SlotValue": {
+    # Field 3 held the pre-0.1.0 `slots` map, removed and reserved before the
+    # first release; see test_the_removed_slots_field_stays_reserved.
+    "Instance": {"id": 1, "type_symbol_id": 2, "feature_values": 4},
+    "FeatureValue": {
         "feature_name": 1,
         "value": 2,
         "values": 3,
@@ -71,6 +73,14 @@ def test_legacy_field_numbers_are_unchanged():
             if name in descriptor.fields_by_name
         }
         assert got == fields, f"{message_name} field numbers moved"
+
+
+def test_the_removed_slots_field_stays_reserved():
+    """`slots` went away before 0.1.0, and its number must not be reused."""
+    descriptor = sysml_pb2.Instance.DESCRIPTOR
+    assert "slots" not in descriptor.fields_by_name
+    assert not hasattr(sysml_pb2, "SlotValue")
+    assert all(field.number != 3 for field in descriptor.fields)
 
 
 def test_legacy_rpcs_are_still_declared():
@@ -124,13 +134,13 @@ def test_instance_graph_round_trips():
         instance=sysml_pb2.Instance(
             id=1,
             type_symbol_id="Demo::Vehicle",
-            slots={
-                "mass": sysml_pb2.SlotValue(
+            feature_values={
+                "mass": sysml_pb2.FeatureValue(
                     feature_name="mass",
                     value=sysml_pb2.Value(real_value=1200.0),
                     materialized=True,
                 ),
-                "wheels": sysml_pb2.SlotValue(
+                "wheels": sysml_pb2.FeatureValue(
                     feature_name="wheels",
                     values=[
                         sysml_pb2.Value(instance_id=2),
@@ -138,7 +148,7 @@ def test_instance_graph_round_trips():
                     ],
                     materialized=True,
                 ),
-                "broken": sysml_pb2.SlotValue(
+                "broken": sysml_pb2.FeatureValue(
                     feature_name="broken",
                     error="feature is unbound",
                 ),
@@ -153,7 +163,7 @@ def test_instance_graph_round_trips():
     again = sysml_pb2.InstantiateResponse()
     again.ParseFromString(response.SerializeToString())
     assert again == response
-    assert again.instance.slots["mass"].value.real_value == 1200.0
+    assert again.instance.feature_values["mass"].value.real_value == 1200.0
 
 
 def test_every_value_kind_round_trips():

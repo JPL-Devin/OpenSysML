@@ -26,7 +26,6 @@ quoted segment holding a space and one in the middle of a chain: `%instantiate '
 | **Instantiation & Inspection** | |
 | `%instantiate <name>` | Create an object of a part definition, and start the behaviors its type exhibits or performs: each object runs its own machine, initialized after its feature values are built and run until it is quiescent. A second `%instantiate` of the same name is a new object, and the name then denotes that one. A later submission keeps the object's identity but restarts its behaviors from their initial states, and says so |
 | `%features <name>` | Show what an object holds for each feature of its type |
-| `%slots <name>` | Deprecated spelling of `%features`: the same listing, led by a note naming the command to write instead |
 | `%instances` | List all created objects |
 | `%eval <expr>` | Evaluate expression, in the last namespace the session declared |
 | `%eval in <name> : <expr>` | Evaluate expression in the named element's own namespace, or — when an object was materialized under that name — on that object, so a feature reads its value. The separator is the first `:` outside a quoted name that is not part of a `::`, so `%eval in Demo : Vehicle::mass` works |

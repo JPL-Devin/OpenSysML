@@ -23,7 +23,7 @@ func TestCommandsAfterClearExplainTheLoss(t *testing.T) {
 	wants(t, run(t, s, "%instances"), "the session was reset")
 	// The declaration went with the reset, so the name itself is unresolved — the
 	// loss is what makes that answer make sense.
-	wants(t, run(t, s, "%slots Demo::Vehicle"), "the session was reset")
+	wants(t, run(t, s, "%features Demo::Vehicle"), "the session was reset")
 }
 
 // A reset ends a debugging session, and the next %step says so rather than
@@ -57,7 +57,7 @@ func TestReloadKeepsObjectsItStillResolves(t *testing.T) {
 		t.Errorf("reload dropped the object it still resolves:\n%s", joinLines(out))
 	}
 	wants(t, run(t, s, "%instances"), "Demo::Vehicle (ID: 1)")
-	wants(t, run(t, s, "%slots Demo::Vehicle"), "ID: 1", "mass = 1500")
+	wants(t, run(t, s, "%features Demo::Vehicle"), "ID: 1", "mass = 1500")
 }
 
 // A reload replaces the declaration the debugger is stepping, which ends that
