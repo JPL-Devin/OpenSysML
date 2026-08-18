@@ -1,6 +1,6 @@
 ---
 name: testing-sysml-repl
-description: How to build, drive, and record end-to-end tests of the Systemica sysml REPL (bin/sysml) and the sysml-grpc service with its pysysml Python client — meta-command behavior, symbol lookup, action/state debugging, gRPC slot serialization, and GUI-terminal recording setup.
+description: How to build, drive, and record end-to-end tests of the OpenSysML sysml REPL (bin/sysml) and the sysml-grpc service with its pysysml Python client — meta-command behavior, symbol lookup, action/state debugging, gRPC slot serialization, and GUI-terminal recording setup.
 ---
 
 # Testing the `sysml` REPL end-to-end
@@ -1464,7 +1464,7 @@ worth asserting, with the wording each produces:
 | absent | `v0.0.8` | `… was not downloaded by this client, so which release it is cannot be told` |
 | `v0.0.7` + **true** sha256 of the file | `v0.0.8` | `… is v0.0.7, but v0.0.8 was asked for` |
 | `v0.0.7` + wrong sha256 (hand-swapped binary) | `v0.0.8` | falls back to the "not downloaded by this client" wording |
-| `v0.0.8` but `"repo":"someone/Systemica-fork"` | `v0.0.8` | `… was downloaded from someone/Systemica-fork, but v0.0.8 of Open-MBEE/OpenSysML was asked for` |
+| `v0.0.8` but `"repo":"someone/OpenSysML-fork"` | `v0.0.8` | `… was downloaded from someone/OpenSysML-fork, but v0.0.8 of Open-MBEE/OpenSysML was asked for` |
 
 - The digest is re-verified (`cached_release`), so a *true* sha256 in the sidecar is what makes the
   "is v0.0.7" branch reachable — a placeholder digest silently tests the wrong branch.
@@ -2140,7 +2140,7 @@ Traps found while testing it:
 The GUI is on `DISPLAY=:0` (`:1` does not exist here — `wmctrl` will say "Cannot open display").
 
 ```bash
-cd /home/ubuntu/repos/Systemica && (DISPLAY=:0 konsole --hide-menubar >/dev/null 2>&1 &)
+cd /home/ubuntu/repos/OpenSysML && (DISPLAY=:0 konsole --hide-menubar >/dev/null 2>&1 &)
 DISPLAY=:0 wmctrl -a "Konsole"
 DISPLAY=:0 wmctrl -r :ACTIVE: -b add,maximized_vert,maximized_horz
 ```
@@ -3228,7 +3228,7 @@ mypy cannot resolve the editable-installed `pysysml`, silently treats `_t.Quanti
 reports *no* errors on obvious misuse (a false pass that looks like a passing test):
 
 ```bash
-cd /tmp/qw && MYPYPATH=/home/ubuntu/repos/Systemica/python \
+cd /tmp/qw && MYPYPATH=/home/ubuntu/repos/OpenSysML/python \
   $HOME/pv/bin/python -m mypy --no-incremental --no-error-summary --follow-imports=silent misuse.py
 # -> Unsupported operand types for + ("Quantity" and "float")  [operator]
 # -> Incompatible types in assignment (expression has type "Quantity", variable has type "float")
@@ -3682,7 +3682,7 @@ Fixture shapes that actually discriminate:
   solving: …` (no verdict). Incommensurable units are refused the same way (`L against M`).
 - **Read-only:** start `%action <A>`, run `%check`, then `%step` — the token must still advance
   (`Token 1 @ start` → `Token 1 @ step1`).
-- **Assignments use qualified Systemica names** (`Check::Satisfiable::i = 4`,
+- **Assignments use qualified OpenSysML names** (`Check::Satisfiable::i = 4`,
   `Check::SpeedReq::'craft.topSpeed' = 100`, enum as `Check::Gear::high`). A quantity is a magnitude
   in the *base units* a written unit reduces to, named as such (`1500.0 [kg]` comes back as
   `1500000.0 [gram]`), so don't expect the unit as written.

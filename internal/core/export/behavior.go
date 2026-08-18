@@ -17,7 +17,7 @@ import (
 )
 
 // Metaclass names for the behavioral nodes the SysML metamodel has no
-// counterpart for, typed in the Systemica namespace.
+// counterpart for, typed in the OpenSysML namespace.
 const (
 	mInitialNode     = "InitialNode"
 	mFinalNode       = "FinalNode"

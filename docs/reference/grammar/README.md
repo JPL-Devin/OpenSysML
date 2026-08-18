@@ -25,13 +25,13 @@ library or the Systems Library, and those are the governing reference; UML 2.5.1
 §14.2.3.4 (Pseudostates) is cited only for the ones that have neither, whose
 notation there is diagrammatic and so has no textual surface syntax to borrow.
 
-Systemica therefore defines its own keywords for them, in a state body only.
+OpenSysML therefore defines its own keywords for them, in a state body only.
 They are a documented extension, not an OMG notation:
 
 | Form | Meaning | Semantic reference |
 |------|---------|-------------|
-| `choice <name>;` | dynamic conditional branch | KerML `ControlPerformances::DecisionPerformance` — selects one of the successions leaving it, `outgoingHBLink: HappensBefore[1]` (notation is a Systemica invention) |
-| `junction <name>;` | static branch/merge | KerML `DecisionPerformance::outgoingHBLink[1]` / `MergePerformance::incomingHBLink[1]` (notation is a Systemica invention) |
+| `choice <name>;` | dynamic conditional branch | KerML `ControlPerformances::DecisionPerformance` — selects one of the successions leaving it, `outgoingHBLink: HappensBefore[1]` (notation is an OpenSysML invention) |
+| `junction <name>;` | static branch/merge | KerML `DecisionPerformance::outgoingHBLink[1]` / `MergePerformance::incomingHBLink[1]` (notation is an OpenSysML invention) |
 | `fork <name>;` | parallel split | UML `fork` pseudostate (a state-body fork has no SysML v2 or KerML counterpart; the action-level one is `Actions::ForkAction`) |
 | `join <name>;` | parallel synchronization | UML `join` pseudostate (a state-body join has no SysML v2 or KerML counterpart; the action-level one is `Actions::JoinAction`) |
 | `region <name> { … }` | orthogonal region | UML `Region` |
@@ -64,7 +64,7 @@ Notes:
 
 Grammar conformance is validated through parsing **OMG's own files**:
 
-1. **Stdlib Conformance Gate** - all 95 bundled library files (94 OMG standard library files and 1 Systemica extension) must parse with zero diagnostics
+1. **Stdlib Conformance Gate** - all 95 bundled library files (94 OMG standard library files and 1 OpenSysML extension) must parse with zero diagnostics
    - See: `internal/core/libs/stdlib_conformance_test.go`
    - These files are the **source of truth** for correct parsing
 

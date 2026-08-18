@@ -11,12 +11,12 @@ These files are licensed under the Eclipse Public License v2.0 (EPL-2.0).
 See LICENSE-EPL-2.0 for the complete license text.
 
 The standard library files (.kerml and .sysml) remain under EPL-2.0.
-The rest of Systemica is licensed under Apache 2.0 (see LICENSE in repository root).
+The rest of OpenSysML is licensed under Apache 2.0 (see LICENSE in repository root).
 
 Exception — OpenSysML Libraries/
 --------------------------------
 
 The `OpenSysML Libraries/` subdirectory is NOT from OMG. Its files are non-normative
-Systemica extensions, authored by the Systemica project and licensed under Apache 2.0
-like the rest of Systemica. They are bundled here so they load alongside the standard
+OpenSysML extensions, authored by the OpenSysML project and licensed under Apache 2.0
+like the rest of OpenSysML. They are bundled here so they load alongside the standard
 library, and no OMG copyright or EPL-2.0 term applies to them.

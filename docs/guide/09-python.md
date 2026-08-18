@@ -491,7 +491,7 @@ negotiated: a service too old to report the `query` capability raises
 
 The standard's query model has **no graph traversal and no transitive closure**:
 "everything under this part" is a `scope`, and "everything specializing this
-definition" is not expressible at all. It is an interop surface, not Systemica's
+definition" is not expressible at all. It is an interop surface, not OpenSysML's
 expressive query story — [the API reference](../reference/api.md) states exactly what is
 supported.
 

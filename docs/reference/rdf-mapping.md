@@ -45,7 +45,7 @@ addressed the way that service addresses elements. Whether such a graph loads
 into a running Flexo triplestore has not been demonstrated — see
 [Status](#status-experimental).
 
-Systemica's own additions are namespaced separately as `sysx:` so a consumer can
+OpenSysML's own additions are namespaced separately as `sysx:` so a consumer can
 tell them from the standard vocabulary and ignore them if it wants only standard
 SysML.
 
@@ -206,7 +206,7 @@ and keeps everything.
 `connect`, `bind`, `flow`, `succession`, `transition`, `accept` or `satisfy`
 declaration has a head whose participants are not reconstructible from the
 properties above, so the head is kept verbatim alongside its structural
-properties. These round-trip exactly through Systemica. A graph produced by
+properties. These round-trip exactly through OpenSysML. A graph produced by
 *another* tool will not carry the text, and converting such an element to
 notation then reports it as unsupported.
 
@@ -303,7 +303,7 @@ refused as a duplicate.
 - literal shorthands (bare numbers and booleans); literals must be quoted,
   with an `xsd:` datatype where one applies
 
-A graph that uses none of Systemica's `sysx:` properties — one produced by
+A graph that uses none of OpenSysML's `sysx:` properties — one produced by
 another tool — converts as far as the mapping allows and errors on the first
 element it cannot place, rather than emitting a model with elements missing.
 

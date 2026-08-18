@@ -54,7 +54,7 @@ type SysMLServiceClient interface {
 	Instantiate(ctx context.Context, in *InstantiateRequest, opts ...grpc.CallOption) (*InstantiateResponse, error)
 	ExecuteAction(ctx context.Context, in *ExecuteActionRequest, opts ...grpc.CallOption) (*ExecuteActionResponse, error)
 	ExecuteState(ctx context.Context, in *ExecuteStateRequest, opts ...grpc.CallOption) (*ExecuteStateResponse, error)
-	// Convert a model between the representations Systemica writes — SysML
+	// Convert a model between the representations OpenSysML writes — SysML
 	// textual notation and RDF Turtle — so a client can write a model back out
 	// rather than only read it. Reported as the "convert" capability.
 	Convert(ctx context.Context, in *ConvertRequest, opts ...grpc.CallOption) (*ConvertResponse, error)
@@ -226,7 +226,7 @@ type SysMLServiceServer interface {
 	Instantiate(context.Context, *InstantiateRequest) (*InstantiateResponse, error)
 	ExecuteAction(context.Context, *ExecuteActionRequest) (*ExecuteActionResponse, error)
 	ExecuteState(context.Context, *ExecuteStateRequest) (*ExecuteStateResponse, error)
-	// Convert a model between the representations Systemica writes — SysML
+	// Convert a model between the representations OpenSysML writes — SysML
 	// textual notation and RDF Turtle — so a client can write a model back out
 	// rather than only read it. Reported as the "convert" capability.
 	Convert(context.Context, *ConvertRequest) (*ConvertResponse, error)

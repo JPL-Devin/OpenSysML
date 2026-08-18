@@ -24,7 +24,7 @@ func Write(w io.Writer, q *Query) error {
 
 // writeScript writes the script itself; Script and Write share it.
 func writeScript(b *strings.Builder, q *Query) {
-	fmt.Fprintf(b, "; Systemica SMT-LIB2 translation of %s %s\n", q.Kind, comment(q.Element))
+	fmt.Fprintf(b, "; OpenSysML SMT-LIB2 translation of %s %s\n", q.Kind, comment(q.Element))
 	b.WriteString("; the runtime evaluator remains normative; solving is an optional extension\n")
 	if q.Negated {
 		b.WriteString("; the element asserts that its required conditions do not all hold\n")

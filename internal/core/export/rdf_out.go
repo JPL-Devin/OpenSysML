@@ -36,7 +36,7 @@ const (
 	pTargetFeature     = "targetFeature"
 )
 
-// Property names in the Systemica extension namespace: declaration order,
+// Property names in the OpenSysML extension namespace: declaration order,
 // body presence, and the source text of the constructs whose head this
 // mapping keeps verbatim (see the package doc).
 const (
@@ -196,7 +196,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 	fqn := qualify(owner, name, index)
 	subject := rdf.ElementIRI(fqn)
 
-	// A metaclass name this mapping invents is typed in the Systemica namespace,
+	// A metaclass name this mapping invents is typed in the OpenSysML namespace,
 	// so a consumer can tell it from the standard OMG vocabulary.
 	head := func(metaclass rdf.Term) {
 		e.graph.Add(subject, rdf.IRI(rdf.RDFType), metaclass)
@@ -540,7 +540,7 @@ func (e *encoder) flags(subject rdf.Term, flags []boolProperty) {
 	}
 }
 
-// isExtensionFlag reports whether a flag lives in the Systemica namespace
+// isExtensionFlag reports whether a flag lives in the OpenSysML namespace
 // because the SysML metamodel has no such property.
 func isExtensionFlag(name string) bool {
 	switch name {

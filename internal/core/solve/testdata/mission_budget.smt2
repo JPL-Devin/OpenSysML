@@ -1,4 +1,4 @@
-; Systemica SMT-LIB2 translation of constraint BudgetConstraint
+; OpenSysML SMT-LIB2 translation of constraint BudgetConstraint
 ; the runtime evaluator remains normative; solving is an optional extension
 (set-logic ALL)
 ; test::BudgetConstraint::crewCount, declared at mission_budget.sysml:7:3

@@ -1,4 +1,4 @@
-# Python gRPC Bindings for Systemica
+# Python gRPC Bindings for OpenSysML
 
 **Date:** 2026-08-04  
 **Status:** Design  
@@ -10,10 +10,10 @@
 
 ### Purpose and Goals
 
-Enable programmatic access to Systemica's SysML v2 parser, semantic engine, and execution runtime from Python. Primary use case: interactive model exploration in Jupyter notebooks with visualization, querying, and runtime simulation capabilities.
+Enable programmatic access to OpenSysML's SysML v2 parser, semantic engine, and execution runtime from Python. Primary use case: interactive model exploration in Jupyter notebooks with visualization, querying, and runtime simulation capabilities.
 
 **Goals:**
-- Pythonic API wrapping Systemica's full capabilities
+- Pythonic API wrapping OpenSysML's full capabilities
 - Zero-friction installation and setup (`pip install pysysml`)
 - Rich notebook experience with auto-formatting and DataFrame integration
 - Full runtime support (parse, evaluate, instantiate, execute, simulate)
@@ -65,7 +65,7 @@ print(instance.slots)
 └──────────────┬──────────────────────────┘
                │
 ┌──────────────▼──────────────────────────┐
-│ Systemica Core                          │
+│ OpenSysML Core                          │
 │  internal/core/parser                   │
 │  internal/core/semantics                │
 │  internal/core/runtime                  │
@@ -140,7 +140,7 @@ print(instance.slots)
 
 **Tier 1: Go gRPC Service**
 - New binary `sysml-grpc` alongside `sysml` and `sysml-lsp`
-- Exposes Systemica internals via gRPC
+- Exposes OpenSysML internals via gRPC
 - Stateless: each request self-contained
 - LRU cache for parsed models keyed by content hash
 
@@ -1381,7 +1381,7 @@ jupyter nbconvert --execute --to notebook examples/pysysml_demo.ipynb
 3. Setup PyPI publishing
    - Build wheel with `python -m build`
    - Upload to PyPI (test.pypi.org first, then pypi.org)
-   - Versioning strategy (match Systemica version?)
+   - Versioning strategy (match OpenSysML version?)
 
 4. Update documentation
    - Add Python usage to main README
@@ -1468,7 +1468,7 @@ jupyter nbconvert --execute --to notebook examples/pysysml_demo.ipynb
 
 ## Summary
 
-This design provides a complete Python interface to Systemica via gRPC, enabling programmatic model exploration, analysis, and runtime simulation. The stateless architecture with caching balances simplicity and performance. Auto-lifecycle management delivers seamless notebook UX. Six implementation phases allow incremental delivery of value.
+This design provides a complete Python interface to OpenSysML via gRPC, enabling programmatic model exploration, analysis, and runtime simulation. The stateless architecture with caching balances simplicity and performance. Auto-lifecycle management delivers seamless notebook UX. Six implementation phases allow incremental delivery of value.
 
 **Next steps:**
 1. User review and approval of this design

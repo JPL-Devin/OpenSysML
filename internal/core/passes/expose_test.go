@@ -15,7 +15,7 @@ func exposeDiags(t *testing.T, src string) []Diagnostic {
 }
 
 // An expose is owned by a view usage (SysML v2 8.3.26.2); anywhere else is
-// reported, and a view def body is the warning case Systemica still resolves.
+// reported, and a view def body is the warning case OpenSysML still resolves.
 // A package or namespace body rejects `expose` in the parser already.
 func TestExposeOwningNamespace(t *testing.T) {
 	cases := []struct {

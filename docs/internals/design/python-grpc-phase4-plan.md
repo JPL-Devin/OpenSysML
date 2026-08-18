@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Expose Systemica runtime capabilities (eval, instantiate, execute actions/state machines) via Python client
+**Goal:** Expose OpenSysML runtime capabilities (eval, instantiate, execute actions/state machines) via Python client
 
 **Architecture:** Extend protobuf schema with 4 new RPCs (Evaluate, Instantiate, ExecuteAction, ExecuteState), implement gRPC service handlers calling existing `internal/core/runtime` functions, add Python wrapper methods in Connection class plus new Instance class
 
-**Tech Stack:** Go 1.23+, protobuf 7.35.1+, grpcio 1.83.0+, existing Systemica runtime (eval.go, instance.go, action_executor.go, state_executor.go)
+**Tech Stack:** Go 1.23+, protobuf 7.35.1+, grpcio 1.83.0+, existing OpenSysML runtime (eval.go, instance.go, action_executor.go, state_executor.go)
 
 ---
 
@@ -242,7 +242,7 @@ This runs `protoc` to generate:
 ### Step 8: Regenerate Python stubs
 
 ```bash
-cd /home/han/IdeaProjects/Systemica
+cd /home/han/IdeaProjects/OpenSysML
 python -m grpc_tools.protoc -I api/proto \
   --python_out=pysysml/proto \
   --grpc_python_out=pysysml/proto \
@@ -269,7 +269,7 @@ go build ./api/proto
 go build ./internal/grpc
 
 # Python
-PYTHONPATH=/home/han/IdeaProjects/Systemica python -c "from pysysml.proto import sysml_pb2, sysml_pb2_grpc; print('OK')"
+PYTHONPATH=/home/han/IdeaProjects/OpenSysML python -c "from pysysml.proto import sysml_pb2, sysml_pb2_grpc; print('OK')"
 ```
 
 Expected: All compile cleanly.
@@ -780,7 +780,7 @@ def test_instance_str():
 ### Step 3: Run tests
 
 ```bash
-PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_instance.py -v
+PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_instance.py -v
 ```
 
 Expected: 3 tests pass.
@@ -1057,7 +1057,7 @@ def test_eval_raises_on_error():
 ### Step 6: Run tests
 
 ```bash
-PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_runtime.py -v
+PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_runtime.py -v
 ```
 
 Expected: 3 tests pass.
@@ -1198,7 +1198,7 @@ def test_pysysml_instantiate_with_hash():
 ### Step 4: Run tests
 
 ```bash
-PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_api.py -v
+PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_api.py -v
 ```
 
 Expected: All tests pass (including 2 new ones).
@@ -1328,7 +1328,7 @@ def load_from_content(self, content):
 - Or let auto-start handle it
 
 ```bash
-PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/test_runtime_integration.py -v
+PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/test_runtime_integration.py -v
 ```
 
 Expected: 5 tests pass (or skip if service not running).
@@ -1340,7 +1340,7 @@ Expected: 5 tests pass (or skip if service not running).
 go test ./...
 
 # Python tests (all)
-PYTHONPATH=/home/han/IdeaProjects/Systemica pytest tests/ -v
+PYTHONPATH=/home/han/IdeaProjects/OpenSysML pytest tests/ -v
 ```
 
 Expected: All tests pass.

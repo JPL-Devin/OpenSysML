@@ -1,4 +1,4 @@
-"""pysysml - Python client library for Systemica SysML v2 parser."""
+"""pysysml - Python client library for OpenSysML SysML v2 parser."""
 
 import warnings
 

@@ -233,7 +233,7 @@ func TestUnsupportedBehavioralShapesAreReported(t *testing.T) {
 }
 
 // The `else` branch is marked with a term the SysML metamodel does not define,
-// so it belongs to the Systemica namespace and is read from there on its own —
+// so it belongs to the OpenSysML namespace and is read from there on its own —
 // without the branch's keyword having to say `else` as well.
 func TestElseBranchIsMarkedUnderTheExtensionNamespace(t *testing.T) {
 	src := "package P {\n\taction def A {\n\t\tdecision d;\n\t\tif x then a;\n\t\telse b;\n\t\taction a;\n\t\taction b;\n\t\tattribute x : Boolean;\n\t}\n}"

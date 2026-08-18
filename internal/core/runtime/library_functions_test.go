@@ -194,7 +194,7 @@ func TestLibraryFunctionAtan2NamedArguments(t *testing.T) {
 	}
 }
 
-// The Systemica extension library ships the declarations these implementations
+// The OpenSysML extension library ships the declarations these implementations
 // are registered against, so the shipped signatures and the registry cannot
 // drift: every function the file declares has an implementation whose parameters
 // carry the declared names in the declared order.

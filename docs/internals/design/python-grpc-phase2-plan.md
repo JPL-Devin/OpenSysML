@@ -69,7 +69,7 @@ from setuptools import setup, find_packages
 setup(
     name="pysysml",
     version="0.1.0",
-    description="Python client library for Systemica SysML v2 parser",
+    description="Python client library for OpenSysML SysML v2 parser",
     author="Open-MBEE",
     packages=find_packages(),
     python_requires=">=3.8",
@@ -102,7 +102,7 @@ build-backend = "setuptools.build_backend"
 [project]
 name = "pysysml"
 version = "0.1.0"
-description = "Python client library for Systemica SysML v2 parser"
+description = "Python client library for OpenSysML SysML v2 parser"
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
@@ -128,7 +128,7 @@ Expected: File content matches above
 ```markdown
 # pysysml
 
-Python client library for Systemica SysML v2 parser.
+Python client library for OpenSysML SysML v2 parser.
 
 ## Installation
 
@@ -217,7 +217,7 @@ Expected: Output `OK` (no import errors)
 - [ ] **Step 7: Create empty pysysml/__init__.py with version**
 
 ```python
-"""pysysml - Python client library for Systemica SysML v2 parser."""
+"""pysysml - Python client library for OpenSysML SysML v2 parser."""
 
 __version__ = "0.1.0"
 
@@ -1575,7 +1575,7 @@ git commit -m "feat(python): implement Connection class with load() and get_symb
 
 ```python
 # pysysml/__init__.py
-"""pysysml - Python client library for Systemica SysML v2 parser."""
+"""pysysml - Python client library for OpenSysML SysML v2 parser."""
 
 __version__ = "0.1.0"
 

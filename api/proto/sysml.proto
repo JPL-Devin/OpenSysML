@@ -4,7 +4,7 @@ package sysml;
 
 option go_package = "github.com/Open-MBEE/OpenSysML/api/proto";
 
-// SysMLService provides programmatic access to Systemica's parser and runtime
+// SysMLService provides programmatic access to OpenSysML's parser and runtime
 service SysMLService {
   // Report what this build of the service can do, so a client can require a
   // capability instead of guessing from a version string. A service that
@@ -26,7 +26,7 @@ service SysMLService {
   rpc ExecuteAction(ExecuteActionRequest) returns (ExecuteActionResponse);
   rpc ExecuteState(ExecuteStateRequest) returns (ExecuteStateResponse);
 
-  // Convert a model between the representations Systemica writes — SysML
+  // Convert a model between the representations OpenSysML writes — SysML
   // textual notation and RDF Turtle — so a client can write a model back out
   // rather than only read it. Reported as the "convert" capability.
   rpc Convert(ConvertRequest) returns (ConvertResponse);

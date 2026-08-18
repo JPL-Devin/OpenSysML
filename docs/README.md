@@ -1,4 +1,4 @@
-# Systemica documentation
+# OpenSysML documentation
 
 ## Using it
 

@@ -1,10 +1,10 @@
 # API Documentation
 
-Complete API reference for Systemica packages.
+Complete API reference for OpenSysML packages.
 
 ## Overview
 
-Systemica is organized into core packages under `internal/core/`, with frontends in `internal/lsp/` and `internal/repl/`.
+OpenSysML is organized into core packages under `internal/core/`, with frontends in `internal/lsp/` and `internal/repl/`.
 
 **Package Organization:**
 
@@ -565,7 +565,7 @@ The gRPC service implements the query surface the **SysML v2 API & Services**
 standard defines, so a client that speaks that API — the
 [`SysML-v2-API-Java-Client`](https://github.com/Systems-Modeling/SysML-v2-API-Java-Client),
 the SysML v2 API Cookbook notebooks, MATLAB System Composer's `executeQuery` —
-can filter a model Systemica parsed. The standard's schema is authoritative:
+can filter a model OpenSysML parsed. The standard's schema is authoritative:
 `api/openapi.yaml` in the Java client, components `Query`, `Constraint`,
 `PrimitiveConstraint`, `CompositeConstraint`.
 
@@ -639,7 +639,7 @@ answer.
 
 ### `@type` — symbol kind → metamodel type
 
-Mapping Systemica's symbol kinds onto the standard's metamodel type names is the
+Mapping OpenSysML's symbol kinds onto the standard's metamodel type names is the
 substantive design decision here; `metamodelTypeNames`
 (`internal/grpc/query.go`) is the single source of truth, and
 `TestMetamodelTypeNameCoversEveryKind` keeps it total over every kind a parsed
@@ -647,7 +647,7 @@ declaration can have. A standard-library element restored from cache may carry n
 kind at all, and then reports **no** `@type`: it is answered, but never matches a
 `@type =` comparison (and is kept by the inverse of one).
 
-| Systemica kind | `@type` |
+| OpenSysML kind | `@type` |
 |---|---|
 | `package`, `namespace` | `Package`, `Namespace` |
 | `partDef` / `partUsage` | `PartDefinition` / `PartUsage` |
@@ -669,7 +669,7 @@ kind at all, and then reports **no** `@type`: it is answered, but never matches 
 Three kinds have no distinct metamodel type, and report the closest one that
 exists — documented as approximations rather than hidden:
 
-| Systemica kind | `@type` | Why |
+| OpenSysML kind | `@type` | Why |
 |---|---|---|
 | `individualDef` / `individualUsage` | `OccurrenceDefinition` / `OccurrenceUsage` | An individual is an occurrence with `isIndividual` set, not a type of its own |
 | `connectorEnd` | `Feature` | A connector end is a `Feature` with `isEnd` set |
@@ -705,7 +705,7 @@ Where the standard is vague, these are the choices this implementation makes:
 ### Not supported — by design of the standard
 
 The standard's query model is deliberately weak, and this is an interop surface,
-not Systemica's expressive query story:
+not OpenSysML's expressive query story:
 
 - **No graph traversal and no transitive closure.** There is no "all elements
   under X", no "everything that specializes Y", no path expressions and no joins.

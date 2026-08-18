@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "pysysml"
 dynamic = ["version"]
-description = "Python client library for Systemica, a SysML v2 parser and execution runtime"
+description = "Python client library for OpenSysML, a SysML v2 parser and execution runtime"
 readme = "README.md"
 # grpcio 1.83 and protobuf 7.35 publish wheels for CPython 3.10 and later only,
 # so anything older cannot install the dependency set below.

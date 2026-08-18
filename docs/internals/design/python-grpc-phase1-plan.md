@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build working gRPC service (`sysml-grpc`) exposing Systemica's parser and symbol query capabilities.
+**Goal:** Build working gRPC service (`sysml-grpc`) exposing OpenSysML's parser and symbol query capabilities.
 
 **Architecture:** Stateless gRPC service with LRU cache for parsed models. Thin wrapper over existing `internal/core/*` packages. Service keyed by content hash for cache lookup.
 
@@ -73,7 +73,7 @@ package sysml;
 
 option go_package = "github.com/Open-MBEE/OpenSysML/api/proto";
 
-// SysMLService provides programmatic access to Systemica's parser and runtime
+// SysMLService provides programmatic access to OpenSysML's parser and runtime
 service SysMLService {
   // Parse a SysML file and return model hash for subsequent queries
   rpc ParseFile(ParseFileRequest) returns (ParseFileResponse);

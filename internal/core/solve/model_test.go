@@ -45,7 +45,7 @@ func TestRenderedAssignments(t *testing.T) {
 }
 
 // A value the notation has no literal for is reported as the solver wrote it,
-// marked as unrendered rather than mistaken for a Systemica value.
+// marked as unrendered rather than mistaken for an OpenSysML value.
 func TestUnrenderedAssignments(t *testing.T) {
 	cases := []struct {
 		name  string

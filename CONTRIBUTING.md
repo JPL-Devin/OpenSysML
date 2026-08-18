@@ -1,6 +1,6 @@
-# Contributing to Systemica
+# Contributing to OpenSysML
 
-Thank you for your interest in contributing to Systemica!
+Thank you for your interest in contributing to OpenSysML!
 
 ## Development Setup
 
@@ -14,7 +14,7 @@ Thank you for your interest in contributing to Systemica!
 
 ```bash
 git clone https://github.com/Open-MBEE/OpenSysML.git
-cd Systemica
+cd OpenSysML
 make build  # builds bin/sysml, bin/sysml-lsp, and bin/sysml-grpc with version info
 make test   # runs all tests
 make lint   # runs staticcheck and gosec, as CI does
@@ -314,4 +314,4 @@ By contributing, you agree that your contributions will be licensed under the sa
 
 ---
 
-**Thank you for contributing to Systemica!** 🚀
+**Thank you for contributing to OpenSysML!** 🚀

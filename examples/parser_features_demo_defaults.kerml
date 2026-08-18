@@ -77,7 +77,7 @@ package demo_defaults {
 			feature timeout: Real[1] default 30.0;
 			feature followRedirects: Boolean[1] default true;
 			feature maxRedirects: Integer[1] default 5;
-			feature userAgent: String[1] default "Systemica/1.0";
+			feature userAgent: String[1] default "OpenSysML/1.0";
 			feature compression: Boolean[1] default true;
 			
 			feature headers {

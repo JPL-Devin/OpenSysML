@@ -1,6 +1,6 @@
 # Semantic Layer Feature Demo
 
-This demo showcases all semantic layer features implemented in the Systemica SysML v2 compiler.
+This demo showcases all semantic layer features implemented in the OpenSysML SysML v2 compiler.
 
 ## Features Demonstrated
 

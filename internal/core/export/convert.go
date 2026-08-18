@@ -1,5 +1,5 @@
 // Package export saves a SysML v2 model to a file and converts between the
-// two representations Systemica can write: SysML textual notation and RDF
+// two representations OpenSysML can write: SysML textual notation and RDF
 // Turtle.
 //
 // # SysML output

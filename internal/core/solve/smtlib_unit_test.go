@@ -192,7 +192,7 @@ func TestScriptShape(t *testing.T) {
 		}},
 	}
 	want := strings.Join([]string{
-		"; Systemica SMT-LIB2 translation of constraint Polished",
+		"; OpenSysML SMT-LIB2 translation of constraint Polished",
 		"; the runtime evaluator remains normative; solving is an optional extension",
 		"(set-logic ALL)",
 		"; |test::Finish| of test::Finish",

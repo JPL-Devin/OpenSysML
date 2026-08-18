@@ -116,7 +116,7 @@ func init() {
 	registerComplexFunctions()
 	registerStringFunctions()
 
-	// OpenSysMLMathFunctions is the non-normative Systemica extension library
+	// OpenSysMLMathFunctions is the non-normative OpenSysML extension library
 	// (internal/core/libs/stdlib/OpenSysML Libraries/OpenSysMLMathFunctions.kerml),
 	// which declares the exponential, logarithmic and two-argument arctangent
 	// functions the OMG Kernel Function Library omits.

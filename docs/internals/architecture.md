@@ -17,7 +17,7 @@ A complete, production-grade SysML v2 implementation delivering the integrated t
 ### Design Principles
 
 - **Performance:** Sub-millisecond parsing, single static binary, no JVM/Eclipse runtime
-- **Completeness:** SysML v2 textual notation support (95/95 stdlib files parse clean: 94 vendored OMG files and 1 Systemica extension)
+- **Completeness:** SysML v2 textual notation support (95/95 stdlib files parse clean: 94 vendored OMG files and 1 OpenSysML extension)
 - **Executable models:** Not just validation—runtime that instantiates, evaluates, simulates
 - **Incremental & lazy:** Parse immediately, resolve semantics on-demand (gopls/rust-analyzer precedent)
 - **Immutable AST:** All semantic state lives in side tables keyed by node/symbol

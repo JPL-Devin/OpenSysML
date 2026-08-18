@@ -104,7 +104,7 @@ func TestGoldenScriptsAreSelfDescribing(t *testing.T) {
 			t.Fatalf("read %s: %v", path, err)
 		}
 		script := string(text)
-		if !strings.HasPrefix(script, "; Systemica SMT-LIB2 translation of ") {
+		if !strings.HasPrefix(script, "; OpenSysML SMT-LIB2 translation of ") {
 			t.Errorf("%s does not name what it was translated from", path)
 		}
 		if !strings.Contains(script, "(set-logic ") || !strings.HasSuffix(script, "(check-sat)\n") {

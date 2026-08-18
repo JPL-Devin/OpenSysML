@@ -288,7 +288,7 @@ func diagnosticProblems(got []parser.Diagnostic, want []string) []string {
 // TestMain gives the package a primed library cache of its own, so a case sees
 // the restored symbol shape whatever the machine's cache holds or runs first.
 func TestMain(m *testing.M) {
-	dir, err := os.MkdirTemp("", "systemica-runtime-libs")
+	dir, err := os.MkdirTemp("", "opensysml-runtime-libs")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "library cache directory: %v\n", err)
 		os.Exit(1)

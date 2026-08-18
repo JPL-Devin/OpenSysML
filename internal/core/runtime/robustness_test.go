@@ -4094,7 +4094,7 @@ func testLibraryFunctionWrongArity(t *testing.T) {
 	}
 }
 
-// testExtensionLibraryFunctionOutsideItsDomain: a Systemica extension library
+// testExtensionLibraryFunctionOutsideItsDomain: an OpenSysML extension library
 // function reports a domain error the same way a vendored one does — the
 // logarithm of zero has no Real value, and is not returned as an infinity.
 func testExtensionLibraryFunctionOutsideItsDomain(t *testing.T) {

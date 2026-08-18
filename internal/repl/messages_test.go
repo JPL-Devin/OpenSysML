@@ -108,9 +108,9 @@ func TestMessageQuality(t *testing.T) {
 		// The remedy of the other surface is named too, so the two agree.
 		name:  "save_to_an_unknown_format",
 		decls: "part def Wheel;",
-		line:  "%save /tmp/systemica-message-test.txt",
+		line:  "%save /tmp/opensysml-message-test.txt",
 		want: []string{
-			`error: cannot tell the format of "/tmp/systemica-message-test.txt": expected .sysml, .kerml or .ttl, ` +
+			`error: cannot tell the format of "/tmp/opensysml-message-test.txt": expected .sysml, .kerml or .ttl, ` +
 				"so name the file with a .sysml, .kerml or .ttl extension, or pass -convert on the command line",
 		},
 	}}

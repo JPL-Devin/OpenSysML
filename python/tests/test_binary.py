@@ -226,8 +226,8 @@ def test_default_github_repo_env_override(monkeypatch):
     monkeypatch.delenv('PYSYSML_GITHUB_REPO', raising=False)
     assert default_github_repo() == 'Open-MBEE/OpenSysML'
 
-    monkeypatch.setenv('PYSYSML_GITHUB_REPO', 'JPL-Devin/Systemica')
-    assert default_github_repo() == 'JPL-Devin/Systemica'
+    monkeypatch.setenv('PYSYSML_GITHUB_REPO', 'JPL-Devin/OpenSysML')
+    assert default_github_repo() == 'JPL-Devin/OpenSysML'
 
 
 def test_resolve_latest_version():
@@ -526,11 +526,11 @@ class TestPinnedDigests:
 
     def test_opting_in_for_one_repository_is_not_opting_in_for_another(self, monkeypatch):
         """A fork's unpinned releases are its own; trusting it trusts nothing else."""
-        monkeypatch.setenv('PYSYSML_ALLOW_UNPINNED_DOWNLOAD', 'a-fork/Systemica')
+        monkeypatch.setenv('PYSYSML_ALLOW_UNPINNED_DOWNLOAD', 'a-fork/OpenSysML')
         served = 'ab' * 32
         with pytest.warns(RuntimeWarning, match='pins no digest'):
             assert expected_digest(
-                'v9.9.9', 'sysml-grpc-linux-amd64', served, github_repo='a-fork/Systemica'
+                'v9.9.9', 'sysml-grpc-linux-amd64', served, github_repo='a-fork/OpenSysML'
             ) == served
 
         with pytest.raises(ChecksumMismatchError, match='pins no SHA-256 digest'):
@@ -538,8 +538,8 @@ class TestPinnedDigests:
 
     def test_the_repository_opted_in_for_may_be_the_one_being_downloaded_from(self, monkeypatch):
         """$PYSYSML_GITHUB_REPO is what a bare opt-in for that repository names."""
-        monkeypatch.setenv('PYSYSML_GITHUB_REPO', 'a-fork/Systemica')
-        monkeypatch.setenv('PYSYSML_ALLOW_UNPINNED_DOWNLOAD', 'a-fork/Systemica')
+        monkeypatch.setenv('PYSYSML_GITHUB_REPO', 'a-fork/OpenSysML')
+        monkeypatch.setenv('PYSYSML_ALLOW_UNPINNED_DOWNLOAD', 'a-fork/OpenSysML')
         served = 'ab' * 32
         with pytest.warns(RuntimeWarning, match='pins no digest'):
             assert expected_digest('v0.0.5', 'sysml-grpc-linux-amd64', served) == served

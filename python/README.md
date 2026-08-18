@@ -1,6 +1,6 @@
 # pysysml
 
-Python client for Systemica: parse, inspect and execute SysML v2 models over the
+Python client for OpenSysML: parse, inspect and execute SysML v2 models over the
 `sysml-grpc` service.
 
 ```bash

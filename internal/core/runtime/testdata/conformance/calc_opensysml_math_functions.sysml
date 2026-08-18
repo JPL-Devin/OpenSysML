@@ -1,4 +1,4 @@
-// A calc body that computes with the non-normative Systemica extension library:
+// A calc body that computes with the non-normative OpenSysML extension library:
 // the built-in implementations of exp, ln, log and the two-argument atan2, the
 // functions the OMG Kernel Function Library declares nowhere.
 package test {

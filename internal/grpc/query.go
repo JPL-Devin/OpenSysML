@@ -172,7 +172,7 @@ func QueryPropertyNames() []string {
 	return out
 }
 
-// metamodelTypeNames maps Systemica's symbol kinds onto the metamodel type names
+// metamodelTypeNames maps OpenSysML's symbol kinds onto the metamodel type names
 // the standard's clients write as `@type`, and is the single source of truth for
 // that mapping. Where the metamodel has no distinct type — an individual is an
 // occurrence with isIndividual set — the closest one it has is used; docs/reference/api.md

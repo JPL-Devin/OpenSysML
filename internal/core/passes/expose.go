@@ -7,7 +7,7 @@ import (
 // checkExposeOwners reports every `expose` whose owning namespace is not a view
 // (validateExposeOwningNamespace, SysML v2 8.3.26.2). The spec constrains the
 // owner to a ViewUsage, so a `view def` body is a warning rather than an error:
-// Systemica resolves an `expose` there, and the corpus never writes one.
+// OpenSysML resolves an `expose` there, and the corpus never writes one.
 func checkExposeOwners(owner ast.Node, members []ast.Node) []Diagnostic {
 	var diags []Diagnostic
 	for _, m := range members {

@@ -1,4 +1,4 @@
-; Systemica SMT-LIB2 translation of constraint finishMatchesNesting
+; OpenSysML SMT-LIB2 translation of constraint finishMatchesNesting
 ; the runtime evaluator remains normative; solving is an optional extension
 (set-logic ALL)
 ; |test::Finish| of test::Finish
