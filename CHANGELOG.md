@@ -178,9 +178,11 @@ artifacts they describe really were called that.
   may name a conjugated port definition, and `PortionKind` is an attribute of `OccurrenceUsage`,
   which an item usage is. Both are pinned clean over every validation tier by
   `testdata/passes/corpus_notation.golden`, so a regression is caught as the false positive on a
-  flagship model that it would be. Of the four notations the Open-MBEE models diagnose, the two
-  that remain are the OMG-side ones already adjudicated: a bare `end;` outside an interface body
-  and `'SysML Standard Diagrams'::gv`.
+  flagship model that it would be. What the Open-MBEE models still report is other notation: the
+  OMG-side `end;` outside an interface body and `'SysML Standard Diagrams'::gv`, and — in
+  `DesertKite.sysml`, which lives only on that repository's `InitialDesign` branch — 7 errors that
+  are ours: a qualified name refused as a `bind` end and `connection connect … ;` refused inside a
+  `requirement` body, both owned by a separate session.
 
 ## 0.1.0 — 2026-08-17
 

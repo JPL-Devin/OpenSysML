@@ -811,9 +811,16 @@ semantics layer over the conjugation parity of the typing/specialization chain.
   `PortionKind` is an enumeration of `timeslice`/`snapshot`
   (`Systems Library/SysML.sysml:291`) held by `OccurrenceUsage::portionKind`
   (`:262`), which an `ItemUsage` is. Both parse, resolve and check clean over
-  every tier, pinned by `testdata/passes/corpus_notation.golden`; re-running the
-  three models reports only the two OMG-side notations above (plus the notebook
-  models' unresolved library references), so neither notation is outstanding.
+  every tier, pinned by `testdata/passes/corpus_notation.golden`, so neither
+  notation is outstanding. What the models *do* still report is other notation:
+  `OOSEM.sysml` (`Open-MBEE/DesertKite.sysml`, default branch) reports the three
+  `'SysML Standard Diagrams'::gv` errors above and nothing else, and
+  `DesertKite.sysml` — which lives only on that repository's `InitialDesign`
+  branch — reports 7 errors that are **ours, not the model's**: a qualified name
+  refused as a `bind` end (3 sites, 6 errors) and `connection connect … ;`
+  refused inside a `requirement` body (1 site). Both are parser defects owned by
+  a separate session; they are not adjudicated here and no verdict above depends
+  on them.
 - Only the braced spelling of a requirement-constraint reference sets
   `RequireMember.Reference`/`AssumeMember.Reference`. `CalculationBody` also
   allows `;`, so standard `require Q::r;` is a reference too, but OpenSysML reads
