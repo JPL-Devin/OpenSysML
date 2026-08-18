@@ -3686,3 +3686,40 @@ Fixture shapes that actually discriminate:
   `Check::SpeedReq::'craft.topSpeed' = 100`, enum as `Check::Gear::high`). A quantity is a magnitude
   in the *base units* a written unit reduces to, named as such (`1500.0 [kg]` comes back as
   `1500000.0 [gram]`), so don't expect the unit as written.
+
+## Value bodies over inherited values, require bodies, and the extension math functions (PR #296)
+
+- **A nested value body over an inherited value** (`part def Ring { attribute cost : Cost = template; }`
+  plus `part r : Ring { attribute :>> cost { attribute :>> v = 11.0; } }`) is observable purely
+  through `%instantiate` + `%features`: the governing body shows `cost.v = 11.00` while the source
+  object (`template`) keeps its own values, and pre-fix builds show the inherited `9.00` *and* a
+  shared instance ID between `cost` and `template` — the **instance IDs in `%features` are the
+  cheapest tell** that a body materialized an object of its own rather than aliasing the source.
+  Ready-made fixtures with in-model `assert constraint`s live at
+  `internal/core/runtime/testdata/conformance/attribute_body_over_inherited_value*.sysml`; loading
+  one and reading `<constraint: satisfied>` / `<constraint: violated>` in `%features` is a stronger
+  frame than eyeballing numbers. Note `%satisfy` answers `no satisfaction assertion in the session`
+  for such a fixture (those are `assert constraint`, not `assert satisfy`) — not a failure.
+- Discriminating negatives to keep in any test of that area: a body that only *re-declares* a nested
+  feature (`attribute :>> kept { attribute :>> v; }`) must still read the inherited value, and a
+  value **plus** a restatement on the *same* declaration
+  (`attribute :>> ringCost = template { attribute :>> v = 5.0; }`) must still fail with
+  `feature value <inst>.<feat>: feature both valued and restated in a body: v` (exit 2).
+- **Names nested inside a `require`/`assume` body** are only checked through the CLI's analysis, so
+  test them with `sysml -validate <file>`, not the REPL: a typo at depth 2/3 inside
+  `require Q::r { part p : P { attribute x = typo; } }` must report
+  `unresolved reference: typo` with the caret under the name and exit 2. Pre-fix builds print
+  `no errors` and exit 0, so **only a contrast binary proves this class of fix**. Pair it with a
+  legal deep body (must stay clean) and a body-local name read from the enclosing namespace (must
+  still be reported as unresolved — the body is a scope of its own).
+- **The Systemica extension math functions (`exp`, `ln`, `log`, `atan2`)** are no longer answered
+  unimported: `%eval exp(1.0)` gives
+  `error: evaluation failed: function is not in scope: exp is declared by SystemicaMathFunctions, a
+  Systemica extension no OMG library declares: write \`import SystemicaMathFunctions::*;\` to call it`.
+  OMG names (`sqrt`, `sin`, …) and the qualified `SystemicaMathFunctions::exp(1.0)` still evaluate
+  unimported — check both, or a change that broke the OMG fallback looks like a pass.
+- A prompt-level `import SystemicaMathFunctions::*;` submitted **alone** used to leave `exp` out of
+  scope, because a document declaring nothing carried no symbol for the scope tree's document name
+  (fixed in PR #296, regression test `TestRootImportInDocumentDeclaringNothingElse`). Worth retesting
+  in that exact shape — an import followed by any declaration takes a different route and passes even
+  when the bare form is broken.
