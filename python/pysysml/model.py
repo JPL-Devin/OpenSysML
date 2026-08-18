@@ -5,6 +5,7 @@ import difflib
 from pysysml.symbol import Symbol
 from pysysml.conversion import FORMAT_SYSML, FORMAT_TURTLE, format_of_path
 from pysysml.diagnostic import Diagnostic
+from pysysml.edit import Editor
 from pysysml.errors import ModelError, SymbolNotFoundError
 
 #: Severity the service reports for a diagnostic that makes a model unusable.
@@ -190,6 +191,28 @@ class Model:
         )
         conversion.write(path)
         return conversion
+
+    def edit(self):
+        """Start an edit of this model, to be applied in one call.
+
+        The editor collects operations naming elements by the ids this model
+        reports, and :meth:`Editor.apply` has the service perform them on the
+        source it parsed: the edited spans are replaced and every other byte,
+        comments and layout included, comes back unchanged.
+
+        The service holds that source in its bounded model cache, so a model
+        loaded long ago may have been evicted; load it again to edit it.
+
+        Returns:
+            Editor: The editor, empty. Applying an empty one is an error.
+
+        Example:
+            >>> edit = model.edit()
+            >>> edit.set_value("Demo::sc::unitMass", "1050.0[SI::kg]")
+            >>> edit.apply().save("spacecraft.sysml")
+            'spacecraft.sysml'
+        """
+        return Editor(self._hash, self.connection)
 
     def query(self, payload=None, scope=None, select=None, where=None):
         """Run a SysML v2 API & Services Query over this model.

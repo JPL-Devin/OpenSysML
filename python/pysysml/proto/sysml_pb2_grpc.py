@@ -80,6 +80,11 @@ class SysMLServiceStub:
                 request_serializer=sysml__pb2.ConvertRequest.SerializeToString,
                 response_deserializer=sysml__pb2.ConvertResponse.FromString,
                 _registered_method=True)
+        self.ApplyEdits = channel.unary_unary(
+                '/sysml.SysMLService/ApplyEdits',
+                request_serializer=sysml__pb2.ApplyEditsRequest.SerializeToString,
+                response_deserializer=sysml__pb2.ApplyEditsResponse.FromString,
+                _registered_method=True)
         self.VerifyConstraint = channel.unary_unary(
                 '/sysml.SysMLService/VerifyConstraint',
                 request_serializer=sysml__pb2.VerifyConstraintRequest.SerializeToString,
@@ -175,6 +180,17 @@ class SysMLServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def ApplyEdits(self, request, context):
+        """Apply edits to a parsed model's own source and return the edited notation,
+        so a client can change a model and write it back with its comments and
+        layout intact. Edits are byte ranges the service locates from the parsed
+        spans, and the result is re-parsed and validated before it is returned.
+        Reported as the "apply_edits" capability.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def VerifyConstraint(self, request, context):
         """Verification: the answers the REPL's %constraint, %requirement, %satisfy
         and %calc give, so "does this model satisfy its requirements?" can be asked
@@ -260,6 +276,11 @@ def add_SysMLServiceServicer_to_server(servicer, server):
                     servicer.Convert,
                     request_deserializer=sysml__pb2.ConvertRequest.FromString,
                     response_serializer=sysml__pb2.ConvertResponse.SerializeToString,
+            ),
+            'ApplyEdits': grpc.unary_unary_rpc_method_handler(
+                    servicer.ApplyEdits,
+                    request_deserializer=sysml__pb2.ApplyEditsRequest.FromString,
+                    response_serializer=sysml__pb2.ApplyEditsResponse.SerializeToString,
             ),
             'VerifyConstraint': grpc.unary_unary_rpc_method_handler(
                     servicer.VerifyConstraint,
@@ -531,6 +552,33 @@ class SysMLService:
             '/sysml.SysMLService/Convert',
             sysml__pb2.ConvertRequest.SerializeToString,
             sysml__pb2.ConvertResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ApplyEdits(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/sysml.SysMLService/ApplyEdits',
+            sysml__pb2.ApplyEditsRequest.SerializeToString,
+            sysml__pb2.ApplyEditsResponse.FromString,
             options,
             channel_credentials,
             insecure,
