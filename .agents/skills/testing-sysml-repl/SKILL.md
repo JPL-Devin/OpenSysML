@@ -3837,3 +3837,66 @@ The no-solver path is the one case needing a special launch: `mkdir -p /tmp/noso
 `env PATH=/tmp/nosolver ./bin/sysml`, which yields `error: no SMT solver found: install z3 … or set
 OPENSYSML_SMT …; looked for [z3 cvc5] on PATH`. Note `Discover()` is consulted per command, so this
 must be set on the process, not toggled mid-session.
+
+## Rendering a view: `%render` and `sysml -render` (PR #288 class)
+
+A view's `render` member is consumed by `internal/core/view`. Kinds: **tree** (default when the view
+states no rendering), **interconnection**, **state**, **action**, **table**
+(`render asElementTable;` or a `StandardViewDefinitions::GridView`-typed view).
+
+Forms and defaults (`internal/core/view/form.go`):
+
+| kind | text | machine form (`Kind.MachineForm()`) |
+| --- | --- | --- |
+| tree, action | indented text | `mermaid` → `flowchart TD` |
+| interconnection | indented text | `mermaid` → `flowchart LR` |
+| state | indented text | `mermaid` → `stateDiagram-v2` |
+| table | space-aligned columns | `markdown` (pipe table) |
+
+- **REPL defaults to `text`; the CLI defaults to the kind's machine form.** Don't assume they match.
+- Wrong form for a kind is a typed `*WrongFormError`:
+  `<view>: a table rendering is not written as mermaid; ask for text or markdown`. An unknown form in
+  the REPL: `unknown form "svg"; usage: %render <name> [text|mermaid|markdown]`; via the CLI:
+  `unknown rendering form "svg"; -render-form takes text, mermaid, markdown`, exit 2.
+- Always assert **0 bytes on stdout** on refusals, not just the message.
+- CLI stream contract: artifact on **stdout only**; `✓ package …` load report, `note: … renders
+  empty`, "cannot represent" notices and `wrote <file> (form, N bytes)` on **stderr**.
+  `-render` with `-convert` → exit 2 `-convert and -render each write a document out; ask for one per
+  run`; with `-validate` → exit 2 "check it in its own run".
+- Table row shape: `Element | Kind | Type | Declared in`; exposed elements use qualified names,
+  elements declared inside them use local names; a nested view is a row followed by its own exposures.
+- **Empty state rendering must be `state "the view exposes nothing; the rendering is empty" as empty`,
+  never a bare `note "…"`** — a bare top-level `note` is invalid Mermaid. Fixture:
+  `internal/core/view/testdata/errors.sysml` → `ErrorViews::emptyStateView`. Proof pattern for this
+  class of fix: build the pre-fix commit with `git worktree add`, render the same view, and show
+  `mmdc` failing (`Parse error on line 2`, exit 1) on the old artifact and passing on the new one.
+- Mermaid grammar check (independent of Go tests):
+  `cd /tmp && npm install @mermaid-js/mermaid-cli`, write
+  `/tmp/pc.json` = `{"args":["--no-sandbox","--disable-setuid-sandbox"]}`, then
+  `/tmp/node_modules/.bin/mmdc -p /tmp/pc.json -i x.mmd -o x.svg`. **`/tmp` installs do not survive
+  between sessions — re-check `ls /tmp/node_modules/.bin/mmdc` before relying on it (a missing binary
+  shows up as `mmdc exit=127`).** Open the SVG in Chrome (Ctrl+A in the omnibox first, then
+  `file:///tmp/x.svg`) for visual proof.
+- **`%render` must be read-only.** Proof sequence: `%action Gear::Spin` → `%step` → `%tokens` →
+  `%render …` → `%tokens` (identical) → `%step` → `%continue` (completes) → `%instances`
+  (`(no instances created)`). `internal/core/view/testdata/action.sysml` is **unusable** for this —
+  its `action provide : Provide` has no initial node, so `%continue` fails there on `main` too; write
+  your own steppable action.
+- Byte-identity regression harness: build the previous commit via `git worktree add`, then loop the
+  four graph kinds × `text`/`mermaid` through both binaries and `diff` — expect all `IDENTICAL`.
+- Known nit (unfixed): completion of a *partially typed quoted* name offers nothing
+  (`%render Quoted::'My` + Tab) because `nameWord` keeps the leading `'` while the index holds
+  unquoted FQNs (`internal/repl/complete.go`); with a trailing space inside the open quote it dumps
+  every library name. Forms are correctly withheld until the quote closes.
+- `filters.sysml` → `FilteredViews::safetyView` duplicates `Systems::Airbag` and
+  `Systems::Braking::Brake` through the shipping CLI/REPL while the goldens list them once. It
+  reproduces on `main` via `%view`, so it is pre-existing exposed-set behavior, not a rendering bug.
+- Pitfall: never type `clear;` at a `sysml>` prompt — it parses as SysML, errors
+  (`expected a namespace member`) and pollutes the buffer, which later shows as
+  `note: deeper checks may not have run here: the error on buffer line N is unresolved`. Use
+  `ctrl+l`, and `%quit` before running shell commands.
+- After the OpenSysML rename the module is `github.com/Open-MBEE/OpenSysML` and env vars are
+  `OPENSYSML_*`, but the **checkout directory may still be named `Systemica`**. When grepping output
+  for stale branding, exclude build paths, and expect the deliberate legacy RDF namespace
+  `urn:systemica:sysml:` (`internal/core/rdf/vocab.go`) to remain — it exists so a pre-rename graph is
+  refused rather than misread.
