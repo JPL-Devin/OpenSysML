@@ -2,7 +2,6 @@ package runtime
 
 import (
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -67,7 +66,6 @@ func FormatValue(v Value) string {
 			return "Set{}"
 		}
 		parts := formatValueElements(v.Set.Elements())
-		sort.Strings(parts)
 		return "Set{" + strings.Join(parts, ", ") + "}"
 	case ValVariant:
 		if v.Variant == nil {

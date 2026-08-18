@@ -302,7 +302,7 @@ func testBindingMultipleScalarContributors(t *testing.T) {
 		if !errors.Is(err, ErrBindingConflict) {
 			t.Fatalf("GetFeatureValue(a) = %v, want ErrBindingConflict", err)
 		}
-		if got, want := err.Error(), "binding conflict: Sys.a = 1, Sys.a = 2"; got != want {
+		if got, want := err.Error(), "binding conflict at Sys.a: b = 1, c = 2"; got != want {
 			t.Errorf("conflict error = %q, want %q", got, want)
 		}
 	})

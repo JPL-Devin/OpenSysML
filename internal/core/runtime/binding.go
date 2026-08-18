@@ -14,6 +14,7 @@ import (
 // BindingConflictError reports unequal values held by the two ends of a
 // binding connector.
 type BindingConflictError struct {
+	Target     string
 	Left       string
 	Right      string
 	LeftValue  Value
@@ -21,6 +22,10 @@ type BindingConflictError struct {
 }
 
 func (e *BindingConflictError) Error() string {
+	if e.Target != "" {
+		return fmt.Sprintf("%s at %s: %s = %s, %s = %s", ErrBindingConflict,
+			e.Target, e.Left, bindingValueText(e.LeftValue), e.Right, bindingValueText(e.RightValue))
+	}
 	return fmt.Sprintf("%s: %s = %s, %s = %s", ErrBindingConflict,
 		e.Left, bindingValueText(e.LeftValue), e.Right, bindingValueText(e.RightValue))
 }
@@ -53,6 +58,7 @@ type bindingEndpoint struct {
 type bindingAttempt struct {
 	value         Value
 	found         bool
+	contributor   string
 	cycle         bool
 	cycleFeatures []string
 	assignment    *bindingAssignment
@@ -162,6 +168,9 @@ func (ctx *Context) resolveBindingSet(owner, targetInst *Instance, target *Featu
 			cycleFeatures = attempt.cycleFeatures
 		}
 		if attempt.found {
+			if end := bindingEndForPath(binding, endpointName); end >= 0 {
+				attempt.contributor = ctx.bindingEndpointText(binding, 1-end)
+			}
 			attempts = append(attempts, attempt)
 		}
 	}
@@ -175,8 +184,9 @@ func (ctx *Context) resolveBindingSet(owner, targetInst *Instance, target *Featu
 		for _, attempt := range attempts[1:] {
 			if !valueEqual(attempts[0].value, attempt.value) {
 				return Value{}, false, false, nil, &BindingConflictError{
-					Left:       bindingLocationText(bindingLocation{instance: targetInst, name: key.feature}),
-					Right:      bindingLocationText(bindingLocation{instance: targetInst, name: key.feature}),
+					Target:     bindingLocationText(bindingLocation{instance: targetInst, name: key.feature}),
+					Left:       attempts[0].contributor,
+					Right:      attempt.contributor,
 					LeftValue:  attempts[0].value,
 					RightValue: attempt.value,
 				}
@@ -199,6 +209,15 @@ func (ctx *Context) resolveBindingSet(owner, targetInst *Instance, target *Featu
 		return attempts[0].value, true, false, nil, nil
 	}
 	return Value{}, false, len(cycleFeatures) != 0, cycleFeatures, nil
+}
+
+func bindingEndForPath(binding lower.Binding, path string) int {
+	for end, endpoint := range binding.Ends {
+		if endpoint.Path == path {
+			return end
+		}
+	}
+	return -1
 }
 
 func (ctx *Context) attemptBinding(owner, targetInst *Instance, target *FeatureValue,

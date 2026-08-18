@@ -157,15 +157,15 @@ func TestFormatValueCollections(t *testing.T) {
 	outer.Append(Value{Kind: ValSequence, Sequence: inner})
 
 	set := NewSet()
-	set.Add(Value{Kind: ValSequence, Sequence: outer})
 	set.Add(Value{Kind: ValInstance, Instance: 3})
+	set.Add(Value{Kind: ValSequence, Sequence: outer})
 
 	if got, want := FormatValue(Value{Kind: ValSequence, Sequence: outer}),
 		`[1, ["nested"]]`; got != want {
 		t.Errorf("sequence formatting = %q, want %q", got, want)
 	}
 	if got, want := FormatValue(Value{Kind: ValSet, Set: set}),
-		`Set{[1, ["nested"]], instance(3)}`; got != want {
+		`Set{instance(3), [1, ["nested"]]}`; got != want {
 		t.Errorf("set formatting = %q, want %q", got, want)
 	}
 }

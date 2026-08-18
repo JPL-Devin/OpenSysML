@@ -1247,7 +1247,6 @@ func formatValue(ctx *runtime.Context, val runtime.Value) string {
 		for i, element := range val.Set.Elements() {
 			parts[i] = formatValue(ctx, element)
 		}
-		slices.Sort(parts)
 		return "Set{" + strings.Join(parts, ", ") + "}"
 	}
 	return runtime.FormatValue(val)
