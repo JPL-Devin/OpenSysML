@@ -87,7 +87,9 @@ func writeFlowchartNode(b *strings.Builder, node *Node, depth int, containment b
 func (r *Rendering) writeStateDiagram(b *strings.Builder) {
 	b.WriteString("stateDiagram-v2\n")
 	if r.Empty() {
-		fmt.Fprintf(b, "  note \"%s\"\n", mermaidText(r.emptyReason()))
+		// A state diagram takes a note only attached to a state, so the reason
+		// is a state of its own.
+		fmt.Fprintf(b, "  state \"%s\" as empty\n", mermaidText(r.emptyReason()))
 		return
 	}
 	for _, root := range r.Roots {

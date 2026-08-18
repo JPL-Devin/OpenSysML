@@ -343,6 +343,24 @@ func TestRenderingAViewExposingNothing(t *testing.T) {
 	}
 }
 
+// An empty state rendering says so as a state, since a state diagram takes a
+// note only attached to a state.
+func TestEmptyStateRenderingIsAStateNotABareNote(t *testing.T) {
+	rendering := render(t, "errors.sysml", "ErrorViews::emptyStateView")
+	if rendering.Kind != KindState || !rendering.Empty() {
+		t.Fatalf("rendering = %s, empty = %v, want an empty state rendering", rendering.Kind, rendering.Empty())
+	}
+	mermaid := rendering.Mermaid()
+	if !strings.Contains(mermaid, "state \"") || !strings.Contains(mermaid, "as empty") {
+		t.Errorf("the empty state diagram holds no state:\n%s", mermaid)
+	}
+	for _, line := range strings.Split(mermaid, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "note \"") {
+			t.Errorf("a bare note is no state diagram: %q", line)
+		}
+	}
+}
+
 // An element a rendering cannot represent is reported, not dropped.
 func TestRenderingReportsWhatItCannotRepresent(t *testing.T) {
 	rendering := render(t, "errors.sysml", "ErrorViews::misfitView")

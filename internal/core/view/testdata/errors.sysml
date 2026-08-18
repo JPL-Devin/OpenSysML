@@ -16,6 +16,11 @@ package ErrorViews {
 		expose Kit::Widget;
 	}
 
+	// A state view exposing nothing: an empty state diagram.
+	view emptyStateView : StateTransitionView {
+		private import Kit::*;
+	}
+
 	// A structural element an action rendering cannot show.
 	view misfitView : ActionFlowView {
 		expose Kit::Widget;
