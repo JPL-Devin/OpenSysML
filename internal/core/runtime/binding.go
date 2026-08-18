@@ -108,6 +108,12 @@ func (ctx *Context) resolveBindingValue(inst *Instance, name string) (Value, boo
 	if ctx.resolvingBindings[key] {
 		return Value{}, false, &BindingCycleError{Features: []string{bindingLocationText(bindingLocation{instance: inst, name: name})}}
 	}
+	if target.BindingDerived && ctx.CompositeTypeOf(target.Feature) == nil {
+		target.Value = Value{}
+		target.Values = Value{}
+		target.Materialized = false
+		target.BindingDerived = false
+	}
 
 	path := name
 	for current := inst; current != nil; {
@@ -216,6 +222,26 @@ func (ctx *Context) attemptBinding(owner, targetInst *Instance, target *FeatureV
 
 	switch {
 	case leftSet && rightSet:
+		leftDerived := bindingEndpointDerived(left)
+		rightDerived := bindingEndpointDerived(right)
+		if leftDerived && !rightDerived {
+			if err := ctx.assignBindingEndpoint(left, rightValue, binding, 0); err != nil {
+				attempt.err = err
+				return attempt
+			}
+			attempt.value = rightValue
+			attempt.found = true
+			return attempt
+		}
+		if rightDerived && !leftDerived {
+			if err := ctx.assignBindingEndpoint(right, leftValue, binding, 1); err != nil {
+				attempt.err = err
+				return attempt
+			}
+			attempt.value = leftValue
+			attempt.found = true
+			return attempt
+		}
 		if !valueEqual(leftValue, rightValue) {
 			attempt.err = &BindingConflictError{
 				Left: ctx.bindingEndpointText(binding, 0), Right: ctx.bindingEndpointText(binding, 1),
@@ -321,6 +347,24 @@ func (ctx *Context) bindingEndpointValue(endpoint bindingEndpoint, owner *Instan
 	}
 	loc := endpoint.location
 	fv := loc.instance.FeatureValues[loc.name]
+	if fv.BindingDerived && materialize {
+		return Value{}, false, nil
+	}
+	if fv.BindingDerived {
+		if ctx.CompositeTypeOf(fv.Feature) != nil {
+			if val := fv.HeldValue(); val.Kind != ValInvalid {
+				return val, true, nil
+			}
+		}
+		val, found, err := ctx.resolveBindingValue(loc.instance, loc.name)
+		if err != nil {
+			return Value{}, false, err
+		}
+		if found {
+			return val, true, nil
+		}
+		return Value{}, false, nil
+	}
 	if !fv.Materialized {
 		if !materialize && ctx.CompositeTypeOf(fv.Feature) != nil {
 			return Value{}, false, nil
@@ -340,6 +384,13 @@ func (ctx *Context) bindingEndpointValue(endpoint bindingEndpoint, owner *Instan
 		return Value{}, false, err
 	}
 	return val, found, nil
+}
+
+func bindingEndpointDerived(endpoint bindingEndpoint) bool {
+	if endpoint.location.instance == nil {
+		return false
+	}
+	return endpoint.location.instance.FeatureValues[endpoint.location.name].BindingDerived
 }
 
 func (ctx *Context) assignBindingEndpoint(endpoint bindingEndpoint, val Value, binding lower.Binding, end int) error {
@@ -366,6 +417,7 @@ func (ctx *Context) assignBindingValue(inst *Instance, fv *FeatureValue, name st
 		fv.Values = val
 	}
 	fv.Materialized = true
+	fv.BindingDerived = true
 	return nil
 }
 

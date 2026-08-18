@@ -68,6 +68,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("binding_collection_conflicts_do_not_use_hashes", testBindingCollectionConflictsDoNotUseHashes)
 	t.Run("binding_distinct_materialized_objects_conflict", testBindingDistinctMaterializedObjectsConflict)
 	t.Run("binding_named_single_end_does_not_poison_read", testBindingNamedSingleEndDoesNotPoisonRead)
+	t.Run("binding_incomplete_end_does_not_poison_read", testBindingIncompleteEndDoesNotPoisonRead)
 	t.Run("binding_single_valueless", testBindingSingleValueless)
 	t.Run("binding_cycle", testBindingCycle)
 	t.Run("binding_three_binding_ring", testBindingThreeBindingRing)
@@ -487,7 +488,7 @@ func testBindingResultTracksLaterMutation(t *testing.T) {
 		} else if got := fv.HeldValue(); got.Kind != ValInvalid {
 			t.Fatalf("initial b = %#v, want an unknown value", got)
 		}
-		if err := ctx.assignBindingValue(inst, inst.FeatureValues["a"], "a", constInt(9)); err != nil {
+		if err := inst.SetFeatureValue(ctx, "a", constInt(9)); err != nil {
 			t.Fatalf("assign a: %v", err)
 		}
 		fv, err := inst.GetFeatureValue(ctx, "b")
@@ -516,14 +517,93 @@ func testBindingResultTracksLaterMutation(t *testing.T) {
 		} else if got := fv.HeldValue().Const.Int; got != 3 {
 			t.Fatalf("initial b = %d, want 3", got)
 		}
-		if err := ctx.assignBindingValue(inst, inst.FeatureValues["a"], "a", constInt(9)); err != nil {
+		if err := inst.SetFeatureValue(ctx, "a", constInt(9)); err != nil {
 			t.Fatalf("assign a: %v", err)
+		}
+		fv, err := inst.GetFeatureValue(ctx, "b")
+		if err != nil {
+			t.Fatalf("later GetFeatureValue(b): %v", err)
+		}
+		if got := fv.HeldValue().Const.Int; got != 9 {
+			t.Errorf("later b = %d, want 9", got)
+		}
+	})
+
+	t.Run("derived_binding_chain", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-late-chain>", parseAndBuild(t, `package P {
+			part def Sys {
+				attribute a = 3;
+				attribute b;
+				attribute c;
+				binding bind b = a;
+				binding bind c = b;
+			}
+		}`))
+		inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+		if err != nil {
+			t.Fatalf("instantiate: %v", err)
+		}
+		if fv, err := inst.GetFeatureValue(ctx, "c"); err != nil {
+			t.Fatalf("initial GetFeatureValue(c): %v", err)
+		} else if got := fv.HeldValue().Const.Int; got != 3 {
+			t.Fatalf("initial c = %d, want 3", got)
+		}
+		if err := inst.SetFeatureValue(ctx, "a", constInt(9)); err != nil {
+			t.Fatalf("assign a: %v", err)
+		}
+		fv, err := inst.GetFeatureValue(ctx, "c")
+		if err != nil {
+			t.Fatalf("later GetFeatureValue(c): %v", err)
+		}
+		if got := fv.HeldValue().Const.Int; got != 9 {
+			t.Errorf("later c = %d, want 9", got)
+		}
+	})
+
+	t.Run("written_both_ends_conflict", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-written-both-ends>", parseAndBuild(t, `package P {
+			part def Sys {
+				attribute a;
+				attribute b;
+				binding bind b = a;
+			}
+		}`))
+		inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+		if err != nil {
+			t.Fatalf("instantiate: %v", err)
+		}
+		if err := inst.SetFeatureValue(ctx, "a", constInt(1)); err != nil {
+			t.Fatalf("assign a: %v", err)
+		}
+		if err := inst.SetFeatureValue(ctx, "b", constInt(2)); err != nil {
+			t.Fatalf("assign b: %v", err)
 		}
 		_, err = inst.GetFeatureValue(ctx, "b")
 		if !errors.Is(err, ErrBindingConflict) {
-			t.Fatalf("later GetFeatureValue(b) = %v, want ErrBindingConflict", err)
+			t.Fatalf("GetFeatureValue(b) = %v, want ErrBindingConflict", err)
 		}
 	})
+}
+
+func testBindingIncompleteEndDoesNotPoisonRead(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<binding-incomplete-end>", parseAndBuild(t, `package P {
+		part def Sys {
+			attribute x = 4;
+			bind x;
+			binding bb of x;
+		}
+	}`))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	fv, err := inst.GetFeatureValue(ctx, "x")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(x) = %v, want 4", err)
+	}
+	if got := fv.HeldValue().Const.Int; got != 4 {
+		t.Errorf("x = %d, want 4", got)
+	}
 }
 
 func testBindingNestedContainerIsNotACycle(t *testing.T) {

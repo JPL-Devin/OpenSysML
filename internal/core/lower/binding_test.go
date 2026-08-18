@@ -17,6 +17,8 @@ func TestToBindingsNormalizesBindingSpellings(t *testing.T) {
 			binding named bind x = y;
 			binding namedOf of x = y;
 			binding namedOnly = x;
+			bind incomplete;
+			binding incompleteOf of x;
 			binding [1] config.host = serverAddress;
 		}
 	}`)))

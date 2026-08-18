@@ -56,15 +56,25 @@ func TestSetOperations(t *testing.T) {
 }
 
 func TestSetOperationsUseExactValueEquality(t *testing.T) {
+	sequenceValue := func(n int64) Value {
+		seq := NewSequence()
+		seq.Append(Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: n}})
+		return Value{Kind: ValSequence, Sequence: seq}
+	}
+	first := sequenceValue(1)
+	second := sequenceValue(65537)
+	if valueKeyFunc(first) != valueKeyFunc(second) {
+		t.Fatal("test values must share a collection hash bucket")
+	}
 	set := NewSet()
-	set.Add(Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 1}})
-	set.Add(Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 65537}})
+	set.Add(first)
+	set.Add(second)
 
 	if set.Size() != 2 {
-		t.Fatalf("expected two distinct integer elements, got %d", set.Size())
+		t.Fatalf("expected two distinct sequence elements, got %d", set.Size())
 	}
-	if !set.Contains(Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 65537}}) {
-		t.Fatal("expected set to contain 65537")
+	if !set.Contains(second) {
+		t.Fatal("expected set to contain the second colliding sequence")
 	}
 }
 
@@ -74,16 +84,22 @@ func TestSetConstructionUsesBucketedLinearWork(t *testing.T) {
 	for i := 0; i < count; i++ {
 		set.Add(Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: int64(i)}})
 	}
-	addComparisons := set.comparisons
 	for i := 0; i < count; i++ {
 		if !set.Contains(Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: int64(i)}}) {
 			t.Fatalf("set does not contain %d", i)
 		}
 	}
-	containsComparisons := set.comparisons - addComparisons
-	if addComparisons > uint64(count) || containsComparisons > uint64(count) {
-		t.Fatalf("set comparisons: add=%d contains=%d for %d elements; expected linear bucket work",
-			addComparisons, containsComparisons, count)
+	if len(set.elements) != count {
+		t.Fatalf("set has %d buckets for %d elements", len(set.elements), count)
+	}
+	maxBucket := 0
+	for _, bucket := range set.elements {
+		if len(bucket) > maxBucket {
+			maxBucket = len(bucket)
+		}
+	}
+	if maxBucket > 1 {
+		t.Fatalf("maximum bucket length = %d, want 1 for distinct integer keys", maxBucket)
 	}
 }
 

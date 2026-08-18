@@ -159,10 +159,9 @@ func (s *Sequence) Elements() []Value {
 // derived from a set — what `select` and `collect` over a set return —
 // reproducible instead of dependent on map iteration.
 type Set struct {
-	elements    map[valueKey][]Value
-	order       []Value
-	size        int
-	comparisons uint64
+	elements map[valueKey][]Value
+	order    []Value
+	size     int
 }
 
 // NewSet creates an empty Set.
@@ -175,7 +174,6 @@ func (s *Set) Add(val Value) {
 	key := valueKeyFunc(val)
 	bucket := s.elements[key]
 	for _, elem := range bucket {
-		s.comparisons++
 		if valueEqual(elem, val) {
 			return
 		}
@@ -188,7 +186,6 @@ func (s *Set) Add(val Value) {
 // Contains checks if the value is in the set.
 func (s *Set) Contains(val Value) bool {
 	for _, elem := range s.elements[valueKeyFunc(val)] {
-		s.comparisons++
 		if valueEqual(elem, val) {
 			return true
 		}

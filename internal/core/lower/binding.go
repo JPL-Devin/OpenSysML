@@ -62,6 +62,9 @@ func lowerBinding(u *ast.Usage, scope *symbols.Scope) (Binding, bool) {
 	if first == nil {
 		return Binding{}, false
 	}
+	if u.Value == nil {
+		return Binding{}, false
+	}
 	ends := [2]BindingEnd{
 		{Path: FeaturePath(first), Expr: first},
 		{Path: FeaturePath(u.Value), Expr: u.Value},

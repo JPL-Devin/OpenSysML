@@ -69,11 +69,12 @@ func (inst *Instance) keepConnector(fv *FeatureValue, id int64) {
 
 // Feature value holds the runtime value(s) for one feature.
 type FeatureValue struct {
-	Feature      *EffectiveFeature
-	Value        Value // scalar feature value (multiplicity [1])
-	Values       Value // collection feature value (Sequence or Set)
-	Materialized bool  // lazy flag: has this feature value been instantiated?
-	Written      bool  // a run assigned this value, so no default derives it again
+	Feature        *EffectiveFeature
+	Value          Value // scalar feature value (multiplicity [1])
+	Values         Value // collection feature value (Sequence or Set)
+	Materialized   bool  // lazy flag: has this feature value been instantiated?
+	Written        bool  // a run assigned this value, so no default derives it again
+	BindingDerived bool  // value came from binding propagation rather than a write
 }
 
 // HeldValue is the value the feature value reads as: its collection when the feature is
@@ -348,6 +349,7 @@ func (inst *Instance) SetFeatureValue(ctx *Context, name string, value Value) er
 		fv.Value = Value{}
 	}
 	fv.Materialized, fv.Written = true, true
+	fv.BindingDerived = false
 	return nil
 }
 
