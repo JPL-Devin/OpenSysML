@@ -887,6 +887,30 @@ RDF stays **experimental**: D1 (expressions as source text), D2 (end-binding hea
 triplestore round trip) are untouched by this, and D3 remains the gate on calling the path
 stable.
 
+## T1 — the deprecated "slot" spellings still ship on the wire and in the client
+
+`slot` is UML / SysML v1 vocabulary (`InstanceSpecification::slot`). It occurs **zero** times in
+the vendored normative metamodel and standard library, and v2 has no `InstanceSpecification`
+metaclass at all; the pair for this concept is `Feature` (`KerML.kerml:164`) and `FeatureValue`
+(`KerML.kerml:360-366`).
+
+The rename itself is done: the runtime is `FeatureValue` / `Instance.FeatureValues` /
+`GetFeatureValue` / `FeatureValueError`, the REPL command is `%features`, and the error and report
+wording say "feature value". What is left is the compatibility layer the rename left behind, all
+of it aliasing rather than adding behavior:
+
+- `Instance.slots` and `SlotValue` in `api/proto/sysml.proto` (`deprecated = true`), populated
+  from the feature values by `deprecatedSlots` in `internal/grpc/convert.go`
+- `Instance.slots` / `raw_slots` / `get_slot` in `python/opensysml/instance.py`, and the client's
+  read-from-either-spelling fallback in `Instance._values`
+- `%slots`, which prints a deprecation note and defers to `%features`
+
+Because 0.1.0 has not shipped, these have no released client to keep working, so the pre-0.1.0
+clean-break rule applies: **remove them rather than carry them**, in one mechanical PR with no
+behavior change in the same commit. Dropping the proto field is the only part with a wire
+consequence — the field number stays reserved — and the local corpus gate belongs in the run,
+with the expectation file never regenerated for a rename.
+
 ---
 
 # How to run the next batch
@@ -915,7 +939,10 @@ Tracks A, B and P are closed, so what is left reorders:
 2. **Track C** is done: `cmd/sysml-grpc` now has the process lifecycle gate it lacked, and the
    resolver and semantics rules that were tested only on the parsed index are tested on the
    cache-restored one as well.
-3. **Track D** is independent of the rest and can run whenever. Take **D3** before **D1**/**D2**:
+3. **T1** is unordered with respect to everything else, but it has to land before 0.1.0, since
+   after that release the deprecated spellings are a compatibility promise rather than an alias
+   nothing depends on.
+4. **Track D** is independent of the rest and can run whenever. Take **D3** before **D1**/**D2**:
    it is the cheapest, and it is what would show whether the Flexo interop claim actually holds
    before more work is layered on the mapping. **D4** is done; what it left behind — a succession
    end that refers to an unnamed member — belongs with **D2**, since both want real end triples
