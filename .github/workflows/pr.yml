@@ -95,7 +95,7 @@ jobs:
       - name: Solver gate
         run: |
           set -o pipefail
-          go test -count=1 -v ./internal/core/solve ./internal/repl -run 'TestSolver|TestDiscovery|TestSolved|TestDivisor|TestCheck' | tee solver-gate.log
+          go test -count=1 -v ./internal/core/solve ./internal/repl -run 'TestSolver|TestDiscovery|TestSolved|TestDivisor|TestCheck|TestSolve|TestConfigure|TestSynthesis|TestPinned|TestFixed' | tee solver-gate.log
           if grep -qE '^\s*--- SKIP' solver-gate.log; then
             echo "error: a solver-dependent test skipped" >&2
             exit 1
@@ -112,6 +112,24 @@ jobs:
             echo "error: a differential gate skipped" >&2
             exit 1
           fi
+
+      # The other half of the contract: with no solver to be found, every
+      # solver-dependent test must skip with a reason and the absent-solver paths
+      # must still report one. OPENSYSML_SMT names an executable that does not
+      # exist, which is discovery's absent case, and the requirement flag is
+      # dropped so a skip is the expected outcome here.
+      - name: Solver-absent gate
+        run: |
+          set -o pipefail
+          env -u OPENSYSML_REQUIRE_SMT OPENSYSML_SMT=/nonexistent/no-such-solver \
+            go test -count=1 -v ./internal/core/solve ./internal/repl | tee no-solver-gate.log
+          for name in TestCheckReportsAnAbsentSolver TestExplainReportsAnAbsentSolver \
+            TestSolveReportsAnAbsentSolver TestConfigureReportsAnAbsentSolver; do
+            grep -qE "^\s*--- PASS: $name" no-solver-gate.log || {
+              echo "error: $name did not run without a solver" >&2
+              exit 1
+            }
+          done
 
       - name: Build binaries
         run: |
@@ -180,9 +198,9 @@ jobs:
 
       - name: Install sysml-grpc binary
         run: |
-          mkdir -p ~/.pysysml/bin
-          cp bin/sysml-grpc ~/.pysysml/bin/
-          chmod +x ~/.pysysml/bin/sysml-grpc
+          mkdir -p ~/.opensysml/bin
+          cp bin/sysml-grpc ~/.opensysml/bin/
+          chmod +x ~/.opensysml/bin/sysml-grpc
 
       - name: Install Python package
         working-directory: python
@@ -194,8 +212,8 @@ jobs:
       # which exercises nothing, so one runs here for the rest of the job.
       - name: Start sysml-grpc service
         run: |
-          chmod +x ~/.pysysml/bin/sysml-grpc
-          nohup ~/.pysysml/bin/sysml-grpc -port 50051 > /tmp/sysml-grpc.log 2>&1 &
+          chmod +x ~/.opensysml/bin/sysml-grpc
+          nohup ~/.opensysml/bin/sysml-grpc -port 50051 > /tmp/sysml-grpc.log 2>&1 &
           python3 - <<'PY'
           import socket, sys, time
 
@@ -209,13 +227,13 @@ jobs:
           sys.exit("sysml-grpc never listened on 50051")
           PY
 
-      # PYSYSML_REQUIRE_SERVICE turns "no service, so skip" into a failure: a
+      # OPENSYSML_REQUIRE_SERVICE turns "no service, so skip" into a failure: a
       # service is provided here, so its absence is the bug, not a pass.
       - name: Run Python tests
         working-directory: python
         env:
-          PYSYSML_REQUIRE_SERVICE: 1
+          OPENSYSML_REQUIRE_SERVICE: 1
         run: pytest tests/ -v
 
       - name: Verify import
-        run: python3 -c "import pysysml; print(f'pysysml {pysysml.__version__} imported successfully')"
+        run: python3 -c "import opensysml; print(f'opensysml {opensysml.__version__} imported successfully')"

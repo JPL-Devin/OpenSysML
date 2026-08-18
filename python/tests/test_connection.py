@@ -8,7 +8,7 @@ import time
 from contextlib import ExitStack
 from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
-from pysysml.connection import (
+from opensysml.connection import (
     Connection,
     START_PROBE_RPC_TIMEOUT,
     START_TIMEOUT,
@@ -16,8 +16,8 @@ from pysysml.connection import (
     _get_lockfile_path,
     _service_key,
 )
-from pysysml.errors import PySysMLError, ServiceError
-from pysysml.proto import sysml_pb2
+from opensysml.errors import OpenSysMLError, ServiceError
+from opensysml.proto import sysml_pb2
 
 
 @pytest.fixture
@@ -26,7 +26,7 @@ def tmp_home(tmp_path, monkeypatch):
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
-    monkeypatch.setenv("PYSYSML_STATE_DIR", str(home / ".pysysml"))
+    monkeypatch.setenv("OPENSYSML_STATE_DIR", str(home / ".opensysml"))
     before = set(_OWNED_SERVICES)
     yield home
     # Only this test's records: another test's connection still needs its own.
@@ -37,7 +37,7 @@ def tmp_home(tmp_path, monkeypatch):
 def test_connection_init():
     with patch('grpc.insecure_channel') as mock_channel:
         mock_stub = Mock()
-        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub', return_value=mock_stub):
+        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub', return_value=mock_stub):
             conn = Connection(port=50051, auto_start=False)
             
             assert conn.port == 50051
@@ -46,7 +46,7 @@ def test_connection_init():
 
 def test_connection_custom_host():
     with patch('grpc.insecure_channel') as mock_channel:
-        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
+        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
             conn = Connection(host='example.com', port=9000, auto_start=False)
             
             mock_channel.assert_called_once_with('example.com:9000')
@@ -74,7 +74,7 @@ def test_connection_load():
         
         mock_stub.ParseFile.return_value = pb_response
         
-        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub', return_value=mock_stub):
+        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub', return_value=mock_stub):
             conn = Connection(auto_start=False)
             model = conn.load("test.sysml")
             
@@ -115,7 +115,7 @@ def test_connection_load_with_diagnostics():
         
         mock_stub.ParseFile.return_value = pb_response
         
-        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub', return_value=mock_stub):
+        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub', return_value=mock_stub):
             conn = Connection(auto_start=False)
             model = conn.load("bad.sysml")
             
@@ -132,12 +132,12 @@ def test_connection_load_grpc_error():
         original = grpc.RpcError()
         mock_stub.ParseFile.side_effect = original
 
-        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub', return_value=mock_stub):
+        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub', return_value=mock_stub):
             conn = Connection(auto_start=False)
 
             with pytest.raises(ServiceError) as excinfo:
                 conn.load("missing.sysml")
-            assert isinstance(excinfo.value, PySysMLError)
+            assert isinstance(excinfo.value, OpenSysMLError)
             assert excinfo.value.__cause__ is original
 
 
@@ -161,7 +161,7 @@ def test_connection_get_symbol():
         
         mock_stub.GetSymbol.return_value = pb_response
         
-        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub', return_value=mock_stub):
+        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub', return_value=mock_stub):
             conn = Connection(auto_start=False)
             pb_result = conn.get_symbol("model_hash", "Vehicle::Engine")
             
@@ -187,7 +187,7 @@ def test_connection_get_symbol_not_found():
         
         mock_stub.GetSymbol.return_value = pb_response
         
-        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub', return_value=mock_stub):
+        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub', return_value=mock_stub):
             conn = Connection(auto_start=False)
             pb_result = conn.get_symbol("hash", "NonExistent")
             
@@ -201,7 +201,7 @@ def test_connection_context_manager():
         mock_chan_instance = Mock()
         mock_channel.return_value = mock_chan_instance
         
-        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
+        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
             with Connection(auto_start=False) as conn:
                 # __enter__ should return self
                 assert conn is not None
@@ -224,7 +224,7 @@ def test_probe_service_running():
         # Mock GetDiagnostics RPC success
         mock_stub.GetDiagnostics.return_value = sysml_pb2.DiagnosticsResponse(diagnostics=[])
         
-        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub', return_value=mock_stub):
+        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub', return_value=mock_stub):
             conn = Connection(auto_start=False)
             result = conn._probe_service('localhost', 50051, timeout=1.0)
             
@@ -253,7 +253,7 @@ def test_probe_service_not_running():
         # Mock GetDiagnostics RPC failure
         mock_stub.GetDiagnostics.side_effect = mock_error
         
-        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub', return_value=mock_stub):
+        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub', return_value=mock_stub):
             conn = Connection(auto_start=False)
             result = conn._probe_service('localhost', 50051, timeout=1.0)
             
@@ -263,7 +263,7 @@ def test_probe_service_not_running():
 def test_ensure_service_already_running():
     """Test _ensure_service doesn't start if service already running."""
     with patch('grpc.insecure_channel'):
-        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
+        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
             conn = Connection(auto_start=False)
             
             # Mock _probe_service to return True (already running)
@@ -279,9 +279,9 @@ def test_ensure_service_starts_when_needed(tmp_home):
     """Test _ensure_service starts subprocess when service not running."""
     binary_path = '/path/to/sysml-grpc'
     with patch('grpc.insecure_channel'):
-        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
+        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
             # Patch ensure_binary at module level before creating Connection
-            with patch('pysysml.connection.ensure_binary', return_value=binary_path):
+            with patch('opensysml.connection.ensure_binary', return_value=binary_path):
                 # Mock only binary existence check
                 real_exists = os.path.exists
                 def mock_exists(path):
@@ -324,9 +324,9 @@ def test_ensure_service_starts_when_needed(tmp_home):
 def test_ensure_service_timeout(tmp_home):
     """Test _ensure_service raises if service doesn't start in time."""
     with patch('grpc.insecure_channel'):
-        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
+        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
             # Patch ensure_binary at module level before creating Connection
-            with patch('pysysml.connection.ensure_binary', return_value='/path/to/sysml-grpc'):
+            with patch('opensysml.connection.ensure_binary', return_value='/path/to/sysml-grpc'):
                 with patch('os.path.exists', return_value=True):  # Mock binary exists
                     conn = Connection(auto_start=False)
                     
@@ -336,7 +336,7 @@ def test_ensure_service_timeout(tmp_home):
                             mock_popen.return_value = Mock(pid=12345)
                             mock_popen.return_value.poll.return_value = None
                             with patch('time.sleep'):  # Speed up test
-                                from pysysml.errors import ConnectionError
+                                from opensysml.errors import ConnectionError
                                 try:
                                     conn._ensure_service()
                                     assert False, "Expected ConnectionError"
@@ -358,9 +358,9 @@ def _spawning_connection(port=50051):
 
     stack = ExitStack()
     stack.enter_context(patch('grpc.insecure_channel'))
-    stack.enter_context(patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub'))
+    stack.enter_context(patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub'))
     stack.enter_context(
-        patch('pysysml.connection.ensure_binary', return_value=binary_path)
+        patch('opensysml.connection.ensure_binary', return_value=binary_path)
     )
     stack.enter_context(patch('os.path.exists', side_effect=mock_exists))
     stack.enter_context(patch('atexit.register'))
@@ -404,7 +404,7 @@ def test_service_that_never_answers_fails_within_the_waiting_bound(tmp_home):
     started = time.monotonic()
     with stack:
         with patch.object(conn, '_probe_service', side_effect=probe):
-            with pytest.raises(PySysMLError) as excinfo:
+            with pytest.raises(OpenSysMLError) as excinfo:
                 conn._ensure_service()
     elapsed = time.monotonic() - started
 
@@ -430,9 +430,9 @@ def test_a_probe_that_answers_nothing_may_not_outlive_the_bound(tmp_home):
 
     started = time.monotonic()
     with stack:
-        with patch('pysysml.connection.START_TIMEOUT', 0.4):
+        with patch('opensysml.connection.START_TIMEOUT', 0.4):
             with patch.object(conn, '_probe_service', side_effect=deaf):
-                with pytest.raises(PySysMLError):
+                with pytest.raises(OpenSysMLError):
                     conn._ensure_service()
     elapsed = time.monotonic() - started
 
@@ -445,9 +445,9 @@ def test_waiting_bound_is_the_module_constant(tmp_home):
 
     started = time.monotonic()
     with stack:
-        with patch('pysysml.connection.START_TIMEOUT', 0.2):
+        with patch('opensysml.connection.START_TIMEOUT', 0.2):
             with patch.object(conn, '_probe_service', return_value=False):
-                with pytest.raises(PySysMLError):
+                with pytest.raises(OpenSysMLError):
                     conn._ensure_service()
     elapsed = time.monotonic() - started
 
@@ -457,7 +457,7 @@ def test_waiting_bound_is_the_module_constant(tmp_home):
 def test_cleanup_service_releases_one_reference_of_a_service_still_in_use():
     """A released reference leaves a service other connections still hold."""
     with patch('grpc.insecure_channel'):
-        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
+        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
             conn = Connection(auto_start=False)
             conn._holds_refcount = True
             conn._referenced_service = (12345, 1.0)
@@ -465,7 +465,7 @@ def test_cleanup_service_releases_one_reference_of_a_service_still_in_use():
             _OWNED_SERVICES[key] = {'pid': 12345, 'create_time': 1.0, 'refs': 2}
 
             try:
-                with patch('pysysml.connection._stop_process') as mock_stop:
+                with patch('opensysml.connection._stop_process') as mock_stop:
                     conn._cleanup_service()
 
                     mock_stop.assert_not_called()
@@ -481,13 +481,13 @@ def test_cleanup_service_without_a_reference_touches_nothing():
     Closing must therefore leave the ownership of whoever did spawn it alone.
     """
     with patch('grpc.insecure_channel'):
-        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
+        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
             conn = Connection(auto_start=False)
             key = _service_key(conn.port)
             _OWNED_SERVICES[key] = {'pid': 12345, 'create_time': 1.0, 'refs': 1}
 
             try:
-                with patch('pysysml.connection._stop_process') as mock_stop:
+                with patch('opensysml.connection._stop_process') as mock_stop:
                     conn._cleanup_service()
 
                     mock_stop.assert_not_called()
@@ -499,8 +499,8 @@ def test_cleanup_service_without_a_reference_touches_nothing():
 def test_auto_start_enabled():
     """Test auto_start=True triggers _ensure_service."""
     with patch('grpc.insecure_channel'):
-        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
-            with patch('pysysml.connection.Connection._ensure_service') as mock_ensure:
+        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
+            with patch('opensysml.connection.Connection._ensure_service') as mock_ensure:
                 conn = Connection(auto_start=True)
                 
                 mock_ensure.assert_called_once()
@@ -509,8 +509,8 @@ def test_auto_start_enabled():
 def test_auto_start_disabled():
     """Test auto_start=False skips _ensure_service."""
     with patch('grpc.insecure_channel'):
-        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
-            with patch('pysysml.connection.Connection._ensure_service') as mock_ensure:
+        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
+            with patch('opensysml.connection.Connection._ensure_service') as mock_ensure:
                 conn = Connection(auto_start=False)
                 
                 mock_ensure.assert_not_called()
@@ -522,7 +522,7 @@ def test_auto_start_disabled():
 def test_ensure_service_uses_lockfile(tmp_home):
     """Test that _ensure_service acquires lockfile before starting service."""
     binary_path = '/path/to/sysml-grpc'
-    with patch('pysysml.connection.ensure_binary') as mock_ensure:
+    with patch('opensysml.connection.ensure_binary') as mock_ensure:
         mock_ensure.return_value = binary_path
         
         # Mock binary existence check
@@ -540,7 +540,7 @@ def test_ensure_service_uses_lockfile(tmp_home):
                 # Mock time.sleep to skip retries
                 with patch('time.sleep'):
                     with patch('grpc.insecure_channel'):
-                        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
+                        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
                             conn = Connection(auto_start=False)
                             
                             # Mock _probe_service: False initially, then True after start
@@ -570,14 +570,14 @@ def test_concurrent_ensure_service_blocks(tmp_home):
     
     try:
         # Second process should timeout trying to acquire
-        from pysysml.errors import ConnectionError
+        from opensysml.errors import ConnectionError
         with pytest.raises(ConnectionError, match="Timeout acquiring service lockfile"):
-            with patch('pysysml.connection.ensure_binary', return_value='/path/to/binary'):
+            with patch('opensysml.connection.ensure_binary', return_value='/path/to/binary'):
                 with patch('os.path.exists', return_value=True):
                     with patch('subprocess.Popen') as mock_popen:
                         mock_popen.return_value = Mock(pid=12345)
                         with patch('grpc.insecure_channel'):
-                            with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
+                            with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
                                 conn = Connection(auto_start=False)
                                 with patch.object(conn, '_probe_service', return_value=False):
                                     conn._ensure_service()

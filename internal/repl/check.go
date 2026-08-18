@@ -8,6 +8,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
 	"github.com/Open-MBEE/OpenSysML/internal/core/solve"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // SolveStatus is what a solver answered about an element's conditions. It is
@@ -144,61 +145,105 @@ func unavailableReport(subject, msg string) SolveReport {
 	return SolveReport{Subject: subject, Status: SolveUnavailable, Lines: []string{"error: " + msg}}
 }
 
-// solveQueries translates what the named element states. Its second result is
-// non-nil for a check that cannot be made at all.
+// solveQueries translates what the named element states, leaving every value
+// free. Its second result is non-nil for a check that cannot be made at all.
 func (s *Session) solveQueries(name string) ([]*solve.Query, *SolveReport) {
+	queries, _, bad := s.solveQueriesWith(name, nil)
+	return queries, bad
+}
+
+// pinner supplies the values a query about subject fixes, given the resolved
+// element; subject is the element the query is translated from, which for a
+// satisfaction is the requirement rather than the element asserting it.
+type pinner func(target checkTarget, subject *symbols.Symbol) ([]solve.Pin, []solve.Unfixed, *SolveReport)
+
+// solveQueriesWith translates what the named element states, fixing the values
+// the pinner supplies. Its second result names the features whose value could not
+// be read, which stay free.
+func (s *Session) solveQueriesWith(name string, pins pinner) ([]*solve.Query, []solve.Unfixed, *SolveReport) {
 	target, bad := s.resolveCheckTarget(name)
 	if bad != nil {
 		report := unavailableReport(name, strings.TrimPrefix(bad.Lines[0], "error: "))
-		return nil, &report
+		return nil, nil, &report
+	}
+	fixed, unfixed, prob := s.fixedFor(target, target.sym, pins)
+	if prob != nil {
+		return nil, nil, prob
 	}
 	switch {
 	case runtime.RequireConstraint(target.sym) == nil:
-		q, err := solve.Constraint(target.ctx, target.sym, target.scope)
-		return oneQuery(name, q, err)
+		q, err := solve.ConstraintWith(target.ctx, target.sym, target.scope, fixed)
+		return oneQuery(name, q, unfixed, err)
 	case runtime.RequireRequirement(target.sym) == nil:
-		q, err := solve.Requirement(target.ctx, target.sym, target.scope)
-		return oneQuery(name, q, err)
+		q, err := solve.RequirementWith(target.ctx, target.sym, target.scope, fixed)
+		return oneQuery(name, q, unfixed, err)
 	}
 	if a, err := target.ctx.SatisfyAssertionOf(target.sym); err == nil {
-		q, qerr := solve.Satisfaction(target.ctx, a)
-		return oneQuery(name, q, qerr)
+		fixed, unfixed, prob := s.fixedFor(target, a.Symbol, pins)
+		if prob != nil {
+			return nil, nil, prob
+		}
+		q, qerr := solve.SatisfactionWith(target.ctx, a, fixed)
+		return oneQuery(name, q, unfixed, qerr)
 	}
-	return s.satisfactionQueries(name, target)
+	return s.satisfactionQueries(name, target, pins)
+}
+
+// fixedFor asks the pinner for the values a query about subject fixes, and fixes
+// none when there is no pinner.
+func (s *Session) fixedFor(
+	target checkTarget,
+	subject *symbols.Symbol,
+	pins pinner,
+) ([]solve.Pin, []solve.Unfixed, *SolveReport) {
+	if pins == nil {
+		return nil, nil, nil
+	}
+	return pins(target, subject)
 }
 
 // satisfactionQueries translates every satisfaction assertion an element states,
 // which is how an anonymous `assert satisfy` is reached.
-func (s *Session) satisfactionQueries(name string, target checkTarget) ([]*solve.Query, *SolveReport) {
+func (s *Session) satisfactionQueries(
+	name string,
+	target checkTarget,
+	pins pinner,
+) ([]*solve.Query, []solve.Unfixed, *SolveReport) {
 	if target.sym.Scope == nil {
 		report := unavailableReport(name, fmt.Sprintf("%s is not a constraint, requirement or satisfaction assertion", name))
-		return nil, &report
+		return nil, nil, &report
 	}
 	assertions := target.ctx.SatisfyAssertionsIn(target.sym.Scope)
 	if len(assertions) == 0 {
 		report := unavailableReport(name, fmt.Sprintf("no satisfaction assertion in %s", target.fqn))
-		return nil, &report
+		return nil, nil, &report
 	}
 	queries := make([]*solve.Query, 0, len(assertions))
+	var unfixed []solve.Unfixed
 	for _, a := range assertions {
-		q, err := solve.Satisfaction(target.ctx, a)
+		fixed, notRead, prob := s.fixedFor(target, a.Symbol, pins)
+		if prob != nil {
+			return nil, nil, prob
+		}
+		unfixed = append(unfixed, notRead...)
+		q, err := solve.SatisfactionWith(target.ctx, a, fixed)
 		if err != nil {
 			report := unavailableReport(name, err.Error())
-			return nil, &report
+			return nil, nil, &report
 		}
 		queries = append(queries, q)
 	}
-	return queries, nil
+	return queries, unfixed, nil
 }
 
 // oneQuery is a single translated query, or the report explaining why the
 // element could not be translated.
-func oneQuery(name string, q *solve.Query, err error) ([]*solve.Query, *SolveReport) {
+func oneQuery(name string, q *solve.Query, unfixed []solve.Unfixed, err error) ([]*solve.Query, []solve.Unfixed, *SolveReport) {
 	if err != nil {
 		report := unavailableReport(name, err.Error())
-		return nil, &report
+		return nil, nil, &report
 	}
-	return []*solve.Query{q}, nil
+	return []*solve.Query{q}, unfixed, nil
 }
 
 // doCheck carries out %check.

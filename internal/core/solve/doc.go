@@ -94,6 +94,64 @@
 // sort: declared values are not asserted, so a query asks what the conditions
 // permit rather than what one object holds.
 //
+// # Value synthesis
+//
+// TranslateWith (and ConstraintWith, RequirementWith, SatisfactionWith) takes a
+// partial assignment: Pins fixing some features to the values the model already
+// fixes, the rest left free for the solver to choose. A pin is read where the
+// evaluator reads it — Fixed and FixedFor go through the runtime's objects,
+// feature values and declared defaults — and carries its provenance: held by an
+// object (PinHeld), declared by the model (PinDeclared) or chosen by the caller
+// (PinChosen). Passing no pin translates exactly as before, so a query with no
+// partial assignment is the same script it always was.
+//
+// A pin becomes an ordinary equality assertion in role RolePinned, asserted
+// before the conditions and named in Query.Pinned with its assertion index, so it
+// can appear in an unsat core like any other assertion: unsat under pins means no
+// values exist consistent with what is already fixed, and the core says which
+// fixed values conflict. Values are converted through the same machinery the
+// translator uses — a quantity normalized to base units as an exact rational, an
+// enumeration literal or variant as the datatype constructor the writer declares
+// — and a value the subset cannot represent, or one whose dimension does not
+// match its feature, is a PinError wrapping ErrNotPinnable, never a silent drop.
+// Features read by the conditions but not readable as a value are reported as
+// Unread rather than being fixed to something.
+//
+// Result.Model is one witness, not a canonical answer: a satisfiable query
+// usually has many models and the solver may return any of them. Values are
+// rendered in Systemica's terms where the sort allows (qualified feature names,
+// declared units, enumeration and variant names) and flagged as the solver wrote
+// them where it does not.
+//
+// # Variant configuration
+//
+// A variation point translates as a finite datatype sort (Sort.Variation), so
+// Query.Variations are its variation variables. Query.FixValue chooses a variant
+// (PinChosen), which Solve then checks like any other fixed value, and with none
+// chosen Solve's model is a consistent selection. Configurations enumerates
+// consistent selections: one fresh check-sat per solution, each asserting the
+// negation of the complete previous assignment, built from the solver's own
+// terms rather than from rendered text. Every variation variable is assigned in
+// every solution, nested variation points and constrained variants included,
+// since they are variables of the same query as any other condition.
+//
+// The enumeration is bounded, in the spirit of the runtime's step budgets, by
+// DefaultMaxConfigurations solutions (OPENSYSML_SMT_MAX_CONFIGURATIONS overrides
+// it). Result.Truncated says the enumeration was cut short and why: AtBound for
+// the bound, Undecided for a solver that stopped deciding, with TimedOut when
+// the run's deadline was what stopped it — a deadline reports the solutions
+// already found rather than discarding them. Results are exhaustive only when a
+// final check-sat answered unsat; nothing implies exhaustiveness that was not
+// shown. A query reading no variation point is a NoVariationsError wrapping
+// ErrNoVariations, not an empty enumeration.
+//
+// Known limitations: only variation points in the translatable subset are
+// configured, so a variation whose variants carry collection-valued or otherwise
+// untranslatable conditions refuses with ErrNotTranslatable; variants are
+// configured as values of a variation point, not as objects, so nothing is
+// materialized and features a variant would only have once bound are not
+// constrained; and the enumeration order is the solver's, not a defined one.
+//
 // # Deliberately out of subset
 //
 // Everything else refuses with ErrNotTranslatable, and one refused conjunct

@@ -26,6 +26,13 @@ const (
 	// RoleDefined is a side condition a condition needs for the solver to mean by
 	// it what the evaluator means, such as a divisor being non-zero.
 	RoleDefined
+	// RolePinned is a value the model already fixes — held by an object, declared
+	// by the model, or chosen by the caller — asserted so the solver synthesises
+	// only what is still free.
+	RolePinned
+	// RoleExcluded is an assignment already reported, denied so enumerating asks
+	// for a different one.
+	RoleExcluded
 )
 
 var roleNames = map[Role]string{
@@ -34,6 +41,8 @@ var roleNames = map[Role]string{
 	RoleDenied:   "denied conditions",
 	RoleDomain:   "declared domain",
 	RoleDefined:  "well-definedness",
+	RolePinned:   "fixed value",
+	RoleExcluded: "excluded assignment",
 }
 
 // String names the role as an assertion's comment reads it.
@@ -145,6 +154,34 @@ type Query struct {
 	// SMT-LIB's arithmetic logics do not admit `div`, so such a query is written
 	// with the unrestricted logic even when it is linear.
 	IntegerDivision bool
+
+	// Pinned are the values the query fixes rather than leaves free, each naming
+	// the assertion that fixes it; nil for a query that fixes none.
+	Pinned []PinnedValue
+
+	// Unread are the values that were to be fixed but that no variable of the
+	// query reads, reported rather than dropped.
+	Unread []Unread
+}
+
+// Fixes reports whether the query fixes any value, which is what makes an unsat
+// verdict about it a verdict about those values too.
+func (q *Query) Fixes() bool { return len(q.Pinned) > 0 }
+
+// Free are the variables the query leaves for the solver to choose, in the order
+// they are declared.
+func (q *Query) Free() []*Var {
+	fixed := make(map[*Var]bool, len(q.Pinned))
+	for _, p := range q.Pinned {
+		fixed[p.Var] = true
+	}
+	out := make([]*Var, 0, len(q.Vars))
+	for _, v := range q.Vars {
+		if !fixed[v] {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 // Logic returns the SMT-LIB logic the sorts and operators used need: "ALL" once

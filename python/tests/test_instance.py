@@ -1,8 +1,8 @@
 """Tests for Instance class."""
 import pytest
-from pysysml.errors import SlotError
-from pysysml.proto import sysml_pb2
-from pysysml.instance import Instance
+from opensysml.errors import SlotError
+from opensysml.proto import sysml_pb2
+from opensysml.instance import Instance
 
 
 def scalar_slot(name, **value_kwargs):

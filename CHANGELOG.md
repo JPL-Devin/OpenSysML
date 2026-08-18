@@ -46,8 +46,19 @@ artifacts they describe really were called that.
 
 - **Go module path is `github.com/Open-MBEE/OpenSysML`.** `go install
   github.com/Open-MBEE/OpenSysML/cmd/sysml@latest`; the old path resolves only for `v0.0.x`.
-- **The binaries are unchanged** — `sysml`, `sysml-lsp` and `sysml-grpc` keep their names, as does
-  the `pysysml` Python package.
+- **The binaries are unchanged** — `sysml`, `sysml-lsp` and `sysml-grpc` keep their names.
+- **The Python client is `opensysml`**, on PyPI and as the import: `pip install opensysml`,
+  `import opensysml`. Its environment variables are `OPENSYSML_*` (`OPENSYSML_GRPC_VERSION`,
+  `OPENSYSML_STATE_DIR`, `OPENSYSML_GITHUB_REPO`, `OPENSYSML_ALLOW_UNPINNED_DOWNLOAD`,
+  `OPENSYSML_REQUIRE_SERVICE`), the base error is `OpenSysMLError`, the generator entry point is
+  `opensysml-generate`, the state directory is `~/.opensysml` and the release tag is
+  `opensysml-v*`. Nothing reads the `pysysml` names, so a `~/.pysysml` left behind by an older
+  install is dead weight and can be deleted. The first release under the new name is 0.3.0,
+  carrying on from `pysysml` 0.2.0 rather than restarting, and `pysysml` gets one last version,
+  0.2.1, which contains no client: it raises on import naming `opensysml`, so `pip install
+  pysysml` reports the rename instead of resolving to the pre-rename 0.2.0. Pin
+  `pysysml==0.2.0` to keep that release while migrating; nothing further is published under
+  that name.
 - **Release archives are `opensysml-<os>-<arch>.tar.gz`** (`.zip` on Windows), and the Homebrew
   formula is `opensysml`: `brew install Open-MBEE/tap/opensysml`. Assets already published under
   `v0.0.x` keep their old names.
@@ -133,7 +144,7 @@ artifacts they describe really were called that.
   - The gRPC interface gained `Instance.feature_values` (`FeatureValue`) and the
     `feature-values` capability. The deprecated `Instance.slots` (`SlotValue`) is still populated
     identically, so an existing client keeps working.
-  - `pysysml` gained `Instance.features`, `raw_features`, `get_feature`, `FeatureValueError`, and
+  - `opensysml` gained `Instance.features`, `raw_features`, `get_feature`, `FeatureValueError`, and
     `typed.feature_value`/`optional_feature_value`/`list_feature_value`, which generated modules now
     emit (emission schema `3`). `slots`, `raw_slots`, `get_slot`, `SlotError` and the `slot`
     decoders remain as deprecated spellings, and `SlotError is FeatureValueError`.
@@ -261,6 +272,30 @@ artifacts they describe really were called that.
   `DesertKite.sysml`, which lives only on that repository's `InitialDesign` branch — 7 errors that
   are ours: a qualified name refused as a `bind` end and `connection connect … ;` refused inside a
   `requirement` body, both owned by a separate session.
+
+### A binding end may be a qualified name, and a requirement body takes a prefixed connector
+
+- **`bind` now accepts the notation a connector end is written in:** `binding bind R::a = c;` and a
+  feature chain whose chaining features are themselves qualified names
+  (`bind 'Kite Environment'::'Region Earth Surface'.'Kite System'::'Desert Kite'.'Wall Height' = …`)
+  parsed as far as the first `::` and then failed. A connector end names a feature by a
+  `QualifiedName` (SysML `ConnectorEndMember` → KerML `OwnedReferenceSubsetting`,
+  `OwnedFeatureChaining`), and every segment of the chain is now recorded and resolved, not
+  collapsed to its last one.
+- **The named form is no longer read as a redefinition:** `binding b1 bind R::a = c;` reported
+  "b1 redefines a, but a is not an inherited member of P". `b1` is the binding's name and `R::a` its
+  first end, which reference-subsets the feature it names, so it resolves where that feature is
+  declared rather than as an inherited member of the binding's owner.
+- **A connector, flow or message written with its kind keyword is a member of a requirement-like
+  body:** `requirement r { connection connect r to x; }` reported `expected a body member` at the
+  closing brace. A `requirement`, `constraint`, `concern`, `objective`, `use case` and `view` body
+  admits usage elements, and a connector usage declares no name — its ends are what make it a
+  declaration.
+- The Open-MBEE `DesertKite.sysml` model parses clean as a result. What it still reports is
+  recorded in [spec compliance](docs/project/spec-compliance.md) § Structural, Interface and
+  Analysis Notation: the tool-specific `'SysML Standard Diagrams'::gv` namespace, an `OOSEM::MOE`
+  reference to a member of `OOSEM::'OOSEM Measures'`, and references to a decision node whose name
+  is not registered as a symbol.
 
 ## 0.1.0 — 2026-08-17
 
@@ -1127,7 +1162,8 @@ are listed here rather than under a heading of their own.
   metadata and `pysysml.__version__` both read — a tag that disagrees with it
   fails the job before anything is uploaded. `python/setup.py` is gone;
   `pyproject.toml` declares the build. See
-  [docs/project/releasing.md](docs/project/releasing.md#releasing-pysysml-to-pypi).
+  [docs/project/releasing.md](docs/project/releasing.md#releasing-opensysml-to-pypi)
+  (that section, and the package, are named `opensysml` since the rename).
 
 ### Known limitations
 

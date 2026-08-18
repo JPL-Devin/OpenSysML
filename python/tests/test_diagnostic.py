@@ -1,5 +1,5 @@
-from pysysml.proto import sysml_pb2
-from pysysml.diagnostic import Diagnostic
+from opensysml.proto import sysml_pb2
+from opensysml.diagnostic import Diagnostic
 
 
 def test_diagnostic_properties():

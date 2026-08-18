@@ -1,15 +1,15 @@
 """A slot holding no value, as a valueless feature of a value type has.
 
 The service sends such a slot materialized with the ``unset`` arm of ``Value``,
-so the client reads it as :data:`pysysml.UNSET` — falsy, spelled ``<unset>`` as
+so the client reads it as :data:`opensysml.UNSET` — falsy, spelled ``<unset>`` as
 every other surface spells it, and distinct from ``None``, the model's ``null``.
 """
 
-import pysysml
-from pysysml.errors import SlotError
-from pysysml.instance import Instance
-from pysysml.proto import sysml_pb2
-from pysysml.values import UNSET, UnsetType, slot_to_python, value_to_python
+import opensysml
+from opensysml.errors import SlotError
+from opensysml.instance import Instance
+from opensysml.proto import sysml_pb2
+from opensysml.values import UNSET, UnsetType, slot_to_python, value_to_python
 
 import pytest
 
@@ -86,5 +86,5 @@ def test_an_instance_exposes_an_unset_slot_as_unset():
 
 
 def test_unset_is_exported():
-    assert pysysml.UNSET is UNSET
-    assert pysysml.UnsetType is UnsetType
+    assert opensysml.UNSET is UNSET
+    assert opensysml.UnsetType is UnsetType

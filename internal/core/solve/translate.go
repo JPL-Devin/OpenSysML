@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -36,6 +37,12 @@ type Subject struct {
 // included, in the order the evaluator checks them. scope stands in for sym's
 // own scope when sym declares none.
 func Constraint(ctx *runtime.Context, sym *symbols.Symbol, scope *symbols.Scope) (*Query, error) {
+	return ConstraintWith(ctx, sym, scope, nil)
+}
+
+// ConstraintWith translates a constraint with values already fixed, so the solver
+// synthesises only what the model leaves free. With no pins it is Constraint.
+func ConstraintWith(ctx *runtime.Context, sym *symbols.Symbol, scope *symbols.Scope, pins []Pin) (*Query, error) {
 	if err := runtime.RequireConstraint(sym); err != nil {
 		return nil, err
 	}
@@ -45,12 +52,18 @@ func Constraint(ctx *runtime.Context, sym *symbols.Symbol, scope *symbols.Scope)
 		Symbol:  sym,
 		Negated: runtime.NegatedDecl(sym),
 	}
-	return Translate(ctx, subject, ctx.ConditionsOf(sym, scope))
+	return TranslateWith(ctx, subject, ctx.ConditionsOf(sym, scope), pins)
 }
 
 // Requirement translates the conditions sym states as a requirement, its
 // assumptions included as assumed rather than required.
 func Requirement(ctx *runtime.Context, sym *symbols.Symbol, scope *symbols.Scope) (*Query, error) {
+	return RequirementWith(ctx, sym, scope, nil)
+}
+
+// RequirementWith translates a requirement with values already fixed. With no
+// pins it is Requirement.
+func RequirementWith(ctx *runtime.Context, sym *symbols.Symbol, scope *symbols.Scope, pins []Pin) (*Query, error) {
 	if err := runtime.RequireRequirement(sym); err != nil {
 		return nil, err
 	}
@@ -60,13 +73,19 @@ func Requirement(ctx *runtime.Context, sym *symbols.Symbol, scope *symbols.Scope
 		Symbol:  sym,
 		Negated: runtime.NegatedDecl(sym),
 	}
-	return Translate(ctx, subject, ctx.ConditionsOf(sym, scope))
+	return TranslateWith(ctx, subject, ctx.ConditionsOf(sym, scope), pins)
 }
 
 // Satisfaction translates the conditions an `assert satisfy` checks: those of the
 // requirement it names, read through that requirement's own parameters, since the
 // query asks what they permit rather than what the subject holds.
 func Satisfaction(ctx *runtime.Context, assertion *runtime.SatisfyAssertion) (*Query, error) {
+	return SatisfactionWith(ctx, assertion, nil)
+}
+
+// SatisfactionWith translates an `assert satisfy` with values already fixed. With
+// no pins it is Satisfaction.
+func SatisfactionWith(ctx *runtime.Context, assertion *runtime.SatisfyAssertion, pins []Pin) (*Query, error) {
 	if assertion == nil || assertion.Symbol == nil {
 		return nil, fmt.Errorf("satisfaction: %w", ErrNoConditions)
 	}
@@ -76,13 +95,21 @@ func Satisfaction(ctx *runtime.Context, assertion *runtime.SatisfyAssertion) (*Q
 		Symbol:  assertion.Symbol,
 		Negated: assertion.Negated,
 	}
-	return Translate(ctx, subject, ctx.ConditionsOf(assertion.Symbol, assertion.Symbol.OwnerScope))
+	return TranslateWith(ctx, subject, ctx.ConditionsOf(assertion.Symbol, assertion.Symbol.OwnerScope), pins)
 }
 
 // Translate builds a query from conditions the runtime collected. One refusal
 // fails the whole translation, since a query missing a conjunct would answer
 // about conditions it does not hold.
 func Translate(ctx *runtime.Context, subject Subject, conds []runtime.Condition) (*Query, error) {
+	return TranslateWith(ctx, subject, conds, nil)
+}
+
+// TranslateWith builds a query whose pinned features are asserted equal to the
+// values given, leaving the rest free. A value that cannot be fixed refuses, as
+// an untranslatable condition does; a value no condition reads is reported in
+// Query.Unread rather than dropped.
+func TranslateWith(ctx *runtime.Context, subject Subject, conds []runtime.Condition, pins []Pin) (*Query, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("solve: no runtime context")
 	}
@@ -100,6 +127,9 @@ func Translate(ctx *runtime.Context, subject Subject, conds []runtime.Condition)
 		baseUnits: map[string]string{},
 	}
 	if err := t.translate(conds); err != nil {
+		return nil, err
+	}
+	if err := t.fix(pins); err != nil {
 		return nil, err
 	}
 	return t.query(), nil
@@ -122,6 +152,12 @@ type translator struct {
 	domains []Assertion
 	guards  []Assertion
 	asserts []Assertion
+
+	// pins are the equalities fixing values the model already holds, and pinned
+	// records them for a report; unread holds the values no variable reads.
+	pins   []Assertion
+	pinned []PinnedValue
+	unread []Unread
 
 	// guarded remembers the divisors already asserted non-zero, by their term, so
 	// a divisor read twice is guarded once.
@@ -226,9 +262,36 @@ func (t *translator) query() *Query {
 	sortSorts(q.Sorts)
 	domains := append([]Assertion(nil), t.domains...)
 	sortAssertions(domains)
-	q.Assertions = append(domains, t.guards...)
+	q.Assertions = append(domains, t.pinnedAssertions(len(domains))...)
+	q.Assertions = append(q.Assertions, t.guards...)
 	q.Assertions = append(q.Assertions, t.asserts...)
+	q.Pinned = t.pinned
+	q.Unread = t.unread
 	return q
+}
+
+// pinnedAssertions orders the fixed values by the variable they fix, and records
+// where each one's assertion sits, so a core naming it names the fixed value. The
+// assertions and the records they come from are ordered as one, since the record
+// is what an unsat core is read back through.
+func (t *translator) pinnedAssertions(offset int) []Assertion {
+	order := make([]int, len(t.pinned))
+	for i := range order {
+		order[i] = i
+	}
+	sort.SliceStable(order, func(i, j int) bool {
+		return t.pinned[order[i]].Var.Name < t.pinned[order[j]].Var.Name
+	})
+	assertions := make([]Assertion, 0, len(order))
+	pinned := make([]PinnedValue, 0, len(order))
+	for at, i := range order {
+		assertions = append(assertions, t.pins[i])
+		record := t.pinned[i]
+		record.Index = offset + at
+		pinned = append(pinned, record)
+	}
+	t.pinned = pinned
+	return assertions
 }
 
 // condition translates one condition, applying the negation it was written with.

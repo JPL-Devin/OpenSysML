@@ -12,8 +12,8 @@
 ## File Structure
 
 **Modified:**
-- `pysysml/binary.py` - integrate checksum verification into download flow
-- `pysysml/connection.py` - add lockfile coordination + reference counting
+- `opensysml/binary.py` - integrate checksum verification into download flow
+- `opensysml/connection.py` - add lockfile coordination + reference counting
 - `tests/test_binary.py` - verify checksums enforced
 - `tests/test_connection.py` - test multi-process scenarios
 - `tests/test_lifecycle.py` - verify reference-counted shutdown
@@ -27,14 +27,14 @@
 ## Task 1: Add Lockfile Coordination
 
 **Files:**
-- Modify: `pysysml/connection.py`
+- Modify: `opensysml/connection.py`
 - Modify: `setup.py`, `pyproject.toml`
 - Test: `tests/test_connection.py`
 
 **Objective:** Prevent race condition when multiple processes try to auto-start service simultaneously.
 
 **Design:**
-- Lockfile path: `~/.pysysml/sysml-grpc.lock`
+- Lockfile path: `~/.opensysml/sysml-grpc.lock`
 - Use `filelock` library (cross-platform)
 - Lock acquired before checking if service running
 - PID written to lockfile for reference tracking
@@ -76,25 +76,25 @@ import os
 
 def test_ensure_service_uses_lockfile():
     """Test that _ensure_service acquires lockfile before starting service."""
-    with patch('pysysml.connection.ensure_binary') as mock_ensure:
+    with patch('opensysml.connection.ensure_binary') as mock_ensure:
         mock_ensure.return_value = '/path/to/sysml-grpc'
         
-        with patch('pysysml.connection._probe_service', return_value=False):
+        with patch('opensysml.connection._probe_service', return_value=False):
             with patch('subprocess.Popen') as mock_popen:
                 mock_popen.return_value = Mock(pid=12345)
                 
                 # Mock time.sleep to skip retries
                 with patch('time.sleep'):
-                    with patch('pysysml.connection._probe_service', side_effect=[False, True]):
+                    with patch('opensysml.connection._probe_service', side_effect=[False, True]):
                         conn = Connection(auto_start=True)
                         
                         # Verify lockfile was created
-                        lockfile_path = os.path.expanduser('~/.pysysml/sysml-grpc.lock')
+                        lockfile_path = os.path.expanduser('~/.opensysml/sysml-grpc.lock')
                         assert os.path.exists(lockfile_path)
 
 def test_concurrent_ensure_service_blocks():
     """Test that second process blocks while first starts service."""
-    lockfile_path = os.path.expanduser('~/.pysysml/sysml-grpc.lock')
+    lockfile_path = os.path.expanduser('~/.opensysml/sysml-grpc.lock')
     
     # Simulate first process holding lock
     lock1 = FileLock(lockfile_path, timeout=0.1)
@@ -103,8 +103,8 @@ def test_concurrent_ensure_service_blocks():
     try:
         # Second process should timeout trying to acquire
         with pytest.raises(TimeoutError):
-            with patch('pysysml.connection.ensure_binary', return_value='/path/to/binary'):
-                with patch('pysysml.connection._probe_service', return_value=False):
+            with patch('opensysml.connection.ensure_binary', return_value='/path/to/binary'):
+                with patch('opensysml.connection._probe_service', return_value=False):
                     Connection(auto_start=True)
     finally:
         lock1.release()
@@ -118,20 +118,20 @@ Expected: FAIL with "FileNotFoundError: lockfile_path"
 - [ ] **Step 5: Implement lockfile coordination in _ensure_service**
 
 ```python
-# pysysml/connection.py
+# opensysml/connection.py
 from filelock import FileLock, Timeout
 import os
 
 def _get_lockfile_path():
     """Get path to service lockfile."""
-    pysysml_dir = os.path.expanduser('~/.pysysml')
-    os.makedirs(pysysml_dir, exist_ok=True)
-    return os.path.join(pysysml_dir, 'sysml-grpc.lock')
+    opensysml_dir = os.path.expanduser('~/.opensysml')
+    os.makedirs(opensysml_dir, exist_ok=True)
+    return os.path.join(opensysml_dir, 'sysml-grpc.lock')
 
 def _get_pidfile_path():
     """Get path to service PID file."""
-    pysysml_dir = os.path.expanduser('~/.pysysml')
-    return os.path.join(pysysml_dir, 'sysml-grpc.pid')
+    opensysml_dir = os.path.expanduser('~/.opensysml')
+    return os.path.join(opensysml_dir, 'sysml-grpc.pid')
 
 def _ensure_service(self):
     """Ensure sysml-grpc service is running, with lockfile coordination.
@@ -200,7 +200,7 @@ Expected: PASS (2 tests)
 - [ ] **Step 7: Commit lockfile coordination**
 
 ```bash
-git add pysysml/connection.py tests/test_connection.py setup.py pyproject.toml
+git add opensysml/connection.py tests/test_connection.py setup.py pyproject.toml
 git commit -m "feat(connection): add lockfile coordination for multi-process service startup"
 ```
 
@@ -209,13 +209,13 @@ git commit -m "feat(connection): add lockfile coordination for multi-process ser
 ## Task 2: Implement Reference-Counted Shutdown
 
 **Files:**
-- Modify: `pysysml/connection.py`
+- Modify: `opensysml/connection.py`
 - Modify: `tests/test_lifecycle.py`
 
 **Objective:** Track how many processes are using the service, shut down only when last process exits.
 
 **Design:**
-- Reference count file: `~/.pysysml/sysml-grpc.refcount`
+- Reference count file: `~/.opensysml/sysml-grpc.refcount`
 - Atomic increment on service start
 - Atomic decrement on cleanup
 - Terminate service when refcount reaches 0
@@ -232,11 +232,11 @@ def test_service_shuts_down_when_last_process_exits():
     import time
     
     # First connection increments refcount to 1
-    with patch('pysysml.binary.ensure_binary', return_value=get_binary_path()):
+    with patch('opensysml.binary.ensure_binary', return_value=get_binary_path()):
         conn1 = Connection(auto_start=True)
         
         # Get PID
-        pidfile = os.path.expanduser('~/.pysysml/sysml-grpc.pid')
+        pidfile = os.path.expanduser('~/.opensysml/sysml-grpc.pid')
         with open(pidfile) as f:
             pid = int(f.read().strip())
         
@@ -269,12 +269,12 @@ Expected: FAIL (service doesn't shut down)
 - [ ] **Step 3: Implement reference counting**
 
 ```python
-# pysysml/connection.py
+# opensysml/connection.py
 
 def _get_refcount_path():
     """Get path to service reference count file."""
-    pysysml_dir = os.path.expanduser('~/.pysysml')
-    return os.path.join(pysysml_dir, 'sysml-grpc.refcount')
+    opensysml_dir = os.path.expanduser('~/.opensysml')
+    return os.path.join(opensysml_dir, 'sysml-grpc.refcount')
 
 def _increment_refcount():
     """Atomically increment service reference count.
@@ -438,7 +438,7 @@ Expected: All tests pass
 - [ ] **Step 9: Commit reference counting**
 
 ```bash
-git add pysysml/connection.py tests/test_lifecycle.py setup.py pyproject.toml
+git add opensysml/connection.py tests/test_lifecycle.py setup.py pyproject.toml
 git commit -m "feat(connection): add reference-counted service shutdown"
 ```
 
@@ -447,7 +447,7 @@ git commit -m "feat(connection): add reference-counted service shutdown"
 ## Task 3: Integrate Checksum Verification
 
 **Files:**
-- Modify: `pysysml/binary.py`
+- Modify: `opensysml/binary.py`
 - Modify: `tests/test_binary.py`
 
 **Objective:** Verify downloaded binaries against checksums before using them.
@@ -484,7 +484,7 @@ def test_download_binary_verifies_checksum():
             Mock(__enter__=Mock(return_value=Mock(read=Mock(return_value=mock_binary_data))))
         ]
         
-        with patch('pysysml.binary.detect_platform', return_value=('linux', 'amd64')):
+        with patch('opensysml.binary.detect_platform', return_value=('linux', 'amd64')):
             result = download_binary(version, github_repo)
             
             # Should have called urlopen twice (checksum + binary)
@@ -512,7 +512,7 @@ def test_download_binary_fails_on_checksum_mismatch():
             Mock(__enter__=Mock(return_value=Mock(read=Mock(return_value=mock_binary_data))))
         ]
         
-        with patch('pysysml.binary.detect_platform', return_value=('linux', 'amd64')):
+        with patch('opensysml.binary.detect_platform', return_value=('linux', 'amd64')):
             with pytest.raises(RuntimeError, match="Checksum mismatch"):
                 download_binary(version, github_repo)
 ```
@@ -525,7 +525,7 @@ Expected: FAIL (checksum not downloaded/verified)
 - [ ] **Step 3: Update download_binary to fetch and verify checksum**
 
 ```python
-# pysysml/binary.py
+# opensysml/binary.py
 import hashlib
 
 def download_binary(version='v0.1.0', github_repo='Open-MBEE/OpenSysML'):
@@ -604,7 +604,7 @@ Expected: PASS (2 tests)
 
 - [ ] **Step 5: Verify verify_checksum is no longer dead code**
 
-Run: `grep -n "verify_checksum" pysysml/binary.py`
+Run: `grep -n "verify_checksum" opensysml/binary.py`
 Expected: Should show both definition (line ~102) and call site (in download_binary)
 
 - [ ] **Step 6: Run full test suite**
@@ -615,7 +615,7 @@ Expected: All tests pass
 - [ ] **Step 7: Commit checksum verification**
 
 ```bash
-git add pysysml/binary.py tests/test_binary.py
+git add opensysml/binary.py tests/test_binary.py
 git commit -m "feat(binary): add checksum verification for downloaded binaries"
 ```
 
@@ -636,8 +636,8 @@ Expected: All tests pass
 - [ ] **Verify Phase 3 DoD complete**
 
 Check each DoD item:
-- [x] `import pysysml` auto-downloads binary on first use
-- [x] `model = pysysml.load("A1.sysml")` works without manual service start
+- [x] `import opensysml` auto-downloads binary on first use
+- [x] `model = opensysml.load("A1.sysml")` works without manual service start
 - [x] Multiple Python processes can import concurrently (lockfile prevents conflicts)
 - [x] Service shuts down when last process exits (reference counting)
 - [x] Tests pass: `pytest tests/test_binary.py tests/test_lifecycle.py`
@@ -647,13 +647,13 @@ Check each DoD item:
 
 ```python
 # test_concurrent.py
-import pysysml
+import opensysml
 import multiprocessing
 import time
 
 def worker(file_path, worker_id):
     print(f"Worker {worker_id} starting...")
-    model = pysysml.load(file_path)
+    model = opensysml.load(file_path)
     print(f"Worker {worker_id} loaded: {model.root.name}")
     time.sleep(2)  # Hold connection
     print(f"Worker {worker_id} done")
