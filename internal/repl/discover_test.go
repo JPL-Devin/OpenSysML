@@ -41,6 +41,19 @@ func TestSearchCommand(t *testing.T) {
 			wants:   []string{"Wheel  partDef"},
 		},
 		{
+			name:    "a chained binding end declares no symbol",
+			declare: "package B { part R { part inner { attribute hhh; } } part ccc; binding bind R.inner.hhh = ccc; }",
+			line:    "%search hhh",
+			wants:   []string{"B::R::inner::hhh  attributeUsage"},
+			rejects: []string{"\nB::hhh", "unknown"},
+		},
+		{
+			name:    "a named control node is listed",
+			declare: "package B { action def F { first start; fork Jump; action S; first start then Jump; first Jump then S; } }",
+			line:    "%search Jump",
+			wants:   []string{"B::F::Jump  actionUsage"},
+		},
+		{
 			name:  "no match",
 			line:  "%search zzzznotasymbol",
 			wants: []string{`no symbol matches "zzzznotasymbol"`},
