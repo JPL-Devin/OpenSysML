@@ -166,9 +166,11 @@ artifacts they describe really were called that.
     `state machine exceeded max do action steps (…)`. The `%budget` label reads `do action steps`.
     `SYSML_MAX_DO_STEPS` and every exit status are unchanged, but a script matching the old text
     needs updating.
-  - The gRPC interface carries `Instance.feature_values` (`FeatureValue`) and the `feature-values`
+  - The gRPC interface carries `Instance.feature_values` (`FeatureValue`) and the `feature_values`
     capability. `Instance.slots` and `SlotValue` are removed; field number 3 and the name `slots`
-    stay reserved in `sysml.proto`, so the number is never reused.
+    stay reserved in `sysml.proto`, so the number is never reused. `opensysml` requires that
+    capability before it hands back an object, so a service predating the rename — every published
+    release does — is named rather than answering with an object that appears to hold nothing.
   - `opensysml` exposes `Instance.features`, `raw_features`, `get_feature`, `FeatureValueError`, and
     `typed.feature_value`/`optional_feature_value`/`list_feature_value`, which generated modules
     emit (emission schema `3`). The `slots`, `raw_slots`, `get_slot`, `SlotError`, `slot_to_python`

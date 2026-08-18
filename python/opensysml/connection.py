@@ -17,6 +17,7 @@ from opensysml.capabilities import (
     CAPABILITY_APPLY_EDITS,
     CAPABILITY_CONVERT,
     CAPABILITY_EVALUATE_SUBJECT,
+    CAPABILITY_FEATURE_VALUES,
     CAPABILITY_QUERY,
     CAPABILITY_VERIFICATION,
     ServerInfo,
@@ -838,9 +839,11 @@ class Connection:
         Raises:
             ExecutionError: If instantiation fails
             ModelNotFoundError: If the service no longer holds the model
+            MissingCapabilityError: If the service predates ``feature_values``
         """
         from opensysml.instance import Instance
-        
+
+        self._require_feature_values()
         req = sysml_pb2.InstantiateRequest(
             model_hash=model_hash,
             symbol_id=symbol_id
@@ -1101,10 +1104,20 @@ class Connection:
             diagnostics=diagnostics,
         )
 
+    def _require_feature_values(self):
+        """Refuse instances from a service that populates only the removed `slots` field."""
+        require(
+            self.server_info(),
+            CAPABILITY_FEATURE_VALUES,
+            upgrade_remedy(CAPABILITY_FEATURE_VALUES),
+        )
+
     def _instances_of(self, response):
         """Wrap the instance graph a verification returned, roots first."""
         from opensysml.instance import Instance
 
+        if response.instances:
+            self._require_feature_values()
         graph = {inst.id: inst for inst in response.instances}
         wrappers = {}
         return [

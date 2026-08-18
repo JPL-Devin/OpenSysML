@@ -1,6 +1,7 @@
 """Tests for runtime methods (eval, instantiate, etc.)."""
 import pytest
 from unittest.mock import Mock, patch
+from opensysml.capabilities import CAPABILITY_FEATURE_VALUES
 from opensysml.connection import Connection
 from opensysml.proto import sysml_pb2
 from opensysml.errors import ExecutionError
@@ -44,7 +45,10 @@ def test_instantiate_returns_instance():
                 error=""
             )
             mock_stub.Instantiate.return_value = mock_response
-            
+            mock_stub.GetServerInfo.return_value = sysml_pb2.ServerInfoResponse(
+                version="test", capabilities=[CAPABILITY_FEATURE_VALUES]
+            )
+
             conn = Connection(auto_start=False)
             instance = conn.instantiate("Test::Part", "model-hash")
             
