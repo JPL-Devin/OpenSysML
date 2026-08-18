@@ -107,6 +107,9 @@ func (t *translator) objective(obj runtime.Objective) (Objective, error) {
 			"an optimizer improves a linear objective; a product or quotient of two "+
 				"computed values is not one")
 	}
+	if err := t.bindBest(obj, term); err != nil {
+		return Objective{}, err
+	}
 	return Objective{
 		Direction:  direction,
 		Term:       term,
@@ -118,6 +121,30 @@ func (t *translator) objective(obj runtime.Objective) (Objective, error) {
 		Span:       objectiveSpan(obj),
 		Location:   t.ctx.SourceLocation(t.condFile, objectiveSpan(obj)),
 	}, nil
+}
+
+// bindBest asserts that the `best` feature an objective restates holds the value
+// it improves, so a condition a definition states over `best` bounds that value
+// as the evaluator would read it. A `best` no condition reads needs no variable.
+func (t *translator) bindBest(obj runtime.Objective, term *Term) error {
+	if obj.Best == nil || obj.Best.Decl == nil {
+		return nil
+	}
+	chain := []*symbols.Symbol{obj.Best}
+	if _, read := t.vars[variableName(t, chain)]; !read {
+		return nil
+	}
+	best, err := t.variableOf(obj.Best.Decl, obj.Scope, chain, []string{obj.Best.Name})
+	if err != nil {
+		return err
+	}
+	left, right := promote(best, term)
+	if !left.Sort.Equal(right.Sort) {
+		return t.refuseObjective(obj, "states a value of sort "+right.Sort.Name+
+			" for a `best` of sort "+left.Sort.Name, "")
+	}
+	t.guard(Binary(OpEq, Bool, left, right), obj.Best.Decl)
+	return nil
 }
 
 // direction reads which way the objective's value is to be improved from the

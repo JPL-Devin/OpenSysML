@@ -152,12 +152,18 @@ func (s *Solver) probeOptimization(ctx context.Context) error {
 	unsupported := func(detail string) error {
 		return &NoOptimizationError{Solver: s.Name, Detail: detail}
 	}
-	if _, err := sess.verdict(); err != nil {
-		return unsupported("rejected an optimizing script: " + err.Error())
+	// A solver that answers intelligibly but not the optimization commands does
+	// not optimize; one that dies or falls silent is the process failure it is.
+	verdict, err := sess.read("check-sat")
+	if err != nil {
+		return err
+	}
+	if msg, isErr := verdict.isError(); isErr {
+		return unsupported("rejected an optimizing script: " + msg)
 	}
 	reply, err := sess.read("get-objectives")
 	if err != nil {
-		return unsupported("answered nothing to (get-objectives): " + err.Error())
+		return err
 	}
 	if msg, isErr := reply.isError(); isErr {
 		return unsupported("rejected (get-objectives): " + msg)

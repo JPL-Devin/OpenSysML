@@ -85,6 +85,24 @@ func TestObjectiveOwnConditions(t *testing.T) {
 	}
 }
 
+// TestObjectiveConditionsFromItsDefinition: a condition a model states on its own
+// objective definition bounds the values its objectives improve, the objective's
+// `best` being bound to the value it improves.
+func TestObjectiveConditionsFromItsDefinition(t *testing.T) {
+	q := analysisQuery(t, "BoundedByItsDefinition")
+	script := Script(q)
+	best := "|test::BoundedByItsDefinition::lightest::best|"
+	mass := "|test::BoundedByItsDefinition::mass|"
+	for _, want := range []string{
+		"(assert (= " + best + " " + mass + "))",
+		"(assert (>= " + best + " 2))",
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("script does not assert %s:\n%s", want, script)
+		}
+	}
+}
+
 // TestObjectivesInDeclarationOrder: objectives are optimized in the order
 // declared, which is what makes them lexicographic.
 func TestObjectivesInDeclarationOrder(t *testing.T) {

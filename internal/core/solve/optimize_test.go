@@ -262,7 +262,9 @@ func TestOptimizeRejectsUnreadableOptima(t *testing.T) {
 }
 
 // TestOptimizeProcessFailures: a solver that dies or falls silent while being
-// optimized fails as it does while being asked a satisfiability question.
+// optimized fails as it does while being asked a satisfiability question, and is
+// not mistaken for one that does not optimize — which would send the user after
+// a z3 they already have.
 func TestOptimizeProcessFailures(t *testing.T) {
 	for _, scenario := range []string{"crash", "silent"} {
 		t.Run(scenario, func(t *testing.T) {
@@ -271,8 +273,11 @@ func TestOptimizeProcessFailures(t *testing.T) {
 			if err == nil {
 				t.Fatal("a failed solver reported an optimum")
 			}
-			if !errors.Is(err, ErrSolverProcess) && !errors.Is(err, ErrNoOptimization) {
+			if !errors.Is(err, ErrSolverProcess) {
 				t.Errorf("error is %v, want a process failure", err)
+			}
+			if errors.Is(err, ErrNoOptimization) {
+				t.Errorf("a failed solver is reported as one that does not optimize: %v", err)
 			}
 		})
 	}

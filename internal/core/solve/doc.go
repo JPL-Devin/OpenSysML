@@ -172,10 +172,13 @@
 //     is read too, where a model can write one.
 //   - What is feasible is the case's own conditions (CaseConditionsOf: `require`,
 //     `assume`, `assert`, `inv`, inherited ones included) together with the
-//     conditions each objective states in its own body. The trade-study
-//     conditions an objective inherits are about choosing among alternatives
-//     rather than about which values are feasible, so they are left out. A case
-//     stating no condition is legitimately unbounded, not refused.
+//     conditions each objective states: its own body's, and the ones it inherits
+//     from the model's own objective definitions, read where they are inherited.
+//     Only the trade-study library's own conditions are left out, being about
+//     choosing among alternatives rather than about which values are feasible. A
+//     condition an inherited definition states over `best` bounds the value
+//     improved, since the objective's `best` is asserted equal to it (RoleDefined).
+//     A case stating no condition is legitimately unbounded, not refused.
 //   - Objectives, values and conditions are read through the runtime's own
 //     surfaces (runtime.Context.ObjectivesOf), so what is optimized is what the
 //     evaluator would evaluate; no declaration is re-parsed and no AST mutated.

@@ -211,4 +211,23 @@ package test {
 			size >= 1
 		}
 	}
+
+	// A model's own objective definition, whose condition bounds the values its
+	// objectives improve as an objective's own condition does.
+	requirement def LeastMass :> MinimizeObjective {
+		attribute :>> best : Integer;
+		require constraint {
+			best >= 2
+		}
+	}
+
+	analysis def BoundedByItsDefinition {
+		attribute mass : Integer;
+		require constraint {
+			mass <= 9
+		}
+		objective lightest : LeastMass {
+			attribute :>> best = mass;
+		}
+	}
 }

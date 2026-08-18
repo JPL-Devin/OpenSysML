@@ -56,6 +56,15 @@ func TestOptimumOfAnInteger(t *testing.T) {
 	}
 }
 
+// TestOptimumBoundedByItsDefinition: the condition the model's own objective
+// definition states bounds the optimum — without it the value is unbounded below.
+func TestOptimumBoundedByItsDefinition(t *testing.T) {
+	got := oneOptimum(t, "BoundedByItsDefinition")
+	if got.Status != OptimumAttained || got.Value != "2" {
+		t.Errorf("least mass is %s %q: %s", got.Status, got.Value, got.Detail)
+	}
+}
+
 // TestOptimumOverAVariantSelection: the objective's value depends on which
 // variant is chosen, and the model reported names the choice attaining it.
 func TestOptimumOverAVariantSelection(t *testing.T) {

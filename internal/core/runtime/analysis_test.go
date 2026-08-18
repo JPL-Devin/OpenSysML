@@ -198,6 +198,36 @@ func TestObjectivesOfOwnConditions(t *testing.T) {
 	}
 }
 
+// A condition a model states on its own objective definition is the model's, so
+// an objective typed by that definition states it too: only the library's own
+// trade-study conditions are about choosing among alternatives.
+func TestObjectivesOfInheritedProjectConditions(t *testing.T) {
+	ctx, scope := analysisFixture(t, `
+		package test {
+			private import ScalarValues::*;
+			private import TradeStudies::*;
+			requirement def LeastMass :> MinimizeObjective {
+				attribute :>> best;
+				require constraint { best > 0 }
+			}
+			analysis def Trade {
+				attribute mass : Integer;
+				objective lightest : LeastMass {
+					attribute :>> best = mass;
+					require constraint { mass <= 90 }
+				}
+			}
+		}
+	`)
+	objs := objectivesOfCase(t, ctx, scope, "Trade")
+	if len(objs) != 1 {
+		t.Fatalf("objectives are [%s], want one", objectiveLabels(objs))
+	}
+	if got, want := labelsOf(objs[0].Conditions), "required best > 0; required mass <= 90"; got != want {
+		t.Errorf("the objective's conditions are [%s], want [%s]", got, want)
+	}
+}
+
 // An objective restating an inherited one stands where it is restated and takes
 // the value it states there, the objective it restates being the same objective.
 func TestObjectivesOfRedeclared(t *testing.T) {
