@@ -1,0 +1,14 @@
+{
+  "type": "instance",
+  "instantiate": "test::Sys",
+  "featureValues": {
+    "a": {"type": "Sequence", "elements": [
+      {"type": "Integer", "value": 1},
+      {"type": "Integer", "value": 2}
+    ]},
+    "b": {"type": "Sequence", "elements": [
+      {"type": "Integer", "value": 1},
+      {"type": "Integer", "value": 2}
+    ]}
+  }
+}

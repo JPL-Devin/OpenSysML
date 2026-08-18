@@ -67,6 +67,8 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("binding_conflict", testBindingConflict)
 	t.Run("binding_cycle", testBindingCycle)
 	t.Run("binding_cycle_with_value", testBindingCycleWithValue)
+	t.Run("binding_unrelated_expression_does_not_poison_read", testBindingUnrelatedExpressionDoesNotPoisonRead)
+	t.Run("binding_expression_end_cannot_receive", testBindingExpressionEndCannotReceive)
 	t.Run("nested_calc_usage_unbound_input", testNestedCalcUsageUnboundInput)
 	t.Run("nested_calc_usage_unknown_output", testNestedCalcUsageUnknownOutput)
 	t.Run("nested_calc_usage_self_cycle", testNestedCalcUsageSelfCycle)
@@ -264,6 +266,56 @@ func testBindingCycleWithValue(t *testing.T) {
 		if fv.HeldValue().Kind != ValConst || fv.HeldValue().Const.Int != 4 {
 			t.Errorf("%s = %#v, want integer 4", name, fv.HeldValue())
 		}
+	}
+}
+
+func testBindingUnrelatedExpressionDoesNotPoisonRead(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<binding-unrelated-expression>", parseAndBuild(t, `package P {
+		part def Sys {
+			attribute a = 5;
+			attribute b;
+			attribute sibling = 8;
+			binding bind b = a + 1;
+		}
+	}`))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	fv, err := inst.GetFeatureValue(ctx, "sibling")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(sibling): %v", err)
+	}
+	if got := fv.HeldValue().Const.Int; got != 8 {
+		t.Errorf("sibling = %d, want 8", got)
+	}
+	fv, err = inst.GetFeatureValue(ctx, "b")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(b): %v", err)
+	}
+	if got := fv.HeldValue().Const.Int; got != 6 {
+		t.Errorf("b = %d, want 6", got)
+	}
+}
+
+func testBindingExpressionEndCannotReceive(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<binding-expression-end>", parseAndBuild(t, `package P {
+		part def Sys {
+			attribute a;
+			attribute b = 7;
+			binding bind b = a + 1;
+		}
+	}`))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	_, err = inst.GetFeatureValue(ctx, "b")
+	if !errors.Is(err, ErrBindingEnd) {
+		t.Fatalf("GetFeatureValue(b) = %v, want ErrBindingEnd", err)
+	}
+	if !strings.Contains(err.Error(), "a + 1") || !strings.Contains(err.Error(), "b") {
+		t.Errorf("binding endpoint error %q does not name both ends", err)
 	}
 }
 

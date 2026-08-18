@@ -1,9 +1,12 @@
 package runtime
 
 import (
+	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -38,6 +41,19 @@ func (e *BindingCycleError) Unwrap() error { return ErrBindingCycle }
 type bindingLocation struct {
 	instance *Instance
 	name     string
+	path     string
+}
+
+type bindingEndpoint struct {
+	location bindingLocation
+	expr     ast.Node
+	scope    *symbols.Scope
+}
+
+type bindingResult struct {
+	value Value
+	found bool
+	err   error
 }
 
 func (ctx *Context) objectBindings(typeSym *symbols.Symbol) []lower.Binding {
@@ -59,7 +75,7 @@ func (ctx *Context) objectBindings(typeSym *symbols.Symbol) []lower.Binding {
 	return bindings
 }
 
-func (ctx *Context) resolveBindingValue(inst *Instance, name string) (Value, bool, error) {
+func (ctx *Context) resolveBindingValue(inst *Instance, name string) (value Value, found bool, err error) {
 	bindings := ctx.objectBindings(inst.Type)
 	if len(bindings) == 0 {
 		return Value{}, false, nil
@@ -69,64 +85,84 @@ func (ctx *Context) resolveBindingValue(inst *Instance, name string) (Value, boo
 		return Value{}, false, nil
 	}
 	key := featureValueRef{instance: inst.ID, feature: name}
+	if cached, ok := ctx.bindingResults[key]; ok {
+		return cached.value, cached.found, cached.err
+	}
 	if ctx.resolvingBindings[key] {
 		return Value{}, false, &BindingCycleError{Features: []string{bindingLocationText(bindingLocation{instance: inst, name: name})}}
 	}
 	ctx.resolvingBindings[key] = true
-	defer delete(ctx.resolvingBindings, key)
+	defer func() {
+		delete(ctx.resolvingBindings, key)
+		ctx.bindingResults[key] = bindingResult{value: value, found: found, err: err}
+	}()
 
 	cycleSeen := false
 	var cycleFeatures []string
 	for _, binding := range bindings {
-		left, err := ctx.resolveBindingLocation(inst, binding, 0)
+		if !bindingInvolvesFeature(binding, name) {
+			continue
+		}
+		left, err := ctx.resolveBindingEndpoint(inst, binding, 0)
 		if err != nil {
 			return Value{}, false, err
 		}
-		right, err := ctx.resolveBindingLocation(inst, binding, 1)
+		right, err := ctx.resolveBindingEndpoint(inst, binding, 1)
 		if err != nil {
 			return Value{}, false, err
 		}
-		if !bindingLocationCarries(left, target, inst) && !bindingLocationCarries(right, target, inst) {
+		leftCarries := left.location.instance != nil && bindingLocationCarries(left.location, target, inst)
+		rightCarries := right.location.instance != nil && bindingLocationCarries(right.location, target, inst)
+		if !leftCarries && !rightCarries && left.location.path != name && right.location.path != name {
 			continue
 		}
 
-		leftValue, leftSet, err := ctx.bindingEndpointValue(left)
+		leftValue, leftSet, err := ctx.bindingEndpointValue(left, inst)
 		if err != nil {
 			return Value{}, false, err
 		}
-		if ctx.resolvingBindings[featureValueRef{instance: left.instance.ID, feature: left.name}] {
+		if left.location.instance != nil && ctx.resolvingBindings[featureValueRef{instance: left.location.instance.ID, feature: left.location.name}] {
 			cycleSeen = true
 		}
-		rightValue, rightSet, err := ctx.bindingEndpointValue(right)
+		rightValue, rightSet, err := ctx.bindingEndpointValue(right, inst)
 		if err != nil {
 			return Value{}, false, err
 		}
-		if ctx.resolvingBindings[featureValueRef{instance: right.instance.ID, feature: right.name}] {
+		if right.location.instance != nil && ctx.resolvingBindings[featureValueRef{instance: right.location.instance.ID, feature: right.location.name}] {
 			cycleSeen = true
 		}
 		if cycleSeen {
-			cycleFeatures = []string{bindingLocationText(left), bindingLocationText(right)}
+			cycleFeatures = []string{ctx.bindingEndpointText(binding, 0), ctx.bindingEndpointText(binding, 1)}
 		}
 		switch {
 		case leftSet && rightSet:
 			if valueKeyFunc(leftValue) != valueKeyFunc(rightValue) {
 				return Value{}, false, &BindingConflictError{
-					Left: bindingLocationText(left), Right: bindingLocationText(right),
+					Left: ctx.bindingEndpointText(binding, 0), Right: ctx.bindingEndpointText(binding, 1),
 					LeftValue: leftValue, RightValue: rightValue,
 				}
 			}
-			if bindingLocationCarries(left, target, inst) {
+			if leftCarries {
 				return leftValue, true, nil
 			}
 			return rightValue, true, nil
 		case leftSet:
-			ctx.assignBindingLocation(left, leftValue)
-			ctx.assignBindingLocation(right, leftValue)
-			return leftValue, true, nil
+			if err := ctx.assignBindingEndpoint(right, leftValue, binding, 1); err != nil {
+				return Value{}, false, err
+			}
+			if leftCarries {
+				return leftValue, true, nil
+			}
+			if rightCarries {
+				return leftValue, true, nil
+			}
 		case rightSet:
-			ctx.assignBindingLocation(left, rightValue)
-			ctx.assignBindingLocation(right, rightValue)
-			return rightValue, true, nil
+			if err := ctx.assignBindingEndpoint(left, rightValue, binding, 0); err != nil {
+				return Value{}, false, err
+			}
+			if leftCarries || rightCarries {
+				return rightValue, true, nil
+			}
 		}
 	}
 	if cycleSeen {
@@ -135,8 +171,32 @@ func (ctx *Context) resolveBindingValue(inst *Instance, name string) (Value, boo
 	return Value{}, false, nil
 }
 
-func (ctx *Context) resolveBindingLocation(owner *Instance, binding lower.Binding, end int) (bindingLocation, error) {
+func bindingInvolvesFeature(binding lower.Binding, name string) bool {
+	for _, end := range binding.Ends {
+		if root := strings.SplitN(end.Path, ".", 2)[0]; root == name {
+			return true
+		}
+	}
+	return false
+}
+
+func (ctx *Context) resolveBindingEndpoint(owner *Instance, binding lower.Binding, end int) (bindingEndpoint, error) {
 	path := binding.Ends[end].Path
+	if path == "" {
+		if binding.Ends[end].Expr != nil {
+			return bindingEndpoint{expr: binding.Ends[end].Expr, scope: binding.Scope}, nil
+		}
+		return bindingEndpoint{}, fmt.Errorf("%w: empty endpoint", ErrBindingEnd)
+	}
+	loc, err := ctx.resolveBindingLocation(owner, path)
+	if err != nil {
+		return bindingEndpoint{}, err
+	}
+	loc.path = path
+	return bindingEndpoint{location: loc}, nil
+}
+
+func (ctx *Context) resolveBindingLocation(owner *Instance, path string) (bindingLocation, error) {
 	parts := strings.Split(path, ".")
 	if len(parts) == 0 || parts[0] == "" {
 		return bindingLocation{}, fmt.Errorf("%w: empty endpoint", ErrBindingEnd)
@@ -164,7 +224,22 @@ func (ctx *Context) resolveBindingLocation(owner *Instance, binding lower.Bindin
 	return bindingLocation{instance: current, name: name}, nil
 }
 
-func (ctx *Context) bindingEndpointValue(loc bindingLocation) (Value, bool, error) {
+func (ctx *Context) bindingEndpointValue(endpoint bindingEndpoint, owner *Instance) (Value, bool, error) {
+	if endpoint.expr != nil {
+		value, err := ctx.EvalWithScopeOn(endpoint.expr, endpoint.scope, owner)
+		if err != nil {
+			if errors.Is(err, ErrUninitializedFeatureValue) {
+				return Value{}, false, nil
+			}
+			return Value{}, false, fmt.Errorf("%w: expression %s: %v",
+				ErrBindingEnd, ctx.bindingExprText(endpoint.expr, endpoint.scope), err)
+		}
+		if value.Kind == ValInvalid {
+			return Value{}, false, nil
+		}
+		return value, true, nil
+	}
+	loc := endpoint.location
 	fv := loc.instance.FeatureValues[loc.name]
 	if !fv.Materialized {
 		if _, err := loc.instance.materializeFeatureValueIntrinsic(ctx, loc.name); err != nil {
@@ -184,11 +259,13 @@ func (ctx *Context) bindingEndpointValue(loc bindingLocation) (Value, bool, erro
 	return val, found, nil
 }
 
-func (ctx *Context) assignBindingLocation(loc bindingLocation, val Value) {
-	fv := loc.instance.FeatureValues[loc.name]
-	fv.Value = val
-	fv.Values = Value{}
-	fv.Materialized = true
+func (ctx *Context) assignBindingEndpoint(endpoint bindingEndpoint, val Value, binding lower.Binding, end int) error {
+	if endpoint.expr != nil {
+		return fmt.Errorf("%w: cannot assign %s from %s",
+			ErrBindingEnd, ctx.bindingEndpointText(binding, end), ctx.bindingEndpointText(binding, 1-end))
+	}
+	loc := endpoint.location
+	return ctx.assignBindingValue(loc.instance, loc.instance.FeatureValues[loc.name], loc.name, val)
 }
 
 func (ctx *Context) assignBindingValue(inst *Instance, fv *FeatureValue, name string, val Value) error {
@@ -217,7 +294,59 @@ func bindingLocationText(loc bindingLocation) string {
 	if loc.instance == nil {
 		return loc.name
 	}
+	if loc.path != "" {
+		return loc.path
+	}
+	if loc.instance.Type == nil {
+		return loc.name
+	}
 	return fmt.Sprintf("%s.%s", loc.instance.Type.Name, loc.name)
+}
+
+func (ctx *Context) bindingEndpointText(binding lower.Binding, end int) string {
+	endpoint := binding.Ends[end]
+	if endpoint.Path != "" {
+		return endpoint.Path
+	}
+	return ctx.bindingExprText(endpoint.Expr, binding.Scope)
+}
+
+func (ctx *Context) bindingExprText(expr ast.Node, scope *symbols.Scope) string {
+	if expr == nil {
+		return "<empty>"
+	}
+	if scope != nil && scope.Owner() != nil {
+		if sf := ctx.sources[scope.Owner().DocName]; sf != nil {
+			if text := strings.TrimSpace(sf.Text(expr.Span())); text != "" {
+				return text
+			}
+		}
+	}
+	switch node := expr.(type) {
+	case *ast.OperatorExpr:
+		parts := make([]string, len(node.Operands))
+		for i, operand := range node.Operands {
+			parts[i] = ctx.bindingExprText(operand, scope)
+		}
+		return strings.Join(parts, " "+node.Operator.String()+" ")
+	case *ast.FeatureReference:
+		return ctx.bindingExprText(node.Name, scope)
+	case *ast.QualifiedName:
+		parts := make([]string, len(node.Parts))
+		for i, part := range node.Parts {
+			parts[i] = part.Text
+		}
+		return strings.Join(parts, "::")
+	case *ast.LiteralInteger:
+		return node.Value
+	case *ast.LiteralReal:
+		return node.Value
+	case *ast.LiteralBool:
+		return strconv.FormatBool(node.Value)
+	case *ast.LiteralString:
+		return node.Value
+	}
+	return ast.Dump(expr)
 }
 
 func bindingValueText(val Value) string {
