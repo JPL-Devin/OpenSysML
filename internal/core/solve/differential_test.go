@@ -482,23 +482,6 @@ func referenceNodes(node ast.Node) []ast.Node {
 	return nil
 }
 
-// fixedValues pins variables to values chosen by the caller, which is what the
-// randomized gate generates.
-type fixedValues struct {
-	byName map[string]runtime.Value
-	source string
-}
-
-func (f fixedValues) origin() string { return f.source }
-
-func (f fixedValues) valueOf(v *Var) (runtime.Value, error) {
-	val, ok := f.byName[v.Name]
-	if !ok {
-		return runtime.Value{}, fmt.Errorf("%w: %s was not generated", errNoConcreteValue, v.Name)
-	}
-	return val, nil
-}
-
 // pin is one variable fixed to a concrete value.
 type pin struct {
 	v     *Var
