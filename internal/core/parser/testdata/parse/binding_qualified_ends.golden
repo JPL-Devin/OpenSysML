@@ -1,0 +1,43 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="Kite Bindings" library=false standard=false
+      (Membership visibility="default"
+        (Package name="R" library=false standard=false
+          (Membership visibility="default"
+            (Usage kind="part" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))))
+      (Membership visibility="default"
+        (Usage kind="part" name="c" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="binding" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="references" target=R::a
+            (*ast.QualifiedName))
+          (FeatureReference name="c")))
+      (Membership visibility="default"
+        (Usage kind="binding" name="b1" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="references" target=R::a
+            (*ast.QualifiedName))
+          (FeatureReference name="c")))
+      (Membership visibility="default"
+        (Usage kind="part" name="Kite Environment" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="part" name="Region Earth Surface" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))))
+      (Membership visibility="default"
+        (Usage kind="part" name="Kite System" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="part" name="Desert Kite" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Membership visibility="default"
+                (Usage kind="part" name="Kite Wall" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                  (Membership visibility="default"
+                    (Usage kind="attribute" name="Wall Height" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))))))))
+      (Membership visibility="default"
+        (Package name="Kite Requirements" library=false standard=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="Minimum Wall Height" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))))
+      (Membership visibility="default"
+        (Usage kind="binding" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="references" target=(expr)
+            (FeatureChainExpr member="Wall Height"
+              (FeatureChainExpr member="Kite Wall"
+                (FeatureChainExpr member="Kite System::Desert Kite"
+                  (FeatureReference name="Kite Environment::Region Earth Surface")))))
+          (FeatureReference name="Kite Requirements::Minimum Wall Height"))))))

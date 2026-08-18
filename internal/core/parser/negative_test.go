@@ -199,6 +199,13 @@ func TestNegative(t *testing.T) {
 		{"transition_effect_assign_two_semicolons", "state def S { attribute x; state a; state b; transition a to b do assign x := 1 ;; }"},
 		{"transition_effect_no_semicolon", "state def S { attribute x; state a; state b; transition a to b do assign x := 1 }"},
 		{"transition_braced_effect_no_semicolon", "state def S { attribute x; state a; state b; transition a to b do { assign x := 1; } }"},
+		// A binding end names a feature by a qualified name or a chain of them,
+		// so neither qualification nor chaining may end in nothing.
+		{"binding_end_qualification_no_name", "package P { part c; binding bind R:: = c; }"},
+		{"binding_end_chain_trailing_dot", "package P { part a; part c; binding bind a. = c; }"},
+		{"binding_end_chain_trailing_dot_qualified", "package P { part c; binding bind R::a. = c; }"},
+		{"binding_end_unterminated", "package P { part a; binding bind R::a }"},
+		{"binding_end_no_target", "package P { part a; binding bind R::a = ; }"},
 	}
 
 	for _, tt := range tests {

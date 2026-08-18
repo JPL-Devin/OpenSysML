@@ -115,6 +115,30 @@ artifacts they describe really were called that.
   the `ConvertResponse.experimental` comment and the guide pages were brought back in step. A test
   pins the Python copy byte-identical to the constant, since Python cannot import it.
 
+### A binding end may be a qualified name, and a requirement body takes a prefixed connector
+
+- **`bind` now accepts the notation a connector end is written in:** `binding bind R::a = c;` and a
+  feature chain whose chaining features are themselves qualified names
+  (`bind 'Kite Environment'::'Region Earth Surface'.'Kite System'::'Desert Kite'.'Wall Height' = …`)
+  parsed as far as the first `::` and then failed. A connector end names a feature by a
+  `QualifiedName` (SysML `ConnectorEndMember` → KerML `OwnedReferenceSubsetting`,
+  `OwnedFeatureChaining`), and every segment of the chain is now recorded and resolved, not
+  collapsed to its last one.
+- **The named form is no longer read as a redefinition:** `binding b1 bind R::a = c;` reported
+  "b1 redefines a, but a is not an inherited member of P". `b1` is the binding's name and `R::a` its
+  first end, which reference-subsets the feature it names, so it resolves where that feature is
+  declared rather than as an inherited member of the binding's owner.
+- **A connector, flow or message written with its kind keyword is a member of a requirement-like
+  body:** `requirement r { connection connect r to x; }` reported `expected a body member` at the
+  closing brace. A `requirement`, `constraint`, `concern`, `objective`, `use case` and `view` body
+  admits usage elements, and a connector usage declares no name — its ends are what make it a
+  declaration.
+- The Open-MBEE `DesertKite.sysml` model parses clean as a result. What it still reports is
+  recorded in [spec compliance](docs/project/spec-compliance.md) § Structural, Interface and
+  Analysis Notation: the tool-specific `'SysML Standard Diagrams'::gv` namespace, an `OOSEM::MOE`
+  reference to a member of `OOSEM::'OOSEM Measures'`, and references to a decision node whose name
+  is not registered as a symbol.
+
 ## 0.1.0 — 2026-08-17
 
 ### RDF conversion is experimental
