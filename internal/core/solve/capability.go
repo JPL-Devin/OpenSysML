@@ -458,9 +458,8 @@ func (r *capabilityRecord) probe(ctx context.Context, s *Solver, capability Capa
 	if len(checks) == 0 {
 		return capabilityResult{detail: "no check is defined for it"}, nil
 	}
-	// Every form the writer emits of the feature is checked, and the first answer
-	// short of support is the capability's: a backend taking one form and refusing
-	// another does not support what a query may ask of it.
+	// Every emitted form is checked, and the first answer short of support is the
+	// capability's: taking one form and refusing another is not support.
 	result := capabilityResult{state: capSupported}
 	for _, check := range checks {
 		got, err := s.runProbe(ctx, check)
