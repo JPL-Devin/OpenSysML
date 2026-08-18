@@ -3987,3 +3987,80 @@ Forms and defaults (`internal/core/view/form.go`):
   for stale branding, exclude build paths, and expect the deliberate legacy RDF namespace
   `urn:systemica:sysml:` (`internal/core/rdf/vocab.go`) to remain — it exists so a pre-rename graph is
   refused rather than misread.
+
+## SMT logic selection, the capability model, and `%optimize`
+
+The REPL never prints the logic a query set, so to test logic selection **wrap the real solver in a
+tee** rather than reading the goldens. `newSolver` picks the CLI flags from the wrapper's *base
+name*, so a wrapper whose name contains `z3` is invoked with z3's own `-smt2 -in`:
+
+```sh
+mkdir -p /tmp/fakesmt /tmp/smtlog     # tee fails if the log directory is absent
+cat > /tmp/fakesmt/z3-tee <<'EOF'
+#!/bin/sh
+tee /tmp/smtlog/script-$$.smt2 | /usr/bin/z3 "$@"
+EOF
+chmod +x /tmp/fakesmt/z3-tee
+```
+
+`OPENSYSML_SMT=/tmp/fakesmt/z3-tee ./bin/sysml <model>` answers normally and leaves one script per
+solver invocation. **Capability probes run through the same wrapper**, so the log also holds the
+probes' own scripts; select the real query's with `grep -l <ModelName> /tmp/smtlog/*.smt2` (each
+script starts `; OpenSysML SMT-LIB2 translation of constraint <Name>`). Expected logics from
+`internal/core/solve/testdata/logic_selection.sysml`: `CratesPerPallet` (`crates / 12`) → `QF_LIA`
+(integer division does **not** widen the logic); `CratesPerRun` (variable divisor) → `QF_NIA`;
+`MassAndCrates` (Int + Real) → `AUFLIRA`; a datatype/variant model (`ring_variants.sysml`) → `ALL`,
+preceded by `; no SMT-LIB logic covers algebraic datatypes (declare-datatypes), …`.
+
+### `%optimize`
+`%optimize <name>` takes an **analysis case** (`runtime.RequireAnalysis`), not a constraint — and
+conversely an analysis def is not a `%check`/`%explain` target (`%check test::SomeAnalysis` answers
+`error: no satisfaction assertion in …`). Fixtures live in
+`internal/core/solve/testdata/objectives.sysml`, e.g. `test::CrewSizing` → `maximize largestCrew =
+`crew`: 7`, `test::CostThenMargin` → `minimize cheapest = `cost`: 3` then `maximize widestMargin =
+`margin`: 6` (lexicographic, in declaration order), `test::UnboundedLoad` → `! … has no optimum: an
+objective improves without limit` plus `the assignment below attains 1.0` — a bound or a feasible
+value is never printed as an optimum.
+
+Optimization is a **z3 extension**, so only z3 can be used to prove the happy path. cvc5 must refuse
+through the capability model (`Solver.requireOptimization` preflights `CapOptimization` *and*
+`CapOptimizationPriority`), printing
+`error: the SMT solver does not implement optimization: cvc5 lacks `(maximize …)`/`(minimize …)`
+with `(get-objectives)`, a solver extension: it rejected the script: Parse Error: …; install z3 or
+set OPENSYSML_SMT to it`. Probe results are cached per executable+args, so a second `%optimize` in
+the same session must print the identical refusal — a differing second error means the cache is not
+holding. `internal/repl/optimize_test.go` skips its solver cases through
+`requireOptimizingSolver`, so **`go test` alone proves nothing about `%optimize` on cvc5**; drive the
+REPL, or read the `TestPortability -v` report, which must show `refuse objective optimization` for
+cvc5 and `pass` for z3.
+
+### Fake backends for the failure modes
+Name them so they contain neither `z3` nor `cvc5` (otherwise they inherit that family's flags); the
+name is also what the message reports as the solver.
+
+- **Refused feature** → typed `UnsupportedCapabilityError`: a python wrapper forwarding to z3 but
+  answering `unsupported` to `(get-unsat-core)`. `%explain` then names backend, feature and
+  operation while `%check` in the *same* session still answers — the refusal must be scoped to the
+  feature, not the backend.
+- **Dead backend** (`#!/bin/sh` + `exit 3` or `exit 0`) → `error: the SMT solver did not answer:
+  <name> failed at check-sat: it stopped without answering`, never a capability error. A dead
+  backend leaves the probe *undetermined* (`capUnknown`), which deliberately does not refuse.
+- **Hanging backend** (`cat > /dev/null; sleep 600`) → bound it with `OPENSYSML_SMT_TIMEOUT=5s` and
+  time the run: expect `? … is undecided … Reason: the solver ran out of time after 5s` in roughly
+  3× the timeout (probe + query + verification each get their own budget), not a hang.
+- **Garbage-echoing non-solver** (replies `i am not a solver` to everything) → a *process* error, not
+  a capability refusal: `error: the SMT solver did not answer: <name> failed at capability check: it
+  answered `i` rather than an SMT-LIB response`. Only an `(error …)` or `unsupported` reply is a
+  missing feature (`capability.go` `smtlibResponse`), so when checking a refusal message make sure the
+  fake backend answers one of those rather than arbitrary text.
+
+`OPENSYSML_SMT=/nonexistent/no-such-solver` gives `error: no SMT solver found: OPENSYSML_SMT names
+"…", which is not an executable file` for `%check`, `%explain`, `%configure` and `%optimize` alike —
+discovery precedes both the capability preflight and the "states no variation point" complaint.
+
+Cross-solver agreement worth asserting (z3 4.8.12 vs cvc5 1.3.4): the verdict line, the witness
+values (`crates = 36`; `MassPerCrate` → `crates = 1`, `mass = 0.0`), the unsat-core rows of
+`internal/repl/testdata/explain_conflicts.sysml`, and the **count and set** — not the order — of
+`%configure test::ringFamily::variantsAgree all` on `nested_variants.sysml` (3 selections; the
+solvers list them in different orders, which is not a defect). `%configure` names the **constraint**
+(`…::variantsAgree`), not the part.
