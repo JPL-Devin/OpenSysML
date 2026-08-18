@@ -1,6 +1,6 @@
 package repl
 
-import "github.com/Open-MBEE/Systemica/internal/core/runtime"
+import "github.com/Open-MBEE/OpenSysML/internal/core/runtime"
 
 // tracePrefix marks a recorded execution step, so a trace is distinguishable
 // from a command's own output.

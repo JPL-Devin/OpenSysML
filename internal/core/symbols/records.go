@@ -1,6 +1,6 @@
 package symbols
 
-import "github.com/Open-MBEE/Systemica/internal/core/source"
+import "github.com/Open-MBEE/OpenSysML/internal/core/source"
 
 // RecordEntry is a minimal, AST-less description of a symbol, used to populate
 // the index from a persisted cache record instead of a parsed document.

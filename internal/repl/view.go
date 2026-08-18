@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Open-MBEE/Systemica/internal/core/resolve"
-	"github.com/Open-MBEE/Systemica/internal/core/runtime"
-	"github.com/Open-MBEE/Systemica/internal/core/semantics"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
-	"github.com/Open-MBEE/Systemica/internal/core/view"
+	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
+	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/view"
 )
 
 // doView reports what a view exposes, the way every other name-taking command

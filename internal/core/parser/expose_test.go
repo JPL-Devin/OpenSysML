@@ -3,8 +3,8 @@ package parser
 import (
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 // exposeIn parses a view usage whose body holds a single expose declaration and

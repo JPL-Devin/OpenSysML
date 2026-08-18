@@ -3,7 +3,7 @@ package resolve
 import (
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 )
 
 func TestImportMembership(t *testing.T) {

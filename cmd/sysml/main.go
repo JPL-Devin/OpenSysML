@@ -12,9 +12,9 @@ import (
 
 	"github.com/chzyer/readline"
 
-	"github.com/Open-MBEE/Systemica/internal/core/export"
-	"github.com/Open-MBEE/Systemica/internal/core/runtime"
-	"github.com/Open-MBEE/Systemica/internal/repl"
+	"github.com/Open-MBEE/OpenSysML/internal/core/export"
+	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
+	"github.com/Open-MBEE/OpenSysML/internal/repl"
 )
 
 var (

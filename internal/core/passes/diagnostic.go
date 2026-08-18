@@ -1,8 +1,8 @@
 package passes
 
 import (
-	"github.com/Open-MBEE/Systemica/internal/core/quickfix"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/quickfix"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 // Severity classifies the impact of a Diagnostic.

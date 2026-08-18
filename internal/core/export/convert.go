@@ -1,5 +1,5 @@
 // Package export saves a SysML v2 model to a file and converts between the
-// two representations Systemica can write: SysML textual notation and RDF
+// two representations OpenSysML can write: SysML textual notation and RDF
 // Turtle.
 //
 // # SysML output
@@ -22,7 +22,7 @@
 // metamodel properties: declaredName, declaredShortName, owningNamespace,
 // visibility, direction, the feature flags, the typing and specialization
 // clauses, multiplicity bounds and its value. Three properties the metamodel
-// does not define live in a separate urn:systemica:sysml: namespace so a
+// does not define live in a separate urn:opensysml:sysml: namespace so a
 // consumer can tell them from the standard vocabulary: memberIndex (declaration
 // order, which the notation is sensitive to and RDF is not), hasBody, and
 // sourceText.
@@ -56,11 +56,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Open-MBEE/Systemica/internal/core/format"
-	"github.com/Open-MBEE/Systemica/internal/core/lexer"
-	"github.com/Open-MBEE/Systemica/internal/core/parser"
-	"github.com/Open-MBEE/Systemica/internal/core/rdf"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/format"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
+	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 // Format is one of the representations a model can be read from or written to.

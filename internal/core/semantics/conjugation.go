@@ -1,8 +1,8 @@
 package semantics
 
 import (
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // Port conjugation (SysML v2 §7.12.2, §7.12.3): `port p : ~P` is a usage of the

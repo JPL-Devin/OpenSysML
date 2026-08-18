@@ -1,6 +1,6 @@
 package lexer
 
-import "github.com/Open-MBEE/Systemica/internal/core/source"
+import "github.com/Open-MBEE/OpenSysML/internal/core/source"
 
 // Lexer is a hand-written, pull-based scanner. Call Next() repeatedly.
 type Lexer struct {

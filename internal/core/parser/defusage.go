@@ -3,9 +3,9 @@ package parser
 import (
 	"fmt"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/lexer"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 // definitionKindKeywords maps a single kind keyword to its DefinitionKind.

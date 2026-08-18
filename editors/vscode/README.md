@@ -1,7 +1,7 @@
-# SysML v2 for VS Code (Systemica)
+# SysML v2 for VS Code (OpenSysML)
 
 Syntax highlighting and language support for `.sysml` and `.kerml` files, backed by
-Systemica's `sysml-lsp` server: diagnostics, hover, go-to-definition, document
+OpenSysML's `sysml-lsp` server: diagnostics, hover, go-to-definition, document
 symbols and typed completion.
 
 This extension is built and side-loaded from this repository. It is deliberately
@@ -13,13 +13,13 @@ This extension is built and side-loaded from this repository. It is deliberately
 make build          # from the repo root: builds bin/sysml-lsp
 cd editors/vscode
 npm install
-npm run package     # typecheck + bundle + systemica-sysml.vsix
-code --install-extension systemica-sysml.vsix
+npm run package     # typecheck + bundle + opensysml-sysml.vsix
+code --install-extension opensysml-sysml.vsix
 ```
 
 Then open any `.sysml` file. The extension finds the server in this order:
 
-1. `systemica.server.path`, if set;
+1. `opensysml.server.path`, if set;
 2. `bin/sysml-lsp` inside an open workspace folder (a repo checkout that ran `make build`);
 3. `sysml-lsp` on `PATH`.
 
@@ -30,10 +30,10 @@ server. `SysML: Restart Language Server` restarts it after a rebuild.
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
-| `systemica.server.path` | `""` | Absolute path to `sysml-lsp`; empty falls back to the workspace build, then `PATH`. |
-| `systemica.server.args` | `[]` | Extra server arguments. |
-| `systemica.server.enabled` | `true` | Set to `false` for highlighting without a server. |
-| `systemica.trace.server` | `"off"` | Trace LSP traffic in the "SysML v2" output channel. |
+| `opensysml.server.path` | `""` | Absolute path to `sysml-lsp`; empty falls back to the workspace build, then `PATH`. |
+| `opensysml.server.args` | `[]` | Extra server arguments. |
+| `opensysml.server.enabled` | `true` | Set to `false` for highlighting without a server. |
+| `opensysml.trace.server` | `"off"` | Trace LSP traffic in the "SysML v2" output channel. |
 
 ## Grammar generation
 

@@ -3,9 +3,9 @@ package libs
 import (
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/parser"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 // TestBindKeywordSupport tests that "bind" works as shorthand for "binding"

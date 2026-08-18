@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // maxTreeDepth bounds how deep a containment tree is walked, so a model whose

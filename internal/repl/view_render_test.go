@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/passes"
-	"github.com/Open-MBEE/Systemica/internal/core/semantics"
-	"github.com/Open-MBEE/Systemica/internal/core/view"
+	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/view"
 )
 
 // A view stating no rendering renders as a containment tree, of what it exposes.

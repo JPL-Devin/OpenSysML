@@ -11,13 +11,13 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/rdf"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 // Metaclass names for the behavioral nodes the SysML metamodel has no
-// counterpart for, typed in the Systemica namespace.
+// counterpart for, typed in the OpenSysML namespace.
 const (
 	mInitialNode     = "InitialNode"
 	mFinalNode       = "FinalNode"
@@ -76,7 +76,7 @@ const (
 func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf.Term, fqn, owner string, index int) (bool, error) {
 	switch n := node.(type) {
 	case *ast.InitialNode:
-		head(rdf.SystemicaTerm(mInitialNode))
+		head(rdf.OpenSysMLTerm(mInitialNode))
 		// `first x` names the node the body starts at, so the name is a reference
 		// to a member rather than one this element declares.
 		if n.Name != "" {
@@ -97,7 +97,7 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 		return true, nil
 
 	case *ast.FinalNode:
-		head(rdf.SystemicaTerm(mFinalNode))
+		head(rdf.OpenSysMLTerm(mFinalNode))
 		e.name(subject, n.Name)
 		e.writtenKeyword(subject, n, "done", "final")
 		return true, nil
@@ -126,7 +126,7 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 	case *ast.ActionExecutionNode:
 		// `action [<name>] <ref>;` performs an action declared elsewhere;
 		// `action <name> { <expr> }` performs the expression it states.
-		head(rdf.SystemicaTerm(mActionExecution))
+		head(rdf.OpenSysMLTerm(mActionExecution))
 		e.name(subject, n.Name)
 		switch {
 		case n.Expression != nil:
@@ -203,7 +203,7 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 		return true, e.encode(branches, fqn, subject)
 
 	case *ast.IfBranchNode:
-		head(rdf.SystemicaTerm(mIfBranch))
+		head(rdf.OpenSysMLTerm(mIfBranch))
 		e.graph.Add(subject, e.sysx(xBranchKind), rdf.String(n.Kind.String()))
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(e.bracedBranch(n)))
 		return true, e.encode(n.Body, fqn, subject)
@@ -230,7 +230,7 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 		return true, nil
 
 	case *ast.StateRegion:
-		head(rdf.SystemicaTerm(mStateRegion))
+		head(rdf.OpenSysMLTerm(mStateRegion))
 		e.name(subject, n.Name)
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(true))
 		return true, e.encode(n.States, fqn, subject)
@@ -245,14 +245,14 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 		return true, e.encodeSubaction(n, n.Actions, "exit", head, subject, fqn)
 
 	case *ast.DeferMember:
-		head(rdf.SystemicaTerm(mDeferMember))
+		head(rdf.OpenSysMLTerm(mDeferMember))
 		for _, trigger := range n.Triggers {
 			e.graph.Add(subject, e.sysx(xDeferredEvent), rdf.String(e.text(trigger)))
 		}
 		return true, nil
 
 	case *ast.PseudostateNode:
-		head(rdf.SystemicaTerm(mPseudostate))
+		head(rdf.OpenSysMLTerm(mPseudostate))
 		e.name(subject, n.Name)
 		e.graph.Add(subject, e.sysx(xPseudostateKind), rdf.String(n.Kind.String()))
 		e.graph.Add(subject, e.sysx(xDeclaredKeyword), rdf.String(e.pseudostateKeyword(n)))
@@ -602,7 +602,7 @@ func (d *decoder) behaviorHead(el *element) (string, bool, error) {
 		if start := d.referenceText(el, rdf.SysML+pSourceFeature); start != "" {
 			words = append(words, start)
 		}
-		if guard, ok := d.stringOf(el, rdf.Systemica+xGuard); ok {
+		if guard, ok := d.stringOf(el, rdf.OpenSysML+xGuard); ok {
 			words = append(words, "if", guard)
 		}
 		if successor := d.referenceText(el, rdf.SysML+pTargetFeature); successor != "" {
@@ -621,7 +621,7 @@ func (d *decoder) behaviorHead(el *element) (string, bool, error) {
 	case mActionExecution:
 		words := []string{"action"}
 		words = append(words, d.identWords(el)...)
-		switch expression, ok := d.stringOf(el, rdf.Systemica+xExpression); {
+		switch expression, ok := d.stringOf(el, rdf.OpenSysML+xExpression); {
 		case ok:
 			words = append(words, "{ "+expression+" }")
 		case d.referenceText(el, rdf.SysML+relationshipProperty[ast.RelReferences]) != "":
@@ -632,50 +632,50 @@ func (d *decoder) behaviorHead(el *element) (string, bool, error) {
 		return strings.Join(words, " "), true, nil
 
 	case mPerform:
-		action, ok := d.stringOf(el, rdf.Systemica+xExpression)
+		action, ok := d.stringOf(el, rdf.OpenSysML+xExpression)
 		if !ok {
 			return "", true, d.missing(el, "sysx:"+xExpression, "a perform statement names the action it performs")
 		}
 		return "perform " + action, true, nil
 
 	case mAssignment:
-		target, hasTarget := d.stringOf(el, rdf.Systemica+xTarget)
+		target, hasTarget := d.stringOf(el, rdf.OpenSysML+xTarget)
 		value, hasValue := d.stringOf(el, rdf.SysML+pValue)
 		if !hasTarget || !hasValue {
 			return "", true, d.missing(el, "sysx:"+xTarget+" and sysml:"+pValue, "an assignment states what it assigns to what")
 		}
 		var words []string
-		if keyword, ok := d.stringOf(el, rdf.Systemica+xDeclaredKeyword); ok {
+		if keyword, ok := d.stringOf(el, rdf.OpenSysML+xDeclaredKeyword); ok {
 			words = append(words, keyword)
 		}
 		operator := ":="
-		if written, ok := d.stringOf(el, rdf.Systemica+xAssignOperator); ok {
+		if written, ok := d.stringOf(el, rdf.OpenSysML+xAssignOperator); ok {
 			operator = written
 		}
 		words = append(words, target, operator, value)
 		return strings.Join(words, " "), true, nil
 
 	case mSend:
-		payload, hasPayload := d.stringOf(el, rdf.Systemica+xPayload)
-		receiver, hasReceiver := d.stringOf(el, rdf.Systemica+xReceiver)
+		payload, hasPayload := d.stringOf(el, rdf.OpenSysML+xPayload)
+		receiver, hasReceiver := d.stringOf(el, rdf.OpenSysML+xReceiver)
 		if !hasPayload || !hasReceiver {
 			return "", true, d.missing(el, "sysx:"+xPayload+" and sysx:"+xReceiver, "a send states what it sends and where")
 		}
 		keyword := "to"
-		if d.boolOf(el, rdf.Systemica+xIsVia) {
+		if d.boolOf(el, rdf.OpenSysML+xIsVia) {
 			keyword = "via"
 		}
 		return strings.Join([]string{"send", payload, keyword, receiver}, " "), true, nil
 
 	case mTerminate:
 		words := []string{"terminate"}
-		if target, ok := d.stringOf(el, rdf.Systemica+xExpression); ok {
+		if target, ok := d.stringOf(el, rdf.OpenSysML+xExpression); ok {
 			words = append(words, target)
 		}
 		return strings.Join(words, " "), true, nil
 
 	case mDeferMember:
-		events := d.graph.Objects(rdf.IRI(el.iri), rdf.Systemica+xDeferredEvent)
+		events := d.graph.Objects(rdf.IRI(el.iri), rdf.OpenSysML+xDeferredEvent)
 		if len(events) == 0 {
 			return "", true, d.missing(el, "sysx:"+xDeferredEvent, "a defer member names the events it defers")
 		}
@@ -686,7 +686,7 @@ func (d *decoder) behaviorHead(el *element) (string, bool, error) {
 		return "defer " + strings.Join(names, ", "), true, nil
 
 	case mPseudostate:
-		kind, ok := d.stringOf(el, rdf.Systemica+xPseudostateKind)
+		kind, ok := d.stringOf(el, rdf.OpenSysML+xPseudostateKind)
 		if !ok {
 			return "", true, d.missing(el, "sysx:"+xPseudostateKind, "a pseudostate states which kind it is")
 		}
@@ -714,7 +714,7 @@ var controlNodeKeyword = map[string]string{
 func (d *decoder) successionHead(el *element) (string, error) {
 	source := d.referenceText(el, rdf.SysML+pSourceFeature)
 	target := d.referenceText(el, rdf.SysML+pTargetFeature)
-	guard, hasGuard := d.stringOf(el, rdf.Systemica+xGuard)
+	guard, hasGuard := d.stringOf(el, rdf.OpenSysML+xGuard)
 	if target == "" {
 		return "", &UnsupportedError{
 			What: fmt.Sprintf("the succession <%s>", el.iri),
@@ -722,7 +722,7 @@ func (d *decoder) successionHead(el *element) (string, error) {
 		}
 	}
 	switch keyword := d.keywordOr(el, "then"); {
-	case keyword == "else" || d.boolOf(el, rdf.Systemica+xIsElse):
+	case keyword == "else" || d.boolOf(el, rdf.OpenSysML+xIsElse):
 		return "else " + target, nil
 	case keyword == "if":
 		if !hasGuard {
@@ -799,14 +799,14 @@ func (d *decoder) loopText(el *element, depth int) (string, error) {
 	var head string
 	switch el.metaclass {
 	case mForLoop:
-		variable, hasVariable := d.stringOf(el, rdf.Systemica+xLoopVariable)
-		collection, hasCollection := d.stringOf(el, rdf.Systemica+xCollection)
+		variable, hasVariable := d.stringOf(el, rdf.OpenSysML+xLoopVariable)
+		collection, hasCollection := d.stringOf(el, rdf.OpenSysML+xCollection)
 		if !hasVariable || !hasCollection {
 			return "", d.missing(el, "sysx:"+xLoopVariable+" and sysx:"+xCollection, "a for loop binds a variable over a collection")
 		}
 		head = "for " + nameText(variable) + " in " + collection
 	default:
-		if condition, ok := d.stringOf(el, rdf.Systemica+xWhileCondition); ok {
+		if condition, ok := d.stringOf(el, rdf.OpenSysML+xWhileCondition); ok {
 			head = "while " + condition
 		} else {
 			head = "loop"
@@ -819,10 +819,10 @@ func (d *decoder) loopText(el *element, depth int) (string, error) {
 	text := head + " " + body
 	// An `until` clause states the condition tested after each iteration, and
 	// terminates the loop; so does a body written without braces.
-	if until, ok := d.stringOf(el, rdf.Systemica+xUntilCondition); ok {
+	if until, ok := d.stringOf(el, rdf.OpenSysML+xUntilCondition); ok {
 		return text + " until " + until + ";", nil
 	}
-	if !d.boolOf(el, rdf.Systemica+xHasBody) && !strings.HasSuffix(text, ";") && el.metaclass != mForLoop {
+	if !d.boolOf(el, rdf.OpenSysML+xHasBody) && !strings.HasSuffix(text, ";") && el.metaclass != mForLoop {
 		return text + ";", nil
 	}
 	return text, nil
@@ -831,7 +831,7 @@ func (d *decoder) loopText(el *element, depth int) (string, error) {
 // conditionalText writes an if action: its condition, the branch taken when the
 // condition holds, and the one taken when it does not.
 func (d *decoder) conditionalText(el *element, depth int) (string, error) {
-	condition, ok := d.stringOf(el, rdf.Systemica+xCondition)
+	condition, ok := d.stringOf(el, rdf.OpenSysML+xCondition)
 	if !ok {
 		return "", d.missing(el, "sysx:"+xCondition, "an if action states the condition it branches on")
 	}
@@ -843,7 +843,7 @@ func (d *decoder) conditionalText(el *element, depth int) (string, error) {
 				Note: "an if action owns its branches, and this member is not one",
 			}
 		}
-		kind, _ := d.stringOf(child, rdf.Systemica+xBranchKind)
+		kind, _ := d.stringOf(child, rdf.OpenSysML+xBranchKind)
 		if kind == ast.IfBranchElse.String() {
 			otherwise = child
 		} else {
@@ -871,12 +871,12 @@ func (d *decoder) conditionalText(el *element, depth int) (string, error) {
 // subactionText writes one of a state's entry/do/exit subactions in the shape it
 // was written: empty, a braced sequence, or a single action.
 func (d *decoder) subactionText(el *element, depth int) (string, error) {
-	kind, ok := d.stringOf(el, rdf.Systemica+xSubactionKind)
+	kind, ok := d.stringOf(el, rdf.OpenSysML+xSubactionKind)
 	if !ok {
 		return "", d.missing(el, "sysx:"+xSubactionKind, "a state subaction states whether it runs on entry, throughout or on exit")
 	}
 	keyword := d.keywordOr(el, kind)
-	braced := d.boolOf(el, rdf.Systemica+xHasBody)
+	braced := d.boolOf(el, rdf.OpenSysML+xHasBody)
 	if len(el.children) == 0 && !braced {
 		return keyword + ";", nil
 	}
@@ -890,7 +890,7 @@ func (d *decoder) subactionText(el *element, depth int) (string, error) {
 	// A performed action states the subaction's keyword itself
 	// (`entry warmUp;`), so writing the keyword again would declare it twice.
 	if len(el.children) == 1 {
-		if written, ok := d.stringOf(el.children[0], rdf.Systemica+xDeclaredKeyword); ok && written == kind {
+		if written, ok := d.stringOf(el.children[0], rdf.OpenSysML+xDeclaredKeyword); ok && written == kind {
 			return body, nil
 		}
 	}
@@ -903,7 +903,7 @@ func (d *decoder) transitionText(el *element, depth int) (string, error) {
 	source := d.referenceText(el, rdf.SysML+pSourceFeature)
 	target := d.referenceText(el, rdf.SysML+pTargetFeature)
 	syntax := "first"
-	if written, ok := d.stringOf(el, rdf.Systemica+xTransitionSyntax); ok {
+	if written, ok := d.stringOf(el, rdf.OpenSysML+xTransitionSyntax); ok {
 		syntax = written
 	}
 	var words []string
@@ -922,9 +922,9 @@ func (d *decoder) transitionText(el *element, depth int) (string, error) {
 			words = append(words, "first", source)
 		}
 	}
-	if trigger, ok := d.stringOf(el, rdf.Systemica+xTrigger); ok {
+	if trigger, ok := d.stringOf(el, rdf.OpenSysML+xTrigger); ok {
 		keyword := "accept"
-		if written, ok := d.stringOf(el, rdf.Systemica+xTriggerKeyword); ok {
+		if written, ok := d.stringOf(el, rdf.OpenSysML+xTriggerKeyword); ok {
 			keyword = written
 		}
 		words = append(words, keyword, trigger)
@@ -932,7 +932,7 @@ func (d *decoder) transitionText(el *element, depth int) (string, error) {
 			words = append(words, "via", via)
 		}
 	}
-	if guard, ok := d.stringOf(el, rdf.Systemica+xGuard); ok {
+	if guard, ok := d.stringOf(el, rdf.OpenSysML+xGuard); ok {
 		words = append(words, "if", guard)
 	}
 	if len(el.children) > 0 {
@@ -958,7 +958,7 @@ func (d *decoder) bodyText(el *element, depth int) (string, error) {
 			return "", err
 		}
 	}
-	if d.boolOf(el, rdf.Systemica+xHasBody) {
+	if d.boolOf(el, rdf.OpenSysML+xHasBody) {
 		return "{\n" + members.String() + indent + "}", nil
 	}
 	return strings.TrimSpace(members.String()), nil

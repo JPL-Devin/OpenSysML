@@ -1,4 +1,4 @@
-; Systemica SMT-LIB2 translation of constraint SafeWindow
+; OpenSysML SMT-LIB2 translation of constraint SafeWindow
 ; the runtime evaluator remains normative; solving is an optional extension
 (set-logic QF_LIA)
 ; test::SafeWindow::level, declared at safe_window.sysml:8:3

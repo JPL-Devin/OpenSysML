@@ -1,7 +1,7 @@
 package symbols
 
 import (
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 )
 
 // buildBodyScopes links the scope each body expression declares its parameters

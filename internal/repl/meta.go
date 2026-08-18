@@ -9,16 +9,16 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/lexer"
-	"github.com/Open-MBEE/Systemica/internal/core/model"
-	"github.com/Open-MBEE/Systemica/internal/core/parser"
-	"github.com/Open-MBEE/Systemica/internal/core/resolve"
-	"github.com/Open-MBEE/Systemica/internal/core/runtime"
-	"github.com/Open-MBEE/Systemica/internal/core/semantics"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
-	"github.com/Open-MBEE/Systemica/internal/core/view"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
+	"github.com/Open-MBEE/OpenSysML/internal/core/model"
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
+	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
+	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/view"
 )
 
 // renderUsage is how %render is written: a view, and the form to write it in,
@@ -143,6 +143,8 @@ var metaCommandTable = []metaCommand{
 	{group: "Behavioral commands:", name: "%constraint", args: "<name>", desc: "evaluate a constraint definition"},
 	{group: "Behavioral commands:", name: "%requirement", args: "<name>", desc: "evaluate a requirement definition"},
 	{group: "Behavioral commands:", name: "%satisfy", args: "[name]", desc: "evaluate the satisfaction assertions of the model, or of one element"},
+	{group: "Behavioral commands:", name: "%check", args: "<name>", desc: "ask an SMT solver whether a constraint, requirement or satisfaction can be satisfied (experimental)"},
+	{group: "Behavioral commands:", name: "%explain", args: "<name>", desc: "ask an SMT solver which conditions of an unsatisfiable element conflict (experimental)"},
 
 	{group: "Action debugging:", name: "%action", args: "<name> [<object>]", desc: "start action executor debugging session, performed by an object"},
 	{group: "Action debugging:", name: "%step", desc: "advance one token step"},
@@ -342,6 +344,16 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 		return s.doRequirement(fields[1])
 	case "%satisfy":
 		return s.doSatisfy(fields[1:])
+	case "%check":
+		if len(fields) < 2 {
+			return []string{"usage: %check <name>"}, false, nil
+		}
+		return s.doCheck(fields[1])
+	case "%explain":
+		if len(fields) < 2 {
+			return []string{"usage: %explain <name>"}, false, nil
+		}
+		return s.doExplain(fields[1])
 	// Action debugging
 	case "%action":
 		if len(fields) < 2 {

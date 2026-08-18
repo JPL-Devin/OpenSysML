@@ -28,6 +28,7 @@ const (
 	SysMLService_ExecuteAction_FullMethodName      = "/sysml.SysMLService/ExecuteAction"
 	SysMLService_ExecuteState_FullMethodName       = "/sysml.SysMLService/ExecuteState"
 	SysMLService_Convert_FullMethodName            = "/sysml.SysMLService/Convert"
+	SysMLService_ApplyEdits_FullMethodName         = "/sysml.SysMLService/ApplyEdits"
 	SysMLService_VerifyConstraint_FullMethodName   = "/sysml.SysMLService/VerifyConstraint"
 	SysMLService_VerifyRequirement_FullMethodName  = "/sysml.SysMLService/VerifyRequirement"
 	SysMLService_VerifySatisfaction_FullMethodName = "/sysml.SysMLService/VerifySatisfaction"
@@ -54,10 +55,16 @@ type SysMLServiceClient interface {
 	Instantiate(ctx context.Context, in *InstantiateRequest, opts ...grpc.CallOption) (*InstantiateResponse, error)
 	ExecuteAction(ctx context.Context, in *ExecuteActionRequest, opts ...grpc.CallOption) (*ExecuteActionResponse, error)
 	ExecuteState(ctx context.Context, in *ExecuteStateRequest, opts ...grpc.CallOption) (*ExecuteStateResponse, error)
-	// Convert a model between the representations Systemica writes — SysML
+	// Convert a model between the representations OpenSysML writes — SysML
 	// textual notation and RDF Turtle — so a client can write a model back out
 	// rather than only read it. Reported as the "convert" capability.
 	Convert(ctx context.Context, in *ConvertRequest, opts ...grpc.CallOption) (*ConvertResponse, error)
+	// Apply edits to a parsed model's own source and return the edited notation,
+	// so a client can change a model and write it back with its comments and
+	// layout intact. Edits are byte ranges the service locates from the parsed
+	// spans, and the result is re-parsed and validated before it is returned.
+	// Reported as the "apply_edits" capability.
+	ApplyEdits(ctx context.Context, in *ApplyEditsRequest, opts ...grpc.CallOption) (*ApplyEditsResponse, error)
 	// Verification: the answers the REPL's %constraint, %requirement, %satisfy
 	// and %calc give, so "does this model satisfy its requirements?" can be asked
 	// by a script. Each evaluates the same runtime paths the prompt does and
@@ -162,6 +169,15 @@ func (c *sysMLServiceClient) Convert(ctx context.Context, in *ConvertRequest, op
 	return out, nil
 }
 
+func (c *sysMLServiceClient) ApplyEdits(ctx context.Context, in *ApplyEditsRequest, opts ...grpc.CallOption) (*ApplyEditsResponse, error) {
+	out := new(ApplyEditsResponse)
+	err := c.cc.Invoke(ctx, SysMLService_ApplyEdits_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *sysMLServiceClient) VerifyConstraint(ctx context.Context, in *VerifyConstraintRequest, opts ...grpc.CallOption) (*VerifyConstraintResponse, error) {
 	out := new(VerifyConstraintResponse)
 	err := c.cc.Invoke(ctx, SysMLService_VerifyConstraint_FullMethodName, in, out, opts...)
@@ -226,10 +242,16 @@ type SysMLServiceServer interface {
 	Instantiate(context.Context, *InstantiateRequest) (*InstantiateResponse, error)
 	ExecuteAction(context.Context, *ExecuteActionRequest) (*ExecuteActionResponse, error)
 	ExecuteState(context.Context, *ExecuteStateRequest) (*ExecuteStateResponse, error)
-	// Convert a model between the representations Systemica writes — SysML
+	// Convert a model between the representations OpenSysML writes — SysML
 	// textual notation and RDF Turtle — so a client can write a model back out
 	// rather than only read it. Reported as the "convert" capability.
 	Convert(context.Context, *ConvertRequest) (*ConvertResponse, error)
+	// Apply edits to a parsed model's own source and return the edited notation,
+	// so a client can change a model and write it back with its comments and
+	// layout intact. Edits are byte ranges the service locates from the parsed
+	// spans, and the result is re-parsed and validated before it is returned.
+	// Reported as the "apply_edits" capability.
+	ApplyEdits(context.Context, *ApplyEditsRequest) (*ApplyEditsResponse, error)
 	// Verification: the answers the REPL's %constraint, %requirement, %satisfy
 	// and %calc give, so "does this model satisfy its requirements?" can be asked
 	// by a script. Each evaluates the same runtime paths the prompt does and
@@ -276,6 +298,9 @@ func (UnimplementedSysMLServiceServer) ExecuteState(context.Context, *ExecuteSta
 }
 func (UnimplementedSysMLServiceServer) Convert(context.Context, *ConvertRequest) (*ConvertResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Convert not implemented")
+}
+func (UnimplementedSysMLServiceServer) ApplyEdits(context.Context, *ApplyEditsRequest) (*ApplyEditsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ApplyEdits not implemented")
 }
 func (UnimplementedSysMLServiceServer) VerifyConstraint(context.Context, *VerifyConstraintRequest) (*VerifyConstraintResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VerifyConstraint not implemented")
@@ -467,6 +492,24 @@ func _SysMLService_Convert_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SysMLService_ApplyEdits_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ApplyEditsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SysMLServiceServer).ApplyEdits(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SysMLService_ApplyEdits_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SysMLServiceServer).ApplyEdits(ctx, req.(*ApplyEditsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _SysMLService_VerifyConstraint_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(VerifyConstraintRequest)
 	if err := dec(in); err != nil {
@@ -599,6 +642,10 @@ var SysMLService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Convert",
 			Handler:    _SysMLService_Convert_Handler,
+		},
+		{
+			MethodName: "ApplyEdits",
+			Handler:    _SysMLService_ApplyEdits_Handler,
 		},
 		{
 			MethodName: "VerifyConstraint",

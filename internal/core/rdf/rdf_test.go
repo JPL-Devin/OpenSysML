@@ -129,7 +129,7 @@ func TestWriteTurtleShape(t *testing.T) {
 	g.Add(subject, IRI(RDFType), SysMLTerm("PartDefinition"))
 	g.Add(subject, SysMLTerm("declaredName"), String("Q"))
 	g.Add(subject, SysMLTerm("isAbstract"), Bool(true))
-	g.Add(subject, SystemicaTerm("memberIndex"), Int(0))
+	g.Add(subject, OpenSysMLTerm("memberIndex"), Int(0))
 
 	out := string(WriteTurtle(g))
 	for _, want := range []string{
@@ -170,8 +170,8 @@ func TestTurtleRoundTrip(t *testing.T) {
 	g.Add(subject, SysMLTerm("declaredName"), String("Part"))
 	g.Add(subject, SysMLTerm("owningNamespace"), ElementIRI("Demo"))
 	g.Add(subject, SysMLTerm("isOrdered"), Bool(false))
-	g.Add(subject, SystemicaTerm("memberIndex"), Int(7))
-	g.Add(subject, SystemicaTerm("sourceText"), String("line one\nline two \"quoted\"\ttabbed"))
+	g.Add(subject, OpenSysMLTerm("memberIndex"), Int(7))
+	g.Add(subject, OpenSysMLTerm("sourceText"), String("line one\nline two \"quoted\"\ttabbed"))
 	g.Add(subject, SysMLTerm("body"), String(`a \ backslash`))
 	g.Add(ElementIRI("Demo"), IRI(RDFType), SysMLTerm("Package"))
 

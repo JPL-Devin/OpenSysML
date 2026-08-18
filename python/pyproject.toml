@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "pysysml"
 dynamic = ["version"]
-description = "Python client library for Systemica, a SysML v2 parser and execution runtime"
+description = "Python client library for OpenSysML, a SysML v2 parser and execution runtime"
 readme = "README.md"
 # grpcio 1.83 and protobuf 7.35 publish wheels for CPython 3.10 and later only,
 # so anything older cannot install the dependency set below.
@@ -50,17 +50,20 @@ dev = [
     "types-psutil>=5.9.0",
     "grpc-stubs>=1.53.0",
     "pandas-stubs>=2.0.0",
+    # Pulled in by pandas-stubs; numpy 2.5's stubs use a PEP 695 `type`
+    # statement, a syntax error at the python_version mypy targets below.
+    "numpy<2.5",
 ]
 
 [project.scripts]
 pysysml-generate = "pysysml.generate:main"
 
 [project.urls]
-Homepage = "https://github.com/Open-MBEE/Systemica"
-Repository = "https://github.com/Open-MBEE/Systemica"
-Documentation = "https://github.com/Open-MBEE/Systemica/blob/main/python/README.md"
-Changelog = "https://github.com/Open-MBEE/Systemica/blob/main/CHANGELOG.md"
-Issues = "https://github.com/Open-MBEE/Systemica/issues"
+Homepage = "https://github.com/Open-MBEE/OpenSysML"
+Repository = "https://github.com/Open-MBEE/OpenSysML"
+Documentation = "https://github.com/Open-MBEE/OpenSysML/blob/main/python/README.md"
+Changelog = "https://github.com/Open-MBEE/OpenSysML/blob/main/CHANGELOG.md"
+Issues = "https://github.com/Open-MBEE/OpenSysML/issues"
 
 [tool.setuptools.dynamic]
 version = { attr = "pysysml._version.VERSION" }
@@ -84,3 +87,4 @@ markers = [
 python_version = "3.10"
 files = ["pysysml"]
 warn_unused_ignores = true
+

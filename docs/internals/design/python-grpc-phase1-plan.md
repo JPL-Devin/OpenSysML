@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build working gRPC service (`sysml-grpc`) exposing Systemica's parser and symbol query capabilities.
+**Goal:** Build working gRPC service (`sysml-grpc`) exposing OpenSysML's parser and symbol query capabilities.
 
 **Architecture:** Stateless gRPC service with LRU cache for parsed models. Thin wrapper over existing `internal/core/*` packages. Service keyed by content hash for cache lookup.
 
@@ -71,9 +71,9 @@ syntax = "proto3";
 
 package sysml;
 
-option go_package = "github.com/Open-MBEE/Systemica/api/proto";
+option go_package = "github.com/Open-MBEE/OpenSysML/api/proto";
 
-// SysMLService provides programmatic access to Systemica's parser and runtime
+// SysMLService provides programmatic access to OpenSysML's parser and runtime
 service SysMLService {
   // Parse a SysML file and return model hash for subsequent queries
   rpc ParseFile(ParseFileRequest) returns (ParseFileResponse);
@@ -219,8 +219,8 @@ package grpc
 import (
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 func TestCachePutGet(t *testing.T) {
@@ -295,8 +295,8 @@ import (
 	"container/list"
 	"sync"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // CachedModel holds parsed model data
@@ -403,10 +403,10 @@ package grpc
 import (
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
-	pb "github.com/Open-MBEE/Systemica/api/proto"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 )
 
 func TestSymbolToProto(t *testing.T) {
@@ -472,9 +472,9 @@ package grpc
 import (
 	"fmt"
 
-	pb "github.com/Open-MBEE/Systemica/api/proto"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	pb "github.com/Open-MBEE/OpenSysML/api/proto"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // SymbolToProto converts a Symbol to protobuf SymbolInfo
@@ -568,7 +568,7 @@ import (
 	"os"
 	"testing"
 
-	pb "github.com/Open-MBEE/Systemica/api/proto"
+	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 )
 
 func TestParseFileFromContent(t *testing.T) {
@@ -648,10 +648,10 @@ import (
 	"fmt"
 	"os"
 
-	pb "github.com/Open-MBEE/Systemica/api/proto"
-	"github.com/Open-MBEE/Systemica/internal/core/parser"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	pb "github.com/Open-MBEE/OpenSysML/api/proto"
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -942,8 +942,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	pb "github.com/Open-MBEE/Systemica/api/proto"
-	grpcService "github.com/Open-MBEE/Systemica/internal/grpc"
+	pb "github.com/Open-MBEE/OpenSysML/api/proto"
+	grpcService "github.com/Open-MBEE/OpenSysML/internal/grpc"
 	"google.golang.org/grpc"
 )
 
@@ -1075,7 +1075,7 @@ import (
 	"net"
 	"testing"
 
-	pb "github.com/Open-MBEE/Systemica/api/proto"
+	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"

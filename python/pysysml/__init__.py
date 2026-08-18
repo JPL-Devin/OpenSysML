@@ -1,4 +1,4 @@
-"""pysysml - Python client library for Systemica SysML v2 parser."""
+"""pysysml - Python client library for OpenSysML SysML v2 parser."""
 
 import warnings
 
@@ -25,9 +25,12 @@ from pysysml.conversion import (
     FORMAT_SYSML, FORMAT_TURTLE, Conversion, ExperimentalFeatureWarning,
     format_of_path, is_experimental,
 )
+from pysysml.edit import AppliedEdit, EditResult, Editor
 from pysysml.errors import (
     PySysMLError, ChecksumMismatchError, ConnectionError, ConversionError,
-    ExecutionError, FeatureValueError,
+    EditError, EditResultError, EditTargetError, ExecutionError,
+    FeatureValueError, InvalidEditError, NoEditsError, OverlappingEditsError,
+    RenameReferencedError,
     InstanceTypeError, InvalidRequestError, ModelError,
     ModelFileNotFoundError, ModelNotFoundError, ServiceError,
     ServiceTimeoutError, SlotError, StaleServiceError, SymbolNotFoundError,
@@ -43,10 +46,13 @@ __all__ = [
     "UNSET", "UnsetType",
     "Conversion", "FORMAT_SYSML", "FORMAT_TURTLE", "format_of_path",
     "ExperimentalFeatureWarning", "is_experimental",
+    "Editor", "EditResult", "AppliedEdit",
     "Verdict", "CalcResult",
     "QueryElement", "QueryError",
     "PySysMLError", "ChecksumMismatchError", "ConnectionError",
     "ConversionError", "ExecutionError", "FeatureValueError",
+    "EditError", "NoEditsError", "EditTargetError", "InvalidEditError",
+    "RenameReferencedError", "OverlappingEditsError", "EditResultError",
     "InstanceTypeError", "InvalidRequestError", "MissingCapabilityError",
     "ModelError", "ModelFileNotFoundError", "ModelNotFoundError",
     "ServiceError", "ServiceTimeoutError", "SlotError", "StaleServiceError",

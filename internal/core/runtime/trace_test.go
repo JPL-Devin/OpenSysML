@@ -8,12 +8,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/parser"
-	"github.com/Open-MBEE/Systemica/internal/core/resolve"
-	"github.com/Open-MBEE/Systemica/internal/core/semantics"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
+	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 var updateTraces = flag.Bool("update-traces", false, "Update golden trace files")

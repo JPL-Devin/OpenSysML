@@ -1,7 +1,7 @@
 """Writing a model back out, in SysML notation or RDF Turtle.
 
 The service converts; this module is the client's side of it. The formats are
-the two Systemica can write, named as the ``sysml`` CLI's ``-from``/``-to``
+the two OpenSysML can write, named as the ``sysml`` CLI's ``-from``/``-to``
 name them, so a script and a command line agree.
 
 A round trip is defined on the model, not on the bytes: notation written back
@@ -90,7 +90,7 @@ def format_of_path(path):
 
 @dataclass(frozen=True)
 class Conversion:
-    """A model written out in one of the formats Systemica writes.
+    """A model written out in one of the formats OpenSysML writes.
 
     Attributes:
         content: The converted model. ``str(conversion)`` is this text, so a
@@ -123,12 +123,15 @@ class Conversion:
     def write(self, path):
         """Write the converted model to ``path``.
 
+        The bytes written are the ones the service returned: ``newline=""`` turns
+        off the translation text mode would otherwise apply to every line ending.
+
         Args:
             path (str): File to write, created or truncated.
 
         Returns:
             str: The path written, for chaining.
         """
-        with open(path, "w", encoding="utf-8") as handle:
+        with open(path, "w", encoding="utf-8", newline="") as handle:
             handle.write(self.content)
         return path

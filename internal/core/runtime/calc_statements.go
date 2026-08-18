@@ -3,7 +3,7 @@ package runtime
 import (
 	"fmt"
 
-	"github.com/Open-MBEE/Systemica/internal/core/lower"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
 )
 
 // calcStmtHost runs a calculation body's statements: it owns its locals, its

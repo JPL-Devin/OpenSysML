@@ -3,10 +3,10 @@ package resolve
 import (
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/parser"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 func resolveDoc(t *testing.T, name, src string) *Resolver {

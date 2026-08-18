@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/export"
+	"github.com/Open-MBEE/OpenSysML/internal/core/export"
 )
 
 // The help states the RDF mapping's status in the same wording a conversion

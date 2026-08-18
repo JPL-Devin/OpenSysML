@@ -1,11 +1,11 @@
 ---
 name: testing-homebrew-packaging
-description: How to verify the Systemica Homebrew formula end to end on Linux — rendering packaging/homebrew/Formula/systemica.rb with scripts/render-homebrew-formula.sh, installing/testing/auditing it through a throwaway local tap, and the adversarial paths worth checking.
+description: How to verify the OpenSysML Homebrew formula end to end on Linux — rendering packaging/homebrew/Formula/opensysml.rb with scripts/render-homebrew-formula.sh, installing/testing/auditing it through a throwaway local tap, and the adversarial paths worth checking.
 ---
 
-# Verifying the Systemica Homebrew formula (Linux)
+# Verifying the OpenSysML Homebrew formula (Linux)
 
-`packaging/homebrew/Formula/systemica.rb` is a **template** with `__TAG__` / `__SHA256_*__`
+`packaging/homebrew/Formula/opensysml.rb` is a **template** with `__TAG__` / `__SHA256_*__`
 placeholders. `scripts/render-homebrew-formula.sh <tag>` substitutes them from the release's
 `SHA256SUMS.txt` and strips the maintainer header. The tap repo `Open-MBEE/homebrew-tap` does
 not exist yet, so everything below uses a throwaway **local** tap.
@@ -24,7 +24,7 @@ not exist yet, so everything below uses a throwaway **local** tap.
 A previous run leaves state that makes a rerun a no-op and silently proves nothing:
 
 ```bash
-brew uninstall systemica 2>/dev/null
+brew uninstall opensysml 2>/dev/null
 brew untap local/<previous-tap-name> 2>/dev/null
 which sysml   # must print nothing before you begin
 brew tap      # confirm no leftover local/* taps
@@ -37,11 +37,11 @@ exercised. First `brew install` pulls ~12 dependencies (gcc, glibc, binutils…)
 ## The verification recipe (mirrors packaging/homebrew/README.md)
 
 ```bash
-./scripts/render-homebrew-formula.sh v0.0.4 > /tmp/systemica.rb
+./scripts/render-homebrew-formula.sh v0.0.4 > /tmp/opensysml.rb
 brew tap-new local/<fresh> --no-git
-cp /tmp/systemica.rb "$(brew --repository local/<fresh>)/Formula/systemica.rb"
-brew install local/<fresh>/systemica && brew test local/<fresh>/systemica
-brew audit --strict --online local/<fresh>/systemica
+cp /tmp/opensysml.rb "$(brew --repository local/<fresh>)/Formula/opensysml.rb"
+brew install local/<fresh>/opensysml && brew test local/<fresh>/opensysml
+brew audit --strict --online local/<fresh>/opensysml
 ```
 
 All four must exit 0. Benign noise to ignore: `fatal: ambiguous argument
@@ -56,11 +56,11 @@ sandboxing!`, and ``AllCops/UseProjectIndex` is enabled but the `rubydex` gem is
   copy and rerun the audit — it must fail with exactly that wording, then restore the file.
   Just seeing a green audit does not prove the fix.
 - **Checksums match the release**, not merely "look like hashes". Download
-  `https://github.com/Open-MBEE/Systemica/releases/download/<tag>/SHA256SUMS.txt` and compare
-  the four `systemica-<os>-<arch>.tar.gz` entries against the `url`/`sha256` pairs parsed out
+  `https://github.com/Open-MBEE/OpenSysML/releases/download/<tag>/SHA256SUMS.txt` and compare
+  the four `opensysml-<os>-<arch>.tar.gz` entries against the `url`/`sha256` pairs parsed out
   of the rendered file. Note the manifest also contains per-binary `sysml-*` / `sysml-lsp-*`
-  entries — the formula only uses the `systemica-*` bundles.
-- **Zero placeholders**: `grep -c '__[A-Z0-9_]*__' /tmp/systemica.rb` → `0`. The script has its
+  entries — the formula only uses the `opensysml-*` bundles.
+- **Zero placeholders**: `grep -c '__[A-Z0-9_]*__' /tmp/opensysml.rb` → `0`. The script has its
   own guard for this (exit 1), so a rendering regression usually surfaces as a script failure.
 - **The installed binaries are the brew ones**: check `which sysml` resolves under
   `/home/linuxbrew/...`, not `./bin/sysml`, before smoke-testing. `sysml --version` must print
@@ -70,8 +70,8 @@ sandboxing!`, and ``AllCops/UseProjectIndex` is enabled but the `rubydex` gem is
 
 | Command | Expected |
 |---|---|
-| `render-homebrew-formula.sh v9.9.9` | exit 22, `curl: (22) ... error: 404`, no `class Systemica` in output |
-| `render-homebrew-formula.sh <tag> <sums-with-one-line>` | exit 1, `error: no checksum for systemica-darwin-amd64.tar.gz` |
+| `render-homebrew-formula.sh v9.9.9` | exit 22, `curl: (22) ... error: 404`, no `class OpenSysML` in output |
+| `render-homebrew-formula.sh <tag> <sums-with-one-line>` | exit 1, `error: no checksum for opensysml-darwin-amd64.tar.gz` |
 | `render-homebrew-formula.sh` (no args) | exit 2, `usage: ... <tag> [SHA256SUMS.txt]` |
 | `brew install` of the **unrendered** template | must FAIL — download URL contains literal `__TAG__` and 404s |
 
@@ -81,7 +81,7 @@ misleading `HTTP Error 403: rate limit exceeded`. Report the 404 wording, not th
 ## Homebrew 6.x tap trust
 
 Homebrew 6 requires tap trust. Taps you create locally with `brew tap-new` are trusted
-automatically (`==> Trusted formula local/<tap>/systemica`), but installing from tap B will warn
+automatically (`==> Trusted formula local/<tap>/opensysml`), but installing from tap B will warn
 that tap A "is not trusted" if A is still tapped. That warning is cosmetic for this workflow;
 untap old taps to silence it, or `brew trust local/<tap>`.
 

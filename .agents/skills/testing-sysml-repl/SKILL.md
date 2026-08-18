@@ -1,6 +1,6 @@
 ---
 name: testing-sysml-repl
-description: How to build, drive, and record end-to-end tests of the Systemica sysml REPL (bin/sysml) and the sysml-grpc service with its pysysml Python client — meta-command behavior, symbol lookup, action/state debugging, gRPC slot serialization, and GUI-terminal recording setup.
+description: How to build, drive, and record end-to-end tests of the OpenSysML sysml REPL (bin/sysml) and the sysml-grpc service with its pysysml Python client — meta-command behavior, symbol lookup, action/state debugging, gRPC slot serialization, and GUI-terminal recording setup.
 ---
 
 # Testing the `sysml` REPL end-to-end
@@ -1464,7 +1464,7 @@ worth asserting, with the wording each produces:
 | absent | `v0.0.8` | `… was not downloaded by this client, so which release it is cannot be told` |
 | `v0.0.7` + **true** sha256 of the file | `v0.0.8` | `… is v0.0.7, but v0.0.8 was asked for` |
 | `v0.0.7` + wrong sha256 (hand-swapped binary) | `v0.0.8` | falls back to the "not downloaded by this client" wording |
-| `v0.0.8` but `"repo":"someone/Systemica-fork"` | `v0.0.8` | `… was downloaded from someone/Systemica-fork, but v0.0.8 of Open-MBEE/Systemica was asked for` |
+| `v0.0.8` but `"repo":"someone/OpenSysML-fork"` | `v0.0.8` | `… was downloaded from someone/OpenSysML-fork, but v0.0.8 of Open-MBEE/OpenSysML was asked for` |
 
 - The digest is re-verified (`cached_release`), so a *true* sha256 in the sidecar is what makes the
   "is v0.0.7" branch reachable — a placeholder digest silently tests the wrong branch.
@@ -1821,7 +1821,7 @@ definition deriving from `pysysml.typed.TypedObject`. Useful facts when testing 
 The runtime supplies bodies for the function-library declarations in
 `internal/core/runtime/library_functions.go`; the non-normative extensions
 (`exp`, `ln`, `log`, `atan2`) live in
-`internal/core/libs/stdlib/Systemica Libraries/SystemicaMathFunctions.kerml`.
+`internal/core/libs/stdlib/OpenSysML Libraries/OpenSysMLMathFunctions.kerml`.
 Testing notes that generalize to any future built-in:
 
 - The fastest end-to-end surface is the batch flag, which loads a model *and* evaluates
@@ -1844,7 +1844,7 @@ Testing notes that generalize to any future built-in:
 - A **bare** call with no `import` still evaluates (the unqualified-name table is always in force)
   but the checker prints `error: unresolved reference: <name>` for the same call inside a
   declaration. That divergence is a known rough edge of the built-in dispatch, not a new bug —
-  report it as expected, and use `import SystemicaMathFunctions::*;` in fixtures to avoid it.
+  report it as expected, and use `import OpenSysMLMathFunctions::*;` in fixtures to avoid it.
 - Fixture gotchas when writing action fixtures by hand: `done` is a reserved keyword (use another
   name), a body has one start so only one `first` end (chain the rest as `first a then b; then b c;`
   — two `first` ends yield `action has multiple initial nodes`), and `and`/`or` are
@@ -2140,7 +2140,7 @@ Traps found while testing it:
 The GUI is on `DISPLAY=:0` (`:1` does not exist here — `wmctrl` will say "Cannot open display").
 
 ```bash
-cd /home/ubuntu/repos/Systemica && (DISPLAY=:0 konsole --hide-menubar >/dev/null 2>&1 &)
+cd /home/ubuntu/repos/OpenSysML && (DISPLAY=:0 konsole --hide-menubar >/dev/null 2>&1 &)
 DISPLAY=:0 wmctrl -a "Konsole"
 DISPLAY=:0 wmctrl -r :ACTIVE: -b add,maximized_vert,maximized_horz
 ```
@@ -2781,7 +2781,7 @@ number rather than quoting the table.
   `nohup ~/.pysysml/bin/sysml-grpc -port 50051 >/tmp/svc.log 2>&1 &`.
 - **`PINNED_SHA256` is nested `repo -> version -> asset`.** To exercise the *contradicted* digest arm
   you must inject the key for the repository actually in use, e.g.
-  `binary.PINNED_SHA256['Open-MBEE/Systemica'] = {'v0.0.8': {'sysml-grpc-linux-amd64': 'de'*32}}`
+  `binary.PINNED_SHA256['Open-MBEE/OpenSysML'] = {'v0.0.8': {'sysml-grpc-linux-amd64': 'de'*32}}`
   (`DEFAULT_GITHUB_REPO`, looked up case-sensitively, so the spelling must match exactly);
   a mis-cased, flat or `in`-substring patch leaves the pin absent and you silently re-test the *unpinned* arm
   (`UnpinnedReleaseError` + kept cache) while believing you tested the contradiction.
@@ -3228,7 +3228,7 @@ mypy cannot resolve the editable-installed `pysysml`, silently treats `_t.Quanti
 reports *no* errors on obvious misuse (a false pass that looks like a passing test):
 
 ```bash
-cd /tmp/qw && MYPYPATH=/home/ubuntu/repos/Systemica/python \
+cd /tmp/qw && MYPYPATH=/home/ubuntu/repos/OpenSysML/python \
   $HOME/pv/bin/python -m mypy --no-incremental --no-error-summary --follow-imports=silent misuse.py
 # -> Unsupported operand types for + ("Quantity" and "float")  [operator]
 # -> Incompatible types in assignment (expression has type "Quantity", variable has type "float")
@@ -3646,3 +3646,194 @@ part def Machine {
 with the typed `initialize state machine: schedule events: time duration must be constant, got
 quantity`, while the unitless `accept after 5` fires at t=5 — that pair is the cheapest way to show
 the feature is absent-but-typed rather than half-present.
+
+## Source-preserving edits: `ApplyEdits` / `model.edit()` (PR #282)
+
+The edit surface is only reachable through pysysml (`model.edit()` → `set_value` / `rename` →
+`apply()` → `save(path)`); there is no REPL meta-command for it, so the REPL is only useful
+afterwards, to prove the edited file still parses/instantiates.
+
+Setup that actually matters: the client auto-starts `~/.pysysml/bin/sysml-grpc`, so a stale copy
+there serves an old build and `apply()` fails as `MissingCapabilityError('apply_edits')` — which
+looks like a client bug. Always `go build -o bin/sysml-grpc ./cmd/sysml-grpc`, then
+`pkill -x sysml-grpc` (the file is `Text file busy` while it runs) before
+`cp bin/sysml-grpc ~/.pysysml/bin/`.
+
+Fixture shape that discriminates a broken implementation: one file with line comments, a block
+comment, blank lines and **deliberately mixed tab/space indentation** (some lines space-indented
+inconsistently). A reformatting implementation normalizes those lines, so the assertion is
+`diff -u orig edited` showing exactly **2** changed lines per operation (`diff | grep -c '^[<>]'`),
+never "the file still validates". `cat -A` the fixture on camera to show the tabs are real.
+
+Targets and evals worth using (they cover the interesting locate.go branches in one file):
+
+| target | notes |
+|---|---|
+| `Demo::sc::unitMass` (`attribute redefines unitMass = …;`) | the `redefines` shorthand path |
+| `Demo::SC::margin` (`attribute margin : ISQ::MassValue;`) | value **added**: `AppliedEdit.length == 0`, `new_text == ' = 5.0[SI::kg]'` (a space is inserted before `=`) |
+| `Demo::SC::avionics::board::count` | deeply nested; eval it as `eval("avionics.board.count", subject="Demo::sc")` |
+| `Demo::SC::total = unitMass * 2` | expression referencing another feature; evaluates against the *redefined* value (1200 → 2400) |
+
+Refusals and the exact class each raises (all leave the file byte-identical — sha256 it before and
+after every case, since "an exception was raised" says nothing about writes):
+
+| case | class / `failure` |
+|---|---|
+| unknown FQN, **and any stdlib element** (`ISQ::MassValue` reports `no element named … in this model`) | `EditTargetError` / `EDIT_FAILURE_UNKNOWN_TARGET` |
+| a `part def` target | `EditTargetError` / `EDIT_FAILURE_NOT_VALUED` |
+| `"1050.0[SI::kg"`, `""`, rename to `part` or `2bad` | `InvalidEditError` (`INVALID_VALUE` / `INVALID_NAME`) |
+| a value that parses but does not resolve (`Nope::missing`) | **`EditResultError` / `EDIT_FAILURE_RESULT_INVALID`** — not `InvalidEditError`; it is caught by re-analysis, and `diagnostics` names the *model* file and line |
+| two `set_value`s on one feature | `OverlappingEditsError` |
+| `apply()` twice | plain `builtins.RuntimeError` (client-side, **not** a `PySysMLError`) |
+| `apply()` with no ops | `NoEditsError` |
+| non-`str` value | `TypeError` |
+| renaming a referenced declaration | `RenameReferencedError`, `referring_elements == ['Demo::SC', 'Demo::sc']` |
+
+Two cases need process work rather than a Python call:
+
+- **Evicted model → `ModelNotFoundError`.** Hand-start the service (`bin/sysml-grpc -port 50123
+  -health-port 8123`) with `pysysml.connect(port=50123, auto_start=False)`, load, kill and restart
+  it, reconnect, then rebuild the editor against the *new* connection with the *old* hash:
+  `pysysml.edit.Editor(m._hash, c2)`. Killing the auto-started 50051 service mid-script instead
+  tends to hang the run — a `connect()` right after a `pkill -x sysml-grpc` did not return.
+- **`MissingCapabilityError` before the RPC.** Don't chase the v0.0.7 download; build the merge-base
+  with `git worktree add /tmp/oldmain main` + `go build -o /tmp/old-sysml-grpc ./cmd/sysml-grpc`
+  and run it on port 50099 (`-health-port 8099`; 8081 collides). Assert the old service still
+  serves reads (`load` + `eval`) and that the raise is `MissingCapabilityError`, not
+  `UnsupportedOperationError`/UNIMPLEMENTED — that class difference is the proof the check ran
+  client-side. The service logs no per-RPC lines at INFO, so "no ApplyEdits in the log" proves
+  nothing on its own.
+
+`Model.find` returns **None** for a missing symbol (only `model[name]` raises), so the
+"old name is gone after a rename" assertion must compare against `None`; a `try/except` around
+`find` passes even when the rename did nothing.
+
+### Traps that cost time when re-testing the edit surface
+
+- **`python/tests/test_edit.py`'s `real_service` fixture prefers `<repo>/bin/sysml-grpc` over
+  `~/.pysysml/bin/sysml-grpc`** (`GRPC_BINARIES`, test_edit.py:61). A stale `bin/sysml-grpc` left
+  from an earlier snapshot therefore fails all 13 `TestEditRoundTripAgainstRealService` cases with
+  `MissingCapabilityError('apply_edits')` / `assert has('apply_edits') == False`, which reads like a
+  product bug. Always `make build-grpc` and check `./bin/sysml-grpc -version` prints the current
+  commit *before* running the suite; the same applies to the copy in `~/.pysysml/bin`.
+- `MissingCapabilityError` lives in **`pysysml.capabilities`**, not `pysysml.errors`
+  (`pysysml.errors.__getattr__` raises `AttributeError` for it). It is still a `PySysMLError` and is
+  *not* an `UnsupportedOperationError`.
+- `test_generate_golden.py::test_typed_codegen_modules_are_mypy_clean` may fail for reasons unrelated
+  to any change: with mypy 2.3.x and the venv's numpy stubs it reports
+  `numpy/__init__.pyi:737: error: Type statement is only supported in Python 3.12 and greater`.
+  Reproduce with `echo 'import numpy' > /tmp/nm.py; $HOME/pv/bin/python -m mypy --no-incremental
+  /tmp/nm.py` before blaming a PR; pinning/refreshing numpy stubs is the likely fix.
+- Non-ASCII **identifiers** (`package Démo`) do not parse, so a Unicode fixture must keep the
+  accents/emoji in comments and strings only. That still exercises the byte-vs-rune offset risk:
+  assert `saved == orig[:a.offset] + a.new_text.encode() + orig[a.offset + a.length:]`, which is the
+  strongest single assertion available for `AppliedEdit` (it proves offsets are byte offsets and
+  that nothing outside the span moved).
+- CRLF: build the fixture as `orig.replace(b"\n", b"\r\n")` and assert the saved file has the same
+  `\r` count, **zero bare LFs** (`b.count(b"\n") - b.count(b"\r\n") == 0`) and no `\r\r`. Test the
+  *insertion* case (a feature with no value) on CRLF too, not just replacement.
+- Unwritable targets: `save()` raises plain `PermissionError`/`FileNotFoundError` from `open()`, so
+  sha256 the victim file before/after — the point of the case is that it is not truncated first.
+- An edit is allowed on a file that already has errors elsewhere (name *or* syntax), and the saved
+  file keeps exactly those pre-existing diagnostics; a refusal there is the regression the
+  "baseline diagnostics" fixes in PR #282 were about.
+
+## `%check` and the SMT solver driver (PR #285)
+
+`%check <name>` asks an external solver about a constraint def, requirement def or satisfaction
+assertion. z3 may already be installed (`/usr/bin/z3`, 4.8.12 seen); discovery is `OPENSYSML_SMT`
+(path to an executable) → `z3` → `cvc5` on PATH, and `OPENSYSML_SMT_TIMEOUT` (default `10s`) bounds
+one query. Every solver-availability path is reachable from the shell without touching code, so
+drive each in its own REPL and show the env on camera:
+
+```bash
+OPENSYSML_SMT_TIMEOUT=1ms ./bin/sysml            # "? … is undecided (z3, 1ms)" + "Reason: the solver ran out of time after 1ms"
+OPENSYSML_SMT=/tmp/fake_unknown.sh ./bin/sysml   # sh script: printf 'unknown\n(:reason-unknown "incomplete")\n'; then `while read -r line; do :; done`
+OPENSYSML_SMT=/tmp/fake_fail.sh ./bin/sysml      # sh script: exit 3 → "error: the SMT solver did not answer: … failed at check-sat"
+env -u OPENSYSML_SMT PATH=/tmp/emptybin ./bin/sysml   # "error: no SMT solver found: install z3 …"
+```
+
+The fake-unknown script *must* keep draining stdin after printing, or the driver's later writes hit
+a closed pipe and you get a process error instead of `unknown`. Note `env -u … PATH=/tmp/emptybin`
+also removes `timeout` from PATH — call `/usr/bin/timeout` by absolute path in piped dry runs.
+
+Fixture shapes that actually discriminate:
+
+- **Naming a satisfaction:** `%check` on a `requirement usage` reports the *requirement*, not the
+  assertion. To reach a satisfaction, `%check` the element whose body holds `assert satisfy r by o;`
+  (e.g. a `part context { assert satisfy fastEnough by car; }`) → `✓ Satisfaction satisfy fastEnough
+  by car is satisfiable`. Bare `satisfy X by y;` at package level is rejected at parse/semantics
+  ("satisfy target must be a requirement usage") — always go through a named requirement usage.
+- **Truncating `/` and `%`:** use a *symbolic* dividend/divisor (`a == -7 and b == 2 and q == a / b`),
+  because a constant `-7 / 2` is const-folded to the evaluator's real quotient (`%eval -7 / 2` = `-3.50`),
+  so `q : Integer == -7 / 2` is reported **unsatisfiable** by design. The discriminating pair is
+  `q == a / b and q == -3` (sat) vs `q == -4` (unsat, the floor answer); same for `r == a % b` with
+  `-1` vs `1`. A literal zero divisor is refused with "operator `/` by zero not translatable".
+- **Untranslatable:** `i ** 2 == 4` → `error: constraint X: operator `**` not translatable for
+  solving: …` (no verdict). Incommensurable units are refused the same way (`L against M`).
+- **Read-only:** start `%action <A>`, run `%check`, then `%step` — the token must still advance
+  (`Token 1 @ start` → `Token 1 @ step1`).
+- **Assignments use qualified OpenSysML names** (`Check::Satisfiable::i = 4`,
+  `Check::SpeedReq::'craft.topSpeed' = 100`, enum as `Check::Gear::high`). A quantity is a magnitude
+  in the *base units* a written unit reduces to, named as such (`1500.0 [kg]` comes back as
+  `1500000.0 [gram]`), so don't expect the unit as written.
+
+## `%explain <name>` — unsat cores (PR #291)
+
+`%explain` asks the solver which conditions of an unsatisfiable constraint/requirement/satisfy
+element conflict. It shares `solveQueries` with `%check` (`internal/repl/check.go:149`), so the two
+must always reach the same verdict; the split is that `%check` prints a satisfying assignment and
+`%explain` never does. Rendering lives in `internal/repl/explain.go`, core reduction in
+`internal/core/solve/core.go`.
+
+`internal/repl/testdata/explain_conflicts.sysml` is the fixture that covers every core-row shape at
+once, so prefer it over hand-rolled models. Values observed at 04d0c4b with z3 4.8.12, loading that
+file **alone** (locations are buffer-relative — see below):
+
+| `%explain Conflicts::…` | header | rows |
+|---|---|---|
+| `Contradictory` | `✗ … 2 conditions conflict` | `required condition: \`i > 8\`` @10:29, `\`i < 3\`` @11:29 |
+| `NatBound` | `✗ … 2 conditions conflict` | `declared domain: \`a Natural is not negative\` — declaration Conflicts::NatBound::n` @20:9, `required condition: \`n < 0\`` @21:29 |
+| `ZeroDivisor` | `✗ … 2 conditions conflict` | `well-definedness: \`a / b == 1\`` @28:29 **then** `required condition: \`b == 0\`` @27:29 |
+| `Derived` | `✗ Requirement … 2 conditions conflict` | `\`x > 10\` — requirement Derived, declared by Base` @34:30, `\`x < 1\` — requirement Derived` (no "declared by") @38:30 |
+| `Satisfiable` | `✓ … is satisfiable, so no conditions conflict` | none, plus `Use %check … for a satisfying assignment.` |
+| `rig::always` | `✗ Constraint always (negated) … 1 condition conflicts with itself` | `denied conditions: \`not (i == i)\`` @47:9 |
+
+Every unsat header is followed by one minimality line before the numbered rows.
+
+Things that look like bugs but are not, and traps:
+
+- **Rows are in query-assertion order, not source order.** `ZeroDivisor` lists the hoisted
+  divisor guard (line 28) before the condition that sets the divisor to zero (line 27). Don't
+  report this as mis-ordering without checking `translate.go`'s assertion order first.
+- **The location column always names `<repl>`, never the loaded file, and counts lines from the
+  start of the joined buffer.** With one file loaded the numbers happen to match the file; load a
+  second file first and the same condition moves (`<repl>:23:29` for what is really
+  `explain_conflicts.sysml:10:29`), while load-time *analysis* diagnostics in the same session do
+  name the real file and count from its start. The unit tests assert `<repl>`, so this is the
+  REPL's implicit-document convention rather than a regression — but it is misleading, and any
+  location assertion must therefore fix the load order. Always `%load` the fixture **alone**, or
+  pass it as a CLI argument (`./bin/sysml <fixture>`), when asserting line/col.
+- **A 1-member core has its own minimality wording**: `The condition below is the whole conflict:
+  nothing else is needed for it.` (`internal/repl/explain.go` `minimality`), not the multi-condition
+  `dropping any one leaves the rest satisfiable`. `rig::always` is the case that exercises it.
+- **`String` IS in the translatable subset** (`SortString`, `internal/core/solve/reference.go:214`),
+  so `constraint { s == "x" }` answers `satisfiable` and is useless as an "outside the subset" case.
+  Untranslatable cases that do work: a **calc invocation** in a condition
+  (`assert constraint { Twice(i) > 4 }` → `invocation not translatable for solving: it is outside
+  the subset`) and an **unresolved reference** (→ `it resolves to nothing`).
+- **z3 decides nonlinear reals**, so `x*y == 7.5 and x*x + y*y == 2.0` comes back `unsat` with a
+  real core, not `unknown`. The `? … is undecided, so there is nothing to explain` branch is hard
+  to reach on purpose; use `OPENSYSML_SMT_CORE_BUDGET` (a tiny value) if you need to exercise the
+  non-minimal `Note` wording instead.
+- **Header durations include core-reduction time** (since 04d0c4b), so an unsat `%explain` reads
+  ~3x the matching `%check` (24–30ms vs 7ms). Never assert exact milliseconds.
+- **`%explain` is read-only.** An `%action Debug::tally` session (fixture
+  `internal/repl/testdata/action_debug.sysml`) must survive it: `%step` after `%explain` still
+  prints `✓ Step complete` and the run ends `total = 5`. A regression here shows up as
+  `error: no active action session`.
+
+The no-solver path is the one case needing a special launch: `mkdir -p /tmp/nosolver` and run
+`env PATH=/tmp/nosolver ./bin/sysml`, which yields `error: no SMT solver found: install z3 … or set
+OPENSYSML_SMT …; looked for [z3 cvc5] on PATH`. Note `Discover()` is consulted per command, so this
+must be set on the process, not toggled mid-session.

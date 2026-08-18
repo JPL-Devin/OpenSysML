@@ -3,7 +3,7 @@ package main
 import (
 	"strings"
 
-	"github.com/Open-MBEE/Systemica/internal/core/project"
+	"github.com/Open-MBEE/OpenSysML/internal/core/project"
 )
 
 // namedModels lists the models a message is about, calling standard input what

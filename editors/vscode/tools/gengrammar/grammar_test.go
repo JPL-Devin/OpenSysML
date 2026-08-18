@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/lexer"
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 )
 
 // TestCommittedGrammarsAreCurrent is the drift gate: the grammars the extension

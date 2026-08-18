@@ -3,7 +3,7 @@ package parser
 import (
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 // warningCodes parses input and returns the codes of the warnings it produced,

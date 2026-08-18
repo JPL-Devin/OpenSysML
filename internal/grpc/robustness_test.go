@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	pb "github.com/Open-MBEE/Systemica/api/proto"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	pb "github.com/Open-MBEE/OpenSysML/api/proto"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // TestGRPCRobustness exercises failure modes: missing models, invalid symbols, parse errors.

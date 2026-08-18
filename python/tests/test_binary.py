@@ -63,7 +63,7 @@ def pins(monkeypatch):
     monkeypatch.setattr('pysysml.binary.PINNED_SHA256', table)
     monkeypatch.delenv('PYSYSML_ALLOW_UNPINNED_DOWNLOAD', raising=False)
 
-    def pin(digest, version, goos='linux', goarch='amd64', repo='Open-MBEE/Systemica'):
+    def pin(digest, version, goos='linux', goarch='amd64', repo='Open-MBEE/OpenSysML'):
         asset = release_asset_name(goos, goarch)
         table.setdefault(repo, {}).setdefault(version, {})[asset] = digest
         return digest
@@ -114,7 +114,7 @@ def test_download_binary(pins):
                         assert mock_urlopen.call_count == 2
                         # Verify URL format
                         call_args = mock_urlopen.call_args_list[1][0][0]
-                        assert 'github.com/Open-MBEE/Systemica/releases/download/v0.1.0' in call_args
+                        assert 'github.com/Open-MBEE/OpenSysML/releases/download/v0.1.0' in call_args
 
 
 def test_verify_checksum():
@@ -158,7 +158,7 @@ def test_download_binary_verifies_checksum(pins):
     """Test that download_binary fetches and verifies checksum."""
     import pytest
     version = 'v0.1.0'
-    github_repo = 'Open-MBEE/Systemica'
+    github_repo = 'Open-MBEE/OpenSysML'
     
     # Mock binary download
     mock_binary_data = b'fake binary content'
@@ -195,7 +195,7 @@ def test_download_binary_fails_on_checksum_mismatch(pins):
     """Test that download fails if the binary does not match the digest expected."""
     import pytest
     version = 'v0.1.0'
-    github_repo = 'Open-MBEE/Systemica'
+    github_repo = 'Open-MBEE/OpenSysML'
     
     # Mock binary download
     mock_binary_data = b'fake binary content'
@@ -224,10 +224,10 @@ def test_download_binary_fails_on_checksum_mismatch(pins):
 def test_default_github_repo_env_override(monkeypatch):
     """Test $PYSYSML_GITHUB_REPO overrides the default repository."""
     monkeypatch.delenv('PYSYSML_GITHUB_REPO', raising=False)
-    assert default_github_repo() == 'Open-MBEE/Systemica'
+    assert default_github_repo() == 'Open-MBEE/OpenSysML'
 
-    monkeypatch.setenv('PYSYSML_GITHUB_REPO', 'JPL-Devin/Systemica')
-    assert default_github_repo() == 'JPL-Devin/Systemica'
+    monkeypatch.setenv('PYSYSML_GITHUB_REPO', 'JPL-Devin/OpenSysML')
+    assert default_github_repo() == 'JPL-Devin/OpenSysML'
 
 
 def test_resolve_latest_version():
@@ -237,9 +237,9 @@ def test_resolve_latest_version():
         mock_urlopen.return_value = Mock(
             __enter__=Mock(return_value=Mock(read=Mock(return_value=payload))),
             __exit__=Mock(return_value=False))
-        assert resolve_latest_version('Open-MBEE/Systemica') == 'v0.0.4'
+        assert resolve_latest_version('Open-MBEE/OpenSysML') == 'v0.0.4'
         url = str(mock_urlopen.call_args_list[0][0][0])
-        assert url == 'https://api.github.com/repos/Open-MBEE/Systemica/releases/latest'
+        assert url == 'https://api.github.com/repos/Open-MBEE/OpenSysML/releases/latest'
 
 
 def test_resolve_latest_version_without_tag():
@@ -250,7 +250,7 @@ def test_resolve_latest_version_without_tag():
             __enter__=Mock(return_value=Mock(read=Mock(return_value=b'{}'))),
             __exit__=Mock(return_value=False))
         with pytest.raises(ConnectionError, match="no tag name"):
-            resolve_latest_version('Open-MBEE/Systemica')
+            resolve_latest_version('Open-MBEE/OpenSysML')
 
 
 def test_download_binary_latest_resolves_tag(pins):
@@ -271,7 +271,7 @@ def test_download_binary_latest_resolves_tag(pins):
                     with patch('os.makedirs'), patch('os.chmod'), patch('os.replace'):
                         download_binary(version='latest')
 
-            mock_resolve.assert_called_once_with('Open-MBEE/Systemica')
+            mock_resolve.assert_called_once_with('Open-MBEE/OpenSysML')
             for call in mock_urlopen.call_args_list:
                 assert 'releases/download/v0.0.4/sysml-grpc-linux-amd64' in str(call[0][0])
 
@@ -306,7 +306,7 @@ def test_download_binary_records_the_release(cache, pins):
         assert json.load(f) == {
             'version': 'v0.0.7',
             'sha256': checksum,
-            'repo': 'Open-MBEE/Systemica',
+            'repo': 'Open-MBEE/OpenSysML',
         }
     assert cached_release() == 'v0.0.7'
 
@@ -427,7 +427,7 @@ def test_cache_from_another_repository_is_not_the_release_asked_for(cache, monke
 
     assert cached_release() is None
     reason = stale_cache_reason('v0.0.7')
-    assert 'downloaded from Open-MBEE/Systemica' in reason
+    assert 'downloaded from Open-MBEE/OpenSysML' in reason
     assert 'someone/fork' in reason
 
 
@@ -526,11 +526,11 @@ class TestPinnedDigests:
 
     def test_opting_in_for_one_repository_is_not_opting_in_for_another(self, monkeypatch):
         """A fork's unpinned releases are its own; trusting it trusts nothing else."""
-        monkeypatch.setenv('PYSYSML_ALLOW_UNPINNED_DOWNLOAD', 'a-fork/Systemica')
+        monkeypatch.setenv('PYSYSML_ALLOW_UNPINNED_DOWNLOAD', 'a-fork/OpenSysML')
         served = 'ab' * 32
         with pytest.warns(RuntimeWarning, match='pins no digest'):
             assert expected_digest(
-                'v9.9.9', 'sysml-grpc-linux-amd64', served, github_repo='a-fork/Systemica'
+                'v9.9.9', 'sysml-grpc-linux-amd64', served, github_repo='a-fork/OpenSysML'
             ) == served
 
         with pytest.raises(ChecksumMismatchError, match='pins no SHA-256 digest'):
@@ -538,8 +538,8 @@ class TestPinnedDigests:
 
     def test_the_repository_opted_in_for_may_be_the_one_being_downloaded_from(self, monkeypatch):
         """$PYSYSML_GITHUB_REPO is what a bare opt-in for that repository names."""
-        monkeypatch.setenv('PYSYSML_GITHUB_REPO', 'a-fork/Systemica')
-        monkeypatch.setenv('PYSYSML_ALLOW_UNPINNED_DOWNLOAD', 'a-fork/Systemica')
+        monkeypatch.setenv('PYSYSML_GITHUB_REPO', 'a-fork/OpenSysML')
+        monkeypatch.setenv('PYSYSML_ALLOW_UNPINNED_DOWNLOAD', 'a-fork/OpenSysML')
         served = 'ab' * 32
         with pytest.warns(RuntimeWarning, match='pins no digest'):
             assert expected_digest('v0.0.5', 'sysml-grpc-linux-amd64', served) == served

@@ -8,12 +8,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/model"
-	"github.com/Open-MBEE/Systemica/internal/core/parser"
-	"github.com/Open-MBEE/Systemica/internal/core/resolve"
-	"github.com/Open-MBEE/Systemica/internal/core/semantics"
-	"github.com/Open-MBEE/Systemica/internal/core/source"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/model"
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
+	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 var update = flag.Bool("update", false, "rewrite the golden artifacts in testdata")
@@ -275,7 +275,7 @@ func TestTableFormsAreMarkdownNotMermaid(t *testing.T) {
 	}
 }
 
-// A rendering kind Systemica does not produce is a typed error naming the kind
+// A rendering kind OpenSysML does not produce is a typed error naming the kind
 // and the view, never another kind's rendering.
 func TestUnsupportedRenderingKinds(t *testing.T) {
 	r, idx := loadFixture(t, "errors.sysml")

@@ -1,0 +1,78 @@
+package edit
+
+import (
+	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+)
+
+// Failure is why edits were refused. Every refusal carries one: an edit is
+// never silently dropped.
+type Failure int
+
+const (
+	// FailureNone is no failure.
+	FailureNone Failure = iota
+	// FailureNoOperations is a request naming no edit.
+	FailureNoOperations
+	// FailureUnknownTarget is a target this model declares nothing under.
+	FailureUnknownTarget
+	// FailureAmbiguousTarget is a target several declarations answer to.
+	FailureAmbiguousTarget
+	// FailureNotValued is a target that can carry no value.
+	FailureNotValued
+	// FailureInvalidValue is a new value that does not parse as an expression.
+	FailureInvalidValue
+	// FailureInvalidName is a new name that does not lex as an identifier.
+	FailureInvalidName
+	// FailureNotNamed is a target declaring no name to rewrite.
+	FailureNotNamed
+	// FailureRenameReferenced is a rename that references to the element would
+	// not survive.
+	FailureRenameReferenced
+	// FailureOverlappingEdits is two edits covering the same bytes.
+	FailureOverlappingEdits
+	// FailureResultInvalid is edited notation carrying errors the original had
+	// not.
+	FailureResultInvalid
+)
+
+var failureNames = map[Failure]string{
+	FailureNone:             "none",
+	FailureNoOperations:     "no-operations",
+	FailureUnknownTarget:    "unknown-target",
+	FailureAmbiguousTarget:  "ambiguous-target",
+	FailureNotValued:        "not-valued",
+	FailureInvalidValue:     "invalid-value",
+	FailureInvalidName:      "invalid-name",
+	FailureNotNamed:         "not-named",
+	FailureRenameReferenced: "rename-referenced",
+	FailureOverlappingEdits: "overlapping-edits",
+	FailureResultInvalid:    "result-invalid",
+}
+
+// String returns the lowercase name of the failure, or "unknown".
+func (f Failure) String() string {
+	if name, ok := failureNames[f]; ok {
+		return name
+	}
+	return "unknown"
+}
+
+// Error is a refused edit: which kind of refusal it is, and the evidence for it.
+type Error struct {
+	Failure Failure
+	Message string
+	// OperationIndex is the operation refused, or -1 for a whole request.
+	OperationIndex int
+	// Diagnostics are the errors behind a refusal: those of an unreadable new
+	// value, or those the edited notation was found to have.
+	Diagnostics []passes.Diagnostic
+	// Diagnosed is the source the Diagnostics' spans are offsets into: the new
+	// value's text, or the edited notation. A refusal still returns no model.
+	Diagnosed *source.SourceFile
+	// Referring names the elements referring to a declaration whose rename was
+	// refused.
+	Referring []string
+}
+
+func (e *Error) Error() string { return e.Message }

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #
 # Render the Homebrew formula for a published release, ready to commit to the
-# Open-MBEE/homebrew-tap repository as Formula/systemica.rb.
+# Open-MBEE/homebrew-tap repository as Formula/opensysml.rb.
 #
 # Usage:
-#   scripts/render-homebrew-formula.sh <tag> [SHA256SUMS.txt] > Formula/systemica.rb
+#   scripts/render-homebrew-formula.sh <tag> [SHA256SUMS.txt] > Formula/opensysml.rb
 #
 # <tag> is the release tag as it appears in the GitHub release URL (e.g. v0.3.0).
 # If the checksum file is omitted it is downloaded from the release. The
@@ -23,7 +23,7 @@ if [ -z "$TAG" ]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TEMPLATE="${SCRIPT_DIR}/../packaging/homebrew/Formula/systemica.rb"
+TEMPLATE="${SCRIPT_DIR}/../packaging/homebrew/Formula/opensysml.rb"
 
 if [ ! -f "$TEMPLATE" ]; then
   echo "error: formula source not found at $TEMPLATE" >&2
@@ -36,7 +36,7 @@ trap cleanup EXIT
 
 if [ -z "$SUMS" ]; then
   TMP_SUMS="$(mktemp)"
-  URL="https://github.com/Open-MBEE/Systemica/releases/download/${TAG}/SHA256SUMS.txt"
+  URL="https://github.com/Open-MBEE/OpenSysML/releases/download/${TAG}/SHA256SUMS.txt"
   echo "Fetching ${URL}" >&2
   curl -fsSL "$URL" -o "$TMP_SUMS"
   SUMS="$TMP_SUMS"
@@ -52,10 +52,10 @@ sum_for() {
   printf '%s' "$sum"
 }
 
-DARWIN_ARM64="$(sum_for systemica-darwin-arm64.tar.gz)"
-DARWIN_AMD64="$(sum_for systemica-darwin-amd64.tar.gz)"
-LINUX_ARM64="$(sum_for systemica-linux-arm64.tar.gz)"
-LINUX_AMD64="$(sum_for systemica-linux-amd64.tar.gz)"
+DARWIN_ARM64="$(sum_for opensysml-darwin-arm64.tar.gz)"
+DARWIN_AMD64="$(sum_for opensysml-darwin-amd64.tar.gz)"
+LINUX_ARM64="$(sum_for opensysml-linux-arm64.tar.gz)"
+LINUX_AMD64="$(sum_for opensysml-linux-amd64.tar.gz)"
 
 sed \
   -e "s|__TAG__|${TAG}|g" \

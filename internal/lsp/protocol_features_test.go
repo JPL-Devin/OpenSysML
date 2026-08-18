@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Open-MBEE/Systemica/internal/core/model"
+	"github.com/Open-MBEE/OpenSysML/internal/core/model"
 )
 
 // Regression: semanticTokens/full and codeAction were answered with JSON-RPC

@@ -3,7 +3,7 @@ package view
 import (
 	"fmt"
 
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // tableColumns are the headings of a tabular rendering: what each row is, what

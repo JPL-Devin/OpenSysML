@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Open-MBEE/Systemica/internal/core/export"
+	"github.com/Open-MBEE/OpenSysML/internal/core/export"
 )
 
 // formatAdvice is the remedy for a save path whose format cannot be told. The

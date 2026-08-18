@@ -54,6 +54,9 @@ const (
 	OpMul
 	// OpDiv is division of two reals.
 	OpDiv
+	// OpIntDiv is SMT-LIB's Euclidean integer division; TruncDiv builds the
+	// evaluator's truncating division from it.
+	OpIntDiv
 	// OpNeg is arithmetic negation, one argument.
 	OpNeg
 
@@ -68,7 +71,7 @@ const (
 var smtOps = map[Op]string{
 	OpNot: "not", OpAnd: "and", OpOr: "or", OpXor: "xor", OpImplies: "=>",
 	OpEq: "=", OpNe: "distinct", OpLt: "<", OpLe: "<=", OpGt: ">", OpGe: ">=",
-	OpAdd: "+", OpSub: "-", OpMul: "*", OpDiv: "/", OpNeg: "-",
+	OpAdd: "+", OpSub: "-", OpMul: "*", OpDiv: "/", OpIntDiv: "div", OpNeg: "-",
 	OpIte: "ite", OpToReal: "to_real",
 }
 
@@ -184,6 +187,21 @@ func ToReal(arg *Term) *Term {
 		return RealTerm(new(big.Rat).SetInt64(arg.Int))
 	}
 	return &Term{Op: OpToReal, Sort: Real, Args: []*Term{arg}}
+}
+
+// TruncDiv returns integer division truncating toward zero, as the evaluator
+// divides: `ite(a >= 0, div(a, b), -div(-a, b))`, exact for either sign of b.
+func TruncDiv(a, b *Term) *Term {
+	positive := Binary(OpIntDiv, Int, a, b)
+	negative := Unary(OpNeg, Int, Binary(OpIntDiv, Int, Unary(OpNeg, Int, a), b))
+	return Ite(Binary(OpGe, Bool, a, IntTerm(0)), positive, negative)
+}
+
+// TruncRem returns the remainder that truncating division leaves,
+// `a - b*TruncDiv(a, b)`, which takes the sign of the dividend as `%` does.
+func TruncRem(a, b *Term) *Term {
+	product := Binary(OpMul, Int, b, TruncDiv(a, b))
+	return Binary(OpSub, Int, a, product)
 }
 
 // walk visits the term and every term below it, parents first.

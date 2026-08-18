@@ -12,7 +12,10 @@ env:
   # The OMG training corpus is not vendored. Requiring it here turns "corpus
   # absent" into a test failure instead of a skip, so the gate cannot pass green
   # without actually running (see internal/core/model/training_examples_test.go).
-  SYSTEMICA_REQUIRE_TRAINING_CORPUS: "1"
+  OPENSYSML_REQUIRE_TRAINING_CORPUS: "1"
+  # z3 is installed below, so "no solver, therefore skip" would exercise nothing:
+  # this turns an absent solver into a failure (see internal/core/solve).
+  OPENSYSML_REQUIRE_SMT: "1"
 
 jobs:
   build-and-test:
@@ -28,6 +31,14 @@ jobs:
 
       - name: Download modules
         run: go mod download
+
+      # The solver is an external process, never linked in: the solver-dependent
+      # tests need one on PATH to run rather than skip.
+      - name: Install z3
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y z3
+          z3 --version
 
       # Keyed on the download script, so a change to the pinned pilot tag or the
       # layout invalidates the cache. A restored cache is still verified below.
@@ -79,6 +90,17 @@ jobs:
             exit 1
           fi
 
+      # Re-run the solver gate on its own, as the corpus gate is, so a skip
+      # cannot hide behind a green suite.
+      - name: Solver gate
+        run: |
+          set -o pipefail
+          go test -count=1 -v ./internal/core/solve ./internal/repl -run 'TestSolver|TestDiscovery|TestSolved|TestDivisor|TestCheck' | tee solver-gate.log
+          if grep -qE '^\s*--- SKIP' solver-gate.log; then
+            echo "error: a solver-dependent test skipped" >&2
+            exit 1
+          fi
+
       - name: Build binaries
         run: |
           make build \
@@ -126,7 +148,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: vscode-extension
-          path: editors/vscode/systemica-sysml.vsix
+          path: editors/vscode/opensysml-sysml.vsix
 
   python-test:
     name: Python client tests

@@ -3,7 +3,7 @@ package semantics
 import (
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // nested walks a chain of member names from a scope and returns the symbol the

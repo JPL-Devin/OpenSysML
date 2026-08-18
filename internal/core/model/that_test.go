@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/passes"
+	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
 )
 
 // errorsIn returns the error diagnostics of one document, joined.

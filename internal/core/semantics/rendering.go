@@ -1,8 +1,8 @@
 package semantics
 
 import (
-	"github.com/Open-MBEE/Systemica/internal/core/ast"
-	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // A view's rendering (SysML v2 8.3.26 ViewRenderingMembership, 10.2 Views and

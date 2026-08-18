@@ -14,6 +14,7 @@ from pysysml.proto import sysml_pb2, sysml_pb2_grpc
 from pysysml.model import Model
 from pysysml.binary import cached_release, ensure_binary, resolve_latest_version
 from pysysml.capabilities import (
+    CAPABILITY_APPLY_EDITS,
     CAPABILITY_CONVERT,
     CAPABILITY_EVALUATE_SUBJECT,
     CAPABILITY_QUERY,
@@ -30,6 +31,7 @@ from pysysml.conversion import (
     is_experimental,
 )
 from pysysml.diagnostic import Diagnostic
+from pysysml.edit import error_for_failure, failure_name, result_of
 from pysysml.enumeration import EnumLiteral
 from pysysml.errors import (
     ChecksumMismatchError,
@@ -558,7 +560,7 @@ class Connection:
     
     def convert(self, to_format, file_path=None, content=None, model_hash=None,
                 from_format='', tolerate_syntax_errors=False):
-        """Write a model out in another of the formats Systemica writes.
+        """Write a model out in another of the formats OpenSysML writes.
 
         The source is a loaded model, named by its hash, or one named the way
         :meth:`load` names it: a path the service opens, or content carried
@@ -658,6 +660,61 @@ class Connection:
             experimental=experimental,
             experimental_notice=notice,
         )
+
+    def apply_edits(self, model_hash, operations):
+        """Apply source-preserving edits to a loaded model.
+
+        The operations are performed on the source the service parsed, so what
+        comes back is that notation with the edited spans replaced and every
+        other byte — comments, blank lines, indentation — unchanged. The service
+        re-parses and re-analyses the result and refuses to return content the
+        parser could not read back.
+
+        Args:
+            model_hash (str): Hash of the model to edit
+            operations (list[tuple]): ``('set_value', target, value)`` and
+                ``('rename', target, new_name)`` tuples, as
+                :class:`~pysysml.edit.Editor` collects them
+
+        Returns:
+            EditResult: The edited notation and what each operation changed
+
+        Raises:
+            ValueError: If an operation names no kind this client knows
+            EditError: If the service refused the edit; the subclass names why,
+                including :class:`NoEditsError` for no operations at all
+            MissingCapabilityError: If the service cannot apply edits
+            ModelNotFoundError: If the model is no longer cached
+        """
+        require(
+            self.server_info(),
+            CAPABILITY_APPLY_EDITS,
+            upgrade_remedy(CAPABILITY_APPLY_EDITS),
+        )
+        request = sysml_pb2.ApplyEditsRequest(model_hash=model_hash)
+        for kind, target, text in operations:
+            operation = request.operations.add()
+            if kind == 'set_value':
+                operation.set_value.target = target
+                operation.set_value.value = text
+            elif kind == 'rename':
+                operation.rename.target = target
+                operation.rename.new_name = text
+            else:
+                raise ValueError(
+                    f"unknown edit operation {kind!r}: expected 'set_value' or 'rename'"
+                )
+
+        with translate_rpc_errors():
+            response = self._stub.ApplyEdits(request)
+        if response.error:
+            raise error_for_failure(
+                failure_name(response.failure),
+                response.error,
+                diagnostics=[Diagnostic(d) for d in response.diagnostics],
+                referring_elements=list(response.referring_elements),
+            )
+        return result_of(response)
 
     def query(self, model_hash, payload=None, scope=None, select=None, where=None):
         """Run a SysML v2 API & Services Query over a loaded model.

@@ -8,7 +8,7 @@ import (
 	"go.lsp.dev/protocol"
 	"go.lsp.dev/uri"
 
-	"github.com/Open-MBEE/Systemica/internal/core/model"
+	"github.com/Open-MBEE/OpenSysML/internal/core/model"
 )
 
 func TestLSPEndToEnd(t *testing.T) {

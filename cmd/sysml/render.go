@@ -7,8 +7,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/Open-MBEE/Systemica/internal/core/export"
-	"github.com/Open-MBEE/Systemica/internal/core/view"
+	"github.com/Open-MBEE/OpenSysML/internal/core/export"
+	"github.com/Open-MBEE/OpenSysML/internal/core/view"
 )
 
 // runRender renders the view -render names of the model named on the command

@@ -3,7 +3,7 @@ package runtime
 import (
 	"testing"
 
-	"github.com/Open-MBEE/Systemica/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 )
 
 // realValue reports the real a feature value holds.

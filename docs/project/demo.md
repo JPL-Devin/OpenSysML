@@ -1,6 +1,6 @@
 # `sysml` in fifteen minutes — a live demo script
 
-A single page of runnable material for showing Systemica to someone who has never seen it: each
+A single page of runnable material for showing OpenSysML to someone who has never seen it: each
 section is a model you can paste, a command you can run, and the output it produces. Sections are
 independent, so drop any of them to fit the time you have.
 
@@ -12,12 +12,12 @@ independent, so drop any of them to fit the time you have.
 ## 0. Setup (one minute)
 
 ```bash
-git clone https://github.com/Open-MBEE/Systemica.git && cd Systemica
+git clone https://github.com/Open-MBEE/OpenSysML.git && cd OpenSysML
 make build-sysml          # -> ./bin/sysml
 export PATH="$PWD/bin:$PATH"
 ```
 
-macOS listeners can instead run `brew install Open-MBEE/tap/systemica`.
+macOS listeners can instead run `brew install Open-MBEE/tap/opensysml`.
 
 Show the audience what is running — the version line carries the commit:
 
@@ -504,7 +504,7 @@ $ head -14 structure.ttl
 @prefix elmt: <urn:sysmlv2:element:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
-@prefix sysx: <urn:systemica:sysml:> .
+@prefix sysx: <urn:opensysml:sysml:> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
 elmt:Structure
