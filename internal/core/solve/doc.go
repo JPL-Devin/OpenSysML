@@ -2,9 +2,16 @@
 // satisfaction assertion states into a solver-independent term IR and writes
 // that IR as an SMT-LIB2 script.
 //
+// It also runs an external solver over that script — z3 or cvc5, found on PATH
+// or named by SYSTEMICA_SMT — as a process speaking SMT-LIB2 on standard input,
+// so no library is linked in and releases stay pure Go. The verdicts sat, unsat
+// and unknown stay distinct: a timeout or arithmetic the solver gave up on is
+// unknown, and a solver that crashes, is absent, or replies unusably is a typed
+// error rather than a verdict.
+//
 // The runtime evaluator remains the normative semantics; SysML v2 defines no
 // solving semantics, so this is an advertised extension, not a conformance
-// claim. No solver is invoked: the package only writes a script.
+// claim.
 //
 // Conditions come from the evaluator's own collection
 // (runtime.Context.ConditionsOf), keeping its order and its distinctions:
@@ -19,8 +26,19 @@
 //     conditional expression `if c ? a else b`.
 //   - Equality `==` and `!=` between two values of the same sort.
 //   - Comparisons `<`, `<=`, `>`, `>=` between numbers of the same dimension.
-//   - Arithmetic `+`, `-`, `*`, unary `-` and `+`, and `/` where the result is a
-//     real number.
+//   - Arithmetic `+`, `-`, `*`, unary `-` and `+`.
+//   - Division `/` and remainder `%`. Integer division truncates toward zero as
+//     the evaluator does, encoded as ite(a >= 0, div(a, b), -div(-a, b)), and the
+//     remainder as a - b*tdiv(a, b), which takes the dividend's sign. A literal
+//     divisor keeps this linear; a variable divisor sets Query.Nonlinear, so
+//     unknown is an expected verdict rather than a surprise.
+//   - Division by zero, which SMT-LIB leaves underspecified while the evaluator
+//     refuses it: a literal zero divisor refuses translation, and any other
+//     divisor, integer or real, is asserted non-zero as a RoleDefined side
+//     condition. That assertion constrains the whole query, so it is only made
+//     where the division is always evaluated and read unnegated; a computed
+//     divisor under `not`, `or`, `xor`, `implies`, a conditional branch or a
+//     denied element refuses instead, since the evaluator may never divide there.
 //   - Literals: boolean, integer, real, string.
 //   - Quantity expressions (`450.0 [km/h]`), normalized to the base units their
 //     unit reduces to through semantics.UnitTermOf — magnitudes are exact
@@ -47,8 +65,10 @@
 //     collection-valued features. Bounded expansion is not implemented.
 //   - Invocations of any kind, calc usages included: a calc body may be
 //     iterative or read state, and constant folding it is the evaluator's job.
-//   - Integer division and `%`: SMT-LIB's `div`/`mod` are Euclidean while the
-//     evaluator truncates toward zero, so encoding them would change answers.
+//   - Euclidean `div`/`mod` themselves, as SMT-LIB defines them: only the
+//     evaluator's truncating semantics are encoded.
+//   - Real remainder `%`, which the evaluator answers by floating-point
+//     remainder.
 //   - `**` and `^`: exponentiation is outside linear and polynomial arithmetic
 //     as encoded here.
 //   - Classification and metadata operators: `hastype`, `istype`, `@`, `@@`,

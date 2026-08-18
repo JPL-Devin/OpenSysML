@@ -137,6 +137,7 @@ var metaCommandTable = []metaCommand{
 	{group: "Behavioral commands:", name: "%constraint", args: "<name>", desc: "evaluate a constraint definition"},
 	{group: "Behavioral commands:", name: "%requirement", args: "<name>", desc: "evaluate a requirement definition"},
 	{group: "Behavioral commands:", name: "%satisfy", args: "[name]", desc: "evaluate the satisfaction assertions of the model, or of one element"},
+	{group: "Behavioral commands:", name: "%check", args: "<name>", desc: "ask an SMT solver whether a constraint, requirement or satisfaction can be satisfied (experimental)"},
 
 	{group: "Action debugging:", name: "%action", args: "<name> [<object>]", desc: "start action executor debugging session, performed by an object"},
 	{group: "Action debugging:", name: "%step", desc: "advance one token step"},
@@ -324,6 +325,11 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 		return s.doRequirement(fields[1])
 	case "%satisfy":
 		return s.doSatisfy(fields[1:])
+	case "%check":
+		if len(fields) < 2 {
+			return []string{"usage: %check <name>"}, false, nil
+		}
+		return s.doCheck(fields[1])
 	// Action debugging
 	case "%action":
 		if len(fields) < 2 {

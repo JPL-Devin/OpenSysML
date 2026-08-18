@@ -1,0 +1,211 @@
+package repl
+
+import (
+	"context"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/Open-MBEE/Systemica/internal/core/runtime"
+	"github.com/Open-MBEE/Systemica/internal/core/solve"
+)
+
+// SolveStatus is what a solver answered about an element's conditions. It is
+// kept apart from VerdictStatus: satisfiability is not evaluation.
+type SolveStatus int
+
+const (
+	// SolveSat means an assignment satisfying the conditions exists.
+	SolveSat SolveStatus = iota
+	// SolveUnsat means no assignment satisfies them.
+	SolveUnsat
+	// SolveUnknown means the solver did not decide: it timed out, or gave up on
+	// arithmetic it cannot decide.
+	SolveUnknown
+	// SolveUnavailable means nothing was asked: no solver is installed, the
+	// element is outside the translatable subset, or the solver failed.
+	SolveUnavailable
+)
+
+// String names the status for a report a machine reads.
+func (s SolveStatus) String() string {
+	switch s {
+	case SolveSat:
+		return "sat"
+	case SolveUnsat:
+		return "unsat"
+	case SolveUnknown:
+		return "unknown"
+	default:
+		return "unavailable"
+	}
+}
+
+// SolveReport is what a solver answered about one element, with the lines the
+// REPL prints for it.
+type SolveReport struct {
+	// Subject is what was checked, spelled as the caller named it.
+	Subject string
+	Status  SolveStatus
+	Lines   []string
+	// Solver names the solver that answered, empty when none did.
+	Solver string
+}
+
+// Satisfiable reports whether the solver found the conditions satisfiable.
+func (r SolveReport) Satisfiable() bool { return r.Status == SolveSat }
+
+// CheckSolve asks a solver whether the named constraint, requirement or
+// satisfaction can be satisfied at all. Experimental: SysML v2 defines no solving.
+func (s *Session) CheckSolve(name string) []SolveReport {
+	queries, bad := s.solveQueries(name)
+	if bad != nil {
+		return []SolveReport{*bad}
+	}
+	solver, err := solve.Discover()
+	if err != nil {
+		return []SolveReport{unavailableReport(name, err.Error())}
+	}
+	reports := make([]SolveReport, 0, len(queries))
+	for _, q := range queries {
+		reports = append(reports, s.solveQuery(name, solver, q))
+	}
+	return reports
+}
+
+// solveQuery asks the solver about one query and renders its answer.
+func (s *Session) solveQuery(name string, solver *solve.Solver, q *solve.Query) SolveReport {
+	result, err := solver.Solve(context.Background(), q)
+	if err != nil {
+		return unavailableReport(name, err.Error())
+	}
+	subject := solveSubject(q)
+	switch result.Status {
+	case solve.StatusSat:
+		lines := []string{fmt.Sprintf("✓ %s is satisfiable (%s)", subject, solveDetail(result))}
+		return SolveReport{Subject: name, Status: SolveSat, Solver: result.Solver,
+			Lines: append(lines, assignmentLines(result.Model)...)}
+	case solve.StatusUnsat:
+		return SolveReport{Subject: name, Status: SolveUnsat, Solver: result.Solver, Lines: []string{
+			fmt.Sprintf("✗ %s is unsatisfiable (%s)", subject, solveDetail(result)),
+		}}
+	default:
+		lines := []string{fmt.Sprintf("? %s is undecided (%s)", subject, solveDetail(result))}
+		if reason := solveReason(result, q); reason != "" {
+			lines = append(lines, "  "+reason)
+		}
+		return SolveReport{Subject: name, Status: SolveUnknown, Solver: result.Solver, Lines: lines}
+	}
+}
+
+// solveSubject names the element a report is about, as a verdict about it would.
+func solveSubject(q *solve.Query) string {
+	subject := strings.ToUpper(q.Kind[:1]) + q.Kind[1:] + " " + q.Element
+	if q.Negated {
+		return subject + " (negated)"
+	}
+	return subject
+}
+
+// solveDetail is the solver and the time it took, as the report's suffix.
+func solveDetail(result *solve.Result) string {
+	return fmt.Sprintf("%s, %s", result.Solver, result.Elapsed.Round(time.Millisecond))
+}
+
+// solveReason explains an undecided answer: what the solver said, and that the
+// query left the arithmetic it decides when it said nothing.
+func solveReason(result *solve.Result, q *solve.Query) string {
+	switch {
+	case result.Reason != "":
+		return "Reason: " + result.Reason
+	case q.Nonlinear:
+		return "Reason: the query uses nonlinear arithmetic"
+	default:
+		return ""
+	}
+}
+
+// assignmentLines renders a satisfying model, one indented line per variable.
+func assignmentLines(model []solve.Assignment) []string {
+	out := make([]string, 0, len(model))
+	for _, a := range model {
+		line := fmt.Sprintf("  %s = %s", notationName(a.Var.Name), a.Value)
+		if !a.Rendered {
+			line += "  (as the solver wrote it)"
+		}
+		out = append(out, line)
+	}
+	return out
+}
+
+// unavailableReport reports a check that was never made, phrased as the prompt
+// reports any command it cannot carry out.
+func unavailableReport(subject, msg string) SolveReport {
+	return SolveReport{Subject: subject, Status: SolveUnavailable, Lines: []string{"error: " + msg}}
+}
+
+// solveQueries translates what the named element states. Its second result is
+// non-nil for a check that cannot be made at all.
+func (s *Session) solveQueries(name string) ([]*solve.Query, *SolveReport) {
+	target, bad := s.resolveCheckTarget(name)
+	if bad != nil {
+		report := unavailableReport(name, strings.TrimPrefix(bad.Lines[0], "error: "))
+		return nil, &report
+	}
+	switch {
+	case runtime.RequireConstraint(target.sym) == nil:
+		q, err := solve.Constraint(target.ctx, target.sym, target.scope)
+		return oneQuery(name, q, err)
+	case runtime.RequireRequirement(target.sym) == nil:
+		q, err := solve.Requirement(target.ctx, target.sym, target.scope)
+		return oneQuery(name, q, err)
+	}
+	if a, err := target.ctx.SatisfyAssertionOf(target.sym); err == nil {
+		q, qerr := solve.Satisfaction(target.ctx, a)
+		return oneQuery(name, q, qerr)
+	}
+	return s.satisfactionQueries(name, target)
+}
+
+// satisfactionQueries translates every satisfaction assertion an element states,
+// which is how an anonymous `assert satisfy` is reached.
+func (s *Session) satisfactionQueries(name string, target checkTarget) ([]*solve.Query, *SolveReport) {
+	if target.sym.Scope == nil {
+		report := unavailableReport(name, fmt.Sprintf("%s is not a constraint, requirement or satisfaction assertion", name))
+		return nil, &report
+	}
+	assertions := target.ctx.SatisfyAssertionsIn(target.sym.Scope)
+	if len(assertions) == 0 {
+		report := unavailableReport(name, fmt.Sprintf("no satisfaction assertion in %s", target.fqn))
+		return nil, &report
+	}
+	queries := make([]*solve.Query, 0, len(assertions))
+	for _, a := range assertions {
+		q, err := solve.Satisfaction(target.ctx, a)
+		if err != nil {
+			report := unavailableReport(name, err.Error())
+			return nil, &report
+		}
+		queries = append(queries, q)
+	}
+	return queries, nil
+}
+
+// oneQuery is a single translated query, or the report explaining why the
+// element could not be translated.
+func oneQuery(name string, q *solve.Query, err error) ([]*solve.Query, *SolveReport) {
+	if err != nil {
+		report := unavailableReport(name, err.Error())
+		return nil, &report
+	}
+	return []*solve.Query{q}, nil
+}
+
+// doCheck carries out %check.
+func (s *Session) doCheck(name string) ([]string, bool, error) {
+	var out []string
+	for _, r := range s.CheckSolve(name) {
+		out = append(out, r.Lines...)
+	}
+	return out, false, nil
+}
