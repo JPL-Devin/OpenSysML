@@ -114,6 +114,11 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 - The body is a scope of its own: what it declares is visible to what nests inside it but is no
   member of the namespace that declares the member, and the referenced requirement's features stay
   offered to the body's direct members, which is what the reference subsetting inherits them to.
+- **Every tier reads the body in that same scope.** Type checking and condition evaluation walked
+  such a body in the *enclosing* scope, so a value written there was typed against the wrong set of
+  names — silently missing a genuine type error, or judging the name against an unrelated
+  declaration outside the body — and a condition stated in the body could not read a name the body
+  declares.
 
 ### An unimported Systemica extension function no longer answers a call it is reported unresolved on
 

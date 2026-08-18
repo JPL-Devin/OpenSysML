@@ -86,10 +86,10 @@ func (tc *typeChecker) checkBehaviorMember(scope *symbols.Scope, n ast.Node) {
 		tc.walk(scope, m.Body)
 	case *ast.AssumeMember:
 		tc.expr.checkBoolean(scope, m.Expression, "assume expression")
-		tc.walk(scope, m.Body)
+		tc.walk(symbols.ConstraintBodyScope(scope, m), m.Body)
 	case *ast.RequireMember:
 		tc.expr.checkBoolean(scope, m.Expression, "require expression")
-		tc.walk(scope, m.Body)
+		tc.walk(symbols.ConstraintBodyScope(scope, m), m.Body)
 	case *ast.IfActionNode:
 		// The condition is evaluated before either branch is entered, so it is
 		// checked outside them; each branch's body is checked in its own scope.
