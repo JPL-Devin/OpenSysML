@@ -380,6 +380,13 @@ func (s *Solver) runProbe(ctx context.Context, p probe) (capabilityResult, error
 		if got.Atom == "unsupported" {
 			return refused(i, "it answered "+quoteReply(got)), nil
 		}
+		if !smtlibResponse(got) {
+			// A reply SMT-LIB does not define says nothing about the feature: the
+			// executable is not answering as a solver, which is a process failure.
+			return capabilityResult{}, s.processError("capability check",
+				"it answered "+quoteReply(got)+" rather than an SMT-LIB response",
+				sess.stderrText(), nil)
+		}
 		if got.Atom == "unknown" && want != replyDecided {
 			return undetermined(i, "it answered "+quoteReply(got)), nil
 		}
@@ -406,6 +413,19 @@ func refusedAt(i int, detail string) string {
 		return detail
 	}
 	return "after answering the first command, " + detail
+}
+
+// smtlibResponse reports whether the reply is one SMT-LIB defines: a verdict, an
+// acknowledgement, `unsupported`, or a list such as a model, core or objectives.
+func smtlibResponse(got sexpr) bool {
+	if got.IsList {
+		return true
+	}
+	switch got.Atom {
+	case "sat", "unsat", "unknown", "unsupported", "success":
+		return true
+	}
+	return false
 }
 
 // accepts reports whether a reply is the answer a supporting backend gives.

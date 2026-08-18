@@ -15,21 +15,27 @@ import (
 const (
 	capabilityScenario = "capabilities"
 	refuseEnv          = "OPENSYSML_TEST_SOLVER_REFUSE"
+	unsupportedEnv     = "OPENSYSML_TEST_SOLVER_UNSUPPORTED"
 	ackEnv             = "OPENSYSML_TEST_SOLVER_ACK"
 )
 
 // playCapabilities answers a capability check as a backend supporting everything
 // does, except for the commands refuseEnv names, which it rejects.
 func playCapabilities(in, out *os.File) int {
-	refused := strings.Split(os.Getenv(refuseEnv), ",")
-	rejects := func(cmd string) bool {
-		for _, name := range refused {
-			if name != "" && strings.HasPrefix(cmd, "("+name) {
-				return true
+	names := func(env string) func(string) bool {
+		listed := strings.Split(os.Getenv(env), ",")
+		return func(cmd string) bool {
+			for _, name := range listed {
+				if name != "" && strings.HasPrefix(cmd, "("+name) {
+					return true
+				}
 			}
+			return false
 		}
-		return false
 	}
+	// A backend refusing with an error reply, and one refusing with SMT-LIB's own
+	// `unsupported`: both are refusals rather than failures.
+	rejects, declines := names(refuseEnv), names(unsupportedEnv)
 	// A backend printing SMT-LIB's per-command acknowledgement even after being
 	// told not to: every reply read has to look past it.
 	acknowledges := os.Getenv(ackEnv) != ""
@@ -40,6 +46,10 @@ func playCapabilities(in, out *os.File) int {
 		}
 		if rejects(cmd) {
 			writeLine(out, `(error "unsupported")`)
+			continue
+		}
+		if declines(cmd) {
+			writeLine(out, "unsupported")
 			continue
 		}
 		switch {
@@ -241,6 +251,56 @@ func TestUndeterminedCapabilityDoesNotRefuse(t *testing.T) {
 	}
 	if !errors.Is(err, ErrSolverProcess) {
 		t.Errorf("a silent backend failed with %v, want a process error", err)
+	}
+}
+
+// A backend answering something SMT-LIB does not define is not answering as a
+// solver: that is a process failure, not a claim about what it supports.
+func TestUnreadableReplyIsAProcessFailure(t *testing.T) {
+	solver := capabilitySolver(t)
+	// The scenario answers `maybe` to every check-sat.
+	solver.Env = []string{scenarioEnv + "=garbage"}
+	if _, err := solver.Capabilities(context.Background()); err == nil {
+		t.Fatal("probing a backend answering `maybe` succeeded")
+	} else {
+		if Unsupported(err) {
+			t.Errorf("an unreadable reply is reported as a missing capability: %v", err)
+		}
+		if !errors.Is(err, ErrSolverProcess) {
+			t.Errorf("probe failed with %v, want a process error", err)
+		}
+		for _, want := range []string{"fake", "maybe", "SMT-LIB response"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("failure %q does not mention %q", err, want)
+			}
+		}
+	}
+	q := &Query{Kind: "constraint", Element: "Budget",
+		Vars:       []*Var{{Name: "x", Sort: Int}},
+		Assertions: []Assertion{{Term: Binary(OpGt, Bool, VarTerm(&Var{Name: "x", Sort: Int}), IntTerm(1))}}}
+	_, err := solver.Solve(context.Background(), q)
+	if Unsupported(err) || !errors.Is(err, ErrSolverProcess) {
+		t.Errorf("solving against it failed with %v, want a process error", err)
+	}
+}
+
+// The other side of that line: `unsupported`, which SMT-LIB defines as declining
+// a command, is a refusal of the capability rather than a failure.
+func TestUnsupportedReplyIsARefusal(t *testing.T) {
+	solver := capabilitySolver(t)
+	solver.Env = append(solver.Env, unsupportedEnv+"=get-unsat-core")
+	caps, err := solver.Capabilities(context.Background())
+	if err != nil {
+		t.Fatalf("probe: %v", err)
+	}
+	if !caps.Refuses(CapUnsatCores) {
+		t.Errorf("unsat-cores is %v after `unsupported`, want refused", caps.Detail(CapUnsatCores))
+	}
+	if !strings.Contains(caps.Detail(CapUnsatCores), "unsupported") {
+		t.Errorf("refusal detail is %q, want what the backend answered", caps.Detail(CapUnsatCores))
+	}
+	if !caps.Supports(CapModels) {
+		t.Errorf("models is unsupported (%s), want supported", caps.Detail(CapModels))
 	}
 }
 

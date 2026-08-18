@@ -41,6 +41,16 @@
 // nor rejected settles nothing, so the query proceeds and its own verdict or
 // SolverProcessError is reported.
 //
+// Three answers to a check are told apart, so a backend is never blamed for the
+// wrong thing:
+//   - `(error …)`, `unsupported`, or a defined reply that contradicts the check —
+//     the backend refuses the capability, reported as UnsupportedCapabilityError.
+//   - `unknown`, no reply, a closed pipe or the check's deadline — nothing was
+//     established, so the query runs and answers for itself.
+//   - a reply SMT-LIB does not define at all, such as `maybe` — the executable is
+//     not answering as a solver, reported as SolverProcessError rather than as a
+//     missing feature, which is also how the dialogue itself reports one.
+//
 // Probed against z3 4.8.12 and cvc5 1.3.4: both support models, unsat cores,
 // incremental checks, datatypes, strings, div/mod, nonlinear and mixed arithmetic
 // and the non-standard logic. cvc5 rejects `(maximize …)` as a parse error and

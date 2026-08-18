@@ -279,7 +279,7 @@ type SolverProcessError struct {
 	Solver string
 
 	// Stage names what was being done: "start", "write", "check-sat",
-	// "get-value" or "exit".
+	// "get-value", "capability check" or "exit".
 	Stage string
 
 	// Detail says what went wrong.
