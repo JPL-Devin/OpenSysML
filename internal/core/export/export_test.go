@@ -580,7 +580,7 @@ func TestSuccessionRoundTripsInEveryBody(t *testing.T) {
 func TestHalfNamedSuccessionInAGraphIsReported(t *testing.T) {
 	const graph = `@prefix elmt: <urn:sysmlv2:element:> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
-@prefix sysx: <urn:systemica:sysml:> .
+@prefix sysx: <urn:opensysml:sysml:> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
 elmt:P
@@ -794,7 +794,7 @@ func TestForeignGraph(t *testing.T) {
 // written: reporting it beats emitting notation that will not parse.
 func TestMissingRequiredPropertyIsUnsupported(t *testing.T) {
 	const head = `@prefix sysml: <https://www.omg.org/spec/SysML#> .
-@prefix sysx: <urn:systemica:sysml:> .
+@prefix sysx: <urn:opensysml:sysml:> .
 @prefix elmt: <urn:sysmlv2:element:> .
 
 <urn:sysmlv2:element:P> a sysml:Package ; sysml:declaredName "P" .

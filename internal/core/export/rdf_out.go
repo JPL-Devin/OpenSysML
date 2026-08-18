@@ -347,7 +347,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		return e.encode(n.Body, fqn, subject)
 
 	case *ast.Alias:
-		head(rdf.SystemicaTerm(mAlias))
+		head(rdf.OpenSysMLTerm(mAlias))
 		e.ident(subject, n.Ident)
 		e.graph.Add(subject, e.sysml(pAliasFor), e.reference(owner, qualifiedText(n.For)))
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
@@ -397,7 +397,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		return nil
 
 	case *ast.MultiplicityDecl:
-		head(rdf.SystemicaTerm(mMultiplicity))
+		head(rdf.OpenSysMLTerm(mMultiplicity))
 		e.ident(subject, n.Ident)
 		e.multiplicity(subject, n.Range)
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
@@ -406,7 +406,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 	case *ast.ConstraintMember:
 		// A condition of a constraint body, written inline (`assert x > 0;`) or
 		// as a nested constraint (`assert constraint [name] { … }`).
-		head(rdf.SystemicaTerm(mConstraint))
+		head(rdf.OpenSysMLTerm(mConstraint))
 		if n.Name != "" {
 			e.graph.Add(subject, e.sysml(pDeclaredName), rdf.String(n.Name))
 		}
@@ -417,15 +417,15 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		return e.condition(subject, fqn, owner, n.Expression, nil, n.Body)
 
 	case *ast.AssumeMember:
-		head(rdf.SystemicaTerm(mAssume))
+		head(rdf.OpenSysMLTerm(mAssume))
 		return e.condition(subject, fqn, owner, n.Expression, n.Reference, n.Body)
 
 	case *ast.RequireMember:
-		head(rdf.SystemicaTerm(mRequire))
+		head(rdf.OpenSysMLTerm(mRequire))
 		return e.condition(subject, fqn, owner, n.Expression, n.Reference, n.Body)
 
 	case *ast.ResultMember:
-		head(rdf.SystemicaTerm(mResult))
+		head(rdf.OpenSysMLTerm(mResult))
 		e.graph.Add(subject, e.sysml(pValue), rdf.String(e.text(n.Expression)))
 		return nil
 
@@ -448,7 +448,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		return e.encode(n.Body, fqn, subject)
 
 	case *ast.FilterMember:
-		head(rdf.SystemicaTerm(mFilter))
+		head(rdf.OpenSysMLTerm(mFilter))
 		e.graph.Add(subject, e.sysx(xFilter), rdf.String(e.text(n.Condition)))
 		return nil
 
@@ -516,7 +516,7 @@ func verbatimUsage(n *ast.Usage) bool {
 }
 
 func (e *encoder) sysml(name string) rdf.Term { return rdf.SysMLTerm(name) }
-func (e *encoder) sysx(name string) rdf.Term  { return rdf.SystemicaTerm(name) }
+func (e *encoder) sysx(name string) rdf.Term  { return rdf.OpenSysMLTerm(name) }
 
 func (e *encoder) ident(subject rdf.Term, ident ast.Identification) {
 	if ident.Name != "" {
@@ -672,7 +672,7 @@ func (e *encoder) relationships(subject rdf.Term, owner string, rels []*ast.Rela
 			e.graph.Add(subject, e.sysml(property), e.reference(owner, qualifiedText(name)))
 			continue
 		}
-		e.graph.Add(subject, e.sysml(property), rdf.TypedLiteral(e.text(rel.Target), rdf.Systemica+dtExpression))
+		e.graph.Add(subject, e.sysml(property), rdf.TypedLiteral(e.text(rel.Target), rdf.OpenSysML+dtExpression))
 	}
 }
 

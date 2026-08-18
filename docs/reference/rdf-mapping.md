@@ -35,7 +35,7 @@ The wording is one constant, `export.ExperimentalNotice`.
 |---------|------------------------------------------------|-------|
 | `sysml:` | `https://www.omg.org/spec/SysML#`             | Metaclasses and metamodel properties |
 | `elmt:`  | `urn:sysmlv2:element:`                        | The elements of the converted model |
-| `sysx:`  | `urn:systemica:sysml:`                        | The few properties the metamodel does not define |
+| `sysx:`  | `urn:opensysml:sysml:`                        | The few properties the metamodel does not define |
 | `rdf:`, `xsd:` | the standard RDF and XML Schema namespaces | `rdf:type`, literal datatypes |
 
 The `sysml:` vocabulary and the `elmt:` element base match the ones the

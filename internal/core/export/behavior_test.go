@@ -186,7 +186,7 @@ func TestStateMembersRoundTrip(t *testing.T) {
 func TestUnsupportedBehavioralShapesAreReported(t *testing.T) {
 	prologue := "@prefix elmt: <urn:sysmlv2:element:> .\n" +
 		"@prefix sysml: <https://www.omg.org/spec/SysML#> .\n" +
-		"@prefix sysx: <urn:systemica:sysml:> .\n" +
+		"@prefix sysx: <urn:opensysml:sysml:> .\n" +
 		"@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n\n" +
 		"elmt:P a sysml:Package ; sysml:qualifiedName \"P\" ; sysml:declaredName \"P\" ;\n" +
 		"    sysx:memberIndex \"0\"^^xsd:integer ; sysx:hasBody \"true\"^^xsd:boolean .\n\n" +

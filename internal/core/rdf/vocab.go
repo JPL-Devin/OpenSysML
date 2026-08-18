@@ -16,11 +16,11 @@ const (
 	SysML = "https://www.omg.org/spec/SysML#"
 	// Element is the base IRI for the elements of a converted model.
 	Element = "urn:sysmlv2:element:"
-	// Systemica namespaces the few properties this tool needs that the SysML
+	// OpenSysML namespaces the few properties this tool needs that the SysML
 	// metamodel does not define: declaration order, and the source text of
 	// expressions. They are namespaced separately so a consumer can tell our
 	// additions from the standard vocabulary and ignore them.
-	Systemica = "urn:systemica:sysml:"
+	OpenSysML = "urn:opensysml:sysml:"
 )
 
 // RDFType is the rdf:type predicate IRI.
@@ -32,7 +32,7 @@ var DefaultPrefixes = map[string]string{
 	"xsd":   XSD,
 	"sysml": SysML,
 	"elmt":  Element,
-	"sysx":  Systemica,
+	"sysx":  OpenSysML,
 }
 
 // ElementIRI returns the element IRI for a fully-qualified SysML name.
@@ -56,8 +56,8 @@ func QualifiedNameOf(iri string) (string, bool) {
 // metaclasses (`sysml:PartUsage`) and properties (`sysml:declaredName`).
 func SysMLTerm(name string) Term { return IRI(SysML + name) }
 
-// SystemicaTerm returns the IRI of a name in the Systemica extension namespace.
-func SystemicaTerm(name string) Term { return IRI(Systemica + name) }
+// OpenSysMLTerm returns the IRI of a name in the OpenSysML extension namespace.
+func OpenSysMLTerm(name string) Term { return IRI(OpenSysML + name) }
 
 // LocalName returns the part of iri after the last '#', '/' or ':' — the
 // metaclass or property name for a vocabulary IRI. An element IRI returns the

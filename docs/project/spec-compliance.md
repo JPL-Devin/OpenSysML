@@ -1076,7 +1076,7 @@ a whole model or that its vocabulary is settled — see
 `urn:sysmlv2:element:` match the Flexo MMS SysML v2 service's `Namespaces.kt`, so
 a converted graph addresses its elements the way that service does. Whether such
 a graph loads into a running Flexo triplestore has not been demonstrated. Properties the SysML metamodel
-does not define are confined to `sysx:` = `urn:systemica:sysml:`: `memberIndex`,
+does not define are confined to `sysx:` = `urn:opensysml:sysml:`: `memberIndex`,
 `hasBody` and `sourceText` carry order, body presence and verbatim heads,
 `prefixMetadata`, `filter`, `isNamespaceImport`, `isRecursive` and `isExpose`
 carry notation the metamodel has no property for, and the behavioral properties

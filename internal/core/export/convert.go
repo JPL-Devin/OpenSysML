@@ -22,7 +22,7 @@
 // metamodel properties: declaredName, declaredShortName, owningNamespace,
 // visibility, direction, the feature flags, the typing and specialization
 // clauses, multiplicity bounds and its value. Three properties the metamodel
-// does not define live in a separate urn:systemica:sysml: namespace so a
+// does not define live in a separate urn:opensysml:sysml: namespace so a
 // consumer can tell them from the standard vocabulary: memberIndex (declaration
 // order, which the notation is sensitive to and RDF is not), hasBody, and
 // sourceText.
