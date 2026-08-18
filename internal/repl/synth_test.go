@@ -303,6 +303,8 @@ func TestConfigureRejectsWhatItCannotAnswer(t *testing.T) {
 		// Part of a segment names nothing: `amily::nesting` is not ringFamily's.
 		"%configure variantsAgree amily::nesting=nestingTrue": "is not a variation point these conditions read",
 		"%configure variantsAgree nesting=ingTrue":            "is not a variant of",
+		"%configure variantsAgree all 2 3":                    "one word too many",
+		"%configure variantsAgree all 2 nesting=nestingTrue":  "one word too many",
 	}
 	for command, want := range cases {
 		got := run(t, s, command)

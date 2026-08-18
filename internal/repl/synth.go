@@ -287,6 +287,9 @@ func parseConfigure(args []string) (configureRequest, error) {
 			}
 			request.all = true
 		case request.all:
+			if request.limit != 0 {
+				return request, fmt.Errorf("`all` takes one count of selections to report, so %s is one word too many", arg)
+			}
 			n, err := strconv.Atoi(arg)
 			if err != nil || n <= 0 {
 				return request, fmt.Errorf("`all %s` is not a count of selections to report: give a positive number", arg)
