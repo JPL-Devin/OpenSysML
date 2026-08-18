@@ -6,6 +6,35 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ## Unreleased
 
+### A view renders
+
+- **`%render <name>` turns a view's exposed set into the rendering its `render` member states**, and
+  into a containment tree where it states none. The kinds produced are a tree (the exposed elements
+  with their kinds and names, nested views as subtrees), an interconnection diagram (the exposed
+  parts and the connections between them, read from the model's own connector and flow ends), a
+  state machine (states and transitions) and an action flow (nodes and successions). State and
+  action renderings read the lowered `StateGraph`/`ActionGraph` the runtime executes, so a rendering
+  cannot drift from what runs.
+- **`%render <name> mermaid` writes the same rendering as a Mermaid diagram** — `flowchart TD` for a
+  tree or an action, `flowchart LR` for an interconnection, `stateDiagram-v2` for a state machine —
+  which pastes into Markdown, a documentation site or an editor as-is. Text stays the default at the
+  prompt.
+- **`sysml model.sysml -render <view>` renders without the prompt**: the artifact on stdout, Mermaid
+  by default and `-render-form text` for the indented form, `-o` writing it to a file, and every
+  human notice — what was loaded, an empty rendering, an element the rendering cannot represent — on
+  stderr. Rendering decides nothing about the model, so it is not asked for together with `-convert`
+  or a check flag.
+- **Rendering is a read.** `%render` materializes no object, registers nothing in the session and
+  leaves an `%action`/`%state` debugging session stepping the same graph and the same objects, so it
+  can be asked between two `%step`s. `%view`'s report is unchanged.
+- **The empty and error paths say what happened**: a view exposing nothing renders an empty artifact
+  and says so, a rendering kind this build does not produce is a typed error naming the kind and the
+  view rather than a substituted rendering, a name that is no view is `semantics.ErrNotAView` as
+  `%view` answers, and an exposed element a rendering cannot draw is reported rather than dropped.
+- The rendering itself is **tool-defined output**: SysML v2 §10.2 leaves rendering to the tool, so
+  the notation is what is supported and the artifact is Systemica's own — recorded as such in
+  [docs/project/spec-compliance.md](docs/project/spec-compliance.md).
+
 ### `%slots` is now `%features`, the name SysML v2 uses
 
 - **`%features <name>` lists what an object holds for each feature of its type**, which is what

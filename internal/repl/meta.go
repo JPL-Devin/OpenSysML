@@ -126,6 +126,7 @@ var metaCommandTable = []metaCommand{
 	{group: "Library discovery:", name: "%search", args: "<substring>", desc: "list the declared and library symbols whose qualified name contains <substring>"},
 	{group: "Library discovery:", name: "%builtins", desc: "list the library functions this build implements directly"},
 	{group: "Library discovery:", name: "%view", args: "<name>", desc: "show what a view exposes, and the views nested in it"},
+	{group: "Library discovery:", name: "%render", args: "<name> [mermaid]", desc: "render a view as the rendering it states — as text, or as a Mermaid diagram"},
 
 	{group: "Runtime commands:", name: "%instantiate", args: "<name>", desc: "create an instance of a part def"},
 	{group: "Runtime commands:", name: "%eval", args: "[in <name> :] <expr>", desc: "evaluate an expression, in the named element or object when one is named"},
@@ -278,6 +279,15 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 			return []string{"usage: %view <name>"}, false, nil
 		}
 		return s.doView(fields[1])
+	case "%render":
+		if len(fields) < 2 || len(fields) > 3 {
+			return []string{"usage: %render <name> [mermaid]"}, false, nil
+		}
+		mermaid := len(fields) == 3
+		if mermaid && fields[2] != "mermaid" {
+			return []string{fmt.Sprintf("unknown form %q; usage: %%render <name> [mermaid]", fields[2])}, false, nil
+		}
+		return s.doRender(fields[1], mermaid)
 	case "%quit", "%exit":
 		return []string{"goodbye"}, true, nil
 	case "%instantiate":

@@ -106,6 +106,8 @@ var (
 	convertFormat string
 	outputPath    string
 	fromFormat    string
+	renderView    string
+	renderForm    string
 	modelChecks   checks
 )
 
@@ -197,6 +199,14 @@ func printUsage(w io.Writer) {
 	fmt.Fprintf(w, "\n%s\n", wrapped(export.ExperimentalNotice, 78))
 	fmt.Fprintf(w, "Every run that converts RDF says so on stderr. Saving to .sysml or .kerml is\n")
 	fmt.Fprintf(w, "stable.\n")
+	fmt.Fprintf(w, "\nRendering a view:\n")
+	fmt.Fprintf(w, "  sysml model.sysml -render Views::vehicleView   # As a Mermaid diagram, on stdout\n")
+	fmt.Fprintf(w, "  sysml model.sysml -render Views::vehicleView -render-form text\n")
+	fmt.Fprintf(w, "  sysml model.sysml -render Views::vehicleView -o view.mmd\n")
+	fmt.Fprintf(w, "\nThe rendering is the one the view's render member states, and a containment tree\n")
+	fmt.Fprintf(w, "where it states none. It is tool-defined output: SysML v2 specifies the notation,\n")
+	fmt.Fprintf(w, "not how a tool draws it. Notices — an empty view, an element the rendering cannot\n")
+	fmt.Fprintf(w, "represent — go on stderr.\n")
 	fmt.Fprintf(w, "\nFlags may be written before or after the model they apply to. A file named like\n")
 	fmt.Fprintf(w, "a flag is read as a file after --, which ends the flags: sysml -trace -- -m.sysml\n")
 	fmt.Fprintf(w, "\nReading from standard input:\n")
@@ -229,6 +239,8 @@ func runCLI() int {
 	flag.StringVar(&outputPath, "output", "", "Write conversion output to this file (default: stdout)")
 	flag.StringVar(&outputPath, "o", "", "Write conversion output to this file (shorthand)")
 	flag.StringVar(&fromFormat, "from", "", "Input format for -convert: sysml, kerml, ttl, turtle or rdf (default: from the input's extension)")
+	flag.StringVar(&renderView, "render", "", "Render this view of the model instead of running it, in the form its render member states")
+	flag.StringVar(&renderForm, "render-form", "", "Form -render writes: mermaid (default) or text")
 	flag.Var(&deprecatedFlag{instead: "-to has been replaced by -convert, as `sysml model.sysml -convert ttl`"}, "to", "Replaced by -convert, which names the output format")
 	flag.Var(&modelChecks.instantiate, "instantiate", "Create an object of this definition before the checks, so a verdict is about it (repeatable)")
 	flag.Var(&modelChecks.constraints, "constraint", "Evaluate this constraint and exit (repeatable)")
@@ -284,10 +296,30 @@ func runCLI() int {
 			return refuse(modelChecks,
 				"-convert writes the model out and decides nothing about it; check it in its own run")
 		}
+		if renderView != "" {
+			fmt.Fprintln(os.Stderr, "sysml: -convert and -render each write a document out; ask for one per run")
+			return 2
+		}
 		if err := runConvert(args); err != nil {
 			return fail(err)
 		}
 		return exitHolds
+	}
+
+	if renderView != "" {
+		if modelChecks.requested() {
+			return refuse(modelChecks,
+				"-render writes a view out and decides nothing about the model; check it in its own run")
+		}
+		if err := runRender(args); err != nil {
+			return fail(err)
+		}
+		return exitHolds
+	}
+
+	if renderForm != "" {
+		fmt.Fprintln(os.Stderr, "sysml: -render-form is the form -render writes; name the view to render with -render")
+		return 2
 	}
 
 	// Resolve the run bounds before any model runs, so a bad value is reported at

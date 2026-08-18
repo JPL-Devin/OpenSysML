@@ -1,0 +1,450 @@
+package view
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/Open-MBEE/Systemica/internal/core/ast"
+	"github.com/Open-MBEE/Systemica/internal/core/lower"
+	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+)
+
+// maxBehaviorDepth bounds how deep a nested action usage is lowered, so a
+// behavior performing itself still renders.
+const maxBehaviorDepth = 8
+
+// renderStates renders the states and transitions of the exposed behaviors, from
+// the lowered StateGraph of each. An exposed element that is no state machine is
+// reported, and a machine that does not lower is reported with the reason.
+func (r *Renderer) renderStates(exposed []*symbols.Symbol, out *Rendering) {
+	ids := &nodeIDs{}
+	for _, elem := range exposed {
+		if elem.Kind != symbols.SymbolStateDef && elem.Kind != symbols.SymbolStateUsage {
+			out.Notices = append(out.Notices, fmt.Sprintf("%s %s is no state machine; a state rendering does not show it",
+				declKind(elem), r.notationName(elem)))
+			continue
+		}
+		graph, err := lower.ToStateGraph(elem.Decl, declScope(elem))
+		if err != nil {
+			out.Notices = append(out.Notices, fmt.Sprintf("%s %s does not lower to a state graph: %v",
+				declKind(elem), r.notationName(elem), err))
+			continue
+		}
+		out.Roots = append(out.Roots, r.stateMachineNode(elem, graph, ids, out))
+	}
+}
+
+// stateMachineNode renders one lowered state machine: its regions and states as
+// nested nodes, its transitions as edges.
+func (r *Renderer) stateMachineNode(machine *symbols.Symbol, graph *lower.StateGraph, ids *nodeIDs, out *Rendering) *Node {
+	root := &Node{ID: ids.take(), Kind: declKind(machine), Name: r.notationName(machine), Detail: declType(machine)}
+	doc := machine.DocName
+	nodes := map[ast.Node]*Node{}
+	regions := map[*ast.StateRegion]*Node{}
+
+	// Regions first: a state of an orthogonal region is nested in that region,
+	// and the region order is the order the machine enters and exits them in.
+	for _, region := range graph.TopRegions {
+		regions[region] = r.regionNode(region, ids)
+		root.Children = append(root.Children, regions[region])
+	}
+	for _, state := range graph.States {
+		node := r.stateNode(state, graph, ids)
+		nodes[state] = node
+		for _, region := range graph.CompositeStates[state] {
+			regions[region] = r.regionNode(region, ids)
+			node.Children = append(node.Children, regions[region])
+		}
+	}
+	// Then placement, so that a nested state reaches the node of its owner.
+	for _, state := range graph.States {
+		parent := root
+		if region := graph.RegionOf[state]; region != nil && regions[region] != nil {
+			parent = regions[region]
+		} else if owner := graph.ParentState[state]; owner != nil && nodes[owner] != nil {
+			parent = nodes[owner]
+		}
+		parent.Children = append(parent.Children, nodes[state])
+	}
+	for _, pseudo := range graph.Pseudostates {
+		node := &Node{ID: ids.take(), Kind: pseudo.Kind.String(), Name: notationName(pseudo.Name)}
+		nodes[pseudo] = node
+		parent := root
+		if owner := graph.PseudostateOwner[pseudo]; owner != nil && nodes[owner] != nil {
+			parent = nodes[owner]
+		}
+		parent.Children = append(parent.Children, node)
+	}
+
+	sources := make([]ast.Node, 0, len(graph.States)+len(graph.Pseudostates))
+	for _, state := range graph.States {
+		sources = append(sources, state)
+	}
+	for _, pseudo := range graph.Pseudostates {
+		sources = append(sources, pseudo)
+	}
+	for _, src := range sources {
+		for _, transition := range graph.Transitions[src] {
+			target, ok := nodes[transition.Target]
+			if !ok {
+				out.Notices = append(out.Notices, fmt.Sprintf("transition %s of %s leaves the machine's own states; no edge is drawn",
+					transitionName(transition), r.notationName(machine)))
+				continue
+			}
+			out.Edges = append(out.Edges, Edge{
+				From: nodes[src].ID, To: target.ID, Label: r.transitionLabel(doc, transition), Kind: EdgeTransition,
+			})
+		}
+	}
+	if len(root.Children) == 0 {
+		root.Detail = detailWith(root.Detail, "declares no states")
+	}
+	return root
+}
+
+// regionNode renders one orthogonal region, which holds the states declared in
+// it.
+func (r *Renderer) regionNode(region *ast.StateRegion, ids *nodeIDs) *Node {
+	return &Node{ID: ids.take(), Kind: "region", Name: notationName(region.Name)}
+}
+
+// stateNode renders one state with what the machine says about it: whether it is
+// the state entered first, a final state, and the behaviors it runs.
+func (r *Renderer) stateNode(state *ast.StateNode, graph *lower.StateGraph, ids *nodeIDs) *Node {
+	node := &Node{ID: ids.take(), Kind: "state", Name: notationName(state.Name)}
+	var detail []string
+	if state.IsInitial || graph.Initial == state || initialOfRegion(graph, state) {
+		detail = append(detail, "initial")
+	}
+	if state.IsFinal {
+		detail = append(detail, "final")
+	}
+	if behaviors := graph.Behaviors[state]; behaviors != nil {
+		for _, part := range []struct {
+			name string
+			list []lower.StateBehavior
+		}{{"entry", behaviors.Entry}, {"do", behaviors.Do}, {"exit", behaviors.Exit}} {
+			if len(part.list) > 0 {
+				detail = append(detail, part.name)
+			}
+		}
+	}
+	if len(graph.Deferred[state]) > 0 {
+		detail = append(detail, "defers")
+	}
+	node.Detail = strings.Join(detail, ", ")
+	return node
+}
+
+// initialOfRegion reports whether a state is the one its region enters first.
+func initialOfRegion(graph *lower.StateGraph, state *ast.StateNode) bool {
+	region := graph.RegionOf[state]
+	return region != nil && graph.RegionInitials[region] == state
+}
+
+// transitionLabel is what a transition edge carries: its name, the trigger it
+// waits for, the guard it is subject to, and whether it runs an effect —
+// `maintain: after 5 [ok] / effect`.
+func (r *Renderer) transitionLabel(doc string, transition *lower.Transition) string {
+	var parts []string
+	if transition.Name != "" {
+		parts = append(parts, notationName(transition.Name)+":")
+	}
+	if trigger := r.triggerLabel(doc, transition.Trigger); trigger != "" {
+		parts = append(parts, trigger)
+	}
+	if transition.Via != "" {
+		parts = append(parts, "via "+notationName(transition.Via))
+	}
+	if guard := r.nodeText(doc, transition.Guard); guard != "" {
+		parts = append(parts, "["+guard+"]")
+	} else if transition.Guard != nil {
+		parts = append(parts, "[guard]")
+	}
+	if len(transition.Effect) > 0 {
+		parts = append(parts, "/ "+behaviorNames(transition.Effect))
+	}
+	return strings.Join(parts, " ")
+}
+
+// transitionName names a transition in a notice: its own name, else the states
+// it was written between.
+func transitionName(transition *lower.Transition) string {
+	if transition.Name != "" {
+		return notationName(transition.Name)
+	}
+	return fmt.Sprintf("first %s then %s", behaviorNodeName(transition.Source), behaviorNodeName(transition.Target))
+}
+
+// behaviorNames names the behaviors an effect runs, so an edge says what it
+// does without carrying the statements themselves.
+func behaviorNames(behaviors []lower.StateBehavior) string {
+	names := make([]string, 0, len(behaviors))
+	for _, behavior := range behaviors {
+		if behavior.Name != "" {
+			names = append(names, notationName(behavior.Name))
+			continue
+		}
+		names = append(names, "effect")
+	}
+	return strings.Join(names, ", ")
+}
+
+// triggerLabel is the event a transition waits for, as written when the source
+// is at hand, else what kind of event it is.
+func (r *Renderer) triggerLabel(doc string, trigger ast.Node) string {
+	if trigger == nil {
+		return ""
+	}
+	if text := r.nodeText(doc, trigger); text != "" {
+		return text
+	}
+	switch event := trigger.(type) {
+	case *ast.TimeEvent:
+		keyword := "after"
+		if event.Absolute {
+			keyword = "at"
+		}
+		return joinNonEmpty(keyword, r.nodeText(doc, event.Duration))
+	case *ast.ChangeEvent:
+		return joinNonEmpty("when", r.nodeText(doc, event.Condition))
+	case *ast.AcceptEvent:
+		if event.Subsets != nil {
+			return "accept :> " + notationName(qualifiedText(event.Subsets))
+		}
+		if event.SignalType != nil {
+			return "accept " + notationName(qualifiedText(event.SignalType))
+		}
+		return "accept event"
+	case *ast.CallEvent:
+		if event.Operation != nil {
+			return "accept " + notationName(qualifiedText(event.Operation))
+		}
+		return "call event"
+	}
+	return "event"
+}
+
+// nodeText is the notation a node was written in, collapsed to one line, and ""
+// when the rendering holds no source for it.
+func (r *Renderer) nodeText(doc string, node ast.Node) string {
+	if r.text == nil || node == nil || doc == "" {
+		return ""
+	}
+	span := node.Span()
+	if span.Len <= 0 {
+		return ""
+	}
+	return collapseSpace(r.text(doc, span))
+}
+
+// joinNonEmpty joins a keyword and what follows it, dropping an empty tail.
+func joinNonEmpty(keyword, tail string) string {
+	if tail == "" {
+		return keyword
+	}
+	return keyword + " " + tail
+}
+
+// collapseSpace folds the runs of whitespace in a label written across lines
+// into single spaces.
+func collapseSpace(text string) string {
+	return strings.Join(strings.Fields(text), " ")
+}
+
+// renderActions renders the nodes and successions of the exposed behaviors, from
+// the lowered ActionGraph of each.
+func (r *Renderer) renderActions(exposed []*symbols.Symbol, out *Rendering) {
+	ids := &nodeIDs{}
+	for _, elem := range exposed {
+		if elem.Kind != symbols.SymbolActionDef && elem.Kind != symbols.SymbolActionUsage {
+			out.Notices = append(out.Notices, fmt.Sprintf("%s %s is no action; an action rendering does not show it",
+				declKind(elem), r.notationName(elem)))
+			continue
+		}
+		node, ok := r.actionNode(elem.Decl, declKind(elem), r.notationName(elem), declScope(elem), elem.DocName, ids, out, map[ast.Node]bool{}, 0)
+		if ok {
+			out.Roots = append(out.Roots, node)
+		}
+	}
+}
+
+// actionNode renders one lowered action: its nodes as nested nodes, its
+// successions and object flows as edges. A nested action declaring a body of its
+// own is lowered in turn, so the rendering shows the flow within it as well.
+func (r *Renderer) actionNode(decl ast.Node, kind, name string, scope *symbols.Scope, doc string,
+	ids *nodeIDs, out *Rendering, lowered map[ast.Node]bool, depth int) (*Node, bool) {
+	graph, err := lower.ToActionGraph(decl, scope)
+	if err != nil {
+		out.Notices = append(out.Notices, fmt.Sprintf("%s %s does not lower to an action graph: %v", kind, name, err))
+		return nil, false
+	}
+	root := &Node{ID: ids.take(), Kind: kind, Name: name}
+	lowered[decl] = true
+	nodes := map[ast.Node]*Node{}
+	for _, node := range graph.Nodes {
+		child := &Node{ID: ids.take(), Kind: actionNodeKind(node, graph), Name: notationName(behaviorNodeName(node))}
+		nodes[node] = child
+		root.Children = append(root.Children, child)
+		if nested, ok := nestedAction(node); ok && depth < maxBehaviorDepth && !lowered[node] {
+			sub, ok := r.actionNode(nested, child.Kind, child.Name, actionScope(scope, nested), doc, ids, out, lowered, depth+1)
+			if ok {
+				child.Children, child.Detail = sub.Children, detailWith(child.Detail, "own flow")
+				// The nested flow's own edges belong to the nested nodes, which the
+				// sub-rendering already added to out.Edges.
+			}
+		}
+	}
+	for _, src := range graph.Nodes {
+		for _, target := range graph.Edges[src] {
+			to, ok := nodes[target]
+			if !ok {
+				out.Notices = append(out.Notices, fmt.Sprintf("succession from %s in %s leaves the action's own nodes; no edge is drawn",
+					notationName(behaviorNodeName(src)), name))
+				continue
+			}
+			label := ""
+			if guard := graph.Guards[src][target]; guard != nil {
+				if text := r.nodeText(doc, guard); text != "" {
+					label = "[" + text + "]"
+				} else {
+					label = "[guard]"
+				}
+			}
+			out.Edges = append(out.Edges, Edge{From: nodes[src].ID, To: to.ID, Label: label, Kind: EdgeSuccession})
+		}
+		for _, flow := range graph.DataFlows[src] {
+			to, ok := nodes[flow.Target]
+			if !ok {
+				out.Notices = append(out.Notices, fmt.Sprintf("flow from %s in %s leaves the action's own nodes; no edge is drawn",
+					notationName(behaviorNodeName(src)), name))
+				continue
+			}
+			out.Edges = append(out.Edges, Edge{From: nodes[src].ID, To: to.ID, Label: flowLabel(flow), Kind: EdgeFlow})
+		}
+	}
+	if len(root.Children) == 0 {
+		root.Detail = detailWith(root.Detail, "declares no nodes")
+	}
+	return root, true
+}
+
+// flowLabel is what an object flow carries: the pins it joins, named by the flow
+// when it has a name of its own.
+func flowLabel(flow lower.ObjectFlow) string {
+	label := flow.SourcePin
+	if flow.TargetPin != "" {
+		label = strings.TrimPrefix(label+" to "+flow.TargetPin, " to ")
+	}
+	if flow.Name != "" {
+		return notationName(flow.Name) + ": " + label
+	}
+	return label
+}
+
+// nestedAction is the declaration of an action node that performs a body of its
+// own, which is lowered as an action in turn.
+func nestedAction(node ast.Node) (ast.Node, bool) {
+	switch n := node.(type) {
+	case *ast.Usage:
+		if n.Kind == ast.UsageAction && n.HasBody {
+			return n, true
+		}
+	case *ast.Definition:
+		if n.Kind == ast.DefAction {
+			return n, true
+		}
+	}
+	return nil, false
+}
+
+// actionScope is the scope a nested action's body resolves in: the child scope
+// the enclosing scope holds for it, else the enclosing scope itself.
+func actionScope(scope *symbols.Scope, decl ast.Node) *symbols.Scope {
+	if scope == nil {
+		return nil
+	}
+	if child := scope.ChildFor(decl); child != nil {
+		return child
+	}
+	return scope
+}
+
+// actionNodeKind names an action graph node the way the notation declares it, so
+// a rendering says "fork" and "action" rather than a Go type name.
+func actionNodeKind(node ast.Node, graph *lower.ActionGraph) string {
+	if graph != nil && graph.StatementRuns[node] {
+		return "statements"
+	}
+	switch n := node.(type) {
+	case *ast.InitialNode:
+		return "initial"
+	case *ast.FinalNode:
+		return "final"
+	case *ast.ForkNode:
+		return "fork"
+	case *ast.JoinNode:
+		return "join"
+	case *ast.MergeNode:
+		return "merge"
+	case *ast.DecisionNode:
+		return "decision"
+	case *ast.ActionExecutionNode:
+		return "perform"
+	case *ast.StateNode:
+		return "state"
+	case *ast.Usage:
+		return n.Kind.String()
+	case *ast.Definition:
+		return n.Kind.String() + " def"
+	}
+	return "node"
+}
+
+// behaviorNodeName is the name a state or action graph node was declared with,
+// "" for an anonymous one.
+func behaviorNodeName(node ast.Node) string {
+	switch n := node.(type) {
+	case *ast.InitialNode:
+		return n.Name
+	case *ast.FinalNode:
+		return n.Name
+	case *ast.ForkNode:
+		return n.Name
+	case *ast.JoinNode:
+		return n.Name
+	case *ast.MergeNode:
+		return n.Name
+	case *ast.DecisionNode:
+		return n.Name
+	case *ast.ActionExecutionNode:
+		return n.Name
+	case *ast.StateNode:
+		return n.Name
+	case *ast.PseudostateNode:
+		return n.Name
+	case *ast.Usage:
+		if name, _ := ast.EffectiveName(n); name != "" {
+			return name
+		}
+		return n.Ident.ShortName
+	case *ast.Definition:
+		if n.Ident.Name != "" {
+			return n.Ident.Name
+		}
+		return n.Ident.ShortName
+	}
+	return ""
+}
+
+// declScope is the scope a declaration's own members resolve in: the scope it
+// owns, else the scope it was declared in.
+func declScope(sym *symbols.Symbol) *symbols.Scope {
+	if sym == nil {
+		return nil
+	}
+	if sym.Scope != nil {
+		return sym.Scope
+	}
+	return sym.OwnerScope
+}

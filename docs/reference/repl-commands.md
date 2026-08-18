@@ -22,6 +22,7 @@ quoted segment holding a space and one in the middle of a chain: `%instantiate '
 | `%search <substring>` | List the declared and library symbols whose qualified name contains the substring, with the kind of each |
 | `%builtins` | List the library functions the runtime implements directly (`sqrt`, `abs`, `max`, `floor`, `x->isEmpty()`, `x->sum()` …) |
 | `%view <name>` | Show what a view exposes — its own `expose` relationships and the protected ones of the views it specializes — the views nested in it, each of which is asked for its own exposed set, and its conformance to every viewpoint it satisfies: a verdict of `conforms`, `violated` or `unevaluable` per viewpoint and per framed concern, with the reason, the exposed element a concern's condition failed for, and `(from <view>)` where the `satisfy` is inherited. Asking it of an element that is no view says so |
+| `%render <name> [mermaid]` | Render a view: the exposed set as the rendering the view's `render` member states — a containment tree with nested views as subtrees, an interconnection diagram of the exposed parts and the connections between them, a state machine's states and transitions, or an action's nodes and successions — and a tree where the view states none. Written as indented text, or as a [Mermaid](#rendering-a-view) diagram with `mermaid`. Read-only: it creates no object and leaves a `%action`/`%state` debugging session running. A view exposing nothing renders empty and says so; a rendering kind this build does not produce names the kind and the view rather than rendering something else; an element the rendering cannot represent is reported, not dropped |
 | **Instantiation & Inspection** | |
 | `%instantiate <name>` | Create instance from part definition |
 | `%features <name>` | Show what an object holds for each feature of its type |
@@ -48,5 +49,34 @@ quoted segment holding a space and one in the middle of a chain: `%instantiate '
 | `%advance <time>` | Advance simulation time by `<time>` units, processing every event due |
 | **Control** | |
 | `%quit` | Exit the REPL |
-| `Tab` | Complete meta commands, symbol names (after `%print`, `%instantiate`, `%features` …), and file paths after `%load` and `%save` |
+| `Tab` | Complete meta commands, symbol names (after `%print`, `%instantiate`, `%features` …), the form after `%render <name>`, and file paths after `%load` and `%save` |
 | `Ctrl-D` | Exit REPL |
+
+## Rendering a view
+
+```
+sysml> %render Demo::summary
+Demo::summary — tree rendering (the view states no rendering; a tree is the default)
+
+part def Demo::Vehicle
+part Demo::v (Vehicle)
+view Demo::summary::detail
+  part def Demo::Wheel
+
+sysml> %render Demo::summary mermaid
+%% Demo::summary — tree rendering
+flowchart TD
+  n0["part def Demo::Vehicle"]
+  n1["part Demo::v (Vehicle)"]
+  n2["view Demo::summary::detail"]
+  n3["part def Demo::Wheel"]
+  n2 --- n3
+```
+
+The rendering is **tool-defined output**: SysML v2 §10.2 specifies the notation a view is written
+in, not how a tool draws it. Mermaid is the machine-readable form because it renders as-is in
+Markdown, documentation sites and editors without a separate rendering tool, and has a dedicated
+state diagram grammar. A state rendering reads the lowered state graph and an action rendering the
+lowered action graph, so what is drawn is what the runtime executes.
+
+Rendering a view outside the prompt is [`sysml -render`](cli.md#rendering-a-view).

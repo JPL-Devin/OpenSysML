@@ -168,6 +168,35 @@ A name the session cannot find is offered the qualified names it is known under,
 first — what the session itself declares before the library, and a package's member before a name
 nested inside another element — and at most three of them.
 
+## Rendering a view
+
+`%render <name>` turns the exposed set into the rendering the view's `render` member states —
+a containment tree with nested views as subtrees, an interconnection diagram of the exposed parts and
+the connections between them, a state machine's states and transitions, or an action's nodes and
+successions — and a tree where the view states none:
+
+```
+sysml> %render Demo::summary
+Demo::summary — tree rendering (the view states no rendering; a tree is the default)
+
+part def Demo::Vehicle
+part Demo::v (Vehicle)
+view Demo::summary::detail
+  part def Demo::Wheel
+```
+
+`%render <name> mermaid` writes the same rendering as a Mermaid diagram, which pastes into
+Markdown or an editor as-is. State and action renderings read the lowered graphs the runtime
+executes, so what is drawn is what runs; the rendering itself is this tool's output, since SysML v2
+§10.2 specifies the notation, not how a tool draws it.
+
+Rendering reads the model and nothing else: it creates no object, and a `%render` between two
+`%step`s leaves an action or state debugging session exactly where it was. A view exposing nothing
+renders empty and says so, a rendering kind this build does not produce names the kind and the view
+rather than drawing something else, and an element the rendering cannot represent is reported
+rather than dropped. Outside the prompt the same rendering is
+[`sysml -render`](../reference/cli.md#rendering-a-view).
+
 ## Where an expression is evaluated
 
 `%eval <expression>` evaluates in the namespace the session is working in — the last one it declared
@@ -192,6 +221,7 @@ separator.
 
 | To ask | Use | Chapter |
 |--------|-----|---------|
+| what a view shows | `%view`, `%render` | this chapter |
 | what an expression is worth | `%eval`, `%eval in … : …` | [5](05-checking.md) |
 | what an object holds for each feature | `%instantiate`, `%features`, `%instances` | [5](05-checking.md) |
 | whether a check holds | `%constraint`, `%requirement`, `%satisfy`, `%calc` | [5](05-checking.md) |

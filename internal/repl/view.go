@@ -3,12 +3,14 @@ package repl
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/Open-MBEE/Systemica/internal/core/resolve"
 	"github.com/Open-MBEE/Systemica/internal/core/runtime"
 	"github.com/Open-MBEE/Systemica/internal/core/semantics"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
+	"github.com/Open-MBEE/Systemica/internal/core/view"
 )
 
 // doView reports what a view exposes, the way every other name-taking command
@@ -67,6 +69,82 @@ func (s *Session) View(name string) ([]string, error) {
 		return nil, fmt.Errorf("%s: %w", notationName(fqn), err)
 	}
 	return append(out, s.conformanceLines(report)...), nil
+}
+
+// doRender renders a view, reporting a name the session cannot find, an element
+// that is no view, or a rendering kind not produced, as a line.
+func (s *Session) doRender(name string, mermaid bool) ([]string, bool, error) {
+	lines, err := s.renderLines(name, mermaid)
+	if err != nil {
+		return []string{"error: " + err.Error()}, false, nil
+	}
+	return lines, false, nil
+}
+
+// renderLines renders a view in the form its `render` member states, as text or
+// as Mermaid, one line per line of the artifact.
+func (s *Session) renderLines(name string, mermaid bool) ([]string, error) {
+	rendering, err := s.viewRendering(name)
+	if err != nil {
+		return nil, err
+	}
+	artifact := rendering.Text()
+	if mermaid {
+		artifact = rendering.Mermaid()
+	}
+	return strings.Split(strings.TrimRight(artifact, "\n"), "\n"), nil
+}
+
+// ViewRendering renders a view of the session's model. It reads the session's
+// symbols and creates nothing in it: no object, no runtime, no change to a
+// debugging session in progress.
+func (s *Session) ViewRendering(name string) (*view.Rendering, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.viewRendering(name)
+}
+
+// viewRendering renders a view with the session already held.
+func (s *Session) viewRendering(name string) (*view.Rendering, error) {
+	sym, fqn, err := s.lookupSymbol(name)
+	if err != nil {
+		return nil, err
+	}
+	renderer, err := s.viewRenderer()
+	if err != nil {
+		return nil, err
+	}
+	rendering, err := renderer.Render(sym)
+	if err != nil {
+		if errors.Is(err, semantics.ErrNotAView) {
+			return nil, fmt.Errorf("%s: %w", notationName(fqn), err)
+		}
+		return nil, err
+	}
+	return rendering, nil
+}
+
+// viewRenderer returns a renderer over the session's symbols, in a semantic
+// model of its own so that rendering leaves the session's runtime untouched.
+func (s *Session) viewRenderer() (*view.Renderer, error) {
+	idx := s.browseIndex()
+	if idx == nil {
+		return nil, fmt.Errorf("no declarations loaded")
+	}
+	resolver := resolve.New(idx)
+	model := semantics.NewModel(resolver)
+	resolver.SetModel(model)
+	var text view.SourceText
+	if doc := s.ws.Document(docName); doc != nil {
+		sf := source.New(docName, doc.Content)
+		text = func(name string, span source.Span) string {
+			if name != docName {
+				return ""
+			}
+			return sf.Text(span)
+		}
+	}
+	return view.NewRenderer(model, resolver, text), nil
 }
 
 // conformanceLines renders a conformance report in declaration order: each
