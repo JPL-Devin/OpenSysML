@@ -688,14 +688,14 @@ two-argument arctangent: `RealFunctions` has `sqrt`/`floor`/`round`/`abs`/`max`/
 `TrigFunctions` has `sin`/`cos`/`tan`/`cot`/`arcsin`/`arccos`/`arctan`, and that
 is all. The vendored OMG files stay byte-identical, so the missing signatures are
 declared in a clearly non-normative Systemica extension instead:
-`internal/core/libs/stdlib/Systemica Libraries/SystemicaMathFunctions.kerml`. It
+`internal/core/libs/stdlib/OpenSysML Libraries/OpenSysMLMathFunctions.kerml`. It
 is bundled by the same `embed.FS` as the vendored tree and enters the same
 gates — `TestStdlibConformance` now reports 95/95 clean. It is Systemica code under
 Apache 2.0, not OMG code under EPL-2.0; `internal/core/libs/stdlib/NOTICE` carves
 the subdirectory out of the OMG notice.
 
-**Reachability.** A model writes `import SystemicaMathFunctions::*;` (or calls
-`SystemicaMathFunctions::exp(x)` qualified); both resolve like any other library
+**Reachability.** A model writes `import OpenSysMLMathFunctions::*;` (or calls
+`OpenSysMLMathFunctions::exp(x)` qualified); both resolve like any other library
 package, with no diagnostic. A *bare* `exp(x)` with no import **evaluates**, by
 the same unqualified-name dispatch a bare `sqrt(x)` uses, but the checker still
 reports `unresolved reference: exp` on the name — exactly the rough edge the
@@ -708,8 +708,8 @@ vendored functions have, no better and no worse. ROADMAP A6 is the general fix.
 | `log(x, base)` — logarithm to an explicit base, so base 10 and base e are never confused; base 10 and base 2 use `math.Log10`/`math.Log2`, which are exact where the ratio of logarithms is not | `runtime/library_functions.go` `logToBase` | `TestLibraryFunctionValues`, `TestLibraryFunctionErrors` | ✅ Faithful |
 | `atan2(y, x)` — full-quadrant angle, parameters ordered as in IEEE 754 and `math.Atan2` | `runtime/library_functions.go` `atan2Real` | `TestLibraryFunctionValues`, `TestLibraryFunctionAtan2NamedArguments` | ✅ Faithful |
 | `ln(0.0)`, `ln(-1.0)`, `log(x, 1.0)`, `log(-1.0, 10.0)`, `atan2(0.0, 0.0)` report a domain error; `exp` beyond the Real range reports an overflow | `runtime/library_functions.go` | `TestLibraryFunctionErrors`, `TestRuntimeRobustness/extension_library_function_outside_its_domain` | ✅ Faithful |
-| The shipped declarations and the registered implementations cannot drift (names, parameter names, parameter order) | `runtime/library_functions.go` registry | `TestSystemicaMathFunctionsMatchTheShippedDeclarations` | ✅ Faithful |
-| Evaluable from a `calc def` body | `runtime/invoke_calc.go` | `calc_systemica_math_functions.sysml` + golden trace | ✅ Faithful |
+| The shipped declarations and the registered implementations cannot drift (names, parameter names, parameter order) | `runtime/library_functions.go` registry | `TestOpenSysMLMathFunctionsMatchTheShippedDeclarations` | ✅ Faithful |
+| Evaluable from a `calc def` body | `runtime/invoke_calc.go` | `calc_opensysml_math_functions.sysml` + golden trace | ✅ Faithful |
 
 ### Static Expression Type Checking (KerML §7.4 Expressions, §8.3 Feature Values)
 

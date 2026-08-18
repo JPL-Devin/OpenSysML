@@ -3,7 +3,7 @@
 // functions the OMG Kernel Function Library declares nowhere.
 package test {
 	import ScalarValues::*;
-	import SystemicaMathFunctions::*;
+	import OpenSysMLMathFunctions::*;
 
 	calc def descentSteering {
 		in altitude : Real;

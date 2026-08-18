@@ -1,10 +1,10 @@
-library package SystemicaMathFunctions {
+library package OpenSysMLMathFunctions {
 	doc
 	/*
 	 * NON-NORMATIVE. This package is a Systemica extension, not part of the OMG KerML
 	 * standard library: it declares the exponential, logarithmic and two-argument
 	 * arctangent functions the Kernel Function Library omits. The vendored OMG files are
-	 * unmodified. A model that needs these writes `import SystemicaMathFunctions::*;`.
+	 * unmodified. A model that needs these writes `import OpenSysMLMathFunctions::*;`.
 	 */
 
 	public import ScalarValues::*;

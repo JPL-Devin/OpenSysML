@@ -1821,7 +1821,7 @@ definition deriving from `pysysml.typed.TypedObject`. Useful facts when testing 
 The runtime supplies bodies for the function-library declarations in
 `internal/core/runtime/library_functions.go`; the non-normative extensions
 (`exp`, `ln`, `log`, `atan2`) live in
-`internal/core/libs/stdlib/Systemica Libraries/SystemicaMathFunctions.kerml`.
+`internal/core/libs/stdlib/OpenSysML Libraries/OpenSysMLMathFunctions.kerml`.
 Testing notes that generalize to any future built-in:
 
 - The fastest end-to-end surface is the batch flag, which loads a model *and* evaluates
@@ -1844,7 +1844,7 @@ Testing notes that generalize to any future built-in:
 - A **bare** call with no `import` still evaluates (the unqualified-name table is always in force)
   but the checker prints `error: unresolved reference: <name>` for the same call inside a
   declaration. That divergence is a known rough edge of the built-in dispatch, not a new bug —
-  report it as expected, and use `import SystemicaMathFunctions::*;` in fixtures to avoid it.
+  report it as expected, and use `import OpenSysMLMathFunctions::*;` in fixtures to avoid it.
 - Fixture gotchas when writing action fixtures by hand: `done` is a reserved keyword (use another
   name), a body has one start so only one `first` end (chain the rest as `first a then b; then b c;`
   — two `first` ends yield `action has multiple initial nodes`), and `and`/`or` are

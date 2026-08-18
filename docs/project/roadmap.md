@@ -433,12 +433,12 @@ Both remaining bullets are statements of fact rather than gaps:
 - **An unqualified library function call is reported unresolved, and conformantly so.** Written
   with no import in force the name is genuinely unresolved (A6), so the diagnostic is right; what
   is loose is the other side — runtime dispatch by local name answers such a call anyway, so an
-  unimported `exp(x)` evaluates while being reported. `import SystemicaMathFunctions::*;` (or
+  unimported `exp(x)` evaluates while being reported. `import OpenSysMLMathFunctions::*;` (or
   `MathFunctions` for the OMG ones) clears the diagnostic and is the spelling a model should use.
 - **`exp`, `ln`, `log` and `atan2` are a Systemica extension, not OMG.** The vendored library
   declares no signature for any of them, and the vendored files stay byte-identical, so they are
-  declared in `internal/core/libs/stdlib/Systemica Libraries/SystemicaMathFunctions.kerml` — a
-  non-normative package a model reaches with `import SystemicaMathFunctions::*;`. A model meant
+  declared in `internal/core/libs/stdlib/OpenSysML Libraries/OpenSysMLMathFunctions.kerml` — a
+  non-normative package a model reaches with `import OpenSysMLMathFunctions::*;`. A model meant
   to be portable to another SysML v2 tool cannot rely on it.
 
 ## A11 — string operators and the string function library — done
