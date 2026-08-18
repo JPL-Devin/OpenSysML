@@ -4,7 +4,47 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Cutting a release
 is described in [docs/project/releasing.md](docs/project/releasing.md).
 
-## Unreleased
+## 0.1.0 — 2026-08-18
+
+### The project is now OpenSysML
+
+The rename is a clean break with no compatibility aliases: every name below has exactly one
+spelling from this release on. Entries for earlier releases keep the old names, because the
+artifacts they describe really were called that.
+
+- **Go module path is `github.com/Open-MBEE/OpenSysML`.** `go install
+  github.com/Open-MBEE/OpenSysML/cmd/sysml@latest`; the old path resolves only for `v0.0.x`.
+- **The binaries are unchanged** — `sysml`, `sysml-lsp` and `sysml-grpc` keep their names.
+- **The Python client is `opensysml`**, on PyPI and as the import: `pip install opensysml`,
+  `import opensysml`. Its environment variables are `OPENSYSML_*` (`OPENSYSML_GRPC_VERSION`,
+  `OPENSYSML_STATE_DIR`, `OPENSYSML_GITHUB_REPO`, `OPENSYSML_ALLOW_UNPINNED_DOWNLOAD`,
+  `OPENSYSML_REQUIRE_SERVICE`), the base error is `OpenSysMLError`, the generator entry point is
+  `opensysml-generate`, the state directory is `~/.opensysml` and the release tag is
+  `opensysml-v*`. Nothing reads the `pysysml` names, so a `~/.pysysml` left behind by an older
+  install is dead weight and can be deleted. The first release under the new name is 0.3.0,
+  carrying on from `pysysml` 0.2.0 rather than restarting, and `pysysml` gets one last version,
+  0.2.1, which contains no client: it raises on import naming `opensysml`, so `pip install
+  pysysml` reports the rename instead of resolving to the pre-rename 0.2.0. Pin
+  `pysysml==0.2.0` to keep that release while migrating; nothing further is published under
+  that name.
+- **Release archives are `opensysml-<os>-<arch>.tar.gz`** (`.zip` on Windows), and the Homebrew
+  formula is `opensysml`: `brew install Open-MBEE/tap/opensysml`. Assets already published under
+  `v0.0.x` keep their old names.
+- **The RDF extension namespace is `urn:opensysml:sysml:`**, still bound to the `sysx:` prefix. A
+  `.ttl` file written before this release carries `urn:systemica:sysml:` properties, and reading one
+  is refused rather than silently dropping what those properties said — re-export it from its
+  notation source.
+- **The non-normative math library is `OpenSysMLMathFunctions`**, in
+  `OpenSysML Libraries/OpenSysMLMathFunctions.kerml`. A model that writes
+  `import SystemicaMathFunctions::*;` must be updated; the unqualified `exp`, `ln`, `log` and
+  `atan2` aliases are unaffected.
+- **Environment variables are `OPENSYSML_*`** (`OPENSYSML_SMT`, `OPENSYSML_SMT_TIMEOUT`,
+  `OPENSYSML_REQUIRE_SMT`, `OPENSYSML_REQUIRE_TRAINING_CORPUS`, `OPENSYSML_SMT_CORE_BUDGET`,
+  `OPENSYSML_SMT_MAX_CONFIGURATIONS`). The
+  `SYSTEMICA_*` names are not read.
+- **The VS Code extension is `opensysml-sysml`** and its settings are `opensysml.server.path`,
+  `opensysml.server.args`, `opensysml.server.enabled` and `opensysml.trace.server`, with the
+  command `opensysml.restartServer`. Existing settings must be re-set under the new keys.
 
 ### Binding connector runtime semantics
 
@@ -53,45 +93,11 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 - The rendering itself is **tool-defined output**: SysML v2 §10.2 leaves rendering to the tool, so
   the notation is what is supported and the artifact is OpenSysML's own — recorded as such in
   [docs/project/spec-compliance.md](docs/project/spec-compliance.md).
-
-### The project is now OpenSysML
-
-The rename is a clean break with no compatibility aliases: every name below has exactly one
-spelling from this release on. Entries for earlier releases keep the old names, because the
-artifacts they describe really were called that.
-
-- **Go module path is `github.com/Open-MBEE/OpenSysML`.** `go install
-  github.com/Open-MBEE/OpenSysML/cmd/sysml@latest`; the old path resolves only for `v0.0.x`.
-- **The binaries are unchanged** — `sysml`, `sysml-lsp` and `sysml-grpc` keep their names.
-- **The Python client is `opensysml`**, on PyPI and as the import: `pip install opensysml`,
-  `import opensysml`. Its environment variables are `OPENSYSML_*` (`OPENSYSML_GRPC_VERSION`,
-  `OPENSYSML_STATE_DIR`, `OPENSYSML_GITHUB_REPO`, `OPENSYSML_ALLOW_UNPINNED_DOWNLOAD`,
-  `OPENSYSML_REQUIRE_SERVICE`), the base error is `OpenSysMLError`, the generator entry point is
-  `opensysml-generate`, the state directory is `~/.opensysml` and the release tag is
-  `opensysml-v*`. Nothing reads the `pysysml` names, so a `~/.pysysml` left behind by an older
-  install is dead weight and can be deleted. The first release under the new name is 0.3.0,
-  carrying on from `pysysml` 0.2.0 rather than restarting, and `pysysml` gets one last version,
-  0.2.1, which contains no client: it raises on import naming `opensysml`, so `pip install
-  pysysml` reports the rename instead of resolving to the pre-rename 0.2.0. Pin
-  `pysysml==0.2.0` to keep that release while migrating; nothing further is published under
-  that name.
-- **Release archives are `opensysml-<os>-<arch>.tar.gz`** (`.zip` on Windows), and the Homebrew
-  formula is `opensysml`: `brew install Open-MBEE/tap/opensysml`. Assets already published under
-  `v0.0.x` keep their old names.
-- **The RDF extension namespace is `urn:opensysml:sysml:`**, still bound to the `sysx:` prefix. A
-  `.ttl` file written before this release carries `urn:systemica:sysml:` properties, and reading one
-  is refused rather than silently dropping what those properties said — re-export it from its
-  notation source.
-- **The non-normative math library is `OpenSysMLMathFunctions`**, in
-  `OpenSysML Libraries/OpenSysMLMathFunctions.kerml`. A model that writes
-  `import SystemicaMathFunctions::*;` must be updated; the unqualified `exp`, `ln`, `log` and
-  `atan2` aliases are unaffected.
-- **Environment variables are `OPENSYSML_*`** (`OPENSYSML_SMT`, `OPENSYSML_SMT_TIMEOUT`,
-  `OPENSYSML_REQUIRE_SMT`, `OPENSYSML_REQUIRE_TRAINING_CORPUS`, `OPENSYSML_SMT_CORE_BUDGET`). The
-  `SYSTEMICA_*` names are not read.
-- **The VS Code extension is `opensysml-sysml`** and its settings are `opensysml.server.path`,
-  `opensysml.server.args`, `opensysml.server.enabled` and `opensysml.trace.server`, with the
-  command `opensysml.restartServer`. Existing settings must be re-set under the new keys.
+- **An element reached twice is exposed and rendered once.** A wildcard or filtered `expose` walks
+  the document's own scope tree and the global index, which build a symbol each for one
+  declaration, so `expose P::*` and `expose P::**[@T]` used to show an element as many times as it
+  was reached. The declaration a symbol was built from is now its identity, so exposure, filtering,
+  rename and reference lookup all agree on when two symbols are one element.
 
 ### An object runs the behavior its type exhibits
 
@@ -185,6 +191,93 @@ artifacts they describe really were called that.
 - Printing is a read. No object is materialized, `%instances` and the buffer are unchanged, and an
   `%action`/`%state` debugging session keeps running across it. An empty session, a name nothing
   declares, and a symbol this session holds no source of (a library name) each answer in one line.
+
+### An SMT solver decides what a model's conditions permit
+
+The whole path is **experimental** and every surface says so: the vocabulary of the reports may
+change, and a solver is optional at runtime — discovered on `PATH` or named by `OPENSYSML_SMT`,
+with a build that has none reporting that rather than a verdict.
+
+- **`%check <name>` asks an external SMT solver whether a constraint, requirement or satisfaction
+  assertion *can* be satisfied**, and prints an assignment on `sat`. Conditions are translated to
+  an SMT-LIB 2 script — one variable per logical feature with injective symbols, quantities in
+  named base units, and truncating integer division whose well-definedness guard is hoisted only
+  where the division always runs — and `sat`, `unsat` and `unknown` stay three distinct verdicts.
+  Satisfiability is not evaluation: `%constraint` and `%satisfy` still answer what holds of an
+  object.
+- **`%explain <name>` says which conditions conflict** behind an `unsat`: an unsat core reduced to
+  a minimal one by dropping a member at a time in fresh solver processes, bounded by member count
+  and `OPENSYSML_SMT_CORE_BUDGET`, printed as the role, the condition as written, the declaring
+  element and `file:line:col` in the query's assertion order. A declared domain (a `Natural` being
+  non-negative) or a division guard can be the conflicting condition, a one-member conflict says it
+  is the whole conflict, and a core that was refused, unreadable, empty, repeated or never issued is
+  a typed `CoreError` rather than a shorter core presented as minimal. The time reported covers the
+  reduction, not just the first verdict.
+- **`%solve <name>` synthesises values that satisfy an assertion**, keeping fixed what already is —
+  the values an object holds, else the ones the model declares — and reporting what was fixed and
+  by whom, the values chosen, and that they are one witness of possibly many. `unsat` there means
+  no values exist consistent with what is fixed, and names the fixed values that conflict; an
+  object's fixed values survive an unrelated submission.
+- **`%configure <name>` answers which variants an assertion permits**: with no argument one
+  consistent selection, with `<variation>=<variant>` the named selection checked and the conflict
+  named where it is not consistent, and with `all [<count>]` the selections enumerated up to
+  `OPENSYSML_SMT_MAX_CONFIGURATIONS`. The report says whether they are all of them or were cut
+  short — at the bound, or because the solver stopped deciding or ran out of time, in which case
+  the selections found so far are still reported. An element that reads no variation point is an
+  error pointing at `%check`.
+- **`%optimize <name>` improves the `objective`s an `analysis def` states**, which until now parsed
+  and then sat inert: the direction comes from the trade-study definition typing it
+  (`TradeStudies::MinimizeObjective` or `MaximizeObjective`), the value from the expression the
+  objective states for the library's `best` feature, and feasibility from the case's own conditions
+  together with each objective's — all read through the runtime's own surfaces, re-parsing no
+  declaration. Several objectives are improved lexicographically in declaration order, with
+  `(set-option :opt.priority lex)` written into the script rather than left to a backend default,
+  and every optimum is verified by asking whether anything does better, so an attained optimum, an
+  unbounded objective, a bound no assignment attains and an answer that could not be verified stay
+  four different reports and none of them fabricates a number.
+- **What a query needs of a backend is modelled as capabilities**, probed once per executable (or
+  declared by the caller) and cached, so a feature the backend lacks is an
+  `UnsupportedCapabilityError` naming the backend, the feature and the operation instead of a silent
+  degrade or a fabricated verdict. A query emits the narrowest standard SMT-LIB 2.6 logic it needs,
+  falling back to the non-standard `ALL` only for datatypes and strings, which the standard logics
+  cover with nothing. Optimization is a z3 extension, so cvc5 is refused there rather than answering
+  a plain `check-sat` presented as an optimum. "Lacks the feature", "cannot be run" and "did not
+  decide" are three distinct reports, an undecided probe settles nothing, and a reply SMT-LIB does
+  not define — `maybe` — is a `SolverProcessError` about the executable rather than a capability
+  refusal.
+- **The path is gated in CI both with a solver and without one.** A differential gate requires the
+  solver's `sat`/`unsat` to agree with the evaluator's verdict over the conformance corpus, the
+  standard library, the OMG training corpus and deterministic randomized models — it found and
+  fixed a real division by zero answered as an infinity, and a redefining variation usage given a
+  sort of its own — and a portability harness reports pass/refuse/fail per capability against
+  whatever `OPENSYSML_SMT` names, wired to both z3 and cvc5.
+- `brew install opensysml` brings z3 along, so the path works out of the box on a Homebrew
+  install, and the install guide, troubleshooting page, environment reference and REPL command
+  reference each say how to get a solver otherwise.
+
+### A model is edited through the source it was parsed from
+
+- **`ApplyEdits` edits a loaded model by rewriting the bytes of its own source.**
+  `internal/core/edit` is a span-level engine that sets a feature's value or renames a declaration
+  and leaves every untouched byte identical, so comments and the text as typed survive an edit the
+  way they survive a save. The edited source is re-parsed and re-analyzed before it is handed back,
+  and the edits of a request are applied all of them or none. The source edited is the one the parse
+  read, named by its hash, so a file changed since then is refused rather than edited blind.
+- **An edit is judged only by the tiers the original's parse reached.** A model whose parse had
+  errors was never analyzed, so its semantic baseline was empty and every pre-existing name or type
+  error counted as one the edit introduced — refusing a good edit to a file with a syntax error
+  elsewhere. Renaming a referenced element, and creating or deleting an element, are refused with a
+  typed error rather than approximated.
+- **`opensysml` exposes it as `model.edit()`** — `set_value(target, value)`, `rename(target, name)`
+  and `apply()`, whose result saves the way a `Conversion` does — behind the `apply_edits`
+  capability, so a service too old to offer it says so instead of failing as an unimplemented
+  method.
+
+### Resolution cost
+
+- **Resolving a feature chain is linear in its length**, where a chain's prefixes used to be
+  re-resolved per segment, and an operand of a chain that is no reference is preserved rather than
+  dropped on the way.
 
 ### A model that states behavior converts to RDF
 
@@ -316,16 +409,14 @@ artifacts they describe really were called that.
   reference to a member of `OOSEM::'OOSEM Measures'`, and references to a decision node whose name
   is not registered as a symbol.
 
-## 0.1.0 — 2026-08-17
-
 ### RDF conversion is experimental
 
 - SysML ↔ RDF Turtle conversion is labelled **experimental**, in both directions, on every
-  surface that offers it. The mapping covers model structure only — 71 of the 120 models under
-  `examples/` convert and the other 49 are refused with the construct named — its vocabulary
-  may change without a compatibility path, and no round trip through a running triplestore has
-  been demonstrated (roadmap D1–D3, D6). Saving and converting notation (`.sysml`, `.kerml`) is
-  stable and unchanged.
+  surface that offers it. The mapping covers a model's structure and behavior but not its
+  expressions, a model it cannot write is refused with the construct named (the counts are
+  above), its vocabulary may change without a compatibility path, and no round trip through a
+  running triplestore has been demonstrated (roadmap D1–D3, D6). Saving and converting notation
+  (`.sysml`, `.kerml`) is stable and unchanged.
 - `sysml -convert` writes the status as a `note:` on **stderr**, so a conversion piped to a file
   or to stdout carries no extra bytes, and a refused conversion is labelled too. `-help` says
   the same.
@@ -333,11 +424,11 @@ artifacts they describe really were called that.
 - `ConvertResponse` carries `experimental` and `experimental_notice`, set before the conversion
   runs, so a client reads the status off a refusal as well as off a success. The `convert`
   capability is unchanged: the status is per conversion, not per service.
-- `pysysml` raises the status as `ExperimentalFeatureWarning` and exposes it as
-  `Conversion.experimental`/`.experimental_notice`, plus `pysysml.is_experimental(from, to)`.
+- `opensysml` raises the status as `ExperimentalFeatureWarning` and exposes it as
+  `Conversion.experimental`/`.experimental_notice`, plus `opensysml.is_experimental(from, to)`.
   A service too old to send the fields is read from the formats it reports instead, so an RDF
   conversion warns either way. Silence it with
-  `warnings.simplefilter("ignore", pysysml.ExperimentalFeatureWarning)` — no stable feature
+  `warnings.simplefilter("ignore", opensysml.ExperimentalFeatureWarning)` — no stable feature
   warns with that class.
 - The wording lives once, in `export.ExperimentalNotice`, so no surface can drift from another.
 
@@ -350,19 +441,41 @@ artifacts they describe really were called that.
   Flexo's `Namespaces.kt`, which is an addressing claim, not a demonstrated load.
 - The README capability table splits notation save (complete) from RDF conversion
   (experimental), and the guide, CLI and REPL references, Python guide and roadmap say the same.
+- Two example models come with a walkthrough of the commands that exercise them:
+  [`examples/solver-demo.sysml`](examples/solver-demo.sysml) for `%check`, `%explain`, `%solve`,
+  `%configure` and `%optimize`, and [`examples/views-demo.sysml`](examples/views-demo.sysml) for
+  `%view` and `%render` across the five rendering kinds and the text, Mermaid and Markdown forms.
 
 ### Release process
 
 - The CircleCI pipeline that builds release tags downloads the OMG training corpus and runs the
-  suite with `SYSTEMICA_REQUIRE_TRAINING_CORPUS=1`, so the corpus gate can no longer skip
+  suite with `OPENSYSML_REQUIRE_TRAINING_CORPUS=1`, so the corpus gate can no longer skip
   silently where a tag is cut. 0.0.9 listed that as a known limitation; it is closed.
 
 ### Known limitations
 
-- Everything 0.0.9 listed still stands, with the RDF limitation now stated as a feature status
-  rather than a footnote: expressions are not emitted as triples, a model whose behavior is
-  stated as action or state nodes is refused, and end-binding heads depend on
-  `sysx:sourceText`.
+- Of what 0.0.9 listed, the untested tag pipeline is closed above and the RDF refusal of a model
+  stating behavior is closed by the mapping's behavior coverage. What stands: expressions are not
+  emitted as triples and end-binding heads depend on `sysx:sourceText`, so RDF conversion is
+  stated as a feature status rather than a footnote; a `that` written inside a nested `action`,
+  `constraint` or transition-guard body binds to the innermost enclosing usage; an unqualified
+  standard library name requires an import, which is conformant and recorded as won't-do; and a
+  port that accepts TCP but never answers gRPC costs the Python client about 9 s rather than the
+  nominal 2.5 s `START_TIMEOUT`.
+- A package-owned binding connector does not propagate values; a binding declared in a
+  materialized type or usage body does.
+- Constraint solving is experimental and needs an external solver: `%check`, `%explain`, `%solve`
+  and `%configure` want z3 or cvc5, and `%optimize` wants z3, since optimization is a z3 extension
+  cvc5 does not implement. A condition the translation has no SMT-LIB form for refuses the whole
+  query rather than dropping the condition, and the guide covers the commands by reference rather
+  than in a chapter of its own.
+- An edit sets a feature's value or renames a declaration; creating or deleting an element, and
+  renaming one that is referenced, are refused.
+- Only an action member of a type is executable through `%invoke`; an operation written as a
+  `calc` or `constraint` is evaluated as an expression and reports that.
+- A rendering is tool-defined output (SysML v2 §10.2 leaves rendering to the tool), so what
+  `%render` and `sysml -render` produce is OpenSysML's own notation rather than a standard
+  interchange form.
 
 ## 0.0.9 — 2026-08-17
 

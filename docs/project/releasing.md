@@ -325,7 +325,7 @@ whole rule, so the happy path has no extra switch to forget. To rehearse a
 release:
 
 ```bash
-# 1. Declare a pre-release version, e.g. VERSION = "0.1.0rc1"
+# 1. Declare a pre-release version, e.g. VERSION = "0.3.0rc1"
 $EDITOR python/opensysml/_version.py
 # 2. Land it, then tag it
 git tag -a opensysml-v0.3.0rc1 -m "opensysml 0.3.0rc1" && git push origin opensysml-v0.3.0rc1
@@ -339,7 +339,7 @@ dependencies from PyPI:
 ```bash
 python -m venv /tmp/opensysml-rc && . /tmp/opensysml-rc/bin/activate
 pip install --index-url https://test.pypi.org/simple/ \
-            --extra-index-url https://pypi.org/simple/ opensysml==0.1.0rc1
+            --extra-index-url https://pypi.org/simple/ opensysml==0.3.0rc1
 python -c "import opensysml; print(opensysml.__version__)"
 ```
 
@@ -354,8 +354,8 @@ In a clean virtualenv, from the index — not from the source tree:
 
 ```bash
 python -m venv /tmp/opensysml-verify && . /tmp/opensysml-verify/bin/activate
-pip install opensysml==0.1.0
-python -c "import opensysml; print(opensysml.__version__)"    # must print 0.1.0
+pip install opensysml==0.3.0
+python -c "import opensysml; print(opensysml.__version__)"    # must print 0.3.0
 ```
 
 Then check the client end to end against a published core release, since that

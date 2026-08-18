@@ -52,7 +52,8 @@ func (r *Rendering) Text() string {
 // notices then account for one by one.
 func (r *Rendering) emptyReason() string {
 	if len(r.Notices) > 0 {
-		return fmt.Sprintf("the rendering is empty: nothing the view exposes is shown by a %s rendering", r.Kind)
+		return fmt.Sprintf("the rendering is empty: nothing the view exposes is shown by %s %s rendering",
+			r.Kind.article(), r.Kind)
 	}
 	return "the view exposes nothing; the rendering is empty"
 }

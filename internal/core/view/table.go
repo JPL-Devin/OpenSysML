@@ -65,7 +65,7 @@ func (r *Renderer) nestedViewRows(view *symbols.Symbol, rendered map[*symbols.Sy
 		out.Rows = append(out.Rows, []string{r.notationName(sub), declKind(sub), declType(sub), r.notationName(view)})
 		exposed, err := r.model.ExposedElements(sub)
 		if err == nil {
-			for _, elem := range dedupe(exposed) {
+			for _, elem := range exposed {
 				r.tableRows(elem, r.notationName(sub), map[*symbols.Symbol]bool{}, 0, out)
 			}
 		}

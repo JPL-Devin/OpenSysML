@@ -370,7 +370,8 @@ func TestRenderingReportsWhatItCannotRepresent(t *testing.T) {
 	if !strings.Contains(rendering.Text(), "not represented:") {
 		t.Errorf("text does not report what it dropped:\n%s", rendering.Text())
 	}
-	if !strings.Contains(rendering.Text(), "the rendering is empty") {
+	// The kind is named with the article it reads with, "an action" rather than "a action".
+	if !strings.Contains(rendering.Text(), "the rendering is empty: nothing the view exposes is shown by an action rendering") {
 		t.Errorf("text does not say the rendering came out empty:\n%s", rendering.Text())
 	}
 	if !strings.Contains(rendering.Mermaid(), "%% not represented:") {

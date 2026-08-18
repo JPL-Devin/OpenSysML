@@ -47,8 +47,8 @@ type WrongFormError struct {
 }
 
 func (e *WrongFormError) Error() string {
-	return fmt.Sprintf("%s: a %s rendering is not written as %s; ask for %s or %s",
-		e.View, e.Kind, e.Form, FormText, e.Kind.MachineForm())
+	return fmt.Sprintf("%s: %s %s rendering is not written as %s; ask for %s or %s",
+		e.View, e.Kind.article(), e.Kind, e.Form, FormText, e.Kind.MachineForm())
 }
 
 func (e *WrongFormError) Unwrap() error { return ErrWrongForm }
