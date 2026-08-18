@@ -528,6 +528,9 @@ func truncation(result *solve.Result) string {
 	if !result.Truncated {
 		return ", which are all of them"
 	}
+	if result.TimedOut {
+		return ", reported before the solver ran out of time"
+	}
 	if result.Undecided {
 		return ", reported before the solver stopped deciding"
 	}

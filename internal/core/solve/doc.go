@@ -125,23 +125,25 @@
 //
 // # Variant configuration
 //
-// Configure answers what variants a query's conditions permit. A variation point
-// translates as a finite datatype sort (Sort.Variation), so Query.Variations are
-// its variation variables: ConfigureWith checks a selection the caller chose
-// (pins with PinChosen), synthesises a consistent one when none is chosen, and
-// Enumerate lists consistent selections. Enumeration is one solver process per
-// solution: a fresh check-sat after asserting the negation of the complete
-// previous assignment, built from the solver's own terms rather than from
-// rendered text. Every variation variable is assigned in every solution, nested
-// variation points and constrained variants included, since they are variables
-// of the same query as any other condition.
+// A variation point translates as a finite datatype sort (Sort.Variation), so
+// Query.Variations are its variation variables. Query.FixValue chooses a variant
+// (PinChosen), which Solve then checks like any other fixed value, and with none
+// chosen Solve's model is a consistent selection. Configurations enumerates
+// consistent selections: one fresh check-sat per solution, each asserting the
+// negation of the complete previous assignment, built from the solver's own
+// terms rather than from rendered text. Every variation variable is assigned in
+// every solution, nested variation points and constrained variants included,
+// since they are variables of the same query as any other condition.
 //
 // The enumeration is bounded, in the spirit of the runtime's step budgets, by
 // DefaultMaxConfigurations solutions (OPENSYSML_SMT_MAX_CONFIGURATIONS overrides
-// it). Result.Truncated says the bound was reached, so results are exhaustive
-// only when a final check-sat answered unsat; nothing implies exhaustiveness that
-// was not shown. A query reading no variation point is a NoVariationsError
-// wrapping ErrNoVariations, not an empty enumeration.
+// it). Result.Truncated says the enumeration was cut short and why: AtBound for
+// the bound, Undecided for a solver that stopped deciding, with TimedOut when
+// the run's deadline was what stopped it — a deadline reports the solutions
+// already found rather than discarding them. Results are exhaustive only when a
+// final check-sat answered unsat; nothing implies exhaustiveness that was not
+// shown. A query reading no variation point is a NoVariationsError wrapping
+// ErrNoVariations, not an empty enumeration.
 //
 // Known limitations: only variation points in the translatable subset are
 // configured, so a variation whose variants carry collection-valued or otherwise

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -185,6 +186,37 @@ func TestConfigurationsStopAtTheirBound(t *testing.T) {
 	if !result.AtBound || result.Undecided {
 		t.Fatalf("at bound %v, undecided %v, want the bound as the reason",
 			result.AtBound, result.Undecided)
+	}
+}
+
+// TestConfigurationsKeepWhatTheyFoundWhenTimeRunsOut: a deadline part way
+// through an enumeration reports the configurations already found, as truncated
+// and undecided, rather than discarding them for a bare `unknown`.
+func TestConfigurationsKeepWhatTheyFoundWhenTimeRunsOut(t *testing.T) {
+	q, _ := variantQuery(t, "test::ringFamily::variantsAgree")
+	solver := fakeSolver(t, "sat-then-hang")
+	solver.Timeout = 200 * time.Millisecond
+	solver.Env = append(solver.Env, "OPENSYSML_TEST_SOLVER_MODEL="+
+		"((|test::ringFamily::nesting| |test::ringFamily::nesting::nestingTrue|)"+
+		" (|test::ringFamily::trim| |test::ringFamily::trim::gilded|))")
+
+	result, err := solver.Configurations(context.Background(), q, 0)
+	if err != nil {
+		t.Fatalf("enumerate configurations: %v", err)
+	}
+	if result.Status != StatusSat || len(result.Solutions) != 1 {
+		t.Fatalf("status %s, %d selections, want the one reported before the deadline",
+			result.Status, len(result.Solutions))
+	}
+	if !result.Truncated || !result.Undecided || !result.TimedOut {
+		t.Fatalf("truncated %v, undecided %v, timed out %v, want all three",
+			result.Truncated, result.Undecided, result.TimedOut)
+	}
+	if !strings.Contains(result.Reason, "ran out of time") {
+		t.Errorf("reason %q does not say the solver ran out of time", result.Reason)
+	}
+	if got := result.Solutions[0][0].Value; got != "test::ringFamily::nesting::nestingTrue" {
+		t.Errorf("the selection reported %s, want the nesting the solver gave", got)
 	}
 }
 

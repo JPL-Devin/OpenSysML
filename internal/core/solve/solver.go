@@ -112,8 +112,9 @@ type Result struct {
 	// Solver names the solver that answered.
 	Solver string
 
-	// TimedOut reports that Status is StatusUnknown because the solver ran out
-	// of time rather than because it gave up.
+	// TimedOut reports that the solver ran out of time rather than giving up:
+	// Status is StatusUnknown, or StatusSat and Undecided for an enumeration
+	// reporting what it had found when the deadline fired.
 	TimedOut bool
 
 	// Reason is what the solver said when asked why it answered `unknown`,
@@ -139,8 +140,8 @@ type Result struct {
 	AtBound bool
 
 	// Undecided reports that the enumeration stopped because the solver stopped
-	// deciding, whether or not it said why: the solutions found stand, and
-	// whether others exist is unknown.
+	// deciding or ran out of time (TimedOut), whether or not it said why: the
+	// solutions found stand, and whether others exist is unknown.
 	Undecided bool
 
 	// Core holds the conflicting assertions for a query Explain found unsat, and
@@ -251,9 +252,17 @@ func (s *Solver) solve(ctx context.Context, q *Query, dialogue func(*session) (*
 			if terr != nil {
 				return nil, terr
 			}
+			reason := "the solver ran out of time after " + timeout.String()
+			// A dialogue reporting many answers keeps those it reported before
+			// the deadline; whether any others exist is undecided.
+			if found := foundBeforeDeadline(err); found != nil {
+				found.Query, found.Solver, found.Elapsed = q, s.Name, time.Since(started)
+				found.TimedOut, found.Reason = true, reason
+				return found, nil
+			}
 			return &Result{
 				Query: q, Status: StatusUnknown, Solver: s.Name,
-				TimedOut: true, Reason: "the solver ran out of time after " + timeout.String(),
+				TimedOut: true, Reason: reason,
 				Elapsed: time.Since(started),
 			}, nil
 		}

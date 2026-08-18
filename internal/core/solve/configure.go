@@ -169,10 +169,19 @@ func (s *session) enumerate(q *Query, vars []*Var, limit int) (*Result, error) {
 		return nil, err
 	}
 	result := &Result{}
+	// A failure past the first configuration carries the ones already reported,
+	// so a deadline mid-enumeration does not discard them.
+	fail := func(err error) (*Result, error) {
+		if len(result.Solutions) == 0 {
+			return nil, err
+		}
+		result.Status, result.Truncated, result.Undecided = StatusSat, true, true
+		return nil, &partialResult{result: result, err: err}
+	}
 	for {
 		status, err := s.verdict()
 		if err != nil {
-			return nil, err
+			return fail(err)
 		}
 		switch status {
 		case StatusUnsat:
@@ -195,7 +204,7 @@ func (s *session) enumerate(q *Query, vars []*Var, limit int) (*Result, error) {
 		}
 		values, err := s.values(vars)
 		if err != nil {
-			return nil, err
+			return fail(err)
 		}
 		result.Solutions = append(result.Solutions, values)
 		if len(result.Solutions) >= limit {
@@ -203,9 +212,33 @@ func (s *session) enumerate(q *Query, vars []*Var, limit int) (*Result, error) {
 			return result, nil
 		}
 		if err := s.deny(values); err != nil {
-			return nil, err
+			return fail(err)
 		}
 	}
+}
+
+// partialResult carries the answers a dialogue had already reported when it
+// failed, so a deadline is answered with them rather than with nothing.
+type partialResult struct {
+	result *Result
+	err    error
+}
+
+// Error reports the failure that ended the dialogue.
+func (e *partialResult) Error() string { return e.err.Error() }
+
+// Unwrap returns that failure, so a caller not reading the partial answers sees
+// the error it always did.
+func (e *partialResult) Unwrap() error { return e.err }
+
+// foundBeforeDeadline is the partial answers a failed dialogue reported, or nil
+// when it reported none.
+func foundBeforeDeadline(err error) *Result {
+	var partial *partialResult
+	if errors.As(err, &partial) {
+		return partial.result
+	}
+	return nil
 }
 
 // deny excludes the configuration just reported and asks again, so the next
