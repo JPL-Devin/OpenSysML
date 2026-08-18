@@ -23,6 +23,12 @@ const (
 	// SolveUnknown means the solver did not decide: it timed out, or gave up on
 	// arithmetic it cannot decide.
 	SolveUnknown
+	// SolveUnbounded means the conditions are satisfiable but an objective
+	// improves without limit, so it has no optimum.
+	SolveUnbounded
+	// SolveNoOptimum means the conditions are satisfiable and an objective's
+	// optimum was not established: only a bound, or an unverified answer.
+	SolveNoOptimum
 	// SolveUnavailable means nothing was asked: no solver is installed, the
 	// element is outside the translatable subset, or the solver failed.
 	SolveUnavailable
@@ -37,6 +43,10 @@ func (s SolveStatus) String() string {
 		return "unsat"
 	case SolveUnknown:
 		return "unknown"
+	case SolveUnbounded:
+		return "unbounded"
+	case SolveNoOptimum:
+		return "no-optimum"
 	default:
 		return "unavailable"
 	}

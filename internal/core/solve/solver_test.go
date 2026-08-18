@@ -21,6 +21,11 @@ const scenarioEnv = "OPENSYSML_TEST_SOLVER_SCENARIO"
 // `get-unsat-core`, which is how a refused or malformed core is tested.
 const coreEnv = "OPENSYSML_TEST_SOLVER_CORE"
 
+// objectivesEnv names the environment variable holding the reply a fake solver
+// gives to `get-objectives`, which is how the forms an optimum is reported in are
+// tested without a solver.
+const objectivesEnv = "OPENSYSML_TEST_SOLVER_OBJECTIVES"
+
 // TestHelperSolverProcess is the fake solver: with scenarioEnv set it plays that
 // scenario and exits before the framework prints, so stdout is only SMT-LIB.
 func TestHelperSolverProcess(t *testing.T) {
@@ -63,6 +68,19 @@ func playScenario(scenario string, in *os.File, out, errOut *os.File) int {
 				}
 				fmt.Fprintln(out, "sat")
 				continue
+			case "optimal", "optimal-unknown":
+				// The query is satisfiable; the checks after it ask whether a
+				// better value is feasible, and none is.
+				if checks == 1 {
+					fmt.Fprintln(out, "sat")
+					continue
+				}
+				if scenario == "optimal-unknown" {
+					fmt.Fprintln(out, "unknown")
+					continue
+				}
+				fmt.Fprintln(out, "unsat")
+				continue
 			case "silent":
 				return 0
 			case "crash":
@@ -91,6 +109,8 @@ func playScenario(scenario string, in *os.File, out, errOut *os.File) int {
 				continue
 			}
 			fmt.Fprintln(out, os.Getenv(coreEnv))
+		case strings.HasPrefix(cmd, "(get-objectives"):
+			fmt.Fprintln(out, os.Getenv(objectivesEnv))
 		case strings.HasPrefix(cmd, "(get-value"):
 			fmt.Fprintln(out, os.Getenv("OPENSYSML_TEST_SOLVER_MODEL"))
 		case strings.HasPrefix(cmd, "(get-info"):
