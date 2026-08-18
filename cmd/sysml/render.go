@@ -34,6 +34,7 @@ func runRender(files []string) error {
 	}
 	writeLines(os.Stderr, report.Loaded)
 	writeLines(os.Stderr, report.Found)
+	writeLines(os.Stderr, report.Declared)
 	if report.Errors {
 		return fmt.Errorf("%s did not analyse cleanly; nothing was rendered", files[0])
 	}

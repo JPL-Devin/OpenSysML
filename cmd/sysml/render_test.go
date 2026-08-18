@@ -35,6 +35,9 @@ func TestRenderWritesTheArtifactOnStdout(t *testing.T) {
 	if strings.Contains(got.stdout, "✓ package Demo") {
 		t.Errorf("the load report landed in the artifact:\n%s", got.stdout)
 	}
+	if !strings.Contains(got.stderr, "package Demo") {
+		t.Errorf("stderr does not say what the load declared:\n%s", got.stderr)
+	}
 }
 
 func TestRenderTextFormAndOutputFile(t *testing.T) {
