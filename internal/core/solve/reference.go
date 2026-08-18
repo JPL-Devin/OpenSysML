@@ -135,7 +135,12 @@ func (t *translator) datatype(origin *symbols.Symbol, values []*symbols.Symbol) 
 	if sort, ok := t.sorts[name]; ok {
 		return sort
 	}
-	sort := Sort{Kind: SortDatatype, Name: name, Origin: t.fqn(origin)}
+	sort := Sort{
+		Kind:      SortDatatype,
+		Name:      name,
+		Origin:    t.fqn(origin),
+		Variation: t.model.IsVariationFeature(origin),
+	}
 	for _, value := range values {
 		sort.Values = append(sort.Values, t.fqn(value))
 	}

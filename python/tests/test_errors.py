@@ -1,4 +1,4 @@
-"""Tests for translating gRPC failures into the pysysml exception hierarchy."""
+"""Tests for translating gRPC failures into the opensysml exception hierarchy."""
 
 import builtins
 import warnings
@@ -6,14 +6,14 @@ import warnings
 import grpc
 import pytest
 
-from pysysml import errors
-from pysysml.errors import (
+from opensysml import errors
+from opensysml.errors import (
     ConnectionError,
     ExecutionError,
     InvalidRequestError,
     ModelFileNotFoundError,
     ModelNotFoundError,
-    PySysMLError,
+    OpenSysMLError,
     ServiceError,
     ServiceTimeoutError,
     SymbolNotFoundError,
@@ -73,7 +73,7 @@ class TestStatusTranslation:
     def test_each_status_becomes_the_class_for_it(self, code, expected):
         translated = from_rpc_error(FakeRpcError(code, "the service said so"))
         assert isinstance(translated, expected)
-        assert isinstance(translated, PySysMLError)
+        assert isinstance(translated, OpenSysMLError)
         assert "the service said so" in str(translated)
 
     def test_a_status_without_details_still_says_which_status(self):
@@ -134,7 +134,7 @@ class TestStatusTranslation:
 class TestConnectionError:
     def test_it_is_catchable_as_the_builtin_connection_error(self):
         assert issubclass(ConnectionError, builtins.ConnectionError)
-        assert issubclass(ConnectionError, PySysMLError)
+        assert issubclass(ConnectionError, OpenSysMLError)
 
     def test_a_translated_one_keeps_the_status_it_came_from(self):
         translated = from_rpc_error(
@@ -153,8 +153,8 @@ class TestExecutionError:
         with pytest.raises(RuntimeError):
             raise ExecutionError("evaluation failed")
 
-    def test_it_is_a_pysysml_error(self):
-        assert issubclass(ExecutionError, PySysMLError)
+    def test_it_is_a_opensysml_error(self):
+        assert issubclass(ExecutionError, OpenSysMLError)
 
     def test_it_carries_the_diagnostics_behind_the_failure(self):
         exc = ExecutionError("evaluation failed", diagnostics=["d"])
@@ -171,11 +171,11 @@ class TestExecutionError:
         assert "ExecutionError" in str(caught[0].message)
 
     def test_the_old_name_is_gone_from_the_star_import_surface(self):
-        # Which is the point: `from pysysml.errors import *` no longer shadows
+        # Which is the point: `from opensysml.errors import *` no longer shadows
         # the built-in RuntimeError.
         assert "RuntimeError" not in errors.__all__
         namespace = {}
-        exec("from pysysml.errors import *", namespace)
+        exec("from opensysml.errors import *", namespace)
         assert "RuntimeError" not in namespace
 
     def test_an_unknown_attribute_is_still_an_attribute_error(self):
@@ -201,8 +201,8 @@ class TestSymbolNotFoundError:
 class TestPackageSurface:
     def test_every_exception_is_catchable_from_the_package(self):
         # A caller catches what the package exports; an exception reachable only
-        # under pysysml.errors is one a documented failure cannot be caught by.
-        import pysysml
+        # under opensysml.errors is one a documented failure cannot be caught by.
+        import opensysml
 
         exceptions = {
             name for name in errors.__all__
@@ -211,7 +211,7 @@ class TestPackageSurface:
         }
         missing = sorted(
             name for name in exceptions
-            if getattr(pysysml, name, None) is not getattr(errors, name)
+            if getattr(opensysml, name, None) is not getattr(errors, name)
         )
         assert missing == []
-        assert exceptions <= set(pysysml.__all__)
+        assert exceptions <= set(opensysml.__all__)

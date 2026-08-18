@@ -101,6 +101,28 @@ func (m *Model) DimensionOfExpr(scope *symbols.Scope, node ast.Node) (Dimension,
 	return Dimension{}, false
 }
 
+// DimensionOfFeature reports the dimension a feature's values are measured in,
+// as its declared quantity type fixes it.
+func (m *Model) DimensionOfFeature(sym *symbols.Symbol) (Dimension, bool) {
+	if m == nil {
+		return Dimension{}, false
+	}
+	return m.dimensionOfFeature(sym)
+}
+
+// DimensionOfUnit reports the dimension a reduced unit measures in, so a value
+// carrying a unit can be checked against the dimension a feature declares.
+func (m *Model) DimensionOfUnit(unit UnitTerm) (Dimension, bool) {
+	if m == nil {
+		return Dimension{}, false
+	}
+	term, ok := m.dimensionOfUnitTerm(unit)
+	if !ok {
+		return Dimension{}, false
+	}
+	return Dimension{Term: term}, true
+}
+
 // dimensionOfQuantity reports the dimension of a magnitude with a unit
 // (`1000.0[m]`): the dimension of the unit its reduction is over.
 func (m *Model) dimensionOfQuantity(scope *symbols.Scope, n *ast.IndexExpr) (Dimension, bool) {

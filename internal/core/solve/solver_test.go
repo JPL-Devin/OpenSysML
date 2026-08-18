@@ -45,13 +45,24 @@ func playScenario(scenario string, in *os.File, out, errOut *os.File) int {
 		return 0
 	}
 	var labels []string
+	checks := 0
 	for cmd := range readCommands(in) {
 		if label, ok := namedLabel(cmd); ok {
 			labels = append(labels, label)
 		}
 		switch {
 		case strings.HasPrefix(cmd, "(check-sat"):
+			checks++
 			switch scenario {
+			case "sat-then-hang":
+				// One answer, then silence: an enumeration meets the deadline
+				// having already reported a configuration.
+				if checks > 1 {
+					time.Sleep(time.Minute)
+					return 0
+				}
+				fmt.Fprintln(out, "sat")
+				continue
 			case "silent":
 				return 0
 			case "crash":

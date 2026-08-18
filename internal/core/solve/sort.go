@@ -41,6 +41,10 @@ type Sort struct {
 	// Origin is the enumeration definition or variation point a datatype sort
 	// was declared for; nil for a scalar sort.
 	Origin string
+
+	// Variation marks a datatype sort declared for a variation point, whose
+	// values are its variants rather than an enumeration's literals.
+	Variation bool
 }
 
 // The scalar sorts, which every query may use without declaring them.

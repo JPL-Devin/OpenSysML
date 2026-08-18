@@ -8,7 +8,7 @@ units, an exhausted step budget) is not an answer, and is reported as
 :attr:`Verdict.error`, or raised by :meth:`Verdict.raise_for_error`.
 """
 
-from pysysml.errors import ExecutionError
+from opensysml.errors import ExecutionError
 
 #: Verdict kinds, as the service reports them.
 KIND_CONSTRAINT = "constraint"
@@ -96,7 +96,7 @@ class Verdict:
         return not self._pb.error
 
     def raise_for_error(self):
-        """Raise :class:`~pysysml.errors.ExecutionError` if evaluation failed.
+        """Raise :class:`~opensysml.errors.ExecutionError` if evaluation failed.
 
         A verdict of false raises nothing: it is the model's answer. Call this
         where a failure to evaluate must not be read as a failing verdict.

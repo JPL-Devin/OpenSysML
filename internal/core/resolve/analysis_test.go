@@ -247,3 +247,232 @@ func TestResolveMissingStandardViewNamespace(t *testing.T) {
 		}
 	}
 }
+
+// A binding end is a feature chain whose segments are qualified names, as the
+// Open-MBEE DesertKite model writes them. Every segment must resolve to the
+// declaration it names — resolution walks the chain, it does not stop at the
+// last segment.
+func TestResolveQualifiedBindingChain(t *testing.T) {
+	src := `package 'Desert Kites' {
+		part 'Kite Environment' {
+			part 'Region Earth Surface';
+		}
+		part 'Kite System' {
+			part 'Desert Kite' {
+				part 'Kite Wall' { attribute 'Wall Height'; }
+			}
+		}
+		package 'Kite Requirements' { attribute 'Minimum Wall Height'; }
+
+		binding bind 'Kite Environment'::'Region Earth Surface'.'Kite System'::'Desert Kite'.'Kite Wall'.'Wall Height'
+			= 'Kite Requirements'::'Minimum Wall Height';
+	}`
+	p := parser.New(source.New("dk.sysml", []byte(src)))
+	root := p.ParseFile()
+	if len(p.Diagnostics) != 0 {
+		t.Fatalf("parse diagnostics: %v", p.Diagnostics)
+	}
+	r := New(symbols.NewIndexFromDoc("dk.sysml", root))
+	r.ResolveDocument("dk.sysml", root)
+	if len(r.Diagnostics) != 0 {
+		t.Fatalf("expected no diagnostics, got %v", r.Diagnostics)
+	}
+
+	binding := findBindingUsage(t, root.Members)
+	if len(binding.Relationships) != 1 || binding.Relationships[0].Kind != ast.RelReferences {
+		t.Fatalf("expected one reference-subsetting end, got %v", binding.Relationships)
+	}
+
+	// Source end: the whole chain, outermost segment last.
+	wantSource := []string{
+		"Kite Environment", "Region Earth Surface",
+		"Kite System", "Desert Kite",
+		"Kite Wall", "Wall Height",
+	}
+	if got := resolvedSegments(t, r, binding.Relationships[0].Target); !equalStrings(got, wantSource) {
+		t.Errorf("source end resolved to %v, want %v", got, wantSource)
+	}
+
+	wantTarget := []string{"Kite Requirements", "Minimum Wall Height"}
+	if got := resolvedSegments(t, r, binding.Value); !equalStrings(got, wantTarget) {
+		t.Errorf("target end resolved to %v, want %v", got, wantTarget)
+	}
+}
+
+// A misspelled chain segment is one mistake, so it is reported once: the
+// outward reading is only a probe until it is the one adopted.
+func TestResolveChainBadQualifiedSegmentReportedOnce(t *testing.T) {
+	src := `package P {
+		part a { part b; }
+		part c;
+		binding bind a.'No Such'::x = c;
+	}`
+	p := parser.New(source.New("chain.sysml", []byte(src)))
+	root := p.ParseFile()
+	if len(p.Diagnostics) != 0 {
+		t.Fatalf("parse diagnostics: %v", p.Diagnostics)
+	}
+	r := New(symbols.NewIndexFromDoc("chain.sysml", root))
+	r.ResolveDocument("chain.sysml", root)
+	if len(r.Diagnostics) != 1 {
+		t.Fatalf("expected one diagnostic, got %d: %v", len(r.Diagnostics), r.Diagnostics)
+	}
+	if !strings.Contains(r.Diagnostics[0].Message, "No Such") {
+		t.Errorf("diagnostic %q does not name the bad segment", r.Diagnostics[0].Message)
+	}
+}
+
+// A segment reported unresolved leaves no symbol behind for a reader to jump to.
+func TestResolveChainUnresolvedSegmentRecordsNoSymbol(t *testing.T) {
+	src := `package P {
+		part a;
+		part B { part right; }
+		part c;
+		binding bind a.B::wrong = c;
+	}`
+	p := parser.New(source.New("probe.sysml", []byte(src)))
+	root := p.ParseFile()
+	if len(p.Diagnostics) != 0 {
+		t.Fatalf("parse diagnostics: %v", p.Diagnostics)
+	}
+	r := New(symbols.NewIndexFromDoc("probe.sysml", root))
+	r.ResolveDocument("probe.sysml", root)
+	if len(r.Diagnostics) == 0 {
+		t.Fatal("expected the chain to be reported unresolved")
+	}
+
+	binding := findBindingUsage(t, root.Members)
+	chain, ok := binding.Relationships[0].Target.(*ast.FeatureChainExpr)
+	if !ok {
+		t.Fatalf("expected a feature chain end, got %T", binding.Relationships[0].Target)
+	}
+	if sym, ok := r.PartSymbol(chain.Member, 0); ok {
+		t.Errorf("discarded reading left segment B pointing at %s", sym.Name)
+	}
+}
+
+// A qualified chain segment names a member of the previous element when it has
+// one, even where an outer declaration spells the same name.
+func TestResolveChainPrefersMemberOverOuterDeclaration(t *testing.T) {
+	src := `package P {
+		part a { part B { part c; } }
+		part B { part c; }
+		part t;
+		binding bind a.B::c = t;
+	}`
+	p := parser.New(source.New("inner.sysml", []byte(src)))
+	root := p.ParseFile()
+	if len(p.Diagnostics) != 0 {
+		t.Fatalf("parse diagnostics: %v", p.Diagnostics)
+	}
+	r := New(symbols.NewIndexFromDoc("inner.sysml", root))
+	r.ResolveDocument("inner.sysml", root)
+	if len(r.Diagnostics) != 0 {
+		t.Fatalf("expected no diagnostics, got %v", r.Diagnostics)
+	}
+
+	binding := findBindingUsage(t, root.Members)
+	chain, ok := binding.Relationships[0].Target.(*ast.FeatureChainExpr)
+	if !ok {
+		t.Fatalf("expected a feature chain end, got %T", binding.Relationships[0].Target)
+	}
+	inner := innerSymbol(t, r, chain.Operand, "B")
+	got, ok := r.PartSymbol(chain.Member, 0)
+	if !ok {
+		t.Fatal("segment B did not resolve")
+	}
+	if got != inner {
+		t.Errorf("segment B resolved to the declaration in %v, want a's own member", got.OwnerScope)
+	}
+}
+
+// innerSymbol returns the member the chain's previous element declares itself.
+func innerSymbol(t *testing.T, r *Resolver, operand ast.Node, name string) *symbols.Symbol {
+	t.Helper()
+	ref, ok := operand.(*ast.FeatureReference)
+	if !ok {
+		t.Fatalf("expected a feature reference operand, got %T", operand)
+	}
+	operandSym, ok := r.PartSymbol(ref.Name, 0)
+	if !ok {
+		t.Fatal("chain operand did not resolve")
+	}
+	if operandSym.Scope == nil {
+		t.Fatalf("%s has no scope", operandSym.Name)
+	}
+	sym, ok := operandSym.Scope.LookupLocal(name)
+	if !ok {
+		t.Fatalf("%s declares no member %q", operandSym.Name, name)
+	}
+	return sym
+}
+
+// resolvedSegments returns the name of the symbol each segment of a binding end
+// resolved to, in source order.
+func resolvedSegments(t *testing.T, r *Resolver, end ast.Node) []string {
+	t.Helper()
+	switch v := end.(type) {
+	case *ast.FeatureChainExpr:
+		return append(resolvedSegments(t, r, v.Operand), partNames(t, r, v.Member)...)
+	case *ast.FeatureReference:
+		return partNames(t, r, v.Name)
+	case *ast.QualifiedName:
+		return partNames(t, r, v)
+	}
+	t.Fatalf("unexpected binding end node %T", end)
+	return nil
+}
+
+func partNames(t *testing.T, r *Resolver, qn *ast.QualifiedName) []string {
+	t.Helper()
+	var out []string
+	for i, part := range qn.Parts {
+		sym, ok := r.PartSymbol(qn, i)
+		if !ok {
+			t.Errorf("segment %q did not resolve", part.Text)
+			out = append(out, "<unresolved>")
+			continue
+		}
+		out = append(out, sym.Name)
+	}
+	return out
+}
+
+func findBindingUsage(t *testing.T, members []ast.Node) *ast.Usage {
+	t.Helper()
+	var found *ast.Usage
+	var walk func(nodes []ast.Node)
+	walk = func(nodes []ast.Node) {
+		for _, n := range nodes {
+			switch v := n.(type) {
+			case *ast.Membership:
+				walk([]ast.Node{v.Member})
+			case *ast.Package:
+				walk(v.Members)
+			case *ast.Usage:
+				if v.Kind == ast.UsageBinding {
+					found = v
+					return
+				}
+				walk(v.Members)
+			}
+		}
+	}
+	walk(members)
+	if found == nil {
+		t.Fatal("no binding usage in parsed document")
+	}
+	return found
+}
+
+func equalStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}

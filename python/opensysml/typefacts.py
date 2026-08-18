@@ -8,7 +8,7 @@ exercised over synthetic symbol trees.
 from dataclasses import dataclass, field
 from typing import Optional, Tuple
 
-from pysysml.values import value_to_python
+from opensysml.values import value_to_python
 
 
 @dataclass(frozen=True)

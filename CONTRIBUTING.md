@@ -45,7 +45,7 @@ make install
 
 # Python gRPC bindings
 make python-proto    # regenerate protobuf stubs
-make python-install  # install pysysml package
+make python-install  # install opensysml package
 make python-test     # run Python binding tests
 
 # Clean build artifacts
@@ -236,7 +236,7 @@ github.com/Open-MBEE/OpenSysML
 ├── internal/lsp/          # LSP implementation
 ├── internal/grpc/         # gRPC service implementation
 ├── internal/repl/         # REPL implementation
-├── python/                # Python client bindings (pysysml)
+├── python/                # Python client bindings (opensysml)
 ├── docs/                  # Documentation
 │   ├── guide/             # The handbook, in reading order
 │   ├── reference/         # CLI, REPL, environment, APIs, RDF mapping

@@ -15,11 +15,11 @@ from concurrent import futures
 import grpc
 import pytest
 
-from pysysml.capabilities import CAPABILITY_APPLY_EDITS, MissingCapabilityError
-from pysysml.connection import Connection
-from pysysml.conversion import Conversion, FORMAT_SYSML
-from pysysml.edit import EditResult
-from pysysml.errors import (
+from opensysml.capabilities import CAPABILITY_APPLY_EDITS, MissingCapabilityError
+from opensysml.connection import Connection
+from opensysml.conversion import Conversion, FORMAT_SYSML
+from opensysml.edit import EditResult
+from opensysml.errors import (
     EditError,
     EditResultError,
     EditTargetError,
@@ -29,7 +29,7 @@ from pysysml.errors import (
     OverlappingEditsError,
     RenameReferencedError,
 )
-from pysysml.proto import sysml_pb2, sysml_pb2_grpc
+from opensysml.proto import sysml_pb2, sysml_pb2_grpc
 
 MODEL = """package Demo {
     // The mass of one unit, measured on the bench.
@@ -60,7 +60,7 @@ MODEL = """package Demo {
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 GRPC_BINARIES = (
     os.path.join(REPO_ROOT, "bin", "sysml-grpc"),
-    os.path.join(os.path.expanduser("~"), ".pysysml", "bin", "sysml-grpc"),
+    os.path.join(os.path.expanduser("~"), ".opensysml", "bin", "sysml-grpc"),
 )
 
 

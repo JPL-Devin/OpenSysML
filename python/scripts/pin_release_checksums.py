@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pin the SHA-256 digest of every asset of a release into pysysml.
+"""Pin the SHA-256 digest of every asset of a release into opensysml.
 
 The download check is otherwise same-origin: the .sha256 served beside a binary
 comes from whoever served the binary, so a republished release would be trusted.
@@ -29,7 +29,7 @@ import urllib.error
 import urllib.request
 
 BINARY_FILE = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pysysml", "binary.py"
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "opensysml", "binary.py"
 )
 DEFAULT_REPO = "Open-MBEE/OpenSysML"
 ASSET_PREFIX = "sysml-grpc-"
@@ -78,7 +78,7 @@ def pinned_table(binary_file=None):
     package's dependencies nor an installed distribution.
 
     Args:
-        binary_file (str, optional): Path to pysysml/binary.py
+        binary_file (str, optional): Path to opensysml/binary.py
 
     Returns:
         dict: repo -> version -> asset -> digest
@@ -223,7 +223,7 @@ def write_table(table, binary_file=None):
 
     Args:
         table (dict): repo -> version -> asset -> digest
-        binary_file (str, optional): Path to pysysml/binary.py
+        binary_file (str, optional): Path to opensysml/binary.py
 
     Raises:
         PinError: If the literal cannot be located to replace
@@ -272,7 +272,7 @@ def main(argv=None):
     parser.add_argument(
         "--write",
         action="store_true",
-        help="rewrite the table in pysysml/binary.py instead of printing it",
+        help="rewrite the table in opensysml/binary.py instead of printing it",
     )
     parser.add_argument(
         "--check",
