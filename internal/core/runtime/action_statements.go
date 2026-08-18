@@ -44,11 +44,20 @@ func (h *actionStmtHost) send(ec *EvalContext, s lower.Send) error {
 	return h.exec.ctx.post(h.exec.graph.Connections, msg, s, h.exec.self)
 }
 
-// assignOuter writes a name the body's blocks do not declare to the action's
-// features, which every one of its tokens shares.
+// assignOuter writes a name the body's blocks do not declare to the feature of
+// the object performing the action, and to the action's own features — which
+// every one of its tokens shares — when the object has no such feature.
 func (h *actionStmtHost) assignOuter(env *stmtEnv, name string, value Value, _ lower.Assign) error {
+	if written, err := assignPerformerFeature(h.exec.ctx, h.exec.self, name, value); written || err != nil {
+		return err
+	}
 	env.data[name] = value
 	return nil
+}
+
+// performer is the object performing the action this body belongs to.
+func (h *actionStmtHost) performer() *Instance {
+	return h.exec.self
 }
 
 // acceptReturn rejects a `return`: an action node computes no result to return.

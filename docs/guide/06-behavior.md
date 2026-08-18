@@ -105,6 +105,83 @@ sysml> %advance 30
 
 **See [examples/action-executor-demo.sysml](../../examples/action-executor-demo.sysml) and [examples/state-machine-demo.sysml](../../examples/state-machine-demo.sysml) for complete workflows.**
 
+## An object runs the behaviors its type exhibits
+
+A type that exhibits a state machine or performs an action binds that behavior to every object of
+the type: materializing the object gives it an execution of its own, bound to its identity. Two
+objects of one type run two machines, with their own current state, event queue and feature values,
+and what a body assigns is the feature value of the object performing it.
+
+```sysml
+sysml> part def Monitor {
+  ...>     attribute count = 0;
+  ...>     exhibit state modes {
+  ...>         entry; then idle;
+  ...>         state idle {
+  ...>             entry action bump { assign count := count + 1; }
+  ...>             accept after 10 then awake;
+  ...>         }
+  ...>         state awake { entry action mark { assign count := count + 10; } }
+  ...>     }
+  ...>     action bumpBy { in n; first apply; action apply { assign count := count + n; } }
+  ...> }
+✓ part def Monitor
+
+sysml> %instantiate Monitor
+✓ Created instance of Monitor
+  ID: 1
+  Use %features Monitor to inspect
+
+sysml> %state Monitor
+✓ Debugging state machine "modes" exhibited by object #1 of "Monitor"
+  Current state: idle
+  Time: 0.00
+  Events: 1
+
+sysml> %step
+✓ Event dispatched
+  Current state: awake
+  Time: 10.00
+  Events: 0
+
+sysml> %features Monitor
+Instance: Monitor (ID: 1)
+Features:
+  count = 11
+```
+
+`%instantiate` started the machine and `%state Monitor` bound the debugger to *that object's*
+machine rather than to a detached run of the usage, so `%step`, `%advance`, `%current` and
+`%events` drive it and `%features` shows what its entry actions wrote — `1` from `idle`, then
+`10` more from `awake` once the timer was dispatched.
+
+**When a machine starts, and how far it runs.** The object's feature values are built and its
+constant defaults evaluated first, so an entry action sees declared initial values; the machine is
+then initialized and run to *quiescence* — no event due at the current time, no runnable do action,
+no message in flight. A machine waiting on a timer or an `accept` is quiescent, and advancing time
+is what moves it on. Objects that signal each other are drained together, bounded by the event and
+do-step budgets in [reference/environment.md](../reference/environment.md): an exchange that never
+settles reports a budget error rather than hanging. Materializing the same name twice makes a second
+object with its own identity and its own machines; `%instantiate` reports the new object, and the
+name then denotes it.
+
+**Invoking an operation.** `%invoke <object> <op> [<p>=<expr>]` runs an action the object's type
+owns, performed by that object:
+
+```sysml
+sysml> %invoke Monitor bumpBy n=4
+✓ Invoked bumpBy on object #1 of "Monitor"
+
+sysml> %features Monitor
+Instance: Monitor (ID: 1)
+Features:
+  count = 15
+```
+
+Each argument is written `<parameter>=<expression>`; an unbound parameter, an argument naming no
+parameter, and an operation the type does not own are each reported as errors. A `calc` or
+`constraint` named as an operation is not invocable this way yet.
+
 ## Token-flow patterns
 
 Every model below is in

@@ -176,9 +176,10 @@ func (obj *Instance) carried(ctx *Context) []Value {
 // derivedFeatureValue reports whether the feature value holds what a value expression states,
 // which a new context computes again from the declarations that expression now
 // reads. What a variation's default states is a variant rather than a value, so
-// the object bound to it is carried instead of bound again.
+// the object bound to it is carried instead of bound again. A value a run wrote
+// is the object's own state, which no default derives again.
 func (ctx *Context) derivedFeatureValue(s *FeatureValue) bool {
-	if s.Feature == nil || !ctx.valueBinds(s.Feature) {
+	if s.Written || s.Feature == nil || !ctx.valueBinds(s.Feature) {
 		return false
 	}
 	return !ctx.model.IsVariationFeature(s.Feature.Symbol)
@@ -188,7 +189,7 @@ func (ctx *Context) derivedFeatureValue(s *FeatureValue) bool {
 // subsetting it, which are read again here since one of them may be derived from
 // a declaration that changed. A collection of objects is kept: they are carried.
 func (ctx *Context) collectedFeatureValue(s *FeatureValue) bool {
-	if !s.Materialized || (s.Values.Kind != ValSequence && s.Values.Kind != ValSet) {
+	if s.Written || !s.Materialized || (s.Values.Kind != ValSequence && s.Values.Kind != ValSet) {
 		return false
 	}
 	object := false

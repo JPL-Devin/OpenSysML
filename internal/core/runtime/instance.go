@@ -12,6 +12,11 @@ import (
 // rather than a run that is merely slow.
 const maxMaterializedLowerBound int64 = 1000
 
+// maxBehaviorBindingDepth bounds the chain of names an `exhibit`/`perform`
+// declaration is followed through to the element stating the body, so a binding
+// that names itself is reported rather than followed forever.
+const maxBehaviorBindingDepth = 32
+
 // Instance is a runtime-materialized object (Tier 2).
 type Instance struct {
 	ID            int64                    // unique identity
@@ -35,6 +40,22 @@ type Instance struct {
 	// keptConnectors holds, per feature value of a named connector, the identity the object
 	// of it had before a carry-over, which the one materialized again takes back.
 	keptConnectors map[*FeatureValue]int64
+
+	// behaviors are the executions of the behaviors the object's type exhibits or
+	// performs, in declaration order, each bound to this object's identity.
+	behaviors []*ObjectBehavior
+
+	// owner is the object holding this one as the feature value named ownerFeature,
+	// nil for an object no other holds. A nested object reaches its siblings
+	// through it.
+	owner        *Instance
+	ownerFeature string
+}
+
+// Owner answers the object holding this one and the feature of it that does, or
+// nil and "" for an object no other holds.
+func (inst *Instance) Owner() (*Instance, string) {
+	return inst.owner, inst.ownerFeature
 }
 
 // keepConnector remembers the identity the object of a named connector feature value had,
@@ -52,6 +73,7 @@ type FeatureValue struct {
 	Value        Value // scalar feature value (multiplicity [1])
 	Values       Value // collection feature value (Sequence or Set)
 	Materialized bool  // lazy flag: has this feature value been instantiated?
+	Written      bool  // a run assigned this value, so no default derives it again
 }
 
 // HeldValue is the value the feature value reads as: its collection when the feature is
@@ -97,7 +119,11 @@ func isValueTypeSymbol(sym *symbols.Symbol) bool {
 
 // Instantiate materializes an instance of the given usage/definition symbol.
 // Allocates ID, creates feature values per FeaturesOf(sym), evaluates default values,
-// leaves composite features lazy. Returns the instance or an error.
+// leaves composite features lazy, then starts the behaviors the type exhibits or
+// performs and runs them to quiescence. Returns the instance or an error.
+//
+// Each call materializes a distinct object with an identity and behaviors of its
+// own; occurrenceOf is the path that reads one object of a usage twice.
 func (ctx *Context) Instantiate(sym *symbols.Symbol) (*Instance, error) {
 	return ctx.instantiateAs(sym, 0)
 }
@@ -105,6 +131,29 @@ func (ctx *Context) Instantiate(sym *symbols.Symbol) (*Instance, error) {
 // instantiateAs materializes an object under the given identity, falling back to
 // the next one this context hands out when that identity is none or taken here.
 func (ctx *Context) instantiateAs(sym *symbols.Symbol, id int64) (*Instance, error) {
+	return ctx.instantiateOwnedBy(sym, id, nil, "")
+}
+
+// instantiateOwnedBy materializes an object held by owner as the feature value
+// named feature. The owner is recorded before any behavior starts, so a behavior
+// addressing a sibling reaches the object its owner holds rather than a second
+// one.
+func (ctx *Context) instantiateOwnedBy(sym *symbols.Symbol, id int64, owner *Instance, feature string) (*Instance, error) {
+	inst, err := ctx.materialize(sym, id)
+	if err != nil {
+		return nil, err
+	}
+	inst.owner, inst.ownerFeature = owner, feature
+	if err := ctx.startClassifierBehaviors(inst); err != nil {
+		return nil, err
+	}
+	return inst, nil
+}
+
+// materialize builds the object and its feature values and registers it, before
+// any behavior of it starts: an entry action reads the object's declared
+// defaults, and a behavior can already reach the object it belongs to.
+func (ctx *Context) materialize(sym *symbols.Symbol, id int64) (*Instance, error) {
 	defer ctx.beginRun()()
 
 	// Check step limit (I3)
@@ -158,6 +207,10 @@ func (ctx *Context) instantiateAs(sym *symbols.Symbol, id int64) (*Instance, err
 	// Register instance
 	ctx.registerInstance(inst)
 
+	if ctx.trace != nil {
+		ctx.trace.RecordObjectMaterialized(symbolText(sym), inst.ID)
+	}
+
 	return inst, nil
 }
 
@@ -170,11 +223,16 @@ func (ctx *Context) occurrenceOf(sym *symbols.Symbol) (*Instance, error) {
 			return inst, nil
 		}
 	}
-	inst, err := ctx.Instantiate(sym)
+	// The occurrence is recorded before its behaviors start, so a behavior that
+	// reaches the usage it belongs to reads this object rather than a second one.
+	inst, err := ctx.materialize(sym, 0)
 	if err != nil {
 		return nil, err
 	}
 	ctx.occurrences[sym] = inst.ID
+	if err := ctx.startClassifierBehaviors(inst); err != nil {
+		return nil, err
+	}
 	return inst, nil
 }
 
@@ -241,6 +299,29 @@ func (inst *Instance) GetFeatureValue(ctx *Context, name string) (*FeatureValue,
 		return nil, &FeatureValueError{Err: err}
 	}
 	return fv, nil
+}
+
+// SetFeatureValue writes a value to the named feature value of the object, which is how a
+// behavior the object performs updates the object's own state. The value must
+// conform to the multiplicity governing the feature; a feature the object does
+// not have is reported rather than added.
+func (inst *Instance) SetFeatureValue(ctx *Context, name string, value Value) error {
+	fv, ok := inst.FeatureValues[name]
+	if !ok {
+		return fmt.Errorf("feature %q not found in instance %d (type %s)", name, inst.ID, inst.Type.Name)
+	}
+	if err := ctx.checkDefaultCount(inst, fv, name, value); err != nil {
+		return err
+	}
+	if isScalarFeature(fv.Feature) {
+		fv.Value = value
+		fv.Values = Value{}
+	} else {
+		fv.Values = value
+		fv.Value = Value{}
+	}
+	fv.Materialized, fv.Written = true, true
+	return nil
 }
 
 // materializeFeatureValue is GetFeatureValue's materialization: the feature value's value, evaluated and
@@ -331,7 +412,7 @@ func (inst *Instance) materializeFeatureValue(ctx *Context, name string) (*Featu
 
 		if !mult.Upper.Infinite && mult.Upper.Value == 1 {
 			// Scalar: instantiate one
-			childInst, err := ctx.Instantiate(composite)
+			childInst, err := ctx.instantiateOwnedBy(composite, 0, inst, name)
 			if err != nil {
 				return nil, err
 			}
@@ -364,7 +445,7 @@ func (inst *Instance) materializeFeatureValue(ctx *Context, name string) (*Featu
 				seq.Append(val)
 			}
 			for i := 0; i < count; i++ {
-				childInst, err := ctx.Instantiate(composite)
+				childInst, err := ctx.instantiateOwnedBy(composite, 0, inst, name)
 				if err != nil {
 					return nil, err
 				}

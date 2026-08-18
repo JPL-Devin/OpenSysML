@@ -1,0 +1,35 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="test" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="state" abstract=false variation=false name="Modes"))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="Report"))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Monitor"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="count" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))
+              (LiteralInteger value="0")))
+          (Membership visibility="default"
+            (Usage kind="state" name="tracking" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="exhibit state"
+              (EntryMember)
+              (SuccessionEdge source="@entry" target="idle")
+              (Membership visibility="default"
+                (Usage kind="state" name="idle" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                  (EntryMember
+                    (Membership visibility="default"
+                      (Usage kind="action" name="bump" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                        (*ast.AssignmentActionNode))))))))
+          (Membership visibility="default"
+            (Usage kind="state" name="named" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="exhibit state"
+              (Relationship kind="typing" target=Modes
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="action" name="report" ref=false direction="none" composite=false derived=false ordered=false nonunique=false prefix="perform"
+              (Relationship kind="typing" target=Report
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="action" name="sample" ref=false direction="none" composite=false derived=false ordered=false nonunique=false prefix="perform"
+              (*ast.AssignmentActionNode))))))))

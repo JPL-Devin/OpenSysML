@@ -138,6 +138,7 @@ var metaCommandTable = []metaCommand{
 	{group: "Runtime commands:", name: "%features", args: "<name>", desc: "show an object's features and their values"},
 	{group: "Runtime commands:", name: "%slots", args: "<name>", desc: "deprecated spelling of %features", alias: true, instead: "%features"},
 	{group: "Runtime commands:", name: "%instances", desc: "list all instantiated objects"},
+	{group: "Runtime commands:", name: "%invoke", args: "<object> <op> [<p>=<expr>]", desc: "invoke an operation of an object's type, performed by that object"},
 
 	{group: "Behavioral commands:", name: "%calc", args: "<name> <args>", desc: "invoke a calculation with arguments"},
 	{group: "Behavioral commands:", name: "%constraint", args: "<name>", desc: "evaluate a constraint definition"},
@@ -147,13 +148,13 @@ var metaCommandTable = []metaCommand{
 	{group: "Behavioral commands:", name: "%explain", args: "<name>", desc: "ask an SMT solver which conditions of an unsatisfiable element conflict (experimental)"},
 
 	{group: "Action debugging:", name: "%action", args: "<name> [<object>]", desc: "start action executor debugging session, performed by an object"},
-	{group: "Action debugging:", name: "%step", desc: "advance one token step"},
+	{group: "Action debugging:", name: "%step", desc: "advance one token step, or one step of the state machine being debugged"},
 	{group: "Action debugging:", name: "%continue", desc: "run action to completion"},
 	{group: "Action debugging:", name: "%tokens", desc: "show active tokens"},
 	{group: "Action debugging:", name: "%break", args: "<node>", desc: "set breakpoint at node"},
 	{group: "Action debugging:", name: "%stop", desc: "stop current debugging session"},
 
-	{group: "State machine debugging:", name: "%state", args: "<name> [<object>]", desc: "start state machine debugging session, performed by an object"},
+	{group: "State machine debugging:", name: "%state", args: "<name> [<object>]", desc: "debug the machine an object exhibits, or a state machine performed by an object"},
 	{group: "State machine debugging:", name: "%events", desc: "show event queue"},
 	{group: "State machine debugging:", name: "%current", desc: "show current state and configuration"},
 	{group: "State machine debugging:", name: "%advance", args: "<time>", desc: "advance simulation time by <time> units, processing every event due"},
@@ -379,6 +380,11 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 			return []string{"usage: %state <name> [<object>]"}, false, nil
 		}
 		return s.doStateMachine(fields[1], fields[2:])
+	case "%invoke":
+		if len(fields) < 3 {
+			return []string{"usage: %invoke <object> <operation> [<parameter>=<expression> ...]"}, false, nil
+		}
+		return s.doInvoke(fields[1], fields[2], fields[3:])
 	case "%events":
 		return s.doEvents()
 	case "%current":
@@ -1821,9 +1827,13 @@ func (s *Session) startAction(name string, performer []string) ([]string, error)
 	}, nil
 }
 
-// doStep advances the action executor one step.
+// doStep advances the action executor one step, or the state machine one event
+// when the session debugs a machine instead.
 func (s *Session) doStep() ([]string, bool, error) {
 	if s.actionExec == nil {
+		if s.stateExec != nil {
+			return s.stepState()
+		}
 		return []string{s.noActionSessionMsg()}, false, nil
 	}
 
@@ -2043,6 +2053,13 @@ func (s *Session) startStateMachine(name string, performer []string) ([]string, 
 		return nil, lerr
 	}
 
+	// A name the session materialized denotes that object, whose exhibited
+	// machine is already running: the debugger drives that machine rather than a
+	// detached run of the shared usage.
+	if inst, ok := s.instances[fqn]; ok {
+		return s.debugExhibitedMachine(ctx, name, fqn, inst, performer)
+	}
+
 	if sym.Kind != symbols.SymbolStateDef && sym.Kind != symbols.SymbolStateUsage {
 		return nil, fmt.Errorf("%q is not a state machine", name)
 	}
@@ -2077,6 +2094,166 @@ func (s *Session) startStateMachine(name string, performer []string) ([]string, 
 		fmt.Sprintf("  Time: %.2f", exec.CurrentTime()),
 		fmt.Sprintf("  Events: %d", exec.EventQueue().Len()),
 	}, nil
+}
+
+// debugExhibitedMachine binds the debugging session to the machine an object
+// already exhibits, so %current, %events and %advance drive that object's
+// machine and %features shows what it wrote.
+func (s *Session) debugExhibitedMachine(
+	ctx *runtime.Context,
+	name, fqn string,
+	inst *runtime.Instance,
+	performer []string,
+) ([]string, error) {
+	if len(performer) > 0 {
+		return nil, fmt.Errorf("%q is an object, which performs its exhibited machine itself", notationName(fqn))
+	}
+	behavior, ok := inst.ExhibitedState()
+	if !ok {
+		return nil, fmt.Errorf("object %q exhibits no state machine", notationName(fqn))
+	}
+	behavior.State.SetTrace(s.trace)
+
+	s.stateExec = &stateSession{
+		name:     name,
+		fqn:      qualifiedOr(fqn, name),
+		selfFQN:  qualifiedOr(fqn, name),
+		symbol:   behavior.Symbol,
+		executor: behavior.State,
+		rtCtx:    ctx,
+		now:      behavior.State.CurrentTime(),
+	}
+	s.endedState = nil
+
+	return []string{
+		fmt.Sprintf("✓ Debugging state machine %q exhibited by object #%d of %q", behavior.Name, inst.ID, notationName(fqn)),
+		fmt.Sprintf("  Current state: %s", currentStateName(behavior.State)),
+		fmt.Sprintf("  Time: %.2f", behavior.State.CurrentTime()),
+		fmt.Sprintf("  Events: %d", behavior.State.EventQueue().Len()),
+	}, nil
+}
+
+// stepState takes the machine's next step: a change condition that has become
+// true, the event due next, or one round of the do behaviors active now.
+func (s *Session) stepState() ([]string, bool, error) {
+	exec := s.stateExec.executor
+	if exec.HasPendingWork() {
+		exec.Resume()
+	}
+	if exec.State() != runtime.StateRunning {
+		return []string{fmt.Sprintf("✓ State machine %s (%s)", exec.State(), currentStateName(exec))}, false, nil
+	}
+
+	step, err := s.stateStep(exec)
+	if err != nil {
+		return []string{"error: " + err.Error()}, false, nil
+	}
+	return []string{
+		"✓ " + step,
+		fmt.Sprintf("  Current state: %s", currentStateName(exec)),
+		fmt.Sprintf("  Time: %.2f", exec.CurrentTime()),
+		fmt.Sprintf("  Events: %d", exec.EventQueue().Len()),
+	}, false, nil
+}
+
+// stateStep performs one step and reports what it was.
+func (s *Session) stateStep(exec *runtime.StateExecutor) (string, error) {
+	fired, err := exec.PollChangeEvents()
+	if err != nil {
+		return "", fmt.Errorf("change condition failed: %w", err)
+	}
+	if fired {
+		return "Change event dispatched", nil
+	}
+	if exec.EventQueue().Len() > 0 || exec.HasPendingSignal() {
+		if err := exec.ProcessNextEvent(); err != nil {
+			return "", fmt.Errorf("event processing failed: %w", err)
+		}
+		s.stateExec.now = math.Max(s.stateExec.now, exec.CurrentTime())
+		return "Event dispatched", nil
+	}
+	if exec.HasPendingDoWork() {
+		ran, err := exec.RunDoRound()
+		if err != nil {
+			return "", fmt.Errorf("do behavior failed: %w", err)
+		}
+		return fmt.Sprintf("Ran %d do action(s)", ran), nil
+	}
+	if reason := exec.SuspendReason(); reason != "" {
+		return "Nothing to do: " + reason, nil
+	}
+	return "Nothing to do: the machine is quiescent", nil
+}
+
+// doInvoke invokes an operation on an object, with the object as its performer.
+func (s *Session) doInvoke(name, operation string, args []string) ([]string, bool, error) {
+	lines, err := s.invokeOperation(name, operation, args)
+	if err != nil {
+		if errors.Is(err, errRuntimeInit) {
+			return nil, false, err
+		}
+		return []string{"error: " + err.Error()}, false, nil
+	}
+	return lines, false, nil
+}
+
+// invokeOperation binds the arguments written as `name=<expression>` and runs the
+// operation the object's type owns, performed by that object.
+func (s *Session) invokeOperation(name, operation string, args []string) ([]string, error) {
+	ctx, err := s.getOrCreateRuntime()
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", errRuntimeInit, err)
+	}
+	inst, fqn, perr := s.performingObject([]string{name})
+	if perr != nil {
+		return nil, perr
+	}
+	bound, err := s.operationArguments(ctx, args)
+	if err != nil {
+		return nil, err
+	}
+	results, err := ctx.InvokeOperation(inst, operation, bound)
+	if err != nil {
+		return nil, err
+	}
+	out := []string{fmt.Sprintf("✓ Invoked %s on object #%d of %q", operation, inst.ID, notationName(fqn))}
+	if values := namedValues(ctx, results); len(values) > 0 {
+		out = append(out, "", "Results:")
+		for _, v := range values {
+			out = append(out, fmt.Sprintf("  %s = %s", v.Name, v.Value))
+		}
+	}
+	return out, nil
+}
+
+// operationArguments evaluates the `name=<expression>` arguments of %invoke,
+// where the prompt evaluates any expression.
+func (s *Session) operationArguments(ctx *runtime.Context, args []string) (map[string]runtime.Value, error) {
+	if len(args) == 0 {
+		return nil, nil
+	}
+	scope := s.promptScope(s.ws.Document(docName))
+	bound := make(map[string]runtime.Value, len(args))
+	for _, arg := range args {
+		param, expr, ok := strings.Cut(arg, "=")
+		param, expr = strings.TrimSpace(param), strings.TrimSpace(expr)
+		if !ok || param == "" || expr == "" {
+			return nil, fmt.Errorf("argument %q is not written as <parameter>=<expression>", arg)
+		}
+		node, diags := parseExprAlone(expr)
+		if len(diags) > 0 {
+			return nil, exprError(expr, diags[0].Message, diags[0].Span, len(exprPrefix))
+		}
+		if node == nil {
+			return nil, fmt.Errorf("argument %s: could not parse %q", param, expr)
+		}
+		value, err := ctx.EvalWithScope(node, scope)
+		if err != nil {
+			return nil, fmt.Errorf("argument %s: %w", param, err)
+		}
+		bound[param] = value
+	}
+	return bound, nil
 }
 
 // doEvents displays the event queue.
@@ -2198,6 +2375,9 @@ func (s *Session) advanceBy(duration float64) ([]string, error) {
 
 	exec := s.stateExec.executor
 	deadline := s.stateExec.now + duration
+	// A machine already at quiescence — an object's, run when it was materialized —
+	// steps again once time makes its next event due.
+	exec.Resume()
 
 	// Bound the drain by the session's own budgets, so a machine that keeps
 	// queueing work cannot hang the REPL and the way to raise the bound is the

@@ -66,6 +66,35 @@ artifacts they describe really were called that.
   `opensysml.server.args`, `opensysml.server.enabled` and `opensysml.trace.server`, with the
   command `opensysml.restartServer`. Existing settings must be re-set under the new keys.
 
+### An object runs the behavior its type exhibits
+
+- **Materializing an object starts the behaviors its type exhibits or performs.** An
+  `exhibit state` machine written in a part definition is now that part's own machine: each object
+  gets an execution of its own, so two objects of one type hold two current states, two event queues
+  and two sets of feature values. Until now the body only parsed, resolved and lowered — running it
+  meant `%state` on the state usage itself, detached from any object.
+- **Identity carries through the run.** What an entry, `do`, exit or effect body reads and writes is
+  the performing object's feature values, and a send addressed to an object reaches that object's
+  machine and not a sibling's — a nested object now knows the object that owns it, so
+  `send … to sibling` finds the sibling instead of materializing a second one.
+- **Startup and quiescence are defined.** Feature values and constant defaults come first, so an
+  entry action sees declared initial values; then the behaviors are initialized and run until
+  nothing is due at the current time — a machine waiting on a timer is quiescent, and `%step` or
+  `%advance` drives it. Cross-object messages are drained collectively, bounded by the state-event
+  and do-step budgets, so a machine that never settles reports
+  `object behaviors exceeded their budget` rather than hanging.
+- **A second `%instantiate` of one name is a second object**, with its own identity and its own
+  behaviors, and the command now says so (`note: P now denotes this object; object #1 is no longer
+  named, with 1 behavior of its own`) instead of silently replacing the name. `occurrenceOf` is
+  still the reuse path for a named occurrence.
+- **`%invoke <object> <op> [<p>=<expr>]` runs an operation of the object's type**, performed by that
+  object, binding arguments to its `in`/`inout` parameters by name and printing its outputs. Known
+  limitation: only an action member is executable this way — an operation written as a `calc` or
+  `constraint` is evaluated as an expression rather than performed, and reports that.
+- **`%state <object>` attaches to the object's exhibited machine**, so `%step`, `%advance`,
+  `%current`, `%events` and `%features` all describe that object. A behavior-written feature value
+  now survives an unrelated declaration too, along with the object's identity and the debug session.
+
 ### `%slots` is now `%features`, the name SysML v2 uses
 
 - **`%features <name>` lists what an object holds for each feature of its type**, which is what

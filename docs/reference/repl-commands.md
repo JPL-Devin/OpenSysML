@@ -24,7 +24,7 @@ quoted segment holding a space and one in the middle of a chain: `%instantiate '
 | `%view <name>` | Show what a view exposes — its own `expose` relationships and the protected ones of the views it specializes — the views nested in it, each of which is asked for its own exposed set, and its conformance to every viewpoint it satisfies: a verdict of `conforms`, `violated` or `unevaluable` per viewpoint and per framed concern, with the reason, the exposed element a concern's condition failed for, and `(from <view>)` where the `satisfy` is inherited. Asking it of an element that is no view says so |
 | `%render <name> [form]` | Render a view: the exposed set as the rendering the view's `render` member states — a containment tree with nested views as subtrees, an interconnection diagram of the exposed parts and the connections between them, a state machine's states and transitions, an action's nodes and successions, or a table of the exposed elements and what they declare — and a tree where the view states none. Written as indented text, or in the machine-readable form of the kind: a [Mermaid](#rendering-a-view) diagram with `mermaid`, a Markdown table with `markdown`; a form the kind is not written in names the one it is. Read-only: it creates no object and leaves a `%action`/`%state` debugging session running. A view exposing nothing renders empty and says so; a rendering kind this build does not produce names the kind and the view rather than rendering something else; an element the rendering cannot represent is reported, not dropped |
 | **Instantiation & Inspection** | |
-| `%instantiate <name>` | Create instance from part definition |
+| `%instantiate <name>` | Create an object of a part definition, and start the behaviors its type exhibits or performs: each object runs its own machine, initialized after its feature values are built and run until it is quiescent. A second `%instantiate` of the same name is a new object, and the name then denotes that one |
 | `%features <name>` | Show what an object holds for each feature of its type |
 | `%slots <name>` | Deprecated spelling of `%features`: the same listing, led by a note naming the command to write instead |
 | `%instances` | List all created objects |
@@ -33,6 +33,7 @@ quoted segment holding a space and one in the middle of a chain: `%instantiate '
 | **Behavioral Execution** | |
 | `%calc <name> [args...]` | Invoke calculation with arguments |
 | `%constraint <name>` | Evaluate constraint (assert/assume) |
+| `%invoke <object> <op> [<p>=<expr>]` | Invoke an operation of an object's type — an action it owns — performed by that object, with each argument written as `<parameter>=<expression>`. What the body writes is that object's feature value; declared outputs are reported. Not yet supported: an operation given as a `calc` or `constraint`, and positional arguments |
 | `%requirement <name>` | Evaluate requirement (subject/assume/require/actor) |
 | `%satisfy [name]` | Evaluate satisfaction assertions of the model, or of one element |
 | `%check <name>` | **Experimental.** Ask an external SMT solver whether a constraint, requirement or satisfaction assertion *can* be satisfied, and on `sat` print an assignment. Reports `sat`, `unsat` or `unknown`, kept distinct; needs `z3` or `cvc5` on `PATH` (or `OPENSYSML_SMT`) — [installing a solver](../guide/01-install.md#installing-a-solver-optional) — and reports an error rather than a verdict when none is installed. Satisfiability is not evaluation: use `%constraint`/`%satisfy` for what holds of an object |
@@ -45,7 +46,7 @@ quoted segment holding a space and one in the middle of a chain: `%instantiate '
 | `%break <node>` | Set a breakpoint at a node |
 | `%stop` | Stop the current debugging session |
 | **State machine debugging** ([guide chapter 6](../guide/06-behavior.md)) | |
-| `%state <name> [<object>]` | Start a state machine debugging session, optionally performed by an instantiated object |
+| `%state <name> [<object>]` | Debug the machine an object exhibits — `%state <part>` after `%instantiate <part>` binds to that object's own running machine — or start a state machine, optionally performed by an instantiated object. `%step`, `%advance`, `%current`, `%events` then drive that object's machine, and `%features` shows what it wrote |
 | `%events` | Show the event queue |
 | `%current` | Show the current state and configuration |
 | `%advance <time>` | Advance simulation time by `<time>` units, processing every event due |

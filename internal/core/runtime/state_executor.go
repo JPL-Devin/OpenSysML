@@ -1492,6 +1492,20 @@ func (e *StateExecutor) enterHierarchyInto(state *ast.StateNode, branches map[*a
 // error instead of spinning forever. A poll that fires nothing costs no budget;
 // a change transition taken counts as one step, like a dispatched event.
 func (e *StateExecutor) RunToCompletion() error {
+	return e.run(false)
+}
+
+// RunToQuiescence runs the machine as RunToCompletion does, but leaves an event
+// scheduled for a later time queued rather than advancing to it: the
+// configuration an object settles into is the one reached at the time it was
+// materialized, and a timer it is waiting on is driven by advancing time.
+func (e *StateExecutor) RunToQuiescence() error {
+	return e.run(true)
+}
+
+// run is the run-to-completion loop, holding simulation time where it is when
+// atCurrentTime is set.
+func (e *StateExecutor) run(atCurrentTime bool) error {
 	defer e.ctx.beginExecutorRun(&e.runStarted)()
 
 	// Suspension is derived at quiescence, so re-running is allowed: a run that
@@ -1522,7 +1536,7 @@ func (e *StateExecutor) RunToCompletion() error {
 			events++
 			continue
 		}
-		if e.eventQueue.Len() == 0 && !e.deliverPendingSignal() {
+		if !e.hasDueEvent(atCurrentTime) && !e.deliverPendingSignal() {
 			if ran > 0 {
 				continue // do behaviors are still running; they may yet queue events
 			}
@@ -2147,6 +2161,17 @@ func (e *StateExecutor) CurrentTime() float64 {
 	return e.currentTime
 }
 
+// Resume returns a machine suspended at quiescence to running, so a driver that
+// makes work available — advancing time, or delivering an event — can step it
+// again. A completed or failed machine is left as it is.
+func (e *StateExecutor) Resume() bool {
+	if e.state != StateSuspended {
+		return false
+	}
+	e.state = StateRunning
+	return true
+}
+
 // State returns current execution state.
 func (e *StateExecutor) State() ExecutionState {
 	return e.state
@@ -2183,6 +2208,21 @@ func (e *StateExecutor) ProcessNextEvent() error {
 		return nil
 	}
 	return e.processNextEvent()
+}
+
+// hasDueEvent reports whether an event the run may dispatch is queued: with time
+// held where it is, one scheduled for later is not yet due.
+func (e *StateExecutor) hasDueEvent(atCurrentTime bool) bool {
+	if e.eventQueue.Len() == 0 {
+		return false
+	}
+	return !atCurrentTime || e.eventQueue.Peek().Timestamp <= e.currentTime
+}
+
+// HasDueEvent reports whether an event scheduled no later than the machine's
+// current time is queued, which a run holding time where it is dispatches.
+func (e *StateExecutor) HasDueEvent() bool {
+	return e.hasDueEvent(true)
 }
 
 // HasPendingWork reports whether stepping the machine can still make progress:

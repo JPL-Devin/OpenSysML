@@ -12,7 +12,7 @@
       (Membership visibility="default"
         (Usage kind="part" name="camera" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (Membership visibility="default"
-            (Usage kind="action" name="takePhoto" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (Usage kind="action" name="takePhoto" ref=false direction="none" composite=false derived=false ordered=false nonunique=false prefix="perform"
               (Relationship kind="references" target=takePicture
                 (*ast.QualifiedName))))
           (Membership visibility="default"

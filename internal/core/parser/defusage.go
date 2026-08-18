@@ -690,7 +690,10 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 	// Pattern: perform action generateTorque: GenerateTorque;
 	// Skip "perform" and parse as regular "action" usage
 	if kw == "perform" && p.peekN(1).Kind == lexer.Keyword && p.peekN(1).KeywordID == "action" {
-		p.advance()   // consume 'perform'
+		p.advance() // consume 'perform'
+		// The prefix says the action is performed by whatever declares it, which
+		// the kind keyword alone would lose (PerformActionUsage, SysML v2 §7.17.6).
+		mods.prefixKeyword = "perform"
 		kw = "action" // treat as regular action keyword
 		// Continue to dual-keyword path (don't enter usage-only block)
 	} else if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" || kw == "bind" || kw == "satisfy" || kw == "verify" || kw == "include" || kw == "step" || kw == "expr" || kw == "interaction" || kw == "require" || kw == "transition" || kw == "perform" || kw == "exhibit" || kw == "variant" || kw == "assert" || kw == "assume" || kw == "event" || kw == "stakeholder" || kw == "frame" || kw == "actor" || kw == "expose" || kw == "render" {
