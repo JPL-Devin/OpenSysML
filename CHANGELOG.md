@@ -123,6 +123,18 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   call to an OMG function library (`sqrt`, `sin`, …), which every model may write whatever it
   imports.
 
+### The corpus notation two verdicts were open on is adjudicated legal
+
+- **A conjugated end (`end spacePort : ~CommunicationPort`) and a portion prefixed onto a kind
+  keyword (`timeslice item item1`) are legal, and are accepted.** `ConjugatedPortTyping`
+  specializes `FeatureTyping`, so any feature typing — a connection or interface end among them —
+  may name a conjugated port definition, and `PortionKind` is an attribute of `OccurrenceUsage`,
+  which an item usage is. Both are pinned clean over every validation tier by
+  `testdata/passes/corpus_notation.golden`, so a regression is caught as the false positive on a
+  flagship model that it would be. Of the four notations the Open-MBEE models diagnose, the two
+  that remain are the OMG-side ones already adjudicated: a bare `end;` outside an interface body
+  and `'SysML Standard Diagrams'::gv`.
+
 ## 0.1.0 — 2026-08-17
 
 ### RDF conversion is experimental

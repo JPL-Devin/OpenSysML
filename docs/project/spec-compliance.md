@@ -779,6 +779,7 @@ semantics layer over the conjugation parity of the typing/specialization chain.
 | The standard view/diagram library is part of the vendored stdlib, so `view v : StandardViewDefinitions::gv;` resolves | `libs/stdlib/Systems Library/StandardViewDefinitions.sysml` (already vendored: the eight standard view definitions with their short names) | `model/standard_views_test.go` `TestStandardViewDefinitionsBundled`, `TestStdlibConformance` | ✅ Faithful |
 | A qualified reference whose *first* segment names no loaded namespace is reported as such, naming the declarations that do carry the trailing name | `resolve/qualified.go` (unresolved-namespace diagnostic), `symbols/index.go` `FQNsEndingIn` | `model/standard_views_test.go` `TestVendorViewNamespaceDiagnostic`, `resolve/analysis_test.go` `TestResolveMissingStandardViewNamespace` | ✅ Faithful |
 | Every usage element subsets the most general base usage `Base::things`, whose `that` feature is therefore visible in a usage body (§7.6, [KerML 8.4.2]) | `semantics/implicit.go` `implicitBaseUsage`, `semantics/reference.go` `contributors` | `semantics/implicit_test.go` `TestImplicitBaseUsageContributesThat`, `model/that_constraint_test.go` `TestThatResolvesInAssertedConstraint` | ✅ Faithful (a member-contribution edge only: it is deliberately not a direct supertype, so conformance and `DirectSupertypes` are unchanged) |
+| The notation the Open-MBEE corpus models write stays clean at every validation tier: a conjugated interface *and* connection end, `connect`/`flow` between two such ends, and a portion prefixed onto a kind keyword and named as its whole occurrence is (`item item1 { timeslice item item1; }`) | the rules above (`parser/defusage.go` end and portion prefixes, `semantics/conjugation.go`, `passes/typecheck.go` `checkConjugatedTyping`) | `passes/integration_test.go` `TestPassesGoldenCorpusNotation` over `testdata/passes/corpus_notation.golden` (`(no diagnostics)`), `parser/negative_test.go` (`conjugated_end_no_type`) | ✅ Faithful |
 | A succession may be written with no keyword at the start of a namespace member: `first a::b then c;` (`SuccessionAsUsage`) | `parser/namespace.go` `parseMember`, `parseSuccessionAsUsage` | `parse/succession_as_usage.golden` | ✅ Faithful |
 
 **Known limitations of this notation**
@@ -797,6 +798,19 @@ semantics layer over the conjugation parity of the typing/specialization chain.
   standard library — so it is not vendored under that name and no alias to
   `StandardViewDefinitions` is fabricated. The diagnostic says the namespace is
   not loaded and points at `StandardViewDefinitions::gv`.
+- The two notations that had been *suspected* of being our false positives are
+  adjudicated as legal and are accepted: a conjugated end
+  (`end spacePort : ~CommunicationPort`, `spacecraft-example-model.sysml`) and a
+  portion prefixed onto a kind keyword (`timeslice item item1`, `Dragon.sysml`).
+  `ConjugatedPortTyping` specializes `FeatureTyping`
+  (`Systems Library/SysML.sysml:100`), so any feature typing — a connection or
+  interface end among them — may name a conjugated port definition; and
+  `PortionKind` is an enumeration of `timeslice`/`snapshot`
+  (`Systems Library/SysML.sysml:291`) held by `OccurrenceUsage::portionKind`
+  (`:262`), which an `ItemUsage` is. Both parse, resolve and check clean over
+  every tier, pinned by `testdata/passes/corpus_notation.golden`; re-running the
+  three models reports only the two OMG-side notations above (plus the notebook
+  models' unresolved library references), so neither notation is outstanding.
 - Only the braced spelling of a requirement-constraint reference sets
   `RequireMember.Reference`/`AssumeMember.Reference`. `CalculationBody` also
   allows `;`, so standard `require Q::r;` is a reference too, but Systemica reads
@@ -1288,10 +1302,10 @@ the `@type` mapping and the comparison choices.
 - a nested action node written inside a loop or branch body is lowered as unsupported and
   reported when reached; only statements, and the body parameter the body itself is written
   as, execute in those bodies
-- the Open-MBEE corpus models still report structural diagnostics outside this scope —
-  conjugated connection ends (`end spacePort : ~CommunicationPort`), `timeslice item item1`,
-  `end ;`, and unresolved library references (`Scalarattributes::String`, `start`,
-  `envelopingShapes`, `mRefs`)
+- the Open-MBEE corpus models still report the two OMG-side notations adjudicated above
+  (`end ;` outside an interface body, `'SysML Standard Diagrams'::gv`) and unresolved library
+  references in the notebook models (`Scalarattributes::String`, `start`, `envelopingShapes`,
+  `mRefs`). The conjugated end and `timeslice item item1` are legal and are accepted
 
 **Go gRPC layer:**
 - `SymbolInfo.attributes` reports only defaults that fold to a model-level

@@ -67,3 +67,7 @@ func runPassesGolden(t *testing.T, name string) {
 func TestPassesGoldenClean(t *testing.T)       { runPassesGolden(t, "clean") }
 func TestPassesGoldenErrors(t *testing.T)      { runPassesGolden(t, "errors") }
 func TestPassesGoldenConstraints(t *testing.T) { runPassesGolden(t, "constraints") }
+
+// The corpus notation stays clean at every tier: a regression in the conjugated
+// end or the portion prefix is a false positive on a flagship model.
+func TestPassesGoldenCorpusNotation(t *testing.T) { runPassesGolden(t, "corpus_notation") }
