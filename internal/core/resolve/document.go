@@ -915,7 +915,7 @@ func (r *Resolver) resolveFeatureChain(scope *symbols.Scope, fc *ast.FeatureChai
 	// The probe runs aside so that a chain whose member the walk below resolves
 	// keeps its diagnostics: only the reading actually adopted reports.
 	if len(fc.Member.Parts) > 1 {
-		if _, ok := r.lookupMember(operandSym, fc.Member.Parts[0].Text); !ok {
+		if _, ok := r.chainMember(operandSym, fc.Member.Parts[0].Text); !ok {
 			outward := false
 			r.aside(func() { _, outward = r.ResolveQualified(scope, fc.Member) })
 			if outward {
@@ -927,6 +927,18 @@ func (r *Resolver) resolveFeatureChain(scope *symbols.Scope, fc *ast.FeatureChai
 
 	// Walk member parts explicitly, assigning symbols to each part
 	r.resolveMemberChain(operandSym, fc.Member)
+}
+
+// chainMember looks a chain segment up as the member walk does: as a member of
+// sym when a model is attached, else in sym's own scope.
+func (r *Resolver) chainMember(sym *symbols.Symbol, name string) (*symbols.Symbol, bool) {
+	if found, ok := r.lookupMember(sym, name); ok {
+		return found, true
+	}
+	if sym == nil || sym.Scope == nil {
+		return nil, false
+	}
+	return sym.Scope.LookupLocal(name)
 }
 
 // resolveMemberChain walks a qualified name member-by-member in the given scope,

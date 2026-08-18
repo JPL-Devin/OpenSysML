@@ -323,6 +323,62 @@ func TestResolveChainBadQualifiedSegmentReportedOnce(t *testing.T) {
 	}
 }
 
+// A qualified chain segment names a member of the previous element when it has
+// one, even where an outer declaration spells the same name.
+func TestResolveChainPrefersMemberOverOuterDeclaration(t *testing.T) {
+	src := `package P {
+		part a { part B { part c; } }
+		part B { part c; }
+		part t;
+		binding bind a.B::c = t;
+	}`
+	p := parser.New(source.New("inner.sysml", []byte(src)))
+	root := p.ParseFile()
+	if len(p.Diagnostics) != 0 {
+		t.Fatalf("parse diagnostics: %v", p.Diagnostics)
+	}
+	r := New(symbols.NewIndexFromDoc("inner.sysml", root))
+	r.ResolveDocument("inner.sysml", root)
+	if len(r.Diagnostics) != 0 {
+		t.Fatalf("expected no diagnostics, got %v", r.Diagnostics)
+	}
+
+	binding := findBindingUsage(t, root.Members)
+	chain, ok := binding.Relationships[0].Target.(*ast.FeatureChainExpr)
+	if !ok {
+		t.Fatalf("expected a feature chain end, got %T", binding.Relationships[0].Target)
+	}
+	inner := innerSymbol(t, r, chain.Operand, "B")
+	got, ok := r.PartSymbol(chain.Member, 0)
+	if !ok {
+		t.Fatal("segment B did not resolve")
+	}
+	if got != inner {
+		t.Errorf("segment B resolved to the declaration in %v, want a's own member", got.OwnerScope)
+	}
+}
+
+// innerSymbol returns the member the chain's previous element declares itself.
+func innerSymbol(t *testing.T, r *Resolver, operand ast.Node, name string) *symbols.Symbol {
+	t.Helper()
+	ref, ok := operand.(*ast.FeatureReference)
+	if !ok {
+		t.Fatalf("expected a feature reference operand, got %T", operand)
+	}
+	operandSym, ok := r.PartSymbol(ref.Name, 0)
+	if !ok {
+		t.Fatal("chain operand did not resolve")
+	}
+	if operandSym.Scope == nil {
+		t.Fatalf("%s has no scope", operandSym.Name)
+	}
+	sym, ok := operandSym.Scope.LookupLocal(name)
+	if !ok {
+		t.Fatalf("%s declares no member %q", operandSym.Name, name)
+	}
+	return sym
+}
+
 // resolvedSegments returns the name of the symbol each segment of a binding end
 // resolved to, in source order.
 func resolvedSegments(t *testing.T, r *Resolver, end ast.Node) []string {
