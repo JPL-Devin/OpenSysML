@@ -8,6 +8,7 @@ import (
 	"github.com/Open-MBEE/Systemica/internal/core/ast"
 	"github.com/Open-MBEE/Systemica/internal/core/lexer"
 	"github.com/Open-MBEE/Systemica/internal/core/resolve"
+	"github.com/Open-MBEE/Systemica/internal/core/semantics"
 	"github.com/Open-MBEE/Systemica/internal/core/source"
 	"github.com/Open-MBEE/Systemica/internal/core/symbols"
 )
@@ -206,7 +207,7 @@ func (m Model) nameTaken(sym *symbols.Symbol, newName string) (string, bool) {
 	if sym.OwnerScope == nil {
 		return "", false
 	}
-	other, ok := resolve.New(m.Index).LookupNameExcluding(sym.OwnerScope, newName, sym.Decl)
+	other, ok := m.resolver().LookupNameExcluding(sym.OwnerScope, newName, sym.Decl)
 	if !ok || sameSymbol(other, sym) {
 		return "", false
 	}
@@ -214,6 +215,15 @@ func (m Model) nameTaken(sym *symbols.Symbol, newName string) (string, bool) {
 		return fqn, true
 	}
 	return other.Name, true
+}
+
+// resolver is a resolver with a semantic model attached, as every other caller
+// builds one: without one, members reached through inheritance or a reference
+// subsetting are invisible both to a lookup and to a reference's resolution.
+func (m Model) resolver() *resolve.Resolver {
+	r := resolve.New(m.Index)
+	r.SetModel(semantics.NewModel(r))
+	return r
 }
 
 // declIdent returns the identification a declaration node carries.
@@ -252,7 +262,7 @@ func (m Model) referringTo(sym *symbols.Symbol, nameSpan source.Span) []string {
 	if rootScope == nil {
 		return nil
 	}
-	r := resolve.New(m.Index)
+	r := m.resolver()
 	seen := map[string]bool{}
 	var out []string
 	for _, ref := range resolve.References(m.Root, rootScope) {

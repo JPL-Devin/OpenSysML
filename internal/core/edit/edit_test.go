@@ -531,6 +531,37 @@ func TestRenameShadowingAnOuterNameIsRefused(t *testing.T) {
 	}
 }
 
+// Members reached through inheritance count, both as a name a rename would take
+// over and as a reference a rename would break: the lookups run over a resolver
+// with a semantic model attached, which is what makes them visible.
+func TestRenameSeesInheritedMembers(t *testing.T) {
+	const src = "package Demo {\n\tpart def Base {\n\t\tattribute mass = 1.0;\n\t}\n" +
+		"\tpart def P :> Base {\n\t\tattribute m = 2.0;\n\t\tattribute q = mass;\n\t}\n}\n"
+
+	m := loadContent(t, "inherit.sysml", src)
+	requireClean(t, m)
+	_, err := Apply(m, []Operation{Rename("Demo::P::m", "mass")})
+	e := editError(t, err)
+	if e.Failure != FailureInvalidName {
+		t.Fatalf("failure is %s (%s), want invalid-name", e.Failure, e.Message)
+	}
+	if !strings.Contains(e.Message, "already means Demo::Base::mass") {
+		t.Fatalf("refusal does not name the inherited feature: %s", e.Message)
+	}
+
+	// The inherited feature is referenced by name from P, so renaming it there is
+	// the referenced-rename refusal, naming where the reference is made.
+	m = loadContent(t, "inherit.sysml", src)
+	_, err = Apply(m, []Operation{Rename("Demo::Base::mass", "weight")})
+	e = editError(t, err)
+	if e.Failure != FailureRenameReferenced {
+		t.Fatalf("failure is %s (%s), want rename-referenced", e.Failure, e.Message)
+	}
+	if len(e.Referring) != 1 || e.Referring[0] != "Demo::P" {
+		t.Fatalf("referrers are %v, want [Demo::P]", e.Referring)
+	}
+}
+
 func TestSemanticValidationSkippedWithoutIndexSource(t *testing.T) {
 	m := load(t, "spacecraft.sysml")
 	requireClean(t, m)
