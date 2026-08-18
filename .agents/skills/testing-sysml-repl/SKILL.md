@@ -3813,8 +3813,8 @@ below was observed at 41dc35cb with `/usr/bin/z3` 4.8.12; `bin/sysml` needs no e
   (`2000.0 [gram]`) — a good adversarial case that a naive translation would get wrong.
 - **Bad input:** `%optimize` alone → `usage: %optimize <name>`; an unknown name →
   `error: unresolved reference: X`; a package/part def/constraint def →
-  `error: not an analysis case: X is a <kind>, not a analysis case definition or usage`
-  (note the "a analysis" article typo, present at 41dc35cb — don't mistake it for a test failure).
+  `error: not an analysis case: X is a <kind>, not an analysis case definition or usage`
+  (the article follows the kind's first letter, `articleFor` in `internal/core/runtime/describe.go`).
 - **Read-only check that actually discriminates:** `%action <A>`, `%instances`
   (`(no instances created)`), `%optimize <case>`, then `%step` twice to `State: Completed` with the
   right `Results:` — and `%instances` still `(no instances created)`. Run `%optimize` twice in a row
