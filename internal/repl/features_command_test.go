@@ -10,7 +10,7 @@ const deprecationLine = "note: %slots is deprecated — use %features"
 
 // The rename is a spelling of one command: what %features lists is what %slots
 // listed, down to the nested expansion and the object IDs.
-func TestFeaturesMatchesSlotsListing(t *testing.T) {
+func TestFeaturesMatchesFeatureValuesListing(t *testing.T) {
 	for _, fixture := range []string{"testdata/nested_part.sysml", "testdata/collection_slots.sysml"} {
 		name := "Nested::Car"
 		if strings.Contains(fixture, "collection") {
@@ -21,10 +21,10 @@ func TestFeaturesMatchesSlotsListing(t *testing.T) {
 			run(t, s, "%instantiate "+name)
 
 			features := run(t, s, "%features "+name)
-			slots := run(t, s, "%slots "+name)
+			fvs := run(t, s, "%slots "+name)
 			wants(t, features, "Features:")
 			rejects(t, features, deprecationLine)
-			if got := strings.TrimPrefix(slots, deprecationLine+"\n"); got != features {
+			if got := strings.TrimPrefix(fvs, deprecationLine+"\n"); got != features {
 				t.Errorf("%%slots listing differs from %%features:\n%s\nwant:\n%s", got, features)
 			}
 		})
@@ -32,7 +32,7 @@ func TestFeaturesMatchesSlotsListing(t *testing.T) {
 }
 
 // The old spelling still works, and says what to write instead.
-func TestSlotsIsADeprecatedAliasOfFeatures(t *testing.T) {
+func TestFeatureValuesIsADeprecatedAliasOfFeatures(t *testing.T) {
 	s := loadFixture(t, "testdata/vehicle_package.sysml")
 	run(t, s, "%instantiate Vehicle")
 
@@ -54,9 +54,9 @@ func TestInstantiateSuggestsFeatures(t *testing.T) {
 }
 
 // The error paths are the command's, not the spelling's: an unresolved name, a
-// definition with no object, and a slot that cannot be materialized read the
+// definition with no object, and a feature value that cannot be materialized read the
 // same either way.
-func TestFeaturesErrorPathsMatchSlots(t *testing.T) {
+func TestFeaturesErrorPathsMatchFeatureValues(t *testing.T) {
 	t.Run("unresolved name", func(t *testing.T) {
 		s := loadFixture(t, "testdata/vehicle_package.sysml")
 		wants(t, run(t, s, "%features Nope"), "error: unresolved reference: Nope")

@@ -30,8 +30,8 @@ func vehicleIn(t *testing.T, ctx *Context) *Instance {
 	if err != nil {
 		t.Fatalf("Instantiate: %v", err)
 	}
-	if _, err := obj.GetSlot(ctx, "engine"); err != nil {
-		t.Fatalf("GetSlot(engine): %v", err)
+	if _, err := obj.GetFeatureValue(ctx, "engine"); err != nil {
+		t.Fatalf("GetFeatureValue(engine): %v", err)
 	}
 	return obj
 }
@@ -43,9 +43,9 @@ func TestAdoptCarriesAnObjectIntoAReanalysis(t *testing.T) {
 	prev := contextOver(t, adoptSrc)
 	obj := vehicleIn(t, prev)
 	shapes := prev.ShapesOf(obj)
-	nested, ok := obj.Slots["engine"].Value.Object()
+	nested, ok := obj.FeatureValues["engine"].Value.Object()
 	if !ok {
-		t.Fatalf("engine slot holds %v, want an object", obj.Slots["engine"].Value)
+		t.Fatalf("engine feature value holds %v, want an object", obj.FeatureValues["engine"].Value)
 	}
 
 	ctx := contextOver(t, adoptSrc+"\npart def Widget;")
@@ -62,13 +62,13 @@ func TestAdoptCarriesAnObjectIntoAReanalysis(t *testing.T) {
 	if want := lookupOne(t, ctx.resolver.Index(), "Demo::Vehicle"); obj.Type != want {
 		t.Error("the object is still of the declaration it was built against")
 	}
-	feat := obj.Slots["mass"].Feature
+	feat := obj.FeatureValues["mass"].Feature
 	if features := ctx.FeaturesOf(obj.Type); feat != &features[indexOfFeature(t, features, "mass")] {
-		t.Error("a slot still fills a feature of the analysis the object was built against")
+		t.Error("a feature value still fills a feature of the analysis the object was built against")
 	}
-	mass, err := obj.GetSlot(ctx, "mass")
+	mass, err := obj.GetFeatureValue(ctx, "mass")
 	if err != nil {
-		t.Fatalf("GetSlot(mass): %v", err)
+		t.Fatalf("GetFeatureValue(mass): %v", err)
 	}
 	if got := mass.Value; got.Kind != ValConst || !strings.Contains(fmt.Sprint(got.Const), "1500") {
 		t.Errorf("mass = %v, want the value its declaration states", got)
@@ -88,7 +88,7 @@ const adoptCalcSrc = `package Demo {
 	part def Gauge { attribute reading = double(3.0); }
 }`
 
-// A slot holding what a value expression states is derived again in the context
+// A feature value that holds what a value expression states is derived again in the context
 // it is carried into, so it reads the declarations that expression names as they
 // are now rather than keeping what they said when it was materialized.
 func TestAdoptDerivesAValueAgainstTheNewDeclarations(t *testing.T) {
@@ -97,9 +97,9 @@ func TestAdoptDerivesAValueAgainstTheNewDeclarations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Instantiate: %v", err)
 	}
-	if slot, err := obj.GetSlot(prev, "reading"); err != nil {
-		t.Fatalf("GetSlot(reading): %v", err)
-	} else if got := fmt.Sprint(slot.Value.Const); !strings.Contains(got, "6") {
+	if fv, err := obj.GetFeatureValue(prev, "reading"); err != nil {
+		t.Fatalf("GetFeatureValue(reading): %v", err)
+	} else if got := fmt.Sprint(fv.Value.Const); !strings.Contains(got, "6") {
 		t.Fatalf("reading = %s, want 6", got)
 	}
 	shapes := prev.ShapesOf(obj)
@@ -108,11 +108,11 @@ func TestAdoptDerivesAValueAgainstTheNewDeclarations(t *testing.T) {
 	if err := ctx.Adopt(prev, shapes, obj); err != nil {
 		t.Fatalf("Adopt: %v", err)
 	}
-	slot, err := obj.GetSlot(ctx, "reading")
+	fv, err := obj.GetFeatureValue(ctx, "reading")
 	if err != nil {
-		t.Fatalf("GetSlot(reading): %v", err)
+		t.Fatalf("GetFeatureValue(reading): %v", err)
 	}
-	if got := fmt.Sprint(slot.Value.Const); !strings.Contains(got, "9") {
+	if got := fmt.Sprint(fv.Value.Const); !strings.Contains(got, "9") {
 		t.Errorf("reading = %s, want 9 from the calc as it is declared now", got)
 	}
 }
@@ -159,7 +159,7 @@ func TestAdoptCarriesAnObjectOwningAnAnonymousConnector(t *testing.T) {
 	if conns[0].ID != before {
 		t.Errorf("the connector object is %d after the carry-over, want the identity %d it had", conns[0].ID, before)
 	}
-	port := slotInstance(t, ctx, obj, "a", "p")
+	port := fvInstance(t, ctx, obj, "a", "p")
 	if end := conns[0].Ends[0].Value; !holdsObject(end, port.ID) {
 		t.Errorf("the connector end holds %v, want the port object %d of the carried object", end, port.ID)
 	}
@@ -173,7 +173,7 @@ func holdsObject(val Value, id int64) bool {
 
 // A declaration that no longer resolves to the shape an object was materialized
 // against cannot hold that object, so it is refused rather than rebound onto
-// slots that no longer mean the same thing.
+// feature values that no longer mean the same thing.
 func TestAdoptRefusesAChangedShape(t *testing.T) {
 	prev := contextOver(t, adoptSrc)
 	obj := vehicleIn(t, prev)
@@ -190,7 +190,7 @@ func TestAdoptRefusesAChangedShape(t *testing.T) {
 }
 
 // A change to a declaration an object only depends on invalidates it too: its
-// slots hold what that declaration says.
+// feature values hold what that declaration says.
 func TestAdoptRefusesAChangedDependency(t *testing.T) {
 	prev := contextOver(t, adoptSrc)
 	obj := vehicleIn(t, prev)

@@ -180,16 +180,16 @@ Harden `MembersOf` into stable, ordered **effective-feature list** per type:
 ### Tier 2 — Instance Model ✅
 
 - **Value:** Extends `semantics.Value` → `null`, strings, **instance references**, **collections** (sequences/sets)
-- **Instance:** Typed object with one slot per effective feature (Tier 1)
+- **Instance:** Typed object with one feature value per effective feature (Tier 1)
 - **Instantiation:** Materialize instance graph from `part`/`item` usage
   - Recursively instantiate composite features
-  - Multiplicity governs slot cardinality
-  - Lazy slot materialization
+  - Multiplicity governs feature value cardinality
+  - Lazy feature value materialization
 
 ### Tier 3 — Expression Evaluator ✅
 
 Full evaluator with **user-defined calc invocation**, **constraint evaluation**, and **requirement evaluation**:
-- Feature access `x.y.z` resolved against instance slots
+- Feature access `x.y.z` resolved against instance feature values
 - KerML operator library (`->select`, `->collect`, `size`, string ops)
 - **Calc invocation:** Resolve calc symbol → extract params/return → bind args to parameters → evaluate return expression
 - **Constraint evaluation:** Extract `assert`/`assume` members → evaluate boolean expressions → check satisfaction (with optional `not` negation)
@@ -587,7 +587,7 @@ New behavioral features (actions, states, calc, constraints, requirements) requi
 - Action: token flow, outputs, nested invocation, send/accept, port communication, `perform` reference and shorthand, accept...then, flows, loops and decisions
 - State: simple, do behavior, concurrent do, transition effect, choice/junction/fork-join pseudostates, orthogonal regions and region pseudostates, shallow/deep history, entry/exit points, deferred/undeferred events, call and timed triggers, signal discrimination/unmatched, self signal
 - Requirement: require/subject/actor/assume satisfaction, nested
-- Instance: derived slots, constraint binding, inherited constraints, nested usage bodies
+- Instance: derived feature values, constraint binding, inherited constraints, nested usage bodies
 - Unit and quantity evaluation
 - Constraint: assert/assume satisfaction, negation
 - Satisfy assertions, variations, redefinitions, variants, feature chains, string operations, nested behaviors, element filters, the ball-and-chain model, and one each of attribute, connector, cubesat and view

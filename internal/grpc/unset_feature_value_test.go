@@ -8,7 +8,7 @@ import (
 	pb "github.com/Open-MBEE/Systemica/api/proto"
 )
 
-const unsetSlotModel = `
+const unsetFeatureValueModel = `
 package Demo {
   private import ScalarValues::*;
   part def Engine {
@@ -23,43 +23,43 @@ package Demo {
 }
 `
 
-// A slot holding no value is sent as such, so a client reads "no value" rather
-// than the id of an object with nothing in it. A valued slot and an object-valued
+// A feature value that holds no value is sent as such, so a client reads "no value" rather
+// than the id of an object with nothing in it. A valued feature value and an object-valued
 // one are unaffected.
-func TestInstantiate_ValuelessValueTypedSlotIsSentUnset(t *testing.T) {
-	resp := instantiate(t, unsetSlotModel, "unset-slot", "Demo::Vehicle")
-	slots := resp.GetInstance().GetFeatureValues()
+func TestInstantiate_ValuelessValueTypedFeatureValueIsSentUnset(t *testing.T) {
+	resp := instantiate(t, unsetFeatureValueModel, "unset-feature-value", "Demo::Vehicle")
+	fvs := resp.GetInstance().GetFeatureValues()
 
-	d := slots["d"]
+	d := fvs["d"]
 	if !d.GetMaterialized() {
-		t.Errorf("slot d: materialized = false, want true: the object is created either way")
+		t.Errorf("feature value d: materialized = false, want true: the object is created either way")
 	}
 	if _, ok := d.GetValue().GetKind().(*pb.Value_Unset); !ok {
 		kind, value := describeValue(d.GetValue())
-		t.Errorf("slot d: %s %v, want unset", kind, value)
+		t.Errorf("feature value d: %s %v, want unset", kind, value)
 	}
 
-	for i, elem := range slots["ds"].GetValues() {
+	for i, elem := range fvs["ds"].GetValues() {
 		if _, ok := elem.GetKind().(*pb.Value_Unset); !ok {
 			kind, value := describeValue(elem)
-			t.Errorf("slot ds[%d]: %s %v, want unset", i, kind, value)
+			t.Errorf("feature value ds[%d]: %s %v, want unset", i, kind, value)
 		}
 	}
 
-	if got := slots["k"].GetValue().GetRealValue(); got != 2.0 {
-		kind, value := describeValue(slots["k"].GetValue())
-		t.Errorf("slot k: %s %v, want real 2", kind, value)
+	if got := fvs["k"].GetValue().GetRealValue(); got != 2.0 {
+		kind, value := describeValue(fvs["k"].GetValue())
+		t.Errorf("feature value k: %s %v, want real 2", kind, value)
 	}
-	if _, ok := slots["engine"].GetValue().GetKind().(*pb.Value_InstanceId); !ok {
-		kind, value := describeValue(slots["engine"].GetValue())
-		t.Errorf("slot engine: %s %v, want an instance id", kind, value)
+	if _, ok := fvs["engine"].GetValue().GetKind().(*pb.Value_InstanceId); !ok {
+		kind, value := describeValue(fvs["engine"].GetValue())
+		t.Errorf("feature value engine: %s %v, want an instance id", kind, value)
 	}
 }
 
 // The empty object a valueless value-typed feature materializes is not reachable
 // as a value, so it is not sent as one of the graph's instances either.
-func TestInstantiate_UnsetSlotContributesNoInstance(t *testing.T) {
-	resp := instantiate(t, unsetSlotModel, "unset-slot-graph", "Demo::Vehicle")
+func TestInstantiate_UnsetFeatureValueContributesNoInstance(t *testing.T) {
+	resp := instantiate(t, unsetFeatureValueModel, "unset-feature-value-graph", "Demo::Vehicle")
 	if len(resp.Instances) != 2 {
 		ids := make([]int64, 0, len(resp.Instances))
 		for _, inst := range resp.Instances {
@@ -69,7 +69,7 @@ func TestInstantiate_UnsetSlotContributesNoInstance(t *testing.T) {
 	}
 }
 
-// Unset says what a slot holds, which is something to read and not to supply, so
+// Unset says what a feature value holds, which is something to read and not to supply, so
 // a caller sending it is told so rather than having it read as some value.
 func TestProtoToValue_RejectsUnset(t *testing.T) {
 	_, err := ProtoToValueIn(&pb.Value{Kind: &pb.Value_Unset{Unset: true}}, nil, nil)

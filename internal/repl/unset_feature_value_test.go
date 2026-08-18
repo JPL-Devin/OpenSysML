@@ -5,10 +5,10 @@ import (
 	"testing"
 )
 
-// unsetSlotModel declares valueless features of value types — a library one, an
+// unsetFeatureValueModel declares valueless features of value types — a library one, an
 // attribute definition with no features, and a collection — beside a valued
 // attribute and objects of classes.
-const unsetSlotModel = `package P {
+const unsetFeatureValueModel = `package P {
     private import ScalarValues::*;
     attribute def Empty;
     attribute def Point { attribute x : Real = 1.0; }
@@ -24,16 +24,16 @@ const unsetSlotModel = `package P {
 }
 `
 
-// A valueless feature of a value type holds no value, so the slot listing says
+// A valueless feature of a value type holds no value, so the feature value listing says
 // so rather than naming the object materialization holds for it. What does hold
 // a value — a valued attribute, a value type with features, an object of a class
 // — still reads as what it holds.
-func TestSlotListingReportsAValuelessValueTypedFeatureAsUnset(t *testing.T) {
-	s := loadSource(t, unsetSlotModel)
+func TestFeatureValueListingReportsAValuelessValueTypedFeatureAsUnset(t *testing.T) {
+	s := loadSource(t, unsetFeatureValueModel)
 	wants(t, run(t, s, "%instantiate P::Q"), "Created instance")
 
-	slots := run(t, s, "%slots P::Q")
-	wants(t, slots,
+	fvs := run(t, s, "%features P::Q")
+	wants(t, fvs,
 		"d = <unset>",
 		"ds = [<unset>, <unset>]",
 		"empty = <unset>",
@@ -44,16 +44,16 @@ func TestSlotListingReportsAValuelessValueTypedFeatureAsUnset(t *testing.T) {
 	)
 	// The object materialization holds for such a feature is not named, and not
 	// expanded — only the class-typed part is reported as an empty object.
-	rejects(t, slots, "d = Instance(", "empty = Instance(")
-	if n := strings.Count(slots, "(no features)"); n != 1 {
-		t.Errorf("%d empty objects reported, want only the class-typed part:\n%s", n, slots)
+	rejects(t, fvs, "d = Instance(", "empty = Instance(")
+	if n := strings.Count(fvs, "(no features)"); n != 1 {
+		t.Errorf("%d empty objects reported, want only the class-typed part:\n%s", n, fvs)
 	}
 }
 
-// An evaluation of the same feature reports the same thing the slot listing
+// An evaluation of the same feature reports the same thing the feature value listing
 // does: the two surfaces read one runtime value.
 func TestEvaluationReportsAValuelessValueTypedFeatureAsUnset(t *testing.T) {
-	s := loadSource(t, unsetSlotModel)
+	s := loadSource(t, unsetFeatureValueModel)
 	wants(t, run(t, s, "%instantiate P::Q"), "Created instance")
 
 	wants(t, run(t, s, "%eval P::Q::d"), "= <unset>")

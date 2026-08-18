@@ -40,11 +40,11 @@ func TestChainOverCollectionTraceOrder(t *testing.T) {
 
 	trace := NewTraceRecorder()
 	ctx.SetTrace(trace)
-	slot, err := inst.GetSlot(ctx, "values")
+	fv, err := inst.GetFeatureValue(ctx, "values")
 	if err != nil {
-		t.Fatalf("GetSlot(values): %v", err)
+		t.Fatalf("GetFeatureValue(values): %v", err)
 	}
-	if got := FormatTraceValue(slot.HeldValue()); got != "(1.0, 2.0, 4.0)" {
+	if got := FormatTraceValue(fv.HeldValue()); got != "(1.0, 2.0, 4.0)" {
 		t.Fatalf("values = %s, want (1.0, 2.0, 4.0)", got)
 	}
 

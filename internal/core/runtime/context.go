@@ -90,13 +90,13 @@ type Context struct {
 	// so a message one behavior sends can be accepted in another.
 	messages []Message
 
-	// derivingSlots holds the slots whose defaults are being evaluated, so a
-	// default that refers back to its own slot is reported as a cycle.
-	derivingSlots map[slotRef]bool
+	// derivingFeatureValues holds the feature values whose defaults are being evaluated, so a
+	// default that refers back to its own feature value is reported as a cycle.
+	derivingFeatureValues map[featureValueRef]bool
 
-	// collectingSubsets holds the slots whose subsetting features are being read,
+	// collectingSubsets holds the feature values whose subsetting features are being read,
 	// so features that subset each other are reported as a cycle.
-	collectingSubsets map[slotRef]bool
+	collectingSubsets map[featureValueRef]bool
 
 	// sources holds the text of the files the model was read from, by name, so an
 	// error about a declaration can say where it was written. A file no caller
@@ -104,8 +104,8 @@ type Context struct {
 	sources map[string]*source.SourceFile
 }
 
-// slotRef identifies one slot of one instance.
-type slotRef struct {
+// featureValueRef identifies one feature value of one instance.
+type featureValueRef struct {
 	instance int64
 	feature  string
 }
@@ -157,8 +157,8 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 
 		materializingConnectors: make(map[connectorRef]bool),
 		objectConns:             make(map[*symbols.Symbol][]lower.Connection),
-		derivingSlots:           make(map[slotRef]bool),
-		collectingSubsets:       make(map[slotRef]bool),
+		derivingFeatureValues:   make(map[featureValueRef]bool),
+		collectingSubsets:       make(map[featureValueRef]bool),
 		sources:                 make(map[string]*source.SourceFile),
 	}
 }
@@ -399,7 +399,7 @@ func RequireRequirement(sym *symbols.Symbol) error {
 }
 
 // EvaluateConstraintOn evaluates a constraint against a concrete instance: a
-// feature the constraint names resolves to that instance's slot, so the same
+// feature the constraint names resolves to that instance's feature value, so the same
 // constraint can pass for one instance and fail for another. An instance that
 // does not carry the constraint itself is searched for the nested object that
 // does; a nil instance leaves the subject to EvaluateConstraint's rule.
@@ -574,7 +574,7 @@ func (ctx *Context) EvaluateRequirement(sym *symbols.Symbol, scope *symbols.Scop
 }
 
 // EvaluateRequirementOn evaluates a requirement against a concrete instance,
-// binding the features it names to that instance's slots. The subject is chosen
+// binding the features it names to that instance's feature values. The subject is chosen
 // as EvaluateConstraintOn chooses it, and the subject/actor bindings are
 // evaluated against that same object.
 func (ctx *Context) EvaluateRequirementOn(sym *symbols.Symbol, scope *symbols.Scope, self *Instance) (bool, error) {

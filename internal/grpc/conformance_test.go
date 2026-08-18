@@ -20,12 +20,12 @@ type expectedValue struct {
 	Value interface{} `json:"value"`
 }
 
-// expectedSlot is the fixture encoding of a pb.FeatureValue.
-type expectedSlot struct {
+// expectedSlot is the fixture encoding of a pb.SlotValue.
+type expectedFeatureValue struct {
 	Materialized bool        `json:"materialized"`
 	ValueKind    string      `json:"value_kind"`
 	Value        interface{} `json:"value"`
-	// Error, when set, is a substring the slot's error must contain.
+	// Error, when set, is a substring the feature value's error must contain.
 	Error string `json:"error"`
 }
 
@@ -56,12 +56,12 @@ type conformanceCase struct {
 	// ExecuteState
 	Events []string `json:"events,omitempty"`
 
-	ExpectedResult        *expectedValue           `json:"expected_result,omitempty"`
-	ExpectedSlots         map[string]expectedSlot  `json:"expected_slots,omitempty"`
-	ExpectedInstanceCount int                      `json:"expected_instance_count,omitempty"`
-	ExpectedOutputs       map[string]expectedValue `json:"expected_outputs,omitempty"`
-	ExpectedStatesVisited []string                 `json:"expected_states_visited,omitempty"`
-	ExpectedFinalContext  map[string]expectedValue `json:"expected_final_context,omitempty"`
+	ExpectedResult        *expectedValue                  `json:"expected_result,omitempty"`
+	ExpectedFeatureValues map[string]expectedFeatureValue `json:"expected_slots,omitempty"`
+	ExpectedInstanceCount int                             `json:"expected_instance_count,omitempty"`
+	ExpectedOutputs       map[string]expectedValue        `json:"expected_outputs,omitempty"`
+	ExpectedStatesVisited []string                        `json:"expected_states_visited,omitempty"`
+	ExpectedFinalContext  map[string]expectedValue        `json:"expected_final_context,omitempty"`
 
 	// GetSymbol
 	ExpectedAttributeNames []string                     `json:"expected_attribute_names,omitempty"`
@@ -246,24 +246,24 @@ func runInstantiateCase(t *testing.T, srv *Service, ctx context.Context, modelHa
 	if resp.Instance.TypeSymbolId != tc.SymbolID {
 		t.Errorf("type_symbol_id = %q, want %q", resp.Instance.TypeSymbolId, tc.SymbolID)
 	}
-	for name, want := range tc.ExpectedSlots {
-		slot, ok := resp.Instance.FeatureValues[name]
+	for name, want := range tc.ExpectedFeatureValues {
+		fv, ok := resp.Instance.FeatureValues[name]
 		if !ok {
-			t.Errorf("missing slot %q", name)
+			t.Errorf("missing feature value %q", name)
 			continue
 		}
-		if slot.Materialized != want.Materialized {
-			t.Errorf("slot %q: materialized = %v, want %v", name, slot.Materialized, want.Materialized)
+		if fv.Materialized != want.Materialized {
+			t.Errorf("feature value %q: materialized = %v, want %v", name, fv.Materialized, want.Materialized)
 		}
 		if want.Error == "" {
-			if slot.Error != "" {
-				t.Errorf("slot %q: unexpected error %q", name, slot.Error)
+			if fv.Error != "" {
+				t.Errorf("feature value %q: unexpected error %q", name, fv.Error)
 			}
-		} else if !strings.Contains(slot.Error, want.Error) {
-			t.Errorf("slot %q: error = %q, want it to contain %q", name, slot.Error, want.Error)
+		} else if !strings.Contains(fv.Error, want.Error) {
+			t.Errorf("feature value %q: error = %q, want it to contain %q", name, fv.Error, want.Error)
 		}
 		if want.ValueKind != "" {
-			checkValue(t, "slot "+name, expectedValue{Kind: want.ValueKind, Value: want.Value}, slot.Value)
+			checkValue(t, "feature value "+name, expectedValue{Kind: want.ValueKind, Value: want.Value}, fv.Value)
 		}
 	}
 	if tc.ExpectedInstanceCount != 0 && len(resp.Instances) != tc.ExpectedInstanceCount {

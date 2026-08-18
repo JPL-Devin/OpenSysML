@@ -380,7 +380,7 @@ var (
 	// which alone commensurability is decided.
 	ErrUnitNotReduced = errors.New("unit carries no reduction to base units")
 	// ErrUnsetNotAccepted reports the unset arm arriving as an input. It reports
-	// that a slot holds no value, which is something to read, not to supply.
+	// that a feature value holds no value, which is something to read, not to supply.
 	ErrUnsetNotAccepted = errors.New("unset is not a value a caller can supply")
 )
 
@@ -531,7 +531,7 @@ const (
 // request, so the whole reachable graph is serialized while the context is alive.
 //
 // Expansion stops at a child whose type is already on the path, at maxGraphDepth
-// and at maxGraphInstances: reading a composite slot materializes the object it
+// and at maxGraphInstances: reading a composite feature value materializes the object it
 // holds, so a self-referential part would otherwise instantiate forever. An
 // unexpanded child stays a bare instance id.
 func InstanceGraphToProto(rt *runtime.Context, inst *runtime.Instance, idx *symbols.Index) (*pb.Instance, []*pb.Instance) {
@@ -548,7 +548,7 @@ func InstanceGraphToProto(rt *runtime.Context, inst *runtime.Instance, idx *symb
 		onPath[cur.Type] = true
 		defer delete(onPath, cur.Type)
 
-		// InstanceToProto reads every slot through GetSlot, which is what
+		// InstanceToProto reads every feature value through GetFeatureValue, which is what
 		// lazily materializes the children the ids below resolve to.
 		pbInst := InstanceToProto(rt, cur, idx)
 		all = append(all, pbInst)
@@ -613,13 +613,13 @@ func collectionElements(val runtime.Value) []runtime.Value {
 }
 
 // InstanceToProto converts runtime.Instance to protobuf Instance. Feature values
-// are read through Instance.GetSlot, so a derived default is evaluated against
+// are read through Instance.GetFeatureValue, so a derived default is evaluated against
 // the instance rather than reported as unmaterialized.
 func InstanceToProto(rt *runtime.Context, inst *runtime.Instance, idx *symbols.Index) *pb.Instance {
 	pbValues := make(map[string]*pb.FeatureValue)
 
-	for name := range inst.Slots {
-		slot, err := inst.GetSlot(rt, name)
+	for name := range inst.FeatureValues {
+		fv, err := inst.GetFeatureValue(rt, name)
 		if err != nil {
 			pbValues[name] = &pb.FeatureValue{
 				FeatureName: name,
@@ -630,19 +630,19 @@ func InstanceToProto(rt *runtime.Context, inst *runtime.Instance, idx *symbols.I
 
 		pbValue := &pb.FeatureValue{
 			FeatureName:  name,
-			Materialized: slot.Materialized,
+			Materialized: fv.Materialized,
 		}
 
 		// Check multiplicity to determine single- vs multi-valued
-		mult := slot.Feature.Multiplicity
+		mult := fv.Feature.Multiplicity
 		if !mult.Upper.Infinite && mult.Upper.Value <= 1 {
 			// Single-valued. An unmaterialized one holds no value; marshalling it
 			// anyway would report the empty value as an unsupported null.
-			if slot.Materialized {
-				pbValue.Value = ValueToProtoIn(rt, slot.Value, idx)
+			if fv.Materialized {
+				pbValue.Value = ValueToProtoIn(rt, fv.Value, idx)
 			}
 		} else {
-			for _, elem := range collectionElements(slot.Values) {
+			for _, elem := range collectionElements(fv.Values) {
 				pbValue.Values = append(pbValue.Values, ValueToProtoIn(rt, elem, idx))
 			}
 		}
@@ -664,10 +664,10 @@ func InstanceToProto(rt *runtime.Context, inst *runtime.Instance, idx *symbols.I
 //lint:ignore SA1019 populating the deprecated map is the point of this helper.
 func deprecatedSlots(values map[string]*pb.FeatureValue) map[string]*pb.SlotValue {
 	//lint:ignore SA1019 the deprecated message is what this map holds, deliberately.
-	slots := make(map[string]*pb.SlotValue, len(values))
+	fvs := make(map[string]*pb.SlotValue, len(values))
 	for name, fv := range values {
 		//lint:ignore SA1019 the deprecated message is what this map holds, deliberately.
-		slots[name] = &pb.SlotValue{
+		fvs[name] = &pb.SlotValue{
 			FeatureName:  fv.FeatureName,
 			Value:        fv.Value,
 			Values:       fv.Values,
@@ -675,5 +675,5 @@ func deprecatedSlots(values map[string]*pb.FeatureValue) map[string]*pb.SlotValu
 			Error:        fv.Error,
 		}
 	}
-	return slots
+	return fvs
 }

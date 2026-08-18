@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// The steps reading an object's slots belong to the object, so a later command
+// The steps reading an object's feature values belong to the object, so a later command
 // reports its own execution rather than replaying the materialization.
 func TestInstantiateReportCarriesItsOwnTrace(t *testing.T) {
 	s := loadFixture(t, "testdata/derived_package.sysml")

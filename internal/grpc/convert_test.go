@@ -247,7 +247,7 @@ package Vehicle {
 	}
 }
 
-// TestCollectionElementsHandlesSetAndSequence verifies a collection slot is
+// TestCollectionElementsHandlesSetAndSequence verifies a collection feature value is
 // marshalled whichever collection kind the runtime left in it.
 func TestCollectionElementsHandlesSetAndSequence(t *testing.T) {
 	one := runtime.Value{Kind: runtime.ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 1}}

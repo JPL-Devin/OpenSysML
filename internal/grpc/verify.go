@@ -133,7 +133,7 @@ func (v *verifyContext) verdict(kind string, sym *symbols.Symbol, element string
 }
 
 // instanceGraph serializes the object a verdict is about, so a client can read
-// the slot values behind a failure without a follow-up call.
+// the feature values behind a failure without a follow-up call.
 func (v *verifyContext) instanceGraph(inst *runtime.Instance) []*pb.Instance {
 	if inst == nil {
 		return nil

@@ -21,12 +21,12 @@ func TestIntegration_ParseAndInstantiate(t *testing.T) {
 		t.Fatalf("Instantiate failed: %v", err)
 	}
 
-	slot, err := inst.GetSlot(ctx, "diameter")
+	fv, err := inst.GetFeatureValue(ctx, "diameter")
 	if err != nil {
-		t.Fatalf("GetSlot failed: %v", err)
+		t.Fatalf("GetFeatureValue failed: %v", err)
 	}
 
-	if slot.Value.Const.Real != 0.5 {
-		t.Errorf("expected diameter=0.5, got %v", slot.Value.Const.Real)
+	if fv.Value.Const.Real != 0.5 {
+		t.Errorf("expected diameter=0.5, got %v", fv.Value.Const.Real)
 	}
 }

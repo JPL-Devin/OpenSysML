@@ -286,9 +286,9 @@ func TestServiceServesRPCsAndShutsDownCleanly(t *testing.T) {
 // featureValueOf returns the named feature value of an instantiation response.
 func featureValueOf(t *testing.T, res *pb.InstantiateResponse, name string) *pb.FeatureValue {
 	t.Helper()
-	for _, slot := range res.GetInstance().GetFeatureValues() {
-		if slot.GetFeatureName() == name {
-			return slot
+	for _, fv := range res.GetInstance().GetFeatureValues() {
+		if fv.GetFeatureName() == name {
+			return fv
 		}
 	}
 	t.Fatalf("no feature value %q in %v", name, res.GetInstance())

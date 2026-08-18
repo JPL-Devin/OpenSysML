@@ -333,7 +333,7 @@ func newSession() *repl.Session {
 }
 
 // runInteractiveWithFiles loads what was named and takes lines from the prompt.
-// A model that did not analyse, or a slot a command could not materialize, leaves
+// A model that did not analyse, or a feature value a command could not materialize, leaves
 // the status of a run that decided nothing, except at a terminal, where the
 // prompt that opens is where it gets fixed.
 func runInteractiveWithFiles(files []string) int {
@@ -365,7 +365,7 @@ func runInteractiveWithFiles(files []string) int {
 
 // sessionStatus is the status a prompt session leaves: at a terminal the session
 // is where an unusable model gets fixed, so it decides nothing, and otherwise the
-// run is undecided if the model did not analyse or a command reported a slot it
+// run is undecided if the model did not analyse or a command reported a feature value it
 // could not materialize.
 func sessionStatus(loaded int, terminal bool, materializeFailures []error) int {
 	if terminal {

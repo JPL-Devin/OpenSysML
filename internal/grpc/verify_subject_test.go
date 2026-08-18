@@ -29,7 +29,7 @@ const nestedSubjectModelSource = `package Demo {
 `
 
 // A verdict about a condition reached through a nested redefinition names the
-// nested object it was evaluated against, so a client reading the reported slots
+// nested object it was evaluated against, so a client reading the reported feature values
 // sees the values behind the verdict.
 func TestVerifyConstraintNamesTheNestedSubject(t *testing.T) {
 	srv := mustNewService(t, 10)
@@ -63,7 +63,7 @@ func TestVerifyConstraintNamesTheNestedSubject(t *testing.T) {
 	}
 	pressure, ok := named.FeatureValues["pressure"]
 	if !ok {
-		t.Fatalf("the object the verdict names has no pressure slot: %v", named.FeatureValues)
+		t.Fatalf("the object the verdict names has no pressure feature value: %v", named.FeatureValues)
 	}
 	if pressure.Value.GetRealValue() != 5.0 {
 		t.Errorf("pressure = %v, want the redefined 5", pressure)

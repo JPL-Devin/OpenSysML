@@ -53,7 +53,7 @@ func NewEvalContext(ctx *Context, scope *symbols.Scope) *EvalContext {
 }
 
 // NewEvalContextIn creates an evaluation context bound to an instance, so that
-// a feature name resolves to that instance's slot value rather than to the
+// a feature name resolves to that instance's feature value rather than to the
 // declared default of the same name.
 func NewEvalContextIn(ctx *Context, scope *symbols.Scope, self *Instance) *EvalContext {
 	ec := NewEvalContext(ctx, scope)
@@ -198,7 +198,7 @@ func (ctx *Context) EvalWithScope(node ast.Node, scope *symbols.Scope) (Value, e
 }
 
 // EvalWithScopeOn evaluates an expression against a concrete instance, so a
-// feature it names reads that object's slot. It brackets one run, as
+// feature it names reads that object's feature value. It brackets one run, as
 // EvalWithScope does, which is what bounds the evaluation by the step budget.
 func (ctx *Context) EvalWithScopeOn(node ast.Node, scope *symbols.Scope, self *Instance) (Value, error) {
 	defer ctx.beginRun()()
@@ -286,10 +286,10 @@ func (ec *EvalContext) evalName(qn *ast.QualifiedName) (Value, error) {
 			delete(ec.resolving, name)
 			return val, err
 		}
-		// Then the bound instance: a slot holds the value this object actually
+		// Then the bound instance: a feature value holds the value this object actually
 		// carries, which overrides the declared default the scope would yield.
 		if ec.self != nil {
-			if val, ok, err := ec.selfSlotValue(name); err != nil {
+			if val, ok, err := ec.selfFeatureValue(name); err != nil {
 				return Value{}, err
 			} else if ok {
 				return val, nil
@@ -342,7 +342,7 @@ func (ec *EvalContext) evalName(qn *ast.QualifiedName) (Value, error) {
 		// Nothing outside the feature supplies its value, so its own value depends
 		// on itself.
 		if ec.resolving[name] {
-			return Value{}, fmt.Errorf("%w: %s", ErrCyclicSlot, name)
+			return Value{}, fmt.Errorf("%w: %s", ErrCyclicFeatureValue, name)
 		}
 		// A feature the element declares but nothing gives a value to is
 		// uninitialized rather than unresolved.
@@ -447,20 +447,20 @@ func (ec *EvalContext) evalName(qn *ast.QualifiedName) (Value, error) {
 	}
 }
 
-// selfSlotValue reads the named slot of the bound instance. Reports whether the
-// instance has such a slot; an error means the slot exists but could not be
+// selfFeatureValue reads the named feature value of the bound instance. Reports whether the
+// instance has such a feature value; an error means the feature value exists but could not be
 // materialized.
-func (ec *EvalContext) selfSlotValue(name string) (Value, bool, error) {
-	if _, ok := ec.self.Slots[name]; !ok {
+func (ec *EvalContext) selfFeatureValue(name string) (Value, bool, error) {
+	if _, ok := ec.self.FeatureValues[name]; !ok {
 		return Value{}, false, nil
 	}
-	slot, err := ec.self.GetSlot(ec.ctx, name)
+	fv, err := ec.self.GetFeatureValue(ec.ctx, name)
 	if err != nil {
 		return Value{}, true, err
 	}
-	value := slot.HeldValue()
+	value := fv.HeldValue()
 	if value.Kind == ValInvalid {
-		return Value{}, true, fmt.Errorf("%w: %s", ErrUninitializedSlot, name)
+		return Value{}, true, fmt.Errorf("%w: %s", ErrUninitializedFeatureValue, name)
 	}
 	return value, true, nil
 }
@@ -474,7 +474,7 @@ func (ec *EvalContext) evalFeatureChain(n *ast.FeatureChainExpr) (Value, error) 
 
 	// A calc usage carries no value of its own: its output features are computed
 	// by evaluating it, so `c.a` runs the usage — once — and reads the output
-	// from that evaluation rather than from a slot.
+	// from that evaluation rather than from a feature value.
 	if sym, ok := ec.calcUsageOperand(base); ok {
 		return ec.evalCalcUsageMembers(sym, parts)
 	}
@@ -557,9 +557,9 @@ func (ec *EvalContext) chainMemberValue(value Value, parts []ast.NameSegment, fr
 		return Value{}, fmt.Errorf("instance ID %d not found for member %s", id, from)
 	}
 	name := parts[0].Text
-	slotDecl, ok := inst.Slots[name]
+	fvDecl, ok := inst.FeatureValues[name]
 	if !ok {
-		// A calc usage is an evaluation rather than a slot, so its outputs are
+		// A calc usage is an evaluation rather than a feature value, so its outputs are
 		// read from a run of it against this object.
 		if sym, found := ec.ctx.model.LookupMember(inst.Type, name); found && isCalcUsageSymbol(sym) {
 			return ec.calcUsageMemberValue(sym, inst, parts[1:])
@@ -568,26 +568,26 @@ func (ec *EvalContext) chainMemberValue(value Value, parts []ast.NameSegment, fr
 	}
 	// A variant named through the variation feature it belongs to is the choice
 	// itself, not a member of the variation's value.
-	if variant, rest, ok := ec.variantSegment(slotDecl.Feature, parts[1:]); ok {
+	if variant, rest, ok := ec.variantSegment(fvDecl.Feature, parts[1:]); ok {
 		if len(rest) == 0 {
 			return variantReference(variant), nil
 		}
 		// Members are read from the object the variant stands for.
-		val, err := ec.ctx.variantValue(slotDecl.Feature.Symbol, variant, inst.ID)
+		val, err := ec.ctx.variantValue(fvDecl.Feature.Symbol, variant, inst.ID)
 		if err != nil {
 			return Value{}, err
 		}
 		return ec.chainMemberValue(val, rest, variant.Name)
 	}
-	// Read through GetSlot so a derived or composite member is materialized
-	// on demand rather than read as an empty slot.
-	slot, err := inst.GetSlot(ec.ctx, name)
+	// Read through GetFeatureValue so a derived or composite member is materialized
+	// on demand rather than read as an empty feature value.
+	fv, err := inst.GetFeatureValue(ec.ctx, name)
 	if err != nil {
 		return Value{}, err
 	}
-	member := slot.HeldValue()
+	member := fv.HeldValue()
 	if member.Kind == ValInvalid {
-		return Value{}, fmt.Errorf("%w: %s", ErrUninitializedSlot, name)
+		return Value{}, fmt.Errorf("%w: %s", ErrUninitializedFeatureValue, name)
 	}
 	return ec.chainMemberValue(member, parts[1:], name)
 }

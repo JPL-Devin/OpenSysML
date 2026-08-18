@@ -310,7 +310,7 @@ func (ctx *Context) runCalcBody(shape *calcShape, bindings map[string]Value, cal
 	// through the same run bookkeeping a calc usage's outputs use.
 	run := newCalcRun(shape, callerScope, nil, bindings)
 	run.activation = activation
-	// The invocation already holds this evaluation's nesting slot.
+	// The invocation already holds this evaluation's nesting feature value.
 	run.onStack = true
 	return run.value(ctx, out)
 }

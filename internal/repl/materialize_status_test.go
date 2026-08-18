@@ -11,7 +11,7 @@ import (
 )
 
 // unmaterializableModel binds two values to a feature declaring no multiplicity,
-// so reading the slot finds a default that does not conform to 1..1.
+// so reading the feature value finds a default that does not conform to 1..1.
 const unmaterializableModel = `package Demo { attribute def X { attribute bad : ScalarValues::Real = (1.0, 2.0); }
                part def R { attribute b : X; } }
 `
@@ -29,10 +29,10 @@ func submitted(t *testing.T, src string) *Session {
 	return s
 }
 
-// A slot a command could not materialize is a finding about the model, so it
+// A feature value a command could not materialize is a finding about the model, so it
 // reaches the session status a non-interactive run exits on — as the typed error
 // the runtime reported, not as the rendering the command printed.
-func TestSlotsCarriesMaterializationFailureIntoStatus(t *testing.T) {
+func TestFeatureValuesCarriesMaterializationFailureIntoStatus(t *testing.T) {
 	s := submitted(t, unmaterializableModel)
 	if s.HasErrors() {
 		t.Fatalf("a model that analyses clean has errors before any command: %v", s.DiagnosticLines())
@@ -53,14 +53,14 @@ func TestSlotsCarriesMaterializationFailureIntoStatus(t *testing.T) {
 	}
 }
 
-// %eval reads a slot too, so a value it could not materialize is the same finding.
+// %eval reads a feature value too, so a value it could not materialize is the same finding.
 func TestEvalCarriesMaterializationFailureIntoStatus(t *testing.T) {
 	s := submitted(t, unmaterializableModel)
 	wants(t, run(t, s, "%instantiate Demo::R"), "Created instance")
 
 	wants(t, run(t, s, "%eval bad"), "error: evaluation failed", "multiplicity violation")
 	if !s.HasErrors() {
-		t.Error("a failed evaluation of a slot did not reach the session status")
+		t.Error("a failed evaluation of a feature value did not reach the session status")
 	}
 	if got := s.MaterializationFailures(); len(got) == 0 ||
 		!errors.Is(got[0], runtime.ErrMultiplicityViolation) {
@@ -68,7 +68,7 @@ func TestEvalCarriesMaterializationFailureIntoStatus(t *testing.T) {
 	}
 }
 
-// A pinned %eval reads the same slot through the object it names, so which form
+// A pinned %eval reads the same feature value through the object it names, so which form
 // of the command surfaced the failure does not decide whether it is recorded.
 func TestPinnedEvalCarriesMaterializationFailureIntoStatus(t *testing.T) {
 	s := submitted(t, unmaterializableModel)
@@ -76,17 +76,17 @@ func TestPinnedEvalCarriesMaterializationFailureIntoStatus(t *testing.T) {
 
 	wants(t, run(t, s, "%eval in Demo::R::b : bad"), "error:", "multiplicity violation")
 	if !s.HasErrors() {
-		t.Error("a pinned evaluation of a slot that does not materialize did not reach the session status")
+		t.Error("a pinned evaluation of a feature value that does not materialize did not reach the session status")
 	}
 	if got := s.MaterializationFailures(); len(got) == 0 ||
-		!errors.Is(got[0], runtime.ErrSlotMaterialization) {
-		t.Errorf("materialization failures = %v, want the slot the runtime could not materialize", got)
+		!errors.Is(got[0], runtime.ErrFeatureValueMaterialization) {
+		t.Errorf("materialization failures = %v, want the feature value the runtime could not materialize", got)
 	}
 }
 
-// A name that is no slot of the object is a request the command got wrong, not a
-// slot that failed to materialize, so it decides nothing about the model.
-func TestEvalOfAnUnknownSlotIsNoMaterializationFailure(t *testing.T) {
+// A name that is no feature value of the object is a request the command got wrong, not a
+// feature value that failed to materialize, so it decides nothing about the model.
+func TestEvalOfAnUnknownFeatureValueIsNoMaterializationFailure(t *testing.T) {
 	s := submitted(t, conformingModel)
 	run(t, s, "%instantiate Demo::R")
 	run(t, s, "%eval nosuch")
@@ -96,8 +96,8 @@ func TestEvalOfAnUnknownSlotIsNoMaterializationFailure(t *testing.T) {
 	}
 }
 
-// A model whose slots all materialize leaves the session with nothing unanswered.
-func TestSlotsOfAConformingModelLeaveNoFailure(t *testing.T) {
+// A model whose feature values all materialize leaves the session with nothing unanswered.
+func TestFeatureValuesOfAConformingModelLeaveNoFailure(t *testing.T) {
 	s := submitted(t, conformingModel)
 	run(t, s, "%instantiate Demo::R")
 	wants(t, run(t, s, "%slots Demo::R"), "b = 1")

@@ -332,7 +332,7 @@ func TestSatisfyCanBeTurnedOff(t *testing.T) {
 
 // TestCheckAgainstInstantiatedObject checks that -instantiate makes a following
 // verdict be about that object, which is the only way a part's own constraint
-// reaches concrete slot values.
+// reaches concrete feature values.
 func TestCheckAgainstInstantiatedObject(t *testing.T) {
 	binary := buildCLI(t)
 
