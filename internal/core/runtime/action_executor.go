@@ -453,7 +453,7 @@ func (e *ActionExecutor) NodeNames() []string {
 // initializeAttributes populates the feature space with the attribute defaults
 // lowering recorded, evaluated in the scope the action's body was declared in.
 func (e *ActionExecutor) initializeAttributes() error {
-	ec := NewEvalContext(e.ctx, e.graph.Scope)
+	ec := NewEvalContextIn(e.ctx, e.graph.Scope, e.self)
 	defer ec.beginStep()()
 	for _, attr := range e.graph.Attributes {
 		value, err := ec.Eval(attr.Value)
@@ -569,7 +569,7 @@ func (e *ActionExecutor) enabledSuccessions(node ast.Node) ([]ast.Node, error) {
 		return declared, nil
 	}
 
-	ec := NewEvalContext(e.ctx, e.graph.Scope)
+	ec := NewEvalContextIn(e.ctx, e.graph.Scope, e.self)
 	ec.Push(e.data)
 	defer ec.beginStep()()
 
@@ -818,7 +818,7 @@ func (e *ActionExecutor) stepDecisionNode(tokenIdx int) error {
 
 	// A guard resolves in the action's scope, with the action's current feature
 	// values pushed over it so they shadow same-named declarations.
-	ec := NewEvalContext(e.ctx, e.graph.Scope)
+	ec := NewEvalContextIn(e.ctx, e.graph.Scope, e.self)
 	ec.Push(e.data)
 	defer ec.beginStep()()
 
@@ -871,7 +871,7 @@ func (e *ActionExecutor) stepActionExecutionNode(tokenIdx int) error {
 
 	if node.Expression != nil {
 		// Evaluate in the action's scope, its feature values shadowing it.
-		ec := NewEvalContext(e.ctx, e.graph.Scope)
+		ec := NewEvalContextIn(e.ctx, e.graph.Scope, e.self)
 		ec.Push(e.data)
 		defer ec.beginStep()()
 		result, err := ec.Eval(node.Expression)
@@ -1040,7 +1040,7 @@ func (e *ActionExecutor) stepNestedAction(tokenIdx int) error {
 func (e *ActionExecutor) triggerHolds(accept lower.Accept) (bool, error) {
 	switch t := accept.Trigger.(type) {
 	case *ast.ChangeEvent:
-		ec := NewEvalContext(e.ctx, e.graph.Scope)
+		ec := NewEvalContextIn(e.ctx, e.graph.Scope, e.self)
 		ec.Push(e.data)
 		defer ec.beginStep()()
 		result, err := ec.Eval(t.Condition)

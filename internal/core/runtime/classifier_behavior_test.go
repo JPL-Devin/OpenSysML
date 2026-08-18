@@ -473,3 +473,54 @@ func TestMessageLeftForACompletedMachineDoesNotBlockANewObject(t *testing.T) {
 		t.Errorf("the second object took identity %d", second.ID)
 	}
 }
+
+// A decision of an action an object performs reads the object's feature values,
+// so a branch is chosen on what the action itself has written.
+func TestPerformedActionDecidesOnItsOwnWrite(t *testing.T) {
+	src := `
+		part def Watchdog {
+			attribute level: Integer = 0;
+			attribute alerted: Integer = 0;
+
+			perform action watch {
+				first start;
+
+				action raise {
+					assign level := 5;
+				}
+
+				action alert {
+					assign alerted := 1;
+				}
+
+				action quiet {
+					assign alerted := 2;
+				}
+
+				done end;
+
+				then start raise;
+				then raise check;
+				then alert end;
+				then quiet end;
+
+				decide check;
+				if level > 0 then alert;
+				else quiet;
+			}
+		}
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	ctx := NewContext(model, resolver, 10000)
+
+	inst, err := ctx.Instantiate(resolveSymbol(t, root, "Watchdog"))
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	if got := featureInt(t, ctx, inst, "level"); got != 5 {
+		t.Fatalf("level = %d, want 5 written by the action", got)
+	}
+	if got := featureInt(t, ctx, inst, "alerted"); got != 1 {
+		t.Errorf("alerted = %d, want 1: the decision read the level the action wrote", got)
+	}
+}

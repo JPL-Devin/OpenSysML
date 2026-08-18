@@ -149,7 +149,7 @@ func newStateExecutor(ctx *Context, stateMachine *symbols.Symbol, self *Instance
 // initializeAttributes populates stateData with the attribute defaults lowering
 // recorded, evaluated in the scope the machine's body was declared in.
 func (e *StateExecutor) initializeAttributes() error {
-	ec := NewEvalContext(e.ctx, e.graph.Scope)
+	ec := NewEvalContextIn(e.ctx, e.graph.Scope, e.self)
 	defer ec.beginStep()()
 	for _, attr := range e.graph.Attributes {
 		value, err := ec.Eval(attr.Value)
@@ -164,9 +164,10 @@ func (e *StateExecutor) initializeAttributes() error {
 
 // evalStep evaluates one expression of a step - a guard, a change condition, a
 // duration, an inline expression - in scope with the machine's data shadowing it,
-// in an activation of its own (see beginStep).
+// in an activation of its own (see beginStep). What the machine reads is bound to
+// the object exhibiting it, so a guard sees the values its own bodies wrote.
 func (e *StateExecutor) evalStep(node ast.Node, scope *symbols.Scope) (Value, error) {
-	ec := NewEvalContext(e.ctx, scope)
+	ec := NewEvalContextIn(e.ctx, scope, e.self)
 	ec.Push(e.stateData)
 	defer ec.beginStep()()
 	return ec.Eval(node)
