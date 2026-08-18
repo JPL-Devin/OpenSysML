@@ -428,6 +428,48 @@ func TestFailedMaterializationLeavesNoBehaviorBehind(t *testing.T) {
 	}
 }
 
+// A creation that fails leaves none of the objects it reached in the session: a
+// sibling materialized on the way would otherwise survive running nothing.
+func TestFailedMaterializationLeavesNoNeighbourBehind(t *testing.T) {
+	src := `
+		package test {
+			item def Ping;
+
+			part def Listener {
+				exhibit state listening {
+					entry; then waiting;
+					state waiting { accept Ping then heard; }
+					state heard;
+				}
+			}
+
+			part def Broken {
+				exhibit state sending {
+					entry; then sent;
+					state sent { entry send Ping() to good; }
+				}
+				exhibit state empty { }
+			}
+
+			part good : Listener;
+			part bad : Broken;
+		}
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	pkg := resolveSymbol(t, root, "test")
+	ctx := NewContext(model, resolver, 10000)
+
+	if _, err := ctx.Instantiate(resolveSymbol(t, pkg.Scope, "bad")); err == nil {
+		t.Fatal("expected the machine with no initial state to fail materialization")
+	}
+	if got := len(ctx.instances); got != 0 {
+		t.Errorf("%d object(s) left alive after a failed creation, want none", got)
+	}
+	if got := len(ctx.objectBehaviors); got != 0 {
+		t.Errorf("%d behavior(s) left attached after a failed creation", got)
+	}
+}
+
 // A machine that reached its final state takes no step, so a message still
 // addressed to it does not make a later materialization spin to its budget.
 func TestMessageLeftForACompletedMachineDoesNotBlockANewObject(t *testing.T) {

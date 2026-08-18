@@ -139,12 +139,16 @@ func (ctx *Context) instantiateAs(sym *symbols.Symbol, id int64) (*Instance, err
 // addressing a sibling reaches the object its owner holds rather than a second
 // one.
 func (ctx *Context) instantiateOwnedBy(sym *symbols.Symbol, id int64, owner *Instance, feature string) (*Instance, error) {
+	// A creation that fails leaves none of the objects it reached behind, however
+	// deeply nested or however a behavior of it addressed them.
+	existing := ctx.liveInstanceIDs()
 	inst, err := ctx.materialize(sym, id)
 	if err != nil {
+		ctx.abandonInstancesSince(existing)
 		return nil, err
 	}
 	inst.owner, inst.ownerFeature = owner, feature
-	if err := ctx.startClassifierBehaviors(inst); err != nil {
+	if err := ctx.startClassifierBehaviors(inst, existing); err != nil {
 		return nil, err
 	}
 	return inst, nil
@@ -225,12 +229,14 @@ func (ctx *Context) occurrenceOf(sym *symbols.Symbol) (*Instance, error) {
 	}
 	// The occurrence is recorded before its behaviors start, so a behavior that
 	// reaches the usage it belongs to reads this object rather than a second one.
+	existing := ctx.liveInstanceIDs()
 	inst, err := ctx.materialize(sym, 0)
 	if err != nil {
+		ctx.abandonInstancesSince(existing)
 		return nil, err
 	}
 	ctx.occurrences[sym] = inst.ID
-	if err := ctx.startClassifierBehaviors(inst); err != nil {
+	if err := ctx.startClassifierBehaviors(inst, existing); err != nil {
 		return nil, err
 	}
 	return inst, nil
