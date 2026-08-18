@@ -1,0 +1,26 @@
+FlowViews::driveView — action rendering (render asInterconnectionDiagram, view def ActionFlowView)
+
+action def Flows::Drive
+  initial start
+  action provide
+  action monitor (own flow)
+    initial begin
+    action record
+  fork split
+  join sync
+  final finish
+  action park
+  decision check
+
+flow:
+  begin -> record
+  start -> split
+  provide -> sync
+  provide => monitor: torque to reading
+  monitor -> sync
+  split -> provide
+  split -> monitor
+  sync -> check
+  park -> finish
+  check -> finish: [speed > 0]
+  check -> park

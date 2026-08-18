@@ -1,0 +1,6 @@
+<!-- TableViews::partsTable — table rendering (render asElementTable) -->
+| Element | Kind | Type | Declared in |
+| --- | --- | --- | --- |
+| Fleet::Truck | part def |  |  |
+| engine | part | Engine | Fleet::Truck |
+| wheels | part | Wheel | Fleet::Truck |
