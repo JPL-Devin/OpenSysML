@@ -44,6 +44,9 @@ func ToSysML(graph *rdf.Graph) ([]byte, error) {
 	if graph == nil || graph.Len() == 0 {
 		return nil, &UnsupportedError{What: "an empty graph", Note: "nothing to convert"}
 	}
+	if err := checkExtensionNamespace(graph); err != nil {
+		return nil, err
+	}
 	d := &decoder{
 		graph: graph,
 		byIRI: map[string]*element{},
@@ -65,6 +68,30 @@ func ToSysML(graph *rdf.Graph) ([]byte, error) {
 		return nil, fmt.Errorf("converted source is not valid SysML: %w", err)
 	}
 	return out, nil
+}
+
+// checkExtensionNamespace refuses a graph written with the pre-rename extension
+// namespace. Its properties would otherwise read as absent and the elements they
+// describe would be written back without them.
+func checkExtensionNamespace(graph *rdf.Graph) error {
+	for _, triple := range graph.Triples() {
+		for _, term := range []rdf.Term{triple.Subject, triple.Predicate, triple.Object} {
+			if term.Kind == rdf.TermIRI && strings.HasPrefix(term.Value, rdf.LegacyExtension) {
+				return legacyNamespaceError(term.Value)
+			}
+		}
+		if strings.HasPrefix(triple.Object.Datatype, rdf.LegacyExtension) {
+			return legacyNamespaceError(triple.Object.Datatype)
+		}
+	}
+	return nil
+}
+
+func legacyNamespaceError(iri string) error {
+	return &UnsupportedError{
+		What: fmt.Sprintf("the term <%s>", iri),
+		Note: fmt.Sprintf("it is in the pre-rename extension namespace %s, which this version does not read; convert the model from source again to write %s", rdf.LegacyExtension, rdf.OpenSysML),
+	}
 }
 
 type decoder struct {

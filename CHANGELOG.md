@@ -20,15 +20,16 @@ artifacts they describe really were called that.
   formula is `opensysml`: `brew install Open-MBEE/tap/opensysml`. Assets already published under
   `v0.0.x` keep their old names.
 - **The RDF extension namespace is `urn:opensysml:sysml:`**, still bound to the `sysx:` prefix. A
-  `.ttl` file written before this release carries `urn:systemica:sysml:` properties and is no
-  longer read back — re-export it from its notation source.
+  `.ttl` file written before this release carries `urn:systemica:sysml:` properties, and reading one
+  is refused rather than silently dropping what those properties said — re-export it from its
+  notation source.
 - **The non-normative math library is `OpenSysMLMathFunctions`**, in
   `OpenSysML Libraries/OpenSysMLMathFunctions.kerml`. A model that writes
   `import SystemicaMathFunctions::*;` must be updated; the unqualified `exp`, `ln`, `log` and
   `atan2` aliases are unaffected.
 - **Environment variables are `OPENSYSML_*`** (`OPENSYSML_SMT`, `OPENSYSML_SMT_TIMEOUT`,
-  `OPENSYSML_REQUIRE_SMT`, `OPENSYSML_REQUIRE_TRAINING_CORPUS`). The `SYSTEMICA_*` names are not
-  read.
+  `OPENSYSML_REQUIRE_SMT`, `OPENSYSML_REQUIRE_TRAINING_CORPUS`, `OPENSYSML_SMT_CORE_BUDGET`). The
+  `SYSTEMICA_*` names are not read.
 - **The VS Code extension is `opensysml-sysml`** and its settings are `opensysml.server.path`,
   `opensysml.server.args`, `opensysml.server.enabled` and `opensysml.trace.server`, with the
   command `opensysml.restartServer`. Existing settings must be re-set under the new keys.

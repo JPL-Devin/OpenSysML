@@ -21,6 +21,10 @@ const (
 	// expressions. They are namespaced separately so a consumer can tell our
 	// additions from the standard vocabulary and ignore them.
 	OpenSysML = "urn:opensysml:sysml:"
+	// LegacyExtension is the extension namespace this tool wrote before the
+	// project was renamed. It is recognized only so a graph carrying it can be
+	// refused rather than read as if its properties were absent.
+	LegacyExtension = "urn:systemica:sysml:"
 )
 
 // RDFType is the rdf:type predicate IRI.

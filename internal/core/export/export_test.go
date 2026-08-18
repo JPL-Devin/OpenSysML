@@ -879,6 +879,37 @@ func TestEmptyInputs(t *testing.T) {
 	}
 }
 
+// A graph written before the rename carries the old extension namespace, whose
+// properties this version would read as absent; it must be refused instead.
+func TestLegacyExtensionNamespaceIsRefused(t *testing.T) {
+	for name, src := range map[string]string{
+		"property": "@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n" +
+			"@prefix sysml: <https://www.omg.org/spec/SysML#> .\n" +
+			"@prefix elmt: <urn:sysmlv2:element:> .\n" +
+			"@prefix sysx: <urn:systemica:sysml:> .\n" +
+			"@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n" +
+			"elmt:Demo rdf:type sysml:Package ; sysml:declaredName \"Demo\" ;\n" +
+			"    sysx:memberIndex \"0\"^^xsd:integer .\n",
+		"metaclass": "@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .\n" +
+			"@prefix sysml: <https://www.omg.org/spec/SysML#> .\n" +
+			"@prefix elmt: <urn:sysmlv2:element:> .\n" +
+			"@prefix sysx: <urn:systemica:sysml:> .\n" +
+			"elmt:Demo rdf:type sysx:InitialNode ; sysml:declaredName \"Demo\" .\n",
+	} {
+		graph, err := rdf.ParseTurtle([]byte(src))
+		if err != nil {
+			t.Fatalf("%s: parse: %v", name, err)
+		}
+		_, err = export.ToSysML(graph)
+		if err == nil {
+			t.Fatalf("%s: expected the legacy namespace to be refused", name)
+		}
+		if !strings.Contains(err.Error(), rdf.LegacyExtension) {
+			t.Errorf("%s: error does not name the legacy namespace: %v", name, err)
+		}
+	}
+}
+
 func modelFiles(t *testing.T) []string {
 	t.Helper()
 	paths, err := filepath.Glob(filepath.Join("testdata", "convert", "*.sysml"))
