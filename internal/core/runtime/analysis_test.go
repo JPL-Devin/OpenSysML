@@ -320,6 +320,9 @@ func TestRequireAnalysis(t *testing.T) {
 		if !strings.Contains(err.Error(), name) {
 			t.Errorf("error %q does not name %s", err, name)
 		}
+		if !strings.Contains(err.Error(), "an analysis case") {
+			t.Errorf("error %q does not read \"an analysis case\"", err)
+		}
 	}
 }
 
