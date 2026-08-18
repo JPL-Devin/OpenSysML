@@ -1,4 +1,4 @@
-; Systemica SMT-LIB2 translation of constraint fits
+; OpenSysML SMT-LIB2 translation of constraint fits
 ; the runtime evaluator remains normative; solving is an optional extension
 (set-logic QF_LIA)
 ; test::Panel::height, declared at panel_pins.sysml:17:3

@@ -1,4 +1,4 @@
-; Systemica SMT-LIB2 translation of constraint speedIsBounded
+; OpenSysML SMT-LIB2 translation of constraint speedIsBounded
 ; the runtime evaluator remains normative; solving is an optional extension
 (set-logic QF_LRA)
 ; test::Panel::maxSpeed in base units of L·T^-1, declared at panel_pins.sysml:19:3
