@@ -300,6 +300,29 @@ func TestResolveQualifiedBindingChain(t *testing.T) {
 	}
 }
 
+// A misspelled chain segment is one mistake, so it is reported once: the
+// outward reading is only a probe until it is the one adopted.
+func TestResolveChainBadQualifiedSegmentReportedOnce(t *testing.T) {
+	src := `package P {
+		part a { part b; }
+		part c;
+		binding bind a.'No Such'::x = c;
+	}`
+	p := parser.New(source.New("chain.sysml", []byte(src)))
+	root := p.ParseFile()
+	if len(p.Diagnostics) != 0 {
+		t.Fatalf("parse diagnostics: %v", p.Diagnostics)
+	}
+	r := New(symbols.NewIndexFromDoc("chain.sysml", root))
+	r.ResolveDocument("chain.sysml", root)
+	if len(r.Diagnostics) != 1 {
+		t.Fatalf("expected one diagnostic, got %d: %v", len(r.Diagnostics), r.Diagnostics)
+	}
+	if !strings.Contains(r.Diagnostics[0].Message, "No Such") {
+		t.Errorf("diagnostic %q does not name the bad segment", r.Diagnostics[0].Message)
+	}
+}
+
 // resolvedSegments returns the name of the symbol each segment of a binding end
 // resolved to, in source order.
 func resolvedSegments(t *testing.T, r *Resolver, end ast.Node) []string {

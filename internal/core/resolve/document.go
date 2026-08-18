@@ -912,9 +912,14 @@ func (r *Resolver) resolveFeatureChain(scope *symbols.Scope, fc *ast.FeatureChai
 	// A chaining feature spelled as a qualified name resolves outward through the
 	// enclosing namespaces when the previous element has no such member (KerML
 	// §7.2.5): in `A::B.C::D`, `C::D` names a declaration, not a member of `B`.
+	// The probe runs aside so that a chain whose member the walk below resolves
+	// keeps its diagnostics: only the reading actually adopted reports.
 	if len(fc.Member.Parts) > 1 {
 		if _, ok := r.lookupMember(operandSym, fc.Member.Parts[0].Text); !ok {
-			if _, ok := r.ResolveQualified(scope, fc.Member); ok {
+			outward := false
+			r.aside(func() { _, outward = r.ResolveQualified(scope, fc.Member) })
+			if outward {
+				r.ResolveQualified(scope, fc.Member)
 				return
 			}
 		}
