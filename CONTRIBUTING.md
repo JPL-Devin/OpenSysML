@@ -24,7 +24,7 @@ make lint   # runs staticcheck and gosec, as CI does
 
 The OMG training-corpus gate (`internal/core/model/training_examples_test.go`) skips while
 `examples/sysml-v2-training/` is absent, so run the download script once before trusting a
-local `make test`. CI runs the script itself and sets `SYSTEMICA_REQUIRE_TRAINING_CORPUS=1`,
+local `make test`. CI runs the script itself and sets `OPENSYSML_REQUIRE_TRAINING_CORPUS=1`,
 which makes a missing corpus a failure there instead of a skip.
 
 ## Development Workflow

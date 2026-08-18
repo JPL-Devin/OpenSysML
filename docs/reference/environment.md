@@ -12,8 +12,8 @@ into a reported error instead of a hang.
 | `SYSML_MAX_DO_STEPS` | `5000000` | Do actions one state machine run may perform, and the ones one `%advance` drains |
 | `SYSML_MAX_ELEMENTS` | `1000000` | Collection elements one evaluation may hold — the bound on the memory a run holds rather than on the work it does |
 | `SYSML_MAX_CALC_DEPTH` | `10000` (ceiling `25000`) | Nested `calc` invocations one run may hold on the stack, which is what a recursion spends |
-| `SYSTEMICA_SMT` | unset (look for `z3`, then `cvc5`, on `PATH`) | Executable `%check` drives as its SMT solver, speaking SMT-LIB2 on standard input (experimental) |
-| `SYSTEMICA_SMT_TIMEOUT` | `10s` | How long one `%check` query may take, as a Go duration (`5s`, `500ms`), after which the verdict is `unknown` |
+| `OPENSYSML_SMT` | unset (look for `z3`, then `cvc5`, on `PATH`) | Executable `%check` drives as its SMT solver, speaking SMT-LIB2 on standard input (experimental) |
+| `OPENSYSML_SMT_TIMEOUT` | `10s` | How long one `%check` query may take, as a Go duration (`5s`, `500ms`), after which the verdict is `unknown` |
 | `SYSML_GRPC_INDEX_POOL` | `4` | How many standard library indexes `sysml-grpc` keeps prewarmed for the models it has not seen yet; `0` loads the library on each request instead |
 
 Each budget is what turns a non-terminating run into a reported error instead of

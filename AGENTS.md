@@ -50,7 +50,7 @@ gofmt -l .                                      # must print nothing (CI enforce
 The OMG training-corpus gate is part of that suite but skips while the corpus is absent, so
 fetch it once with `./scripts/download-training-examples.sh` and re-run
 `go test -count=1 ./internal/core/model -run TestTrainingExamples`. CI downloads the corpus
-too and sets `SYSTEMICA_REQUIRE_TRAINING_CORPUS=1`, so there an absent corpus fails rather
+too and sets `OPENSYSML_REQUIRE_TRAINING_CORPUS=1`, so there an absent corpus fails rather
 than skips.
 
 ---

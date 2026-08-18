@@ -16,11 +16,11 @@ import (
 
 // SolverEnv names the environment variable that overrides solver discovery with
 // the path of an executable speaking SMT-LIB2 on standard input.
-const SolverEnv = "SYSTEMICA_SMT"
+const SolverEnv = "OPENSYSML_SMT"
 
 // TimeoutEnv names the environment variable that overrides how long a solver is
 // given, as a Go duration ("5s", "500ms").
-const TimeoutEnv = "SYSTEMICA_SMT_TIMEOUT"
+const TimeoutEnv = "OPENSYSML_SMT_TIMEOUT"
 
 // DefaultTimeout is how long a solver is given to answer one query before the
 // verdict becomes `unknown`, in the spirit of the runtime's step budgets.
@@ -120,7 +120,7 @@ type Result struct {
 	Elapsed time.Duration
 }
 
-// Discover finds a solver: the SYSTEMICA_SMT override first, then z3 and cvc5 on
+// Discover finds a solver: the OPENSYSML_SMT override first, then z3 and cvc5 on
 // PATH. An absent solver is a typed error, never a fabricated verdict.
 func Discover() (*Solver, error) {
 	if override := strings.TrimSpace(os.Getenv(SolverEnv)); override != "" {

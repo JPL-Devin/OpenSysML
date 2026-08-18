@@ -3,7 +3,7 @@
 // that IR as an SMT-LIB2 script.
 //
 // It also runs an external solver over that script — z3 or cvc5, found on PATH
-// or named by SYSTEMICA_SMT — as a process speaking SMT-LIB2 on standard input,
+// or named by OPENSYSML_SMT — as a process speaking SMT-LIB2 on standard input,
 // so no library is linked in and releases stay pure Go. The verdicts sat, unsat
 // and unknown stay distinct: a timeout or arithmetic the solver gave up on is
 // unknown, and a solver that crashes, is absent, or replies unusably is a typed
