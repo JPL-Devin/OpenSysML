@@ -301,11 +301,22 @@ func isImplicitCalcResult(scope *symbols.Scope, node ast.Node) bool {
 	default:
 		return false
 	}
-	ref, ok := node.(*ast.FeatureReference)
-	if !ok || ref.Name == nil || len(ref.Name.Parts) != 1 {
+	var name string
+	switch ref := node.(type) {
+	case *ast.FeatureReference:
+		if ref.Name == nil || len(ref.Name.Parts) != 1 {
+			return false
+		}
+		name = ref.Name.Parts[0].Text
+	case *ast.QualifiedName:
+		if len(ref.Parts) != 1 {
+			return false
+		}
+		name = ref.Parts[0].Text
+	default:
 		return false
 	}
-	return ref.Name.Parts[0].Text == "result"
+	return name == "result"
 }
 
 // resolveTrigger resolves the references a transition trigger carries.
@@ -464,6 +475,9 @@ func (r *Resolver) resolveRelationships(scope *symbols.Scope, decl ast.Node, rel
 					r.resolveRedefinition(scope, qn, decl)
 					continue
 				}
+			}
+			if rel.Kind == ast.RelReferences && isImplicitCalcResult(scope, target) {
+				continue
 			}
 
 			// A reference subsetting resolves its leading segment past the

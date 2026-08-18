@@ -53,3 +53,16 @@ func TestSetOperations(t *testing.T) {
 		t.Error("expected set to contain v1")
 	}
 }
+
+func TestSetOperationsUseExactValueEquality(t *testing.T) {
+	set := NewSet()
+	set.Add(Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 1}})
+	set.Add(Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 65537}})
+
+	if set.Size() != 2 {
+		t.Fatalf("expected two distinct integer elements, got %d", set.Size())
+	}
+	if !set.Contains(Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 65537}}) {
+		t.Fatal("expected set to contain 65537")
+	}
+}

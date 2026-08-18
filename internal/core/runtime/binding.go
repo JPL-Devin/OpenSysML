@@ -183,7 +183,7 @@ func (ctx *Context) attemptBinding(owner, targetInst *Instance, target *FeatureV
 		return attempt
 	}
 
-	leftValue, leftSet, err := ctx.bindingEndpointValue(left, owner)
+	leftValue, leftSet, err := ctx.bindingEndpointValue(left, owner, leftCarries)
 	if err != nil {
 		attempt.err = err
 		return attempt
@@ -195,7 +195,7 @@ func (ctx *Context) attemptBinding(owner, targetInst *Instance, target *FeatureV
 		}, binding.Decl) {
 		attempt.cycle = true
 	}
-	rightValue, rightSet, err := ctx.bindingEndpointValue(right, owner)
+	rightValue, rightSet, err := ctx.bindingEndpointValue(right, owner, rightCarries)
 	if err != nil {
 		attempt.err = err
 		return attempt
@@ -216,7 +216,7 @@ func (ctx *Context) attemptBinding(owner, targetInst *Instance, target *FeatureV
 
 	switch {
 	case leftSet && rightSet:
-		if valueKeyFunc(leftValue) != valueKeyFunc(rightValue) {
+		if !valueEqual(leftValue, rightValue) {
 			attempt.err = &BindingConflictError{
 				Left: ctx.bindingEndpointText(binding, 0), Right: ctx.bindingEndpointText(binding, 1),
 				LeftValue: leftValue, RightValue: rightValue,
@@ -304,7 +304,7 @@ func (ctx *Context) resolveBindingLocation(owner *Instance, path string) (bindin
 	return bindingLocation{instance: current, name: name}, nil
 }
 
-func (ctx *Context) bindingEndpointValue(endpoint bindingEndpoint, owner *Instance) (Value, bool, error) {
+func (ctx *Context) bindingEndpointValue(endpoint bindingEndpoint, owner *Instance, materialize bool) (Value, bool, error) {
 	if endpoint.expr != nil {
 		value, err := ctx.EvalWithScopeOn(endpoint.expr, endpoint.scope, owner)
 		if err != nil {
@@ -322,6 +322,9 @@ func (ctx *Context) bindingEndpointValue(endpoint bindingEndpoint, owner *Instan
 	loc := endpoint.location
 	fv := loc.instance.FeatureValues[loc.name]
 	if !fv.Materialized {
+		if !materialize && ctx.CompositeTypeOf(fv.Feature) != nil {
+			return Value{}, false, nil
+		}
 		if _, err := loc.instance.materializeFeatureValueIntrinsic(ctx, loc.name); err != nil {
 			return Value{}, false, err
 		}

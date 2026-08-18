@@ -12,7 +12,8 @@ import (
 func TestToBindingsNormalizesBindingSpellings(t *testing.T) {
 	p := parser.New(source.New("binding.sysml", []byte(`package P {
 		part def Owner {
-			binding anonymous bind config.x = y;
+			binding bind x = y;
+			bind x = y;
 			binding named bind x = y;
 			binding namedOf of x = y;
 			binding namedOnly = x;
@@ -44,12 +45,11 @@ func TestToBindingsNormalizesBindingSpellings(t *testing.T) {
 			}
 		}
 	}
-	if len(bindings) != 4 {
-		t.Fatalf("lowered %d bindings, want 4", len(bindings))
+	if len(bindings) != 5 {
+		t.Fatalf("lowered %d bindings, want 5", len(bindings))
 	}
 	wants := map[[2]string]int{
-		{"config.x", "y"}:                1,
-		{"x", "y"}:                       2,
+		{"x", "y"}:                       4,
 		{"config.host", "serverAddress"}: 1,
 	}
 	for _, binding := range bindings {

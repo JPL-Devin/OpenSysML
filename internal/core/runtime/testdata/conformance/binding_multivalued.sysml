@@ -2,6 +2,6 @@ package test {
     part def Sys {
         attribute a : Integer[*] = (1, 2);
         attribute b : Integer[*];
-        binding ba bind b = a;
+        binding bind b = a;
     }
 }
