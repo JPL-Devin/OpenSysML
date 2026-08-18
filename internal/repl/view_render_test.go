@@ -170,6 +170,15 @@ func TestRenderIsInHelpAndCompletion(t *testing.T) {
 			t.Errorf("completing the form offered %v, want %s", got.Candidates, form)
 		}
 	}
+	// A form has been typed already, and a third argument is no command, so no
+	// further form is offered.
+	for _, head := range []string{"%render Demo::summary text ", "%render Demo::summary text mer"} {
+		for _, form := range renderForms() {
+			if got := s.Complete(head, len(head)); slices.Contains(got.Candidates, form) {
+				t.Errorf("completing past the form offered %s: %v", form, got.Candidates)
+			}
+		}
+	}
 }
 
 // A view whose name is unrestricted is rendered, named and completed with its
@@ -209,6 +218,12 @@ func TestRenderOfAViewWithAnUnrestrictedName(t *testing.T) {
 	head = "%render Quoted::'My Summary' "
 	if got := s.Complete(head, len(head)); !slices.Contains(got.Candidates, "mermaid") {
 		t.Errorf("completing the form after a quoted name offered %v", got.Candidates)
+	}
+	// The notation's own escape closes no name, so a name holding a quote is
+	// finished and the form follows it too.
+	head = `%render Quoted::'it\'s' `
+	if got := s.Complete(head, len(head)); !slices.Contains(got.Candidates, "mermaid") {
+		t.Errorf("completing the form after an escaped quote offered %v", got.Candidates)
 	}
 }
 

@@ -98,11 +98,30 @@ func sharedPrefix(candidates []string) string {
 // arguments are counted the way dispatch splits them, so a quoted name holding a
 // space ('My View') is one argument, and one still being typed is not yet past.
 func atSecondArgument(head string) bool {
-	if strings.Count(head, "'")%2 == 1 {
+	if inUnfinishedName(head) {
 		return false
 	}
 	args := parseArgs(head)
-	return len(args) >= 3 || (len(args) == 2 && strings.HasSuffix(head, " "))
+	typing := !strings.HasSuffix(head, " ") && !strings.HasSuffix(head, "\t")
+	return (len(args) == 3 && typing) || (len(args) == 2 && !typing)
+}
+
+// inUnfinishedName reports whether head ends inside an unrestricted name whose
+// closing quote has not been typed. The notation's own escape is honoured, so
+// 'it\'s' is a finished name.
+func inUnfinishedName(head string) bool {
+	inName, escaped := false, false
+	for _, r := range head {
+		switch {
+		case escaped:
+			escaped = false
+		case r == '\\':
+			escaped = true
+		case r == '\'':
+			inName = !inName
+		}
+	}
+	return inName
 }
 
 // firstToken returns the first whitespace-separated token of a line.
