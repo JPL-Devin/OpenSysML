@@ -202,37 +202,72 @@ func Fixed(ctx *runtime.Context, sym *symbols.Symbol, inst *runtime.Instance) ([
 	return pins, unfixed
 }
 
-// FixedFor gathers the values fixed for a query about sym: what inst holds for
-// the features of its own definition where an object is the subject, else what
-// owner — the element the conditions were written in — declares, and then what
-// the element's own features declare. A feature fixed twice is fixed by the
-// nearer source, which is what an evaluation about it would read.
-func FixedFor(ctx *runtime.Context, sym, owner *symbols.Symbol, inst *runtime.Instance) ([]Pin, []Unfixed) {
+// Fixing is what a query reads fixed values from: the element it is about, the
+// element whose declarations its conditions were written among, and the object a
+// verdict about it would be about, named by the definition this resolution
+// declares — an object carried over a submission is bound to symbols of another
+// scope tree, which are not the ones the query is translated from.
+type Fixing struct {
+	Element    *symbols.Symbol
+	Owner      *symbols.Symbol
+	Object     *runtime.Instance
+	ObjectType *symbols.Symbol
+}
+
+// FixedFor gathers the values fixed for a query about the fixing's element: what
+// its object holds for the features of its own definition, else what the owner —
+// the element the conditions were written in — declares, and then what the
+// element's own features declare. A feature fixed twice is fixed by the nearer
+// source, which is what an evaluation about it would read.
+func FixedFor(ctx *runtime.Context, f Fixing) ([]Pin, []Unfixed) {
 	var pins []Pin
 	var unfixed []Unfixed
-	from := owner
-	if inst != nil && inst.Type != nil {
-		from = inst.Type
-	}
-	if from != nil && from != sym {
-		pins, unfixed = Fixed(ctx, from, inst)
-	}
-	own, ownUnfixed := Fixed(ctx, sym, inst)
-	seen := make(map[*symbols.Symbol]bool, len(pins))
-	for _, p := range pins {
-		seen[p.Feature] = true
-	}
-	for _, p := range own {
-		if !seen[p.Feature] {
-			pins = append(pins, p)
+	fixed := make(map[string]bool)
+	inst := f.Object
+	for _, from := range fixedFrom(ctx, f) {
+		found, notRead := Fixed(ctx, from, inst)
+		for _, p := range found {
+			if !fixed[p.Name] {
+				fixed[p.Name] = true
+				pins = append(pins, p)
+			}
 		}
-	}
-	for _, u := range ownUnfixed {
-		if !seen[u.Feature] {
-			unfixed = append(unfixed, u)
+		for _, u := range notRead {
+			if !fixed[u.Name] {
+				fixed[u.Name] = true
+				unfixed = append(unfixed, u)
+			}
 		}
 	}
 	return pins, unfixed
+}
+
+// fixedFrom are the types whose features a query reads values of, nearest first:
+// the object's own definition, the element the conditions were written in, then
+// the element itself. A type the runtime knows no feature of is left out, so the
+// values are read through the declarations this runtime holds.
+func fixedFrom(ctx *runtime.Context, f Fixing) []*symbols.Symbol {
+	var froms []*symbols.Symbol
+	add := func(candidate *symbols.Symbol) {
+		if candidate == nil || len(ctx.FeaturesOf(candidate)) == 0 {
+			return
+		}
+		for _, already := range froms {
+			if already == candidate {
+				return
+			}
+		}
+		froms = append(froms, candidate)
+	}
+	if f.Object != nil {
+		if f.ObjectType != nil {
+			add(f.ObjectType)
+		}
+		add(f.Object.Type)
+	}
+	add(f.Owner)
+	add(f.Element)
+	return froms
 }
 
 // fixedValue is the value the model fixes for one feature: the one an object

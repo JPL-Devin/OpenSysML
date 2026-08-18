@@ -180,6 +180,12 @@ func TestConfigurationsStopAtTheirBound(t *testing.T) {
 		t.Fatalf("status %s, truncated %v, %d selections, want 2 and truncated",
 			result.Status, result.Truncated, len(result.Solutions))
 	}
+	// Why it stopped is recorded, so a bound is never reported as a solver that
+	// stopped deciding, whether or not the solver would say why.
+	if !result.AtBound || result.Undecided {
+		t.Fatalf("at bound %v, undecided %v, want the bound as the reason",
+			result.AtBound, result.Undecided)
+	}
 }
 
 // TestConfigurationsOfAConstrainedVariant: a variant constrained through another

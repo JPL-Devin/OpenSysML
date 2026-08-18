@@ -206,9 +206,9 @@ func TestSynthesisForADeniedElement(t *testing.T) {
 	}
 }
 
-// TestWitnessIsReportedInSystemicaTerms: the values reported name the features
+// TestWitnessIsReportedInOpenSysMLTerms: the values reported name the features
 // and the units the notation writes, not the solver's own text.
-func TestWitnessIsReportedInSystemicaTerms(t *testing.T) {
+func TestWitnessIsReportedInOpenSysMLTerms(t *testing.T) {
 	solver := requireSolver(t)
 	ctx, idx := fixtureFile(t, "rig_pins.sysml")
 	landing := symbolNamed(t, idx, "test::Landing")

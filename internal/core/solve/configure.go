@@ -190,7 +190,7 @@ func (s *session) enumerate(q *Query, vars []*Var, limit int) (*Result, error) {
 				return result, nil
 			}
 			// The configurations found stand; whether others exist is undecided.
-			result.Status, result.Truncated = StatusSat, true
+			result.Status, result.Truncated, result.Undecided = StatusSat, true, true
 			return result, nil
 		}
 		values, err := s.values(vars)
@@ -199,7 +199,7 @@ func (s *session) enumerate(q *Query, vars []*Var, limit int) (*Result, error) {
 		}
 		result.Solutions = append(result.Solutions, values)
 		if len(result.Solutions) >= limit {
-			result.Status, result.Truncated = StatusSat, true
+			result.Status, result.Truncated, result.AtBound = StatusSat, true, true
 			return result, nil
 		}
 		if err := s.deny(values); err != nil {

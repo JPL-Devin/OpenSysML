@@ -115,6 +115,23 @@ func TestSolveKeepsWhatAnObjectHolds(t *testing.T) {
 	}
 }
 
+// TestSolveKeepsWhatAnObjectHoldsOverASubmission: a declaration that changes
+// nothing the object is of leaves its values fixed, as a verdict about them
+// still reads them.
+func TestSolveKeepsWhatAnObjectHoldsOverASubmission(t *testing.T) {
+	requireSolver(t)
+	s := checkSession(t, synthModel)
+	wants(t, run(t, s, "%instantiate Panel"), "Created instance")
+	if res := s.Submit("package Unrelated { }"); len(res.Diagnostics) != 0 {
+		t.Fatalf("submitting an unrelated package reported %v", res.Diagnostics)
+	}
+
+	got := run(t, s, "%solve fits")
+	wants(t, got, "Already fixed:", "Synth::Panel::width = 4  (held by object 1)",
+		"Synthesised:", "Synth::Panel::height = ")
+	rejects(t, got, "Synthesised:\n    Synth::Panel::width")
+}
+
 // TestSolveReportsNoValuesConsistentWithWhatIsFixed: an unsat verdict about a
 // query fixing values says so, and names the fixed values in the conflict.
 func TestSolveReportsNoValuesConsistentWithWhatIsFixed(t *testing.T) {

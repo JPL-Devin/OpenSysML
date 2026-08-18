@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
 	"github.com/Open-MBEE/OpenSysML/internal/core/solve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -41,9 +42,31 @@ func (s *Session) declaredPins(name string) pinner {
 			report := unavailableReport(name, strings.TrimPrefix(bad.Lines[0], "error: "))
 			return nil, nil, &report
 		}
-		pins, unfixed := solve.FixedFor(target.ctx, subject, owningElement(subject), inst)
+		pins, unfixed := solve.FixedFor(target.ctx, solve.Fixing{
+			Element:    subject,
+			Owner:      owningElement(subject),
+			Object:     inst,
+			ObjectType: s.documentType(inst),
+		})
 		return pins, unfixed, nil
 	}
+}
+
+// documentType is the object's definition as the document declares it: an object
+// carried over a submission is bound to the browse index's own scope tree, whose
+// symbols are not the ones a query about the document's declarations reads.
+func (s *Session) documentType(inst *runtime.Instance) *symbols.Symbol {
+	if inst == nil || inst.Type == nil {
+		return nil
+	}
+	doc := s.ws.Document(docName)
+	if doc == nil {
+		return inst.Type
+	}
+	if local := scopeSymbolFor(doc.Scope, inst.Type.Decl); local != nil {
+		return local
+	}
+	return inst.Type
 }
 
 // owningElement is the element a condition was written in, whose declared values
@@ -505,7 +528,7 @@ func truncation(result *solve.Result) string {
 	if !result.Truncated {
 		return ", which are all of them"
 	}
-	if result.Reason != "" {
+	if result.Undecided {
 		return ", reported before the solver stopped deciding"
 	}
 	return ", reported up to the bound on how many are enumerated"

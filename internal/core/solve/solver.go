@@ -131,8 +131,17 @@ type Result struct {
 	Solutions [][]Assignment
 
 	// Truncated reports that an enumeration stopped before it had shown there is
-	// no further solution: it reached its bound, or the solver stopped deciding.
+	// no further solution, for the reason AtBound or Undecided names.
 	Truncated bool
+
+	// AtBound reports that the enumeration stopped because it had reported as
+	// many solutions as it was asked for; raising the bound may report more.
+	AtBound bool
+
+	// Undecided reports that the enumeration stopped because the solver stopped
+	// deciding, whether or not it said why: the solutions found stand, and
+	// whether others exist is unknown.
+	Undecided bool
 
 	// Core holds the conflicting assertions for a query Explain found unsat, and
 	// is nil for every other verdict and for a plain Solve.

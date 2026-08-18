@@ -17,7 +17,7 @@ package test {
 		attribute height : Integer;
 		attribute finish : Finish = Finish::polished;
 		attribute maxSpeed : ISQSpaceTime::SpeedValue = 5.4 [km/h];
-		attribute clearance : ISQSpaceTime::LengthValue = 2.0 [m];
+		attribute clearance : ISQBase::LengthValue = 2.0 [m];
 		attribute label : String = "left";
 
 		assert constraint fits {
