@@ -65,6 +65,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("calc_output_valued_and_assigned", testCalcOutputValuedAndAssigned)
 	t.Run("calc_output_assigned_twice", testCalcOutputAssignedTwice)
 	t.Run("binding_conflict", testBindingConflict)
+	t.Run("binding_named_single_end_does_not_poison_read", testBindingNamedSingleEndDoesNotPoisonRead)
 	t.Run("binding_single_valueless", testBindingSingleValueless)
 	t.Run("binding_cycle", testBindingCycle)
 	t.Run("binding_three_binding_ring", testBindingThreeBindingRing)
@@ -214,7 +215,7 @@ func testBindingConflict(t *testing.T) {
 		part def Sys {
 			attribute a = 1;
 			attribute b = 2;
-			binding bind b = a;
+			binding ba bind b = a;
 		}
 	}`))
 	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
@@ -226,8 +227,28 @@ func testBindingConflict(t *testing.T) {
 		t.Fatalf("GetFeatureValue(b) = %v, want ErrBindingConflict", err)
 	}
 	if !strings.Contains(err.Error(), "a") || !strings.Contains(err.Error(), "b") ||
-		!strings.Contains(err.Error(), "1") || !strings.Contains(err.Error(), "2") {
+		!strings.Contains(err.Error(), "b = 2") || !strings.Contains(err.Error(), "a = 1") {
 		t.Errorf("conflict error %q does not name both ends and values", err)
+	}
+}
+
+func testBindingNamedSingleEndDoesNotPoisonRead(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<binding-named-single-end>", parseAndBuild(t, `package P {
+		part def Sys {
+			attribute a = 5;
+			binding bnd = a;
+		}
+	}`))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	fv, err := inst.GetFeatureValue(ctx, "a")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(a) = %v, want 5", err)
+	}
+	if got := fv.HeldValue(); got.Kind != ValConst || got.Const.Int != 5 {
+		t.Errorf("a = %#v, want integer 5", got)
 	}
 }
 
@@ -236,8 +257,8 @@ func testBindingCycle(t *testing.T) {
 		part def Sys {
 			attribute a;
 			attribute b;
-			binding bind a = b;
-			binding bind b = a;
+			binding ab bind a = b;
+			binding ba bind b = a;
 		}
 	}`))
 	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
@@ -258,7 +279,7 @@ func testBindingSingleValueless(t *testing.T) {
 		part def Sys {
 			attribute a;
 			attribute b;
-			binding bind b = a;
+			binding ba bind b = a;
 		}
 	}`))
 	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
@@ -287,9 +308,9 @@ func testBindingThreeBindingRing(t *testing.T) {
 			attribute a;
 			attribute b;
 			attribute c;
-			binding bind a = b;
-			binding bind b = c;
-			binding bind c = a;
+			binding ab bind a = b;
+			binding bc bind b = c;
+			binding ca bind c = a;
 		}
 	}`))
 	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
@@ -312,8 +333,8 @@ func testBindingCycleWithValue(t *testing.T) {
 		part def Sys {
 			attribute a = 4;
 			attribute b;
-			binding bind a = b;
-			binding bind b = a;
+			binding ab bind a = b;
+			binding ba bind b = a;
 		}
 	}`))
 	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
@@ -337,7 +358,7 @@ func testBindingUnrelatedExpressionDoesNotPoisonRead(t *testing.T) {
 			attribute a = 5;
 			attribute b;
 			attribute sibling = 8;
-			binding bind b = a + 1;
+			binding expression bind b = a + 1;
 		}
 	}`))
 	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
@@ -365,7 +386,7 @@ func testBindingExpressionEndCannotReceive(t *testing.T) {
 		part def Sys {
 			attribute a;
 			attribute b = 7;
-			binding bind b = a + 1;
+			binding expression bind b = a + 1;
 		}
 	}`))
 	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
@@ -387,7 +408,7 @@ func testBindingResultTracksLaterMutation(t *testing.T) {
 			part def Sys {
 				attribute a;
 				attribute b;
-				binding bind b = a;
+				binding ba bind b = a;
 			}
 		}`))
 		inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
@@ -416,7 +437,7 @@ func testBindingResultTracksLaterMutation(t *testing.T) {
 			part def Sys {
 				attribute a = 3;
 				attribute b;
-				binding bind b = a;
+				binding ba bind b = a;
 			}
 		}`))
 		inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
@@ -446,7 +467,7 @@ func testBindingNestedContainerIsNotACycle(t *testing.T) {
 		part def Sys {
 			attribute x = 9;
 			part child : Child;
-			binding bind child.b = x;
+			binding childBinding bind child.b = x;
 		}
 	}`))
 	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))

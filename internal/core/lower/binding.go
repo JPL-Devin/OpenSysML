@@ -2,7 +2,6 @@ package lower
 
 import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
-	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -60,20 +59,12 @@ func lowerBinding(u *ast.Usage, scope *symbols.Scope) (Binding, bool) {
 			break
 		}
 	}
-	if first == nil && u.Ident.Name != "" {
-		first = featureReference(u.Ident.Name, u.Ident.NameSpan)
+	if first == nil {
+		return Binding{}, false
 	}
 	ends := [2]BindingEnd{
 		{Path: FeaturePath(first), Expr: first},
 		{Path: FeaturePath(u.Value), Expr: u.Value},
 	}
 	return Binding{Ends: ends, Scope: scope, Decl: u}, true
-}
-
-func featureReference(name string, span source.Span) ast.Node {
-	return &ast.FeatureReference{
-		Name: &ast.QualifiedName{
-			Parts: []ast.NameSegment{{Text: name, Span: span}},
-		},
-	}
 }

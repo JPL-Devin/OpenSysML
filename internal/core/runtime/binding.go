@@ -432,7 +432,7 @@ func (ctx *Context) bindingExprText(expr ast.Node, scope *symbols.Scope) string 
 func bindingValueText(val Value) string {
 	switch val.Kind {
 	case ValConst:
-		return fmt.Sprintf("%v", val.Const)
+		return FormatConst(val.Const)
 	case ValString:
 		return fmt.Sprintf("%q", val.Str)
 	case ValEnumLiteral:

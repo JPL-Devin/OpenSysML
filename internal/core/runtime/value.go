@@ -25,6 +25,23 @@ const (
 	ValEnumLiteral // one literal of an enumeration definition, identified by itself
 )
 
+// FormatConst renders a scalar constant using the runtime's user-facing
+// numeric convention.
+func FormatConst(c semantics.Value) string {
+	switch c.Kind {
+	case semantics.ValInt:
+		return fmt.Sprintf("%d", c.Int)
+	case semantics.ValReal:
+		return fmt.Sprintf("%.2f", c.Real)
+	case semantics.ValBool:
+		return fmt.Sprintf("%v", c.Bool)
+	case semantics.ValInfinity:
+		return "∞"
+	default:
+		return "<unknown const>"
+	}
+}
+
 // String names the kind, so diagnostics quoting it read as more than an index.
 func (k ValueKind) String() string {
 	switch k {

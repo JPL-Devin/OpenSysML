@@ -1264,18 +1264,7 @@ func formatValue(ctx *runtime.Context, val runtime.Value) string {
 // formatConst renders a numeric constant for a result table: a Real to two
 // decimals, which is the session's convention for a displayed number.
 func formatConst(c semantics.Value) string {
-	switch c.Kind {
-	case semantics.ValInt:
-		return fmt.Sprintf("%d", c.Int)
-	case semantics.ValReal:
-		return fmt.Sprintf("%.2f", c.Real)
-	case semantics.ValBool:
-		return fmt.Sprintf("%v", c.Bool)
-	case semantics.ValInfinity:
-		return "∞"
-	default:
-		return "<unknown const>"
-	}
+	return runtime.FormatConst(c)
 }
 
 // formatElements renders a collection's contents, since its size alone answers

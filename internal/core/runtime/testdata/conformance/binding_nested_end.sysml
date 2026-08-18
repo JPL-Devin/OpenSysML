@@ -6,6 +6,6 @@ package test {
 		attribute x = 9;
 		part child : Child;
 		attribute mirror = child.b;
-		binding bind child.b = x;
+		binding childBinding bind child.b = x;
 	}
 }

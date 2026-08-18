@@ -12,9 +12,11 @@ import (
 func TestToBindingsNormalizesBindingSpellings(t *testing.T) {
 	p := parser.New(source.New("binding.sysml", []byte(`package P {
 		part def Owner {
-			binding bind x = y;
+			binding anonymous bind config.x = y;
 			binding named bind x = y;
 			binding namedOf of x = y;
+			binding namedOnly = x;
+			binding [1] config.host = serverAddress;
 		}
 	}`)))
 	file := p.ParseFile()
@@ -42,12 +44,25 @@ func TestToBindingsNormalizesBindingSpellings(t *testing.T) {
 			}
 		}
 	}
-	if len(bindings) != 3 {
-		t.Fatalf("lowered %d bindings, want 3", len(bindings))
+	if len(bindings) != 4 {
+		t.Fatalf("lowered %d bindings, want 4", len(bindings))
+	}
+	wants := map[[2]string]int{
+		{"config.x", "y"}:                1,
+		{"x", "y"}:                       2,
+		{"config.host", "serverAddress"}: 1,
 	}
 	for _, binding := range bindings {
-		if binding.Ends[0].Path != "x" || binding.Ends[1].Path != "y" {
-			t.Errorf("binding paths = [%q, %q], want [x, y]", binding.Ends[0].Path, binding.Ends[1].Path)
+		paths := [2]string{binding.Ends[0].Path, binding.Ends[1].Path}
+		if wants[paths] == 0 {
+			t.Errorf("binding paths = %q, want one of [x, y] or [config.host, serverAddress]", paths)
+			continue
+		}
+		wants[paths]--
+	}
+	for paths, count := range wants {
+		if count != 0 {
+			t.Errorf("binding paths %q occurred %d extra times", paths, count)
 		}
 	}
 }
