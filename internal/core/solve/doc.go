@@ -119,7 +119,7 @@
 //
 // Result.Model is one witness, not a canonical answer: a satisfiable query
 // usually has many models and the solver may return any of them. Values are
-// rendered in Systemica's terms where the sort allows (qualified feature names,
+// rendered in OpenSysML's terms where the sort allows (qualified feature names,
 // declared units, enumeration and variant names) and flagged as the solver wrote
 // them where it does not.
 //
