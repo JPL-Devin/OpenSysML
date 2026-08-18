@@ -250,10 +250,27 @@ func (inst *Instance) materializeFeatureValue(ctx *Context, name string) (*Featu
 
 	fv := inst.FeatureValues[name]
 
+	if val, found, err := ctx.resolveBindingValue(inst, name); err != nil {
+		return nil, err
+	} else if found {
+		if err := ctx.assignBindingValue(inst, fv, name, val); err != nil {
+			return nil, err
+		}
+		return fv, nil
+	}
+
 	// If already materialized, return
 	if fv.Materialized {
 		return fv, nil
 	}
+
+	return inst.materializeFeatureValueIntrinsic(ctx, name)
+}
+
+// materializeFeatureValueIntrinsic evaluates a feature without following
+// binding connectors; binding resolution calls it to inspect an endpoint.
+func (inst *Instance) materializeFeatureValueIntrinsic(ctx *Context, name string) (*FeatureValue, error) {
+	fv := inst.FeatureValues[name]
 
 	// A variation holds the variant it was bound to, and nothing until it is
 	// bound: it classifies its variants abstractly, so it is no object of itself.

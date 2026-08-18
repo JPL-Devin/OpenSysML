@@ -39,6 +39,8 @@ type calcShape struct {
 	// whatever path the execution takes. A calc that binds its outputs this way
 	// computes them though it returns nothing, so it states a computation.
 	BodyOutputs map[string]bool
+	Bindings    []lower.Binding
+	ResultExpr  ast.Node
 }
 
 // calcShapeOf resolves the invocation interface of a calc symbol: its
@@ -71,14 +73,42 @@ func (ctx *Context) calcShapeOf(sym *symbols.Symbol) (*calcShape, error) {
 		Steps:     calcSteps(body),
 	}
 	shape.BodyOutputs = assignedOutputs(shape.Steps, shape.Outputs)
+	shape.Bindings = calcBindings(chain)
+	shape.ResultExpr = resultBindingExpr(shape.Bindings)
 	// A calc computes nothing when it neither returns a value nor binds an output
 	// feature — by a declaration or by an assignment in its body.
-	if !lower.Returns(shape.Body) && len(shape.BodyOutputs) == 0 {
+	if !lower.Returns(shape.Body) && len(shape.BodyOutputs) == 0 && shape.ResultExpr == nil {
 		return nil, fmt.Errorf("%w: calc %s has no return expression", ErrNoResultExpression, name)
 	}
 
 	ctx.calcShapes[sym] = shape
 	return shape, nil
+}
+
+func calcBindings(chain []*symbols.Symbol) []lower.Binding {
+	var out []lower.Binding
+	for _, link := range chain {
+		if link != nil {
+			out = append(out, lower.ToBindings(link.Decl, declScope(link))...)
+		}
+	}
+	return out
+}
+
+func resultBindingExpr(bindings []lower.Binding) ast.Node {
+	var result ast.Node
+	for _, binding := range bindings {
+		for i := range binding.Ends {
+			if binding.Ends[i].Path != "result" {
+				continue
+			}
+			other := binding.Ends[1-i]
+			if other.Expr != nil {
+				result = other.Expr
+			}
+		}
+	}
+	return result
 }
 
 // calcChain returns sym's calc specialization chain, most general first. Only

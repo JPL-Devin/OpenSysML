@@ -1,0 +1,8 @@
+{
+  "type": "instance",
+  "instantiate": "test::Sys",
+  "featureValues": {
+    "a": {"type": "Integer", "value": 5},
+    "b": {"type": "Integer", "value": 5}
+  }
+}

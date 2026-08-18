@@ -102,6 +102,8 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		// names are not all references (see resolveTrigger).
 		if d.IsAccept {
 			r.resolveTrigger(scope, d.Value)
+		} else if d.Kind == ast.UsageBinding && isImplicitCalcResult(scope, d.Value) {
+			// A calc binding may name its implicit result feature as the value end.
 		} else {
 			r.resolveExpr(scope, d.Value)
 		}
@@ -280,6 +282,30 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		}
 		r.walkMembers(body, d.Body)
 	}
+}
+
+func isImplicitCalcResult(scope *symbols.Scope, node ast.Node) bool {
+	owner := scope.Owner()
+	if owner == nil {
+		return false
+	}
+	switch decl := owner.Decl.(type) {
+	case *ast.Definition:
+		if decl.Kind != ast.DefCalc {
+			return false
+		}
+	case *ast.Usage:
+		if decl.Kind != ast.UsageCalc {
+			return false
+		}
+	default:
+		return false
+	}
+	ref, ok := node.(*ast.FeatureReference)
+	if !ok || ref.Name == nil || len(ref.Name.Parts) != 1 {
+		return false
+	}
+	return ref.Name.Parts[0].Text == "result"
 }
 
 // resolveTrigger resolves the references a transition trigger carries.

@@ -32,6 +32,15 @@ var (
 	// ErrUninitializedFeatureValue is returned when accessing a feature value that has no value and no default.
 	ErrUninitializedFeatureValue = errors.New("uninitialized feature value")
 
+	// ErrBindingConflict is returned when two binding ends hold unequal values.
+	ErrBindingConflict = errors.New("binding conflict")
+
+	// ErrBindingCycle is returned when a binding component has no value.
+	ErrBindingCycle = errors.New("binding cycle")
+
+	// ErrBindingEnd is returned when a binding endpoint cannot be resolved to a feature.
+	ErrBindingEnd = errors.New("binding end cannot be resolved")
+
 	// ErrNotACalc is returned when a calc invocation targets a symbol that is
 	// not a calc definition or usage.
 	ErrNotACalc = errors.New("not a calc")

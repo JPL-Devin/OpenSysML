@@ -6,6 +6,13 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
 
 ## Unreleased
 
+### Binding connector runtime semantics
+
+- **Bindings declared in materialized type and usage bodies now propagate values in both
+  directions**, including inherited and nested ends, with typed conflict and cycle errors;
+  calc result bindings such as `bind result = x` are also evaluated. Package-owned bindings
+  remain a documented limitation.
+
 ### A view renders
 
 - **`%render <name>` turns a view's exposed set into the rendering its `render` member states**, and

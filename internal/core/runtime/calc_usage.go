@@ -192,6 +192,9 @@ func (shape *calcShape) outputNames() string {
 // none, so its values are read from a calc usage's output features instead of
 // being narrowed to whichever output comes first.
 func (shape *calcShape) designatedOutput() (calcOutput, error) {
+	if shape.ResultExpr != nil {
+		return calcOutput{Name: "result", Value: shape.ResultExpr, Owner: shape.Sym, IsResult: true}, nil
+	}
 	var valued []calcOutput
 	for _, out := range shape.Outputs {
 		if out.IsResult {

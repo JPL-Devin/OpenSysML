@@ -1,0 +1,9 @@
+{
+  "type": "instance",
+  "instantiate": "test::Sys",
+  "featureValues": {
+    "x": {"type": "Integer", "value": 9},
+    "child": {"type": "Instance"},
+    "mirror": {"type": "Integer", "value": 9}
+  }
+}

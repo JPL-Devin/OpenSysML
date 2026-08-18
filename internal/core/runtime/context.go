@@ -70,6 +70,14 @@ type Context struct {
 	// of, which a behavior that object performs routes over.
 	objectConns map[*symbols.Symbol][]lower.Connection
 
+	// objectBindings memoizes binding connectors declared by each materialized
+	// object type, including bindings inherited from its supertypes.
+	bindingIR map[*symbols.Symbol][]lower.Binding
+
+	// resolvingBindings guards binding endpoint resolution for one instance
+	// feature, so a valueless binding cycle is reported rather than recursed.
+	resolvingBindings map[featureValueRef]bool
+
 	// trace records evaluation, nil when not tracing.
 	trace *TraceRecorder
 
@@ -157,7 +165,9 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 
 		materializingConnectors: make(map[connectorRef]bool),
 		objectConns:             make(map[*symbols.Symbol][]lower.Connection),
+		bindingIR:               make(map[*symbols.Symbol][]lower.Binding),
 		derivingFeatureValues:   make(map[featureValueRef]bool),
+		resolvingBindings:       make(map[featureValueRef]bool),
 		collectingSubsets:       make(map[featureValueRef]bool),
 		sources:                 make(map[string]*source.SourceFile),
 	}

@@ -64,6 +64,9 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("calc_output_assigned_in_a_branch_not_taken", testCalcOutputAssignedInABranchNotTaken)
 	t.Run("calc_output_valued_and_assigned", testCalcOutputValuedAndAssigned)
 	t.Run("calc_output_assigned_twice", testCalcOutputAssignedTwice)
+	t.Run("binding_conflict", testBindingConflict)
+	t.Run("binding_cycle", testBindingCycle)
+	t.Run("binding_cycle_with_value", testBindingCycleWithValue)
 	t.Run("nested_calc_usage_unbound_input", testNestedCalcUsageUnboundInput)
 	t.Run("nested_calc_usage_unknown_output", testNestedCalcUsageUnknownOutput)
 	t.Run("nested_calc_usage_self_cycle", testNestedCalcUsageSelfCycle)
@@ -194,6 +197,74 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("classification_outside_the_evaluable_subset", testClassificationOutsideTheEvaluableSubset)
 	t.Run("expression_over_a_feature_value_holding_no_value", testExpressionOverAFeatureValueHoldingNoValue)
 	t.Run("succession_guard_failure_modes", testSuccessionGuardFailureModes)
+}
+
+func testBindingConflict(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<binding-conflict>", parseAndBuild(t, `package P {
+		part def Sys {
+			attribute a = 1;
+			attribute b = 2;
+			binding bind b = a;
+		}
+	}`))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	_, err = inst.GetFeatureValue(ctx, "b")
+	if !errors.Is(err, ErrBindingConflict) {
+		t.Fatalf("GetFeatureValue(b) = %v, want ErrBindingConflict", err)
+	}
+	if !strings.Contains(err.Error(), "a") || !strings.Contains(err.Error(), "b") ||
+		!strings.Contains(err.Error(), "1") || !strings.Contains(err.Error(), "2") {
+		t.Errorf("conflict error %q does not name both ends and values", err)
+	}
+}
+
+func testBindingCycle(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<binding-cycle>", parseAndBuild(t, `package P {
+		part def Sys {
+			attribute a;
+			attribute b;
+			binding bind a = b;
+			binding bind b = a;
+		}
+	}`))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	_, err = inst.GetFeatureValue(ctx, "a")
+	if !errors.Is(err, ErrBindingCycle) {
+		t.Fatalf("GetFeatureValue(a) = %v, want ErrBindingCycle", err)
+	}
+	if !strings.Contains(err.Error(), "a") || !strings.Contains(err.Error(), "b") {
+		t.Errorf("cycle error %q does not name both ends", err)
+	}
+}
+
+func testBindingCycleWithValue(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<binding-cycle-value>", parseAndBuild(t, `package P {
+		part def Sys {
+			attribute a = 4;
+			attribute b;
+			binding bind a = b;
+			binding bind b = a;
+		}
+	}`))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	for _, name := range []string{"a", "b"} {
+		fv, err := inst.GetFeatureValue(ctx, name)
+		if err != nil {
+			t.Fatalf("GetFeatureValue(%s): %v", name, err)
+		}
+		if fv.HeldValue().Kind != ValConst || fv.HeldValue().Const.Int != 4 {
+			t.Errorf("%s = %#v, want integer 4", name, fv.HeldValue())
+		}
+	}
 }
 
 // testSuccessionGuardFailureModes: a guard on a succession leaving an ordinary
