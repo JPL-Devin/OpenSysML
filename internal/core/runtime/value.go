@@ -2,6 +2,9 @@ package runtime
 
 import (
 	"fmt"
+	"sort"
+	"strconv"
+	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
@@ -40,6 +43,58 @@ func FormatConst(c semantics.Value) string {
 	default:
 		return "<unknown const>"
 	}
+}
+
+// FormatValue renders a value with the notation used by user-facing runtime
+// results and diagnostics.
+func FormatValue(v Value) string {
+	switch v.Kind {
+	case ValConst:
+		return FormatConst(v.Const)
+	case ValNull:
+		return "null"
+	case ValString:
+		return strconv.Quote(v.Str)
+	case ValInstance:
+		return fmt.Sprintf("instance(%d)", v.Instance)
+	case ValSequence:
+		if v.Sequence == nil {
+			return "[]"
+		}
+		return "[" + strings.Join(formatValueElements(v.Sequence.Elements()), ", ") + "]"
+	case ValSet:
+		if v.Set == nil {
+			return "Set{}"
+		}
+		parts := formatValueElements(v.Set.Elements())
+		sort.Strings(parts)
+		return "Set{" + strings.Join(parts, ", ") + "}"
+	case ValVariant:
+		if v.Variant == nil {
+			return "<unknown variant>"
+		}
+		if v.Instance != 0 {
+			return fmt.Sprintf("%s (Instance ID: %d)", v.Variant.Name, v.Instance)
+		}
+		return v.Variant.Name
+	case ValEnumLiteral:
+		return v.LiteralText()
+	case ValQuantity:
+		if v.Quantity == nil {
+			return "<unknown>"
+		}
+		return v.Quantity.TextWithMagnitude(FormatConst(v.Quantity.Num))
+	default:
+		return "<unknown>"
+	}
+}
+
+func formatValueElements(elements []Value) []string {
+	parts := make([]string, len(elements))
+	for i, element := range elements {
+		parts[i] = FormatValue(element)
+	}
+	return parts
 }
 
 // String names the kind, so diagnostics quoting it read as more than an index.

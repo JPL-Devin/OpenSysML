@@ -279,6 +279,12 @@ func TestRequirement(t *testing.T) {
 }
 
 func TestFormatValue(t *testing.T) {
+	sequence := runtime.NewSequence()
+	sequence.Append(runtime.Value{
+		Kind:  runtime.ValConst,
+		Const: semantics.Value{Kind: semantics.ValInt, Int: 1},
+	})
+	sequence.Append(runtime.Value{Kind: runtime.ValString, Str: "hi"})
 	cases := []struct {
 		name string
 		val  runtime.Value
@@ -291,6 +297,7 @@ func TestFormatValue(t *testing.T) {
 		{"null", runtime.Value{Kind: runtime.ValNull}, "null"},
 		{"string", runtime.Value{Kind: runtime.ValString, Str: "hi"}, `"hi"`},
 		{"instance", runtime.Value{Kind: runtime.ValInstance, Instance: 3}, "Instance(ID: 3)"},
+		{"sequence", runtime.Value{Kind: runtime.ValSequence, Sequence: sequence}, `[1, "hi"]`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

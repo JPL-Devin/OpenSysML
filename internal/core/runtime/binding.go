@@ -55,7 +55,15 @@ type bindingAttempt struct {
 	found         bool
 	cycle         bool
 	cycleFeatures []string
+	assignment    *bindingAssignment
 	err           error
+}
+
+type bindingAssignment struct {
+	endpoint bindingEndpoint
+	value    Value
+	binding  lower.Binding
+	end      int
 }
 
 func (ctx *Context) objectBindings(typeSym *symbols.Symbol) []lower.Binding {
@@ -121,7 +129,7 @@ func (ctx *Context) resolveBindingValue(inst *Instance, name string) (Value, boo
 		if len(bindings) != 0 {
 			ctx.resolvingBindings[key] = true
 			value, found, cycle, cycleFeatures, err := ctx.resolveBindingSet(
-				current, inst, target, bindings, key,
+				current, inst, target, path, bindings, key,
 			)
 			delete(ctx.resolvingBindings, key)
 			if err != nil || found {
@@ -142,8 +150,9 @@ func (ctx *Context) resolveBindingValue(inst *Instance, name string) (Value, boo
 }
 
 func (ctx *Context) resolveBindingSet(owner, targetInst *Instance, target *FeatureValue,
-	bindings []lower.Binding, key featureValueRef) (Value, bool, bool, []string, error) {
+	endpointName string, bindings []lower.Binding, key featureValueRef) (Value, bool, bool, []string, error) {
 	var cycleFeatures []string
+	var attempts []bindingAttempt
 	for _, binding := range bindings {
 		attempt := ctx.attemptBinding(owner, targetInst, target, binding, key)
 		if attempt.err != nil {
@@ -153,8 +162,41 @@ func (ctx *Context) resolveBindingSet(owner, targetInst *Instance, target *Featu
 			cycleFeatures = attempt.cycleFeatures
 		}
 		if attempt.found {
-			return attempt.value, true, false, nil, nil
+			attempts = append(attempts, attempt)
 		}
+	}
+	if len(attempts) > 1 {
+		if !isScalarFeature(target.Feature) {
+			return Value{}, false, false, nil, fmt.Errorf(
+				"%w: multiple bindings contribute to multi-valued endpoint %q (element-wise contribution is not implemented)",
+				ErrBindingEnd, endpointName,
+			)
+		}
+		for _, attempt := range attempts[1:] {
+			if !valueEqual(attempts[0].value, attempt.value) {
+				return Value{}, false, false, nil, &BindingConflictError{
+					Left:       bindingLocationText(bindingLocation{instance: targetInst, name: key.feature}),
+					Right:      bindingLocationText(bindingLocation{instance: targetInst, name: key.feature}),
+					LeftValue:  attempts[0].value,
+					RightValue: attempt.value,
+				}
+			}
+		}
+	}
+	selected := attempts
+	if len(selected) > 1 {
+		selected = selected[:1]
+	}
+	if len(selected) == 1 && selected[0].assignment != nil {
+		assignment := selected[0].assignment
+		if err := ctx.assignBindingEndpoint(
+			assignment.endpoint, assignment.value, assignment.binding, assignment.end,
+		); err != nil {
+			return Value{}, false, false, nil, err
+		}
+	}
+	if len(attempts) != 0 {
+		return attempts[0].value, true, false, nil, nil
 	}
 	return Value{}, false, len(cycleFeatures) != 0, cycleFeatures, nil
 }
@@ -225,21 +267,19 @@ func (ctx *Context) attemptBinding(owner, targetInst *Instance, target *FeatureV
 		leftDerived := bindingEndpointDerived(left)
 		rightDerived := bindingEndpointDerived(right)
 		if leftDerived && !rightDerived {
-			if err := ctx.assignBindingEndpoint(left, rightValue, binding, 0); err != nil {
-				attempt.err = err
-				return attempt
-			}
 			attempt.value = rightValue
 			attempt.found = true
+			attempt.assignment = &bindingAssignment{
+				endpoint: left, value: rightValue, binding: binding, end: 0,
+			}
 			return attempt
 		}
 		if rightDerived && !leftDerived {
-			if err := ctx.assignBindingEndpoint(right, leftValue, binding, 1); err != nil {
-				attempt.err = err
-				return attempt
-			}
 			attempt.value = leftValue
 			attempt.found = true
+			attempt.assignment = &bindingAssignment{
+				endpoint: right, value: leftValue, binding: binding, end: 1,
+			}
 			return attempt
 		}
 		if !valueEqual(leftValue, rightValue) {
@@ -252,18 +292,16 @@ func (ctx *Context) attemptBinding(owner, targetInst *Instance, target *FeatureV
 		attempt.value = leftValue
 		attempt.found = true
 	case leftSet:
-		if err := ctx.assignBindingEndpoint(right, leftValue, binding, 1); err != nil {
-			attempt.err = err
-			return attempt
+		attempt.assignment = &bindingAssignment{
+			endpoint: right, value: leftValue, binding: binding, end: 1,
 		}
 		if leftCarries || rightCarries {
 			attempt.value = leftValue
 			attempt.found = true
 		}
 	case rightSet:
-		if err := ctx.assignBindingEndpoint(left, rightValue, binding, 0); err != nil {
-			attempt.err = err
-			return attempt
+		attempt.assignment = &bindingAssignment{
+			endpoint: left, value: rightValue, binding: binding, end: 0,
 		}
 		if leftCarries || rightCarries {
 			attempt.value = rightValue
@@ -411,7 +449,11 @@ func (ctx *Context) assignBindingValue(inst *Instance, fv *FeatureValue, name st
 		fv.Values = Value{}
 	} else {
 		if val.Kind != ValSequence && val.Kind != ValSet {
-			val = sequenceOf(elementsOf(val))
+			elements := elementsOf(val)
+			if err := ctx.chargeElements(int64(len(elements))); err != nil {
+				return err
+			}
+			val = sequenceOf(elements)
 		}
 		fv.Value = Value{}
 		fv.Values = val
@@ -485,16 +527,5 @@ func (ctx *Context) bindingExprText(expr ast.Node, scope *symbols.Scope) string 
 }
 
 func bindingValueText(val Value) string {
-	switch val.Kind {
-	case ValConst:
-		return FormatConst(val.Const)
-	case ValString:
-		return fmt.Sprintf("%q", val.Str)
-	case ValEnumLiteral:
-		return val.LiteralText()
-	case ValInstance:
-		return fmt.Sprintf("instance(%d)", val.Instance)
-	default:
-		return val.Kind.String()
-	}
+	return FormatValue(val)
 }

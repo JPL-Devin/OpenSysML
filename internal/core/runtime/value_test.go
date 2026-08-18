@@ -148,3 +148,24 @@ func TestSetDeduplicatesCommensurableQuantities(t *testing.T) {
 		t.Fatalf("set size = %d, want 1 for commensurable equal quantities", set.Size())
 	}
 }
+
+func TestFormatValueCollections(t *testing.T) {
+	inner := NewSequence()
+	inner.Append(Value{Kind: ValString, Str: "nested"})
+	outer := NewSequence()
+	outer.Append(Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 1}})
+	outer.Append(Value{Kind: ValSequence, Sequence: inner})
+
+	set := NewSet()
+	set.Add(Value{Kind: ValSequence, Sequence: outer})
+	set.Add(Value{Kind: ValInstance, Instance: 3})
+
+	if got, want := FormatValue(Value{Kind: ValSequence, Sequence: outer}),
+		`[1, ["nested"]]`; got != want {
+		t.Errorf("sequence formatting = %q, want %q", got, want)
+	}
+	if got, want := FormatValue(Value{Kind: ValSet, Set: set}),
+		`Set{[1, ["nested"]], instance(3)}`; got != want {
+		t.Errorf("set formatting = %q, want %q", got, want)
+	}
+}

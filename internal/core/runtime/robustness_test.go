@@ -66,6 +66,9 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("calc_output_assigned_twice", testCalcOutputAssignedTwice)
 	t.Run("binding_conflict", testBindingConflict)
 	t.Run("binding_collection_conflicts_do_not_use_hashes", testBindingCollectionConflictsDoNotUseHashes)
+	t.Run("binding_multiple_scalar_contributors", testBindingMultipleScalarContributors)
+	t.Run("binding_multiple_collection_contributors", testBindingMultipleCollectionContributors)
+	t.Run("binding_propagation_spends_element_budget", testBindingPropagationSpendsElementBudget)
 	t.Run("binding_distinct_materialized_objects_conflict", testBindingDistinctMaterializedObjectsConflict)
 	t.Run("binding_named_single_end_does_not_poison_read", testBindingNamedSingleEndDoesNotPoisonRead)
 	t.Run("binding_incomplete_end_does_not_poison_read", testBindingIncompleteEndDoesNotPoisonRead)
@@ -229,9 +232,8 @@ func testBindingConflict(t *testing.T) {
 	if !errors.Is(err, ErrBindingConflict) {
 		t.Fatalf("GetFeatureValue(b) = %v, want ErrBindingConflict", err)
 	}
-	if !strings.Contains(err.Error(), "a") || !strings.Contains(err.Error(), "b") ||
-		!strings.Contains(err.Error(), "b = 2") || !strings.Contains(err.Error(), "a = 1") {
-		t.Errorf("conflict error %q does not name both ends and values", err)
+	if got, want := err.Error(), "binding conflict: b = 2, a = 1"; got != want {
+		t.Errorf("conflict error = %q, want %q", got, want)
 	}
 }
 
@@ -252,6 +254,10 @@ func testBindingCollectionConflictsDoNotUseHashes(t *testing.T) {
 		if !errors.Is(err, ErrBindingConflict) {
 			t.Fatalf("GetFeatureValue(b) = %v, want ErrBindingConflict", err)
 		}
+		if got, want := err.Error(),
+			`binding conflict: b = ["b"], a = ["a"]`; got != want {
+			t.Errorf("conflict error = %q, want %q", got, want)
+		}
 	})
 
 	t.Run("integers", func(t *testing.T) {
@@ -270,7 +276,106 @@ func testBindingCollectionConflictsDoNotUseHashes(t *testing.T) {
 		if !errors.Is(err, ErrBindingConflict) {
 			t.Fatalf("GetFeatureValue(b) = %v, want ErrBindingConflict", err)
 		}
+		if got, want := err.Error(),
+			"binding conflict: b = [65537], a = [1]"; got != want {
+			t.Errorf("conflict error = %q, want %q", got, want)
+		}
 	})
+}
+
+func testBindingMultipleScalarContributors(t *testing.T) {
+	t.Run("unequal", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-multiple-scalar-conflict>", parseAndBuild(t, `package P {
+			part def Sys {
+				attribute a;
+				attribute b = 1;
+				attribute c = 2;
+				bind a = b;
+				bind a = c;
+			}
+		}`))
+		inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+		if err != nil {
+			t.Fatalf("instantiate: %v", err)
+		}
+		_, err = inst.GetFeatureValue(ctx, "a")
+		if !errors.Is(err, ErrBindingConflict) {
+			t.Fatalf("GetFeatureValue(a) = %v, want ErrBindingConflict", err)
+		}
+		if got, want := err.Error(), "binding conflict: Sys.a = 1, Sys.a = 2"; got != want {
+			t.Errorf("conflict error = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("equal", func(t *testing.T) {
+		idx, _, ctx := buildRuntime(t, "<binding-multiple-scalar-equal>", parseAndBuild(t, `package P {
+			part def Sys {
+				attribute a;
+				attribute b = 1;
+				attribute c = 1;
+				bind a = b;
+				bind a = c;
+			}
+		}`))
+		inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+		if err != nil {
+			t.Fatalf("instantiate: %v", err)
+		}
+		fv, err := inst.GetFeatureValue(ctx, "a")
+		if err != nil {
+			t.Fatalf("GetFeatureValue(a): %v", err)
+		}
+		if got := fv.HeldValue().Const.Int; got != 1 {
+			t.Errorf("a = %d, want 1", got)
+		}
+	})
+}
+
+func testBindingMultipleCollectionContributors(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<binding-multiple-collection-contributors>", parseAndBuild(t, `package P {
+		part def Sys {
+			attribute edges : Integer[*];
+			attribute leftEdge : Integer[0..1] = (1);
+			attribute rightEdge : Integer[0..1] = (2);
+			binding [1] bind [0..1] edges = [0..1] leftEdge;
+			binding [1] bind [0..1] edges = [0..1] rightEdge;
+		}
+	}`))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	_, err = inst.GetFeatureValue(ctx, "edges")
+	if !errors.Is(err, ErrBindingEnd) {
+		t.Fatalf("GetFeatureValue(edges) = %v, want ErrBindingEnd", err)
+	}
+	if !strings.Contains(err.Error(), "multiple bindings contribute to multi-valued endpoint") ||
+		!strings.Contains(err.Error(), "edges") {
+		t.Errorf("error %q does not name the unsupported multiple-contributor endpoint", err)
+	}
+	fv := inst.FeatureValues["edges"]
+	if fv.Materialized || fv.Written || fv.BindingDerived || fv.HeldValue().Kind != ValInvalid {
+		t.Errorf("unsupported binding left an assignment behind: %+v", *fv)
+	}
+}
+
+func testBindingPropagationSpendsElementBudget(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<binding-element-budget>", parseAndBuild(t, `package P {
+		part def Sys {
+			attribute a : Integer[*] = (1, 2, 3);
+			attribute b : Integer[*];
+			bind b = a;
+		}
+	}`))
+	ctx.maxElements = 2
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	_, err = inst.GetFeatureValue(ctx, "b")
+	if !errors.Is(err, ErrElementLimitExceeded) {
+		t.Fatalf("GetFeatureValue(b) = %v, want ErrElementLimitExceeded", err)
+	}
 }
 
 func testBindingDistinctMaterializedObjectsConflict(t *testing.T) {

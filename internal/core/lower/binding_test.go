@@ -68,3 +68,49 @@ func TestToBindingsNormalizesBindingSpellings(t *testing.T) {
 		}
 	}
 }
+
+func TestToBindingsKeepsMultipleContributors(t *testing.T) {
+	p := parser.New(source.New("binding-multiple.sysml", []byte(`package P {
+		part def Sys {
+			part edges : Edge[*];
+			part leftEdge : Edge;
+			part rightEdge : Edge;
+			binding [1] bind [0..1] edges = [0..1] leftEdge;
+			binding [1] bind [0..1] edges = [0..1] rightEdge;
+		}
+	}`)))
+	file := p.ParseFile()
+	idx := symbols.NewIndex()
+	idx.AddDocument("binding-multiple.sysml", file)
+	scope := idx.DocumentRoot("binding-multiple.sysml")
+	var bindings []Binding
+	for _, member := range file.Members {
+		membership, ok := member.(*ast.Membership)
+		if !ok {
+			continue
+		}
+		pkg, ok := membership.Member.(*ast.Package)
+		if !ok {
+			continue
+		}
+		for _, nested := range pkg.Members {
+			ownerMembership, ok := nested.(*ast.Membership)
+			if !ok {
+				continue
+			}
+			owner, ok := ownerMembership.Member.(*ast.Definition)
+			if ok {
+				bindings = append(bindings, ToBindings(owner, scope)...)
+			}
+		}
+	}
+	if len(bindings) != 2 {
+		t.Fatalf("lowered %d bindings, want 2", len(bindings))
+	}
+	for _, binding := range bindings {
+		if got := [2]string{binding.Ends[0].Path, binding.Ends[1].Path}; got != [2]string{"edges", "leftEdge"} &&
+			got != [2]string{"edges", "rightEdge"} {
+			t.Errorf("binding paths = %q, want edges/leftEdge or edges/rightEdge", got)
+		}
+	}
+}

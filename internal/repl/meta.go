@@ -1226,55 +1226,31 @@ func formatValue(ctx *runtime.Context, val runtime.Value) string {
 	if ctx != nil && ctx.HoldsNoValue(val) {
 		return runtime.UnsetText
 	}
-	switch val.Kind {
-	case runtime.ValConst:
-		return formatConst(val.Const)
-	case runtime.ValNull:
-		return "null"
-	case runtime.ValString:
-		return fmt.Sprintf("%q", val.Str)
-	case runtime.ValInstance:
+	if val.Kind == runtime.ValInstance {
 		return fmt.Sprintf("Instance(ID: %d)", val.Instance)
+	}
+	switch val.Kind {
 	case runtime.ValSequence:
-		return formatElements(ctx, val.Sequence.Elements())
+		if val.Sequence == nil {
+			return "[]"
+		}
+		parts := make([]string, len(val.Sequence.Elements()))
+		for i, element := range val.Sequence.Elements() {
+			parts[i] = formatValue(ctx, element)
+		}
+		return "[" + strings.Join(parts, ", ") + "]"
 	case runtime.ValSet:
-		return fmt.Sprintf("Set{%d}", val.Set.Size())
-	case runtime.ValVariant:
-		// A selected variation shows the variant chosen, and the object it
-		// materialized when it has one.
-		if val.Variant == nil {
-			return "<unknown variant>"
+		if val.Set == nil {
+			return "Set{}"
 		}
-		if val.Instance != 0 {
-			return fmt.Sprintf("%s (Instance ID: %d)", val.Variant.Name, val.Instance)
+		parts := make([]string, len(val.Set.Elements()))
+		for i, element := range val.Set.Elements() {
+			parts[i] = formatValue(ctx, element)
 		}
-		return val.Variant.Name
-	case runtime.ValEnumLiteral:
-		// A literal shows the enumeration it belongs to, as it is written.
-		return val.LiteralText()
-	case runtime.ValQuantity:
-		// A magnitude is a number like any other in a result table, so it is
-		// rendered as a bare one; the value itself keeps its full precision.
-		return val.Quantity.TextWithMagnitude(formatConst(val.Quantity.Num))
-	default:
-		return "<unknown>"
+		slices.Sort(parts)
+		return "Set{" + strings.Join(parts, ", ") + "}"
 	}
-}
-
-// formatConst renders a numeric constant for a result table: a Real to two
-// decimals, which is the session's convention for a displayed number.
-func formatConst(c semantics.Value) string {
-	return runtime.FormatConst(c)
-}
-
-// formatElements renders a collection's contents, since its size alone answers
-// nothing about what the object holds.
-func formatElements(ctx *runtime.Context, elements []runtime.Value) string {
-	parts := make([]string, len(elements))
-	for i, el := range elements {
-		parts[i] = formatValue(ctx, el)
-	}
-	return "[" + strings.Join(parts, ", ") + "]"
+	return runtime.FormatValue(val)
 }
 
 // doCalc invokes a calculation with the arguments the command line states.
