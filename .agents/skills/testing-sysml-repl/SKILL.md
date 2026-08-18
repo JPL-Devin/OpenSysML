@@ -3769,6 +3769,8 @@ file **alone** (locations are buffer-relative — see below):
 | `Satisfiable` | `✓ … is satisfiable, so no conditions conflict` | none, plus `Use %check … for a satisfying assignment.` |
 | `rig::always` | `✗ Constraint always (negated) … 1 condition conflicts with itself` | `denied conditions: \`not (i == i)\`` @47:9 |
 
+Every unsat header is followed by one minimality line before the numbered rows.
+
 Things that look like bugs but are not, and traps:
 
 - **Rows are in query-assertion order, not source order.** `ZeroDivisor` lists the hoisted
@@ -3782,8 +3784,9 @@ Things that look like bugs but are not, and traps:
   REPL's implicit-document convention rather than a regression — but it is misleading, and any
   location assertion must therefore fix the load order. Always `%load` the fixture **alone**, or
   pass it as a CLI argument (`./bin/sysml <fixture>`), when asserting line/col.
-- **A 1-member core still prints "dropping any one leaves the rest satisfiable"**, which is vacuous
-  when there is no "rest". Cosmetic, but worth reporting rather than re-deriving.
+- **A 1-member core has its own minimality wording**: `The condition below is the whole conflict:
+  nothing else is needed for it.` (`internal/repl/explain.go` `minimality`), not the multi-condition
+  `dropping any one leaves the rest satisfiable`. `rig::always` is the case that exercises it.
 - **`String` IS in the translatable subset** (`SortString`, `internal/core/solve/reference.go:214`),
   so `constraint { s == "x" }` answers `satisfiable` and is useless as an "outside the subset" case.
   Untranslatable cases that do work: a **calc invocation** in a condition
