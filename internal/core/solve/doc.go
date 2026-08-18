@@ -13,6 +13,27 @@
 // solving semantics, so this is an advertised extension, not a conformance
 // claim.
 //
+// # Conflict explanation
+//
+// Explain answers an unsat verdict with the assertions that conflict. The script
+// it writes (CoreScript) names each assertion, turns unsat cores on and asks for
+// the core once the verdict is unsat; labels are the assertion's position, so a
+// core reads back to the Assertion, and its Provenance, that produced it. Every
+// role can appear in a core, a declared domain (RoleDomain) or a well-definedness
+// guard (RoleDefined) included, and an inherited condition names the supertype
+// that declared it.
+//
+// Minimality is established, not assumed. A solver's core is unsatisfiable but
+// need not be irreducible, so reduction drops one member at a time, each round a
+// fresh solver process, and Core.Minimal says every remaining member was shown to
+// be needed: dropping any one left the rest satisfiable. Reduction is bounded, in
+// the spirit of the runtime's step budgets, by DefaultMaxCoreMembers members and
+// DefaultCoreBudget of wall time (SYSTEMICA_SMT_CORE_BUDGET overrides it); a core
+// too large, out of budget, or whose round the solver did not decide is reported
+// as it stands with Minimal false and Core.Note saying why. A solver that refuses
+// cores, names an assertion the query did not assert, answers unreadably or
+// reports an empty core is a CoreError, never an empty or invented core.
+//
 // Conditions come from the evaluator's own collection
 // (runtime.Context.ConditionsOf), keeping its order and its distinctions:
 // `require` versus `assume`, negation, and a body meaning the conjunction of

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +16,10 @@ import (
 // scenarioEnv names the environment variable that turns this test binary into a
 // fake solver, which is how the driver is tested without a real solver.
 const scenarioEnv = "SYSTEMICA_TEST_SOLVER_SCENARIO"
+
+// coreEnv names the environment variable holding the reply a fake solver gives to
+// `get-unsat-core`, which is how a refused or malformed core is tested.
+const coreEnv = "SYSTEMICA_TEST_SOLVER_CORE"
 
 // TestHelperSolverProcess is the fake solver: with scenarioEnv set it plays that
 // scenario and exits before the framework prints, so stdout is only SMT-LIB.
@@ -39,7 +44,11 @@ func playScenario(scenario string, in *os.File, out, errOut *os.File) int {
 		time.Sleep(time.Minute)
 		return 0
 	}
+	var labels []string
 	for cmd := range readCommands(in) {
+		if label, ok := namedLabel(cmd); ok {
+			labels = append(labels, label)
+		}
 		switch {
 		case strings.HasPrefix(cmd, "(check-sat"):
 			switch scenario {
@@ -48,8 +57,29 @@ func playScenario(scenario string, in *os.File, out, errOut *os.File) int {
 			case "crash":
 				fmt.Fprintln(errOut, "fake solver: segmentation fault")
 				return 3
+			case "core-needs-first", "core-then-crash":
+				// A shrinking round asserts a subset, which is what labels that
+				// are not the whole query's show.
+				if scenario == "core-then-crash" && !wholeQuery(labels) {
+					fmt.Fprintln(errOut, "fake solver: segmentation fault")
+					return 3
+				}
+				// Only the first assertion conflicts, so the solver's own core is
+				// larger than it needs to be and reduction has work to do.
+				if !slices.Contains(labels, CoreLabel(0)) {
+					fmt.Fprintln(out, "sat")
+					continue
+				}
+				fmt.Fprintln(out, "unsat")
+				continue
 			}
 			fmt.Fprintln(out, verdicts[strings.TrimSuffix(scenario, "-exit-1")])
+		case strings.HasPrefix(cmd, "(get-unsat-core"):
+			if scenario == "core-needs-first" || scenario == "core-then-crash" {
+				fmt.Fprintln(out, "("+strings.Join(labels, " ")+")")
+				continue
+			}
+			fmt.Fprintln(out, os.Getenv(coreEnv))
 		case strings.HasPrefix(cmd, "(get-value"):
 			fmt.Fprintln(out, os.Getenv("SYSTEMICA_TEST_SOLVER_MODEL"))
 		case strings.HasPrefix(cmd, "(get-info"):
@@ -62,6 +92,26 @@ func playScenario(scenario string, in *os.File, out, errOut *os.File) int {
 		}
 	}
 	return 0
+}
+
+// namedLabel is the label an assertion was named with, for a command naming one.
+func namedLabel(cmd string) (string, bool) {
+	_, rest, ok := strings.Cut(cmd, ":named ")
+	if !ok {
+		return "", false
+	}
+	return strings.TrimRight(rest, ")"), true
+}
+
+// wholeQuery reports whether the labels are a query's own, in order, rather than
+// the subset a shrinking round asserts.
+func wholeQuery(labels []string) bool {
+	for i, label := range labels {
+		if label != CoreLabel(i) {
+			return false
+		}
+	}
+	return true
 }
 
 // readCommands yields the driver's input one top-level command at a time, so the
