@@ -233,12 +233,14 @@
 // attaining only one of them, which would make "the assignments achieving the
 // optimum" untrue.
 //
-// `(minimize e)`/`(maximize e)` and `(get-objectives)` are a z3 extension, not
-// SMT-LIB2; cvc5 does not implement them. Solver.Optimize settles the backend's
-// capability before sending a query — by family for z3 and cvc5, and by probing
-// any other with a tiny optimizing script of its own — and reports a backend
-// without it as NoOptimizationError wrapping ErrNoOptimization. Nothing is ever
-// degraded to a plain check-sat and presented as an optimum.
+// `(minimize e)`/`(maximize e)`, `(get-objectives)` and `:opt.priority` are
+// solver extensions rather than SMT-LIB2; cvc5 implements none of them.
+// Solver.Optimize settles them through the capability model below before sending
+// a query — CapOptimization and CapOptimizationPriority, probed once per backend
+// and cached — and reports a backend without them as NoOptimizationError, which
+// wraps both ErrNoOptimization and the ErrUnsupportedCapability refusal it was
+// settled by. Nothing is ever degraded to a plain check-sat and presented as an
+// optimum.
 //
 // # What an optimum is, and is not
 //

@@ -180,12 +180,13 @@ scripts use:
 | Nonlinear arithmetic | a product or quotient of two non-literal terms | yes | yes |
 | Mixed arithmetic | the `AUFLIRA`/`AUFNIRA` logics, for a query over `Int` and `Real` | yes | yes |
 | Non-standard logic | `(set-logic ALL)`, which datatypes and strings need | yes | yes |
-| Objective optimization | `(maximize …)`/`(minimize …)`, for a later objective command | yes | **no** — parse error |
+| Objective optimization | `(maximize …)`/`(minimize …)`, for `%optimize` | yes | **no** — parse error |
 | Objective priority | `:opt.priority`, a z3 extension | yes | **no** — answers `unsupported` |
 
 The two columns are what each solver answered when probed on this machine, not what its
-documentation claims. The last two rows are the only part of the subset cvc5 lacks, and no
-command emits them yet: every command that exists today works on either solver.
+documentation claims. The last two rows are the only part of the subset cvc5 lacks, and
+`%optimize` is the only command that needs them: on cvc5 it refuses by naming the extension
+the solver lacks, and every other command works on either solver.
 
 Every logic a script sets other than that non-standard `ALL` is a standard SMT-LIB 2.6 one
 ([the logic list](https://smt-lib.org/logics.shtml)): `QF_UF`, `QF_LIA`, `QF_NIA`, `QF_LRA`,

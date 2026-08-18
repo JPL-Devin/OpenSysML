@@ -103,6 +103,9 @@ type NoOptimizationError struct {
 
 	// Detail says how it turned out not to implement optimization.
 	Detail string
+
+	// Cause is the capability refusal this was settled by, when one settled it.
+	Cause error
 }
 
 // Error reports that the solver cannot optimize, naming what can.
@@ -114,8 +117,14 @@ func (e *NoOptimizationError) Error() string {
 	return msg + fmt.Sprintf("; install z3 or set %s to it", SolverEnv)
 }
 
-// Unwrap returns ErrNoOptimization.
-func (e *NoOptimizationError) Unwrap() error { return ErrNoOptimization }
+// Unwrap returns ErrNoOptimization, and the capability refusal behind it when the
+// capability model settled it.
+func (e *NoOptimizationError) Unwrap() []error {
+	if e.Cause != nil {
+		return []error{ErrNoOptimization, e.Cause}
+	}
+	return []error{ErrNoOptimization}
+}
 
 // OptimumError says which solver would not report an optimum it had found, and
 // how. It unwraps to both ErrNoOptimum and ErrSolverProcess, as the solver did
