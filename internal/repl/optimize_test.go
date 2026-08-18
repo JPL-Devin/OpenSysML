@@ -1,12 +1,32 @@
 package repl
 
 import (
+	"context"
 	"os"
 	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/solve"
 )
+
+// requireOptimizingSolver skips when the backend on PATH implements no
+// (minimize)/(maximize): cvc5 refuses them, which %optimize reports rather than
+// works around.
+func requireOptimizingSolver(t *testing.T) {
+	t.Helper()
+	requireSolver(t)
+	solver, err := solve.Discover()
+	if err != nil {
+		t.Fatalf("discovering the solver: %v", err)
+	}
+	caps, err := solver.Capabilities(context.Background())
+	if err != nil {
+		t.Fatalf("asking %s what it supports: %v", solver.Name, err)
+	}
+	if !caps.Supports(solve.CapOptimization) {
+		t.Skipf("%s implements no optimization: %s", solver.Name, caps.Detail(solve.CapOptimization))
+	}
+}
 
 // optimizeModel states the analysis cases %optimize is asked about: what each one
 // improves comes from the trade-study definition typing its objective.
@@ -95,7 +115,7 @@ func optimized(t *testing.T, s *Session, name string) (string, SolveReport) {
 }
 
 func TestOptimizeReportsTheLeastValue(t *testing.T) {
-	requireSolver(t)
+	requireOptimizingSolver(t)
 	s := checkSession(t, optimizeModel)
 	got, report := optimized(t, s, "Bounded")
 	wants(t, got, "✓ Analysis Bounded is optimized", "minimize smallest = `size`: 3", "Trade::Bounded::size = 3")
@@ -111,7 +131,7 @@ func TestOptimizeReportsTheLeastValue(t *testing.T) {
 // The objective's own condition bounds it from below, and the case's assumption
 // from above, so the greatest value comes from both together.
 func TestOptimizeReportsTheGreatestValue(t *testing.T) {
-	requireSolver(t)
+	requireOptimizingSolver(t)
 	s := checkSession(t, optimizeModel)
 	got, report := optimized(t, s, "Widest")
 	wants(t, got, "✓ Analysis Widest is optimized", "maximize largest = `size`: 9")
@@ -123,7 +143,7 @@ func TestOptimizeReportsTheGreatestValue(t *testing.T) {
 // An objective improving without limit has no optimum: that is its own status,
 // and no number is offered as one.
 func TestOptimizeReportsAnUnboundedObjective(t *testing.T) {
-	requireSolver(t)
+	requireOptimizingSolver(t)
 	s := checkSession(t, optimizeModel)
 	got, report := optimized(t, s, "Unbounded")
 	wants(t, got, "! Analysis Unbounded has no optimum", "no greatest value")
@@ -134,7 +154,7 @@ func TestOptimizeReportsAnUnboundedObjective(t *testing.T) {
 }
 
 func TestOptimizeReportsAnInfeasibleAnalysis(t *testing.T) {
-	requireSolver(t)
+	requireOptimizingSolver(t)
 	s := checkSession(t, optimizeModel)
 	got, report := optimized(t, s, "Impossible")
 	wants(t, got, "✗ Analysis Impossible has no values satisfying its conditions")
@@ -147,7 +167,7 @@ func TestOptimizeReportsAnInfeasibleAnalysis(t *testing.T) {
 // Objectives are improved lexicographically in declaration order: the least cost
 // first, then the greatest margin among the assignments achieving it.
 func TestOptimizeReportsObjectivesInDeclarationOrder(t *testing.T) {
-	requireSolver(t)
+	requireOptimizingSolver(t)
 	s := checkSession(t, optimizeModel)
 	got, report := optimized(t, s, "Ordered")
 	wants(t, got, "minimize cheapest = `cost`: 3", "maximize widest = `margin`: 3")
@@ -163,7 +183,7 @@ func TestOptimizeReportsObjectivesInDeclarationOrder(t *testing.T) {
 // A bound no assignment attains is never reported as a value: the report says
 // there is no optimum and offers only the feasible value found.
 func TestOptimizeReportsABoundThatIsNotAttained(t *testing.T) {
-	requireSolver(t)
+	requireOptimizingSolver(t)
 	s := checkSession(t, optimizeModel)
 	got, report := optimized(t, s, "OpenBound")
 	if report.Status != SolveNoOptimum {
@@ -291,7 +311,7 @@ func TestOptimizeIsListedInHelpAndCompletion(t *testing.T) {
 // %optimize is read-only exactly as %check is: it materializes nothing and leaves
 // a debugging session running, since it declares nothing.
 func TestOptimizeKeepsADebuggingSessionAndMaterializesNothing(t *testing.T) {
-	requireSolver(t)
+	requireOptimizingSolver(t)
 	s := checkSession(t, optimizeModel+`
 package Debug {
 	action def Walk {
