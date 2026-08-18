@@ -73,6 +73,14 @@ type Solver struct {
 
 	// Env are environment variables added to the process's own environment.
 	Env []string
+
+	// CoreBudget is how long shrinking an unsat core is given in total; zero
+	// means the SYSTEMICA_SMT_CORE_BUDGET override or DefaultCoreBudget.
+	CoreBudget time.Duration
+
+	// MaxCoreMembers is the largest core shrinking is attempted over; zero means
+	// DefaultMaxCoreMembers.
+	MaxCoreMembers int
 }
 
 // Assignment is one variable's value in a satisfying model, rendered in the
@@ -116,7 +124,12 @@ type Result struct {
 	// StatusSat and empty otherwise.
 	Model []Assignment
 
-	// Elapsed is how long the solver took.
+	// Core holds the conflicting assertions for a query Explain found unsat, and
+	// is nil for every other verdict and for a plain Solve.
+	Core *Core
+
+	// Elapsed is how long the solver took, for an Explain every round of
+	// shrinking the core included.
 	Elapsed time.Duration
 }
 
@@ -189,6 +202,13 @@ func Solve(ctx context.Context, q *Query) (*Result, error) {
 // Solve writes the query's script to the solver and reads its verdict, plus the
 // model on `sat`. Failing to obtain a verdict is an error, not `unknown`.
 func (s *Solver) Solve(ctx context.Context, q *Query) (*Result, error) {
+	return s.solve(ctx, q, func(sess *session) (*Result, error) { return sess.run(q) })
+}
+
+// solve runs one dialogue in a fresh solver process, turning the run's own
+// deadline into an `unknown` verdict. Every question asked of a solver, a
+// verdict or a core, goes through it.
+func (s *Solver) solve(ctx context.Context, q *Query, dialogue func(*session) (*Result, error)) (*Result, error) {
 	if q == nil {
 		return nil, fmt.Errorf("solve: no query to solve")
 	}
@@ -206,7 +226,7 @@ func (s *Solver) Solve(ctx context.Context, q *Query) (*Result, error) {
 	defer session.close()
 
 	started := time.Now()
-	result, err := session.run(q)
+	result, err := dialogue(session)
 	if err != nil {
 		if timedOut, terr := session.timedOut(ctx, runCtx); timedOut {
 			if terr != nil {
