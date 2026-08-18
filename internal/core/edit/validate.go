@@ -94,7 +94,8 @@ func (m Model) validate(content []byte) error {
 	idx.AddDocument(sf.Name(), root)
 	// The parse diagnostics are handed to the analysis, so a model that already
 	// had syntax errors is not judged by tiers its own parse never reached.
-	before := append(errorsOnly(m.SemDiags), errorsOnly(originalParse)...)
+	before := errorsOnly(m.baseline(editedParse))
+	before = append(before, errorsOnly(originalParse)...)
 	after := errorsOnly(passes.Analyze(sf.Name(), root, editedParse, idx))
 	if introduced := introduced(before, after); len(introduced) > 0 {
 		return &Error{
@@ -106,6 +107,23 @@ func (m Model) validate(content []byte) error {
 		}
 	}
 	return nil
+}
+
+// baseline is what the original was already wrong about, judged at the tiers the
+// edited notation is judged at. A model that did not parse was never analyzed —
+// the service analyzes a clean parse only — so its stored diagnostics say
+// nothing about the tiers an edit that repairs the syntax reaches for the first
+// time; the original is analyzed here instead, under the edited model's gate, so
+// that both are compared at one tier.
+func (m Model) baseline(gate []passes.Diagnostic) []passes.Diagnostic {
+	if len(m.ParseDiags) == 0 {
+		return m.SemDiags
+	}
+	p := parser.New(m.Source)
+	root := p.ParseFile()
+	idx := m.NewIndex()
+	idx.AddDocument(m.Source.Name(), root)
+	return passes.Analyze(m.Source.Name(), root, gate, idx)
 }
 
 // parseDiagnostics presents parse diagnostics as pass diagnostics, which is how

@@ -469,6 +469,25 @@ func TestSyntaxErrorElsewhereDoesNotRefuseAnEdit(t *testing.T) {
 	}
 }
 
+// An edit that happens to repair a model's only syntax error is not refused for
+// the errors the model already had: a parse failure means the original was never
+// analyzed, so its baseline is analyzed here rather than assumed clean.
+func TestEditRepairingTheOnlySyntaxErrorIsNotRefused(t *testing.T) {
+	m := loadContent(t, "broken.sysml",
+		"package Demo {\n\tattribute y : Missing::Type;\n\tattribute z = 1 + ;\n}\n")
+	if len(m.ParseDiags) == 0 {
+		t.Fatal("fixture was expected to carry a syntax error")
+	}
+
+	res := applyOne(t, m, SetValue("Demo::z", "2"))
+	if !strings.Contains(string(res.Content), "attribute z = 2;") {
+		t.Fatalf("value not set:\n%s", res.Content)
+	}
+	if strings.Contains(string(res.Content), "Missing::Type = ") {
+		t.Fatalf("the wrong declaration was edited:\n%s", res.Content)
+	}
+}
+
 func TestSemanticValidationSkippedWithoutIndexSource(t *testing.T) {
 	m := load(t, "spacecraft.sysml")
 	requireClean(t, m)
