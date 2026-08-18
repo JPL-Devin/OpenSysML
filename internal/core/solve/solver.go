@@ -121,8 +121,18 @@ type Result struct {
 	Reason string
 
 	// Model is the satisfying assignment, one entry per declared variable, for
-	// StatusSat and empty otherwise.
+	// StatusSat and empty otherwise. A solver may answer with any model of many:
+	// it is one witness, not a canonical answer.
 	Model []Assignment
+
+	// Solutions are the distinct assignments an enumeration reported, in the
+	// order the solver produced them, over the variables enumerated rather than
+	// every declared one; nil for a plain solve.
+	Solutions [][]Assignment
+
+	// Truncated reports that an enumeration stopped before it had shown there is
+	// no further solution: it reached its bound, or the solver stopped deciding.
+	Truncated bool
 
 	// Core holds the conflicting assertions for a query Explain found unsat, and
 	// is nil for every other verdict and for a plain Solve.
@@ -296,7 +306,7 @@ func (s *session) run(q *Query) (*Result, error) {
 	result := &Result{Status: status}
 	switch status {
 	case StatusSat:
-		model, err := s.model(q)
+		model, err := s.values(q.Vars)
 		if err != nil {
 			return nil, err
 		}
@@ -337,14 +347,14 @@ func (s *session) verdict() (Status, error) {
 		"it answered "+quoteReply(reply)+" rather than sat, unsat or unknown", s.stderrText(), nil)
 }
 
-// model asks for the value of every declared variable and renders each one in
-// the notation's own terms.
-func (s *session) model(q *Query) ([]Assignment, error) {
-	if len(q.Vars) == 0 {
+// values asks for the value of each variable given and renders each one in the
+// notation's own terms.
+func (s *session) values(vars []*Var) ([]Assignment, error) {
+	if len(vars) == 0 {
 		return nil, nil
 	}
-	names := make([]string, 0, len(q.Vars))
-	for _, v := range q.Vars {
+	names := make([]string, 0, len(vars))
+	for _, v := range vars {
 		names = append(names, smtSymbol(v.Name))
 	}
 	if err := s.send("(get-value (" + strings.Join(names, " ") + "))\n"); err != nil {
@@ -357,12 +367,12 @@ func (s *session) model(q *Query) ([]Assignment, error) {
 	if msg, ok := reply.isError(); ok {
 		return nil, s.solver.processError("get-value", "it would not report a model: "+msg, s.stderrText(), nil)
 	}
-	values, err := s.pairs(reply, q)
+	values, err := s.pairs(reply, vars)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]Assignment, 0, len(q.Vars))
-	for _, v := range q.Vars {
+	out := make([]Assignment, 0, len(vars))
+	for _, v := range vars {
 		value, ok := values[v.Name]
 		if !ok {
 			return nil, s.solver.processError("get-value",
@@ -374,13 +384,13 @@ func (s *session) model(q *Query) ([]Assignment, error) {
 }
 
 // pairs reads the `((var value) …)` reply into a value per variable name.
-func (s *session) pairs(reply sexpr, q *Query) (map[string]sexpr, error) {
+func (s *session) pairs(reply sexpr, vars []*Var) (map[string]sexpr, error) {
 	if !reply.IsList {
 		return nil, s.solver.processError("get-value",
 			"its model is not a list of assignments: "+quoteReply(reply), s.stderrText(), nil)
 	}
-	declared := make(map[string]bool, len(q.Vars))
-	for _, v := range q.Vars {
+	declared := make(map[string]bool, len(vars))
+	for _, v := range vars {
 		declared[v.Name] = true
 	}
 	out := make(map[string]sexpr, len(reply.List))
