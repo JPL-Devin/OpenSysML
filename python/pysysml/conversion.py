@@ -123,12 +123,15 @@ class Conversion:
     def write(self, path):
         """Write the converted model to ``path``.
 
+        The bytes written are the ones the service returned: ``newline=""`` turns
+        off the translation text mode would otherwise apply to every line ending.
+
         Args:
             path (str): File to write, created or truncated.
 
         Returns:
             str: The path written, for chaining.
         """
-        with open(path, "w", encoding="utf-8") as handle:
+        with open(path, "w", encoding="utf-8", newline="") as handle:
             handle.write(self.content)
         return path

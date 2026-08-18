@@ -24,6 +24,38 @@ var ErrNoSolver = errors.New("no SMT solver found")
 // crashed, failed, or replied unintelligibly. Never a verdict, not even `unknown`.
 var ErrSolverProcess = errors.New("the SMT solver did not answer")
 
+// ErrNoCore is returned when a solver answered unsat but would not report which
+// assertions conflict, or named assertions the query never asserted. No core is
+// invented in its place.
+var ErrNoCore = errors.New("the SMT solver did not report an unsat core")
+
+// CoreError says which solver would not explain its unsat verdict and how. It
+// unwraps to both ErrNoCore and ErrSolverProcess, as the solver did not answer
+// what it was asked.
+type CoreError struct {
+	// Solver is the executable that was run.
+	Solver string
+
+	// Detail says what it answered instead of a core.
+	Detail string
+
+	// Stderr is what the solver wrote on standard error, trimmed.
+	Stderr string
+}
+
+// Error reports the failure, naming the solver and what it answered.
+func (e *CoreError) Error() string {
+	msg := fmt.Sprintf("%s: %s answered unsat but %s", ErrNoCore, e.Solver, e.Detail)
+	if e.Stderr != "" {
+		msg += ": " + e.Stderr
+	}
+	return msg
+}
+
+// Unwrap returns both kinds this failure is, so either is testable with
+// errors.Is.
+func (e *CoreError) Unwrap() []error { return []error{ErrNoCore, ErrSolverProcess} }
+
 // NoSolverError names the candidates looked for and what to install. It unwraps
 // to ErrNoSolver.
 type NoSolverError struct {

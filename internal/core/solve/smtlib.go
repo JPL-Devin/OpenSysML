@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"strconv"
 	"strings"
 )
 
@@ -12,7 +13,7 @@ import (
 // `check-sat`. Output is deterministic, so it compares byte for byte.
 func Script(q *Query) string {
 	var b strings.Builder
-	writeScript(&b, q)
+	writeScript(&b, q, scriptOptions{})
 	return b.String()
 }
 
@@ -22,12 +23,69 @@ func Write(w io.Writer, q *Query) error {
 	return err
 }
 
-// writeScript writes the script itself; Script and Write share it.
-func writeScript(b *strings.Builder, q *Query) {
+// CoreScript renders the query as a core-producing script: every assertion
+// labelled, unsat cores turned on, and `get-unsat-core` asked after
+// `check-sat`, so running the script by hand answers what the driver asks.
+// include, when non-nil, asserts only the assertions at those indices, which is
+// how a core is reduced without retranslating.
+func CoreScript(q *Query, include []int) string {
+	return coreScript(q, include, true)
+}
+
+// coreScript writes the labelled script, asking for the core only when request
+// is set: the driver asks for it itself once the verdict is unsat, so a solver
+// is never asked for a core it has none of.
+func coreScript(q *Query, include []int, request bool) string {
+	var b strings.Builder
+	writeScript(&b, q, scriptOptions{labelled: true, core: true, request: request, include: indexSet(include)})
+	return b.String()
+}
+
+// scriptOptions selects the form of script written. The zero value is the
+// plain script, whose bytes no core support perturbs.
+type scriptOptions struct {
+	// labelled names each assertion, which is what a core can name back.
+	labelled bool
+
+	// core turns unsat cores on.
+	core bool
+
+	// request asks for the core after `check-sat`.
+	request bool
+
+	// include, when non-nil, holds the indices of the assertions to assert.
+	include map[int]bool
+}
+
+// asserts reports whether the assertion at index i is written.
+func (o scriptOptions) asserts(i int) bool {
+	return o.include == nil || o.include[i]
+}
+
+// indexSet is the set of indices, nil for a nil slice so "every assertion" and
+// "no assertion" stay distinct.
+func indexSet(include []int) map[int]bool {
+	if include == nil {
+		return nil
+	}
+	out := make(map[int]bool, len(include))
+	for _, i := range include {
+		out[i] = true
+	}
+	return out
+}
+
+// writeScript writes the script itself; every form of script shares it.
+func writeScript(b *strings.Builder, q *Query, opts scriptOptions) {
 	fmt.Fprintf(b, "; OpenSysML SMT-LIB2 translation of %s %s\n", q.Kind, comment(q.Element))
 	b.WriteString("; the runtime evaluator remains normative; solving is an optional extension\n")
 	if q.Negated {
 		b.WriteString("; the element asserts that its required conditions do not all hold\n")
+	}
+	if opts.core {
+		b.WriteString("; each assertion is named, so an unsat core names the conditions that conflict\n")
+		// The option must precede set-logic, as a solver decides then what to track.
+		b.WriteString("(set-option :produce-unsat-cores true)\n")
 	}
 	fmt.Fprintf(b, "(set-logic %s)\n", q.Logic())
 
@@ -45,12 +103,46 @@ func writeScript(b *strings.Builder, q *Query) {
 		fmt.Fprintf(b, "(declare-const %s %s)\n", smtSymbol(v.Name), v.Sort.String())
 	}
 
-	for _, a := range q.Assertions {
+	for i, a := range q.Assertions {
+		if !opts.asserts(i) {
+			continue
+		}
 		b.WriteString("; " + assertionComment(a.From) + "\n")
+		if opts.labelled {
+			fmt.Fprintf(b, "(assert (! %s :named %s))\n", writeTerm(a.Term), CoreLabel(i))
+			continue
+		}
 		fmt.Fprintf(b, "(assert %s)\n", writeTerm(a.Term))
 	}
 
 	b.WriteString("(check-sat)\n")
+	if opts.request {
+		b.WriteString("(get-unsat-core)\n")
+	}
+}
+
+// coreLabelPrefix starts every assertion label. No name from a model is written
+// with it, so a label cannot collide with a declared symbol.
+const coreLabelPrefix = "sy!a"
+
+// CoreLabel names the assertion at index i in a labelled script. The index is
+// the label, so a label a solver returns reads back the Assertion itself, with
+// the provenance it carries, rather than a table kept beside the query.
+func CoreLabel(i int) string {
+	return coreLabelPrefix + strconv.Itoa(i)
+}
+
+// coreLabelIndex reads a label back to the assertion index it names.
+func coreLabelIndex(label string) (int, bool) {
+	rest, ok := strings.CutPrefix(label, coreLabelPrefix)
+	if !ok {
+		return 0, false
+	}
+	i, err := strconv.Atoi(rest)
+	if err != nil || i < 0 || strconv.Itoa(i) != rest {
+		return 0, false
+	}
+	return i, true
 }
 
 // varComment describes a declared variable: the feature it stands for, the

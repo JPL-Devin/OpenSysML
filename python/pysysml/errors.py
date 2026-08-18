@@ -240,6 +240,78 @@ class SymbolNotFoundError(PySysMLError, KeyError):
         return self.args[0]
 
 
+class EditError(PySysMLError):
+    """Raised when an edit to a model was refused, and nothing was changed.
+
+    The subclasses name the refusals a caller acts on differently. An edit is
+    never a silent no-op: every refusal raises one of these.
+
+    Attributes:
+        message (str): Why the edit was refused, in the service's wording
+        failure (str): Refusal kind, as the wire enum names it, e.g.
+            ``'EDIT_FAILURE_UNKNOWN_TARGET'``
+        diagnostics (list): Diagnostic objects behind the refusal — the parse
+            errors of an unreadable new value, or the errors the edited notation
+            was found to have
+        referring_elements (list[str]): For a refused rename, where the
+            references it would have broken are made
+    """
+
+    def __init__(self, message, failure="", diagnostics=None, referring_elements=None):
+        super().__init__(message)
+        self.message = message
+        self.failure = failure
+        self.diagnostics = diagnostics or []
+        self.referring_elements = list(referring_elements or [])
+
+
+class NoEditsError(EditError, builtins.ValueError):
+    """Raised when an editor with no operations was applied.
+
+    Applying nothing is a mistake in the caller, not an empty write: the model
+    is not re-parsed and no file is written.
+    """
+
+
+class EditTargetError(EditError, builtins.LookupError):
+    """Raised when the element an edit names cannot carry that edit.
+
+    Covers a target the model does not declare, one declared outside this
+    model's own source, an ambiguous one, a target with no value to set, and one
+    with no declared name to rename.
+    """
+
+
+class InvalidEditError(EditError, builtins.ValueError):
+    """Raised when the new value or name itself cannot be read.
+
+    A value that does not parse as one expression, or a name that does not lex as
+    an identifier, is refused before the model is touched.
+    """
+
+
+class RenameReferencedError(EditError):
+    """Raised when a rename would break references to the renamed element.
+
+    Renaming a declaration rewrites its name token only, so a referenced element
+    cannot be renamed this way. ``referring_elements`` says where the references
+    are made.
+    """
+
+
+class OverlappingEditsError(EditError, builtins.ValueError):
+    """Raised when two operations would edit the same bytes of the source."""
+
+
+class EditResultError(EditError):
+    """Raised when the edited notation could not be read back.
+
+    The service re-parses and re-analyses what it edited and returns no content
+    if the edit introduced an error, so an unreadable model is never written.
+    ``diagnostics`` says what the edit broke.
+    """
+
+
 class ServiceError(PySysMLError):
     """Raised when the service fails a call, translated from its gRPC status.
 
