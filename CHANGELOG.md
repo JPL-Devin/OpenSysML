@@ -93,6 +93,11 @@ artifacts they describe really were called that.
 - The rendering itself is **tool-defined output**: SysML v2 §10.2 leaves rendering to the tool, so
   the notation is what is supported and the artifact is OpenSysML's own — recorded as such in
   [docs/project/spec-compliance.md](docs/project/spec-compliance.md).
+- **An element reached twice is exposed and rendered once.** A wildcard or filtered `expose` walks
+  the document's own scope tree and the global index, which build a symbol each for one
+  declaration, so `expose P::*` and `expose P::**[@T]` used to show an element as many times as it
+  was reached. The declaration a symbol was built from is now its identity, so exposure, filtering,
+  rename and reference lookup all agree on when two symbols are one element.
 
 ### An object runs the behavior its type exhibits
 
@@ -436,6 +441,10 @@ with a build that has none reporting that rather than a verdict.
   Flexo's `Namespaces.kt`, which is an addressing claim, not a demonstrated load.
 - The README capability table splits notation save (complete) from RDF conversion
   (experimental), and the guide, CLI and REPL references, Python guide and roadmap say the same.
+- Two example models come with a walkthrough of the commands that exercise them:
+  [`examples/solver-demo.sysml`](examples/solver-demo.sysml) for `%check`, `%explain`, `%solve`,
+  `%configure` and `%optimize`, and [`examples/views-demo.sysml`](examples/views-demo.sysml) for
+  `%view` and `%render` across the five rendering kinds and the text, Mermaid and Markdown forms.
 
 ### Release process
 

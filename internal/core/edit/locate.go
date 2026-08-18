@@ -208,7 +208,7 @@ func (m Model) nameTaken(sym *symbols.Symbol, newName string) (string, bool) {
 		return "", false
 	}
 	other, ok := m.resolver().LookupNameExcluding(sym.OwnerScope, newName, sym.Decl)
-	if !ok || sameSymbol(other, sym) {
+	if !ok || symbols.SameElement(other, sym) {
 		return "", false
 	}
 	if fqn := m.Index.GetFQN(other); fqn != "" {
@@ -275,7 +275,7 @@ func (m Model) referringTo(sym *symbols.Symbol, nameSpan source.Span) []string {
 				continue
 			}
 			seg, ok := r.PartSymbol(ref.QN, i)
-			if !ok || !sameSymbol(seg, sym) {
+			if !ok || !symbols.SameElement(seg, sym) {
 				continue
 			}
 			site := referenceSite(r, ref, part.Text)
@@ -296,19 +296,4 @@ func referenceSite(r *resolve.Resolver, ref resolve.Reference, text string) stri
 		return fqn
 	}
 	return text
-}
-
-// sameSymbol compares two symbols by identity, falling back to the declaration
-// they were built from: resolution inside a document and through the index yield
-// different pointers for one declaration.
-func sameSymbol(a, b *symbols.Symbol) bool {
-	switch {
-	case a == nil || b == nil:
-		return false
-	case a == b:
-		return true
-	case a.DocName == "" || a.DocName != b.DocName:
-		return false
-	}
-	return a.DeclSpan == b.DeclSpan
 }

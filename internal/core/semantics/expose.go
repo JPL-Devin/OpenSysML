@@ -23,7 +23,7 @@ func (m *Model) ExposedElements(view *symbols.Symbol) ([]*symbols.Symbol, error)
 	if view == nil || !IsView(view) {
 		return nil, ErrNotAView
 	}
-	out := &exposedSet{seen: map[*symbols.Symbol]bool{}}
+	out := &exposedSet{seen: map[symbols.ElementKey]bool{}}
 	m.addExposed(view, out)
 	for _, super := range m.AllSupertypes(view) {
 		if IsView(super) {
@@ -97,16 +97,22 @@ func exposesIn(decl ast.Node) []*ast.Import {
 	return out
 }
 
-// exposedSet collects exposed elements in the order they were reached, once each.
+// exposedSet collects exposed elements in the order they were reached, once each
+// by declaration: two exposes, or two routes to one member, name one element
+// however many symbols were built for it.
 type exposedSet struct {
 	elems []*symbols.Symbol
-	seen  map[*symbols.Symbol]bool
+	seen  map[symbols.ElementKey]bool
 }
 
 func (s *exposedSet) add(sym *symbols.Symbol) {
-	if sym == nil || s.seen[sym] {
+	if sym == nil {
 		return
 	}
-	s.seen[sym] = true
+	key := symbols.KeyOf(sym)
+	if s.seen[key] {
+		return
+	}
+	s.seen[key] = true
 	s.elems = append(s.elems, sym)
 }

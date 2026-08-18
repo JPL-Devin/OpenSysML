@@ -39,7 +39,7 @@ func (r *Renderer) nestedViewNodes(view *symbols.Symbol, ids *nodeIDs, rendered 
 		node := &Node{ID: ids.take(), Kind: declKind(sub), Name: r.notationName(sub), Detail: declType(sub)}
 		exposed, err := r.model.ExposedElements(sub)
 		if err == nil {
-			for _, elem := range dedupe(exposed) {
+			for _, elem := range exposed {
 				node.Children = append(node.Children, r.treeNode(elem, ids, map[*symbols.Symbol]bool{}, 0, true))
 			}
 		}

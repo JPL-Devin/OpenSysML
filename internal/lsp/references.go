@@ -46,7 +46,7 @@ func (s *Server) References(ctx context.Context, params *protocol.ReferenceParam
 		}
 		for _, ref := range collectRefs(refDoc.AST, refDoc.Scope) {
 			for i, seg := range s.ws.ResolveReferenceSegmentsInDoc(docName, ref) {
-				if sameSymbol(seg, target) {
+				if symbols.SameElement(seg, target) {
 					add(docName, refDoc.Content, ref.QN.Parts[i].Span)
 				}
 			}

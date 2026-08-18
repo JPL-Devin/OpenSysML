@@ -63,6 +63,18 @@ func (k Kind) Supported() bool {
 	return false
 }
 
+// article is the indefinite article the kind reads with, so a message says "an
+// action rendering" rather than "a action rendering".
+func (k Kind) article() string {
+	switch {
+	case k == "":
+		return "a"
+	case strings.ContainsRune("aeiou", rune(k[0])):
+		return "an"
+	}
+	return "a"
+}
+
 // ErrUnsupportedKind is the rendering kind a view states that this package does
 // not produce. UnsupportedKindError wraps it, so a caller can test for it
 // without knowing which kind was asked for.
@@ -206,7 +218,6 @@ func (r *Renderer) Render(view *symbols.Symbol) (*Rendering, error) {
 	if err != nil {
 		return nil, err
 	}
-	exposed = dedupe(exposed)
 	out := &Rendering{View: r.notationName(view), Kind: kind, Stated: stated}
 	switch kind {
 	case KindTree:
@@ -269,22 +280,6 @@ func (r *Renderer) KindOf(view *symbols.Symbol) (Kind, string, error) {
 		return definitionKind, definitionStated, nil
 	}
 	return KindTree, "", nil
-}
-
-// dedupe drops the elements an exposed set names more than once — a filtered
-// recursive expose inherited from a view definition can — so nothing is
-// rendered twice.
-func dedupe(syms []*symbols.Symbol) []*symbols.Symbol {
-	out := make([]*symbols.Symbol, 0, len(syms))
-	seen := map[*symbols.Symbol]bool{}
-	for _, sym := range syms {
-		if sym == nil || seen[sym] {
-			continue
-		}
-		seen[sym] = true
-		out = append(out, sym)
-	}
-	return out
 }
 
 // remedyFor is what to do instead of a rendering kind this package does not
