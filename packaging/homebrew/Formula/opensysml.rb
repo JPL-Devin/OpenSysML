@@ -21,6 +21,10 @@ class Opensysml < Formula
   homepage "https://github.com/Open-MBEE/OpenSysML"
   license "Apache-2.0"
 
+  # z3 makes the experimental %check/%explain solver path work out of the box;
+  # the solver stays optional at runtime, discovered on PATH or via OPENSYSML_SMT.
+  depends_on "z3"
+
   on_macos do
     on_arm do
       url "https://github.com/Open-MBEE/OpenSysML/releases/download/__TAG__/opensysml-darwin-arm64.tar.gz"
@@ -55,5 +59,9 @@ class Opensysml < Formula
 
     # Evaluate an expression non-interactively: exercises lexer, parser, and runtime.
     assert_match "= 8", shell_output("#{bin}/sysml -e '5 + 3'")
+
+    # The z3 dependency is the solver %check/%explain discover on PATH: it must
+    # be there and answer SMT-LIB2 on standard input.
+    assert_match "sat", pipe_output("z3 -smt2 -in", "(declare-const x Int)\n(assert (> x 5))\n(check-sat)\n", 0)
   end
 end
