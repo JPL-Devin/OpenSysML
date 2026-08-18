@@ -453,16 +453,17 @@ func testBindingNestedContainerIsNotACycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("instantiate: %v", err)
 	}
-	if _, err := inst.GetFeatureValue(ctx, "child"); err != nil {
-		t.Fatalf("GetFeatureValue(child) = %v, want no binding cycle", err)
-	}
 	childValue, err := inst.GetFeatureValue(ctx, "child")
 	if err != nil {
-		t.Fatalf("GetFeatureValue(child): %v", err)
+		t.Fatalf("GetFeatureValue(child) = %v, want no binding cycle", err)
 	}
-	child, ok := ctx.Instance(childValue.Value.Instance)
+	id, isObject := childValue.HeldValue().Object()
+	if !isObject {
+		t.Fatalf("child holds %s, want an object", childValue.HeldValue().Kind)
+	}
+	child, ok := ctx.Instance(id)
 	if !ok {
-		t.Fatalf("child instance %d is not materialized", childValue.Value.Instance)
+		t.Fatalf("child instance %d is not materialized", id)
 	}
 	b, err := child.GetFeatureValue(ctx, "b")
 	if err != nil {
