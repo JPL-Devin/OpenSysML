@@ -40,13 +40,21 @@ type resolution struct {
 	ok  bool
 }
 
+type featureChainKey struct {
+	scope *symbols.Scope
+	node  *ast.FeatureChainExpr
+}
+
 // Resolver performs lazy name resolution over a symbol index, memoizing results
 // keyed by the reference AST node and collecting diagnostics.
 type Resolver struct {
 	idx       *symbols.Index
 	memo      map[ast.Node]resolution
 	resolving map[ast.Node]bool // cycle detection
-	parts     map[*ast.QualifiedName][]*symbols.Symbol
+	// featureChains are resolved per scope because a chain's leading operand
+	// can resolve differently in different document scopes.
+	featureChains map[featureChainKey]resolution
+	parts         map[*ast.QualifiedName][]*symbols.Symbol
 	// endpoints are the vertices transition endpoints resolve to, memoized per
 	// name node: lowering consumes what this tier resolved (see ResolveEndpoint).
 	endpoints map[*ast.QualifiedName]resolution
@@ -86,15 +94,16 @@ type Resolver struct {
 // New creates a resolver over the given index.
 func New(idx *symbols.Index) *Resolver {
 	return &Resolver{
-		idx:       idx,
-		memo:      map[ast.Node]resolution{},
-		resolving: map[ast.Node]bool{},
-		parts:     map[*ast.QualifiedName][]*symbols.Symbol{},
-		endpoints: map[*ast.QualifiedName]resolution{},
-		imports:   map[ast.Node][]*ast.Import{},
-		naming:    map[*symbols.Symbol]bool{},
-		nsFilters: map[*symbols.Scope][]symbols.ElementFilter{},
-		payloads:  map[*symbols.Scope]map[string]*symbols.Symbol{},
+		idx:           idx,
+		memo:          map[ast.Node]resolution{},
+		resolving:     map[ast.Node]bool{},
+		featureChains: map[featureChainKey]resolution{},
+		parts:         map[*ast.QualifiedName][]*symbols.Symbol{},
+		endpoints:     map[*ast.QualifiedName]resolution{},
+		imports:       map[ast.Node][]*ast.Import{},
+		naming:        map[*symbols.Symbol]bool{},
+		nsFilters:     map[*symbols.Scope][]symbols.ElementFilter{},
+		payloads:      map[*symbols.Scope]map[string]*symbols.Symbol{},
 
 		suggestions: map[suggestKey][]string{},
 		suggesting:  map[suggestKey]bool{},
@@ -262,6 +271,14 @@ func (r *Resolver) memoize(at ast.Node, res resolution) {
 		return
 	}
 	r.memo[at] = res
+}
+
+// memoizeFeatureChain caches a chain result unless condition or quiet rules forbid it.
+func (r *Resolver) memoizeFeatureChain(scope *symbols.Scope, fc *ast.FeatureChainExpr, res resolution) {
+	if fc == nil || r.inCondition > 0 || (!res.ok && r.quiet > 0) {
+		return
+	}
+	r.featureChains[featureChainKey{scope: scope, node: fc}] = res
 }
 
 // InCondition runs the resolution of a filter condition's own names, which its
