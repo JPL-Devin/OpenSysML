@@ -65,7 +65,9 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("calc_output_valued_and_assigned", testCalcOutputValuedAndAssigned)
 	t.Run("calc_output_assigned_twice", testCalcOutputAssignedTwice)
 	t.Run("binding_conflict", testBindingConflict)
+	t.Run("binding_single_valueless", testBindingSingleValueless)
 	t.Run("binding_cycle", testBindingCycle)
+	t.Run("binding_three_binding_ring", testBindingThreeBindingRing)
 	t.Run("binding_cycle_with_value", testBindingCycleWithValue)
 	t.Run("binding_unrelated_expression_does_not_poison_read", testBindingUnrelatedExpressionDoesNotPoisonRead)
 	t.Run("binding_expression_end_cannot_receive", testBindingExpressionEndCannotReceive)
@@ -246,6 +248,60 @@ func testBindingCycle(t *testing.T) {
 	}
 }
 
+func testBindingSingleValueless(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<binding-single-valueless>", parseAndBuild(t, `package P {
+		part def Sys {
+			attribute a;
+			attribute b;
+			binding bind b = a;
+		}
+	}`))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	for _, name := range []string{"a", "b"} {
+		fv, err := inst.GetFeatureValue(ctx, name)
+		if err != nil {
+			t.Fatalf("GetFeatureValue(%s): %v", name, err)
+		}
+		if got := fv.HeldValue(); got.Kind != ValInvalid {
+			t.Errorf("%s = %#v, want an unknown value", name, got)
+		}
+	}
+	sym := oneSymbol(t, idx, "P::Sys")
+	expr := parser.New(source.New("<binding-single-valueless-eval>", []byte("b"))).ParseExpression()
+	if _, err := ctx.EvalWithScopeOn(expr, sym.Scope, inst); !errors.Is(err, ErrUninitializedFeatureValue) {
+		t.Fatalf("evaluating b = %v, want ErrUninitializedFeatureValue", err)
+	}
+}
+
+func testBindingThreeBindingRing(t *testing.T) {
+	idx, _, ctx := buildRuntime(t, "<binding-three-ring>", parseAndBuild(t, `package P {
+		part def Sys {
+			attribute a;
+			attribute b;
+			attribute c;
+			binding bind a = b;
+			binding bind b = c;
+			binding bind c = a;
+		}
+	}`))
+	inst, err := ctx.Instantiate(oneSymbol(t, idx, "P::Sys"))
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	_, err = inst.GetFeatureValue(ctx, "a")
+	if !errors.Is(err, ErrBindingCycle) {
+		t.Fatalf("GetFeatureValue(a) = %v, want ErrBindingCycle", err)
+	}
+	for _, name := range []string{"a", "c"} {
+		if !strings.Contains(err.Error(), name) {
+			t.Errorf("cycle error %q does not name %s", err, name)
+		}
+	}
+}
+
 func testBindingCycleWithValue(t *testing.T) {
 	idx, _, ctx := buildRuntime(t, "<binding-cycle-value>", parseAndBuild(t, `package P {
 		part def Sys {
@@ -333,8 +389,10 @@ func testBindingResultTracksLaterMutation(t *testing.T) {
 		if err != nil {
 			t.Fatalf("instantiate: %v", err)
 		}
-		if _, err := inst.GetFeatureValue(ctx, "b"); !errors.Is(err, ErrBindingCycle) {
-			t.Fatalf("initial GetFeatureValue(b) = %v, want ErrBindingCycle", err)
+		if fv, err := inst.GetFeatureValue(ctx, "b"); err != nil {
+			t.Fatalf("initial GetFeatureValue(b): %v", err)
+		} else if got := fv.HeldValue(); got.Kind != ValInvalid {
+			t.Fatalf("initial b = %#v, want an unknown value", got)
 		}
 		if err := ctx.assignBindingValue(inst, inst.FeatureValues["a"], "a", constInt(9)); err != nil {
 			t.Fatalf("assign a: %v", err)

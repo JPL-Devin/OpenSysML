@@ -77,6 +77,7 @@ type Context struct {
 	// resolvingBindings guards binding endpoint resolution for one instance
 	// feature, so a valueless binding cycle is reported rather than recursed.
 	resolvingBindings map[featureValueRef]bool
+	bindingOwners     map[featureValueRef]*ast.Usage
 	bindingFeatures   map[*symbols.Symbol]map[string][]lower.Binding
 
 	// trace records evaluation, nil when not tracing.
@@ -169,6 +170,7 @@ func NewContext(model *semantics.Model, resolver *resolve.Resolver, maxSteps int
 		bindingIR:               make(map[*symbols.Symbol][]lower.Binding),
 		derivingFeatureValues:   make(map[featureValueRef]bool),
 		resolvingBindings:       make(map[featureValueRef]bool),
+		bindingOwners:           make(map[featureValueRef]*ast.Usage),
 		bindingFeatures:         make(map[*symbols.Symbol]map[string][]lower.Binding),
 		collectingSubsets:       make(map[featureValueRef]bool),
 		sources:                 make(map[string]*source.SourceFile),
