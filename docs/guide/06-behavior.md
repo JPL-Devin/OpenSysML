@@ -171,7 +171,9 @@ parked at an `accept` is quiescent too, and a message a sibling object sends lat
 behaviors alone: identity, current state and the values the behaviors wrote all survive the rebuilt
 analysis. Re-declaring what the object runs — its type's features or the body of a machine or action
 it runs — makes it a different object, so it is dropped with a reported reason instead of resuming a
-new body on values the old one wrote. Re-run `%instantiate` to start from the edited model.
+new body on values the old one wrote. Re-run `%instantiate` to start from the edited model — a
+carried-over object runs the execution it started, so it exchanges no message with an object
+materialized after the edit.
 
 **Invoking an operation.** `%invoke <object> <op> [<p>=<expr>]` runs an action the object's type
 owns, performed by that object:
