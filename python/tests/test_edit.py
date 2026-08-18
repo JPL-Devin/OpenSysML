@@ -17,7 +17,8 @@ import pytest
 
 from pysysml.capabilities import CAPABILITY_APPLY_EDITS, MissingCapabilityError
 from pysysml.connection import Connection
-from pysysml.conversion import Conversion
+from pysysml.conversion import Conversion, FORMAT_SYSML
+from pysysml.edit import EditResult
 from pysysml.errors import (
     EditError,
     EditResultError,
@@ -233,6 +234,18 @@ def test_the_result_is_a_conversion(fake_service, tmp_path):
         "Demo::SC::unitMass", "old", "new",
     )
     assert (applied.offset, applied.length) == (7, 3)
+
+
+def test_saving_writes_the_service_bytes_verbatim(tmp_path):
+    """Line endings are not translated: the file is what the service returned."""
+    out = tmp_path / "crlf.sysml"
+    content = "package Demo {\r\n\tattribute x = 1;\r\n}\r\n"
+    EditResult(
+        content=content,
+        from_format=FORMAT_SYSML,
+        to_format=FORMAT_SYSML,
+    ).save(str(out))
+    assert out.read_bytes() == content.encode("utf-8")
 
 
 def test_an_empty_editor_is_not_applied(fake_service):
