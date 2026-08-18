@@ -3824,7 +3824,7 @@ Things that look like bugs but are not, and traps:
   the subset`) and an **unresolved reference** (→ `it resolves to nothing`).
 - **z3 decides nonlinear reals**, so `x*y == 7.5 and x*x + y*y == 2.0` comes back `unsat` with a
   real core, not `unknown`. The `? … is undecided, so there is nothing to explain` branch is hard
-  to reach on purpose; use `SYSTEMICA_SMT_CORE_BUDGET` (a tiny value) if you need to exercise the
+  to reach on purpose; use `OPENSYSML_SMT_CORE_BUDGET` (a tiny value) if you need to exercise the
   non-minimal `Note` wording instead.
 - **Header durations include core-reduction time** (since 04d0c4b), so an unsat `%explain` reads
   ~3x the matching `%check` (24–30ms vs 7ms). Never assert exact milliseconds.
@@ -3835,5 +3835,5 @@ Things that look like bugs but are not, and traps:
 
 The no-solver path is the one case needing a special launch: `mkdir -p /tmp/nosolver` and run
 `env PATH=/tmp/nosolver ./bin/sysml`, which yields `error: no SMT solver found: install z3 … or set
-SYSTEMICA_SMT …; looked for [z3 cvc5] on PATH`. Note `Discover()` is consulted per command, so this
+OPENSYSML_SMT …; looked for [z3 cvc5] on PATH`. Note `Discover()` is consulted per command, so this
 must be set on the process, not toggled mid-session.
