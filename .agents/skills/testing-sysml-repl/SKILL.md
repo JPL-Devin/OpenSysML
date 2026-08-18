@@ -3995,8 +3995,12 @@ tee** rather than reading the goldens. `newSolver` picks the CLI flags from the 
 name*, so a wrapper whose name contains `z3` is invoked with z3's own `-smt2 -in`:
 
 ```sh
-#!/bin/sh   # /tmp/fakesmt/z3-tee
+mkdir -p /tmp/fakesmt /tmp/smtlog     # tee fails if the log directory is absent
+cat > /tmp/fakesmt/z3-tee <<'EOF'
+#!/bin/sh
 tee /tmp/smtlog/script-$$.smt2 | /usr/bin/z3 "$@"
+EOF
+chmod +x /tmp/fakesmt/z3-tee
 ```
 
 `OPENSYSML_SMT=/tmp/fakesmt/z3-tee ./bin/sysml <model>` answers normally and leaves one script per
