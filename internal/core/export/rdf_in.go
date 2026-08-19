@@ -26,6 +26,9 @@ type element struct {
 	iri         string
 	metaclass   string
 	memberIndex int
+	// qname is the element's sysml:qualifiedName, the only place its identity
+	// is read from — never the IRI, whose id is an opaque encoding.
+	qname string
 	// scope is the qualified name of the namespace this element is declared
 	// in, which is what a reference written inside it is relative to.
 	scope    string
@@ -119,6 +122,7 @@ func (d *decoder) build() ([]*element, error) {
 			metaclass:   metaclass,
 			memberIndex: d.intOf(subject, rdf.OpenSysML+xMemberIndex),
 		}
+		el.qname, _ = d.stringOf(el, rdf.SysML+pQualifiedName)
 		d.byIRI[el.iri] = el
 		order = append(order, el)
 	}
@@ -135,8 +139,11 @@ func (d *decoder) build() ([]*element, error) {
 				Note: fmt.Sprintf("its owning namespace <%s> is not in the graph", owner.Value),
 			}
 		}
-		el.scope = d.qualifiedName(parent)
+		el.scope = parent.qname
 		parent.children = append(parent.children, el)
+	}
+	if err := d.checkReferences(); err != nil {
+		return nil, err
 	}
 	sortByIndex(roots)
 	for _, el := range order {
@@ -146,6 +153,49 @@ func (d *decoder) build() ([]*element, error) {
 		return nil, err
 	}
 	return roots, nil
+}
+
+// referenceProperties are the predicates the decoder reads element references
+// from. An IRI object of one of these must be a subject of the graph carrying
+// sysml:qualifiedName: that property, never the IRI, is where a name comes from.
+var referenceProperties = func() map[string]bool {
+	set := map[string]bool{
+		rdf.SysML + pOwningNamespace:  true,
+		rdf.SysML + pSourceFeature:    true,
+		rdf.SysML + pTargetFeature:    true,
+		rdf.SysML + pClient:           true,
+		rdf.SysML + pSupplier:         true,
+		rdf.SysML + pAliasFor:         true,
+		rdf.SysML + pAnnotatedElement: true,
+	}
+	for _, property := range relationshipProperty {
+		set[rdf.SysML+property] = true
+	}
+	return set
+}()
+
+// checkReferences refuses a graph whose element references cannot be named
+// from the graph itself, which would otherwise be written back mis-named.
+func (d *decoder) checkReferences() error {
+	for _, triple := range d.graph.Triples() {
+		if triple.Object.Kind != rdf.TermIRI || !referenceProperties[triple.Predicate.Value] {
+			continue
+		}
+		target, ok := d.byIRI[triple.Object.Value]
+		if !ok {
+			return &UnsupportedError{
+				What: fmt.Sprintf("the reference <%s>", triple.Object.Value),
+				Note: "it is not a subject of the graph, so there is no sysml:qualifiedName to write its name back from",
+			}
+		}
+		if target.qname == "" {
+			return &UnsupportedError{
+				What: fmt.Sprintf("the element <%s>", target.iri),
+				Note: "it is referenced but carries no sysml:qualifiedName, which is where a reference's name is read from",
+			}
+		}
+	}
+	return nil
 }
 
 // checkReachable reports an element that no root owns, which happens when
@@ -175,18 +225,6 @@ func (d *decoder) checkReachable(roots, all []*element) error {
 		}
 	}
 	return nil
-}
-
-// qualifiedName returns the qualified name of an element: the one it carries,
-// or the one its IRI encodes for a graph written by another tool.
-func (d *decoder) qualifiedName(el *element) string {
-	if name, ok := d.stringOf(el, rdf.SysML+pQualifiedName); ok {
-		return name
-	}
-	if name, ok := rdf.QualifiedNameOf(el.iri); ok {
-		return name
-	}
-	return ""
 }
 
 func sortByIndex(elements []*element) {
@@ -831,9 +869,9 @@ func (d *decoder) referenceList(el *element, property string) []string {
 //
 // A literal is a name that resolved outside this model, quoted where the
 // notation needs it, except an expression literal, which is already the text it
-// was written as. An element IRI is written relative to the scope the reference
-// appears in — the same name the author would have written — falling back to the
-// full qualified name when the target is not in scope.
+// was written as. An IRI names an element of the graph — checkReferences made
+// sure of that — whose sysml:qualifiedName is written relative to the scope the
+// reference appears in, falling back to the full name when it is not in scope.
 func (d *decoder) referenceName(term rdf.Term, scope string) string {
 	if term.IsLiteral() {
 		if term.Datatype == rdf.OpenSysML+dtExpression {
@@ -841,10 +879,7 @@ func (d *decoder) referenceName(term rdf.Term, scope string) string {
 		}
 		return qualifiedNameText(term.Value)
 	}
-	qname, ok := rdf.QualifiedNameOf(term.Value)
-	if !ok {
-		return qualifiedNameText(rdf.LocalName(term.Value))
-	}
+	qname := d.byIRI[term.Value].qname
 	for {
 		if scope == "" {
 			return qualifiedNameText(qname)

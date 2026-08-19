@@ -42,7 +42,7 @@ func TestMetaSaveTurtle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"@prefix sysml:", "elmt:Demo::Engine", "a sysml:PartDefinition"} {
+	for _, want := range []string{"@prefix sysml:", "elmt:Demo__Engine", "a sysml:PartDefinition"} {
 		if !strings.Contains(string(data), want) {
 			t.Errorf("saved Turtle is missing %q:\n%s", want, data)
 		}

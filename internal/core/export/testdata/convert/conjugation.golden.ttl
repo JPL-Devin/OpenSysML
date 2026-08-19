@@ -11,7 +11,7 @@ elmt:Conjugation
     sysml:declaredName "Conjugation" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-elmt:Conjugation::CommunicationPort
+elmt:Conjugation__CommunicationPort
     a sysml:PortDefinition ;
     sysml:qualifiedName "Conjugation::CommunicationPort" ;
     sysml:owningNamespace elmt:Conjugation ;
@@ -19,16 +19,16 @@ elmt:Conjugation::CommunicationPort
     sysml:declaredName "CommunicationPort" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-elmt:Conjugation::CommunicationPort::signal
+elmt:Conjugation__CommunicationPort__signal
     a sysml:ItemUsage ;
     sysml:qualifiedName "Conjugation::CommunicationPort::signal" ;
-    sysml:owningNamespace elmt:Conjugation::CommunicationPort ;
+    sysml:owningNamespace elmt:Conjugation__CommunicationPort ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "signal" ;
     sysml:direction "out" ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:Conjugation::Ground
+elmt:Conjugation__Ground
     a sysml:PartDefinition ;
     sysml:qualifiedName "Conjugation::Ground" ;
     sysml:owningNamespace elmt:Conjugation ;
@@ -36,26 +36,26 @@ elmt:Conjugation::Ground
     sysml:declaredName "Ground" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-elmt:Conjugation::Ground::groundPort
+elmt:Conjugation__Ground__groundPort
     a sysml:PortUsage ;
     sysml:qualifiedName "Conjugation::Ground::groundPort" ;
-    sysml:owningNamespace elmt:Conjugation::Ground ;
+    sysml:owningNamespace elmt:Conjugation__Ground ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "groundPort" ;
-    sysml:type elmt:Conjugation::CommunicationPort ;
+    sysml:type elmt:Conjugation__CommunicationPort ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:Conjugation::Ground::spacePort
+elmt:Conjugation__Ground__spacePort
     a sysml:PortUsage ;
     sysml:qualifiedName "Conjugation::Ground::spacePort" ;
-    sysml:owningNamespace elmt:Conjugation::Ground ;
+    sysml:owningNamespace elmt:Conjugation__Ground ;
     sysx:memberIndex "1"^^xsd:integer ;
     sysml:declaredName "spacePort" ;
     sysml:isConjugated "true"^^xsd:boolean ;
-    sysml:type elmt:Conjugation::CommunicationPort ;
+    sysml:type elmt:Conjugation__CommunicationPort ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:Conjugation::Link
+elmt:Conjugation__Link
     a sysml:InterfaceDefinition ;
     sysml:qualifiedName "Conjugation::Link" ;
     sysml:owningNamespace elmt:Conjugation ;
@@ -63,23 +63,23 @@ elmt:Conjugation::Link
     sysml:declaredName "Link" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-elmt:Conjugation::Link::a
+elmt:Conjugation__Link__a
     a sysml:PortUsage ;
     sysml:qualifiedName "Conjugation::Link::a" ;
-    sysml:owningNamespace elmt:Conjugation::Link ;
+    sysml:owningNamespace elmt:Conjugation__Link ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "a" ;
     sysml:isEnd "true"^^xsd:boolean ;
-    sysml:type elmt:Conjugation::CommunicationPort ;
+    sysml:type elmt:Conjugation__CommunicationPort ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:Conjugation::Link::b
+elmt:Conjugation__Link__b
     a sysml:PortUsage ;
     sysml:qualifiedName "Conjugation::Link::b" ;
-    sysml:owningNamespace elmt:Conjugation::Link ;
+    sysml:owningNamespace elmt:Conjugation__Link ;
     sysx:memberIndex "1"^^xsd:integer ;
     sysml:declaredName "b" ;
     sysml:isEnd "true"^^xsd:boolean ;
     sysml:isConjugated "true"^^xsd:boolean ;
-    sysml:type elmt:Conjugation::CommunicationPort ;
+    sysml:type elmt:Conjugation__CommunicationPort ;
     sysx:hasBody "false"^^xsd:boolean .

@@ -11,7 +11,7 @@ elmt:Named
     sysml:declaredName "Named" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-elmt:Named::Vehicle
+elmt:Named__Vehicle
     a sysml:PartDefinition ;
     sysml:qualifiedName "Named::Vehicle" ;
     sysml:owningNamespace elmt:Named ;
@@ -20,16 +20,16 @@ elmt:Named::Vehicle
     sysml:declaredShortName "v1" ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:Named::Car
+elmt:Named__Car
     a sysx:Alias ;
     sysml:qualifiedName "Named::Car" ;
     sysml:owningNamespace elmt:Named ;
     sysx:memberIndex "1"^^xsd:integer ;
     sysml:declaredName "Car" ;
-    sysml:aliasedElement elmt:Named::Vehicle ;
+    sysml:aliasedElement elmt:Named__Vehicle ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:Named::Mass
+elmt:Named__Mass
     a sysml:AttributeDefinition ;
     sysml:qualifiedName "Named::Mass" ;
     sysml:owningNamespace elmt:Named ;

@@ -80,9 +80,12 @@ func TestElementIRIRoundTrip(t *testing.T) {
 		if !term.IsIRI() {
 			t.Fatalf("%q did not produce an IRI", qname)
 		}
-		got, ok := QualifiedNameOf(term.Value)
+		if !strings.HasPrefix(term.Value, Element) {
+			t.Fatalf("%q: IRI %q is not in the element namespace", qname, term.Value)
+		}
+		got, ok := DecodeElementID(strings.TrimPrefix(term.Value, Element))
 		if !ok {
-			t.Fatalf("%q: IRI %q was not recognized as an element", qname, term.Value)
+			t.Fatalf("%q: the id of IRI %q does not decode", qname, term.Value)
 		}
 		if got != qname {
 			t.Errorf("%q round tripped as %q", qname, got)
@@ -101,19 +104,11 @@ func TestElementIRIEscapesTurtleDelimiters(t *testing.T) {
 	}
 }
 
-func TestQualifiedNameOfRejectsForeignIRIs(t *testing.T) {
-	for _, iri := range []string{"urn:other:thing", "https://example.com/x", ""} {
-		if _, ok := QualifiedNameOf(iri); ok {
-			t.Errorf("%q should not be read as an element IRI", iri)
-		}
-	}
-}
-
 func TestLocalName(t *testing.T) {
 	cases := map[string]string{
 		SysML + "PartUsage":        "PartUsage",
 		"https://example.com/a/b":  "b",
-		"urn:sysmlv2:element:X::Y": "X::Y",
+		"urn:sysmlv2:element:X__Y": "X__Y",
 		"plain":                    "plain",
 	}
 	for iri, want := range cases {
@@ -135,7 +130,7 @@ func TestWriteTurtleShape(t *testing.T) {
 	for _, want := range []string{
 		"@prefix sysml: <https://www.omg.org/spec/SysML#> .",
 		"@prefix elmt: <urn:sysmlv2:element:> .",
-		"elmt:P::Q",
+		"elmt:P__Q",
 		"a sysml:PartDefinition ;",
 		`sysml:declaredName "Q" ;`,
 		`sysml:isAbstract "true"^^xsd:boolean`,

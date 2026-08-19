@@ -11,7 +11,7 @@ elmt:Outer
     sysml:declaredName "Outer" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-elmt:Outer::Inner
+elmt:Outer__Inner
     a sysml:Package ;
     sysml:qualifiedName "Outer::Inner" ;
     sysml:owningNamespace elmt:Outer ;
@@ -19,26 +19,26 @@ elmt:Outer::Inner
     sysml:declaredName "Inner" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-elmt:Outer::Inner::Widget
+elmt:Outer__Inner__Widget
     a sysml:PartDefinition ;
     sysml:qualifiedName "Outer::Inner::Widget" ;
-    sysml:owningNamespace elmt:Outer::Inner ;
+    sysml:owningNamespace elmt:Outer__Inner ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "Widget" ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:Outer::Inner::Sub
+elmt:Outer__Inner__Sub
     a sysml:Namespace ;
     sysml:qualifiedName "Outer::Inner::Sub" ;
-    sysml:owningNamespace elmt:Outer::Inner ;
+    sysml:owningNamespace elmt:Outer__Inner ;
     sysx:memberIndex "1"^^xsd:integer ;
     sysml:declaredName "Sub" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-elmt:Outer::Inner::Sub::Gear
+elmt:Outer__Inner__Sub__Gear
     a sysml:PartDefinition ;
     sysml:qualifiedName "Outer::Inner::Sub::Gear" ;
-    sysml:owningNamespace elmt:Outer::Inner::Sub ;
+    sysml:owningNamespace elmt:Outer__Inner__Sub ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "Gear" ;
     sysx:hasBody "false"^^xsd:boolean .

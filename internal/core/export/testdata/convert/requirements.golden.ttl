@@ -11,7 +11,7 @@ elmt:Reqs
     sysml:declaredName "Reqs" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-elmt:Reqs::Safe
+elmt:Reqs__Safe
     a sysml:RequirementDefinition ;
     sysml:qualifiedName "Reqs::Safe" ;
     sysml:owningNamespace elmt:Reqs ;
@@ -19,16 +19,16 @@ elmt:Reqs::Safe
     sysml:declaredName "Safe" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-elmt:Reqs::Safe::margin
+elmt:Reqs__Safe__margin
     a sysml:AttributeUsage ;
     sysml:qualifiedName "Reqs::Safe::margin" ;
-    sysml:owningNamespace elmt:Reqs::Safe ;
+    sysml:owningNamespace elmt:Reqs__Safe ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "margin" ;
     sysml:type "Real" ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:Reqs::Positive
+elmt:Reqs__Positive
     a sysml:ConstraintDefinition ;
     sysml:qualifiedName "Reqs::Positive" ;
     sysml:owningNamespace elmt:Reqs ;
@@ -36,16 +36,16 @@ elmt:Reqs::Positive
     sysml:declaredName "Positive" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-elmt:Reqs::Positive::value
+elmt:Reqs__Positive__value
     a sysml:AttributeUsage ;
     sysml:qualifiedName "Reqs::Positive::value" ;
-    sysml:owningNamespace elmt:Reqs::Positive ;
+    sysml:owningNamespace elmt:Reqs__Positive ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "value" ;
     sysml:type "Real" ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:Reqs::System
+elmt:Reqs__System
     a sysml:PartDefinition ;
     sysml:qualifiedName "Reqs::System" ;
     sysml:owningNamespace elmt:Reqs ;
@@ -53,11 +53,11 @@ elmt:Reqs::System
     sysml:declaredName "System" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-elmt:Reqs::System::safety
+elmt:Reqs__System__safety
     a sysml:RequirementUsage ;
     sysml:qualifiedName "Reqs::System::safety" ;
-    sysml:owningNamespace elmt:Reqs::System ;
+    sysml:owningNamespace elmt:Reqs__System ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "safety" ;
-    sysml:type elmt:Reqs::Safe ;
+    sysml:type elmt:Reqs__Safe ;
     sysx:hasBody "false"^^xsd:boolean .

@@ -11,7 +11,7 @@ elmt:Mult
     sysml:declaredName "Mult" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-elmt:Mult::exactlyOne
+elmt:Mult__exactlyOne
     a sysx:MultiplicityDeclaration ;
     sysml:qualifiedName "Mult::exactlyOne" ;
     sysml:owningNamespace elmt:Mult ;
@@ -21,7 +21,7 @@ elmt:Mult::exactlyOne
     sysml:upperBound "1" ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:Mult::optional
+elmt:Mult__optional
     a sysx:MultiplicityDeclaration ;
     sysml:qualifiedName "Mult::optional" ;
     sysml:owningNamespace elmt:Mult ;

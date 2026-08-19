@@ -11,7 +11,7 @@ elmt:Modifiers
     sysml:declaredName "Modifiers" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-elmt:Modifiers::Hidden
+elmt:Modifiers__Hidden
     a sysml:PartDefinition ;
     sysml:qualifiedName "Modifiers::Hidden" ;
     sysml:owningNamespace elmt:Modifiers ;
@@ -20,7 +20,7 @@ elmt:Modifiers::Hidden
     sysml:declaredName "Hidden" ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:Modifiers::Shown
+elmt:Modifiers__Shown
     a sysml:PartDefinition ;
     sysml:qualifiedName "Modifiers::Shown" ;
     sysml:owningNamespace elmt:Modifiers ;
@@ -29,7 +29,7 @@ elmt:Modifiers::Shown
     sysml:declaredName "Shown" ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:Modifiers::Base
+elmt:Modifiers__Base
     a sysml:PartDefinition ;
     sysml:qualifiedName "Modifiers::Base" ;
     sysml:owningNamespace elmt:Modifiers ;
@@ -38,16 +38,16 @@ elmt:Modifiers::Base
     sysml:isAbstract "true"^^xsd:boolean ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:Modifiers::Derived
+elmt:Modifiers__Derived
     a sysml:PartDefinition ;
     sysml:qualifiedName "Modifiers::Derived" ;
     sysml:owningNamespace elmt:Modifiers ;
     sysx:memberIndex "3"^^xsd:integer ;
     sysml:declaredName "Derived" ;
-    sysml:specializes elmt:Modifiers::Base ;
+    sysml:specializes elmt:Modifiers__Base ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:Modifiers::Choice
+elmt:Modifiers__Choice
     a sysml:PartDefinition ;
     sysml:qualifiedName "Modifiers::Choice" ;
     sysml:owningNamespace elmt:Modifiers ;
