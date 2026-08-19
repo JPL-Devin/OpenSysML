@@ -241,8 +241,8 @@ func (tc *typeChecker) checkTypeTarget(scope *symbols.Scope, target ast.Node, re
 	if !ok || sym == nil {
 		return // unresolved: name-resolution tier owns this
 	}
-	// Resolve aliases to their underlying types for typing relationships and
-	// for a satisfy reference, both of which check the target's kind.
+	// Resolve aliases to their underlying types for the relationships whose
+	// check depends on the target's kind: a typing and a generalization.
 	targetSym := sym
 	aliasMatters := relKind == ast.RelSpecializes ||
 		relKind == ast.RelSubsets ||
