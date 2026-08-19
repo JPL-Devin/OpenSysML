@@ -2,6 +2,8 @@ version: 2.1
 
 orbs:
   go: circleci/go@1.10.0
+  # Pinned exactly, matching Open-MBEE/flexo-mms-layer1-service.
+  sonarcloud: sonarsource/sonarcloud@4.0.0
 
 executors:
   go-executor:
@@ -182,6 +184,8 @@ jobs:
           root: .
           paths:
             - bin/sysml-grpc
+            # The scan job reads this profile; without it Sonar shows no coverage.
+            - coverage.txt
       
       - store_artifacts:
           path: bin/
@@ -190,6 +194,54 @@ jobs:
       - store_test_results:
           path: coverage.txt
   
+  # SonarCloud analysis. The `SonarCloud` context supplies SONAR_TOKEN.
+  scan:
+    executor: go-executor
+    steps:
+      # Forked PRs get no context, so the token is absent there: end green
+      # rather than fail every outside contribution. With a token, a failing
+      # scan still fails the job.
+      - run:
+          name: Halt when SONAR_TOKEN is absent (forked PR)
+          command: |
+            if [ -z "${SONAR_TOKEN:-}" ]; then
+              echo "SONAR_TOKEN is empty (forked PR or missing context); skipping the scan."
+              circleci-agent step halt
+            fi
+
+      - checkout
+
+      - attach_workspace:
+          at: .
+
+      # sonar.go.coverage.reportPaths expects the profile at the repo root.
+      - run:
+          name: Show the coverage profile the scan reads
+          command: |
+            ls -l coverage.txt
+            head -n 3 coverage.txt
+
+      # SonarCloud needs full history for blame and new-code detection.
+      - run:
+          name: Fetch full git history
+          command: |
+            if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+              git fetch --unshallow
+            fi
+
+      - sonarcloud/scan
+
+      # SonarCloud does not create a project from a CI scan, so the first run
+      # against an unprovisioned project fails; point at the setup doc.
+      - run:
+          name: Point at the setup doc on failure
+          when: on_fail
+          command: |
+            echo "The scan failed. If it reported \"Could not find a default branch for"
+            echo "project with key 'Open-MBEE_OpenSysML'\", the project has not been"
+            echo "created on SonarCloud yet: see 'The SonarCloud scan' in"
+            echo "docs/project/releasing.md for the one-time maintainer step."
+
   python-test:
     executor: python-executor
     steps:
@@ -681,6 +733,17 @@ workflows:
             tags:
               ignore: /.*/
       - python-test:
+          requires:
+            - build-and-test
+          filters:
+            branches:
+              only: /.*/
+            tags:
+              ignore: /.*/
+      - scan:
+          # Matched exactly, like PyPI below; this context holds SONAR_TOKEN.
+          context:
+            - SonarCloud
           requires:
             - build-and-test
           filters:
