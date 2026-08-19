@@ -59,6 +59,20 @@ interface changed.
   `OPENSYSML_GRPC_VERSION=v0.1.0` downloads and verifies the service instead of refusing it as
   unpinned. `PINNED_SHA256` stopped at `v0.0.8`.
 
+### A rendering read at a terminal
+
+- **`sysml -render` writes the text form at a terminal**, where a person reads it, and the
+  machine-readable form of the kind rendered — Mermaid for a diagram, Markdown for a table — into a
+  file or a pipe, where a tool does. `sysml m.sysml -render Views::table` showed a Markdown table on
+  screen; `> table.md`, `| tool` and `-o table.md` are unchanged, and `-render-form` still names
+  either form whatever the destination.
+- **The text form is ASCII**: the rendering header and a connection edge were written with an em
+  dash, which a terminal drawing no more than ASCII showed as a replacement character.
+- **A text table is written to fit the terminal**, wrapping a cell wider than its column over as
+  many lines as it needs rather than truncating it or overflowing the window. Columns are narrowed
+  no further than 8 characters, and a table written to a file or a pipe keeps every column as wide
+  as its widest cell, so a saved artifact does not depend on the window it was written from.
+
 ## 0.1.0 — 2026-08-18
 
 ### The project is now OpenSysML

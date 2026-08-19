@@ -1,4 +1,4 @@
-MachineViews::vehicleStates — state rendering (view def StateTransitionView)
+MachineViews::vehicleStates - state rendering (view def StateTransitionView)
 
 state def Machines::VehicleStates
   state off (initial)

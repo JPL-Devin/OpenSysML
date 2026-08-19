@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/chzyer/readline"
+
 	"github.com/Open-MBEE/OpenSysML/internal/core/export"
 	"github.com/Open-MBEE/OpenSysML/internal/core/view"
 )
@@ -43,18 +45,48 @@ func runRender(files []string) error {
 	if err != nil {
 		return err
 	}
-	// No form named writes the machine-readable one of the kind rendered: a
-	// Mermaid diagram of a graph, a Markdown table of a table.
 	if form == "" {
-		form = rendering.Kind.MachineForm()
+		form = defaultRenderForm(rendering.Kind, outputPath, atStdoutTerminal())
 	}
-	artifact, err := rendering.Write(form)
+	artifact, err := rendering.WriteWidth(form, artifactWidth(outputPath, terminalWidth()))
 	if err != nil {
 		return err
 	}
 	reportRenderNotices(rendering)
 	return writeArtifact(artifact, form)
 }
+
+// defaultRenderForm is the form -render writes where -render-form named none:
+// the text form on a terminal, read by a person, and the machine-readable form
+// of the kind rendered into a file or a pipe, read by a tool.
+func defaultRenderForm(kind view.Kind, output string, terminal bool) view.Form {
+	if output == "" && terminal {
+		return view.FormText
+	}
+	return kind.MachineForm()
+}
+
+// artifactWidth is the width -render writes the text form to fit: view.WidthUnbounded
+// into a file, so a saved artifact does not depend on the window it was written from.
+func artifactWidth(output string, width int) int {
+	if output != "" {
+		return view.WidthUnbounded
+	}
+	return width
+}
+
+// terminalWidth is stdout's width, and view.WidthUnbounded where stdout is no
+// terminal.
+func terminalWidth() int {
+	width, _, err := readline.GetSize(int(os.Stdout.Fd()))
+	if err != nil || width <= 0 {
+		return view.WidthUnbounded
+	}
+	return width
+}
+
+// atStdoutTerminal reports whether the artifact is written to a terminal.
+func atStdoutTerminal() bool { return readline.IsTerminal(int(os.Stdout.Fd())) }
 
 // formList names the forms -render-form takes, as its help and errors spell them.
 func formList() string {

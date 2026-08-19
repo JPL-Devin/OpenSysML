@@ -101,6 +101,10 @@ type Session struct {
 	budgets runtime.Budgets
 
 	verbosity Verbosity
+
+	// renderWidth is the width a text rendering's table is written to fit, 0 for
+	// as wide as its widest cell.
+	renderWidth int
 }
 
 // actionSession holds an active action executor debugging session.

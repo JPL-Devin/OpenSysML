@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/view"
 )
 
 // renderModel declares a view stating no rendering, one exposing nothing, and a
@@ -55,7 +57,7 @@ func TestRenderTextFormAndOutputFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(written), "Demo::overview — tree rendering") {
+	if !strings.Contains(string(written), "Demo::overview - tree rendering") {
 		t.Errorf("the rendering is missing from the file:\n%s", written)
 	}
 	if strings.Contains(string(written), "wrote ") {
@@ -149,5 +151,39 @@ func TestRenderReportsWhatItCouldNotDo(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// The form -render writes where none was named is the text form at a terminal,
+// read by a person, and the kind's machine-readable form into a file or a pipe.
+func TestDefaultRenderFormFollowsTheDestination(t *testing.T) {
+	cases := []struct {
+		name     string
+		kind     view.Kind
+		output   string
+		terminal bool
+		want     view.Form
+	}{
+		{"a table at a terminal", view.KindTable, "", true, view.FormText},
+		{"a table into a pipe", view.KindTable, "", false, view.FormMarkdown},
+		{"a table into a file", view.KindTable, "table.md", true, view.FormMarkdown},
+		{"a tree at a terminal", view.KindTree, "", true, view.FormText},
+		{"a tree into a pipe", view.KindTree, "", false, view.FormMermaid},
+	}
+	for _, c := range cases {
+		if got := defaultRenderForm(c.kind, c.output, c.terminal); got != c.want {
+			t.Errorf("%s: default form = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+// The text form is written to fit the terminal, and to no width at all into a
+// file, so a saved artifact does not depend on the window it was written from.
+func TestArtifactWidthIsUnboundedIntoAFile(t *testing.T) {
+	if got := artifactWidth("", 100); got != 100 {
+		t.Errorf("width on stdout = %d, want the terminal's 100", got)
+	}
+	if got := artifactWidth("table.txt", 100); got != view.WidthUnbounded {
+		t.Errorf("width into a file = %d, want %d", got, view.WidthUnbounded)
 	}
 }
