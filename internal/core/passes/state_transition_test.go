@@ -353,3 +353,29 @@ func TestTransitionIntoEntryActionIsNotAVertex(t *testing.T) {
 	}
 }`, CodeEndpointNotOfMachine, "begin")
 }
+
+// Only the body a transition is written in lends it an entry action to leave: a
+// name reaching another state's is not a start designation, and lowering agrees.
+func TestTransitionOutOfAnotherStatesEntryActionIsNotAVertex(t *testing.T) {
+	wantOneError(t, `package test {
+	state def M {
+		state a { entry action begin { } }
+		state b;
+		transition begin then b;
+	}
+}`, CodeEndpointNotOfMachine, "begin")
+}
+
+// A start designation names the state the machine starts in, so a transition out
+// of an entry action into a pseudostate is not one.
+func TestEntryActionTransitionIntoPseudostateIsNotAVertex(t *testing.T) {
+	wantOneError(t, `package test {
+	state def M {
+		entry action begin { }
+		transition begin then j;
+		junction j;
+		state b;
+		transition j then b;
+	}
+}`, CodeEndpointNotOfMachine, "begin")
+}
