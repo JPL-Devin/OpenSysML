@@ -127,7 +127,7 @@ func TestToStateGraph_Simple(t *testing.T) {
 	// Find initial state
 	initialFound := false
 	for _, state := range graph.States {
-		if state.IsInitial {
+		if graph.IsInitial(state) {
 			initialFound = true
 			t.Logf("Found initial state: %s", state.Name)
 		}

@@ -184,7 +184,8 @@ func stateBody(node ast.Node) bool {
 }
 
 // firstVertex searches scope's subtree, outermost and in declaration order, for
-// a vertex whose name path ends in parts.
+// a vertex whose name path ends in parts, or an entry action standing in for a
+// start pseudostate.
 func firstVertex(scope *symbols.Scope, parts []string) (*symbols.Symbol, bool) {
 	if scope == nil || len(parts) == 0 {
 		return nil, false
@@ -198,7 +199,7 @@ func firstVertex(scope *symbols.Scope, parts []string) (*symbols.Symbol, bool) {
 			continue
 		}
 		for _, sym := range symbols.PreferDeclared(scope.LookupLocalAll(key)) {
-			if isVertex(sym.Decl) {
+			if isVertex(sym.Decl) || startAction(sym) {
 				return sym, true
 			}
 		}

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // The textual `defer` notation reaches the graph as the deferral of the state
@@ -231,5 +232,78 @@ func TestToStateGraph_EntryActionSuccessionNamesInitialState(t *testing.T) {
 	}
 	if graph.Initial.Name != "off" {
 		t.Errorf("expected off to be the initial state, got %q", graph.Initial.Name)
+	}
+}
+
+// A machine lowered from its scope tree alone — as a view rendering lowers it,
+// without a resolver over the document — names the same initial state.
+func TestToStateGraph_EntryActionNamesInitialStateFromScopeAlone(t *testing.T) {
+	root, machine := parseStateUsage(t, `
+		package test {
+			state Machine {
+				entry action begin { }
+				transition begin then off;
+				state off;
+				state on;
+				off then on;
+			}
+		}
+	`)
+	idx := symbols.NewIndexFromDoc("test.sysml", root)
+	scope := scopeOfNode(idx.DocumentRoot("test.sysml"), machine)
+	if scope == nil {
+		t.Fatal("the index has no scope for the machine")
+	}
+
+	graph, err := ToStateGraph(machine, scope)
+	if err != nil {
+		t.Fatalf("ToStateGraph: %v", err)
+	}
+	if graph.Initial == nil {
+		t.Fatal("expected the entry action's transition to name an initial state")
+	}
+	if graph.Initial.Name != "off" {
+		t.Errorf("expected off to be the initial state, got %q", graph.Initial.Name)
+	}
+}
+
+// Each spelling that designates an initial state records it on the graph and
+// leaves the parsed states as written (AST immutability).
+func TestToStateGraph_InitialDesignationDoesNotMutateAST(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body string
+	}{
+		{"named entry action", "entry action begin { }\ntransition begin then off;"},
+		{"anonymous entry", "entry; then off;"},
+		{"initial pseudostate", "first i then off;"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			machine := stateUsageIn(t, `
+				package test {
+					state Machine {
+						`+tc.body+`
+						state off;
+						state on;
+						off then on;
+					}
+				}
+			`)
+			graph, err := ToStateGraph(machine, nil)
+			if err != nil {
+				t.Fatalf("ToStateGraph: %v", err)
+			}
+			if graph.Initial == nil || graph.Initial.Name != "off" {
+				t.Fatalf("expected off to be the initial state, got %v", graph.Initial)
+			}
+			if !graph.IsInitial(graph.Initial) {
+				t.Error("expected the graph to report its initial state as initial")
+			}
+			for _, state := range graph.States {
+				if state.IsInitial {
+					t.Errorf("lowering wrote IsInitial onto the parsed state %q", state.Name)
+				}
+			}
+		})
 	}
 }
