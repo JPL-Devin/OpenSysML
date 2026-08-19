@@ -180,29 +180,30 @@ func (d *decoder) checkReferences() error {
 		if triple.Object.Kind != rdf.TermIRI || !referenceProperties[triple.Predicate.Value] {
 			continue
 		}
-		if err := d.checkReference(triple.Object.Value); err != nil {
+		if _, err := d.referencedElement(triple.Object.Value); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// checkReference reports an IRI reference that no sysml:qualifiedName names.
-func (d *decoder) checkReference(iri string) error {
+// referencedElement resolves a referenced IRI to the graph subject whose
+// sysml:qualifiedName names it, reporting a reference no property can name.
+func (d *decoder) referencedElement(iri string) (*element, error) {
 	target, ok := d.byIRI[iri]
 	if !ok {
-		return &UnsupportedError{
+		return nil, &UnsupportedError{
 			What: fmt.Sprintf("the reference <%s>", iri),
 			Note: "it is not a subject of the graph, so there is no sysml:qualifiedName to write its name back from",
 		}
 	}
 	if target.qname == "" {
-		return &UnsupportedError{
+		return nil, &UnsupportedError{
 			What: fmt.Sprintf("the element <%s>", target.iri),
 			Note: "it is referenced but carries no sysml:qualifiedName, which is where a reference's name is read from",
 		}
 	}
-	return nil
+	return target, nil
 }
 
 // checkReachable reports an element that no root owns, which happens when
@@ -932,10 +933,11 @@ func (d *decoder) referenceName(term rdf.Term, scope string) (string, error) {
 		}
 		return qualifiedNameText(term.Value), nil
 	}
-	if err := d.checkReference(term.Value); err != nil {
+	target, err := d.referencedElement(term.Value)
+	if err != nil {
 		return "", err
 	}
-	qname := d.byIRI[term.Value].qname
+	qname := target.qname
 	for {
 		if scope == "" {
 			return qualifiedNameText(qname), nil

@@ -7,8 +7,8 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
 )
 
-// referenceName must report, never panic, when a predicate checkReferences
-// does not cover points at an IRI it cannot name.
+// referenceName must report, never panic, on an IRI it cannot name, even for
+// a predicate checkReferences does not cover.
 func TestReferenceNameReportsUnnameableIRIs(t *testing.T) {
 	d := &decoder{
 		graph: rdf.NewGraph(),
