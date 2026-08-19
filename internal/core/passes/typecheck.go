@@ -770,15 +770,6 @@ func compatibleTyping(useKind ast.UsageKind, direction ast.FeatureDirection, def
 			defKind == symbols.SymbolOccurrenceDef
 	}
 
-	// Parts may be typed by item definitions as well as part definitions:
-	// both are structural classifiers and an alias must not change that
-	// compatibility decision.
-	if useKind == ast.UsagePart {
-		return defKind == symbols.SymbolPartDef ||
-			defKind == symbols.SymbolItemDef ||
-			defKind == symbols.SymbolOccurrenceDef
-	}
-
 	// Occurrences can be typed by any structural def
 	if useKind == ast.UsageOccurrence {
 		return defKind == symbols.SymbolPartDef ||

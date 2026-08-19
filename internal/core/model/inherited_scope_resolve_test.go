@@ -55,7 +55,8 @@ func TestAliasSupertypeInheritanceWithGeometryAndUnits(t *testing.T) {
 			:>> radius = 5 [mm];
 			:>> height = 1 [mm];
 		}
-		part lru : Box {
+		alias AvionicsLRUType for AvionicsLRU;
+		part lru : AvionicsLRUType {
 			:>> length = 100 [mm];
 			:>> width = 50 [mm];
 			:>> height = 20 [mm];
