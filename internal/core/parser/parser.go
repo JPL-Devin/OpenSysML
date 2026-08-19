@@ -199,6 +199,28 @@ func (p *Parser) acceptKeyword(kw string) bool {
 	return false
 }
 
+// valueOperatorAt reports whether the token n ahead introduces a feature value.
+func (p *Parser) valueOperatorAt(n int) bool {
+	t := p.peekN(n)
+	return t.Kind == lexer.Eq || t.Kind == lexer.ColonEq ||
+		(t.Kind == lexer.Keyword && t.KeywordID == "default")
+}
+
+// acceptValueOperator consumes the operator that introduces a feature value:
+// `=`, `:=`, or `default` followed by either of them (KerML `FeatureValue`).
+func (p *Parser) acceptValueOperator() bool {
+	if p.accept2(lexer.Eq) || p.accept2(lexer.ColonEq) {
+		return true
+	}
+	if p.acceptKeyword("default") {
+		if !p.accept2(lexer.Eq) {
+			p.accept2(lexer.ColonEq)
+		}
+		return true
+	}
+	return false
+}
+
 // expect consumes a token of the given kind or records a diagnostic at the
 // current position and returns ok=false (without consuming).
 func (p *Parser) expect(k lexer.Kind, msg string) (lexer.Token, bool) {

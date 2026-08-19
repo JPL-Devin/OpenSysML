@@ -341,7 +341,7 @@ func compatMessage(decl declKind, rel ast.RelationshipKind, target symbols.Symbo
 		if decl.isPlainClassifier() {
 			return ""
 		}
-		if target != want {
+		if !defKindsComparable(target, want) {
 			return fmt.Sprintf("%s cannot specialize %s (kind mismatch)", defKind, target)
 		}
 	case ast.RelSubsets, ast.RelRedefines:
@@ -623,6 +623,58 @@ var occurrenceDefSymbolKinds = map[symbols.SymbolKind]bool{
 
 func isOccurrenceDefKind(k symbols.SymbolKind) bool {
 	return occurrenceDefSymbolKinds[k]
+}
+
+// defKindParents is the definition metaclass taxonomy (SysML v2 §8.3): each
+// kind maps to the kinds it specializes, so which definitions a definition may
+// specialize follows the taxonomy rather than an exact kind match.
+var defKindParents = map[symbols.SymbolKind][]symbols.SymbolKind{
+	symbols.SymbolItemDef:             {symbols.SymbolOccurrenceDef},
+	symbols.SymbolIndividualDef:       {symbols.SymbolOccurrenceDef},
+	symbols.SymbolPartDef:             {symbols.SymbolItemDef},
+	symbols.SymbolMetadataDef:         {symbols.SymbolItemDef},
+	symbols.SymbolConnectionDef:       {symbols.SymbolPartDef},
+	symbols.SymbolInterfaceDef:        {symbols.SymbolConnectionDef},
+	symbols.SymbolAllocationDef:       {symbols.SymbolConnectionDef},
+	symbols.SymbolViewDef:             {symbols.SymbolPartDef},
+	symbols.SymbolRenderingDef:        {symbols.SymbolPartDef},
+	symbols.SymbolActionDef:           {symbols.SymbolOccurrenceDef},
+	symbols.SymbolFlowDef:             {symbols.SymbolActionDef, symbols.SymbolConnectionDef},
+	symbols.SymbolStateDef:            {symbols.SymbolActionDef},
+	symbols.SymbolCalcDef:             {symbols.SymbolActionDef},
+	symbols.SymbolCaseDef:             {symbols.SymbolCalcDef},
+	symbols.SymbolAnalysisCaseDef:     {symbols.SymbolCaseDef},
+	symbols.SymbolVerificationCaseDef: {symbols.SymbolCaseDef},
+	symbols.SymbolUseCaseDef:          {symbols.SymbolCaseDef},
+	symbols.SymbolConstraintDef:       {symbols.SymbolOccurrenceDef},
+	symbols.SymbolRequirementDef:      {symbols.SymbolConstraintDef},
+	symbols.SymbolConcernDef:          {symbols.SymbolRequirementDef},
+	symbols.SymbolViewpointDef:        {symbols.SymbolRequirementDef},
+	symbols.SymbolPortDef:             {symbols.SymbolOccurrenceDef},
+	symbols.SymbolEnumerationDef:      {symbols.SymbolAttributeDef},
+}
+
+// defKindSpecializes reports whether kind k is want or one of its
+// specializations in that taxonomy.
+func defKindSpecializes(k, want symbols.SymbolKind) bool {
+	if k == want {
+		return true
+	}
+	for _, parent := range defKindParents[k] {
+		if defKindSpecializes(parent, want) {
+			return true
+		}
+	}
+	return false
+}
+
+// defKindsComparable reports whether one of two definition kinds specializes
+// the other: `item def Alice :> Person` names a part definition and `part def
+// Wheel :> Component` an item definition, both legal because the kinds are
+// comparable. Disjoint kinds — a part definition and an attribute definition —
+// are not.
+func defKindsComparable(a, b symbols.SymbolKind) bool {
+	return defKindSpecializes(a, b) || defKindSpecializes(b, a)
 }
 
 // isDataTypeDefKind reports whether k classifies data values rather than

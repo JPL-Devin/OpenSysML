@@ -352,9 +352,11 @@ func renderSplit(r Result, v Verbosity) (found, declared []string) {
 // text just read rather than about the analysis of the model as a whole: a load
 // that defers the analysis still says why a file could not be read.
 func renderSyntax(r Result, v Verbosity) []string {
+	// A syntax warning is no reason a file could not be read, and the analysis
+	// this load defers reports it, so reporting it here would report it twice.
 	var diags []passes.Diagnostic
 	for _, d := range scopedDiagnostics(r, v) {
-		if d.Source == "syntax" {
+		if d.Source == "syntax" && d.Severity == passes.SeverityError {
 			diags = append(diags, d)
 		}
 	}

@@ -306,3 +306,18 @@ func TestStateUsageMachineIsChecked(t *testing.T) {
 	}
 }`, CodeEndpointNotOfMachine, "Other::running")
 }
+
+// The machine's entry action stands in for a start pseudostate, so a transition
+// naming it as a source is legal (an ordinary action is rejected by name
+// resolution, see resolve.TestResolveEndpointOrdinaryActionIsNotAVertex).
+func TestTransitionOutOfEntryActionIsLegal(t *testing.T) {
+	wantClean(t, `package test {
+	state def M {
+		entry action start { }
+		transition start then busy;
+		state busy;
+		state done;
+		transition busy to done;
+	}
+}`)
+}

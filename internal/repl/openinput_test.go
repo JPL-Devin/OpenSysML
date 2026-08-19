@@ -109,6 +109,24 @@ func TestLoadFileSummaryReportsSyntaxDiagnostics(t *testing.T) {
 	}
 }
 
+// A summary load defers the analysis, so a syntax warning belongs to the report
+// that analysis makes rather than being printed by the load as well.
+func TestLoadFileSummaryDefersSyntaxWarnings(t *testing.T) {
+	s := NewSession()
+	path := tempFile(t, "keyword.sysml", "package P {\n    action def flow;\n}\n")
+
+	out, err := s.LoadFileSummary(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(out, "\n"); strings.Contains(got, "warning:") {
+		t.Errorf("the summary load reported the warning the analysis reports:\n%s", got)
+	}
+	if lines := strings.Join(s.DiagnosticLines(), "\n"); !strings.Contains(lines, "reserved keyword") {
+		t.Errorf("the analysis did not report the warning:\n%s", lines)
+	}
+}
+
 // A file that parses but whose analysis fails is a different case: it is accepted
 // and reported by the deeper tiers, and the load still counts as an error.
 func TestLoadReportsUnresolvedReference(t *testing.T) {

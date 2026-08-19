@@ -245,15 +245,6 @@ func (p *Parser) parseMember() ast.Node {
 		return en
 	}
 	m := &ast.Membership{Visibility: vis, Member: inner}
-
-	// Parse optional metadata annotations: @Type{props}
-	// Apply to Usage/Definition nodes
-	if u, ok := inner.(*ast.Usage); ok {
-		u.Prefixes = append(u.Prefixes, p.parseMetadataAnnotations()...)
-	} else if d, ok := inner.(*ast.Definition); ok {
-		d.Prefixes = append(d.Prefixes, p.parseMetadataAnnotations()...)
-	}
-
 	m.NodeSpan = p.spanFrom(start)
 	m.SetLeadingTrivia(trivia)
 	return m
@@ -305,6 +296,12 @@ func (p *Parser) parseDeclaration(start int) ast.Node {
 		return p.parseFilter(start)
 	case p.atDefUsageStart():
 		return p.parseDefUsage(start)
+	case p.at(lexer.At):
+		// A metadata usage is a namespace member as much as it is a body member.
+		if pm := p.parseMetadataUsage(start); pm != nil {
+			return pm
+		}
+		return nil
 	case p.at(lexer.Hash):
 		// Look past `# QualifiedName ...` prefixes for the declaration keyword.
 		if p.leadingPrefixIsPackage() {

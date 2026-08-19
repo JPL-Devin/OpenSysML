@@ -1,0 +1,8 @@
+{
+	"type": "state",
+	"finalState": "done",
+	"stateVisits": ["off", "done"],
+	"outputs": {
+		"seen": {"type": "Integer", "value": 1}
+	}
+}

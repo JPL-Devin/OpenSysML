@@ -318,9 +318,9 @@ func (p *Parser) parseDirectionParameter() ast.Node {
 	// Parse post-multiplicity modifiers (ordered/nonunique)
 	postMods := p.parsePostModifiers()
 
-	// Optional value (= expr, := expr, or default expr)
+	// Optional value (= expr, := expr, or default [=] expr)
 	var value ast.Node
-	if p.accept2(lexer.Eq) || p.accept2(lexer.ColonEq) || p.acceptKeyword("default") {
+	if p.acceptValueOperator() {
 		value = p.ParseExpression()
 	}
 
@@ -1533,10 +1533,8 @@ func (p *Parser) parseResultMemberIn(inStatement bool) ast.Node {
 		postModRels := p.parseRelationships(true)
 		u.Relationships = append(u.Relationships, postModRels...)
 
-		// Parse optional default value 'default expr' or '= expr'
-		if p.acceptKeyword("default") {
-			u.Value = p.ParseExpression()
-		} else if p.accept2(lexer.Eq) {
+		// Parse optional value 'default [=] expr', '= expr' or ':= expr'
+		if p.acceptValueOperator() {
 			u.Value = p.ParseExpression()
 		}
 
@@ -1579,9 +1577,8 @@ func (p *Parser) parseResultMemberIn(inStatement bool) ast.Node {
 			u.Multiplicity = p.parseMultiplicity()
 		}
 
-		// If followed by '=', this is Pattern 4 (value), not Pattern 5 (no value)
-		if p.at(lexer.Eq) {
-			p.advance() // consume '='
+		// A value operator here makes this Pattern 4 (value), not Pattern 5 (no value)
+		if p.acceptValueOperator() {
 			u.Value = p.ParseExpression()
 		}
 
@@ -1601,8 +1598,8 @@ func (p *Parser) parseResultMemberIn(inStatement bool) ast.Node {
 	}
 
 	// Check for Pattern 4: return [kind] [modifiers] name = expr [body] (result parameter with initializer, no type, no mult)
-	// Lookahead: name followed by '=' directly
-	if p.atName() && p.peekN(1).Kind == lexer.Eq {
+	// Lookahead: name followed directly by a value operator
+	if p.atName() && p.valueOperatorAt(1) {
 		u := &ast.Usage{
 			Kind:        usageKind,
 			Direction:   ast.DirOut,
@@ -1617,7 +1614,7 @@ func (p *Parser) parseResultMemberIn(inStatement bool) ast.Node {
 			IsNonunique: mods.isNonunique,
 		}
 		u.Ident = p.parseIdentification()
-		p.advance() // consume '='
+		p.acceptValueOperator()
 		u.Value = p.ParseExpression()
 
 		// Check for optional body or semicolon
@@ -1930,15 +1927,9 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 		return en
 	}
 
-	// Value part: `= expr` or `default expr`.
+	// Value part: `= expr`, `:= expr` or `default [=] expr`.
 	var value ast.Node
-	if p.at(lexer.Eq) {
-		p.advance()
-		value = p.ParseExpression()
-	} else if p.acceptKeyword("default") {
-		if p.at(lexer.Eq) {
-			p.advance()
-		}
+	if p.acceptValueOperator() {
 		value = p.ParseExpression()
 	}
 
@@ -2951,16 +2942,28 @@ func (p *Parser) parseTransitionMember(start int) ast.Node {
 		source = p.parseQualifiedNameRelaxed()
 	case p.atName() || p.at(lexer.Keyword):
 		source = p.parseQualifiedNameRelaxed()
-		if !p.acceptKeyword("to") {
+		switch {
+		case p.acceptKeyword("to"):
+			target = p.parseQualifiedNameRelaxed()
+		case p.atTransitionClause():
+			// `first` is optional in `TransitionUsage`, so a bare source may be
+			// followed straight by its clauses: `transition initial then off;`.
+		default:
 			p.error(p.peek().Span, "expected 'to' after transition source, or 'first' before it: a transition is written `transition first <source> … then <target>;` or `transition <source> to <target>;`")
 			en := &ast.ErrorNode{Message: "expected 'to' after transition source"}
 			en.NodeSpan = p.spanFrom(start)
 			return en
 		}
-		target = p.parseQualifiedNameRelaxed()
 	}
 
 	return p.parseTransitionTail(start, name, source, target)
+}
+
+// atTransitionClause reports whether the parser is at a clause a transition
+// carries after its source: its trigger, guard, effect or target.
+func (p *Parser) atTransitionClause() bool {
+	return p.atKeyword("accept") || p.atKeyword("when") || p.atKeyword("if") ||
+		p.atKeyword("do") || p.atKeyword("then")
 }
 
 // parseTransitionTail parses the clauses a transition carries after its source —

@@ -34,7 +34,7 @@ func (r *Resolver) ResolveEndpoint(scope *symbols.Scope, qn *ast.QualifiedName) 
 			// leaving the qualifiers saying which state or region it lives in.
 			Fixes: endpointFixes(last.Text, last.Span, r.vertexSuggestions(scope, qn)),
 		})
-	case !isVertex(sym.Decl):
+	case !isVertex(sym.Decl) && !startAction(sym):
 		r.report(Diagnostic{
 			Span:    qn.Span(),
 			Message: "transition endpoint " + qnText(qn) + " is not a state or pseudostate",
@@ -133,6 +133,15 @@ func endpointFixes(name string, span source.Span, cands []string) []quickfix.Fix
 		return nil
 	}
 	return fixes
+}
+
+// startAction reports whether sym is an entry action of the state declaring it,
+// which stands in for a start pseudostate: `transition initial then off;`.
+func startAction(sym *symbols.Symbol) bool {
+	if sym == nil || sym.OwnerScope == nil {
+		return false
+	}
+	return ast.IsEntryAction(ast.StateEntryActions(sym.OwnerScope.Node()), sym.Decl)
 }
 
 // isVertex reports whether decl is a vertex a transition may name: a state, a

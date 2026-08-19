@@ -676,6 +676,28 @@ func isEntrySubaction(member ast.Node) bool {
 	return ok
 }
 
+// startsAt marks the state a completion transition out of the body's entry action
+// starts the machine in, reporting whether it did — as `entry; then off;` does.
+func (g *StateGraph) startsAt(members []ast.Node, containingState ast.Node, scope *symbols.Scope, trans *ast.TransitionMember) bool {
+	if trans.Source == nil || trans.Target == nil || trans.Trigger != nil {
+		return false
+	}
+	decl, ok := g.endpoints.Endpoint(scope, trans.Source)
+	if !ok {
+		return false
+	}
+	if !ast.IsEntryAction(ast.EntryActions(members), decl) &&
+		!ast.IsEntryAction(ast.StateEntryActions(containingState), decl) {
+		return false
+	}
+	target, ok := g.endpointVertex(scope, trans.Target).(*ast.StateNode)
+	if !ok {
+		return false
+	}
+	target.IsInitial = true
+	return true
+}
+
 // classifyTrigger converts a raw trigger expression into a typed TriggerEvent.
 // Classification rules (syntactic/structural):
 // - nil → nil (completion transition)
@@ -862,6 +884,11 @@ func collectTransitions(graph *StateGraph, memberList []ast.Node, containingStat
 			}
 			graph.Transitions[trans.Source] = append(graph.Transitions[trans.Source], trans)
 		case *ast.TransitionMember:
+			// `transition initial then off;` out of the entry action names the
+			// state the machine starts in, not an edge between two vertices.
+			if graph.startsAt(memberList, containingState, scope, n) {
+				continue
+			}
 			// New: TransitionMember from parser (declarative)
 			trans, err := lowerTransitionMember(graph, n, containingState, scope)
 			if err != nil {

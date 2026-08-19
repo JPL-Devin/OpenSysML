@@ -6,6 +6,7 @@
       (SubstateMember name="s3")
       (TransitionMember source="s1" target="s2"
         (FeatureReference name="event1"))
+      (TransitionMember source="s2" target="s3")
       (Membership visibility="default"
         (Usage kind="attribute" name="stateData" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (Relationship kind="typing" target=String

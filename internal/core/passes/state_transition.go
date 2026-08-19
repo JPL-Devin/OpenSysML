@@ -54,6 +54,9 @@ type machine struct {
 	sources    map[ast.Node]bool
 	unresolved map[string]bool
 	routing    []*ast.PseudostateNode
+	// startActions are the entry actions its bodies declare, each standing in for
+	// a start pseudostate a transition may leave.
+	startActions map[ast.Node]bool
 }
 
 // findMachines walks the document for state machine declarations. A state inside
@@ -93,9 +96,10 @@ func (c *transitionChecker) checkMachine(decl ast.Node, scope *symbols.Scope) {
 		return
 	}
 	m := &machine{
-		vertices:   vertices,
-		sources:    map[ast.Node]bool{},
-		unresolved: map[string]bool{},
+		vertices:     vertices,
+		sources:      map[ast.Node]bool{},
+		unresolved:   map[string]bool{},
+		startActions: map[ast.Node]bool{},
 	}
 	c.walkBody(m, scope, declMembers(decl))
 
@@ -112,6 +116,9 @@ func (c *transitionChecker) checkMachine(decl ast.Node, scope *symbols.Scope) {
 // walkBody collects the transitions and routing pseudostates of a machine body,
 // descending into its states and regions with the scope each was declared in.
 func (c *transitionChecker) walkBody(m *machine, scope *symbols.Scope, members []ast.Node) {
+	for _, action := range ast.EntryActions(members) {
+		m.startActions[action] = true
+	}
 	for _, member := range members {
 		decl := unwrapMembership(member)
 		switch n := decl.(type) {
@@ -141,6 +148,9 @@ func (c *transitionChecker) walkBody(m *machine, scope *symbols.Scope, members [
 				m.routing = append(m.routing, n)
 			}
 		case *ast.StateNode:
+			for _, action := range ast.StateEntryActions(n) {
+				m.startActions[action] = true
+			}
 			c.walkBody(m, bodyScope(scope, n), n.Substates)
 			for _, region := range n.Regions {
 				c.walkBody(m, bodyScope(scope, region), region.States)
@@ -177,6 +187,11 @@ func (c *transitionChecker) checkEndpoint(m *machine, scope *symbols.Scope, qn *
 	// A `first m then x` marker gets no incoming transition (UML 15.7.18), so a
 	// marker target is illegal; a transition out of one is left to lowering.
 	if isMarker(decl) && !isTarget {
+		return decl
+	}
+	// A transition out of the machine's entry action says which state it starts
+	// in, the action standing in for a start pseudostate (SysML 7.19.3).
+	if m.startActions[decl] && !isTarget {
 		return decl
 	}
 	c.report(qn.Span(), CodeEndpointNotOfMachine, fmt.Sprintf(

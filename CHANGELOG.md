@@ -411,6 +411,32 @@ with a build that has none reporting that rather than a verdict.
   reference to a member of `OOSEM::'OOSEM Measures'`, and references to a decision node whose name
   is not registered as a symbol.
 
+### The OMG training corpus reports no errors, and two of its files were never buggy
+
+- **Every definition body inherits the features of the library definition its kind implies.**
+  Only behavior definitions had an implicit base, so `snapshot sale = start;` inside a `part def`
+  reported `unresolved reference: start` even though `Items::Item` declares `start` and `done` and
+  `Parts::Part` redefines both. The verdict recorded against `Time Slice and Snapshot Example` and
+  `Individuals and Time Slices` — "bugs in the OMG files" — was wrong; both are clean now, and the
+  corpus baseline lists no files.
+- **A definition may specialize a definition of a comparable kind:** `individual item def Alice :>
+  Person` was refused as a kind mismatch because `Person` is a `part def`. A part definition *is*
+  an item definition, so specialization follows the definition taxonomy rather than an exact kind
+  match; disjoint kinds — a part definition and an attribute definition — are still refused.
+- **A transition may leave the entry action of the state that declares it:** `entry action initial
+  { } transition initial then off;` reported the action as "not a state or pseudostate". The entry
+  action stands in for a start pseudostate, so the transition designates the state the machine
+  starts in rather than an edge between two vertices, and it executes as such. An ordinary action
+  named as an endpoint is still reported.
+- **A value part accepts every operator the grammar allows** — `= expr`, `:= expr`,
+  `default expr`, `default = expr` and `default := expr` — wherever a usage, parameter, result or
+  subject binds a value; only some spellings were accepted per position.
+- **A metadata usage member (`@M;`) parses in a namespace, a body and a state body**, and RDF
+  conversion refuses it with a typed diagnostic instead of writing an annotation on a different
+  element.
+- **The REPL no longer prints a syntax warning twice**, once from the load that defers the
+  analysis and once from the analysis itself.
+
 ### RDF conversion is experimental
 
 - SysML ↔ RDF Turtle conversion is labelled **experimental**, in both directions, on every
