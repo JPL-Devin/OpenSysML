@@ -53,9 +53,10 @@ SYSMLV2_RDF_ONTOLOGY=/path/to/sysmlv2-rdf-ontology go generate ./internal/core/r
 ```
 
 The generator reads the ontology version from the checkout's `sysml2/README.md`
-and the commit SHA from `git rev-parse HEAD`, refuses to write a table if any
-property has no `rdfs:domain` or if a property IRI disagrees with its domain, and
-overwrites `table.go` in place. Review the diff, then run
+and the commit SHA from the checkout's on-disk Git metadata. It does not need a
+`git` binary, refuses to write a table if any property has no `rdfs:domain` or
+if a property IRI disagrees with its domain, and overwrites `table.go` in place.
+Review the diff, then run
 `go test ./internal/core/rdf/ontology/... ./internal/core/export/...` — the
 export gate compares the golden graphs against the new table and will report
 anything the ontology bump changed.
