@@ -599,13 +599,21 @@ func (d *decoder) behaviorHead(el *element) (string, bool, error) {
 	switch el.metaclass {
 	case mInitialNode:
 		words := []string{d.keywordOr(el, "first")}
-		if start := d.referenceText(el, rdf.SysML+pSourceFeature); start != "" {
+		start, err := d.referenceText(el, rdf.SysML+pSourceFeature)
+		if err != nil {
+			return "", true, err
+		}
+		if start != "" {
 			words = append(words, start)
 		}
 		if guard, ok := d.stringOf(el, rdf.OpenSysML+xGuard); ok {
 			words = append(words, "if", guard)
 		}
-		if successor := d.referenceText(el, rdf.SysML+pTargetFeature); successor != "" {
+		successor, err := d.referenceText(el, rdf.SysML+pTargetFeature)
+		if err != nil {
+			return "", true, err
+		}
+		if successor != "" {
 			words = append(words, "then", successor)
 		}
 		return strings.Join(words, " "), true, nil
@@ -621,11 +629,15 @@ func (d *decoder) behaviorHead(el *element) (string, bool, error) {
 	case mActionExecution:
 		words := []string{"action"}
 		words = append(words, d.identWords(el)...)
+		reference, err := d.referenceText(el, rdf.SysML+relationshipProperty[ast.RelReferences])
+		if err != nil {
+			return "", true, err
+		}
 		switch expression, ok := d.stringOf(el, rdf.OpenSysML+xExpression); {
 		case ok:
 			words = append(words, "{ "+expression+" }")
-		case d.referenceText(el, rdf.SysML+relationshipProperty[ast.RelReferences]) != "":
-			words = append(words, d.referenceText(el, rdf.SysML+relationshipProperty[ast.RelReferences]))
+		case reference != "":
+			words = append(words, reference)
 		default:
 			return "", true, d.missing(el, "sysx:"+xExpression, "an action node performs an action or evaluates an expression")
 		}
@@ -712,8 +724,14 @@ var controlNodeKeyword = map[string]string{
 // the edge form naming both ends, the one-name form whose source is the member
 // before it, a guarded branch of a decision, or that decision's `else` branch.
 func (d *decoder) successionHead(el *element) (string, error) {
-	source := d.referenceText(el, rdf.SysML+pSourceFeature)
-	target := d.referenceText(el, rdf.SysML+pTargetFeature)
+	source, err := d.referenceText(el, rdf.SysML+pSourceFeature)
+	if err != nil {
+		return "", err
+	}
+	target, err := d.referenceText(el, rdf.SysML+pTargetFeature)
+	if err != nil {
+		return "", err
+	}
 	guard, hasGuard := d.stringOf(el, rdf.OpenSysML+xGuard)
 	if target == "" {
 		return "", &UnsupportedError{
@@ -900,8 +918,14 @@ func (d *decoder) subactionText(el *element, depth int) (string, error) {
 // transitionText writes a transition of a state machine, in the spelling it was
 // written in, with its trigger, guard and effect.
 func (d *decoder) transitionText(el *element, depth int) (string, error) {
-	source := d.referenceText(el, rdf.SysML+pSourceFeature)
-	target := d.referenceText(el, rdf.SysML+pTargetFeature)
+	source, err := d.referenceText(el, rdf.SysML+pSourceFeature)
+	if err != nil {
+		return "", err
+	}
+	target, err := d.referenceText(el, rdf.SysML+pTargetFeature)
+	if err != nil {
+		return "", err
+	}
 	syntax := "first"
 	if written, ok := d.stringOf(el, rdf.OpenSysML+xTransitionSyntax); ok {
 		syntax = written
@@ -928,7 +952,11 @@ func (d *decoder) transitionText(el *element, depth int) (string, error) {
 			keyword = written
 		}
 		words = append(words, keyword, trigger)
-		if via := d.referenceText(el, rdf.SysML+relationshipProperty[ast.RelVia]); via != "" {
+		via, err := d.referenceText(el, rdf.SysML+relationshipProperty[ast.RelVia])
+		if err != nil {
+			return "", err
+		}
+		if via != "" {
 			words = append(words, "via", via)
 		}
 	}

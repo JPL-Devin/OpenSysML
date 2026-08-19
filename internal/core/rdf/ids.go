@@ -5,13 +5,6 @@ import (
 	"unicode/utf8"
 )
 
-// Element ids are the last segment of an element IRI, and the id a consumer
-// such as Flexo MMS derives from it, so they are restricted to [A-Za-z0-9_-].
-// EncodeElementID maps a qualified name into that alphabet reversibly, with
-// '_' as the escape character: `::` becomes `__`, a byte in [A-Za-z0-9-]
-// stands for itself, and every other byte — a literal '_' included — becomes
-// '_' plus two lowercase hex digits. Distinct names yield distinct ids.
-
 const lowerHex = "0123456789abcdef"
 
 // idByte reports whether a byte stands for itself in an encoded element id.
@@ -19,7 +12,9 @@ func idByte(c byte) bool {
 	return c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '-'
 }
 
-// EncodeElementID encodes a qualified name as an element id in [A-Za-z0-9_-]+.
+// EncodeElementID encodes a qualified name as an element id in [A-Za-z0-9_-]+:
+// `::` becomes `__`, a byte in [A-Za-z0-9-] stands for itself, and every other
+// byte — a literal '_' included — becomes '_' plus two lowercase hex digits.
 func EncodeElementID(qualifiedName string) string {
 	var b strings.Builder
 	for i := 0; i < len(qualifiedName); i++ {
