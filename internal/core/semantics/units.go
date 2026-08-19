@@ -426,6 +426,11 @@ func (m *Model) referencedUnitSymbol(sym *symbols.Symbol) *symbols.Symbol {
 	if !ok {
 		return nil
 	}
+	if resolved, aliasOK := m.resolver.ResolveAliasTarget(target); aliasOK {
+		target = resolved
+	} else {
+		return nil
+	}
 	return target
 }
 

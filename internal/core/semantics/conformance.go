@@ -271,6 +271,11 @@ func (m *Model) resolveRelTarget(sym *symbols.Symbol, rel *ast.Relationship) *sy
 	if !ok {
 		return nil
 	}
+	if resolved, aliasOK := m.resolver.ResolveAliasTarget(target); aliasOK {
+		target = resolved
+	} else {
+		return nil
+	}
 	return target
 }
 
@@ -521,7 +526,9 @@ func (m *Model) concernSubjectType(concern *symbols.Symbol) *symbols.Symbol {
 func (m *Model) declaredSubjectType(subject *symbols.Symbol) *symbols.Symbol {
 	if decl, ok := subject.Decl.(*ast.SubjectMember); ok && decl.TypeRef != nil {
 		if target, ok := m.resolver.ResolveQualified(subject.OwnerScope, decl.TypeRef); ok {
-			return target
+			if resolved, aliasOK := m.resolver.ResolveAliasTarget(target); aliasOK {
+				return resolved
+			}
 		}
 		return nil
 	}

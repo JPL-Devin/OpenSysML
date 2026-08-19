@@ -124,6 +124,14 @@ func (m *Model) superEdges(sym *symbols.Symbol) []superEdge {
 		if !ok || resolved == nil || resolved == sym || seen[resolved] {
 			continue
 		}
+		if canonical, aliasOK := m.resolver.ResolveAliasTarget(resolved); aliasOK {
+			resolved = canonical
+		} else {
+			continue
+		}
+		if resolved == sym || seen[resolved] {
+			continue
+		}
 		seen[resolved] = true
 		out = append(out, superEdge{sym: resolved, conjugated: rel.Conjugated, typing: rel.Kind == ast.RelTyping})
 	}
@@ -324,6 +332,11 @@ func (m *Model) portTypeOf(sym *symbols.Symbol) (*symbols.Symbol, bool) {
 		if !ok || resolved == nil {
 			continue
 		}
+		if canonical, aliasOK := m.resolver.ResolveAliasTarget(resolved); aliasOK {
+			resolved = canonical
+		} else {
+			continue
+		}
 		if d, isDef := resolved.Decl.(*ast.Definition); !isDef || d.Kind != ast.DefPort {
 			return nil, false
 		}
@@ -371,7 +384,9 @@ func (m *Model) featureType(sym *symbols.Symbol) *symbols.Symbol {
 			continue
 		}
 		if resolved, ok := m.resolver.ResolveQualified(sym.OwnerScope, qn); ok {
-			return resolved
+			if canonical, aliasOK := m.resolver.ResolveAliasTarget(resolved); aliasOK {
+				return canonical
+			}
 		}
 	}
 	return nil

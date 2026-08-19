@@ -726,6 +726,11 @@ func (r *Resolver) findSpecializationTargets(scope *symbols.Scope, rels []*ast.R
 		if qn, ok := target.(*ast.QualifiedName); ok {
 			// Resolve the specialization target
 			if sym, ok := r.ResolveQualified(scope, qn); ok && sym != nil {
+				if resolved, aliasOK := r.ResolveAliasTarget(sym); aliasOK {
+					sym = resolved
+				} else {
+					continue
+				}
 				parents = append(parents, sym)
 			}
 		}
@@ -748,6 +753,11 @@ func (r *Resolver) findTypingTargets(scope *symbols.Scope, rels []*ast.Relations
 		}
 		if qn, ok := target.(*ast.QualifiedName); ok {
 			if sym, ok := r.ResolveQualified(scope, qn); ok && sym != nil {
+				if resolved, aliasOK := r.ResolveAliasTarget(sym); aliasOK {
+					sym = resolved
+				} else {
+					continue
+				}
 				parents = append(parents, sym)
 			}
 		}

@@ -26,6 +26,7 @@ const cachedLibrary = `standard library package Cycles {
 	}
 	part def Tandem :> Cycle;
 	alias Bike for Cycle;
+	part def AliasedCopy :> Bike;
 	private part def Frame;
 	alias HiddenFrame for Frame;
 }`
@@ -116,6 +117,7 @@ func resolveAgainstLibrary(t *testing.T, idx *symbols.Index) map[string]string {
 	out["Cycles::Bike"] = fqnOf(r.ResolveAliasTarget(libSymbol(t, idx, "Cycles::Bike")))
 	out["Cycles::HiddenFrame"] = fqnOf(r.ResolveAliasTarget(libSymbol(t, idx, "Cycles::HiddenFrame")))
 	out["App::Copy super"] = fqnOf(firstSuper(m, libSymbol(t, idx, "App::Copy")))
+	out["Cycles::AliasedCopy super"] = fqnOf(firstSuper(m, libSymbol(t, idx, "Cycles::AliasedCopy")))
 	// Conformance across a library specialization, which the restored path reads
 	// from the record's supertype names.
 	out["Tandem conforms to Cycle"] = boolText(m.Conforms(

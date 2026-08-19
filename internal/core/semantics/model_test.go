@@ -52,6 +52,37 @@ func TestDirectSupertypes(t *testing.T) {
 	}
 }
 
+func TestDirectSupertypesResolvesAliasTargets(t *testing.T) {
+	m, root := buildModel(t, `
+		part def Base { part inherited; }
+		alias BaseAlias for Base;
+		alias BaseAlias2 for BaseAlias;
+		part def Derived :> BaseAlias2;
+		part usage : BaseAlias2;
+	`)
+	base := sym(t, root, "Base")
+	derived := sym(t, root, "Derived")
+	usage := sym(t, root, "usage")
+	for _, tc := range []struct {
+		name string
+		sym  *symbols.Symbol
+	}{
+		{"Derived", derived},
+		{"usage", usage},
+	} {
+		supers := m.DirectSupertypes(tc.sym)
+		if len(supers) != 1 || supers[0] != base {
+			t.Fatalf("DirectSupertypes(%s) = %v, want [Base]", tc.name, supers)
+		}
+	}
+	if _, ok := m.LookupMember(derived, "inherited"); !ok {
+		t.Fatal("alias supertype members should be visible on Derived")
+	}
+	if _, ok := m.LookupMember(usage, "inherited"); !ok {
+		t.Fatal("alias typing target members should be visible on usage")
+	}
+}
+
 func TestDirectSupertypesMemoizedAndDeduped(t *testing.T) {
 	// A specializes B twice (odd but legal syntax); dedupe to one edge.
 	m, root := buildModel(t, "part def B; part def A specializes B, B;")
