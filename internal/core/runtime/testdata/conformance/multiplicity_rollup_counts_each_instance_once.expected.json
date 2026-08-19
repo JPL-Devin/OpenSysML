@@ -1,0 +1,11 @@
+{
+  "type": "instance",
+  "libraries": true,
+  "instantiate": "test::asm",
+  "slots": {
+    "cell": {"type": "Sequence", "elements": [{"type": "Instance"}, {"type": "Instance"}, {"type": "Instance"}, {"type": "Instance"}]},
+    "cellMass": {"type": "Real", "value": 8.0},
+    "module": {"type": "Sequence", "elements": [{"type": "Instance"}, {"type": "Instance"}, {"type": "Instance"}]},
+    "moduleMass": {"type": "Real", "value": 7.0}
+  }
+}
