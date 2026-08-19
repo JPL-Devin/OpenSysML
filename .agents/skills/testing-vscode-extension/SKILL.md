@@ -213,6 +213,66 @@ main.sysml  package Main { import Lib::*; part w : Widget; }
 - After rebuilding `bin/sysml-lsp`, run Command Palette **"Developer: Reload Window"** so the client
   respawns against the new binary; killing the server process alone can leave the old one in use.
 
+## Diagram panel / `opensysml/render` testing (`editors/vscode/src/diagram.ts`, `src/webview/diagram.ts`)
+
+- Fixtures: `examples/views-demo.sysml` declares 7 views (3 drawable trees, 3 `not drawable`);
+  `examples/state-machine-demo.sysml` declares none and therefore exercises the `#tree` pseudo-view
+  fallback. `views-demo.sysml` has ~13 pre-existing Problems on the branch — do not use the Problems
+  count as the pass/fail oracle for rendering.
+- Learn every expected value *before* driving the GUI with a stdio JSON-RPC probe against
+  `bin/sysml-lsp`: `initialize` (check `capabilities.experimental.openSysmlRender`), `textDocument/didOpen`,
+  `opensysml/views`, `opensysml/render` (`{textDocument, view, form:"mermaid"}`), then `didChange` to see
+  the `opensysml/renderChanged {textDocument, version}` push. That gives you node ids, node counts,
+  origin line numbers and notice counts to assert against pixels.
+- With a declared-view document the panel opens with **no view selected** and the status line asks you to
+  name one — that is the implemented initial state, not a failure. Pick a view in the picker.
+- **Tables are not Mermaid.** As of 54118526 the client requests *no* `form`, so the server returns
+  `form=markdown` for a table kind and the webview shows the artifact text in a `<pre>` (header row
+  `| Element | Kind | Type | Declared in |`). If a client build ever hardcodes `form:"mermaid"` again,
+  `#table` fails with `a table rendering is not written as mermaid; ask for text or markdown`.
+  A **declared** `render asElementTable` view (`LanderViews::partsTable`) does render — a probe from a
+  workspace holding only `views-demo.sysml` reports it `supported:true`, `form=markdown`. It only lists
+  `supported:false` when the workspace *is this repository*, because the parser fixture
+  `internal/core/parser/testdata/parse/view_expose.sysml` declares a `package Views` that shadows the
+  standard library's, so `render asElementTable` no longer resolves to a standard rendering. Test the
+  diagram panel from a scratch folder, not the repo root, or expect that shadowing.
+- "Never blank" needs the webview-state cache. Hiding the panel (switching the other tab group to a
+  different tab) tears the webview down; on re-show it reconstructs from `vscode.getState().last`. Test
+  it explicitly, and test it with a view whose render *errors* — that is the case that blanked before
+  the cache existed.
+- **Click-to-source / cursor-highlight break easily on Mermaid id mangling.** Mermaid 11 decorates node
+  ids on *both* sides — `<diagramId>-flowchart-<serverNodeId>-<n>` (e.g.
+  `opensysml-diagram-3-flowchart-n2-0`), and `statediagram-state-<id>-<n>` for state diagrams — so a
+  `bareID()` that only strips a *leading* `flowchart-`/`state-` never matches the server's `n0…nN`.
+  Diagnose it (not with the GUI) in Command Palette → **Developer: Open Webview Developer Tools**, pick
+  the `active-frame (index.html)` context in the context dropdown, then run
+  `document.querySelectorAll('#diagram svg g.node').length` vs
+  `document.querySelectorAll('#diagram .opensysml-node').length` and
+  `[...document.querySelectorAll('#diagram svg g.node')].map(g=>g.id)`.
+  `0 marked` ⇒ ids don't match; clicks and highlights will silently do nothing.
+  Always check a **state** diagram as well as a flowchart — they take different id shapes.
+- A second, independent trap: a highlight rule like
+  `.opensysml-selected > rect { stroke: var(--vscode-focusBorder) }` loses to Mermaid's own
+  `<style>` block injected *inside* the SVG (same specificity, later in document order). Check
+  `getComputedStyle(rect).stroke` — if it is still Mermaid's grey, the highlight is invisible even
+  though the class is applied. `!important` on `stroke`/`stroke-width` fixes it.
+- **Judging "the node is outlined" needs the right fixture.** `LanderViews::overview` draws 14 boxes
+  scaled down to ~30 px wide, where a 3 px stroke is unreadable in a screenshot. Use a small view —
+  `LanderViews::safetyView` renders 4 large boxes — so the focus-border outline is unmistakable.
+  For an objective check independent of eyeballing, crop the same diagram rectangle out of two
+  full-resolution screenshots and run `compare -metric AE a.png b.png null:` — `0` means nothing
+  changed on screen at all. (Screenshots land at 1600x1200 while the tool's coordinate space is
+  1024x768, so multiply crop coordinates by 1.5625.)
+- **Cursor-to-node ranges run declaration-start → next-declaration-start**, so a cursor in the *leading
+  indentation* of a declaration line resolves to the **previous** element, and column 1 of the first
+  declaration line matches nothing. Drive this test with `Ctrl+G line:col` (e.g. `112:20`) or by
+  clicking on the declaration text, never `Ctrl+G <line>` alone, or you will report a false failure.
+- Live-redraw proof: type a new member (e.g. `part booster : Tank;`) inside a `part def` that the view
+  exposes and screenshot before/after — a new box must appear with no manual refresh. Undo with
+  Command Palette **File: Revert File** to keep the git tree clean.
+- Parse-error proof: delete a closing `}`. The previous SVG must stay on screen at reduced opacity
+  (`.stale`) with a red status line; zoom on the status line, and compare box brightness before/after.
+
 ## Recording tips
 
 Record the VS Code window maximized (wmctrl above). Verify visual claims by `zoom`ing the status bar

@@ -18,10 +18,14 @@ export interface Range {
   end: Position;
 }
 
-/** Where an element was declared, as the panel navigates to it. */
+/**
+ * Where an element was declared: `range` is the whole declaration, `selectionRange`
+ * the declared identifier alone, which is where clicking a node goes.
+ */
 export interface RenderOrigin {
   uri: string;
   range: Range;
+  selectionRange?: Range;
 }
 
 export interface RenderNode {

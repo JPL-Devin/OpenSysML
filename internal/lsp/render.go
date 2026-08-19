@@ -77,10 +77,12 @@ type renderRow struct {
 	Origin *renderOrigin `json:"origin,omitempty"`
 }
 
-// renderOrigin is where an element was declared, as a client navigates to it.
+// renderOrigin is where an element was declared: Range is the whole declaration,
+// SelectionRange the declared identifier alone, which is where a client goes.
 type renderOrigin struct {
-	URI   uri.URI        `json:"uri"`
-	Range protocol.Range `json:"range"`
+	URI            uri.URI         `json:"uri"`
+	Range          protocol.Range  `json:"range"`
+	SelectionRange *protocol.Range `json:"selectionRange,omitempty"`
 }
 
 // viewsParams asks for the views a document declares.
@@ -238,7 +240,12 @@ func (s *Server) origin(o view.Origin) *renderOrigin {
 	if doc == nil {
 		return nil
 	}
-	return &renderOrigin{URI: nameToURI(o.Doc), Range: spanToRange(doc.Content, o.Span)}
+	out := &renderOrigin{URI: nameToURI(o.Doc), Range: spanToRange(doc.Content, o.Span)}
+	if o.Name.Len > 0 {
+		name := spanToRange(doc.Content, o.Name)
+		out.SelectionRange = &name
+	}
+	return out
 }
 
 // queueRenderChanged tells the client the renderings of a document are stale,

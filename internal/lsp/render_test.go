@@ -245,6 +245,15 @@ func TestRenderOriginsLocateTheDeclaration(t *testing.T) {
 		if node.Origin.Range.Start.Line != 2 || node.Origin.Range.Start.Character != 2 {
 			t.Fatalf("origin starts at %+v, want line 2 character 2", node.Origin.Range.Start)
 		}
+		// The selection range is `cog` alone, so clicking selects the name
+		// rather than the whole declaration.
+		sel := node.Origin.SelectionRange
+		if sel == nil {
+			t.Fatal("the node for cog carries no selection range")
+		}
+		if sel.Start.Line != 2 || sel.Start.Character != 7 || sel.End.Character != 10 {
+			t.Fatalf("selection range = %+v, want `cog` on line 2", *sel)
+		}
 		return
 	}
 	t.Fatalf("the #tree rendering has no node for cog: %+v", out.Nodes)

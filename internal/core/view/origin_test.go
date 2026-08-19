@@ -64,6 +64,31 @@ func TestTreeNodeOriginsSpanTheirDeclaration(t *testing.T) {
 	}
 }
 
+// A node's origin names the declared identifier within the declaration it spans,
+// so a reader is taken to the name rather than the whole element.
+func TestNodeOriginsNameTheDeclaredIdentifier(t *testing.T) {
+	rendering := render(t, "tree.sysml", "VehicleViews::vehicleView")
+	sf := fixtureText(t, "tree.sysml")
+	for name, want := range map[string]string{
+		"Vehicles::Vehicle": "Vehicle",
+		"engine":            "engine",
+		"wheels":            "wheels",
+	} {
+		node := nodeNamed(t, rendering, name)
+		if node.Origin.Name.Len == 0 {
+			t.Errorf("node %s: origin names no identifier", name)
+			continue
+		}
+		if text := sf.Text(node.Origin.Name); text != want {
+			t.Errorf("node %s: origin names %q, want %q", name, text, want)
+		}
+		if node.Origin.Name.Offset < node.Origin.Span.Offset ||
+			node.Origin.Name.Offset+node.Origin.Name.Len > node.Origin.Span.Offset+node.Origin.Span.Len {
+			t.Errorf("node %s: named span %v is outside the declaration %v", name, node.Origin.Name, node.Origin.Span)
+		}
+	}
+}
+
 // An interconnection rendering locates its features and the connector each edge
 // was declared as.
 func TestInterconnectionOriginsLocateFeaturesAndConnectors(t *testing.T) {

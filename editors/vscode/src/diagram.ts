@@ -315,7 +315,9 @@ class DiagramPanel {
     if (!origin) {
       return;
     }
-    const range = toRange(origin.range);
+    // The identifier alone when the server located it: selecting the whole
+    // declaration would select the element's entire body.
+    const range = toRange(origin.selectionRange ?? origin.range);
     const document = await vscode.workspace.openTextDocument(vscode.Uri.parse(origin.uri));
     const editor = await vscode.window.showTextDocument(document, {
       viewColumn: vscode.ViewColumn.One,

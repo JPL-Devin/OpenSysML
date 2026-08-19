@@ -18,6 +18,9 @@ type Origin struct {
 	Doc string
 	// Span is the span of the declaration within that document.
 	Span source.Span
+	// Name is the span of the declared identifier alone, which is where a reader
+	// is taken to. It is the zero span for a declaration with no identifier.
+	Name source.Span
 }
 
 // Located reports whether the origin names a place in a document.
@@ -29,7 +32,11 @@ func symbolOrigin(sym *symbols.Symbol) Origin {
 	if sym == nil {
 		return Origin{}
 	}
-	return originAt(sym.DocName, sym.DeclSpan)
+	origin := originAt(sym.DocName, sym.DeclSpan)
+	if origin.Located() && sym.NameSpan.Len > 0 {
+		origin.Name = sym.NameSpan
+	}
+	return origin
 }
 
 // nodeOrigin is where an AST node of a lowered graph was written, in the

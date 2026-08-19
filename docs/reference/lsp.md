@@ -76,7 +76,8 @@ The result, for `{"view": "KitViews::widgetTree"}` over a document declaring
       "detail": "",
       "origin": {
         "uri": "file:///tmp/kit.sysml",
-        "range": { "start": { "line": 1, "character": 1 }, "end": { "line": 6, "character": 1 } }
+        "range": { "start": { "line": 1, "character": 1 }, "end": { "line": 6, "character": 1 } },
+        "selectionRange": { "start": { "line": 1, "character": 10 }, "end": { "line": 1, "character": 16 } }
       }
     },
     {
@@ -102,7 +103,7 @@ The result, for `{"view": "KitViews::widgetTree"}` over a document declaring
 | `artifact` | What to draw or show: a Mermaid diagram, the text form, or a Markdown table. |
 | `nodes`, `edges` | What the artifact is made of, so a client can map a click on it back to the source. A node's `parent` is the node containing it, when one does. An edge's `kind` is `connection`, `transition`, `succession` or `flow`. |
 | `rows`, `columns` | A table rendering's cells, in place of nodes and edges. |
-| `origin` | Where the element was declared, as a document URI and a range. Absent for an element with no locatable declaration: a standard library symbol the index served from its cache, or a step a lowering sequenced without a declaration of its own, carries none rather than a bogus range. |
+| `origin` | Where the element was declared, as a document URI, the `range` of the whole declaration and, when the declaration names one, the `selectionRange` of the identifier alone. A client highlights the element whose `range` holds the cursor and navigates to its `selectionRange`, as `textDocument/definition` does. Absent for an element with no locatable declaration: a standard library symbol the index served from its cache, or a step a lowering sequenced without a declaration of its own, carries none rather than a bogus range. |
 | `notices` | What the rendering could not represent, as the text form reports it. |
 | `version` | The version of the document the rendering was made from, so a client can tell a rendering of the text it is showing from a stale one. |
 
