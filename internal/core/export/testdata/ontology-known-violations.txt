@@ -1,0 +1,77 @@
+# Known disagreements between the graphs this tool writes and the OMG SysML v2
+# metamodel as Open-MBEE/sysmlv2-rdf-ontology renders it (version 202407). Each
+# line is one violation key — `<kind> <metaclass> <property>` — and the reason it
+# is expected; TestGoldenGraphsMatchOntology (internal/core/export) fails on any
+# key that is not listed here, and on any listed key no fixture violates any
+# more. The inventory is tracked in docs/project/roadmap.md § D7 and § D8.
+#
+# A key names no element, so this list survives a change of element identity.
+# The ontology records no abstractness, so a subject typed by a metaclass that is
+# abstract in the metamodel (sysml:Import) is not among these findings.
+
+# 1. Properties the metamodel declares on a relationship or membership element
+# that this tool collapses into the element itself (D3.3). The property name is
+# right; the subject should have been the intervening element.
+domain-mismatch AttributeUsage value             # FeatureValue_value: the feature value is written on the usage instead of a FeatureValue membership
+domain-mismatch AssignmentActionUsage value      # FeatureValue_value: same collapse on an assignment's target value
+domain-mismatch PartUsage lowerBound             # MultiplicityRange_lowerBound: the multiplicity is written on the usage instead of a MultiplicityRange
+domain-mismatch PartUsage upperBound             # MultiplicityRange_upperBound: the multiplicity is written on the usage instead of a MultiplicityRange
+domain-mismatch SubjectMembership upperBound     # MultiplicityRange_upperBound: same collapse on a subject membership
+domain-mismatch PartDefinition visibility        # Membership_visibility / Import_visibility: visibility is written on the element, not on its membership
+domain-mismatch ConstraintUsage isNegated        # Invariant_isNegated: a negated constraint is not materialized as an Invariant
+domain-mismatch TransitionUsage sourceFeature    # Connector_sourceFeature: a transition's ends are written on the transition, not on a Connector
+domain-mismatch TransitionUsage targetFeature    # Connector_targetFeature: a transition's ends are written on the transition, not on a Connector
+domain-mismatch Import importedNamespace         # NamespaceImport_importedNamespace: the import is typed sysml:Import, not NamespaceImport (D7)
+
+# 2. Object properties carrying a name as a literal where the ontology's range is
+# an element (D7). D3.1 gives references stable IRIs to point at; emitting them is
+# D7's own work.
+literal-for-object-property AttributeUsage type                                  # Feature_type: the type is written as its name, not as an element IRI
+literal-for-object-property PartUsage type                                       # Feature_type: the type is written as its name, not as an element IRI
+literal-for-object-property SuccessionAsUsage sourceFeature                      # Connector_sourceFeature: a succession end is written as a name (D2)
+literal-for-object-property urn:opensysml:sysml:InitialNode sourceFeature        # Connector_sourceFeature: a succession end is written as a name (D2)
+literal-for-object-property urn:opensysml:sysml:MultiplicityDeclaration lowerBound # MultiplicityRange_lowerBound: the bound is written as a literal, not as an Expression element (D1)
+literal-for-object-property urn:opensysml:sysml:MultiplicityDeclaration upperBound # MultiplicityRange_upperBound: the bound is written as a literal, not as an Expression element (D1)
+
+# 3. Metaclass names this tool writes into the SysML namespace that the 202407
+# rendering does not declare at all.
+unknown-class FlowUsage -                        # 202407 names this metaclass FlowConnectionUsage; SysML.owl declares no FlowUsage
+unknown-class TerminateActionUsage -             # SysML.owl declares no TerminateActionUsage at all (no Terminate* class exists in it)
+
+# 4. Metaclasses of this tool's own extension namespace, for constructs it has no
+# standard metaclass for. Deliberately outside the standard vocabulary, so the
+# ontology cannot declare them; an ontology profile has to materialize the
+# abstract-syntax elements instead (D3.3).
+unknown-class urn:opensysml:sysml:Alias -                    # an alias member, standardly a Membership with a memberShortName/memberName
+unknown-class urn:opensysml:sysml:AssumeMember -             # `assume constraint`, standardly a RequirementConstraintMembership
+unknown-class urn:opensysml:sysml:RequireMember -            # `require constraint`, standardly a RequirementConstraintMembership
+unknown-class urn:opensysml:sysml:ConstraintMember -         # a constraint member, standardly a FeatureMembership
+unknown-class urn:opensysml:sysml:DeferMember -              # `defer` in a state, standardly a StateSubactionMembership
+unknown-class urn:opensysml:sysml:FilterMember -             # `filter` in a namespace, standardly an ElementFilterMembership
+unknown-class urn:opensysml:sysml:InitialNode -              # an action's initial node, standardly a Usage typed by an initial-node kind
+unknown-class urn:opensysml:sysml:FinalNode -                # an action's final node, standardly a Usage typed by a final-node kind
+unknown-class urn:opensysml:sysml:IfBranch -                 # an if/else branch, standardly an IfActionUsage's then/else parameter
+unknown-class urn:opensysml:sysml:MultiplicityDeclaration -  # a named multiplicity, standardly a MultiplicityRange
+unknown-class urn:opensysml:sysml:Pseudostate -              # a state machine pseudostate, standardly a StateUsage or TransitionUsage shape
+unknown-class urn:opensysml:sysml:StateRegion -              # a state's region, standardly a nested StateUsage
+
+# 5. Properties written in the SysML namespace that no metaclass declares. Every
+# one of these is either a relationship the metamodel reifies as an element
+# (Specialization, Subsetting, Redefinition, ReferenceUsage) or a notation flag
+# with no metamodel property, so they belong in this tool's own namespace until
+# the elements are materialized (D3.3).
+unknown-property PartDefinition specializes                  # specialization is a Specialization element, not a property
+unknown-property PartUsage subsets                           # subsetting is a Subsetting element, not a property
+unknown-property PartUsage redefines                         # redefinition is a Redefinition element, not a property
+unknown-property SubjectMembership redefines                 # redefinition is a Redefinition element, not a property
+unknown-property ActionUsage references                      # a referenced element is a ReferenceUsage or Membership, not a property
+unknown-property ViewRenderingMembership references          # a referenced element is a ReferenceUsage or Membership, not a property
+unknown-property urn:opensysml:sysml:AssumeMember references # a referenced element is a ReferenceUsage or Membership, not a property
+unknown-property urn:opensysml:sysml:Alias aliasedElement    # an alias target is a Membership's memberElement, not a property
+unknown-property ActionUsage via                             # the port an accept trigger listens on, which the metamodel reaches through the accept action's parameters
+unknown-property TransitionUsage via                         # the port a transition's trigger listens on, reached the same way
+unknown-property AttributeUsage isAccept                     # notation flag for an accept parameter, no metamodel property
+unknown-property AttributeUsage isResult                     # notation flag for a result parameter, no metamodel property
+unknown-property OccurrenceUsage isSnapshot                  # notation flag for the `snapshot` keyword, no metamodel property
+unknown-property OccurrenceUsage isTimeslice                 # notation flag for the `timeslice` keyword, no metamodel property
+unknown-property PartUsage isChain                           # notation flag for a feature chain, no metamodel property
