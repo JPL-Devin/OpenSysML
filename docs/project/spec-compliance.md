@@ -1101,7 +1101,7 @@ a whole model or that its vocabulary is settled — see
 | Notation → RDF for every definition/usage keyword the parser accepts | `export/kinds.go` metaclass tables, `rdf_out.go` `encode` | `export_test.go:TestGoldenConversions` (18 fixtures) | ✅ Faithful |
 | RDF → notation for the mapped subset | `rdf_in.go` `ToSysML` | `export_test.go:TestGoldenConversions`, `TestConvertedNotationParses` | ✅ Faithful |
 | Round trip preserves the graph (`sysml→ttl→sysml→ttl` is stable) | both directions | `export_test.go:TestRoundTripIsLossless` | ✅ Faithful |
-| Deterministic, reversible element IRIs keyed by qualified name | `rdf/vocab.go` `ElementIRI`/`QualifiedNameOf` | `rdf_test.go:TestElementIRIRoundTrip`, `export_test.go:TestElementIRIsAreQualifiedNames` | ✅ Faithful |
+| Deterministic, reversible element IRIs keyed by qualified name, with ids in `[A-Za-z0-9_-]+` | `rdf/vocab.go` `ElementIRI`, `rdf/ids.go` `EncodeElementID`/`DecodeElementID` | `rdf_test.go:TestElementIRIRoundTrip`, `rdf/ids_test.go`, `export_test.go:TestElementIRIsEncodeQualifiedNames`, `TestFixtureElementIDsRoundTrip` | ✅ Faithful |
 | Declaration order preserved across a format with no order | `sysx:memberIndex` | `TestRoundTripIsLossless` | ✅ Faithful |
 | Turtle writer/parser (prefixes, `a`, `;`/`,` grouping, typed and language literals, long strings, escapes, `@base`) | `rdf/turtle_write.go`, `rdf/turtle_parse.go` | `rdf_test.go:TestTurtleRoundTrip`, `TestParseTurtleForms`, `TestParseTurtleEscapes` | ✅ Faithful |
 | Syntax errors rejected, never partially converted | `export.SyntaxError`, `rdf.ParseError` (with line) | `export_test.go:TestSyntaxErrorIsReported`, `cmd/sysml/convert_test.go:TestConvertErrors` | ✅ Faithful |

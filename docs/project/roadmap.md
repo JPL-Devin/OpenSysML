@@ -200,6 +200,14 @@ known. Five sub-items, in the order to take them.
 
 ### D3.1 — element identity: qualified names cannot address an element
 
+**Done.** `rdf.EncodeElementID` encodes a qualified name reversibly into `[A-Za-z0-9_-]+`
+(`::` → `__`, a byte outside `[A-Za-z0-9-]` → `_` plus two lowercase hex digits, so
+`A_B::C` → `A_5fB__C` and `A::B_C` → `A__B_5fC` stay distinct), `rdf.ElementIRI` mints
+`urn:sysmlv2:element:<encoded id>`, and the decoder reads identity from
+`sysml:qualifiedName` alone — an element referenced without that property is reported as
+unsupported, never named from its IRI (`internal/core/rdf/ids.go`,
+`internal/core/export/rdf_in.go`, `docs/reference/rdf-mapping.md` § Element IRIs).
+
 The reader derives an element's `@id` as `urnSuffix`, defined as
 `substringAfterLast(':')`. So `elmt:Demo::Vehicle` reads back as `Vehicle`, and
 `A::Widget` and `B::Widget` collapse onto one id. Every by-id path also runs

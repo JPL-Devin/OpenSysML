@@ -51,7 +51,7 @@ func TestConvertRoundTripThroughCLI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"@prefix sysml:", "elmt:Demo::Vehicle", "a sysml:PartDefinition"} {
+	for _, want := range []string{"@prefix sysml:", "elmt:Demo__Vehicle", "a sysml:PartDefinition"} {
 		if !strings.Contains(string(data), want) {
 			t.Errorf("Turtle output is missing %q:\n%s", want, data)
 		}

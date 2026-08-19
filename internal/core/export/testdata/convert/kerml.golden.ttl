@@ -11,7 +11,7 @@ elmt:Structural
     sysml:declaredName "Structural" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-elmt:Structural::Frame
+elmt:Structural__Frame
     a sysml:Structure ;
     sysml:qualifiedName "Structural::Frame" ;
     sysml:owningNamespace elmt:Structural ;
@@ -19,7 +19,7 @@ elmt:Structural::Frame
     sysml:declaredName "Frame" ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:Structural::Move
+elmt:Structural__Move
     a sysml:Behavior ;
     sysml:qualifiedName "Structural::Move" ;
     sysml:owningNamespace elmt:Structural ;
@@ -27,7 +27,7 @@ elmt:Structural::Move
     sysml:declaredName "Move" ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:Structural::Thing
+elmt:Structural__Thing
     a sysml:Class ;
     sysml:qualifiedName "Structural::Thing" ;
     sysml:owningNamespace elmt:Structural ;
@@ -35,7 +35,7 @@ elmt:Structural::Thing
     sysml:declaredName "Thing" ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:Structural::Link
+elmt:Structural__Link
     a sysml:Association ;
     sysml:qualifiedName "Structural::Link" ;
     sysml:owningNamespace elmt:Structural ;

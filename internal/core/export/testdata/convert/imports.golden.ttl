@@ -11,7 +11,7 @@ elmt:Importer
     sysml:declaredName "Importer" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-<urn:sysmlv2:element:Importer::@0>
+elmt:Importer___400
     a sysml:Import ;
     sysml:qualifiedName "Importer::@0" ;
     sysml:owningNamespace elmt:Importer ;
@@ -21,7 +21,7 @@ elmt:Importer
     sysx:isNamespaceImport "true"^^xsd:boolean ;
     sysx:hasBody "false"^^xsd:boolean .
 
-<urn:sysmlv2:element:Importer::@1>
+elmt:Importer___401
     a sysml:Import ;
     sysml:qualifiedName "Importer::@1" ;
     sysml:owningNamespace elmt:Importer ;
@@ -29,7 +29,7 @@ elmt:Importer
     sysml:importedNamespace "ScalarValues::Real" ;
     sysx:hasBody "false"^^xsd:boolean .
 
-<urn:sysmlv2:element:Importer::@2>
+elmt:Importer___402
     a sysml:Import ;
     sysml:qualifiedName "Importer::@2" ;
     sysml:owningNamespace elmt:Importer ;

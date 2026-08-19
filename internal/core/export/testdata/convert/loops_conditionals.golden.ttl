@@ -11,7 +11,7 @@ elmt:LoopsAndConditionals
     sysml:declaredName "LoopsAndConditionals" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-elmt:LoopsAndConditionals::Tick
+elmt:LoopsAndConditionals__Tick
     a sysml:ActionDefinition ;
     sysml:qualifiedName "LoopsAndConditionals::Tick" ;
     sysml:owningNamespace elmt:LoopsAndConditionals ;
@@ -19,7 +19,7 @@ elmt:LoopsAndConditionals::Tick
     sysml:declaredName "Tick" ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:LoopsAndConditionals::Control
+elmt:LoopsAndConditionals__Control
     a sysml:ActionDefinition ;
     sysml:qualifiedName "LoopsAndConditionals::Control" ;
     sysml:owningNamespace elmt:LoopsAndConditionals ;
@@ -27,216 +27,216 @@ elmt:LoopsAndConditionals::Control
     sysml:declaredName "Control" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-elmt:LoopsAndConditionals::Control::count
+elmt:LoopsAndConditionals__Control__count
     a sysml:AttributeUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::count" ;
-    sysml:owningNamespace elmt:LoopsAndConditionals::Control ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "count" ;
     sysml:direction "in" ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:LoopsAndConditionals::Control::total
+elmt:LoopsAndConditionals__Control__total
     a sysml:AttributeUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::total" ;
-    sysml:owningNamespace elmt:LoopsAndConditionals::Control ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control ;
     sysx:memberIndex "1"^^xsd:integer ;
     sysml:declaredName "total" ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:LoopsAndConditionals::Control::tick
+elmt:LoopsAndConditionals__Control__tick
     a sysml:ActionUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::tick" ;
-    sysml:owningNamespace elmt:LoopsAndConditionals::Control ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control ;
     sysx:memberIndex "2"^^xsd:integer ;
     sysml:declaredName "tick" ;
-    sysml:type elmt:LoopsAndConditionals::Tick ;
+    sysml:type elmt:LoopsAndConditionals__Tick ;
     sysx:hasBody "false"^^xsd:boolean .
 
-<urn:sysmlv2:element:LoopsAndConditionals::Control::@3>
+elmt:LoopsAndConditionals__Control___403
     a sysml:WhileLoopActionUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@3" ;
-    sysml:owningNamespace elmt:LoopsAndConditionals::Control ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control ;
     sysx:memberIndex "3"^^xsd:integer ;
     sysx:whileCondition "count > 0" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-<urn:sysmlv2:element:LoopsAndConditionals::Control::@3::@0>
+elmt:LoopsAndConditionals__Control___403___400
     a sysml:ActionUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@3::@0" ;
-    sysml:owningNamespace <urn:sysmlv2:element:LoopsAndConditionals::Control::@3> ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control___403 ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysx:declaredKeyword "perform" ;
-    sysml:references elmt:LoopsAndConditionals::Control::tick ;
+    sysml:references elmt:LoopsAndConditionals__Control__tick ;
     sysx:hasBody "false"^^xsd:boolean .
 
-<urn:sysmlv2:element:LoopsAndConditionals::Control::@4>
+elmt:LoopsAndConditionals__Control___404
     a sysml:WhileLoopActionUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@4" ;
-    sysml:owningNamespace elmt:LoopsAndConditionals::Control ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control ;
     sysx:memberIndex "4"^^xsd:integer ;
     sysx:hasBody "true"^^xsd:boolean .
 
-<urn:sysmlv2:element:LoopsAndConditionals::Control::@4::@0>
+elmt:LoopsAndConditionals__Control___404___400
     a sysml:AssignmentActionUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@4::@0" ;
-    sysml:owningNamespace <urn:sysmlv2:element:LoopsAndConditionals::Control::@4> ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control___404 ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysx:declaredKeyword "assign" ;
     sysx:target "total" ;
     sysml:value "total + 1" .
 
-<urn:sysmlv2:element:LoopsAndConditionals::Control::@5>
+elmt:LoopsAndConditionals__Control___405
     a sysml:WhileLoopActionUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@5" ;
-    sysml:owningNamespace elmt:LoopsAndConditionals::Control ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control ;
     sysx:memberIndex "5"^^xsd:integer ;
     sysx:untilCondition "total > 100" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-<urn:sysmlv2:element:LoopsAndConditionals::Control::@5::@0>
+elmt:LoopsAndConditionals__Control___405___400
     a sysml:ActionUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@5::@0" ;
-    sysml:owningNamespace <urn:sysmlv2:element:LoopsAndConditionals::Control::@5> ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control___405 ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysx:declaredKeyword "perform" ;
-    sysml:references elmt:LoopsAndConditionals::Control::tick ;
+    sysml:references elmt:LoopsAndConditionals__Control__tick ;
     sysx:hasBody "false"^^xsd:boolean .
 
-<urn:sysmlv2:element:LoopsAndConditionals::Control::@6>
+elmt:LoopsAndConditionals__Control___406
     a sysml:ForLoopActionUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@6" ;
-    sysml:owningNamespace elmt:LoopsAndConditionals::Control ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control ;
     sysx:memberIndex "6"^^xsd:integer ;
     sysx:loopVariable "idx" ;
     sysx:collection "1..10" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-<urn:sysmlv2:element:LoopsAndConditionals::Control::@6::@0>
+elmt:LoopsAndConditionals__Control___406___400
     a sysml:AssignmentActionUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@6::@0" ;
-    sysml:owningNamespace <urn:sysmlv2:element:LoopsAndConditionals::Control::@6> ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control___406 ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysx:declaredKeyword "assign" ;
     sysx:target "total" ;
     sysml:value "total + idx" .
 
-<urn:sysmlv2:element:LoopsAndConditionals::Control::@7>
+elmt:LoopsAndConditionals__Control___407
     a sysml:IfActionUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@7" ;
-    sysml:owningNamespace elmt:LoopsAndConditionals::Control ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control ;
     sysx:memberIndex "7"^^xsd:integer ;
     sysx:condition "count > 0" .
 
-<urn:sysmlv2:element:LoopsAndConditionals::Control::@7::@0>
+elmt:LoopsAndConditionals__Control___407___400
     a sysx:IfBranch ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@7::@0" ;
-    sysml:owningNamespace <urn:sysmlv2:element:LoopsAndConditionals::Control::@7> ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control___407 ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysx:branchKind "then" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-<urn:sysmlv2:element:LoopsAndConditionals::Control::@7::@0::@0>
+elmt:LoopsAndConditionals__Control___407___400___400
     a sysml:ActionUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@7::@0::@0" ;
-    sysml:owningNamespace <urn:sysmlv2:element:LoopsAndConditionals::Control::@7::@0> ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control___407___400 ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysx:declaredKeyword "perform" ;
-    sysml:references elmt:LoopsAndConditionals::Control::tick ;
+    sysml:references elmt:LoopsAndConditionals__Control__tick ;
     sysx:hasBody "false"^^xsd:boolean .
 
-<urn:sysmlv2:element:LoopsAndConditionals::Control::@8>
+elmt:LoopsAndConditionals__Control___408
     a sysml:IfActionUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@8" ;
-    sysml:owningNamespace elmt:LoopsAndConditionals::Control ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control ;
     sysx:memberIndex "8"^^xsd:integer ;
     sysx:condition "count > 0" .
 
-<urn:sysmlv2:element:LoopsAndConditionals::Control::@8::@0>
+elmt:LoopsAndConditionals__Control___408___400
     a sysx:IfBranch ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@8::@0" ;
-    sysml:owningNamespace <urn:sysmlv2:element:LoopsAndConditionals::Control::@8> ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control___408 ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysx:branchKind "then" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-<urn:sysmlv2:element:LoopsAndConditionals::Control::@8::@0::@0>
+elmt:LoopsAndConditionals__Control___408___400___400
     a sysml:ActionUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@8::@0::@0" ;
-    sysml:owningNamespace <urn:sysmlv2:element:LoopsAndConditionals::Control::@8::@0> ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control___408___400 ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysx:declaredKeyword "perform" ;
-    sysml:references elmt:LoopsAndConditionals::Control::tick ;
+    sysml:references elmt:LoopsAndConditionals__Control__tick ;
     sysx:hasBody "false"^^xsd:boolean .
 
-<urn:sysmlv2:element:LoopsAndConditionals::Control::@8::@1>
+elmt:LoopsAndConditionals__Control___408___401
     a sysx:IfBranch ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@8::@1" ;
-    sysml:owningNamespace <urn:sysmlv2:element:LoopsAndConditionals::Control::@8> ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control___408 ;
     sysx:memberIndex "1"^^xsd:integer ;
     sysx:branchKind "else" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-<urn:sysmlv2:element:LoopsAndConditionals::Control::@8::@1::@0>
+elmt:LoopsAndConditionals__Control___408___401___400
     a sysml:AssignmentActionUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@8::@1::@0" ;
-    sysml:owningNamespace <urn:sysmlv2:element:LoopsAndConditionals::Control::@8::@1> ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control___408___401 ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysx:declaredKeyword "assign" ;
     sysx:target "total" ;
     sysml:value "0" .
 
-<urn:sysmlv2:element:LoopsAndConditionals::Control::@9>
+elmt:LoopsAndConditionals__Control___409
     a sysml:IfActionUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@9" ;
-    sysml:owningNamespace elmt:LoopsAndConditionals::Control ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control ;
     sysx:memberIndex "9"^^xsd:integer ;
     sysx:condition "count > 0" .
 
-<urn:sysmlv2:element:LoopsAndConditionals::Control::@9::@0>
+elmt:LoopsAndConditionals__Control___409___400
     a sysx:IfBranch ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@9::@0" ;
-    sysml:owningNamespace <urn:sysmlv2:element:LoopsAndConditionals::Control::@9> ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control___409 ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysx:branchKind "then" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-<urn:sysmlv2:element:LoopsAndConditionals::Control::@9::@0::@0>
+elmt:LoopsAndConditionals__Control___409___400___400
     a sysml:ActionUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@9::@0::@0" ;
-    sysml:owningNamespace <urn:sysmlv2:element:LoopsAndConditionals::Control::@9::@0> ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control___409___400 ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysx:declaredKeyword "perform" ;
-    sysml:references elmt:LoopsAndConditionals::Control::tick ;
+    sysml:references elmt:LoopsAndConditionals__Control__tick ;
     sysx:hasBody "false"^^xsd:boolean .
 
-<urn:sysmlv2:element:LoopsAndConditionals::Control::@9::@1>
+elmt:LoopsAndConditionals__Control___409___401
     a sysx:IfBranch ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@9::@1" ;
-    sysml:owningNamespace <urn:sysmlv2:element:LoopsAndConditionals::Control::@9> ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control___409 ;
     sysx:memberIndex "1"^^xsd:integer ;
     sysx:branchKind "else" ;
     sysx:hasBody "false"^^xsd:boolean .
 
-<urn:sysmlv2:element:LoopsAndConditionals::Control::@9::@1::@0>
+elmt:LoopsAndConditionals__Control___409___401___400
     a sysml:IfActionUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@9::@1::@0" ;
-    sysml:owningNamespace <urn:sysmlv2:element:LoopsAndConditionals::Control::@9::@1> ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control___409___401 ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysx:condition "total > 0" .
 
-<urn:sysmlv2:element:LoopsAndConditionals::Control::@9::@1::@0::@0>
+elmt:LoopsAndConditionals__Control___409___401___400___400
     a sysx:IfBranch ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@9::@1::@0::@0" ;
-    sysml:owningNamespace <urn:sysmlv2:element:LoopsAndConditionals::Control::@9::@1::@0> ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control___409___401___400 ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysx:branchKind "then" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-<urn:sysmlv2:element:LoopsAndConditionals::Control::@9::@1::@0::@0::@0>
+elmt:LoopsAndConditionals__Control___409___401___400___400___400
     a sysml:AssignmentActionUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::@9::@1::@0::@0::@0" ;
-    sysml:owningNamespace <urn:sysmlv2:element:LoopsAndConditionals::Control::@9::@1::@0::@0> ;
+    sysml:owningNamespace elmt:LoopsAndConditionals__Control___409___401___400___400 ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysx:declaredKeyword "assign" ;
     sysx:target "total" ;
