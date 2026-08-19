@@ -12,7 +12,9 @@ func idByte(c byte) bool {
 	return c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '-'
 }
 
-// EncodeElementID encodes a qualified name as an element id in [A-Za-z0-9_-]+.
+// EncodeElementID encodes a qualified name as an element id in [A-Za-z0-9_-]+:
+// `::` becomes `__`, a byte in [A-Za-z0-9-] stands for itself, and every other
+// byte — a literal '_' included — becomes '_' plus two lowercase hex digits.
 func EncodeElementID(qualifiedName string) string {
 	var b strings.Builder
 	for i := 0; i < len(qualifiedName); i++ {
