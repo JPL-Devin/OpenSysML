@@ -17,10 +17,16 @@ each of these is a deliberate property of it rather than a defect to report:
   one release may not read back into the next, and no migration is provided.
   Treat a `.ttl` as an interchange artifact you can regenerate, not as the copy
   of record.
-- **Interoperability is unverified.** The `sysml:` vocabulary and the `elmt:`
-  element base are read from Flexo MMS's `Namespaces.kt`, but no round trip
-  through a running Flexo service or triplestore has been demonstrated, so
-  nothing here claims one (roadmap item D3).
+- **Interoperability is not yet supported.** The `sysml:` vocabulary and the
+  `elmt:` element base match Flexo MMS's `Namespaces.kt`, but known API
+  mismatches remain. Its reader derives an element's `@id` from the substring
+  after the final `:`, and `requireValidId` permits only `[a-zA-Z0-9_-]+`, so
+  OpenSysML's qualified-name element IRIs are not addressable through that
+  service's API. The reader also ignores predicates outside `sysml:` and
+  `urn:sysmlv2:annotation:json:`, so OpenSysML's `sysx:` triples do not survive
+  that path. Paged listing and query additionally require `sysml:elementId`,
+  while roots filtering uses `sysml:owner` and `sysml:owningRelatedElement`;
+  these are roadmap D3 work, not consequences of matching namespaces.
 
 Every surface reports this where it is used: the command line writes a `note:` to
 stderr, `%save` prints one, and `ConvertResponse` carries `experimental` and
@@ -40,10 +46,15 @@ The wording is one constant, `export.ExperimentalNotice`.
 
 The `sysml:` vocabulary and the `elmt:` element base match the ones the
 [Flexo MMS SysML v2 service](https://github.com/Open-MBEE/flexo-mms-sysmlv2)
-writes into its triplestore (`Namespaces.kt`), so a graph produced here is
-addressed the way that service addresses elements. Whether such a graph loads
-into a running Flexo triplestore has not been demonstrated — see
-[Status](#status-experimental).
+writes into its triplestore (`Namespaces.kt`). That is only vocabulary
+compatibility: the service's reader derives an element's `@id` from the
+substring after the final `:`, and `requireValidId` permits only
+`[a-zA-Z0-9_-]+`, so OpenSysML's qualified-name element IRIs are not
+addressable through its API. The reader also ignores predicates outside
+`sysml:` and `urn:sysmlv2:annotation:json:`, so `sysx:` triples do not survive
+that path. Paged listing and query require `sysml:elementId`, while roots
+filtering uses `sysml:owner` and `sysml:owningRelatedElement`; these are roadmap
+D3 work. See [Status](#status-experimental).
 
 OpenSysML's own additions are namespaced separately as `sysx:` so a consumer can
 tell them from the standard vocabulary and ignore them if it wants only standard
