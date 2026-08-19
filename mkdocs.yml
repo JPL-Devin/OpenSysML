@@ -136,6 +136,7 @@ nav:
       - project/README.md
       - Spec compliance: project/spec-compliance.md
       - Training examples: project/training-examples.md
+      - Pilot differential: project/pilot-differential.md
       - Roadmap: project/roadmap.md
       - Releasing: project/releasing.md
       - macOS distribution: project/macos-distribution.md
