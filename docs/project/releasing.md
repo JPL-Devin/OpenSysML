@@ -206,13 +206,14 @@ On a forked PR the context is withheld, so `SONAR_TOKEN` is empty; the job
 halts successfully rather than failing every outside contribution. When the
 token is present, a failing scan fails the job.
 
-One-time maintainer step: SonarCloud does not create a project from a CI-run
-scan (the scanner sends branch parameters, and Cloud cannot provision from
-those — the first run fails with `Could not find a default branch for project
-with key 'Open-MBEE_OpenSysML'`). Create the project `Open-MBEE_OpenSysML`
-under the `openmbee` organization first, either from the SonarCloud UI or with
-`POST api/projects/create` followed by `POST api/project_branches/rename`,
-using a token that has Create Projects in that organization.
+One-time maintainer step (already done for `Open-MBEE_OpenSysML`, but true of
+any future project): SonarCloud does not create a project from a CI-run scan
+(the scanner sends branch parameters, and Cloud cannot provision from those —
+the first run fails with `Could not find a default branch for project with key
+'...'`). Create the project under the organization first, either from the
+SonarCloud UI or with `POST api/projects/create` followed by
+`POST api/project_branches/rename`, using a token that has Create Projects in
+that organization.
 
 ## Releasing opensysml to PyPI
 
