@@ -113,7 +113,7 @@ func (r *Renderer) regionNode(region *ast.StateRegion, ids *nodeIDs) *Node {
 func (r *Renderer) stateNode(state *ast.StateNode, graph *lower.StateGraph, ids *nodeIDs) *Node {
 	node := &Node{ID: ids.take(), Kind: "state", Name: notationName(state.Name)}
 	var detail []string
-	if state.IsInitial || graph.Initial == state || initialOfRegion(graph, state) {
+	if graph.IsInitial(state) || graph.Initial == state || initialOfRegion(graph, state) {
 		detail = append(detail, "initial")
 	}
 	if state.IsFinal {

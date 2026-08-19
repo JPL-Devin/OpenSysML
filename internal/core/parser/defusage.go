@@ -1342,7 +1342,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		}
 
 		// ValuePart? — a satisfy usage may bind a value like any usage.
-		if p.accept2(lexer.Eq) || p.accept2(lexer.ColonEq) || p.acceptKeyword("default") {
+		if p.acceptValueOperator() {
 			u.Value = p.ParseExpression()
 		}
 
@@ -1533,7 +1533,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 	postRels := p.parseRelationships(true)
 	u.Relationships = append(u.Relationships, postRels...)
 
-	if p.accept2(lexer.Eq) || p.accept2(lexer.ColonEq) || p.acceptKeyword("default") {
+	if p.acceptValueOperator() {
 		u.Value = p.ParseExpression()
 	}
 	p.parseTierBEnds(u, kind)
@@ -1777,23 +1777,17 @@ func (p *Parser) parseBodyMember() ast.Node {
 		return m
 	}
 
-	// Check for metadata annotation: @Type{props}
-	// This creates a metadata usage (annotation statement)
+	// A metadata usage: `@Type;` or `@Type { prop = value; }`.
 	if p.at(lexer.At) {
-		metadata := p.parseMetadataAnnotations()
-		if len(metadata) > 0 {
-			// Wrap first metadata in membership
-			// (Multiple annotations would need different representation)
-			pm := metadata[0]
-			pm.SetLeadingTrivia(trivia)
-			m := &ast.Membership{
-				Visibility: vis,
-				Member:     pm,
-			}
-			m.NodeSpan = p.spanFrom(start)
-			m.SetLeadingTrivia(trivia)
-			return m
+		pm := p.parseMetadataUsage(start)
+		if pm == nil {
+			return nil
 		}
+		pm.SetLeadingTrivia(trivia)
+		m := &ast.Membership{Visibility: vis, Member: pm}
+		m.NodeSpan = p.spanFrom(start)
+		m.SetLeadingTrivia(trivia)
+		return m
 	}
 
 	if p.atKeyword("import") {
@@ -2472,7 +2466,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 			u.Relationships = append(u.Relationships, p.parseRelationships(true)...)
 
 			// Parse optional value (= expr or default expr)
-			if p.accept2(lexer.Eq) || p.acceptKeyword("default") {
+			if p.acceptValueOperator() {
 				u.Value = p.ParseExpression()
 			}
 
@@ -2527,7 +2521,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 		u.Relationships = append(u.Relationships, p.parseRelationships(true)...)
 
 		// Parse optional value (= expr or default expr)
-		if p.accept2(lexer.Eq) || p.acceptKeyword("default") {
+		if p.acceptValueOperator() {
 			u.Value = p.ParseExpression()
 		}
 
@@ -2756,7 +2750,7 @@ func (p *Parser) parseReferenceMemberUsage(start int, kind ast.UsageKind, kw, no
 	}
 	specRels := p.parseRelationships(true)
 	u.Relationships = append(u.Relationships, specRels...)
-	if allowValue && (p.accept2(lexer.Eq) || p.accept2(lexer.ColonEq) || p.acceptKeyword("default")) {
+	if allowValue && p.acceptValueOperator() {
 		u.Value = p.ParseExpression()
 	}
 
@@ -3413,50 +3407,39 @@ func (p *Parser) parseMultiplicityBound() ast.Node {
 	return p.parseBinary(precAdditive)
 }
 
-// parseMetadataAnnotations parses optional metadata annotations: @Type{props}
-// Can appear multiple times. Returns slice of PrefixMetadata nodes.
-func (p *Parser) parseMetadataAnnotations() []*ast.PrefixMetadata {
-	var metadata []*ast.PrefixMetadata
+// parseMetadataUsage parses one `@` metadata usage (SysML v2 MetadataUsage):
+// `@Type;`, or `@Type { prop = value; }` binding its features. Each is a member
+// of its own rather than a prefix of the declaration after it.
+func (p *Parser) parseMetadataUsage(start int) *ast.PrefixMetadata {
+	p.advance() // '@'
 
-	for p.at(lexer.At) {
-		start := p.peek().Span.Offset
-		p.advance() // consume '@'
+	metaType := p.parseQualifiedName()
+	if metaType == nil {
+		p.error(p.peek().Span, "expected metadata type after '@'")
+		return nil
+	}
+	pm := &ast.PrefixMetadata{Type: metaType}
 
-		// Parse metadata type
-		metaType := p.parseQualifiedName()
-		if metaType == nil {
-			p.error(p.peek().Span, "expected metadata type after '@'")
-			break
-		}
-
-		pm := &ast.PrefixMetadata{
-			Type: metaType,
-		}
-
-		// Optional body: {prop = value; ...}
-		if p.at(lexer.LBrace) {
-			p.advance() // consume '{'
-			// Parse body as generic members (assignments/nested declarations)
-			var body []ast.Node
-			for !p.at(lexer.RBrace) && !p.atEOF() {
-				// Parse as body member or expression statement
-				m := p.parseBodyMember()
-				if m != nil {
-					body = append(body, m)
-				} else {
-					// Try expression + semicolon
-					expr := p.ParseExpression()
-					p.accept2(lexer.Semicolon)
-					body = append(body, expr)
-				}
+	if p.at(lexer.LBrace) {
+		p.advance() // '{'
+		var body []ast.Node
+		for !p.at(lexer.RBrace) && !p.atEOF() {
+			if m := p.parseBodyMember(); m != nil {
+				body = append(body, m)
+				continue
 			}
-			p.expect(lexer.RBrace, "expected '}' after metadata body")
-			pm.Body = body
+			expr := p.ParseExpression()
+			p.accept2(lexer.Semicolon)
+			body = append(body, expr)
 		}
-
-		pm.NodeSpan = p.spanFrom(start)
-		metadata = append(metadata, pm)
+		p.expect(lexer.RBrace, "expected '}' after metadata body")
+		pm.Body = body
+	} else {
+		// A usage is a member of its own, so it ends here rather than annotating
+		// whatever follows it — `#Type` is the prefix spelling.
+		p.expect(lexer.Semicolon, "expected ';' or '{' after a metadata usage")
 	}
 
-	return metadata
+	pm.NodeSpan = p.spanFrom(start)
+	return pm
 }

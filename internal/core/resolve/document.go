@@ -82,6 +82,10 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		for _, a := range d.About {
 			r.ResolveQualified(scope, a)
 		}
+	case *ast.PrefixMetadata:
+		// A metadata usage written as a member of its own names its type the same
+		// way a prefix does.
+		r.ResolveQualified(scope, d.Type)
 	case *ast.FilterMember:
 		r.InCondition(func() { r.resolveExpr(scope, d.Condition) })
 	case *ast.Definition:

@@ -18,11 +18,11 @@ they are removed before 0.1.0, with proto field 3 and the name `slots` reserved.
 ## Where the repository stands
 
 Full gate green: `gofmt -l .` empty, `go build ./...`, `go vet ./...`,
-`go test ./...`, `go test -race ./...`, and the corpus gate run locally at its ceiling.
+`go test ./...`, `go test -race ./...`, and the corpus gate run locally clean.
 
 | Gate | Count |
 |---|---|
-| OMG training corpus | **98/100 clean** — 2 files / 4 errors, both pinned OMG source bugs (the ceiling) |
+| OMG training corpus | **100/100 clean** — no file reports a semantic error |
 | Stdlib parser conformance | 95/95 clean — 94 vendored OMG files and 1 non-normative OpenSysML extension |
 | Execution conformance cases | 297 |
 | gRPC conformance fixtures | 14 |

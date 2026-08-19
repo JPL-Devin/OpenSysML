@@ -38,7 +38,7 @@ pytest python/tests/ -v
 
 The OMG training-corpus gate skips while the corpus is absent, so fetch it and
 run it explicitly — the expected result is the pinned baseline, currently
-98/100 files clean:
+100/100 files clean:
 
 ```bash
 ./scripts/download-training-examples.sh

@@ -306,3 +306,76 @@ func TestStateUsageMachineIsChecked(t *testing.T) {
 	}
 }`, CodeEndpointNotOfMachine, "Other::running")
 }
+
+// The machine's entry action stands in for a start pseudostate, so a transition
+// naming it as a source is legal (an ordinary action is rejected by name
+// resolution, see resolve.TestResolveEndpointOrdinaryActionIsNotAVertex).
+func TestTransitionOutOfEntryActionIsLegal(t *testing.T) {
+	wantClean(t, `package test {
+	state def M {
+		entry action start { }
+		transition start then busy;
+		state busy;
+		state done;
+		transition busy to done;
+	}
+}`)
+}
+
+// An entry action stands in for a start pseudostate only in the bare completion
+// shape: a triggered or guarded transition is an edge between two vertices, and
+// an entry action is neither.
+func TestTriggeredTransitionOutOfEntryActionIsNotAVertex(t *testing.T) {
+	wantOneError(t, `package test {
+	state def M {
+		entry action begin { }
+		transition begin accept Warning then busy;
+		state busy;
+	}
+}`, CodeEndpointNotOfMachine, "begin")
+	wantOneError(t, `package test {
+	state def M {
+		entry action begin { }
+		transition begin if true then busy;
+		state busy;
+	}
+}`, CodeEndpointNotOfMachine, "begin")
+}
+
+// Nothing transitions into an entry action.
+func TestTransitionIntoEntryActionIsNotAVertex(t *testing.T) {
+	wantOneError(t, `package test {
+	state def M {
+		entry action begin { }
+		transition begin then busy;
+		state busy;
+		transition busy then begin;
+	}
+}`, CodeEndpointNotOfMachine, "begin")
+}
+
+// Only the body a transition is written in lends it an entry action to leave: a
+// name reaching another state's is not a start designation, and lowering agrees.
+func TestTransitionOutOfAnotherStatesEntryActionIsNotAVertex(t *testing.T) {
+	wantOneError(t, `package test {
+	state def M {
+		state a { entry action begin { } }
+		state b;
+		transition begin then b;
+	}
+}`, CodeEndpointNotOfMachine, "begin")
+}
+
+// A start designation names the state the machine starts in, so a transition out
+// of an entry action into a pseudostate is not one.
+func TestEntryActionTransitionIntoPseudostateIsNotAVertex(t *testing.T) {
+	wantOneError(t, `package test {
+	state def M {
+		entry action begin { }
+		transition begin then j;
+		junction j;
+		state b;
+		transition j then b;
+	}
+}`, CodeEndpointNotOfMachine, "begin")
+}

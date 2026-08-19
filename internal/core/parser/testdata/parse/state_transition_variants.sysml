@@ -6,6 +6,9 @@ state def TransitionVariants {
 	// transition with trigger
 	transition s1 to s2 when event1;
 	
+	// `first` is optional, so a bare source may be followed by `then`
+	transition s2 then s3;
+	
 	// General member (tests Phase B2 fallback)
 	attribute stateData : String;
 }

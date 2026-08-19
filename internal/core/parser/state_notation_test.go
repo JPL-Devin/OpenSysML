@@ -251,6 +251,47 @@ func TestTransitionToSpellingOutsideAStateBody(t *testing.T) {
 	}
 }
 
+// `first` is optional before a transition's source, so the clauses that follow
+// it read the same whether it was written or not (SysML `TransitionUsage`).
+func TestTransitionSourceWithoutFirstKeyword(t *testing.T) {
+	members := stateDefMembers(t, `
+package Test {
+	attribute def Warning;
+	state def Controller {
+		entry action 'initial';
+		transition 'initial' then off;
+		state off;
+		state on;
+		transition off accept w : Warning if true do perform notify then on;
+	}
+}`)
+
+	var transitions []*ast.TransitionMember
+	for _, member := range members {
+		if trans, ok := member.(*ast.TransitionMember); ok {
+			transitions = append(transitions, trans)
+		}
+	}
+	if len(transitions) != 2 {
+		t.Fatalf("expected 2 transitions, got %d", len(transitions))
+	}
+	for i, want := range [][2]string{{"initial", "off"}, {"off", "on"}} {
+		if got := ast.SimpleName(transitions[i].Source); got != want[0] {
+			t.Errorf("transition %d: expected source %q, got %q", i, want[0], got)
+		}
+		if got := ast.SimpleName(transitions[i].Target); got != want[1] {
+			t.Errorf("transition %d: expected target %q, got %q", i, want[1], got)
+		}
+	}
+	if transitions[1].Trigger == nil || transitions[1].Guard == nil || len(transitions[1].Effect) != 1 {
+		t.Errorf("expected the trigger, guard and effect to be read: %+v", transitions[1])
+	}
+	if transitions[0].Name != "" || transitions[1].Name != "" {
+		t.Errorf("a bare source is the source, not the transition's name: %q, %q",
+			transitions[0].Name, transitions[1].Name)
+	}
+}
+
 // A transition whose target the parser could not read names no edge, so it is an
 // error node: a TransitionMember with no target would be dereferenced when the
 // machine is lowered.

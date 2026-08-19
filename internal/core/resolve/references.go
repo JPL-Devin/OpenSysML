@@ -117,6 +117,8 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		for _, a := range d.About {
 			c.add(scope, a)
 		}
+	case *ast.PrefixMetadata:
+		c.add(scope, d.Type)
 	case *ast.FilterMember:
 		c.conditionExpr(scope, d.Condition)
 	case *ast.Definition:
