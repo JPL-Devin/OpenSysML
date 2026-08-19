@@ -13,7 +13,7 @@ log = logging.getLogger("mkdocs.hooks.repo_links")
 
 # Inline links and images; docs/ uses no reference-style links.
 LINK = re.compile(r"(!?\[[^\]]*\]\()([^)\s]+)((?:\s+\"[^\"]*\")?\))")
-FENCE = re.compile(r"^\s*(```+|~~~+)")
+FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 SCHEME = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:")
 
 
@@ -56,12 +56,20 @@ def on_page_markdown(markdown: str, page, config, files) -> str:
         target = _rewrite(match.group(2), page_dir, docs_dir, repo_root, repo_url)
         return f"{match.group(1)}{target}{match.group(3)}"
 
-    out, in_fence, fence = [], False, ""
+    out, fence = [], ""
     for line in markdown.splitlines(keepends=True):
         marker = FENCE.match(line)
-        if marker and (not in_fence or line.strip().startswith(fence)):
-            in_fence, fence = not in_fence, marker.group(1)
-            out.append(line)
-            continue
-        out.append(line if in_fence else LINK.sub(substitute, line))
+        if marker:
+            run, info = marker.group(1), marker.group(2).strip()
+            if not fence:
+                fence = run
+                out.append(line)
+                continue
+            # CommonMark: a closing fence is the same character, at least as long,
+            # and carries no info string — so ```markdown showing ```bash stays open.
+            if not info and run[0] == fence[0] and len(run) >= len(fence):
+                fence = ""
+                out.append(line)
+                continue
+        out.append(line if fence else LINK.sub(substitute, line))
     return "".join(out)
