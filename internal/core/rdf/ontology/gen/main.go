@@ -107,7 +107,7 @@ func run(root, out string) error {
 
 var (
 	versionBadge     = regexp.MustCompile(`Version-(\d+)-`)
-	commitSHAPattern = regexp.MustCompile(`^[0-9a-f]{40}$`)
+	commitSHAPattern = regexp.MustCompile(`^([0-9a-f]{40}|[0-9a-f]{64})$`)
 )
 
 // ontologyVersion reads the metamodel version out of the checkout's own README

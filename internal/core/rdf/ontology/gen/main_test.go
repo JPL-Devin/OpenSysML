@@ -34,6 +34,14 @@ func TestCommitSHADetachedHead(t *testing.T) {
 	assertCommitSHA(t, root, testCommitSHA)
 }
 
+func TestCommitSHA256DetachedHead(t *testing.T) {
+	root := newGitTestRoot(t)
+	sha := strings.Repeat("a", 64)
+	writeGitTestFile(t, filepath.Join(root, ".git", "HEAD"), sha+"\n")
+
+	assertCommitSHA(t, root, sha)
+}
+
 func TestCommitSHAGitdirFile(t *testing.T) {
 	root := t.TempDir()
 	gitDir := filepath.Join(root, "gitdir")
