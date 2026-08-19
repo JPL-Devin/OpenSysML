@@ -206,13 +206,25 @@ The reader derives an element's `@id` as `urnSuffix`, defined as
 `requireValidId`, whose regex is `[a-zA-Z0-9_-]+`, so an id containing `::` cannot be
 requested at all. Qualified-name IRIs are therefore unusable as Flexo element identity.
 
-The fix is to mint an id that satisfies that regex while keeping conversion
-deterministic — a UUID derived from the qualified name (a v5-style name-based UUID over
-a fixed namespace) rather than a random one, so re-converting an unedited model still
-yields the same IRIs. The qualified name then lives in `sysml:qualifiedName` (already
-emitted), and the decoder must stop recovering identity from the IRI
-(`rdf.QualifiedNameOf`) and read it from that property instead. This is the item that
-changes every fixture under `internal/core/export/testdata/convert`, so it goes first.
+The fix is an id that satisfies that regex while keeping conversion deterministic. **A UUID
+is not required**: Flexo types every id as a plain `String` (`Identified.atId`, and no
+`format: uuid` anywhere in its `openapi/openapi.yaml`); `generateId()` returns a random UUID
+only as the default when a request omits an id. So the id can stay readable — encode the
+qualified name reversibly into `[a-zA-Z0-9_-]`, with `::` becoming a separator that a name
+cannot itself produce (escape `_` before substituting, or `A_B::C` and `A::B_C` collide) and a
+hex escape for the characters a name may legally carry but an id may not — non-ASCII names and
+quoted names with spaces or punctuation. Readable ids also keep the graph diffable, which a
+UUID scheme gives up. The cost, and the reason to decide it deliberately: the OMG API's own
+implementations do treat element ids as UUIDs, so a readable id may be rejected by a client
+other than Flexo — that is inference from convention, not something read out of Flexo's
+sources, and it is worth checking against whichever client is meant to consume the graph
+before the encoding is fixed.
+
+Either way the qualified name lives in `sysml:qualifiedName` (already emitted), and the decoder
+must stop recovering identity from the IRI (`rdf.QualifiedNameOf`) and read it from that
+property instead — that decoupling, not the choice of encoding, is the substance of D3.1. This
+is the item that changes every fixture under `internal/core/export/testdata/convert`, so it
+goes first.
 
 ### D3.2 — `sysml:elementId` is required and is not emitted
 
