@@ -249,7 +249,8 @@ github.com/Open-MBEE/OpenSysML
 ## Documentation
 
 Documentation is organized by what a reader wants, not by the feature that landed. Four areas,
-mapped in [docs/README.md](docs/README.md):
+mapped in [docs/README.md](docs/README.md) and published as
+<https://jpl-devin.github.io/OpenSysML/>:
 
 - **[docs/guide/](docs/guide/)** — *how do I use it?* A numbered handbook read in order.
 - **[docs/reference/](docs/reference/)** — *what does this flag, command, API or triple mean?*
@@ -272,6 +273,9 @@ When a change needs documenting:
   [docs/project/roadmap.md](docs/project/roadmap.md) and
   [docs/project/training-examples.md](docs/project/training-examples.md). Recount all four
   together, in one commit.
+- **A new page goes in the `nav:` of [mkdocs.yml](mkdocs.yml)**, in the reading order of its
+  area, or it is published but unreachable from the site's navigation. `make docs-install`
+  once, then `make docs` builds the site the way CI does and `make docs-serve` previews it.
 - **Moving or renaming a page means updating its inbound links.** Run
   `python3 scripts/check-doc-links.py` — it fails on a link to a missing file or heading and
   runs in CI. Where a released `README.md` linked the old path, leave a one-paragraph pointer

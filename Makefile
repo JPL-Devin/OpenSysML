@@ -1,4 +1,4 @@
-.PHONY: all build build-sysml build-lsp build-grpc test lint clean install help python-test python-install python-proto vscode-grammar vscode-build vscode-package
+.PHONY: all build build-sysml build-lsp build-grpc test lint clean install help python-test python-install python-proto vscode-grammar vscode-build vscode-package docs docs-install docs-serve
 
 # Version information
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -21,6 +21,7 @@ BIN_DIR := bin
 PYTHON_DIR := python
 VSCODE_DIR := editors/vscode
 PYTHON ?= python3
+SITE_DIR := site
 
 all: build test python-test ## Build and test everything
 
@@ -66,6 +67,7 @@ clean: ## Remove build artifacts
 	rm -rf $(BIN_DIR)
 	rm -f coverage.txt
 	rm -f sysml sysml-lsp sysml-grpc
+	rm -rf $(SITE_DIR)
 	@echo "✓ Cleaned"
 
 install: build ## Install binaries to $GOPATH/bin
@@ -118,6 +120,17 @@ vscode-package: ## Package the VS Code extension as a .vsix for side-loading
 	@echo "Packaging the VS Code extension..."
 	cd $(VSCODE_DIR) && npm ci && npm run package
 	@echo "✓ Packaged $(VSCODE_DIR)/opensysml-sysml.vsix"
+
+docs-install: ## Install the documentation site toolchain
+	$(PYTHON) -m pip install -r docs-requirements.txt
+
+docs: ## Build the documentation site, failing on a broken link
+	@echo "Building the documentation site..."
+	$(PYTHON) -m mkdocs build --strict --site-dir $(SITE_DIR)
+	@echo "✓ Built $(SITE_DIR)/"
+
+docs-serve: ## Serve the documentation site with live reload
+	$(PYTHON) -m mkdocs serve --strict
 
 help: ## Show this help message
 	@echo "Available targets:"
