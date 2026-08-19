@@ -6,7 +6,7 @@ A complete, production-grade SysML v2 implementation in Go—providing language 
 
 **Get started in 5 minutes:** [the guide](docs/guide/)
 
-**All documentation, searchable:** <https://jpl-devin.github.io/OpenSysML/> — the same
+**All documentation, searchable:** <https://open-mbee.github.io/OpenSysML/> — the same
 pages as [docs/](docs/), rendered from `main`.
 
 ### Install
