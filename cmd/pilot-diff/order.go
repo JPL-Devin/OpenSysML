@@ -24,6 +24,7 @@ func orderByImports(repo, dir string, files []string) []string {
 	declaredBy := make(map[string]string, len(files))
 	imports := make(map[string][]string, len(files))
 	for _, rel := range files {
+		// #nosec G304 -- the corpus root to compare is named on the command line.
 		content, err := os.ReadFile(filepath.Join(repo, dir, rel))
 		if err != nil {
 			// The file is read again on both analysis paths, which report the

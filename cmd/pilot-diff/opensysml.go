@@ -39,6 +39,7 @@ func openSysMLDiagnostics(repo, dir string, files []string) (map[string][]diagno
 	ws := model.NewWorkspace()
 	contents := make(map[string][]byte, len(files))
 	for _, rel := range files {
+		// #nosec G304 -- the corpus root to compare is named on the command line.
 		content, err := os.ReadFile(filepath.Join(repo, dir, rel))
 		if err != nil {
 			return nil, fmt.Errorf("read %s: %w", rel, err)

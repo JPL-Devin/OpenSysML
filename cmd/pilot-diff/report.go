@@ -260,7 +260,7 @@ func countUnmapped(unmapped map[UnmappedRow]int, examples []string) {
 }
 
 func writeReports(dir string, report *Report) error {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return err
 	}
 
@@ -285,12 +285,12 @@ func writeReports(dir string, report *Report) error {
 		return err
 	}
 	jsonPath := filepath.Join(dir, "pilot-diff.json")
-	if err := os.WriteFile(jsonPath, append(encoded, '\n'), 0o644); err != nil {
+	if err := os.WriteFile(jsonPath, append(encoded, '\n'), 0o600); err != nil {
 		return err
 	}
 
 	textPath := filepath.Join(dir, "pilot-diff.txt")
-	if err := os.WriteFile(textPath, []byte(renderText(report)), 0o644); err != nil {
+	if err := os.WriteFile(textPath, []byte(renderText(report)), 0o600); err != nil {
 		return err
 	}
 

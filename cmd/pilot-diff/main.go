@@ -100,6 +100,10 @@ func run(repo, validator, out string, timeout time.Duration) error {
 	}
 
 	report.summarize()
+	// A mistyped -repo would otherwise look like a clean run.
+	if report.Totals.Files == 0 {
+		return fmt.Errorf("no .sysml files found under %s", repo)
+	}
 	return writeReports(out, report)
 }
 
