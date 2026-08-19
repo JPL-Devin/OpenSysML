@@ -14,7 +14,6 @@ import (
 	"go/format"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -106,7 +105,10 @@ func run(root, out string) error {
 	return nil
 }
 
-var versionBadge = regexp.MustCompile(`Version-(\d+)-`)
+var (
+	versionBadge     = regexp.MustCompile(`Version-(\d+)-`)
+	commitSHAPattern = regexp.MustCompile(`^[0-9a-f]{40}$`)
+)
 
 // ontologyVersion reads the metamodel version out of the checkout's own README
 // badge, so the recorded version cannot drift from the file it describes.
@@ -124,12 +126,148 @@ func ontologyVersion(path string) (string, error) {
 }
 
 func commitSHA(root string) (string, error) {
-	cmd := exec.Command("git", "-C", root, "rev-parse", "HEAD")
-	sha, err := cmd.Output()
+	gitDir, refsDir, err := gitMetadataDirs(root)
 	if err != nil {
-		return "", fmt.Errorf("read ontology commit: %w", err)
+		return "", err
 	}
-	return strings.TrimSpace(string(sha)), nil
+	headPath := filepath.Join(gitDir, "HEAD")
+	head, err := os.ReadFile(headPath)
+	if err != nil {
+		return "", gitMetadataErrorf(headPath, "read HEAD: %w", err)
+	}
+	headValue := strings.TrimSpace(string(head))
+	if strings.HasPrefix(headValue, "ref:") {
+		ref := strings.TrimSpace(strings.TrimPrefix(headValue, "ref:"))
+		if !validGitRef(ref) {
+			return "", gitMetadataErrorf(headPath, "invalid symbolic ref %q", ref)
+		}
+		return commitSHAForRef(refsDir, ref)
+	}
+	return validateCommitSHA(headValue, headPath)
+}
+
+type gitMetadataError struct {
+	path string
+	err  error
+}
+
+func (e *gitMetadataError) Error() string {
+	return fmt.Sprintf("git metadata %s: %v", e.path, e.err)
+}
+
+func (e *gitMetadataError) Unwrap() error {
+	return e.err
+}
+
+func gitMetadataErrorf(path, format string, args ...any) error {
+	return &gitMetadataError{path: path, err: fmt.Errorf(format, args...)}
+}
+
+func gitMetadataDirs(root string) (string, string, error) {
+	dotGit := filepath.Join(root, ".git")
+	info, err := os.Stat(dotGit)
+	if err != nil {
+		return "", "", gitMetadataErrorf(dotGit, "read .git: %w", err)
+	}
+	gitDir := dotGit
+	if !info.IsDir() {
+		data, err := os.ReadFile(dotGit)
+		if err != nil {
+			return "", "", gitMetadataErrorf(dotGit, "read gitdir: %w", err)
+		}
+		line := strings.TrimSpace(string(data))
+		const prefix = "gitdir:"
+		if !strings.HasPrefix(line, prefix) {
+			return "", "", gitMetadataErrorf(dotGit, "invalid gitdir file")
+		}
+		target := strings.TrimSpace(strings.TrimPrefix(line, prefix))
+		if target == "" {
+			return "", "", gitMetadataErrorf(dotGit, "empty gitdir path")
+		}
+		if !filepath.IsAbs(target) {
+			target = filepath.Join(root, target)
+		}
+		gitDir = filepath.Clean(target)
+		info, err = os.Stat(gitDir)
+		if err != nil {
+			return "", "", gitMetadataErrorf(dotGit, "read gitdir %s: %w", gitDir, err)
+		}
+		if !info.IsDir() {
+			return "", "", gitMetadataErrorf(dotGit, "gitdir %s is not a directory", gitDir)
+		}
+	}
+
+	refsDir := gitDir
+	commondirPath := filepath.Join(gitDir, "commondir")
+	data, err := os.ReadFile(commondirPath)
+	if err == nil {
+		commonDir := strings.TrimSpace(string(data))
+		if commonDir == "" {
+			return "", "", gitMetadataErrorf(commondirPath, "empty common directory path")
+		}
+		if !filepath.IsAbs(commonDir) {
+			commonDir = filepath.Join(gitDir, commonDir)
+		}
+		refsDir = filepath.Clean(commonDir)
+		info, err := os.Stat(refsDir)
+		if err != nil {
+			return "", "", gitMetadataErrorf(commondirPath, "read common directory %s: %w", refsDir, err)
+		}
+		if !info.IsDir() {
+			return "", "", gitMetadataErrorf(commondirPath, "common directory %s is not a directory", refsDir)
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return "", "", gitMetadataErrorf(commondirPath, "read common directory: %w", err)
+	}
+	return gitDir, refsDir, nil
+}
+
+func validGitRef(ref string) bool {
+	if !strings.HasPrefix(ref, "refs/") || strings.ContainsAny(ref, " \t\r\n") {
+		return false
+	}
+	for _, part := range strings.Split(ref, "/") {
+		if part == "" || part == "." || part == ".." {
+			return false
+		}
+	}
+	return true
+}
+
+func commitSHAForRef(refsDir, ref string) (string, error) {
+	loosePath := filepath.Join(refsDir, filepath.FromSlash(ref))
+	data, err := os.ReadFile(loosePath)
+	if err == nil {
+		return validateCommitSHA(strings.TrimSpace(string(data)), loosePath)
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		return "", gitMetadataErrorf(loosePath, "read ref %s: %w", ref, err)
+	}
+
+	packedPath := filepath.Join(refsDir, "packed-refs")
+	data, err = os.ReadFile(packedPath)
+	if err != nil {
+		return "", gitMetadataErrorf(packedPath, "read ref %s: %w", ref, err)
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "^") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 2 || fields[1] != ref {
+			continue
+		}
+		return validateCommitSHA(fields[0], packedPath)
+	}
+	return "", gitMetadataErrorf(packedPath, "ref %s not found", ref)
+}
+
+func validateCommitSHA(sha, path string) (string, error) {
+	if !commitSHAPattern.MatchString(sha) {
+		return "", gitMetadataErrorf(path, "invalid commit SHA %q", sha)
+	}
+	return sha, nil
 }
 
 // declaration is one top-level RDF/XML declaration in the ontology: an
