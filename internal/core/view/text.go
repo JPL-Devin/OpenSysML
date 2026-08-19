@@ -151,9 +151,8 @@ func columnWidths(columns []string, rows [][]string, width int) []int {
 	return fitWidths(widths, width)
 }
 
-// fitWidths narrows the widest column until the row fits width, stopping where
-// every column is at minColumnWidth: a terminal narrower than that overflows
-// rather than wrapping every cell a character at a time.
+// fitWidths narrows the widest column until the row fits width, stopping at
+// minColumnWidth: a narrower terminal overflows rather than wrapping to nothing.
 func fitWidths(widths []int, width int) []int {
 	if width <= WidthUnbounded {
 		return widths
@@ -178,9 +177,8 @@ func fitWidths(widths []int, width int) []int {
 	return widths
 }
 
-// wrapCell breaks a cell over as many lines of width as it needs: at its spaces
-// where it has them, and mid-name where a name is longer than the column, so no
-// cell is truncated.
+// wrapCell breaks a cell over as many lines of width as it needs, at its spaces
+// and mid-name where a name is longer than the column, so nothing is truncated.
 func wrapCell(text string, width int) []string {
 	if width <= 0 || utf8.RuneCountInString(text) <= width {
 		return []string{text}
