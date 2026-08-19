@@ -1,0 +1,75 @@
+package rdf
+
+import (
+	"regexp"
+	"testing"
+)
+
+var idAlphabet = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+
+func TestEncodeElementID(t *testing.T) {
+	cases := map[string]string{
+		"Vehicle":         "Vehicle",
+		"Demo::Vehicle":   "Demo__Vehicle",
+		"A::B::C":         "A__B__C",
+		"A_B::C":          "A_5fB__C",
+		"A::B_C":          "A__B_5fC",
+		"Importer::@0":    "Importer___400",
+		"Vehicle Mass":    "Vehicle_20Mass",
+		"has:colon":       "has_3acolon",
+		"has#hash":        "has_23hash",
+		"has%percent":     "has_25percent",
+		"kerb-weight":     "kerb-weight",
+		"Fahrzeug::Größe": "Fahrzeug__Gr_c3_b6_c3_9fe",
+		"日本::語":           "_e6_97_a5_e6_9c_ac___e8_aa_9e",
+	}
+	for qname, want := range cases {
+		id := EncodeElementID(qname)
+		if id != want {
+			t.Errorf("EncodeElementID(%q) = %q, want %q", qname, id, want)
+		}
+		if !idAlphabet.MatchString(id) {
+			t.Errorf("EncodeElementID(%q) = %q is outside [A-Za-z0-9_-]+", qname, id)
+		}
+		got, ok := DecodeElementID(id)
+		if !ok || got != qname {
+			t.Errorf("DecodeElementID(%q) = %q, %v, want %q", id, got, ok, qname)
+		}
+	}
+}
+
+// The two names differ only in where the underscore came from, so their ids
+// colliding would merge two distinct elements.
+func TestEncodeElementIDDoesNotCollide(t *testing.T) {
+	names := []string{
+		"A_B::C", "A::B_C", "A_B_C", "A::B::C",
+		"A_5fB", "A__B", "A::_B", "A_::B", "A::5fB",
+	}
+	seen := map[string]string{}
+	for _, qname := range names {
+		id := EncodeElementID(qname)
+		if other, dup := seen[id]; dup {
+			t.Errorf("%q and %q both encode to %q", qname, other, id)
+		}
+		seen[id] = qname
+	}
+}
+
+func TestDecodeElementIDRejectsMalformedIDs(t *testing.T) {
+	for _, id := range []string{
+		"",       // no name is encoded as an empty id
+		"A_",     // trailing escape character
+		"A_5",    // truncated escape
+		"A_5F",   // uppercase hex
+		"A_g0",   // non-hex escape
+		"A B",    // byte outside the id alphabet
+		"A::B",   // raw separator is never emitted
+		"A%3AB",  // percent escapes are not this encoding
+		"caf_e9", // 0xe9 alone is not valid UTF-8
+		"_c3",    // truncated multi-byte sequence
+	} {
+		if got, ok := DecodeElementID(id); ok {
+			t.Errorf("DecodeElementID(%q) = %q, want a rejection", id, got)
+		}
+	}
+}

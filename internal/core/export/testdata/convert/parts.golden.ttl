@@ -11,7 +11,7 @@ elmt:Vehicles
     sysml:declaredName "Vehicles" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-elmt:Vehicles::Vehicle
+elmt:Vehicles__Vehicle
     a sysml:PartDefinition ;
     sysml:qualifiedName "Vehicles::Vehicle" ;
     sysml:owningNamespace elmt:Vehicles ;
@@ -19,26 +19,26 @@ elmt:Vehicles::Vehicle
     sysml:declaredName "Vehicle" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-elmt:Vehicles::Vehicle::mass
+elmt:Vehicles__Vehicle__mass
     a sysml:AttributeUsage ;
     sysml:qualifiedName "Vehicles::Vehicle::mass" ;
-    sysml:owningNamespace elmt:Vehicles::Vehicle ;
+    sysml:owningNamespace elmt:Vehicles__Vehicle ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "mass" ;
     sysml:type "ISQ::MassValue" ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:Vehicles::Vehicle::engine
+elmt:Vehicles__Vehicle__engine
     a sysml:PartUsage ;
     sysml:qualifiedName "Vehicles::Vehicle::engine" ;
-    sysml:owningNamespace elmt:Vehicles::Vehicle ;
+    sysml:owningNamespace elmt:Vehicles__Vehicle ;
     sysx:memberIndex "1"^^xsd:integer ;
     sysml:declaredName "engine" ;
-    sysml:type elmt:Vehicles::Engine ;
+    sysml:type elmt:Vehicles__Engine ;
     sysml:upperBound "1" ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:Vehicles::Engine
+elmt:Vehicles__Engine
     a sysml:PartDefinition ;
     sysml:qualifiedName "Vehicles::Engine" ;
     sysml:owningNamespace elmt:Vehicles ;

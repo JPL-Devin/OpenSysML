@@ -409,6 +409,18 @@ func (p *parser) readLiteral() (Term, error) {
 	return term, nil
 }
 
+func hexDigit(c byte) (byte, bool) {
+	switch {
+	case c >= '0' && c <= '9':
+		return c - '0', true
+	case c >= 'a' && c <= 'f':
+		return c - 'a' + 10, true
+	case c >= 'A' && c <= 'F':
+		return c - 'A' + 10, true
+	}
+	return 0, false
+}
+
 func (p *parser) readWhile(keep func(rune) bool) string {
 	start := p.pos
 	for !p.eof() {
