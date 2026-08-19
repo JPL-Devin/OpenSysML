@@ -300,6 +300,21 @@ elements are `NamespaceImport` or `MembershipImport`. Audit every property the e
 against the API schema for reference-vs-literal and every metaclass name for being concrete;
 this is mechanical once D3.1 gives references something stable to point at.
 
+The reference-vs-literal half of that audit is now mechanized, against the OWL ontology rather
+than the API schema (D8): `TestGoldenGraphsMatchOntology` (`internal/core/export`) checks every
+SysML-namespace triple in the 24 golden graphs against the metamodel's declared domain and range,
+and the 131 triples it flags are inventoried key-by-key with a reason in
+`internal/core/export/testdata/ontology-known-violations.txt`, so any *new* disagreement fails the
+build. 19 of them are this item's own bug — an object property carrying a name as a literal, over
+six distinct metaclass/property pairs: `type` on `AttributeUsage` and `PartUsage`, `sourceFeature`
+on `SuccessionAsUsage` and `sysx:InitialNode`, and both bounds of `sysx:MultiplicityDeclaration`.
+`sysml:importedNamespace "ISQ"` is *not* among them, because the ontology declares that property on
+`NamespaceImport` while we type the element `sysml:Import`, which makes the triple a domain
+mismatch first; that is the same defect seen from the other side. The abstract-metaclass half is
+not mechanizable from the ontology: `SysML.owl` records no ecore abstractness (see D8), so nothing
+in the suite catches `sysml:Import` being abstract, and the audit against the API's own element
+list stays manual.
+
 ## D8 — an optional second output profile: the Open-MBEE SysML v2 OWL ontology
 
 [`Open-MBEE/sysmlv2-rdf-ontology`](https://github.com/Open-MBEE/sysmlv2-rdf-ontology) renders the
@@ -331,8 +346,49 @@ every property, so emitted triples can be checked against it with any OWL tool �
 attached to the wrong metaclass is currently caught by nothing in our suite. That check is worth
 running against the ontology's names even before the profile is user-facing.
 
-Scope: the profile plumbing, the generated table and the domain/range gate are about one session's
-work; conformance beyond that is gated on D3.3, D2 and D1 rather than on this item.
+**The table and the gate are done; the profile itself is not.**
+`internal/core/rdf/ontology` holds the term table generated from `SysML.owl` by
+`internal/core/rdf/ontology/gen`, which reads a local checkout of the ontology rather than
+vendoring its 624 KB of RDF/XML and records the version (`202407`) and the upstream commit SHA in
+the generated header (`README.md` documents regeneration). It carries 411 properties — 348 object,
+63 datatype — each with its unqualified name, defining metaclass, full ontology IRI, kind and
+declared `rdfs:range`, plus all 172 classes with their `rdfs:subClassOf` parents for the
+ancestor-or-self test a domain check needs. Those 411 properties span only **336 distinct
+unqualified names: 59 names are declared by more than one metaclass** (`type`, `value`,
+`visibility`, `source`, `target`, `feature`, `result`, …), so the unqualified convention is
+genuinely lossy in the other direction — an ontology-profile encoder cannot recover the qualified
+IRI from the property name alone and has to pick by the subject's metaclass. `LookupProperty`
+therefore returns every declaration and `AmbiguousNames` reports the set rather than one of them
+being chosen silently.
+
+One thing the ontology does **not** carry: **ecore abstractness**. The only abstractness in
+`SysML.owl` is the metamodel's own `Type::isAbstract` property, which is about modeled types, not
+metaclasses; the `owl:Class` declarations state no abstract/concrete marker. So the "the metaclass
+must be concrete" check that would have caught D7's abstract `sysml:Import` is not possible from
+this table and is not implemented — D7's abstract-metaclass audit stays manual.
+
+The gate is `TestGoldenGraphsMatchOntology` (`internal/core/export/ontology_gate_test.go`), reading
+the golden graphs from `testdata/convert` dynamically. Against the 24 of them it finds **131 triples
+in 45 distinct metaclass/property violations**: 41 triples (10 keys) whose property is declared on a
+metaclass that is not the subject's or an ancestor of it, 39 (14) typed by a class the ontology does
+not declare, 32 (15) naming a property no metaclass declares, and 19 (6) giving an object property a
+literal (D7). No datatype property gets an IRI, and no subject carrying SysML properties lacks an
+`rdf:type`. Every one is inventoried with a one-line reason in
+`testdata/ontology-known-violations.txt` and the gate fails on anything new, so the encoder was left
+alone. The inventory is also the profile's own work list, since it sorts the gap into four causes:
+properties the metamodel declares on a relationship or membership element that we collapse into the
+element (`value` → `FeatureValue`, the multiplicity bounds → `MultiplicityRange`, `visibility` →
+`Membership`, `isNegated` → `Invariant`, a transition's ends → `Connector`) — D3.3; names as
+literals — D7 and D2; 12 metaclasses of our own `sysx:` namespace plus two names the 202407
+rendering does not have at all (`FlowUsage`, which it calls `FlowConnectionUsage`, and
+`TerminateActionUsage`); and 15 properties we write into the SysML namespace that no metaclass
+declares, each either a relationship the metamodel reifies as an element (`specializes`, `subsets`,
+`redefines`, `references`, `aliasedElement`, `via`) or a notation flag with no metamodel property
+(`isAccept`, `isResult`, `isSnapshot`, `isTimeslice`, `isChain`) — arguably those belong in `sysx:`
+regardless of this item.
+
+Scope: the profile plumbing is the remainder, and is about one session's work now that the table and
+the gate exist; conformance beyond that is gated on D3.3, D2 and D1 rather than on this item.
 
 ## D5 — the parser drops the `variant` and `include` keyword prefixes
 
