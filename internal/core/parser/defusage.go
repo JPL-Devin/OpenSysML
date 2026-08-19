@@ -3436,7 +3436,9 @@ func (p *Parser) parseMetadataUsage(start int) *ast.PrefixMetadata {
 		p.expect(lexer.RBrace, "expected '}' after metadata body")
 		pm.Body = body
 	} else {
-		p.accept2(lexer.Semicolon)
+		// A usage is a member of its own, so it ends here rather than annotating
+		// whatever follows it — `#Type` is the prefix spelling.
+		p.expect(lexer.Semicolon, "expected ';' or '{' after a metadata usage")
 	}
 
 	pm.NodeSpan = p.spanFrom(start)

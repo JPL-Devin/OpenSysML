@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -55,5 +56,41 @@ func TestMetadataUsageMember(t *testing.T) {
 
 	if annotations != 3 || parts != 2 {
 		t.Errorf("expected 3 metadata members and 2 parts, got %d and %d", annotations, parts)
+	}
+}
+
+// An unterminated metadata usage is reported rather than read as a prefix of the
+// declaration after it; `#Type` is the prefix spelling.
+func TestMetadataUsageRequiresTerminator(t *testing.T) {
+	p := New(source.New("test.sysml", []byte("package P { metadata def M; @M part def Car; }")))
+	root := p.ParseFile()
+	if len(p.Diagnostics) != 1 {
+		t.Fatalf("expected one diagnostic, got %v", p.Diagnostics)
+	}
+	if !strings.Contains(p.Diagnostics[0].Message, "after a metadata usage") {
+		t.Errorf("unexpected message %q", p.Diagnostics[0].Message)
+	}
+
+	// Recovery leaves the declaration itself parsed.
+	var parts int
+	for _, member := range root.Members {
+		if membership, ok := member.(*ast.Membership); ok {
+			member = membership.Member
+		}
+		pkg, ok := member.(*ast.Package)
+		if !ok {
+			continue
+		}
+		for _, m := range pkg.Members {
+			if membership, ok := m.(*ast.Membership); ok {
+				m = membership.Member
+			}
+			if def, ok := m.(*ast.Definition); ok && def.Kind == ast.DefPart {
+				parts++
+			}
+		}
+	}
+	if parts != 1 {
+		t.Errorf("expected the part def to still be parsed, got %d", parts)
 	}
 }

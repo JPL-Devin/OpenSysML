@@ -678,11 +678,13 @@ func isEntrySubaction(member ast.Node) bool {
 
 // startsAt marks the state a completion transition out of the body's entry action
 // starts the machine in, reporting whether it did — as `entry; then off;` does.
-func (g *StateGraph) startsAt(members []ast.Node, containingState ast.Node, scope *symbols.Scope, trans *ast.TransitionMember) bool {
-	if trans.Source == nil || trans.Target == nil || trans.Trigger != nil {
+// Only the bare completion shape says that: a trigger, guard or effect belongs to
+// an edge between two vertices, which an entry action is not.
+func (g *StateGraph) startsAt(members []ast.Node, containingState ast.Node, scope *symbols.Scope, source, target *ast.QualifiedName) bool {
+	if source == nil || target == nil {
 		return false
 	}
-	decl, ok := g.endpoints.Endpoint(scope, trans.Source)
+	decl, ok := g.endpoints.Endpoint(scope, source)
 	if !ok {
 		return false
 	}
@@ -690,11 +692,11 @@ func (g *StateGraph) startsAt(members []ast.Node, containingState ast.Node, scop
 		!ast.IsEntryAction(ast.StateEntryActions(containingState), decl) {
 		return false
 	}
-	target, ok := g.endpointVertex(scope, trans.Target).(*ast.StateNode)
+	start, ok := g.endpointVertex(scope, target).(*ast.StateNode)
 	if !ok {
 		return false
 	}
-	target.IsInitial = true
+	start.IsInitial = true
 	return true
 }
 
@@ -816,6 +818,13 @@ func collectTransitions(graph *StateGraph, memberList []ast.Node, containingStat
 						sourceVertex := graph.endpointVertex(scope, sourceQName)
 						targetVertex := graph.endpointVertex(scope, targetQName)
 
+						// `begin then off;` out of a named entry action names the
+						// state the machine starts in, not an edge (SysML 7.19.3).
+						if sourceVertex == nil &&
+							graph.startsAt(memberList, containingState, scope, sourceQName, targetQName) {
+							continue
+						}
+
 						if sourceVertex != nil && targetVertex != nil {
 							trans := &Transition{
 								Source:    sourceVertex,
@@ -864,6 +873,11 @@ func collectTransitions(graph *StateGraph, memberList []ast.Node, containingStat
 				}
 			}
 
+			// `start then off;` out of a named entry action says the same.
+			if sourceVertex == nil && graph.startsAt(memberList, containingState, scope, n.Source, n.Target) {
+				continue
+			}
+
 			if sourceVertex != nil && targetVertex != nil {
 				trans := &Transition{
 					Source:    sourceVertex,
@@ -886,7 +900,8 @@ func collectTransitions(graph *StateGraph, memberList []ast.Node, containingStat
 		case *ast.TransitionMember:
 			// `transition initial then off;` out of the entry action names the
 			// state the machine starts in, not an edge between two vertices.
-			if graph.startsAt(memberList, containingState, scope, n) {
+			if n.Trigger == nil && n.Guard == nil && len(n.Effect) == 0 &&
+				graph.startsAt(memberList, containingState, scope, n.Source, n.Target) {
 				continue
 			}
 			// New: TransitionMember from parser (declarative)

@@ -418,13 +418,14 @@ func (cc *constraintChecker) checkRedefinition(sym *symbols.Symbol) {
 			continue
 		}
 
-		// A member's OwnerScope is where it was declared: owner's own scope if
-		// owner declares it, a supertype's if owner inherits it.
+		// A library supertype restored from the cache carries no scope, so
+		// membership is decided by looking the name up in each supertype
+		// rather than by comparing the declaring scope.
+		name := qn.Parts[len(qn.Parts)-1].Text
 		inherited := false
-		locallyDeclared := owner.Scope != nil && redefined.OwnerScope == owner.Scope
-		if !locallyDeclared {
+		if owner.Scope == nil || redefined.OwnerScope != owner.Scope {
 			for _, supertype := range cc.model.AllSupertypes(owner) {
-				if supertype.Scope != nil && redefined.OwnerScope == supertype.Scope {
+				if found, ok := cc.model.LookupMember(supertype, name); ok && found == redefined {
 					inherited = true
 					break
 				}

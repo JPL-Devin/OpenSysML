@@ -321,3 +321,35 @@ func TestTransitionOutOfEntryActionIsLegal(t *testing.T) {
 	}
 }`)
 }
+
+// An entry action stands in for a start pseudostate only in the bare completion
+// shape: a triggered or guarded transition is an edge between two vertices, and
+// an entry action is neither.
+func TestTriggeredTransitionOutOfEntryActionIsNotAVertex(t *testing.T) {
+	wantOneError(t, `package test {
+	state def M {
+		entry action begin { }
+		transition begin accept Warning then busy;
+		state busy;
+	}
+}`, CodeEndpointNotOfMachine, "begin")
+	wantOneError(t, `package test {
+	state def M {
+		entry action begin { }
+		transition begin if true then busy;
+		state busy;
+	}
+}`, CodeEndpointNotOfMachine, "begin")
+}
+
+// Nothing transitions into an entry action.
+func TestTransitionIntoEntryActionIsNotAVertex(t *testing.T) {
+	wantOneError(t, `package test {
+	state def M {
+		entry action begin { }
+		transition begin then busy;
+		state busy;
+		transition busy then begin;
+	}
+}`, CodeEndpointNotOfMachine, "begin")
+}

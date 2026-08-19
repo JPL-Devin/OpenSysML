@@ -209,3 +209,27 @@ func TestToStateGraph_EntryActionTransitionNamesInitialState(t *testing.T) {
 		t.Errorf("expected only off's transition to be an edge, got %d sources", got)
 	}
 }
+
+// The succession spelling of the same designation names the initial state too.
+func TestToStateGraph_EntryActionSuccessionNamesInitialState(t *testing.T) {
+	graph, err := ToStateGraph(stateUsageIn(t, `
+		package test {
+			state Machine {
+				entry action begin { }
+				begin then off;
+				state off;
+				state on;
+				off then on;
+			}
+		}
+	`), nil)
+	if err != nil {
+		t.Fatalf("ToStateGraph: %v", err)
+	}
+	if graph.Initial == nil {
+		t.Fatal("expected the entry action's succession to name an initial state")
+	}
+	if graph.Initial.Name != "off" {
+		t.Errorf("expected off to be the initial state, got %q", graph.Initial.Name)
+	}
+}

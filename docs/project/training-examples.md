@@ -393,8 +393,9 @@ own remaining false positives.
 > Amended at 97/100: `alternative` is no longer among the pinned OMG bugs. The
 > `:>> alternative` in `Trade Study Analysis Example` now matches `alternatives`
 > through implicit redefinition, so the file's one remaining error is a false
-> positive of ours (`objective cannot be typed by requirementDef`). The pinned
-> OMG bugs are the two `start`/`done` files, putting the ceiling at **98/100**.
+> positive of ours (`objective cannot be typed by requirementDef`). The
+> `start`/`done` files were pinned as OMG bugs here, putting the ceiling at
+> **98/100**; that verdict was later overturned and the corpus is 100/100.
 
 ---
 
@@ -604,8 +605,8 @@ directory and fails if any file's diagnostics differ between the two.
 
 **Implementation Status**: Core behavioral semantics complete (297/297 execution conformance cases passing).
 
-**Training Example Status**: 98/100 clean (2 files, 4 errors). What remains is two files that use
-feature names KerML does not define (`start`/`done` instead of `startShot`/`endShot`) — bugs in the
-OMG material, so 98/100 is the ceiling.
+**Training Example Status**: 100/100 clean. The last two files were false positives of ours, not
+OMG bugs: `start` and `done` are declared by `Items::Item` and redefined by `Parts::Part`, and every
+definition body now inherits the features its kind implies (see the re-pin below).
 
 The runtime implementation is **production-ready for complete SysML v2 models**. Training example "failures" reflect incomplete example files, not missing runtime features.

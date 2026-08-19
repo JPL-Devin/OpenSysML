@@ -419,15 +419,27 @@ with a build that has none reporting that rather than a verdict.
   `Parts::Part` redefines both. The verdict recorded against `Time Slice and Snapshot Example` and
   `Individuals and Time Slices` — "bugs in the OMG files" — was wrong; both are clean now, and the
   corpus baseline lists no files.
+- **Because those features are now inherited, a member that reuses one of their names is
+  reported** where it used to shadow silently: `part def C { part start; }` conflicts with
+  `Parts::Part::start`. Redefine it to keep the name — `part start :>> Parts::Part::start;` — which
+  is what the model means.
+- **A qualified redefinition of an inherited library feature is accepted:**
+  `snapshot start :>> Parts::Part::start;` reported "start is not an inherited member of C" because
+  a library supertype restored from the index cache carries no scope to compare against.
+  Redefining a feature the owner does not inherit is still reported.
+- **A metadata usage ends at its own `;` or body:** `@M part def Car;` was read as an annotation
+  plus a declaration with no diagnostic. `#M part def Car;` is the prefix spelling.
 - **A definition may specialize a definition of a comparable kind:** `individual item def Alice :>
   Person` was refused as a kind mismatch because `Person` is a `part def`. A part definition *is*
   an item definition, so specialization follows the definition taxonomy rather than an exact kind
   match; disjoint kinds — a part definition and an attribute definition — are still refused.
-- **A transition may leave the entry action of the state that declares it:** `entry action initial
-  { } transition initial then off;` reported the action as "not a state or pseudostate". The entry
+- **A transition may leave the entry action of the state that declares it:** `entry action begin
+  { } transition begin then off;` reported the action as "not a state or pseudostate". The entry
   action stands in for a start pseudostate, so the transition designates the state the machine
-  starts in rather than an edge between two vertices, and it executes as such. An ordinary action
-  named as an endpoint is still reported.
+  starts in rather than an edge between two vertices, and it executes as such. Only that bare
+  completion shape designates a start: an ordinary action named as an endpoint, a transition *into*
+  an entry action, and a triggered or guarded one out of it are all reported, rather than accepted
+  with the trigger, guard or effect dropped.
 - **A value part accepts every operator the grammar allows** — `= expr`, `:= expr`,
   `default expr`, `default = expr` and `default := expr` — wherever a usage, parameter, result or
   subject binds a value; only some spellings were accepted per position.
@@ -1368,9 +1380,8 @@ The first tagged release.
 - Tiered validation (syntax → name resolution → typing → constraints), where a
   failing tier suppresses the ones above it rather than reporting noise.
 - Measured spec compliance, rule by rule, in
-  [docs/project/spec-compliance.md](docs/project/spec-compliance.md); 98/100 of the OMG
-  training corpus parses and analyzes clean, with the two remaining files
-  pinned as upstream source bugs.
+  [docs/project/spec-compliance.md](docs/project/spec-compliance.md); all 100 files of
+  the OMG training corpus parse and analyze clean.
 
 ### Execution
 

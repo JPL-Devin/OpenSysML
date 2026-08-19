@@ -1,4 +1,8 @@
 part def AnnotatedPart {
-	@Metadata
-	attribute data[1..*] ordered;
+	attribute data[1..*] ordered {
+		@Metadata;
+	}
+	attribute tagged {
+		@Metadata { name = "tagged"; }
+	}
 }

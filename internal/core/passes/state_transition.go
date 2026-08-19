@@ -126,22 +126,23 @@ func (c *transitionChecker) walkBody(m *machine, scope *symbols.Scope, members [
 			// A sourceless `accept … then` takes the state it is written in as its
 			// source (SysML 7.19.3), which names a vertex by construction.
 			if n.Source != nil {
-				m.markLeft(c.checkEndpoint(m, scope, n.Source, false), n.Source)
+				bare := n.Trigger == nil && n.Guard == nil && len(n.Effect) == 0
+				m.markLeft(c.checkEndpoint(m, scope, n.Source, false, bare), n.Source)
 			}
-			c.checkEndpoint(m, scope, n.Target, true)
+			c.checkEndpoint(m, scope, n.Target, true, false)
 		case *ast.SuccessionEdge:
 			// `off then busy;`, whose source is elided by the `entry; then off;` form.
 			if n.Source != nil {
-				m.markLeft(c.checkEndpoint(m, scope, n.Source, false), n.Source)
+				m.markLeft(c.checkEndpoint(m, scope, n.Source, false, true), n.Source)
 			}
-			c.checkEndpoint(m, scope, n.Target, true)
+			c.checkEndpoint(m, scope, n.Target, true, false)
 		case *ast.TransitionEdge:
-			m.markLeft(c.checkEndpoint(m, scope, n.Source, false), n.Source)
-			c.checkEndpoint(m, scope, n.Target, true)
+			m.markLeft(c.checkEndpoint(m, scope, n.Source, false, false), n.Source)
+			c.checkEndpoint(m, scope, n.Target, true, false)
 		case *ast.InitialNode:
 			// The marker's `then` is its one outgoing transition.
 			if n.Successor != nil {
-				c.checkEndpoint(m, scope, n.Successor, true)
+				c.checkEndpoint(m, scope, n.Successor, true, false)
 			}
 		case *ast.PseudostateNode:
 			if routingPseudostate(n.Kind) {
@@ -165,8 +166,8 @@ func (c *transitionChecker) walkBody(m *machine, scope *symbols.Scope, members [
 				// `a then b;`, written as a connector whose two ends name vertices.
 				if len(n.ConnectorEnds) == 2 {
 					source := connectorEndName(n.ConnectorEnds[0])
-					m.markLeft(c.checkEndpoint(m, scope, source, false), source)
-					c.checkEndpoint(m, scope, connectorEndName(n.ConnectorEnds[1]), true)
+					m.markLeft(c.checkEndpoint(m, scope, source, false, true), source)
+					c.checkEndpoint(m, scope, connectorEndName(n.ConnectorEnds[1]), true, false)
 				}
 			}
 		}
@@ -175,8 +176,9 @@ func (c *transitionChecker) walkBody(m *machine, scope *symbols.Scope, members [
 
 // checkEndpoint reports an endpoint naming something no transition of this
 // machine may reach, and returns what it named. An unresolved one is left to
-// name resolution.
-func (c *transitionChecker) checkEndpoint(m *machine, scope *symbols.Scope, qn *ast.QualifiedName, isTarget bool) ast.Node {
+// name resolution. bare says the transition carries no trigger, guard or effect,
+// which is the only shape an entry action stands in for a start pseudostate in.
+func (c *transitionChecker) checkEndpoint(m *machine, scope *symbols.Scope, qn *ast.QualifiedName, isTarget, bare bool) ast.Node {
 	if qn == nil {
 		return nil
 	}
@@ -191,7 +193,7 @@ func (c *transitionChecker) checkEndpoint(m *machine, scope *symbols.Scope, qn *
 	}
 	// A transition out of the machine's entry action says which state it starts
 	// in, the action standing in for a start pseudostate (SysML 7.19.3).
-	if m.startActions[decl] && !isTarget {
+	if m.startActions[decl] && !isTarget && bare {
 		return decl
 	}
 	c.report(qn.Span(), CodeEndpointNotOfMachine, fmt.Sprintf(
