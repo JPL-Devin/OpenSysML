@@ -15,10 +15,11 @@ is an `owl:ObjectProperty` or an `owl:DatatypeProperty`, and its declared
 `rdfs:range`. It also holds every `owl:Class` and its named `rdfs:subClassOf`
 parents, which `IsAncestorOrSelf` walks for the domain check in `validate.go`.
 
-Current contents: 411 properties (348 object, 63 datatype) over 336 distinct
-unqualified names — 59 names are declared by more than one metaclass, so
-`LookupProperty` returns every declaration and `AmbiguousNames` reports the set —
-and 172 classes.
+The table's contents are counted in one place,
+[docs/project/roadmap.md](../../../../docs/project/roadmap.md) § D8, together with
+what the gate finds. Some unqualified names are declared by more than one
+metaclass, so `LookupProperty` returns every declaration and `AmbiguousNames`
+reports those names rather than one being picked silently.
 
 ## What the ontology does not carry
 
