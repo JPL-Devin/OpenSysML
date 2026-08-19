@@ -296,6 +296,18 @@ func TestExprInvocationCorrectArityOK(t *testing.T) {
 	wantNoDiags(t, `package P { `+calcAdd+` calc c { return add(1, 2); } }`)
 }
 
+func TestExprInvocationThroughAliasChecksArguments(t *testing.T) {
+	const model = `package P {
+		` + calcAdd + `
+		alias addAlias for add;
+		calc c { return addAlias(%s); }
+	}`
+	wantOneDiag(t, fmt.Sprintf(model, `1`), "add requires 2 argument(s), found 1")
+	wantOneDiag(t, fmt.Sprintf(model, `1, "two"`),
+		"argument 2 of add expects Integer, found String")
+	wantNoDiags(t, fmt.Sprintf(model, `1, 2`))
+}
+
 func TestExprInvocationArgumentTypeMismatch(t *testing.T) {
 	wantOneDiag(t,
 		`package P { `+calcAdd+` calc c { return add(1, "two"); } }`,

@@ -568,12 +568,15 @@ func (ec *exprChecker) inferInvocation(scope *symbols.Scope, e *ast.InvocationEx
 		return semantics.PrimUnknown
 	}
 	sym, ok := ec.resolver.ResolveQualified(scope, e.Type)
-	if !ok || sym == nil || !isBehaviorKind(sym.Kind) {
+	if !ok || sym == nil {
 		return semantics.PrimUnknown
 	}
-	if resolved, aliasOK := ec.resolver.ResolveAliasTarget(sym); aliasOK {
-		sym = resolved
-	} else {
+	resolved, aliasOK := ec.resolver.ResolveAliasTarget(sym)
+	if !aliasOK {
+		return semantics.PrimUnknown
+	}
+	sym = resolved
+	if !isBehaviorKind(sym.Kind) {
 		return semantics.PrimUnknown
 	}
 	params, ok := ec.effectiveInParameters(sym)
