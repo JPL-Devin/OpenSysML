@@ -34,7 +34,12 @@ mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: darkThe
 // The panel is torn down while it is hidden, so the rendering it last drew is
 // put back — dimmed until the server answers — rather than showing nothing.
 if (last) {
-  void draw(last).then(() => diagram.classList.add("stale"));
+  const restore = drawn + 1;
+  void draw(last).then(() => {
+    if (restore === drawn) {
+      diagram.classList.add("stale");
+    }
+  });
 }
 
 picker.addEventListener("change", () => {
@@ -85,10 +90,15 @@ function fillPicker(views: PickerEntry[], pick: string): void {
 // draw replaces the diagram with the rendering. A failure to draw leaves the last
 // diagram up, dimmed, so a mid-keystroke parse error does not blank the panel.
 async function draw(result: RenderResult): Promise<void> {
+  // A drawing another one started after is abandoned rather than drawn over it:
+  // the restored rendering and the server's answer race on load.
+  const generation = ++drawn;
   try {
     if (result.form === "mermaid") {
-      const id = `opensysml-diagram-${++drawn}`;
-      const { svg } = await mermaid.render(id, result.artifact);
+      const { svg } = await mermaid.render(`opensysml-diagram-${generation}`, result.artifact);
+      if (generation !== drawn) {
+        return;
+      }
       diagram.innerHTML = svg;
       markNodes(result);
       // The drawing replaced the marked node, so what the cursor is in is marked
@@ -108,6 +118,9 @@ async function draw(result: RenderResult): Promise<void> {
     showNotices(result);
     kindLabel.textContent = describe(result);
   } catch (err) {
+    if (generation !== drawn) {
+      return;
+    }
     const message = err instanceof Error ? err.message : String(err);
     showError(message);
     vscode.postMessage({ type: "failed", message });
