@@ -265,3 +265,41 @@ package TextViews {
 		t.Errorf("kind = %q, want %q", unsupported.Kind, view.KindTextual)
 	}
 }
+
+const shortNameModel = `package Kit {
+	part def <w> Widget;
+}
+
+package KitViews {
+	private import Views::*;
+
+	view <v> widgetTree {
+		expose Kit::Widget;
+	}
+}
+`
+
+// A declaration carrying a short name as well as a name is one declaration: it is
+// listed once, and it is not an ambiguity.
+func TestShortNamedDeclarationsAreCountedOnce(t *testing.T) {
+	ws := openDoc(t, "kit.sysml", shortNameModel)
+	if views := ws.Views("kit.sysml"); len(views) != 1 {
+		t.Fatalf("listed %d views, want 1: %+v", len(views), views)
+	}
+	if _, err := ws.RenderView("kit.sysml", ""); err != nil {
+		t.Fatalf("rendering the document's only view: %v", err)
+	}
+	rendering, err := ws.RenderView("kit.sysml", "#tree")
+	if err != nil {
+		t.Fatalf("rendering #tree: %v", err)
+	}
+	seen := map[string]int{}
+	for _, node := range rendering.Data().Nodes {
+		seen[node.Name]++
+	}
+	for label, count := range seen {
+		if count > 1 {
+			t.Errorf("node %q drawn %d times, want once", label, count)
+		}
+	}
+}

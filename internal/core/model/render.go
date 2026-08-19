@@ -249,12 +249,16 @@ func scopeMembers(scope *symbols.Scope) []*symbols.Symbol {
 	}
 	members := scope.AllMembers()
 	out := make([]*symbols.Symbol, 0, len(members))
+	// A declaration carrying a short name is registered under both its names, so
+	// AllMembers lists it twice.
+	seen := make(map[*symbols.Symbol]bool, len(members))
 	for _, sym := range members {
 		// An alias and an import bring in what another namespace declares; the
 		// document declares neither.
-		if sym == nil || sym.Kind == symbols.SymbolAlias || sym.DocName != scope.DocName() {
+		if sym == nil || seen[sym] || sym.Kind == symbols.SymbolAlias || sym.DocName != scope.DocName() {
 			continue
 		}
+		seen[sym] = true
 		out = append(out, sym)
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].DeclSpan.Offset < out[j].DeclSpan.Offset })
