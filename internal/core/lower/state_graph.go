@@ -676,10 +676,9 @@ func isEntrySubaction(member ast.Node) bool {
 	return ok
 }
 
-// startsAt marks the state a completion transition out of the body's entry action
-// starts the machine in, reporting whether it did — as `entry; then off;` does.
-// Only the bare completion shape says that: a trigger, guard or effect belongs to
-// an edge between two vertices, which an entry action is not.
+// startsAt marks the state a bare completion transition out of the body's entry
+// action starts the machine in, as `entry; then off;` does, and reports whether
+// it did.
 func (g *StateGraph) startsAt(members []ast.Node, containingState ast.Node, scope *symbols.Scope, source, target *ast.QualifiedName) bool {
 	if source == nil || target == nil {
 		return false

@@ -3407,10 +3407,9 @@ func (p *Parser) parseMultiplicityBound() ast.Node {
 	return p.parseBinary(precAdditive)
 }
 
-// parseMetadataUsage parses one metadata usage written with the `@` keyword:
-// `@Type;`, or `@Type { prop = value; }` with a body binding its features
-// (SysML v2 MetadataUsage). Each is a member of its own, so annotations written
-// in a row are separate members rather than prefixes of one declaration.
+// parseMetadataUsage parses one `@` metadata usage (SysML v2 MetadataUsage):
+// `@Type;`, or `@Type { prop = value; }` binding its features. Each is a member
+// of its own rather than a prefix of the declaration after it.
 func (p *Parser) parseMetadataUsage(start int) *ast.PrefixMetadata {
 	p.advance() // '@'
 

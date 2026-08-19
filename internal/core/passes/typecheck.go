@@ -625,9 +625,8 @@ func isOccurrenceDefKind(k symbols.SymbolKind) bool {
 	return occurrenceDefSymbolKinds[k]
 }
 
-// defKindParents is the definition metaclass taxonomy (SysML v2 §8.3): each
-// kind maps to the kinds it specializes, so which definitions a definition may
-// specialize follows the taxonomy rather than an exact kind match.
+// defKindParents is the definition metaclass taxonomy (SysML v2 §8.3): each kind
+// maps to the kinds it specializes.
 var defKindParents = map[symbols.SymbolKind][]symbols.SymbolKind{
 	symbols.SymbolItemDef:             {symbols.SymbolOccurrenceDef},
 	symbols.SymbolIndividualDef:       {symbols.SymbolOccurrenceDef},
@@ -668,11 +667,9 @@ func defKindSpecializes(k, want symbols.SymbolKind) bool {
 	return false
 }
 
-// defKindsComparable reports whether one of two definition kinds specializes
-// the other: `item def Alice :> Person` names a part definition and `part def
-// Wheel :> Component` an item definition, both legal because the kinds are
-// comparable. Disjoint kinds — a part definition and an attribute definition —
-// are not.
+// defKindsComparable reports whether one of two definition kinds specializes the
+// other, as an item and a part definition do and a part and an attribute
+// definition do not.
 func defKindsComparable(a, b symbols.SymbolKind) bool {
 	return defKindSpecializes(a, b) || defKindSpecializes(b, a)
 }
