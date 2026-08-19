@@ -269,8 +269,8 @@ Feature values, multiplicity bounds, filter conditions and succession guards are
 their notation. They round-trip exactly, but SPARQL cannot see inside them, so a query like
 "every part whose mass exceeds 1000" is not expressible against the graph. Mapping KerML
 expression trees to RDF is the fix and is a feature in its own right: it needs a node-identity
-scheme for subexpressions, which is the part to design first — and after D3.1 that scheme is
-the same UUID-minting question, so design them together.
+scheme for subexpressions, which is the part to design first — and it is the same identity-encoding
+question D3.1 settles for elements, so design them together.
 
 Under the drop-in target this is no longer only a queryability gap. The Flexo reader keeps
 `sysml:` and `urn:sysmlv2:annotation:json:` predicates and **ignores everything else** (the
@@ -407,3 +407,6 @@ Tracks A, B, C, P and T1 are closed and their entries are removed; what is left 
    identity is stable, then **D2** — a succession end that refers to an unnamed member belongs
    with it, both wanting real end triples rather than names or text — and **D1** last, as the
    largest piece of design. **D5** can go whenever; it is independent of the interop work.
+   **D8** (the OWL-ontology output profile) is optional and additive: its domain/range gate is
+   worth having as soon as the profile's term table exists, but the profile only becomes fully
+   conformant behind D3.3, D2 and D1, so it does not belong ahead of them.
