@@ -52,7 +52,7 @@ The tree renders the exposed elements and each nested view as a subtree of its
 own:
 
 ```
-LanderViews::overview — tree rendering (the view states no rendering; a tree is the default)
+LanderViews::overview - tree rendering (the view states no rendering; a tree is the default)
 
 part Lander::descender (Descender)
   attribute mass
@@ -67,7 +67,7 @@ The interconnection rendering shows exposed features as nodes and the
 connections and flows between them as edges:
 
 ```
-LanderViews::interfaces — interconnection rendering (render asInterconnectionDiagram)
+LanderViews::interfaces - interconnection rendering (render asInterconnectionDiagram)
 
 part def Lander::Descender
   part tank (Tank)
@@ -75,7 +75,7 @@ part def Lander::Descender
   …
 
 connections:
-  tank — thruster: supply
+  tank -- thruster: supply
   tank => thruster: of Fuel
 ```
 
@@ -83,7 +83,7 @@ The state rendering comes from the lowered state graph, nested regions and
 transitions with their triggers and guards alike:
 
 ```
-LanderViews::descentStates — state rendering (view def StateTransitionView)
+LanderViews::descentStates - state rendering (view def StateTransitionView)
 
 state def Lander::DescentStates
   state cruise (initial)
@@ -102,7 +102,7 @@ The action rendering comes from the lowered action graph, control nodes and
 guarded successions alike:
 
 ```
-LanderViews::descentFlow — action rendering (view def ActionFlowView)
+LanderViews::descentFlow - action rendering (view def ActionFlowView)
 
 action def Lander::Descend
   initial start
@@ -170,7 +170,7 @@ reaches only what carries the `Safety` metadata:
 ```
 
 ```
-LanderViews::safetyView — tree rendering (the view states no rendering; a tree is the default)
+LanderViews::safetyView - tree rendering (the view states no rendering; a tree is the default)
 
 part def Lander::Thruster
   attribute thrust (Real)
@@ -183,8 +183,9 @@ part def Lander::Parachute
 `sysml -render` writes the same rendering from the command line:
 
 ```bash
-./bin/sysml examples/views-demo.sysml -render LanderViews::descentStates -render-form text
-./bin/sysml examples/views-demo.sysml -render LanderViews::descentStates   # Mermaid, the kind's machine form
+./bin/sysml examples/views-demo.sysml -render LanderViews::descentStates   # ASCII text at a terminal
+./bin/sysml examples/views-demo.sysml -render LanderViews::descentStates > states.mmd   # Mermaid into a file
+./bin/sysml examples/views-demo.sysml -render LanderViews::descentStates -render-form mermaid
 ```
 
 Every command is documented in

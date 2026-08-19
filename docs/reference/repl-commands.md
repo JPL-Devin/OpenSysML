@@ -61,7 +61,7 @@ quoted segment holding a space and one in the middle of a chain: `%instantiate '
 
 ```
 sysml> %render Demo::summary
-Demo::summary — tree rendering (the view states no rendering; a tree is the default)
+Demo::summary - tree rendering (the view states no rendering; a tree is the default)
 
 part def Demo::Vehicle
 part Demo::v (Vehicle)
@@ -84,7 +84,7 @@ rendered one, as aligned columns at the prompt and as a Markdown table with `mar
 
 ```
 sysml> %render Demo::parts
-Demo::parts — table rendering (render asElementTable)
+Demo::parts - table rendering (render asElementTable)
 
 Element        Kind      Type   Declared in
 -------------  --------  -----  -------------

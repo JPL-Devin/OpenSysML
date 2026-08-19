@@ -200,8 +200,8 @@ func printUsage(w io.Writer) {
 	fmt.Fprintf(w, "Every run that converts RDF says so on stderr. Saving to .sysml or .kerml is\n")
 	fmt.Fprintf(w, "stable.\n")
 	fmt.Fprintf(w, "\nRendering a view:\n")
-	fmt.Fprintf(w, "  sysml model.sysml -render Views::vehicleView   # As a Mermaid diagram, on stdout\n")
-	fmt.Fprintf(w, "  sysml model.sysml -render Views::vehicleView -render-form text\n")
+	fmt.Fprintf(w, "  sysml model.sysml -render Views::vehicleView   # ASCII text at a terminal\n")
+	fmt.Fprintf(w, "  sysml model.sysml -render Views::vehicleView -render-form markdown\n")
 	fmt.Fprintf(w, "  sysml model.sysml -render Views::vehicleView -o view.mmd\n")
 	fmt.Fprintf(w, "\nThe rendering is the one the view's render member states, and a containment tree\n")
 	fmt.Fprintf(w, "where it states none. It is tool-defined output: SysML v2 specifies the notation,\n")
@@ -240,7 +240,7 @@ func runCLI() int {
 	flag.StringVar(&outputPath, "o", "", "Write conversion output to this file (shorthand)")
 	flag.StringVar(&fromFormat, "from", "", "Input format for -convert: sysml, kerml, ttl, turtle or rdf (default: from the input's extension)")
 	flag.StringVar(&renderView, "render", "", "Render this view of the model instead of running it, in the form its render member states")
-	flag.StringVar(&renderForm, "render-form", "", "Form -render writes: text, mermaid or markdown (default: the kind's machine-readable form)")
+	flag.StringVar(&renderForm, "render-form", "", "Form -render writes: text, mermaid or markdown (default: text at a terminal, the kind's machine-readable form into a file or a pipe)")
 	flag.Var(&deprecatedFlag{instead: "-to has been replaced by -convert, as `sysml model.sysml -convert ttl`"}, "to", "Replaced by -convert, which names the output format")
 	flag.Var(&modelChecks.instantiate, "instantiate", "Create an object of this definition before the checks, so a verdict is about it (repeatable)")
 	flag.Var(&modelChecks.constraints, "constraint", "Evaluate this constraint and exit (repeatable)")
@@ -361,6 +361,7 @@ func newSession() *repl.Session {
 		sess.SetVerbosity(repl.VerbosityQuiet)
 	}
 	sess.SetTracing(traceMode)
+	sess.SetRenderWidth(terminalWidth())
 	return sess
 }
 

@@ -1,4 +1,4 @@
-VehicleViews::vehicleView — tree rendering (the view states no rendering; a tree is the default)
+VehicleViews::vehicleView - tree rendering (the view states no rendering; a tree is the default)
 
 part def Vehicles::Vehicle
   part engine (Engine)

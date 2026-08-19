@@ -1,4 +1,4 @@
-FilteredViews::safetyView — tree rendering (the view states no rendering; a tree is the default)
+FilteredViews::safetyView - tree rendering (the view states no rendering; a tree is the default)
 
 part def Systems::Radio
 part def Systems::Airbag

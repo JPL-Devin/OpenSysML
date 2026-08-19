@@ -19,7 +19,7 @@ func TestRenderDefaultsToATree(t *testing.T) {
 	}
 	text := strings.Join(out, "\n")
 	for _, want := range []string{
-		"Demo::summary — tree rendering",
+		"Demo::summary - tree rendering",
 		"the view states no rendering",
 		"part def Demo::Vehicle",
 		"part Demo::v (Vehicle)",
@@ -199,11 +199,11 @@ func TestRenderOfAViewWithAnUnrestrictedName(t *testing.T) {
 			t.Fatalf("the views did not load: %v", res.Diagnostics)
 		}
 	}
-	if text := run(t, s, "%render Quoted::'My Summary'"); !strings.Contains(text, "Quoted::'My Summary' — tree rendering") {
+	if text := run(t, s, "%render Quoted::'My Summary'"); !strings.Contains(text, "Quoted::'My Summary' - tree rendering") {
 		t.Errorf("a quoted view name is not rendered under its written name:\n%s", text)
 	}
 	// A name spelling a keyword is written with its quotes, so it can be typed back.
-	if text := run(t, s, "%render Quoted::'frame'"); !strings.Contains(text, "Quoted::'frame' — tree rendering") {
+	if text := run(t, s, "%render Quoted::'frame'"); !strings.Contains(text, "Quoted::'frame' - tree rendering") {
 		t.Errorf("a keyword view name is not written with its quotes:\n%s", text)
 	}
 	// A quoted name still being typed is not yet the form position, so the
