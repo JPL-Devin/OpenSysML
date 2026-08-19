@@ -1,10 +1,7 @@
-// Command gen writes internal/core/rdf/ontology/table.go from the Open-MBEE OWL
-// rendering of the SysML v2 metamodel.
-//
-// The ontology is third-party and 600 KB of RDF/XML, so it is not vendored here:
-// point this at a local checkout of https://github.com/Open-MBEE/sysmlv2-rdf-ontology
-// and it records that checkout's ontology version and commit SHA in the header of
-// the file it writes, which is what makes the table reproducible.
+// Command gen writes internal/core/rdf/ontology/table.go from a local checkout of
+// https://github.com/Open-MBEE/sysmlv2-rdf-ontology, which is not vendored here.
+// The checkout's version and commit SHA go into the header, making the table
+// reproducible.
 //
 //	go run ./internal/core/rdf/ontology/gen -ontology ../sysmlv2-rdf-ontology
 package main
@@ -46,8 +43,7 @@ package ontology
 // Version is the OMG SysML v2 metamodel version the table was generated from.
 const Version = %q
 
-// SourceCommit is the Open-MBEE/sysmlv2-rdf-ontology commit the table was
-// generated from.
+// SourceCommit is the sysmlv2-rdf-ontology commit the table was generated from.
 const SourceCommit = %q
 
 // properties holds every owl:ObjectProperty and owl:DatatypeProperty the
@@ -112,9 +108,8 @@ func run(root, out string) error {
 
 var versionBadge = regexp.MustCompile(`Version-(\d+)-`)
 
-// ontologyVersion reads the metamodel version out of the ontology repository's
-// own README badge, so the recorded version comes from the checkout rather than
-// from a flag that can drift from it.
+// ontologyVersion reads the metamodel version out of the checkout's own README
+// badge, so the recorded version cannot drift from the file it describes.
 func ontologyVersion(path string) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -147,10 +142,9 @@ type declaration struct {
 	parents  []string
 }
 
-// parseOntology reads the declarations out of the RDF/XML. Only the top-level
-// elements of rdf:RDF are read: the anonymous owl:Restriction subclass axioms
-// nested inside them state cardinality rather than hierarchy, and nothing here
-// needs them.
+// parseOntology reads the declarations out of the RDF/XML. Only top-level elements
+// of rdf:RDF are read; the anonymous owl:Restriction axioms nested inside them
+// state cardinality rather than hierarchy.
 func parseOntology(path string) ([]declaration, error) {
 	file, err := os.Open(path)
 	if err != nil {
@@ -257,8 +251,8 @@ func attr(element xml.StartElement, space, local string) string {
 	return ""
 }
 
-// property and class mirror the generated table's types. The generator cannot
-// import them: the package it generates into does not compile until it has run.
+// property and class mirror the generated table's types, which cannot be imported:
+// the package they live in does not compile until this has run.
 type property struct {
 	name, definingClass, iri, kind, rangeIRI string
 }

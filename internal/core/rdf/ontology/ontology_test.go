@@ -8,14 +8,12 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf/ontology"
 )
 
-// TestTableShape locks what the generated table must hold for the checks built
-// on it to mean anything: every property qualified by a declared metaclass, and
-// every metaclass reachable from the hierarchy's root.
+// TestTableShape locks what the generated table must hold for the checks built on
+// it to mean anything, including the counts § D8 of the roadmap reports.
 func TestTableShape(t *testing.T) {
 	properties := ontology.Properties()
 	classes := ontology.Classes()
-	// The counts SysML.owl 202407 declares, as docs/project/roadmap.md § D8 and
-	// README.md report them; an ontology bump is expected to move them.
+	// The counts SysML.owl 202407 declares; an ontology bump is expected to move them.
 	object, datatype := 0, 0
 	for _, p := range properties {
 		if p.Kind == ontology.ObjectProperty {
@@ -65,7 +63,7 @@ func TestTableShape(t *testing.T) {
 }
 
 // TestLookups checks the accessors against declarations read out of SysML.owl by
-// hand, including a name two metaclasses define.
+// hand, including a name two metaclasses declare.
 func TestLookups(t *testing.T) {
 	declaredName := ontology.LookupProperty("declaredName")
 	if len(declaredName) != 1 {
@@ -106,9 +104,8 @@ func TestLookups(t *testing.T) {
 	}
 }
 
-// TestCheckReportsEachKind exercises the gate on a hand-built graph, one triple
-// per way a graph can disagree with the ontology, so the check itself is covered
-// independently of what the export fixtures happen to contain.
+// TestCheckReportsEachKind exercises the check on a hand-built graph, one triple
+// per kind, independently of what the export fixtures happen to contain.
 func TestCheckReportsEachKind(t *testing.T) {
 	graph := rdf.NewGraph()
 	part := rdf.ElementIRI("M::p")

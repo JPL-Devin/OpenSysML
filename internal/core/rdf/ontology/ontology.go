@@ -1,14 +1,9 @@
 // Package ontology holds the SysML v2 metamodel term table generated from the
-// Open-MBEE OWL rendering of the OMG metamodel, plus the domain/range check built
-// on it. README.md documents regeneration and what the ontology does not carry.
-//
-// The ontology qualifies every property by its defining metaclass
-// (sysml:Element_declaredName) where this tool writes the unqualified name Flexo
-// MMS reads (sysml:declaredName); the table records both spellings.
-//
-// SysML.owl records no ecore abstractness — its owl:Class declarations carry no
-// abstract/concrete marker — so a "the metaclass must be concrete" check is not
-// possible from this table and is not implemented.
+// Open-MBEE OWL rendering, plus the domain/range check built on it. The ontology
+// qualifies each property by its defining metaclass (sysml:Element_declaredName)
+// where this tool writes the unqualified name (sysml:declaredName), so the table
+// records both spellings. It records no ecore abstractness, so a "the metaclass
+// must be concrete" check is not possible here. See README.md.
 package ontology
 
 //go:generate go run ./gen -ontology $SYSMLV2_RDF_ONTOLOGY -out table.go
@@ -38,27 +33,22 @@ func (k PropertyKind) String() string {
 
 // Property is one metamodel property as the ontology declares it.
 type Property struct {
-	// Name is the unqualified local name this tool's encoder writes
-	// ("declaredName").
+	// Name is the unqualified name this tool's encoder writes ("declaredName").
 	Name string
-	// DefiningClass is the metaclass that declares the property and is the
-	// property's rdfs:domain ("Element").
+	// DefiningClass is the rdfs:domain, the metaclass declaring it ("Element").
 	DefiningClass string
-	// IRI is the full ontology property IRI
-	// ("https://www.omg.org/spec/SysML#Element_declaredName").
+	// IRI is "https://www.omg.org/spec/SysML#Element_declaredName".
 	IRI string
 	// Kind is owl:ObjectProperty or owl:DatatypeProperty.
 	Kind PropertyKind
-	// Range is the declared rdfs:range IRI, empty when the ontology declares
-	// none.
+	// Range is the declared rdfs:range IRI, empty when none is declared.
 	Range string
 }
 
 // Class is one metaclass and its named rdfs:subClassOf parents; the anonymous
 // cardinality restrictions the ontology also states are not recorded.
 type Class struct {
-	// Name is the metaclass name ("PartUsage"), which is also its local name in
-	// the SysML namespace.
+	// Name is the metaclass name ("PartUsage"), its local name in the namespace.
 	Name string
 	// Parents are the metaclass names of the declared direct superclasses.
 	Parents []string
@@ -91,23 +81,20 @@ func index() {
 }
 
 // LookupProperty returns every declaration of an unqualified property name, in
-// table order. More than one metaclass may declare the same name, so the caller
-// decides which declaration applies — see AmbiguousNames.
+// table order; several metaclasses may declare one name (see AmbiguousNames).
 func LookupProperty(name string) []Property {
 	index()
 	return propertiesByName[name]
 }
 
-// LookupClass returns the metaclass of a name and whether the ontology declares
-// it.
+// LookupClass returns the metaclass of a name and whether it is declared.
 func LookupClass(name string) (Class, bool) {
 	index()
 	c, ok := classesByName[name]
 	return c, ok
 }
 
-// AmbiguousNames returns the unqualified property names that more than one
-// metaclass declares, in table order.
+// AmbiguousNames returns the unqualified names more than one metaclass declares.
 func AmbiguousNames() []string {
 	index()
 	var out []string
@@ -146,8 +133,7 @@ func IsAncestorOrSelf(class, ancestor string) bool {
 	return false
 }
 
-// LocalName returns the part of a SysML-namespace IRI after the '#', or the IRI
-// itself when it is not in that namespace.
+// LocalName returns the part of an IRI after the '#', or the IRI itself.
 func LocalName(iri string) string {
 	if cut := strings.LastIndex(iri, "#"); cut >= 0 {
 		return iri[cut+1:]

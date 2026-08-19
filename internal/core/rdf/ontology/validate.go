@@ -11,23 +11,19 @@ import (
 type ViolationKind string
 
 const (
-	// UnknownClass is an rdf:type in the SysML namespace, or outside it, that
-	// the ontology declares no owl:Class for.
+	// UnknownClass is an rdf:type the ontology declares no owl:Class for.
 	UnknownClass ViolationKind = "unknown-class"
-	// UntypedSubject is a subject carrying SysML properties with no rdf:type,
-	// which leaves the domain of those properties uncheckable.
+	// UntypedSubject carries SysML properties with no rdf:type, which leaves
+	// their domain uncheckable.
 	UntypedSubject ViolationKind = "untyped-subject"
-	// UnknownProperty is a SysML-namespace predicate whose unqualified name no
-	// metaclass in the ontology declares.
+	// UnknownProperty is a predicate whose name no metaclass declares.
 	UnknownProperty ViolationKind = "unknown-property"
 	// DomainMismatch is a property whose declaring metaclass is neither the
 	// subject's metaclass nor an ancestor of it.
 	DomainMismatch ViolationKind = "domain-mismatch"
-	// LiteralForObjectProperty is an owl:ObjectProperty with a literal object
-	// where the ontology's range requires an IRI.
+	// LiteralForObjectProperty is an owl:ObjectProperty with a literal object.
 	LiteralForObjectProperty ViolationKind = "literal-for-object-property"
-	// IRIForDatatypeProperty is an owl:DatatypeProperty with an IRI object
-	// where the ontology's range requires a literal.
+	// IRIForDatatypeProperty is an owl:DatatypeProperty with an IRI object.
 	IRIForDatatypeProperty ViolationKind = "iri-for-datatype-property"
 )
 
@@ -39,17 +35,15 @@ type Violation struct {
 	// Property is the unqualified name of the predicate, "-" for a violation
 	// about the subject's type rather than a property.
 	Property string
-	// Subject is the subject IRI, for diagnostics only. It is deliberately
-	// absent from Key so that a known-violation list survives a change of
-	// element identity.
+	// Subject is the subject IRI, for diagnostics only; Key omits it.
 	Subject string
 	// Detail explains the specific disagreement.
 	Detail string
 }
 
-// Key identifies a violation by kind, metaclass and property, independently of
-// which element it was found on. A committed list of known violations is keyed
-// by this.
+// Key identifies a violation by kind, metaclass and property. It deliberately
+// omits the subject, so a committed list of known violations survives a change of
+// element identity.
 func (v Violation) Key() string {
 	return fmt.Sprintf("%s %s %s", v.Kind, v.Class, v.Property)
 }
@@ -63,15 +57,21 @@ const missing = "-"
 
 // Check reports every way the triples of g disagree with the ontology. Only
 // SysML-namespace predicates are checked; the RDF vocabulary and this tool's own
-// extension namespace are outside the ontology's scope. The ontology records no
+// extension namespace are out of the ontology's scope. The ontology records no
 // abstractness, so an abstract metaclass is not a violation here.
 func Check(g *rdf.Graph) []Violation {
 	var out []Violation
+	hasSysMLProperty := make(map[rdf.Term]bool)
+	for _, triple := range g.Triples() {
+		if strings.HasPrefix(triple.Predicate.Value, rdf.SysML) {
+			hasSysMLProperty[triple.Subject] = true
+		}
+	}
 	declared := make(map[rdf.Term]bool)
 	for _, subject := range g.Subjects() {
 		typeIRI := g.Type(subject)
 		if typeIRI == "" {
-			if subjectHasSysMLProperty(g, subject) {
+			if hasSysMLProperty[subject] {
 				out = append(out, Violation{
 					Kind: UntypedSubject, Class: missing, Property: missing, Subject: subject.Value,
 					Detail: "subject carries SysML properties but no rdf:type",
@@ -103,9 +103,9 @@ func Check(g *rdf.Graph) []Violation {
 	return out
 }
 
-// checkTriple applies the property checks to one triple whose subject is typed by
-// class. An undeclared class has no place in the hierarchy to compare a domain
-// against, so only the property's existence and object kind are checked for it.
+// checkTriple applies the property checks to one triple. An undeclared class has
+// no place in the hierarchy to compare a domain against, so only the property's
+// existence and object kind are checked for it.
 func checkTriple(class string, classDeclared bool, triple rdf.Triple) (Violation, bool) {
 	name := strings.TrimPrefix(triple.Predicate.Value, rdf.SysML)
 	found := Violation{Class: class, Property: name, Subject: triple.Subject.Value}
@@ -156,18 +156,8 @@ func objectMatchesKind(kind PropertyKind, object rdf.Term) bool {
 	return object.IsIRI()
 }
 
-func subjectHasSysMLProperty(g *rdf.Graph, subject rdf.Term) bool {
-	for _, triple := range g.Triples() {
-		if triple.Subject == subject && strings.HasPrefix(triple.Predicate.Value, rdf.SysML) {
-			return true
-		}
-	}
-	return false
-}
-
-// classNameOf returns the local name of an rdf:type IRI, or "" when the subject
-// has none. An IRI outside the SysML namespace keeps enough of itself to be
-// recognizable in a report.
+// classNameOf returns the local name of an rdf:type IRI, or "" when there is
+// none. An IRI outside the SysML namespace is kept whole, to stay recognizable.
 func classNameOf(typeIRI string) string {
 	if typeIRI == "" {
 		return ""

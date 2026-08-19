@@ -12,19 +12,13 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/rdf/ontology"
 )
 
-// knownViolationsFile lists the disagreements between the graphs this tool
-// writes and the OMG metamodel as the Open-MBEE OWL rendering states it. It is
-// committed so that the gate below fails on a *new* disagreement while the ones
-// already recorded in the roadmap are reported rather than hidden.
+// knownViolationsFile inventories the disagreements between the graphs this tool
+// writes and the OMG metamodel, so a new one fails rather than being hidden.
 const knownViolationsFile = "testdata/ontology-known-violations.txt"
 
 // TestGoldenGraphsMatchOntology checks every golden Turtle graph against the
-// generated ontology table: each SysML-namespace predicate must be a property
-// the metamodel declares, on a metaclass the subject conforms to, carrying the
-// kind of object (IRI or literal) the property's range allows.
-//
-// The fixtures are read from disk rather than embedded, so the gate keeps
-// working when element identity changes underneath it.
+// generated ontology table. The fixtures are read from disk rather than embedded,
+// so the gate keeps working when element identity changes underneath it.
 func TestGoldenGraphsMatchOntology(t *testing.T) {
 	known, err := readKnownViolations(knownViolationsFile)
 	if err != nil {
@@ -71,8 +65,8 @@ func TestGoldenGraphsMatchOntology(t *testing.T) {
 		len(graphs), ontology.Version, ontology.SourceCommit, total, len(occurrences))
 }
 
-// goldenGraphs returns the golden Turtle fixtures, failing when none are found
-// so that a moved fixture directory cannot make the gate vacuous.
+// goldenGraphs returns the golden Turtle fixtures, failing when none are found so
+// that a moved fixture directory cannot make the gate vacuous.
 func goldenGraphs(t *testing.T) []string {
 	t.Helper()
 	paths, err := filepath.Glob(filepath.Join("testdata", "convert", "*.golden.ttl"))

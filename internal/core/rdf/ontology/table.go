@@ -13,8 +13,7 @@ package ontology
 // Version is the OMG SysML v2 metamodel version the table was generated from.
 const Version = "202407"
 
-// SourceCommit is the Open-MBEE/sysmlv2-rdf-ontology commit the table was
-// generated from.
+// SourceCommit is the sysmlv2-rdf-ontology commit the table was generated from.
 const SourceCommit = "a1fda2623d4a0a7b7ace855e12e799dbd5cbaa82"
 
 // properties holds every owl:ObjectProperty and owl:DatatypeProperty the
