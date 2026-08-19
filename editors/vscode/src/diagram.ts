@@ -243,10 +243,11 @@ class DiagramPanel {
     }
     this.post({ type: "views", views: [...views, ...PSEUDO_VIEWS], selected: this.selected });
     try {
+      // No form is asked for: the server writes the machine form of the kind it
+      // rendered, which is Mermaid for a diagram and Markdown for a table.
       const result = await client.sendRequest<RenderResult>(RENDER_METHOD, {
         textDocument,
         view: this.selected === "" ? undefined : this.selected,
-        form: "mermaid",
       });
       this.nodes = result.nodes ?? [];
       this.post({ type: "render", result, selected: this.selected });
@@ -400,9 +401,11 @@ function html(
       #diagram.stale { opacity: 0.45; }
       #diagram svg { max-width: 100%; height: auto; }
       #diagram g.opensysml-node { cursor: pointer; }
+      /* Mermaid injects its own stylesheet into the SVG, so the highlight has to
+         win over it. */
       #diagram .opensysml-selected > rect, #diagram .opensysml-selected > polygon,
       #diagram .opensysml-selected > circle, #diagram .opensysml-selected > path {
-        stroke: var(--vscode-focusBorder); stroke-width: 3px;
+        stroke: var(--vscode-focusBorder) !important; stroke-width: 3px !important;
       }
       details { margin-top: 0.75rem; font-size: 0.9em; }
       pre { white-space: pre-wrap; }

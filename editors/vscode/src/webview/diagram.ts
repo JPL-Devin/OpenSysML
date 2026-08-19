@@ -23,10 +23,18 @@ const notices = document.getElementById("notices") as HTMLDetailsElement;
 const noticeList = document.getElementById("notice-list") as HTMLElement;
 
 const documentURI = (JSON.parse(body.dataset.state ?? "{}") as { uri?: string }).uri ?? "";
-let selected = "";
+const saved = (vscode.getState() ?? {}) as { view?: string; last?: RenderResult };
+let selected = saved.view ?? "";
+let last: RenderResult | undefined = saved.last;
 let drawn = 0;
 
 mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: darkTheme() ? "dark" : "default" });
+
+// The panel is torn down while it is hidden, so the rendering it last drew is
+// put back — dimmed until the server answers — rather than showing nothing.
+if (last) {
+  void draw(last).then(() => diagram.classList.add("stale"));
+}
 
 picker.addEventListener("change", () => {
   selected = picker.value;
@@ -77,12 +85,22 @@ function fillPicker(views: PickerEntry[], pick: string): void {
 // diagram up, dimmed, so a mid-keystroke parse error does not blank the panel.
 async function draw(result: RenderResult): Promise<void> {
   try {
-    const id = `opensysml-diagram-${++drawn}`;
-    const { svg } = await mermaid.render(id, result.artifact);
-    diagram.innerHTML = svg;
+    if (result.form === "mermaid") {
+      const id = `opensysml-diagram-${++drawn}`;
+      const { svg } = await mermaid.render(id, result.artifact);
+      diagram.innerHTML = svg;
+      markNodes(result);
+    } else {
+      // A table is written as Markdown rather than drawn, so it is shown as the
+      // artifact it is.
+      const pre = document.createElement("pre");
+      pre.textContent = result.artifact;
+      diagram.replaceChildren(pre);
+    }
     diagram.classList.remove("stale");
     status.textContent = "";
-    markNodes(result);
+    last = result;
+    remember();
     showNotices(result);
     kindLabel.textContent = describe(result);
   } catch (err) {
@@ -172,9 +190,8 @@ function nodeElement(svg: SVGElement, id: string): (SVGElement & { dataset: DOMS
 // bareID is the id a Mermaid element was drawn for, without the diagram prefix
 // and the ordinal suffix Mermaid adds.
 function bareID(raw: string): string {
-  let id = raw.replace(/^(flowchart|state|statediagram)-/, "");
-  id = id.replace(/-\d+$/, "");
-  return id;
+  const marked = /(?:^|-)(?:flowchart|state|statediagram(?:-state)?)-(.+)$/.exec(raw);
+  return (marked ? marked[1] : raw).replace(/-\d+$/, "");
 }
 
 // cssEscape quotes an id for an attribute selector, since CSS.escape is not in
@@ -185,7 +202,7 @@ function cssEscape(value: string): string {
 
 // remember keeps what the panel is showing, so a window reload restores it.
 function remember(): void {
-  vscode.setState({ uri: documentURI, view: selected });
+  vscode.setState({ uri: documentURI, view: selected, last });
 }
 
 function darkTheme(): boolean {
