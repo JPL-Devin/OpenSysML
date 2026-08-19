@@ -10,6 +10,8 @@ maintainers; the behavior a user sees is [the guide](../../guide/).
 - **[Pseudostates](pseudostates.md)** — choice, junction, fork, join, entry/exit points
   and history
 - **[Python gRPC bindings](python-grpc-bindings.md)** — the service and client design
+- **[Visual modeling in VS Code](vscode-visual-modeling.md)** — the live diagram panel, the
+  diagram-driven edits, and the graphical editor it builds to
 
 The staged plans that built the bindings, kept for their rationale:
 [phase 1](python-grpc-phase1-plan.md) (the service),
