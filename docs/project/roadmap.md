@@ -300,6 +300,40 @@ elements are `NamespaceImport` or `MembershipImport`. Audit every property the e
 against the API schema for reference-vs-literal and every metaclass name for being concrete;
 this is mechanical once D3.1 gives references something stable to point at.
 
+## D8 — an optional second output profile: the Open-MBEE SysML v2 OWL ontology
+
+[`Open-MBEE/sysmlv2-rdf-ontology`](https://github.com/Open-MBEE/sysmlv2-rdf-ontology) renders the
+OMG metamodel (version 202407, from `SysML.ecore`) as OML and OWL: `sysml2/owl/.../SysML.owl`, 172
+classes, 348 object properties, 63 datatype properties, with `rdfs:domain`/`rdfs:range` on each and
+a reasoned bundle alongside it (`Owl Reason 2.12.0`). It uses the *same* namespace we do,
+`https://www.omg.org/spec/SysML#`, and its class IRIs are the plain metaclass names we already
+emit (`sysml:PartUsage`). The difference is the properties: each is qualified by the metaclass that
+defines it — `sysml:Element_declaredName` (a datatype property), `sysml:Element_owningNamespace`
+(an object property whose range is a `Namespace`), `sysml:Element_owner` (range
+`OwningMembership`) — and a conformant instance graph therefore materializes the abstract syntax's
+relationship elements rather than collapsing them. That is where the verbosity the Flexo team
+objects to comes from, and it is inherent to the ontology rather than incidental.
+
+So this is a **second profile selected by a flag, not a superset**: the property IRIs differ, so
+one graph cannot satisfy both conventions, and Flexo's convention stays the default — under the
+ontology's names Flexo's reader would hand a client payload keys like `Element_declaredName`. The
+encoder already separates the term layer (`rdf.SysMLTerm`, `internal/core/rdf/vocab.go`) from the
+structural decisions (`internal/core/export/convert.go`), so the profile is mostly a term-mapping
+layer: property name → defining metaclass. Generate that table from `SysML.owl` and vendor it
+rather than hand-writing 400 entries, so it can be regenerated when the ontology version moves.
+
+Two things the flag does not buy. Full instance-level conformance still needs the membership and
+relationship elements (D3.3) and real triples where we currently write `sysx:sourceText` (D1, D2):
+`sysx:` has no place in that ontology at all, so an ontology-profile graph is conformant only as
+far as those items have landed, and the profile should say so where it is documented. What it does
+buy immediately is a **validation gate we do not have**: the TBox declares domain and range for
+every property, so emitted triples can be checked against it with any OWL tool — a property
+attached to the wrong metaclass is currently caught by nothing in our suite. That check is worth
+running against the ontology's names even before the profile is user-facing.
+
+Scope: the profile plumbing, the generated table and the domain/range gate are about one session's
+work; conformance beyond that is gated on D3.3, D2 and D1 rather than on this item.
+
 ## D5 — the parser drops the `variant` and `include` keyword prefixes
 
 `variant part a : A;` and `include U;` prefix a kind keyword the AST already records on its
