@@ -26,6 +26,9 @@ concurrency:
 jobs:
   build:
     name: Build the site
+    # The site is published from Open-MBEE/OpenSysML; a fork would deploy the same
+    # pages under its own domain.
+    if: github.repository == 'Open-MBEE/OpenSysML'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
