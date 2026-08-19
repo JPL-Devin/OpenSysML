@@ -206,13 +206,25 @@ The reader derives an element's `@id` as `urnSuffix`, defined as
 `requireValidId`, whose regex is `[a-zA-Z0-9_-]+`, so an id containing `::` cannot be
 requested at all. Qualified-name IRIs are therefore unusable as Flexo element identity.
 
-The fix is to mint an id that satisfies that regex while keeping conversion
-deterministic — a UUID derived from the qualified name (a v5-style name-based UUID over
-a fixed namespace) rather than a random one, so re-converting an unedited model still
-yields the same IRIs. The qualified name then lives in `sysml:qualifiedName` (already
-emitted), and the decoder must stop recovering identity from the IRI
-(`rdf.QualifiedNameOf`) and read it from that property instead. This is the item that
-changes every fixture under `internal/core/export/testdata/convert`, so it goes first.
+The fix is an id that satisfies that regex while keeping conversion deterministic. **A UUID
+is not required**: Flexo types every id as a plain `String` (`Identified.atId`, and no
+`format: uuid` anywhere in its `openapi/openapi.yaml`); `generateId()` returns a random UUID
+only as the default when a request omits an id. So the id can stay readable — encode the
+qualified name reversibly into `[a-zA-Z0-9_-]`, with `::` becoming a separator that a name
+cannot itself produce (escape `_` before substituting, or `A_B::C` and `A::B_C` collide) and a
+hex escape for the characters a name may legally carry but an id may not — non-ASCII names and
+quoted names with spaces or punctuation. Readable ids also keep the graph diffable, which a
+UUID scheme gives up. The cost, and the reason to decide it deliberately: the OMG API's own
+implementations do treat element ids as UUIDs, so a readable id may be rejected by a client
+other than Flexo — that is inference from convention, not something read out of Flexo's
+sources, and it is worth checking against whichever client is meant to consume the graph
+before the encoding is fixed.
+
+Either way the qualified name lives in `sysml:qualifiedName` (already emitted), and the decoder
+must stop recovering identity from the IRI (`rdf.QualifiedNameOf`) and read it from that
+property instead — that decoupling, not the choice of encoding, is the substance of D3.1. This
+is the item that changes every fixture under `internal/core/export/testdata/convert`, so it
+goes first.
 
 ### D3.2 — `sysml:elementId` is required and is not emitted
 
@@ -257,8 +269,8 @@ Feature values, multiplicity bounds, filter conditions and succession guards are
 their notation. They round-trip exactly, but SPARQL cannot see inside them, so a query like
 "every part whose mass exceeds 1000" is not expressible against the graph. Mapping KerML
 expression trees to RDF is the fix and is a feature in its own right: it needs a node-identity
-scheme for subexpressions, which is the part to design first — and after D3.1 that scheme is
-the same UUID-minting question, so design them together.
+scheme for subexpressions, which is the part to design first — and it is the same identity-encoding
+question D3.1 settles for elements, so design them together.
 
 Under the drop-in target this is no longer only a queryability gap. The Flexo reader keeps
 `sysml:` and `urn:sysmlv2:annotation:json:` predicates and **ignores everything else** (the
@@ -287,6 +299,40 @@ a reference, and the metaclass is `sysml:Import`, which is abstract in KerML —
 elements are `NamespaceImport` or `MembershipImport`. Audit every property the encoder writes
 against the API schema for reference-vs-literal and every metaclass name for being concrete;
 this is mechanical once D3.1 gives references something stable to point at.
+
+## D8 — an optional second output profile: the Open-MBEE SysML v2 OWL ontology
+
+[`Open-MBEE/sysmlv2-rdf-ontology`](https://github.com/Open-MBEE/sysmlv2-rdf-ontology) renders the
+OMG metamodel (version 202407, from `SysML.ecore`) as OML and OWL: `sysml2/owl/.../SysML.owl`, 172
+classes, 348 object properties, 63 datatype properties, with `rdfs:domain`/`rdfs:range` on each and
+a reasoned bundle alongside it (`Owl Reason 2.12.0`). It uses the *same* namespace we do,
+`https://www.omg.org/spec/SysML#`, and its class IRIs are the plain metaclass names we already
+emit (`sysml:PartUsage`). The difference is the properties: each is qualified by the metaclass that
+defines it — `sysml:Element_declaredName` (a datatype property), `sysml:Element_owningNamespace`
+(an object property whose range is a `Namespace`), `sysml:Element_owner` (range
+`OwningMembership`) — and a conformant instance graph therefore materializes the abstract syntax's
+relationship elements rather than collapsing them. That is where the verbosity the Flexo team
+objects to comes from, and it is inherent to the ontology rather than incidental.
+
+So this is a **second profile selected by a flag, not a superset**: the property IRIs differ, so
+one graph cannot satisfy both conventions, and Flexo's convention stays the default — under the
+ontology's names Flexo's reader would hand a client payload keys like `Element_declaredName`. The
+encoder already separates the term layer (`rdf.SysMLTerm`, `internal/core/rdf/vocab.go`) from the
+structural decisions (`internal/core/export/convert.go`), so the profile is mostly a term-mapping
+layer: property name → defining metaclass. Generate that table from `SysML.owl` and vendor it
+rather than hand-writing 400 entries, so it can be regenerated when the ontology version moves.
+
+Two things the flag does not buy. Full instance-level conformance still needs the membership and
+relationship elements (D3.3) and real triples where we currently write `sysx:sourceText` (D1, D2):
+`sysx:` has no place in that ontology at all, so an ontology-profile graph is conformant only as
+far as those items have landed, and the profile should say so where it is documented. What it does
+buy immediately is a **validation gate we do not have**: the TBox declares domain and range for
+every property, so emitted triples can be checked against it with any OWL tool — a property
+attached to the wrong metaclass is currently caught by nothing in our suite. That check is worth
+running against the ontology's names even before the profile is user-facing.
+
+Scope: the profile plumbing, the generated table and the domain/range gate are about one session's
+work; conformance beyond that is gated on D3.3, D2 and D1 rather than on this item.
 
 ## D5 — the parser drops the `variant` and `include` keyword prefixes
 
@@ -361,3 +407,6 @@ Tracks A, B, C, P and T1 are closed and their entries are removed; what is left 
    identity is stable, then **D2** — a succession end that refers to an unnamed member belongs
    with it, both wanting real end triples rather than names or text — and **D1** last, as the
    largest piece of design. **D5** can go whenever; it is independent of the interop work.
+   **D8** (the OWL-ontology output profile) is optional and additive: its domain/range gate is
+   worth having as soon as the profile's term table exists, but the profile only becomes fully
+   conformant behind D3.3, D2 and D1, so it does not belong ahead of them.
