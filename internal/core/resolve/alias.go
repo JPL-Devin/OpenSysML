@@ -8,6 +8,24 @@ import (
 // ResolveAliasTarget follows an alias symbol to its ultimate non-alias target.
 // Non-alias symbols resolve to themselves. Cycles yield (nil, false).
 func (r *Resolver) ResolveAliasTarget(sym *symbols.Symbol) (*symbols.Symbol, bool) {
+	if sym == nil {
+		return nil, false
+	}
+	if cached, ok := r.aliasTargets[sym]; ok {
+		return cached.sym, cached.ok
+	}
+	if r.resolvingAlias[sym] {
+		return nil, false
+	}
+	r.resolvingAlias[sym] = true
+	defer delete(r.resolvingAlias, sym)
+
+	target, ok := r.resolveAliasTarget(sym)
+	r.aliasTargets[sym] = resolution{sym: target, ok: ok}
+	return target, ok
+}
+
+func (r *Resolver) resolveAliasTarget(sym *symbols.Symbol) (*symbols.Symbol, bool) {
 	seen := map[*symbols.Symbol]bool{}
 	cur := sym
 	for cur != nil {

@@ -82,6 +82,10 @@ type Resolver struct {
 	// members whose bodies are being walked, innermost last: such a body may
 	// redefine a feature of the requirement it references by plain name.
 	constraintRefs []constraintRef
+	// aliasTargets memoizes the canonical target of each alias. A separate
+	// resolving set makes cycles fail without recursing indefinitely.
+	aliasTargets   map[*symbols.Symbol]resolution
+	resolvingAlias map[*symbols.Symbol]bool
 	// suggestions are the spellings an unresolvable name may have meant, kept
 	// per name and scope; names is the index's name table they are looked up in.
 	// suggesting holds the suggestions being scored, so scoring one cannot
@@ -109,6 +113,8 @@ func New(idx *symbols.Index) *Resolver {
 		suggesting:  map[suggestKey]bool{},
 
 		inheritedImports: map[*symbols.Symbol]bool{},
+		aliasTargets:     map[*symbols.Symbol]resolution{},
+		resolvingAlias:   map[*symbols.Symbol]bool{},
 	}
 }
 

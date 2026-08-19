@@ -244,8 +244,10 @@ func (tc *typeChecker) checkTypeTarget(scope *symbols.Scope, target ast.Node, re
 	// Resolve aliases to their underlying types for typing relationships and
 	// for a satisfy reference, both of which check the target's kind.
 	targetSym := sym
-	aliasMatters := relKind == ast.RelTyping ||
-		(relKind == ast.RelSubsets && decl.useKind == ast.UsageSatisfy)
+	aliasMatters := relKind == ast.RelSpecializes ||
+		relKind == ast.RelSubsets ||
+		relKind == ast.RelRedefines ||
+		relKind == ast.RelTyping
 	if aliasMatters && sym.Kind == symbols.SymbolAlias {
 		if resolved, ok := tc.resolver.ResolveAliasTarget(sym); ok && resolved != nil {
 			targetSym = resolved
@@ -764,6 +766,15 @@ func compatibleTyping(useKind ast.UsageKind, direction ast.FeatureDirection, def
 	if useKind == ast.UsageItem {
 		return defKind == symbols.SymbolPartDef ||
 			defKind == symbols.SymbolAttributeDef ||
+			defKind == symbols.SymbolItemDef ||
+			defKind == symbols.SymbolOccurrenceDef
+	}
+
+	// Parts may be typed by item definitions as well as part definitions:
+	// both are structural classifiers and an alias must not change that
+	// compatibility decision.
+	if useKind == ast.UsagePart {
+		return defKind == symbols.SymbolPartDef ||
 			defKind == symbols.SymbolItemDef ||
 			defKind == symbols.SymbolOccurrenceDef
 	}

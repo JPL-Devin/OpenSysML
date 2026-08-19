@@ -214,6 +214,11 @@ func (cc *constraintChecker) checkSubsettingMultiplicity(sym *symbols.Symbol) {
 		if !resolved || target == nil {
 			continue
 		}
+		if canonical, aliasOK := cc.resolver.ResolveAliasTarget(target); aliasOK {
+			target = canonical
+		} else {
+			continue
+		}
 		superRange, ok := cc.model.MultiplicityOf(target)
 		if !ok || !superRange.Upper.Known {
 			continue
@@ -519,6 +524,11 @@ func extractUsageType(cc *constraintChecker, sym *symbols.Symbol) *symbols.Symbo
 		if qn, ok := targetNode.(*ast.QualifiedName); ok {
 			resolved, ok := cc.resolver.ResolveQualified(sym.OwnerScope, qn)
 			if ok && resolved != nil {
+				if canonical, aliasOK := cc.resolver.ResolveAliasTarget(resolved); aliasOK {
+					resolved = canonical
+				} else {
+					continue
+				}
 				return resolved
 			}
 		}

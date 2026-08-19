@@ -571,6 +571,11 @@ func (ec *exprChecker) inferInvocation(scope *symbols.Scope, e *ast.InvocationEx
 	if !ok || sym == nil || !isBehaviorKind(sym.Kind) {
 		return semantics.PrimUnknown
 	}
+	if resolved, aliasOK := ec.resolver.ResolveAliasTarget(sym); aliasOK {
+		sym = resolved
+	} else {
+		return semantics.PrimUnknown
+	}
 	params, ok := ec.effectiveInParameters(sym)
 	if !ok {
 		return semantics.PrimUnknown

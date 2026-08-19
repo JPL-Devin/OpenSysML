@@ -41,6 +41,35 @@ func TestInheritedMembersAreVisible(t *testing.T) {
 	}
 }
 
+func TestAliasSupertypeInheritanceWithGeometryAndUnits(t *testing.T) {
+	src := `package LRU_Assembly {
+		private import ShapeItems::Box;
+		private import ShapeItems::CircularCylinder;
+		private import SI::mm;
+		part def AvionicsLRU :> Box {
+			:>> length = 100 [mm];
+			:>> width = 50 [mm];
+			:>> height = 20 [mm];
+		}
+		part def MountingBushing :> CircularCylinder {
+			:>> radius = 5 [mm];
+			:>> height = 1 [mm];
+		}
+		part lru : Box {
+			:>> length = 100 [mm];
+			:>> width = 50 [mm];
+			:>> height = 20 [mm];
+		}
+	}`
+	ws := NewWorkspace()
+	const uri = "file:///alias_geometry.sysml"
+	ws.Open(uri, []byte(src), 1)
+	defer ws.Close(uri)
+	if diagnostics := ws.Diagnostics(uri); len(diagnostics) != 0 {
+		t.Fatalf("expected alias-based geometry model to be clean, got %d: %v", len(diagnostics), diagnostics)
+	}
+}
+
 // TestRedefinitionDoesNotShadowItsTarget covers the misspelled counterpart of
 // the inherited cases: a redefinition of a name no supertype declares must
 // still report, or the inherited lookup would accept anything.

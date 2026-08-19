@@ -175,6 +175,11 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		if !ok || target == nil {
 			continue
 		}
+		if resolved, aliasOK := m.resolver.ResolveAliasTarget(target); aliasOK {
+			target = resolved
+		} else {
+			continue
+		}
 		// A redefinition names the feature it refines, which the redefining
 		// feature shadows in its own scope (`part redefines engine`), so a
 		// target resolving to sym itself must be looked up in what sym's owner
@@ -198,7 +203,15 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 	// edges were resolved when the record was written and are carried as FQNs.
 	for _, fqn := range sym.SuperFQNs {
 		for _, target := range m.resolver.Index().LookupQualified(fqn) {
-			if target == nil || target == sym || seen[target] {
+			if target == nil {
+				continue
+			}
+			if resolved, aliasOK := m.resolver.ResolveAliasTarget(target); aliasOK {
+				target = resolved
+			} else {
+				continue
+			}
+			if target == sym || seen[target] {
 				continue
 			}
 			seen[target] = true
@@ -209,7 +222,15 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 
 	// SubjectMember has TypeRef instead of Relationships - handle separately
 	if subj, ok := sym.Decl.(*ast.SubjectMember); ok && subj.TypeRef != nil {
-		if target, ok := m.resolver.ResolveQualified(sym.OwnerScope, subj.TypeRef); ok && target != nil {
+		target, ok := m.resolver.ResolveQualified(sym.OwnerScope, subj.TypeRef)
+		if ok && target != nil {
+			if resolved, aliasOK := m.resolver.ResolveAliasTarget(target); aliasOK {
+				target = resolved
+			} else {
+				target = nil
+			}
+		}
+		if target != nil {
 			if !seen[target] {
 				seen[target] = true
 				out = append(out, target)
