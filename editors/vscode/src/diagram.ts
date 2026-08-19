@@ -395,7 +395,7 @@ function html(
     `font-src ${webview.cspSource} data:`,
     `script-src 'nonce-${nonce}'`,
   ].join("; ");
-  const state = JSON.stringify({ uri: docURI.toString(), view: selected });
+  const state = attribute(JSON.stringify({ uri: docURI.toString(), view: selected }));
   return `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -438,6 +438,17 @@ function html(
     <script nonce="${nonce}" src="${script}"></script>
   </body>
 </html>`;
+}
+
+// attribute escapes a value written into an HTML attribute. A document path or a
+// quoted view name may hold any of these, and one of them would end the value.
+function attribute(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/'/g, "&#39;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 
 // randomNonce is a per-page nonce, so only the script this page shipped runs.
