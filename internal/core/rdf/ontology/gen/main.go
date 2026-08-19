@@ -131,6 +131,7 @@ func commitSHA(root string) (string, error) {
 		return "", err
 	}
 	headPath := filepath.Join(gitDir, "HEAD")
+	// #nosec G304 -- git metadata path derives from the requested checkout.
 	head, err := os.ReadFile(headPath)
 	if err != nil {
 		return "", gitMetadataErrorf(headPath, "read HEAD: %w", err)
@@ -171,6 +172,7 @@ func gitMetadataDirs(root string) (string, string, error) {
 	}
 	gitDir := dotGit
 	if !info.IsDir() {
+		// #nosec G304 -- .git is derived from the requested checkout.
 		data, err := os.ReadFile(dotGit)
 		if err != nil {
 			return "", "", gitMetadataErrorf(dotGit, "read gitdir: %w", err)
@@ -199,6 +201,7 @@ func gitMetadataDirs(root string) (string, string, error) {
 
 	refsDir := gitDir
 	commondirPath := filepath.Join(gitDir, "commondir")
+	// #nosec G304 -- commondir is inside the requested Git metadata directory.
 	data, err := os.ReadFile(commondirPath)
 	if err == nil {
 		commonDir := strings.TrimSpace(string(data))
@@ -236,6 +239,7 @@ func validGitRef(ref string) bool {
 
 func commitSHAForRef(refsDir, ref string) (string, error) {
 	loosePath := filepath.Join(refsDir, filepath.FromSlash(ref))
+	// #nosec G304 -- ref is validated before it is joined to the Git directory.
 	data, err := os.ReadFile(loosePath)
 	if err == nil {
 		return validateCommitSHA(strings.TrimSpace(string(data)), loosePath)
@@ -245,6 +249,7 @@ func commitSHAForRef(refsDir, ref string) (string, error) {
 	}
 
 	packedPath := filepath.Join(refsDir, "packed-refs")
+	// #nosec G304 -- packed-refs is inside the requested Git metadata directory.
 	data, err = os.ReadFile(packedPath)
 	if err != nil {
 		return "", gitMetadataErrorf(packedPath, "read ref %s: %w", ref, err)
