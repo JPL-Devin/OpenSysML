@@ -1117,9 +1117,15 @@ a whole model or that its vocabulary is settled — see
 | Blank nodes, RDF collections, bare literal shorthands | rejected by `rdf.ParseTurtle` | `rdf_test.go:TestParseTurtleRejects` | ❌ Not supported (by design; see docs/reference/rdf-mapping.md) |
 
 **Vocabulary:** `sysml:` = `https://www.omg.org/spec/SysML#` and `elmt:` =
-`urn:sysmlv2:element:` match the Flexo MMS SysML v2 service's `Namespaces.kt`, so
-a converted graph addresses its elements the way that service does. Whether such
-a graph loads into a running Flexo triplestore has not been demonstrated. Properties the SysML metamodel
+`urn:sysmlv2:element:` match the Flexo MMS SysML v2 service's `Namespaces.kt`.
+That is only vocabulary compatibility: the service's reader derives an element's
+`@id` from the substring after the final `:`, and `requireValidId` permits only
+`[a-zA-Z0-9_-]+`, so OpenSysML's qualified-name element IRIs are not addressable
+through its API. The reader also ignores predicates outside `sysml:` and
+`urn:sysmlv2:annotation:json:`, so `sysx:` triples do not survive that path.
+Paged listing and query require `sysml:elementId`, while roots filtering uses
+`sysml:owner` and `sysml:owningRelatedElement`; these are roadmap D3 work.
+Whether such a graph loads into a running Flexo triplestore has not been demonstrated. Properties the SysML metamodel
 does not define are confined to `sysx:` = `urn:opensysml:sysml:`: `memberIndex`,
 `hasBody` and `sourceText` carry order, body presence and verbatim heads,
 `prefixMetadata`, `filter`, `isNamespaceImport`, `isRecursive` and `isExpose`

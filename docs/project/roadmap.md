@@ -1,10 +1,10 @@
 # OpenSysML — Roadmap
 
-Baseline: `main` @ `32f5a03`, verified locally on 2026-08-17 with Go 1.25.13.
+Baseline: `main` @ `c28b5f1`, verified locally on 2026-08-19 with Go 1.25.13.
 Read `AGENTS.md` first; it governs everything below.
 
-0.0.7 is released from `Open-MBEE/OpenSysML`, carrying `sysml`, `sysml-lsp` and `sysml-grpc`
-archives. `main` now carries everything cut under 0.1.0 in `CHANGELOG.md`, which is awaiting its
+0.1.0 is released from `Open-MBEE/OpenSysML`, carrying `sysml`, `sysml-lsp` and `sysml-grpc`
+archives. `main` now carries everything cut under 0.1.1 in `CHANGELOG.md`, which is awaiting its
 tag. Everything in "Release follow-through" is maintainer- or account-gated; everything after it
 is ordinary engineering work.
 
@@ -68,16 +68,17 @@ runs the suite with that variable set, and it runs on `v*` tags as well as on br
 
 # Release follow-through
 
-## R1 — tag 0.1.0 (maintainer, blocking everything else in this section)
+## R1 — tag 0.1.1 (maintainer, blocking everything else in this section)
 
-Releases live on `Open-MBEE/OpenSysML`; development happens on `JPL-Devin/OpenSysML`, which
-has no tags at all. So the tag is preceded by promoting `main` upstream, as 0.0.4 was through
-Open-MBEE PR #47:
+`v0.1.0` is tagged and released on `Open-MBEE/OpenSysML`, so what remains is the same procedure
+for the next release. Releases live on `Open-MBEE/OpenSysML`; development happens on
+`JPL-Devin/OpenSysML`, which has no tags at all. So the tag is preceded by promoting `main`
+upstream, as 0.0.4 was through Open-MBEE PR #47:
 
 ```bash
 # on Open-MBEE/OpenSysML, after main carries the release commit
-git tag -a v0.1.0 -m "v0.1.0"
-git push origin v0.1.0
+git tag -a v0.1.1 -m "v0.1.1"
+git push origin v0.1.1
 ```
 
 The publish job needs `GITHUB_TOKEN`, `GH_TOKEN` or `CIRCLE_TOKEN` in the CircleCI project.
@@ -159,11 +160,96 @@ Saving and SysML ↔ RDF Turtle conversion landed (`internal/core/rdf`,
 `internal/core/export`, `%save`, `sysml -convert`); see
 [the RDF mapping](../reference/rdf-mapping.md).
 
-The RDF direction ships **experimental** as of 0.1.0, because of D1–D3 below: its
+The RDF direction ships **experimental** as of 0.1.0, because of D1–D3 and D7 below: its
 vocabulary may change without a compatibility path, and no triplestore interop has
 been demonstrated. Every surface says so (`export.ExperimentalNotice`), and
-promoting it to stable is D3, not a documentation change. What that work
-deliberately left open:
+promoting it to stable is D3, not a documentation change.
+
+## The target, stated precisely
+
+The goal is that a graph OpenSysML writes can **stand in for the RDF
+`flexo-mms-sysmlv2` produces**: loaded straight into `flexo-mms-layer1-service` as a
+branch's model graph, and read back through the SysML v2 API surface as the same
+elements, without that service having produced it. Two consequences shape D1–D3, and
+both were read from the two services' sources rather than from our own docs:
+
+- **Layer 1 imposes no vocabulary at all.** `routes/gsp/ModelLoad.kt` loads whatever
+  triples the request body carries into a load graph, diffs it against staging and
+  commits; sanitization (`sanitizeCrudObject`) applies to LDP CRUD objects — orgs,
+  repos, branches, policies — not to model triples. So layer 1's requirements are
+  transport-level: a Turtle body on `PUT .../branches/{branch}/graph` (or SPARQL update
+  on `.../update`), the ETag precondition, an optional `?message=`, and the literal-size
+  limit (`maximumLiteralSizeKib`). Named-graph layout, commits, locks and provenance are
+  layer 1's own and are not ours to emit.
+- **The vocabulary contract belongs to the reader in `flexo-mms-sysmlv2`.**
+  `ElementApi.extractModelElementToJson` is what turns triples back into API payloads,
+  and it is stricter than `Namespaces.kt` suggested. Matching the namespaces is
+  necessary and nowhere near sufficient; the specific mismatches below are what D3 has
+  to close, and each is a source-level fact about that reader, not a hypothesis.
+
+What matches today: `sysml:` = `https://www.omg.org/spec/SysML#` and `elmt:` =
+`urn:sysmlv2:element:` are identical to `Namespaces.kt`; `rdf:type` plus
+`sysml:<property>` per scalar field is the shape the reader expects; and our typed
+literals fall in the datatypes it maps (`xsd:boolean`, `xsd:integer`,
+`xsd:decimal`/`xsd:double`, otherwise string).
+
+## D3 — make a converted graph readable through Flexo, and prove it
+
+D3 is no longer "run the harness": the harness would fail today, and the reasons are
+known. Five sub-items, in the order to take them.
+
+### D3.1 — element identity: qualified names cannot address an element
+
+The reader derives an element's `@id` as `urnSuffix`, defined as
+`substringAfterLast(':')`. So `elmt:Demo::Vehicle` reads back as `Vehicle`, and
+`A::Widget` and `B::Widget` collapse onto one id. Every by-id path also runs
+`requireValidId`, whose regex is `[a-zA-Z0-9_-]+`, so an id containing `::` cannot be
+requested at all. Qualified-name IRIs are therefore unusable as Flexo element identity.
+
+The fix is to mint an id that satisfies that regex while keeping conversion
+deterministic — a UUID derived from the qualified name (a v5-style name-based UUID over
+a fixed namespace) rather than a random one, so re-converting an unedited model still
+yields the same IRIs. The qualified name then lives in `sysml:qualifiedName` (already
+emitted), and the decoder must stop recovering identity from the IRI
+(`rdf.QualifiedNameOf`) and read it from that property instead. This is the item that
+changes every fixture under `internal/core/export/testdata/convert`, so it goes first.
+
+### D3.2 — `sysml:elementId` is required and is not emitted
+
+Paged listing selects on `?e sysml:elementId ?id` (`listElementsConstructQuery`) and
+`QueryApi` rewrites an `@id` constraint to `sysml:elementId`, so without that triple our
+elements are invisible to paged listing and unreachable by query, even when a direct
+construct on the IRI would find them. Emit it on every element, carrying the D3.1 id.
+
+### D3.3 — ownership: every element reads as a root
+
+The roots endpoint filters on `sysml:owner` and `sysml:owningRelatedElement` being
+unbound or `rdf:nil`. We emit only `sysml:owningNamespace`, so *every* element passes
+that filter and the model has no tree. Emit the API's ownership properties as element
+references, and decide explicitly whether to materialize `OwningMembership` elements:
+the API's payloads reach members through memberships, and a consumer walking
+`ownedMember`/`ownedRelationship` finds nothing in our compact projection.
+
+### D3.4 — collection-valued properties need the JSON annotation
+
+The reader **skips** a `sysml:` predicate with more than one object and prefers the
+annotation literal at `urn:sysmlv2:annotation:json:<key>`, which it parses as JSON.
+Anything multi-valued we emit as bare repeated triples is silently dropped on read. So
+the encoder must write both forms for collections, and the decoder must accept the
+annotation form when reading a foreign graph.
+
+### D3.5 — the harness, once D3.1–D3.4 are in
+
+Layer 1's `src/test/resources/docker-compose.yml` brings up Fuseki, MinIO and the store
+service; `deploy/` generates `cluster.trig` for cluster init; the service needs
+`FLEXO_MMS_ROOT_CONTEXT`, `FLEXO_MMS_QUERY_URL`, `FLEXO_MMS_UPDATE_URL` and
+`FLEXO_MMS_GRAPH_STORE_PROTOCOL_URL`. The test: create org/repo/branch, `PUT` our
+Turtle to the branch graph, then read the elements back through `flexo-mms-sysmlv2`
+(`GET /projects/{p}/commits/{c}/elements`, and by id) and compare against the payloads
+that service's own commit path stores for the same model. That comparison — our graph
+vs. theirs for one model — is the actual compliance statement, and it is what promotes
+the RDF path off experimental. Keep it out of `go test ./...`: an opt-in build tag or
+environment gate, like the corpus gate.
 
 ## D1 — expressions are carried as source text, not as triples
 
@@ -171,7 +257,16 @@ Feature values, multiplicity bounds, filter conditions and succession guards are
 their notation. They round-trip exactly, but SPARQL cannot see inside them, so a query like
 "every part whose mass exceeds 1000" is not expressible against the graph. Mapping KerML
 expression trees to RDF is the fix and is a feature in its own right: it needs a node-identity
-scheme for subexpressions, which is the part to design first.
+scheme for subexpressions, which is the part to design first — and after D3.1 that scheme is
+the same UUID-minting question, so design them together.
+
+Under the drop-in target this is no longer only a queryability gap. The Flexo reader keeps
+`sysml:` and `urn:sysmlv2:annotation:json:` predicates and **ignores everything else** (the
+unrecognized-predicate error is commented out in `extractModelElementToJson`), so every
+`sysx:` triple — `sourceText`, `memberIndex`, `hasBody`, `declaredKeyword`, the behavioral
+properties — is dropped the moment a graph passes through that service. Whatever a model needs
+in order to survive has to be standard, which makes D1 and D2 part of the interop goal rather
+than refinements after it.
 
 ## D2 — end-binding heads depend on `sysx:sourceText`
 
@@ -180,16 +275,18 @@ verbatim, so a graph produced by *another* tool converts to notation only as far
 structural properties reach and then reports the element as unsupported. Emitting real end
 triples (`sysml:source`/`sysml:target`/`sysml:connectorEnd`) would remove the dependency; the
 parser already has the ends, so this is an encoder/decoder change rather than a parser one.
+By the `sysx:`-is-dropped rule above, these ends are also what a Flexo-mediated round trip
+would lose entirely, so D2 is the second-largest interop item after D3.
 
-## D3 — no round trip against a real triplestore
+## D7 — reference-valued properties are emitted as strings, and one metaclass is abstract
 
-The vocabulary and element IRIs match Flexo MMS's `Namespaces.kt`, and the round-trip tests
-run entirely in-process. Nothing has yet loaded a converted graph into Fuseki via
-`flexo-mms-sysmlv2` and read it back, which is the only way to confirm the interop claim.
-The companion repo's `src/test/resources/docker-compose.yml` brings up Fuseki plus layer1,
-so the harness already exists. Until it runs, no interop claim is made anywhere:
-the docs say the vocabulary matches Flexo's namespaces, not that a graph loads into
-it, and D3 is the gate on calling the RDF path stable.
+The reader turns a resource-valued object into `{"@id": …}` and a literal into a string, so a
+property the API defines as a reference has to be an element IRI in the graph. `imports.golden.ttl`
+shows both halves of this gap: `sysml:importedNamespace "ISQ"` is a string where the API expects
+a reference, and the metaclass is `sysml:Import`, which is abstract in KerML — the API's own
+elements are `NamespaceImport` or `MembershipImport`. Audit every property the encoder writes
+against the API schema for reference-vs-literal and every metaclass name for being concrete;
+this is mechanical once D3.1 gives references something stable to point at.
 
 ## D5 — the parser drops the `variant` and `include` keyword prefixes
 
@@ -229,8 +326,9 @@ not byte-stable in its notation across a second hop: the graph records the `ref`
 `end [*] ref cause : Situation;` faithfully and writes it back as `end ref attribute cause`,
 which the parser reads with no reference flag — a parser gap, noted rather than worked around.
 
-RDF stays **experimental**: D1 (expressions as source text), D2 (end-binding heads) and D3 (no
-triplestore round trip) are untouched by this, and D3 remains the gate on calling the path
+RDF stays **experimental**: D1 (expressions as source text), D2 (end-binding heads), D3 (no
+triplestore round trip) and D7 (reference-valued properties and an abstract metaclass) are
+untouched by this, and D3 remains the gate on calling the path
 stable.
 
 # How to run the next batch
@@ -256,8 +354,10 @@ Tracks A, B, C, P and T1 are closed and their entries are removed; what is left 
 
 1. **R1** (tag), then **R2**/**R3**/**R5** as the account access appears. R1 gates the rest of
    the release section, and R2 is what makes the Python surface reachable by a user.
-2. **Track D** is independent of the rest and can run whenever. Take **D3** before **D1**/**D2**:
-   it is the cheapest, and it is what would show whether the Flexo interop claim actually holds
-   before more work is layered on the mapping. What **D4** left behind — a succession end that
-   refers to an unnamed member — belongs with **D2**, since both want real end triples rather
-   than names or text.
+2. **Track D** is independent of the rest and can run whenever. Take **D3** first, in its own
+   order: **D3.1** (identity) reshapes every fixture and everything else builds on it, then
+   **D3.2**/**D3.3**/**D3.4**, then the **D3.5** harness, which is the first thing that can
+   actually confirm or refute the interop claim. **D7** next, since it is mechanical once
+   identity is stable, then **D2** — a succession end that refers to an unnamed member belongs
+   with it, both wanting real end triples rather than names or text — and **D1** last, as the
+   largest piece of design. **D5** can go whenever; it is independent of the interop work.
