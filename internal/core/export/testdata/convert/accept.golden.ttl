@@ -11,7 +11,7 @@ elmt:Accepts
     sysml:declaredName "Accepts" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-elmt:Accepts::Scene
+elmt:Accepts__Scene
     a sysml:ItemDefinition ;
     sysml:qualifiedName "Accepts::Scene" ;
     sysml:owningNamespace elmt:Accepts ;
@@ -19,7 +19,7 @@ elmt:Accepts::Scene
     sysml:declaredName "Scene" ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:Accepts::Camera
+elmt:Accepts__Camera
     a sysml:PortDefinition ;
     sysml:qualifiedName "Accepts::Camera" ;
     sysml:owningNamespace elmt:Accepts ;
@@ -27,7 +27,7 @@ elmt:Accepts::Camera
     sysml:declaredName "Camera" ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:Accepts::Observe
+elmt:Accepts__Observe
     a sysml:ActionDefinition ;
     sysml:qualifiedName "Accepts::Observe" ;
     sysml:owningNamespace elmt:Accepts ;
@@ -35,28 +35,28 @@ elmt:Accepts::Observe
     sysml:declaredName "Observe" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-elmt:Accepts::Observe::trigger
+elmt:Accepts__Observe__trigger
     a sysml:ActionUsage ;
     sysml:qualifiedName "Accepts::Observe::trigger" ;
-    sysml:owningNamespace elmt:Accepts::Observe ;
+    sysml:owningNamespace elmt:Accepts__Observe ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "trigger" ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:Accepts::Observe::trigger::scene
+elmt:Accepts__Observe__trigger__scene
     a sysml:AttributeUsage ;
     sysml:qualifiedName "Accepts::Observe::trigger::scene" ;
-    sysml:owningNamespace elmt:Accepts::Observe::trigger ;
+    sysml:owningNamespace elmt:Accepts__Observe__trigger ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "scene" ;
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:isReference "true"^^xsd:boolean ;
     sysml:isAccept "true"^^xsd:boolean ;
     sysml:direction "out" ;
-    sysml:type elmt:Accepts::Scene ;
+    sysml:type elmt:Accepts__Scene ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:Accepts::Watch
+elmt:Accepts__Watch
     a sysml:ActionDefinition ;
     sysml:qualifiedName "Accepts::Watch" ;
     sysml:owningNamespace elmt:Accepts ;
@@ -64,33 +64,33 @@ elmt:Accepts::Watch
     sysml:declaredName "Watch" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-elmt:Accepts::Watch::lens
+elmt:Accepts__Watch__lens
     a sysml:PortUsage ;
     sysml:qualifiedName "Accepts::Watch::lens" ;
-    sysml:owningNamespace elmt:Accepts::Watch ;
+    sysml:owningNamespace elmt:Accepts__Watch ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "lens" ;
-    sysml:type elmt:Accepts::Camera ;
+    sysml:type elmt:Accepts__Camera ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:Accepts::Watch::framed
+elmt:Accepts__Watch__framed
     a sysml:ActionUsage ;
     sysml:qualifiedName "Accepts::Watch::framed" ;
-    sysml:owningNamespace elmt:Accepts::Watch ;
+    sysml:owningNamespace elmt:Accepts__Watch ;
     sysx:memberIndex "1"^^xsd:integer ;
     sysml:declaredName "framed" ;
-    sysml:via elmt:Accepts::Watch::lens ;
+    sysml:via elmt:Accepts__Watch__lens ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:Accepts::Watch::framed::scene
+elmt:Accepts__Watch__framed__scene
     a sysml:AttributeUsage ;
     sysml:qualifiedName "Accepts::Watch::framed::scene" ;
-    sysml:owningNamespace elmt:Accepts::Watch::framed ;
+    sysml:owningNamespace elmt:Accepts__Watch__framed ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "scene" ;
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:isReference "true"^^xsd:boolean ;
     sysml:isAccept "true"^^xsd:boolean ;
     sysml:direction "out" ;
-    sysml:type elmt:Accepts::Scene ;
+    sysml:type elmt:Accepts__Scene ;
     sysx:hasBody "false"^^xsd:boolean .

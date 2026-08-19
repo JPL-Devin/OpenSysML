@@ -34,7 +34,7 @@ func (r *Resolver) ResolveEndpoint(scope *symbols.Scope, qn *ast.QualifiedName) 
 			// leaving the qualifiers saying which state or region it lives in.
 			Fixes: endpointFixes(last.Text, last.Span, r.vertexSuggestions(scope, qn)),
 		})
-	case !isVertex(sym.Decl):
+	case !isVertex(sym.Decl) && !startAction(sym):
 		r.report(Diagnostic{
 			Span:    qn.Span(),
 			Message: "transition endpoint " + qnText(qn) + " is not a state or pseudostate",
@@ -135,6 +135,15 @@ func endpointFixes(name string, span source.Span, cands []string) []quickfix.Fix
 	return fixes
 }
 
+// startAction reports whether sym is an entry action of the state declaring it,
+// which stands in for a start pseudostate: `transition initial then off;`.
+func startAction(sym *symbols.Symbol) bool {
+	if sym == nil || sym.OwnerScope == nil {
+		return false
+	}
+	return ast.IsEntryAction(ast.StateEntryActions(sym.OwnerScope.Node()), sym.Decl)
+}
+
 // isVertex reports whether decl is a vertex a transition may name: a state, a
 // pseudostate, or a control node standing in for one (SysML 7.19.2).
 func isVertex(decl ast.Node) bool {
@@ -175,7 +184,8 @@ func stateBody(node ast.Node) bool {
 }
 
 // firstVertex searches scope's subtree, outermost and in declaration order, for
-// a vertex whose name path ends in parts.
+// a vertex whose name path ends in parts, or an entry action standing in for a
+// start pseudostate.
 func firstVertex(scope *symbols.Scope, parts []string) (*symbols.Symbol, bool) {
 	if scope == nil || len(parts) == 0 {
 		return nil, false
@@ -189,7 +199,7 @@ func firstVertex(scope *symbols.Scope, parts []string) (*symbols.Symbol, bool) {
 			continue
 		}
 		for _, sym := range symbols.PreferDeclared(scope.LookupLocalAll(key)) {
-			if isVertex(sym.Decl) {
+			if isVertex(sym.Decl) || startAction(sym) {
 				return sym, true
 			}
 		}

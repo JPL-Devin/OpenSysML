@@ -98,12 +98,17 @@ func (s *Session) renderLines(name string, form view.Form) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	artifact, err := rendering.Write(form)
+	artifact, err := rendering.WriteWidth(form, s.renderWidth)
 	if err != nil {
 		return nil, err
 	}
 	return strings.Split(strings.TrimRight(artifact, "\n"), "\n"), nil
 }
+
+// SetRenderWidth sets the width a text rendering's table is written to fit. The
+// frontend sets it from the terminal; view.WidthUnbounded, the default, writes
+// every column as wide as its widest cell.
+func (s *Session) SetRenderWidth(width int) { s.renderWidth = width }
 
 // ViewRendering renders a view of the session's model. It reads the session's
 // symbols and creates nothing in it: no object, no runtime, no change to a

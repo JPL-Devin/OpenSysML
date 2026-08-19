@@ -30,7 +30,7 @@ Runnable models are in [examples/](../examples/), with a catalog of what each on
 ## Where the project stands
 
 - **[Spec compliance](project/spec-compliance.md)** — faithful, approximate, or not implemented
-- **[Training examples](project/training-examples.md)** — the OMG corpus, 98/100 clean
+- **[Training examples](project/training-examples.md)** — the OMG corpus, 100/100 clean
 - **[Roadmap](project/roadmap.md)** — the known gaps, in the order they should be picked up
 - **[Releasing](project/releasing.md)** — the pre-tag gate, tagging, artifacts, Homebrew
 - **[macOS distribution](project/macos-distribution.md)** — Gatekeeper and the signing decision

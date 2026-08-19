@@ -9,10 +9,24 @@ func TestTypeCheckNewKindSpecializeSameKindOK(t *testing.T) {
 	}
 }
 
+// Occurrences are disjoint with data values (SysML v2 §8.4.5.1), so a part
+// definition specializing an attribute definition is a cross-kind error.
 func TestTypeCheckNewKindSpecializeCrossKindError(t *testing.T) {
-	diags := typeDiags(t, "part def P; item def I specializes P;")
+	diags := typeDiags(t, "attribute def A; part def P specializes A;")
 	if len(diags) != 1 {
 		t.Fatalf("expected exactly one type diagnostic, got %v", diags)
+	}
+}
+
+// A part definition is an item definition (SysML v2 §8.3.9.2), so either kind
+// may specialize the other: `individual item def Alice :> Person` in the OMG
+// training corpus names a part definition.
+func TestTypeCheckSpecializeComparableKindOK(t *testing.T) {
+	if diags := typeDiags(t, "part def P; item def I specializes P;"); len(diags) != 0 {
+		t.Fatalf("expected no type diagnostics, got %v", diags)
+	}
+	if diags := typeDiags(t, "item def I; part def P specializes I;"); len(diags) != 0 {
+		t.Fatalf("expected no type diagnostics, got %v", diags)
 	}
 }
 

@@ -2,9 +2,13 @@
   (Membership visibility="default"
     (Definition kind="part" abstract=false variation=false name="AnnotatedPart"
       (Membership visibility="default"
-        (PrefixMetadata type="Metadata"))
-      (Membership visibility="default"
         (Usage kind="attribute" name="data" ref=false direction="none" composite=false derived=false ordered=true nonunique=false
           (Multiplicity range=true
             (LiteralInteger value="1")
-            (LiteralInfinity)))))))
+            (LiteralInfinity))
+          (Membership visibility="default"
+            (PrefixMetadata type="Metadata"))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="tagged" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (PrefixMetadata type="Metadata")))))))

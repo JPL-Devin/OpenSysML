@@ -23,6 +23,18 @@ const (
 // offered.
 func Forms() []Form { return []Form{FormText, FormMermaid, FormMarkdown} }
 
+// The widths the text form is written to.
+const (
+	// WidthUnbounded writes every column as wide as its widest cell, which is
+	// what a form written to a file or a pipe rather than a terminal is.
+	WidthUnbounded = 0
+	// minColumnWidth is how narrow a column is made to fit a terminal before the
+	// row is left to overflow it.
+	minColumnWidth = 8
+	// columnGap separates the columns of the text form.
+	columnGap = 2
+)
+
 // MachineForm is the machine-readable form of renderings of this kind.
 func (k Kind) MachineForm() Form {
 	if k == KindTable {
@@ -53,12 +65,18 @@ func (e *WrongFormError) Error() string {
 
 func (e *WrongFormError) Unwrap() error { return ErrWrongForm }
 
-// Write is the rendering in form. A form the kind is not written in is a
-// *WrongFormError, and an unknown form names the ones there are.
+// Write is the rendering in form, written to no particular width.
 func (r *Rendering) Write(form Form) (string, error) {
+	return r.WriteWidth(form, WidthUnbounded)
+}
+
+// WriteWidth is the rendering in form, the text form written to fit width. A
+// form the kind is not written in is a *WrongFormError, and an unknown form
+// names the ones there are.
+func (r *Rendering) WriteWidth(form Form, width int) (string, error) {
 	switch form {
 	case FormText:
-		return r.Text(), nil
+		return r.TextWidth(width), nil
 	case FormMermaid, FormMarkdown:
 		if form != r.Kind.MachineForm() {
 			return "", &WrongFormError{Form: form, Kind: r.Kind, View: r.View}

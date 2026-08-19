@@ -179,7 +179,7 @@ successions, or a table of the exposed elements — and a tree where the view st
 
 ```
 sysml> %render Demo::summary
-Demo::summary — tree rendering (the view states no rendering; a tree is the default)
+Demo::summary - tree rendering (the view states no rendering; a tree is the default)
 
 part def Demo::Vehicle
 part Demo::v (Vehicle)

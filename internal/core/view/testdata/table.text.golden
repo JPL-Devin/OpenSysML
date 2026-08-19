@@ -1,4 +1,4 @@
-TableViews::partsTable — table rendering (render asElementTable)
+TableViews::partsTable - table rendering (render asElementTable)
 
 Element       Kind      Type    Declared in
 ------------  --------  ------  ------------

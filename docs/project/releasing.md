@@ -38,7 +38,7 @@ pytest python/tests/ -v
 
 The OMG training-corpus gate skips while the corpus is absent, so fetch it and
 run it explicitly — the expected result is the pinned baseline, currently
-98/100 files clean:
+100/100 files clean:
 
 ```bash
 ./scripts/download-training-examples.sh
@@ -187,6 +187,33 @@ needed is read access to this repository's releases — `public_repo` for a clas
 token, `Contents: read` for a fine-grained one; nothing is written through the
 API. Without either variable the script fails immediately with
 `MissingTokenError` naming the variable, rather than at the first request.
+
+## The SonarCloud scan
+
+Not a release step — the `scan` job runs in the `build-test` workflow on every
+commit, after `build-and-test` — but it is documented here with the other
+CircleCI credential plumbing.
+
+The job references the organization context named exactly `SonarCloud`, which
+supplies `SONAR_TOKEN` (the same context `Open-MBEE/flexo-mms-layer1-service`
+uses, so no new credential is provisioned). It reads
+`sonar-project.properties` at the repository root and the `coverage.txt`
+profile that `build-and-test` writes (`go test -coverprofile=coverage.txt`) and
+persists to the workspace, and it un-shallows the clone because SonarCloud
+needs full history for blame and new-code detection.
+
+On a forked PR the context is withheld, so `SONAR_TOKEN` is empty; the job
+halts successfully rather than failing every outside contribution. When the
+token is present, a failing scan fails the job.
+
+One-time maintainer step (already done for `Open-MBEE_OpenSysML`, but true of
+any future project): SonarCloud does not create a project from a CI-run scan
+(the scanner sends branch parameters, and Cloud cannot provision from those —
+the first run fails with `Could not find a default branch for project with key
+'...'`). Create the project under the organization first, either from the
+SonarCloud UI or with `POST api/projects/create` followed by
+`POST api/project_branches/rename`, using a token that has Create Projects in
+that organization.
 
 ## Releasing opensysml to PyPI
 

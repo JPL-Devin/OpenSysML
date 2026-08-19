@@ -11,7 +11,7 @@ elmt:Constraints
     sysml:declaredName "Constraints" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-elmt:Constraints::Mass
+elmt:Constraints__Mass
     a sysml:AttributeDefinition ;
     sysml:qualifiedName "Constraints::Mass" ;
     sysml:owningNamespace elmt:Constraints ;
@@ -19,7 +19,7 @@ elmt:Constraints::Mass
     sysml:declaredName "Mass" ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:Constraints::MassLimit
+elmt:Constraints__MassLimit
     a sysml:ConstraintDefinition ;
     sysml:qualifiedName "Constraints::MassLimit" ;
     sysml:owningNamespace elmt:Constraints ;
@@ -27,36 +27,36 @@ elmt:Constraints::MassLimit
     sysml:declaredName "MassLimit" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-elmt:Constraints::MassLimit::m
+elmt:Constraints__MassLimit__m
     a sysml:AttributeUsage ;
     sysml:qualifiedName "Constraints::MassLimit::m" ;
-    sysml:owningNamespace elmt:Constraints::MassLimit ;
+    sysml:owningNamespace elmt:Constraints__MassLimit ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "m" ;
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:direction "in" ;
-    sysml:type elmt:Constraints::Mass ;
+    sysml:type elmt:Constraints__Mass ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:Constraints::MassLimit::limit
+elmt:Constraints__MassLimit__limit
     a sysml:AttributeUsage ;
     sysml:qualifiedName "Constraints::MassLimit::limit" ;
-    sysml:owningNamespace elmt:Constraints::MassLimit ;
+    sysml:owningNamespace elmt:Constraints__MassLimit ;
     sysx:memberIndex "1"^^xsd:integer ;
     sysml:declaredName "limit" ;
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:direction "in" ;
-    sysml:type elmt:Constraints::Mass ;
+    sysml:type elmt:Constraints__Mass ;
     sysx:hasBody "false"^^xsd:boolean .
 
-<urn:sysmlv2:element:Constraints::MassLimit::@2>
+elmt:Constraints__MassLimit___402
     a sysx:ConstraintMember ;
     sysml:qualifiedName "Constraints::MassLimit::@2" ;
-    sysml:owningNamespace elmt:Constraints::MassLimit ;
+    sysml:owningNamespace elmt:Constraints__MassLimit ;
     sysx:memberIndex "2"^^xsd:integer ;
     sysx:condition "m < limit" .
 
-elmt:Constraints::Margin
+elmt:Constraints__Margin
     a sysml:CalculationDefinition ;
     sysml:qualifiedName "Constraints::Margin" ;
     sysml:owningNamespace elmt:Constraints ;
@@ -64,30 +64,30 @@ elmt:Constraints::Margin
     sysml:declaredName "Margin" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-elmt:Constraints::Margin::m
+elmt:Constraints__Margin__m
     a sysml:AttributeUsage ;
     sysml:qualifiedName "Constraints::Margin::m" ;
-    sysml:owningNamespace elmt:Constraints::Margin ;
+    sysml:owningNamespace elmt:Constraints__Margin ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "m" ;
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:direction "in" ;
-    sysml:type elmt:Constraints::Mass ;
+    sysml:type elmt:Constraints__Mass ;
     sysx:hasBody "false"^^xsd:boolean .
 
-<urn:sysmlv2:element:Constraints::Margin::@1>
+elmt:Constraints__Margin___401
     a sysml:AttributeUsage ;
     sysml:qualifiedName "Constraints::Margin::@1" ;
-    sysml:owningNamespace elmt:Constraints::Margin ;
+    sysml:owningNamespace elmt:Constraints__Margin ;
     sysx:memberIndex "1"^^xsd:integer ;
     sysx:isKindImplicit "true"^^xsd:boolean ;
     sysml:isResult "true"^^xsd:boolean ;
     sysml:direction "out" ;
-    sysml:type elmt:Constraints::Mass ;
+    sysml:type elmt:Constraints__Mass ;
     sysml:value "100 - m" ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:Constraints::Rover
+elmt:Constraints__Rover
     a sysml:PartDefinition ;
     sysml:qualifiedName "Constraints::Rover" ;
     sysml:owningNamespace elmt:Constraints ;
@@ -95,29 +95,29 @@ elmt:Constraints::Rover
     sysml:declaredName "Rover" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-elmt:Constraints::Rover::mass
+elmt:Constraints__Rover__mass
     a sysml:AttributeUsage ;
     sysml:qualifiedName "Constraints::Rover::mass" ;
-    sysml:owningNamespace elmt:Constraints::Rover ;
+    sysml:owningNamespace elmt:Constraints__Rover ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "mass" ;
-    sysml:type elmt:Constraints::Mass ;
+    sysml:type elmt:Constraints__Mass ;
     sysml:value "80" ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:Constraints::Rover::limit
+elmt:Constraints__Rover__limit
     a sysml:ConstraintUsage ;
     sysml:qualifiedName "Constraints::Rover::limit" ;
-    sysml:owningNamespace elmt:Constraints::Rover ;
+    sysml:owningNamespace elmt:Constraints__Rover ;
     sysx:memberIndex "1"^^xsd:integer ;
     sysml:declaredName "limit" ;
-    sysml:type elmt:Constraints::MassLimit ;
+    sysml:type elmt:Constraints__MassLimit ;
     sysx:hasBody "true"^^xsd:boolean .
 
-elmt:Constraints::Rover::limit::m
+elmt:Constraints__Rover__limit__m
     a sysml:AttributeUsage ;
     sysml:qualifiedName "Constraints::Rover::limit::m" ;
-    sysml:owningNamespace elmt:Constraints::Rover::limit ;
+    sysml:owningNamespace elmt:Constraints__Rover__limit ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "m" ;
     sysx:isKindImplicit "true"^^xsd:boolean ;
@@ -125,10 +125,10 @@ elmt:Constraints::Rover::limit::m
     sysml:value "mass" ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:Constraints::Rover::limit::limit
+elmt:Constraints__Rover__limit__limit
     a sysml:AttributeUsage ;
     sysml:qualifiedName "Constraints::Rover::limit::limit" ;
-    sysml:owningNamespace elmt:Constraints::Rover::limit ;
+    sysml:owningNamespace elmt:Constraints__Rover__limit ;
     sysx:memberIndex "1"^^xsd:integer ;
     sysml:declaredName "limit" ;
     sysx:isKindImplicit "true"^^xsd:boolean ;
@@ -136,155 +136,155 @@ elmt:Constraints::Rover::limit::limit
     sysml:value "100" ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:Constraints::Rover::massOK
+elmt:Constraints__Rover__massOK
     a sysml:ConstraintUsage ;
     sysml:qualifiedName "Constraints::Rover::massOK" ;
-    sysml:owningNamespace elmt:Constraints::Rover ;
+    sysml:owningNamespace elmt:Constraints__Rover ;
     sysx:memberIndex "2"^^xsd:integer ;
     sysml:declaredName "massOK" ;
     sysx:declaredPrefix "assert" ;
-    sysml:type elmt:Constraints::MassLimit ;
+    sysml:type elmt:Constraints__MassLimit ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:Constraints::Rover::massBad
+elmt:Constraints__Rover__massBad
     a sysml:ConstraintUsage ;
     sysml:qualifiedName "Constraints::Rover::massBad" ;
-    sysml:owningNamespace elmt:Constraints::Rover ;
+    sysml:owningNamespace elmt:Constraints__Rover ;
     sysx:memberIndex "3"^^xsd:integer ;
     sysml:declaredName "massBad" ;
     sysx:declaredPrefix "assert" ;
     sysml:isNegated "true"^^xsd:boolean ;
-    sysml:type elmt:Constraints::MassLimit ;
+    sysml:type elmt:Constraints__MassLimit ;
     sysx:hasBody "false"^^xsd:boolean .
 
-<urn:sysmlv2:element:Constraints::Rover::@4>
+elmt:Constraints__Rover___404
     a sysml:ConstraintUsage ;
     sysml:qualifiedName "Constraints::Rover::@4" ;
-    sysml:owningNamespace elmt:Constraints::Rover ;
+    sysml:owningNamespace elmt:Constraints__Rover ;
     sysx:memberIndex "4"^^xsd:integer ;
     sysx:declaredPrefix "assert" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-<urn:sysmlv2:element:Constraints::Rover::@4::@0>
+elmt:Constraints__Rover___404___400
     a sysx:ConstraintMember ;
     sysml:qualifiedName "Constraints::Rover::@4::@0" ;
-    sysml:owningNamespace <urn:sysmlv2:element:Constraints::Rover::@4> ;
+    sysml:owningNamespace elmt:Constraints__Rover___404 ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysx:condition "mass > 0" .
 
-elmt:Constraints::Rover::bounds
+elmt:Constraints__Rover__bounds
     a sysml:ConstraintUsage ;
     sysml:qualifiedName "Constraints::Rover::bounds" ;
-    sysml:owningNamespace elmt:Constraints::Rover ;
+    sysml:owningNamespace elmt:Constraints__Rover ;
     sysx:memberIndex "5"^^xsd:integer ;
     sysml:declaredName "bounds" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-<urn:sysmlv2:element:Constraints::Rover::bounds::@0>
+elmt:Constraints__Rover__bounds___400
     a sysx:ConstraintMember ;
     sysml:qualifiedName "Constraints::Rover::bounds::@0" ;
-    sysml:owningNamespace elmt:Constraints::Rover::bounds ;
+    sysml:owningNamespace elmt:Constraints__Rover__bounds ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysx:declaredKeyword "assert" ;
     sysx:condition "mass > 0" .
 
-<urn:sysmlv2:element:Constraints::Rover::bounds::@1>
+elmt:Constraints__Rover__bounds___401
     a sysx:ConstraintMember ;
     sysml:qualifiedName "Constraints::Rover::bounds::@1" ;
-    sysml:owningNamespace elmt:Constraints::Rover::bounds ;
+    sysml:owningNamespace elmt:Constraints__Rover__bounds ;
     sysx:memberIndex "1"^^xsd:integer ;
     sysx:declaredKeyword "assume" ;
     sysx:condition "mass != 0" .
 
-<urn:sysmlv2:element:Constraints::Rover::bounds::@2>
+elmt:Constraints__Rover__bounds___402
     a sysx:ConstraintMember ;
     sysml:qualifiedName "Constraints::Rover::bounds::@2" ;
-    sysml:owningNamespace elmt:Constraints::Rover::bounds ;
+    sysml:owningNamespace elmt:Constraints__Rover__bounds ;
     sysx:memberIndex "2"^^xsd:integer ;
     sysx:declaredKeyword "assert" ;
     sysml:isNegated "true"^^xsd:boolean ;
     sysx:condition "mass > 1000" .
 
-elmt:Constraints::Rover::bounds::inner
+elmt:Constraints__Rover__bounds__inner
     a sysx:ConstraintMember ;
     sysml:qualifiedName "Constraints::Rover::bounds::inner" ;
-    sysml:owningNamespace elmt:Constraints::Rover::bounds ;
+    sysml:owningNamespace elmt:Constraints__Rover__bounds ;
     sysx:memberIndex "3"^^xsd:integer ;
     sysml:declaredName "inner" ;
     sysx:declaredKeyword "assert" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-<urn:sysmlv2:element:Constraints::Rover::bounds::inner::@0>
+elmt:Constraints__Rover__bounds__inner___400
     a sysx:ConstraintMember ;
     sysml:qualifiedName "Constraints::Rover::bounds::inner::@0" ;
-    sysml:owningNamespace elmt:Constraints::Rover::bounds::inner ;
+    sysml:owningNamespace elmt:Constraints__Rover__bounds__inner ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysx:condition "mass < 1000" .
 
-elmt:Constraints::Rover::lightEnough
+elmt:Constraints__Rover__lightEnough
     a sysml:RequirementUsage ;
     sysml:qualifiedName "Constraints::Rover::lightEnough" ;
-    sysml:owningNamespace elmt:Constraints::Rover ;
+    sysml:owningNamespace elmt:Constraints__Rover ;
     sysx:memberIndex "6"^^xsd:integer ;
     sysml:declaredName "lightEnough" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-elmt:Constraints::Rover::lightEnough::r
+elmt:Constraints__Rover__lightEnough__r
     a sysml:SubjectMembership ;
     sysml:qualifiedName "Constraints::Rover::lightEnough::r" ;
-    sysml:owningNamespace elmt:Constraints::Rover::lightEnough ;
+    sysml:owningNamespace elmt:Constraints__Rover__lightEnough ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "r" ;
-    sysml:type elmt:Constraints::Rover ;
+    sysml:type elmt:Constraints__Rover ;
     sysx:hasBody "false"^^xsd:boolean .
 
-<urn:sysmlv2:element:Constraints::Rover::lightEnough::@1>
+elmt:Constraints__Rover__lightEnough___401
     a sysx:AssumeMember ;
     sysml:qualifiedName "Constraints::Rover::lightEnough::@1" ;
-    sysml:owningNamespace elmt:Constraints::Rover::lightEnough ;
+    sysml:owningNamespace elmt:Constraints__Rover__lightEnough ;
     sysx:memberIndex "1"^^xsd:integer ;
     sysx:condition "r.mass > 0" .
 
-<urn:sysmlv2:element:Constraints::Rover::lightEnough::@2>
+elmt:Constraints__Rover__lightEnough___402
     a sysx:RequireMember ;
     sysml:qualifiedName "Constraints::Rover::lightEnough::@2" ;
-    sysml:owningNamespace elmt:Constraints::Rover::lightEnough ;
+    sysml:owningNamespace elmt:Constraints__Rover__lightEnough ;
     sysx:memberIndex "2"^^xsd:integer ;
     sysx:hasBody "true"^^xsd:boolean .
 
-<urn:sysmlv2:element:Constraints::Rover::lightEnough::@2::@0>
+elmt:Constraints__Rover__lightEnough___402___400
     a sysx:ConstraintMember ;
     sysml:qualifiedName "Constraints::Rover::lightEnough::@2::@0" ;
-    sysml:owningNamespace <urn:sysmlv2:element:Constraints::Rover::lightEnough::@2> ;
+    sysml:owningNamespace elmt:Constraints__Rover__lightEnough___402 ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysx:condition "r.mass < 100" .
 
-<urn:sysmlv2:element:Constraints::Rover::lightEnough::@3>
+elmt:Constraints__Rover__lightEnough___403
     a sysx:RequireMember ;
     sysml:qualifiedName "Constraints::Rover::lightEnough::@3" ;
-    sysml:owningNamespace elmt:Constraints::Rover::lightEnough ;
+    sysml:owningNamespace elmt:Constraints__Rover__lightEnough ;
     sysx:memberIndex "3"^^xsd:integer ;
     sysx:condition "r.mass < 200" .
 
-<urn:sysmlv2:element:Constraints::Rover::lightEnough::@4>
+elmt:Constraints__Rover__lightEnough___404
     a sysx:RequireMember ;
     sysml:qualifiedName "Constraints::Rover::lightEnough::@4" ;
-    sysml:owningNamespace elmt:Constraints::Rover::lightEnough ;
+    sysml:owningNamespace elmt:Constraints__Rover__lightEnough ;
     sysx:memberIndex "4"^^xsd:integer ;
     sysx:condition "MassLimit" .
 
-<urn:sysmlv2:element:Constraints::Rover::lightEnough::@5>
+elmt:Constraints__Rover__lightEnough___405
     a sysx:AssumeMember ;
     sysml:qualifiedName "Constraints::Rover::lightEnough::@5" ;
-    sysml:owningNamespace elmt:Constraints::Rover::lightEnough ;
+    sysml:owningNamespace elmt:Constraints__Rover__lightEnough ;
     sysx:memberIndex "5"^^xsd:integer ;
-    sysml:references elmt:Constraints::MassLimit ;
+    sysml:references elmt:Constraints__MassLimit ;
     sysx:hasBody "true"^^xsd:boolean .
 
-<urn:sysmlv2:element:Constraints::Rover::lightEnough::@5::m>
+elmt:Constraints__Rover__lightEnough___405__m
     a sysml:AttributeUsage ;
     sysml:qualifiedName "Constraints::Rover::lightEnough::@5::m" ;
-    sysml:owningNamespace <urn:sysmlv2:element:Constraints::Rover::lightEnough::@5> ;
+    sysml:owningNamespace elmt:Constraints__Rover__lightEnough___405 ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "m" ;
     sysx:isKindImplicit "true"^^xsd:boolean ;
@@ -292,10 +292,10 @@ elmt:Constraints::Rover::lightEnough::r
     sysml:value "r.mass" ;
     sysx:hasBody "false"^^xsd:boolean .
 
-<urn:sysmlv2:element:Constraints::Rover::lightEnough::@5::limit>
+elmt:Constraints__Rover__lightEnough___405__limit
     a sysml:AttributeUsage ;
     sysml:qualifiedName "Constraints::Rover::lightEnough::@5::limit" ;
-    sysml:owningNamespace <urn:sysmlv2:element:Constraints::Rover::lightEnough::@5> ;
+    sysml:owningNamespace elmt:Constraints__Rover__lightEnough___405 ;
     sysx:memberIndex "1"^^xsd:integer ;
     sysml:declaredName "limit" ;
     sysx:isKindImplicit "true"^^xsd:boolean ;
@@ -303,22 +303,22 @@ elmt:Constraints::Rover::lightEnough::r
     sysml:value "100" ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:Constraints::Rover::refined
+elmt:Constraints__Rover__refined
     a sysml:RequirementUsage ;
     sysml:qualifiedName "Constraints::Rover::refined" ;
-    sysml:owningNamespace elmt:Constraints::Rover ;
+    sysml:owningNamespace elmt:Constraints__Rover ;
     sysx:memberIndex "7"^^xsd:integer ;
     sysml:declaredName "refined" ;
-    sysml:type elmt:Constraints::Rover::lightEnough ;
+    sysml:type elmt:Constraints__Rover__lightEnough ;
     sysx:hasBody "true"^^xsd:boolean .
 
-elmt:Constraints::Rover::refined::r
+elmt:Constraints__Rover__refined__r
     a sysml:SubjectMembership ;
     sysml:qualifiedName "Constraints::Rover::refined::r" ;
-    sysml:owningNamespace elmt:Constraints::Rover::refined ;
+    sysml:owningNamespace elmt:Constraints__Rover__refined ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "r" ;
-    sysml:type elmt:Constraints::Rover ;
-    sysml:redefines elmt:Constraints::Rover::lightEnough::r ;
+    sysml:type elmt:Constraints__Rover ;
+    sysml:redefines elmt:Constraints__Rover__lightEnough__r ;
     sysml:upperBound "1" ;
     sysx:hasBody "true"^^xsd:boolean .

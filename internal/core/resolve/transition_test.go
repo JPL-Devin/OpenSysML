@@ -203,6 +203,38 @@ func TestResolveEndpointNotAVertexIsReported(t *testing.T) {
 	}
 }
 
+// The machine's entry action stands in for a start pseudostate, so a transition
+// may leave it — while an ordinary action is still no vertex.
+func TestResolveEndpointEntryActionIsAVertex(t *testing.T) {
+	r := resolveDoc(t, "d.sysml", `
+		state def M {
+			entry action start { }
+			transition start then idle;
+			state idle;
+		}
+	`)
+	if len(r.Diagnostics) != 0 {
+		t.Fatalf("expected no diagnostics for the entry action endpoint, got %v", r.Diagnostics)
+	}
+}
+
+func TestResolveEndpointOrdinaryActionIsNotAVertex(t *testing.T) {
+	r := resolveDoc(t, "d.sysml", `
+		state def M {
+			action work { }
+			entry; then idle;
+			state idle;
+			transition work then idle;
+		}
+	`)
+	if len(r.Diagnostics) != 1 {
+		t.Fatalf("expected one diagnostic for the action endpoint, got %v", r.Diagnostics)
+	}
+	if r.Diagnostics[0].Code != CodeNotAVertex {
+		t.Errorf("expected the %s code, got %q", CodeNotAVertex, r.Diagnostics[0].Code)
+	}
+}
+
 // Diagnostics belong to the name-resolution tier: the lookup lowering makes
 // reports nothing, however it turns out.
 func TestEndpointLookupForLoweringReportsNothing(t *testing.T) {

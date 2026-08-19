@@ -11,7 +11,7 @@ elmt:Bounds
     sysml:declaredName "Bounds" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-elmt:Bounds::Vehicle
+elmt:Bounds__Vehicle
     a sysml:PartDefinition ;
     sysml:qualifiedName "Bounds::Vehicle" ;
     sysml:owningNamespace elmt:Bounds ;
@@ -19,7 +19,7 @@ elmt:Bounds::Vehicle
     sysml:declaredName "Vehicle" ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:Bounds::Fleet
+elmt:Bounds__Fleet
     a sysml:PartDefinition ;
     sysml:qualifiedName "Bounds::Fleet" ;
     sysml:owningNamespace elmt:Bounds ;
@@ -27,74 +27,74 @@ elmt:Bounds::Fleet
     sysml:declaredName "Fleet" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-elmt:Bounds::Fleet::exact
+elmt:Bounds__Fleet__exact
     a sysml:PartUsage ;
     sysml:qualifiedName "Bounds::Fleet::exact" ;
-    sysml:owningNamespace elmt:Bounds::Fleet ;
+    sysml:owningNamespace elmt:Bounds__Fleet ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "exact" ;
-    sysml:type elmt:Bounds::Vehicle ;
+    sysml:type elmt:Bounds__Vehicle ;
     sysml:upperBound "3" ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:Bounds::Fleet::range
+elmt:Bounds__Fleet__range
     a sysml:PartUsage ;
     sysml:qualifiedName "Bounds::Fleet::range" ;
-    sysml:owningNamespace elmt:Bounds::Fleet ;
+    sysml:owningNamespace elmt:Bounds__Fleet ;
     sysx:memberIndex "1"^^xsd:integer ;
     sysml:declaredName "range" ;
-    sysml:type elmt:Bounds::Vehicle ;
+    sysml:type elmt:Bounds__Vehicle ;
     sysml:lowerBound "1" ;
     sysml:upperBound "4" ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:Bounds::Fleet::many
+elmt:Bounds__Fleet__many
     a sysml:PartUsage ;
     sysml:qualifiedName "Bounds::Fleet::many" ;
-    sysml:owningNamespace elmt:Bounds::Fleet ;
+    sysml:owningNamespace elmt:Bounds__Fleet ;
     sysx:memberIndex "2"^^xsd:integer ;
     sysml:declaredName "many" ;
-    sysml:type elmt:Bounds::Vehicle ;
+    sysml:type elmt:Bounds__Vehicle ;
     sysml:lowerBound "0" ;
     sysml:upperBound "*" ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:Bounds::Fleet::loose
+elmt:Bounds__Fleet__loose
     a sysml:PartUsage ;
     sysml:qualifiedName "Bounds::Fleet::loose" ;
-    sysml:owningNamespace elmt:Bounds::Fleet ;
+    sysml:owningNamespace elmt:Bounds__Fleet ;
     sysx:memberIndex "3"^^xsd:integer ;
     sysml:declaredName "loose" ;
     sysml:isOrdered "true"^^xsd:boolean ;
     sysml:isNonunique "true"^^xsd:boolean ;
-    sysml:type elmt:Bounds::Vehicle ;
+    sysml:type elmt:Bounds__Vehicle ;
     sysml:upperBound "*" ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:Bounds::Fleet::shared
+elmt:Bounds__Fleet__shared
     a sysml:PartUsage ;
     sysml:qualifiedName "Bounds::Fleet::shared" ;
-    sysml:owningNamespace elmt:Bounds::Fleet ;
+    sysml:owningNamespace elmt:Bounds__Fleet ;
     sysx:memberIndex "4"^^xsd:integer ;
     sysml:declaredName "shared" ;
     sysml:isReference "true"^^xsd:boolean ;
-    sysml:type elmt:Bounds::Vehicle ;
+    sysml:type elmt:Bounds__Vehicle ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:Bounds::Fleet::owned
+elmt:Bounds__Fleet__owned
     a sysml:PartUsage ;
     sysml:qualifiedName "Bounds::Fleet::owned" ;
-    sysml:owningNamespace elmt:Bounds::Fleet ;
+    sysml:owningNamespace elmt:Bounds__Fleet ;
     sysx:memberIndex "5"^^xsd:integer ;
     sysml:declaredName "owned" ;
     sysml:isComposite "true"^^xsd:boolean ;
-    sysml:type elmt:Bounds::Vehicle ;
+    sysml:type elmt:Bounds__Vehicle ;
     sysx:hasBody "false"^^xsd:boolean .
 
-elmt:Bounds::Fleet::count
+elmt:Bounds__Fleet__count
     a sysml:AttributeUsage ;
     sysml:qualifiedName "Bounds::Fleet::count" ;
-    sysml:owningNamespace elmt:Bounds::Fleet ;
+    sysml:owningNamespace elmt:Bounds__Fleet ;
     sysx:memberIndex "6"^^xsd:integer ;
     sysml:declaredName "count" ;
     sysml:isDerived "true"^^xsd:boolean ;

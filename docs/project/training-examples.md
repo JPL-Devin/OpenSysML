@@ -4,8 +4,8 @@
 
 **Source:** [SysML-v2-Pilot-Implementation](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation) training examples  
 **Download:** https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training  
-**Status:** 98/100 files parse and resolve cleanly (0 semantic errors)  
-**Errors**: 2/100 files have semantic errors (4 total errors), both pinned OMG bugs  
+**Status:** 100/100 files parse and resolve cleanly (0 semantic errors)  
+**Errors**: none recorded  
 **Gate**: the per-file error counts are recorded in `internal/core/model/testdata/training_examples_expected.txt`, so `TestTrainingExamplesSemanticErrors` fails when a file regresses *or* improves without updating the list (`-update-training` regenerates it)  
 
 Defects found in OMG material *outside* this corpus — a wrong declaration in a vendored
@@ -107,7 +107,7 @@ One entry drifted; every other file kept its exact count.
 |---|---|---|
 | `Conditional Succession Example-1` | `unresolved member: isWellFocused` | Implicit *redefinition*: `out item image;` inside `action focus : Focus` refines `Focus::image` (typed `Image`). Untyped usages that shadow an inherited feature deliberately got no implicit base, so the type came from nowhere. (Fixed in the 88/100 re-pin below.) |
 | `Action Performance Example`, `Allocation Usage Example` | `unresolved member: focus`/`shoot`/`generateTorque` | The members come from `perform action takePhoto references takePicture;` and `perform providePower.generateTorque;`: a `references` edge and the feature a `perform` statement contributes, neither of which is a generalization. **Fixed since — see the reference-subsetting verdicts below.** |
-| `Time Slice and Snapshot Example`, `Individuals and Time Slices` | `unresolved reference: start`/`done` | Bugs in the OMG files (`startShot`/`endShot`), unchanged. |
+| `Time Slice and Snapshot Example`, `Individuals and Time Slices` | `unresolved reference: start`/`done` | Not OMG bugs after all — see the implicit definition-base re-pin below. |
 
 ### Verdicts for the reference-subsetting re-pin (81 → 83; 87 once `main`'s message-payload and satisfy-reference fixes merged in)
 
@@ -384,7 +384,7 @@ pass above the level that errored, so a half-declared flow never reaches
 #### Implied corpus ceiling
 
 Both verdicts are "the checker is wrong", so the set of pinned OMG bugs is
-unchanged at three files (`start`/`done` vs `startShot`/`endShot` in
+unchanged at three files (`start`/`done` in
 `Time Slice and Snapshot Example` and `Individuals and Time Slices`, and
 `alternative` vs `alternatives` in `Trade Study Analysis Example`). The corpus
 ceiling is therefore **97/100**, and the two files between 95 and 97 are our
@@ -393,8 +393,9 @@ own remaining false positives.
 > Amended at 97/100: `alternative` is no longer among the pinned OMG bugs. The
 > `:>> alternative` in `Trade Study Analysis Example` now matches `alternatives`
 > through implicit redefinition, so the file's one remaining error is a false
-> positive of ours (`objective cannot be typed by requirementDef`). The pinned
-> OMG bugs are the two `start`/`done` files, putting the ceiling at **98/100**.
+> positive of ours (`objective cannot be typed by requirementDef`). The
+> `start`/`done` files were pinned as OMG bugs here, putting the ceiling at
+> **98/100**; that verdict was later overturned and the corpus is 100/100.
 
 ---
 
@@ -532,23 +533,18 @@ is not touched here.
 
 ---
 
-## Error Classification
+## Re-pin for implicit definition bases (98 → 100)
 
-The 4 errors recorded on the current baseline, per file (the counts are exactly
-the ones in `training_examples_expected.txt`):
+The last two recorded files went clean, and the "OMG bug" verdict standing
+against them since the first baseline was **wrong**.
 
-| File | n | Cause |
+| File | Was | Verdict |
 |---|---|---|
-| `27. Occurrences/Time Slice and Snapshot Example` | 2 | OMG bug: `start`/`done` should be `startShot`/`endShot` |
-| `28. Individuals/Individuals and Time Slices` | 2 | same OMG bug |
+| `27. Occurrences/Time Slice and Snapshot Example` | 2 × `unresolved reference: start`/`done` | Real fix: `Systems Library/Items.sysml:33` declares `item start :>> startShot` and `item done :>> endShot`, and `Parts.sysml:28` redefines both, so `snapshot sale = start` names a library feature. Only *behavior* definitions had an implicit base, so no `part def`/`item def` body inherited it; `implicitDefinitionBases` now covers every definition kind. |
+| `28. Individuals/Individuals and Time Slices` | 2 × the same | Same fix. It then exposed a second false positive: `individual item def Alice :> Person` names a *part* definition, which the kind table rejected on an exact-kind match. A part definition **is** an item definition (SysML v2 §8.3.9.2), so specialization now follows the definition taxonomy — see `defKindsComparable` in `passes/typecheck.go`. |
 
-### Bugs in the OMG Materials (4 errors, 2 files)
-
-**Lifecycle snapshots — wrong feature names (2 files, 4 errors):**
-- Files: `27. Occurrences/Time Slice and Snapshot Example.sysml`; `28. Individuals/Individuals and Time Slices.sysml`
-- **Error**: `unresolved reference: start` (2×), `unresolved reference: done` (2×)
-- **Cause**: Files use `snapshot sale = start` and `snapshot junked = done` but KerML defines these as `startShot` and `endShot` (Occurrences.kerml:348, 364)
-- **Fix**: Change `start` → `startShot`, `done` → `endShot` in the OMG files
+The corpus therefore has no pinned OMG bugs left and no known false positives:
+`training_examples_expected.txt` lists no files.
 
 ### Type System Limitations (0 errors)
 
@@ -575,19 +571,13 @@ was fixed (see the objective-typing re-pin above).
 
 | Category | Pass | Fail | Pass Rate |
 |----------|------|------|-----------|
-| **All Examples** | 98 | 2 | 98% |
-| **Excluding the 2 files whose errors are OMG bugs** | 98 | 0 | 100% |
-
-**Note**: Both remaining files fail only because of bugs in the OMG material itself (`start`/`done` instead of `startShot`/`endShot`), so 98/100 is the ceiling.
+| **All Examples** | 100 | 0 | 100% |
 
 ---
 
 ## Remaining Work for Full Training Example Support
 
-### Priority 1: Kind Tables
-- Accept a `requirement def` as the type of an `objective` in the kind table in `passes/typecheck.go` — the last remaining corpus false positive
-
-### Priority 2: Pedagogical Documentation
+### Priority 1: Pedagogical Documentation
 - Mark which examples are intentionally incomplete
 - Provide "complete" versions of pedagogical examples for testing
 
@@ -613,10 +603,10 @@ directory and fails if any file's diagnostics differ between the two.
 
 ## Conclusion
 
-**Implementation Status**: Core behavioral semantics complete (297/297 execution conformance cases passing).
+**Implementation Status**: Core behavioral semantics complete (338/338 execution conformance cases passing).
 
-**Training Example Status**: 98/100 clean (2 files, 4 errors). What remains is two files that use
-feature names KerML does not define (`start`/`done` instead of `startShot`/`endShot`) — bugs in the
-OMG material, so 98/100 is the ceiling.
+**Training Example Status**: 100/100 clean. The last two files were false positives of ours, not
+OMG bugs: `start` and `done` are declared by `Items::Item` and redefined by `Parts::Part`, and every
+definition body now inherits the features its kind implies (see the re-pin below).
 
 The runtime implementation is **production-ready for complete SysML v2 models**. Training example "failures" reflect incomplete example files, not missing runtime features.

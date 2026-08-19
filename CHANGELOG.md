@@ -4,6 +4,75 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Cutting a release
 is described in [docs/project/releasing.md](docs/project/releasing.md).
 
+## 0.1.1 — 2026-08-19
+
+A fix release: every change below corrects something 0.1.0 got wrong about a valid model, so a
+model that 0.1.0 rejected or misread may analyze differently here. Nothing was renamed and no
+interface changed.
+
+### The OMG training corpus reports no errors, and two of its files were never buggy
+
+- **Every definition body inherits the features of the library definition its kind implies.**
+  Only behavior definitions had an implicit base, so `snapshot sale = start;` inside a `part def`
+  reported `unresolved reference: start` even though `Items::Item` declares `start` and `done` and
+  `Parts::Part` redefines both. The verdict recorded against `Time Slice and Snapshot Example` and
+  `Individuals and Time Slices` — "bugs in the OMG files" — was wrong; both are clean now, and the
+  corpus baseline lists no files.
+- **Because those features are now inherited, a member that reuses one of their names is
+  reported** where it used to shadow silently: `part def C { part start; }` conflicts with
+  `Parts::Part::start`. Redefine it to keep the name — `part start :>> Parts::Part::start;` — which
+  is what the model means.
+- **A qualified redefinition of an inherited library feature is accepted:**
+  `snapshot start :>> Parts::Part::start;` reported "start is not an inherited member of C" because
+  a library supertype restored from the index cache carries no scope to compare against.
+  Redefining a feature the owner does not inherit is still reported.
+- **A metadata usage ends at its own `;` or body:** `@M part def Car;` was read as an annotation
+  plus a declaration with no diagnostic. `#M part def Car;` is the prefix spelling.
+- **A definition may specialize a definition of a comparable kind:** `individual item def Alice :>
+  Person` was refused as a kind mismatch because `Person` is a `part def`. A part definition *is*
+  an item definition, so specialization follows the definition taxonomy rather than an exact kind
+  match; disjoint kinds — a part definition and an attribute definition — are still refused.
+- **A transition may leave the entry action of the state that declares it:** `entry action begin
+  { } transition begin then off;` reported the action as "not a state or pseudostate". The entry
+  action stands in for a start pseudostate, so the transition designates the state the machine
+  starts in rather than an edge between two vertices, and it executes as such. Only that bare
+  completion shape designates a start: an ordinary action named as an endpoint, a transition *into*
+  an entry action, and a triggered or guarded one out of it are all reported, rather than accepted
+  with the trigger, guard or effect dropped. The designation is read from the body the transition
+  is written in, so a name reaching another state's entry action, or one naming a junction rather
+  than a state, is reported where it used to analyze clean and then fail to execute. A machine
+  designated this way renders its initial state in a view that only exposes it.
+- **A metadata usage member names a type**, so `@Securty;` reports an unresolved reference the way
+  the `#` prefix spelling does instead of going unchecked.
+- **A value part accepts every operator the grammar allows** — `= expr`, `:= expr`,
+  `default expr`, `default = expr` and `default := expr` — wherever a usage, parameter, result or
+  subject binds a value; only some spellings were accepted per position.
+- **A metadata usage member (`@M;`) parses in a namespace, a body and a state body**, and RDF
+  conversion refuses it with a typed diagnostic instead of writing an annotation on a different
+  element.
+- **The REPL no longer prints a syntax warning twice**, once from the load that defers the
+  analysis and once from the analysis itself.
+
+### The Python client accepts the 0.1.0 service
+
+- **`opensysml` carries the pinned `sysml-grpc` digests for `v0.1.0`**, so
+  `OPENSYSML_GRPC_VERSION=v0.1.0` downloads and verifies the service instead of refusing it as
+  unpinned. `PINNED_SHA256` stopped at `v0.0.8`.
+
+### A rendering read at a terminal
+
+- **`sysml -render` writes the text form at a terminal**, where a person reads it, and the
+  machine-readable form of the kind rendered — Mermaid for a diagram, Markdown for a table — into a
+  file or a pipe, where a tool does. `sysml m.sysml -render Views::table` showed a Markdown table on
+  screen; `> table.md`, `| tool` and `-o table.md` are unchanged, and `-render-form` still names
+  either form whatever the destination.
+- **The text form is ASCII**: the rendering header and a connection edge were written with an em
+  dash, which a terminal drawing no more than ASCII showed as a replacement character.
+- **A text table is written to fit the terminal**, wrapping a cell wider than its column over as
+  many lines as it needs rather than truncating it or overflowing the window. Columns are narrowed
+  no further than 8 characters, and a table written to a file or a pipe keeps every column as wide
+  as its widest cell, so a saved artifact does not depend on the window it was written from.
+
 ## 0.1.0 — 2026-08-18
 
 ### The project is now OpenSysML

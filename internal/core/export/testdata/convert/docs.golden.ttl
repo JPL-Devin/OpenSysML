@@ -11,14 +11,14 @@ elmt:Documented
     sysml:declaredName "Documented" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-<urn:sysmlv2:element:Documented::@0>
+elmt:Documented___400
     a sysml:Documentation ;
     sysml:qualifiedName "Documented::@0" ;
     sysml:owningNamespace elmt:Documented ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:body " what this package is for " .
 
-elmt:Documented::Wheel
+elmt:Documented__Wheel
     a sysml:PartDefinition ;
     sysml:qualifiedName "Documented::Wheel" ;
     sysml:owningNamespace elmt:Documented ;
@@ -26,22 +26,22 @@ elmt:Documented::Wheel
     sysml:declaredName "Wheel" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-<urn:sysmlv2:element:Documented::Wheel::@0>
+elmt:Documented__Wheel___400
     a sysml:Documentation ;
     sysml:qualifiedName "Documented::Wheel::@0" ;
-    sysml:owningNamespace elmt:Documented::Wheel ;
+    sysml:owningNamespace elmt:Documented__Wheel ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:body " one wheel " .
 
-<urn:sysmlv2:element:Documented::@2>
+elmt:Documented___402
     a sysml:Comment ;
     sysml:qualifiedName "Documented::@2" ;
     sysml:owningNamespace elmt:Documented ;
     sysx:memberIndex "2"^^xsd:integer ;
-    sysml:annotatedElement elmt:Documented::Wheel ;
+    sysml:annotatedElement elmt:Documented__Wheel ;
     sysml:body " a note on wheels " .
 
-elmt:Documented::asJava
+elmt:Documented__asJava
     a sysml:TextualRepresentation ;
     sysml:qualifiedName "Documented::asJava" ;
     sysml:owningNamespace elmt:Documented ;

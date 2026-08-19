@@ -1,4 +1,4 @@
-TableViews::fleetTable — table rendering (view def GridView)
+TableViews::fleetTable - table rendering (view def GridView)
 
 Element                                Kind       Type      Declared in
 -------------------------------------  ---------  --------  -------------------------------------

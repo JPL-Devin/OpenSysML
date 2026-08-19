@@ -17,10 +17,15 @@ each of these is a deliberate property of it rather than a defect to report:
   one release may not read back into the next, and no migration is provided.
   Treat a `.ttl` as an interchange artifact you can regenerate, not as the copy
   of record.
-- **Interoperability is unverified.** The `sysml:` vocabulary and the `elmt:`
-  element base are read from Flexo MMS's `Namespaces.kt`, but no round trip
-  through a running Flexo service or triplestore has been demonstrated, so
-  nothing here claims one (roadmap item D3).
+- **Interoperability is not yet supported.** The `sysml:` vocabulary and the
+  `elmt:` element base match Flexo MMS's `Namespaces.kt`, and OpenSysML's
+  element ids — the part of the IRI after the final `:` — match that service's
+  `requireValidId` (`[a-zA-Z0-9_-]+`), but known API mismatches remain. The
+  reader ignores predicates outside `sysml:` and
+  `urn:sysmlv2:annotation:json:`, so OpenSysML's `sysx:` triples do not survive
+  that path. Paged listing and query additionally require `sysml:elementId`,
+  while roots filtering uses `sysml:owner` and `sysml:owningRelatedElement`;
+  these are roadmap D3 work, not consequences of matching namespaces.
 
 Every surface reports this where it is used: the command line writes a `note:` to
 stderr, `%save` prints one, and `ConvertResponse` carries `experimental` and
@@ -40,10 +45,14 @@ The wording is one constant, `export.ExperimentalNotice`.
 
 The `sysml:` vocabulary and the `elmt:` element base match the ones the
 [Flexo MMS SysML v2 service](https://github.com/Open-MBEE/flexo-mms-sysmlv2)
-writes into its triplestore (`Namespaces.kt`), so a graph produced here is
-addressed the way that service addresses elements. Whether such a graph loads
-into a running Flexo triplestore has not been demonstrated — see
-[Status](#status-experimental).
+writes into its triplestore (`Namespaces.kt`). That service derives an
+element's `@id` from the substring after the final `:`, and `requireValidId`
+permits only `[a-zA-Z0-9_-]+`; OpenSysML's encoded element ids satisfy both.
+Other mismatches remain: the reader ignores predicates outside `sysml:` and
+`urn:sysmlv2:annotation:json:`, so `sysx:` triples do not survive that path,
+and paged listing and query require `sysml:elementId`, while roots filtering
+uses `sysml:owner` and `sysml:owningRelatedElement`; these are roadmap D3
+work. See [Status](#status-experimental).
 
 OpenSysML's own additions are namespaced separately as `sysx:` so a consumer can
 tell them from the standard vocabulary and ignore them if it wants only standard
@@ -51,22 +60,36 @@ SysML.
 
 ### Element IRIs
 
-An element's IRI is its qualified name appended to `elmt:`:
+An element's IRI is its qualified name, encoded as an id, appended to `elmt:`:
 
 ```
 package Demo { part def Vehicle; }
 ```
 
 ```turtle
-elmt:Demo         a sysml:Package .
-elmt:Demo::Vehicle a sysml:PartDefinition ;
+elmt:Demo         a sysml:Package ;
+    sysml:qualifiedName "Demo" .
+elmt:Demo__Vehicle a sysml:PartDefinition ;
+    sysml:qualifiedName "Demo::Vehicle" ;
     sysml:owningNamespace elmt:Demo .
 ```
 
-The IRI is therefore **deterministic**: converting the same model twice yields
-the same IRIs, and re-converting after an edit leaves the untouched elements
-addressed as before. Characters that an IRI cannot carry are percent-escaped and
-decode back exactly.
+The encoding (`rdf.EncodeElementID`) works over the UTF-8 bytes of the
+qualified name, with `_` as the escape character:
+
+- the `::` separator becomes `__`
+- a byte in `[A-Za-z0-9-]` stands for itself
+- every other byte — a literal `_` included — becomes `_` plus two lowercase
+  hex digits: `A_B::C` → `A_5fB__C`, `A::B_C` → `A__B_5fC`,
+  `Importer::@0` → `Importer___400`, `Vehicle Mass` → `Vehicle_20Mass`
+
+The id therefore always matches `[A-Za-z0-9_-]+`, distinct qualified names
+never collide, and `rdf.DecodeElementID` reverses the encoding exactly. The
+IRI is **deterministic**: converting the same model twice yields the same
+IRIs, and re-converting after an edit leaves the untouched elements addressed
+as before. The id is an address, not the copy of record for the name — the
+name is carried by `sysml:qualifiedName`, which is where reading a graph back
+takes it from.
 
 ### What each element carries
 
@@ -216,10 +239,10 @@ or attached to one (`then action b : B;`, which the parser desugars to the same
 edge), so the order a model declares survives the hop:
 
 ```turtle
-<urn:sysmlv2:element:P::Move::@2>
+elmt:P__Move___402
     a sysml:SuccessionAsUsage ;
-    sysml:sourceFeature elmt:P::Move::a ;
-    sysml:targetFeature elmt:P::Move::c .
+    sysml:sourceFeature elmt:P__Move__a ;
+    sysml:targetFeature elmt:P__Move__c .
 ```
 
 Converting that back writes `then a c;`, which sequences the same pair wherever
@@ -296,6 +319,9 @@ refused as a duplicate.
 - blank nodes and `[ ... ]` — every element must have a stable IRI
 - RDF collections `( ... )` — order is carried by `sysx:memberIndex`
 - an element with no `rdf:type`, or a metaclass outside the mapping
+- a referenced element with no `sysml:qualifiedName` — the name is read from
+  that property, never recovered from the IRI, so a graph with foreign ids
+  (UUIDs, say) converts exactly when it carries the names
 - an element whose `sysml:owningNamespace` is not in the graph
 - ownership that forms a cycle, leaving an element no root owns — printing walks
   down from the roots, so this would otherwise write an empty document

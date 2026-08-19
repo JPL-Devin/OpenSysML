@@ -39,21 +39,12 @@ var DefaultPrefixes = map[string]string{
 	"sysx":  OpenSysML,
 }
 
-// ElementIRI returns the element IRI for a fully-qualified SysML name.
-// Qualified names are kept legible (`urn:sysmlv2:element:Demo::Vehicle`) and
-// only the characters an IRI cannot carry are percent-escaped, so the IRI is
-// deterministic and reversible.
+// ElementIRI returns the element IRI for a fully-qualified SysML name: the
+// element namespace followed by EncodeElementID of the name, so the id after
+// the last ':' is readable, deterministic, and valid for a consumer that
+// restricts ids to [A-Za-z0-9_-]+.
 func ElementIRI(qualifiedName string) Term {
-	return IRI(Element + escapeIRIPath(qualifiedName))
-}
-
-// QualifiedNameOf reverses ElementIRI, returning the qualified name an element
-// IRI encodes and whether iri is in the element namespace at all.
-func QualifiedNameOf(iri string) (string, bool) {
-	if !strings.HasPrefix(iri, Element) {
-		return "", false
-	}
-	return unescapeIRIPath(strings.TrimPrefix(iri, Element)), true
+	return IRI(Element + EncodeElementID(qualifiedName))
 }
 
 // SysMLTerm returns the IRI of a name in the SysML vocabulary, used for both
@@ -64,13 +55,9 @@ func SysMLTerm(name string) Term { return IRI(SysML + name) }
 func OpenSysMLTerm(name string) Term { return IRI(OpenSysML + name) }
 
 // LocalName returns the part of iri after the last '#', '/' or ':' — the
-// metaclass or property name for a vocabulary IRI. An element IRI returns the
-// whole qualified name it encodes, since the segments of a qualified name are
-// one name and not a path.
+// metaclass or property name for a vocabulary IRI, or the encoded id for an
+// element IRI.
 func LocalName(iri string) string {
-	if qname, ok := QualifiedNameOf(iri); ok {
-		return qname
-	}
 	if cut := strings.LastIndexAny(iri, "#/"); cut >= 0 {
 		return iri[cut+1:]
 	}
@@ -78,57 +65,4 @@ func LocalName(iri string) string {
 		return iri[cut+1:]
 	}
 	return iri
-}
-
-const iriUnreserved = "-._~:@!$&'()*+,;=" // safe in an IRI path segment
-
-func escapeIRIPath(value string) string {
-	var b strings.Builder
-	for _, r := range value {
-		switch {
-		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
-			b.WriteRune(r)
-		case strings.ContainsRune(iriUnreserved, r):
-			b.WriteRune(r)
-		case r == '%':
-			b.WriteString("%25")
-		default:
-			for _, octet := range []byte(string(r)) {
-				b.WriteString("%")
-				const hex = "0123456789ABCDEF"
-				b.WriteByte(hex[octet>>4])
-				b.WriteByte(hex[octet&0x0f])
-			}
-		}
-	}
-	return b.String()
-}
-
-func unescapeIRIPath(value string) string {
-	var b strings.Builder
-	for i := 0; i < len(value); i++ {
-		if value[i] == '%' && i+2 < len(value) {
-			hi, ok1 := hexDigit(value[i+1])
-			lo, ok2 := hexDigit(value[i+2])
-			if ok1 && ok2 {
-				b.WriteByte(hi<<4 | lo)
-				i += 2
-				continue
-			}
-		}
-		b.WriteByte(value[i])
-	}
-	return b.String()
-}
-
-func hexDigit(c byte) (byte, bool) {
-	switch {
-	case c >= '0' && c <= '9':
-		return c - '0', true
-	case c >= 'a' && c <= 'f':
-		return c - 'a' + 10, true
-	case c >= 'A' && c <= 'F':
-		return c - 'A' + 10, true
-	}
-	return 0, false
 }

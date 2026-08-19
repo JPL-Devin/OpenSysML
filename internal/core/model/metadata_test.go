@@ -126,3 +126,34 @@ func TestSemanticMetadataMemberIsNotInvented(t *testing.T) {
 		t.Fatalf("diagnostics = %v, want one about notAMember", got)
 	}
 }
+
+// A metadata usage written as a member of its own names a type, so a name that
+// refers to nothing is reported the way the `#` prefix spelling is.
+func TestMetadataUsageMemberResolvesItsType(t *testing.T) {
+	src := `package P {
+		metadata def Safety;
+		@Safety;
+		part def Car {
+			@Safety;
+		}
+	}`
+	if got := diagnoseSource(t, "file:///metadata-usage.sysml", src); len(got) != 0 {
+		t.Fatalf("expected no diagnostics, got %v", got)
+	}
+
+	got := diagnoseSource(t, "file:///metadata-usage-bad.sysml", `package P {
+		metadata def Safety;
+		@Securty;
+		part def Car {
+			@Securty;
+		}
+	}`)
+	if len(got) != 2 {
+		t.Fatalf("expected both usages to be reported, got %v", got)
+	}
+	for _, msg := range got {
+		if !strings.Contains(msg, "unresolved reference: Securty") {
+			t.Errorf("unexpected diagnostic %q", msg)
+		}
+	}
+}

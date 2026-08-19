@@ -138,7 +138,7 @@ echo "%load model.sysml
 | `--convert <format>` | | Convert the model instead of running it: `sysml`, `kerml`, `ttl`, `turtle` or `rdf`. RDF is [experimental](rdf-mapping.md#status-experimental) and every run that converts it says so on stderr (see [the RDF mapping](rdf-mapping.md)) |
 | `--from <format>` | | Input format for `--convert` (default: from the input's extension) |
 | `--render <view>` | | Render this view of the model instead of running it, in the form its `render` member states (see [Rendering a view](#rendering-a-view)) |
-| `--render-form <form>` | | Form `--render` writes: `text`, `mermaid` or `markdown` (default: the machine-readable form of the kind rendered) |
+| `--render-form <form>` | | Form `--render` writes: `text`, `mermaid` or `markdown` (default: `text` at a terminal, the machine-readable form of the kind rendered into a file or a pipe) |
 | `--output <file>` | `-o` | Write the conversion or the rendering to a file instead of stdout |
 | `--version` | `-v` | Show version information |
 | `--help` | `-h` | Show usage information |
@@ -200,18 +200,24 @@ sysml -e "result" file1.sysml file2.sysml
 are a tree, an interconnection diagram, a state machine, an action flow and a table.
 
 ```bash
-# The view in the machine-readable form of its kind, on stdout
+# The ASCII text form a person reads, written to fit the terminal
 sysml model.sysml -render Views::vehicleView
 
-# The indented text form a person reads
-sysml model.sysml -render Views::vehicleView -render-form text
-
-# A tabular view as a Markdown table
-sysml model.sysml -render Views::partsTable -o parts.md
-
-# Write the rendering to a file
+# The machine-readable form of the kind: piped, redirected or written to a file
+sysml model.sysml -render Views::vehicleView | tee view.mmd
+sysml model.sysml -render Views::partsTable > parts.md
 sysml model.sysml -render Views::vehicleView -o view.mmd
+
+# Either form, whatever the destination
+sysml model.sysml -render Views::partsTable -render-form markdown
+sysml model.sysml -render Views::vehicleView -render-form text
 ```
+
+Where `-render-form` names no form, the form follows the destination: the text form at a terminal,
+where a person reads it, and the machine-readable form of the kind into a file or a pipe, where a
+tool does. The text form is ASCII and its table is written to fit the terminal, wrapping a cell
+wider than its column rather than truncating it; into a file or a pipe every column is as wide as
+its widest cell, so a saved artifact does not depend on the window it was written from.
 
 The artifact is the run's result, so it goes on stdout alone — what was loaded, what the model
 analysed to, an empty rendering, and any element the rendering cannot represent all go on stderr,

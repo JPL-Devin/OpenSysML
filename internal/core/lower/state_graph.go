@@ -81,6 +81,11 @@ type StateGraph struct {
 	// InitialState (required for simple machines, nil for multi-region)
 	Initial *ast.StateNode
 
+	// designatedInitials are the states a transition out of the body's entry
+	// action names as the state the machine starts in. It is graph-local: the
+	// parsed AST it is derived from stays as written.
+	designatedInitials map[*ast.StateNode]bool
+
 	// Connections are the connectors declared in the state machine body, which
 	// is how a `send ... via <port>` in an entry/do/exit/effect action finds the
 	// ports it reaches.
@@ -201,7 +206,7 @@ func ToStateGraphWithEndpoints(stateMachineDecl ast.Node, scope *symbols.Scope, 
 		maxLeafDepth := -1
 
 		for _, state := range graph.States {
-			if !state.IsInitial {
+			if !graph.IsInitial(state) {
 				continue
 			}
 
@@ -221,7 +226,7 @@ func ToStateGraphWithEndpoints(stateMachineDecl ast.Node, scope *symbols.Scope, 
 			chainRoot := state
 			for {
 				parent, hasParent := graph.ParentState[chainRoot]
-				if !hasParent || !parent.IsInitial {
+				if !hasParent || !graph.IsInitial(parent) {
 					break
 				}
 				chainRoot = parent
@@ -326,7 +331,21 @@ func newStateGraph(scope *symbols.Scope, endpoints Endpoints) *StateGraph {
 		RegionOwner:      make(map[*ast.StateRegion]*ast.StateNode),
 		RegionOf:         make(map[*ast.StateNode]*ast.StateRegion),
 		Deferred:         make(map[*ast.StateNode][]ast.Node),
+
+		designatedInitials: make(map[*ast.StateNode]bool),
 	}
+}
+
+// IsInitial reports whether the machine starts in state, either because it was
+// written `initial` or because a transition out of the body's entry action named
+// it.
+func (g *StateGraph) IsInitial(state *ast.StateNode) bool {
+	return state != nil && (state.IsInitial || g.designatedInitials[state])
+}
+
+// designateInitial records state as one the machine starts in.
+func (g *StateGraph) designateInitial(state *ast.StateNode) {
+	g.designatedInitials[state] = true
 }
 
 // machineMembers is the body of a state machine declaration.
@@ -475,7 +494,7 @@ func collectRegionStates(graph *StateGraph, region *ast.StateRegion, parent *ast
 			return err
 		}
 		graph.RegionOf[state] = region
-		if state.IsInitial && graph.RegionInitials[region] == nil {
+		if graph.IsInitial(state) && graph.RegionInitials[region] == nil {
 			graph.RegionInitials[region] = state
 		}
 	}
@@ -676,6 +695,29 @@ func isEntrySubaction(member ast.Node) bool {
 	return ok
 }
 
+// startsAt marks the state a bare completion transition out of the body's entry
+// action starts the machine in, as `entry; then off;` does, and reports whether
+// it did.
+func (g *StateGraph) startsAt(members []ast.Node, containingState ast.Node, scope *symbols.Scope, source, target *ast.QualifiedName) bool {
+	if source == nil || target == nil {
+		return false
+	}
+	decl, ok := g.endpoints.Endpoint(scope, source)
+	if !ok {
+		return false
+	}
+	if !ast.IsEntryAction(ast.EntryActions(members), decl) &&
+		!ast.IsEntryAction(ast.StateEntryActions(containingState), decl) {
+		return false
+	}
+	start, ok := g.endpointVertex(scope, target).(*ast.StateNode)
+	if !ok {
+		return false
+	}
+	g.designateInitial(start)
+	return true
+}
+
 // classifyTrigger converts a raw trigger expression into a typed TriggerEvent.
 // Classification rules (syntactic/structural):
 // - nil → nil (completion transition)
@@ -794,6 +836,13 @@ func collectTransitions(graph *StateGraph, memberList []ast.Node, containingStat
 						sourceVertex := graph.endpointVertex(scope, sourceQName)
 						targetVertex := graph.endpointVertex(scope, targetQName)
 
+						// `begin then off;` out of a named entry action names the
+						// state the machine starts in, not an edge (SysML 7.19.3).
+						if sourceVertex == nil &&
+							graph.startsAt(memberList, containingState, scope, sourceQName, targetQName) {
+							continue
+						}
+
 						if sourceVertex != nil && targetVertex != nil {
 							trans := &Transition{
 								Source:    sourceVertex,
@@ -823,7 +872,7 @@ func collectTransitions(graph *StateGraph, memberList []ast.Node, containingStat
 			if n.Successor != nil {
 				targetState := graph.endpointState(scope, n.Successor)
 				if targetState != nil {
-					targetState.IsInitial = true
+					graph.designateInitial(targetState)
 				}
 			}
 		case *ast.SuccessionEdge:
@@ -837,9 +886,14 @@ func collectTransitions(graph *StateGraph, memberList []ast.Node, containingStat
 			// `initial start; start then off;`.
 			if sourceVertex == nil && isEntrySubaction(n.SourceMember) {
 				if target, ok := targetVertex.(*ast.StateNode); ok {
-					target.IsInitial = true
+					graph.designateInitial(target)
 					continue
 				}
+			}
+
+			// `start then off;` out of a named entry action says the same.
+			if sourceVertex == nil && graph.startsAt(memberList, containingState, scope, n.Source, n.Target) {
+				continue
 			}
 
 			if sourceVertex != nil && targetVertex != nil {
@@ -862,6 +916,12 @@ func collectTransitions(graph *StateGraph, memberList []ast.Node, containingStat
 			}
 			graph.Transitions[trans.Source] = append(graph.Transitions[trans.Source], trans)
 		case *ast.TransitionMember:
+			// `transition initial then off;` out of the entry action names the
+			// state the machine starts in, not an edge between two vertices.
+			if n.Trigger == nil && n.Guard == nil && len(n.Effect) == 0 &&
+				graph.startsAt(memberList, containingState, scope, n.Source, n.Target) {
+				continue
+			}
 			// New: TransitionMember from parser (declarative)
 			trans, err := lowerTransitionMember(graph, n, containingState, scope)
 			if err != nil {

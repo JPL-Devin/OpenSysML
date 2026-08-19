@@ -23,11 +23,11 @@ func TestUnsupportedConversionMessages(t *testing.T) {
 		src:  "package P {\n\tmetadata def M;\n\tpart p {@M{isSet = true;}}\n}",
 		want: []string{"cannot convert the prefix metadata at m.sysml:3:10", remedy},
 	}, {
-		// The parser records an `@` annotation on the declaration ahead of the one
-		// it prefixes, so writing it back would annotate a different element.
-		name: "misplaced_annotation",
-		src:  "package P {\n\tmetadata def M;\n\t@M part def Car;\n}",
-		want: []string{"cannot convert the metadata annotation at m.sysml:3:3", "would be a different model", remedy},
+		// A metadata usage member (`@M;`) has no mapping in this graph yet, so it
+		// is refused rather than dropped.
+		name: "metadata_usage_member",
+		src:  "package P {\n\tmetadata def M;\n\t@M;\n}",
+		want: []string{"cannot convert the prefix metadata at m.sysml:3:2", remedy},
 	}, {
 		// The entry member is unnamed, so the `then` beside it sequences an end
 		// no reference can name.

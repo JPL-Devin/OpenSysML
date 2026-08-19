@@ -764,20 +764,24 @@ func TestUnknownMetaclassIsUnsupported(t *testing.T) {
 	}
 }
 
-// TestForeignGraph covers a graph written by another tool: no memberIndex, no
-// hasBody, no sourceText, and links between elements only.
+// TestForeignGraph covers a graph written by another tool: UUID element IRIs,
+// no memberIndex, no hasBody, no sourceText, and links between elements only.
+// Every name comes from a property; nothing is recovered from an IRI.
 func TestForeignGraph(t *testing.T) {
 	src := `@prefix sysml: <https://www.omg.org/spec/SysML#> .
-@prefix elmt: <urn:sysmlv2:element:> .
 
-<urn:sysmlv2:element:Demo> a sysml:Package ; sysml:declaredName "Demo" .
-<urn:sysmlv2:element:Demo::Engine> a sysml:PartDefinition ;
+<urn:uuid:aaaa-1> a sysml:Package ;
+    sysml:declaredName "Demo" ;
+    sysml:qualifiedName "Demo" .
+<urn:uuid:aaaa-2> a sysml:PartDefinition ;
     sysml:declaredName "Engine" ;
-    sysml:owningNamespace elmt:Demo .
-<urn:sysmlv2:element:Demo::engine> a sysml:PartUsage ;
+    sysml:qualifiedName "Demo::Engine" ;
+    sysml:owningNamespace <urn:uuid:aaaa-1> .
+<urn:uuid:aaaa-3> a sysml:PartUsage ;
     sysml:declaredName "engine" ;
-    sysml:owningNamespace elmt:Demo ;
-    sysml:type <urn:sysmlv2:element:Demo::Engine> ;
+    sysml:qualifiedName "Demo::engine" ;
+    sysml:owningNamespace <urn:uuid:aaaa-1> ;
+    sysml:type <urn:uuid:aaaa-2> ;
     sysml:upperBound "1" .`
 	out, err := export.Convert("foreign.ttl", []byte(src), export.FormatTurtle, export.FormatSysML)
 	if err != nil {
@@ -790,6 +794,56 @@ func TestForeignGraph(t *testing.T) {
 	}
 }
 
+// A graph whose referenced elements carry no sysml:qualifiedName cannot be
+// written back: the name is never recovered from the IRI, so it is reported.
+func TestForeignGraphWithoutQualifiedNamesIsReported(t *testing.T) {
+	src := `@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix elmt: <urn:sysmlv2:element:> .
+
+elmt:Demo a sysml:Package ; sysml:declaredName "Demo" .
+elmt:Demo__Engine a sysml:PartDefinition ;
+    sysml:declaredName "Engine" ;
+    sysml:owningNamespace elmt:Demo .`
+	out, err := export.Convert("foreign.ttl", []byte(src), export.FormatTurtle, export.FormatSysML)
+	if err == nil {
+		t.Fatalf("a graph without qualified names converted to:\n%s", out)
+	}
+	if !strings.Contains(err.Error(), "sysml:qualifiedName") {
+		t.Errorf("error %q should name the missing property", err)
+	}
+}
+
+// A reference whose target cannot be named from the graph — an IRI that is not
+// a subject, or a subject without sysml:qualifiedName — is reported, not named.
+func TestUnnameableReferencesAreReported(t *testing.T) {
+	const head = `@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix elmt: <urn:sysmlv2:element:> .
+
+elmt:P a sysml:Package ; sysml:declaredName "P" ; sysml:qualifiedName "P" .
+elmt:P__u a sysml:PartUsage ; sysml:declaredName "u" ; sysml:qualifiedName "P::u" ;
+    sysml:owningNamespace elmt:P ;
+`
+	for name, tail := range map[string]string{
+		"reference to an IRI that is not a subject": `    sysml:type <urn:uuid:absent> .`,
+		"reference to a subject without qualifiedName": `    sysml:type elmt:P__T .
+elmt:P__T a sysml:PartDefinition ; sysml:declaredName "T" ; sysml:owningNamespace elmt:P .`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			out, err := export.Convert("m.ttl", []byte(head+tail), export.FormatTurtle, export.FormatSysML)
+			if err == nil {
+				t.Fatalf("an unnameable reference converted to:\n%s", out)
+			}
+			var unsupported *export.UnsupportedError
+			if !errors.As(err, &unsupported) {
+				t.Fatalf("want an UnsupportedError, got %v", err)
+			}
+			if !strings.Contains(err.Error(), "sysml:qualifiedName") {
+				t.Errorf("error %q should name the missing property", err)
+			}
+		})
+	}
+}
+
 // A declaration built from a property the graph does not carry cannot be
 // written: reporting it beats emitting notation that will not parse.
 func TestMissingRequiredPropertyIsUnsupported(t *testing.T) {
@@ -797,7 +851,7 @@ func TestMissingRequiredPropertyIsUnsupported(t *testing.T) {
 @prefix sysx: <urn:opensysml:sysml:> .
 @prefix elmt: <urn:sysmlv2:element:> .
 
-<urn:sysmlv2:element:P> a sysml:Package ; sysml:declaredName "P" .
+<urn:sysmlv2:element:P> a sysml:Package ; sysml:declaredName "P" ; sysml:qualifiedName "P" .
 `
 	for name, subject := range map[string]string{
 		"alias without aliasedElement": `<urn:sysmlv2:element:P::X> a sysx:Alias ;
@@ -824,18 +878,51 @@ func TestMissingRequiredPropertyIsUnsupported(t *testing.T) {
 	}
 }
 
-func TestElementIRIsAreQualifiedNames(t *testing.T) {
+func TestElementIRIsEncodeQualifiedNames(t *testing.T) {
 	graph, err := export.SysMLToRDF("iri.sysml", []byte("package P { part def Q; }"))
 	if err != nil {
 		t.Fatalf("convert: %v", err)
 	}
-	want := rdf.Element + "P::Q"
+	want := rdf.Element + rdf.EncodeElementID("P::Q")
 	for _, subject := range graph.Subjects() {
 		if subject.Value == want {
 			return
 		}
 	}
 	t.Errorf("expected subject %s in:\n%s", want, rdf.WriteTurtle(graph))
+}
+
+// Every element IRI in the convert fixtures is the encoding of the qualified
+// name the element carries, and the encoding decodes back to that name.
+func TestFixtureElementIDsRoundTrip(t *testing.T) {
+	paths, err := filepath.Glob(filepath.Join("testdata", "convert", "*.golden.ttl"))
+	if err != nil || len(paths) == 0 {
+		t.Fatalf("no fixtures found: %v", err)
+	}
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		graph, err := rdf.ParseTurtle(data)
+		if err != nil {
+			t.Fatalf("%s: %v", path, err)
+		}
+		for _, subject := range graph.Subjects() {
+			qname, ok := graph.Lexical(subject, rdf.SysML+"qualifiedName")
+			if !ok {
+				t.Errorf("%s: subject %s has no qualified name", path, subject.Value)
+				continue
+			}
+			if want := rdf.Element + rdf.EncodeElementID(qname); subject.Value != want {
+				t.Errorf("%s: subject %s should be %s for %q", path, subject.Value, want, qname)
+			}
+			id := strings.TrimPrefix(subject.Value, rdf.Element)
+			if got, ok := rdf.DecodeElementID(id); !ok || got != qname {
+				t.Errorf("%s: id %q decoded to %q, %v, want %q", path, id, got, ok, qname)
+			}
+		}
+	}
 }
 
 func TestFormatDetection(t *testing.T) {

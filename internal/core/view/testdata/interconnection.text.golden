@@ -1,4 +1,4 @@
-PlantViews::loopView — interconnection rendering (render asInterconnectionDiagram)
+PlantViews::loopView - interconnection rendering (render asInterconnectionDiagram)
 
 part def Plant::Loop
   part pump (Pump)
@@ -6,5 +6,5 @@ part def Plant::Loop
   part sensor (Pump)
 
 connections:
-  pump — tank: supply
+  pump -- tank: supply
   pump => tank: of Water
