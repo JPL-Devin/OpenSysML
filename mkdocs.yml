@@ -1,0 +1,143 @@
+# The site is the docs/ tree unmodified: every page stays a Markdown file read on
+# GitHub, and MkDocs is only the renderer.
+site_name: OpenSysML
+site_description: A SysML v2 and KerML implementation in Go — language server, REPL, execution runtime, Python client
+site_url: https://open-mbee.github.io/OpenSysML/
+repo_url: https://github.com/Open-MBEE/OpenSysML
+repo_name: Open-MBEE/OpenSysML
+edit_uri: edit/main/docs/
+copyright: Apache-2.0
+
+docs_dir: docs
+
+theme:
+  name: material
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.top
+    - navigation.indexes
+    - content.code.copy
+    - content.action.edit
+    - search.highlight
+    - search.suggest
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+plugins:
+  - search
+
+# Links out of docs/ (examples/, Go sources, CONTRIBUTING.md) are correct on GitHub
+# and 404 here, so the hook rewrites those to the repository at build time.
+hooks:
+  - scripts/mkdocs_repo_links.py
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      # GitHub's own slugger, so an anchor written for a page read on GitHub is
+      # the same anchor here and #a--b (a dropped em dash) still resolves.
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+
+validation:
+  nav:
+    # A page absent from both nav and not_in_nav fails the build: publishing a
+    # page nothing navigates to is the mistake, not an omission.
+    omitted_files: warn
+    not_found: warn
+  links:
+    absolute_links: warn
+    unrecognized_links: warn
+    anchors: warn
+
+not_in_nav: |
+  API.md
+  ARCHITECTURE.md
+  MACOS_DISTRIBUTION.md
+  QUICKSTART.md
+  RDF_INTEROP.md
+  RELEASING.md
+  SPEC_COMPLIANCE.md
+  TRAINING_EXAMPLES.md
+
+nav:
+  - Documentation: README.md
+  - Guide:
+      - guide/README.md
+      - guide/01-install.md
+      - guide/02-first-model.md
+      - guide/03-command-line.md
+      - guide/04-repl.md
+      - guide/05-checking.md
+      - guide/06-behavior.md
+      - guide/07-saving-and-rdf.md
+      - guide/08-editors.md
+      - guide/09-python.md
+      - guide/10-troubleshooting.md
+  - Reference:
+      - reference/README.md
+      - CLI: reference/cli.md
+      - REPL commands: reference/repl-commands.md
+      - Environment variables: reference/environment.md
+      - Go API: reference/api.md
+      - Python API: reference/python-api.md
+      - RDF mapping: reference/rdf-mapping.md
+      - Grammar: reference/grammar/README.md
+  - Internals:
+      - internals/README.md
+      - Architecture: internals/architecture.md
+      - Testing: internals/testing.md
+      - Performance: internals/performance.md
+      - Design notes:
+          - internals/design/README.md
+          - internals/design/action-executor.md
+          - internals/design/orthogonal-regions.md
+          - internals/design/pseudostates.md
+          - internals/design/python-grpc-bindings.md
+          - internals/design/python-grpc-phase1-plan.md
+          - internals/design/python-grpc-phase2-plan.md
+          - internals/design/python-grpc-phase3-plan.md
+          - internals/design/python-grpc-phase3-fixes.md
+          - internals/design/python-grpc-phase4-plan.md
+      - Plans:
+          - internals/notes/README.md
+          - internals/notes/behavior-robustness-plan.md
+          - internals/notes/lowering-integration-plan.md
+          - internals/notes/parser-robustness-plan.md
+  - Project:
+      - project/README.md
+      - Spec compliance: project/spec-compliance.md
+      - Training examples: project/training-examples.md
+      - Roadmap: project/roadmap.md
+      - Releasing: project/releasing.md
+      - macOS distribution: project/macos-distribution.md
+      - OMG issues: project/omg-issues.md
+      - Demo: project/demo.md

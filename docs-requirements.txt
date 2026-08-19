@@ -1,0 +1,4 @@
+# The documentation site toolchain, pinned so a local `make docs-serve` renders
+# what the Pages workflow publishes.
+mkdocs==1.6.1
+mkdocs-material==9.7.7

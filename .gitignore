@@ -9,6 +9,9 @@
 /sysml
 /sysml-lsp
 
+# Rendered documentation site (make docs)
+/site/
+
 # Downloaded training examples (run scripts/download-training-examples.sh)
 /examples/sysml-v2-training/
 

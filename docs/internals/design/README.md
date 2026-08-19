@@ -1,0 +1,18 @@
+# Design notes
+
+How a subsystem is built and which normative reference it answers to. For
+maintainers; the behavior a user sees is [the guide](../../guide/).
+
+- **[The action executor](action-executor.md)** — how a token moves through a lowered
+  `ActionGraph`
+- **[Orthogonal regions](orthogonal-regions.md)** — concurrent substates, an OpenSysML
+  extension against UML 2.5.1 semantics
+- **[Pseudostates](pseudostates.md)** — choice, junction, fork, join, entry/exit points
+  and history
+- **[Python gRPC bindings](python-grpc-bindings.md)** — the service and client design
+
+The staged plans that built the bindings, kept for their rationale:
+[phase 1](python-grpc-phase1-plan.md) (the service),
+[phase 2](python-grpc-phase2-plan.md) (the client),
+[phase 3](python-grpc-phase3-plan.md) and its [fixes](python-grpc-phase3-fixes.md),
+[phase 4](python-grpc-phase4-plan.md).
