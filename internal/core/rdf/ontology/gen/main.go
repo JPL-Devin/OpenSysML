@@ -98,7 +98,7 @@ func run(root, out string) error {
 	if err != nil {
 		return fmt.Errorf("format generated source: %w", err)
 	}
-	if err := os.WriteFile(out, formatted, 0o644); err != nil {
+	if err := os.WriteFile(out, formatted, 0o600); err != nil {
 		return err
 	}
 	fmt.Printf("wrote %s: %d properties, %d classes (version %s, commit %s)\n",
@@ -111,6 +111,7 @@ var versionBadge = regexp.MustCompile(`Version-(\d+)-`)
 // ontologyVersion reads the metamodel version out of the checkout's own README
 // badge, so the recorded version cannot drift from the file it describes.
 func ontologyVersion(path string) (string, error) {
+	// #nosec G304 -- the checkout to read is named on the command line.
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return "", fmt.Errorf("read ontology version: %w", err)
@@ -146,6 +147,7 @@ type declaration struct {
 // of rdf:RDF are read; the anonymous owl:Restriction axioms nested inside them
 // state cardinality rather than hierarchy.
 func parseOntology(path string) ([]declaration, error) {
+	// #nosec G304 -- the checkout to read is named on the command line.
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
