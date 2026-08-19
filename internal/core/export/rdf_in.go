@@ -155,9 +155,8 @@ func (d *decoder) build() ([]*element, error) {
 	return roots, nil
 }
 
-// referenceProperties are the predicates the decoder reads element references
-// from. An IRI object of one of these must be a subject of the graph carrying
-// sysml:qualifiedName: that property, never the IRI, is where a name comes from.
+// referenceProperties are the predicates whose IRI objects reference elements,
+// which must be graph subjects carrying sysml:qualifiedName.
 var referenceProperties = func() map[string]bool {
 	set := map[string]bool{
 		rdf.SysML + pOwningNamespace:  true,
@@ -181,18 +180,26 @@ func (d *decoder) checkReferences() error {
 		if triple.Object.Kind != rdf.TermIRI || !referenceProperties[triple.Predicate.Value] {
 			continue
 		}
-		target, ok := d.byIRI[triple.Object.Value]
-		if !ok {
-			return &UnsupportedError{
-				What: fmt.Sprintf("the reference <%s>", triple.Object.Value),
-				Note: "it is not a subject of the graph, so there is no sysml:qualifiedName to write its name back from",
-			}
+		if err := d.checkReference(triple.Object.Value); err != nil {
+			return err
 		}
-		if target.qname == "" {
-			return &UnsupportedError{
-				What: fmt.Sprintf("the element <%s>", target.iri),
-				Note: "it is referenced but carries no sysml:qualifiedName, which is where a reference's name is read from",
-			}
+	}
+	return nil
+}
+
+// checkReference reports an IRI reference that no sysml:qualifiedName names.
+func (d *decoder) checkReference(iri string) error {
+	target, ok := d.byIRI[iri]
+	if !ok {
+		return &UnsupportedError{
+			What: fmt.Sprintf("the reference <%s>", iri),
+			Note: "it is not a subject of the graph, so there is no sysml:qualifiedName to write its name back from",
+		}
+	}
+	if target.qname == "" {
+		return &UnsupportedError{
+			What: fmt.Sprintf("the element <%s>", target.iri),
+			Note: "it is referenced but carries no sysml:qualifiedName, which is where a reference's name is read from",
 		}
 	}
 	return nil
@@ -291,7 +298,7 @@ func (d *decoder) head(el *element) (string, error) {
 	case "Dependency":
 		return d.dependencyHead(el)
 	case "Comment":
-		return d.commentHead(el), nil
+		return d.commentHead(el)
 	case "Documentation":
 		return d.documentationHead(el), nil
 	case "TextualRepresentation":
@@ -333,7 +340,7 @@ func (d *decoder) head(el *element) (string, error) {
 		return head, err
 	}
 	if kind, ok := metaclassDefinition[el.metaclass]; ok {
-		return d.definitionHead(el, kind), nil
+		return d.definitionHead(el, kind)
 	}
 	if kind, ok := metaclassUsage[el.metaclass]; ok {
 		return d.usageHead(el, kind)
@@ -365,7 +372,7 @@ func (d *decoder) namespaceHead(el *element) string {
 	return strings.Join(words, " ")
 }
 
-func (d *decoder) definitionHead(el *element, kind ast.DefinitionKind) string {
+func (d *decoder) definitionHead(el *element, kind ast.DefinitionKind) (string, error) {
 	var words []string
 	words = append(words, d.prefixWords(el)...)
 	if keyword := d.visibility(el); keyword != "" {
@@ -393,8 +400,12 @@ func (d *decoder) definitionHead(el *element, kind ast.DefinitionKind) string {
 		words = append(words, "def")
 	}
 	words = append(words, d.identWords(el)...)
-	words = append(words, d.relationshipWords(el, "")...)
-	return strings.Join(words, " ")
+	relationships, err := d.relationshipWords(el, "")
+	if err != nil {
+		return "", err
+	}
+	words = append(words, relationships...)
+	return strings.Join(words, " "), nil
 }
 
 func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
@@ -475,7 +486,11 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 	// ViewRenderingUsage, FramedConcernUsage) even when it declares no name.
 	var skip []ast.RelationshipKind
 	if noun := memberDeclarationKeyword(kind); noun != "" {
-		if targets := d.referenceList(el, rdf.SysML+relationshipProperty[ast.RelReferences]); len(targets) > 0 {
+		targets, err := d.referenceList(el, rdf.SysML+relationshipProperty[ast.RelReferences])
+		if err != nil {
+			return "", err
+		}
+		if len(targets) > 0 {
 			words = append(words, strings.Join(targets, ", "))
 			skip = append(skip, ast.RelReferences)
 		} else {
@@ -486,7 +501,11 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 	// existing one, `include use case <name> : T` declares one that includes T
 	// (SysML.xtext PerformedUseCaseUsage). Both carry the inclusion as a
 	// relationship, which the keyword itself writes.
-	if included := d.referenceList(el, rdf.SysML+relationshipProperty[ast.RelIncludes]); len(included) > 0 {
+	included, err := d.referenceList(el, rdf.SysML+relationshipProperty[ast.RelIncludes])
+	if err != nil {
+		return "", err
+	}
+	if len(included) > 0 {
 		skip = append(skip, ast.RelIncludes)
 		if len(d.identWords(el)) == 0 {
 			// `include <ref>;` states no kind keyword and takes the inclusion in
@@ -501,7 +520,11 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 	// declaring no name of its own (SysML.xtext PerformActionUsageDeclaration).
 	identWords := d.identWords(el)
 	if len(identWords) == 0 && referenceMemberKeyword(keyword) {
-		if targets := d.referenceList(el, rdf.SysML+relationshipProperty[ast.RelReferences]); len(targets) > 0 {
+		targets, err := d.referenceList(el, rdf.SysML+relationshipProperty[ast.RelReferences])
+		if err != nil {
+			return "", err
+		}
+		if len(targets) > 0 {
 			words = append(words, strings.Join(targets, ", "))
 			skip = append(skip, ast.RelReferences)
 		}
@@ -512,7 +535,11 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 	if accept := d.acceptParam(el); accept != nil {
 		words = append(words, "accept")
 		words = append(words, d.identWords(accept)...)
-		words = append(words, d.relationshipWords(accept, "")...)
+		acceptWords, err := d.relationshipWords(accept, "")
+		if err != nil {
+			return "", err
+		}
+		words = append(words, acceptWords...)
 		// A trigger (`when`/`at`/`after` …) is what the payload accepts, written
 		// in place of a type rather than as a value clause.
 		if trigger, ok := d.stringOf(accept, rdf.SysML+pValue); ok {
@@ -529,12 +556,19 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 	if d.boolOf(el, rdf.SysML+"isNonunique") {
 		multPart += " nonunique"
 	}
-	if len(d.referenceList(el, rdf.SysML+relationshipProperty[ast.RelTyping])) > 0 {
-		words = append(words, d.relationshipWords(el, multPart, skip...)...)
-		multPart = ""
-	} else {
-		words = append(words, d.relationshipWords(el, "", skip...)...)
+	typed, err := d.referenceList(el, rdf.SysML+relationshipProperty[ast.RelTyping])
+	if err != nil {
+		return "", err
 	}
+	typedPart := ""
+	if len(typed) > 0 {
+		typedPart, multPart = multPart, ""
+	}
+	relationships, err := d.relationshipWords(el, typedPart, skip...)
+	if err != nil {
+		return "", err
+	}
+	words = append(words, relationships...)
 	head := strings.Join(words, " ") + multPart
 	if value, ok := d.stringOf(el, rdf.SysML+pValue); ok {
 		head += " = " + value
@@ -553,11 +587,15 @@ func (d *decoder) conditionHead(el *element, keyword string) (string, error) {
 	if d.boolOf(el, rdf.SysML+"isNegated") {
 		words = append(words, "not")
 	}
+	reference, err := d.referenceText(el, rdf.SysML+relationshipProperty[ast.RelReferences])
+	if err != nil {
+		return "", err
+	}
 	switch condition, ok := d.stringOf(el, rdf.OpenSysML+xCondition); {
 	case ok:
 		words = append(words, condition)
-	case d.referenceText(el, rdf.SysML+relationshipProperty[ast.RelReferences]) != "":
-		words = append(words, d.referenceText(el, rdf.SysML+relationshipProperty[ast.RelReferences]))
+	case reference != "":
+		words = append(words, reference)
 	case d.boolOf(el, rdf.OpenSysML+xHasBody):
 		// The nested-constraint form spells out the kind it declares, so the
 		// braces that follow are read as a constraint body rather than a name.
@@ -630,7 +668,10 @@ func (d *decoder) aliasHead(el *element) (string, error) {
 	}
 	words = append(words, "alias")
 	words = append(words, d.identWords(el)...)
-	for_ := d.referenceText(el, rdf.SysML+pAliasFor)
+	for_, err := d.referenceText(el, rdf.SysML+pAliasFor)
+	if err != nil {
+		return "", err
+	}
 	if for_ == "" {
 		return "", d.missing(el, "sysml:"+pAliasFor, "an alias names the element it stands for")
 	}
@@ -646,8 +687,14 @@ func (d *decoder) dependencyHead(el *element) (string, error) {
 	}
 	words = append(words, "dependency")
 	words = append(words, d.identWords(el)...)
-	clients := d.referenceList(el, rdf.SysML+pClient)
-	suppliers := d.referenceList(el, rdf.SysML+pSupplier)
+	clients, err := d.referenceList(el, rdf.SysML+pClient)
+	if err != nil {
+		return "", err
+	}
+	suppliers, err := d.referenceList(el, rdf.SysML+pSupplier)
+	if err != nil {
+		return "", err
+	}
 	if len(clients) == 0 {
 		return "", d.missing(el, "sysml:"+pClient, "a dependency runs from at least one client")
 	}
@@ -661,17 +708,21 @@ func (d *decoder) dependencyHead(el *element) (string, error) {
 	return strings.Join(words, " "), nil
 }
 
-func (d *decoder) commentHead(el *element) string {
+func (d *decoder) commentHead(el *element) (string, error) {
 	// The keyword is what makes this a declared element rather than lexical
 	// trivia, so it is written even when nothing identifies the comment.
 	words := []string{"comment"}
 	words = append(words, d.identWords(el)...)
-	if about := d.referenceList(el, rdf.SysML+pAnnotatedElement); len(about) > 0 {
+	about, err := d.referenceList(el, rdf.SysML+pAnnotatedElement)
+	if err != nil {
+		return "", err
+	}
+	if len(about) > 0 {
 		words = append(words, "about", strings.Join(about, ", "))
 	}
 	words = append(words, d.localeWords(el)...)
 	body, _ := d.stringOf(el, rdf.SysML+pBody)
-	return strings.Join(words, " ") + " /*" + body + "*/"
+	return strings.Join(words, " ") + " /*" + body + "*/", nil
 }
 
 func (d *decoder) documentationHead(el *element) string {
@@ -807,13 +858,16 @@ func (d *decoder) visibility(el *element) string {
 // relationshipWords renders the typing and specialization clauses of a
 // declaration head, in the order the grammar expects. multPart, when given, is
 // the multiplicity part the typing clause carries.
-func (d *decoder) relationshipWords(el *element, multPart string, skip ...ast.RelationshipKind) []string {
+func (d *decoder) relationshipWords(el *element, multPart string, skip ...ast.RelationshipKind) ([]string, error) {
 	var words []string
 	for _, kind := range relationshipOrder {
 		if slices.Contains(skip, kind) {
 			continue
 		}
-		targets := d.referenceList(el, rdf.SysML+relationshipProperty[kind])
+		targets, err := d.referenceList(el, rdf.SysML+relationshipProperty[kind])
+		if err != nil {
+			return nil, err
+		}
 		if len(targets) == 0 {
 			continue
 		}
@@ -830,7 +884,7 @@ func (d *decoder) relationshipWords(el *element, multPart string, skip ...ast.Re
 		}
 		words = append(words, relationshipSyntax[kind], clause)
 	}
-	return words
+	return words, nil
 }
 
 func (d *decoder) multiplicityText(el *element) string {
@@ -849,43 +903,45 @@ func (d *decoder) multiplicityText(el *element) string {
 
 // referenceText renders a single reference property: an element IRI becomes the
 // qualified name it encodes, a literal is the name as written.
-func (d *decoder) referenceText(el *element, property string) string {
-	list := d.referenceList(el, property)
-	if len(list) == 0 {
-		return ""
+func (d *decoder) referenceText(el *element, property string) (string, error) {
+	list, err := d.referenceList(el, property)
+	if err != nil || len(list) == 0 {
+		return "", err
 	}
-	return list[0]
+	return list[0], nil
 }
 
-func (d *decoder) referenceList(el *element, property string) []string {
+func (d *decoder) referenceList(el *element, property string) ([]string, error) {
 	var out []string
 	for _, term := range d.graph.Objects(rdf.IRI(el.iri), property) {
-		out = append(out, d.referenceName(term, el.scope))
+		name, err := d.referenceName(term, el.scope)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, name)
 	}
-	return out
+	return out, nil
 }
 
-// referenceName renders a reference term as the name to write in source.
-//
-// A literal is a name that resolved outside this model, quoted where the
-// notation needs it, except an expression literal, which is already the text it
-// was written as. An IRI names an element of the graph — checkReferences made
-// sure of that — whose sysml:qualifiedName is written relative to the scope the
-// reference appears in, falling back to the full name when it is not in scope.
-func (d *decoder) referenceName(term rdf.Term, scope string) string {
+// referenceName renders a reference term as the name to write in source: a
+// literal as written, an IRI as its element's qualified name relative to scope.
+func (d *decoder) referenceName(term rdf.Term, scope string) (string, error) {
 	if term.IsLiteral() {
 		if term.Datatype == rdf.OpenSysML+dtExpression {
-			return term.Value
+			return term.Value, nil
 		}
-		return qualifiedNameText(term.Value)
+		return qualifiedNameText(term.Value), nil
+	}
+	if err := d.checkReference(term.Value); err != nil {
+		return "", err
 	}
 	qname := d.byIRI[term.Value].qname
 	for {
 		if scope == "" {
-			return qualifiedNameText(qname)
+			return qualifiedNameText(qname), nil
 		}
 		if rest, found := strings.CutPrefix(qname, scope+"::"); found {
-			return qualifiedNameText(rest)
+			return qualifiedNameText(rest), nil
 		}
 		cut := strings.LastIndex(scope, "::")
 		if cut < 0 {

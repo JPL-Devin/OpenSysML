@@ -813,6 +813,37 @@ elmt:Demo__Engine a sysml:PartDefinition ;
 	}
 }
 
+// A reference whose target cannot be named from the graph — an IRI that is not
+// a subject, or a subject without sysml:qualifiedName — is reported, not named.
+func TestUnnameableReferencesAreReported(t *testing.T) {
+	const head = `@prefix sysml: <https://www.omg.org/spec/SysML#> .
+@prefix elmt: <urn:sysmlv2:element:> .
+
+elmt:P a sysml:Package ; sysml:declaredName "P" ; sysml:qualifiedName "P" .
+elmt:P__u a sysml:PartUsage ; sysml:declaredName "u" ; sysml:qualifiedName "P::u" ;
+    sysml:owningNamespace elmt:P ;
+`
+	for name, tail := range map[string]string{
+		"reference to an IRI that is not a subject": `    sysml:type <urn:uuid:absent> .`,
+		"reference to a subject without qualifiedName": `    sysml:type elmt:P__T .
+elmt:P__T a sysml:PartDefinition ; sysml:declaredName "T" ; sysml:owningNamespace elmt:P .`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			out, err := export.Convert("m.ttl", []byte(head+tail), export.FormatTurtle, export.FormatSysML)
+			if err == nil {
+				t.Fatalf("an unnameable reference converted to:\n%s", out)
+			}
+			var unsupported *export.UnsupportedError
+			if !errors.As(err, &unsupported) {
+				t.Fatalf("want an UnsupportedError, got %v", err)
+			}
+			if !strings.Contains(err.Error(), "sysml:qualifiedName") {
+				t.Errorf("error %q should name the missing property", err)
+			}
+		})
+	}
+}
+
 // A declaration built from a property the graph does not carry cannot be
 // written: reporting it beats emitting notation that will not parse.
 func TestMissingRequiredPropertyIsUnsupported(t *testing.T) {
