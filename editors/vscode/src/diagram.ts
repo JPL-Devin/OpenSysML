@@ -154,6 +154,7 @@ class DiagramPanel {
   private selected: string;
   private nodes: RenderNode[] = [];
   private pending = false;
+  private again = false;
   private disposed = false;
 
   constructor(
@@ -201,11 +202,16 @@ class DiagramPanel {
 
   /**
    * refresh pulls a fresh rendering. Nothing is requested for a hidden panel,
-   * which is what the push-notify/pull-artifact protocol is for, and a request
-   * in flight is not doubled: the notification that follows it redraws anyway.
+   * which is what the push-notify/pull-artifact protocol is for. A request in
+   * flight is not doubled; it is repeated once it settles, since a pick of
+   * another view has no notification of its own to redraw it.
    */
   refresh(): void {
-    if (this.disposed || !this.panel.visible || this.pending) {
+    if (this.disposed || !this.panel.visible) {
+      return;
+    }
+    if (this.pending) {
+      this.again = true;
       return;
     }
     const client = this.client();
@@ -216,6 +222,10 @@ class DiagramPanel {
     this.pending = true;
     void this.render(client).finally(() => {
       this.pending = false;
+      if (this.again) {
+        this.again = false;
+        this.refresh();
+      }
     });
   }
 

@@ -26,6 +26,7 @@ const documentURI = (JSON.parse(body.dataset.state ?? "{}") as { uri?: string })
 const saved = (vscode.getState() ?? {}) as { view?: string; last?: RenderResult };
 let selected = saved.view ?? "";
 let last: RenderResult | undefined = saved.last;
+let selectedNode: string | undefined;
 let drawn = 0;
 
 mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: darkTheme() ? "dark" : "default" });
@@ -90,6 +91,9 @@ async function draw(result: RenderResult): Promise<void> {
       const { svg } = await mermaid.render(id, result.artifact);
       diagram.innerHTML = svg;
       markNodes(result);
+      // The drawing replaced the marked node, so what the cursor is in is marked
+      // again: a redraw arrives without the cursor having moved.
+      highlight(selectedNode);
     } else {
       // A table is written as Markdown rather than drawn, so it is shown as the
       // artifact it is.
@@ -163,8 +167,10 @@ function markNodes(result: RenderResult): void {
   }
 }
 
-// highlight marks the node the cursor is in, and only that one.
+// highlight marks the node the cursor is in, and only that one. The id is kept so
+// a redraw can mark it again.
 function highlight(id: string | undefined): void {
+  selectedNode = id;
   for (const marked of diagram.querySelectorAll(".opensysml-selected")) {
     marked.classList.remove("opensysml-selected");
   }
