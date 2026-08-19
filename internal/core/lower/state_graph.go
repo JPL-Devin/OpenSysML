@@ -96,7 +96,10 @@ type StateGraph struct {
 type Transition struct {
 	// Name is the transition's own name, when it was written with one
 	// (`transition maintain first idle then busy`), and "" when it was not.
-	Name    string
+	Name string
+	// Decl is the declaration the transition was written as, for a consumer that
+	// reports where it comes from.
+	Decl    ast.Node
 	Source  ast.Node // *ast.StateNode or *ast.PseudostateNode
 	Target  ast.Node // *ast.StateNode or *ast.PseudostateNode
 	Trigger ast.Node // TimeEvent, ChangeEvent, SignalEvent, CallEvent, nil = completion
@@ -628,6 +631,7 @@ func lowerTransitionEdge(graph *StateGraph, edge *ast.TransitionEdge, scope *sym
 	}
 
 	return &Transition{
+		Decl:      edge,
 		Source:    source,
 		Target:    target,
 		Trigger:   edge.Trigger,
@@ -677,6 +681,7 @@ func lowerTransitionMember(graph *StateGraph, member *ast.TransitionMember, cont
 	bodyScope := symbols.TriggerScope(scope, member)
 	return &Transition{
 		Name:      member.Name,
+		Decl:      member,
 		Source:    source,
 		Target:    target,
 		Trigger:   classifyTrigger(member.Trigger),
@@ -845,6 +850,7 @@ func collectTransitions(graph *StateGraph, memberList []ast.Node, containingStat
 
 						if sourceVertex != nil && targetVertex != nil {
 							trans := &Transition{
+								Decl:      n,
 								Source:    sourceVertex,
 								Target:    targetVertex,
 								Trigger:   nil, // Completion transition
@@ -898,6 +904,7 @@ func collectTransitions(graph *StateGraph, memberList []ast.Node, containingStat
 
 			if sourceVertex != nil && targetVertex != nil {
 				trans := &Transition{
+					Decl:      n,
 					Source:    sourceVertex,
 					Target:    targetVertex,
 					Trigger:   nil, // Completion transition

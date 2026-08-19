@@ -5,6 +5,7 @@ why. The handbook that puts them in order is [the guide](../guide/).
 
 - **[CLI](cli.md)** — every flag of `sysml`, the modes, and the exit status
 - **[REPL commands](repl-commands.md)** — every `%` command and its arguments
+- **[LSP extensions](lsp.md)** — the custom render requests `sysml-lsp` serves a diagram client
 - **[Environment variables](environment.md)** — the bounds one run may spend, and paths
 - **[Go API](api.md)** — the public API of every package
 - **[Python API](python-api.md)** — `opensysml`, its generated typed classes and latency

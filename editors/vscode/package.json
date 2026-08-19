@@ -95,6 +95,11 @@
       {
         "command": "opensysml.restartServer",
         "title": "SysML: Restart Language Server"
+      },
+      {
+        "command": "opensysml.openDiagram",
+        "title": "SysML: Open Diagram",
+        "enablement": "opensysml.renderSupported && (editorLangId == sysml || editorLangId == kerml)"
       }
     ]
   },
@@ -102,10 +107,11 @@
     "grammar": "go run ./tools/gengrammar -out syntaxes",
     "build": "node esbuild.mjs",
     "watch": "node esbuild.mjs --watch",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p src/webview/tsconfig.json",
     "package": "npm run typecheck && npm run build -- --production && vsce package --no-dependencies --out opensysml-sysml.vsix"
   },
   "dependencies": {
+    "mermaid": "11.16.1",
     "vscode-languageclient": "9.0.1"
   },
   "devDependencies": {

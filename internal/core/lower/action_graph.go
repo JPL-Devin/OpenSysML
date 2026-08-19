@@ -33,6 +33,11 @@ type ActionGraph struct {
 	// Guards: source → target → guard expression
 	Guards map[ast.Node]map[ast.Node]ast.Node
 
+	// Successions: source → target → the declaration the edge was written as, for
+	// a consumer that reports where an edge comes from. An edge a lowering
+	// sequences without a declaration of its own carries none.
+	Successions map[ast.Node]map[ast.Node]ast.Node
+
 	// DataFlows: source node → list of object flows
 	DataFlows map[ast.Node][]ObjectFlow
 
@@ -56,6 +61,18 @@ type ActionGraph struct {
 	// statements rather than for an action node (block_graph.go). Such a node is
 	// keyed by the first statement of the run, whose name names no step.
 	StatementRuns map[ast.Node]bool
+}
+
+// recordSuccession records the declaration an edge between two nodes was
+// written as.
+func (g *ActionGraph) recordSuccession(source, target, decl ast.Node) {
+	if g.Successions == nil {
+		g.Successions = make(map[ast.Node]map[ast.Node]ast.Node)
+	}
+	if g.Successions[source] == nil {
+		g.Successions[source] = make(map[ast.Node]ast.Node)
+	}
+	g.Successions[source][target] = decl
 }
 
 // Statement is one lowered statement in an action node's body. Statements are
@@ -274,6 +291,9 @@ type ObjectFlow struct {
 	SourcePin string
 	TargetPin string
 	Target    ast.Node
+	// Decl is the declaration the flow was written as, for a consumer that
+	// reports where it comes from.
+	Decl ast.Node
 }
 
 // ToActionGraph converts an action AST (Usage or Definition) to an ActionGraph.
@@ -282,14 +302,15 @@ type ObjectFlow struct {
 // Returns error if graph is malformed (e.g., no initial node, dangling edges).
 func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, error) {
 	graph := &ActionGraph{
-		Scope:     scope,
-		Nodes:     make([]ast.Node, 0),
-		Edges:     make(map[ast.Node][]ast.Node),
-		Guards:    make(map[ast.Node]map[ast.Node]ast.Node),
-		DataFlows: make(map[ast.Node][]ObjectFlow),
-		Bodies:    make(map[ast.Node][]Statement),
-		Accepts:   make(map[ast.Node]Accept),
-		Finals:    make([]ast.Node, 0),
+		Scope:       scope,
+		Nodes:       make([]ast.Node, 0),
+		Edges:       make(map[ast.Node][]ast.Node),
+		Guards:      make(map[ast.Node]map[ast.Node]ast.Node),
+		Successions: make(map[ast.Node]map[ast.Node]ast.Node),
+		DataFlows:   make(map[ast.Node][]ObjectFlow),
+		Bodies:      make(map[ast.Node][]Statement),
+		Accepts:     make(map[ast.Node]Accept),
+		Finals:      make([]ast.Node, 0),
 	}
 
 	// Extract members from Usage or Definition
@@ -375,6 +396,7 @@ func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, err
 					return nil, fmt.Errorf("initial node %s successor references undefined target %s", n.Name, edgeEndName(n.Successor))
 				}
 				graph.Edges[sourceNode] = append(graph.Edges[sourceNode], targetNode)
+				graph.recordSuccession(sourceNode, targetNode, n)
 				if n.Guard != nil {
 					if graph.Guards[sourceNode] == nil {
 						graph.Guards[sourceNode] = make(map[ast.Node]ast.Node)
@@ -393,6 +415,7 @@ func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, err
 				return nil, fmt.Errorf("succession edge references undefined target node %s", edgeEnd(n.Target, n.TargetMember))
 			}
 			graph.Edges[sourceNode] = append(graph.Edges[sourceNode], targetNode)
+			graph.recordSuccession(sourceNode, targetNode, n)
 		case *ast.ControlFlowEdge:
 			sourceNode := resolveEnd(graph.Nodes, n.Source, n.SourceMember)
 			targetNode := resolveEnd(graph.Nodes, n.Target, n.TargetMember)
@@ -404,6 +427,7 @@ func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, err
 				return nil, fmt.Errorf("control flow edge references undefined target %s", edgeEnd(n.Target, n.TargetMember))
 			}
 			graph.Edges[sourceNode] = append(graph.Edges[sourceNode], targetNode)
+			graph.recordSuccession(sourceNode, targetNode, n)
 
 			// Store guard expression
 			if n.Guard != nil {
@@ -427,6 +451,7 @@ func ToActionGraph(actionDecl ast.Node, scope *symbols.Scope) (*ActionGraph, err
 				SourcePin: sourcePin,
 				TargetPin: targetPin,
 				Target:    targetNode,
+				Decl:      n,
 			})
 		case *ast.Usage:
 			if n.Kind != ast.UsageFlow || n.FlowEnds == nil {
@@ -856,6 +881,7 @@ func lowerFlow(nodes []ast.Node, flow *ast.Usage) (ast.Node, ObjectFlow, error) 
 		SourcePin: sourcePin,
 		TargetPin: targetPin,
 		Target:    targetNode,
+		Decl:      flow,
 	}, nil
 }
 

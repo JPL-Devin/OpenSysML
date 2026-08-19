@@ -141,6 +141,21 @@ const (
 	EdgeFlow
 )
 
+// String names an edge kind the way the notation speaks of it.
+func (k EdgeKind) String() string {
+	switch k {
+	case EdgeConnection:
+		return "connection"
+	case EdgeTransition:
+		return "transition"
+	case EdgeSuccession:
+		return "succession"
+	case EdgeFlow:
+		return "flow"
+	}
+	return "edge"
+}
+
 // Node is one element of a rendering: an exposed element, a feature nested in
 // one, a state or an action node. Children are the nodes nested in it, which is
 // how a rendering carries containment.
@@ -158,6 +173,9 @@ type Node struct {
 	Detail string
 	// Children are the nodes nested in this one.
 	Children []*Node
+	// Origin is where the element was declared, the zero Origin for one with no
+	// locatable declaration.
+	Origin Origin
 }
 
 // Edge joins two nodes of a rendering.
@@ -169,6 +187,9 @@ type Edge struct {
 	// trigger, guard and effect, a succession's guard. It may be empty.
 	Label string
 	Kind  EdgeKind
+	// Origin is where the connection, transition, succession or flow was
+	// declared, the zero Origin for one with no locatable declaration.
+	Origin Origin
 }
 
 // Rendering is what a view renders to: the nodes and edges of one artifact,
@@ -193,6 +214,8 @@ type Rendering struct {
 	// Rows are the rows of a tabular rendering, each holding one cell per
 	// column, in the order the view exposes the elements.
 	Rows [][]string
+	// RowOrigins is where each row's element was declared, one entry per row.
+	RowOrigins []Origin
 	// Notices are what the rendering could not represent, reported rather than
 	// dropped: an exposed element with no place in this kind of rendering, a
 	// connection to something the view does not expose, a behavior that does not
@@ -233,6 +256,30 @@ func (r *Renderer) Render(view *symbols.Symbol) (*Rendering, error) {
 	default:
 		// Unreachable: KindOf refuses an unsupported kind.
 		return nil, &UnsupportedKindError{Kind: kind, View: r.notationName(view), Stated: stated}
+	}
+	return out, nil
+}
+
+// RenderExposed renders elements in the kind asked for, as a view exposing just
+// them would: a document with no view declared is rendered this way. Nothing is
+// added to the model or to the symbol index, so the rendering carries no view
+// name; stated says how the kind was decided. An unsupported kind is an
+// *UnsupportedKindError.
+func (r *Renderer) RenderExposed(exposed []*symbols.Symbol, kind Kind, stated string) (*Rendering, error) {
+	out := &Rendering{Kind: kind, Stated: stated}
+	switch kind {
+	case KindTree:
+		r.renderTree(nil, exposed, out)
+	case KindInterconnection:
+		r.renderInterconnection(exposed, out)
+	case KindState:
+		r.renderStates(exposed, out)
+	case KindAction:
+		r.renderActions(exposed, out)
+	case KindTable:
+		r.renderTable(nil, exposed, out)
+	default:
+		return nil, &UnsupportedKindError{Kind: kind, Stated: stated, Remedy: remedyFor(kind)}
 	}
 	return out, nil
 }

@@ -8,11 +8,14 @@ import {
   TransportKind,
 } from "vscode-languageclient/node";
 
+import { DiagramPanels } from "./diagram";
+
 const EXECUTABLE = process.platform === "win32" ? "sysml-lsp.exe" : "sysml-lsp";
 
 let client: LanguageClient | undefined;
 let output: vscode.OutputChannel;
 let watcher: vscode.FileSystemWatcher;
+let diagrams: DiagramPanels;
 // Start/stop run one at a time: overlapping restarts would otherwise leave an
 // unreferenced client, and its server process, running forever.
 let queue: Promise<void> = Promise.resolve();
@@ -25,6 +28,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // client that used it and pile up over restarts.
   watcher = vscode.workspace.createFileSystemWatcher("**/*.{sysml,kerml}");
   context.subscriptions.push(watcher);
+
+  // The panel is the client of the server's render methods, and is registered
+  // only once a server that serves them has started.
+  diagrams = new DiagramPanels(context.extensionUri, output);
+  context.subscriptions.push(diagrams);
 
   context.subscriptions.push(
     vscode.commands.registerCommand("opensysml.restartServer", () => restart()),
@@ -98,11 +106,13 @@ async function startClient(): Promise<void> {
     client = undefined;
     void vscode.window.showErrorMessage(`SysML v2 language server failed to start: ${String(err)}`);
   }
+  diagrams.attach(client);
 }
 
 async function stopClient(): Promise<void> {
   const running = client;
   client = undefined;
+  diagrams.detach();
   if (running) {
     await running.stop();
   }
