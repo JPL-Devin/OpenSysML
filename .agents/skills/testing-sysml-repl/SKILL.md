@@ -1471,6 +1471,37 @@ worth asserting, with the wording each produces:
   That is the only observable half of the replacement without network; say so rather than claiming
   the replacement was proven. Always back up the cache + sidecar and restore them afterwards.
 
+#### Proving a *pinned release digest* really unblocks a download (PR #316)
+
+`PINNED_SHA256` in `python/opensysml/binary.py` is what `download_binary(version)` verifies against;
+without an entry for the tag, `expected_digest` raises `UnpinnedReleaseError` (a subclass of
+`ChecksumMismatchError`) instead of trusting the `.sha256` served beside the asset. Verifying a new
+pin end to end needs a **real download**, so isolate the cache first:
+
+- `get_binary_path()` hard-codes `os.path.expanduser('~/.opensysml/bin')`. `$OPENSYSML_STATE_DIR`
+  moves only the *lockfile* (`connection.py`), so a throwaway **`HOME=/tmp/…`** is the only way to
+  force a download and to keep a locally built `~/.opensysml/bin/sysml-grpc` from answering. Run
+  every step with the same throwaway `HOME` and `pkill -f sysml-grpc` first, otherwise a leftover
+  service on :50051 is adopted and you never exercise the downloaded one.
+- Assert the triangle, not just success: `sha256(downloaded file) == PINNED_SHA256[repo][tag][asset]
+  == the freshly fetched .sha256 sidecar`, plus the `sysml-grpc.json` sidecar recording
+  `{"version", "sha256", "repo"}`, plus `<path> -version` naming the tag. A pass on any one of those
+  alone would look identical if the pin were wrong.
+- The load-bearing check is a **contrast run on the parent commit** (opensysml is pure Python, so no
+  rebuild): `git worktree add /tmp/wt <parent>` and run the same `download_binary('<tag>')` with
+  `sys.path.insert(0, '/tmp/wt/python')`. It must raise `UnpinnedReleaseError` — otherwise the pin
+  proves nothing. Remove the worktree afterwards (`git worktree remove --force`), and beware that
+  while it exists the worktree's own `AGENTS.md`/`.agents/skills` also get picked up.
+- Negative paths worth one run each, both of which must leave the cache byte-identical and no
+  `sysml-grpc.tmp` behind: a published-but-unpinned tag (v0.0.9 is the standing example) ⇒
+  `UnpinnedReleaseError`; and an in-memory tampered pin (`PINNED_SHA256[…][asset] = '0'*64`) ⇒
+  `ChecksumMismatchError` naming both digests, refused before the ~24 MB binary is installed.
+- `python/scripts/pin_release_checksums.py --check` re-hashes every pinned asset and is the only
+  coverage for the darwin/windows pins on a Linux box. It needs a token:
+  `GITHUB_TOKEN=$(gh auth token) python python/scripts/pin_release_checksums.py --check` (exit 0 and
+  one digest line per asset). Confirm it is not vacuous by copying `python/` aside, corrupting one
+  digest and re-running — it must exit 1 with `… now hashes to X, but Y is pinned`.
+
 #### Service start-up timing and its failure paths (PR #250)
 
 `Connection._ensure_service` probes the service it spawns immediately and then backs off

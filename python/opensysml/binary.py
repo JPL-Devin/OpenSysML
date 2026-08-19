@@ -57,6 +57,13 @@ PINNED_SHA256 = {
             'sysml-grpc-linux-arm64': '31e3b10edc8e0cc53537f3be0d56e1a78ea703899afaec76875b502b9919c438',
             'sysml-grpc-windows-amd64.exe': '6bf92438d139e21f1005c41c3fcca5693bad3abf9c5fd8ca6dd18a041d20b101',
         },
+        'v0.1.0': {
+            'sysml-grpc-darwin-amd64': '60a05614a278c5c17fd27717416fdf957c7f90ba69f31d9a14d531013861601e',
+            'sysml-grpc-darwin-arm64': 'a31a96d6de5e43ae5071ba0cc469be7f5854b8458aad9d8cd20e5a14c64eb48b',
+            'sysml-grpc-linux-amd64': '6bf718f8ade6c67a86cad39fcbc335ae019916b50e10530608bd832986e5b1fa',
+            'sysml-grpc-linux-arm64': '09db2db4490fc07efd371ee114b395f9a7650fa9d1dc3de7ad0d2855e5958be5',
+            'sysml-grpc-windows-amd64.exe': '7367261c2f82f4dd2d473d580d4410eaf0f8c22532ba94890e33482e509b2d8c',
+        },
     },
 }
 
