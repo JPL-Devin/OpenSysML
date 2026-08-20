@@ -545,6 +545,9 @@ func (r *Resolver) headerHasName(scope *symbols.Scope, name string) bool {
 		return true
 	}
 	for _, imp := range r.importsOf(scope.Node()) {
+		if !r.importPrefixAvailable(scope, imp, name) {
+			continue
+		}
 		if _, ok := r.matchImport(scope, imp, name); ok {
 			return true
 		}

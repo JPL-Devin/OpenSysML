@@ -116,6 +116,21 @@ func TestAllSupertypesTransitive(t *testing.T) {
 	}
 }
 
+func TestInheritedFeatureNamedUsesDeclarationOrderForUnrelatedSupertypes(t *testing.T) {
+	m, root := buildModel(t, `
+		part def A { feature shared; }
+		part def B { feature shared; }
+		part def C specializes A, B { feature local; }
+	`)
+	a := sym(t, root, "A")
+	c := sym(t, root, "C")
+	local := sym(t, c.Scope, "local")
+	got := m.inheritedFeatureNamed(local, "shared")
+	if got == nil || got.OwnerScope == nil || got.OwnerScope.Owner() != a {
+		t.Fatalf("inherited shared = %v, want A::shared from declaration order", got)
+	}
+}
+
 func TestConforms(t *testing.T) {
 	m, root := buildModel(t, "part def A; part def B specializes A; part def C specializes B; part def X;")
 	a := sym(t, root, "A")

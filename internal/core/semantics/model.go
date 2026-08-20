@@ -353,14 +353,15 @@ func (m *Model) inheritedFeatureNamed(sym *symbols.Symbol, name string) *symbols
 		}
 	}
 	for _, candidate := range candidates {
-		moreSpecific := false
+		moreSpecificCandidateExists := false
 		for _, other := range candidates {
 			if other != candidate && m.Conforms(other, candidate) {
-				moreSpecific = true
+				moreSpecificCandidateExists = true
 				break
 			}
 		}
-		if !moreSpecific {
+		if !moreSpecificCandidateExists {
+			// Unrelated ties use the breadth-first declaration order as a deterministic choice.
 			return candidate
 		}
 	}

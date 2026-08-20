@@ -328,6 +328,19 @@ func TestConstraint_PackageLevelRedefinitionHasNoInheritedOwner(t *testing.T) {
 	}
 }
 
+func TestConstraint_PackageLevelUnfeaturedRedefinitionExemptsNoInheritedRule(t *testing.T) {
+	// A package-level feature has no featuring type, so no type can inherit it.
+	diags := constraintDiags(t, `
+		package P {
+			feature x;
+			feature y :>> x;
+		}
+	`)
+	if hasCode(diags, "redefinition-no-inherited") {
+		t.Fatalf("unfeatured package-level target should not trigger the rule: %v", diags)
+	}
+}
+
 func TestConstraint_RedefinitionNoInheritedMember(t *testing.T) {
 	src := `
 		attribute def SpeedType;

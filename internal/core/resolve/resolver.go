@@ -173,6 +173,9 @@ func (r *Resolver) lookupMember(sym *symbols.Symbol, name string) (*symbols.Symb
 		if r.resolvingImports[imp] {
 			continue
 		}
+		if !r.importPrefixAvailable(sym.Scope, imp, name) {
+			continue
+		}
 		if found, ok := r.matchImport(sym.Scope, imp, name); ok {
 			return found, true
 		}

@@ -103,6 +103,7 @@ var implicitKerMLBases = map[string]string{
 // implicitBase returns the stdlib definition sym is implicitly typed by, or nil
 // when sym is not a declaration of a kind with a known base.
 func (m *Model) implicitBase(sym *symbols.Symbol) *symbols.Symbol {
+	isKerML := source.KindOf(sym.DocName) == source.KindKerML
 	var fqn string
 	var ok bool
 	switch d := sym.Decl.(type) {
@@ -121,17 +122,17 @@ func (m *Model) implicitBase(sym *symbols.Symbol) *symbols.Symbol {
 	default:
 		return nil
 	}
-	if source.KindOf(sym.DocName) == source.KindKerML {
+	if isKerML {
 		switch d := sym.Decl.(type) {
 		case *ast.Usage:
 			fqn, ok = implicitKerMLBases[d.Keyword]
 		case *ast.Definition:
 			fqn, ok = implicitKerMLBases[d.Keyword]
 		}
-	} else if declaresGeneralization(symRelationships(sym)) {
+	} else if declaresGeneralization(RelationshipsOf(sym)) {
 		return nil
 	}
-	if source.KindOf(sym.DocName) == source.KindKerML && m.declaredGeneralizationReaches(sym, fqn, nil) {
+	if isKerML && m.declaredGeneralizationReaches(sym, fqn, nil) {
 		return nil
 	}
 	if !ok || m.resolver == nil || m.resolver.Index() == nil {
@@ -143,13 +144,6 @@ func (m *Model) implicitBase(sym *symbols.Symbol) *symbols.Symbol {
 		}
 	}
 	return nil
-}
-
-func symRelationships(sym *symbols.Symbol) []*ast.Relationship {
-	if sym == nil {
-		return nil
-	}
-	return RelationshipsOf(sym)
 }
 
 func (m *Model) declaredGeneralizationReaches(sym *symbols.Symbol, want string, visiting map[*symbols.Symbol]bool) bool {

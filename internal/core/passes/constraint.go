@@ -553,20 +553,12 @@ func (cc *constraintChecker) isInheritedMember(
 		return false
 	}
 
-	candidateFQN := ""
-	if cc.resolver.Index() != nil {
-		candidateFQN = cc.resolver.Index().GetFQN(candidate)
-	}
-
 	for _, supertype := range cc.model.AllSupertypes(owner) {
 		if found, ok := cc.model.LookupMember(supertype, name); ok && found == candidate {
 			return true
 		}
-		// KerML featured-by members can inherit a nested specialization rooted
-		// at the redefined feature, as in TimeVaryingFeatures.kerml.
-		if candidateFQN != "" && cc.resolver.Index() != nil {
-			supertypeFQN := cc.resolver.Index().GetFQN(supertype)
-			if strings.HasPrefix(supertypeFQN, candidateFQN+"::") {
+		for scope := supertype.OwnerScope; scope != nil; scope = scope.Parent() {
+			if scope.Owner() == candidate {
 				return true
 			}
 		}
@@ -584,8 +576,13 @@ func isPackageLevelFeature(sym *symbols.Symbol) bool {
 	default:
 		return false
 	}
-	usage, ok := sym.Decl.(*ast.Usage)
-	return ok && usage.Keyword == "feature"
+	// A package-level feature has no featuring type to inherit its redefined member.
+	for _, rel := range semantics.RelationshipsOf(sym) {
+		if rel != nil && rel.Kind == ast.RelFeaturedBy && rel.Target != nil {
+			return false
+		}
+	}
+	return true
 }
 
 // extractUsageType extracts the type of a usage via its RelTyping relationship.

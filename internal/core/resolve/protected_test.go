@@ -172,6 +172,27 @@ func TestProtectedImportDoesNotReachAnUnrelatedNamespace(t *testing.T) {
 	}
 }
 
+func TestProtectedImportReexportFollowsSpecialization(t *testing.T) {
+	idx := indexOf(t, map[string]string{
+		"lib.sysml": protectedLib,
+		"app.sysml": `package App {
+			part def Base { protected import Lib::Pub; }
+			part def Sub :> Base { public import Base::*; }
+			part def Other { public import Base::*; }
+		}`,
+	})
+	app := scopeOf(t, idx.DocumentRoot("app.sysml"), "App")
+
+	r := resolverWithSpecializations(idx)
+	if _, ok := r.ResolveName(scopeOf(t, app, "Sub"), "Pub", ident("Pub")); !ok {
+		t.Fatalf("Pub is not visible through Sub's re-export; diags=%v", r.Diagnostics)
+	}
+	r2 := resolverWithSpecializations(idx)
+	if _, ok := r2.ResolveName(scopeOf(t, app, "Other"), "Pub", ident("Pub")); ok {
+		t.Fatal("Pub must not be re-exported through an unrelated namespace")
+	}
+}
+
 // A private import keeps its narrower reach: it is visible in the body that
 // declares it and in nothing that specializes that body.
 func TestPrivateImportDoesNotReachASpecialization(t *testing.T) {

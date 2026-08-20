@@ -160,6 +160,9 @@ func (r *Resolver) lookupImports(scope *symbols.Scope, name string) (*symbols.Sy
 		if r.resolvingImports[imp] {
 			continue
 		}
+		if !r.importPrefixAvailable(scope, imp, name) {
+			continue
+		}
 		if sym, ok := r.matchImport(scope, imp, name); ok {
 			return sym, true
 		}
@@ -174,6 +177,9 @@ func (r *Resolver) lookupImportedMember(target *symbols.Symbol, targetScope, fro
 		if imp.Kind != ast.ImportMembership {
 			continue
 		}
+		if !r.importPrefixAvailable(targetScope, imp, name) {
+			continue
+		}
 		if !r.importVisibleFrom(target, from, imp) {
 			continue
 		}
@@ -185,6 +191,13 @@ func (r *Resolver) lookupImportedMember(target *symbols.Symbol, targetScope, fro
 }
 
 func (r *Resolver) importVisibleFrom(target *symbols.Symbol, from *symbols.Scope, imp *ast.Import) bool {
+	if imp.Visibility == ast.VisibilityProtected {
+		var owner *symbols.Symbol
+		if from != nil {
+			owner = from.Owner()
+		}
+		return inheritedThroughSpecialization(imp) && r.specializes(owner, target)
+	}
 	if imp.Visibility != ast.VisibilityPrivate && !imp.IsExpose {
 		return true
 	}
@@ -248,12 +261,6 @@ func importsOf(node ast.Node) []*ast.Import {
 func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name string) (*symbols.Symbol, bool) {
 	if imp.Imported == nil || len(imp.Imported.Parts) == 0 {
 		return nil, false
-	}
-	if imp.Kind == ast.ImportMembership && !imp.IsRecursive {
-		targetName := imp.Imported.Parts[len(imp.Imported.Parts)-1].Text
-		if targetName != name {
-			return nil, false
-		}
 	}
 	if r.resolvingImports[imp] {
 		return nil, false
@@ -330,6 +337,26 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 		}
 	}
 	return nil, false
+}
+
+func (r *Resolver) importPrefixAvailable(scope *symbols.Scope, imp *ast.Import, name string) bool {
+	if len(r.resolvingImports) == 0 || imp.Imported == nil || len(imp.Imported.Parts) == 0 {
+		return true
+	}
+	// During recursive import resolution, avoid re-entering a path with no independent prefix binding.
+	prefix := imp.Imported.Parts[0].Text
+	if prefix == name {
+		return true
+	}
+	for s := scope; s != nil; s = s.Parent() {
+		if _, ok := s.LookupLocal(prefix); ok {
+			return true
+		}
+	}
+	if r.idx != nil && len(r.idx.LookupQualified(prefix)) > 0 {
+		return true
+	}
+	return false
 }
 
 // lookupInSubtree searches a scope and all descendant scopes for a match on

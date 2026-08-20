@@ -23,6 +23,24 @@ func TestImportMembership(t *testing.T) {
 	}
 }
 
+func TestMembershipImportAcceptsDeclaredAndShortNames(t *testing.T) {
+	idx := indexOf(t, map[string]string{
+		"lib.sysml": "package SI { attribute <kg> kilogram; attribute <g> gram; }",
+		"app.sysml": "package App { import SI::kilogram; }",
+	})
+	r := New(idx)
+	appScope := scopeOf(t, idx.DocumentRoot("app.sysml"), "App")
+
+	for _, name := range []string{"kilogram", "kg"} {
+		if _, ok := r.ResolveName(appScope, name, ident(name)); !ok {
+			t.Fatalf("%s unresolved via membership import; diags=%v", name, r.Diagnostics)
+		}
+	}
+	if _, ok := r.ResolveName(appScope, "g", ident("g")); ok {
+		t.Fatal("gram's short name must not resolve through an import of kilogram")
+	}
+}
+
 func TestRootImportVisibleInNestedPackage(t *testing.T) {
 	for _, ext := range []string{"sysml", "kerml"} {
 		idx := indexOf(t, map[string]string{
