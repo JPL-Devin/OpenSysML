@@ -25,6 +25,20 @@ func (s *Server) setFolders(folders []string) {
 	s.folders = folders
 }
 
+// setHoverMarkdown records whether the client renders Markdown hovers.
+func (s *Server) setHoverMarkdown(ok bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.hoverMarkdown = ok
+}
+
+// wantsMarkdownHover reports whether hovers should be rendered as Markdown.
+func (s *Server) wantsMarkdownHover() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.hoverMarkdown
+}
+
 // initializeFolders returns a session's folders, preferring workspaceFolders and
 // falling back to the deprecated rootUri/rootPath older clients send instead.
 func initializeFolders(params *protocol.InitializeParams) []string {

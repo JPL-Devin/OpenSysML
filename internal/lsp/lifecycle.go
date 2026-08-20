@@ -13,6 +13,7 @@ func (s *Server) Initialize(ctx context.Context, params *protocol.InitializePara
 	s.setFolders(initializeFolders(params))
 	if params != nil {
 		s.applyConformanceSettings(params.InitializationOptions)
+		s.setHoverMarkdown(clientRendersMarkdownHover(params.Capabilities))
 	}
 	return &protocol.InitializeResult{
 		Capabilities: protocol.ServerCapabilities{
@@ -57,6 +58,20 @@ func (s *Server) Initialize(ctx context.Context, params *protocol.InitializePara
 			Version: "0.1.0",
 		},
 	}, nil
+}
+
+// clientRendersMarkdownHover reports whether the client advertised Markdown
+// among the content formats it accepts for hover.
+func clientRendersMarkdownHover(caps protocol.ClientCapabilities) bool {
+	if caps.TextDocument == nil || caps.TextDocument.Hover == nil {
+		return false
+	}
+	for _, format := range caps.TextDocument.Hover.ContentFormat {
+		if format == protocol.Markdown {
+			return true
+		}
+	}
+	return false
 }
 
 // Initialized indexes the session's folders, so cross-file names resolve without

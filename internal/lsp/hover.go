@@ -24,34 +24,65 @@ func (s *Server) Hover(ctx context.Context, params *protocol.HoverParams) (*prot
 		return nil, nil
 	}
 
-	var b strings.Builder
-	b.WriteString(sym.Kind.String())
+	signature := sym.Kind.String()
 	if sym.Name != "" {
-		b.WriteString(" ")
-		b.WriteString(sym.Name)
+		signature += " " + sym.Name
 	}
 	// A metadata body declaration implicitly redefines a feature of the
 	// annotation's metadata definition (KerML 7.4.7); name it and its type.
 	if isMetadataBodyScope(sym.OwnerScope) {
 		if target, fqn, ok := s.ws.MetadataBodyRedefines(sym); ok {
-			b.WriteString(" redefines ")
-			b.WriteString(fqn)
+			signature += " redefines " + fqn
 			if t := declaredTypeText(target); t != "" {
-				b.WriteString(" : ")
-				b.WriteString(t)
+				signature += " : " + t
 			}
 		}
 	}
-	if note := leadingDocText(content, sym.LeadingTrivia); note != "" {
-		b.WriteString("\n\n")
-		b.WriteString(note)
-	}
+	docText := leadingDocText(content, sym.LeadingTrivia)
 
 	rng := spanToRange(content, sym.DeclSpan)
 	return &protocol.Hover{
-		Contents: protocol.MarkupContent{Kind: protocol.PlainText, Value: b.String()},
+		Contents: s.hoverContents(signature, docText),
 		Range:    &rng,
 	}, nil
+}
+
+// hoverContents renders the hover as Markdown when the client supports it,
+// plain text otherwise.
+func (s *Server) hoverContents(signature, doc string) protocol.MarkupContent {
+	if s.wantsMarkdownHover() {
+		var b strings.Builder
+		b.WriteString("```sysml\n")
+		b.WriteString(signature)
+		b.WriteString("\n```")
+		if prose := docCommentProse(doc); prose != "" {
+			b.WriteString("\n\n")
+			b.WriteString(prose)
+		}
+		return protocol.MarkupContent{Kind: protocol.Markdown, Value: b.String()}
+	}
+
+	value := signature
+	if doc != "" {
+		value += "\n\n" + doc
+	}
+	return protocol.MarkupContent{Kind: protocol.PlainText, Value: value}
+}
+
+// docCommentProse strips the comment delimiters and per-line decoration from a
+// doc comment so it renders as Markdown prose rather than as source.
+func docCommentProse(doc string) string {
+	doc = strings.TrimSpace(doc)
+	doc = strings.TrimPrefix(doc, "/*")
+	doc = strings.TrimSuffix(doc, "*/")
+	var lines []string
+	for _, line := range strings.Split(doc, "\n") {
+		line = strings.TrimSpace(line)
+		line = strings.TrimPrefix(line, "//")
+		line = strings.TrimPrefix(line, "*")
+		lines = append(lines, strings.TrimSpace(line))
+	}
+	return strings.TrimSpace(strings.Join(lines, "\n"))
 }
 
 // symbolAtOffset finds the innermost symbol whose DeclSpan contains offset.
