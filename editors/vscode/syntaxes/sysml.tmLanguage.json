@@ -84,7 +84,7 @@
     },
     "keywords-control": {
       "name": "keyword.control.source.sysml",
-      "match": "\\b(?:succession|transition|terminate|decision|junction|parallel|exhibit|history|include|initial|perform|require|satisfy|shallow|accept|assert|assign|choice|decide|region|render|return|after|defer|entry|first|merge|until|while|deep|done|else|exit|fork|join|loop|send|then|when|for|via|at|do|if|to)\\b"
+      "match": "\\b(?:succession|transition|terminate|parallel|exhibit|include|perform|require|satisfy|accept|assert|assign|decide|render|return|after|entry|first|merge|until|while|else|exit|fork|join|loop|send|then|when|for|via|at|do|if|to)\\b"
     },
     "keywords-declaration": {
       "name": "keyword.declaration.source.sysml",
@@ -92,7 +92,7 @@
     },
     "keywords-modifier": {
       "name": "storage.modifier.source.sysml",
-      "match": "\\b(?:individual|composite|nonunique|protected|timeslice|variation|abstract|constant|snapshot|standard|default|derived|library|ordered|portion|private|variant|member|public|const|final|inout|all|end|new|out|ref|in)\\b"
+      "match": "\\b(?:individual|composite|nonunique|protected|timeslice|variation|abstract|constant|snapshot|standard|default|derived|library|ordered|portion|private|variant|member|public|const|inout|all|end|new|out|ref|in)\\b"
     },
     "keywords-operator": {
       "name": "keyword.operator.word.source.sysml",
