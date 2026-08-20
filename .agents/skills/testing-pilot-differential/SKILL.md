@@ -77,6 +77,12 @@ and category counts. Parsing rules that matter:
 - Shortcut when a root has `pilotDiagnostics: 0` and `agreement: 0` (true for `pilot-examples`
   and `pilot-validation`): every `        opensysml:` line in that root's section is an only-ours
   diagnostic, so `grep -c` over the sliced section is an independent cross-check of the parser.
+- **Agreement and severity-only must be counted by summing the `xK` multiplicities, not the
+  message lines.** An agreement entry lists K `opensysml:` *and* K `pilot:` lines, so counting
+  messages doubles it; the severity bucket's header is `same line and category, different
+  severity:`, which a parser keyed on `only ...` silently mis-buckets.
+- **Root file counts must come from `.roots[].totals`, not `len(.roots[].files)`** — the per-file
+  array omits files both tools are silent on.
 - Cross-check the doc's class table by summing its Files and Diags columns; they must equal the
   measured number of files carrying only-ours diagnostics (root `files` − `filesFullyAgreeing`)
   and the root only-ours totals.
