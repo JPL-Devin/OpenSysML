@@ -31,6 +31,9 @@ func IsIdentifier(s string) bool {
 	return true
 }
 
+// Words the grammar uses in one position only are not listed here: they are
+// matched contextually by the parser and are ordinary names elsewhere, as
+// `point`, `chain` and `var` are (see docs/reference/grammar/README.md).
 var keywordList = []string{
 	// KerML + SysML union (deduplicated). Contextual keywords included;
 	// parser disambiguates identifier usage.
@@ -50,14 +53,14 @@ var keywordList = []string{
 	"inverse", "inverting", "istype", "item", "join", "junction", "language", "library",
 	"locale", "loop", "member", "merge", "message", "meta", "metaclass",
 	"metadata", "multiplicity", "namespace", "new", "nonunique", "not", "null",
-	"objective", "occurrence", "of", "on", "or", "ordered", "out", "package", "parallel",
+	"objective", "occurrence", "of", "or", "ordered", "out", "package", "parallel",
 	"part", "perform", "port", "portion", "predicate", "private", "protected",
 	"public", "redefines", "redefinition", "ref", "references", "region", "render",
 	"rendering", "rep", "require", "requirement", "return", "satisfy", "send",
 	"shallow", "snapshot", "specialization", "specializes", "stakeholder", "standard",
 	"state", "step", "struct", "subclassifier", "subject", "subset", "subsets",
 	"subtype", "succession", "terminate", "then", "timeslice", "to", "transition",
-	"true", "type", "typed", "typing", "unions", "until", "use", "var", "variant",
+	"true", "type", "typed", "typing", "unions", "until", "use", "variant",
 	"variation", "verification", "verify", "via", "view", "viewpoint", "when",
 	"while", "xor",
 }

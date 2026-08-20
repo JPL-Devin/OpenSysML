@@ -68,7 +68,7 @@ var keywordGroups = []struct {
 			"abstract", "all", "composite", "const", "constant", "default", "derived",
 			"end", "final", "in", "individual", "inout", "library", "member", "new",
 			"nonunique", "ordered", "out", "portion", "private", "protected", "public",
-			"ref", "snapshot", "standard", "timeslice", "var", "variant", "variation",
+			"ref", "snapshot", "standard", "timeslice", "variant", "variation",
 		},
 	},
 	{
