@@ -86,8 +86,10 @@ VehicleUsages::*` from `VehicleUsages.sysml` in the same directory — reports u
 errors under a bare single-file `bin/sysml -validate <f>` even when the differential shows it
 fully agreeing. Before calling such a file a failure, either pass the sibling files on the same
 `-validate` command line or check the file's entry in `build/pilot-diff/pilot-diff.json`
-(`.roots[].files[]` lists only files with diffs; absence there means full agreement — confirm by
-comparing against the same file's entry in `docs/project/pilot-differential-baseline.json`).
+(`.roots[].files[]` omits only files both tools are silent on; a fully-agreeing file with shared
+diagnostics is still listed with empty `openSysMLOnly`/`pilotOnly`/`severityMismatch` buckets, so
+treat absence — or all-empty disagreement buckets — as full agreement, confirming by comparing
+against the same file's entry in `docs/project/pilot-differential-baseline.json`).
 
 ## Running a doc's inline reproducers through both tools
 
