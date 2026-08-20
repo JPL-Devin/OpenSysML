@@ -789,10 +789,6 @@ func (e *ActionExecutor) stepMergeNode(tokenIdx int) error {
 		return nil
 	}
 
-	if err := e.runNodeBody(mergeNode); err != nil {
-		return err
-	}
-
 	declared := e.graph.Edges[mergeNode]
 	if len(declared) == 0 {
 		return fmt.Errorf("merge node %s has no successors", mergeNode.Name)
@@ -810,7 +806,11 @@ func (e *ActionExecutor) stepMergeNode(tokenIdx int) error {
 	}
 
 	// First-wins counts the token that traverses, not the one that arrives: a
-	// token whose succession was pruned leaves the merge open for a later one.
+	// token whose succession was pruned leaves the merge open for a later one,
+	// so the body runs with that traversal rather than on every arrival.
+	if err := e.runNodeBody(mergeNode); err != nil {
+		return err
+	}
 	e.mergeVisited[mergeNode] = true
 	token.Location = successors[0]
 	return nil
