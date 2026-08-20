@@ -284,6 +284,9 @@ func applyFeatureMods(decl ast.Node, mods featureMods) {
 		if mods.earlyMultiplicity != nil && d.Multiplicity == nil {
 			d.Multiplicity = mods.earlyMultiplicity
 		}
+		if mods.prefixKeyword != "" && d.PrefixKeyword == "" {
+			d.PrefixKeyword = mods.prefixKeyword
+		}
 	case *ast.Definition:
 		if mods.isAbstract {
 			d.IsAbstract = true
@@ -303,23 +306,64 @@ func applyFeatureMods(decl ast.Node, mods featureMods) {
 	}
 }
 
+// varPrefixWord marks a variable feature (KerML.xtext BasicFeaturePrefix,
+// `isVariable ?= 'var'`). That is the only position where it is a keyword, so it
+// is matched contextually like `point` and names a feature everywhere else.
+const varPrefixWord = "var"
+
+// atVarWord reports whether the cursor is at the word `var`.
+func (p *Parser) atVarWord() bool {
+	t := p.peek()
+	return t.Kind == lexer.Identifier && p.src.Text(t.Span) == varPrefixWord
+}
+
+// atVarPrefix reports whether the cursor is at the `var` prefix of a declaration
+// rather than at a feature named `var`.
+func (p *Parser) atVarPrefix() bool {
+	return p.atVarWord() && isKindKeyword(p.peekN(1))
+}
+
+// atVarDeclaration reports whether the cursor is at a `var`-prefixed
+// declaration, whose kind keyword may be left out (`var x : Integer;`). A
+// following name cannot continue an expression, so `var` there is the prefix.
+func (p *Parser) atVarDeclaration() bool {
+	if !p.atVarWord() {
+		return false
+	}
+	next := p.peekN(1).Kind
+	return isKindKeyword(p.peekN(1)) || next == lexer.Identifier || next == lexer.UnrestrictedName
+}
+
+// kindPrefixWord returns the word at the cursor that may qualify a following
+// kind keyword, or "" when the cursor is at no such word.
+func (p *Parser) kindPrefixWord() string {
+	if p.at(lexer.Keyword) {
+		return p.peek().KeywordID
+	}
+	if p.atVarPrefix() {
+		return varPrefixWord
+	}
+	return ""
+}
+
 // atKindPrefix reports whether the current keyword qualifies the kind keyword
 // after it instead of being the kind itself, as in `var feature x` or
 // `item part Shape`. When it does not, the second keyword names the declaration
 // (`action flow { ... }` is an action named `flow`).
 func (p *Parser) atKindPrefix() bool {
-	if !p.at(lexer.Keyword) || notKindPrefixKeywords[p.peek().KeywordID] {
+	kw := p.kindPrefixWord()
+	if kw == "" || notKindPrefixKeywords[kw] {
 		return false
 	}
 	// A feature modifier qualifies the declaration itself (`variation part v`),
 	// so it is parsed as a modifier rather than dropped as a kind prefix.
-	if featureModifierKeywords[p.peek().KeywordID] {
+	if featureModifierKeywords[kw] {
 		return false
 	}
 	if !isKindKeyword(p.peekN(1)) {
 		return false
 	}
-	return kindPrefixKeywords[p.peek().KeywordID] || !namesDeclaration(p.peekN(2))
+	return kindPrefixKeywords[kw] || !namesDeclaration(p.peekN(2))
 }
 
 // atSecondaryKind reports whether the current kind keyword belongs to the kind
@@ -2371,7 +2415,12 @@ func (p *Parser) parseBodyMember() ast.Node {
 		if isKindKeyword(p.peek()) || p.atKindPrefix() {
 			// A keyword that only qualifies the kind after it is consumed first:
 			// `derived var feature x` declares a feature, not a `var`.
-			for p.at(lexer.Keyword) && p.atKindPrefix() && !isKindKeyword(p.peek()) {
+			for p.atKindPrefix() && !isKindKeyword(p.peek()) {
+				// A prefix saying what the declaration is for is part of it, whether
+				// or not a modifier was written before it (`derived var feature x`).
+				if w := p.kindPrefixWord(); kindPrefixKeywords[w] {
+					mods.prefixKeyword = w
+				}
 				p.advance()
 			}
 			decl := p.parseDeclaration(start)
@@ -2395,23 +2444,15 @@ func (p *Parser) parseBodyMember() ast.Node {
 		hasNameAndMult := p.atName() && p.peekN(1).Kind == lexer.LBracket // name with multiplicity (e.g., ref payload [0..*])
 		// `end [1] : A;` — an unnamed feature declaring only its type.
 		hasTypeOnly := p.at(lexer.Colon)
-		// Allow 'var' keyword as name for anonymous features (common in actions/loops)
-		hasVarKeyword := p.atKeyword("var") && (p.peekN(1).Kind == lexer.LBracket || p.peekN(1).Kind == lexer.Colon ||
-			p.peekN(1).Kind == lexer.ColonGt || p.peekN(1).Kind == lexer.ColonGtGt || p.peekN(1).Kind == lexer.ColonColonGt ||
-			p.peekN(1).Kind == lexer.Semicolon || p.peekN(1).Kind == lexer.RBrace)
 
-		if hasNameAndType || hasTypeOnly || hasRelationship || hasNameAndRelationship || hasNameOnly || hasNameAndMult || hasVarKeyword {
+		if hasNameAndType || hasTypeOnly || hasRelationship || hasNameAndRelationship || hasNameOnly || hasNameAndMult {
 			var id ast.Identification
 
 			// Parse optional name
-			if hasNameAndType || hasNameAndRelationship || hasNameOnly || hasNameAndMult || hasVarKeyword {
+			if hasNameAndType || hasNameAndRelationship || hasNameOnly || hasNameAndMult {
 				tok := p.advance()
 				if tok.Kind == lexer.Identifier || tok.Kind == lexer.UnrestrictedName {
 					id.Name = p.src.Text(tok.Span)
-					id.NameSpan = tok.Span
-				} else if tok.Kind == lexer.Keyword && tok.KeywordID == "var" {
-					// Allow 'var' keyword as feature name
-					id.Name = "var"
 					id.NameSpan = tok.Span
 				}
 				if hasNameAndType {
@@ -2592,8 +2633,8 @@ func (p *Parser) parseBodyMember() ast.Node {
 	// is not such a prefix is the declaration's own kind, and the keyword after
 	// it is its name (`action flow { ... }` is an action named `flow`); that is
 	// parsed below, which reads the name instead of dropping it.
-	if p.at(lexer.Keyword) && p.atKindPrefix() {
-		prefix := p.peek().KeywordID
+	if p.atKindPrefix() {
+		prefix := p.kindPrefixWord()
 		p.advance() // consume the prefix keyword
 		inner := p.parseDeclaration(start)
 		if inner == nil {

@@ -60,7 +60,9 @@ func (p *Parser) parseCalcBody() []ast.Node {
 					peek2.Kind == lexer.Keyword || peek2.Kind == lexer.LBracket)
 
 			// If expression-start but NOT name-declaration pattern, parse as implicit return
-			if p.atExprStart() && !isNameDecl {
+			// A `var`-prefixed declaration is a member, not the value of an
+			// expression naming a feature `var` (KerML BasicFeaturePrefix).
+			if p.atExprStart() && !isNameDecl && !p.atVarDeclaration() {
 				// Parse as implicit return expression
 				body.add(p.ParseExpression())
 			} else {

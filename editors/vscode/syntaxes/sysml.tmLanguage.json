@@ -92,7 +92,7 @@
     },
     "keywords-modifier": {
       "name": "storage.modifier.source.sysml",
-      "match": "\\b(?:individual|composite|nonunique|protected|timeslice|variation|abstract|constant|snapshot|standard|default|derived|library|ordered|portion|private|variant|member|public|const|final|inout|all|end|new|out|ref|var|in)\\b"
+      "match": "\\b(?:individual|composite|nonunique|protected|timeslice|variation|abstract|constant|snapshot|standard|default|derived|library|ordered|portion|private|variant|member|public|const|final|inout|all|end|new|out|ref|in)\\b"
     },
     "keywords-operator": {
       "name": "keyword.operator.word.source.sysml",
@@ -100,7 +100,7 @@
     },
     "keywords-other": {
       "name": "keyword.other.source.sysml",
-      "match": "\\b(?:stakeholder|objective|allocate|connect|message|subject|assume|expose|filter|locale|verify|about|actor|frame|bind|bool|from|inv|use|by|of|on)\\b"
+      "match": "\\b(?:stakeholder|objective|allocate|connect|message|subject|assume|expose|filter|locale|verify|about|actor|frame|bind|bool|from|inv|use|by|of)\\b"
     },
     "keywords-relationship": {
       "name": "keyword.other.relationship.source.sysml",

@@ -64,6 +64,18 @@ func TestNegative(t *testing.T) {
 		{"entry_reference_no_semicolon", "state s { entry warmUp state t; }"},
 		{"exit_reference_no_semicolon", "state s { exit coolDown state t; }"},
 		{"do_reference_dangling_chain", "state s { do warmUp.; }"},
+
+		// `on` and `var` are names, not keywords, so genuine misuse around them
+		// is still reported: a state named `on` without its `;`, a transition
+		// whose trigger is missing after a source named `on`, and a `var`-marked
+		// declaration with no type. A `var` prefix with the kind keyword left out
+		// (KerML BasicFeaturePrefix, `var a : Integer;`) is not supported and is
+		// reported rather than read as a reference to a feature named `var`.
+		{"state_named_on_no_semicolon", "state def S { state on }"},
+		{"transition_from_on_no_trigger", "state def S { state on; transition first on accept then off; }"},
+		{"var_prefixed_declaration_no_type", "part def D { var attribute x : ; }"},
+		{"attribute_named_var_no_type", "part def D { attribute var : ; }"},
+		{"var_prefix_without_kind_keyword", "calc def C { var a : Integer; }"},
 		{"end_no_feature", "connection def C { end ; }"},
 		{"end_unclosed_multiplicity", "connection def C { end [1 part bead : T; }"},
 		{"connector_end_no_reference_target", "part p { connection : C connect bead references to rim; }"},

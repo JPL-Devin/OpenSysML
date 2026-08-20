@@ -465,13 +465,13 @@ func TestCompoundRelationshipOperators(t *testing.T) {
 // TestBehavioralKeywords verifies lexer recognizes all SysML v2 behavioral
 // keywords for action control-flow and state machine parsing (Task 6).
 func TestBehavioralKeywords(t *testing.T) {
-	src := source.New("test", []byte("first done fork join merge decision then state initial final entry exit transition after when accept on choice junction region"))
+	src := source.New("test", []byte("first done fork join merge decision then state initial final entry exit transition after when accept choice junction region"))
 	l := New(src)
 
 	expectedKeywords := []string{
 		"first", "done", "fork", "join", "merge", "decision", "then", // Action
 		"state", "initial", "final", "entry", "exit", "transition", // State
-		"after", "when", "accept", "on", // Trigger
+		"after", "when", "accept", // Trigger
 		"choice", "junction", // Pseudostate
 		"region", // Region
 	}
@@ -487,6 +487,22 @@ func TestBehavioralKeywords(t *testing.T) {
 		text := src.Text(tok.Span)
 		if text != expected {
 			t.Errorf("token %d: expected %q, got %q", i, expected, text)
+		}
+	}
+}
+
+// TestContextualWordsAreIdentifiers pins the words the grammar uses in one
+// position only: the lexer hands them over as names and the parser matches them
+// contextually, so a model may declare a feature with any of them.
+func TestContextualWordsAreIdentifiers(t *testing.T) {
+	for _, word := range []string{"on", "var", "point", "chain"} {
+		src := source.New("test", []byte(word))
+		tok := New(src).Next()
+		if tok.Kind != Identifier {
+			t.Errorf("%q: expected Identifier, got %v", word, tok.Kind)
+		}
+		if got := src.Text(tok.Span); got != word {
+			t.Errorf("%q: got text %q", word, got)
 		}
 	}
 }
