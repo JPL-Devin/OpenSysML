@@ -8,8 +8,13 @@ description: How to verify the advisory pilot-implementation differential harnes
 The harness compares OpenSysML diagnostics against the OMG SysML v2 Pilot Implementation
 (via `DeciSym/sysmlv2-validator`) over four corpus roots and writes
 `build/pilot-diff/pilot-diff.{txt,json}`. `docs/project/pilot-differential-baseline.json` is the
-committed result of the last run, so **the harness is testable by reproduction**: any real
-regression shows up as a non-empty `jq -S` diff against that baseline.
+committed result of the *last refreshed* run, so **the harness is testable by reproduction** —
+but only while the baseline is current. Check that first: as of `ac4ac4fb` the committed baseline
+is **stale** (it records 276 files / 175 fully agreeing / 18 agreement / 457 ours / 188 pilot's,
+while a live run gives 277 / 186 / 20 / 395 / 152), and `docs/project/pilot-differential.md`'s
+"Results" table and "Unmapped messages" table match the stale baseline, not the harness. So a
+non-empty `jq -S` baseline diff is *not* by itself evidence of a regression — see "Isolating one
+change's effect" below.
 
 ## Prerequisites
 
@@ -40,9 +45,27 @@ introduce order-dependence). Observed at `3b2d14a3`: byte-identical across runs,
 after a full validator rebuild from scratch — that last one is the strongest evidence available,
 because it shows the numbers are a property of the pinned pilot release, not of one local build.
 
-Observed at `711684cb` (KerML root added): `335 file(s), 196 fully agreeing; 20 agreed, 834 only
-ours, 158 only the pilot's`, wall time ~70 s (the KerML batch costs ~50 s), byte-identical to the
+Observed at `90da2cad` (KerML root added): `338 file(s), 196 fully agreeing; 20 agreed, 851 only
+ours, 145 only the pilot's`, wall time ~70 s (the KerML batch costs ~50 s), byte-identical to the
 committed baseline and across runs.
+
+## Isolating one change's effect (works even with a stale baseline)
+
+The reliable control is to run the *parent commit's* harness code over the *same* corpora and
+diff the two JSONs:
+
+```bash
+git worktree add /tmp/wt-base <parent-sha>
+(cd /tmp/wt-base && go run ./cmd/pilot-diff -repo /path/to/real/checkout -out /tmp/pd-base)
+go run ./cmd/pilot-diff -out /tmp/pd-head
+diff <(jq -S . /tmp/pd-base/pilot-diff.json) <(jq -S . /tmp/pd-head/pilot-diff.json)
+```
+
+`-repo <real checkout>` is what makes this work: it points the corpus roots (and the default
+validator path) at the provisioned checkout. **Do not** try to symlink `examples/sysml-v2-training`
+or `examples/pilot-corpora` into the worktree — the walker does not follow symlinks, so the roots
+silently report `skipping ...: no .sysml files` and the file count drops (277 → 177), which looks
+like a regression but is the missing corpus.
 
 Check doc claims mechanically rather than by eye:
 
@@ -53,6 +76,13 @@ jq -r '.roots[] | [.dir,.totals.files,.totals.filesFullyAgreeing,.totals.openSys
         .totals.openSysMLOnly,.totals.pilotOnly] | @tsv' build/pilot-diff/pilot-diff.json
 jq -r '.unmapped[] | "\(.side)\t\(.count)\t\(.message)"' build/pilot-diff/pilot-diff.json
 ```
+
+The JSON carries no message text per entry, so to check a *category* claim for one message
+(e.g. "`Must invoke ...` is now `kind-mismatch`, not `unmapped`") read `pilot-diff.txt`: it lists
+`line N  severity  category  xK` followed by the messages, grouped under the file path. Combine
+both: the message must be absent from the JSON `unmapped[]` list *and* present under the new
+category in the txt, with `totals.pilotOnly` unchanged (a category move must not create an
+agreement).
 
 ## The KerML root and its bridge
 
@@ -97,6 +127,10 @@ exercise a KerML-only run (e.g. a small `-timeout`), copy just
 `-validator`/`-kerml-validator`; otherwise the SysML roots time out first. Strongest
 non-silence proof: drop a malformed `.kerml` into that copied corpus and confirm the JSON gains
 pilot-side diagnostics for it (observed: 6 pilot-only + 1 agreed on that one file).
+
+Our own `.kerml` fixtures under `testdata/` and `examples/` are *not* in the comparison: a root
+carries one language, so they are collected as SysML and dropped (follow-up F34). Don't read a
+`testdata`/`examples` count as covering them.
 
 ## Running the pilot validator directly
 
