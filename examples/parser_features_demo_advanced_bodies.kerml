@@ -29,7 +29,6 @@ package AdvancedBodies {
         in t2: Transfer [1];
         
         return t1Before: Boolean;
-        return t2Before: Boolean;
     }
     
     // ===== Anonymous Return Parameters (Task 85) =====
@@ -41,7 +40,7 @@ package AdvancedBodies {
         return : Boolean[1];
     }
     
-    calc CalculateSum {
+    function CalculateSum {
         in x: Integer;
         in y: Integer;
         
@@ -88,17 +87,17 @@ package AdvancedBodies {
         value > 0
     }
     
-    // ===== General Members in Constraint Bodies (Task 91) =====
+    // ===== General Members in Predicate Bodies (Task 91) =====
     
-    constraint SystemRequirements {
+    predicate SystemRequirements {
         doc
-        /* Constraint can contain definitions and usages */
+        /* Predicate bodies can contain feature members and an expression */
         
-        // Feature declarations inside constraint body
-        ref ownedPerformances: Performance[*];
-        ref nestedPerformances: Performance[*];
+        // Feature declarations inside the predicate body
+        feature ownedPerformances: Performance[*];
+        feature nestedPerformances: Performance[*];
         
-        // Constraint expressions
-        assert ownedPerformances->size() > 0;
+        // Result expression
+        size(ownedPerformances) > 0
     }
 }

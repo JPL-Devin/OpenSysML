@@ -49,9 +49,9 @@ package demo_defaults {
 	}
 	
 	// Anonymous features with default (from Task 51 fix)
-	port interface APIEndpoint {
+	struct APIEndpoint {
 		doc /* 
-		 * Port parameters with defaults.
+		 * Structure features with defaults.
 		 * Note: Fully anonymous features (just multiplicity + default) 
 		 * are an edge case pattern.
 		 */
@@ -60,18 +60,18 @@ package demo_defaults {
 		feature supportedMethods: String[1..*] default "GET";
 	}
 	
-	// Action parameters with defaults
-	action processRequest {
+	// Behavior parameters with defaults
+	behavior processRequest {
 		in feature url: String[1];
 		in feature method: String[1] default "GET";
 		in feature timeout: Integer[1] default 30;
 		in feature retries: Integer[1] default 3;
 		
-		doc /* Action with default parameter values */
+		doc /* Behavior with default parameter values */
 	}
 	
 	// Real-world example: HTTP client configuration
-	item HttpClient {
+	struct HttpClient {
 		feature config {
 			feature baseURL: String[1];
 			feature timeout: Real[1] default 30.0;

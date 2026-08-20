@@ -26,31 +26,31 @@ package EdgeCasesAndAdvanced {
     // From TransitionPerformances.kerml
     
     feature ProcessFlow {
-        feature itemCount: Integer;
+        feature itemCount: Natural;
         
         step initialize[1];
         step process[1];
         
-        succession [itemCount] items 
+        succession items [itemCount] 
             first [1] initialize
             then [1] process;
     }
     
-    // ===== Bind Keyword Shorthand (Task 62) =====
-    // From Actions.sysml and States.sysml
+    // ===== Binding Connectors in a Behavior Body (Task 62) =====
+    // From TransitionPerformances.kerml
     
-    // 'bind' binds a feature to a feature of a nested action
-    action def AcceptingTransition {
+    // 'binding' binds a feature to a feature of a nested step
+    behavior AcceptingTransition {
         inout payload[0..*];
-        ref receiver[0..1];
+        feature receiver[0..1];
         
-        action accepter {
+        step accepter {
             inout payload[0..*];
-            ref receiver[0..1];
+            feature receiver[0..1];
         }
         
-        bind payload = accepter.payload;
-        bind receiver = accepter.receiver;
+        binding payload = accepter.payload;
+        binding receiver = accepter.receiver;
     }
     
     // ===== Step Usage with 'do' as Name (Task 67) =====
@@ -64,10 +64,10 @@ package EdgeCasesAndAdvanced {
         step exit[1];
     }
     
-    // ===== Ref with Body (Task 90) =====
-    // From Flows.sysml
+    // ===== Feature with Body (Task 90) =====
+    // From Transfers.kerml
     
-    ref payload [0..*] {
+    feature payload [0..*] {
         doc
         /* Reference with body */
         

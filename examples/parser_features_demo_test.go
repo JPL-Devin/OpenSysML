@@ -14,7 +14,7 @@ func TestParserFeaturesDemos(t *testing.T) {
 		"parser_features_demo_relationships.kerml",
 		"parser_features_demo_modifiers.kerml",
 		"parser_features_demo_binding.kerml",
-		"parser_features_demo_connectors.kerml",
+		"parser_features_demo_connectors.sysml",
 		"parser_features_demo_defaults.kerml",
 	}
 
