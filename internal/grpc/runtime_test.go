@@ -321,8 +321,10 @@ package Test {
 	if err != nil {
 		t.Fatalf("ParseFile failed: %v", err)
 	}
-	if len(parseResp.Diagnostics) > 0 {
-		t.Fatalf("unexpected parse diagnostics: %v", parseResp.Diagnostics)
+	// `initial`/`final` warn as OpenSysML extensions; only errors would be a
+	// fixture defect.
+	if errs := errorDiagnostics(parseResp.Diagnostics); len(errs) > 0 {
+		t.Fatalf("unexpected parse errors: %v", errs)
 	}
 
 	execReq := &pb.ExecuteStateRequest{

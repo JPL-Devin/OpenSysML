@@ -33,6 +33,7 @@ Runnable models are in [examples/](../examples/), with a catalog of what each on
 - **[Spec compliance](project/spec-compliance.md)** — faithful, approximate, or not implemented
 - **[Training examples](project/training-examples.md)** — the OMG corpus, 100/100 clean
 - **[Pilot differential](project/pilot-differential.md)** — our diagnostics against the OMG pilot implementation
+- **[Grammar coverage](project/grammar-coverage.md)** — which OMG grammar productions our inputs exercise
 - **[Roadmap](project/roadmap.md)** — the known gaps, in the order they should be picked up
 - **[Releasing](project/releasing.md)** — the pre-tag gate, tagging, artifacts, Homebrew
 - **[macOS distribution](project/macos-distribution.md)** — Gatekeeper and the signing decision

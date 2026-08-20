@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 )
@@ -18,10 +19,23 @@ func loadFixture(t *testing.T, path string) *Session {
 		t.Fatalf("read %s: %v", path, err)
 	}
 	s := NewSession()
-	if res := s.Submit(string(data)); len(res.Diagnostics) > 0 {
-		t.Fatalf("fixture %s has diagnostics: %v", path, res.Diagnostics)
+	// Warnings are expected: these fixtures are written in our state notation,
+	// which NonstandardNotationPass reports as an OpenSysML extension.
+	if errs := errorDiagnostics(s.Submit(string(data)).Diagnostics); len(errs) > 0 {
+		t.Fatalf("fixture %s has errors: %v", path, errs)
 	}
 	return s
+}
+
+// errorDiagnostics returns only the error-severity diagnostics of diags.
+func errorDiagnostics(diags []passes.Diagnostic) []passes.Diagnostic {
+	var out []passes.Diagnostic
+	for _, d := range diags {
+		if d.Severity == passes.SeverityError {
+			out = append(out, d)
+		}
+	}
+	return out
 }
 
 // run executes one meta command and returns its output as a single string.

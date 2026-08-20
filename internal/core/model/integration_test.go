@@ -11,8 +11,9 @@ func hasSym(t *testing.T, ws *Workspace, fqn string) bool {
 func TestWorkspaceConvergesAcrossChangeSequence(t *testing.T) {
 	ws := NewWorkspace()
 
-	// 1. Open a buffer.
-	ws.Open("a.sysml", []byte("package P { namespace First; }"), 1)
+	// 1. Open a buffer. The members are packages: `namespace` is KerML notation,
+	// warned about in a .sysml file.
+	ws.Open("a.sysml", []byte("package P { package First; }"), 1)
 	if !hasSym(t, ws, "P::First") {
 		t.Fatal("after open: P::First missing")
 	}
@@ -21,7 +22,7 @@ func TestWorkspaceConvergesAcrossChangeSequence(t *testing.T) {
 	}
 
 	// 2. Edit the buffer (incremental reindex must drop the stale entry).
-	ws.Update("a.sysml", []byte("package P { namespace Second; }"), 2)
+	ws.Update("a.sysml", []byte("package P { package Second; }"), 2)
 	if hasSym(t, ws, "P::First") {
 		t.Fatal("after edit: stale P::First still indexed")
 	}
@@ -30,7 +31,7 @@ func TestWorkspaceConvergesAcrossChangeSequence(t *testing.T) {
 	}
 
 	// 3. External on-disk write while OPEN must NOT change the model (buffer wins).
-	ws.SetOnDisk("a.sysml", []byte("package P { namespace Disk; }"))
+	ws.SetOnDisk("a.sysml", []byte("package P { package Disk; }"))
 	if hasSym(t, ws, "P::Disk") {
 		t.Fatal("while open: on-disk content leaked into index")
 	}

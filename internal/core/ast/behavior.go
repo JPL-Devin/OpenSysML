@@ -12,12 +12,17 @@ type InitialNode struct {
 	Name      string         // optional identifier for edge referencing
 	Successor *QualifiedName // optional target for implicit succession (from `first X then Y` syntax)
 	Guard     Node           // optional guard condition for succession
+	// Keyword is the word the node was written with, `first` or `initial`: only
+	// the first is SysML v2 notation.
+	Keyword string
 }
 
 // FinalNode is the termination point for action execution.
 type FinalNode struct {
 	NodeBase
 	Name string
+	// Keyword is the word the node was written with, `done` or `final`.
+	Keyword string
 }
 
 // ForkNode splits execution into concurrent flows (1 incoming → N outgoing).
@@ -46,6 +51,9 @@ type DecisionNode struct {
 	NodeBase
 	Name     string
 	NameSpan source.Span // span of Name, empty for an unnamed node
+	// Keyword is the word the node was written with, `decide` or `decision`:
+	// only the first is SysML v2 notation.
+	Keyword string
 }
 
 // ActionExecutionNode performs action work: invokes nested action or evaluates inline expression.
@@ -236,6 +244,9 @@ type PseudostateNode struct {
 	NodeBase
 	Kind PseudostateKind
 	Name string
+	// Keyword is the notation the pseudostate was written with (`choice`,
+	// `deep history`, `entry point`, `fork`).
+	Keyword string
 }
 
 // SuccessionEdge is sequential control flow in actions (source then target).
@@ -460,6 +471,9 @@ type TransitionMember struct {
 	// Via is the port the trigger's message must arrive at
 	// (`accept :> ping via commPort`), nil when the trigger named none.
 	Via *QualifiedName
+	// ToSpan spans the `to` of the second spelling, and is empty when the
+	// transition was written the standard way.
+	ToSpan source.Span
 }
 
 // SendStatement sends a message to a target.
