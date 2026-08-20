@@ -128,6 +128,7 @@ nav:
           - internals/design/python-grpc-phase3-plan.md
           - internals/design/python-grpc-phase3-fixes.md
           - internals/design/python-grpc-phase4-plan.md
+          - internals/design/vscode-visual-modeling.md
       - Plans:
           - internals/notes/README.md
           - internals/notes/behavior-robustness-plan.md
