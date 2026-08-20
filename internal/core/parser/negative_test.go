@@ -253,6 +253,53 @@ func TestNegative(t *testing.T) {
 	}
 }
 
+// TestNegativeKerML covers the KerML notation whose malformed variants must
+// still be reported: accepting them would be a conformance failure of its own.
+func TestNegativeKerML(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		// `featured by` states one target or a list of them, so the keyword pair
+		// and every target in the list are required (KerML.xtext:569).
+		{"featured_without_by", "package P { class A; feature f featured A; }"},
+		{"featured_by_no_target", "package P { feature f featured by ; }"},
+		{"featured_by_trailing_comma", "package P { class A; feature f featured by A, ; }"},
+		{"featured_by_no_terminator", "package P { class A; feature f featured by A }"},
+		{"by_without_featured", "package P { class A; feature f by A; }"},
+
+		// A parenthesized end list holds at least two ends and closes
+		// (KerML.xtext:842).
+		{"nary_connector_unclosed", "package P { feature a; feature b; connector c (a, b; }"},
+		{"nary_connector_trailing_comma", "package P { feature a; feature b; connector c (a, b, ); }"},
+		{"nary_connector_empty", "package P { connector c (); }"},
+		{"nary_connector_one_end", "package P { feature a; connector c (a); }"},
+		{"nary_connector_end_no_target", "package P { feature a; connector c ([1], a); }"},
+
+		// A succession states both ends around `then` (KerML.xtext:891).
+		{"succession_declaration_no_then", "package P { behavior B { step a; step b; succession s : L [1] first a b; } }"},
+		{"succession_declaration_no_target", "package P { behavior B { step a; succession s : L [1] first a then ; } }"},
+		{"succession_declaration_no_ends", "package P { behavior B { succession s : L [1] first then; } }"},
+
+		// A word the KerML grammar does not reserve names a feature, so a
+		// declaration so named that is malformed is still reported.
+		{"feature_named_merge_no_type", "package P { feature merge : ; }"},
+		{"feature_named_at_no_terminator", "package P { feature at }"},
+		{"import_named_while_no_terminator", "package P { public import while }"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := New(source.New(tt.name+".kerml", []byte(tt.input)))
+			_ = p.ParseFile()
+
+			if len(p.Diagnostics) == 0 {
+				t.Errorf("Expected parse errors for malformed input, got none.\nInput: %s", tt.input)
+			}
+		})
+	}
+}
+
 // An unterminated comment swallows the rest of the document, so the parser says
 // so rather than silently returning a tree that is missing everything after it.
 func TestUnterminatedCommentIsReported(t *testing.T) {

@@ -133,6 +133,7 @@ var relationshipProperty = map[ast.RelationshipKind]string{
 	ast.RelVia:         "via",
 	ast.RelAnnotates:   "annotates",
 	ast.RelSubject:     "subject",
+	ast.RelFeaturedBy:  "featuringType",
 }
 
 // relationshipSyntax gives the source syntax that introduces a relationship
@@ -153,6 +154,7 @@ var relationshipSyntax = map[ast.RelationshipKind]string{
 	ast.RelVia:         "via",
 	ast.RelAnnotates:   "about",
 	ast.RelSubject:     "by",
+	ast.RelFeaturedBy:  "featured by",
 }
 
 // Reverse lookups, derived once so the two directions cannot disagree.
@@ -188,6 +190,7 @@ var relationshipOrder = []ast.RelationshipKind{
 	ast.RelVia,
 	ast.RelAnnotates,
 	ast.RelSubject,
+	ast.RelFeaturedBy,
 }
 
 // visibilityKeyword renders a declared visibility, or "" for the default.

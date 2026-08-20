@@ -1,0 +1,45 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="FeaturedBy" library=false standard=false
+      (Membership visibility="default"
+        (Usage kind="class" name="Product" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="class" name="Account" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="class" name="ShoppingCart" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="class" name="Product_Account" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="inCart" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+              (Relationship kind="typing" target=ShoppingCart
+                (*ast.QualifiedName))
+              (Relationship kind="featured by" target=Product_Account
+                (*ast.QualifiedName))
+              (Multiplicity range=true
+                (LiteralInteger value="0")
+                (LiteralInteger value="1"))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="both" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+              (Relationship kind="typing" target=ShoppingCart
+                (*ast.QualifiedName))
+              (Relationship kind="featured by" target=Product
+                (*ast.QualifiedName))
+              (Relationship kind="featured by" target=Account
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="multBeforeType" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+              (Relationship kind="typing" target=ShoppingCart
+                (*ast.QualifiedName))
+              (Relationship kind="featured by" target=Product
+                (*ast.QualifiedName))
+              (Multiplicity range=true
+                (LiteralInteger value="1")
+                (LiteralInteger value="1"))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="bare" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+              (Relationship kind="featured by" target=Product
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Usage kind="class" name="OnAClassifier" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="featured by" target=Product
+            (*ast.QualifiedName)))))))

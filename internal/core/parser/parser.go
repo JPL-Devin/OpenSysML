@@ -113,7 +113,7 @@ func (p *Parser) fill(n int) {
 			}
 			tok = p.lx.Next()
 		}
-		p.buf = append(p.buf, tok)
+		p.buf = append(p.buf, p.unreserved(tok))
 		if tok.Kind == lexer.EOF {
 			// keep EOF sticky: stop growing further with real tokens
 			return

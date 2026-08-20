@@ -19,14 +19,17 @@ func TestGolden(t *testing.T) {
 	}
 
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".sysml") {
+		ext := filepath.Ext(entry.Name())
+		// A `.kerml` fixture locks KerML notation, whose parse is file-kind
+		// sensitive: the name carries the extension into the parser.
+		if entry.IsDir() || (ext != ".sysml" && ext != ".kerml") {
 			continue
 		}
 
 		name := entry.Name()
 		t.Run(name, func(t *testing.T) {
 			sysmlPath := filepath.Join(fixtures, name)
-			goldenPath := strings.TrimSuffix(sysmlPath, ".sysml") + ".golden"
+			goldenPath := strings.TrimSuffix(sysmlPath, ext) + ".golden"
 
 			// Parse
 			data, err := os.ReadFile(sysmlPath)

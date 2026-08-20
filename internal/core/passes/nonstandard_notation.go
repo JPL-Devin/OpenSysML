@@ -55,8 +55,10 @@ func (w *notationWalker) walk(members []ast.Node) {
 		case *ast.Package:
 			w.walk(n.Members)
 		case *ast.Definition:
+			w.kermlRelationships(n.Relationships)
 			w.walk(n.Members)
 		case *ast.Usage:
+			w.kermlRelationships(n.Relationships)
 			w.walk(n.Members)
 		case *ast.Import:
 			w.walk(n.Body)
@@ -153,6 +155,27 @@ func (w *notationWalker) kermlNamespace(n *ast.Namespace) {
 		Code:   CodeKerMLNotation,
 		Source: "syntax",
 	})
+}
+
+// kermlRelationships reports a `featured by` clause in a SysML file: the
+// featuring relationship is KerML.xtext:569 only, absent from SysML.xtext.
+func (w *notationWalker) kermlRelationships(rels []*ast.Relationship) {
+	if !w.sysml {
+		return
+	}
+	for _, rel := range rels {
+		if rel == nil || rel.Kind != ast.RelFeaturedBy {
+			continue
+		}
+		w.diags = append(w.diags, Diagnostic{
+			Severity: SeverityWarning,
+			Span:     rel.Span(),
+			Message: "`featured by` is KerML notation: the SysML v2 grammar has no featuring clause, " +
+				"so move the declaration to a .kerml file",
+			Code:   CodeKerMLNotation,
+			Source: "syntax",
+		})
+	}
 }
 
 // extension reports one construct as an OpenSysML extension.
