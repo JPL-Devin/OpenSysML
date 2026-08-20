@@ -545,8 +545,10 @@ Known limitations, by design:
   enclosing namespace, an import or a supertype — is refused too: it would either
   be ambiguous or shadow what is already there, and either way expressions you
   did not name would start reading the renamed element.
-- **Elements are not created or deleted**, and a model is not built from Python:
-  editing changes the source of a model that already says what it says.
+- **A model is not built from Python.** Declarations are added to and deleted
+  from a model that is already loaded; there is no way to author one from
+  nothing, and no object facade — a declaration is described by the notation
+  arguments of an `add_*` call, not by a Python object you mutate.
 - An editor is applied **once** — it describes an edit of the model it was made
   from, so applying it twice raises `RuntimeError`. Load the saved file and edit
   that.
