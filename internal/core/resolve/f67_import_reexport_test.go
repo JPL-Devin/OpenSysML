@@ -16,9 +16,8 @@ func f67Clean(t *testing.T, name, src string) {
 	})
 }
 
-// A name a wildcard import introduces into a namespace can itself be the
-// target of a sibling import (F67: `private import RiskLevelEnum::*;` after
-// the enum arrived through `private import RiskMetadata::*;`).
+// A name a wildcard import introduces can itself be the target of a sibling
+// import (F67: `private import RiskLevelEnum::*;`).
 func TestF67ImportOfImportIntroducedName(t *testing.T) {
 	f67Clean(t, "wildcard-then-wildcard", `package M {
 		package RiskMeta {
@@ -43,9 +42,7 @@ func TestF67ImportOfImportIntroducedName(t *testing.T) {
 }
 
 // A public wildcard import re-exports, so the name reaches a second importer
-// through the chain (F67: `Diameter` in VehicleVariabilityModel's '150% Model',
-// visible via `DesignModel::*` because DesignModel publicly imports
-// `PartDefinitions::*`).
+// through the chain (F67: `Diameter` via `DesignModel::*` re-export).
 func TestF67WildcardReexportChain(t *testing.T) {
 	f67Clean(t, "two-level-chain", `package M {
 		package Inner { part def D; }
@@ -73,9 +70,8 @@ func TestF67PrivateImportDoesNotReexport(t *testing.T) {
 	}
 }
 
-// Subsetting a feature reachable only by feature chain contributes the chain's
-// final feature as a generalization, so its members resolve in the subsetter's
-// body (F67: `part c subsets b.f { part aa subsets a; }`).
+// Subsetting via feature chain contributes the chain tip's members in the
+// subsetter's body (F67: `part c subsets b.f { part aa subsets a; }`).
 func TestF67FeatureChainSubsettingContributesMembers(t *testing.T) {
 	f67Clean(t, "chain-subsetting", `package Q {
 		part def F { part a; }
@@ -86,9 +82,8 @@ func TestF67FeatureChainSubsettingContributesMembers(t *testing.T) {
 	}`)
 }
 
-// An included use case contributes its members through the inclusion's
-// reference subsetting (SysML.xtext IncludeUseCaseUsage), so its actors may be
-// redefined in the include's body (F67: `actor :>> fueler = driver;`).
+// An include is a reference subsetting (SysML.xtext IncludeUseCaseUsage), so
+// the included use case's actors are redefinable in its body (F67).
 func TestF67IncludeUseCaseContributesActors(t *testing.T) {
 	f67Clean(t, "include-actor-redef", `package U {
 		part def Person;
@@ -108,10 +103,8 @@ func TestF67IncludeUseCaseContributesActors(t *testing.T) {
 	}`)
 }
 
-// A bare `variant X` is a VariantReference (SysML.xtext VariantReference): it
-// reference-subsets the like-named feature visible outside the variation, so
-// that feature's members resolve in the variant's body (F67:
-// `variant '6cylEngine' { variation port :>> autoPort { … } }`).
+// A bare `variant X` is a VariantReference (SysML.xtext:642): it subsets the
+// like-named outer feature, whose members resolve in its body (F67).
 func TestF67VariantReferenceContributesMembers(t *testing.T) {
 	f67Clean(t, "variant-reference", `package V {
 		port def AutoPort;
