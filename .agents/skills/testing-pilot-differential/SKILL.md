@@ -132,6 +132,40 @@ Our own `.kerml` fixtures under `testdata/` and `examples/` are *not* in the com
 carries one language, so they are collected as SysML and dropped (follow-up F34). Don't read a
 `testdata`/`examples` count as covering them.
 
+## Testing language-scoped (`.sysml` vs `.kerml`) diagnostic behaviour
+
+Some checks are gated on the document's language via `source.KindOf(name)` (e.g. the KerML
+type tier in `internal/core/passes/typecheck.go`). **Which surface you observe from decides
+whether you see it at all**, because only some surfaces analyse under the real file name:
+
+| Surface | Document name passed to `passes.Analyze` | Language honoured? |
+|---|---|---|
+| `cmd/pilot-diff` (`opensysml.go`, `ws.Open(rel, ...)`) | corpus-relative path with extension | **yes** |
+| `sysml-lsp` / `sysml-grpc` (`internal/core/model/workspace.go`) | the opened file's URI/path | **yes** |
+| `cmd/sysml` / REPL (`internal/repl/session.go`) | the constant `"<repl>"` | **no** — `KindUnknown`, so SysML rules |
+
+So `go run ./cmd/sysml foo.kerml` is **not** a valid way to observe KerML-only leniency: files
+loaded on the command line are appended to one accumulated session buffer named `<repl>`, and
+`typecheck.go` documents that an unknown-kind document deliberately reads as SysML. If a task
+says "run the CLI over a .kerml file and confirm it is clean", expect it *not* to be clean and
+flag the surface mismatch instead of reporting a bug in the type checker.
+
+Two cheap surfaces that *do* prove the split:
+
+1. **A synthetic two-language mini-repo through pilot-diff.** Put byte-identical content in
+   `<tmp>/testdata/adv.sysml` and `<tmp>/examples/pilot-corpora/kerml-examples/adv.kerml`, then
+   `go run ./cmd/pilot-diff -repo <tmp> -validator <abs>/build/pilot-validator/validate-sysml \
+   -kerml-validator <abs>/build/pilot-kerml-validator/validate-kerml -out <tmp-out>`.
+   The other five roots warn `skipping ...: no .sysml files` and are skipped, which is fine.
+   Read `pilot-diff.txt`: the message must appear under `adv.sysml` and be absent under
+   `adv.kerml`. Run the *same* command from the parent-revision worktree as the control —
+   without it, an absent message proves nothing.
+2. **A ~30-line stdio LSP driver.** `make build-lsp`, then spawn `bin/sysml-lsp`, send
+   `initialize` (sleep ~2 s), `initialized`, and `textDocument/didOpen` with
+   `uri: file:///tmp/x.kerml` (sleep ~4 s), and print the `textDocument/publishDiagnostics`
+   payloads. `languageId` is irrelevant — the URI extension is what `KindOf` reads. This is the
+   closest thing to the real editor-facing surface and takes seconds.
+
 ## Running the pilot validator directly
 
 `build/pilot-validator/validate-sysml <file.sysml>` prints diagnostics on **stderr** in GNU
