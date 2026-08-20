@@ -264,17 +264,15 @@ root causes, adjudicated next.
 
 ### Only ours — candidate false positives (3, SysML side)
 
-The three diagnostics below are the adjudicated only-ours set outside the KerML root, which
-has its own tables further down. The six cycle diagnostics on the `probes` root are adjudicated
-with F4 below. The remaining 401 SysML-side only-ours diagnostics are not adjudicated in this
-pass. The 121 `pilot-validation` syntax-only
-discrepancies from the pre-merge comparison and the bulk of the `pilot-examples` syntax-only
-discrepancies come from four missing productions: `connect a to b { ... }`, `flow a.x to b.y
-{ ... }`, anonymous `interface a.p to b.q`, and `accept` on an action usage declaration
-(`action got accept e : E { ... }`). Representative corpus locations are
-`02-Parts Interconnection/2a-Parts Interconnection.sysml:97,157,162` and
-`03-Function-based Behavior/3a-Function-based Behavior-1.sysml:58,102,112`. The child session is
-fixing those parser gaps; they remain open here.
+The three diagnostics below are the `testdata` only-ours set. The six cycle diagnostics on the
+`probes` root are adjudicated with F4 below, the KerML root has its own tables further down,
+and the 373 diagnostics on the two OMG SysML roots are adjudicated in
+[SysML corpora — only ours](#sysml-corpora--only-ours-373), which supersedes this paragraph's
+earlier "not adjudicated in this pass" note. The four productions called out here previously —
+`connect a to b { ... }`, `flow a.x to b.y { ... }`, anonymous `interface a.p to b.q`, and
+`accept` on an action usage declaration — are fixed: `02-Parts Interconnection/2a-Parts
+Interconnection.sysml` is now fully agreeing, and `03-Function-based Behavior/3a-Function-based
+Behavior-1.sysml` keeps only the S3 diagnostics adjudicated below.
 
 The two keyword-as-name rows that stood here are **fixed** (F1): `on` appears as a literal in
 none of the pilot's grammars, and `var` only in `KerML.xtext` (`BasicFeaturePrefix`), so both
@@ -286,6 +284,261 @@ are gone from the three files listed in the movement table above.
 | ~~`passes/errors.sysml:4`, `resolve/errors.sysml:4`~~ | ~~`unresolved reference: Nowhere`~~ | **No longer a disagreement.** These were negative fixtures where the pilot was silent only because a bare `import` earlier in the same file broke its parse before it got there (see P1). Since F2 gave our fixtures an explicit visibility, the pilot parses them and reports `Nowhere` too: both rows are now agreement. |
 | `passes/constraints.sysml:2,3` | `A`/`B` `participates in a specialization cycle` (`unmapped`) | **Ours is right, and the pilot has no such check** — settled by F4, both by reading its validators and by probing it on clean files (see [Specialization cycles](#specialization-cycles-f4)). The silence is not a parse cascade of the kind P1 describes: the same three cycle shapes in files with nothing else in them are accepted by the pilot with zero diagnostics. A one-sided finding, so it is our extension of the reference rather than a disagreement — kept `unmapped` because no coarse category honestly covers it. |
 | `passes/constraints.sysml:9` | `multiplicity lower bound exceeds upper bound on lo` | **Ours is right**: `part lo [5..2];`. No pilot counterpart. |
+
+### SysML corpora — only ours (373)
+
+**The two OMG SysML roots' authoritative only-ours count is 373** — `pilot-examples` 314 and
+`pilot-validation` 59, measured by the run in the results table above: 274 syntax, 82
+`unresolved-reference`, 14 `kind-mismatch`, 2 `unmapped`, 1 `units`, spread over 73 of the two
+roots' 154 files (81 files carry none). Together with the KerML root's 150, `testdata`'s 3, the
+probes' 6 and `examples`' 28 that is the entire only-ours column. The `examples` 28 are all
+`nonstandard-notation` warnings on *our own* demo models — the F3 extensions (`region`,
+`initial <state>;`, bare `transition <source> to <target>;`) firing exactly where they are
+meant to — so they are one-sided by construction and adjudicated with F3, not here.
+
+Method, per file: take the **first** only-ours diagnostic, read the construct it sits on, write
+the smallest file that shows the same construct, and run that file through both our checker and
+the pinned pilot. 85 such reproducers were run (`bin/sysml -validate` and
+`build/pilot-validator/validate-sysml` on the same file); they are quoted inline below rather
+than committed, so that no corpus root gains a file and the baseline does not move. Where a
+reproducer failed to reproduce the corpus diagnostic, that is said so; nothing below is
+classified from a reproducer that did not discriminate.
+
+Two things the counts do **not** mean:
+
+- **138 of the 274 syntax diagnostics are recovery, not findings.** They are the two generic
+  messages emitted as the enclosing bodies unwind after the first unparsed member:
+  `expected a body member` (74) and `expected a namespace member` (64). The 235 remaining
+  only-ours diagnostics carry a construct-specific message.
+- **Attribution is per file, by the construct the file's first diagnostic sits on.** Long files
+  mix classes: `Vehicle Example/SysML v2 Spec Annex A SimpleVehicleModel.sysml` is counted under
+  S2 for its line 424, yet its 57 diagnostics also include S1's `expected ';' or '{' after a
+  metadata usage` (6), S3's `expected ';' after send statement` (4) and S5's `expected ';'
+  after return expression` (5). So the "Diags" column is what a class's files hold, not what its
+  construct provably produces.
+
+| # | Class — the construct the file's first only-ours diagnostic sits on | Files | Diags | Verdict | Follow-up |
+|---|---|---:|---:|---|---|
+| S1 | Prefix metadata used as a member's only keyword (`#M connect a to b;`, `#service x : PortDef;`, `end #original r1 : Req1;`) | 7 | 32 | **Ours** — the pilot's `ExtendedUsage` | [F60](#follow-ups-not-fixed-here--this-pr-is-advisory) |
+| S2 | Keyword-less members: value-only, specialization-only, redefinition-only, anonymous enumerated values, result expressions, `locale` | 12 | 87 | **Ours** — `DefaultReferenceUsage`, `EnumeratedValue`, `ResultExpressionMember` | [F61](#follow-ups-not-fixed-here--this-pr-is-advisory) |
+| S3 | State/occurrence behavior: qualified transition targets, bodies on `then`/`accept`/`send`, `exhibit` of a dotted state | 7 | 65 | **Ours** — `TargetTransitionUsage`, `SendNode`, `ExhibitStateUsage` | [F62](#follow-ups-not-fixed-here--this-pr-is-advisory) |
+| S4 | Action nodes: bodies on control nodes, `decide`, typed `for` variables, redefining body parameters, `ref x { … }` | 5 | 33 | **Ours** — `ControlNode`, `ForVariableDeclaration`, `UsageBody` | [F63](#follow-ups-not-fixed-here--this-pr-is-advisory) |
+| S5 | Calculations and expressions: `return` of a usage element, declarations inside expression bodies, `assert not` | 6 | 19 | **Ours** — `ReturnParameterMember`, `OperatorExpression` | [F64](#follow-ups-not-fixed-here--this-pr-is-advisory) |
+| S6 | Connectors and interactions: typed `binding … bind`, `message … of P[1]`, `event x = y.start;` | 5 | 22 | **Ours** — `BindingConnectorAsUsage`, `MessageDeclaration`, `EventOccurrenceUsage` | [F65](#follow-ups-not-fixed-here--this-pr-is-advisory) |
+| S7 | Requirement/case clauses: `assume constraint`, `verify … :>>`, `variant use case`, multiplicity after `redefines` | 5 | 25 | **Ours** — `RequirementConstraintMember`, `UseCaseUsage`, `FeatureSpecializationPart` | [F66](#follow-ups-not-fixed-here--this-pr-is-advisory) |
+| S8 | Names of inherited, redefined and imported members (`item :>> shape : Box`, `variation … :> Diameter`, `filter @Safety`) | 12 | 43 | **Ours** — resolution, not syntax | [F67](#follow-ups-not-fixed-here--this-pr-is-advisory) |
+| S9 | Members reached through a behavioral usage's implicit parameters (`subscribing.sub`, `producer.publish_request`) | 6 | 39 | **Ours** — resolution, not syntax | [F68](#follow-ups-not-fixed-here--this-pr-is-advisory) |
+| S10 | Semantic checks stricter than the reference's (kind table, binding types, name conflicts, units, conjugation) | 8 | 8 | **Mixed**: 5 ours, 3 one-sided | [F69](#follow-ups-not-fixed-here--this-pr-is-advisory) |
+
+Every one of the 373 is accounted for by exactly one class; no file appears twice. The verdict
+across the ten classes is **370 ours** (233 construct-specific plus the 138 recovery
+diagnostics they drag in, less the three one-sided rows in S10) and **3 one-sided** — checks we
+have and the reference does not. **Not one diagnostic is a pilot artifact**: unlike the
+`testdata`/`examples` rows, every file here was written by the reference's own authors for the
+reference, and the pilot is silent or nearly silent on all 73.
+
+#### S1 — prefix metadata as a member's only keyword (F60, 32)
+
+`Cause and Effect Examples/CauseAndEffectExample.sysml:25` is `#multicausation connect …` and
+`Arrowhead Framework Example/AHFCoreLib.sysml:28` is `#service serviceDiscovery :
+ServiceDiscovery ;`. Reproducers:
+
+```sysml
+package B2 { metadata def M; part a; part b; #M connect a to b; }
+package B7 { port def ServiceDiscovery; metadata def service; part def P { #service sd : ServiceDiscovery; } }
+```
+
+Ours: `expected a namespace member` on the `#`, and — where the member does parse —
+`attribute cannot be typed by portDef (kind mismatch)`. Pilot: clean on both. The grammar is
+explicit: `UsagePrefix` ends in `UsageExtensionKeyword*` (`SysML.xtext:582`),
+`UsageExtensionKeyword` *is* a `PrefixMetadataMember` (`:578`), and `ExtendedUsage` is
+`UnextendedUsagePrefix UsageExtensionKeyword+ Usage` returning a plain `SysML::Usage`
+(`:730`) — so one or more `#M` annotations may stand where a kind keyword would, both alone and
+after `end`/`ref`/`abstract`, and the member is *not* an attribute usage. That second half is
+why 6 of these are `kind-mismatch` rather than syntax: we do parse `end #original r1 : Req1;`
+(`Requirements Examples/RequirementDerivationExample.sysml:10`) and
+`#service sd : ServiceDiscovery;`, but as attribute usages, so the kind check then rejects a
+requirement or port definition as their type. **Ours, one parser gap with two faces.**
+
+#### S2 — keyword-less members (F61, 87)
+
+The class the biggest files are led by, and the widest. Four productions, six corpus shapes:
+
+| Corpus | Construct | Ours | Pilot |
+|---|---|---|---|
+| `Vehicle Example/SysML v2 Spec Annex A SimpleVehicleModel.sysml:424` (57 diags), `v1 Spec Examples/8.4.1 Wheel Hub Assembly/Wheel Package.sysml:9` | `distancePerVolume :> scalarQuantities = distance / volume;` — specialization and value, no keyword | `expected a namespace member` | clean (`Wheel Package.sysml`: a `Bound features should have conforming types` warning) |
+| `Vehicle Example/VehicleUsages.sysml:14` | `T1 = 10.0 [N * m];` — value only | `expected a namespace member` | clean |
+| `Simple Tests/EnumerationTest.sysml:48` | `= 60.0;` — an anonymous enumerated value | `expected a body member` | clean on the value itself |
+| `Simple Tests/AnalysisTest.sysml:20`, `10-Analysis and Trades/10a-Analysis.sysml:52`, `Simple Tests/VerificationTest.sysml:21` | a bare expression as the last body member (`v.m`, `VerificationCases::PassIf(v.m == 0)`) | `expected a body member` | clean |
+| `15-Properties-Values-Expressions/15_11-Variable Length Collection Types.sysml:15` | `value :>> elements: Integer;` — a redefinition only; `value` here is the member's *name*, reserved by neither grammar | `expected a body member` | clean |
+| `Simple Tests/CommentTest.sysml:25` | `locale "en_US" /* … */` — an anonymous comment carrying a locale | `expected a namespace member` | clean; it rejects the reproducer only because that file has `locale` with *no* comment body after it, which is exactly what its `Comment` production requires |
+
+Reproducers `a3`/`a4` (`torquePerCurrent :> scalarQuantities = 1.0;` at body level, `T1 = 10.0;`
+at namespace level), `f6` (two anonymous `= 60.0;` enumerated values) and `f8` (`value :>>
+elements : ScalarValues::Integer;`) each reproduce their corpus message with the pilot accepting
+the member; `f7` reproduces ours and reads the reference wrong (see the last row). `DefaultReferenceUsage` (`SysML.xtext:632`) requires
+no keyword at all — `('end')? RefPrefix UsageDeclaration ValuePart? UsageBody`, and a
+`UsageDeclaration` may be a name, a specialization, a redefinition, or any combination;
+`EnumeratedValue` (`:786`) makes both the keyword and the declaration optional
+(`UsageExtensionKeyword* EnumerationUsageKeyword? Usage`); `ResultExpressionMember` (`:1967`)
+allows a trailing expression as a body member; and `Comment` (`:86`) makes its `comment` keyword
+optional, so `locale "en_US"` followed by a comment body is an anonymous comment with a locale —
+not, as the `f7` reproducer assumed, part of the package declaration. **Ours, four parser
+gaps.** This is where the recovery noise concentrates: 63 of the class's 87 are the
+two generic messages, and the 24 that remain are other classes' constructs in the same files.
+
+#### S3 — state and occurrence behavior (F62, 65)
+
+| Corpus | Construct | Ours | Pilot |
+|---|---|---|---|
+| `Simple Tests/StateTest.sysml:30` | `then S2.S3;` — a qualified transition target | `expected ';' after transition` | clean |
+| `05-State-based Behavior/5-State-based Behavior-1.sysml:86`, `-1a.sysml:87` | `then starting { … }` — a body on the target transition | `expected ';' after transition` | clean |
+| `Vehicle Example/Annex_A_VehicleViews.sysml:518` (24 diags) | `action turnVehicleOn send ignitionCmd via driver.p1 { … }` | `expected ';' after send statement` | clean but for two `Duplicate of inherited member name 'self'` warnings |
+| `Arrowhead Framework Example/AHFNorwayTopics.sysml:94` | `accept cl : CallGiveItems via tellu.APIS_HTTP` continued over lines | `expected a body member` | clean |
+| `03-Function-based Behavior/3a-Function-based Behavior-1.sysml:85` | `first start then continue { … }` — a body on a succession | `expected ';' after initial node` | clean |
+| `06-Individual and Snapshots/6-Individual and Snapshots.sysml:113` | `exhibit vehicleStates.on { … }` — dotted reference plus body | `expected '{' or ';'` | clean |
+
+All six reproduce (`d1`, `d2`, `d4`, `e4`, `e5`). `TransitionUsage`, `TargetTransitionUsage`,
+`SendNode` and `AcceptNode` all end in `ActionBody`, and `ExhibitStateUsage` is
+`'exhibit' ( OwnedReferenceSubsetting FeatureSpecializationPart? | StateUsageKeyword
+UsageDeclaration? ) ValuePart? StateUsageBody` — a dotted reference to an existing state, with a
+body. In every case we accept the head of the construct and then require `;` where the reference
+allows a body. **Ours, one shape of gap in six places:** a body is refused where the reference takes one.
+
+#### S4 — action nodes (F63, 33)
+
+| Corpus | Construct | Ours | Pilot |
+|---|---|---|---|
+| `Simple Tests/ControlNodeTest.sysml:13` | `then fork F { … }` | `expected ';' after fork node` | clean |
+| `Simple Tests/DecisionTest.sysml:4` | `decide 'test x';` — a named decision node | `expected ';' after decision node` | clean |
+| `Simple Tests/StructuredControlTest.sysml:32` | `for n : ScalarValues::Integer in (1, 2, 3) { … }` — a typed loop variable | `expected 'in' keyword after for variable` | clean |
+| `Simple Tests/ActionTest.sysml:35` | `in :>> payload = s;` — a body parameter that only redefines | `expected ';' after body parameter` | clean |
+| `Cause and Effect Examples/MedicalDeviceFailure.sysml:12` | `ref patient { … }` — a body on a bare `ref` | `expected a body member` | clean |
+
+All five reproduce (`e1`, `e3`, `e7`, `e6`, `g7`). Each `ControlNode` alternative —
+`MergeNode`, `DecisionNode`, `JoinNode`, `ForkNode` — is
+`ControlNodePrefix isComposite ?= '<kw>' UsageDeclaration? ActionBody`, so it both takes an
+optional name and ends in a body; `ForVariableDeclaration` (`:1637`) is a full
+`UsageDeclaration`, so the loop variable may state its type before `in`; and a body parameter
+needs only a `FeatureSpecializationPart` — a name is optional when the parameter redefines one.
+**Ours, four parser gaps** (`fork`/`join`/`merge`/`decide` bodies are one).
+
+#### S5 — calculations and expressions (F64, 19)
+
+| Corpus | Construct | Ours | Pilot |
+|---|---|---|---|
+| `Metadata Examples/RationaleMetadataExample.sysml:22`, `10-Analysis and Trades/10d-Dynamics Analysis.sysml:60`, `10b-Trade-off Among Alternative Configurations.sysml:82` | `return selectedEngine :> engine;`, `return attribute accelerationProfile :> ISQ::acceleration[*] := ();` | `expected ';' after return expression` | clean |
+| `Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml:56`, `Analysis Examples/Vehicle Analysis Demo.sysml:207` | a `private attribute` declaration inside an expression body | `expected '}'` | clean on the declaration (it reports its own unrelated `forAll` resolution error) |
+| `Simple Tests/ConstraintTest.sysml:89` | `assert not massLimitation { … }` | `expected '{' or ';'`, plus `"not" is a reserved keyword` | clean |
+
+All three reproduce (`f1`/`f2`, `f5`, `f4`). `ReturnParameterMember` is `'return' UsageElement`
+— a named, specializing, even keyword-carrying usage, not just an expression — and `assert`
+takes an `OperatorExpression`, so `not` binds a constraint rather than naming one.
+**Ours, three parser gaps.**
+
+#### S6 — connectors and interactions (F65, 22)
+
+| Corpus | Construct | Ours | Pilot |
+|---|---|---|---|
+| `Simple Tests/ConnectionTest.sysml:24` | `binding ab1 : AB bind a = b;` — a typed binding connector | `expected '{' or ';' after declaration`, then `"bind" is a reserved keyword` | rejects our reproducer's `binding def` (grammar has no such keyword) but takes `binding ab1 : AB bind x = y;` itself |
+| `17-Sequence Modeling/17a-Sequence-Modeling.sysml:26`, `17b`, `Arrowhead Framework Example/AHFSequences.sysml:45` | `message publish_message of Publish[1] …` — a payload type with multiplicity | `expected '{' or ';' after declaration` | clean |
+| `Interaction Sequencing Examples/ServerSequenceModelOutside.sysml:6` | `event publish_source_event = publish_message.start;` | `expected a body member` | reports its own `Must reference an occurrence` on the reproducer |
+
+`c1`, `c2`/`c3` and `g8` reproduce the ours side; the pilot's side is clean only for `message`.
+`BindingConnectorAsUsage` is `'binding' UsageDeclaration? 'bind' … '=' …`, so the declaration may
+carry a type before `bind`; the `Payload` after `of` is `OwnedFeatureTyping
+( OwnedMultiplicity )?`, i.e. `Publish[1]` exactly; and `EventOccurrenceUsage` ends in
+`UsageCompletion` (`ValuePart? UsageBody`), so `= m.start` is its value.
+**Ours, three parser gaps** — with the caveat that the `event` and `binding` reproducers each
+also draw a *different* pilot diagnostic, so those two need a corpus-faithful reproducer before
+a fix is validated against the reference rather than against the grammar alone.
+
+#### S7 — requirement and case clauses (F66, 25)
+
+| Corpus | Construct | Ours | Pilot |
+|---|---|---|---|
+| `Simple Tests/RequirementTest.sysml:6`, `08-Requirements/8-Requirements.sysml:111` | `assume constraint c1 : C;`, `assume constraint fuelConstraint { … }` | `expected '{' after 'assume constraint'` | clean |
+| `09-Verification/9-Verification-simplified.sysml:55` | `verify vehicleMassRequirement :>> massRequirement;` | `expected '{' or ';'` | clean |
+| `Simple Tests/VariabilityTest.sysml:29` | `variant use case uc11;` | `expected '{' or ';' after declaration`, plus `"use" is a reserved keyword` | clean |
+| `v1 Spec Examples/8.4.5 Constraining Decomposition/Vehicle Decomposition.sysml:45` (12 diags) | `ref redefines cylinderBR[4];` — multiplicity after a redefinition | `expected '{' or ';' after declaration` | clean |
+
+All four reproduce (`g1`/`g2`, `g3`, `g5`, `g4`). `RequirementConstraintMember` (`:2057`) is
+`kind = ('assume'|'require')` plus a `RequirementConstraintUsage` — a full usage with a
+declaration and an *optional* body, where we require a brace; `RequirementVerificationUsage`
+begins `OwnedReferenceSubsetting FeatureSpecialization*`, so `verify` takes a usage that only
+redefines; `UseCaseUsage` is reachable from
+`VariantUsageElement`, so `use case` is a kind keyword after `variant`; and
+`FeatureSpecializationPart` puts multiplicity after the specialization, not only after a name.
+**Ours, four parser gaps.** The last is the clearest arithmetic in the class: six identical
+lines × two diagnostics each = the file's 12.
+
+#### S8 — inherited, redefined and imported names (F67, 43)
+
+Not syntax: every diagnostic here is `unresolved reference`, and the pilot resolves the name.
+The largest is `item :>> shape : Box [1] { … }` (`Geometry Examples/CarWithShapeAndCSG.sysml:48`,
+`SimpleQuadcopter.sysml:15`), 12 diagnostics of `unresolved reference: shape — did you mean
+LugBolt::shape?` — the same inherited-member lookup PR #331 fixed for `length`/`width`/`height`
+through `ShapeItems::Box`, still failing when the redefinition *itself* introduces the type.
+Others: `variation attribute def DiameterChoices :> Diameter { … }`
+(`Variability Examples/VehicleVariabilityModel.sysml:71`, 14), an enumeration imported by
+`private import RiskLevelEnum::*;` (`Metadata Examples/RiskMetadataExample.sysml:3`, and
+`VerificationMetadataExample.sysml`) — the name is itself introduced by an import in the
+imported namespace — `filter @Safety and (as Safety).isMandatory;`
+(`11-View and Viewpoint/11b-Safety and Security Feature Views.sysml:57`), `actor :>> fueler =
+driver;` (`18-Use Case/18-Use Case.sysml:48`), and `part aa subsets a;` where `a` is reachable
+by feature chain (`Simple Tests/FeaturePathTest.sysml:24`).
+
+Reproducers split: `h3` (import of an imported name) and `h5` (subsetting a feature reachable by
+chain) reproduce with the pilot resolving; `h1` (redefined inherited shape) and `h7`
+(`filter @Safety`) do **not** — both need the corpus's library imports and view context, and in
+isolation both tools agree. So this class is **ours** on the two reproduced shapes and
+**ours, unreproduced in isolation** on the rest: the corpus files themselves are the evidence,
+and each will need its own fixture built from the real context before a fix is claimed.
+
+#### S9 — members through implicit parameters (F68, 39)
+
+All 39 are `unresolved member`, all in files the reference validates cleanly, and all reach
+*through* a behavioral usage into what it implicitly parameterizes:
+`subscribing.sub` (`Interaction Sequencing Examples/ServerSequenceRealization-2.sysml:42`, 13
+diagnostics; `-OutsideRealization-2.sysml`, 10), `producer.publish_request`
+(`-3.sysml:134`, 6; `-Outside-3.sysml`, 6), `x.p to a1.aa.receiver` in a `succession flow`
+(`Simple Tests/PartTest.sysml:25`), and `rep inOCL language "ocl" /* self.x > 0.0 */`
+(`Simple Tests/TextualRepresentationTest.sysml:7`, 3 — a `TextualRepresentation`
+(`SysML.xtext:103`) as a member of a constraint body, which we read as an expression, hence
+`unresolved reference: rep`, `inOCL`, `language`). The `h9`/`h6` reproducers do not
+discriminate — minimal versions of `subscribing.sub` and `succession flow … receiver` are clean
+on both sides — so this class is **ours, with the corpus files as the evidence**: the
+membership our resolver exposes for an action/state usage's implicit parameters is narrower than
+the reference's, but a faithful fixture has to come from the corpus context, and `rep` is a
+separate, small lexer/parser item.
+
+#### S10 — checks stricter than the reference (F69, 8)
+
+Eight files, one diagnostic each, and the only class where the verdict splits.
+
+| Corpus | Ours | Pilot | Verdict |
+|---|---|---|---|
+| `Simple Tests/ItemTest.sysml:11`, `IndividualTest.sysml:12` | `part cannot be typed by itemDef (kind mismatch)` | clean; its own counterpart message is `An occurrence, item or part must be typed by occurrence definitions` | **Ours**: the reference admits any occurrence definition for a part usage, we demand a part definition. Reproduced by `i1` |
+| `Simple Tests/UseCaseTest.sysml:35` | `case cannot be typed by useCaseDef (kind mismatch)` | clean | **Ours**: a use case definition is a case definition. Reproduced by `i2` |
+| `03-Function-based Behavior/3e-Function-based Behavior-item.sysml:43` | `cannot bind a value of type VehicleAssembly to a feature typed by AssembledVehicle` | clean | **Ours**: reproduced by `i5`; the value's type specializes the feature's through the corpus's definitions |
+| `03-Function-based Behavior/3c-…-structure mod-1.sysml:42` | `type must be a definition, found calcUsage` on `OccurrenceFunctions::destroy` | *not* clean on the reproducer (`An action must be typed by action definitions`) | **Ours, unreproduced**: in the corpus the reference accepts the library `destroy`; our resolution of it yields a calc usage. Needs a library-faithful fixture |
+| `Metadata Examples/IssueMetadataExample.sysml:7` | `name conflict: text is already the name of the inherited feature …::text` | clean | **One-sided**: the member redefines the inherited `text` implicitly; reproduced by `i6`, and no reference counterpart exists |
+| `Vehicle Example/VehicleDefinitions.sysml:47` | `interface … ports … are not conjugate` (warning) | clean | **One-sided**: our own advice, reproduced by `i7`; the reference has no conjugation check |
+| `Analysis Examples/Turbojet Stage Analysis.sysml:25` | `operator '+' combines incommensurable quantities` (`units`) | clean | **One-sided**: probed directly — `attribute s = a + t;` over `LengthValue` and `TemperatureValue` draws our dimension warning and *nothing* from the reference, which has no dimensional analysis at all. Like F4/K5, our extension |
+
+The five "ours" rows are the honest count of semantic false positives on this corpus: five, out
+of 373. The three one-sided rows stay, on the F4 precedent — a check the reference lacks is not
+a disagreement — and the units row keeps its own category rather than being folded into
+`kind-mismatch`.
+
+#### What this class list predicts
+
+If S1–S7 are fixed, the 274 syntax diagnostics and the 138 recovery diagnostics inside them go
+with them; S8/S9 move 82 `unresolved-reference`; S10's five ours-rows move 6 (`kind-mismatch`
+14 → 8 counting S1's six, which S1's fix takes). The three one-sided diagnostics stay by
+design. That is the movement any fix PR should be measured against, per root and per category,
+and it is why the fixes are sequenced parser-first: while a file's first member fails to parse,
+nothing downstream of it is measurable.
 
 ### KerML — only ours
 
@@ -610,6 +863,16 @@ one.
 | F51 | A file's kind does not reach the REPL/`-validate` surface: `submitFiles` opens the accumulated buffer as one document named `<repl>` (`internal/repl/session.go:25,728`), so `source.KindOf` is `KindUnknown` and the file-kind gates in the parser never fire — `at`/`while`/`merge`/`decide` stay reserved there, while `-convert`, which passes the real path, accepts them. The pass layer already compensates for the `kerml-notation` *warning* alone (`dropKerMLNotationOfKerMLFiles`); since the buffer mixes `.sysml` and `.kerml` snippets, the fix is a per-snippet parse kind rather than a document one. |
 | F52 | A succession's `redefines` target does not resolve: `succession redefines named : T [1] first a then b;` reports `redefines target must be a usage or definition, found unknown` in both `.sysml` and `.kerml` (the fixtures `succession_declared_multiplicity.sysml:12`, `kerml_succession_declaration.kerml:18`). Predates F30 — the same message comes from the pre-F30 binary for the keyword-less form — and is only reachable now that the typed declaration parses. Parse is clean; the defect is in resolving a succession usage as a redefinition target. |
 | F53 | `succession s : SomeConnectionDef …` is reported as `succession cannot be typed by connectionDef (kind mismatch)` (`succession_declared_multiplicity.sysml:11,12`). `SuccessionAsUsage` (`SysML.xtext:1033`) types a succession through `UsageDeclaration` like any usage, so the kind table is likely too narrow — confirm against the reference before widening it, and see F32 for the rest of the kind-mismatch class. |
+| F60 | S1, 32 diagnostics over 7 files. Prefix metadata as a member's only keyword: `ExtendedUsage` (`SysML.xtext:730`) is `UnextendedUsagePrefix UsageExtensionKeyword+ Usage`, returning a plain `Usage`. Two symptoms, one gap: `#M connect a to b;` and `abstract #Classified z;` do not parse, while `#service sd : PortDef;` and `end #original r1 : Req1;` parse *as attribute usages* and then draw a `kind-mismatch` (6 of the 32). Parser-owned; the semantic half disappears with it. |
+| F61 | S2, 87 diagnostics over 12 files (63 of them the two generic recovery messages). Keyword-less members: a `DefaultReferenceUsage` whose declaration is only a value, only a specialization or only a redefinition (`distancePerVolume :> scalarQuantities = distance / volume;`, `T1 = 10.0 [N * m];`, `value :>> elements: Integer;`), an anonymous `EnumeratedValue` (`= 60.0;`), a `ResultExpressionMember` as the last body member (`v.m`), and an anonymous `Comment` carrying a locale (`locale "en_US" /* … */`, `Comment` at `:86` makes the keyword optional). The single largest class, and it leads the two biggest files in the corpus. |
+| F62 | S3, 65 diagnostics over 7 files. Bodies and dotted references in state/occurrence behavior: `then S2.S3;`, `then starting { … }`, `action a send x via p { … }`, multi-line `accept c : C via p`, `first start then continue { … }`, `exhibit vehicleStates.on { … }`. `TransitionUsage`, `TargetTransitionUsage`, `SendNode` and `AcceptNode` all end in `ActionBody`; `ExhibitStateUsage` takes `OwnedReferenceSubsetting` plus `StateUsageBody`. |
+| F63 | S4, 33 diagnostics over 5 files. Action nodes: a body on any `ControlNode` (`then fork F { … }`), a named `decide 'test x';`, a typed `for` variable (`for n : ScalarValues::Integer in (1, 2, 3)`), a body parameter that only redefines (`in :>> payload = s;`), and a body on a bare `ref` (`ref patient { … }`). |
+| F64 | S5, 19 diagnostics over 6 files. `ReturnParameterMember` is `'return' UsageElement` (`:1961`), so `return selectedEngine :> engine;` and `return attribute accelerationProfile :> ISQ::acceleration[*] := ();` are usages, not expressions; a `private attribute` declaration inside an expression body is legal; and `assert not c { … }` is an `OperatorExpression`, so `not` must not be forced to name a constraint. |
+| F65 | S6, 22 diagnostics over 5 files. `binding ab1 : AB bind a = b;` (`BindingConnectorAsUsage` allows a `UsageDeclaration` before `bind`), `message m of Publish[1] …` (the `Payload` after `of` is `OwnedFeatureTyping ( OwnedMultiplicity )?`), `event e = m.start;` (`EventOccurrenceUsage` ends in `ValuePart? UsageBody`). The `binding` and `event` reproducers draw a *different* pilot diagnostic, so both need a corpus-faithful fixture before a fix is validated against the reference rather than the grammar alone. |
+| F66 | S7, 25 diagnostics over 5 files. `assume constraint c1 : C;` and `assume constraint c { … }` (`RequirementConstraintMember`, `:2057`, whose body is optional), `verify r :>> massRequirement;` (`RequirementVerificationUsage`), `variant use case uc11;` (`UseCaseUsage` is reachable from `VariantUsageElement`), and multiplicity after a redefinition (`ref redefines cylinderBR[4];` — six identical lines × 2 diagnostics = that file's 12). |
+| F67 | S8, 43 `unresolved-reference` over 12 files, all resolved by the reference. Two shapes reproduce and are ours: a name introduced into a namespace *by an import* and then wildcard-imported onward (`private import RiskLevelEnum::*;`), and subsetting a feature reachable by feature chain (`part aa subsets a;`). The largest shape, `item :>> shape : Box [1] { … }` (12 diagnostics), is the inherited-member lookup #331 fixed for `length`/`width`/`height`, still failing when the redefinition itself introduces the type — it needs a fixture built from the corpus's library context, since the minimal form agrees. |
+| F68 | S9, 39 `unresolved member`/`unresolved reference` over 6 files, all in files the reference validates cleanly, all reaching through a behavioral usage into what it implicitly parameterizes (`subscribing.sub`, `producer.publish_request`, `succession flow x.p to a1.aa.receiver`). The minimal forms agree, so the corpus files are the evidence and a faithful fixture has to come from them. 3 of the 39 are `rep inOCL language "ocl"` — the same textual-representation gap as F70, on the SysML side. |
+| F69 | S10, 8 diagnostics over 8 files, one each — **5 ours, 3 one-sided.** Ours: `part x : ItemDef` and `use case uc : UseCaseDef` (the kind table is narrower than the reference's `An occurrence, item or part must be typed by occurrence definitions`; see F53 and F32 for the rest of that class), a bind whose value type specializes the feature's, and `action d : OccurrenceFunctions::destroy` resolving to a calc usage. One-sided (kept, on the F4 precedent): the inherited-name conflict on a metadata body's `text`, the interface-conjugation warning, and the units check — probed directly, the reference has no dimensional analysis at all. |
 | ~~F31~~ | **Done.** All three shapes were ours, and none was cascade: measured on merged `origin/main` the class is 123 of the root's 269 only-ours, and 116 of the 123 are four genuine resolution defects — implicit generalization missing from inherited-member traversal (58), import visibility (15), a declaration's header not seeing its own body (39), and the implicit base suppressed by any declared generalization rather than only by one that already reaches it (4). The root falls **269 → 150** and the class **123 → 7**, with the four `.sysml` roots byte-identical per file and the committed baseline untouched. The 7 remaining are F70–F72. |
 | F70 | `rep inOCL language "ocl"` (`Simple Tests/TextualRepresentation.kerml:7`, 3 diagnostics): a textual-representation member is not parsed, so `rep`, `inOCL` and `language` are read as names to resolve. Parser-owned, alongside F50. |
 | F71 | A parameter's name is lost for `in timeslice : Timeslice;` inside `expr while { … }` (`Variable Feature Examples/Enhancements/ExtendedOccurrences.kerml:27`): the AST carries `Usage{Keyword: "timeslice", Ident: ""}`, so no symbol is built and `at(timeslice.interval)` cannot resolve. The name never reaches symbols, so this is a parser representation gap, not resolution — the shape it belongs to is F30's `at`/`while` work. |
