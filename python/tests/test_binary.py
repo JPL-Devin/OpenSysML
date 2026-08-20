@@ -9,7 +9,7 @@ import platform
 import re
 import pytest
 from unittest.mock import patch, Mock, mock_open
-from opensysml.binary import (
+from pysysml.binary import (
     PINNED_SHA256,
     cached_release,
     default_github_repo,
@@ -26,8 +26,8 @@ from opensysml.binary import (
     write_metadata,
     ensure_binary
 )
-from opensysml.errors import ChecksumMismatchError, UnpinnedReleaseError
-from opensysml.errors import ConnectionError as OpenSysMLConnectionError
+from pysysml.errors import ChecksumMismatchError, UnpinnedReleaseError
+from pysysml.errors import ConnectionError as PySysMLConnectionError
 
 
 @pytest.fixture
@@ -38,8 +38,8 @@ def cache(tmp_path, monkeypatch):
         A callable placing binary content, optionally recorded as a release
     """
     binary_path = str(tmp_path / 'sysml-grpc')
-    monkeypatch.setattr('opensysml.binary.get_binary_path', lambda: binary_path)
-    monkeypatch.delenv('OPENSYSML_GRPC_VERSION', raising=False)
+    monkeypatch.setattr('pysysml.binary.get_binary_path', lambda: binary_path)
+    monkeypatch.delenv('PYSYSML_GRPC_VERSION', raising=False)
 
     def place(content=b'cached binary', version=None):
         with open(binary_path, 'wb') as f:
@@ -56,12 +56,12 @@ def cache(tmp_path, monkeypatch):
 def pins(monkeypatch):
     """Pin digests for the fake releases downloaded below.
 
-    Stands in for the table a release of opensysml ships, so nothing here depends
+    Stands in for the table a release of pysysml ships, so nothing here depends
     on the digests of the real published assets.
     """
     table = {}
-    monkeypatch.setattr('opensysml.binary.PINNED_SHA256', table)
-    monkeypatch.delenv('OPENSYSML_ALLOW_UNPINNED_DOWNLOAD', raising=False)
+    monkeypatch.setattr('pysysml.binary.PINNED_SHA256', table)
+    monkeypatch.delenv('PYSYSML_ALLOW_UNPINNED_DOWNLOAD', raising=False)
 
     def pin(digest, version, goos='linux', goarch='amd64', repo='Open-MBEE/OpenSysML'):
         asset = release_asset_name(goos, goarch)
@@ -81,7 +81,7 @@ def test_detect_platform():
 def test_get_binary_path():
     """Test binary path construction."""
     path = get_binary_path()
-    assert path.startswith(os.path.expanduser('~/.opensysml/bin/'))
+    assert path.startswith(os.path.expanduser('~/.pysysml/bin/'))
     assert path.endswith('sysml-grpc') or path.endswith('sysml-grpc.exe')
 
 
@@ -139,7 +139,7 @@ def test_ensure_binary_exists():
 def test_ensure_binary_downloads():
     """Test ensure_binary downloads if binary missing and version provided."""
     with patch('os.path.exists', return_value=False):
-        with patch('opensysml.binary.download_binary') as mock_download:
+        with patch('pysysml.binary.download_binary') as mock_download:
             mock_download.return_value = '/fake/path/sysml-grpc'
             path = ensure_binary(version='v0.1.0')
             assert path == '/fake/path/sysml-grpc'
@@ -148,7 +148,7 @@ def test_ensure_binary_downloads():
 
 def test_ensure_binary_raises_without_version():
     """Test ensure_binary raises ConnectionError when binary missing and no version."""
-    from opensysml.errors import ConnectionError
+    from pysysml.errors import ConnectionError
     with patch('os.path.exists', return_value=False):
         with pytest.raises(ConnectionError, match="Binary not found.*auto-download disabled"):
             ensure_binary()
@@ -176,7 +176,7 @@ def test_download_binary_verifies_checksum(pins):
             Mock(__enter__=Mock(return_value=Mock(read=Mock(return_value=mock_binary_data))), __exit__=Mock(return_value=False))
         ]
         
-        with patch('opensysml.binary.detect_platform', return_value=('linux', 'amd64')):
+        with patch('pysysml.binary.detect_platform', return_value=('linux', 'amd64')):
             with patch('builtins.open', mock_open(read_data=mock_binary_data)):
                 with patch('os.makedirs'):
                     with patch('os.chmod'):
@@ -211,22 +211,22 @@ def test_download_binary_fails_on_checksum_mismatch(pins):
             Mock(__enter__=Mock(return_value=Mock(read=Mock(return_value=mock_binary_data))), __exit__=Mock(return_value=False))
         ]
         
-        with patch('opensysml.binary.detect_platform', return_value=('linux', 'amd64')):
+        with patch('pysysml.binary.detect_platform', return_value=('linux', 'amd64')):
             with patch('builtins.open', mock_open(read_data=mock_binary_data)):
                 with patch('os.makedirs'):
                     with patch('os.chmod'):
                         with patch('os.remove'):
-                            from opensysml.errors import ConnectionError
+                            from pysysml.errors import ConnectionError
                             with pytest.raises(ConnectionError, match="Checksum mismatch"):
                                 download_binary(version, github_repo)
 
 
 def test_default_github_repo_env_override(monkeypatch):
-    """Test $OPENSYSML_GITHUB_REPO overrides the default repository."""
-    monkeypatch.delenv('OPENSYSML_GITHUB_REPO', raising=False)
+    """Test $PYSYSML_GITHUB_REPO overrides the default repository."""
+    monkeypatch.delenv('PYSYSML_GITHUB_REPO', raising=False)
     assert default_github_repo() == 'Open-MBEE/OpenSysML'
 
-    monkeypatch.setenv('OPENSYSML_GITHUB_REPO', 'JPL-Devin/OpenSysML')
+    monkeypatch.setenv('PYSYSML_GITHUB_REPO', 'JPL-Devin/OpenSysML')
     assert default_github_repo() == 'JPL-Devin/OpenSysML'
 
 
@@ -244,7 +244,7 @@ def test_resolve_latest_version():
 
 def test_resolve_latest_version_without_tag():
     """Test a release carrying no tag is reported rather than returned."""
-    from opensysml.errors import ConnectionError
+    from pysysml.errors import ConnectionError
     with patch('urllib.request.urlopen') as mock_urlopen:
         mock_urlopen.return_value = Mock(
             __enter__=Mock(return_value=Mock(read=Mock(return_value=b'{}'))),
@@ -260,13 +260,13 @@ def test_download_binary_latest_resolves_tag(pins):
     pins(actual_checksum, 'v0.0.4')
     mock_checksum_data = f"{actual_checksum}  sysml-grpc-linux-amd64\n".encode()
 
-    with patch('opensysml.binary.resolve_latest_version', return_value='v0.0.4') as mock_resolve:
+    with patch('pysysml.binary.resolve_latest_version', return_value='v0.0.4') as mock_resolve:
         with patch('urllib.request.urlopen') as mock_urlopen:
             mock_urlopen.side_effect = [
                 Mock(__enter__=Mock(return_value=Mock(read=Mock(return_value=mock_checksum_data))), __exit__=Mock(return_value=False)),
                 Mock(__enter__=Mock(return_value=Mock(read=Mock(return_value=mock_binary_data))), __exit__=Mock(return_value=False))
             ]
-            with patch('opensysml.binary.detect_platform', return_value=('linux', 'amd64')):
+            with patch('pysysml.binary.detect_platform', return_value=('linux', 'amd64')):
                 with patch('builtins.open', mock_open(read_data=mock_binary_data)):
                     with patch('os.makedirs'), patch('os.chmod'), patch('os.replace'):
                         download_binary(version='latest')
@@ -277,10 +277,10 @@ def test_download_binary_latest_resolves_tag(pins):
 
 
 def test_ensure_binary_downloads_version_from_env(monkeypatch):
-    """Test $OPENSYSML_GRPC_VERSION enables auto-download when no binary is present."""
-    monkeypatch.setenv('OPENSYSML_GRPC_VERSION', 'v0.0.4')
+    """Test $PYSYSML_GRPC_VERSION enables auto-download when no binary is present."""
+    monkeypatch.setenv('PYSYSML_GRPC_VERSION', 'v0.0.4')
     with patch('os.path.exists', return_value=False):
-        with patch('opensysml.binary.download_binary') as mock_download:
+        with patch('pysysml.binary.download_binary') as mock_download:
             mock_download.return_value = '/fake/path/sysml-grpc'
             assert ensure_binary() == '/fake/path/sysml-grpc'
             mock_download.assert_called_once_with(version='v0.0.4', github_repo=None)
@@ -299,7 +299,7 @@ def test_download_binary_records_the_release(cache, pins):
              __exit__=Mock(return_value=False)),
     ]
     with patch('urllib.request.urlopen', side_effect=responses):
-        with patch('opensysml.binary.detect_platform', return_value=('linux', 'amd64')):
+        with patch('pysysml.binary.detect_platform', return_value=('linux', 'amd64')):
             download_binary(version='v0.0.7')
 
     with open(metadata_path()) as f:
@@ -325,7 +325,7 @@ def test_download_binary_overwrites_the_cache_it_replaces(cache, pins):
              __exit__=Mock(return_value=False)),
     ]
     with patch('urllib.request.urlopen', side_effect=responses):
-        with patch('opensysml.binary.detect_platform', return_value=('linux', 'amd64')):
+        with patch('pysysml.binary.detect_platform', return_value=('linux', 'amd64')):
             path = download_binary(version='v0.0.7')
 
     with open(path, 'rb') as f:
@@ -348,9 +348,9 @@ def test_download_binary_reports_a_cache_it_cannot_install_over(cache, pins):
              __exit__=Mock(return_value=False)),
     ]
     with patch('urllib.request.urlopen', side_effect=responses):
-        with patch('opensysml.binary.detect_platform', return_value=('linux', 'amd64')):
+        with patch('pysysml.binary.detect_platform', return_value=('linux', 'amd64')):
             with patch('os.replace', side_effect=PermissionError('in use')):
-                with pytest.raises(OpenSysMLConnectionError, match='could not install it'):
+                with pytest.raises(PySysMLConnectionError, match='could not install it'):
                     download_binary(version='v0.0.7')
 
     assert not os.path.exists(binary_path + '.tmp')
@@ -387,9 +387,9 @@ def test_stale_cache_reason_for_an_unidentifiable_binary(cache):
 
 def test_stale_cache_reason_keeps_the_cache_when_offline(cache):
     """Test version='latest' keeps a working cache when releases are unreachable."""
-    from opensysml.errors import ConnectionError
+    from pysysml.errors import ConnectionError
     cache(version='v0.0.7')
-    with patch('opensysml.binary.resolve_latest_version',
+    with patch('pysysml.binary.resolve_latest_version',
                side_effect=ConnectionError('no network')):
         assert stale_cache_reason('latest') is None
 
@@ -397,7 +397,7 @@ def test_stale_cache_reason_keeps_the_cache_when_offline(cache):
 def test_ensure_binary_reuses_the_release_asked_for(cache):
     """Test no download happens when the cache is already that release."""
     binary_path = cache(version='v0.0.7')
-    with patch('opensysml.binary.download_binary') as mock_download:
+    with patch('pysysml.binary.download_binary') as mock_download:
         assert ensure_binary(version='v0.0.7') == binary_path
         mock_download.assert_not_called()
 
@@ -405,7 +405,7 @@ def test_ensure_binary_reuses_the_release_asked_for(cache):
 def test_ensure_binary_replaces_a_cache_from_another_release(cache):
     """Test a stale cache is replaced rather than served, with a warning saying so."""
     cache(version='v0.0.5')
-    with patch('opensysml.binary.download_binary') as mock_download:
+    with patch('pysysml.binary.download_binary') as mock_download:
         mock_download.return_value = '/downloaded/sysml-grpc'
         with pytest.warns(UserWarning, match='v0.0.5'):
             assert ensure_binary(version='v0.0.7') == '/downloaded/sysml-grpc'
@@ -415,7 +415,7 @@ def test_ensure_binary_replaces_a_cache_from_another_release(cache):
 def test_ensure_binary_keeps_a_cache_when_no_version_is_asked_for(cache):
     """Test a locally built binary is left alone when nothing names a release."""
     binary_path = cache()
-    with patch('opensysml.binary.download_binary') as mock_download:
+    with patch('pysysml.binary.download_binary') as mock_download:
         assert ensure_binary() == binary_path
         mock_download.assert_not_called()
 
@@ -423,7 +423,7 @@ def test_ensure_binary_keeps_a_cache_when_no_version_is_asked_for(cache):
 def test_cache_from_another_repository_is_not_the_release_asked_for(cache, monkeypatch):
     """Test a fork's build is not served for the same tag of another repository."""
     cache(version='v0.0.7')  # recorded against the default repository
-    monkeypatch.setenv('OPENSYSML_GITHUB_REPO', 'someone/fork')
+    monkeypatch.setenv('PYSYSML_GITHUB_REPO', 'someone/fork')
 
     assert cached_release() is None
     reason = stale_cache_reason('v0.0.7')
@@ -447,15 +447,15 @@ def test_a_timed_out_release_query_keeps_a_working_cache(cache):
     cache(version='v0.0.7')
     with patch('urllib.request.urlopen', side_effect=TimeoutError('timed out')):
         assert stale_cache_reason('latest') is None
-        with pytest.raises(OpenSysMLConnectionError, match='Failed to resolve latest release'):
+        with pytest.raises(PySysMLConnectionError, match='Failed to resolve latest release'):
             resolve_latest_version()
 
 
 def test_a_cache_survives_a_replacement_that_cannot_be_downloaded(cache):
     """Test a working binary keeps serving when the release asked for cannot be had."""
     binary_path = cache(version='v0.0.5')
-    with patch('opensysml.binary.download_binary',
-               side_effect=OpenSysMLConnectionError('404 Not Found')):
+    with patch('pysysml.binary.download_binary',
+               side_effect=PySysMLConnectionError('404 Not Found')):
         with pytest.warns(UserWarning, match='Keeping the cached sysml-grpc'):
             assert ensure_binary(version='v0.0.7') == binary_path
 
@@ -465,7 +465,7 @@ def test_a_cache_survives_a_replacement_that_cannot_be_downloaded(cache):
 def test_a_tampered_download_is_not_answered_from_the_cache(cache):
     """Test an integrity failure refuses to start rather than serving the old binary."""
     cache(version='v0.0.5')
-    with patch('opensysml.binary.download_binary',
+    with patch('pysysml.binary.download_binary',
                side_effect=ChecksumMismatchError('Checksum mismatch')):
         with pytest.warns(UserWarning, match='Replacing the cached sysml-grpc'):
             with pytest.raises(ChecksumMismatchError):
@@ -486,7 +486,7 @@ SHIPPED_PINS = copy.deepcopy(PINNED_SHA256)
 
 
 class TestPinnedDigests:
-    """The digest a download is checked against comes from opensysml, not the origin."""
+    """The digest a download is checked against comes from pysysml, not the origin."""
 
     def test_every_shipped_pin_is_a_sha256_of_a_known_asset(self):
         """A malformed or misnamed pin would silently never match a download."""
@@ -519,14 +519,14 @@ class TestPinnedDigests:
 
     def test_an_unpinned_release_may_be_accepted_explicitly(self, monkeypatch):
         """Opting in falls back to the served checksum, saying what that means."""
-        monkeypatch.setenv('OPENSYSML_ALLOW_UNPINNED_DOWNLOAD', '1')
+        monkeypatch.setenv('PYSYSML_ALLOW_UNPINNED_DOWNLOAD', '1')
         served = 'ab' * 32
         with pytest.warns(RuntimeWarning, match='pins no digest'):
             assert expected_digest('v9.9.9', 'sysml-grpc-linux-amd64', served) == served
 
     def test_opting_in_for_one_repository_is_not_opting_in_for_another(self, monkeypatch):
         """A fork's unpinned releases are its own; trusting it trusts nothing else."""
-        monkeypatch.setenv('OPENSYSML_ALLOW_UNPINNED_DOWNLOAD', 'a-fork/OpenSysML')
+        monkeypatch.setenv('PYSYSML_ALLOW_UNPINNED_DOWNLOAD', 'a-fork/OpenSysML')
         served = 'ab' * 32
         with pytest.warns(RuntimeWarning, match='pins no digest'):
             assert expected_digest(
@@ -537,9 +537,9 @@ class TestPinnedDigests:
             expected_digest('v9.9.9', 'sysml-grpc-linux-amd64', served)
 
     def test_the_repository_opted_in_for_may_be_the_one_being_downloaded_from(self, monkeypatch):
-        """$OPENSYSML_GITHUB_REPO is what a bare opt-in for that repository names."""
-        monkeypatch.setenv('OPENSYSML_GITHUB_REPO', 'a-fork/OpenSysML')
-        monkeypatch.setenv('OPENSYSML_ALLOW_UNPINNED_DOWNLOAD', 'a-fork/OpenSysML')
+        """$PYSYSML_GITHUB_REPO is what a bare opt-in for that repository names."""
+        monkeypatch.setenv('PYSYSML_GITHUB_REPO', 'a-fork/OpenSysML')
+        monkeypatch.setenv('PYSYSML_ALLOW_UNPINNED_DOWNLOAD', 'a-fork/OpenSysML')
         served = 'ab' * 32
         with pytest.warns(RuntimeWarning, match='pins no digest'):
             assert expected_digest('v0.0.5', 'sysml-grpc-linux-amd64', served) == served
@@ -552,7 +552,7 @@ class TestPinnedDigests:
     def test_a_release_republished_with_another_binary_is_refused(self, pins):
         """A sidecar contradicting the pin is the case same-origin trust misses."""
         pins('cd' * 32, 'v9.9.9')
-        with pytest.raises(ChecksumMismatchError, match='but opensysml pins'):
+        with pytest.raises(ChecksumMismatchError, match='but pysysml pins'):
             expected_digest('v9.9.9', 'sysml-grpc-linux-amd64', 'ef' * 32)
 
     def test_a_download_of_an_unpinned_release_is_refused(self, cache):
@@ -577,7 +577,7 @@ class TestPinnedDigests:
     def test_the_unpinned_refusal_is_its_own_class_inside_the_old_one(self):
         """An except clause written against the old base still catches it."""
         assert issubclass(UnpinnedReleaseError, ChecksumMismatchError)
-        assert issubclass(UnpinnedReleaseError, OpenSysMLConnectionError)
+        assert issubclass(UnpinnedReleaseError, PySysMLConnectionError)
         with pytest.raises(ChecksumMismatchError):
             raise UnpinnedReleaseError('pins no SHA-256 digest')
         assert UnpinnedReleaseError('x').unpinned
@@ -590,14 +590,14 @@ class TestPinnedDigests:
 
     def test_a_contradicted_pin_is_not_the_unpinned_class(self, pins):
         pins('cd' * 32, 'v9.9.7')
-        with pytest.raises(ChecksumMismatchError, match='but opensysml pins') as exc:
+        with pytest.raises(ChecksumMismatchError, match='but pysysml pins') as exc:
             expected_digest('v9.9.7', 'sysml-grpc-linux-amd64', 'ef' * 32)
         assert type(exc.value) is ChecksumMismatchError
 
     def test_an_unpinned_release_keeps_a_working_cache(self, cache):
-        """A release newer than this opensysml is a build it cannot get, not a tampered one."""
+        """A release newer than this pysysml is a build it cannot get, not a tampered one."""
         binary_path = cache(version='v0.0.5')
-        with patch('opensysml.binary.download_binary',
+        with patch('pysysml.binary.download_binary',
                    side_effect=UnpinnedReleaseError('pins no SHA-256 digest')):
             with pytest.warns(UserWarning, match='Keeping the cached sysml-grpc'):
                 assert ensure_binary(version='v9.9.9') == binary_path
@@ -606,7 +606,7 @@ class TestPinnedDigests:
 
     def test_an_unpinned_release_with_no_cache_is_still_refused(self, cache):
         """Nothing to fall back to leaves the refusal, with its own explanation."""
-        with patch('opensysml.binary.download_binary',
+        with patch('pysysml.binary.download_binary',
                    side_effect=UnpinnedReleaseError('pins no SHA-256 digest')):
             with pytest.raises(ChecksumMismatchError, match='pins no SHA-256 digest'):
                 ensure_binary(version='v9.9.9')

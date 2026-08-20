@@ -1,8 +1,8 @@
-"""Pytest fixtures for opensysml tests."""
+"""Pytest fixtures for pysysml tests."""
 
 import pytest
 from unittest.mock import Mock, MagicMock
-from opensysml.proto import sysml_pb2
+from pysysml.proto import sysml_pb2
 
 
 @pytest.fixture
@@ -75,19 +75,19 @@ def mock_client():
 @pytest.fixture
 def mock_diagnostic(mock_pb_diagnostic):
     """Create Diagnostic instance from protobuf."""
-    from opensysml.diagnostic import Diagnostic
+    from pysysml.diagnostic import Diagnostic
     return Diagnostic(mock_pb_diagnostic)
 
 
 @pytest.fixture
 def mock_symbol(mock_pb_symbol, mock_client):
     """Create Symbol instance from protobuf."""
-    from opensysml.symbol import Symbol
+    from pysysml.symbol import Symbol
     return Symbol(mock_pb_symbol, mock_client, "test_hash")
 
 
 @pytest.fixture
 def mock_model(mock_pb_parse_response, mock_client):
     """Create Model instance from protobuf."""
-    from opensysml.model import Model
+    from pysysml.model import Model
     return Model(mock_pb_parse_response, mock_client)

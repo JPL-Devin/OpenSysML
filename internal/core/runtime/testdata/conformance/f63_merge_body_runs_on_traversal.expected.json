@@ -1,0 +1,9 @@
+{
+	"type": "action",
+	"trace": true,
+	"outputs": {
+		"ready": {"type": "Boolean", "value": true},
+		"mergeRuns": {"type": "Integer", "value": 1},
+		"passed": {"type": "Integer", "value": 1}
+	}
+}

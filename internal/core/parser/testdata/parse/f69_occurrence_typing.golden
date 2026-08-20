@@ -1,0 +1,44 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="F69OccurrenceTyping" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="item" abstract=false variation=false name="Box"))
+      (Membership visibility="default"
+        (Usage kind="part" name="carried" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Box
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Definition kind="use case" abstract=false variation=false name="Drive"))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Vehicle"
+          (Membership visibility="default"
+            (Usage kind="case" name="drive" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Drive
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Truck"
+          (Relationship kind="specializes" target=Vehicle
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="part" name="v" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Vehicle
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="part" name="t" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Truck
+            (*ast.QualifiedName))
+          (FeatureReference name="v")))
+      (Membership visibility="default"
+        (Definition kind="connection" abstract=false variation=false name="Before"))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="Process"
+          (Usage kind="action" name="paint" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)
+          (Usage kind="action" name="dry" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)
+          (Membership visibility="default"
+            (Usage kind="succession" name="s" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Before
+                (*ast.QualifiedName))
+              (ConnectorEnd target="paint"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="dry"
+                (*ast.QualifiedName)))))))))

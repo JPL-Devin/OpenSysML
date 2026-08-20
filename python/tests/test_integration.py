@@ -7,14 +7,14 @@ Run with: pytest tests/test_integration.py
 Skip with: pytest tests/ -k "not integration"
 
 Without a service they skip, which is what a developer who has no binary wants;
-with $OPENSYSML_REQUIRE_SERVICE set, as CI sets it, an absent service fails
+with $PYSYSML_REQUIRE_SERVICE set, as CI sets it, an absent service fails
 instead, since a skip that never runs exercises nothing.
 """
 
 import pytest
 import grpc
-from opensysml import Connection
-from opensysml.errors import ModelFileNotFoundError
+from pysysml import Connection
+from pysysml.errors import ModelFileNotFoundError
 from tests.service_gate import fail_if_service_promised, is_server_available
 
 _AVAILABLE = is_server_available()
@@ -94,7 +94,7 @@ class TestIntegrationRealServer:
             # If model has children, verify they're Symbol objects
             if len(root_children) > 0:
                 first_child = root_children[0]
-                from opensysml import Symbol
+                from pysysml import Symbol
                 assert isinstance(first_child, Symbol)
                 assert first_child.name is not None
                 assert first_child.kind is not None

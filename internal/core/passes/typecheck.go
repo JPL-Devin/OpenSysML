@@ -822,29 +822,32 @@ func compatibleTyping(useKind ast.UsageKind, direction ast.FeatureDirection, def
 			defKind == symbols.SymbolEnumerationDef
 	}
 
-	// Items can be typed by any structural def (structural hierarchy)
-	if useKind == ast.UsageItem {
-		return defKind == symbols.SymbolPartDef ||
-			defKind == symbols.SymbolAttributeDef ||
-			defKind == symbols.SymbolItemDef ||
-			defKind == symbols.SymbolOccurrenceDef
+	// An occurrence, item or part may be typed by an occurrence definition of
+	// any kind (SysML v2 §8.3.9.7 validateOccurrenceUsageType).
+	if useKind == ast.UsagePart {
+		return isOccurrenceDefKind(defKind)
+	}
+	// Items and occurrences keep the table's attribute-def leniency for values.
+	if useKind == ast.UsageItem || useKind == ast.UsageOccurrence || useKind == ast.UsageIndividual {
+		return isOccurrenceDefKind(defKind) || defKind == symbols.SymbolAttributeDef
 	}
 
-	// Occurrences can be typed by any structural def
-	if useKind == ast.UsageOccurrence {
-		return defKind == symbols.SymbolPartDef ||
-			defKind == symbols.SymbolAttributeDef ||
-			defKind == symbols.SymbolItemDef ||
-			defKind == symbols.SymbolOccurrenceDef
+	// An action must be typed by action definitions, i.e. Behaviors (SysML v2
+	// §8.3.16.6 validateActionUsageType), so any behavior-family def works.
+	if useKind == ast.UsageAction {
+		return defKindSpecializes(defKind, symbols.SymbolActionDef)
 	}
 
-	// Individuals can be typed by any structural def
-	if useKind == ast.UsageIndividual {
-		return defKind == symbols.SymbolPartDef ||
-			defKind == symbols.SymbolAttributeDef ||
-			defKind == symbols.SymbolItemDef ||
-			defKind == symbols.SymbolOccurrenceDef ||
-			defKind == symbols.SymbolIndividualDef
+	// A case may be typed by a case definition of any kind (SysML v2 §8.3.24.4
+	// validateCaseUsageType); analysis and verification keep their exact kinds.
+	if useKind == ast.UsageCase {
+		return defKindSpecializes(defKind, symbols.SymbolCaseDef)
+	}
+
+	// A succession is a binary connector (SysML v2 §8.3.13), so a connection
+	// definition of any kind types it.
+	if useKind == ast.UsageSuccession {
+		return defKindSpecializes(defKind, symbols.SymbolConnectionDef)
 	}
 
 	// SysML v2 §8.3.22.4: an ObjectiveMembership's ownedObjectiveRequirement is a

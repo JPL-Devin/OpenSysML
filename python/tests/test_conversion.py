@@ -16,17 +16,17 @@ from concurrent import futures
 import grpc
 import pytest
 
-from opensysml.capabilities import CAPABILITY_CONVERT, MissingCapabilityError
-from opensysml.connection import Connection
-from opensysml.conversion import (
+from pysysml.capabilities import CAPABILITY_CONVERT, MissingCapabilityError
+from pysysml.connection import Connection
+from pysysml.conversion import (
     FORMAT_SYSML,
     FORMAT_TURTLE,
     ExperimentalFeatureWarning,
     format_of_path,
     is_experimental,
 )
-from opensysml.errors import ConversionError, InvalidRequestError, ModelNotFoundError
-from opensysml.proto import sysml_pb2, sysml_pb2_grpc
+from pysysml.errors import ConversionError, InvalidRequestError, ModelNotFoundError
+from pysysml.proto import sysml_pb2, sysml_pb2_grpc
 
 MODEL = """package Demo {
     // a comment, which notation keeps and RDF does not
@@ -37,11 +37,11 @@ MODEL = """package Demo {
 """
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-# A local build, or the copy opensysml installs; CI publishes the binary as an
+# A local build, or the copy pysysml installs; CI publishes the binary as an
 # artifact, which does not carry the executable bit into the repo's bin.
 GRPC_BINARIES = (
     os.path.join(REPO_ROOT, "bin", "sysml-grpc"),
-    os.path.join(os.path.expanduser("~"), ".opensysml", "bin", "sysml-grpc"),
+    os.path.join(os.path.expanduser("~"), ".pysysml", "bin", "sysml-grpc"),
 )
 
 

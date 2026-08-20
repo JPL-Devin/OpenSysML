@@ -7,7 +7,7 @@ Complete API reference for OpenSysML packages.
 `Editor.add_member(owner, kind, name, type=None, multiplicity=None, value=None,
 specializes=None)` and its typed `add_*` helpers create declarations while
 preserving untouched source bytes. `Editor.delete(target, cascade=False)`
-removes declarations transactionally. `opensysml.loads(content, language=None,
+removes declarations transactionally. `pysysml.loads(content, language=None,
 strict=False)` loads inline SysML or KerML for this workflow.
 
 ## Overview
@@ -579,7 +579,7 @@ can filter a model OpenSysML parsed. The standard's schema is authoritative:
 
 **Implementation:** `internal/grpc/query.go` (`Service.Query`), reported from
 `GetServerInfo` as the `query` capability. Python: `model.query(...)`
-(`python/opensysml/query.py`).
+(`python/pysysml/query.py`).
 
 ### The query model
 
@@ -604,7 +604,7 @@ rpc Query(QueryRequest) returns (QueryResponse);   // api/proto/sysml.proto
 A cookbook payload, sent verbatim through the Python client:
 
 ```python
-model = opensysml.load("examples/vehicle.sysml")
+model = pysysml.load("examples/vehicle.sysml")
 model.query({"@type": "Query", "where": {
     "@type": "PrimitiveConstraint",
     "operator": "=", "property": "@type", "value": ["PartUsage"]}})

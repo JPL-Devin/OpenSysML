@@ -25,7 +25,9 @@ func (ec *exprChecker) checkValueConformance(scope *symbols.Scope, u *ast.Usage)
 	// against the feature's type rather than the sequence as a whole.
 	for _, value := range valueElements(u.Value) {
 		if got := ec.valueTypeSymbol(scope, value); got != nil {
-			if !ec.model.Conforms(got, want) {
+			// A binding equates the two features, so conformance in either
+			// direction suffices; only unrelated types are rejected.
+			if !ec.model.Conforms(got, want) && !ec.model.Conforms(want, got) {
 				ec.errorf(value.Span(), "cannot bind a value of type %s to a feature typed by %s", got.Name, want.Name)
 			}
 			continue

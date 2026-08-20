@@ -33,11 +33,7 @@ func (s *Session) lookupSymbol(name string) (*symbols.Symbol, string, error) {
 	if plain, ok := plainName(name); ok {
 		name = plain
 	}
-	doc := s.ws.Document(docName)
-	var docScope *symbols.Scope
-	if doc != nil {
-		docScope = doc.Scope
-	}
+	docScopes := s.docScopes()
 	// The library is searched even from an empty session, so a qualified
 	// library name is not answered with "no declarations loaded".
 	idx := s.browseIndex()
@@ -52,7 +48,7 @@ func (s *Session) lookupSymbol(name string) (*symbols.Symbol, string, error) {
 			// A name may reach through a declared feature into its type
 			// (Outer::inner::b), which no declaration is registered under.
 			if sym, fqn := s.featureChainSymbol(name); sym != nil {
-				if local := scopeSymbolFor(docScope, sym.Decl); local != nil {
+				if local := scopeSymbolForAny(docScopes, sym.Decl); local != nil {
 					sym = local
 				}
 				return sym, fqn, nil
@@ -66,7 +62,7 @@ func (s *Session) lookupSymbol(name string) (*symbols.Symbol, string, error) {
 			if fqn == "" {
 				fqn = name
 			}
-			if local := scopeSymbolFor(docScope, sym.Decl); local != nil {
+			if local := scopeSymbolForAny(docScopes, sym.Decl); local != nil {
 				sym = local
 			}
 			return sym, fqn, nil
@@ -75,12 +71,15 @@ func (s *Session) lookupSymbol(name string) (*symbols.Symbol, string, error) {
 		}
 	}
 
-	matches := collectInScopeTree(docScope, name)
+	var matches []*symbols.Symbol
+	for _, scope := range docScopes {
+		matches = append(matches, collectInScopeTree(scope, name)...)
+	}
 	switch len(matches) {
 	case 0:
 		// A name the session declares nowhere may still be visible where the
 		// prompt evaluates — through an import of that namespace.
-		if sym, ok := resolve.New(idx).LookupName(s.promptScope(doc), name); ok && sym != nil {
+		if sym, ok := resolve.New(idx).LookupName(s.promptScope(), name); ok && sym != nil {
 			return sym, idx.GetFQN(sym), nil
 		}
 		// A top-level library name (ISQ) is qualified by nothing, so the index
@@ -389,6 +388,28 @@ func collectInScopeTree(scope *symbols.Scope, name string) []*symbols.Symbol {
 		out = append(out, collectInScopeTree(child, name)...)
 	}
 	return out
+}
+
+// docScopes returns the scope trees of the session's open documents, in
+// buffer order, so a lookup reads both languages.
+func (s *Session) docScopes() []*symbols.Scope {
+	var out []*symbols.Scope
+	for _, doc := range s.sessionDocs() {
+		if doc.Scope != nil {
+			out = append(out, doc.Scope)
+		}
+	}
+	return out
+}
+
+// scopeSymbolForAny is scopeSymbolFor over several scope trees, first hit wins.
+func scopeSymbolForAny(scopes []*symbols.Scope, decl ast.Node) *symbols.Symbol {
+	for _, scope := range scopes {
+		if sym := scopeSymbolFor(scope, decl); sym != nil {
+			return sym
+		}
+	}
+	return nil
 }
 
 // scopeSymbolFor returns the symbol in scope's tree declared by decl, or nil.

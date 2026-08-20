@@ -17,9 +17,9 @@ import psutil
 import shutil
 from pathlib import Path
 from unittest.mock import patch, MagicMock
-import opensysml
-from opensysml.binary import ensure_binary, get_binary_path
-from opensysml.connection import _OWNED_SERVICES, _get_pidfile_path, _service_key
+import pysysml
+from pysysml.binary import ensure_binary, get_binary_path
+from pysysml.connection import _OWNED_SERVICES, _get_pidfile_path, _service_key
 from tests.service_gate import (
     free_port,
     service_binary,
@@ -59,7 +59,7 @@ class TestAutoLifecycle:
             pytest.skip(f"Binary download not available yet: {e}")
     
     def test_service_start_with_auto_lifecycle(self, tmp_path):
-        """Verify service starts automatically when using opensysml.load().
+        """Verify service starts automatically when using pysysml.load().
         
         Tests the complete lifecycle:
         1. Binary download (if needed)
@@ -76,7 +76,7 @@ class TestAutoLifecycle:
         
         # Use convenience API - should trigger auto-lifecycle
         try:
-            model = opensysml.load(str(test_file))
+            model = pysysml.load(str(test_file))
             
             # Verify model loaded successfully
             assert model is not None
@@ -109,11 +109,11 @@ class TestAutoLifecycle:
         
         try:
             # Load first model
-            model1 = opensysml.load(str(file1))
+            model1 = pysysml.load(str(file1))
             assert model1 is not None
             
             # Load second model - should reuse service
-            model2 = opensysml.load(str(file2))
+            model2 = pysysml.load(str(file2))
             assert model2 is not None
             
             # Models should be different (different hashes)
@@ -123,9 +123,9 @@ class TestAutoLifecycle:
             pytest.skip(f"Auto-lifecycle not available: {e}")
     
     def test_explicit_connect_with_auto_start(self):
-        """Verify opensysml.connect() with auto_start=True triggers lifecycle."""
+        """Verify pysysml.connect() with auto_start=True triggers lifecycle."""
         try:
-            conn = opensysml.connect(auto_start=True)
+            conn = pysysml.connect(auto_start=True)
             assert conn is not None
             
             # Connection should be usable
@@ -141,13 +141,13 @@ class TestAutoLifecycle:
         # It will fail if service isn't already running
         
         # Check if service is already running
-        from opensysml.connection import Connection
+        from pysysml.connection import Connection
         
         # Try connecting without auto-start
         conn = Connection(auto_start=False)
         
         # Try a simple operation - will fail if service not running
-        from opensysml.proto import sysml_pb2
+        from pysysml.proto import sysml_pb2
         import grpc
         
         try:
@@ -187,12 +187,12 @@ class TestLifecycleRobustness:
         
         try:
             # Load with explicit connection
-            conn1 = opensysml.connect(auto_start=True)
+            conn1 = pysysml.connect(auto_start=True)
             model1 = conn1.load(str(test_file))
             assert model1 is not None
             
             # Create new connection - should find service already running
-            conn2 = opensysml.connect(auto_start=True)
+            conn2 = pysysml.connect(auto_start=True)
             model2 = conn2.load(str(test_file))
             assert model2 is not None
             
@@ -208,7 +208,7 @@ class TestLifecycleRobustness:
             pytest.skip(f"Auto-lifecycle not available: {e}")
     
     def test_module_level_load_reuses_connection(self, tmp_path):
-        """Verify module-level opensysml.load() reuses connection across calls."""
+        """Verify module-level pysysml.load() reuses connection across calls."""
         file1 = tmp_path / "reuse1.sysml"
         file1.write_text("package Reuse1 { part P1; }")
         
@@ -217,19 +217,19 @@ class TestLifecycleRobustness:
         
         try:
             # Clear default connection to start fresh
-            opensysml._default_connection = None
-            opensysml._default_connection_params = None
+            pysysml._default_connection = None
+            pysysml._default_connection_params = None
             
             # Load two models
-            model1 = opensysml.load(str(file1))
-            model2 = opensysml.load(str(file2))
+            model1 = pysysml.load(str(file1))
+            model2 = pysysml.load(str(file2))
             
             assert model1 is not None
             assert model2 is not None
             assert model1.hash != model2.hash
             
             # Should have created only one default connection
-            assert opensysml._default_connection is not None
+            assert pysysml._default_connection is not None
             
         except Exception as e:
             pytest.skip(f"Auto-lifecycle not available: {e}")
@@ -239,7 +239,7 @@ class TestLifecycleRobustness:
 class TestOwnershipOfASpawnedService:
     """A service this process spawned, on a port and state directory of its own.
 
-    opensysml never stops a service it did not spawn, so these spawn their own
+    pysysml never stops a service it did not spawn, so these spawn their own
     rather than asserting anything about whatever listens on the default port.
     """
 
@@ -249,10 +249,10 @@ class TestOwnershipOfASpawnedService:
         binary = service_binary()
         if binary is None:
             skip_or_fail_without_service("no sysml-grpc binary is available to spawn")
-        monkeypatch.setenv("OPENSYSML_STATE_DIR", str(tmp_path / "state"))
-        monkeypatch.delenv("OPENSYSML_GRPC_VERSION", raising=False)
+        monkeypatch.setenv("PYSYSML_STATE_DIR", str(tmp_path / "state"))
+        monkeypatch.delenv("PYSYSML_GRPC_VERSION", raising=False)
         monkeypatch.setattr(
-            "opensysml.connection.ensure_binary", lambda **kwargs: binary
+            "pysysml.connection.ensure_binary", lambda **kwargs: binary
         )
         port = free_port()
         yield port
@@ -271,12 +271,12 @@ class TestOwnershipOfASpawnedService:
         self, own_service
     ):
         """A spawned service outlives every connection but the last."""
-        conn1 = opensysml.connect(port=own_service, auto_start=True)
+        conn1 = pysysml.connect(port=own_service, auto_start=True)
         pid = self._recorded_pid(own_service)
         service = psutil.Process(pid)
         assert service.is_running()
 
-        conn2 = opensysml.connect(port=own_service, auto_start=True)
+        conn2 = pysysml.connect(port=own_service, auto_start=True)
         # Both connections hold the one service this process spawned.
         assert _OWNED_SERVICES[_service_key(own_service)]["refs"] == 2
 
@@ -299,10 +299,10 @@ class TestOwnershipOfASpawnedService:
         Otherwise the connection that spawned it could stop it while another is
         still using it.
         """
-        spawner = opensysml.connect(port=own_service, auto_start=True)
+        spawner = pysysml.connect(port=own_service, auto_start=True)
         service = psutil.Process(self._recorded_pid(own_service))
 
-        attached = opensysml.connect(port=own_service, auto_start=True)
+        attached = pysysml.connect(port=own_service, auto_start=True)
         spawner.close()
         assert service.is_running()
 
@@ -312,13 +312,13 @@ class TestOwnershipOfASpawnedService:
 
     def test_a_crashed_service_leaves_recoverable_state(self, own_service):
         """A record whose process is gone is cleaned, and a service starts again."""
-        conn = opensysml.connect(port=own_service, auto_start=True)
+        conn = pysysml.connect(port=own_service, auto_start=True)
         service = psutil.Process(self._recorded_pid(own_service))
         service.kill()
         _wait_gone(service)
         conn.close()
 
-        with opensysml.connect(port=own_service, auto_start=True) as recovered:
+        with pysysml.connect(port=own_service, auto_start=True) as recovered:
             started = psutil.Process(self._recorded_pid(own_service))
             assert started.pid != service.pid
             assert started.is_running()
@@ -330,12 +330,12 @@ class TestOwnershipOfASpawnedService:
         self, own_service
     ):
         """A reference taken on a dead service is not a reference on the new one."""
-        crashed = opensysml.connect(port=own_service, auto_start=True)
+        crashed = pysysml.connect(port=own_service, auto_start=True)
         service = psutil.Process(self._recorded_pid(own_service))
         service.kill()
         _wait_gone(service)
 
-        restarted_conn = opensysml.connect(port=own_service, auto_start=True)
+        restarted_conn = pysysml.connect(port=own_service, auto_start=True)
         restarted = psutil.Process(self._recorded_pid(own_service))
         crashed.close()
         assert restarted.is_running()
