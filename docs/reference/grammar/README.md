@@ -12,7 +12,16 @@ For reference, the official Xtext grammar files from OMG are available at:
 **SysML v2 Grammar:**
 - https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/blob/master/org.omg.sysml.xtext/src/org/omg/sysml/xtext/SysML.xtext
 
-These files are licensed under Eclipse Public License 2.0 (EPL-2.0) and are not included in this repository to avoid license mixing.
+These files are licensed under Eclipse Public License 2.0 (EPL-2.0) and are not included in this repository to avoid license mixing. `./scripts/download-pilot-grammars.sh` fetches them at the pinned release into `build/pilot-grammars/` when they are needed.
+
+Which of their productions our test inputs have ever exercised is measured, on input-presence evidence rather than execution coverage, in [grammar-coverage.md](../../project/grammar-coverage.md).
+
+## Conformance Audit
+
+[conformance-audit.md](conformance-audit.md) records, with `file:line` citations
+at the pinned grammars, which words and constructs OpenSysML accepts are standard
+(silent), which are our own extensions (warned as `nonstandard-notation`), and
+which are KerML-only in a `.sysml` file (warned as `kerml-notation`).
 
 ## State Machine Notation Beyond the OMG Grammar
 
@@ -26,7 +35,8 @@ library or the Systems Library, and those are the governing reference; UML 2.5.1
 notation there is diagrammatic and so has no textual surface syntax to borrow.
 
 OpenSysML therefore defines its own keywords for them, in a state body only.
-They are a documented extension, not an OMG notation:
+They are a documented extension, not an OMG notation, and using one draws a
+`nonstandard-notation` warning:
 
 | Form | Meaning | Semantic reference |
 |------|---------|-------------|
@@ -50,6 +60,13 @@ connectors be 1..1" — the library states no behavior of their own, a
 
 Notes:
 
+- `fork` and `join` are the exception in that table: both are action node
+  literals a state body admits (`SysML.xtext:1684`, `:1678`, `:1761-1763`), so
+  they are read as standard and are not warned about.
+- None of `choice`, `decision`, `deep`, `defer`, `done`, `final`, `history`,
+  `initial`, `junction`, `region` or `shallow` is reserved: each is a literal in
+  none of the pinned grammars, so all are ordinary names, matched contextually
+  where the notation above needs them.
 - `point` is **not** a reserved word: it is matched contextually after `entry`
   or `exit` and only when a pseudostate name and `;` follow, because models
   routinely declare features named `point`. `entry <action>` keeps its OMG

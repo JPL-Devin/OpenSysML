@@ -146,7 +146,7 @@ func (p *Parser) parseActionBodyMixed() []ast.Node {
 					continue
 				}
 				// If brace after name, peek inside
-				if tok2.Kind == lexer.LBrace && startsActionBodyItem(p.peekN(3)) {
+				if tok2.Kind == lexer.LBrace && p.startsActionBodyItem(3) {
 					body.add(p.parseBodyMember())
 					continue
 				}
@@ -154,7 +154,7 @@ func (p *Parser) parseActionBodyMixed() []ast.Node {
 			// `action { <statements> }` is the anonymous ActionBodyParameter a loop
 			// or branch body is written as (SysML.xtext ActionBodyParameter), not the
 			// one expression an `action { <expr> }` node computes.
-			if tok1.Kind == lexer.LBrace && startsActionBodyItem(p.peekN(2)) {
+			if tok1.Kind == lexer.LBrace && p.startsActionBodyItem(2) {
 				body.add(p.parseBodyMember())
 				continue
 			}
@@ -390,6 +390,20 @@ func (p *Parser) parseActionMember() ast.Node {
 		return p.parseBodyMember()
 	}
 
+	// The words of our own node notation are names the lexer does not reserve,
+	// so they are matched by the shape around them (see notation.go).
+	if w, ok := p.atActionNodeWord(); ok {
+		tok := p.advance()
+		switch w {
+		case "initial":
+			return p.parseInitialNode(tok)
+		case "done", "final":
+			return p.parseFinalNode(tok)
+		case "decision":
+			return p.parseDecisionNode(tok)
+		}
+	}
+
 	// Try general declaration first (nested actions, features, etc.)
 	if node := p.tryParseDeclaration(); node != nil {
 		return node
@@ -404,17 +418,15 @@ func (p *Parser) parseActionMember() ast.Node {
 	if tok, ok := p.accept(lexer.Keyword); ok {
 		kw := tok.KeywordID
 		switch kw {
-		case "first", "initial":
+		case "first":
 			return p.parseInitialNode(tok)
-		case "done", "final":
-			return p.parseFinalNode(tok)
 		case "fork":
 			return p.parseForkNode(tok)
 		case "join":
 			return p.parseJoinNode(tok)
 		case "merge":
 			return p.parseMergeNode(tok)
-		case "decision", "decide":
+		case "decide":
 			return p.parseDecisionNode(tok)
 		case "action":
 			return p.parseActionExecutionNode(tok)
@@ -519,6 +531,7 @@ func (p *Parser) parseInitialNode(tok lexer.Token) ast.Node {
 		Name:      name,
 		Successor: successor,
 		Guard:     guard,
+		Keyword:   p.wordText(tok),
 	}
 	node.NodeSpan = p.spanFrom(start)
 	return node
@@ -537,7 +550,8 @@ func (p *Parser) parseFinalNode(tok lexer.Token) ast.Node {
 	p.expect(lexer.Semicolon, "expected ';' after final node")
 
 	node := &ast.FinalNode{
-		Name: name,
+		Name:    name,
+		Keyword: p.wordText(tok),
 	}
 	node.NodeSpan = p.spanFrom(start)
 	return node
@@ -626,6 +640,7 @@ func (p *Parser) parseDecisionNode(tok lexer.Token) ast.Node {
 	node := &ast.DecisionNode{
 		Name:     name,
 		NameSpan: nameSpan,
+		Keyword:  p.wordText(tok),
 	}
 	node.NodeSpan = p.spanFrom(start)
 	return node
@@ -779,18 +794,23 @@ func (p *Parser) atNamespaceSuccession() bool {
 	return isUsage
 }
 
-// startsActionBodyItem reports whether tok, the first token inside a braced
-// action body, begins an action body item (SysML.xtext ActionBodyItem) rather
-// than an expression. Only keywords that cannot begin an expression qualify.
-func startsActionBodyItem(tok lexer.Token) bool {
-	if tok.Kind != lexer.Keyword {
+// startsActionBodyItem reports whether the token n ahead, the first inside a
+// braced action body, begins an action body item (SysML.xtext ActionBodyItem)
+// rather than an expression. Only words that cannot begin an expression qualify,
+// so `done` and `decision` count only in the node shape (see notation.go).
+func (p *Parser) startsActionBodyItem(n int) bool {
+	if p.peekN(n).Kind == lexer.Identifier {
+		_, ok := p.actionNodeWordAt(n)
+		return ok
+	}
+	if p.peekN(n).Kind != lexer.Keyword {
 		return false
 	}
-	switch tok.KeywordID {
+	switch p.peekN(n).KeywordID {
 	case "in", "out", "inout",
 		"action", "part", "item", "flow", "doc", "state", "port", "attribute",
 		"perform", "send", "assign", "accept", "terminate",
-		"first", "then", "done", "fork", "join", "merge", "decision", "decide",
+		"first", "then", "fork", "join", "merge", "decide",
 		"while", "loop", "for":
 		return true
 	}
@@ -2157,18 +2177,43 @@ func (p *Parser) parseStateMember() ast.Node {
 		return p.parseDocumentation(start)
 	}
 
+	// The words of our own state notation are names the lexer does not reserve,
+	// so they are matched by the shape around them (see notation.go).
+	if w, ok := p.atStateNotationWord(); ok {
+		p.advance()
+		switch w {
+		case "initial":
+			return p.parseInitialState(start)
+		case "final":
+			return p.parseFinalState(start)
+		case "region":
+			return p.parseRegionMember(start)
+		case "choice":
+			return p.parsePseudostate(start, w, ast.PseudostateChoice)
+		case "junction":
+			return p.parsePseudostate(start, w, ast.PseudostateJunction)
+		case "history":
+			// Bare `history <name>;` is shallow: SysML v2 has no history notation, so
+			// UML's H vs H* is the reference for this OpenSysML extension.
+			return p.parsePseudostate(start, w, ast.PseudostateShallowHistory)
+		case "shallow", "deep":
+			kind := ast.PseudostateShallowHistory
+			if w == "deep" {
+				kind = ast.PseudostateDeepHistory
+			}
+			p.advance() // consume 'history'
+			return p.parsePseudostate(start, w+" history", kind)
+		case "defer":
+			return p.parseDeferMember(start)
+		}
+	}
+
 	// Check for state-specific keywords first
 	if p.at(lexer.Keyword) {
 		tok := p.peek()
 		kw := tok.KeywordID
 
 		switch kw {
-		case "initial":
-			p.advance()
-			return p.parseInitialState(start)
-		case "final":
-			p.advance()
-			return p.parseFinalState(start)
 		case "entry":
 			// `entry point <name>;` declares an entry point pseudostate; `entry ...`
 			// anything else is the state's entry action.
@@ -2190,9 +2235,6 @@ func (p *Parser) parseStateMember() ast.Node {
 			}
 			p.advance()
 			return p.parseExitMember(start)
-		case "defer":
-			p.advance()
-			return p.parseDeferMember(start)
 		case "state":
 			// Check if this is a simple declaration (state name;) or full usage (state name { ... })
 			// Lookahead: state followed by name/keyword and semicolon → SubstateMember
@@ -2205,39 +2247,12 @@ func (p *Parser) parseStateMember() ast.Node {
 			}
 			// Full state usage - parse as body member
 			return p.parseBodyMember()
-		case "region":
-			p.advance()
-			return p.parseRegionMember(start)
-		case "choice":
-			p.advance()
-			return p.parsePseudostate(start, kw, ast.PseudostateChoice)
-		case "junction":
-			p.advance()
-			return p.parsePseudostate(start, kw, ast.PseudostateJunction)
 		case "fork":
 			p.advance()
 			return p.parsePseudostate(start, kw, ast.PseudostateFork)
 		case "join":
 			p.advance()
 			return p.parsePseudostate(start, kw, ast.PseudostateJoin)
-		case "history":
-			// Bare `history <name>;` is shallow: SysML v2 has no history notation, so
-			// UML's H vs H* is the reference for this OpenSysML extension.
-			p.advance()
-			return p.parsePseudostate(start, kw, ast.PseudostateShallowHistory)
-		case "shallow", "deep":
-			kind := ast.PseudostateShallowHistory
-			if kw == "deep" {
-				kind = ast.PseudostateDeepHistory
-			}
-			p.advance() // consume 'shallow' / 'deep'
-			if !p.acceptKeyword("history") {
-				p.error(p.peek().Span, fmt.Sprintf("expected 'history' after '%s'", kw))
-				en := &ast.ErrorNode{Message: fmt.Sprintf("expected 'history' after '%s'", kw)}
-				en.NodeSpan = p.spanFrom(start)
-				return en
-			}
-			return p.parsePseudostate(start, kw+" history", kind)
 		case "transition":
 			// Lookahead to distinguish:
 			// 1. State machine transition: transition source to target (no name)
@@ -2252,8 +2267,7 @@ func (p *Parser) parseStateMember() ast.Node {
 			return p.parseTransitionMember(start)
 		case "first":
 			// Initial node: first <name> then <target>;
-			p.advance() // consume 'first'
-			return p.parseInitialNode(p.peek())
+			return p.parseInitialNode(p.advance())
 		case "then":
 			// Standalone succession (`then <source> <target>;`, `then <target>;`):
 			// the same edge node a member-attached `then` desugars to, so a state
@@ -2605,7 +2619,7 @@ func (p *Parser) parseCallEvent(start int, operation *ast.QualifiedName) ast.Nod
 //
 //	accept <trigger> [via <port>] [if <guard>] [do <effect>] then <target>;
 func (p *Parser) parseAcceptTransition(start int) ast.Node {
-	return p.parseTransitionTail(start, "", nil, nil)
+	return p.parseTransitionTail(start, "", nil, nil, lexer.Token{})
 }
 
 // stateSubactionKind names which of a state's subactions is being parsed: the
@@ -2913,8 +2927,9 @@ func (p *Parser) parsePseudostate(start int, keyword string, kind ast.Pseudostat
 	p.expect(lexer.Semicolon, fmt.Sprintf("expected ';' after %s name", keyword))
 
 	ps := &ast.PseudostateNode{
-		Kind: kind,
-		Name: name,
+		Kind:    kind,
+		Name:    name,
+		Keyword: keyword,
 	}
 	ps.NodeSpan = p.spanFrom(start)
 	return ps
@@ -2933,6 +2948,9 @@ func (p *Parser) parsePseudostate(start int, keyword string, kind ast.Pseudostat
 func (p *Parser) parseTransitionMember(start int) ast.Node {
 	var name string
 	var source, target *ast.QualifiedName
+	// The `to` of the second spelling, kept so the pass that diagnoses it can
+	// point at the word.
+	var toTok lexer.Token
 
 	// A name of the transition's own, which only the `first` spelling can have:
 	// in the `to` spelling the first name is the source state.
@@ -2951,7 +2969,8 @@ func (p *Parser) parseTransitionMember(start int) ast.Node {
 	case p.atName() || p.at(lexer.Keyword):
 		source = p.parseQualifiedNameRelaxed()
 		switch {
-		case p.acceptKeyword("to"):
+		case p.atKeyword("to"):
+			toTok = p.advance()
 			target = p.parseQualifiedNameRelaxed()
 		case p.atTransitionClause():
 			// `first` is optional in `TransitionUsage`, so a bare source may be
@@ -2964,7 +2983,7 @@ func (p *Parser) parseTransitionMember(start int) ast.Node {
 		}
 	}
 
-	return p.parseTransitionTail(start, name, source, target)
+	return p.parseTransitionTail(start, name, source, target, toTok)
 }
 
 // atTransitionClause reports whether the parser is at a clause a transition
@@ -2979,11 +2998,14 @@ func (p *Parser) atTransitionClause() bool {
 // the `then` naming it — and the terminating ';'. The clauses are read in the
 // order they were written so a misordered transition is reported once, at the
 // clause that is out of place, rather than silently dropped.
-func (p *Parser) parseTransitionTail(start int, name string, source, target *ast.QualifiedName) ast.Node {
+func (p *Parser) parseTransitionTail(start int, name string, source, target *ast.QualifiedName, toTok lexer.Token) ast.Node {
 	node := &ast.TransitionMember{
 		Name:   name,
 		Source: source,
 		Target: target,
+	}
+	if toTok.Kind == lexer.Keyword {
+		node.ToSpan = toTok.Span
 	}
 
 	for {

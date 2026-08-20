@@ -112,6 +112,7 @@ nav:
       - Python API: reference/python-api.md
       - RDF mapping: reference/rdf-mapping.md
       - Grammar: reference/grammar/README.md
+      - Grammar conformance audit: reference/grammar/conformance-audit.md
   - Internals:
       - internals/README.md
       - Architecture: internals/architecture.md
@@ -139,6 +140,7 @@ nav:
       - Spec compliance: project/spec-compliance.md
       - Training examples: project/training-examples.md
       - Pilot differential: project/pilot-differential.md
+      - Grammar coverage: project/grammar-coverage.md
       - Roadmap: project/roadmap.md
       - Releasing: project/releasing.md
       - macOS distribution: project/macos-distribution.md

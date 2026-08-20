@@ -16,6 +16,9 @@ const (
 	// CategoryUnmapped is for a diagnostic no rule below claims. It is
 	// deliberately never merged into another category: an unmapped diagnostic
 	// must show up as a disagreement rather than as accidental agreement.
+	// Specialization cycles stay here by adjudication: the pilot has no such
+	// check, and no category above describes one (F4 in
+	// docs/project/pilot-differential.md).
 	CategoryUnmapped Category = "unmapped"
 )
 

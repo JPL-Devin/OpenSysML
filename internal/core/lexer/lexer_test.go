@@ -465,15 +465,13 @@ func TestCompoundRelationshipOperators(t *testing.T) {
 // TestBehavioralKeywords verifies lexer recognizes all SysML v2 behavioral
 // keywords for action control-flow and state machine parsing (Task 6).
 func TestBehavioralKeywords(t *testing.T) {
-	src := source.New("test", []byte("first done fork join merge decision then state initial final entry exit transition after when accept choice junction region"))
+	src := source.New("test", []byte("first fork join merge decide then state entry exit transition after when accept parallel"))
 	l := New(src)
 
 	expectedKeywords := []string{
-		"first", "done", "fork", "join", "merge", "decision", "then", // Action
-		"state", "initial", "final", "entry", "exit", "transition", // State
-		"after", "when", "accept", // Trigger
-		"choice", "junction", // Pseudostate
-		"region", // Region
+		"first", "fork", "join", "merge", "decide", "then", // Action
+		"state", "entry", "exit", "transition", // State
+		"after", "when", "accept", "parallel", // Trigger and state body
 	}
 	for i, expected := range expectedKeywords {
 		tok := l.Next()
@@ -495,7 +493,13 @@ func TestBehavioralKeywords(t *testing.T) {
 // position only: the lexer hands them over as names and the parser matches them
 // contextually, so a model may declare a feature with any of them.
 func TestContextualWordsAreIdentifiers(t *testing.T) {
-	for _, word := range []string{"on", "var", "point", "chain"} {
+	for _, word := range []string{
+		"on", "var", "point", "chain",
+		// Words that are a literal in none of the pinned grammars: our own state
+		// and action notation (docs/reference/grammar/conformance-audit.md).
+		"choice", "decision", "deep", "defer", "done", "final", "history",
+		"initial", "junction", "region", "shallow",
+	} {
 		src := source.New("test", []byte(word))
 		tok := New(src).Next()
 		if tok.Kind != Identifier {

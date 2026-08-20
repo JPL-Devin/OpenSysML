@@ -53,11 +53,13 @@ var keywordGroups = []struct {
 		rule:  "keywords-control",
 		scope: "keyword.control",
 		keywords: []string{
-			"accept", "after", "assert", "assign", "at", "choice", "decide", "decision",
-			"deep", "defer", "do", "done", "else", "entry", "exhibit", "exit", "first",
-			"for", "fork", "history", "if", "include", "initial", "join", "junction",
-			"loop", "merge", "parallel", "perform", "region", "render", "require",
-			"return", "satisfy", "send", "shallow", "succession", "terminate", "then",
+			// The words our state notation adds (`region`, `initial`, `done`) are not
+			// here: the lexer does not reserve them, so they are names to it.
+			"accept", "after", "assert", "assign", "at", "decide",
+			"do", "else", "entry", "exhibit", "exit", "first",
+			"for", "fork", "if", "include", "join",
+			"loop", "merge", "parallel", "perform", "render", "require",
+			"return", "satisfy", "send", "succession", "terminate", "then",
 			"to", "transition", "until", "via", "when", "while",
 		},
 	},
@@ -66,7 +68,7 @@ var keywordGroups = []struct {
 		scope: "storage.modifier",
 		keywords: []string{
 			"abstract", "all", "composite", "const", "constant", "default", "derived",
-			"end", "final", "in", "individual", "inout", "library", "member", "new",
+			"end", "in", "individual", "inout", "library", "member", "new",
 			"nonunique", "ordered", "out", "portion", "private", "protected", "public",
 			"ref", "snapshot", "standard", "timeslice", "variant", "variation",
 		},
