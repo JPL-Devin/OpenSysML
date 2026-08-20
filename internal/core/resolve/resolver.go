@@ -60,8 +60,10 @@ type Resolver struct {
 	endpoints map[*ast.QualifiedName]resolution
 	// imports are the import declarations of a namespace-bearing node, found once
 	// and kept: see (*Resolver).importsOf.
-	imports     map[ast.Node][]*ast.Import
-	Diagnostics []Diagnostic
+	imports          map[ast.Node][]*ast.Import
+	importStack      map[*ast.Import]bool
+	resolvingImports map[*ast.Import]bool
+	Diagnostics      []Diagnostic
 	// quiet is nonzero while a lookup is made on behalf of a semantic query
 	// rather than a reference in the document being resolved.
 	quiet int
@@ -98,16 +100,18 @@ type Resolver struct {
 // New creates a resolver over the given index.
 func New(idx *symbols.Index) *Resolver {
 	return &Resolver{
-		idx:           idx,
-		memo:          map[ast.Node]resolution{},
-		resolving:     map[ast.Node]bool{},
-		featureChains: map[featureChainKey]resolution{},
-		parts:         map[*ast.QualifiedName][]*symbols.Symbol{},
-		endpoints:     map[*ast.QualifiedName]resolution{},
-		imports:       map[ast.Node][]*ast.Import{},
-		naming:        map[*symbols.Symbol]bool{},
-		nsFilters:     map[*symbols.Scope][]symbols.ElementFilter{},
-		payloads:      map[*symbols.Scope]map[string]*symbols.Symbol{},
+		idx:              idx,
+		memo:             map[ast.Node]resolution{},
+		resolving:        map[ast.Node]bool{},
+		featureChains:    map[featureChainKey]resolution{},
+		parts:            map[*ast.QualifiedName][]*symbols.Symbol{},
+		endpoints:        map[*ast.QualifiedName]resolution{},
+		imports:          map[ast.Node][]*ast.Import{},
+		importStack:      map[*ast.Import]bool{},
+		resolvingImports: map[*ast.Import]bool{},
+		naming:           map[*symbols.Symbol]bool{},
+		nsFilters:        map[*symbols.Scope][]symbols.ElementFilter{},
+		payloads:         map[*symbols.Scope]map[string]*symbols.Symbol{},
 
 		suggestions: map[suggestKey][]string{},
 		suggesting:  map[suggestKey]bool{},

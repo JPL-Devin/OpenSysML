@@ -157,11 +157,40 @@ func simpleName(sym *symbols.Symbol) string {
 func (r *Resolver) lookupImports(scope *symbols.Scope, name string) (*symbols.Symbol, bool) {
 	node := scope.Node()
 	for _, imp := range r.importsOf(node) {
+		if r.resolvingImports[imp] {
+			continue
+		}
 		if sym, ok := r.matchImport(scope, imp, name); ok {
 			return sym, true
 		}
 	}
 	return nil, false
+}
+
+// lookupImportedMember resolves a segment surfaced by the namespace being
+// traversed, including a public membership import.
+func (r *Resolver) lookupImportedMember(target *symbols.Symbol, targetScope, from *symbols.Scope, name string) (*symbols.Symbol, bool) {
+	for _, imp := range r.importsOf(targetScope.Node()) {
+		if imp.Kind != ast.ImportMembership {
+			continue
+		}
+		if !r.importVisibleFrom(target, from, imp) {
+			continue
+		}
+		if sym, ok := r.matchImport(targetScope, imp, name); ok {
+			return sym, true
+		}
+	}
+	return nil, false
+}
+
+func (r *Resolver) importVisibleFrom(target *symbols.Symbol, from *symbols.Scope, imp *ast.Import) bool {
+	if imp.Visibility != ast.VisibilityPrivate && !imp.IsExpose {
+		return true
+	}
+	targetFQN := r.registeredFQN(target)
+	fromFQN := r.ReferringNamespaceFQN(from)
+	return targetFQN != "" && (fromFQN == targetFQN || strings.HasPrefix(fromFQN, targetFQN+"::"))
 }
 
 // importsOf is importsOf memoized: the tree is immutable once parsed, and every
@@ -220,7 +249,18 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 	if imp.Imported == nil || len(imp.Imported.Parts) == 0 {
 		return nil, false
 	}
+	if imp.Kind == ast.ImportMembership && !imp.IsRecursive {
+		targetName := imp.Imported.Parts[len(imp.Imported.Parts)-1].Text
+		if targetName != name {
+			return nil, false
+		}
+	}
+	if r.resolvingImports[imp] {
+		return nil, false
+	}
+	r.resolvingImports[imp] = true
 	target, ok := r.ResolveQualified(scope, imp.Imported)
+	delete(r.resolvingImports, imp)
 	if !ok {
 		return nil, false
 	}
@@ -246,6 +286,9 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 	// Check scope first if available
 	if target.Scope != nil {
 		if sym, ok := target.Scope.LookupLocal(name); ok && visibleThroughImport(imp, sym) && admit(sym) {
+			return sym, true
+		}
+		if sym, ok := r.lookupImportedMember(target, target.Scope, scope, name); ok && visibleThroughImport(imp, sym) && admit(sym) {
 			return sym, true
 		}
 	}
