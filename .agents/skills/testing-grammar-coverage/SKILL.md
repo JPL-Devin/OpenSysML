@@ -17,10 +17,12 @@ form-level unseen diagnostics.
 - `./scripts/download-pilot-grammars.sh` — run by the blueprint's `initialize`, and cheap (~2 s
   sparse clone, unlike the multi-minute validator build), so re-provisioning from scratch is free
   and should always be part of the test.
-- The corpora it searches must be present, including the OMG training corpus
-  (`./scripts/download-training-examples.sh`, in the blueprint maintenance step). A missing corpus
-  silently lowers the file count (expect `searched 536 corpus file(s) for 217 distinct literal(s)`
-  when everything is present) and shifts every bucket — check that line before believing a diff.
+- All eight corpus roots must be present, which takes two more downloads: the OMG training corpus
+  (`./scripts/download-training-examples.sh`) and the OMG example/validation corpora
+  (`./scripts/download-pilot-corpora.sh`, which writes `examples/pilot-corpora/`, 212 of the files).
+  A missing corpus silently lowers the file count (expect `searched 536 corpus file(s) for 217
+  distinct literal(s)` when everything is present) and shifts every bucket — check that line before
+  believing a diff, since `cmp` against the committed baseline fails on the root stats alone.
 
 ## The core check
 
