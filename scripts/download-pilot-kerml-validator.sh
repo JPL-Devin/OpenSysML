@@ -99,7 +99,9 @@ else
 fi
 
 # Always rewritten, so a changed pin never leaves a launcher pointing at the old jar.
-cat >"$launcher" <<'EOF'
+launcher_tmp="$(mktemp "${launcher}.XXXXXX")"
+trap 'rm -f "$launcher_tmp" "${launcher_tmp}.out"' EXIT
+cat >"$launcher_tmp" <<'EOF'
 #!/bin/sh
 set -e
 
@@ -128,23 +130,27 @@ if [ ! -f "$JAR" ]; then
 	echo "Error: pilot KerML jar not found at $JAR" >&2
 	exit 1
 fi
-if [ ! -d "$LIBRARY" ]; then
-	echo "Error: SysML library not found at $LIBRARY" >&2
-	exit 1
-fi
 
 has_library=0
 for arg in "$@"; do
 	[ "$arg" = "--library" ] && has_library=1
 done
 if [ "$has_library" -eq 0 ]; then
+	if [ ! -d "$LIBRARY" ]; then
+		echo "Error: SysML library not found at $LIBRARY" >&2
+		exit 1
+	fi
 	LIBRARY="$(cd "$LIBRARY" && pwd)"
 	set -- --library "$LIBRARY" "$@"
 fi
 
 exec "$JAVA" -cp "$CLASSES:$JAR" ValidateKerML "$@"
 EOF
-sed -i "s/__PILOT_ARTIFACT_VERSION__/${PILOT_ARTIFACT_VERSION}/" "$launcher"
+sed "s|__PILOT_ARTIFACT_VERSION__|${PILOT_ARTIFACT_VERSION}|g" \
+	"$launcher_tmp" >"${launcher_tmp}.out"
+mv "${launcher_tmp}.out" "$launcher"
+rm -f "$launcher_tmp"
+trap - EXIT
 chmod +x "$launcher"
 
 echo "Built $launcher (pilot $PILOT_TAG, $PILOT_ARTIFACT_VERSION)"

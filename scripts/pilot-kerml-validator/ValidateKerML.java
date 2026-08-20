@@ -41,8 +41,18 @@ public final class ValidateKerML extends SysMLUtil {
 
     private final IResourceValidator validator;
     private final Path root;
-    private final List<Path> readFiles = new ArrayList<>();
+    private final List<Input> inputs = new ArrayList<>();
     private boolean hasErrors = false;
+
+    private static final class Input {
+        private final Path file;
+        private final Resource resource;
+
+        private Input(Path file, Resource resource) {
+            this.file = file;
+            this.resource = resource;
+        }
+    }
 
     private ValidateKerML(IResourceValidator validator, Path root) {
         super();
@@ -65,8 +75,9 @@ public final class ValidateKerML extends SysMLUtil {
     private void readInputs(List<Path> files) {
         for (Path file : files) {
             try {
-                addInputResource(readResource(file.toString()));
-                readFiles.add(file);
+                Resource resource = readResource(file.toString());
+                addInputResource(resource);
+                inputs.add(new Input(file, resource));
             } catch (RuntimeException e) {
                 report(file, 1, 1, Severity.ERROR, message(e));
             }
@@ -74,18 +85,15 @@ public final class ValidateKerML extends SysMLUtil {
     }
 
     private void validateInputs() {
-        List<Resource> resources = getInputResources();
-        for (int i = 0; i < resources.size(); i++) {
-            Resource resource = resources.get(i);
-            Path file = readFiles.get(i);
+        for (Input input : inputs) {
             try {
-                for (Issue issue : validator.validate(resource, CheckMode.ALL, CancelIndicator.NullImpl)) {
+                for (Issue issue : validator.validate(input.resource, CheckMode.ALL, CancelIndicator.NullImpl)) {
                     int line = issue.getLineNumber() == null ? 1 : issue.getLineNumber();
                     int column = issue.getColumn() == null ? 1 : issue.getColumn();
-                    report(file, line, column, issue.getSeverity(), issue.getMessage());
+                    report(input.file, line, column, issue.getSeverity(), issue.getMessage());
                 }
             } catch (RuntimeException e) {
-                report(file, 1, 1, Severity.ERROR, message(e));
+                report(input.file, 1, 1, Severity.ERROR, message(e));
             }
         }
     }
