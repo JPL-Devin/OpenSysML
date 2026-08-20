@@ -103,6 +103,55 @@ func TestTypeCheckKerMLTypedByNonTypeStillFires(t *testing.T) {
 	}
 }
 
+// An alias resolves to its target upstream, so a chain of them names the type.
+func TestTypeCheckKerMLSpecializesAliasOfTypeClean(t *testing.T) {
+	src := "class Object; alias O1 for Object; alias O2 for O1; class C specializes O2;"
+	if diags := diagsIn(t, "a.kerml", src, "type"); len(diags) != 0 {
+		t.Errorf("expected no type diagnostics, got %v", diags)
+	}
+}
+
+// An alias reaches the check unresolved only when it is cyclic, naming no type.
+func TestTypeCheckKerMLSpecializesCyclicAliasStillFires(t *testing.T) {
+	for _, src := range []string{
+		"alias A for A; class C specializes A;",
+		"alias A for B; alias B for A; class C specializes A;",
+	} {
+		diags := diagsIn(t, "a.kerml", src, "type")
+		if len(diags) != 1 {
+			t.Fatalf("%s: expected one type diagnostic, got %v", src, diags)
+		}
+		if !strings.Contains(diags[0].Message, "may specialize only a type, found alias") {
+			t.Errorf("%s: got %q", src, diags[0].Message)
+		}
+	}
+}
+
+// isTypeKind enumerates the types, so an unclassified kind is not one: a kind
+// added later is rejected until someone classifies it.
+func TestIsTypeKindIsAnAllowlist(t *testing.T) {
+	for _, k := range []symbols.SymbolKind{
+		symbols.SymbolKerMLType, symbols.SymbolPartDef, symbols.SymbolMetaclass,
+		symbols.SymbolAttributeUsage, symbols.SymbolConnectorEnd,
+	} {
+		if !isTypeKind(k) {
+			t.Errorf("%s: expected a type", k)
+		}
+	}
+	for _, k := range []symbols.SymbolKind{
+		symbols.SymbolPackage, symbols.SymbolNamespace, symbols.SymbolAlias,
+		symbols.SymbolDependency, symbols.SymbolComment, symbols.SymbolDocumentation,
+		symbols.SymbolTextualRepresentation,
+	} {
+		if isTypeKind(k) {
+			t.Errorf("%s: expected not a type", k)
+		}
+	}
+	if n := symbols.SymbolKerMLType + 1; isTypeKind(n) {
+		t.Errorf("an unenumerated kind (%d) must not be a type", n)
+	}
+}
+
 // A metaclass is a Class and specializes a metaclass, in either language.
 func TestTypeCheckMetaclassSpecializesMetaclass(t *testing.T) {
 	for _, name := range []string{"a.kerml", "a.sysml"} {

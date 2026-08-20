@@ -619,21 +619,27 @@ func isUsageKind(k symbols.SymbolKind) bool {
 	return usageSymbolKinds[k]
 }
 
-// nonTypeSymbolKinds classifies what is not a type and so may not be a
-// specialization or typing target: a namespace, a dependency or an annotation.
-var nonTypeSymbolKinds = map[symbols.SymbolKind]bool{
-	symbols.SymbolPackage:               true,
-	symbols.SymbolNamespace:             true,
-	symbols.SymbolDependency:            true,
-	symbols.SymbolComment:               true,
-	symbols.SymbolDocumentation:         true,
-	symbols.SymbolTextualRepresentation: true,
-}
+// typeSymbolKinds is the set of SymbolKinds that classify a Type: every
+// definition and usage kind, plus a KerML type declaration. Enumerated rather
+// than derived by negation so a kind added later is rejected until classified.
+var typeSymbolKinds = func() map[symbols.SymbolKind]bool {
+	m := map[symbols.SymbolKind]bool{symbols.SymbolKerMLType: true}
+	for k := range defSymbolKinds {
+		m[k] = true
+	}
+	for k := range usageSymbolKinds {
+		m[k] = true
+	}
+	// An alias is a naming, not a Type; a resolvable one is resolved upstream.
+	delete(m, symbols.SymbolAlias)
+	return m
+}()
 
-// isTypeKind reports whether k may name a type: every KerML element that is not
-// a namespace or an annotation is a Type, a Feature being one too (KerML §8.3.3).
+// isTypeKind reports whether k classifies a Type, which alone may be a KerML
+// specialization or typing target — a Feature is one too (KerML 1.0 §8.3.3).
+// An unclassified kind constrains nothing, as on the definition path.
 func isTypeKind(k symbols.SymbolKind) bool {
-	return !nonTypeSymbolKinds[k]
+	return k == symbols.SymbolUnknown || typeSymbolKinds[k]
 }
 
 // occurrenceDefSymbolKinds is the set of SymbolKinds that classify a definition
