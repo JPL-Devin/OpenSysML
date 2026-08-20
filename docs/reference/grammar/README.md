@@ -12,7 +12,9 @@ For reference, the official Xtext grammar files from OMG are available at:
 **SysML v2 Grammar:**
 - https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/blob/master/org.omg.sysml.xtext/src/org/omg/sysml/xtext/SysML.xtext
 
-These files are licensed under Eclipse Public License 2.0 (EPL-2.0) and are not included in this repository to avoid license mixing.
+These files are licensed under Eclipse Public License 2.0 (EPL-2.0) and are not included in this repository to avoid license mixing. `./scripts/download-pilot-grammars.sh` fetches them at the pinned release into `build/pilot-grammars/` when they are needed.
+
+Which of their productions our test inputs have ever exercised is measured, on input-presence evidence rather than execution coverage, in [grammar-coverage.md](../../project/grammar-coverage.md).
 
 ## State Machine Notation Beyond the OMG Grammar
 
