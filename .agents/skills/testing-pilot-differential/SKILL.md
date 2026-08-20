@@ -26,6 +26,10 @@ change's effect" below.
 - The validator: `./scripts/download-pilot-validator.sh`. It is **not** in the blueprint, takes
   ~2-3 minutes (Maven downloads the pilot release ZIP and shades a jar), and needs network access
   to github.com and Maven Central. Once built it no-ops.
+- The KerML oracle: `./scripts/download-pilot-kerml-validator.sh` (needs `javac` too). It compiles
+  `scripts/pilot-kerml-validator/ValidateKerML.java` against the pilot shaded jar into
+  `build/pilot-kerml-validator/`, auto-provisioning the SysML validator first if the jar is
+  missing. Seconds, not minutes — safe to `--force` rebuild during testing.
 
 ## The core check (fast, ~20 s per run)
 
@@ -40,6 +44,10 @@ topological sort in `order.go` and the basename batching in `pilot.go` are the p
 introduce order-dependence). Observed at `3b2d14a3`: byte-identical across runs, and identical
 after a full validator rebuild from scratch — that last one is the strongest evidence available,
 because it shows the numbers are a property of the pinned pilot release, not of one local build.
+
+Observed at `90da2cad` (KerML root added): `338 file(s), 196 fully agreeing; 20 agreed, 851 only
+ours, 145 only the pilot's`, wall time ~70 s (the KerML batch costs ~50 s), byte-identical to the
+committed baseline and across runs.
 
 ## Isolating one change's effect (works even with a stale baseline)
 
@@ -76,6 +84,54 @@ both: the message must be absent from the JSON `unmapped[]` list *and* present u
 category in the txt, with `totals.pilotOnly` unchanged (a category move must not create an
 agreement).
 
+## The KerML root and its bridge
+
+`examples/pilot-corpora/kerml-examples` (58 `.kerml` files) is a root validated by
+`build/pilot-kerml-validator/validate-kerml`, which drives the pilot's own `KerMLValidator`
+through Xtext's `IResourceValidator` in **one** resource-set batch and prints GNU-format
+diagnostics **relative to `--root`** (paths, not basenames — so no basename batching).
+
+Provisioning script checks that actually distinguish working from broken:
+
+- Re-run with no args → `KerML validator already compiled at .../classes/ValidateKerML.class`,
+  exit 0, and the `.class` mtime is unchanged. The **launcher is intentionally rewritten every
+  run** (so a changed pin can never leave a stale jar path), so compare the `.class` mtime, not
+  the launcher's.
+- `--force` → prints `Compiling ...` and the `.class` mtime advances.
+- `grep jupyter-sysml-kernel build/pilot-kerml-validator/validate-kerml` must show the pinned
+  `PILOT_ARTIFACT_VERSION` from `scripts/pilot-pin.sh` (`0.60.1`) and no leftover
+  `__PILOT_ARTIFACT_VERSION__` placeholder.
+- `PILOT_ARTIFACT_VERSION=9.9.9-bogus ./scripts/download-pilot-kerml-validator.sh` → exit 1 with
+  `error: pilot shaded jar not found at .../jupyter-sysml-kernel-9.9.9-bogus-all.jar`, and the
+  existing launcher is left untouched (it does *not* silently reuse the stale jar). Note it first
+  calls `download-pilot-validator.sh`, which no-ops in seconds when `build/pilot-validator` exists.
+- `--bogus` → exit 1, `error: unknown option: --bogus (only --force is supported)`.
+
+Oracle behaviour (`validate-kerml`, exit codes without a pipe):
+
+| Input | Expected |
+|---|---|
+| a clean corpus file (`Address Book Example/AddressBookModel.kerml`) | exit 0, no `: error:` lines (only `log4j:WARN` noise on stderr) |
+| a malformed `.kerml` | exit 1 with `<file>:<line>:<col>: error: no viable alternative at input ...` plus `Couldn't resolve reference to Type '...'` — the oracle must not be silent |
+| no args | exit 2 + `usage: validate-kerml --library DIR [--root DIR] [--kernel-only] FILE...` |
+| a `.sysml` file | exit 2 + `Error: File must have .kerml extension: <abs path>` |
+| nonexistent file | exit 2 + `Error: File not found: <abs path>` |
+| a directory | walks it for `.kerml` recursively and validates the batch |
+| an empty directory | exit 0 + `Warning: No .kerml files found` |
+
+Harness paths: `-kerml-validator /nonexistent` → exit 1,
+`KerML pilot validator not found at /nonexistent: run ./scripts/download-pilot-kerml-validator.sh`,
+no report written. The skip warning is language-aware (`no .kerml files` for that root). To
+exercise a KerML-only run (e.g. a small `-timeout`), copy just
+`examples/pilot-corpora/kerml-examples` into a temp dir and pass `-repo <tmp>` with absolute
+`-validator`/`-kerml-validator`; otherwise the SysML roots time out first. Strongest
+non-silence proof: drop a malformed `.kerml` into that copied corpus and confirm the JSON gains
+pilot-side diagnostics for it (observed: 6 pilot-only + 1 agreed on that one file).
+
+Our own `.kerml` fixtures under `testdata/` and `examples/` are *not* in the comparison: a root
+carries one language, so they are collected as SysML and dropped (follow-up F34). Don't read a
+`testdata`/`examples` count as covering them.
+
 ## Running the pilot validator directly
 
 `build/pilot-validator/validate-sysml <file.sysml>` prints diagnostics on **stderr** in GNU
@@ -93,6 +149,7 @@ reports the exit of the last stage and a failure looks like a pass.
 | `-repo /tmp/notrepo` (default validator) | exit 1, validator-not-found under *that* repo |
 | `-repo /tmp/notrepo -validator <abs path>` | exit **0**, one `skipping <root>: no .sysml files` warning per root, `files: 0` — warned but not fatal; worth flagging if a caller could mistake it for a clean run |
 | `-timeout 1s` | exit 1, `... validate-sysml failed (signal: killed)`, no report written (the JVM needs ~10 s just to load the library) |
+| `-repo <empty dir>` | exit 1, seven language-aware skip warnings then `no model files found under <dir>` |
 
 Provisioning script (`scripts/download-pilot-validator.sh`):
 
