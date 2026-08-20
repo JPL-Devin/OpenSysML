@@ -95,6 +95,16 @@ func TestF61KeywordlessMembers(t *testing.T) {
 		}
 	})
 
+	t.Run("keyword_led_result_expression", func(t *testing.T) {
+		pkg := parsePkg(t, "package B { attribute def V { attribute m; } analysis def A { subject v : V; if v.m > 1.0 ? v.m else 1.0 } }")
+		def := pkg.Members[1].(*ast.Membership).Member.(*ast.Definition)
+		last := def.Members[len(def.Members)-1]
+		op, ok := last.(*ast.OperatorExpr)
+		if !ok || op.Operator != ast.OpConditional {
+			t.Errorf("last member = %T, want *ast.OperatorExpr with OpConditional", last)
+		}
+	})
+
 	t.Run("anonymous_locale_comment", func(t *testing.T) {
 		pkg := parsePkg(t, "package B { locale \"en_US\" /* body */ }")
 		c, ok := pkg.Members[0].(*ast.Membership).Member.(*ast.Comment)

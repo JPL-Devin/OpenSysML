@@ -1905,7 +1905,7 @@ func (p *Parser) parseCaseBody() []ast.Node {
 // declaration.
 func (p *Parser) atResultExpression() bool {
 	t := p.peek()
-	if t.Kind == lexer.Keyword || t.Kind == lexer.LBrace {
+	if (t.Kind == lexer.Keyword && !exprStartKeywords[t.KeywordID]) || t.Kind == lexer.LBrace {
 		return false
 	}
 	if !p.atExprStart() || p.atVarDeclaration() {
