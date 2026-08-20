@@ -1,1164 +1,4042 @@
 {
-  "validator": "build/pilot-validator/validate-sysml",
   "pilotRelease": "2026-05 (jupyter-sysml-kernel 0.60.1)",
-  "totals": {
-    "files": 122,
-    "filesFullyAgreeing": 103,
-    "agreement": 18,
-    "severityMismatch": 1,
-    "openSysMLOnly": 5,
-    "pilotOnly": 188,
-    "openSysMLDiagnostics": 24,
-    "pilotDiagnostics": 207
-  },
   "roots": [
     {
-      "name": "training",
       "dir": "examples/sysml-v2-training",
-      "totals": {
-        "files": 100,
-        "filesFullyAgreeing": 100,
-        "agreement": 0,
-        "severityMismatch": 0,
-        "openSysMLOnly": 0,
-        "pilotOnly": 0,
-        "openSysMLDiagnostics": 0,
-        "pilotDiagnostics": 0
-      },
-      "files": []
-    },
-    {
-      "name": "testdata",
-      "dir": "testdata",
-      "totals": {
-        "files": 9,
-        "filesFullyAgreeing": 0,
-        "agreement": 18,
-        "severityMismatch": 1,
-        "openSysMLOnly": 5,
-        "pilotOnly": 48,
-        "openSysMLDiagnostics": 24,
-        "pilotDiagnostics": 67
-      },
       "files": [
         {
-          "path": "lex/basic.sysml",
-          "agreement": [
+          "agreement": [],
+          "openSysMLOnly": [
             {
-              "line": 4,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
+              "category": "syntax",
+              "count": 1,
+              "line": 26,
+              "severity": "warning"
             }
           ],
-          "severityMismatch": [],
-          "openSysMLOnly": [],
-          "pilotOnly": [
-            {
-              "line": 4,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
-            }
-          ]
+          "path": "24. States/State Actions.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
         },
         {
-          "path": "parse/expressions.sysml",
-          "agreement": [
+          "agreement": [],
+          "openSysMLOnly": [
             {
-              "line": 3,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 4,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 3
-            },
-            {
-              "line": 5,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 3
-            },
-            {
-              "line": 6,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 2
+              "category": "syntax",
+              "count": 1,
+              "line": 34,
+              "severity": "warning"
             }
           ],
-          "severityMismatch": [],
-          "openSysMLOnly": [],
-          "pilotOnly": [
+          "path": "25. Transitions/Transition Actions.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        }
+      ],
+      "name": "training",
+      "totals": {
+        "agreement": 0,
+        "files": 100,
+        "filesFullyAgreeing": 98,
+        "openSysMLDiagnostics": 2,
+        "openSysMLOnly": 2,
+        "pilotDiagnostics": 0,
+        "pilotOnly": 0,
+        "severityMismatch": 0
+      }
+    },
+    {
+      "dir": "examples/pilot-corpora/sysml-examples",
+      "files": [
+        {
+          "agreement": [],
+          "openSysMLOnly": [
             {
-              "line": 2,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
+              "category": "units",
+              "count": 1,
+              "line": 25,
+              "severity": "warning"
+            }
+          ],
+          "path": "Analysis Examples/Turbojet Stage Analysis.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 207,
+              "severity": "error"
             },
             {
-              "line": 3,
-              "severity": "error",
+              "category": "syntax",
+              "count": 1,
+              "line": 286,
+              "severity": "error"
+            }
+          ],
+          "path": "Analysis Examples/Vehicle Analysis Demo.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
               "category": "kind-mismatch",
-              "count": 1
+              "count": 1,
+              "line": 28,
+              "severity": "error"
             },
             {
-              "line": 3,
-              "severity": "error",
+              "category": "kind-mismatch",
+              "count": 1,
+              "line": 32,
+              "severity": "error"
+            },
+            {
+              "category": "kind-mismatch",
+              "count": 1,
+              "line": 40,
+              "severity": "error"
+            }
+          ],
+          "path": "Arrowhead Framework Example/AHFCoreLib.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 94,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 116,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 130,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 135,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 140,
+              "severity": "error"
+            }
+          ],
+          "path": "Arrowhead Framework Example/AHFNorwayTopics.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 45,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 51,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 89,
+              "severity": "error"
+            }
+          ],
+          "path": "Arrowhead Framework Example/AHFSequences.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 25,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 35,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 36,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 37,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 38,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 46,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 48,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 49,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 52,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 54,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 55,
+              "severity": "error"
+            }
+          ],
+          "path": "Cause and Effect Examples/CauseAndEffectExample.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 12,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 17,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 18,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 19,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 22,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 25,
+              "severity": "error"
+            }
+          ],
+          "path": "Cause and Effect Examples/MedicalDeviceFailure.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
               "category": "unresolved-reference",
-              "count": 2
+              "count": 1,
+              "line": 48,
+              "severity": "error"
             },
             {
-              "line": 3,
-              "severity": "warning",
-              "category": "kind-mismatch",
-              "count": 1
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 57,
+              "severity": "error"
             },
             {
-              "line": 4,
-              "severity": "error",
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 71,
+              "severity": "error"
+            }
+          ],
+          "path": "Geometry Examples/CarWithShapeAndCSG.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 15,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 27,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 41,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 60,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 73,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 89,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 100,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 128,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 142,
+              "severity": "error"
+            }
+          ],
+          "path": "Geometry Examples/SimpleQuadcopter.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 56,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 130,
+              "severity": "error"
+            }
+          ],
+          "path": "Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 14,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 18,
+              "severity": "error"
+            }
+          ],
+          "path": "Import Tests/CircularImport.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 53,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 61,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 64,
+              "severity": "error"
+            }
+          ],
+          "path": "Individuals Examples/AnalysisIndividualExample.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 6,
+              "severity": "error"
+            }
+          ],
+          "path": "Interaction Sequencing Examples/ServerSequenceModelOutside.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 27,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 53,
+              "severity": "error"
+            }
+          ],
+          "path": "Interaction Sequencing Examples/ServerSequenceOutsideRealization-2.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 142,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 144,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 148,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 150,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 154,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 156,
+              "severity": "error"
+            }
+          ],
+          "path": "Interaction Sequencing Examples/ServerSequenceOutsideRealization-3.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 23,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 48,
+              "severity": "error"
+            }
+          ],
+          "path": "Interaction Sequencing Examples/ServerSequenceRealization-2.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 134,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 136,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 140,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 142,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 146,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 148,
+              "severity": "error"
+            }
+          ],
+          "path": "Interaction Sequencing Examples/ServerSequenceRealization-3.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
               "category": "unmapped",
-              "count": 2
-            },
-            {
-              "line": 4,
-              "severity": "warning",
-              "category": "kind-mismatch",
-              "count": 2
-            },
-            {
-              "line": 5,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 5,
-              "severity": "warning",
-              "category": "kind-mismatch",
-              "count": 3
-            },
-            {
-              "line": 6,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 6,
-              "severity": "warning",
-              "category": "kind-mismatch",
-              "count": 1
-            }
-          ]
-        },
-        {
-          "path": "parse/namespaces.sysml",
-          "agreement": [
-            {
-              "line": 2,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 3,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 6,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 8,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
+              "count": 1,
+              "line": 7,
+              "severity": "error"
             }
           ],
-          "severityMismatch": [],
-          "openSysMLOnly": [],
-          "pilotOnly": [
+          "path": "Metadata Examples/IssueMetadataExample.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
             {
+              "category": "syntax",
+              "count": 1,
+              "line": 22,
+              "severity": "error"
+            }
+          ],
+          "path": "Metadata Examples/RationaleMetadataExample.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 30,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 3,
+              "line": 31,
+              "severity": "error"
+            }
+          ],
+          "path": "Metadata Examples/RequirementMetadataExample.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 3,
+              "severity": "error"
+            }
+          ],
+          "path": "Metadata Examples/RiskMetadataExample.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 3,
+              "severity": "error"
+            }
+          ],
+          "path": "Metadata Examples/VerificationMetadataExample.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "unmapped",
+              "count": 1,
+              "line": 22,
+              "severity": "error"
+            }
+          ],
+          "path": "Packet Example/Packets.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 2,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
               "line": 4,
-              "severity": "error",
-              "category": "syntax",
-              "count": 2
+              "severity": "error"
             },
             {
-              "line": 5,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
+              "category": "unresolved-reference",
+              "count": 1,
               "line": 11,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 12,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 17,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 19,
+              "severity": "error"
             }
-          ]
+          ],
+          "path": "Requirements Examples/HSUVRequirements.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
         },
         {
-          "path": "passes/clean.sysml",
           "agreement": [],
-          "severityMismatch": [],
+          "openSysMLOnly": [
+            {
+              "category": "kind-mismatch",
+              "count": 1,
+              "line": 10,
+              "severity": "error"
+            },
+            {
+              "category": "kind-mismatch",
+              "count": 1,
+              "line": 11,
+              "severity": "error"
+            },
+            {
+              "category": "kind-mismatch",
+              "count": 1,
+              "line": 12,
+              "severity": "error"
+            },
+            {
+              "category": "kind-mismatch",
+              "count": 1,
+              "line": 32,
+              "severity": "error"
+            },
+            {
+              "category": "kind-mismatch",
+              "count": 1,
+              "line": 33,
+              "severity": "error"
+            },
+            {
+              "category": "kind-mismatch",
+              "count": 1,
+              "line": 34,
+              "severity": "error"
+            }
+          ],
+          "path": "Requirements Examples/RequirementDerivationExample.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 35,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 36,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 37,
+              "severity": "error"
+            }
+          ],
+          "path": "Requirements Examples/VehicleRequirementDerivation.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 25,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 7,
+              "line": 35,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 3,
+              "line": 37,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 53,
+              "severity": "error"
+            }
+          ],
+          "path": "Simple Tests/ActionTest.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 20,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 21,
+              "severity": "error"
+            }
+          ],
+          "path": "Simple Tests/AliasTest.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 3,
+              "line": 35,
+              "severity": "error"
+            }
+          ],
+          "path": "Simple Tests/AllocationTest.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 20,
+              "severity": "error"
+            }
+          ],
+          "path": "Simple Tests/AnalysisTest.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 25,
+              "severity": "error"
+            }
+          ],
+          "path": "Simple Tests/CommentTest.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 24,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 24,
+              "severity": "warning"
+            }
+          ],
+          "path": "Simple Tests/ConnectionTest.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 89,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 89,
+              "severity": "warning"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 90,
+              "severity": "error"
+            }
+          ],
+          "path": "Simple Tests/ConstraintTest.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 13,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 18,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 19,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 21,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 22,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 27,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 32,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 34,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 35,
+              "severity": "error"
+            }
+          ],
+          "path": "Simple Tests/ControlNodeTest.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 4,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 18,
+              "severity": "error"
+            }
+          ],
+          "path": "Simple Tests/DecisionTest.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 48,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 49,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 50,
+              "severity": "error"
+            }
+          ],
+          "path": "Simple Tests/EnumerationTest.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 24,
+              "severity": "error"
+            }
+          ],
+          "path": "Simple Tests/FeaturePathTest.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 5,
+              "severity": "error"
+            }
+          ],
+          "path": "Simple Tests/ImportTest.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "kind-mismatch",
+              "count": 1,
+              "line": 12,
+              "severity": "error"
+            }
+          ],
+          "path": "Simple Tests/IndividualTest.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "kind-mismatch",
+              "count": 1,
+              "line": 11,
+              "severity": "error"
+            }
+          ],
+          "path": "Simple Tests/ItemTest.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 33,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 34,
+              "severity": "error"
+            }
+          ],
+          "path": "Simple Tests/MetadataTest.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 25,
+              "severity": "error"
+            }
+          ],
+          "path": "Simple Tests/PartTest.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 6,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 16,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 26,
+              "severity": "error"
+            }
+          ],
+          "path": "Simple Tests/RequirementTest.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 30,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 33,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 45,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 55,
+              "severity": "error"
+            }
+          ],
+          "path": "Simple Tests/StateTest.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 3,
+              "line": 32,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 32,
+              "severity": "warning"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 36,
+              "severity": "error"
+            }
+          ],
+          "path": "Simple Tests/StructuredControlTest.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "unresolved-reference",
+              "count": 3,
+              "line": 7,
+              "severity": "error"
+            }
+          ],
+          "path": "Simple Tests/TextualRepresentationTest.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "kind-mismatch",
+              "count": 1,
+              "line": 35,
+              "severity": "error"
+            }
+          ],
+          "path": "Simple Tests/UseCaseTest.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 29,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 29,
+              "severity": "warning"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 30,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 30,
+              "severity": "warning"
+            }
+          ],
+          "path": "Simple Tests/VariabilityTest.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 21,
+              "severity": "error"
+            }
+          ],
+          "path": "Simple Tests/VerificationTest.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 48,
+              "severity": "error"
+            }
+          ],
+          "path": "State Space Representation Examples/EVSample.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 49,
+              "severity": "error"
+            }
+          ],
+          "path": "State Space Representation Examples/EVSample1.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 71,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 76,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 79,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 84,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 85,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 3,
+              "line": 99,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 2,
+              "line": 102,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 113,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 126,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 127,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 132,
+              "severity": "error"
+            }
+          ],
+          "path": "Variability Examples/VehicleVariabilityModel.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 404,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 431,
+              "severity": "warning"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 434,
+              "severity": "warning"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 463,
+              "severity": "warning"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 518,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 521,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 528,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 531,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 547,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 607,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 608,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 627,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 631,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 635,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 674,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 689,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 701,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 3,
+              "line": 703,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 706,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 723,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 901,
+              "severity": "error"
+            }
+          ],
+          "path": "Vehicle Example/Annex_A_VehicleViews.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 44,
+              "severity": "warning"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 47,
+              "severity": "warning"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 76,
+              "severity": "warning"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 126,
+              "severity": "warning"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 166,
+              "severity": "warning"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 424,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 425,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 426,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 427,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 430,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 431,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 432,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 506,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 3,
+              "line": 509,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 513,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 577,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 578,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 579,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 755,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 758,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 765,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 768,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 919,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 920,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 924,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 937,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 1015,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 1060,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 1065,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 1069,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 1110,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 1121,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 1123,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 1128,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 1130,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 1131,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 1132,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 1134,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 1137,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 1138,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 1139,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 1198,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 1200,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 1201,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 1219,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 1230,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 3,
+              "line": 1232,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 1235,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 1252,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 1413,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 1414,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 1415,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 1420,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 1429,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 1436,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 1442,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 1580,
+              "severity": "error"
+            }
+          ],
+          "path": "Vehicle Example/SysML v2 Spec Annex A SimpleVehicleModel.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "unmapped",
+              "count": 1,
+              "line": 47,
+              "severity": "warning"
+            }
+          ],
+          "path": "Vehicle Example/VehicleDefinitions.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 68,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 81,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 87,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 103,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 104,
+              "severity": "error"
+            }
+          ],
+          "path": "Vehicle Example/VehicleIndividuals.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 14,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 15,
+              "severity": "error"
+            }
+          ],
+          "path": "Vehicle Example/VehicleUsages.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 11,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 17,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 33,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 34,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 53,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 57,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 58,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 64,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 65,
+              "severity": "error"
+            }
+          ],
+          "path": "v1 Spec Examples/8.4.1 Wheel Hub Assembly/Wheel Package - Updated.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 9,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 21,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 49,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 50,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 74,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 78,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 79,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 90,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 91,
+              "severity": "error"
+            }
+          ],
+          "path": "v1 Spec Examples/8.4.1 Wheel Hub Assembly/Wheel Package.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 45,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 46,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 47,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 51,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 52,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 53,
+              "severity": "error"
+            }
+          ],
+          "path": "v1 Spec Examples/8.4.5 Constraining Decomposition/Vehicle Decomposition.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        }
+      ],
+      "name": "pilot-examples",
+      "totals": {
+        "agreement": 0,
+        "files": 98,
+        "filesFullyAgreeing": 38,
+        "openSysMLDiagnostics": 337,
+        "openSysMLOnly": 337,
+        "pilotDiagnostics": 0,
+        "pilotOnly": 0,
+        "severityMismatch": 0
+      }
+    },
+    {
+      "dir": "examples/pilot-corpora/sysml-validation",
+      "files": [
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 97,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 103,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 157,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 162,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 204,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 206,
+              "severity": "error"
+            }
+          ],
+          "path": "02-Parts Interconnection/2a-Parts Interconnection.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 58,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 70,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 75,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 94,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 102,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 112,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 134,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 136,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 137,
+              "severity": "error"
+            }
+          ],
+          "path": "03-Function-based Behavior/3a-Function-based Behavior-1.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 42,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 47,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 52,
+              "severity": "error"
+            }
+          ],
+          "path": "03-Function-based Behavior/3a-Function-based Behavior-2.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 36,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 43,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 51,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 59,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 68,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 68,
+              "severity": "warning"
+            }
+          ],
+          "path": "03-Function-based Behavior/3a-Function-based Behavior-3.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "kind-mismatch",
+              "count": 1,
+              "line": 42,
+              "severity": "error"
+            }
+          ],
+          "path": "03-Function-based Behavior/3c-Function-based Behavior-structure mod-1.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 63,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 83,
+              "severity": "error"
+            }
+          ],
+          "path": "03-Function-based Behavior/3d-Function-based Behavior-item.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 34,
+              "severity": "error"
+            }
+          ],
+          "path": "03-Function-based Behavior/3e-Function-based Behavior-item.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 9,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 37,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 50,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 56,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 60,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 65,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 71,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 75,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 80,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 85,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 86,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 88,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 90,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 94,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 97,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 98,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 103,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 4,
+              "line": 110,
+              "severity": "error"
+            }
+          ],
+          "path": "04-Functional Allocation/4a-Functional Allocation.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 70,
+              "severity": "warning"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 86,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 105,
+              "severity": "warning"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 129,
+              "severity": "warning"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 169,
+              "severity": "warning"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 236,
+              "severity": "error"
+            }
+          ],
+          "path": "05-State-based Behavior/5-State-based Behavior-1.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 71,
+              "severity": "warning"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 87,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 106,
+              "severity": "warning"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 130,
+              "severity": "warning"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 170,
+              "severity": "warning"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 238,
+              "severity": "error"
+            }
+          ],
+          "path": "05-State-based Behavior/5-State-based Behavior-1a.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 59,
+              "severity": "warning"
+            }
+          ],
+          "path": "05-State-based Behavior/5-State-based Behavior-2.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 113,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 137,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 157,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 167,
+              "severity": "error"
+            }
+          ],
+          "path": "06-Individual and Snapshots/6-Individual and Snapshots.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 111,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 117,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 129,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 131,
+              "severity": "error"
+            }
+          ],
+          "path": "08-Requirements/8-Requirements.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 55,
+              "severity": "error"
+            }
+          ],
+          "path": "09-Verification/9-Verification-simplified.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 52,
+              "severity": "error"
+            }
+          ],
+          "path": "10-Analysis and Trades/10a-Analysis.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 82,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 83,
+              "severity": "error"
+            }
+          ],
+          "path": "10-Analysis and Trades/10b-Trade-off Among Alternative Configurations.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 60,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 3,
+              "line": 65,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 73,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 74,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 75,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 80,
+              "severity": "error"
+            }
+          ],
+          "path": "10-Analysis and Trades/10d-Dynamics Analysis.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 57,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 61,
+              "severity": "error"
+            }
+          ],
+          "path": "11-View and Viewpoint/11b-Safety and Security Feature Views.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 187,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 188,
+              "severity": "error"
+            }
+          ],
+          "path": "14-Language Extensions/14c-Language Extensions.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 15,
+              "severity": "error"
+            }
+          ],
+          "path": "15-Properties-Values-Expressions/15_11-Variable Length Collection Types.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 26,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 34,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 35,
+              "severity": "error"
+            }
+          ],
+          "path": "17-Sequence Modeling/17a-Sequence-Modeling.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 26,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 34,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 35,
+              "severity": "error"
+            }
+          ],
+          "path": "17-Sequence Modeling/17b-Sequence-Modeling.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 48,
+              "severity": "error"
+            }
+          ],
+          "path": "18-Use Case/18-Use Case.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        }
+      ],
+      "name": "pilot-validation",
+      "totals": {
+        "agreement": 0,
+        "files": 56,
+        "filesFullyAgreeing": 33,
+        "openSysMLDiagnostics": 121,
+        "openSysMLOnly": 121,
+        "pilotDiagnostics": 0,
+        "pilotOnly": 0,
+        "severityMismatch": 0
+      }
+    },
+    {
+      "dir": "testdata",
+      "files": [
+        {
+          "agreement": [
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 4,
+              "severity": "error"
+            }
+          ],
           "openSysMLOnly": [],
+          "path": "lex/basic.sysml",
           "pilotOnly": [
             {
-              "line": 1,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 2,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 2,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 3,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 3,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 7,
-              "severity": "error",
-              "category": "syntax",
-              "count": 2
-            },
-            {
-              "line": 7,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 10,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
+              "category": "kind-mismatch",
+              "count": 1,
+              "line": 4,
+              "severity": "error"
             }
-          ]
+          ],
+          "severityMismatch": []
         },
         {
-          "path": "passes/constraints.sysml",
+          "agreement": [
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 3,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 3,
+              "line": 4,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 3,
+              "line": 5,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 2,
+              "line": 6,
+              "severity": "error"
+            }
+          ],
+          "openSysMLOnly": [],
+          "path": "parse/expressions.sysml",
+          "pilotOnly": [
+            {
+              "category": "kind-mismatch",
+              "count": 1,
+              "line": 2,
+              "severity": "error"
+            },
+            {
+              "category": "kind-mismatch",
+              "count": 1,
+              "line": 3,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 2,
+              "line": 3,
+              "severity": "error"
+            },
+            {
+              "category": "kind-mismatch",
+              "count": 1,
+              "line": 3,
+              "severity": "warning"
+            },
+            {
+              "category": "unmapped",
+              "count": 2,
+              "line": 4,
+              "severity": "error"
+            },
+            {
+              "category": "kind-mismatch",
+              "count": 2,
+              "line": 4,
+              "severity": "warning"
+            },
+            {
+              "category": "kind-mismatch",
+              "count": 1,
+              "line": 5,
+              "severity": "error"
+            },
+            {
+              "category": "kind-mismatch",
+              "count": 3,
+              "line": 5,
+              "severity": "warning"
+            },
+            {
+              "category": "kind-mismatch",
+              "count": 1,
+              "line": 6,
+              "severity": "error"
+            },
+            {
+              "category": "kind-mismatch",
+              "count": 1,
+              "line": 6,
+              "severity": "warning"
+            }
+          ],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 2,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 3,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 6,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 8,
+              "severity": "error"
+            }
+          ],
+          "openSysMLOnly": [],
+          "path": "parse/namespaces.sysml",
+          "pilotOnly": [
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 4,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 5,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 11,
+              "severity": "error"
+            }
+          ],
+          "severityMismatch": []
+        },
+        {
           "agreement": [],
+          "openSysMLOnly": [],
+          "path": "passes/clean.sysml",
+          "pilotOnly": [
+            {
+              "category": "unmapped",
+              "count": 1,
+              "line": 1,
+              "severity": "warning"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 2,
+              "severity": "error"
+            },
+            {
+              "category": "unmapped",
+              "count": 1,
+              "line": 2,
+              "severity": "warning"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 3,
+              "severity": "error"
+            },
+            {
+              "category": "unmapped",
+              "count": 1,
+              "line": 3,
+              "severity": "warning"
+            },
+            {
+              "category": "syntax",
+              "count": 2,
+              "line": 7,
+              "severity": "error"
+            },
+            {
+              "category": "unmapped",
+              "count": 1,
+              "line": 7,
+              "severity": "warning"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 10,
+              "severity": "error"
+            }
+          ],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "unmapped",
+              "count": 1,
+              "line": 2,
+              "severity": "error"
+            },
+            {
+              "category": "unmapped",
+              "count": 1,
+              "line": 3,
+              "severity": "error"
+            },
+            {
+              "category": "multiplicity",
+              "count": 1,
+              "line": 9,
+              "severity": "error"
+            }
+          ],
+          "path": "passes/constraints.sysml",
+          "pilotOnly": [],
           "severityMismatch": [
             {
+              "category": "multiplicity",
+              "count": 1,
               "line": 6,
-              "category": "multiplicity",
               "openSysMLSeverity": "error",
-              "pilotSeverity": "warning",
-              "count": 1
+              "pilotSeverity": "warning"
             }
-          ],
-          "openSysMLOnly": [
-            {
-              "line": 2,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 3,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 9,
-              "severity": "error",
-              "category": "multiplicity",
-              "count": 1
-            }
-          ],
-          "pilotOnly": []
+          ]
         },
         {
+          "agreement": [],
+          "openSysMLOnly": [],
           "path": "passes/corpus_notation.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [],
           "pilotOnly": [
             {
+              "category": "unmapped",
+              "count": 1,
               "line": 33,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
+              "severity": "warning"
             },
             {
+              "category": "unmapped",
+              "count": 1,
               "line": 34,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
+              "severity": "warning"
             }
-          ]
+          ],
+          "severityMismatch": []
         },
         {
+          "agreement": [
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 2,
+              "severity": "error"
+            },
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 3,
+              "severity": "error"
+            }
+          ],
+          "openSysMLOnly": [
+            {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 4,
+              "severity": "error"
+            }
+          ],
           "path": "passes/errors.sysml",
-          "agreement": [
-            {
-              "line": 2,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 3,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            }
-          ],
-          "severityMismatch": [],
-          "openSysMLOnly": [
-            {
-              "line": 4,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            }
-          ],
           "pilotOnly": [
             {
-              "line": 3,
-              "severity": "error",
               "category": "kind-mismatch",
-              "count": 1
+              "count": 1,
+              "line": 3,
+              "severity": "error"
             },
             {
-              "line": 3,
-              "severity": "warning",
               "category": "kind-mismatch",
-              "count": 1
+              "count": 1,
+              "line": 3,
+              "severity": "warning"
             },
             {
-              "line": 4,
-              "severity": "error",
               "category": "syntax",
-              "count": 2
+              "count": 2,
+              "line": 4,
+              "severity": "error"
             }
-          ]
+          ],
+          "severityMismatch": []
         },
         {
-          "path": "resolve/basic.sysml",
           "agreement": [],
-          "severityMismatch": [],
           "openSysMLOnly": [],
+          "path": "resolve/basic.sysml",
           "pilotOnly": [
             {
+              "category": "unmapped",
+              "count": 1,
               "line": 1,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
+              "severity": "warning"
             },
             {
+              "category": "syntax",
+              "count": 1,
               "line": 2,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
+              "severity": "error"
             },
             {
+              "category": "unmapped",
+              "count": 1,
               "line": 2,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
+              "severity": "warning"
             },
             {
-              "line": 3,
-              "severity": "error",
               "category": "syntax",
-              "count": 1
-            },
-            {
+              "count": 1,
               "line": 3,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
+              "severity": "error"
             },
             {
-              "line": 7,
-              "severity": "error",
+              "category": "unmapped",
+              "count": 1,
+              "line": 3,
+              "severity": "warning"
+            },
+            {
               "category": "syntax",
-              "count": 2
-            },
-            {
+              "count": 2,
               "line": 7,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
+              "severity": "error"
             },
             {
+              "category": "unmapped",
+              "count": 1,
+              "line": 7,
+              "severity": "warning"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
               "line": 10,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
+              "severity": "error"
             }
-          ]
+          ],
+          "severityMismatch": []
         },
         {
-          "path": "resolve/errors.sysml",
           "agreement": [
             {
-              "line": 2,
-              "severity": "error",
               "category": "unresolved-reference",
-              "count": 1
+              "count": 1,
+              "line": 2,
+              "severity": "error"
             },
             {
-              "line": 3,
-              "severity": "error",
               "category": "unresolved-reference",
-              "count": 1
+              "count": 1,
+              "line": 3,
+              "severity": "error"
             }
           ],
-          "severityMismatch": [],
           "openSysMLOnly": [
             {
-              "line": 4,
-              "severity": "error",
               "category": "unresolved-reference",
-              "count": 1
+              "count": 1,
+              "line": 4,
+              "severity": "error"
             }
           ],
+          "path": "resolve/errors.sysml",
           "pilotOnly": [
             {
-              "line": 3,
-              "severity": "error",
               "category": "kind-mismatch",
-              "count": 1
+              "count": 1,
+              "line": 3,
+              "severity": "error"
             },
             {
-              "line": 3,
-              "severity": "warning",
               "category": "kind-mismatch",
-              "count": 1
+              "count": 1,
+              "line": 3,
+              "severity": "warning"
             },
             {
-              "line": 4,
-              "severity": "error",
               "category": "syntax",
-              "count": 2
+              "count": 2,
+              "line": 4,
+              "severity": "error"
             }
-          ]
+          ],
+          "severityMismatch": []
         }
-      ]
+      ],
+      "name": "testdata",
+      "totals": {
+        "agreement": 18,
+        "files": 9,
+        "filesFullyAgreeing": 0,
+        "openSysMLDiagnostics": 24,
+        "openSysMLOnly": 5,
+        "pilotDiagnostics": 67,
+        "pilotOnly": 48,
+        "severityMismatch": 1
+      }
     },
     {
-      "name": "examples",
       "dir": "examples",
-      "totals": {
-        "files": 12,
-        "filesFullyAgreeing": 2,
-        "agreement": 0,
-        "severityMismatch": 0,
-        "openSysMLOnly": 0,
-        "pilotOnly": 140,
-        "openSysMLDiagnostics": 0,
-        "pilotDiagnostics": 140
-      },
       "files": [
         {
+          "agreement": [],
+          "openSysMLOnly": [],
           "path": "action-executor-demo.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [],
           "pilotOnly": [
             {
+              "category": "syntax",
+              "count": 2,
               "line": 2,
-              "severity": "error",
-              "category": "syntax",
-              "count": 2
+              "severity": "error"
             },
             {
+              "category": "kind-mismatch",
+              "count": 1,
               "line": 6,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
+              "severity": "error"
             },
             {
+              "category": "unresolved-reference",
+              "count": 1,
               "line": 6,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
+              "severity": "error"
             },
             {
-              "line": 7,
-              "severity": "error",
               "category": "kind-mismatch",
-              "count": 1
-            },
-            {
+              "count": 1,
               "line": 7,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
+              "severity": "error"
             },
             {
-              "line": 9,
-              "severity": "error",
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 7,
+              "severity": "error"
+            },
+            {
               "category": "syntax",
-              "count": 1
+              "count": 1,
+              "line": 9,
+              "severity": "error"
             },
             {
-              "line": 9,
-              "severity": "error",
               "category": "unresolved-reference",
-              "count": 1
-            },
-            {
+              "count": 1,
               "line": 9,
-              "severity": "warning",
-              "category": "kind-mismatch",
-              "count": 1
+              "severity": "error"
             },
             {
+              "category": "kind-mismatch",
+              "count": 1,
+              "line": 9,
+              "severity": "warning"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
               "line": 10,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
+              "severity": "error"
             }
-          ]
+          ],
+          "severityMismatch": []
         },
         {
+          "agreement": [],
+          "openSysMLOnly": [],
           "path": "combined-behavioral-demo.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [],
           "pilotOnly": [
             {
-              "line": 2,
-              "severity": "error",
               "category": "syntax",
-              "count": 2
+              "count": 2,
+              "line": 2,
+              "severity": "error"
             },
             {
+              "category": "kind-mismatch",
+              "count": 1,
               "line": 6,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
+              "severity": "error"
             },
             {
+              "category": "unresolved-reference",
+              "count": 1,
               "line": 6,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
+              "severity": "error"
             },
             {
+              "category": "kind-mismatch",
+              "count": 1,
               "line": 7,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
+              "severity": "error"
             },
             {
+              "category": "unresolved-reference",
+              "count": 1,
               "line": 7,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
+              "severity": "error"
             },
             {
-              "line": 10,
-              "severity": "error",
               "category": "kind-mismatch",
-              "count": 1
-            },
-            {
+              "count": 1,
               "line": 10,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
+              "severity": "error"
             },
             {
-              "line": 11,
-              "severity": "error",
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 10,
+              "severity": "error"
+            },
+            {
               "category": "kind-mismatch",
-              "count": 1
-            },
-            {
+              "count": 1,
               "line": 11,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
+              "severity": "error"
             },
             {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 11,
+              "severity": "error"
+            },
+            {
+              "category": "kind-mismatch",
+              "count": 2,
               "line": 14,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 2
+              "severity": "error"
             },
             {
+              "category": "kind-mismatch",
+              "count": 2,
               "line": 15,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 2
+              "severity": "error"
             },
             {
+              "category": "syntax",
+              "count": 1,
               "line": 19,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
+              "severity": "error"
             }
-          ]
+          ],
+          "severityMismatch": []
         },
         {
+          "agreement": [],
+          "openSysMLOnly": [],
           "path": "orthogonal-regions-demo.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [],
           "pilotOnly": [
             {
+              "category": "syntax",
+              "count": 2,
               "line": 2,
-              "severity": "error",
-              "category": "syntax",
-              "count": 2
+              "severity": "error"
             },
             {
+              "category": "syntax",
+              "count": 2,
               "line": 10,
-              "severity": "error",
-              "category": "syntax",
-              "count": 2
+              "severity": "error"
             },
             {
-              "line": 11,
-              "severity": "error",
               "category": "syntax",
-              "count": 1
+              "count": 1,
+              "line": 11,
+              "severity": "error"
             },
             {
-              "line": 11,
-              "severity": "warning",
               "category": "unmapped",
-              "count": 1
+              "count": 1,
+              "line": 11,
+              "severity": "warning"
             },
             {
+              "category": "unmapped",
+              "count": 1,
               "line": 12,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
+              "severity": "warning"
             },
             {
-              "line": 16,
-              "severity": "error",
               "category": "multiplicity",
-              "count": 1
+              "count": 1,
+              "line": 16,
+              "severity": "error"
             },
             {
-              "line": 16,
-              "severity": "error",
               "category": "syntax",
-              "count": 2
+              "count": 2,
+              "line": 16,
+              "severity": "error"
             },
             {
-              "line": 16,
-              "severity": "warning",
               "category": "unmapped",
-              "count": 2
+              "count": 2,
+              "line": 16,
+              "severity": "warning"
             },
             {
-              "line": 17,
-              "severity": "error",
               "category": "syntax",
-              "count": 2
+              "count": 2,
+              "line": 17,
+              "severity": "error"
             },
             {
+              "category": "syntax",
+              "count": 1,
               "line": 18,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
+              "severity": "error"
             }
-          ]
+          ],
+          "severityMismatch": []
         },
         {
+          "agreement": [],
+          "openSysMLOnly": [
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 38,
+              "severity": "warning"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
+              "line": 65,
+              "severity": "warning"
+            }
+          ],
+          "path": "parser_features_demo_action_semantics.sysml",
+          "pilotOnly": [],
+          "severityMismatch": []
+        },
+        {
+          "agreement": [],
+          "openSysMLOnly": [],
           "path": "phase-c-behavioral-bodies.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [],
           "pilotOnly": [
             {
+              "category": "syntax",
+              "count": 5,
               "line": 60,
-              "severity": "error",
-              "category": "syntax",
-              "count": 5
+              "severity": "error"
             },
             {
-              "line": 64,
-              "severity": "error",
               "category": "kind-mismatch",
-              "count": 1
-            },
-            {
+              "count": 1,
               "line": 64,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
+              "severity": "error"
             },
             {
-              "line": 65,
-              "severity": "error",
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 64,
+              "severity": "error"
+            },
+            {
               "category": "kind-mismatch",
-              "count": 1
-            },
-            {
+              "count": 1,
               "line": 65,
-              "severity": "error",
+              "severity": "error"
+            },
+            {
               "category": "unresolved-reference",
-              "count": 1
+              "count": 1,
+              "line": 65,
+              "severity": "error"
             },
             {
-              "line": 67,
-              "severity": "error",
               "category": "syntax",
-              "count": 7
+              "count": 7,
+              "line": 67,
+              "severity": "error"
             },
             {
-              "line": 67,
-              "severity": "warning",
               "category": "unmapped",
-              "count": 4
+              "count": 4,
+              "line": 67,
+              "severity": "warning"
             },
             {
+              "category": "kind-mismatch",
+              "count": 1,
               "line": 71,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
+              "severity": "error"
             },
             {
+              "category": "unresolved-reference",
+              "count": 1,
               "line": 71,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
+              "severity": "error"
             },
             {
-              "line": 72,
-              "severity": "error",
               "category": "kind-mismatch",
-              "count": 1
-            },
-            {
+              "count": 1,
               "line": 72,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
+              "severity": "error"
             },
             {
-              "line": 73,
-              "severity": "error",
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 72,
+              "severity": "error"
+            },
+            {
               "category": "kind-mismatch",
-              "count": 1
-            },
-            {
+              "count": 1,
               "line": 73,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
+              "severity": "error"
             },
             {
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 73,
+              "severity": "error"
+            },
+            {
+              "category": "syntax",
+              "count": 7,
               "line": 75,
-              "severity": "error",
-              "category": "syntax",
-              "count": 7
+              "severity": "error"
             },
             {
-              "line": 83,
-              "severity": "error",
               "category": "kind-mismatch",
-              "count": 1
-            },
-            {
+              "count": 1,
               "line": 83,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
+              "severity": "error"
             },
             {
-              "line": 84,
-              "severity": "error",
+              "category": "unresolved-reference",
+              "count": 1,
+              "line": 83,
+              "severity": "error"
+            },
+            {
               "category": "kind-mismatch",
-              "count": 1
-            },
-            {
+              "count": 1,
               "line": 84,
-              "severity": "error",
+              "severity": "error"
+            },
+            {
               "category": "unresolved-reference",
-              "count": 1
+              "count": 1,
+              "line": 84,
+              "severity": "error"
             },
             {
-              "line": 86,
-              "severity": "error",
               "category": "syntax",
-              "count": 3
-            },
-            {
+              "count": 3,
               "line": 86,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
+              "severity": "error"
             },
             {
-              "line": 87,
-              "severity": "error",
+              "category": "unmapped",
+              "count": 1,
+              "line": 86,
+              "severity": "warning"
+            },
+            {
               "category": "syntax",
-              "count": 1
-            },
-            {
+              "count": 1,
               "line": 87,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
+              "severity": "error"
             },
             {
+              "category": "unmapped",
+              "count": 1,
+              "line": 87,
+              "severity": "warning"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
               "line": 89,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
+              "severity": "error"
             }
-          ]
+          ],
+          "severityMismatch": []
         },
         {
+          "agreement": [],
+          "openSysMLOnly": [],
           "path": "pseudostates-demo.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [],
           "pilotOnly": [
             {
+              "category": "syntax",
+              "count": 2,
               "line": 2,
-              "severity": "error",
-              "category": "syntax",
-              "count": 2
+              "severity": "error"
             },
             {
-              "line": 9,
-              "severity": "error",
               "category": "syntax",
-              "count": 2
+              "count": 2,
+              "line": 9,
+              "severity": "error"
             },
             {
-              "line": 9,
-              "severity": "warning",
               "category": "unmapped",
-              "count": 1
+              "count": 1,
+              "line": 9,
+              "severity": "warning"
             },
             {
+              "category": "unmapped",
+              "count": 1,
               "line": 10,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
+              "severity": "warning"
             },
             {
+              "category": "syntax",
+              "count": 1,
               "line": 11,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
+              "severity": "error"
             },
             {
-              "line": 16,
-              "severity": "error",
               "category": "syntax",
-              "count": 1
+              "count": 1,
+              "line": 16,
+              "severity": "error"
             },
             {
-              "line": 16,
-              "severity": "warning",
               "category": "unmapped",
-              "count": 2
+              "count": 2,
+              "line": 16,
+              "severity": "warning"
             },
             {
+              "category": "syntax",
+              "count": 1,
               "line": 17,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
+              "severity": "error"
             }
-          ]
+          ],
+          "severityMismatch": []
         },
         {
+          "agreement": [],
+          "openSysMLOnly": [],
           "path": "repl-behavioral-demo.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [],
           "pilotOnly": [
             {
-              "line": 26,
-              "severity": "error",
               "category": "syntax",
-              "count": 6
-            },
-            {
+              "count": 6,
               "line": 26,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 4
+              "severity": "error"
             },
             {
+              "category": "unmapped",
+              "count": 4,
+              "line": 26,
+              "severity": "warning"
+            },
+            {
+              "category": "syntax",
+              "count": 4,
               "line": 34,
-              "severity": "error",
-              "category": "syntax",
-              "count": 4
+              "severity": "error"
             },
             {
-              "line": 35,
-              "severity": "error",
               "category": "syntax",
-              "count": 1
+              "count": 1,
+              "line": 35,
+              "severity": "error"
             }
-          ]
+          ],
+          "severityMismatch": []
         },
         {
+          "agreement": [],
+          "openSysMLOnly": [],
           "path": "semantic-layer/demo.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [],
           "pilotOnly": [
             {
-              "line": 35,
-              "severity": "error",
               "category": "syntax",
-              "count": 1
-            },
-            {
+              "count": 1,
               "line": 35,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
+              "severity": "error"
             },
             {
+              "category": "unmapped",
+              "count": 1,
+              "line": 35,
+              "severity": "warning"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
               "line": 39,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
+              "severity": "error"
             },
             {
-              "line": 44,
-              "severity": "error",
               "category": "unmapped",
-              "count": 1
+              "count": 1,
+              "line": 44,
+              "severity": "error"
             },
             {
+              "category": "unmapped",
+              "count": 1,
               "line": 45,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
+              "severity": "error"
             },
             {
+              "category": "unmapped",
+              "count": 1,
               "line": 46,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
+              "severity": "error"
             },
             {
+              "category": "unmapped",
+              "count": 1,
               "line": 50,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
+              "severity": "error"
             },
             {
+              "category": "unmapped",
+              "count": 1,
               "line": 51,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
+              "severity": "error"
             },
             {
-              "line": 105,
-              "severity": "error",
               "category": "syntax",
-              "count": 1
+              "count": 1,
+              "line": 105,
+              "severity": "error"
             },
             {
-              "line": 105,
-              "severity": "warning",
               "category": "unmapped",
-              "count": 1
+              "count": 1,
+              "line": 105,
+              "severity": "warning"
             }
-          ]
+          ],
+          "severityMismatch": []
         },
         {
+          "agreement": [],
+          "openSysMLOnly": [],
           "path": "solver-demo.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [],
           "pilotOnly": [
             {
+              "category": "syntax",
+              "count": 1,
               "line": 119,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
+              "severity": "error"
             },
             {
-              "line": 120,
-              "severity": "error",
               "category": "unresolved-reference",
-              "count": 2
-            },
-            {
+              "count": 2,
               "line": 120,
-              "severity": "warning",
-              "category": "kind-mismatch",
-              "count": 2
+              "severity": "error"
             },
             {
+              "category": "kind-mismatch",
+              "count": 2,
+              "line": 120,
+              "severity": "warning"
+            },
+            {
+              "category": "syntax",
+              "count": 1,
               "line": 123,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
+              "severity": "error"
             },
             {
-              "line": 124,
-              "severity": "error",
               "category": "unresolved-reference",
-              "count": 1
-            },
-            {
+              "count": 1,
               "line": 124,
-              "severity": "warning",
+              "severity": "error"
+            },
+            {
               "category": "kind-mismatch",
-              "count": 1
+              "count": 1,
+              "line": 124,
+              "severity": "warning"
             },
             {
+              "category": "syntax",
+              "count": 1,
               "line": 127,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
+              "severity": "error"
             }
-          ]
+          ],
+          "severityMismatch": []
         },
         {
+          "agreement": [],
+          "openSysMLOnly": [],
           "path": "state-machine-demo.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [],
           "pilotOnly": [
             {
-              "line": 2,
-              "severity": "error",
               "category": "syntax",
-              "count": 2
+              "count": 2,
+              "line": 2,
+              "severity": "error"
             },
             {
-              "line": 13,
-              "severity": "error",
               "category": "syntax",
-              "count": 1
+              "count": 1,
+              "line": 13,
+              "severity": "error"
             }
-          ]
+          ],
+          "severityMismatch": []
         },
         {
-          "path": "views-demo.sysml",
           "agreement": [],
-          "severityMismatch": [],
           "openSysMLOnly": [],
+          "path": "views-demo.sysml",
           "pilotOnly": [
             {
+              "category": "multiplicity",
+              "count": 1,
               "line": 32,
-              "severity": "error",
-              "category": "multiplicity",
-              "count": 1
+              "severity": "error"
             },
             {
-              "line": 44,
-              "severity": "error",
               "category": "multiplicity",
-              "count": 1
+              "count": 1,
+              "line": 44,
+              "severity": "error"
             },
             {
-              "line": 44,
-              "severity": "error",
               "category": "unmapped",
-              "count": 2
+              "count": 2,
+              "line": 44,
+              "severity": "error"
             },
             {
+              "category": "syntax",
+              "count": 1,
               "line": 81,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
+              "severity": "error"
             },
             {
+              "category": "syntax",
+              "count": 2,
               "line": 85,
-              "severity": "error",
-              "category": "syntax",
-              "count": 2
+              "severity": "error"
             },
             {
-              "line": 88,
-              "severity": "error",
               "category": "syntax",
-              "count": 1
+              "count": 1,
+              "line": 88,
+              "severity": "error"
             }
-          ]
+          ],
+          "severityMismatch": []
         }
-      ]
+      ],
+      "name": "examples",
+      "totals": {
+        "agreement": 0,
+        "files": 12,
+        "filesFullyAgreeing": 1,
+        "openSysMLDiagnostics": 2,
+        "openSysMLOnly": 2,
+        "pilotDiagnostics": 140,
+        "pilotOnly": 140,
+        "severityMismatch": 0
+      }
     },
     {
-      "name": "probes",
       "dir": "cmd/pilot-diff/testdata",
+      "files": [],
+      "name": "probes",
       "totals": {
+        "agreement": 0,
         "files": 1,
         "filesFullyAgreeing": 1,
-        "agreement": 0,
-        "severityMismatch": 0,
-        "openSysMLOnly": 0,
-        "pilotOnly": 0,
         "openSysMLDiagnostics": 0,
-        "pilotDiagnostics": 0
-      },
-      "files": []
+        "openSysMLOnly": 0,
+        "pilotDiagnostics": 0,
+        "pilotOnly": 0,
+        "severityMismatch": 0
+      }
     }
   ],
+  "totals": {
+    "agreement": 18,
+    "files": 276,
+    "filesFullyAgreeing": 171,
+    "openSysMLDiagnostics": 486,
+    "openSysMLOnly": 467,
+    "pilotDiagnostics": 207,
+    "pilotOnly": 188,
+    "severityMismatch": 1
+  },
   "unmapped": [
     {
-      "side": "pilot",
+      "count": 30,
       "message": "Duplicate of other owned member name",
-      "count": 30
+      "side": "pilot"
     },
     {
-      "side": "pilot",
+      "count": 5,
       "message": "Must be an accessible feature (use dot notation for nesting)",
-      "count": 5
+      "side": "pilot"
     },
     {
-      "side": "pilot",
+      "count": 2,
       "message": "Cannot identify flow end (use dot notation)",
-      "count": 2
+      "side": "pilot"
     },
     {
-      "side": "opensysml",
+      "count": 1,
       "message": "A participates in a specialization cycle",
-      "count": 1
+      "side": "opensysml"
     },
     {
-      "side": "opensysml",
+      "count": 1,
       "message": "B participates in a specialization cycle",
-      "count": 1
+      "side": "opensysml"
     },
     {
-      "side": "pilot",
+      "count": 1,
+      "message": "interface Mounting connects ports AxleMountIF and WheelHubIF, whose directed features are not conjugate; one end usually names the conjugate port (~AxleMountIF)",
+      "side": "opensysml"
+    },
+    {
+      "count": 1,
+      "message": "name conflict: text is already the name of the inherited feature ModelingMetadata::Issue::text",
+      "side": "opensysml"
+    },
+    {
+      "count": 1,
+      "message": "packet data field redefines packet data field, but packet data field is not an inherited member of Thermal Data Packet",
+      "side": "opensysml"
+    },
+    {
+      "count": 1,
       "message": "Must be model-level evaluable",
-      "count": 1
+      "side": "pilot"
     },
     {
-      "side": "pilot",
+      "count": 1,
       "message": "Must invoke a behavior or a behavioral feature",
-      "count": 1
+      "side": "pilot"
     }
-  ]
+  ],
+  "validator": "build/pilot-validator/validate-sysml"
 }

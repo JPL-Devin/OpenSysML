@@ -164,6 +164,24 @@ func TestOrderByImports(t *testing.T) {
 	}
 }
 
+// A qualified import must match the longest declared namespace prefix.
+func TestOrderByImportsQualifiedPrefix(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, content string) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("z-provider.sysml", "package Wrapper {\n\tpackage SimpleVehicleModel {\n\t\tpart def Thing;\n\t}\n}\n")
+	write("a-importer.sysml", "package Views {\n\tprivate import Wrapper::SimpleVehicleModel::*;\n}\n")
+
+	files := []string{"a-importer.sysml", "z-provider.sysml"}
+	want := []string{"z-provider.sysml", "a-importer.sysml"}
+	if got := orderByImports(dir, ".", files); !reflect.DeepEqual(got, want) {
+		t.Errorf("orderByImports() = %v, want %v", got, want)
+	}
+}
+
 // An import cycle must not hang or drop files.
 func TestOrderByImportsCycle(t *testing.T) {
 	dir := t.TempDir()
