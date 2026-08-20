@@ -95,6 +95,30 @@ Fixtures that actually exercise the redefinition-owner path:
 - Imports: a wildcard `import Lib::*` plus a nested `import Lib::Inner::Wheel` for the positive
   case, and a usage of an undeclared type for the negative (`unresolved reference: Gearbox`).
 
+## Per-snippet parse kind: .kerml vs .sysml gates (PR #360)
+
+Since F51 the REPL analyzes each snippet under the parse kind of the file it came from, so the
+parser's file-kind gates are testable through the binary:
+
+- **Fixture pair that hits both gates:** `package F51Expr { feature at = 1; feature while = 2;
+  feature merge = 3; feature decide = 4; feature total = at + while + merge + decide; }` (contextual
+  keywords as names) and `package F51Type { class at; feature f : at; feature g = at::self; }`
+  (keyword in type/qualified-name position). As `.kerml` both must `-validate` clean (exit 0) and
+  `-convert sysml` successfully; byte-identical `.sysml` copies must produce four
+  `"<kw>" is a reserved keyword` warnings (expr) and an `at::self` → `expected '{' or ';'` **error,
+  exit 2** (type). The reference `./build/pilot-kerml-validator/validate-kerml` accepts both .kerml
+  files (exit 0) — the agreement check.
+- **The prompt is always SysML-kind:** `namespace N;` typed at `sysml>` must still get the
+  `` `namespace` is KerML notation `` warning, and `package P { feature at = 1; }` the
+  reserved-keyword warning, even right after clean `.kerml` %loads. If either warning disappears
+  after a `%load *.kerml`, the snippet kind leaked into the prompt.
+- **Mixed sessions:** `./bin/sysml k.kerml sn.sysml -validate` (or `%load` both) must attribute the
+  kerml-notation warning **only** to the `.sysml` file, and a prompt snippet must resolve
+  kerml-declared names across kinds (`package Q { attribute r = K::f; }` → `%eval Q::r`).
+- Known pre-existing (same on main, not regressions): `%eval` of a reference whose value chain
+  names a kerml feature spelled with a contextual keyword fails `unresolved reference: at`;
+  compound `%eval` expressions reparse the buffer under an unknown-kind temp doc.
+
 ## Two ways to drive it
 
 1. **Non-interactive (fast, for exploration and expected-value discovery).** The REPL reads a
