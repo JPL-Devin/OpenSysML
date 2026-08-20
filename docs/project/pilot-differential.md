@@ -360,7 +360,8 @@ package Decl {
 }
 ```
 
-The pilot reports the diagnostic at `3:29`, on `A`; OpenSysML reports nothing. Deleting the
+The pilot reports the diagnostic on line 3, on `A` (the column follows the indentation, so
+assert on the line and the message); OpenSysML reports nothing. Deleting the
 `disjoint from A` clause, or writing it as the standalone `disjoint B from A;` in the same
 package, silences the pilot — so the clause, and only the clause, provokes it.
 
