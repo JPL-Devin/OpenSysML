@@ -56,6 +56,12 @@ func TestNamespaceInSysMLIsKerMLNotation(t *testing.T) {
 	}
 }
 
+// A document of no file kind — the REPL and CLI buffer — takes the SysML reading,
+// so its `namespace` is reported rather than silently accepted.
+func TestNamespaceInAnUnnamedDocumentIsKerMLNotation(t *testing.T) {
+	wantNotation(t, "<repl>", "namespace N;", CodeKerMLNotation, "`namespace` is KerML notation")
+}
+
 func TestNamespaceInKerMLIsSilent(t *testing.T) {
 	for _, src := range []string{
 		"namespace N { }",
