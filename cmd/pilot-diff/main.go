@@ -25,19 +25,32 @@ import (
 type corpusRoot struct {
 	Name string
 	Dir  string
+	Lang language
 	// Skip lists sub-paths of Dir (slash-separated, relative to Dir) that
 	// belong to another root.
 	Skip []string
+}
+
+type language uint8
+
+const (
+	languageSysML language = iota
+	languageKerML
+)
+
+func (root corpusRoot) extension() string {
+	if root.Lang == languageKerML {
+		return ".kerml"
+	}
+	return ".sysml"
 }
 
 var defaultRoots = []corpusRoot{
 	{Name: "training", Dir: "examples/sysml-v2-training"},
 	{Name: "pilot-examples", Dir: "examples/pilot-corpora/sysml-examples"},
 	{Name: "pilot-validation", Dir: "examples/pilot-corpora/sysml-validation"},
-	// examples/pilot-corpora/kerml-examples is fetched but not compared: the
-	// wrapper rejects any input that is not .sysml, and the pilot release ships
-	// no KerML validation entry point to invoke instead. See
-	// docs/project/pilot-differential.md.
+	// KerML is validated in one resource-set batch by the plain-Java bridge.
+	{Name: "kerml-examples", Dir: "examples/pilot-corpora/kerml-examples", Lang: languageKerML},
 	{Name: "testdata", Dir: "testdata"},
 	{Name: "examples", Dir: "examples", Skip: []string{"sysml-v2-training", "pilot-corpora"}},
 	// Hand-written models for behaviour classes the corpora do not cover, such
@@ -48,17 +61,18 @@ var defaultRoots = []corpusRoot{
 func main() {
 	repo := flag.String("repo", "", "repository root (default: the module root containing this command)")
 	validator := flag.String("validator", "", "pilot validator executable (default: <repo>/build/pilot-validator/validate-sysml)")
+	kermlValidator := flag.String("kerml-validator", "", "KerML pilot validator executable (default: <repo>/build/pilot-kerml-validator/validate-kerml)")
 	out := flag.String("out", "", "output directory for the reports (default: <repo>/build/pilot-diff)")
 	timeout := flag.Duration("timeout", 0, "per-batch timeout for the pilot validator (0: no limit)")
 	flag.Parse()
 
-	if err := run(*repo, *validator, *out, *timeout); err != nil {
+	if err := run(*repo, *validator, *kermlValidator, *out, *timeout); err != nil {
 		fmt.Fprintf(os.Stderr, "pilot-diff: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func run(repo, validator, out string, timeout time.Duration) error {
+func run(repo, validator, kermlValidator, out string, timeout time.Duration) error {
 	var err error
 	if repo == "" {
 		repo, err = moduleRoot()
@@ -68,6 +82,9 @@ func run(repo, validator, out string, timeout time.Duration) error {
 	}
 	if validator == "" {
 		validator = filepath.Join(repo, "build", "pilot-validator", "validate-sysml")
+	}
+	if kermlValidator == "" {
+		kermlValidator = filepath.Join(repo, "build", "pilot-kerml-validator", "validate-kerml")
 	}
 	if out == "" {
 		out = filepath.Join(repo, "build", "pilot-diff")
@@ -89,16 +106,28 @@ func run(repo, validator, out string, timeout time.Duration) error {
 			return err
 		}
 		if len(files) == 0 {
-			fmt.Fprintf(os.Stderr, "skipping %s: no .sysml files (corpus not downloaded?)\n", root.Dir)
+			fmt.Fprintf(os.Stderr, "skipping %s: no %s files (corpus not downloaded?)\n", root.Dir, root.extension())
 			continue
 		}
 		fmt.Fprintf(os.Stderr, "%s: %d file(s)\n", root.Name, len(files))
 
+		pilot := validator
+		if root.Lang == languageKerML {
+			pilot = kermlValidator
+			if _, err := os.Stat(pilot); err != nil {
+				return fmt.Errorf("KerML pilot validator not found at %s: run ./scripts/download-pilot-kerml-validator.sh", pilot)
+			}
+		}
 		ours, err := openSysMLDiagnostics(repo, root.Dir, files)
 		if err != nil {
 			return err
 		}
-		theirs, err := pilotDiagnostics(validator, repo, root.Dir, files, timeout)
+		var theirs map[string][]diagnostic
+		if root.Lang == languageKerML {
+			theirs, err = kermlDiagnostics(pilot, repo, root.Dir, files, timeout)
+		} else {
+			theirs, err = pilotDiagnostics(pilot, repo, root.Dir, files, timeout)
+		}
 		if err != nil {
 			return err
 		}
@@ -139,9 +168,8 @@ func moduleRoot() (string, error) {
 	}
 }
 
-// collectFiles returns the root's .sysml files as sorted slash-separated paths
-// relative to the root directory. The pilot validator only accepts .sysml, so
-// .kerml fixtures are out of scope for the comparison.
+// collectFiles returns the root's model files as sorted slash-separated paths
+// relative to the root directory.
 func collectFiles(repo string, root corpusRoot) ([]string, error) {
 	dir := filepath.Join(repo, root.Dir)
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
@@ -166,7 +194,7 @@ func collectFiles(repo string, root corpusRoot) ([]string, error) {
 			}
 			return nil
 		}
-		if filepath.Ext(path) == ".sysml" {
+		if filepath.Ext(path) == root.extension() {
 			files = append(files, rel)
 		}
 		return nil

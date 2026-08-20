@@ -14,9 +14,8 @@ import (
 	"time"
 )
 
-// pilotLine matches the GNU-format diagnostics the wrapper prints on stderr:
-// "<file>:<line>:<column>: <severity>: <message>". The file is a base name.
-var pilotLine = regexp.MustCompile(`^(.+\.sysml):(\d+):(\d+): (error|warning|info|ignore): (.*)$`)
+// pilotLine matches the GNU-format diagnostics the validators print on stderr.
+var pilotLine = regexp.MustCompile(`^(.+\.(?:sysml|kerml)):(\d+):(\d+): (error|warning|info|ignore): (.*)$`)
 
 // pilotVersion reports which pilot release the validator was built against,
 // read from the wrapper's pinned Maven properties.
@@ -64,6 +63,26 @@ func pilotDiagnostics(validator, repo, dir string, files []string, timeout time.
 		if err := runPilot(validator, args, byBase, out, timeout); err != nil {
 			return nil, err
 		}
+	}
+	return out, nil
+}
+
+func kermlDiagnostics(validator, repo, dir string, files []string, timeout time.Duration) (map[string][]diagnostic, error) {
+	root, err := filepath.Abs(filepath.Join(repo, dir))
+	if err != nil {
+		return nil, fmt.Errorf("resolve KerML corpus root: %w", err)
+	}
+
+	byPath := make(map[string]string, len(files))
+	args := []string{"--root", root}
+	for _, rel := range files {
+		byPath[rel] = rel
+		args = append(args, filepath.Join(root, filepath.FromSlash(rel)))
+	}
+
+	out := make(map[string][]diagnostic, len(files))
+	if err := runPilot(validator, args, byPath, out, timeout); err != nil {
+		return nil, err
 	}
 	return out, nil
 }

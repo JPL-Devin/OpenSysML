@@ -132,6 +132,52 @@ func TestCollectFilesSkipsNestedRoots(t *testing.T) {
 	}
 }
 
+func TestCollectFilesByLanguage(t *testing.T) {
+	repo := t.TempDir()
+	for _, rel := range []string{
+		"kerml/Example.kerml",
+		"kerml/Example.sysml",
+		"sysml/Example.kerml",
+		"sysml/Example.sysml",
+	} {
+		path := filepath.Join(repo, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("package P;\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	tests := []struct {
+		name string
+		root corpusRoot
+		want []string
+	}{
+		{
+			name: "KerML",
+			root: corpusRoot{Name: "kerml", Dir: "kerml", Lang: languageKerML},
+			want: []string{"Example.kerml"},
+		},
+		{
+			name: "SysML",
+			root: corpusRoot{Name: "sysml", Dir: "sysml"},
+			want: []string{"Example.sysml"},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := collectFiles(repo, test.root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(got, test.want) {
+				t.Errorf("collectFiles() = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
 func TestBatchByBaseName(t *testing.T) {
 	got := batchByBaseName([]string{"a/x.sysml", "b/x.sysml", "c/y.sysml", "d/x.sysml"})
 	want := [][]string{
@@ -239,15 +285,66 @@ func TestOrderByImportsCycle(t *testing.T) {
 }
 
 func TestPilotLineParsing(t *testing.T) {
-	line := "Part Definition Example.sysml:12:3: warning: Bound features should have conforming types"
-	match := pilotLine.FindStringSubmatch(line)
-	if match == nil {
-		t.Fatalf("no match for %q", line)
+	tests := []struct {
+		name, line, path, lineNo, severity, message string
+	}{
+		{
+			name:     "SysML",
+			line:     "Part Definition Example.sysml:12:3: warning: Bound features should have conforming types",
+			path:     "Part Definition Example.sysml",
+			lineNo:   "12",
+			severity: "warning",
+			message:  "Bound features should have conforming types",
+		},
+		{
+			name:     "KerML nested path",
+			line:     "Nested Folder/Example.kerml:7:4: error: unresolved reference",
+			path:     "Nested Folder/Example.kerml",
+			lineNo:   "7",
+			severity: "error",
+			message:  "unresolved reference",
+		},
 	}
-	if match[1] != "Part Definition Example.sysml" || match[2] != "12" || match[4] != "warning" {
-		t.Errorf("match = %q", match[1:])
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			match := pilotLine.FindStringSubmatch(test.line)
+			if match == nil {
+				t.Fatalf("no match for %q", test.line)
+			}
+			if match[1] != test.path || match[2] != test.lineNo || match[4] != test.severity {
+				t.Errorf("match = %q", match[1:])
+			}
+			if match[5] != test.message {
+				t.Errorf("message = %q", match[5])
+			}
+		})
 	}
-	if match[5] != "Bound features should have conforming types" {
-		t.Errorf("message = %q", match[5])
+}
+
+func TestKerMLDiagnosticsAttribution(t *testing.T) {
+	repo := t.TempDir()
+	rel := "Nested Space/Example.kerml"
+	file := filepath.Join(repo, filepath.FromSlash(rel))
+	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(file, []byte("package P;\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	bridge := filepath.Join(repo, "bridge.sh")
+	if err := os.WriteFile(bridge, []byte("#!/bin/sh\necho \"Nested Space/Example.kerml:7:4: error: unresolved reference\" >&2\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := kermlDiagnostics(bridge, repo, ".", []string{rel}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got[rel]) != 1 {
+		t.Fatalf("diagnostics[%q] = %+v", rel, got[rel])
+	}
+	if got[rel][0].File != rel || got[rel][0].Line != 7 || got[rel][0].Message != "unresolved reference" {
+		t.Errorf("diagnostics[%q] = %+v", rel, got[rel])
 	}
 }
