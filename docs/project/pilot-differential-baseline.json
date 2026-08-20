@@ -3,12 +3,12 @@
   "pilotRelease": "2026-05 (jupyter-sysml-kernel 0.60.1)",
   "totals": {
     "files": 122,
-    "filesFullyAgreeing": 100,
+    "filesFullyAgreeing": 103,
     "agreement": 18,
     "severityMismatch": 1,
-    "openSysMLOnly": 9,
+    "openSysMLOnly": 5,
     "pilotOnly": 188,
-    "openSysMLDiagnostics": 28,
+    "openSysMLDiagnostics": 24,
     "pilotDiagnostics": 207
   },
   "roots": [
@@ -17,44 +17,15 @@
       "dir": "examples/sysml-v2-training",
       "totals": {
         "files": 100,
-        "filesFullyAgreeing": 98,
+        "filesFullyAgreeing": 100,
         "agreement": 0,
         "severityMismatch": 0,
-        "openSysMLOnly": 2,
+        "openSysMLOnly": 0,
         "pilotOnly": 0,
-        "openSysMLDiagnostics": 2,
+        "openSysMLDiagnostics": 0,
         "pilotDiagnostics": 0
       },
-      "files": [
-        {
-          "path": "24. States/State Actions.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [
-            {
-              "line": 26,
-              "severity": "warning",
-              "category": "syntax",
-              "count": 1
-            }
-          ],
-          "pilotOnly": []
-        },
-        {
-          "path": "25. Transitions/Transition Actions.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [
-            {
-              "line": 34,
-              "severity": "warning",
-              "category": "syntax",
-              "count": 1
-            }
-          ],
-          "pilotOnly": []
-        }
-      ]
+      "files": []
     },
     {
       "name": "testdata",
@@ -500,12 +471,12 @@
       "dir": "examples",
       "totals": {
         "files": 12,
-        "filesFullyAgreeing": 1,
+        "filesFullyAgreeing": 2,
         "agreement": 0,
         "severityMismatch": 0,
-        "openSysMLOnly": 2,
+        "openSysMLOnly": 0,
         "pilotOnly": 140,
-        "openSysMLDiagnostics": 2,
+        "openSysMLDiagnostics": 0,
         "pilotDiagnostics": 140
       },
       "files": [
@@ -718,26 +689,6 @@
               "count": 1
             }
           ]
-        },
-        {
-          "path": "parser_features_demo_action_semantics.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [
-            {
-              "line": 38,
-              "severity": "warning",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 65,
-              "severity": "warning",
-              "category": "syntax",
-              "count": 1
-            }
-          ],
-          "pilotOnly": []
         },
         {
           "path": "phase-c-behavioral-bodies.sysml",

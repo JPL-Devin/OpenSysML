@@ -92,15 +92,23 @@ nor double-counted as two independent disagreements.
 
 | Root | Files | Fully agreeing | Ours | Pilot | Agreed | Severity-only | Only ours | Only pilot |
 |---|---|---|---|---|---|---|---|---|
-| `examples/sysml-v2-training` | 100 | 98 | 2 | 0 | 0 | 0 | 2 | 0 |
+| `examples/sysml-v2-training` | 100 | 100 | 0 | 0 | 0 | 0 | 0 | 0 |
 | `testdata` | 9 | 0 | 24 | 67 | 18 | 1 | 5 | 48 |
-| `examples` | 12 | 1 | 2 | 140 | 0 | 0 | 2 | 140 |
+| `examples` | 12 | 2 | 0 | 140 | 0 | 0 | 0 | 140 |
 | `cmd/pilot-diff/testdata` (probes) | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **122** | **100** | **28** | **207** | **18** | **1** | **9** | **188** |
+| **Total** | **122** | **103** | **24** | **207** | **18** | **1** | **5** | **188** |
 
 The headline is the first row: on the 100-file OMG training corpus the pilot reports
-**nothing at all**, and we report **two** diagnostics — both false positives (below). That is
-the corpus written to be valid, and it is the row that most directly answers "are we right?".
+**nothing at all**, and so do we. That is the corpus written to be valid, and it is the row
+that most directly answers "are we right?".
+
+Counts that moved since the previous run, and why:
+
+| Count | Was | Now | Reason |
+|---|---|---|---|
+| training: fully agreeing / ours / only ours | 98 / 2 / 2 | 100 / 0 / 0 | F1 fixed: `on` is no longer reserved, so `24. States/State Actions.sysml:26` and `25. Transitions/Transition Actions.sysml:34` report nothing. |
+| `examples`: fully agreeing / ours / only ours | 1 / 2 / 2 | 2 / 0 / 0 | F1 fixed: `var` is no longer reserved, so `parser_features_demo_action_semantics.sysml:38,65` report nothing. |
+| Total: fully agreeing / ours / only ours | 100 / 28 / 9 | 103 / 24 / 5 | The four diagnostics above, in three files. No other tuple changed — the pilot side is byte-identical. |
 
 The other two rows are not a like-for-like verdict on our checker. `testdata/` and
 `examples/` are largely *our* fixtures — several are deliberately malformed negative fixtures,
@@ -112,12 +120,15 @@ root causes, adjudicated next.
 
 ## Adjudications
 
-### Only ours — candidate false positives (9)
+### Only ours — candidate false positives (5)
+
+The two keyword-as-name rows that stood here are **fixed** (F1): `on` appears as a literal in
+none of the pilot's grammars, and `var` only in `KerML.xtext` (`BasicFeaturePrefix`), so both
+are now matched contextually and are names everywhere else. The four diagnostics they produced
+are gone from the three files listed in the movement table above.
 
 | Files | Diagnostic | Verdict |
 |---|---|---|
-| `24. States/State Actions.sysml:26`, `25. Transitions/Transition Actions.sysml:34` | `"on" is a reserved keyword; write 'on' to use it as a name` | **Ours is wrong.** Both OMG files declare `state on { ... }` and write `then on;`. The pilot accepts both files completely. `on` is a keyword only in trigger position (`accept ... on ...`); our lexer/parser rejects it as a name. Follow-up F1. |
-| `parser_features_demo_action_semantics.sysml:38,65` | `"var" is a reserved keyword; write 'var' to use it as a name` | **Ours is wrong**, same class: `attribute var : Integer;` is accepted by the pilot. Follow-up F1. |
 | `passes/errors.sysml:4`, `resolve/errors.sysml:4` | `unresolved reference: Nowhere` | **Ours is right**, and these are negative fixtures where the diagnostic is the point. The pilot is silent only because a bare `import` earlier in the same file broke its parse before it got there (see P1) — a cascade artifact, not a disagreement about `Nowhere`. |
 | `passes/constraints.sysml:2,3` | `A`/`B` `participates in a specialization cycle` (`unmapped`) | **Ours is right**: `part def A specializes B; part def B specializes A;`. The pilot reports nothing for the cycle. Recorded as `unmapped` because no pilot message pattern corresponds; whether the pilot has no such check or suppressed it is not established here. Follow-up F4. |
 | `passes/constraints.sysml:9` | `multiplicity lower bound exceeds upper bound on lo` | **Ours is right**: `part lo [5..2];`. No pilot counterpart. |
@@ -190,7 +201,9 @@ one.
 
 | # | Follow-up |
 |---|---|
-| F1 | Keyword-as-name: `on` (OMG training corpus, 2 files) and `var` are rejected as names; the pilot accepts both. Our lexer reserves them unconditionally. This is the only false positive of ours on the OMG corpus. |
+| ~~F1~~ | **Done.** Keyword-as-name for `on` and `var`. The scope came from the pilot's grammars rather than the failing files: `on` is a literal in none of `KerML.xtext`, `SysML.xtext` or `Expr.xtext` — the premise that it is a trigger keyword (`accept ... on ...`) was wrong — and `var` is a literal only in `KerML.xtext` `BasicFeaturePrefix` (`isVariable ?= 'var'`). Both are now contextual, like `point`. |
+| F8 | The other words we reserve that appear as a literal in none of the pilot's grammars: `choice`, `decision`, `deep`, `defer`, `done`, `final`, `history`, `initial`, `junction`, `region`, `shallow`. Unlike `on` and `var`, each is read as a keyword by our parser in a position of its own (mostly the state-machine notation of [grammar/README.md](../reference/grammar/README.md), some of which is an OpenSysML invention), so each needs its own contextual rule and its own decision about whether the notation stays. `done` is the pressing one: it is a *name* in five files of the normative OMG library (`Systems Library/Actions.sysml`, `Items.sysml`, `Parts.sysml`, `States.sysml`, `UseCases.sysml`), where we report it — see `TestStdlibReservedKeywordNames`. |
+| F9 | Contextual keywords are neither highlighted nor completed: the VS Code grammars and the LSP keyword completion are generated from `lexer.Keywords()`, which `point`, `chain`, `on` and `var` are deliberately absent from. `var` is real KerML notation, so a second list of contextual words for those two surfaces would restore it without reserving it. |
 | F2 | Decide whether a bare `import` (no visibility) is legal SysML v2 textual notation. The pilot's grammar requires visibility; we accept its absence. Whichever way it lands, it affects 10 of our own fixtures. |
 | F3 | Over-acceptance in our parser: `namespace N;` and `region` in a state body are not SysML v2 notation. |
 | F4 | Specialization cycles: confirm whether the pilot checks them at all, and categorise the diagnostic (currently `unmapped`). |

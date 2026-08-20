@@ -54,6 +54,14 @@ Notes:
   or `exit` and only when a pseudostate name and `;` follow, because models
   routinely declare features named `point`. `entry <action>` keeps its OMG
   meaning.
+- `on` and `var` are **not** reserved either, for the same reason and on the
+  pilot implementation's authority: `on` is a literal in none of its grammars,
+  and `var` only in `KerML.xtext` `BasicFeaturePrefix` (`isVariable ?= 'var'`).
+  So `state on { … }` and `then on;` (the OMG training corpus writes both) and
+  `attribute var : Integer;` declare and name features, while `var` before a
+  kind keyword (`var feature x`, `var attribute total : Integer;`) still marks a
+  variable feature. `var` with the kind keyword left out is not supported and is
+  reported. See [pilot-differential.md](../../project/pilot-differential.md).
 - A deferred event is parsed exactly like a transition trigger, so both a signal
   name (`defer Ping;`) and a call event (`defer setSpeed(value);`) are accepted;
   time and change events cannot be deferred and are reported at lowering.
