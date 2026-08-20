@@ -4,7 +4,7 @@
 
 **Reference:** [SysML v2 Pilot Implementation](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation), release `2026-05` (`jupyter-sysml-kernel` 0.60.1) — the same release the training corpus is pinned to
 **Wrapper:** [DeciSym/sysmlv2-validator](https://github.com/DeciSym/sysmlv2-validator) at commit `0d706e5ba1e9c56730cb8600ee43602906e12058`
-**Provision:** `./scripts/download-pilot-validator.sh` (needs Java 21+ and Maven; writes `build/pilot-validator/`)
+**Provision:** `./scripts/download-pilot-validator.sh` (needs Java 21+ and Maven; writes `build/pilot-validator/`) and `./scripts/download-pilot-kerml-validator.sh` for the KerML side (writes `build/pilot-kerml-validator/`)
 **Run:** `go run ./cmd/pilot-diff` (writes `build/pilot-diff/pilot-diff.txt` and `build/pilot-diff/pilot-diff.json`)
 **Baseline:** the last committed run is [pilot-differential-baseline.json](pilot-differential-baseline.json), so a later run can be diffed against it
 **Status:** advisory only — nothing here gates CI, and the harness reads the corpora without writing to them
@@ -53,6 +53,34 @@ The DeciSym CLI recurses into directories, but it validates each file with a sep
 Our side is run the way the training-examples gate runs it: every file in a root is opened
 into one workspace *before* any diagnostic is requested, so cross-file imports resolve.
 
+### The KerML side of the bridge
+
+The DeciSym CLI is `.sysml`-only, so the KerML root is validated by a sibling program,
+[`scripts/pilot-kerml-validator/ValidateKerML.java`](../../scripts/pilot-kerml-validator/ValidateKerML.java),
+built against the *same* pinned pilot jar by `./scripts/download-pilot-kerml-validator.sh`
+(which sources `scripts/pilot-pin.sh`, provisions the SysML wrapper first if its jar is
+missing, and writes only under `build/pilot-kerml-validator/`). It is ~150 lines of glue and
+contains no rule of its own: it registers `KerMLStandaloneSetup`
+(`createInjectorAndDoEMFRegistration`), extends the pilot's own `SysMLUtil` to load
+`sysml.library` and the corpus into one `ResourceSet`, then asks the injected Xtext
+`IResourceValidator` — the pilot's `KerMLResourceValidator`, driving the pilot's
+`KerMLValidator` — for `validate(resource, CheckMode.ALL, CancelIndicator.NullImpl)`, and
+prints each `Issue` in the same GNU format the DeciSym wrapper emits, so `cmd/pilot-diff`
+reads both with one parser. The verdicts are therefore the reference's.
+
+Two differences from the SysML side, both in the bridge's favour:
+
+- **One batch, one resource set.** Every corpus file is read and indexed before any file is
+  validated, so there is no ordering to emulate (`order.go` is not used for this root) and no
+  cross-file name accumulation, which is why the `Duplicate of other owned member name`
+  artifact (P4) has no KerML counterpart.
+- **Paths, not basenames.** Diagnostics are printed relative to the corpus root, so
+  same-basename files need no batching and are attributed exactly.
+
+EMF renders object references with an identity hash code and an absolute `file:` URI, which
+would differ between runs and machines; the bridge rewrites those to the display path, so
+repeated runs are byte-identical.
+
 ---
 
 ## Corpus roots
@@ -62,9 +90,13 @@ into one workspace *before* any diagnostic is requested, so cross-file imports r
 | `training` | `examples/sysml-v2-training` (`sysml/src/training`) | `scripts/download-training-examples.sh` |
 | `pilot-examples` | `examples/pilot-corpora/sysml-examples` (`sysml/src/examples`) | `scripts/download-pilot-corpora.sh` |
 | `pilot-validation` | `examples/pilot-corpora/sysml-validation` (`sysml/src/validation`) | `scripts/download-pilot-corpora.sh` |
+| `kerml-examples` | `examples/pilot-corpora/kerml-examples` (`kerml/src/examples`) | `scripts/download-pilot-corpora.sh` |
 | `testdata` | `testdata` | vendored |
 | `examples` | `examples`, less the downloaded corpora | vendored |
 | `probes` | `cmd/pilot-diff/testdata` | vendored |
+
+`kerml-examples` is collected as KerML; every other root is collected as SysML, which leaves our
+own `.kerml` fixtures out of the comparison (see the known limitation below).
 
 The OMG corpora are not vendored, for the same licensing reason as the training corpus, and the
 pilot release they are fetched at is pinned once in `scripts/pilot-pin.sh` — the same pin the
@@ -72,26 +104,48 @@ validator build reads, so corpus and reference can never come from different rel
 corpus directory is left alone when it already exists; remove it to re-download. A root whose
 directory is absent is skipped with a warning.
 
-### KerML: fetched, not compared
+### KerML: how the reference validates it
 
-`kerml/src/examples` (58 `.kerml` files) is downloaded to
-`examples/pilot-corpora/kerml-examples`, but it is **not** a root, because the reference side
-cannot validate it:
+`kerml/src/examples` (58 `.kerml` files) is now a root. The earlier reading of this page —
+that the pilot has no KerML validation to invoke — confused *entry points* with *validators*.
+The two dead ends were real but narrower than they looked:
 
 - The DeciSym wrapper refuses any other extension outright —
   `Error: File must have .sysml extension: <file>.kerml` — and its directory mode only collects
-  `.sysml`.
-- The pinned pilot release has no KerML equivalent of `SysMLInteractive` to invoke instead. The
-  `jupyter-sysml-kernel` jar ships `org.omg.kerml.xtext.*` grammar and scoping support, but the
-  only KerML entry points are the `KerML2XMI` / `KerML2JSON` converters, which emit no
-  diagnostics at all: run over a deliberately malformed `.kerml` file they still report
-  `Transforming... / Resolving proxies... / Writing ...` and exit 0.
-- Renaming a `.kerml` file to `.sysml` is not a substitute: the wrapper then parses KerML with
-  the SysML grammar, so `class Entry { ... }` becomes `no viable alternative at input 'Entry'`.
-  That measures the grammar mismatch, not agreement.
+  `.sysml`. Renaming a `.kerml` file to `.sysml` is not a substitute either: the wrapper then
+  parses KerML with the SysML grammar, so `class Entry { ... }` becomes `no viable alternative
+  at input 'Entry'`, which measures the grammar mismatch, not agreement.
+- `KerML2XMI` / `KerML2JSON` are indeed silent on malformed input, but that is because they
+  parse, transform and serialize without ever calling `IResourceValidator` — not evidence that
+  the reference has no KerML checks.
 
-Our own side has no such gap — `model.Workspace` analyses `.kerml` — so the root becomes
-comparable as soon as a reference-side KerML entry point exists (follow-up F10).
+The pinned `jupyter-sysml-kernel` jar in fact ships the KerML twin of everything the SysML
+comparison already consumes: `org/omg/kerml/xtext/validation/KerMLValidator.class` (~88 KB,
+against ~79 KB for `org/omg/sysml/xtext/validation/SysMLValidator.class`),
+`KerMLResourceValidator.class`, `AbstractKerMLValidator.class`, and
+`org/omg/kerml/xtext/KerMLStandaloneSetup.class`. What was missing was only a CLI, which the
+bridge above supplies (F10).
+
+The oracle was sanity-checked before any comparison was drawn from it. On
+`Address Book Example/AddressBookModel.kerml` it reports nothing and exits 0; on a malformed
+file (`package Broken {` / `part def`) it exits 1 with
+
+```
+malformed.kerml:2:8: error: no viable alternative at input 'def'
+malformed.kerml:2:11: error: no viable alternative at input '<EOF>'
+```
+
+and on a file that parses but does not resolve
+(`feature x : NoSuchTypeAtAll; classifier C specializes AlsoMissing;`) it reports unresolved
+references, so it is exercising name resolution too, not just the parser.
+
+**Known limitation:** a root has one language, so only `kerml-examples` is compared as KerML.
+Our own 11 `.kerml` fixtures — `testdata/lex/basic.kerml` and
+`examples/parser_features_demo_*.kerml` — sit in roots collected as `.sysml` and are therefore
+*not* compared, even though the bridge could now validate them and our side already analyses
+them. The counts for `testdata` and `examples` below are SysML-only for that reason. Comparing
+them means letting one root collect both extensions and dispatching each language to its own
+oracle: follow-up F34.
 
 ---
 
@@ -128,17 +182,23 @@ nor double-counted as two independent disagreements.
 
 ---
 
-## Results (pilot `2026-05`, 276 files)
+## Results (pilot `2026-05`, 338 files)
 
 | Root | Files | Fully agreeing | Ours | Pilot | Agreed | Severity-only | Only ours | Only pilot |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | `examples/sysml-v2-training` | 100 | 100 | 0 | 0 | 0 | 0 | 0 | 0 |
-| `examples/pilot-corpora/sysml-examples` | 98 | 38 | 334 | 0 | 0 | 0 | 334 | 0 |
-| `examples/pilot-corpora/sysml-validation` | 56 | 34 | 118 | 0 | 0 | 0 | 118 | 0 |
-| `testdata` | 9 | 0 | 24 | 67 | 18 | 1 | 5 | 48 |
-| `examples` | 12 | 2 | 0 | 140 | 0 | 0 | 0 | 140 |
-| `cmd/pilot-diff/testdata` (probes) | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **276** | **175** | **476** | **207** | **18** | **1** | **457** | **188** |
+| `examples/pilot-corpora/sysml-examples` | 98 | 40 | 316 | 0 | 0 | 0 | 316 | 0 |
+| `examples/pilot-corpora/sysml-validation` | 56 | 39 | 59 | 0 | 0 | 0 | 59 | 0 |
+| `examples/pilot-corpora/kerml-examples` | 58 | 10 | 439 | 6 | 0 | 0 | 439 | 6 |
+| `testdata` | 10 | 2 | 27 | 54 | 20 | 4 | 3 | 30 |
+| `examples` | 12 | 4 | 40 | 121 | 0 | 12 | 28 | 109 |
+| `cmd/pilot-diff/testdata` (probes) | 4 | 1 | 6 | 0 | 0 | 0 | 6 | 0 |
+| **Total** | **338** | **196** | **887** | **181** | **20** | **16** | **851** | **145** |
+
+Only the `kerml-examples` row is new here. The other rows moved because of work merged since
+the baseline was written, not because of this change: re-running the previous revision of
+`cmd/pilot-diff` on `origin/main` reproduces every non-KerML root of this table exactly,
+per-file and not just per-total, and the SysML side of this run is identical to it.
 
 The ordering fix removed all 539 pilot-only diagnostics from `pilot-examples`: the reference
 now processes `SysML v2 Spec Annex A SimpleVehicleModel.sysml` before its importer,
@@ -147,20 +207,30 @@ longer reported by the pilot. The importer still has OpenSysML-only syntax diagn
 remain part of the parser-gap follow-up below.
 
 `pilot-validation` was unchanged by the ordering fix: it contributed 121 only-ours syntax
-diagnostics in the pre-merge comparison. The current main-based baseline has 118 after the
-unrelated keyword-as-name fix in #335.
+diagnostics in the pre-merge comparison, and 59 now.
 
 The headline is the first row: on the 100-file OMG training corpus the pilot reports
 **nothing at all**, and so do we. That is the corpus written to be valid, and it is the row
 that most directly answers "are we right?".
 
-Counts that moved since the previous run, and why:
+Counts that moved since the committed baseline, and why:
 
 | Count | Was | Now | Reason |
 |---|---|---|---|
-| training: fully agreeing / ours / only ours | 98 / 2 / 2 | 100 / 0 / 0 | F1 fixed: `on` is no longer reserved, so `24. States/State Actions.sysml:26` and `25. Transitions/Transition Actions.sysml:34` report nothing. |
-| `examples`: fully agreeing / ours / only ours | 1 / 2 / 2 | 2 / 0 / 0 | F1 fixed: `var` is no longer reserved, so `parser_features_demo_action_semantics.sysml:38,65` report nothing. |
-| Total: fully agreeing / ours / only ours | 100 / 28 / 9 | 103 / 24 / 5 | The four diagnostics above, in three files. No other tuple changed — the pilot side is byte-identical. |
+| `kerml-examples`: everything | — | 58 files, 439 only ours, 6 only pilot | New root: the reference can validate KerML (F10). Adjudicated below. |
+| `pilot-examples`: only ours | 334 | 316 | Merged since the baseline: the four parser productions and the keyword-as-name work. Not re-attributed line by line here. |
+| `pilot-validation`: only ours | 118 | 59 | Same merged work. |
+| `testdata`: files / only ours / only pilot / severity-only | 9 / 5 / 48 / 1 | 10 / 3 / 30 / 4 | F2: our fixtures now carry an explicit import visibility, so the pilot parses them instead of abandoning the body — which retires its cascade and the two `unresolved reference: Nowhere` rows below, and adds the `import_no_visibility.sysml` severity-only rows that F2's warn-not-error decision implies. The extra file is that fixture. |
+| `examples`: only ours / only pilot / severity-only | 0 / 140 / 0 | 28 / 109 / 12 | F3's warn-not-error decision on non-standard notation: the words the pilot's grammars have no production for are now warned on rather than accepted silently, so lines the pilot already errored on become severity-only instead of pilot-only. |
+| `probes`: files / only ours | 1 / 0 | 4 / 6 | The three specialization-cycle probes F4 was settled with are part of this root. |
+
+None of those SysML-side movements come from this change: the previous revision of
+`cmd/pilot-diff` run on `origin/main` reproduces them exactly.
+
+The KerML row is the harshest in the table, and it is almost entirely ours: 439 only-ours
+against 6 only-pilot, with 10 of 58 files fully agreeing. Where the reference validates the
+corpus its authors wrote for it, we reject notation it accepts — adjudicated below. This is
+reported, not fixed: this page is a comparison.
 
 One category label moved with this adjudication and **no count did**:
 `Must invoke a behavior or a behavioral feature` is now `kind-mismatch` rather than `unmapped`
@@ -168,26 +238,28 @@ One category label moved with this adjudication and **no count did**:
 invoked — "a declaration used where its metaclass is not allowed" — which is exactly what that
 category means, and it is the only one of the four P6 messages a category honestly fits. Its
 single occurrence (`testdata/parse/expressions.sysml:4`) has no diagnostic of ours at that line
-and category, so it stays a pilot-only disagreement and every total above is unchanged; the
-committed baseline JSON, which records categories, is left to the session that owns it. The
-other three stay `unmapped`: featuring-accessibility, flow-end identification and model-level
-evaluability are none of the five categories, and mapping them would risk accidental agreement
-rather than record the debt.
+and category, so it stays a pilot-only disagreement and every total above is unchanged — the
+regenerated baseline JSON moves that one diagnostic between category buckets and drops its
+`unmapped` row, and nothing else. The other three stay `unmapped`: featuring-accessibility,
+flow-end identification and model-level evaluability are none of the five categories, and
+mapping them would risk accidental agreement rather than record the debt.
 
-The other two rows are not a like-for-like verdict on our checker. `testdata/` and
+The `testdata`/`examples` rows are not a like-for-like verdict on our checker. `testdata/` and
 `examples/` are largely *our* fixtures — several are deliberately malformed negative fixtures,
 and many are written in notation the pilot's grammar rejects outright, after which its error
-recovery cascades. The 188 pilot-only diagnostics are therefore dominated by a handful of
+recovery cascades. Their 139 pilot-only diagnostics are therefore dominated by a handful of
 root causes, adjudicated next.
 
 ---
 
 ## Adjudications
 
-### Only ours — candidate false positives (5)
+### Only ours — candidate false positives (3, SysML side)
 
-The five diagnostics below are the adjudicated only-ours set. The remaining 452 current
-only-ours diagnostics are not adjudicated in this pass. The 121 `pilot-validation` syntax-only
+The three diagnostics below are the adjudicated only-ours set outside the KerML root, which
+has its own tables further down. The six cycle diagnostics on the `probes` root are adjudicated
+with F4 below. The remaining 403 SysML-side only-ours diagnostics are not adjudicated in this
+pass. The 121 `pilot-validation` syntax-only
 discrepancies from the pre-merge comparison and the bulk of the `pilot-examples` syntax-only
 discrepancies come from four missing productions: `connect a to b { ... }`, `flow a.x to b.y
 { ... }`, anonymous `interface a.p to b.q`, and `accept` on an action usage declaration
@@ -203,21 +275,49 @@ are gone from the three files listed in the movement table above.
 
 | Files | Diagnostic | Verdict |
 |---|---|---|
-| `passes/errors.sysml:4`, `resolve/errors.sysml:4` | `unresolved reference: Nowhere` | **Ours is right**, and these are negative fixtures where the diagnostic is the point. The pilot is silent only because a bare `import` earlier in the same file broke its parse before it got there (see P1) — a cascade artifact, not a disagreement about `Nowhere`. |
-| `passes/constraints.sysml:2,3` | `A`/`B` `participates in a specialization cycle` (`unmapped`) | **Ours is right, and the pilot has no such check** — settled by F4, both by reading its validators and by probing it on clean files (see [Specialization cycles](#specialization-cycles-f4)). The silence is not the bare-`import` cascade that silences the `errors.sysml` rows above: the same three cycle shapes in files with nothing else in them are accepted by the pilot with zero diagnostics. A one-sided finding, so it is our extension of the reference rather than a disagreement — kept `unmapped` because no coarse category honestly covers it. |
+| ~~`passes/errors.sysml:4`, `resolve/errors.sysml:4`~~ | ~~`unresolved reference: Nowhere`~~ | **No longer a disagreement.** These were negative fixtures where the pilot was silent only because a bare `import` earlier in the same file broke its parse before it got there (see P1). Since F2 gave our fixtures an explicit visibility, the pilot parses them and reports `Nowhere` too: both rows are now agreement. |
+| `passes/constraints.sysml:2,3` | `A`/`B` `participates in a specialization cycle` (`unmapped`) | **Ours is right, and the pilot has no such check** — settled by F4, both by reading its validators and by probing it on clean files (see [Specialization cycles](#specialization-cycles-f4)). The silence is not a parse cascade of the kind P1 describes: the same three cycle shapes in files with nothing else in them are accepted by the pilot with zero diagnostics. A one-sided finding, so it is our extension of the reference rather than a disagreement — kept `unmapped` because no coarse category honestly covers it. |
 | `passes/constraints.sysml:9` | `multiplicity lower bound exceeds upper bound on lo` | **Ours is right**: `part lo [5..2];`. No pilot counterpart. |
 
-### Severity-only (1)
+### KerML — only ours (439)
+
+Every one of the 439 falls in one of the classes below; the counts sum to 439. Verdicts:
+**436 ours** and **3 one-sided** (K5, a check the reference does not have), with none
+attributable to the bridge — it validates one
+batch in one resource set, so it has no ordering or name-accumulation artifact to produce.
+Nothing here is fixed in this PR; each class carries its follow-up.
+
+| # | Class | Count | Verdict |
+|---|---|---:|---|
+| K1 | `featured by` is not parsed: `expected a body member: 'featured' relates the declaration written before it, so a member cannot begin with it` (43), then `expected '{' or ';' after declaration` (95) and `expected a namespace member` (169) as the enclosing bodies unwind | 307 | **Ours (over-restriction).** KerML's featuring relationship (`member feature inCart: ShoppingCart[0..1] featured by Product_Account;`) is notation the reference accepts silently. One unparsed keyword produces 70% of the root's diagnostics: `Association Examples/ProductSelection_N_ary.kerml:38,40,42` cascade to `:51,53,54`. Follow-up F30. |
+| K2 | Other KerML notation we reject: `expected a body member` on n-ary connector end lists (36), `expected 'then' between connector ends` on a typed/redefining succession (8), `"at"`/`"while"`/`"merge"` `is a reserved keyword` inside `expr` bodies (8), `expected a name` (6), `expected '{' or ';'` (3) | 61 | **Ours (over-restriction).** `connector ps1 : ProductSelection (myCart, products, myAccount);` (`Association Examples/ProductSelection_N_ary.kerml:122,124`), `succession redefines p_before_d : MyPaint_Before_Dry_Link [1] first paint then dry;` (`KerML Spec Annex A Examples/A-3-6-Sequences.kerml:58,60`), and `expr at { ... }` / `expr while { ... }` (`Variable Feature Examples/Enhancements/ExtendedOccurrences.kerml:16,25`) are all accepted by the reference. The keyword rows are the KerML half of F8. Follow-up F30. |
+| K3 | `unresolved reference` / `unresolved member` | 43 | **Ours (name resolution).** Three shapes: inherited library features reached through implicit specialization (`portion focusedState: Camera subsets timeSlices;`, `Behavior Examples/Camera.kerml:4,5`); a package declared in a sibling corpus file (`private import OneToOneConnectorsExecution::MyWheel;` at `KerML Spec Annex A Examples/A-3-5-TimingForStructures.kerml:24`, declared at `A-3-3-OneToOneConnectors.kerml:21`); and members named through a feature chain (`succession step1 then camera.focusedState;`, `Behavior Examples/TakePicture.kerml:16,17`). Some are plausibly downstream of K1/K2 in the same or an imported file, which is why they are one class and not one verdict per line. Follow-up F31. |
+| K4 | SysML-shaped semantic checks firing on KerML: `only a definition may specialize; found a usage` (21), `type must be a definition, found attributeUsage` (2), `metaclass cannot specialize metaclass (kind mismatch)` (1), `rollsOn (typed by MyWheel) redefines rollsOn (typed by Wheel): types do not conform` (1) | 25 | **Ours.** KerML has no definition/usage split, so the first row misfires on ordinary declarations (`class Person specializes Object`, `Individuals Examples/JohnIndividualExample.kerml:4,12,34`; `Mass Roll-up Example/Vehicles_3.kerml:32`; `Simple Tests/Inheritance.kerml:21`). `metaclass <atom> AtomMetadata specializes Metaobject` (`KerML Spec Annex A Examples/A-2-Atoms.kerml:11`) is a metaclass specializing a metaclass, which the reference allows. The conformance row misses `classifier MyWheel unions MyWheel1, MyWheel2;` as a supertype of `Wheel` (`KerML Spec Annex A Examples/A-3-2-WithoutConnectors.kerml:32`). Follow-up F32. |
+| K5 | `x`/`y`/`z` `participates in a specialization cycle` (`unmapped`) | 3 | **Ours is right, and the reference has no such check** — the same one-sided finding F4 settled on the SysML side, now with a KerML witness the corpus's own authors committed: `feature x :> z; feature y :> x; feature z :> y;` in `Simple Tests/Circular.kerml:9-11` is a cycle, and `KerMLValidator.checkSpecialization` is exactly the validator F4 read. Our extension of the reference rather than a disagreement, so it stays `unmapped`. |
+
+### KerML — only the pilot (6)
+
+| # | Class | Count | Verdict |
+|---|---|---:|---|
+| K6 | `The opposite features 'owningType' of '…DisjoiningImpl{…}' and 'ownedDisjoining' of '…{…}' do not refer to each other` | 6 | **Pilot artifact**, `unmapped`. Raised on `disjoint from` declarations in `KerML Spec Annex A Examples/A-2-ModelingInstances.kerml:9`, `Simple Tests/Classifiers.kerml:13`, `FeatureChains.kerml:31`, `Features.kerml:20`, `Inverses.kerml:3`, `Types.kerml:31`. It is an EMF `eOpposite` consistency complaint about the reference's own in-memory graph — it names `…Impl` objects and resource fragments, not model elements — so it is a statement about the pilot's transformation, not about the models, which are the pilot's own examples. Follow-up F33. |
+
+### Severity-only (16)
+
+One is adjudicated; the fifteen added by work merged since the baseline are not re-adjudicated
+in this pass, which is a comparison of the KerML root.
 
 | File | Verdict |
 |---|---|
+| `passes/import_no_visibility.sysml:8,12`, `parse/namespaces.sysml:5` (3) | A direct consequence of the F2 decision below: we report a bare `import` as a `warning` where the pilot's grammar makes it an `error`. Deliberate, and recorded here rather than re-argued. |
+| `examples/` non-standard notation (12) | The same shape under F3: notation with no production in the pilot's grammars is now a warning of ours on a line the pilot errors on, so the pair is severity-only instead of pilot-only. |
 | `passes/constraints.sysml:6` | Both flag `part few subsets cap [0..10];` under `cap [0..3]` at the same line and category. We report `error`; the pilot reports `warning` (`Subsetting/redefining feature should not have larger multiplicity upper bound`). A real difference in strictness, kept in its own bucket rather than being counted as two disagreements. |
 
-### Only the pilot — candidate gaps (188)
+### Only the pilot — candidate gaps (139, SysML side)
 
 The 539 pilot-only diagnostics that were previously concentrated in `pilot-examples` were an
-ordering artifact and are resolved by this change. The remaining 188 pilot-only diagnostics
-are the same `testdata`/`examples` issues as before.
+ordering artifact and are resolved. The remaining 139 SysML-side pilot-only diagnostics are the
+same `testdata`/`examples` issues as before, at the lower counts the merged import-visibility,
+keyword and non-standard-notation work left behind.
 
 Grouped by root cause. The pilot's own grammar
 (`org.omg.sysml.xtext/src/org/omg/sysml/xtext/SysML.xtext`) is quoted where it settles the
@@ -228,9 +328,10 @@ question.
 | P1 | `mismatched input 'import' expecting '}'` / `missing EOF at 'import'` on a bare `import X::*;` | 10 of our 21 `testdata`/`examples` files | **Pilot is stricter, and its grammar is explicit**: `fragment ImportPrefix returns SysML::Import : visibility = VisibilityIndicator 'import' ...` — visibility is *mandatory* for an import, unlike `MemberPrefix`, where it is optional. `private import X::*;` parses cleanly. Whether the specification's concrete syntax makes visibility mandatory too is not settled here, so this is not booked as our bug: follow-up F2. **This is also the single largest cascade source** — once the import fails, the pilot abandons the enclosing body, which produces most of the `no viable alternative`, `extraneous input '}' expecting EOF`, `missing EOF`, `Couldn't resolve reference to Type 'Real'` and `A usage must be typed by definitions.` entries downstream. |
 | P2 | `no viable alternative at input '<name>'` on `namespace N;` inside a package body | 4 files | **Ours is wrong (over-acceptance).** `namespace` is a KerML keyword; the pilot's `DefinitionElement` list has no namespace declaration, so `.sysml` notation has none. We parse it. Follow-up F3. |
 | P3 | `no viable alternative at input 'region'` (`orthogonal-regions-demo.sysml`) | 1 file | **Ours is wrong (over-acceptance).** SysML v2 spells orthogonal regions as a `parallel` state body (`';' \| ( isParallel ?= 'parallel' )? '{' StateBodyPart '}'`); there is no `region` keyword. We accept one. Follow-up F3. |
-| P4 | `Duplicate of other owned member name` (warning) | 30 | **Harness/wrapper artifact**, `unmapped`. The wrapper feeds every file of a root into one accumulating interactive session, so identically-named packages in different files collide. Not a statement about any model. |
+| P4 | `Duplicate of other owned member name` (warning) | 25 | **Harness/wrapper artifact**, `unmapped`. The wrapper feeds every file of a root into one accumulating interactive session, so identically-named packages in different files collide. Not a statement about any model. |
 | P5 | `Bound features should have conforming types`, `Must have a Boolean result`, `Must have at least two related elements`, `An attribute must be typed by attribute definitions.` | 23 | **Mostly downstream of P1/P2/P3**: with the imports or the enclosing body broken, the pilot type-checks a partially-recovered model. Not adjudicated individually; the honest reading is that these become meaningful only once P1–P3 are resolved and the files re-run. |
 | P6 | `Must be an accessible feature (use dot notation for nesting)`, `Cannot identify flow end (use dot notation)`, `Must be model-level evaluable`, `Must invoke a behavior or a behavioral feature` | 9 | **Adjudicated per diagnostic below** (F5, done). 5 are downstream of P2, 2 are a real gap in our constraint tier, 2 are downstream of unresolved references both implementations report. The four *rules* behind them are all real, and three of them we do not implement: follow-ups F20–F23. |
+| P7 | K6, the KerML `eOpposite` complaint | 6 | **Pilot artifact**, `unmapped`, and the only pilot-only class on the KerML root. Adjudicated with K6 above. Follow-up F33. |
 
 #### P6, diagnostic by diagnostic (F5)
 
@@ -269,14 +370,18 @@ Recorded so the categorisation's debt is visible rather than hidden:
 
 | Side | Message | Count |
 |---|---|---|
-| pilot | `Duplicate of other owned member name` | 30 |
+| pilot | `Duplicate of other owned member name` | 25 |
 | pilot | `Must be an accessible feature (use dot notation for nesting)` | 5 |
 | pilot | `Cannot identify flow end (use dot notation)` | 2 |
 | pilot | `Must be model-level evaluable` | 1 |
-| opensysml | `A participates in a specialization cycle` | 1 |
-| opensysml | `B participates in a specialization cycle` | 1 |
+| pilot | `The opposite features 'owningType' … do not refer to each other` (K6, one row per file) | 6 |
+| opensysml | `only a definition may specialize; found a usage` (K4) | 21 |
+| opensysml | `<name> participates in a specialization cycle` | 11 |
+| opensysml | `interface Mounting connects ports AxleMountIF and WheelHubIF, whose directed features are not conjugate; one end usually names the conjugate port (~AxleMountIF)` | 1 |
+| opensysml | `name conflict: text is already the name of the inherited feature ModelingMetadata::Issue::text` | 1 |
+| opensysml | `packet data field redefines packet data field, but packet data field is not an inherited member of Thermal Data Packet` | 1 |
 
-The two cycle rows stay `unmapped` **by adjudication, not by omission** (F4): the finding is
+The cycle rows stay `unmapped` **by adjudication, not by omission** (F4): the finding is
 one-sided, and none of the five coarse categories describes a cycle in the specialization graph
 — it is neither a name that failed to resolve, nor a metaclass used where it is not allowed, nor
 bounds, units or syntax. Inventing a sixth category for a single check would empty the bucket
@@ -317,8 +422,8 @@ the same way: adding `part p : Nowhere;` to the pair probe makes it emit
 `Couldn't resolve reference to Type 'Nowhere'.` and exit 1. Silence on the cycle is therefore a
 result, not an unreached validation stage.
 
-The probes are part of the `probes` root, so their six only-ours diagnostics will appear the next
-time the baseline is refreshed; the committed baseline and the results table above predate them.
+The probes are part of the `probes` root, so their six only-ours diagnostics are in the results
+table and the refreshed baseline above.
 
 ---
 
@@ -366,7 +471,12 @@ one.
 | F23 | `validateInvocationExpressionInstantiatedType` (`Must invoke a behavior or a behavioral feature`): what is invoked must be a behavior, or a feature typed by exactly one behavior. Third priority. Its pilot-side category is now `kind-mismatch` rather than `unmapped` (see the note under the results table), so once implemented it can agree rather than merely coincide. |
 | F6 | Build `Fabi303/sysmlv2tool` (needs a Tycho-capable Maven) and re-run with true single-batch loading, which would eliminate the P4 artifact and the ordering machinery. |
 | F7 | Add [Sensmetry `syside check`](https://github.com/sensmetry/syside) as an *additional* cross-check. It is a different implementation, not the reference, so it can only corroborate — never adjudicate. |
-| F10 | Compare the KerML corpus: it needs a reference-side entry point that validates `.kerml` and reports diagnostics, which neither the DeciSym wrapper nor the pinned pilot release provides. |
+| ~~F10~~ | **Done.** The pinned pilot release *does* ship KerML validation — `org/omg/kerml/xtext/validation/KerMLValidator.class` and `KerMLStandaloneSetup.class` — and what was missing was only a CLI. `scripts/pilot-kerml-validator/ValidateKerML.java` supplies one over the pilot's own `IResourceValidator`, sanity-checked on malformed, unresolvable and known-good input, and `kerml-examples` is a root. |
+| F30 | KerML notation we reject and the reference accepts (K1, K2): `featured by`, n-ary connector end lists, `first … then` on a typed/redefining succession, and `at`/`while`/`merge` as names in `expr` bodies. K1 alone accounts for 307 of the root's 439 diagnostics. |
+| F31 | KerML name resolution (K3): inherited library features reached through implicit specialization, packages declared in a sibling corpus file, and members named through a feature chain. Re-measure after F30 — part of this class is plausibly cascade. |
+| F32 | Checks that assume the SysML definition/usage split and fire on KerML (K4), plus `unions` as a supertype in redefinition conformance. |
+| F33 | The pilot's `eOpposite` complaint on `disjoint from` (K6): confirm against the reference's `KerMLResourceValidator`/`ElementUtil.transformAll` whether the batch bridge can avoid it, or report it upstream. |
+| F34 | Compare our own 11 `.kerml` fixtures (`testdata/lex/basic.kerml`, `examples/parser_features_demo_*.kerml`) too: a root carries one language today, so they are collected as SysML and excluded (see the known limitation above). Needs per-file language dispatch within a root, and a second pilot invocation per root. |
 
 F6 and F7 are deprioritised: they change how the comparison is *run*, not what it says about
 either implementation, so they rank below every rule follow-up above them.
@@ -379,6 +489,7 @@ either implementation, so they rank below every rule follow-up above them.
 ./scripts/download-training-examples.sh   # the OMG training corpus (pinned 2026-05)
 ./scripts/download-pilot-corpora.sh       # the other OMG corpora, same pin
 ./scripts/download-pilot-validator.sh     # the pilot validator (pinned wrapper + release)
+./scripts/download-pilot-kerml-validator.sh  # the KerML oracle, same pin
 go run ./cmd/pilot-diff                   # writes build/pilot-diff/{pilot-diff.txt,pilot-diff.json}
 diff <(jq -S . docs/project/pilot-differential-baseline.json) \
      <(jq -S . build/pilot-diff/pilot-diff.json)
