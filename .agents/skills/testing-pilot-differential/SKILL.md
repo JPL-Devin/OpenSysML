@@ -49,6 +49,18 @@ Observed at `90da2cad` (KerML root added): `338 file(s), 196 fully agreeing; 20 
 ours, 145 only the pilot's`, wall time ~70 s (the KerML batch costs ~50 s), byte-identical to the
 committed baseline and across runs.
 
+Observed at `82ff0fac` (F34, per-file language dispatch): `349 file(s), 222 fully agreeing; 20
+agreed diagnostic(s), 564 only ours, 459 only the pilot's`, wall time ~82 s, byte-identical across
+runs (both `.json` and `.txt`). The committed baseline is stale against this (338 / 221 / 20 / 560
+/ 145), so use the entry-keyed delta below rather than `jq -S`.
+
+When the baseline is stale, audit a change by comparing per-file *entries* keyed by
+`(root.name, file.path)` — the whole entry value, not the whole file — so that added roots/files
+and aggregate totals do not drown out the question you are asking (did any pre-existing verdict
+move?). A run at `82ff0fac` gives 0 changed, 0 removed, 10 added
+(`examples/parser_features_demo_*.kerml`). Files clean on both sides appear in no entry map at
+all, so a newly-compared clean file shows up only as `filesFullyAgreeing +1`.
+
 ## Auditing a docs-only PR's numeric claims against the report
 
 Adjudication PRs (e.g. #356, the S1–S10 / F60–F69 classes) assert per-root, per-category and
@@ -170,9 +182,15 @@ exercise a KerML-only run (e.g. a small `-timeout`), copy just
 non-silence proof: drop a malformed `.kerml` into that copied corpus and confirm the JSON gains
 pilot-side diagnostics for it (observed: 6 pilot-only + 1 agreed on that one file).
 
-Our own `.kerml` fixtures under `testdata/` and `examples/` are *not* in the comparison: a root
-carries one language, so they are collected as SysML and dropped (follow-up F34). Don't read a
-`testdata`/`examples` count as covering them.
+Since F34, language is a per-file property (`source.KindOf`), so a root collects both extensions
+and runs one reference invocation per language over all of that language's files. stderr prints one
+line per language per root (`testdata: 10 SysML file(s)` then `testdata: 1 KerML file(s)`), and our
+own `.kerml` fixtures under `testdata/` and `examples/` are compared.
+
+The control for a dispatch change: a synthetic repo with byte-identical `testdata/adv.sysml` and
+`testdata/adv.kerml`, run at HEAD and in a parent worktree (`-repo` plus absolute validator flags).
+The two files getting *different* pilot messages is the proof that two oracles ran; the parent
+run reporting only `adv.sysml` is the proof the delta belongs to the change.
 
 ## Testing language-scoped (`.sysml` vs `.kerml`) diagnostic behaviour
 
