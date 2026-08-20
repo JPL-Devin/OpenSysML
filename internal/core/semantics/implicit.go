@@ -100,6 +100,41 @@ var implicitKerMLBases = map[string]string{
 	"type":        "Base::Anything",
 }
 
+// kindBaseFQN returns the standard-library base every declaration of sym's
+// kind conforms to, implicitly or through its declared chain.
+func kindBaseFQN(sym *symbols.Symbol, isKerML bool) (string, bool) {
+	if sym == nil {
+		return "", false
+	}
+	switch d := sym.Decl.(type) {
+	case *ast.Usage:
+		if isKerML {
+			fqn, ok := implicitKerMLBases[d.Keyword]
+			return fqn, ok
+		}
+		if d.IsIndividual && d.Kind == ast.UsageOccurrence {
+			// An individual occurrence is a life, not an arbitrary occurrence
+			// (SysML v2 §7.9.4), however the modifier is spelled.
+			fqn, ok := implicitUsageBases[ast.UsageIndividual]
+			return fqn, ok
+		}
+		fqn, ok := implicitUsageBases[d.Kind]
+		return fqn, ok
+	case *ast.Definition:
+		if isKerML {
+			fqn, ok := implicitKerMLBases[d.Keyword]
+			return fqn, ok
+		}
+		fqn, ok := implicitDefinitionBases[d.Kind]
+		return fqn, ok
+	case *ast.SubstateMember:
+		// `state s;` in a state body: a bodyless, always-untyped state usage.
+		fqn, ok := implicitUsageBases[ast.UsageState]
+		return fqn, ok
+	}
+	return "", false
+}
+
 // isKerMLDoc reports whether sym is declared by a KerML document, as recorded
 // by the index rather than inferred from the document name.
 func (m *Model) isKerMLDoc(sym *symbols.Symbol) bool {
@@ -113,38 +148,17 @@ func (m *Model) isKerMLDoc(sym *symbols.Symbol) bool {
 // when sym is not a declaration of a kind with a known base.
 func (m *Model) implicitBase(sym *symbols.Symbol) *symbols.Symbol {
 	isKerML := m.isKerMLDoc(sym)
-	var fqn string
-	var ok bool
-	switch d := sym.Decl.(type) {
-	case *ast.Usage:
-		fqn, ok = implicitUsageBases[d.Kind]
-		if d.IsIndividual && d.Kind == ast.UsageOccurrence {
-			// An individual occurrence is a life, not an arbitrary occurrence
-			// (SysML v2 §7.9.4), however the modifier is spelled.
-			fqn, ok = implicitUsageBases[ast.UsageIndividual]
-		}
-	case *ast.Definition:
-		fqn, ok = implicitDefinitionBases[d.Kind]
-	case *ast.SubstateMember:
-		// `state s;` in a state body: a bodyless, always-untyped state usage.
-		fqn, ok = implicitUsageBases[ast.UsageState]
-	default:
-		return nil
-	}
-	if isKerML {
-		switch d := sym.Decl.(type) {
-		case *ast.Usage:
-			fqn, ok = implicitKerMLBases[d.Keyword]
-		case *ast.Definition:
-			fqn, ok = implicitKerMLBases[d.Keyword]
-		}
-	} else if declaresGeneralization(RelationshipsOf(sym)) {
-		return nil
-	}
-	if isKerML && m.declaredGeneralizationReaches(sym, fqn, nil) {
-		return nil
-	}
+	fqn, ok := kindBaseFQN(sym, isKerML)
 	if !ok || m.resolver == nil || m.resolver.Index() == nil {
+		return nil
+	}
+	if _, isDef := sym.Decl.(*ast.Definition); !isDef && !isKerML && declaresGeneralization(RelationshipsOf(sym)) {
+		return nil
+	}
+	// A definition keeps its kind's base unless a declared chain already
+	// conforms to it: `item def SpatialItem :> SpatialFrame` still specializes
+	// Items::Item, since SpatialFrame is not an item definition (SysML 7.9.3).
+	if m.declaredGeneralizationReaches(sym, fqn, nil) {
 		return nil
 	}
 	for _, base := range m.resolver.Index().LookupQualified(fqn) {
@@ -190,6 +204,13 @@ func (m *Model) declaredGeneralizationReaches(sym *symbols.Symbol, want string, 
 			continue
 		}
 		sameBase := m.resolver.Index() != nil && m.resolver.Index().GetFQN(target) == want
+		if !sameBase {
+			// A declaration conforms to its kind's base whether the edge is
+			// declared or implicit, so reaching one of the same kind suffices.
+			if base, ok := kindBaseFQN(target, m.isKerMLDoc(target)); ok && base == want {
+				sameBase = true
+			}
+		}
 		if sameBase || m.declaredGeneralizationReaches(target, want, visiting) {
 			return true
 		}
