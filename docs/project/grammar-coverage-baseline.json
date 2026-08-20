@@ -87,15 +87,13 @@
               "literal": ";",
               "root": "testdata",
               "file": "testdata/parse/namespaces.sysml",
-              "line": 2,
-              "matches": 0
+              "line": 2
             },
             {
               "literal": "namespace",
               "root": "testdata",
               "file": "testdata/parse/namespaces.sysml",
-              "line": 5,
-              "matches": 0
+              "line": 5
             }
           ],
           "branches": [
@@ -131,22 +129,19 @@
               "literal": ";",
               "root": "pilot-kerml-examples",
               "file": "examples/pilot-corpora/kerml-examples/Simple Tests/Types.kerml",
-              "line": 2,
-              "matches": 0
+              "line": 2
             },
             {
               "literal": "conjugate",
               "root": "pilot-kerml-examples",
               "file": "examples/pilot-corpora/kerml-examples/Simple Tests/Types.kerml",
-              "line": 25,
-              "matches": 0
+              "line": 25
             },
             {
               "literal": "~",
               "root": "pilot-kerml-examples",
               "file": "examples/pilot-corpora/kerml-examples/Simple Tests/Types.kerml",
-              "line": 26,
-              "matches": 0
+              "line": 26
             }
           ],
           "branches": [
@@ -205,22 +200,19 @@
               "literal": ";",
               "root": "stdlib",
               "file": "internal/core/libs/stdlib/Kernel Libraries/Kernel Semantic Library/Occurrences.kerml",
-              "line": 8,
-              "matches": 0
+              "line": 8
             },
             {
               "literal": "disjoint",
               "root": "stdlib",
               "file": "internal/core/libs/stdlib/Kernel Libraries/Kernel Semantic Library/Occurrences.kerml",
-              "line": 23,
-              "matches": 0
+              "line": 23
             },
             {
               "literal": "from",
               "root": "stdlib",
               "file": "internal/core/libs/stdlib/Kernel Libraries/Kernel Semantic Library/Occurrences.kerml",
-              "line": 23,
-              "matches": 0
+              "line": 23
             }
           ],
           "branches": [
@@ -269,22 +261,19 @@
               "literal": ";",
               "root": "pilot-kerml-examples",
               "file": "examples/pilot-corpora/kerml-examples/Simple Tests/FeatureChains.kerml",
-              "line": 3,
-              "matches": 0
+              "line": 3
             },
             {
               "literal": "redefines",
               "root": "pilot-kerml-examples",
               "file": "examples/pilot-corpora/kerml-examples/Simple Tests/FeatureChains.kerml",
-              "line": 24,
-              "matches": 0
+              "line": 24
             },
             {
               "literal": "redefinition",
               "root": "pilot-kerml-examples",
               "file": "examples/pilot-corpora/kerml-examples/Simple Tests/FeatureChains.kerml",
-              "line": 24,
-              "matches": 0
+              "line": 24
             }
           ],
           "branches": [
@@ -353,8 +342,7 @@
               "literal": "*",
               "root": "stdlib",
               "file": "internal/core/libs/stdlib/Domain Libraries/Analysis/AnalysisTooling.sysml",
-              "line": 8,
-              "matches": 0
+              "line": 8
             }
           ],
           "branches": [

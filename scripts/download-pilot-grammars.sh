@@ -47,8 +47,12 @@ work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
 echo "Fetching ${wanted_names[*]} from $PILOT_REPO at $PILOT_TAG ..."
-git clone --quiet --filter=blob:none --sparse --depth 1 \
-	--branch "$PILOT_TAG" "$PILOT_REPO" "$work/pilot" 2>&1 | grep -v "detached HEAD" || true
+git -c advice.detachedHead=false clone --quiet --filter=blob:none --sparse --depth 1 \
+	--branch "$PILOT_TAG" "$PILOT_REPO" "$work/pilot" || true
+if [ ! -d "$work/pilot/.git" ]; then
+	echo "error: could not clone $PILOT_REPO at $PILOT_TAG, the tag scripts/pilot-pin.sh pins" >&2
+	exit 1
+fi
 git -C "$work/pilot" sparse-checkout set "${wanted_paths[@]}"
 
 mkdir -p "$target"

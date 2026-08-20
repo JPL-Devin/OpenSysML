@@ -45,7 +45,6 @@ type Citation struct {
 	Root    string `json:"root"`
 	File    string `json:"file"`
 	Line    int    `json:"line"`
-	Matches int    `json:"matches"`
 }
 
 // fileIndex is one corpus file's literals with the line each was first seen on.
@@ -141,12 +140,12 @@ func (idx *literalIndex) scanFile(file fileIndex, content string, words map[stri
 	for n, line := range lines {
 		for _, word := range identifiers(line) {
 			if words[word] {
-				idx.record(file, word, n+1, 1)
+				idx.record(file, word, n+1)
 			}
 		}
 		for _, lit := range punct {
-			if count := strings.Count(line, lit); count > 0 {
-				idx.record(file, lit, n+1, count)
+			if strings.Contains(line, lit) {
+				idx.record(file, lit, n+1)
 			}
 		}
 	}
@@ -154,16 +153,15 @@ func (idx *literalIndex) scanFile(file fileIndex, content string, words map[stri
 	return len(lines)
 }
 
-func (idx *literalIndex) record(file fileIndex, literal string, line, count int) {
+// record notes the literal's first line in this file, and its first citation
+// corpus-wide.
+func (idx *literalIndex) record(file fileIndex, literal string, line int) {
 	if _, ok := file.lines[literal]; !ok {
 		file.lines[literal] = line
 	}
-	if existing, ok := idx.first[literal]; ok {
-		existing.Matches += count
-		idx.first[literal] = existing
-		return
+	if _, ok := idx.first[literal]; !ok {
+		idx.first[literal] = Citation{Literal: literal, Root: file.root, File: file.path, Line: line}
 	}
-	idx.first[literal] = Citation{Literal: literal, Root: file.root, File: file.path, Line: line, Matches: count}
 }
 
 // identifiers splits a line into identifier tokens.

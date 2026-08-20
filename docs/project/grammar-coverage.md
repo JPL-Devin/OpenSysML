@@ -102,7 +102,7 @@ operator with no test input anywhere.
 `KerML.xtext:119` `Namespace : ( ownedRelationship += PrefixMetadataMember )* NamespaceDeclaration NamespaceBody`.
 Both `#` and `namespace` occur in the corpora, never in one file. We implement the prefix
 (`parseMember` / the prefix-metadata loop in `internal/core/parser/namespace.go`), and
-`#Meta namespace N { part def A; }` analyses clean.
+`metadata def Meta; #Meta namespace N { part def A; }` analyses clean.
 
 **Verdict: real notation, want a fixture.**
 
