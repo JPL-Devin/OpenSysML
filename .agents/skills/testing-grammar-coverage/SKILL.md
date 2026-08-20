@@ -14,9 +14,9 @@ form-level unseen diagnostics.
 ## Prerequisites
 
 - Go on PATH (`export PATH=/usr/local/go/bin:$PATH`), `git`, `jq`, network to github.com.
-- `./scripts/download-pilot-grammars.sh` — **not in the repo blueprint**, but cheap (~2 s sparse
-  clone, unlike the multi-minute validator build), so re-provisioning from scratch is free and
-  should always be part of the test.
+- `./scripts/download-pilot-grammars.sh` — run by the blueprint's `initialize`, and cheap (~2 s
+  sparse clone, unlike the multi-minute validator build), so re-provisioning from scratch is free
+  and should always be part of the test.
 - The corpora it searches must be present, including the OMG training corpus
   (`./scripts/download-training-examples.sh`, in the blueprint maintenance step). A missing corpus
   silently lowers the file count (expect `searched 536 corpus file(s) for 217 distinct literal(s)`
@@ -71,7 +71,7 @@ have **no** `file` key (5 of them at `04afba74`).
 | `-out /nonexistent-root/x` | exit 1, `mkdir /nonexistent-root: permission denied`, nothing written |
 | `-baseline /nonexistent-dir/b.json` / `-baseline /tmp` | exit 1, `open …: no such file or directory` / `open /tmp: is a directory` |
 | truncated grammar (`head -c 4000 KerML.xtext`) | exit 1, `KerML.xtext: production NamespaceBodyElement: line 143: expected ";", found ""` — a parse error, never a panic and never still 176 productions |
-| `PILOT_TAG=9999-99 ./scripts/download-pilot-grammars.sh` | exit 128, raw git `fatal: Remote branch 9999-99 not found`, then a second confusing `fatal: cannot change to '<tmp>/pilot'` because the clone is piped with `|| true`; nothing is provisioned, which is the property that matters |
+| `PILOT_TAG=9999-99 ./scripts/download-pilot-grammars.sh` | exit 1, `error: could not clone <repo> at 9999-99, the tag scripts/pilot-pin.sh pins` after git's own `fatal:` lines; nothing is provisioned, which is the property that matters |
 
 `mv build/pilot-grammars` aside instead of deleting it if you want the original bytes back — and
 beware moving it onto an existing backup path, which nests it (`build/pilot-grammars/pilot-grammars`).
