@@ -4,19 +4,19 @@
       (Membership visibility="default"
         (Usage kind="attribute" name="D" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="datatype"
           (Membership visibility="default"
-            (Usage kind="attribute" name="a" ref=false direction="none" composite=false derived=true ordered=false nonunique=false keyword="feature" prefix="var"
+            (Usage kind="attribute" name="a" ref=false direction="none" composite=false derived=true ordered=false nonunique=false variable=true keyword="feature" prefix="var"
               (Relationship kind="typing" target=D
                 (*ast.QualifiedName))
               (Multiplicity range=false
                 (LiteralInteger value="1"))))
           (Membership visibility="private"
-            (Usage kind="attribute" name="b" ref=false direction="none" composite=false derived=true ordered=false nonunique=false keyword="feature" prefix="var"
+            (Usage kind="attribute" name="b" ref=false direction="none" composite=false derived=true ordered=false nonunique=false variable=true keyword="feature" prefix="var"
               (Relationship kind="typing" target=D
                 (*ast.QualifiedName))
               (Multiplicity range=false
                 (LiteralInteger value="1"))))
           (Membership visibility="default"
-            (Usage kind="attribute" name="c" ref=false direction="none" composite=true derived=true ordered=false nonunique=false keyword="feature" prefix="var"
+            (Usage kind="attribute" name="c" ref=false direction="none" composite=true derived=true ordered=false nonunique=false variable=true keyword="feature" prefix="var"
               (Relationship kind="typing" target=D
                 (*ast.QualifiedName))
               (Multiplicity range=true

@@ -228,6 +228,9 @@ func (p *Parser) parseMember() ast.Node {
 		al.SetLeadingTrivia(trivia)
 		return al
 	}
+	if p.atKeyword("disjoint") {
+		return p.parseDisjointMember(start, vis, trivia)
+	}
 
 	// A namespace member may be a succession stated without its keyword
 	// (SysML v2 8.2.2.13.3): `first a::b then c;`, whose ends are qualified
@@ -297,7 +300,7 @@ func (p *Parser) parseDeclaration(start int) ast.Node {
 		return p.parseComment(start)
 	case p.atKeyword("doc"):
 		return p.parseDocumentation(start)
-	case p.atKeyword("rep"), p.atKeyword("language"):
+	case p.atTextualRepresentationStart():
 		return p.parseTextualRepresentation(start)
 	case p.atKeyword("multiplicity"):
 		return p.parseMultiplicityDecl(start)
