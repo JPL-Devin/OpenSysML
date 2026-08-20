@@ -160,66 +160,81 @@ public final class ValidateKerML extends SysMLUtil {
         System.err.println("usage: validate-kerml --library DIR [--root DIR] [--kernel-only] FILE...");
     }
 
-    public static void main(String[] args) throws IOException {
-        Path library = null;
-        Path root = null;
-        boolean kernelOnly = false;
-        List<String> inputs = new ArrayList<>();
-        for (int i = 0; i < args.length; i++) {
-            switch (args[i]) {
-                case "--library" -> library = Paths.get(args[++i]).toAbsolutePath().normalize();
-                case "--root" -> root = Paths.get(args[++i]).toAbsolutePath().normalize();
-                case "--kernel-only" -> kernelOnly = true;
-                case "-h", "--help" -> {
-                    usage();
-                    System.exit(0);
+    public static void main(String[] args) {
+        try {
+            Path library = null;
+            Path root = null;
+            boolean kernelOnly = false;
+            List<String> inputs = new ArrayList<>();
+            for (int i = 0; i < args.length; i++) {
+                switch (args[i]) {
+                    case "--library" -> {
+                        if (i + 1 >= args.length || args[i + 1].startsWith("--")) {
+                            throw new IllegalArgumentException("--library requires a value");
+                        }
+                        library = Paths.get(args[++i]).toAbsolutePath().normalize();
+                    }
+                    case "--root" -> {
+                        if (i + 1 >= args.length || args[i + 1].startsWith("--")) {
+                            throw new IllegalArgumentException("--root requires a value");
+                        }
+                        root = Paths.get(args[++i]).toAbsolutePath().normalize();
+                    }
+                    case "--kernel-only" -> kernelOnly = true;
+                    case "-h", "--help" -> {
+                        usage();
+                        System.exit(0);
+                    }
+                    default -> inputs.add(args[i]);
                 }
-                default -> inputs.add(args[i]);
             }
-        }
 
-        if (library == null) {
-            String property = System.getProperty("sysml.library");
-            library = property == null ? null : Paths.get(property).toAbsolutePath().normalize();
-        }
-        if (library == null || !Files.isDirectory(library)) {
-            System.err.println("Error: SysML library not found: " + library);
-            usage();
-            System.exit(2);
-        }
-        if (inputs.isEmpty()) {
-            usage();
-            System.exit(2);
-        }
-
-        List<Path> files = collect(inputs);
-        for (Path file : files) {
-            if (!file.toString().endsWith(KERML_EXTENSION)) {
-                System.err.println("Error: File must have .kerml extension: " + file);
+            if (library == null) {
+                String property = System.getProperty("sysml.library");
+                library = property == null ? null : Paths.get(property).toAbsolutePath().normalize();
+            }
+            if (library == null || !Files.isDirectory(library)) {
+                System.err.println("Error: SysML library not found: " + library);
+                usage();
                 System.exit(2);
             }
-            if (!Files.isRegularFile(file)) {
-                System.err.println("Error: File not found: " + file);
+            if (inputs.isEmpty()) {
+                usage();
                 System.exit(2);
             }
-        }
-        if (files.isEmpty()) {
-            System.err.println("Warning: No .kerml files found");
-            System.exit(0);
-        }
 
-        // The KerML injector supplies the pilot's KerMLResourceValidator; registering the
-        // SysML language too lets the .sysml parts of the standard library load.
-        Injector injector = new KerMLStandaloneSetup().createInjectorAndDoEMFRegistration();
-        if (!kernelOnly) {
-            SysMLStandaloneSetup.doSetup();
-        }
-        IResourceValidator validator = injector.getInstance(IResourceValidator.class);
+            List<Path> files = collect(inputs);
+            for (Path file : files) {
+                if (!file.toString().endsWith(KERML_EXTENSION)) {
+                    System.err.println("Error: File must have .kerml extension: " + file);
+                    System.exit(2);
+                }
+                if (!Files.isRegularFile(file)) {
+                    System.err.println("Error: File not found: " + file);
+                    System.exit(2);
+                }
+            }
+            if (files.isEmpty()) {
+                System.err.println("Warning: No .kerml files found");
+                System.exit(0);
+            }
 
-        ValidateKerML instance = new ValidateKerML(validator, root);
-        instance.loadLibrary(library, kernelOnly);
-        instance.readInputs(files);
-        instance.validateInputs();
-        System.exit(instance.hasErrors ? 1 : 0);
+            // The KerML injector supplies the pilot's KerMLResourceValidator; registering the
+            // SysML language too lets the .sysml parts of the standard library load.
+            Injector injector = new KerMLStandaloneSetup().createInjectorAndDoEMFRegistration();
+            if (!kernelOnly) {
+                SysMLStandaloneSetup.doSetup();
+            }
+            IResourceValidator validator = injector.getInstance(IResourceValidator.class);
+
+            ValidateKerML instance = new ValidateKerML(validator, root);
+            instance.loadLibrary(library, kernelOnly);
+            instance.readInputs(files);
+            instance.validateInputs();
+            System.exit(instance.hasErrors ? 1 : 0);
+        } catch (Throwable e) {
+            System.err.println("Error: " + message(e));
+            System.exit(3);
+        }
     }
 }

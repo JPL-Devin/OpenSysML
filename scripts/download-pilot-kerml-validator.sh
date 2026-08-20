@@ -64,6 +64,15 @@ else
 	exit 1
 fi
 
+if command -v jar >/dev/null 2>&1; then
+	jar_bin="$(command -v jar)"
+elif [ -x /usr/local/jdk-21/bin/jar ]; then
+	jar_bin=/usr/local/jdk-21/bin/jar
+else
+	echo "error: jar is required to inspect the pilot KerML validator" >&2
+	exit 1
+fi
+
 java_major="$("$java_bin" -version 2>&1 | sed -n '1s/.*version "\([0-9][0-9]*\).*/\1/p')"
 if [ -z "$java_major" ] || [ "$java_major" -lt 21 ]; then
 	echo "error: the pilot implementation requires Java 21+, found: $("${java_bin}" -version 2>&1 | head -1)" >&2
@@ -73,7 +82,7 @@ fi
 for class in \
 	"org/omg/kerml/xtext/validation/KerMLValidator.class" \
 	"org/omg/kerml/xtext/KerMLStandaloneSetup.class"; do
-	if ! jar tf "$pilot_jar" | grep -Fqx "$class"; then
+	if ! "$jar_bin" tf "$pilot_jar" | grep -Fqx "$class"; then
 		echo "error: pilot jar $pilot_jar is missing $class" >&2
 		exit 1
 	fi
