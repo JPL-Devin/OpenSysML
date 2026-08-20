@@ -28,11 +28,8 @@ func TestStdlibReservedKeywordNames(t *testing.T) {
 		`Kernel Libraries/Kernel Semantic Library/StatePerformances.kerml: "entry"`,
 		`Kernel Libraries/Kernel Semantic Library/StatePerformances.kerml: "exit"`,
 		`Kernel Libraries/Kernel Semantic Library/TransitionPerformances.kerml: "accept"`,
-		`Systems Library/Actions.sysml: "done"`,
-		`Systems Library/Items.sysml: "done"`,
-		`Systems Library/Parts.sysml: "done"`,
-		`Systems Library/States.sysml: "done"`,
-		`Systems Library/UseCases.sysml: "done"`,
+		// `done` is not here: it is a literal in none of the pinned grammars, so
+		// the lexer no longer reserves it (docs/reference/grammar/conformance-audit.md).
 	}
 
 	src := &embedSource{}

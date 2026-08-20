@@ -32,7 +32,17 @@ func analyzeTransitions(t *testing.T, src string) []Diagnostic {
 	if len(p.Diagnostics) != 0 {
 		t.Fatalf("unexpected parse diagnostics: %+v", p.Diagnostics)
 	}
-	return Analyze("t.sysml", root, nil, symbols.NewIndexFromDoc("t.sysml", root))
+	var out []Diagnostic
+	for _, d := range Analyze("t.sysml", root, nil, symbols.NewIndexFromDoc("t.sysml", root)) {
+		// The models here are written in our own state notation, which
+		// NonstandardNotationPass warns about; the verdict under test is another
+		// tier's.
+		if d.Code == CodeNonstandardNotation {
+			continue
+		}
+		out = append(out, d)
+	}
+	return out
 }
 
 // wantClean fails when the pass reports anything about a legal model, which is
