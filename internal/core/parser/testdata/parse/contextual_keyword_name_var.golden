@@ -17,7 +17,7 @@
               (Relationship kind="typing" target=Integer
                 (*ast.QualifiedName))))
           (Membership visibility="default"
-            (Usage kind="attribute" name="scaled" ref=false direction="none" composite=false derived=true ordered=false nonunique=false keyword="feature"
+            (Usage kind="attribute" name="scaled" ref=false direction="none" composite=false derived=true ordered=false nonunique=false keyword="feature" prefix="var"
               (Relationship kind="typing" target=Integer
                 (*ast.QualifiedName))))))
       (Membership visibility="default"

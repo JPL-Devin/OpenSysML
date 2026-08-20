@@ -72,7 +72,14 @@ func TestParseVarPrefixQualifiesTheKind(t *testing.T) {
 		t.Errorf("prefix = %q, want \"var\"", u.PrefixKeyword)
 	}
 
-	// `var feature` — the spelling the Kernel Semantic Library uses — reads the
-	// same way, with the modifiers before it kept.
-	parseClean(t, "package P { datatype D { derived var feature a : D[1]; } }")
+	// `derived var feature` — the spelling the Kernel Semantic Library uses —
+	// reads the same way: the modifier is kept and the prefix is still recorded,
+	// so both spellings describe the feature as variable.
+	root = parseClean(t, "package P { datatype D { derived var feature a : D[1]; } }")
+	pkg = root.(*ast.RootNamespace).Members[0].(*ast.Membership).Member.(*ast.Package)
+	dt := pkg.Members[0].(*ast.Membership).Member.(*ast.Usage)
+	u = dt.Members[0].(*ast.Membership).Member.(*ast.Usage)
+	if !u.IsDerived || u.PrefixKeyword != "var" || u.Ident.Name != "a" {
+		t.Errorf("derived = %v, prefix = %q, name = %q; want true, \"var\", \"a\"", u.IsDerived, u.PrefixKeyword, u.Ident.Name)
+	}
 }

@@ -284,6 +284,9 @@ func applyFeatureMods(decl ast.Node, mods featureMods) {
 		if mods.earlyMultiplicity != nil && d.Multiplicity == nil {
 			d.Multiplicity = mods.earlyMultiplicity
 		}
+		if mods.prefixKeyword != "" && d.PrefixKeyword == "" {
+			d.PrefixKeyword = mods.prefixKeyword
+		}
 	case *ast.Definition:
 		if mods.isAbstract {
 			d.IsAbstract = true
@@ -2413,6 +2416,11 @@ func (p *Parser) parseBodyMember() ast.Node {
 			// A keyword that only qualifies the kind after it is consumed first:
 			// `derived var feature x` declares a feature, not a `var`.
 			for p.atKindPrefix() && !isKindKeyword(p.peek()) {
+				// A prefix saying what the declaration is for is part of it, whether
+				// or not a modifier was written before it (`derived var feature x`).
+				if w := p.kindPrefixWord(); kindPrefixKeywords[w] {
+					mods.prefixKeyword = w
+				}
 				p.advance()
 			}
 			decl := p.parseDeclaration(start)
