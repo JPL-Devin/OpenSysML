@@ -12,8 +12,11 @@ import (
 // buildModel parses src, indexes and resolves it, and returns the semantic
 // model plus the document root scope for symbol lookups.
 func buildModel(t *testing.T, src string) (*Model, *symbols.Scope) {
+	return buildModelNamed(t, "t.sysml", src)
+}
+
+func buildModelNamed(t *testing.T, name, src string) (*Model, *symbols.Scope) {
 	t.Helper()
-	const name = "t.sysml"
 	p := parser.New(source.New(name, []byte(src)))
 	root := p.ParseFile()
 	if len(p.Diagnostics) != 0 {

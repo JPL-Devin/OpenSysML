@@ -2,6 +2,7 @@ package semantics
 
 import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -84,6 +85,21 @@ var implicitDefinitionBases = map[ast.DefinitionKind]string{
 	ast.DefUseCase:          "UseCases::UseCase",
 }
 
+var implicitKerMLBases = map[string]string{
+	"classifier":  "Base::Anything",
+	"class":       "Occurrences::Occurrence",
+	"struct":      "Objects::Object",
+	"assoc":       "Links::Link",
+	"association": "Links::Link",
+	"behavior":    "Performances::Performance",
+	"function":    "Performances::Evaluation",
+	"predicate":   "Performances::BooleanEvaluation",
+	"interaction": "Transfers::Transfer",
+	"metaclass":   "Metaobjects::Metaobject",
+	"datatype":    "Base::DataValue",
+	"type":        "Base::Anything",
+}
+
 // implicitBase returns the stdlib definition sym is implicitly typed by, or nil
 // when sym is not an untyped usage or definition of a kind with a known base. A
 // declaration that declares any generalization (typing, subsetting,
@@ -113,6 +129,14 @@ func (m *Model) implicitBase(sym *symbols.Symbol) *symbols.Symbol {
 		fqn, ok = implicitUsageBases[ast.UsageState]
 	default:
 		return nil
+	}
+	if source.KindOf(sym.DocName) == source.KindKerML {
+		switch d := sym.Decl.(type) {
+		case *ast.Usage:
+			fqn, ok = implicitKerMLBases[d.Keyword]
+		case *ast.Definition:
+			fqn, ok = implicitKerMLBases[d.Keyword]
+		}
 	}
 	if !ok || m.resolver == nil || m.resolver.Index() == nil {
 		return nil

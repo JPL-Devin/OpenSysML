@@ -13,7 +13,7 @@ import (
 // formatVersion is the on-disk index record format version. Bump it whenever
 // the persisted shape changes, or the resolution a record captures changes; a
 // mismatch invalidates all cached records.
-const formatVersion = 16
+const formatVersion = 17
 
 // symRecord is the reduced, gob-encodable projection of a symbols.Symbol.
 // It deliberately excludes the AST-backed Decl and the Scope/OwnerScope
@@ -106,7 +106,7 @@ func collectScope(scope *symbols.Scope, prefix string, rec *IndexRecord, model *
 		if prefix != "" {
 			fqn = prefix + "::" + sym.Name
 		}
-		supers, resolved := supersOf(sym, idx, r)
+		supers, resolved := supersOf(sym, idx, r, model)
 		complete = complete && resolved
 		rec.Symbols = append(rec.Symbols, symRecord{
 			FQN:              fqn,
@@ -162,12 +162,9 @@ func dimensionFactsOf(sym *symbols.Symbol, model *semantics.Model, idx *symbols.
 	return model.DimensionFactsOf(sym, idx)
 }
 
-// supersOf resolves the generalization edges declared by a Definition or Usage
-// to the fully-qualified names of their targets, reporting whether every one of
-// them resolved. The edge kinds are exactly semantics.GeneralizationKind, since
-// a restored record replaces that graph; a feature chain target has no
-// qualified name to record and counts as unresolved.
-func supersOf(sym *symbols.Symbol, idx *symbols.Index, r *resolve.Resolver) ([]string, bool) {
+// supersOf records semantic direct-supertype edges for a Definition or Usage,
+// while checking that every declared generalization target resolves.
+func supersOf(sym *symbols.Symbol, idx *symbols.Index, r *resolve.Resolver, model *semantics.Model) ([]string, bool) {
 	var rels []*ast.Relationship
 	switch d := sym.Decl.(type) {
 	case *ast.Definition:
@@ -177,8 +174,6 @@ func supersOf(sym *symbols.Symbol, idx *symbols.Index, r *resolve.Resolver) ([]s
 	default:
 		return nil, true
 	}
-	var out []string
-	seen := map[string]bool{}
 	complete := true
 	for _, rel := range rels {
 		if !semantics.GeneralizationKind(rel.Kind) {
@@ -202,12 +197,15 @@ func supersOf(sym *symbols.Symbol, idx *symbols.Index, r *resolve.Resolver) ([]s
 		if super == sym {
 			continue
 		}
-		superFQN := idx.GetFQN(super)
-		if superFQN == "" {
+		if idx.GetFQN(super) == "" {
 			complete = false
-			continue
 		}
-		if seen[superFQN] {
+	}
+	var out []string
+	seen := map[string]bool{}
+	for _, super := range model.DirectSupertypes(sym) {
+		superFQN := idx.GetFQN(super)
+		if superFQN == "" || seen[superFQN] {
 			continue
 		}
 		seen[superFQN] = true

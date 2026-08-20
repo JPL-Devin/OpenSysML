@@ -182,15 +182,12 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		} else {
 			continue
 		}
-		// A redefinition names the feature it refines, which the redefining
-		// feature shadows in its own scope (`part redefines engine`), so a
-		// target resolving to sym itself must be looked up in what sym's owner
-		// inherits. Self-reference through specializes/typing is preserved so
-		// cycle detection still sees it.
-		if target == sym && rel.Kind == ast.RelRedefines {
+		// Same-named subsettings and redefinitions target the inherited feature,
+		// not the binding that resolves first in the owner's scope.
+		if len(qn.Parts) == 1 && (rel.Kind == ast.RelRedefines || rel.Kind == ast.RelSubsets) {
 			if redefined := m.inheritedFeature(sym, qn); redefined != nil {
 				target = redefined
-			} else {
+			} else if target == sym {
 				continue
 			}
 		}
@@ -344,12 +341,32 @@ func (m *Model) inheritedFeatureNamed(sym *symbols.Symbol, name string) *symbols
 	if owner == nil {
 		return nil
 	}
+	var candidates []*symbols.Symbol
+	seen := make(map[*symbols.Symbol]bool)
 	for _, sup := range m.AllSupertypes(owner) {
 		if found, ok := m.LookupMember(sup, name); ok && found != sym {
-			return found
+			if !seen[found] {
+				seen[found] = true
+				candidates = append(candidates, found)
+			}
 		}
 	}
-	return nil
+	for _, candidate := range candidates {
+		moreSpecific := false
+		for _, other := range candidates {
+			if other != candidate && m.Conforms(other, candidate) {
+				moreSpecific = true
+				break
+			}
+		}
+		if !moreSpecific {
+			return candidate
+		}
+	}
+	if len(candidates) == 0 {
+		return nil
+	}
+	return candidates[0]
 }
 
 // AllSupertypes returns the transitive closure of DirectSupertypes, excluding
