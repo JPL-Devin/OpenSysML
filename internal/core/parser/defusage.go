@@ -1172,11 +1172,13 @@ func usageBodyContext(kind ast.UsageKind) bodyContext {
 // isBehavioralKeyword checks if next token is a behavioral keyword
 func (p *Parser) isBehavioralKeyword() bool {
 	if !p.at(lexer.Keyword) {
-		return false
+		// `done;` and the other unreserved node words, in the node shape only.
+		_, ok := p.atActionNodeWord()
+		return ok
 	}
 	kw := p.peek().KeywordID
 	switch kw {
-	case "first", "done", "fork", "join", "merge", "decision", "decide", "action", "then",
+	case "first", "fork", "join", "merge", "decide", "action", "then",
 		"assign", "perform", "while", "loop", "if", "send", "terminate", "for",
 		// `else <target>;` is a DefaultTargetSuccession member (SysML.xtext).
 		"else":

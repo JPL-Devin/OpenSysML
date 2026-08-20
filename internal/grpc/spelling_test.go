@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
@@ -37,10 +38,23 @@ func parseQuotedNamesModel(t *testing.T, srv *Service, hash string) string {
 	if err != nil {
 		t.Fatalf("ParseFile failed: %v", err)
 	}
-	if len(resp.Diagnostics) > 0 {
-		t.Fatalf("unexpected parse diagnostics: %v", resp.Diagnostics)
+	// The state notation here warns as an OpenSysML extension; only errors would
+	// be a fixture defect.
+	if errs := errorDiagnostics(resp.Diagnostics); len(errs) > 0 {
+		t.Fatalf("unexpected parse errors: %v", errs)
 	}
 	return resp.ModelHash
+}
+
+// errorDiagnostics returns only the error-severity diagnostics of diags.
+func errorDiagnostics(diags []*pb.Diagnostic) []*pb.Diagnostic {
+	var out []*pb.Diagnostic
+	for _, d := range diags {
+		if strings.EqualFold(d.Severity, "error") {
+			out = append(out, d)
+		}
+	}
+	return out
 }
 
 // One spelling rule holds on every surface: a symbol ID may be written the way a

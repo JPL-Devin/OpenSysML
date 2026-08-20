@@ -50,10 +50,11 @@ func TestNegative(t *testing.T) {
 		{"allocate_missing_target", "package q { allocate a to ; }"},
 		{"message_payload_declaration_no_type", "message m of pay : from a to b;"},
 		{"message_payload_declaration_no_target", "message m of pay : T from a;"},
-		{"defer_no_event", "state s { defer ; }"},
+		// `state s { defer ; }` and `state s { history ; }` are no longer malformed:
+		// neither word is a grammar literal, so each names a reference usage there
+		// (docs/reference/grammar/conformance-audit.md).
 		{"defer_no_semicolon", "state s { defer Ping state t; }"},
 		{"defer_trailing_comma", "state s { defer Ping, ; }"},
-		{"history_no_name", "state s { history ; }"},
 		{"deep_without_history", "state s { deep resume; }"},
 		{"shallow_without_history", "state s { shallow resume; }"},
 		{"history_no_semicolon", "state s { history resume state t; }"},
