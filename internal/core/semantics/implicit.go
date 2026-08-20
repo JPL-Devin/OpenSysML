@@ -100,11 +100,19 @@ var implicitKerMLBases = map[string]string{
 	"type":        "Base::Anything",
 }
 
+// isKerMLDoc reports whether sym is declared by a KerML document, as recorded
+// by the index rather than inferred from the document name.
+func (m *Model) isKerMLDoc(sym *symbols.Symbol) bool {
+	if m.resolver == nil || m.resolver.Index() == nil {
+		return false
+	}
+	return m.resolver.Index().DocumentKind(sym.DocName) == source.KindKerML
+}
+
 // implicitBase returns the stdlib definition sym is implicitly typed by, or nil
 // when sym is not a declaration of a kind with a known base.
 func (m *Model) implicitBase(sym *symbols.Symbol) *symbols.Symbol {
-	isKerML := m.resolver != nil && m.resolver.Index() != nil &&
-		m.resolver.Index().DocumentKind(sym.DocName) == source.KindKerML
+	isKerML := m.isKerMLDoc(sym)
 	var fqn string
 	var ok bool
 	switch d := sym.Decl.(type) {
