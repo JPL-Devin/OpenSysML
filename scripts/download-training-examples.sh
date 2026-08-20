@@ -6,12 +6,14 @@
 # is optional for building and running the suite — but `go test ./internal/core/model`
 # only gates the corpus once it has been downloaded.
 #
-# The tag is pinned to the same pilot release the bundled standard library comes
-# from, so the expected results in internal/core/model/testdata are reproducible.
+# The tag is pinned in scripts/pilot-pin.sh to the same pilot release the bundled
+# standard library comes from, so the expected results in
+# internal/core/model/testdata are reproducible.
 set -euo pipefail
 
-PILOT_TAG="${PILOT_TAG:-2026-05}"
-PILOT_REPO="${PILOT_REPO:-https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation.git}"
+# shellcheck source=scripts/pilot-pin.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/pilot-pin.sh"
+
 TRAINING_PATH="sysml/src/training"
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

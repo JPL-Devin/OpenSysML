@@ -55,6 +55,46 @@ into one workspace *before* any diagnostic is requested, so cross-file imports r
 
 ---
 
+## Corpus roots
+
+| Root | Directory | Provisioned by |
+|---|---|---|
+| `training` | `examples/sysml-v2-training` (`sysml/src/training`) | `scripts/download-training-examples.sh` |
+| `pilot-examples` | `examples/pilot-corpora/sysml-examples` (`sysml/src/examples`) | `scripts/download-pilot-corpora.sh` |
+| `pilot-validation` | `examples/pilot-corpora/sysml-validation` (`sysml/src/validation`) | `scripts/download-pilot-corpora.sh` |
+| `testdata` | `testdata` | vendored |
+| `examples` | `examples`, less the downloaded corpora | vendored |
+| `probes` | `cmd/pilot-diff/testdata` | vendored |
+
+The OMG corpora are not vendored, for the same licensing reason as the training corpus, and the
+pilot release they are fetched at is pinned once in `scripts/pilot-pin.sh` — the same pin the
+validator build reads, so corpus and reference can never come from different releases. Each
+corpus directory is left alone when it already exists; remove it to re-download. A root whose
+directory is absent is skipped with a warning.
+
+### KerML: fetched, not compared
+
+`kerml/src/examples` (58 `.kerml` files) is downloaded to
+`examples/pilot-corpora/kerml-examples`, but it is **not** a root, because the reference side
+cannot validate it:
+
+- The DeciSym wrapper refuses any other extension outright —
+  `Error: File must have .sysml extension: <file>.kerml` — and its directory mode only collects
+  `.sysml`.
+- The pinned pilot release has no KerML equivalent of `SysMLInteractive` to invoke instead. The
+  `jupyter-sysml-kernel` jar ships `org.omg.kerml.xtext.*` grammar and scoping support, but the
+  only KerML entry points are the `KerML2XMI` / `KerML2JSON` converters, which emit no
+  diagnostics at all: run over a deliberately malformed `.kerml` file they still report
+  `Transforming... / Resolving proxies... / Writing ...` and exit 0.
+- Renaming a `.kerml` file to `.sysml` is not a substitute: the wrapper then parses KerML with
+  the SysML grammar, so `class Entry { ... }` becomes `no viable alternative at input 'Entry'`.
+  That measures the grammar mismatch, not agreement.
+
+Our own side has no such gap — `model.Workspace` analyses `.kerml` — so the root becomes
+comparable as soon as a reference-side KerML entry point exists (follow-up F8).
+
+---
+
 ## What is compared
 
 Each diagnostic is normalized to a tuple:
@@ -89,6 +129,9 @@ nor double-counted as two independent disagreements.
 ---
 
 ## Results (pilot `2026-05`, 122 files)
+
+These counts predate the `pilot-examples` and `pilot-validation` roots; they cover the four
+roots that existed when they were adjudicated.
 
 | Root | Files | Fully agreeing | Ours | Pilot | Agreed | Severity-only | Only ours | Only pilot |
 |---|---|---|---|---|---|---|---|---|
@@ -197,13 +240,15 @@ one.
 | F5 | Read the P6 pilot checks (accessible-feature, flow-end, model-level-evaluable, behavior-invocation) file by file; each is a candidate gap in our constraint tier. |
 | F6 | Build `Fabi303/sysmlv2tool` (needs a Tycho-capable Maven) and re-run with true single-batch loading, which would eliminate the P4 artifact and the ordering machinery. |
 | F7 | Add [Sensmetry `syside check`](https://github.com/sensmetry/syside) as an *additional* cross-check. It is a different implementation, not the reference, so it can only corroborate — never adjudicate. |
+| F8 | Compare the KerML corpus: it needs a reference-side entry point that validates `.kerml` and reports diagnostics, which neither the DeciSym wrapper nor the pinned pilot release provides. |
 
 ---
 
 ## Re-running and diffing
 
 ```sh
-./scripts/download-training-examples.sh   # the OMG corpus (pinned 2026-05)
+./scripts/download-training-examples.sh   # the OMG training corpus (pinned 2026-05)
+./scripts/download-pilot-corpora.sh       # the other OMG corpora, same pin
 ./scripts/download-pilot-validator.sh     # the pilot validator (pinned wrapper + release)
 go run ./cmd/pilot-diff                   # writes build/pilot-diff/{pilot-diff.txt,pilot-diff.json}
 diff <(jq -S . docs/project/pilot-differential-baseline.json) \

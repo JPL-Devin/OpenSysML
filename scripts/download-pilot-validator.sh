@@ -3,15 +3,15 @@
 # Implementation) into build/pilot-validator/, for the advisory differential
 # harness in cmd/pilot-diff. See docs/project/pilot-differential.md.
 #
-# Both the wrapper commit and the pilot release are pinned; the pilot tag must
-# match the 2026-05 the rest of the repository pins (see
-# scripts/download-training-examples.sh).
+# Both the wrapper commit and the pilot release are pinned; the pilot tag and
+# artifact version come from scripts/pilot-pin.sh, the pin the corpora use too.
 set -euo pipefail
+
+# shellcheck source=scripts/pilot-pin.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/pilot-pin.sh"
 
 VALIDATOR_REPO="${VALIDATOR_REPO:-https://github.com/DeciSym/sysmlv2-validator.git}"
 VALIDATOR_COMMIT="${VALIDATOR_COMMIT:-0d706e5ba1e9c56730cb8600ee43602906e12058}"
-PILOT_TAG="${PILOT_TAG:-2026-05}"
-PILOT_ARTIFACT_VERSION="${PILOT_ARTIFACT_VERSION:-0.60.1}"
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 target="$repo_root/build/pilot-validator"

@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
+	"strings"
 	"testing"
 )
 
@@ -73,6 +75,60 @@ func TestCompareFileBucketsMultisets(t *testing.T) {
 	}
 	if sm := got.SeverityMismatch[0]; sm.Line != 9 || sm.OpenSysML != "error" || sm.Pilot != "warning" || sm.Count != 1 {
 		t.Errorf("severityMismatch[0] = %+v", sm)
+	}
+}
+
+// The downloaded OMG corpora live under examples/, which is a root of its own,
+// so they must be compared once each rather than twice.
+func TestDefaultRootsDoNotOverlap(t *testing.T) {
+	dirs := map[string]string{}
+	for _, root := range defaultRoots {
+		if other, ok := dirs[root.Dir]; ok {
+			t.Errorf("roots %s and %s share the directory %s", other, root.Name, root.Dir)
+		}
+		dirs[root.Dir] = root.Name
+	}
+	for _, root := range defaultRoots {
+		for dir, name := range dirs {
+			if name == root.Name || !strings.HasPrefix(dir, root.Dir+"/") {
+				continue
+			}
+			nested := strings.TrimPrefix(dir, root.Dir+"/")
+			if !slices.ContainsFunc(root.Skip, func(skip string) bool {
+				return nested == skip || strings.HasPrefix(nested, skip+"/")
+			}) {
+				t.Errorf("root %s does not skip %s, which root %s compares", root.Name, nested, name)
+			}
+		}
+	}
+}
+
+func TestCollectFilesSkipsNestedRoots(t *testing.T) {
+	repo := t.TempDir()
+	for _, rel := range []string{
+		"examples/demo.sysml",
+		"examples/pilot-corpora/sysml-examples/Model.sysml",
+		"examples/pilot-corpora/kerml-examples/Model.kerml",
+		"examples/sysml-v2-training/Training.sysml",
+	} {
+		path := filepath.Join(repo, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("package P;\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got, err := collectFiles(repo, corpusRoot{
+		Name: "examples", Dir: "examples",
+		Skip: []string{"sysml-v2-training", "pilot-corpora"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"demo.sysml"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("collectFiles() = %v, want %v", got, want)
 	}
 }
 

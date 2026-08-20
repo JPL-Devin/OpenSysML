@@ -32,8 +32,14 @@ type corpusRoot struct {
 
 var defaultRoots = []corpusRoot{
 	{Name: "training", Dir: "examples/sysml-v2-training"},
+	{Name: "pilot-examples", Dir: "examples/pilot-corpora/sysml-examples"},
+	{Name: "pilot-validation", Dir: "examples/pilot-corpora/sysml-validation"},
+	// examples/pilot-corpora/kerml-examples is fetched but not compared: the
+	// wrapper rejects any input that is not .sysml, and the pilot release ships
+	// no KerML validation entry point to invoke instead. See
+	// docs/project/pilot-differential.md.
 	{Name: "testdata", Dir: "testdata"},
-	{Name: "examples", Dir: "examples", Skip: []string{"sysml-v2-training"}},
+	{Name: "examples", Dir: "examples", Skip: []string{"sysml-v2-training", "pilot-corpora"}},
 	// Hand-written models for behaviour classes the corpora do not cover, such
 	// as redefining a feature inherited through an alias.
 	{Name: "probes", Dir: "cmd/pilot-diff/testdata"},
