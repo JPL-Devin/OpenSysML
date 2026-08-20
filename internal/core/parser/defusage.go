@@ -697,6 +697,15 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 
 	mods := p.parseFeatureModifiers()
 
+	// UsagePrefix ends in UsageExtensionKeyword* (SysML.xtext:582), so prefix
+	// metadata may follow the modifiers: `abstract #Classified z;`.
+	for p.at(lexer.Hash) {
+		p.advance()
+		if metaName := p.parseQualifiedNameRelaxed(); metaName != nil {
+			prefixes = append(prefixes, &ast.PrefixMetadata{Type: metaName})
+		}
+	}
+
 	// `snapshot` and `timeslice` portion the occurrence usage they prefix:
 	// `timeslice item i;` as well as the bare `timeslice t;`
 	// (SysML v2 8.3.9.11, PortionUsage).
@@ -1008,7 +1017,8 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		// SysML v2 §7.27.4: a user-defined keyword may declare a usage without
 		// any language-defined keyword (`#cause 'battery old' { ... }`). The
 		// kind of such a usage comes from the metadata, not the syntax.
-		keywordOnlyUsage := len(prefixes) > 0 && (p.at(lexer.Identifier) || p.at(lexer.UnrestrictedName))
+		keywordOnlyUsage := len(prefixes) > 0 &&
+			(p.at(lexer.Identifier) || p.at(lexer.UnrestrictedName) || p.atFeatureSpecialization())
 		if hasModifiers || hasNameWithMultOrMods || keywordOnlyUsage {
 			kind, keyword := modifierImpliedKind(mods)
 			return applyPrefixes(p.parseUsage(start, kind, keyword, mods, false))
@@ -2087,6 +2097,18 @@ func (p *Parser) parseBodyMember() ast.Node {
 		// Also: end [1] feature transferSource (no short name)
 		// Also: end ref source; (no definition keyword, just anonymous feature)
 		// This declares a feature with 'end' modifier, optional short name, and multiplicity
+		// Prefix metadata may stand where the kind keyword would, after the
+		// modifiers (SysML.xtext ExtendedUsage): `end #original r1 : Req1;`.
+		if p.at(lexer.Hash) {
+			if inner := p.parseDefUsage(start); inner != nil {
+				applyFeatureMods(inner, mods)
+				m := &ast.Membership{Visibility: vis, Member: inner}
+				m.NodeSpan = p.spanFrom(start)
+				m.SetLeadingTrivia(trivia)
+				return m
+			}
+		}
+
 		if mods.isEnd && (p.atNameOrKeyword() || p.at(lexer.LBracket)) {
 			var shortName string
 			var shortNameSpan source.Span

@@ -748,6 +748,11 @@ func (p *Parser) leadingPrefixIsDefUsage() bool {
 	if t.KeywordID == "def" {
 		return true // explicit 'def' after prefixes
 	}
+	// `#M connect a to b;` — `connect` begins an anonymous connection usage
+	// without being a kind keyword (SysML.xtext ConnectionUsage).
+	if t.KeywordID == "connect" {
+		return true
+	}
 	_, isDef := definitionKindKeywords[t.KeywordID]
 	_, isUsage := usageKindKeywords[t.KeywordID]
 	return isDef || isUsage
