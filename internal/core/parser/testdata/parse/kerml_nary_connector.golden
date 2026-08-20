@@ -1,0 +1,70 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="NaryConnector" library=false standard=false
+      (Membership visibility="default"
+        (Usage kind="class" name="Cart" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="class" name="Product" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="class" name="Account" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="assoc" name="ProductSelection" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="cart" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" end=true
+              (Relationship kind="typing" target=Cart
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="product" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" end=true
+              (Relationship kind="typing" target=Product
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="account" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" end=true
+              (Relationship kind="typing" target=Account
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Usage kind="class" name="Shop" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="myCart" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+              (Relationship kind="typing" target=Cart
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="products" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+              (Relationship kind="typing" target=Product
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="myAccount" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+              (Relationship kind="typing" target=Account
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="connector" name="ps1" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=ProductSelection
+                (*ast.QualifiedName))
+              (ConnectorEnd target="myCart"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="products"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="myAccount"
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="connector" name="ps2" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=ProductSelection
+                (*ast.QualifiedName))
+              (ConnectorEnd target="myCart"
+                (Multiplicity range=false
+                  (LiteralInteger value="1"))
+                (*ast.QualifiedName))
+              (ConnectorEnd target="products"
+                (Multiplicity range=true
+                  (LiteralInteger value="0")
+                  (LiteralInteger value="1"))
+                (*ast.QualifiedName))
+              (ConnectorEnd target="myAccount"
+                (Multiplicity range=false
+                  (LiteralInteger value="1"))
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="connector" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="myCart"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="products"
+                (*ast.QualifiedName)))))))))

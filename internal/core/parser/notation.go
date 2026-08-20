@@ -5,7 +5,10 @@ package parser
 // the lexer does not reserve them: they arrive as names and are matched here by
 // the shape of the notation around them, as `point` and `var` are.
 
-import "github.com/Open-MBEE/OpenSysML/internal/core/lexer"
+import (
+	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+)
 
 // notationWords are the unreserved words our notation matches contextually.
 var notationWords = map[string]bool{
@@ -20,6 +23,29 @@ var notationWords = map[string]bool{
 	"junction": true,
 	"region":   true,
 	"shallow":  true,
+}
+
+// sysmlOnlyWords are literals of SysML.xtext that appear in neither
+// KerML.xtext nor KerMLExpressions.xtext: `at` (`SysML.xtext:1480`, an accept
+// trigger), `while` (`:1617`, a loop action), `merge` (`:1666`) and `decide`
+// (`:1672`, control nodes). A word the file's own grammar does not reserve is a
+// name there, so in a `.kerml` file these read as ordinary names.
+var sysmlOnlyWords = map[string]bool{
+	"at":     true,
+	"while":  true,
+	"merge":  true,
+	"decide": true,
+}
+
+// unreserved reclassifies a keyword the file's grammar does not reserve as the
+// name it is, so every position that takes a name accepts it.
+func (p *Parser) unreserved(tok lexer.Token) lexer.Token {
+	if tok.Kind != lexer.Keyword || p.src.Kind() != source.KindKerML || !sysmlOnlyWords[tok.KeywordID] {
+		return tok
+	}
+	tok.Kind = lexer.Identifier
+	tok.KeywordID = ""
+	return tok
 }
 
 // notationWordAt returns the notation word n tokens ahead: a keyword's identity,

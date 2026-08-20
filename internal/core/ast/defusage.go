@@ -330,6 +330,10 @@ const (
 	RelVia        // 'via' (accept action receiving port)
 	RelAnnotates  // 'about' (metadata annotated element)
 	RelSubject    // 'by' (satisfy/verify subject)
+	// RelFeaturedBy models a KerML TypeFeaturing written in a feature
+	// declaration: `featured by T` states a type the feature is a feature of
+	// (KerML.xtext TypeFeaturingPart, 8.3.3.1.4). KerML notation only.
+	RelFeaturedBy // 'featured by'
 )
 
 func (k RelationshipKind) String() string {
@@ -364,6 +368,8 @@ func (k RelationshipKind) String() string {
 		return "about"
 	case RelSubject:
 		return "by"
+	case RelFeaturedBy:
+		return "featured by"
 	default:
 		return "unknown"
 	}

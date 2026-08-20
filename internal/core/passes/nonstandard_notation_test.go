@@ -72,6 +72,20 @@ func TestNamespaceInKerMLIsSilent(t *testing.T) {
 	}
 }
 
+// `featured by` is KerML-only notation: the SysML grammar has no featuring
+// clause, so a SysML file is warned and a KerML one is silent.
+func TestFeaturedByInSysMLIsKerMLNotation(t *testing.T) {
+	const want = "`featured by` is KerML notation"
+	wantNotation(t, "a.sysml", "package P { part def A; part x featured by A; }", CodeKerMLNotation, want)
+	// A list states one featuring per target, so each is reported.
+	wantNotation(t, "a.sysml", "package P { part def A; part def B; part x featured by A, B; }",
+		CodeKerMLNotation, want, want)
+}
+
+func TestFeaturedByInKerMLIsSilent(t *testing.T) {
+	wantSilent(t, "a.kerml", "package P { class A; class B; feature x featured by A, B; }")
+}
+
 // The state notation with no production of its own is reported, one warning per
 // construct.
 func TestStateExtensionsAreReported(t *testing.T) {

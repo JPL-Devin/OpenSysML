@@ -1570,7 +1570,11 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 	// For anonymous succession/flow, skip multiplicity parsing - it belongs to connector ends
 	// UNLESS earlyMultiplicity was already parsed (e.g., `succession [mult] first ...`)
 	// In the shorthand forms a multiplicity here is the first end's.
-	skipMultiplicity := ((kind == ast.UsageSuccession || kind == ast.UsageFlow) && u.Ident.Name == "" && earlyMultiplicity == nil) ||
+	// A succession stating a specialization instead of a name still has a
+	// declaration of its own, so the multiplicity is the declaration's
+	// (KerML.xtext:891, SuccessionDeclaration's FeatureDeclaration alternative).
+	declared := u.Ident.Name != "" || u.Ident.ShortName != "" || len(u.Relationships) > 0
+	skipMultiplicity := ((kind == ast.UsageSuccession || kind == ast.UsageFlow) && !declared && earlyMultiplicity == nil) ||
 		((kind == ast.UsageConnection || kind == ast.UsageInterface) && skipIdentification)
 	if !skipMultiplicity {
 		if earlyMultiplicity != nil {
@@ -2909,12 +2913,15 @@ func (p *Parser) parseTierBEnds(u *ast.Usage, kind ast.UsageKind) {
 			p.parseConnectorEnds(u, "")
 		}
 	case ast.UsageConnector:
-		// Connector can use three syntaxes:
+		// Connector can use four syntaxes:
 		// 1. "connect X to Y" - standard connector ends
 		// 2. "from X to Y" - from/to syntax
 		// 3. "to [mult] target" - single end typing (shorthand)
+		// 4. "(X, Y, Z)" - n-ary end list (KerML.xtext:842 NaryConnectorDeclaration)
 		if p.atKeyword("connect") {
 			p.parseConnectorEnds(u, "connect")
+		} else if p.at(lexer.LParen) {
+			p.parseNaryConnectorEnds(u)
 		} else if p.atKeyword("to") {
 			// Single-end connector: "connector name to [mult] target"
 			// This is shorthand for a connector with one implicit end
@@ -3081,6 +3088,18 @@ func (p *Parser) parseConnectorEnd() *ast.ConnectorEnd {
 
 	ce.NodeSpan = p.spanFrom(start)
 	return ce
+}
+
+// parseNaryConnectorEnds parses the parenthesized end list a KerML connector
+// declaration states without an introducing keyword; the grammar requires at
+// least two ends there (KerML.xtext:842).
+func (p *Parser) parseNaryConnectorEnds(u *ast.Usage) {
+	before := len(u.ConnectorEnds)
+	p.parseConnectorEnds(u, "")
+	if n := len(u.ConnectorEnds) - before; n == 1 {
+		p.error(u.ConnectorEnds[before].Span(),
+			"expected at least two connector ends in a parenthesized end list")
+	}
 }
 
 // parseConnectorFromTo parses the `from x to y` pattern for connector usages.
@@ -3324,7 +3343,7 @@ func (p *Parser) atRelationshipKeyword() bool {
 			return true
 		}
 		// Special multi-word keywords
-		if t.KeywordID == "defined" || t.KeywordID == "inverse" {
+		if t.KeywordID == "defined" || t.KeywordID == "inverse" || t.KeywordID == "featured" {
 			return true
 		}
 	}
@@ -3353,6 +3372,13 @@ func (p *Parser) relationshipClauseKind(isUsage bool) (ast.RelationshipKind, boo
 			p.advance()
 			p.expect2Keyword("of")
 			return ast.RelInverseOf, true
+		}
+		// `featured by T` states the types a feature is featured by, and is
+		// reached from FeatureDeclaration alone (KerML.xtext:569, 659).
+		if t.KeywordID == "featured" {
+			p.advance()
+			p.expect2Keyword("by")
+			return ast.RelFeaturedBy, true
 		}
 	}
 	switch p.peek().Kind {

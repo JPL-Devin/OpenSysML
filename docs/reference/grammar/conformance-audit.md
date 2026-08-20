@@ -113,6 +113,24 @@ imports — not a `namespace` declaration. Both spellings, `namespace N;` and
 the defect is the production being used in a SysML file at all. It stays parsed
 and is warned in `.sysml`, silent in `.kerml`.
 
+### Reserved by SysML only — a name in a `.kerml` file
+
+A word is reserved by the grammar of the file it is written in, so a literal of
+`SysML.xtext` alone is an ordinary name in KerML. F30 unreserves these four by
+file kind; they keep their SysML meanings in `.sysml`, where the literal exists.
+
+| Word | `KerML.xtext` | `KerMLExpressions.xtext` | `SysML.xtext` | Corpus witness |
+|------|---------------|--------------------------|---------------|----------------|
+| `at` | absent | absent | `:1480` (`TimeTriggerKind`) | `expr at { … }`, `Variable Feature Examples/Enhancements/ExtendedOccurrences.kerml:16` |
+| `while` | absent | absent | `:1617` (`WhileLoopActionUsage`) | `expr while { … }`, same file `:25` |
+| `merge` | absent | absent | `:1666` (`MergeNode`) | `member step merge : …`, `Enhancements/TimeVaryingSteps.kerml:4`, imported at `:6` |
+| `decide` | absent | absent | `:1672` (`DecisionNode`) | `member step decide : …`, same file `:25`, imported at `:27` |
+
+`featured by` is the converse case: `TypeFeaturingPart` (`KerML.xtext:569-571`)
+and `OwnedTypeFeaturing` (`:659`) are KerML productions with no SysML
+counterpart, so the clause is parsed everywhere and warned as `kerml-notation`
+in a `.sysml` file — the F3 treatment of `namespace`.
+
 ## Judgment calls
 
 Everything above is a grammar citation except these, recorded so a reviewer can
