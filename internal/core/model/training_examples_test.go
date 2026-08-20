@@ -27,11 +27,19 @@ const (
 
 // skipWithoutTrainingCorpus skips the calling test locally, but fails it when
 // the corpus is declared mandatory, so the gate cannot pass by skipping.
+// The skip is announced on stderr because `go test` hides skip reasons without
+// -v, which makes a gate that never ran look like a gate that passed.
 func skipWithoutTrainingCorpus(t *testing.T, reason string) {
 	t.Helper()
 	if os.Getenv(trainingRequiredEnv) != "" {
 		t.Fatalf("%s=%s but %s: %s", trainingRequiredEnv, os.Getenv(trainingRequiredEnv), reason, trainingSkipHint)
 	}
+	fmt.Fprintf(os.Stderr, "\n!!! GATE NOT RUN: %s SKIPPED - %s.\n"+
+		"!!! The OMG training corpus is absent, so this run proves nothing about it.\n"+
+		"!!! Fetch it with ./scripts/download-training-examples.sh and re-run\n"+
+		"!!!   go test -count=1 ./internal/core/model -run TestTrainingExamples\n"+
+		"!!! CI sets %s=1, where an absent corpus fails instead of skipping.\n\n",
+		t.Name(), reason, trainingRequiredEnv)
 	t.Skip(trainingSkipHint)
 }
 
@@ -132,9 +140,6 @@ func trainingErrorCounts(t *testing.T, files []string) map[string]int {
 // and the second reads it back.
 func TestTrainingExamplesCacheStateIndependent(t *testing.T) {
 	files := trainingFiles(t)
-	if testing.Short() {
-		t.Skip("indexes the whole corpus twice")
-	}
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 
 	cold := trainingErrorCounts(t, files)
