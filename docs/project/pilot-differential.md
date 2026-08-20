@@ -91,7 +91,7 @@ cannot validate it:
   That measures the grammar mismatch, not agreement.
 
 Our own side has no such gap — `model.Workspace` analyses `.kerml` — so the root becomes
-comparable as soon as a reference-side KerML entry point exists (follow-up F8).
+comparable as soon as a reference-side KerML entry point exists (follow-up F10).
 
 ---
 
@@ -128,18 +128,27 @@ nor double-counted as two independent disagreements.
 
 ---
 
-## Results (pilot `2026-05`, 122 files)
-
-These counts predate the `pilot-examples` and `pilot-validation` roots; they cover the four
-roots that existed when they were adjudicated.
+## Results (pilot `2026-05`, 276 files)
 
 | Root | Files | Fully agreeing | Ours | Pilot | Agreed | Severity-only | Only ours | Only pilot |
-|---|---|---|---|---|---|---|---|---|
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
 | `examples/sysml-v2-training` | 100 | 100 | 0 | 0 | 0 | 0 | 0 | 0 |
+| `examples/pilot-corpora/sysml-examples` | 98 | 38 | 334 | 0 | 0 | 0 | 334 | 0 |
+| `examples/pilot-corpora/sysml-validation` | 56 | 34 | 118 | 0 | 0 | 0 | 118 | 0 |
 | `testdata` | 9 | 0 | 24 | 67 | 18 | 1 | 5 | 48 |
 | `examples` | 12 | 2 | 0 | 140 | 0 | 0 | 0 | 140 |
 | `cmd/pilot-diff/testdata` (probes) | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **122** | **103** | **24** | **207** | **18** | **1** | **5** | **188** |
+| **Total** | **276** | **175** | **476** | **207** | **18** | **1** | **457** | **188** |
+
+The ordering fix removed all 539 pilot-only diagnostics from `pilot-examples`: the reference
+now processes `SysML v2 Spec Annex A SimpleVehicleModel.sysml` before its importer,
+`Annex_A_VehicleViews.sysml`, so the missing `SimpleVehicleModel` namespace at line 2 is no
+longer reported by the pilot. The importer still has OpenSysML-only syntax diagnostics, which
+remain part of the parser-gap follow-up below.
+
+`pilot-validation` was unchanged by the ordering fix: it contributed 121 only-ours syntax
+diagnostics in the pre-merge comparison. The current main-based baseline has 118 after the
+unrelated keyword-as-name fix in #335.
 
 The headline is the first row: on the 100-file OMG training corpus the pilot reports
 **nothing at all**, and so do we. That is the corpus written to be valid, and it is the row
@@ -165,6 +174,16 @@ root causes, adjudicated next.
 
 ### Only ours — candidate false positives (5)
 
+The five diagnostics below are the adjudicated only-ours set. The remaining 452 current
+only-ours diagnostics are not adjudicated in this pass. The 121 `pilot-validation` syntax-only
+discrepancies from the pre-merge comparison and the bulk of the `pilot-examples` syntax-only
+discrepancies come from four missing productions: `connect a to b { ... }`, `flow a.x to b.y
+{ ... }`, anonymous `interface a.p to b.q`, and `accept` on an action usage declaration
+(`action got accept e : E { ... }`). Representative corpus locations are
+`02-Parts Interconnection/2a-Parts Interconnection.sysml:97,157,162` and
+`03-Function-based Behavior/3a-Function-based Behavior-1.sysml:58,102,112`. The child session is
+fixing those parser gaps; they remain open here.
+
 The two keyword-as-name rows that stood here are **fixed** (F1): `on` appears as a literal in
 none of the pilot's grammars, and `var` only in `KerML.xtext` (`BasicFeaturePrefix`), so both
 are now matched contextually and are names everywhere else. The four diagnostics they produced
@@ -183,6 +202,10 @@ are gone from the three files listed in the movement table above.
 | `passes/constraints.sysml:6` | Both flag `part few subsets cap [0..10];` under `cap [0..3]` at the same line and category. We report `error`; the pilot reports `warning` (`Subsetting/redefining feature should not have larger multiplicity upper bound`). A real difference in strictness, kept in its own bucket rather than being counted as two disagreements. |
 
 ### Only the pilot — candidate gaps (188)
+
+The 539 pilot-only diagnostics that were previously concentrated in `pilot-examples` were an
+ordering artifact and are resolved by this change. The remaining 188 pilot-only diagnostics
+are the same `testdata`/`examples` issues as before.
 
 Grouped by root cause. The pilot's own grammar
 (`org.omg.sysml.xtext/src/org/omg/sysml/xtext/SysML.xtext`) is quoted where it settles the
@@ -253,7 +276,7 @@ one.
 | F5 | Read the P6 pilot checks (accessible-feature, flow-end, model-level-evaluable, behavior-invocation) file by file; each is a candidate gap in our constraint tier. |
 | F6 | Build `Fabi303/sysmlv2tool` (needs a Tycho-capable Maven) and re-run with true single-batch loading, which would eliminate the P4 artifact and the ordering machinery. |
 | F7 | Add [Sensmetry `syside check`](https://github.com/sensmetry/syside) as an *additional* cross-check. It is a different implementation, not the reference, so it can only corroborate — never adjudicate. |
-| F8 | Compare the KerML corpus: it needs a reference-side entry point that validates `.kerml` and reports diagnostics, which neither the DeciSym wrapper nor the pinned pilot release provides. |
+| F10 | Compare the KerML corpus: it needs a reference-side entry point that validates `.kerml` and reports diagnostics, which neither the DeciSym wrapper nor the pinned pilot release provides. |
 
 ---
 

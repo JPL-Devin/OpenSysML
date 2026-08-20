@@ -164,6 +164,62 @@ func TestOrderByImports(t *testing.T) {
 	}
 }
 
+// A qualified import must match the longest declared namespace prefix.
+func TestOrderByImportsQualifiedPrefix(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, content string) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("z-provider.sysml", "package Wrapper {\n\tpackage SimpleVehicleModel {\n\t\tpart def Thing;\n\t}\n}\n")
+	write("a-importer.sysml", "package Views {\n\tprivate import Wrapper::SimpleVehicleModel::*;\n}\n")
+
+	files := []string{"a-importer.sysml", "z-provider.sysml"}
+	want := []string{"z-provider.sysml", "a-importer.sysml"}
+	if got := orderByImports(dir, ".", files); !reflect.DeepEqual(got, want) {
+		t.Errorf("orderByImports() = %v, want %v", got, want)
+	}
+}
+
+// Top-level definitions, usages, and aliases are importable declarations too.
+func TestOrderByImportsDeclarations(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, content string) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("z-definition.sysml", "part def DefinitionThing;\n")
+	write("y-usage.sysml", "part usageThing;\n")
+	write("x-alias.sysml", "alias AliasThing for DefinitionThing;\n")
+	write("a-importer.sysml", "package Imports {\n\tprivate import DefinitionThing::*;\n\tprivate import usageThing::*;\n\tprivate import AliasThing::*;\n}\n")
+
+	files := []string{"a-importer.sysml", "z-definition.sysml", "y-usage.sysml", "x-alias.sysml"}
+	want := []string{"z-definition.sysml", "y-usage.sysml", "x-alias.sysml", "a-importer.sysml"}
+	if got := orderByImports(dir, ".", files); !reflect.DeepEqual(got, want) {
+		t.Errorf("orderByImports() = %v, want %v", got, want)
+	}
+}
+
+// Repeated declarations must still propagate child prefixes from each occurrence.
+func TestOrderByImportsRepeatedPackage(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, content string) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("z-provider.sysml", "package Provider {\n\tpart first;\n}\npackage Provider {\n\tpackage Inner {\n\t\tpart second;\n\t}\n}\n")
+	write("a-importer.sysml", "package Views {\n\tprivate import Provider::Inner::*;\n}\n")
+
+	files := []string{"a-importer.sysml", "z-provider.sysml"}
+	want := []string{"z-provider.sysml", "a-importer.sysml"}
+	if got := orderByImports(dir, ".", files); !reflect.DeepEqual(got, want) {
+		t.Errorf("orderByImports() = %v, want %v", got, want)
+	}
+}
+
 // An import cycle must not hang or drop files.
 func TestOrderByImportsCycle(t *testing.T) {
 	dir := t.TempDir()
