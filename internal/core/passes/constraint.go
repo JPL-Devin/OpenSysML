@@ -418,23 +418,34 @@ func (cc *constraintChecker) checkRedefinition(sym *symbols.Symbol) {
 		if !isQN {
 			continue
 		}
-		redefined, resolved := cc.resolveInheritedMember(owner, qn)
-		if !resolved || redefined == nil {
-			continue
+		featuringOwners, hasFeaturing := cc.featuringOwners(sym)
+		if !hasFeaturing {
+			if owner.Kind == symbols.SymbolPackage || owner.Kind == symbols.SymbolNamespace {
+				continue
+			}
+			featuringOwners = []*symbols.Symbol{owner}
 		}
-
-		// A library supertype restored from the cache carries no scope, so
-		// membership is decided by looking the name up in each supertype
-		// rather than by comparing the declaring scope.
-		name := qn.Parts[len(qn.Parts)-1].Text
+		var redefined *symbols.Symbol
 		inherited := false
-		if owner.Scope == nil || redefined.OwnerScope != owner.Scope {
-			for _, supertype := range cc.model.AllSupertypes(owner) {
-				if found, ok := cc.model.LookupMember(supertype, name); ok && found == redefined {
-					inherited = true
-					break
+		for _, featuringOwner := range featuringOwners {
+			candidate, resolved := cc.resolveInheritedMember(featuringOwner, qn)
+			if !resolved || candidate == nil {
+				continue
+			}
+			if candidate.OwnerScope != nil && candidate.OwnerScope.Owner() != nil {
+				switch candidate.OwnerScope.Owner().Kind {
+				case symbols.SymbolPackage, symbols.SymbolNamespace:
+					continue
 				}
 			}
+			redefined = candidate
+			inherited = cc.isInheritedMember(featuringOwner, candidate, qn.Parts[len(qn.Parts)-1].Text)
+			if inherited {
+				break
+			}
+		}
+		if redefined == nil {
+			continue
 		}
 
 		if !inherited {
@@ -508,6 +519,64 @@ func (cc *constraintChecker) checkRedefinition(sym *symbols.Symbol) {
 			}
 		}
 	}
+}
+
+func (cc *constraintChecker) featuringOwners(sym *symbols.Symbol) ([]*symbols.Symbol, bool) {
+	owners := make([]*symbols.Symbol, 0, 1)
+	for _, rel := range semantics.RelationshipsOf(sym) {
+		if rel == nil || rel.Kind != ast.RelFeaturedBy || rel.Target == nil {
+			continue
+		}
+		targetNode := rel.Target
+		if fr, ok := targetNode.(*ast.FeatureReference); ok {
+			targetNode = fr.Name
+		}
+		qn, ok := targetNode.(*ast.QualifiedName)
+		if !ok {
+			continue
+		}
+		resolveScope := sym.OwnerScope
+		if sym.Scope != nil {
+			resolveScope = sym.Scope
+		}
+		target, ok := cc.resolver.ResolveQualified(resolveScope, qn)
+		if !ok || target == nil {
+			continue
+		}
+		owners = append(owners, target)
+	}
+	return owners, len(owners) > 0
+}
+
+func (cc *constraintChecker) isInheritedMember(
+	owner, candidate *symbols.Symbol,
+	name string,
+) bool {
+	if owner == nil || candidate == nil {
+		return false
+	}
+
+	candidateFQN := ""
+	if cc.resolver.Index() != nil {
+		candidateFQN = cc.resolver.Index().GetFQN(candidate)
+	}
+
+	for _, supertype := range cc.model.AllSupertypes(owner) {
+		if found, ok := cc.model.LookupMember(supertype, name); ok && found == candidate {
+			return true
+		}
+
+		if candidateFQN == "" || cc.resolver.Index() == nil {
+			continue
+		}
+		supertypeFQN := cc.resolver.Index().GetFQN(supertype)
+		if supertypeFQN == candidateFQN ||
+			strings.HasPrefix(supertypeFQN, candidateFQN+"::") {
+			return true
+		}
+	}
+
+	return false
 }
 
 // extractUsageType extracts the type of a usage via its RelTyping relationship.

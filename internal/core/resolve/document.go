@@ -90,14 +90,16 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		r.InCondition(func() { r.resolveExpr(scope, d.Condition) })
 	case *ast.Definition:
 		r.resolvePrefixes(scope, d.Prefixes)
-		r.resolveRelationships(scope, d, d.Relationships)
-		if child := r.childScope(scope, d); child != nil {
+		child := r.childScope(scope, d)
+		r.resolveHeaderRelationships(scope, child, d, d.Relationships)
+		if child != nil {
 			r.walkMembers(child, d.Members)
 			r.checkInheritedNames(child)
 		}
 	case *ast.Usage:
 		r.resolvePrefixes(scope, d.Prefixes)
-		r.resolveRelationships(scope, d, d.Relationships)
+		child := r.childScope(scope, d)
+		r.resolveHeaderRelationships(scope, child, d, d.Relationships)
 		if d.Multiplicity != nil {
 			r.resolveExpr(scope, d.Multiplicity.Lower)
 			r.resolveExpr(scope, d.Multiplicity.Upper)
@@ -127,28 +129,28 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 			// the feature it attaches to, its type — is a feature of the
 			// connector's owner and resolves in the enclosing scope.
 			endScope := scope
+			redefinitionScope := scope
 			if inner := r.childScope(scope, d); inner != nil {
-				endScope = inner
+				redefinitionScope = inner
 			}
 			redefines, others := ast.SplitRedefinitions(end.Relationships)
-			r.resolveRelationships(endScope, end, redefines)
-			r.resolveRelationships(scope, end, others)
+			r.resolveRelationships(redefinitionScope, end, redefines)
+			r.resolveRelationships(endScope, end, others)
 			if end.Target != nil && !declaresName {
 				if qn, ok := end.Target.(*ast.QualifiedName); ok {
-					r.ResolveQualified(scope, qn)
+					r.ResolveQualified(endScope, qn)
 				} else {
-					r.resolveExpr(scope, end.Target)
+					r.resolveExpr(endScope, end.Target)
 				}
 			}
 			if end.Reference != nil {
 				if qn, ok := end.Reference.(*ast.QualifiedName); ok {
-					r.ResolveQualified(scope, qn)
+					r.ResolveQualified(endScope, qn)
 				} else {
-					r.resolveExpr(scope, end.Reference)
+					r.resolveExpr(endScope, end.Reference)
 				}
 			}
 		}
-		child := r.childScope(scope, d)
 		if d.FlowEnds != nil {
 			r.resolveExpr(scope, d.FlowEnds.From)
 			r.resolveExpr(scope, d.FlowEnds.To)
@@ -474,7 +476,7 @@ func (r *Resolver) resolveRelationships(scope *symbols.Scope, decl ast.Node, rel
 			}
 
 			// Special case: redefinitions should resolve in inherited scope
-			if rel.Kind == ast.RelRedefines {
+			if rel.Kind == ast.RelRedefines || (rel.Kind == ast.RelSubsets && !relationshipTargetsDecl(rel, decl)) {
 				if qn, ok := target.(*ast.QualifiedName); ok {
 					r.resolveRedefinition(scope, qn, decl)
 					continue
@@ -499,6 +501,76 @@ func (r *Resolver) resolveRelationships(scope *symbols.Scope, decl ast.Node, rel
 			}
 		}
 	}
+}
+
+func (r *Resolver) resolveHeaderRelationships(parent, header *symbols.Scope, decl ast.Node, rels []*ast.Relationship) {
+	if header == nil || header == parent {
+		r.resolveRelationships(parent, decl, rels)
+		return
+	}
+	for _, rel := range rels {
+		if rel == nil || rel.Target == nil {
+			continue
+		}
+		target := rel.Target
+		if fr, ok := target.(*ast.FeatureReference); ok {
+			target = fr.Name
+		}
+		resolvesInHeader := false
+		switch target := target.(type) {
+		case *ast.QualifiedName:
+			if len(target.Parts) > 0 {
+				resolvesInHeader = rel.Kind != ast.RelTyping &&
+					r.headerHasName(header, target.Parts[0].Text)
+			}
+		case *ast.FeatureChainExpr:
+			if len(target.Member.Parts) > 0 {
+				resolvesInHeader = r.headerHasName(header, target.Member.Parts[0].Text)
+			}
+		}
+		if resolvesInHeader {
+			r.resolveRelationships(header, decl, []*ast.Relationship{rel})
+		} else {
+			r.resolveRelationships(parent, decl, []*ast.Relationship{rel})
+		}
+	}
+}
+
+func (r *Resolver) headerHasName(scope *symbols.Scope, name string) bool {
+	if scope == nil {
+		return false
+	}
+	if _, ok := scope.LookupLocal(name); ok {
+		return true
+	}
+	for _, imp := range r.importsOf(scope.Node()) {
+		if _, ok := r.matchImport(scope, imp, name); ok {
+			return true
+		}
+	}
+	return false
+}
+
+func relationshipTargetsDecl(rel *ast.Relationship, decl ast.Node) bool {
+	if rel == nil || decl == nil || rel.Target == nil {
+		return false
+	}
+	target := rel.Target
+	if fr, ok := target.(*ast.FeatureReference); ok {
+		target = fr.Name
+	}
+	qn, ok := target.(*ast.QualifiedName)
+	if !ok || len(qn.Parts) != 1 {
+		return false
+	}
+	name := ""
+	switch d := decl.(type) {
+	case *ast.Definition:
+		name = d.Ident.Name
+	case *ast.Usage:
+		name, _ = ast.EffectiveName(d)
+	}
+	return name != "" && qn.Parts[0].Text == name
 }
 
 // resolveConstraintReference resolves the requirement a require/assume member
@@ -581,6 +653,7 @@ func (r *Resolver) featureOf(sym *symbols.Symbol, name string, seen map[*symbols
 	}
 	generals := r.findSpecializationTargets(scope, rels)
 	generals = append(generals, r.findTypingTargets(scope, rels)...)
+	generals = append(generals, r.findFeaturedByTargets(scope, rels)...)
 	for _, general := range generals {
 		if found, ok := r.featureOf(general, name, seen); ok {
 			return found, true
@@ -644,6 +717,7 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 		if _, ok := ownerNode.(*ast.Usage); ok {
 			parents = append(parents, r.findTypingTargets(scope, ownerRels)...)
 		}
+		parents = append(parents, r.findFeaturedByTargets(scope, ownerRels)...)
 
 		// For definitions with implicit base types (e.g., flow def → Flow), add them
 		if def, ok := ownerNode.(*ast.Definition); ok {
@@ -765,6 +839,30 @@ func (r *Resolver) findTypingTargets(scope *symbols.Scope, rels []*ast.Relations
 	return parents
 }
 
+func (r *Resolver) findFeaturedByTargets(scope *symbols.Scope, rels []*ast.Relationship) []*symbols.Symbol {
+	var parents []*symbols.Symbol
+	for _, rel := range rels {
+		if rel == nil || rel.Kind != ast.RelFeaturedBy {
+			continue
+		}
+		target := rel.Target
+		if fr, ok := target.(*ast.FeatureReference); ok {
+			target = fr.Name
+		}
+		if qn, ok := target.(*ast.QualifiedName); ok {
+			if sym, ok := r.ResolveQualified(scope, qn); ok && sym != nil {
+				if resolved, aliasOK := r.ResolveAliasTarget(sym); aliasOK {
+					sym = resolved
+				} else {
+					continue
+				}
+				parents = append(parents, sym)
+			}
+		}
+	}
+	return parents
+}
+
 // searchInheritedFeature recursively searches for a feature in the parent's inheritance chain.
 func (r *Resolver) searchInheritedFeature(parentSym *symbols.Symbol, featureName string, qn *ast.QualifiedName) bool {
 	if parentSym == nil || parentSym.Decl == nil {
@@ -782,6 +880,7 @@ func (r *Resolver) searchInheritedFeature(parentSym *symbols.Symbol, featureName
 
 	// Search in each grandparent
 	grandparents := r.findSpecializationTargets(parentSym.Scope.Parent(), parentRels)
+	grandparents = append(grandparents, r.findFeaturedByTargets(parentSym.Scope.Parent(), parentRels)...)
 	for _, gp := range grandparents {
 		if gp == nil || gp.Scope == nil {
 			continue
@@ -1091,7 +1190,8 @@ func (r *Resolver) getOperandSymbol(scope *symbols.Scope, e ast.Node) *symbols.S
 		// If usage has inline members (scope), return it to access those members
 		// Otherwise follow type for inherited members
 		if usage, isUsage := sym.Decl.(*ast.Usage); isUsage {
-			if sym.Scope != nil && len(sym.Scope.Members()) > 0 {
+			if sym.Scope != nil &&
+				(len(sym.Scope.Members()) > 0 || len(r.importsOf(sym.Scope.Node())) > 0) {
 				// Usage has inline members, return usage symbol
 				return sym
 			}

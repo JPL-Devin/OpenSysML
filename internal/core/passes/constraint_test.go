@@ -302,6 +302,32 @@ func TestConstraint_RedefinitionValid(t *testing.T) {
 	}
 }
 
+func TestConstraint_RedefinitionUsesFeaturingType(t *testing.T) {
+	src := `
+		package P {
+			class Base { feature x; }
+			class T specializes Base;
+			feature x :>> Base::x featured by T;
+		}
+	`
+	diags := constraintDiags(t, src)
+	if hasCode(diags, "redefinition-no-inherited") {
+		t.Fatalf("featured-by type inherits x, got %v", diags)
+	}
+}
+
+func TestConstraint_PackageLevelRedefinitionHasNoInheritedOwner(t *testing.T) {
+	src := `
+		package P {
+			feature x :>> x;
+		}
+	`
+	diags := constraintDiags(t, src)
+	if hasCode(diags, "redefinition-no-inherited") {
+		t.Fatalf("package-level feature has no inherited owner, got %v", diags)
+	}
+}
+
 func TestConstraint_RedefinitionNoInheritedMember(t *testing.T) {
 	src := `
 		attribute def SpeedType;

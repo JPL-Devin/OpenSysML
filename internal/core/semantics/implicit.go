@@ -101,18 +101,12 @@ var implicitKerMLBases = map[string]string{
 }
 
 // implicitBase returns the stdlib definition sym is implicitly typed by, or nil
-// when sym is not an untyped usage or definition of a kind with a known base. A
-// declaration that declares any generalization (typing, subsetting,
-// redefinition, specialization) takes its supertypes from that declaration
-// instead.
+// when sym is not a declaration of a kind with a known base.
 func (m *Model) implicitBase(sym *symbols.Symbol) *symbols.Symbol {
 	var fqn string
 	var ok bool
 	switch d := sym.Decl.(type) {
 	case *ast.Usage:
-		if declaresGeneralization(d.Relationships) {
-			return nil
-		}
 		fqn, ok = implicitUsageBases[d.Kind]
 		if d.IsIndividual && d.Kind == ast.UsageOccurrence {
 			// An individual occurrence is a life, not an arbitrary occurrence
@@ -120,9 +114,6 @@ func (m *Model) implicitBase(sym *symbols.Symbol) *symbols.Symbol {
 			fqn, ok = implicitUsageBases[ast.UsageIndividual]
 		}
 	case *ast.Definition:
-		if declaresGeneralization(d.Relationships) {
-			return nil
-		}
 		fqn, ok = implicitDefinitionBases[d.Kind]
 	case *ast.SubstateMember:
 		// `state s;` in a state body: a bodyless, always-untyped state usage.
@@ -137,6 +128,11 @@ func (m *Model) implicitBase(sym *symbols.Symbol) *symbols.Symbol {
 		case *ast.Definition:
 			fqn, ok = implicitKerMLBases[d.Keyword]
 		}
+	} else if declaresGeneralization(symRelationships(sym)) {
+		return nil
+	}
+	if source.KindOf(sym.DocName) == source.KindKerML && m.declaredGeneralizationReaches(sym, fqn, nil) {
+		return nil
 	}
 	if !ok || m.resolver == nil || m.resolver.Index() == nil {
 		return nil
@@ -147,6 +143,55 @@ func (m *Model) implicitBase(sym *symbols.Symbol) *symbols.Symbol {
 		}
 	}
 	return nil
+}
+
+func symRelationships(sym *symbols.Symbol) []*ast.Relationship {
+	if sym == nil {
+		return nil
+	}
+	return RelationshipsOf(sym)
+}
+
+func (m *Model) declaredGeneralizationReaches(sym *symbols.Symbol, want string, visiting map[*symbols.Symbol]bool) bool {
+	if sym == nil {
+		return false
+	}
+	if visiting == nil {
+		visiting = make(map[*symbols.Symbol]bool)
+	}
+	if visiting[sym] {
+		return false
+	}
+	visiting[sym] = true
+	defer delete(visiting, sym)
+
+	for _, rel := range RelationshipsOf(sym) {
+		if rel == nil || !GeneralizationKind(rel.Kind) {
+			continue
+		}
+		targetNode := rel.Target
+		if fr, ok := targetNode.(*ast.FeatureReference); ok {
+			targetNode = fr.Name
+		}
+		qn, ok := targetNode.(*ast.QualifiedName)
+		if !ok {
+			continue
+		}
+		target, ok := m.resolver.ResolveQualified(sym.OwnerScope, qn)
+		if !ok || target == nil {
+			continue
+		}
+		if resolved, aliasOK := m.resolver.ResolveAliasTarget(target); aliasOK {
+			target = resolved
+		} else {
+			continue
+		}
+		sameBase := m.resolver.Index() != nil && m.resolver.Index().GetFQN(target) == want
+		if sameBase || m.declaredGeneralizationReaches(target, want, visiting) {
+			return true
+		}
+	}
+	return false
 }
 
 // baseUsageFQN is the most general base usage every usage element subsets,

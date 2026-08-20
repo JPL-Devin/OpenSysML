@@ -144,3 +144,47 @@ func TestSysMLImplicitDefinitionBasesRemainKindBased(t *testing.T) {
 		})
 	}
 }
+
+func TestImplicitBaseOfExplicitSupertypeIsTransitive(t *testing.T) {
+	m, root := buildModelNamed(t, "t.kerml", `package Occurrences {
+		class Occurrence { feature endShot; }
+	}
+	package Objects {
+		struct Object specializes Occurrences::Occurrence;
+	}
+	struct Wheel;
+	struct MyWheel specializes Wheel {
+		feature redefines endShot : EndShot;
+	}
+	struct EndShot;`)
+	myWheel := sym(t, root, "MyWheel")
+	supers := m.AllSupertypes(myWheel)
+	if len(supers) < 3 {
+		var fqns []string
+		for _, super := range supers {
+			fqns = append(fqns, m.resolver.Index().GetFQN(super))
+		}
+		t.Fatalf("AllSupertypes(MyWheel) = %v, want Wheel, Objects::Object, and Occurrences::Occurrence", fqns)
+	}
+	if inherited, ok := m.LookupContributedMember(myWheel, "endShot"); !ok {
+		t.Fatal("MyWheel does not inherit endShot through Wheel's implicit base")
+	} else if got := m.resolver.Index().GetFQN(inherited); got != "Occurrences::Occurrence::endShot" {
+		t.Fatalf("inherited endShot = %q, want Occurrences::Occurrence::endShot", got)
+	}
+}
+
+func TestSysMLImplicitBaseOfExplicitSupertypeIsTransitive(t *testing.T) {
+	m, root := buildModelNamed(t, "t.sysml", `package Parts {
+		part def Part { feature endShot; }
+	}
+	part def Wheel;
+	part def MyWheel specializes Wheel {
+		feature redefines endShot;
+	}`)
+	myWheel := sym(t, root, "MyWheel")
+	if inherited, ok := m.LookupContributedMember(myWheel, "endShot"); !ok {
+		t.Fatal("MyWheel does not inherit endShot through Wheel's implicit base")
+	} else if got := m.resolver.Index().GetFQN(inherited); got != "Parts::Part::endShot" {
+		t.Fatalf("inherited endShot = %q, want Parts::Part::endShot", got)
+	}
+}

@@ -160,7 +160,24 @@ func (r *Resolver) lookupMember(sym *symbols.Symbol, name string) (*symbols.Symb
 	if r.model == nil || sym == nil {
 		return nil, false
 	}
-	return r.model.LookupMember(sym, name)
+	if found, ok := r.model.LookupMember(sym, name); ok {
+		return found, true
+	}
+	if found, ok := r.model.LookupContributedMember(sym, name); ok {
+		return found, true
+	}
+	if sym.Scope == nil {
+		return nil, false
+	}
+	for _, imp := range r.importsOf(sym.Scope.Node()) {
+		if r.resolvingImports[imp] {
+			continue
+		}
+		if found, ok := r.matchImport(sym.Scope, imp, name); ok {
+			return found, true
+		}
+	}
+	return nil, false
 }
 
 // lookupContributedMember resolves name as a member sym inherits or

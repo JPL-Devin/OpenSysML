@@ -12,6 +12,7 @@ package semantics
 import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -311,7 +312,7 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 	// An untyped usage still specializes its standard-library base feature.
 	// Implicit redefinition does not stand in for it: the two rules are
 	// independent, and the redefined parameter may itself be untyped.
-	if declared == 0 {
+	if declared == 0 || source.KindOf(sym.DocName) == source.KindKerML {
 		if base := m.implicitBase(sym); base != nil {
 			out = append(out, base)
 		}
