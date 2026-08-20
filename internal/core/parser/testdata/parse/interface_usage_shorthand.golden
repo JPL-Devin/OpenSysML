@@ -1,0 +1,88 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="Interfaces" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="port" abstract=false variation=false name="P"))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="A"
+          (Membership visibility="default"
+            (Usage kind="port" name="p" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=P
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Axle"
+          (Membership visibility="default"
+            (Usage kind="part" name="half" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=A
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Definition kind="interface" abstract=false variation=false name="Coupling"
+          (Membership visibility="default"
+            (Usage kind="port" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false end=true
+              (Relationship kind="typing" target=P
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="port" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false end=true
+              (Relationship kind="typing" target=P
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Usage kind="part" name="b1" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=A
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="part" name="b2" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=A
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="part" name="rearAxle" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Axle
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="interface" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (ConnectorEnd target="*ast.FeatureChainExpr"
+            (FeatureChainExpr member="p"
+              (FeatureReference name="b1")))
+          (ConnectorEnd target="*ast.FeatureChainExpr"
+            (FeatureChainExpr member="p"
+              (FeatureReference name="b2")))
+          (Membership visibility="default"
+            (Documentation locale=""))))
+      (Membership visibility="default"
+        (Usage kind="interface" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (ConnectorEnd target="*ast.FeatureChainExpr"
+            (FeatureChainExpr member="p"
+              (FeatureReference name="b1")))
+          (ConnectorEnd target="*ast.FeatureChainExpr"
+            (FeatureChainExpr member="p"
+              (FeatureReference name="b2")))))
+      (Membership visibility="default"
+        (Usage kind="interface" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (ConnectorEnd target="*ast.FeatureChainExpr"
+            (FeatureChainExpr member="p"
+              (FeatureReference name="b1")))
+          (ConnectorEnd target="*ast.FeatureChainExpr"
+            (FeatureChainExpr member="p"
+              (FeatureChainExpr member="half"
+                (FeatureReference name="rearAxle"))))))
+      (Membership visibility="default"
+        (Usage kind="interface" name="named" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Coupling
+            (*ast.QualifiedName))
+          (ConnectorEnd target="*ast.FeatureChainExpr"
+            (FeatureChainExpr member="p"
+              (FeatureReference name="b1")))
+          (ConnectorEnd target="*ast.FeatureChainExpr"
+            (FeatureChainExpr member="p"
+              (FeatureReference name="b2")))
+          (Membership visibility="default"
+            (Documentation locale=""))))
+      (Membership visibility="default"
+        (Usage kind="interface" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Coupling
+            (*ast.QualifiedName))
+          (ConnectorEnd target="*ast.FeatureChainExpr"
+            (FeatureChainExpr member="p"
+              (FeatureReference name="b1")))
+          (ConnectorEnd target="*ast.FeatureChainExpr"
+            (FeatureChainExpr member="p"
+              (FeatureReference name="b2"))))))))

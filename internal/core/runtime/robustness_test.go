@@ -140,6 +140,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("injected_message_names_a_receiver_no_accept_has", testInjectedMessageNamesAReceiverNoAcceptHas)
 	t.Run("accept_deadlock_never_satisfied", testAcceptDeadlockNeverSatisfied)
 	t.Run("accept_deadlock_reports_every_waiting_accept", testAcceptDeadlockReportsEveryWaitingAccept)
+	t.Run("accept_statement_deadlock_in_a_loop", testAcceptStatementDeadlockInALoop)
 	t.Run("history_outside_composite_state", testHistoryOutsideCompositeState)
 	t.Run("history_without_record_or_default", testHistoryWithoutRecordOrDefault)
 	t.Run("defer_of_non_deferrable_trigger", testDeferOfNonDeferrableTrigger)
@@ -2594,6 +2595,45 @@ func testAcceptDeadlockReportsEveryWaitingAccept(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "accept n ") {
 		t.Errorf("the Integer accept was satisfied and must not be reported as waiting: %v", err)
+	}
+}
+
+// testAcceptStatementDeadlockInALoop: an accept node standing as a statement of a
+// loop body suspends that body, and a suspension nothing can end is reported as a
+// typed deadlock rather than looping forever.
+func testAcceptStatementDeadlockInALoop(t *testing.T) {
+	done := make(chan error, 1)
+	go func() {
+		_, err := executeActionSource(t, "pipeline", `package P {
+			action pipeline {
+				first start;
+				action waiter {
+					loop {
+						accept n : Integer;
+					}
+				}
+				done end;
+				then start waiter;
+				then waiter end;
+			}
+		}`)
+		done <- err
+	}()
+
+	var err error
+	select {
+	case err = <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("a loop waiting for a message that cannot arrive did not terminate")
+	}
+
+	if err == nil {
+		t.Fatal("expected an error, the suspended accept statement completed")
+	}
+	// The loop keeps the action live around its parked accept, so the run ends on
+	// the step budget rather than on the deadlock a lone accept reports.
+	if !errors.Is(err, ErrAcceptDeadlock) && !errors.Is(err, ErrStepLimitExceeded) {
+		t.Errorf("expected a typed deadlock or step-limit error, got: %v", err)
 	}
 }
 

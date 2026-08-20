@@ -384,6 +384,12 @@ func (p *Parser) parseActionMember() ast.Node {
 		return p.parseResultMemberIn(true)
 	}
 
+	// An accept node is an action node (SysML.xtext ActionNode), so it stands
+	// wherever a statement does: `accept e : E;`, `then action a accept e : E { … }`.
+	if p.atAcceptNode() {
+		return p.parseBodyMember()
+	}
+
 	// Try general declaration first (nested actions, features, etc.)
 	if node := p.tryParseDeclaration(); node != nil {
 		return node
@@ -802,7 +808,7 @@ func startsInlineSuccessionStatement(tok lexer.Token) bool {
 	// `loop` and `for` head the same action node forms `while` does
 	// (SysML.xtext WhileLoopNode, ForLoopNode), so a `then` before one chains a
 	// statement rather than naming an edge end.
-	case "assign", "perform", "while", "loop", "for", "if", "action":
+	case "assign", "perform", "while", "loop", "for", "if", "action", "accept":
 		return true
 	}
 	return false

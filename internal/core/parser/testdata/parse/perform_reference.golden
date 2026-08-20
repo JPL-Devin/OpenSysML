@@ -31,7 +31,7 @@
           (ConnectorEnd target="camera"
             (*ast.QualifiedName))
           (Membership visibility="default"
-            (Usage kind="allocation" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (Usage kind="allocation" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="allocate"
               (ConnectorEnd target="*ast.FeatureChainExpr"
                 (FeatureChainExpr member="focus"
                   (FeatureReference name="takePicture")))
