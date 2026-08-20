@@ -1,6 +1,6 @@
 # The Python client API
 
-What `opensysml` costs, the typed classes it can generate for a model, and the modules behind
+What `pysysml` costs, the typed classes it can generate for a model, and the modules behind
 them. Using the client as a task is [guide chapter 9](../guide/09-python.md).
 
 ## Latency
@@ -33,7 +33,7 @@ A `Connection` that starts `sysml-grpc` itself probes the service immediately an
 then on a doubling backoff (10 ms, 20 ms, 40 ms … capped at 250 ms), so a service
 that answers in milliseconds costs milliseconds: ~17 ms on the machine above,
 against a fixed 500 ms wait before 0.0.9. That wait is bounded by
-`opensysml.connection.START_TIMEOUT` (2.5 s) — sleeping and probing together, since
+`pysysml.connection.START_TIMEOUT` (2.5 s) — sleeping and probing together, since
 no probe is given more than what is left of it — after which `ConnectionError` is
 raised. A probe of a port nothing listens on is refused in a few milliseconds
 rather than spending the per-probe RPC timeout, and a port that accepts without
@@ -41,7 +41,7 @@ answering costs the remaining bound, not another whole timeout on top of it. The
 probe deciding whether to adopt a service already listening is made before that
 wait starts and has its own 5 s timeout, so an address held by something that
 never answers is reported in ~7.5 s. `Connection(auto_start=False)`
-costs ~0.3 ms and the first RPC on it ~1 ms; `import opensysml` is ~120 ms, mostly
+costs ~0.3 ms and the first RPC on it ~1 ms; `import pysysml` is ~120 ms, mostly
 `grpc` (~48 ms), `filelock` and the generated protobuf modules.
 
 ### Real-time analytics
@@ -76,19 +76,19 @@ What that means in practice:
 ## Generated typed classes
 
 `Instance` is dynamic, so an editor cannot complete `inst.mass` and a type checker
-cannot reject `inst.mas`. `opensysml.generate` emits a Python class per SysML
+cannot reject `inst.mas`. `pysysml.generate` emits a Python class per SysML
 definition, so both can:
 
 ```bash
-python -m opensysml.generate internal/repl/testdata/vehicle_package.sysml -o demo_types.py
-opensysml-generate model.sysml -o model_types.py     # same thing, as a console script
+python -m pysysml.generate internal/repl/testdata/vehicle_package.sysml -o demo_types.py
+pysysml-generate model.sysml -o model_types.py     # same thing, as a console script
 ```
 
 ```python
-import opensysml
+import pysysml
 from demo_types import Vehicle
 
-model = opensysml.load("internal/repl/testdata/vehicle_package.sysml")
+model = pysysml.load("internal/repl/testdata/vehicle_package.sysml")
 inst = model.instantiate("Demo::Vehicle")
 
 v: Vehicle = Vehicle.from_instance(inst)   # a typed view over the Instance
@@ -98,7 +98,7 @@ v.instance                                  # the underlying Instance
 ```
 
 mypy (or pyright) then reports `v.mas` as an unknown attribute and `v.mass + "x"`
-as an unsupported operand pair. `opensysml` ships a `py.typed` marker, so its own
+as an unsupported operand pair. `pysysml` ships a `py.typed` marker, so its own
 annotations are used too.
 
 `from_instance` rejects an instance of another definition, naming both types,
@@ -124,7 +124,7 @@ SYSML_MODEL_HASH = "sha256:…"   # hash of the model source it was generated fr
 `--check` regenerates in memory and compares, writing nothing:
 
 ```bash
-python -m opensysml.generate model.sysml -o model_types.py --check   # exits 1 if stale
+python -m pysysml.generate model.sysml -o model_types.py --check   # exits 1 if stale
 ```
 
 It exits non-zero when the module is missing or would change, naming the command
@@ -198,7 +198,7 @@ dodge one.
   `TypedObject` provides (`instance`, `from_instance`, `sysml_id`) gets a trailing
   underscore (`instance_`); the SysML feature name it reads is unchanged.
 
-`opensysml.connect(host, port, auto_start=True)` returns a `Connection` when you
+`pysysml.connect(host, port, auto_start=True)` returns a `Connection` when you
 want to manage the service yourself; the module-level functions share a lazily
 created singleton connection instead. A `host:port` address written as the host
 is read as one — `connect("localhost:50123")` reaches port 50123 — and a port
@@ -206,12 +206,12 @@ named twice with two values raises `ValueError` naming the disagreement rather
 than timing out against an address nobody asked for. The helpers taking
 `host`/`port` (`load`, `evaluate`, `convert`, `instantiate`) read it the same way.
 
-`opensysml` never stops a service it did not start. A service it starts is
+`pysysml` never stops a service it did not start. A service it starts is
 reference-counted *within the process that started it* and stopped when the last
 connection holding it is closed or the interpreter exits; a connection that
 attaches to a service already listening takes no reference and leaves it running,
-whatever it does. The service is recorded in `~/.opensysml/sysml-grpc-<port>.pid`
-(`$OPENSYSML_STATE_DIR` overrides the directory) as its pid and process start time
+whatever it does. The service is recorded in `~/.pysysml/sysml-grpc-<port>.pid`
+(`$PYSYSML_STATE_DIR` overrides the directory) as its pid and process start time
 plus the pid and start time of the process that started it, and every one of
 those pids is re-checked against the start time written for it — a pid the
 operating system has reused is a stale record, cleaned up rather than signalled,
@@ -224,7 +224,7 @@ is: it is asked what it is with `GetServerInfo`, and a release other than the on
 asked for raises `StaleServiceError` naming the mismatch and the remedy, instead
 of serving an old build whose first newer call fails as a
 `MissingCapabilityError`. `connect(version=…, require_capabilities=[…])` asks
-explicitly; `OPENSYSML_GRPC_VERSION` asks for a release for the binary cache and
+explicitly; `PYSYSML_GRPC_VERSION` asks for a release for the binary cache and
 the running service alike, and with neither set whatever answers is accepted.
 Such a service is stopped only when this process started it, no connection of its
 own still holds it, and the binary that would be started in its place can be
@@ -246,10 +246,10 @@ pytest -m integration python/tests/     # needs a running sysml-grpc
 
 # Tests needing a service skip without one; CI sets this so an absent service
 # fails the run instead of quietly passing.
-OPENSYSML_REQUIRE_SERVICE=1 pytest python/tests/
+PYSYSML_REQUIRE_SERVICE=1 pytest python/tests/
 
 # Regenerate the committed golden generated file (needs a running sysml-grpc)
-python -m opensysml.generate internal/repl/testdata/vehicle_package.sysml \
+python -m pysysml.generate internal/repl/testdata/vehicle_package.sysml \
     -o python/tests/golden/vehicle_types.py
 
 # Regenerate protobuf bindings (from the repository root)

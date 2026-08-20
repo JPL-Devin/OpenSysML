@@ -194,6 +194,59 @@ func (p *Parser) parseActionBody() []ast.Node {
 	return members
 }
 
+// parseNodeBody reads the body an action or state node production ends in
+// (SysML.xtext ActionBody, StateUsageBody): a braced member list, or ';'. Every
+// node that ends in one reads it here, so a body is taken wherever the notation
+// allows one.
+func (p *Parser) parseNodeBody(start int, what string) ([]ast.Node, bool) {
+	if p.at(lexer.LBrace) {
+		p.advance() // consume '{'
+		return p.parseActionBodyMixed(), true
+	}
+	p.expectStatementEnd(start, "expected ';' or '{' after "+what)
+	return nil, false
+}
+
+// parseNodeDeclaration reads the optional declaration a control node carries
+// (SysML.xtext ControlNode: `UsageDeclaration?`), which may name the node with
+// any name a usage takes, an unrestricted one (`decide 'test x';`) included.
+func (p *Parser) parseNodeDeclaration() (string, source.Span) {
+	if !p.atName() && !p.at(lexer.Lt) {
+		return "", source.Span{}
+	}
+	id := p.parseIdentification()
+	if id.Name != "" {
+		return id.Name, id.NameSpan
+	}
+	return id.ShortName, id.ShortNameSpan
+}
+
+// parseChainedName parses the name a behavior member refers to: a qualified
+// name whose segments may be chained with '.' as well as with '::', which is how
+// the notation reaches a nested state or a port of a part (`S2.S3`,
+// `tellu.APIS_HTTP`).
+func (p *Parser) parseChainedName() *ast.QualifiedName {
+	qn := p.parseQualifiedNameRelaxed()
+	if qn == nil {
+		return nil
+	}
+	for p.at(lexer.Dot) {
+		next := p.peekN(1)
+		if next.Kind != lexer.Identifier && next.Kind != lexer.UnrestrictedName && next.Kind != lexer.Keyword {
+			break
+		}
+		p.advance() // consume '.'
+		seg, ok := p.parseNameSegmentRelaxed()
+		if !ok {
+			break
+		}
+		seg.Chained = true
+		qn.Parts = append(qn.Parts, seg)
+		qn.NodeSpan = p.spanFrom(qn.NodeSpan.Offset)
+	}
+	return qn
+}
+
 // isDirectionKeyword checks if current token is in/out/inout
 func (p *Parser) isDirectionKeyword() bool {
 	if !p.at(lexer.Keyword) {
@@ -517,7 +570,7 @@ func (p *Parser) parseInitialNode(tok lexer.Token) ast.Node {
 	var successor *ast.QualifiedName
 	if p.atKeyword("then") {
 		p.advance() // consume 'then'
-		successor = p.parseQualifiedName()
+		successor = p.parseChainedName()
 	}
 
 	// If guard present but no then, error
@@ -525,13 +578,17 @@ func (p *Parser) parseInitialNode(tok lexer.Token) ast.Node {
 		p.error(p.peek().Span, "expected 'then' after guard condition")
 	}
 
-	p.expect(lexer.Semicolon, "expected ';' after initial node")
+	// The succession a `first … then …` states ends in a body of its own
+	// (SysML.xtext ActionTargetSuccession, which ends in UsageBody).
+	members, hasBody := p.parseNodeBody(start, "initial node")
 
 	node := &ast.InitialNode{
 		Name:      name,
 		Successor: successor,
 		Guard:     guard,
 		Keyword:   p.wordText(tok),
+		Members:   members,
+		HasBody:   hasBody,
 	}
 	node.NodeSpan = p.spanFrom(start)
 	return node
@@ -559,21 +616,14 @@ func (p *Parser) parseFinalNode(tok lexer.Token) ast.Node {
 
 func (p *Parser) parseForkNode(tok lexer.Token) ast.Node {
 	start := tok.Span.Offset
-	var name string
-	var nameSpan source.Span
-
-	if p.at(lexer.Identifier) {
-		nameToken := p.peek()
-		name = p.src.Text(nameToken.Span)
-		nameSpan = nameToken.Span
-		p.advance()
-	}
-
-	p.expect(lexer.Semicolon, "expected ';' after fork node")
+	name, nameSpan := p.parseNodeDeclaration()
+	members, hasBody := p.parseNodeBody(start, "fork node")
 
 	node := &ast.ForkNode{
 		Name:     name,
 		NameSpan: nameSpan,
+		Members:  members,
+		HasBody:  hasBody,
 	}
 	node.NodeSpan = p.spanFrom(start)
 	return node
@@ -581,21 +631,14 @@ func (p *Parser) parseForkNode(tok lexer.Token) ast.Node {
 
 func (p *Parser) parseJoinNode(tok lexer.Token) ast.Node {
 	start := tok.Span.Offset
-	var name string
-	var nameSpan source.Span
-
-	if p.at(lexer.Identifier) {
-		nameToken := p.peek()
-		name = p.src.Text(nameToken.Span)
-		nameSpan = nameToken.Span
-		p.advance()
-	}
-
-	p.expect(lexer.Semicolon, "expected ';' after join node")
+	name, nameSpan := p.parseNodeDeclaration()
+	members, hasBody := p.parseNodeBody(start, "join node")
 
 	node := &ast.JoinNode{
 		Name:     name,
 		NameSpan: nameSpan,
+		Members:  members,
+		HasBody:  hasBody,
 	}
 	node.NodeSpan = p.spanFrom(start)
 	return node
@@ -603,21 +646,14 @@ func (p *Parser) parseJoinNode(tok lexer.Token) ast.Node {
 
 func (p *Parser) parseMergeNode(tok lexer.Token) ast.Node {
 	start := tok.Span.Offset
-	var name string
-	var nameSpan source.Span
-
-	if p.at(lexer.Identifier) {
-		nameToken := p.peek()
-		name = p.src.Text(nameToken.Span)
-		nameSpan = nameToken.Span
-		p.advance()
-	}
-
-	p.expect(lexer.Semicolon, "expected ';' after merge node")
+	name, nameSpan := p.parseNodeDeclaration()
+	members, hasBody := p.parseNodeBody(start, "merge node")
 
 	node := &ast.MergeNode{
 		Name:     name,
 		NameSpan: nameSpan,
+		Members:  members,
+		HasBody:  hasBody,
 	}
 	node.NodeSpan = p.spanFrom(start)
 	return node
@@ -625,22 +661,15 @@ func (p *Parser) parseMergeNode(tok lexer.Token) ast.Node {
 
 func (p *Parser) parseDecisionNode(tok lexer.Token) ast.Node {
 	start := tok.Span.Offset
-	var name string
-	var nameSpan source.Span
-
-	if p.at(lexer.Identifier) {
-		nameToken := p.peek()
-		name = p.src.Text(nameToken.Span)
-		nameSpan = nameToken.Span
-		p.advance()
-	}
-
-	p.expect(lexer.Semicolon, "expected ';' after decision node")
+	name, nameSpan := p.parseNodeDeclaration()
+	members, hasBody := p.parseNodeBody(start, "decision node")
 
 	node := &ast.DecisionNode{
 		Name:     name,
 		NameSpan: nameSpan,
 		Keyword:  p.wordText(tok),
+		Members:  members,
+		HasBody:  hasBody,
 	}
 	node.NodeSpan = p.spanFrom(start)
 	return node
@@ -1127,6 +1156,10 @@ func (p *Parser) parseForAction(tok lexer.Token) ast.Node {
 		return en
 	}
 
+	// The variable is a full UsageDeclaration, so it may state its type before
+	// `in` (`for n : ScalarValues::Integer in (1, 2, 3)`).
+	variableRels := p.parseRelationships(true)
+
 	// Expect 'in' keyword
 	if !p.acceptKeyword("in") {
 		p.error(p.peek().Span, "expected 'in' keyword after for variable")
@@ -1141,10 +1174,11 @@ func (p *Parser) parseForAction(tok lexer.Token) ast.Node {
 	// Parse body as an action body parameter (SysML.xtext ForLoopNode).
 	if p.atKeyword("action") {
 		node := &ast.WhileLoopActionNode{
-			Kind:       ast.LoopFor,
-			Body:       p.parseActionBodyParameter(),
-			Variable:   variable,
-			Collection: collection,
+			Kind:                  ast.LoopFor,
+			Body:                  p.parseActionBodyParameter(),
+			Variable:              variable,
+			VariableRelationships: variableRels,
+			Collection:            collection,
 		}
 		node.NodeSpan = p.spanFrom(start)
 		return node
@@ -1192,10 +1226,11 @@ func (p *Parser) parseForAction(tok lexer.Token) ast.Node {
 	// A `for` loop has no condition: iteration is driven by the collection, and
 	// the variable it binds each element to is a member of the loop's body scope.
 	node := &ast.WhileLoopActionNode{
-		Kind:       ast.LoopFor,
-		Body:       body,
-		Variable:   variable,
-		Collection: collection,
+		Kind:                  ast.LoopFor,
+		Body:                  body,
+		Variable:              variable,
+		VariableRelationships: variableRels,
+		Collection:            collection,
 	}
 	node.NodeSpan = p.spanFrom(start)
 	return node
@@ -2391,7 +2426,7 @@ func (p *Parser) parseAcceptNode(start int, vis ast.Visibility, trivia []ast.Tri
 	// to a port rather than specializing it, so it is its own relationship kind.
 	if p.acceptKeyword("via") {
 		portStart := p.peek().Span.Offset
-		rel := &ast.Relationship{Kind: ast.RelVia, Target: p.parseQualifiedName()}
+		rel := &ast.Relationship{Kind: ast.RelVia, Target: p.parseChainedName()}
 		rel.NodeSpan = p.spanFrom(portStart)
 		action.Relationships = append(action.Relationships, rel)
 	}
@@ -2965,13 +3000,13 @@ func (p *Parser) parseTransitionMember(start int) ast.Node {
 		// `first` marks the source, unless it is itself the source: `first` is a
 		// legal state name, so `transition first to second;` names a state.
 		p.advance() // consume 'first'
-		source = p.parseQualifiedNameRelaxed()
+		source = p.parseChainedName()
 	case p.atName() || p.at(lexer.Keyword):
-		source = p.parseQualifiedNameRelaxed()
+		source = p.parseChainedName()
 		switch {
 		case p.atKeyword("to"):
 			toTok = p.advance()
-			target = p.parseQualifiedNameRelaxed()
+			target = p.parseChainedName()
 		case p.atTransitionClause():
 			// `first` is optional in `TransitionUsage`, so a bare source may be
 			// followed straight by its clauses: `transition initial then off;`.
@@ -3019,7 +3054,7 @@ func (p *Parser) parseTransitionTail(start int, name string, source, target *ast
 			// `via <port>` belongs to the accept, naming the port the accepted
 			// occurrence must arrive at (SysML.xtext `AcceptParameterPart`).
 			if p.acceptKeyword("via") {
-				node.Via = p.parseQualifiedNameRelaxed()
+				node.Via = p.parseChainedName()
 			}
 			continue
 		case p.atKeyword("when"):
@@ -3050,7 +3085,7 @@ func (p *Parser) parseTransitionTail(start int, name string, source, target *ast
 			if node.Target != nil {
 				p.error(p.peek().Span, "a transition has one target: it is named either after 'to' or after 'then', not both")
 			}
-			node.Target = p.parseQualifiedNameRelaxed()
+			node.Target = p.parseChainedName()
 			continue
 		}
 		break
@@ -3067,7 +3102,9 @@ func (p *Parser) parseTransitionTail(start int, name string, source, target *ast
 		return en
 	}
 
-	p.expect(lexer.Semicolon, "expected ';' after transition")
+	// Both TransitionUsage and TargetTransitionUsage end in ActionBody, so the
+	// transition may carry a body instead of ending at ';'.
+	node.Members, node.HasBody = p.parseNodeBody(start, "transition")
 	node.NodeSpan = p.spanFrom(start)
 	return node
 }
@@ -3103,35 +3140,85 @@ func (p *Parser) parseTransitionEffect(start int) ([]ast.Node, ast.Node) {
 	return nil, en
 }
 
-// parseSendStatement parses: send <message> to <target>;
-// parseSendStatement parses: send <message> to <target>; OR send <message> via <port>;
+// parseSendStatement parses: send [<message>] [to <receiver> | via <port>]
+// ending in ';' or a body.
 func (p *Parser) parseSendStatement(tok lexer.Token) ast.Node {
 	start := tok.Span.Offset
 
-	// Parse message expression
-	message := p.ParseExpression()
+	// The message is an optional argument (SysML.xtext SendNode:
+	// `ArgumentValue?`): a send declaring none carries the payload its body
+	// redefines instead (`send { in :>> payload = s; }`).
+	var message ast.Node
+	if !p.at(lexer.LBrace) && !p.at(lexer.Semicolon) && !p.atKeyword("to") && !p.atKeyword("via") {
+		message = p.parseNodeArgument()
+	}
 
-	// Expect 'to' or 'via' keyword. Which one was written decides how the
-	// target is interpreted: a receiver, or a port to route through.
+	// A `to` or `via` clause is optional too, and which one was written decides
+	// how the target is interpreted: a receiver, or a port to route through.
 	isVia := false
-	if p.acceptKeyword("via") {
+	var target, receiver ast.Node
+	switch {
+	case p.acceptKeyword("via"):
 		isVia = true
-	} else if !p.acceptKeyword("to") {
+		target = p.parseNodeArgument()
+		// A `via` may name the receiver too (SysML.xtext SenderReceiverPart):
+		// the message is routed out of the port and addressed to it.
+		if p.acceptKeyword("to") {
+			receiver = p.parseNodeArgument()
+		}
+	case p.acceptKeyword("to"):
+		target = p.parseNodeArgument()
+	case !p.at(lexer.LBrace) && !p.at(lexer.Semicolon):
 		p.error(p.peek().Span, "expected 'to' or 'via' after send message")
 	}
 
-	// Parse target expression
-	target := p.ParseExpression()
-
-	p.expectStatementEnd(start, "expected ';' after send statement")
+	members, hasBody := p.parseNodeBody(start, "send statement")
 
 	node := &ast.SendStatement{
-		Message: message,
-		Target:  target,
-		IsVia:   isVia,
+		Message:  message,
+		Target:   target,
+		IsVia:    isVia,
+		Receiver: receiver,
+		Members:  members,
+		HasBody:  hasBody,
 	}
 	node.NodeSpan = p.spanFrom(start)
 	return node
+}
+
+// parseNodeArgument parses an argument of an action node — the message a send
+// carries, or the receiver or port it names. A name path followed by '{' names
+// the argument and opens the node's body, so the brace is left to the body.
+func (p *Parser) parseNodeArgument() ast.Node {
+	if p.atNamePathBeforeBody() {
+		if qn := p.parseChainedName(); qn != nil {
+			return qn
+		}
+	}
+	return p.ParseExpression()
+}
+
+// atNamePathBeforeBody reports whether the tokens ahead are a name path
+// followed by '{' (`send to counter { in :>> payload = s; }`).
+func (p *Parser) atNamePathBeforeBody() bool {
+	if !p.atName() {
+		return false
+	}
+	for i := 1; ; {
+		switch p.peekN(i).Kind {
+		case lexer.Dot, lexer.ColonColon:
+			switch p.peekN(i + 1).Kind {
+			case lexer.Identifier, lexer.UnrestrictedName, lexer.Keyword:
+				i += 2
+			default:
+				return false
+			}
+		case lexer.LBrace:
+			return true
+		default:
+			return false
+		}
+	}
 }
 
 // parseTerminateStatement parses: terminate [<target>];

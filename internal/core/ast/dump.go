@@ -43,11 +43,19 @@ func qnString(qn *QualifiedName) string {
 	if qn == nil {
 		return ""
 	}
-	parts := make([]string, len(qn.Parts))
+	s := ""
 	for i, p := range qn.Parts {
-		parts[i] = p.Text
+		switch {
+		case i == 0:
+		case p.Chained:
+			// A chained segment was written with '.', which reaches through a
+			// feature rather than into a namespace.
+			s += "."
+		default:
+			s += "::"
+		}
+		s += p.Text
 	}
-	s := strings.Join(parts, "::")
 	if qn.Global {
 		return "$::" + s
 	}
@@ -315,6 +323,10 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		if v.Target != nil {
 			kids = append(kids, v.Target)
 		}
+		if v.Receiver != nil {
+			kids = append(kids, v.Receiver)
+		}
+		kids = append(kids, v.Members...)
 		writeChildren(b, depth, kids)
 		return
 	case *ConnectorEnd:
@@ -446,6 +458,7 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 			kids = append(kids, v.Guard)
 		}
 		kids = append(kids, v.Effect...)
+		kids = append(kids, v.Members...)
 		writeChildren(b, depth, kids)
 		return
 	case *TimeEvent:
@@ -470,6 +483,9 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		// shape alone does not.
 		fmt.Fprintf(b, `(WhileLoopActionNode kind=%q variable=%q`, v.Kind.String(), v.Variable.Name)
 		kids := []Node{}
+		for _, rel := range v.VariableRelationships {
+			kids = append(kids, rel)
+		}
 		if v.Condition != nil {
 			kids = append(kids, v.Condition)
 		}
@@ -535,21 +551,31 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		b.WriteString(`)`)
 	case *InitialNode:
 		fmt.Fprintf(b, `(InitialNode name=%q successor=%q`, v.Name, qnString(v.Successor))
+		kids := []Node{}
 		if v.Guard != nil {
-			writeChildren(b, depth, []Node{v.Guard})
-			return
+			kids = append(kids, v.Guard)
 		}
-		b.WriteString(`)`)
+		kids = append(kids, v.Members...)
+		writeChildren(b, depth, kids)
+		return
 	case *FinalNode:
 		fmt.Fprintf(b, `(FinalNode name=%q)`, v.Name)
 	case *ForkNode:
-		fmt.Fprintf(b, `(ForkNode name=%q)`, v.Name)
+		fmt.Fprintf(b, `(ForkNode name=%q`, v.Name)
+		writeChildren(b, depth, v.Members)
+		return
 	case *JoinNode:
-		fmt.Fprintf(b, `(JoinNode name=%q)`, v.Name)
+		fmt.Fprintf(b, `(JoinNode name=%q`, v.Name)
+		writeChildren(b, depth, v.Members)
+		return
 	case *MergeNode:
-		fmt.Fprintf(b, `(MergeNode name=%q)`, v.Name)
+		fmt.Fprintf(b, `(MergeNode name=%q`, v.Name)
+		writeChildren(b, depth, v.Members)
+		return
 	case *DecisionNode:
-		fmt.Fprintf(b, `(DecisionNode name=%q)`, v.Name)
+		fmt.Fprintf(b, `(DecisionNode name=%q`, v.Name)
+		writeChildren(b, depth, v.Members)
+		return
 	case *TerminateStatement:
 		b.WriteString(`(TerminateStatement`)
 		if v.Target != nil {

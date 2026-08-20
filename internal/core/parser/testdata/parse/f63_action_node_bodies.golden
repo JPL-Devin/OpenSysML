@@ -1,0 +1,45 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="F63" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="DecisionTest"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="x" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (LiteralInteger value="1")))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="total" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (LiteralInteger value="0")))
+          (DecisionNode name="test x")
+          (ControlFlowEdge source="test x" target="A1" else=false
+            (OperatorExpr operator="=="
+              (FeatureReference name="x")
+              (LiteralInteger value="1")))
+          (ControlFlowEdge source="test x" target="A2" else=false
+            (OperatorExpr operator=">"
+              (FeatureReference name="x")
+              (LiteralInteger value="1")))
+          (ControlFlowEdge source="test x" target="A3" else=true)
+          (Usage kind="action" name="A1" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)
+          (Usage kind="action" name="A2" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)
+          (Usage kind="action" name="A3" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)
+          (ForkNode name="F"
+            (Membership visibility="default"
+              (Usage kind="attribute" name="local" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                (LiteralInteger value="1"))))
+          (SuccessionEdge source="A3" target="F")
+          (JoinNode name="J"
+            (*ast.AssignmentActionNode))
+          (SuccessionEdge source="F" target="J")
+          (MergeNode name="M"
+            (*ast.AssignmentActionNode))
+          (SuccessionEdge source="J" target="M")
+          (Membership visibility="default"
+            (Usage kind="action" name="accumulate" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (WhileLoopActionNode kind="for" variable="n"
+                (Relationship kind="typing" target=ScalarValues::Integer
+                  (*ast.QualifiedName))
+                (SequenceExpr
+                  (LiteralInteger value="1")
+                  (LiteralInteger value="2")
+                  (LiteralInteger value="3"))
+                (*ast.AssignmentActionNode)))))))))

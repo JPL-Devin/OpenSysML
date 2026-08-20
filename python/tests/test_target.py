@@ -8,9 +8,9 @@ reader to the service rather than to the call.
 import pytest
 from unittest.mock import Mock, patch
 
-import opensysml
-from opensysml.connection import DEFAULT_PORT, Connection, split_target
-from opensysml.generate import main as generate_main
+import pysysml
+from pysysml.connection import DEFAULT_PORT, Connection, split_target
+from pysysml.generate import main as generate_main
 
 
 class TestSplitTarget:
@@ -58,7 +58,7 @@ class TestConnectionTarget:
         stub = Mock()
         with patch('grpc.insecure_channel'):
             with patch(
-                'opensysml.proto.sysml_pb2_grpc.SysMLServiceStub',
+                'pysysml.proto.sysml_pb2_grpc.SysMLServiceStub',
                 return_value=stub,
             ):
                 return Connection(*args, auto_start=False, **kwargs)
@@ -70,8 +70,8 @@ class TestConnectionTarget:
 
     def test_connect_reads_an_address_too(self):
         with patch('grpc.insecure_channel'):
-            with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
-                conn = opensysml.connect("localhost:50123", auto_start=False)
+            with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub'):
+                conn = pysysml.connect("localhost:50123", auto_start=False)
         assert (conn.host, conn.port) == ("localhost", 50123)
 
     def test_a_disagreeing_port_is_rejected_before_any_call(self):
@@ -85,23 +85,23 @@ class TestModuleHelpersReadAnAddress:
     """The module-level helpers taking host/port read an address the same way."""
 
     def setup_method(self):
-        opensysml._default_connection = None
-        opensysml._default_connection_params = None
+        pysysml._default_connection = None
+        pysysml._default_connection_params = None
 
     def teardown_method(self):
-        opensysml._default_connection = None
-        opensysml._default_connection_params = None
+        pysysml._default_connection = None
+        pysysml._default_connection_params = None
 
     def test_helpers_reject_a_disagreeing_port(self):
         for call in (
-            lambda: opensysml.load("demo.sysml", "localhost:50123", 50999),
-            lambda: opensysml.evaluate("1+1", model_hash="h", host="localhost:50123",
+            lambda: pysysml.load("demo.sysml", "localhost:50123", 50999),
+            lambda: pysysml.evaluate("1+1", model_hash="h", host="localhost:50123",
                                      port=50999),
-            lambda: opensysml.instantiate("Demo::v", model_hash="h",
+            lambda: pysysml.instantiate("Demo::v", model_hash="h",
                                         host="localhost:50123", port=50999),
-            lambda: opensysml.convert("sysml", model_hash="h",
+            lambda: pysysml.convert("sysml", model_hash="h",
                                     host="localhost:50123", port=50999),
-            lambda: opensysml.load("demo.sysml", "localhost:50123", DEFAULT_PORT),
+            lambda: pysysml.load("demo.sysml", "localhost:50123", DEFAULT_PORT),
         ):
             with pytest.raises(ValueError):
                 call()
@@ -116,7 +116,7 @@ class TestModuleHelpersReadAnAddress:
             recorded['target'] = (host, port)
             raise KeyboardInterrupt
 
-        with patch('opensysml.load', record):
+        with patch('pysysml.load', record):
             with pytest.raises(KeyboardInterrupt):
                 generate_main([str(source), "--host", "localhost:50123"])
         assert recorded['target'] == ("localhost:50123", None)
@@ -135,6 +135,6 @@ class TestModuleHelpersReadAnAddress:
         assert "different ports" in stderr
 
     def test_an_address_reaches_the_port_it_names(self):
-        with patch('opensysml.Connection') as connection:
-            opensysml.load("demo.sysml", "localhost:50123")
+        with patch('pysysml.Connection') as connection:
+            pysysml.load("demo.sysml", "localhost:50123")
         assert connection.call_args[0] == ("localhost", 50123)

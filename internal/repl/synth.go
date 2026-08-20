@@ -60,11 +60,7 @@ func (s *Session) documentType(inst *runtime.Instance) *symbols.Symbol {
 	if inst == nil || inst.Type == nil {
 		return nil
 	}
-	doc := s.ws.Document(docName)
-	if doc == nil {
-		return inst.Type
-	}
-	if local := scopeSymbolFor(doc.Scope, inst.Type.Decl); local != nil {
+	if local := scopeSymbolForAny(s.docScopes(), inst.Type.Decl); local != nil {
 		return local
 	}
 	return inst.Type

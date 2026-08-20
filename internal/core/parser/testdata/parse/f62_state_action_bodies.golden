@@ -1,0 +1,64 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="F62" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="attribute" abstract=false variation=false name="Sig"
+          (Membership visibility="default"
+            (Usage kind="enum" name="x" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))))
+      (Membership visibility="default"
+        (Usage kind="part" name="p" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="action" name="act" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Definition kind="state" abstract=false variation=false name="S"
+          (EntryMember)
+          (SuccessionEdge source="@entry" target="S1")
+          (SubstateMember name="S1")
+          (TransitionMember source="" target="S2"
+            (Usage kind="attribute" name="s" ref=true direction="out" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Sig
+                (*ast.QualifiedName)))
+            (Membership visibility="default"
+              (Usage kind="action" name="D" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)))
+          (Membership visibility="default"
+            (Usage kind="state" name="S2" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (SubstateMember name="S3")))
+          (TransitionMember source="S1" target="S2.S3"
+            (Usage kind="attribute" name="s" ref=true direction="out" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Sig
+                (*ast.QualifiedName)))
+            (Membership visibility="default"
+              (Usage kind="action" name="D" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)))
+          (TransitionMember source="S2.S3" target="S1"
+            (*ast.AssignmentActionNode))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="x" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (LiteralInteger value="0")))))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="A"
+          (Membership visibility="default"
+            (Definition kind="port" abstract=false variation=false name="Pt"))
+          (Membership visibility="default"
+            (Usage kind="part" name="driver" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Membership visibility="default"
+                (Usage kind="port" name="p1" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                  (Relationship kind="typing" target=Pt
+                    (*ast.QualifiedName))))))
+          (Membership visibility="default"
+            (Usage kind="action" name="turnOn" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (SendStatement via=true
+                (FeatureReference name="ignitionCmd")
+                (*ast.QualifiedName)
+                (Membership visibility="default"
+                  (Usage kind="part" name="ignitionCmd" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+                    (Relationship kind="typing" target=Sig
+                      (*ast.QualifiedName)))))))
+          (Membership visibility="default"
+            (Usage kind="action" name="trigger" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="via" target=driver.p1
+                (*ast.QualifiedName))
+              (Membership visibility="default"
+                (Usage kind="attribute" name="ignitionCmd" ref=true direction="out" composite=false derived=false ordered=false nonunique=false
+                  (Relationship kind="typing" target=Sig
+                    (*ast.QualifiedName))))))
+          (InitialNode name="start" successor="turnOn"))))))

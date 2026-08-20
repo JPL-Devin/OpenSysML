@@ -5,7 +5,7 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "opensysml"
+name = "pysysml"
 dynamic = ["version"]
 description = "Python client library for OpenSysML, a SysML v2 parser and execution runtime"
 readme = "README.md"
@@ -44,7 +44,7 @@ dev = [
     "pytest-mock>=3.10.0",
     "grpcio-tools>=1.83.0",
     "mypy>=1.8.0",
-    # Stubs for the untyped dependencies, so `mypy opensysml` checks the calls
+    # Stubs for the untyped dependencies, so `mypy pysysml` checks the calls
     # into them rather than reporting the imports.
     "types-protobuf>=4.24.0",
     "types-psutil>=5.9.0",
@@ -56,7 +56,7 @@ dev = [
 ]
 
 [project.scripts]
-opensysml-generate = "opensysml.generate:main"
+pysysml-generate = "pysysml.generate:main"
 
 [project.urls]
 Homepage = "https://github.com/Open-MBEE/OpenSysML"
@@ -66,17 +66,17 @@ Changelog = "https://github.com/Open-MBEE/OpenSysML/blob/main/CHANGELOG.md"
 Issues = "https://github.com/Open-MBEE/OpenSysML/issues"
 
 [tool.setuptools.dynamic]
-version = { attr = "opensysml._version.VERSION" }
+version = { attr = "pysysml._version.VERSION" }
 
 [tool.setuptools.packages.find]
-include = ["opensysml*"]
+include = ["pysysml*"]
 
 [tool.setuptools.package-data]
 # The marker that tells type checkers the shipped annotations are usable.
-opensysml = ["py.typed"]
+pysysml = ["py.typed"]
 # The generated protobuf stubs: the modules themselves build their classes at
 # import time, so these are the only annotations for them.
-"opensysml.proto" = ["*.pyi"]
+"pysysml.proto" = ["*.pyi"]
 
 [tool.pytest.ini_options]
 markers = [
@@ -85,6 +85,6 @@ markers = [
 
 [tool.mypy]
 python_version = "3.10"
-files = ["opensysml"]
+files = ["pysysml"]
 warn_unused_ignores = true
 

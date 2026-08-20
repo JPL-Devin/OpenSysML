@@ -67,7 +67,7 @@ func dropNotices(drops []dropReport) []string {
 // both the snippet's other top-level declarations and, for a re-declared
 // namespace, the members its new body does not declare again.
 func replacedReport(sn snippet, redeclared map[string]bool, newTop map[string]ast.Node) dropReport {
-	root := parser.New(source.New(docName, []byte(sn.src))).ParseFile()
+	root := parser.New(source.New(parseDocName(sn.origin), []byte(sn.src))).ParseFile()
 	rep := dropReport{}
 	if root == nil {
 		return rep

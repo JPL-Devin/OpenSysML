@@ -35,6 +35,12 @@ func (m *Model) ReferencedFeature(sym *symbols.Symbol) *symbols.Symbol {
 		if target, ok := m.resolver.ResolveReferenceTarget(referenceScope(sym), sym.Decl, node); ok && target != sym {
 			out = target
 		}
+	} else if u, isUsage := sym.Decl.(*ast.Usage); isUsage && u.IsVariant && u.Keyword == "variant" && sym.Name != "" {
+		// A bare `variant X` is a VariantReference (SysML.xtext:642): a
+		// reference usage subsetting the like-named feature visible outside.
+		if named, ok := m.resolver.LookupNameExcluding(sym.OwnerScope, sym.Name, sym.Decl); ok && named != sym {
+			out = named
+		}
 	}
 	// A result computed while another symbol's reference is in flight saw a
 	// truncated member view (that symbol's own reference was hidden), so it is
@@ -54,7 +60,9 @@ func referenceSubsettingTarget(sym *symbols.Symbol) ast.Node {
 		return end.ReferencedTarget()
 	}
 	for _, rel := range RelationshipsOf(sym) {
-		if rel != nil && rel.Kind == ast.RelReferences && rel.Target != nil {
+		// `include 'add fuel'` is an OwnedReferenceSubsetting in the grammar
+		// (SysML.xtext IncludeUseCaseUsage), so an inclusion contributes too.
+		if rel != nil && (rel.Kind == ast.RelReferences || rel.Kind == ast.RelIncludes) && rel.Target != nil {
 			return rel.Target
 		}
 	}

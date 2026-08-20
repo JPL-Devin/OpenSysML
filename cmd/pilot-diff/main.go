@@ -17,32 +17,25 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
-// corpusRoot is one directory of models compared as a batch: every file in it is
-// loaded before any diagnostic is read, on both sides, because corpus files
-// import each other.
+// corpusRoot is one directory of models. Each language in it is compared as its
+// own batch: every file of that language is loaded before any diagnostic is
+// read, on both sides, because corpus files import each other.
 type corpusRoot struct {
 	Name string
 	Dir  string
-	Lang language
 	// Skip lists sub-paths of Dir (slash-separated, relative to Dir) that
 	// belong to another root.
 	Skip []string
 }
 
-type language uint8
-
-const (
-	languageSysML language = iota
-	languageKerML
-)
-
-func (root corpusRoot) extension() string {
-	if root.Lang == languageKerML {
-		return ".kerml"
-	}
-	return ".sysml"
+// languageBatch is one root's files in a single language, in comparison order.
+type languageBatch struct {
+	Kind  source.Kind
+	Files []string
 }
 
 var defaultRoots = []corpusRoot{
@@ -50,7 +43,7 @@ var defaultRoots = []corpusRoot{
 	{Name: "pilot-examples", Dir: "examples/pilot-corpora/sysml-examples"},
 	{Name: "pilot-validation", Dir: "examples/pilot-corpora/sysml-validation"},
 	// KerML is validated in one resource-set batch by the plain-Java bridge.
-	{Name: "kerml-examples", Dir: "examples/pilot-corpora/kerml-examples", Lang: languageKerML},
+	{Name: "kerml-examples", Dir: "examples/pilot-corpora/kerml-examples"},
 	{Name: "testdata", Dir: "testdata"},
 	{Name: "examples", Dir: "examples", Skip: []string{"sysml-v2-training", "pilot-corpora"}},
 	// Hand-written models for behaviour classes the corpora do not cover, such
@@ -106,30 +99,41 @@ func run(repo, validator, kermlValidator, out string, timeout time.Duration) err
 			return err
 		}
 		if len(files) == 0 {
-			fmt.Fprintf(os.Stderr, "skipping %s: no %s files (corpus not downloaded?)\n", root.Dir, root.extension())
+			fmt.Fprintf(os.Stderr, "skipping %s: no .sysml or .kerml files (corpus not downloaded?)\n", root.Dir)
 			continue
 		}
-		fmt.Fprintf(os.Stderr, "%s: %d file(s)\n", root.Name, len(files))
 
-		pilot := validator
-		if root.Lang == languageKerML {
-			pilot = kermlValidator
-			if _, err := os.Stat(pilot); err != nil {
-				return fmt.Errorf("KerML pilot validator not found at %s: run ./scripts/download-pilot-kerml-validator.sh", pilot)
+		ours := make(map[string][]diagnostic, len(files))
+		theirs := make(map[string][]diagnostic, len(files))
+		for _, batch := range batchByLanguage(files) {
+			fmt.Fprintf(os.Stderr, "%s: %d %s file(s)\n", root.Name, len(batch.Files), batch.Kind)
+
+			pilot := validator
+			if batch.Kind == source.KindKerML {
+				pilot = kermlValidator
+				if _, err := os.Stat(pilot); err != nil {
+					return fmt.Errorf("KerML pilot validator not found at %s: run ./scripts/download-pilot-kerml-validator.sh", pilot)
+				}
 			}
-		}
-		ours, err := openSysMLDiagnostics(repo, root.Dir, files)
-		if err != nil {
-			return err
-		}
-		var theirs map[string][]diagnostic
-		if root.Lang == languageKerML {
-			theirs, err = kermlDiagnostics(pilot, repo, root.Dir, files, timeout)
-		} else {
-			theirs, err = pilotDiagnostics(pilot, repo, root.Dir, files, timeout)
-		}
-		if err != nil {
-			return err
+			batchOurs, err := openSysMLDiagnostics(repo, root.Dir, batch.Files)
+			if err != nil {
+				return err
+			}
+			var batchTheirs map[string][]diagnostic
+			if batch.Kind == source.KindKerML {
+				batchTheirs, err = kermlDiagnostics(pilot, repo, root.Dir, batch.Files, timeout)
+			} else {
+				batchTheirs, err = pilotDiagnostics(pilot, repo, root.Dir, batch.Files, timeout)
+			}
+			if err != nil {
+				return err
+			}
+			for rel, diagnostics := range batchOurs {
+				ours[rel] = diagnostics
+			}
+			for rel, diagnostics := range batchTheirs {
+				theirs[rel] = diagnostics
+			}
 		}
 		report.Roots = append(report.Roots, compareRoot(root.Name, root.Dir, files, ours, theirs))
 	}
@@ -168,8 +172,30 @@ func moduleRoot() (string, error) {
 	}
 }
 
-// collectFiles returns the root's model files as sorted slash-separated paths
-// relative to the root directory.
+// batchByLanguage splits a root's files into one batch per language, SysML
+// first. Each language is compared against its own reference validator, and
+// batching per language rather than per file keeps the reference's cross-file
+// reference resolution intact within a batch.
+func batchByLanguage(files []string) []languageBatch {
+	batches := []languageBatch{{Kind: source.KindSysML}, {Kind: source.KindKerML}}
+	for _, rel := range files {
+		for i := range batches {
+			if batches[i].Kind == source.KindOf(rel) {
+				batches[i].Files = append(batches[i].Files, rel)
+			}
+		}
+	}
+	out := make([]languageBatch, 0, len(batches))
+	for _, batch := range batches {
+		if len(batch.Files) > 0 {
+			out = append(out, batch)
+		}
+	}
+	return out
+}
+
+// collectFiles returns the root's model files, in either language, as sorted
+// slash-separated paths relative to the root directory.
 func collectFiles(repo string, root corpusRoot) ([]string, error) {
 	dir := filepath.Join(repo, root.Dir)
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
@@ -194,7 +220,7 @@ func collectFiles(repo string, root corpusRoot) ([]string, error) {
 			}
 			return nil
 		}
-		if filepath.Ext(path) == root.extension() {
+		if source.KindOf(path) != source.KindUnknown {
 			files = append(files, rel)
 		}
 		return nil

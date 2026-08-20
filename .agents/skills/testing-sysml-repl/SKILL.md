@@ -1,6 +1,6 @@
 ---
 name: testing-sysml-repl
-description: How to build, drive, and record end-to-end tests of the OpenSysML sysml REPL (bin/sysml) and the sysml-grpc service with its opensysml Python client — meta-command behavior, symbol lookup, action/state debugging, gRPC feature-value serialization, and GUI-terminal recording setup.
+description: How to build, drive, and record end-to-end tests of the OpenSysML sysml REPL (bin/sysml) and the sysml-grpc service with its pysysml Python client — meta-command behavior, symbol lookup, action/state debugging, gRPC feature-value serialization, and GUI-terminal recording setup.
 ---
 
 # Testing the `sysml` REPL end-to-end
@@ -197,8 +197,8 @@ done | sort | uniq -c
 ### `bin/sysml-grpc` takes `-port`, not `-addr`
 
 `-addr` prints "flag provided but not defined" with a usage dump, so drive a freshly built service
-with `./bin/sysml-grpc -port 50123` and `opensysml.connect(port=50123, auto_start=False)` to keep
-`~/.opensysml/bin` out of it.
+with `./bin/sysml-grpc -port 50123` and `pysysml.connect(port=50123, auto_start=False)` to keep
+`~/.pysysml/bin` out of it.
 
 ## Proving a Turtle round trip loses nothing
 
@@ -258,7 +258,7 @@ reaches paths that used to stop at the first behavioral node. What to know:
   it on the declaration before the one it prefixes — worth re-probing if the parser changes.
 - `export.ExperimentalNotice` (internal/core/export/experimental.go) is printed verbatim by the CLI
   (stderr), `%save` and `ConvertResponse`, and the same wording is duplicated in
-  `cmd/sysml/main.go`, `python/opensysml/`, `api/proto/` and `docs/guide/`. Check every copy whenever
+  `cmd/sysml/main.go`, `python/pysysml/`, `api/proto/` and `docs/guide/`. Check every copy whenever
   the mapping's coverage changes.
 
 ### Checking the experimental notice's copies (PR #271)
@@ -272,7 +272,7 @@ the *documented* claims by running them:
   "Turtle is normalized." and "Every run that converts RDF". `cmd/sysml/main.go`'s `wrapped(…, 78)`
   wraps on `strings.Fields`, so also assert every line's **rune** count ≤ 78 — the notice contains
   `§` (2 bytes), so a byte-based wrapper would pass a naive byte check.
-- `python/opensysml/conversion.py:EXPERIMENTAL_NOTICE` should equal the same literal; compare it in
+- `python/pysysml/conversion.py:EXPERIMENTAL_NOTICE` should equal the same literal; compare it in
   Python against the Go file directly.
 - The client fallback lives in `Connection.convert` (`connection.py`, `response.experimental_notice
   or EXPERIMENTAL_NOTICE`). To exercise it, wrap the stub: `Connection._stub` is a read-only
@@ -435,8 +435,8 @@ is the cheapest source of the values `%features` should print.
 - **Surfaces to check together for any value-rendering change**, since they share `formatValue`:
   `%features` / `%eval` in the REPL, `sysml <model> -instantiate <fqn> -e <expr>` (same text), the same
   run with `-json` (the JSON encoder escapes it, so grep `\u003cunset\u003e`, not `<unset>`), and the
-  gRPC/opensysml path. On the Python side `opensysml.UNSET` is a falsy singleton spelled `<unset>` and
-  distinct from `None`: assert `inst.d is opensysml.UNSET`, `inst.d is not None`, `bool(inst.d) is
+  gRPC/pysysml path. On the Python side `pysysml.UNSET` is a falsy singleton spelled `<unset>` and
+  distinct from `None`: assert `inst.d is pysysml.UNSET`, `inst.d is not None`, `bool(inst.d) is
   False`, `inst.get_feature('d').value.WhichOneof('kind') == 'unset'` with `materialized=True`, and
   `'&lt;unset&gt;' in inst._repr_html_()`. `Value.unset` is send-only: the client cannot build it
   through `_python_to_value`, so to prove the server refuses it, hand-build the request and call the
@@ -757,8 +757,8 @@ Testing this family end-to-end has a few traps that cost a whole run if hit late
   `/home/ubuntu/corpus/apps/*.sysml` and `/home/ubuntu/corpus/dragon/Dragon.sysml`, counting
   `error:` lines, is a cheap high-signal gate — read each remaining message and classify it as
   structural/unresolved-library vs behavioral rather than trusting the count alone.
-- Don't name a opensysml probe script `grpc.py`: `sys.path[0]` shadows the real `grpc` package and
-  opensysml dies with `partially initialized module 'opensysml'`, which looks like a client bug.
+- Don't name a pysysml probe script `grpc.py`: `sys.path[0]` shadows the real `grpc` package and
+  pysysml dies with `partially initialized module 'pysysml'`, which looks like a client bug.
 
 ## Fork/join and an action's shared value space (PR #170)
 
@@ -944,17 +944,17 @@ printf '%%action loopn\n%%continue\n%%quit\n' | ./bin/sysml /tmp/loopn.sysml    
 
 Note the `sh -c` wrapper: `VAR=x cmd | …` only exports to the first process of the pipeline, so put
 the whole pipeline inside `sh -c` or the REPL will not see the variable. The gRPC side inherits the
-variable through the opensysml auto-start path (the client spawns `~/.opensysml/bin/sysml-grpc` as a
+variable through the pysysml auto-start path (the client spawns `~/.pysysml/bin/sysml-grpc` as a
 child), so `SYSML_MAX_STEPS=300000 python script.py` is enough — but `pkill -f sysml-grpc` first,
 otherwise an already-running service from an earlier value keeps serving.
 
-Tooling trap: running a opensysml script that auto-starts the service from a *non-tty* one-shot shell
+Tooling trap: running a pysysml script that auto-starts the service from a *non-tty* one-shot shell
 tends to return no output at all (the spawned service holds the pipe). Run such scripts with a tty
 shell (`tty: true`) or inside the GUI terminal, and use the venv interpreter
-(`~/opensysml-venv/bin/python`) — the default `python` in a plain shell has no `opensysml`.
-**The venv is not always at `~/opensysml-venv`**: some sessions ship `/home/ubuntu/sysml-venv`
+(`~/pysysml-venv/bin/python`) — the default `python` in a plain shell has no `pysysml`.
+**The venv is not always at `~/pysysml-venv`**: some sessions ship `/home/ubuntu/sysml-venv`
 instead, and the system `python` may have a protobuf too new for the generated stubs. Resolve it
-once with `ls -d /home/ubuntu/*venv*` and check `<venv>/bin/python -c 'import opensysml'` before
+once with `ls -d /home/ubuntu/*venv*` and check `<venv>/bin/python -c 'import pysysml'` before
 blaming the client. A one-shot non-tty `<venv>/bin/python script.py` did work in practice, so try
 it before falling back to a tty shell.
 
@@ -982,7 +982,7 @@ a pre-fix binary, so build the contrast binary from the merge-base first (see ab
   `conformance/calc_rk4_lunar_descent.sysml` (four body-local stage usages `k1..k4` in a `for` body
   plus a nested steering usage): `%calc test::Propagate 3` → `= 15001.72`, and the gRPC side gives
   the full-precision `15001.719185373526` that the `.expected.json` pins. **The REPL prints two
-  decimals**, so assert exactness through opensysml `eval`, not the prompt. Keep a two-line `while`
+  decimals**, so assert exactness through pysysml `eval`, not the prompt. Keep a two-line `while`
   variant around too — it shows the removed error message on camera, which the RK4 file cannot,
   because on a pre-fix binary RK4 dies earlier on `..`.
 - **`..` is the ordered integer sequence the stdlib declares**, not a value kind of its own
@@ -1004,7 +1004,7 @@ a pre-fix binary, so build the contrast binary from the merge-base first (see ab
   it rather than inventing constants, and take the expected value from that test
   (`mDry = 100.0 + 250.0 * 0.4` → `200.00`); task descriptions quoting other magnitudes usually
   refer to an earlier draft of the model.
-- **`opensysml` `Model.find` must accept the FQN it reports**: `m.find("Rhs")` and
+- **`pysysml` `Model.find` must accept the FQN it reports**: `m.find("Rhs")` and
   `m.find("test::Rhs")` return the same symbol (`.id == 'test::Rhs'`) and `m.find("test::Missing")`
   is `None`. Remember the package name in the fixture decides the FQN spelling.
 
@@ -1258,9 +1258,9 @@ Traps worth re-checking after any doc or REPL edit:
 - Typing `clear` at the `sysml>` prompt pollutes the buffer (see the session-accumulation trap);
   restart the REPL rather than trying to recover mid-transcript.
 
-## The gRPC service and the `opensysml` Python client
+## The gRPC service and the `pysysml` Python client
 
-The REPL is not the only user-facing surface: `cmd/sysml-grpc` plus `python/opensysml` is the path a
+The REPL is not the only user-facing surface: `cmd/sysml-grpc` plus `python/pysysml` is the path a
 Python user takes, and the two can disagree. When a change touches `internal/grpc/convert.go` or
 the runtime's slot evaluation, **test both and diff them** — that comparison is the highest-value
 assertion available.
@@ -1268,12 +1268,12 @@ assertion available.
 ```bash
 export PATH=/usr/local/go/bin:$PATH
 make build && make build-grpc              # -> bin/sysml, bin/sysml-grpc
-mkdir -p ~/.opensysml/bin && cp bin/sysml-grpc ~/.opensysml/bin/   # where the client looks
+mkdir -p ~/.pysysml/bin && cp bin/sysml-grpc ~/.pysysml/bin/   # where the client looks
 pip install -e python/
 ```
 
 Do **not** start the service by hand. `Connection._ensure_service`
-(`python/opensysml/connection.py`) probes `localhost:50051` and spawns the binary itself; letting it
+(`python/pysysml/connection.py`) probes `localhost:50051` and spawns the binary itself; letting it
 auto-start is both the realistic user path and the only way it writes its pidfile. Attaching to a
 service you started yourself makes `test_lifecycle.py::test_service_shuts_down_when_last_process_exits`
 fail — that is the documented `docs/project/roadmap.md` §P1 gap, not a new bug.
@@ -1282,7 +1282,7 @@ fail — that is the documented `docs/project/roadmap.md` §P1 gap, not a new bu
 
 When the thing under test is the **process** (flags, exit status, graceful shutdown, leaks) rather
 than the model semantics, a hand-started service on `-port 0` is the right harness and
-`opensysml.connect(host, port, auto_start=False)` attaches to it without touching the pidfile
+`pysysml.connect(host, port, auto_start=False)` attaches to it without touching the pidfile
 machinery. Pass `-health-port` too: it defaults to 8081 and collides with an already-running
 service. **Never pipe a command whose exit code you are asserting** — `… | tail` reports `tail`'s
 status, which has produced a false pass on this very exit-code matrix; run it bare and echo `$?`.
@@ -1296,7 +1296,7 @@ real time:
   `${ADDR##*:}` — `cut -d: -f3` yields `]` for `[::]:41325`.
 - Expected values at 0cf94e80 for `internal/grpc/testdata/conformance/instantiate_derived_slot.sysml`:
   `mass` → `materialized=True kind=real_value 1500.0`, `doubled` → `real_value 3000.0`; a missing
-  model path raises `opensysml.errors.ModelFileNotFoundError` ("file not found: open …") and the
+  model path raises `pysysml.errors.ModelFileNotFoundError` ("file not found: open …") and the
   server logs `code = NotFound` for `/sysml.SysMLService/ParseFile` while staying alive. An already
   occupied `-port` exits **1** with `msg="Failed to listen" port=<port>`; `kill -TERM` exits **0**
   after `Shutting down gracefully...` / `gRPC server stopped`. `pgrep -x sysml-grpc` (never `-f`)
@@ -1304,38 +1304,38 @@ real time:
   `-cache-size 0` exits **1** with `cache maxSize must be positive`, raised in `NewService` *before*
   `net.Listen`; a bogus `model_hash` is `NOT_FOUND` / `ModelNotFoundError`. Shutdown with a client
   channel still open exits 0 and makes the client's next call raise `UNAVAILABLE`
-  (`opensysml.ConnectionError`) — bound that call with a timeout so a hang fails instead of hanging
+  (`pysysml.ConnectionError`) — bound that call with a timeout so a hang fails instead of hanging
   the run.
 
 <a id="venv-trap"></a>
-**Python interpreter trap on this box** (bites every opensysml section below): whatever `python3`
+**Python interpreter trap on this box** (bites every pysysml section below): whatever `python3`
 resolves to in a tool shell may be another project's venv, and a venv built from it gets a
 mismatched `sys.path` — `pyvenv.cfg` naming one minor version while `bin/python` runs another, so
-the editable install lands in a `site-packages` the interpreter never searches and `import opensysml`
+the editable install lands in a `site-packages` the interpreter never searches and `import pysysml`
 (or `import grpc`) fails right after a *successful* `pip install -e python/`. Always build the venv
 from an explicit real interpreter (`/home/ubuntu/.pyenv/versions/3.12.8/bin/python3.12 -m venv ~/pv`,
-or `/usr/bin/python3.10`) and verify `<venv>/bin/python -c 'import opensysml'` before blaming the
+or `/usr/bin/python3.10`) and verify `<venv>/bin/python -c 'import pysysml'` before blaming the
 client. `$HOME/pv` is created by the blueprint, so prefer reusing it.
 
 ### Service lifecycle, the stale-service check and `require_capabilities` (PR #181)
 
 Since PR #181 `Connection` interrogates whatever is *already* listening (`GetServerInfo`) and
-compares it against the release asked for (`connect(version=...)` or `$OPENSYSML_GRPC_VERSION`) plus
-`require_capabilities=[...]`; a mismatch raises `opensysml.StaleServiceError`. To test that surface
+compares it against the release asked for (`connect(version=...)` or `$PYSYSML_GRPC_VERSION`) plus
+`require_capabilities=[...]`; a mismatch raises `pysysml.StaleServiceError`. To test that surface
 you **do** need a hand-started service — that is precisely the "foreign process" case:
 
 ```bash
 ./bin/sysml-grpc -port 50099 &                   # a port other than 50051 keeps the auto-start
                                                  # tests independent
-OPENSYSML_GRPC_VERSION=v0.0.7 python -c '...connect(port=50099)...'   # -> StaleServiceError
+PYSYSML_GRPC_VERSION=v0.0.7 python -c '...connect(port=50099)...'   # -> StaleServiceError
 ```
 
-- Ownership is decided in `_started_by_this_client`: `~/.opensysml/sysml-grpc.pid` must name the
+- Ownership is decided in `_started_by_this_client`: `~/.pysysml/sysml-grpc.pid` must name the
   process **and** its cmdline must end `['-port', str(port)]`. A hand-started service has no
   pidfile, so it must be reported and left running — assert `psutil.pid_exists(pid)` *and* that a
   subsequent connect still serves (`model.instantiate(...)`), not just that an exception was raised.
 - A locally built binary reports the **commit** as its version (`version e695687`), not a `vX.Y.Z`
-  tag, so any `OPENSYSML_GRPC_VERSION=v0.0.x` is a mismatch — handy, and it also means asking for a
+  tag, so any `PYSYSML_GRPC_VERSION=v0.0.x` is a mismatch — handy, and it also means asking for a
   tag while a dev build runs will *always* raise.
 - Capability names the service reports today: `convert`, `query`, `type_facts`, `verification`.
   A bogus `require_capabilities=['time_travel']` surfaces as `MissingCapabilityError` whoever
@@ -1344,11 +1344,11 @@ OPENSYSML_GRPC_VERSION=v0.0.7 python -c '...connect(port=50099)...'   # -> Stale
 - With `auto_start=False` the release check is lazy: a service that was not listening when the
   client was built is checked at the first call of *any* kind, so assert it through `conn.load(...)`
   and not only through `conn.server_info()`.
-- `opensysml` has **no module-level `load_from_content`**; use `conn.load_from_content(...)`.
-- Lifecycle state is per-port: `~/.opensysml/sysml-grpc-<port>.pid` (a JSON ownership record whose
-  `refs` is the in-process holder count) and `~/.opensysml/sysml-grpc-<port>.lock`. There is no
+- `pysysml` has **no module-level `load_from_content`**; use `conn.load_from_content(...)`.
+- Lifecycle state is per-port: `~/.pysysml/sysml-grpc-<port>.pid` (a JSON ownership record whose
+  `refs` is the in-process holder count) and `~/.pysysml/sysml-grpc-<port>.lock`. There is no
   `sysml-grpc.refcount` file. Reset a clean auto-start state with
-  `pkill -x sysml-grpc; rm -f ~/.opensysml/sysml-grpc-50051.pid ~/.opensysml/sysml-grpc-50051.lock`
+  `pkill -x sysml-grpc; rm -f ~/.pysysml/sysml-grpc-50051.pid ~/.pysysml/sysml-grpc-50051.lock`
   (`-x`, never `-f`, which matches your own shell — see the pkill trap below).
   Refcount behaviour worth asserting both within one process (two `connect()`s) and across two
   processes: 1 → 2 → 1, service still serving the remaining holder, and the pidfile removed
@@ -1363,7 +1363,7 @@ Client API shapes that are easy to get wrong:
 
 - `Model.find(name)` returns **one `Symbol` or `None`**, not a list — iterating it raises
   `TypeError: 'Symbol' object is not iterable`. Use `.id` (FQN), `.name`, `.kind`.
-- `opensysml.instantiate(fqn, file_path=...)` and `opensysml.evaluate(expr, file_path=..., context_symbol_id=...)`
+- `pysysml.instantiate(fqn, file_path=...)` and `pysysml.evaluate(expr, file_path=..., context_symbol_id=...)`
   each take *exactly one* of `file_path` / `model_hash`.
 - `Instance.get_feature(name)` returns the raw protobuf `FeatureValue`. Read it as
   `sv.materialized` and `sv.value.WhichOneof('kind')` → `real_value` / `int_value` / `instance_id` /
@@ -1383,7 +1383,7 @@ What the feature-value kinds mean (`ValueToProto`, `convert.go`):
   `feature value Loop.a: feature value Loop.b: cyclic feature value dependency: Loop.a`, promptly,
   raised as `FeatureValueError` by
   the client, and prove the service is still alive afterwards with a follow-up
-  `opensysml.evaluate('1 + 1', ...)`.
+  `pysysml.evaluate('1 + 1', ...)`.
 - A nested `part engine : Engine;` still marshals as bare `instance_id=N`, but
   `InstantiateResponse.instances` carries every instance reachable from the root, so Python
   expands the child too (`inst.engine.power`). An id is only resolvable against the response that
@@ -1394,10 +1394,10 @@ to A/B the two surfaces on the same model. The call shapes are **not** the ones 
 suggest: there is no `parse_file` on `Connection` — use `c.load_from_content(src)` (or `c.load(path)`),
 which returns a `Model` whose hash is `model.hash` (not `.model_hash`). Then
 `c.execute_action("Pkg::action", model.hash)` returns a plain `{name: value}` dict, and a runtime
-failure raises `opensysml.errors.RuntimeError` with the executor's message
+failure raises `pysysml.errors.RuntimeError` with the executor's message
 (`action execution failed: execute action: …`). If you must attach to a service you started
-yourself, `opensysml.connect("localhost", 50551, auto_start=False)` avoids the
-`Binary not found at ~/.opensysml/bin/sysml-grpc` error — but prefer the auto-start path per above.
+yourself, `pysysml.connect("localhost", 50551, auto_start=False)` avoids the
+`Binary not found at ~/.pysysml/bin/sysml-grpc` error — but prefer the auto-start path per above.
 
 Fixture trap when proving `Model.execute_action` / `Model.execute_state` "exist and work": an action
 that only declares parameters (`action add : Add { in x = 2.0; out z = x + y; }`) validates clean but
@@ -1418,38 +1418,38 @@ work), and `158 passed, 14 skipped` with a service running. As of the 0.0.8 prep
 `test_a_cache_survives_a_replacement_that_cannot_be_downloaded` — re-measure rather than trusting an
 older count. The skips are the integration
 tests gating on a live service. `pytest` is **not**
-installed in `~/opensysml-venv` by default — `~/opensysml-venv/bin/pip install pytest` first, or
+installed in `~/pysysml-venv` by default — `~/pysysml-venv/bin/pip install pytest` first, or
 `python -m pytest` fails with `No module named pytest` (the `pytest` on `PATH` belongs to an
-unrelated venv and cannot import `opensysml`).
+unrelated venv and cannot import `pysysml`).
 
 A test that skips with no service and fails with one is never actually green — treat it as a
 reportable defect, not a known gap. Two lifecycle traps caused exactly that: a
 `Connection(auto_start=False)` used to release a refcount it never took (fixed), and any test
-that shells out to a opensysml subprocess lets that subprocess's exit decrement the shared
+that shells out to a pysysml subprocess lets that subprocess's exit decrement the shared
 refcount, so such tests must isolate `HOME` for the child.
 
 Liveness check: after `test_lifecycle` runs, `pgrep -af sysml-grpc` still lists a `<defunct>`
 zombie, so it lies. Use `ss -ltn | grep 50051` to decide whether a service is really listening.
 `pkill -9 -f sysml-grpc` matches your own shell's command line — use `pkill -9 -x sysml-grpc`.
 A full-suite run stops even a service another process owns, leaving a stale
-`~/.opensysml/sysml-grpc-<port>.pid`; clear it before the next liveness test.
+`~/.pysysml/sysml-grpc-<port>.pid`; clear it before the next liveness test.
 To hold a service alive for a whole test run, keep a client process open, e.g.
-`(setsid python -c "import opensysml,time; opensysml.connect(); time.sleep(300)" &)` — a plain
+`(setsid python -c "import pysysml,time; pysysml.connect(); time.sleep(300)" &)` — a plain
 backgrounded `python -c` from a non-tty shell may exit before it prints, so verify the port.
 
-Download paths (`python/opensysml/binary.py`) are testable without a real release: move
-`~/.opensysml/bin/sysml-grpc` aside, unset `OPENSYSML_GRPC_VERSION`, and call `ensure_binary()`,
+Download paths (`python/pysysml/binary.py`) are testable without a real release: move
+`~/.pysysml/bin/sysml-grpc` aside, unset `PYSYSML_GRPC_VERSION`, and call `ensure_binary()`,
 `resolve_latest_version()`, `download_binary('latest')`. All three must raise `ConnectionError`
-naming the path or URL. `OPENSYSML_GITHUB_REPO` overrides the repo. Beware: these hit the
+naming the path or URL. `PYSYSML_GITHUB_REPO` overrides the repo. Beware: these hit the
 unauthenticated GitHub API, so repeated runs flip from a truthful `HTTP Error 404: Not Found` to a
 misleading `HTTP Error 403: rate limit exceeded` — rehearse sparingly and report the 404 wording,
 not whichever one the recording happened to catch.
 
 #### The stale-*cache* decision is testable offline (PR #178)
 
-`stale_cache_reason(version, github_repo=None)` decides whether `~/.opensysml/bin/sysml-grpc` may
+`stale_cache_reason(version, github_repo=None)` decides whether `~/.pysysml/bin/sysml-grpc` may
 answer for a requested release, and it needs no network — drive it directly and write the sidecar
-`~/.opensysml/bin/sysml-grpc.json` (`{"version":…, "sha256":…, "repo":…}`) by hand. The four shapes
+`~/.pysysml/bin/sysml-grpc.json` (`{"version":…, "sha256":…, "repo":…}`) by hand. The four shapes
 worth asserting, with the wording each produces:
 
 | sidecar | asked for | reason |
@@ -1461,10 +1461,10 @@ worth asserting, with the wording each produces:
 
 - The digest is re-verified (`cached_release`), so a *true* sha256 in the sidecar is what makes the
   "is v0.0.7" branch reachable — a placeholder digest silently tests the wrong branch.
-- `stale_cache_reason(None)` is `None` **by design**: with `$OPENSYSML_GRPC_VERSION` unset any cached
-  binary is taken on faith. So before any Python check, `cp bin/sysml-grpc ~/.opensysml/bin/` —
+- `stale_cache_reason(None)` is `None` **by design**: with `$PYSYSML_GRPC_VERSION` unset any cached
+  binary is taken on faith. So before any Python check, `cp bin/sysml-grpc ~/.pysysml/bin/` —
   otherwise a binary from an older release answers as if it were your build, and
-  `~/.opensysml/bin/sysml-grpc -version` is the one-line way to confirm which build you are testing.
+  `~/.pysysml/bin/sysml-grpc -version` is the one-line way to confirm which build you are testing.
 - `ensure_binary(version=…)` on a stale cache emits `UserWarning: Replacing the cached sysml-grpc: …`
   and then, when the download fails (403/404 in a sandbox), a second
   `UserWarning: Keeping the cached sysml-grpc … could not be downloaded` and returns the old path.
@@ -1473,21 +1473,21 @@ worth asserting, with the wording each produces:
 
 #### Proving a *pinned release digest* really unblocks a download (PR #316)
 
-`PINNED_SHA256` in `python/opensysml/binary.py` is what `download_binary(version)` verifies against;
+`PINNED_SHA256` in `python/pysysml/binary.py` is what `download_binary(version)` verifies against;
 without an entry for the tag, `expected_digest` raises `UnpinnedReleaseError` (a subclass of
 `ChecksumMismatchError`) instead of trusting the `.sha256` served beside the asset. Verifying a new
 pin end to end needs a **real download**, so isolate the cache first:
 
-- `get_binary_path()` hard-codes `os.path.expanduser('~/.opensysml/bin')`. `$OPENSYSML_STATE_DIR`
+- `get_binary_path()` hard-codes `os.path.expanduser('~/.pysysml/bin')`. `$PYSYSML_STATE_DIR`
   moves only the *lockfile* (`connection.py`), so a throwaway **`HOME=/tmp/…`** is the only way to
-  force a download and to keep a locally built `~/.opensysml/bin/sysml-grpc` from answering. Run
+  force a download and to keep a locally built `~/.pysysml/bin/sysml-grpc` from answering. Run
   every step with the same throwaway `HOME` and `pkill -f sysml-grpc` first, otherwise a leftover
   service on :50051 is adopted and you never exercise the downloaded one.
 - Assert the triangle, not just success: `sha256(downloaded file) == PINNED_SHA256[repo][tag][asset]
   == the freshly fetched .sha256 sidecar`, plus the `sysml-grpc.json` sidecar recording
   `{"version", "sha256", "repo"}`, plus `<path> -version` naming the tag. A pass on any one of those
   alone would look identical if the pin were wrong.
-- The load-bearing check is a **contrast run on the parent commit** (opensysml is pure Python, so no
+- The load-bearing check is a **contrast run on the parent commit** (pysysml is pure Python, so no
   rebuild): `git worktree add /tmp/wt <parent>` and run the same `download_binary('<tag>')` with
   `sys.path.insert(0, '/tmp/wt/python')`. It must raise `UnpinnedReleaseError` — otherwise the pin
   proves nothing. Remove the worktree afterwards (`git worktree remove --force`), and beware that
@@ -1507,8 +1507,8 @@ pin end to end needs a **real download**, so isolate the cache first:
 `Connection._ensure_service` probes the service it spawns immediately and then backs off
 (`START_PROBE_INITIAL_DELAY` 10 ms, doubling to `START_PROBE_MAX_DELAY` 250 ms) until
 `START_TIMEOUT` (2.5 s). Timing claims here need a **contrast run against the parent revision**,
-which needs no rebuild since opensysml is pure Python: `git worktree add /tmp/mainwt main`, copy the
-generated `python/opensysml/proto/*.py` in if they are missing, then run the same script twice, once
+which needs no rebuild since pysysml is pure Python: `git worktree add /tmp/mainwt main`, copy the
+generated `python/pysysml/proto/*.py` in if they are missing, then run the same script twice, once
 plain and once with `PYTHONPATH=/tmp/mainwt/python`, on the *same* `$HOME/pv` venv. Numbers seen at
 c590253e on a free port with nothing listening: **21 ms on the branch vs 515 ms on main**; the
 connection must then really work (`conn.load_from_content(...)` + `Model.eval('1 + 1') == 2`), since
@@ -1517,9 +1517,9 @@ a fast connect to a dead service would look the same.
 Recipes for the failure paths, all with a port of their own so the :50051 tests stay independent:
 
 - **A binary that exits at once** — point `$HOME` at a throwaway dir holding
-  `.opensysml/bin/sysml-grpc` = `#!/bin/sh\nexit 3`. `get_binary_path()` is hard-coded to
-  `~/.opensysml/bin`, so `$HOME` is the only injection point (there is no `OPENSYSML_GRPC_BINARY`);
-  `OPENSYSML_STATE_DIR` moves the pid/lock files only. Expect
+  `.pysysml/bin/sysml-grpc` = `#!/bin/sh\nexit 3`. `get_binary_path()` is hard-coded to
+  `~/.pysysml/bin`, so `$HOME` is the only injection point (there is no `PYSYSML_GRPC_BINARY`);
+  `PYSYSML_STATE_DIR` moves the pid/lock files only. Expect
   `ConnectionError: Service exited with code 3 without serving localhost:<port>` in ~0.02 s.
 - **A port that accepts TCP but never speaks gRPC** — `nc -l` is wrong: it exits after the first
   connection closes, the spawned service then binds the port and the test silently *passes*. Use a
@@ -1534,13 +1534,13 @@ Recipes for the failure paths, all with a port of their own so the :50051 tests 
   `Connection._probe_service` with a timestamping function — that is also the cheapest proof of "no
   busy-spin".
 - **A replacement that could not bind** (the `_wait_for_a_service_that_could_not_bind` /
-  `START_CONFIRM_DELAY` path) — start a real service outside opensysml on the port, then push the
+  `START_CONFIRM_DELAY` path) — start a real service outside pysysml on the port, then push the
   client past the adopt step the way a release mismatch does — either
   `Connection._adopt_running_service = lambda self: False`, or without monkeypatching, ask for a
-  release the running service cannot be: `opensysml.connect(port=P, version="v9.9.9")` (there is no
-  `OPENSYSML_REQUIRE_VERSION` env knob). Expect `StaleServiceError` ("the service
+  release the running service cannot be: `pysysml.connect(port=P, version="v9.9.9")` (there is no
+  `PYSYSML_REQUIRE_VERSION` env knob). Expect `StaleServiceError` ("the service
   started here exited (1) while another one kept serving the address"), **no** ownership record
-  (`~/.opensysml/sysml-grpc-<port>.pid` absent, `_OWNED_SERVICES` empty), the foreign pid still alive
+  (`~/.pysysml/sysml-grpc-<port>.pid` absent, `_OWNED_SERVICES` empty), the foreign pid still alive
   and a follow-up `Connection(auto_start=False)` still evaluating. Asserting only "an exception was
   raised" would miss the real regression risk, which is silently adopting a service this client did
   not start and killing it on close.
@@ -1550,16 +1550,16 @@ Recipes for the failure paths, all with a port of their own so the :50051 tests 
   exits. Pair it with a test that closes an *adopted* connection and asserts the hand-started
   service is still serving.
 
-### Verification RPCs, typed errors and strict loading (`opensysml` Tier 3, PR #149)
+### Verification RPCs, typed errors and strict loading (`pysysml` Tier 3, PR #149)
 
 The verification questions the REPL answers with `%constraint`, `%requirement`, `%satisfy` and
 `%calc` are also RPCs (`internal/grpc/verify.go`), wrapped as `Model.verify_constraint /
 verify_requirement / verify_satisfaction / satisfied / calc`. Testing them from Python:
 
 - Use a **clean venv** — the box's default `python3` may carry an incompatible `protobuf`, which
-  fails at `import opensysml`. A venv with `pip install -e python/` (e.g. `~/pv`) is the reliable
+  fails at `import pysysml`. A venv with `pip install -e python/` (e.g. `~/pv`) is the reliable
   interpreter; rebuild with `make build-grpc` and **re-copy** `bin/sysml-grpc` to
-  `~/.opensysml/bin/` after every rebuild or the client silently auto-starts the old binary.
+  `~/.pysysml/bin/` after every rebuild or the client silently auto-starts the old binary.
 - Argument order bites: `Connection.eval(expression, model_hash)`,
   `Connection.instantiate(symbol_id, model_hash)`, `Connection.verify_constraint(symbol_id,
   model_hash, subject_symbol_id=…)`, `Connection.calc(symbol_id, model_hash, arguments=[…])` —
@@ -1590,11 +1590,11 @@ verify_requirement / verify_satisfaction / satisfied / calc`. Testing them from 
   `conn._server_info = ServerInfo(version='old', capabilities=frozenset({'convert'}),
   answered=True, origin='simulated')` → the verify calls raise `MissingCapabilityError` before
   any RPC. Label it as simulated in the report.
-- gRPC status translation lives in `opensysml/errors.py`: assert both the opensysml class and the
+- gRPC status translation lives in `pysysml/errors.py`: assert both the pysysml class and the
   builtin it also is (`ModelFileNotFoundError`/`FileNotFoundError`,
   `InvalidRequestError`/`ValueError`, `ConnectionError`/`ConnectionError`,
   `ExecutionError`/`RuntimeError`) and that `__cause__` is the original `grpc.RpcError`. A dead
-  service is reproducible with `opensysml.connect(port=50123, auto_start=False)`.
+  service is reproducible with `pysysml.connect(port=50123, auto_start=False)`.
 
 ### The prewarmed library-index pool, `SYSML_GRPC_INDEX_POOL` (PR #252)
 
@@ -1611,9 +1611,9 @@ generalizes to any service-side perf change:
   pooled run: a tight client loop drains the 4 warm indexes faster than the background refill
   (~100 ms per index), and the drained request builds inline by design. Report the median plus the
   spikes rather than the mean, which the spikes dominate.
-- **The env var reaches the service through the opensysml auto-start path** (the client spawns the
+- **The env var reaches the service through the pysysml auto-start path** (the client spawns the
   child, so it inherits the env), so `SYSML_GRPC_INDEX_POOL=0 python sweep.py` is enough — but
-  `pkill -x sysml-grpc; rm -f ~/.opensysml/sysml-grpc-50051.pid ~/.opensysml/sysml-grpc-50051.lock`
+  `pkill -x sysml-grpc; rm -f ~/.pysysml/sysml-grpc-50051.pid ~/.pysysml/sysml-grpc-50051.lock`
   first, or you keep measuring the previously spawned service's configuration.
 - **Equivalence is the assertion that catches a wrong index.** Have one script print a sorted JSON
   blob (diagnostics, `find()` id/kind, `eval`, instantiate slot kind+value, `execute_action`,
@@ -1643,7 +1643,7 @@ generalizes to any service-side perf change:
   models loaded (the 3 oldest hashes raise `ModelNotFoundError`, the 5 newest still evaluate) — an
   index handed to a model that is later evicted must not disturb the models still cached.
 - Interpreter trap: see [the venv trap](#venv-trap) above before blaming `import grpc`/`import
-  opensysml` on the change under test.
+  pysysml` on the change under test.
 
 #### The shared on-disk library index cache (`internal/core/libs/cache.go`)
 
@@ -1659,13 +1659,13 @@ exit 0), never an error mentioning the cache.
 
 ### The `Query` RPC / `model.query(...)` (SysML v2 API & Services, PR #155)
 
-`internal/grpc/query.go` + `python/opensysml/query.py` implement the standard's Query resource
+`internal/grpc/query.go` + `python/pysysml/query.py` implement the standard's Query resource
 (`scope`/`select`/`where`, `PrimitiveConstraint` with `=`/`>`/`<` and `inverse`,
 `CompositeConstraint` with `and`/`or`). Testing notes that generalize:
 
-- **Refresh `~/.opensysml/bin/sysml-grpc` or you test a stale service.** A missing capability shows
+- **Refresh `~/.pysysml/bin/sysml-grpc` or you test a stale service.** A missing capability shows
   up as a `MissingCapabilityError` or an "unimplemented" RPC rather than a build failure, so start
-  every run with `make build-grpc && cp bin/sysml-grpc ~/.opensysml/bin/sysml-grpc` and print
+  every run with `make build-grpc && cp bin/sysml-grpc ~/.pysysml/bin/sysml-grpc` and print
   `md5sum` of both plus `git log --oneline -1` on camera. `GetServerInfo().capabilities` should
   list `type_facts, convert, verification, query`.
 - **The Python layer validates before the wire, so client-path tests cannot reach service-side
@@ -1719,9 +1719,9 @@ so `eval("D::GradePoints::A")` must be the float `4.0`, not an `EnumLiteral`. A 
 attributes (`Level { low { :>> n = 1; } high { :>> n = 9; } }`), read as `eval("D::Level::high.n")`
 → `9`.
 
-- **Stale-binary trap (costs an hour if missed).** `opensysml` auto-start runs
-  `~/.opensysml/bin/sysml-grpc` and otherwise *downloads a release*, which lacks new capabilities.
-  Always `make build-grpc && cp bin/sysml-grpc ~/.opensysml/bin/` first and prove it on camera with
+- **Stale-binary trap (costs an hour if missed).** `pysysml` auto-start runs
+  `~/.pysysml/bin/sysml-grpc` and otherwise *downloads a release*, which lacks new capabilities.
+  Always `make build-grpc && cp bin/sysml-grpc ~/.pysysml/bin/` first and prove it on camera with
   `./bin/sysml-grpc --version` (prints `commit: <sha>`) plus `ls -l` on both paths. Capability check:
   `conn.server_info()` must list `enum_values`
   (`['convert','enum_values','query','type_facts','verification']`).
@@ -1736,7 +1736,7 @@ attributes (`Level { low { :>> n = 1; } high { :>> n = 9; } }`), read as `eval("
   it is called from `internal/grpc/service.go` (action inputs) and `internal/grpc/verify.go` (calc
   arguments). The error wording is layer-specific and worth asserting verbatim:
   calc → `calc argument could not be read: …`, action → `input "c" could not be read: …`.
-- **Identity is `literal_id` alone** (`python/opensysml/enumeration.py` marks `enumeration_id` and
+- **Identity is `literal_id` alone** (`python/pysysml/enumeration.py` marks `enumeration_id` and
   `name` `compare=False`). Comparing two *wire-populated* literals passes even when this is broken,
   so always include the bare-vs-populated cases: with `bare = EnumLiteral("D::Color::red")` and the
   feature value, assert `bare == car.c`, `hash(bare) == hash(car.c)`,
@@ -1744,7 +1744,7 @@ attributes (`Level { low { :>> n = 1; } high { :>> n = 9; } }`), read as `eval("
   `bare != EnumLiteral("D::Color::green")` and `len({bare, green}) == 2`. The broken shape reads
   `False False 2`. Also send a bare literal *to* the server (`calc IsRed([EnumLiteral(
   "D::Color::red")])` → `True`) — a description-free literal must still resolve against the index.
-- **Type, not text.** Assert `isinstance(car.c, opensysml.EnumLiteral)` **and**
+- **Type, not text.** Assert `isinstance(car.c, pysysml.EnumLiteral)` **and**
   `car.c != "Color::red"`; a string-shaped decode passes every `str()`-based check.
 - **Input round-trips need a real executable action.** An `action def` whose body is only `in`/`out`
   parameters is not executable (`initialize action: no initial node found`). Use
@@ -1768,7 +1768,7 @@ attributes (`Level { low { :>> n = 1; } high { :>> n = 9; } }`), read as `eval("
   yields the false-looking `incommensurable units: cannot express SI::kg (1000·SI::gram) in SI::kg
   (SI::kilogram)`. Echo back the reduction the service itself reported
   (`car.mass.unit` → `scale_num=1000.0`, `factors=(UnitFactor('SI::gram', 1.0),)`).
-- **Codegen and REPL cross-checks.** `python -m opensysml.generate` must emit
+- **Codegen and REPL cross-checks.** `python -m pysysml.generate` must emit
   `def c(self) -> _t.EnumLiteral: return _t.feature_value(self, "c", _t.as_enum_literal)` and, for
   the quantity feature, `_t.Quantity` / `_t.as_quantity`; then read both off a live instance
   (`Car.from_instance(conn.instantiate("D::Car")).c`) so a wrong decoder raises `TypeMismatchError`
@@ -1778,11 +1778,11 @@ attributes (`Level { low { :>> n = 1; } high { :>> n = 9; } }`), read as `eval("
 - **Set membership** is only observable through `->includes`/`union`; no REPL syntax builds a `Set`,
   and a sequence literal keeps duplicates by design.
 
-## Typed codegen (`python -m opensysml.generate`, Tier 2)
+## Typed codegen (`python -m pysysml.generate`, Tier 2)
 
-`python -m opensysml.generate <model.sysml> [-o out.py] [--host --port]` loads the model through
+`python -m pysysml.generate <model.sysml> [-o out.py] [--host --port]` loads the model through
 the **live service** (so it auto-starts `sysml-grpc`) and prints/writes one class per SysML
-definition deriving from `opensysml.typed.TypedObject`. Useful facts when testing it:
+definition deriving from `pysysml.typed.TypedObject`. Useful facts when testing it:
 
 - The reference fixture is `internal/repl/testdata/vehicle_package.sysml` and the committed
   golden is `python/tests/golden/vehicle_types.py`; `cmp` them for a byte-for-byte assertion and
@@ -1794,11 +1794,11 @@ definition deriving from `opensysml.typed.TypedObject`. Useful facts when testin
   `part engine : Engine;` must render `-> Engine`. If everything renders `object`, the typefacts
   path (`internal/grpc/typefacts.go` → `SymbolInfo.type_info`) is broken.
 - Static-check evidence needs `MYPYPATH=<repo>/python mypy --follow-imports=silent script.py`
-  and the venv mypy (`~/opensysml-venv/bin/mypy`). Without `MYPYPATH`, mypy silently treats
+  and the venv mypy (`~/pysysml-venv/bin/mypy`). Without `MYPYPATH`, mypy silently treats
   `TypedObject` as `Any` and *misses* attribute-typo errors, so a "clean" mypy run proves nothing
   until you have seen it also flag a deliberate misuse (`v.mas`, `v.mass + "x"`).
 - Adversarial cases that distinguish working from broken, all reachable through a generated
-  property: cyclic derived attributes (`a = b + 1.0; b = a + 1.0;`) must raise opensysml
+  property: cyclic derived attributes (`a = b + 1.0; b = a + 1.0;`) must raise pysysml
   `FeatureValueError` rather than returning `None`; and running *stale* generated code against a
   model whose attribute type changed (e.g. `mass = "heavy"`) must raise
   `TypeMismatchError: feature value 'mass': expected float, got 'heavy'`.
@@ -1807,13 +1807,13 @@ definition deriving from `opensysml.typed.TypedObject`. Useful facts when testin
   traceback that looks like a client bug and is not one.
 - **Capability gate (`type_facts`).** Generation calls `GetServerInfo` first and exits 1 without
   writing anything unless the service reports `type_facts`. To simulate a stale service, keep a
-  pre-`GetServerInfo` binary around — `~/.opensysml/bin/sysml-grpc` from an older release is usually
+  pre-`GetServerInfo` binary around — `~/.pysysml/bin/sysml-grpc` from an older release is usually
   one; check it with a direct `stub.GetServerInfo(...)` (expect `StatusCode.UNIMPLEMENTED`), then
   run it on a spare port (`-port 50077 -health-port 8099`) and generate with `--port 50077`. Assert
   the negatives: target file still absent / identical sha256, and stdout mode piped to `wc -c`
   yields `0` (no silent all-`object` module). The message should name the capability, the service
   origin and `make build-grpc`. Note the repo blueprint copies the freshly built `bin/sysml-grpc`
-  into `~/.opensysml/bin/`, so in a clean session the cached binary is *current* and no longer serves
+  into `~/.pysysml/bin/`, so in a clean session the cached binary is *current* and no longer serves
   as the stale fixture — either keep a copy of an older release binary aside first, or stand up a
   stub gRPC server that answers `GetServerInfo` with `UNIMPLEMENTED`.
 - **`--check`** requires `-o` (exit 2 otherwise), writes nothing, and exits 1 when the target is
@@ -1832,7 +1832,7 @@ definition deriving from `opensysml.typed.TypedObject`. Useful facts when testin
   command and kills your own session. Rebuilding leaves the old process serving a `(deleted)`
   binary, which silently tests the previous revision.
 - `python/tests/test_lifecycle.py::TestLifecycleRobustness::test_service_shuts_down_when_last_process_exits`
-  fails (`FileNotFoundError: ~/.opensysml/sysml-grpc.pid`) whenever an externally started service is
+  fails (`FileNotFoundError: ~/.pysysml/sysml-grpc.pid`) whenever an externally started service is
   already listening on 50051 — a known service-ownership gap, reproducible on `main`. Confirm on a
   `main` worktree before reporting it as a regression.
 - Do not try to force a type mismatch inside the model — the checker rejects
@@ -2196,17 +2196,17 @@ DISPLAY=:0 wmctrl -r :ACTIVE: -b add,maximized_vert,maximized_horz
 
 Enlarge the font before recording with the `ctrl+plus` key combo a few times (`ctrl+shift+plus`
 types literal `+` characters into the shell instead of zooming). Konsole starts a shell whose PATH
-lacks the Python that `pip install -e python/` installed into, so `import opensysml` fails there while
-it works from a tool shell; run `source ~/opensysml-venv/bin/activate` (or
+lacks the Python that `pip install -e python/` installed into, so `import pysysml` fails there while
+it works from a tool shell; run `source ~/pysysml-venv/bin/activate` (or
 whichever interpreter `python -c 'import sys; print(sys.executable)'` reports in the tool shell)
-as a setup step before recording. `~/opensysml-venv` may not exist at all, and the default `python3`
+as a setup step before recording. `~/pysysml-venv` may not exist at all, and the default `python3`
 on PATH can be another project's venv (e.g. `~/repos/fprime/fprime-venv`) whose older
-`google.protobuf` makes `import opensysml` die with
+`google.protobuf` makes `import pysysml` die with
 `cannot import name 'runtime_version' from 'google.protobuf'`. The reliable fallback is a throwaway
 venv off the system interpreter:
 `/usr/bin/python3 -m venv /tmp/pv && /tmp/pv/bin/pip install -e python/` (~1 min), then
 `source /tmp/pv/bin/activate` in Konsole. Also re-copy the freshly built service
-(`make build-grpc && cp bin/sysml-grpc ~/.opensysml/bin/`) or the auto-start path serves a stale
+(`make build-grpc && cp bin/sysml-grpc ~/.pysysml/bin/`) or the auto-start path serves a stale
 revision. Discover expected values with the
 piped-stdin form *before* recording, so the recorded run is one clean pass; anything only verified
 over a pipe is not visible in the video and should be reported as weaker evidence.
@@ -2602,9 +2602,9 @@ object whose type conforms to the type declaring the condition, else declared de
   containment → `Leaf #2 (leaf), Leaf #5 (next::leaf)`. Always time the recursive/mutual fixtures
   (`time ./bin/sysml recursive.sysml < cmds`, ~0.22 s) whenever the occurrence key changes.
 - **gRPC classifies an ambiguity since PR #236:** `FailureReason.FAILURE_REASON_AMBIGUOUS_SUBJECT`
-  (enum 3, `api/proto/sysml.proto`). opensysml exposes **no public property** for it — read
+  (enum 3, `api/proto/sysml.proto`). pysysml exposes **no public property** for it — read
   `verdict._pb.failure_reason` and name it with
-  `from opensysml.proto import sysml_pb2 as pb; pb.FailureReason.Name(...)`; `Verdict` has no
+  `from pysysml.proto import sysml_pb2 as pb; pb.FailureReason.Name(...)`; `Verdict` has no
   `failure_reason` attribute and `connection._failure_of` maps only `WRONG_KIND`, so a client
   wanting to branch on ambiguity today reaches into a private field. An ordinary violated condition
   comes back `holds=False` with `FAILURE_REASON_UNSPECIFIED` (0), i.e. "plain violation" is the unset
@@ -2756,10 +2756,10 @@ number rather than quoting the table.
   state counts (`docs/project/spec-compliance.md`, `README.md`, `docs/project/roadmap.md`,
   `docs/project/training-examples.md`) and must be updated in one commit; anywhere else, link to
   spec-compliance rather than adding a fifth copy.
-- **Error-class claims: check the export path.** A class can exist in `opensysml.errors` and be absent
-  from the package surface — `hasattr(opensysml, name)` is the check, and
+- **Error-class claims: check the export path.** A class can exist in `pysysml.errors` and be absent
+  from the package surface — `hasattr(pysysml, name)` is the check, and
   `TestPackageSurface` in `python/tests/test_errors.py` now locks every exception in
-  `errors.__all__` onto `opensysml`.
+  `errors.__all__` onto `pysysml`.
 - **LSP capability claims** are cheap to check with a framed JSON-RPC driver: assert
   `semanticTokensProvider` has `full: true`, `range: true` and no `delta` key anywhere, that
   `range` returns strictly fewer tokens than `full`, that `semanticTokens/full/delta` answers
@@ -2780,8 +2780,8 @@ number rather than quoting the table.
   `m.eval('mass', subject='Demo::sedan')` must be `1200.0`. Without the redefinition both paths
   return the same number and the test proves nothing.
   - On `Model` the kwarg is `subject=`; on `Connection.eval` it is `subject_symbol_id=` and the
-    model hash comes **second**. Module-level `opensysml.evaluate` also takes `subject=`; the
-    deprecated `opensysml.eval` forwards to it and warns `DeprecationWarning`.
+    model hash comes **second**. Module-level `pysysml.evaluate` also takes `subject=`; the
+    deprecated `pysysml.eval` forwards to it and warns `DeprecationWarning`.
   - A `subject=` plus an explicit `context_symbol_id=` still reads the object, and derived slots
     (`attribute doubled = mass * 2.0`) follow the object too.
   - A *definition* as subject is accepted (it is instantiated and reads its own redefinition), and an
@@ -2806,7 +2806,7 @@ number rather than quoting the table.
   `None`)**, so "attributes of a stdlib element" can only be covered indirectly: declare
   `attribute m : ISQBase::MassValue = 3.0 [kg];` in your own model and assert the *resolved* type
   string `ISQBase::MassValue`.
-- **Generated classes**: `python -m opensysml.generate model.sysml -o out.py` then actually `import` the
+- **Generated classes**: `python -m pysysml.generate model.sysml -o out.py` then actually `import` the
   module — an MRO bug only surfaces at import as
   `TypeError: Cannot create a consistent method resolution order`. Assert `cls.__mro__` names against
   the model (include multiple supertypes and a diamond), that a `:>>`/`subsets` feature inherits the
@@ -2816,18 +2816,18 @@ number rather than quoting the table.
   `# specializes ISQBase::MassValue, which has no generated class`.
 - **Quantity results carry the scalar on `Quantity.magnitude`, not `.value`** — a probe using `.value`
   reports a false failure even when the runtime is correct.
-- **A stale `~/.opensysml/bin/sysml-grpc` silently blocks the subject/attribute surface.** These features
-  are capability-gated (`evaluate_subject`, `symbol_attributes` in `opensysml/capabilities.py`), so a
+- **A stale `~/.pysysml/bin/sysml-grpc` silently blocks the subject/attribute surface.** These features
+  are capability-gated (`evaluate_subject`, `symbol_attributes` in `pysysml/capabilities.py`), so a
   service built before they landed makes `conn.eval(..., subject_symbol_id=…)` /
   `attribute_facts()` / `to_dataframe()` raise `MissingCapabilityError` instead of answering — which
   looks like a client bug. Always reinstall the binary before testing a merge:
-  `make build-grpc && pkill -x sysml-grpc && rm -f ~/.opensysml/sysml-grpc-50051.pid ~/.opensysml/sysml-grpc-50051.lock && cp bin/sysml-grpc ~/.opensysml/bin/`
+  `make build-grpc && pkill -x sysml-grpc && rm -f ~/.pysysml/sysml-grpc-50051.pid ~/.pysysml/sysml-grpc-50051.lock && cp bin/sysml-grpc ~/.pysysml/bin/`
   (the `cp` fails with `Text file busy` while the old one still runs), then assert
   `sorted(conn.server_info().capabilities)` contains both names before trusting any result.
 - **The auto-started service dies with the session that started it.** After an interactive
-  `opensysml` REPL exits, `OPENSYSML_REQUIRE_SERVICE=1 pytest tests/` aborts during collection with
-  `$OPENSYSML_REQUIRE_SERVICE is set … but none answers on localhost:50051`. Start one yourself first:
-  `nohup ~/.opensysml/bin/sysml-grpc -port 50051 >/tmp/svc.log 2>&1 &`.
+  `pysysml` REPL exits, `PYSYSML_REQUIRE_SERVICE=1 pytest tests/` aborts during collection with
+  `$PYSYSML_REQUIRE_SERVICE is set … but none answers on localhost:50051`. Start one yourself first:
+  `nohup ~/.pysysml/bin/sysml-grpc -port 50051 >/tmp/svc.log 2>&1 &`.
 - **`PINNED_SHA256` is nested `repo -> version -> asset`.** To exercise the *contradicted* digest arm
   you must inject the key for the repository actually in use, e.g.
   `binary.PINNED_SHA256['Open-MBEE/OpenSysML'] = {'v0.0.8': {'sysml-grpc-linux-amd64': 'de'*32}}`
@@ -3037,23 +3037,23 @@ checks shows up here and nowhere else.
 that over-reports would look identical otherwise. Because the pre-fix binary printed `no errors`
 for all three, the contrast binary from the parent commit is what makes this evidence conclusive.
 
-## opensysml service ownership and the require-service gate (PR #204)
+## pysysml service ownership and the require-service gate (PR #204)
 
 Ownership is the claim worth testing by hand, because pytest can pass while the invariant is
 broken. Three probes, each with a state dir of its own so nothing collides:
 
 ```bash
-PY=~/opensysml-venv/bin/python          # ls -d /home/ubuntu/*venv* if it is missing
-cp bin/sysml-grpc ~/.opensysml/bin/     # what CI does; otherwise ensure_binary downloads
+PY=~/pysysml-venv/bin/python          # ls -d /home/ubuntu/*venv* if it is missing
+cp bin/sysml-grpc ~/.pysysml/bin/     # what CI does; otherwise ensure_binary downloads
 PORT=$($PY -c 'import socket;s=socket.socket();s.bind(("localhost",0));print(s.getsockname()[1])')
 ```
 
 - **Foreign service:** start `bin/sysml-grpc -port $PORT` from the shell, then in one
-  `OPENSYSML_STATE_DIR=/tmp/stateN` python process `Connection(port=P, auto_start=False)`,
-  `opensysml.connect(port=P)` (the adopt path) and a connection left open at exit. Expect the
+  `PYSYSML_STATE_DIR=/tmp/stateN` python process `Connection(port=P, auto_start=False)`,
+  `pysysml.connect(port=P)` (the adopt path) and a connection left open at exit. Expect the
   shell's pid to still be alive and the state dir to hold **only** `sysml-grpc-<port>.lock` — a
-  `sysml-grpc-<port>.pid` for a service opensysml did not spawn is the bug.
-- **Own service:** `opensysml.connect(port=<free>)` writes
+  `sysml-grpc-<port>.pid` for a service pysysml did not spawn is the bug.
+- **Own service:** `pysysml.connect(port=<free>)` writes
   `{"pid","create_time","port","owner_pid","owner_create_time"}`; assert `create_time` equals
   `psutil.Process(pid).create_time()` and `owner_pid == os.getpid()`. Two connections must keep it
   alive when the first closes, and the last close (or plain interpreter exit, via `atexit`) must
@@ -3067,9 +3067,9 @@ PORT=$($PY -c 'import socket;s=socket.socket();s.bind(("localhost",0));print(s.g
 
 Suite counts as PR #204 merged (`cd python && $PY -m pytest tests/ -q`): **413 passed / 13 skipped**
 with no service; **423 passed / 3 skipped** with a service on 50051 and
-`OPENSYSML_REQUIRE_SERVICE=1`, the
+`PYSYSML_REQUIRE_SERVICE=1`, the
 3 remaining skips being mypy-not-installed and a manual-binary-cache case, never a service skip.
-With `OPENSYSML_REQUIRE_SERVICE=1` and no service, collection must **error** (exit 2,
+With `PYSYSML_REQUIRE_SERVICE=1` and no service, collection must **error** (exit 2,
 "none answers on localhost:50051"), never skip. A whole run must leave an operator-started service
 on 50051 with the same pid.
 
@@ -3196,21 +3196,21 @@ first, then clear at the shell (this also rules out `clear; %load …` as a one-
 asset and dies with `HTTP Error 403: rate limit exceeded` once the unauthenticated budget is spent;
 it reads `$GITHUB_TOKEN`. Set it without putting the token on camera:
 `read -rs GITHUB_TOKEN; export GITHUB_TOKEN`. Careful with `--version <tag> --write`: it edits
-`python/opensysml/binary.py`, so `git checkout python/opensysml/binary.py` afterwards. For the
+`python/pysysml/binary.py`, so `git checkout python/pysysml/binary.py` afterwards. For the
 "release publishes no assets" refusal use an old tag (`v0.0.4`) — v0.0.5..v0.0.8 all publish
 binaries now. The unpinned-download refusal is testable offline-ish with
 `HOME=/tmp/fakehome $PY -c "...ensure_binary(version='v9.9.9')"`, which keeps the real
-`~/.opensysml/bin` cache intact; the opt-in out of it is per repository
-(`OPENSYSML_ALLOW_UNPINNED_DOWNLOAD=<owner/repo>`, or `=1` for any).
+`~/.pysysml/bin` cache intact; the opt-in out of it is per repository
+(`PYSYSML_ALLOW_UNPINNED_DOWNLOAD=<owner/repo>`, or `=1` for any).
 
 ## Quantities on the wire: `Value.quantity` and the Python `Quantity` (PR #200)
 
 Once the service can marshal `runtime.ValQuantity`, a quantity feature no longer reads as
 `FeatureValueError: feature value 'm': unsupported: quantity value` but as
-`opensysml.values.Quantity`. The
+`pysysml.values.Quantity`. The
 highest-value evidence is the **parent-commit contrast** (build `/tmp/old-sysml-grpc` from the
-commit before the change, swap it into `~/.opensysml/bin/sysml-grpc`, clear
-`~/.opensysml/sysml-grpc.{pid,refcount}`, run the same script): the old service raises the error
+commit before the change, swap it into `~/.pysysml/bin/sysml-grpc`, clear
+`~/.pysysml/sysml-grpc.{pid,refcount}`, run the same script): the old service raises the error
 while a plain `ScalarValues::Real` feature still reads `2.0`, so the frame proves the delta.
 
 What to assert on the decoded value, and why each one distinguishes working from broken:
@@ -3267,14 +3267,14 @@ inside a `ValueSequence` input (the error still names the top-level input). Trap
 
 ### Generated typed classes and mypy
 
-`opensysml-generate <model> -o out.py` (or `python -m opensysml.generate`) types a quantity property
+`pysysml-generate <model> -o out.py` (or `python -m pysysml.generate`) types a quantity property
 `-> _t.Quantity` with `_t.feature_value(self, "x", _t.as_quantity)`. Only features with a **declared** quantity
 type get it: an untyped derived attribute (`attribute derivedSpeed = 10.0 [SI::m] / 2.0 [SI::s];`)
 has no type facts and still generates `-> object` / `_t.as_object`, even though the runtime value is
 a `Quantity`. Don't read that as a bug in the quantity typing.
 
 To make mypy actually enforce it, **set `MYPYPATH` to the repo's `python/` directory** — without it
-mypy cannot resolve the editable-installed `opensysml`, silently treats `_t.Quantity` as `Any` and
+mypy cannot resolve the editable-installed `pysysml`, silently treats `_t.Quantity` as `Any` and
 reports *no* errors on obvious misuse (a false pass that looks like a passing test):
 
 ```bash
@@ -3284,24 +3284,24 @@ cd /tmp/qw && MYPYPATH=/home/ubuntu/repos/OpenSysML/python \
 # -> Incompatible types in assignment (expression has type "Quantity", variable has type "float")
 ```
 
-`mypy` must be present in the same venv as `opensysml` ($HOME/pv here); otherwise the typed-codegen
+`mypy` must be present in the same venv as `pysysml` ($HOME/pv here); otherwise the typed-codegen
 tests skip rather than fail.
 
 ## The evaluate/eval split and generated-base planning (PR #218)
 
-- **Since the rename, `opensysml.evaluate` is the real module-level evaluator and `opensysml.eval` is a
-  forwarder that emits `DeprecationWarning` and is out of `opensysml.__all__`.** Test both sides:
+- **Since the rename, `pysysml.evaluate` is the real module-level evaluator and `pysysml.eval` is a
+  forwarder that emits `DeprecationWarning` and is out of `pysysml.__all__`.** Test both sides:
   `evaluate(...)` must produce **zero** DeprecationWarnings (catch them with
   `warnings.catch_warnings(record=True)` + `simplefilter("always")`), `eval(...)` must return the
-  identical value and warn exactly once with a message naming `opensysml.evaluate`, and
-  `from opensysml import *` must bind `evaluate` but not `eval`. `subject` is the **last** parameter of
+  identical value and warn exactly once with a message naming `pysysml.evaluate`, and
+  `from pysysml import *` must bind `evaluate` but not `eval`. `subject` is the **last** parameter of
   `evaluate` precisely so a pre-rename positional call
   `eval(expr, None, hash, None, host, port)` still binds host/port — prove that argument really is the
   host by also calling it with a bogus address (`"203.0.113.9", 59999`) and requiring a
   `ConnectionError`; that call takes ~30-60s to time out, so give the runner a generous timeout.
-- **`opensysml.errors.RuntimeError` is a warn-on-access alias of `ExecutionError`** served by the module
+- **`pysysml.errors.RuntimeError` is a warn-on-access alias of `ExecutionError`** served by the module
   `__getattr__` and absent from `errors.__all__`. Check it by *catching a real failure* with it
-  (`except opensysml.errors.RuntimeError` around a cyclic-slot eval), not just by identity.
+  (`except pysysml.errors.RuntimeError` around a cyclic-slot eval), not just by identity.
 - **`generate.py` elides a base that another declared base already specializes, silently and by design**
   (`_without_implied`): `part def Backwards :> Vehicle, Hybrid` where `Hybrid :> Vehicle` emits
   `class Backwards(Hybrid):` with **no** comment, because `Vehicle` is still in the MRO. Only a base the
@@ -3587,9 +3587,9 @@ grep -c experimental out        # 0 — the graph on stdout stays machine-readab
 - REPL: `%save x.ttl` prints the notice then `saved N bytes of ttl`; `%save x.sysml` prints none, and
   neither written file contains a `note:` line.
 - Cross-surface identity is one diff: compare the CLI note (minus the `note: ` prefix) with
-  `opensysml.conversion.EXPERIMENTAL_NOTICE`, the gRPC `ConvertResponse.experimental_notice` and the
+  `pysysml.conversion.EXPERIMENTAL_NOTICE`, the gRPC `ConvertResponse.experimental_notice` and the
   docs string. All four must be byte-equal.
-- opensysml: one `ExperimentalFeatureWarning` per RDF conversion, `Conversion.experimental` True with
+- pysysml: one `ExperimentalFeatureWarning` per RDF conversion, `Conversion.experimental` True with
   the notice; sysml→sysml gives `False`/`""`/0 warnings; a refused RDF conversion warns *then* raises
   `ConversionError`; `warnings.simplefilter("ignore", ExperimentalFeatureWarning)` silences it while
   the conversion still returns the graph.
@@ -3699,15 +3699,15 @@ the feature is absent-but-typed rather than half-present.
 
 ## Source-preserving edits: `ApplyEdits` / `model.edit()` (PR #282)
 
-The edit surface is only reachable through opensysml (`model.edit()` → `set_value` / `rename` →
+The edit surface is only reachable through pysysml (`model.edit()` → `set_value` / `rename` →
 `apply()` → `save(path)`); there is no REPL meta-command for it, so the REPL is only useful
 afterwards, to prove the edited file still parses/instantiates.
 
-Setup that actually matters: the client auto-starts `~/.opensysml/bin/sysml-grpc`, so a stale copy
+Setup that actually matters: the client auto-starts `~/.pysysml/bin/sysml-grpc`, so a stale copy
 there serves an old build and `apply()` fails as `MissingCapabilityError('apply_edits')` — which
 looks like a client bug. Always `go build -o bin/sysml-grpc ./cmd/sysml-grpc`, then
 `pkill -x sysml-grpc` (the file is `Text file busy` while it runs) before
-`cp bin/sysml-grpc ~/.opensysml/bin/`.
+`cp bin/sysml-grpc ~/.pysysml/bin/`.
 
 Fixture shape that discriminates a broken implementation: one file with line comments, a block
 comment, blank lines and **deliberately mixed tab/space indentation** (some lines space-indented
@@ -3734,7 +3734,7 @@ after every case, since "an exception was raised" says nothing about writes):
 | `"1050.0[SI::kg"`, `""`, rename to `part` or `2bad` | `InvalidEditError` (`INVALID_VALUE` / `INVALID_NAME`) |
 | a value that parses but does not resolve (`Nope::missing`) | **`EditResultError` / `EDIT_FAILURE_RESULT_INVALID`** — not `InvalidEditError`; it is caught by re-analysis, and `diagnostics` names the *model* file and line |
 | two `set_value`s on one feature | `OverlappingEditsError` |
-| `apply()` twice | plain `builtins.RuntimeError` (client-side, **not** a `OpenSysMLError`) |
+| `apply()` twice | plain `builtins.RuntimeError` (client-side, **not** a `PySysMLError`) |
 | `apply()` with no ops | `NoEditsError` |
 | non-`str` value | `TypeError` |
 | renaming a referenced declaration | `RenameReferencedError`, `referring_elements == ['Demo::SC', 'Demo::sc']` |
@@ -3742,9 +3742,9 @@ after every case, since "an exception was raised" says nothing about writes):
 Two cases need process work rather than a Python call:
 
 - **Evicted model → `ModelNotFoundError`.** Hand-start the service (`bin/sysml-grpc -port 50123
-  -health-port 8123`) with `opensysml.connect(port=50123, auto_start=False)`, load, kill and restart
+  -health-port 8123`) with `pysysml.connect(port=50123, auto_start=False)`, load, kill and restart
   it, reconnect, then rebuild the editor against the *new* connection with the *old* hash:
-  `opensysml.edit.Editor(m._hash, c2)`. Killing the auto-started 50051 service mid-script instead
+  `pysysml.edit.Editor(m._hash, c2)`. Killing the auto-started 50051 service mid-script instead
   tends to hang the run — a `connect()` right after a `pkill -x sysml-grpc` did not return.
 - **`MissingCapabilityError` before the RPC.** Don't chase the v0.0.7 download; build the merge-base
   with `git worktree add /tmp/oldmain main` + `go build -o /tmp/old-sysml-grpc ./cmd/sysml-grpc`
@@ -3761,13 +3761,13 @@ Two cases need process work rather than a Python call:
 ### Traps that cost time when re-testing the edit surface
 
 - **`python/tests/test_edit.py`'s `real_service` fixture prefers `<repo>/bin/sysml-grpc` over
-  `~/.opensysml/bin/sysml-grpc`** (`GRPC_BINARIES`, test_edit.py:61). A stale `bin/sysml-grpc` left
+  `~/.pysysml/bin/sysml-grpc`** (`GRPC_BINARIES`, test_edit.py:61). A stale `bin/sysml-grpc` left
   from an earlier snapshot therefore fails all 13 `TestEditRoundTripAgainstRealService` cases with
   `MissingCapabilityError('apply_edits')` / `assert has('apply_edits') == False`, which reads like a
   product bug. Always `make build-grpc` and check `./bin/sysml-grpc -version` prints the current
-  commit *before* running the suite; the same applies to the copy in `~/.opensysml/bin`.
-- `MissingCapabilityError` lives in **`opensysml.capabilities`**, not `opensysml.errors`
-  (`opensysml.errors.__getattr__` raises `AttributeError` for it). It is still a `OpenSysMLError` and is
+  commit *before* running the suite; the same applies to the copy in `~/.pysysml/bin`.
+- `MissingCapabilityError` lives in **`pysysml.capabilities`**, not `pysysml.errors`
+  (`pysysml.errors.__getattr__` raises `AttributeError` for it). It is still a `PySysMLError` and is
   *not* an `UnsupportedOperationError`.
 - `test_generate_golden.py::test_typed_codegen_modules_are_mypy_clean` may fail for reasons unrelated
   to any change: with mypy 2.3.x and the venv's numpy stubs it reports

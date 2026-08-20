@@ -196,8 +196,8 @@ func (s *Session) CheckSatisfy(name string) []Verdict {
 }
 
 func (s *Session) checkSatisfy(name string) []Verdict {
-	doc := s.ws.Document(docName)
-	if doc == nil || doc.Scope == nil {
+	docScopes := s.docScopes()
+	if len(docScopes) == 0 {
 		return []Verdict{unresolvedVerdict(name, "no declarations loaded")}
 	}
 	ctx, err := s.getOrCreateRuntime()
@@ -205,7 +205,7 @@ func (s *Session) checkSatisfy(name string) []Verdict {
 		return []Verdict{unresolvedVerdict(name, err.Error())}
 	}
 
-	scope := doc.Scope
+	scopes := docScopes
 	where := "the session"
 	if name != "" {
 		sym, fqn, lerr := s.lookupSymbol(name)
@@ -218,10 +218,13 @@ func (s *Session) checkSatisfy(name string) []Verdict {
 		if sym.Scope == nil {
 			return []Verdict{unresolvedVerdict(name, fmt.Sprintf("%s states no satisfaction assertion", name))}
 		}
-		scope, where = sym.Scope, fqn
+		scopes, where = []*symbols.Scope{sym.Scope}, fqn
 	}
 
-	assertions := ctx.SatisfyAssertionsIn(scope)
+	var assertions []*runtime.SatisfyAssertion
+	for _, scope := range scopes {
+		assertions = append(assertions, ctx.SatisfyAssertionsIn(scope)...)
+	}
 	if len(assertions) == 0 {
 		// Nothing was checked, so nothing is claimed about the model.
 		return []Verdict{unresolvedVerdict(name, fmt.Sprintf("no satisfaction assertion in %s", where))}
@@ -294,8 +297,8 @@ func (s *Session) instanceName(inst *runtime.Instance) string {
 // resolveCheckTarget resolves the element a constraint/requirement check names.
 // The second result is non-nil for a check that cannot be made at all.
 func (s *Session) resolveCheckTarget(name string) (checkTarget, *Verdict) {
-	doc := s.ws.Document(docName)
-	if doc == nil || doc.Scope == nil {
+	docScopes := s.docScopes()
+	if len(docScopes) == 0 {
 		bad := unresolvedVerdict(name, "no declarations loaded")
 		return checkTarget{}, &bad
 	}
@@ -309,7 +312,17 @@ func (s *Session) resolveCheckTarget(name string) (checkTarget, *Verdict) {
 		bad := unresolvedVerdict(name, err.Error())
 		return checkTarget{}, &bad
 	}
-	return checkTarget{sym: sym, fqn: fqn, scope: declaringScope(sym, doc.Scope), ctx: ctx}, nil
+	scope := declaringScope(sym, docScopes[0])
+	if sym.OwnerScope == nil {
+		// The root fallback names the document declaring the symbol.
+		for _, root := range docScopes {
+			if scopeSymbolFor(root, sym.Decl) != nil {
+				scope = root
+				break
+			}
+		}
+	}
+	return checkTarget{sym: sym, fqn: fqn, scope: scope, ctx: ctx}, nil
 }
 
 // InstantiateNamed creates an object of the named definition and keeps it, so a
