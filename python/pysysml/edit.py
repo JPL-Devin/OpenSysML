@@ -26,8 +26,11 @@ from pysysml.errors import (
     NoEditsError,
     OverlappingEditsError,
     RenameReferencedError,
-    OwnerNotFoundError, OwnerNotNamespaceError, IllegalMemberKindError,
-    MemberNameTakenError, DeleteReferencedError,
+    OwnerNotFoundError,
+    OwnerNotNamespaceError,
+    IllegalMemberKindError,
+    MemberNameTakenError,
+    DeleteReferencedError,
 )
 
 #: Refusal kinds, as the wire enum names them, and the error each raises. A kind
