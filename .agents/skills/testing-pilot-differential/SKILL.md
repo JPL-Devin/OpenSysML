@@ -49,6 +49,48 @@ Observed at `90da2cad` (KerML root added): `338 file(s), 196 fully agreeing; 20 
 ours, 145 only the pilot's`, wall time ~70 s (the KerML batch costs ~50 s), byte-identical to the
 committed baseline and across runs.
 
+## Auditing a docs-only PR's numeric claims against the report
+
+Adjudication PRs (e.g. #356, the S1–S10 / F60–F69 classes) assert per-root, per-category and
+per-message counts. Derive every one of them from `build/pilot-diff/pilot-diff.txt`, never from
+the doc. The JSON carries no per-diagnostic message, so the txt is the only source for message
+and category counts. Parsing rules that matter:
+
+- A root section starts with `<name> (<dir>)`; inside it a file block is `  <path>` and the
+  diagnostic buckets are `    only OpenSysML (candidate false positives):`,
+  `    only the pilot's ...`, `    agree...`, `    severity...`. Reset the current bucket on every
+  new file line, or later files' pilot-only diagnostics leak into your only-ours totals.
+- An entry line is `      line N  severity  category  xK` followed by **K** message lines. Count
+  the K message lines, not the entry — otherwise multi-message lines (`x2`) undercount.
+- Shortcut when a root has `pilotDiagnostics: 0` and `agreement: 0` (true for `pilot-examples`
+  and `pilot-validation`): every `        opensysml:` line in that root's section is an only-ours
+  diagnostic, so `grep -c` over the sliced section is an independent cross-check of the parser.
+- Cross-check the doc's class table by summing its Files and Diags columns; they must equal the
+  measured number of files carrying only-ours diagnostics (root `files` − `filesFullyAgreeing`)
+  and the root only-ours totals.
+
+Observed at `75672e91` (PR #356) — useful reference values: totals `338 / 221 / 20 agreed /
+560 only ours / 145 only pilot`, byte-identical to the committed baseline; `pilot-examples` 314
+and `pilot-validation` 59 = **373** over **73** of 154 files; categories syntax 274,
+unresolved-reference 82, kind-mismatch 14, unmapped 2, units 1; and the two generic recovery
+messages measured **102** `expected a body member` + **73** `expected a namespace member` = 175
+(the doc claimed 74 + 64 = 138, so recovery-vs-finding splits in these docs are the claim most
+likely to be stale — always recount).
+
+## Running a doc's inline reproducers through both tools
+
+Adjudication rows quote a reproducer instead of committing a fixture, so re-derive them:
+write the snippet to a temp `.sysml`, then `go build -o /tmp/sysml ./cmd/sysml &&
+/tmp/sysml -validate <f>` for our side and `build/pilot-validator/validate-sysml <f>` for the
+reference (capture `$?` without a pipe). A row that claims "ours" needs our message present *and*
+the pilot silent; if the pilot also errors, the row is wrong.
+
+Pitfall: the pilot's grammar requires a visibility keyword on imports, so a reproducer with
+`import ISQ::*;` fails on the *pilot* side with `mismatched input 'import' expecting '}'` plus
+cascading `Couldn't resolve reference to Type` errors — which looks like the reference rejecting
+the construct under test. Always write `private import ISQ::*;` (what the corpora do) and put
+library-dependent snippets inside a named `package`.
+
 ## Isolating one change's effect (works even with a stale baseline)
 
 The reliable control is to run the *parent commit's* harness code over the *same* corpora and

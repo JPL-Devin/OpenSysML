@@ -292,9 +292,10 @@ are gone from the three files listed in the movement table above.
 `unresolved-reference`, 14 `kind-mismatch`, 2 `unmapped`, 1 `units`, spread over 73 of the two
 roots' 154 files (81 files carry none). Together with the KerML root's 150, `testdata`'s 3, the
 probes' 6 and `examples`' 28 that is the entire only-ours column. The `examples` 28 are all
-`nonstandard-notation` warnings on *our own* demo models — the F3 extensions (`region`,
-`initial <state>;`, bare `transition <source> to <target>;`) firing exactly where they are
-meant to — so they are one-sided by construction and adjudicated with F3, not here.
+`nonstandard-notation` warnings on *our own* demo models — the F3 extensions firing exactly where
+they are meant to: bare `transition <source> to <target>;` (24), `initial <state>;` (2),
+`region <name> { … }` (1) and `junction <name>;` (1). They carry the `syntax` category at
+`warning` severity, are one-sided by construction, and are adjudicated with F3, not here.
 
 Method, per file: take the **first** only-ours diagnostic, read the construct it sits on, write
 the smallest file that shows the same construct, and run that file through both our checker and
@@ -306,16 +307,17 @@ classified from a reproducer that did not discriminate.
 
 Two things the counts do **not** mean:
 
-- **138 of the 274 syntax diagnostics are recovery, not findings.** They are the two generic
+- **175 of the 274 syntax diagnostics are recovery, not findings.** They are the two generic
   messages emitted as the enclosing bodies unwind after the first unparsed member:
-  `expected a body member` (74) and `expected a namespace member` (64). The 235 remaining
+  `expected a body member` (102) and `expected a namespace member` (73). The 198 remaining
   only-ours diagnostics carry a construct-specific message.
 - **Attribution is per file, by the construct the file's first diagnostic sits on.** Long files
   mix classes: `Vehicle Example/SysML v2 Spec Annex A SimpleVehicleModel.sysml` is counted under
   S2 for its line 424, yet its 57 diagnostics also include S1's `expected ';' or '{' after a
-  metadata usage` (6), S3's `expected ';' after send statement` (4) and S5's `expected ';'
+  metadata usage` (3), S3's `expected ';' after send statement` (2) and S5's `expected ';'
   after return expression` (5). So the "Diags" column is what a class's files hold, not what its
-  construct provably produces.
+  construct provably produces — and the per-class sections below name *representative* files, not
+  every file the class owns (S2's 87, for instance, span 12 files of which 9 are named).
 
 | # | Class — the construct the file's first only-ours diagnostic sits on | Files | Diags | Verdict | Follow-up |
 |---|---|---:|---:|---|---|
@@ -331,11 +333,12 @@ Two things the counts do **not** mean:
 | S10 | Semantic checks stricter than the reference's (kind table, binding types, name conflicts, units, conjugation) | 8 | 8 | **Mixed**: 5 ours, 3 one-sided | [F69](#follow-ups-not-fixed-here--this-pr-is-advisory) |
 
 Every one of the 373 is accounted for by exactly one class; no file appears twice. The verdict
-across the ten classes is **370 ours** (233 construct-specific plus the 138 recovery
-diagnostics they drag in, less the three one-sided rows in S10) and **3 one-sided** — checks we
+across the ten classes is **370 ours** (195 construct-specific plus the 175 recovery
+diagnostics they drag in) and **3 one-sided** — checks we
 have and the reference does not. **Not one diagnostic is a pilot artifact**: unlike the
 `testdata`/`examples` rows, every file here was written by the reference's own authors for the
-reference, and the pilot is silent or nearly silent on all 73.
+reference, and the pilot is silent on all 73 — both roots report `pilotOnly: 0` and
+`pilotDiagnostics: 0`.
 
 #### S1 — prefix metadata as a member's only keyword (F60, 32)
 
@@ -384,8 +387,8 @@ no keyword at all — `('end')? RefPrefix UsageDeclaration ValuePart? UsageBody`
 allows a trailing expression as a body member; and `Comment` (`:86`) makes its `comment` keyword
 optional, so `locale "en_US"` followed by a comment body is an anonymous comment with a locale —
 not, as the `f7` reproducer assumed, part of the package declaration. **Ours, four parser
-gaps.** This is where the recovery noise concentrates: 63 of the class's 87 are the
-two generic messages, and the 24 that remain are other classes' constructs in the same files.
+gaps.** This is where the recovery noise concentrates: 72 of the class's 87 are the
+two generic messages, and the 15 that remain are other classes' constructs in the same files.
 
 #### S3 — state and occurrence behavior (F62, 65)
 
@@ -533,9 +536,10 @@ a disagreement — and the units row keeps its own category rather than being fo
 
 #### What this class list predicts
 
-If S1–S7 are fixed, the 274 syntax diagnostics and the 138 recovery diagnostics inside them go
-with them; S8/S9 move 82 `unresolved-reference`; S10's five ours-rows move 6 (`kind-mismatch`
-14 → 8 counting S1's six, which S1's fix takes). The three one-sided diagnostics stay by
+If S1–S7 are fixed, the 274 syntax diagnostics — 175 of them the recovery messages inside them —
+go with them; S8/S9 move 82 `unresolved-reference`; S10's five ours-rows move 5. That empties
+`kind-mismatch` (14 → 0): 9 sit in S1's two files (its six `attribute cannot be typed by …` plus
+`RequirementDerivationExample.sysml:32,33,34`) and go with S1's fix, and the other 5 are S10's. The three one-sided diagnostics stay by
 design. That is the movement any fix PR should be measured against, per root and per category,
 and it is why the fixes are sequenced parser-first: while a file's first member fails to parse,
 nothing downstream of it is measurable.
