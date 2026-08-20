@@ -172,6 +172,13 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		}
 		qn, isQN := targetNode.(*ast.QualifiedName)
 		if !isQN {
+			// A chain target (`subsets b.f`) generalizes to the chain's final feature.
+			if fc, isChain := targetNode.(*ast.FeatureChainExpr); isChain {
+				if target, ok := m.resolver.ResolveTarget(sym.OwnerScope, fc); ok && target != nil && target != sym && !seen[target] {
+					seen[target] = true
+					out = append(out, target)
+				}
+			}
 			continue
 		}
 		target, ok := m.resolver.ResolveQualified(sym.OwnerScope, qn)
@@ -312,7 +319,10 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 	// An untyped usage still specializes its standard-library base feature.
 	// Implicit redefinition does not stand in for it: the two rules are
 	// independent, and the redefined parameter may itself be untyped.
-	if declared == 0 || source.KindOf(sym.DocName) == source.KindKerML {
+	// A definition is asked even when it declares supertypes: implicitBase
+	// checks whether the declared chain already reaches its kind's base.
+	_, isDef := sym.Decl.(*ast.Definition)
+	if declared == 0 || isDef || source.KindOf(sym.DocName) == source.KindKerML {
 		if base := m.implicitBase(sym); base != nil {
 			out = append(out, base)
 		}
