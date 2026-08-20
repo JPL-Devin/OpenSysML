@@ -322,10 +322,10 @@ one.
 | F23 | `validateInvocationExpressionInstantiatedType` (`Must invoke a behavior or a behavioral feature`): what is invoked must be a behavior, or a feature typed by exactly one behavior. Third priority. Its pilot-side category is now `kind-mismatch` rather than `unmapped` (see the note under the results table), so once implemented it can agree rather than merely coincide. |
 | F6 | Build `Fabi303/sysmlv2tool` (needs a Tycho-capable Maven) and re-run with true single-batch loading, which would eliminate the P4 artifact and the ordering machinery. |
 | F7 | Add [Sensmetry `syside check`](https://github.com/sensmetry/syside) as an *additional* cross-check. It is a different implementation, not the reference, so it can only corroborate — never adjudicate. |
+| F10 | Compare the KerML corpus: it needs a reference-side entry point that validates `.kerml` and reports diagnostics, which neither the DeciSym wrapper nor the pinned pilot release provides. |
 
 F6 and F7 are deprioritised: they change how the comparison is *run*, not what it says about
 either implementation, so they rank below every rule follow-up above them.
-| F10 | Compare the KerML corpus: it needs a reference-side entry point that validates `.kerml` and reports diagnostics, which neither the DeciSym wrapper nor the pinned pilot release provides. |
 
 ---
 
