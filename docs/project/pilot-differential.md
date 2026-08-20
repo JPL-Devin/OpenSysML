@@ -95,6 +95,9 @@ repeated runs are byte-identical.
 | `examples` | `examples`, less the downloaded corpora | vendored |
 | `probes` | `cmd/pilot-diff/testdata` | vendored |
 
+`kerml-examples` is collected as KerML; every other root is collected as SysML, which leaves our
+own `.kerml` fixtures out of the comparison (see the known limitation below).
+
 The OMG corpora are not vendored, for the same licensing reason as the training corpus, and the
 pilot release they are fetched at is pinned once in `scripts/pilot-pin.sh` — the same pin the
 validator build reads, so corpus and reference can never come from different releases. Each
@@ -135,6 +138,14 @@ malformed.kerml:2:11: error: no viable alternative at input '<EOF>'
 and on a file that parses but does not resolve
 (`feature x : NoSuchTypeAtAll; classifier C specializes AlsoMissing;`) it reports unresolved
 references, so it is exercising name resolution too, not just the parser.
+
+**Known limitation:** a root has one language, so only `kerml-examples` is compared as KerML.
+Our own 11 `.kerml` fixtures — `testdata/lex/basic.kerml` and
+`examples/parser_features_demo_*.kerml` — sit in roots collected as `.sysml` and are therefore
+*not* compared, even though the bridge could now validate them and our side already analyses
+them. The counts for `testdata` and `examples` below are SysML-only for that reason. Comparing
+them means letting one root collect both extensions and dispatching each language to its own
+oracle: follow-up F34.
 
 ---
 
@@ -465,6 +476,7 @@ one.
 | F31 | KerML name resolution (K3): inherited library features reached through implicit specialization, packages declared in a sibling corpus file, and members named through a feature chain. Re-measure after F30 — part of this class is plausibly cascade. |
 | F32 | Checks that assume the SysML definition/usage split and fire on KerML (K4), plus `unions` as a supertype in redefinition conformance. |
 | F33 | The pilot's `eOpposite` complaint on `disjoint from` (K6): confirm against the reference's `KerMLResourceValidator`/`ElementUtil.transformAll` whether the batch bridge can avoid it, or report it upstream. |
+| F34 | Compare our own 11 `.kerml` fixtures (`testdata/lex/basic.kerml`, `examples/parser_features_demo_*.kerml`) too: a root carries one language today, so they are collected as SysML and excluded (see the known limitation above). Needs per-file language dispatch within a root, and a second pilot invocation per root. |
 
 F6 and F7 are deprioritised: they change how the comparison is *run*, not what it says about
 either implementation, so they rank below every rule follow-up above them.
