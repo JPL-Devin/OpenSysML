@@ -1,7 +1,7 @@
 """Instance class wrapping runtime-materialized objects."""
 
-from opensysml.errors import FeatureValueError
-from opensysml.values import UNSET, feature_value_to_python, value_to_python
+from pysysml.errors import FeatureValueError
+from pysysml.values import UNSET, feature_value_to_python, value_to_python
 
 
 class Instance:

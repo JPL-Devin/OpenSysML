@@ -1,33 +1,33 @@
-"""opensysml - Python client library for OpenSysML SysML v2 parser."""
+"""pysysml - Python client library for OpenSysML SysML v2 parser."""
 
 import warnings
 
-from opensysml._version import VERSION as _declared_version
-from opensysml.connection import Connection, DEFAULT_PORT, split_target
-from opensysml.model import Model
-from opensysml.symbol import Symbol
-from opensysml.diagnostic import Diagnostic
-from opensysml.enumeration import EnumLiteral
-from opensysml.instance import Instance
-from opensysml.typed import TypedObject
-from opensysml.typefacts import (
+from pysysml._version import VERSION as _declared_version
+from pysysml.connection import Connection, DEFAULT_PORT, split_target
+from pysysml.model import Model
+from pysysml.symbol import Symbol
+from pysysml.diagnostic import Diagnostic
+from pysysml.enumeration import EnumLiteral
+from pysysml.instance import Instance
+from pysysml.typed import TypedObject
+from pysysml.typefacts import (
     AttributeFacts,
     Multiplicity,
     Specialization,
     SymbolFacts,
     TypeFacts,
 )
-from opensysml.capabilities import MissingCapabilityError, ServerInfo
-from opensysml.values import UNSET, UnsetType
-from opensysml.verdict import CalcResult, Verdict
-from opensysml.query import QueryElement, QueryError
-from opensysml.conversion import (
+from pysysml.capabilities import MissingCapabilityError, ServerInfo
+from pysysml.values import UNSET, UnsetType
+from pysysml.verdict import CalcResult, Verdict
+from pysysml.query import QueryElement, QueryError
+from pysysml.conversion import (
     FORMAT_SYSML, FORMAT_TURTLE, Conversion, ExperimentalFeatureWarning,
     format_of_path, is_experimental,
 )
-from opensysml.edit import AppliedEdit, EditResult, Editor
-from opensysml.errors import (
-    OpenSysMLError, ChecksumMismatchError, ConnectionError, ConversionError,
+from pysysml.edit import AppliedEdit, EditResult, Editor
+from pysysml.errors import (
+    PySysMLError, ChecksumMismatchError, ConnectionError, ConversionError,
     EditError, EditResultError, EditTargetError, ExecutionError,
     FeatureValueError, InvalidEditError, NoEditsError, OverlappingEditsError,
     RenameReferencedError,
@@ -49,7 +49,7 @@ __all__ = [
     "Editor", "EditResult", "AppliedEdit",
     "Verdict", "CalcResult",
     "QueryElement", "QueryError",
-    "OpenSysMLError", "ChecksumMismatchError", "ConnectionError",
+    "PySysMLError", "ChecksumMismatchError", "ConnectionError",
     "ConversionError", "ExecutionError", "FeatureValueError",
     "EditError", "NoEditsError", "EditTargetError", "InvalidEditError",
     "RenameReferencedError", "OverlappingEditsError", "EditResultError",
@@ -146,7 +146,7 @@ def connect(host='localhost', port=None, auto_start=True, version=None,
         port (int, optional): Service port (default: 50051)
         auto_start (bool): If True, automatically start service if not running (default: True)
         version (str, optional): Release tag the service must report, or
-            'latest'; defaults to $OPENSYSML_GRPC_VERSION. Checked whether the
+            'latest'; defaults to $PYSYSML_GRPC_VERSION. Checked whether the
             service is started here or managed by the caller
         require_capabilities (iterable, optional): Capability names the service
             must report, checked at connect time
@@ -161,7 +161,7 @@ def connect(host='localhost', port=None, auto_start=True, version=None,
         MissingCapabilityError: If the service lacks a required capability
 
     Example:
-        >>> conn = opensysml.connect("localhost:50123")
+        >>> conn = pysysml.connect("localhost:50123")
         >>> conn.port
         50123
     """
@@ -199,8 +199,8 @@ def convert(to_format, file_path=None, content=None, model_hash=None,
             experimental — see ``docs/reference/rdf-mapping.md``
 
     Example:
-        >>> import opensysml
-        >>> turtle = opensysml.convert("ttl", file_path="model.sysml")
+        >>> import pysysml
+        >>> turtle = pysysml.convert("ttl", file_path="model.sysml")
         >>> turtle.write("model.ttl")
         'model.ttl'
     """
@@ -243,8 +243,8 @@ def evaluate(expression, file_path=None, model_hash=None, context_symbol_id=None
         ExecutionError: If evaluation fails
         
     Example:
-        >>> import opensysml
-        >>> result = opensysml.evaluate("2 + 2", file_path="test.sysml")
+        >>> import pysysml
+        >>> result = pysysml.evaluate("2 + 2", file_path="test.sysml")
         >>> print(result)  # 4
     """
     conn = _get_default_connection(host, port)
@@ -291,8 +291,8 @@ def instantiate(symbol_id, file_path=None, model_hash=None, host='localhost',
         ExecutionError: If instantiation fails
         
     Example:
-        >>> import opensysml
-        >>> instance = opensysml.instantiate("SPACECRAFT_WET", file_path="A1.sysml")
+        >>> import pysysml
+        >>> instance = pysysml.instantiate("SPACECRAFT_WET", file_path="A1.sysml")
         >>> print(instance.id)
     """
     conn = _get_default_connection(host, port)
@@ -319,14 +319,14 @@ _RENAMED_NAMES = {"eval": "evaluate", "RuntimeError": "ExecutionError"}
 def __getattr__(name):
     """Serve a renamed name with the object it became, warning about its use.
 
-    ``opensysml.eval`` is :func:`evaluate` and ``opensysml.RuntimeError`` is
-    :class:`~opensysml.errors.ExecutionError`, so existing snippets keep working.
+    ``pysysml.eval`` is :func:`evaluate` and ``pysysml.RuntimeError`` is
+    :class:`~pysysml.errors.ExecutionError`, so existing snippets keep working.
     """
     replacement = _RENAMED_NAMES.get(name)
     if replacement is None:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
     warnings.warn(
-        f"opensysml.{name} is deprecated; use opensysml.{replacement} instead",
+        f"pysysml.{name} is deprecated; use pysysml.{replacement} instead",
         DeprecationWarning,
         stacklevel=2,
     )

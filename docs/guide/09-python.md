@@ -1,6 +1,6 @@
 # 9. From Python
 
-`opensysml` is the Python client. Every call goes through the `sysml-grpc` service, which the
+`pysysml` is the Python client. Every call goes through the `sysml-grpc` service, which the
 client starts and stops for you, so a script parses, inspects, executes and converts a model
 without shelling out to `sysml`.
 
@@ -10,7 +10,7 @@ The full API surface, the generated typed classes and the measured latency are
 ## Installation
 
 ```bash
-pip install opensysml             # from PyPI, once the first release is published
+pip install pysysml             # from PyPI, once the first release is published
 pip install -e python/          # or from a checkout, at the repository root
 ```
 
@@ -20,44 +20,44 @@ They publish wheels for CPython 3.10 and later only, which is what
 
 ## Getting the service binary
 
-Every call goes through `sysml-grpc`. `opensysml` starts one for you and expects to
-find it at `~/.opensysml/bin/sysml-grpc`. Three ways to put it there:
+Every call goes through `sysml-grpc`. `pysysml` starts one for you and expects to
+find it at `~/.pysysml/bin/sysml-grpc`. Three ways to put it there:
 
 ```bash
-# 1. Download the release build (verified against the digest pinned in opensysml)
-python -c "from opensysml.binary import download_binary; download_binary('latest')"
+# 1. Download the release build (verified against the digest pinned in pysysml)
+python -c "from pysysml.binary import download_binary; download_binary('latest')"
 
-# 2. Let opensysml.connect() download it on first use
-export OPENSYSML_GRPC_VERSION=latest      # or a tag like v0.0.5
+# 2. Let pysysml.connect() download it on first use
+export PYSYSML_GRPC_VERSION=latest      # or a tag like v0.0.5
 
 # 3. Build from source
-make build-grpc && mkdir -p ~/.opensysml/bin && cp bin/sysml-grpc ~/.opensysml/bin/
+make build-grpc && mkdir -p ~/.pysysml/bin && cp bin/sysml-grpc ~/.pysysml/bin/
 ```
 
 Without one of those, `connect()` raises `ConnectionError` rather than
-downloading anything unasked. `OPENSYSML_GITHUB_REPO` overrides the repository
+downloading anything unasked. `PYSYSML_GITHUB_REPO` overrides the repository
 releases are fetched from (default `Open-MBEE/OpenSysML`).
 
 A download records its release tag, repository and digest beside the binary
-(`~/.opensysml/bin/sysml-grpc.json`), so a cache left by an earlier release — or by
+(`~/.pysysml/bin/sysml-grpc.json`), so a cache left by an earlier release — or by
 another repository publishing the same tag — is replaced instead of being served
 to a client asking for a newer one; otherwise an old build answers and the call
 fails as a `MissingCapabilityError` naming a capability the requested release does
 have. Asking for a release is what
-triggers that check, so with `OPENSYSML_GRPC_VERSION` unset a binary you put there
+triggers that check, so with `PYSYSML_GRPC_VERSION` unset a binary you put there
 yourself (option 3) is left alone. If the release asked for cannot be downloaded
 (no asset for your platform, no network), the cached binary keeps serving and the
 warning says so, rather than the connection failing.
 
-A download is checked against the SHA-256 `opensysml` pins for that release, not
+A download is checked against the SHA-256 `pysysml` pins for that release, not
 the `.sha256` served beside the binary: the sidecar comes from whoever served the
 binary, so it catches corruption but not a republished release. A release this
-`opensysml` pins no digest for is refused, naming the version, and keeps a working
+`pysysml` pins no digest for is refused, naming the version, and keeps a working
 cached binary rather than trusting the served checksum; `export
-OPENSYSML_ALLOW_UNPINNED_DOWNLOAD=<owner/repo>` (or `=1` for any repository, which a
+PYSYSML_ALLOW_UNPINNED_DOWNLOAD=<owner/repo>` (or `=1` for any repository, which a
 fork's releases do not need) accepts same-origin trust explicitly for the repository
-it names, with a warning. `OPENSYSML_STATE_DIR` moves the state directory
-(`~/.opensysml`) holding the binary cache and the service records.
+it names, with a warning. `PYSYSML_STATE_DIR` moves the state directory
+(`~/.pysysml`) holding the binary cache and the service records.
 
 The published releases up to v0.0.4 carry the `sysml`/`sysml-lsp` archives only;
 `sysml-grpc` binaries are published from the next release onward, so until then
@@ -66,9 +66,9 @@ build it from source (option 3).
 ## A first script
 
 ```python
-import opensysml
+import pysysml
 
-model = opensysml.load("model.sysml")
+model = pysysml.load("model.sysml")
 for d in model.diagnostics:
     print(d)
 
@@ -86,23 +86,23 @@ it could read plus diagnostics — so a script that does not look at them querie
 model that is missing declarations. Ask for a valid one instead:
 
 ```python
-model = opensysml.load("model.sysml")
+model = pysysml.load("model.sysml")
 model.ok                       # False when any diagnostic is an error
 model.errors                   # just the error-severity diagnostics
 model.raise_for_errors()       # raises ModelError, or returns the model
 
-model = opensysml.load("model.sysml", strict=True)   # raises instead of returning
+model = pysysml.load("model.sysml", strict=True)   # raises instead of returning
 ```
 
-`strict=True` is available on `opensysml.load`, `Connection.load` and
+`strict=True` is available on `pysysml.load`, `Connection.load` and
 `Connection.load_from_content`. The `ModelError` it raises carries the errors as
 `.diagnostics` and the model itself as `.model`, so a caller that wants to report
 them does not have to load twice:
 
 ```python
 try:
-    model = opensysml.load("model.sysml", strict=True)
-except opensysml.ModelError as exc:
+    model = pysysml.load("model.sysml", strict=True)
+except pysysml.ModelError as exc:
     for d in exc.diagnostics:
         print(d)
     partial = exc.model            # what the service did parse
@@ -161,11 +161,11 @@ Integers, reals, booleans, strings and sequences map to `int`, `float`, `bool`,
 `KeyError` (item access), so `hasattr`, `copy` and `pickle` behave.
 
 A feature value holding nothing — a valueless feature of a value type, `attribute d : Real;` —
-reads as `opensysml.UNSET`, the same thing `%features` and `-instantiate` spell `<unset>`. It
+reads as `pysysml.UNSET`, the same thing `%features` and `-instantiate` spell `<unset>`. It
 is falsy and is not `None`, which stays the model's `null`:
 
 ```python
-inst.d is opensysml.UNSET   # True
+inst.d is pysysml.UNSET   # True
 inst.d is None            # False
 ```
 
@@ -215,8 +215,8 @@ a value the wire format cannot represent is reported as an
 `UnsupportedValueError` in that entry, leaving the other entries intact.
 
 Every call about a loaded model is a `Model` method, and the module-level
-`opensysml.instantiate`/`evaluate`/`convert` remain for instantiating straight out of a
-file (`opensysml.instantiate("Demo::Vehicle", file_path="model.sysml")`) or against
+`pysysml.instantiate`/`evaluate`/`convert` remain for instantiating straight out of a
+file (`pysysml.instantiate("Demo::Vehicle", file_path="model.sysml")`) or against
 a hash obtained elsewhere (`model_hash=…`).
 
 ## Verifying constraints, requirements, satisfaction and calculations
@@ -227,7 +227,7 @@ scriptable. They run the same runtime evaluation the REPL drives, not a second
 implementation of it.
 
 ```python
-model = opensysml.load("lander.sysml", strict=True)
+model = pysysml.load("lander.sysml", strict=True)
 
 for verdict in model.verify_satisfaction():        # every assert satisfy … by …
     print(verdict)
@@ -293,7 +293,7 @@ hold" when the answer is "you named a part def":
 
 ```python
 model.verify_constraint("Demo::Wheel")
-# opensysml.errors.WrongKindError: not a constraint: Demo::Wheel is a part def,
+# pysysml.errors.WrongKindError: not a constraint: Demo::Wheel is a part def,
 # not a constraint definition or usage
 ```
 
@@ -323,17 +323,17 @@ the upgrade, rather than failing on an unimplemented method.
 
 ## Errors
 
-Every failure a caller can act on is a `OpenSysMLError`. The service's gRPC status
+Every failure a caller can act on is a `PySysMLError`. The service's gRPC status
 codes are translated at the client boundary, so a script never has to `import
 grpc` and switch on status codes; the original `grpc.RpcError` stays reachable as
 `__cause__` for the debug string.
 
 ```
-OpenSysMLError
+PySysMLError
 ├── ConnectionError            service unreachable or would not start (UNAVAILABLE)
 │   ├── StaleServiceError      another release is already listening on that address
 │   └── ChecksumMismatchError  a download contradicts the digest pinned for it
-│       └── UnpinnedReleaseError  this opensysml pins no digest for that release
+│       └── UnpinnedReleaseError  this pysysml pins no digest for that release
 ├── ServiceError               any other status the service failed a call with
 │   ├── ModelNotFoundError     the model hash is no longer in the service cache
 │   ├── ModelFileNotFoundError the service could not read the path (also FileNotFoundError)
@@ -359,15 +359,15 @@ The two most common failures are both `NOT_FOUND` on the wire but have different
 fixes, and are told apart from what the service reports:
 
 ```python
-opensysml.load("/tmp/nope.sysml")     # ModelFileNotFoundError: file not found: …
+pysysml.load("/tmp/nope.sysml")     # ModelFileNotFoundError: file not found: …
 model.to_turtle()                   # ModelNotFoundError if the model was evicted
 ```
 
 `ExecutionError` inherits from the built-in `RuntimeError`, so `except
 RuntimeError:` catches it — which is what a traceback reading
-`opensysml.errors.RuntimeError` used to promise and not deliver. That old name
+`pysysml.errors.RuntimeError` used to promise and not deliver. That old name
 remains as a deprecated alias of `ExecutionError` (same class, so existing
-`except opensysml.errors.RuntimeError` keeps working) and emits a
+`except pysysml.errors.RuntimeError` keeps working) and emits a
 `DeprecationWarning` on attribute access. Inheriting from the built-in was chosen
 over renaming alone because it fixes existing code that never caught the old
 class, and the alias is excluded from `__all__` so a star-import no longer
@@ -380,13 +380,13 @@ Both names the package used to bind over a Python built-in were renamed before
 
 | Old name | Use instead |
 | --- | --- |
-| `opensysml.eval` | `opensysml.evaluate` |
-| `opensysml.RuntimeError`, `opensysml.errors.RuntimeError` | `opensysml.ExecutionError` |
+| `pysysml.eval` | `pysysml.evaluate` |
+| `pysysml.RuntimeError`, `pysysml.errors.RuntimeError` | `pysysml.ExecutionError` |
 
-Each old name still resolves to the same object — `opensysml.eval` *is*
-`opensysml.evaluate` and `opensysml.RuntimeError` *is* `ExecutionError`, so existing
+Each old name still resolves to the same object — `pysysml.eval` *is*
+`pysysml.evaluate` and `pysysml.RuntimeError` *is* `ExecutionError`, so existing
 snippets and `except` clauses keep working — and emits a `DeprecationWarning` on
-access. Neither is in `__all__`, so `from opensysml import *` no longer binds over
+access. Neither is in `__all__`, so `from pysysml import *` no longer binds over
 `eval` or `RuntimeError`. The `Model.eval`/`Connection.eval` *methods* keep their
 name: an attribute of an object shadows nothing.
 
@@ -403,15 +403,15 @@ Any conversion through it warns with `ExperimentalFeatureWarning` and sets
 `Conversion.experimental`; notation is stable and warns about nothing.
 
 ```python
-model = opensysml.load("model.sysml")
+model = pysysml.load("model.sysml")
 
 model.to_sysml()                 # Conversion: SysML notation
 model.to_turtle()                # Conversion: RDF Turtle
 model.save("model.ttl")          # writes Turtle; format taken from the extension
 model.save("out.sysml")
 
-opensysml.convert("ttl", file_path="model.sysml")            # without loading first
-opensysml.convert("sysml", content=turtle, from_format="ttl")  # Turtle back to notation
+pysysml.convert("ttl", file_path="model.sysml")            # without loading first
+pysysml.convert("sysml", content=turtle, from_format="ttl")  # Turtle back to notation
 ```
 
 A `Conversion` is the output text plus the formats it went between, and whether
@@ -447,7 +447,7 @@ capability, these calls raise `MissingCapabilityError` naming the upgrade rather
 than failing on an unimplemented method. A service too old to report the RDF
 mapping's status is read from the formats it reports instead, so an RDF
 conversion warns either way. Silence the warning with
-`warnings.simplefilter("ignore", opensysml.ExperimentalFeatureWarning)`, which no
+`warnings.simplefilter("ignore", pysysml.ExperimentalFeatureWarning)`, which no
 stable feature uses.
 
 ## Changing a model and writing it back
@@ -459,7 +459,7 @@ by the same ids a read reports, and the service applies them to the source it
 parsed.
 
 ```python
-model = opensysml.load("spacecraft.sysml")
+model = pysysml.load("spacecraft.sysml")
 
 edit = model.edit()
 edit.set_value("Demo::sc::unitMass", "1050.0[SI::kg]")
@@ -519,7 +519,7 @@ where to look rather than which expression is at fault.
 ```python
 try:
     model.edit().rename("Demo::SC", "Spacecraft").apply()
-except opensysml.RenameReferencedError as refused:
+except pysysml.RenameReferencedError as refused:
     print(refused.referring_elements)   # ['Demo::SC', 'Demo::sc']
 ```
 
@@ -554,7 +554,7 @@ verbatim, which is what the API Cookbook notebooks and MATLAB System Composer's
 `executeQuery` send:
 
 ```python
-model = opensysml.load("model.sysml")
+model = pysysml.load("model.sysml")
 
 model.query({"@type": "Query", "where": {
     "@type": "PrimitiveConstraint",

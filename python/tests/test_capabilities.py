@@ -15,16 +15,16 @@ from unittest.mock import patch
 import grpc
 import pytest
 
-from opensysml.capabilities import (
+from pysysml.capabilities import (
     CAPABILITY_QUERY,
     CAPABILITY_TYPE_FACTS,
     MissingCapabilityError,
     upgrade_remedy,
 )
-from opensysml.connection import Connection
-from opensysml.errors import ConnectionError
-from opensysml.generate import main, require_type_facts
-from opensysml.proto import sysml_pb2, sysml_pb2_grpc
+from pysysml.connection import Connection
+from pysysml.errors import ConnectionError
+from pysysml.generate import main, require_type_facts
+from pysysml.proto import sysml_pb2, sysml_pb2_grpc
 
 MODEL = """
 package Demo {
@@ -116,7 +116,7 @@ def test_service_answering_without_type_facts_is_rejected(fake_service):
 
 
 def _run_generate(monkeypatch, tmp_path, port, source, output):
-    """Run the generator CLI against ``port``, isolated from the real ~/.opensysml."""
+    """Run the generator CLI against ``port``, isolated from the real ~/.pysysml."""
     monkeypatch.setenv("HOME", str(tmp_path))
     return main(
         [str(source), "-o", str(output), "--host", "localhost", "--port", str(port)]
@@ -141,7 +141,7 @@ def test_generation_fails_against_a_service_without_type_facts(
     assert f"localhost:{port}" in message
     # Names the fix.
     assert "make build-grpc" in message
-    assert "OPENSYSML_GRPC_VERSION" in message
+    assert "PYSYSML_GRPC_VERSION" in message
 
 
 def test_generation_succeeds_against_a_service_reporting_type_facts(
@@ -163,8 +163,8 @@ def test_generation_succeeds_against_a_service_reporting_type_facts(
 
 def test_remedy_survives_a_platform_with_no_release_build():
     """The advice is still given where no release binary exists to name."""
-    with patch('opensysml.capabilities.get_binary_path',
+    with patch('pysysml.capabilities.get_binary_path',
                side_effect=ConnectionError('Unsupported operating system')):
         remedy = upgrade_remedy(CAPABILITY_QUERY)
     assert "cached locally" in remedy
-    assert "OPENSYSML_GRPC_VERSION" in remedy and "make build-grpc" in remedy
+    assert "PYSYSML_GRPC_VERSION" in remedy and "make build-grpc" in remedy

@@ -3,19 +3,19 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pysysml"
-version = "0.2.1"
-description = "Renamed: install opensysml instead"
+name = "opensysml"
+version = "0.3.1"
+description = "Renamed: install pysysml instead"
 readme = "README.md"
 license = { text = "Apache-2.0" }
 authors = [{ name = "OpenSysML contributors" }]
-keywords = ["sysml", "deprecated", "renamed", "opensysml"]
+keywords = ["sysml", "deprecated", "renamed", "pysysml"]
 
 # No requires-python floor: a floor that excluded an interpreter would make pip
-# fall back to 0.2.0 there, which is the silent outcome this release prevents.
+# fall back to 0.3.0 there, which is the silent outcome this release prevents.
 
-# Deliberately no dependency on opensysml: installing it as a side effect would
-# make `pysysml` keep working through the alias this release refuses to be.
+# Deliberately no dependency on pysysml: installing it as a side effect would
+# make `opensysml` keep working through the alias this release refuses to be.
 dependencies = []
 
 classifiers = [
@@ -28,8 +28,8 @@ classifiers = [
 
 [project.urls]
 Homepage = "https://github.com/Open-MBEE/OpenSysML"
-"Current package" = "https://pypi.org/project/opensysml/"
+"Current package" = "https://pypi.org/project/pysysml/"
 Changelog = "https://github.com/Open-MBEE/OpenSysML/blob/main/CHANGELOG.md"
 
 [tool.setuptools]
-packages = ["pysysml"]
+packages = ["opensysml"]

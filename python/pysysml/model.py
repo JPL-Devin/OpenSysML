@@ -2,11 +2,11 @@
 
 import difflib
 
-from opensysml.symbol import Symbol
-from opensysml.conversion import FORMAT_SYSML, FORMAT_TURTLE, format_of_path
-from opensysml.diagnostic import Diagnostic
-from opensysml.edit import Editor
-from opensysml.errors import ModelError, SymbolNotFoundError
+from pysysml.symbol import Symbol
+from pysysml.conversion import FORMAT_SYSML, FORMAT_TURTLE, format_of_path
+from pysysml.diagnostic import Diagnostic
+from pysysml.edit import Editor
+from pysysml.errors import ModelError, SymbolNotFoundError
 
 #: Severity the service reports for a diagnostic that makes a model unusable.
 _SEVERITY_ERROR = "error"
@@ -85,7 +85,7 @@ class Model:
         return not self.errors
 
     def raise_for_errors(self):
-        """Raise :class:`~opensysml.errors.ModelError` unless :attr:`ok`.
+        """Raise :class:`~pysysml.errors.ModelError` unless :attr:`ok`.
 
         Returns:
             Model: self, so a call can be chained onto a load
