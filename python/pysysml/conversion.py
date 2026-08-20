@@ -72,7 +72,7 @@ def format_of_path(path):
         path (str): File name or path.
 
     Returns:
-        str: Format name, as :func:`~opensysml.connection.Connection.convert` takes it.
+        str: Format name, as :func:`~pysysml.connection.Connection.convert` takes it.
 
     Raises:
         ValueError: If the extension names no format this client can write.

@@ -14,8 +14,8 @@ then ``False``, and no capability is claimed.
 from dataclasses import dataclass
 from typing import FrozenSet, Iterable, Optional
 
-from opensysml.binary import get_binary_path
-from opensysml.errors import OpenSysMLError
+from pysysml.binary import get_binary_path
+from pysysml.errors import PySysMLError
 
 #: Static type facts on ``SymbolInfo`` — ``type_info``, ``multiplicity`` and
 #: ``specializations``. Typed code generation requires this: without it every
@@ -55,7 +55,7 @@ CAPABILITY_EVALUATE_SUBJECT = "evaluate_subject"
 CAPABILITY_SYMBOL_ATTRIBUTES = "symbol_attributes"
 
 #: A valueless feature of a value type as ``Value.unset``, read as
-#: :data:`opensysml.UNSET`. Without it the empty object such a feature materializes
+#: :data:`pysysml.UNSET`. Without it the empty object such a feature materializes
 #: crosses as an instance id, which is indistinguishable from an object of a
 #: class that declares no features.
 CAPABILITY_UNSET_VALUE = "unset_value"
@@ -73,7 +73,7 @@ CAPABILITY_APPLY_EDITS = "apply_edits"
 
 @dataclass(frozen=True)
 class ServerInfo:
-    """Self-description of the service a :class:`~opensysml.connection.Connection` talks to.
+    """Self-description of the service a :class:`~pysysml.connection.Connection` talks to.
 
     Attributes:
         version: Build version the service reports, informational only. Empty
@@ -107,7 +107,7 @@ class ServerInfo:
         return f"{self.origin} (version {version}, capabilities: {reported})"
 
 
-class MissingCapabilityError(OpenSysMLError):
+class MissingCapabilityError(PySysMLError):
     """Raised when the connected service cannot supply a required capability.
 
     Attributes:
@@ -130,12 +130,12 @@ def upgrade_remedy(capability: str) -> str:
     """Remedy for a service lacking ``capability``, naming both routes to one that has it."""
     try:
         cached = f"cached at {get_binary_path()}"
-    except OpenSysMLError:
+    except PySysMLError:
         # A platform with no release build of its own still gets the advice.
         cached = "cached locally"
     return (
         f"run a sysml-grpc whose GetServerInfo reports {capability!r}: set "
-        f"$OPENSYSML_GRPC_VERSION to a release that has it, which replaces the binary "
+        f"$PYSYSML_GRPC_VERSION to a release that has it, which replaces the binary "
         f"{cached} when that is another release, or build one with `make build-grpc` "
         f"and start it yourself"
     )

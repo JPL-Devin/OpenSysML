@@ -4,10 +4,10 @@ import inspect
 
 import pytest
 from unittest.mock import Mock
-from opensysml.connection import Connection
-from opensysml.proto import sysml_pb2
-from opensysml.errors import ExecutionError
-from opensysml.model import Model
+from pysysml.connection import Connection
+from pysysml.proto import sysml_pb2
+from pysysml.errors import ExecutionError
+from pysysml.model import Model
 
 
 def test_model_properties():

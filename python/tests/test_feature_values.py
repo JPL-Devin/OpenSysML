@@ -1,8 +1,8 @@
 """Tests for the feature-value names on Instance."""
 import pytest
-from opensysml.errors import FeatureValueError
-from opensysml.instance import Instance
-from opensysml.proto import sysml_pb2
+from pysysml.errors import FeatureValueError
+from pysysml.instance import Instance
+from pysysml.proto import sysml_pb2
 
 
 def feature_value(name, **value_kwargs):
@@ -32,10 +32,10 @@ def test_feature_values_are_read_from_the_current_field():
 
 def test_the_deprecated_slot_spellings_are_gone():
     """`slots`, `raw_slots`, `get_slot` and SlotError were removed before 0.1.0."""
-    import opensysml
-    import opensysml.errors as errors
-    import opensysml.typed as typed
-    import opensysml.values as values
+    import pysysml
+    import pysysml.errors as errors
+    import pysysml.typed as typed
+    import pysysml.values as values
 
     inst = Instance(sysml_pb2.Instance(
         id=1,
@@ -47,7 +47,7 @@ def test_the_deprecated_slot_spellings_are_gone():
     assert not hasattr(sysml_pb2, "SlotValue")
     for name in ("raw_slots", "get_slot"):
         assert not hasattr(Instance, name)
-    for module in (opensysml, errors):
+    for module in (pysysml, errors):
         assert not hasattr(module, "SlotError")
     for name in ("slot", "optional_slot", "list_slot"):
         assert not hasattr(typed, name)

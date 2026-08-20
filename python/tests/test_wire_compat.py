@@ -7,7 +7,7 @@ pre-existing types and check that bytes written by one schema parse back
 unchanged.
 """
 
-from opensysml.proto import sysml_pb2
+from pysysml.proto import sysml_pb2
 
 
 # Field numbers as of the schema before the verification RPCs were added. A

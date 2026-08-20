@@ -1,7 +1,7 @@
 """Runtime support for generated, statically typed views over instances.
 
 A generated class derives from :class:`TypedObject` and exposes one property per
-SysML feature, each delegating to the underlying Tier 1 :class:`~opensysml.instance.Instance`
+SysML feature, each delegating to the underlying Tier 1 :class:`~pysysml.instance.Instance`
 through :func:`feature_value`, :func:`optional_feature_value` or
 :func:`list_feature_value`. Decoding,
 including its ``FeatureValueError`` behaviour, is unchanged: this layer only states what
@@ -11,10 +11,10 @@ returning a wrongly typed value.
 
 from typing import Callable, ClassVar, List, Optional, Set, TypeVar
 
-from opensysml.enumeration import EnumLiteral
-from opensysml.errors import InstanceTypeError, TypeMismatchError
-from opensysml.instance import Instance
-from opensysml.values import Quantity
+from pysysml.enumeration import EnumLiteral
+from pysysml.errors import InstanceTypeError, TypeMismatchError
+from pysysml.instance import Instance
+from pysysml.values import Quantity
 
 # Re-exported so a generated module annotates a quantity property as `_t.Quantity`
 # and needs no import of its own.

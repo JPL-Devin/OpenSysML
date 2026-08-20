@@ -3,15 +3,15 @@
 from dataclasses import dataclass, field
 from typing import Dict, Tuple, Union
 
-from opensysml.enumeration import EnumLiteral
-from opensysml.errors import FeatureValueError, OpenSysMLError, UnsupportedValueError
-from opensysml.proto import sysml_pb2
+from pysysml.enumeration import EnumLiteral
+from pysysml.errors import FeatureValueError, PySysMLError, UnsupportedValueError
+from pysysml.proto import sysml_pb2
 
 #: What a quantity's magnitude can be: the service keeps Integer and Real apart.
 Magnitude = Union[int, float]
 
 
-class IncommensurableUnitsError(OpenSysMLError):
+class IncommensurableUnitsError(PySysMLError):
     """Raised when quantities measuring different things are compared or combined.
 
     ``5.0 [kg] < 2.0 [m]`` relates no two magnitudes, so it is an error rather
@@ -378,7 +378,7 @@ def value_to_python(pb_value, resolve_instance=None):
 
     Returns:
         int, float, bool, str, list, None, :data:`UNSET`, a :class:`Quantity`, an
-        :class:`~opensysml.enumeration.EnumLiteral`, or the resolved instance object.
+        :class:`~pysysml.enumeration.EnumLiteral`, or the resolved instance object.
 
     Raises:
         UnsupportedValueError: If the service reported the value as unsupported.

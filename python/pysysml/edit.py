@@ -9,15 +9,15 @@ before returning it.
 
 Two operations exist: setting a feature's value, and renaming a declaration.
 Renaming rewrites the declaration's name token only and is refused for an element
-that is referenced — see :class:`~opensysml.errors.RenameReferencedError`.
+that is referenced — see :class:`~pysysml.errors.RenameReferencedError`.
 """
 
 from dataclasses import dataclass, field
 from typing import List
 
-from opensysml.conversion import Conversion, FORMAT_SYSML
-from opensysml.proto import sysml_pb2
-from opensysml.errors import (
+from pysysml.conversion import Conversion, FORMAT_SYSML
+from pysysml.proto import sysml_pb2
+from pysysml.errors import (
     EditError,
     EditResultError,
     EditTargetError,
@@ -112,7 +112,7 @@ class AppliedEdit:
 
 @dataclass(frozen=True)
 class EditResult(Conversion):
-    """The edited notation, as a :class:`~opensysml.conversion.Conversion`.
+    """The edited notation, as a :class:`~pysysml.conversion.Conversion`.
 
     ``str(result)`` is the edited text and ``result.save(path)`` writes it, so an
     edit is written the way a conversion is.
@@ -140,7 +140,7 @@ class Editor:
 
     Collected client-side and applied in one call, so the service edits and
     validates the model once. Every operation names its element by the id a read
-    reports (:attr:`Symbol.id`), or by the :class:`~opensysml.symbol.Symbol` itself.
+    reports (:attr:`Symbol.id`), or by the :class:`~pysysml.symbol.Symbol` itself.
 
     An editor is applied once: it describes an edit of the model it was made
     from, and the edited model is a different model. Build another editor from
@@ -214,7 +214,7 @@ class Editor:
 
         Rewrites the declaration's name token only. References to the element are
         not updated, so a referenced element cannot be renamed this way: the
-        service refuses it with :class:`~opensysml.errors.RenameReferencedError`,
+        service refuses it with :class:`~pysysml.errors.RenameReferencedError`,
         naming where the references are made.
 
         Args:

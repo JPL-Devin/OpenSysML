@@ -2,12 +2,12 @@
 
 from typing import Any, Dict, List, Optional, Protocol, TYPE_CHECKING
 
-from opensysml.capabilities import (
+from pysysml.capabilities import (
     CAPABILITY_SYMBOL_ATTRIBUTES,
     require,
     upgrade_remedy,
 )
-from opensysml.typefacts import (
+from pysysml.typefacts import (
     AttributeFacts,
     Multiplicity,
     Specialization,
@@ -16,7 +16,7 @@ from opensysml.typefacts import (
 )
 
 if TYPE_CHECKING:
-    from opensysml.proto import sysml_pb2
+    from pysysml.proto import sysml_pb2
 
 # Kind strings emitted by the service (internal/core/symbols: symbolKindNames).
 # Matched case-insensitively so older PascalCase producers still work.

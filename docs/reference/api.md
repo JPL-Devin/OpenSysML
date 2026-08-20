@@ -571,7 +571,7 @@ can filter a model OpenSysML parsed. The standard's schema is authoritative:
 
 **Implementation:** `internal/grpc/query.go` (`Service.Query`), reported from
 `GetServerInfo` as the `query` capability. Python: `model.query(...)`
-(`python/opensysml/query.py`).
+(`python/pysysml/query.py`).
 
 ### The query model
 
@@ -596,7 +596,7 @@ rpc Query(QueryRequest) returns (QueryResponse);   // api/proto/sysml.proto
 A cookbook payload, sent verbatim through the Python client:
 
 ```python
-model = opensysml.load("examples/vehicle.sysml")
+model = pysysml.load("examples/vehicle.sysml")
 model.query({"@type": "Query", "where": {
     "@type": "PrimitiveConstraint",
     "operator": "=", "property": "@type", "value": ["PartUsage"]}})

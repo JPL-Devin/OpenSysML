@@ -15,8 +15,8 @@ scope, not a constraint. ``docs/reference/api.md`` states exactly what is suppor
 from dataclasses import dataclass
 from typing import Dict, Mapping, Sequence
 
-from opensysml.errors import OpenSysMLError
-from opensysml.proto import sysml_pb2
+from pysysml.errors import PySysMLError
+from pysysml.proto import sysml_pb2
 
 #: ``@type`` of the standard's query resource.
 TYPE_QUERY = "Query"
@@ -37,7 +37,7 @@ _COMPOSITE_OPERATORS = {
 }
 
 
-class QueryError(OpenSysMLError):
+class QueryError(PySysMLError):
     """Raised when a query payload is not one the standard's query model describes."""
 
 

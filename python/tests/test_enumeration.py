@@ -7,11 +7,11 @@ string attribute, and not as an unsupported null.
 
 import pytest
 
-from opensysml import EnumLiteral
-from opensysml.connection import Connection
-from opensysml.errors import FeatureValueError, UnsupportedValueError
-from opensysml.proto import sysml_pb2
-from opensysml.values import feature_value_to_python, value_to_python
+from pysysml import EnumLiteral
+from pysysml.connection import Connection
+from pysysml.errors import FeatureValueError, UnsupportedValueError
+from pysysml.proto import sysml_pb2
+from pysysml.values import feature_value_to_python, value_to_python
 
 RED = sysml_pb2.EnumLiteral(
     literal_id="D::Color::red", enumeration_id="D::Color", name="Color::red"

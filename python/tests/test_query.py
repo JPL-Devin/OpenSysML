@@ -15,11 +15,11 @@ from concurrent import futures
 import grpc
 import pytest
 
-from opensysml.capabilities import CAPABILITY_QUERY, MissingCapabilityError
-from opensysml.connection import Connection
-from opensysml.errors import InvalidRequestError, ModelNotFoundError
-from opensysml.query import QueryElement, QueryError, build_query
-from opensysml.proto import sysml_pb2, sysml_pb2_grpc
+from pysysml.capabilities import CAPABILITY_QUERY, MissingCapabilityError
+from pysysml.connection import Connection
+from pysysml.errors import InvalidRequestError, ModelNotFoundError
+from pysysml.query import QueryElement, QueryError, build_query
+from pysysml.proto import sysml_pb2, sysml_pb2_grpc
 
 MODEL = """package Demo {
     abstract part def Vehicle {
@@ -46,7 +46,7 @@ COOKBOOK_QUERY = {
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 GRPC_BINARIES = (
     os.path.join(REPO_ROOT, "bin", "sysml-grpc"),
-    os.path.join(os.path.expanduser("~"), ".opensysml", "bin", "sysml-grpc"),
+    os.path.join(os.path.expanduser("~"), ".pysysml", "bin", "sysml-grpc"),
 )
 
 

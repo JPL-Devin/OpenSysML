@@ -4,6 +4,27 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Cutting a release
 is described in [docs/project/releasing.md](docs/project/releasing.md).
 
+## Unreleased
+
+### The Python client is `pysysml` again
+
+- **`pip install pysysml`, `import pysysml`** — the client keeps the name it was published under
+  before 0.1.0 renamed it to `opensysml`; only the client is affected, so the Go module, the
+  binaries, the release archives, the Homebrew formula and the VS Code extension are unchanged.
+  The wire protocol is untouched, so a `pysysml` client talks to an already-released service.
+- **The names built on the old one move back with it:** `OPENSYSML_*` environment variables are
+  `PYSYSML_*` (`PYSYSML_GRPC_VERSION`, `PYSYSML_STATE_DIR`, `PYSYSML_GITHUB_REPO`,
+  `PYSYSML_GRPC_BINARY`, `PYSYSML_VERSION`, `PYSYSML_REQUIRE_VERSION`, `PYSYSML_PRE_RELEASE`,
+  `PYSYSML_ALLOW_UNPINNED_DOWNLOAD`, `PYSYSML_REQUIRE_SERVICE`), the base error is `PySysMLError`,
+  the generator entry point is `pysysml-generate`, the state directory is `~/.pysysml` and the
+  release tag is `pysysml-v*`. A `~/.opensysml` left behind by an `opensysml` install is dead
+  weight and can be deleted.
+- **The client is 0.4.0**, carrying on from `opensysml` 0.3.0 rather than reusing a version.
+- **`opensysml` 0.3.1 is a placeholder that raises `ImportError` naming `pysysml`**, so
+  `pip install opensysml` reports the rename instead of installing a client that no longer gets
+  fixes. It declares no dependency on `pysysml` and re-exports nothing; `opensysml==0.3.0` is the
+  exact pin that still installs the last real release under that name.
+
 ## 0.1.1 — 2026-08-19
 
 A fix release: every change below corrects something 0.1.0 got wrong about a valid model, so a
@@ -1365,8 +1386,7 @@ are listed here rather than under a heading of their own.
   metadata and `pysysml.__version__` both read — a tag that disagrees with it
   fails the job before anything is uploaded. `python/setup.py` is gone;
   `pyproject.toml` declares the build. See
-  [docs/project/releasing.md](docs/project/releasing.md#releasing-opensysml-to-pypi)
-  (that section, and the package, are named `opensysml` since the rename).
+  [docs/project/releasing.md](docs/project/releasing.md#releasing-pysysml-to-pypi).
 
 ### Known limitations
 

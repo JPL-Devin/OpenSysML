@@ -12,9 +12,9 @@ from concurrent import futures
 import grpc
 import pytest
 
-from opensysml.capabilities import CAPABILITY_FEATURE_VALUES, MissingCapabilityError
-from opensysml.connection import Connection
-from opensysml.proto import sysml_pb2, sysml_pb2_grpc
+from pysysml.capabilities import CAPABILITY_FEATURE_VALUES, MissingCapabilityError
+from pysysml.connection import Connection
+from pysysml.proto import sysml_pb2, sysml_pb2_grpc
 
 
 class FakeService(sysml_pb2_grpc.SysMLServiceServicer):
