@@ -109,6 +109,16 @@ func TestF51LoadedKerMLFileAcceptsContextualKeywords(t *testing.T) {
 	}
 }
 
+// A .kerml file may declare members at its top level with no enclosing
+// namespace; a compound prompt expression must still reach them.
+func TestF51PromptCompoundExprReachesTopLevelKerMLNames(t *testing.T) {
+	s := NewSession()
+	s.SubmitFiles([]SourceFile{{Name: "top.kerml", Text: "feature f = 5;\n"}})
+	got := run(t, s, "%eval f * 2")
+	wants(t, got, "= 10")
+	rejects(t, got, "unresolved reference")
+}
+
 // A malformed .kerml snippet reports diagnostics without panicking, and the
 // session stays usable.
 func TestF51MalformedKerMLSnippetIsRobust(t *testing.T) {

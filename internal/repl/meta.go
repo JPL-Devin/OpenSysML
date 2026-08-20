@@ -1621,6 +1621,11 @@ func (s *Session) promptScope() *symbols.Scope {
 			return sym.Scope
 		}
 	}
+	// No namespace to work in: the root holding the last declaration, so a
+	// top-level member loaded from a .kerml file is still in reach.
+	if len(members) > 0 {
+		return members[len(members)-1].scope
+	}
 	return docs[0].Scope
 }
 
