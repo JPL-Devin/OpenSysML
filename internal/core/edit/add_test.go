@@ -276,56 +276,65 @@ func TestAddMemberKerMLNotation(t *testing.T) {
 }
 
 func TestAddMemberIndentationAndRootEOF(t *testing.T) {
+	intoP := AddMember("P", "part def", "Added")
+	atRoot := AddMember("", "part def", "Added")
 	tests := []struct {
 		name, src, want string
+		op              Operation
 	}{
 		{
 			name: "four spaces and indented closing brace",
 			src:  "package P {\n    part def Existing;\n    }\n",
 			want: "package P {\n    part def Existing;\n    part def Added;\n    }\n",
+			op:   intoP,
 		},
 		{
 			name: "tabs and indented closing brace",
 			src:  "package P {\n\tpart def Existing;\n\t}\n",
 			want: "package P {\n\tpart def Existing;\n\tpart def Added;\n\t}\n",
+			op:   intoP,
+		},
+		{
+			name: "tabs and existing body",
+			src:  "package P {\n\tpart def Existing;\n}\n",
+			want: "package P {\n\tpart def Existing;\n\tpart def Added;\n}\n",
+			op:   intoP,
 		},
 		{
 			name: "two spaces",
 			src:  "package P {\n  part def Existing;\n}\n",
 			want: "package P {\n  part def Existing;\n  part def Added;\n}\n",
+			op:   intoP,
 		},
 		{
 			name: "empty body",
 			src:  "package P {\n}\n",
 			want: "package P {\n    part def Added;\n}\n",
+			op:   intoP,
 		},
 		{
 			name: "bodyless owner",
 			src:  "part def P;\n",
 			want: "part def P {\n    part x;\n}\n",
+			op:   AddMember("P", "part", "x"),
 		},
 		{
 			name: "root with newline",
 			src:  "package P;\n",
 			want: "package P;\npart def Added;\n",
+			op:   atRoot,
 		},
 		{
 			name: "root without newline",
 			src:  "package P;",
 			want: "package P;\npart def Added;\n",
+			op:   atRoot,
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			m := loadContent(t, "add.sysml", tc.src)
-			res, err := Apply(m, []Operation{AddMember("", "part def", "Added")})
-			if tc.name == "four spaces and indented closing brace" ||
-				tc.name == "tabs and indented closing brace" ||
-				tc.name == "two spaces" || tc.name == "empty body" {
-				res, err = Apply(m, []Operation{AddMember("P", "part def", "Added")})
-			} else if tc.name == "bodyless owner" {
-				res, err = Apply(m, []Operation{AddMember("P", "part", "x")})
-			}
+			res, err := Apply(m, []Operation{tc.op})
 			if err != nil {
 				t.Fatalf("Apply: %v", err)
 			}
