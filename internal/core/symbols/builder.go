@@ -129,7 +129,12 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 			sym := newSymbol(id, SymbolAttributeUsage, d, vis, child, scope, trivia)
 			defineIdent(scope, id, sym)
 			scope.AddChild(child)
+			buildMembers(child, d.Members)
 		}
+	case *ast.SendStatement:
+		// A send's body declares the node's own parameters, and the node is the
+		// action the send was written on (`action a send x via p { in x; }`).
+		buildMembers(scope, d.Members)
 	case *ast.FinalNode:
 		// Register final node by name so transitions can reference it
 		if d.Name != "" {
@@ -259,6 +264,9 @@ func buildControlNode(scope *Scope, decl ast.Node, name string, nameSpan source.
 	sym := newSymbol(id, SymbolActionUsage, decl, vis, child, scope, trivia)
 	defineIdent(scope, id, sym)
 	scope.AddChild(child)
+	// A control node ends in ActionBody, so what its body declares are features
+	// of the node a flow may name (`flow F.b1 to B1.b`).
+	buildMembers(child, ast.NodeBodyMembers(decl))
 }
 
 // buildConstraintBodyScope links the scope a require/assume body declares into.
