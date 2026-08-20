@@ -4,6 +4,159 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Cutting a release
 is described in [docs/project/releasing.md](docs/project/releasing.md).
 
+## 0.1.2 — 2026-08-20
+
+A measurement release. Two advisory harnesses now ask the OMG pilot implementation and the
+pinned OMG grammars where this implementation differs from them, and most of the behavior below
+is what they found — chiefly in KerML, which the pilot's own KerML validator now judges. A
+`.kerml` file is read as KerML rather than as SysML written with other keywords, so a KerML
+model 0.1.1 rejected may analyze clean here; notation accepted beyond the grammars now warns
+where it used to be silent. Nothing was renamed and no interface changed.
+
+### The pilot implementation judges every corpus, KerML included
+
+- **`cmd/pilot-diff` compares our diagnostics against the pinned OMG pilot implementation**
+  (`2026-05`, jupyter-sysml-kernel 0.60.1) file by file, over 338 files in seven roots: the OMG
+  training corpus, the pilot's own SysML example and validation corpora, its KerML examples, our
+  testdata, our examples and our probes. 221 files agree exactly. It is advisory — a harness that
+  finds work, not a gate — so nothing in CI depends on it, and its committed baseline
+  (`docs/project/pilot-differential-baseline.json`) makes a rerun a diff rather than a reading.
+  On the 100-file training corpus both implementations report nothing at all.
+- **The KerML corpus is judged by the pilot's own KerML validator**, not by our reading of the
+  KerML specification: `scripts/pilot-kerml-validator/ValidateKerML.java` registers the pilot's
+  `KerMLStandaloneSetup`, loads `sysml.library` and the corpus into one EMF `ResourceSet`, and
+  asks the pilot's `IResourceValidator` with `CheckMode.ALL`. It contributes no rule of its own,
+  so a disagreement it prints is the reference's verdict. Over the pilot's 58 KerML examples, the
+  diagnostics only we reported fell from 439 to 150 as the KerML work below landed — the syntax
+  class from 360 to 140, and the genuine name-resolution class from 123 to 7 — and 33 of the 58
+  files now agree exactly.
+- **Six diagnostics the pilot reports and we do not are a defect in the pilot**, not a gap here:
+  EMF's unpaired-bidirectional-reference check firing on the pilot's own
+  `Type::ownedDisjoining` / `Disjoining::owningType` opposite, reproducible from three lines
+  (`classifier A; classifier B disjoint from A;`) in a fresh resource set. It is recorded with
+  its reproducer rather than absorbed into our own numbers.
+- **`cmd/grammar-coverage` measures the pinned OMG grammars against every corpus we hold**:
+  483 of 727 productions and 802 of 807 notational forms have input-presence evidence. The
+  number is deliberately an over-approximation — presence of an input a production admits, never
+  parser-execution coverage or compliance — so the page's useful reading is the five forms with
+  no evidence anywhere, each adjudicated: the `%` remainder operator and prefix metadata on a
+  namespace are implemented but exercised by nothing, and the named `disjoining`, `conjugation`
+  and `redefinition` relationship declarations are not implemented.
+
+### A `.kerml` file is analyzed as KerML
+
+- **A KerML declaration specializes the library type its keyword implies**, so the features of
+  that library type are inherited: `class` reaches `Occurrences::Occurrence`, `struct` reaches
+  `Objects::Object`, and so on through `assoc`, `behavior`, `function`, `interaction`,
+  `metaclass`, `datatype`, `classifier` and `type`. No library member was inherited before, so
+  `portion focusedState : Camera subsets timeSlices;` reported an unresolved reference to a
+  feature the library declares. A declared generalization suppresses the implicit base only when
+  it already reaches it, so `struct MyWheel specializes Wheel` still reaches `Objects::Object`,
+  and a supertype restored from the index cache keeps those edges. A bare `feature` still gets
+  no base: the SysML attribute base is not KerML's.
+- **SysML's definition-and-usage checks no longer fire on KerML declarations.** `class Person
+  specializes Object` was reported as "only a definition may specialize; found a usage" — a
+  distinction KerML does not draw. A `.kerml` specialization or typing now requires only that
+  its target be a type, from an explicit list of what a type is rather than a guess about what
+  isn't, so `metaclass AtomMetadata specializes Metaobject` is accepted while a non-type target
+  is still reported. The SysML files keep the kind checks they had.
+- **A union conforms through its unioning types** — `classifier MyWheel unions MyWheel1,
+  MyWheel2` — without unioning becoming a generalization.
+- **A declaration's header sees its own body.** Names in a `featured by`, `crosses` or
+  subsetting clause resolve against the members and imports of the body of the same declaration
+  before the enclosing scope, and stay reachable afterwards by qualified name and feature chain.
+  Resolution of a member inherited through an implicit base no longer recurses.
+- **An unknown subsetting target is tolerated** rather than reported as a KerML type error about
+  something else.
+
+### KerML notation the reference accepts now parses
+
+- **`featured by`, an n-ary connector end list, and a typed or redefining succession parse**:
+  `class Owner { member feature inCart : Product featured by Account; }`,
+  `connector c : A (a, b, c);` and `succession s : Link [1] first paint then dry;` — whose own
+  `[1]` belongs to the succession rather than to its first end — along with the `succession
+  redefines s : …` spelling. A missing `by`, a missing target, a missing `then` and a trailing
+  comma are still reported.
+- **`at`, `while`, `merge` and `decide` are names in a `.kerml` file**, where they are not KerML
+  keywords, as `about`, `bind` and the other SysML-only words already were. The remaining KerML
+  feature-prefix forms — `abstract var feature x [0..*];` — are still not parsed and are recorded
+  as such.
+
+### Imports and visibility
+
+- **A `public` import is re-exported to importers of the importing namespace**, transitively;
+  before, re-export stopped after one namespace. A root-level import is visible from a nested
+  package, an imported name may prefix a qualified name, and an import cycle terminates instead
+  of recursing. A `protected` import is reachable through a specialization of the importing
+  namespace and from nowhere else.
+- **An import with no visibility indicator warns.** The grammar requires one, so `import Lib::*;`
+  now reports `[syntax/import-visibility] import without a visibility indicator: SysML v2
+  requires public, private or protected before 'import'`. It is a warning at the syntax tier and
+  analysis continues through it; `expose` is exempt, its grammar supplying protected visibility
+  implicitly.
+
+### SysML notation the parser was refusing
+
+- **A connector, interface or flow written with shorthand ends may have a body**:
+  `connect x.p to r.p { ... }`, `interface b1.p to b2.p { ... }` and `flow s1.x to s2.x { ... }`
+  parse with their members. An unclosed body, an interface without `to` and an unterminated flow
+  body are still reported.
+- **An accept node is an action statement**, so `then action engineStopped accept engineOff :
+  EngineOff;` parses and executes. An accept in a loop or branch body remains unsupported by
+  lowering and is reported when reached, rather than accepted and silently skipped.
+- **`connect` requires its ends and reads a leading multiplicity on each of them**:
+  `connect [1] a to [1] b`. `connect;`, `connect { ... }` and a missing target are reported where
+  some were accepted and misrepresented.
+- **Eleven words that no grammar production reserves are names again**, `on` and `var` among
+  them, so `state on;`, `part on : On;` and `attribute var : ScalarValues::Integer;` parse as
+  declarations named `on` and `var`. Each word remains a keyword in the position its grammar
+  gives it, so `var a : Integer;` without a kind is still reported.
+- **A modifier before a kind prefix keeps the kind**, which was dropped from the tree and from
+  every diagnostic that read it.
+
+### Notation accepted beyond the grammars now says so
+
+- **A construct we accept that no pinned production admits warns** at the syntax tier, from the
+  conformance audit: `namespace`, `region`, `choice`, `junction`, an entry/exit/history point,
+  `defer`, the `initial`/`final`/`decision` node spellings, and `transition <source> to
+  <target>;`. `namespace P { }` in a `.sysml` file reports "`namespace` is KerML notation: the
+  SysML v2 grammar has no namespace declaration, so write `package` here or move the declaration
+  to a .kerml file"; `featured by` in a `.sysml` file reports the same for the featuring clause.
+  The same notation in a `.kerml` file is silent, because there it is standard. These are
+  warnings — the models that use this notation still parse, and no higher tier is gated — and the
+  REPL warns for its own buffer, which it reads as SysML.
+
+### Analysis corrections
+
+- **An alias is followed through every type relationship** — specialization, typing, subsetting,
+  redefinition, multiplicity and invocation inference — so `part def AvionicsLRU :> Box`, where
+  `Box` aliases `RectangularCuboid`, no longer reports "part cannot specialize alias (kind
+  mismatch)" and inherits what the aliased definition declares. An alias cycle terminates.
+- **An invocation of an aliased action or function is type-checked** against its parameters
+  instead of going unchecked.
+- **A declaration with a short name is listed once** among a document's members, not twice.
+- **A part typing check that read an unrelated declaration is gone**, with the diagnostics it
+  produced on valid models.
+
+### Diagrams in the VS Code extension
+
+- **`SysML: Open Diagram` renders the open model in a panel** and keeps it current as the file
+  changes, over three new LSP requests — `opensysml/render`, `opensysml/views` and
+  `opensysml/renderChanged` — documented in `docs/reference/lsp.md`. The command is gated on the
+  server capability `experimental.openSysmlRender`, and the panel is read-only and makes no
+  network request.
+- **Go-to-definition locates the identifier of a rendered element**, not only its declaration.
+
+### Four pilot rules this release does not implement
+
+Recorded in `docs/project/spec-compliance.md` with the divergence each one produces, rather than
+left to be discovered: featuring-type access on a subsetting (`validateSubsettingFeaturingTypes`),
+flow-end subsetting (`validateFlowEndSubsetting`, so `flow of Fuel from tank to thruster;` is
+accepted here and rejected by the pilot), invocation instantiated type
+(`validateInvocationExpressionInstantiatedType`, so `part w = Widget();` on a `part def` is
+reported by the pilot and by nothing here), and model-level evaluability of a filter, which
+diverges in both directions.
+
 ## 0.1.1 — 2026-08-19
 
 A fix release: every change below corrects something 0.1.0 got wrong about a valid model, so a
