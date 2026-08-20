@@ -182,6 +182,26 @@ func TestOrderByImportsQualifiedPrefix(t *testing.T) {
 	}
 }
 
+// Top-level definitions, usages, and aliases are importable declarations too.
+func TestOrderByImportsDeclarations(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, content string) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("z-definition.sysml", "part def DefinitionThing;\n")
+	write("y-usage.sysml", "part usageThing;\n")
+	write("x-alias.sysml", "alias AliasThing for DefinitionThing;\n")
+	write("a-importer.sysml", "package Imports {\n\tprivate import DefinitionThing::*;\n\tprivate import usageThing::*;\n\tprivate import AliasThing::*;\n}\n")
+
+	files := []string{"a-importer.sysml", "z-definition.sysml", "y-usage.sysml", "x-alias.sysml"}
+	want := []string{"z-definition.sysml", "y-usage.sysml", "x-alias.sysml", "a-importer.sysml"}
+	if got := orderByImports(dir, ".", files); !reflect.DeepEqual(got, want) {
+		t.Errorf("orderByImports() = %v, want %v", got, want)
+	}
+}
+
 // An import cycle must not hang or drop files.
 func TestOrderByImportsCycle(t *testing.T) {
 	dir := t.TempDir()

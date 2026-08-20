@@ -13,8 +13,8 @@ import (
 )
 
 // orderByImports sorts files so that every file follows the files declaring the
-// root namespaces it imports. Files the parse cannot relate keep their original
-// order, as do the members of an import cycle.
+// names it imports. Files the parse cannot relate keep their original order, as
+// do the members of an import cycle.
 //
 // This is only needed for the pilot side: it processes inputs one after another
 // like notebook cells, so `private import 'Part Definition Example'::*` fails
@@ -57,7 +57,7 @@ func orderByImports(repo, dir string, files []string) []string {
 			if declaredByFile[rel][name] {
 				continue
 			}
-			provider, ok := declaredByByPrefix(name, declaredBy)
+			provider, ok := declaringFileFor(name, declaredBy)
 			if !ok || provider == rel || dependencies[rel][provider] {
 				continue
 			}
@@ -103,15 +103,12 @@ func orderByImports(repo, dir string, files []string) []string {
 	return ordered
 }
 
-// declaredNames returns the namespace names the file declares, including nested
-// packages and namespaces.
+// declaredNames returns the names the file declares, including nested packages,
+// namespaces, definitions, usages, and aliases.
 func declaredNames(root *ast.RootNamespace) []string {
 	seen := make(map[string]bool)
 	var walk func([]ast.Node, []string)
 	walk = func(members []ast.Node, prefixes []string) {
-		if len(prefixes) == 0 {
-			prefixes = []string{""}
-		}
 		for _, member := range members {
 			if membership, ok := member.(*ast.Membership); ok {
 				member = membership.Member
@@ -121,6 +118,12 @@ func declaredNames(root *ast.RootNamespace) []string {
 				walk(node.Members, addDeclaredNames(seen, prefixes, node.Ident))
 			case *ast.Namespace:
 				walk(node.Members, addDeclaredNames(seen, prefixes, node.Ident))
+			case *ast.Definition:
+				walk(node.Members, addDeclaredNames(seen, prefixes, node.Ident))
+			case *ast.Usage:
+				walk(node.Members, addDeclaredNames(seen, prefixes, node.Ident))
+			case *ast.Alias:
+				walk(node.Body, addDeclaredNames(seen, prefixes, node.Ident))
 			}
 		}
 	}
@@ -145,12 +148,9 @@ func addDeclaredNames(seen map[string]bool, prefixes []string, ident ast.Identif
 			full = prefix + "::" + name
 		}
 		if !seen[full] {
-			seen[full] = true
+			next = append(next, full)
 		}
-		next = append(next, full)
-	}
-	if len(prefixes) == 0 {
-		prefixes = []string{""}
+		seen[full] = true
 	}
 	for _, prefix := range prefixes {
 		add(prefix, ident.Name)
@@ -178,7 +178,7 @@ func importedNames(root *ast.RootNamespace) []string {
 	return names
 }
 
-func declaredByByPrefix(name string, declaredBy map[string]string) (string, bool) {
+func declaringFileFor(name string, declaredBy map[string]string) (string, bool) {
 	for {
 		if provider, ok := declaredBy[name]; ok {
 			return provider, true
