@@ -4110,7 +4110,8 @@ skipping the body it now tolerates. Two probes settle it, and both are worth hav
   rows: `%search engineStart` yields `Demo::Startup::engineStarted::engineStart attributeUsage`
   while `%search engineStarted` yields the `actionUsage` — proof they did not collapse into one.
 
-**Corpus sweep against a contrast binary** (`examples/pilot-corpora`, ~454 files) is the cheapest
+**Corpus sweep against a contrast binary** over `examples/pilot-corpora` (for the corpus roots and
+their file counts see [docs/project/pilot-differential.md](../../../docs/project/pilot-differential.md)) is the cheapest
 regression net, but two traps ruin it:
 
 - The corpus paths **contain spaces**: `for f in $(find …)` word-splits and every validate silently
