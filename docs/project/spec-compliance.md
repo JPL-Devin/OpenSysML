@@ -2,7 +2,7 @@
 
 **Purpose:** Document implementation coverage of SysML v2 / KerML behavioral semantics. UML 2.5.1 is cited only as reference semantics for an OpenSysML extension the SysML v2 notation has no production for and the bundled KerML semantic library (`internal/core/libs/stdlib/`) no performance for.
 
-**Related:** [`TESTING.md`](../internals/testing.md) (test contracts), [`ARCHITECTURE.md`](../internals/architecture.md) (runtime architecture)
+**Related:** [`TESTING.md`](../internals/testing.md) (test contracts), [`ARCHITECTURE.md`](../internals/architecture.md) (runtime architecture), [grammar-coverage.md](grammar-coverage.md) (which OMG grammar productions our test inputs exercise — input-presence evidence, which implies nothing about compliance either way)
 
 ---
 
