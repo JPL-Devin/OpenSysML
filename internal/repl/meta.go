@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"math"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
-	"github.com/Open-MBEE/OpenSysML/internal/core/model"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/runtime"
@@ -500,7 +500,7 @@ func (s *Session) evalIn(name, expr string) ([]string, error) {
 	if node == nil {
 		return nil, errors.New("could not parse expression")
 	}
-	scope := contextScope(sym, s.ws.Document(docName))
+	scope := s.contextScope(sym)
 	if scope == nil {
 		return nil, fmt.Errorf("%s names no namespace to evaluate in", notationName(fqn))
 	}
@@ -526,18 +526,20 @@ func (s *Session) evalIn(name, expr string) ([]string, error) {
 
 // contextScope is the namespace a pinned context evaluates in: the element's own
 // scope, so its members are named without qualification, else the scope it was
-// declared in.
-func contextScope(sym *symbols.Symbol, doc *model.Document) *symbols.Scope {
-	switch {
-	case sym == nil:
+// declared in, searched through both session documents.
+func (s *Session) contextScope(sym *symbols.Symbol) *symbols.Scope {
+	if sym == nil {
 		return nil
-	case sym.Scope != nil:
-		return sym.Scope
-	case doc == nil:
-		return nil
-	default:
-		return declaringScope(sym, doc.Scope)
 	}
+	if sym.Scope != nil {
+		return sym.Scope
+	}
+	for _, doc := range s.sessionDocs() {
+		if scope := declaringScope(sym, doc.Scope); scope != nil {
+			return scope
+		}
+	}
+	return nil
 }
 
 // pathArgs is a command's path arguments with any notation quoting removed, so
@@ -700,7 +702,7 @@ func (s *Session) evalExpr(expr string) ([]string, error) {
 	// Evaluated in the namespace the session is working in, so a compound
 	// expression names what a member written there would: the session's
 	// features and the units its imports bring in.
-	val, err := ctx.EvalWithScope(evalUsage.Value, s.promptScope(doc))
+	val, err := ctx.EvalWithScope(evalUsage.Value, s.promptScope())
 	if err != nil {
 		if lookupErr != nil {
 			return nil, lookupErr
@@ -869,12 +871,16 @@ func (s *Session) doBudget() []string {
 // uses, in the document root or in the namespace a prompt expression is
 // evaluated in.
 func (s *Session) declaresANameIn(expr string) bool {
-	doc := s.ws.Document(docName)
-	if doc == nil || doc.Scope == nil {
+	var scopes []*symbols.Scope
+	for _, doc := range s.sessionDocs() {
+		if doc.Scope != nil {
+			scopes = append(scopes, doc.Scope)
+		}
+	}
+	if len(scopes) == 0 {
 		return false
 	}
-	scopes := []*symbols.Scope{doc.Scope}
-	if prompt := s.promptScope(doc); prompt != nil && prompt != doc.Scope {
+	if prompt := s.promptScope(); prompt != nil && prompt != scopes[0] {
 		scopes = append(scopes, prompt)
 	}
 	src := source.New("literal", []byte(expr))
@@ -1277,7 +1283,7 @@ func (s *Session) evalCalc(calcName, argText string) ([]string, []NamedValue, er
 
 	// Arguments are evaluated where the prompt evaluates any expression, so a
 	// quantity argument names the units the session's imports bring in.
-	scope := s.promptScope(doc)
+	scope := s.promptScope()
 	argValues := make([]runtime.Value, len(exprs))
 	argTexts := make([]string, len(exprs))
 	for i, arg := range exprs {
@@ -1570,13 +1576,31 @@ func (s *Session) doConstraint(name string) ([]string, bool, error) {
 // promptScope is the namespace a prompt expression is evaluated in: the last
 // namespace the session declared, whose imports are then visible to it exactly
 // as they are to a member written there (KerML 8.2.3.5.3). A session that
-// declared no namespace evaluates at the document root.
-func (s *Session) promptScope(doc *model.Document) *symbols.Scope {
-	if doc == nil || doc.Scope == nil || doc.AST == nil {
+// declared no namespace evaluates at the document root. Both session documents
+// are read, in buffer order, so a namespace loaded from a .kerml file counts.
+func (s *Session) promptScope() *symbols.Scope {
+	docs := s.sessionDocs()
+	if len(docs) == 0 {
 		return nil
 	}
-	for i := len(doc.AST.Members) - 1; i >= 0; i-- {
-		member := doc.AST.Members[i]
+	type entry struct {
+		member ast.Node
+		scope  *symbols.Scope
+	}
+	var members []entry
+	for _, doc := range docs {
+		if doc.AST == nil || doc.Scope == nil {
+			continue
+		}
+		for _, m := range doc.AST.Members {
+			members = append(members, entry{m, doc.Scope})
+		}
+	}
+	sort.SliceStable(members, func(i, j int) bool {
+		return members[i].member.Span().Offset < members[j].member.Span().Offset
+	})
+	for i := len(members) - 1; i >= 0; i-- {
+		member := members[i].member
 		if mem, ok := member.(*ast.Membership); ok {
 			member = mem.Member
 		}
@@ -1593,11 +1617,16 @@ func (s *Session) promptScope(doc *model.Document) *symbols.Scope {
 		if name == "" {
 			name = ident.ShortName
 		}
-		if sym, ok := doc.Scope.LookupLocal(name); ok && sym != nil && sym.Scope != nil {
+		if sym, ok := members[i].scope.LookupLocal(name); ok && sym != nil && sym.Scope != nil {
 			return sym.Scope
 		}
 	}
-	return doc.Scope
+	// No namespace to work in: the root holding the last declaration, so a
+	// top-level member loaded from a .kerml file is still in reach.
+	if len(members) > 0 {
+		return members[len(members)-1].scope
+	}
+	return docs[0].Scope
 }
 
 // declaringScope returns the scope an element's conditions were written in,
@@ -2203,7 +2232,7 @@ func (s *Session) operationArguments(ctx *runtime.Context, args []string) (map[s
 	if len(args) == 0 {
 		return nil, nil
 	}
-	scope := s.promptScope(s.ws.Document(docName))
+	scope := s.promptScope()
 	bound := make(map[string]runtime.Value, len(args))
 	for _, arg := range args {
 		param, expr, ok := strings.Cut(arg, "=")
