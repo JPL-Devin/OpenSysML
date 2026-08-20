@@ -550,7 +550,9 @@ nothing downstream of it is measurable.
 `unmapped`), measured by the run in the results table above. That is the one current number;
 the table below is a **history**, not an addition. Each row's count is what the class measured
 *when it was adjudicated* — K1–K5 were adjudicated when the root stood at 439, so those counts
-sum to 439 and no longer describe the root. K3 carries F31's before/after figures.
+sum to 439 and no longer describe the root. K3 carries F31's before/after figures. For the 150 as
+they stand, adjudicated one diagnostic at a time, see
+[The 150, adjudicated diagnostic by diagnostic (K7–K18)](#the-150-adjudicated-diagnostic-by-diagnostic-k7k18).
 
 Verdicts across the five classes: **436 ours** and **3 one-sided** (K5, a check the reference
 does not have), with none attributable to the bridge — it validates one batch in one resource
@@ -564,6 +566,602 @@ follow-up, struck through once that follow-up is done.
 | K3 | `unresolved reference` / `unresolved member` | 43 → **123** → **7** | **Ours (name resolution). Fixed by F31, with 7 left open.** Re-measured on merged `origin/main` (with #343, #349 and #350 in), the KerML root is **269** only-ours and **123** of them are this class (91 `unresolved-reference` + 32 `unresolved-member`) — the F30 branch's figure reproduces exactly, so the denominator is unchanged. After F31 the root is **150** and the class is **7**: 140 syntax (unmoved), 0 `kind-mismatch` (3 before — the `A-3-4-OneToUnrestrictedConnectors.kerml:43,48,56` conformance rows F32 recorded as downstream of the unresolved `BikeFork` import, gone with it), 3 `unmapped` (K5's cycles, unmoved). Classification of the 123, each diagnostic in exactly one cause and each verdict backed by a minimal reproducer the pilot is silent on and we reported: **58 — implicit generalization was not part of inherited-member traversal.** KerML's keyword-implied supertypes (`class` → `Occurrences::Occurrence`, `struct` → `Objects::Object`, `assoc` → `Links::Link`, …) were never contributed to a `.kerml` declaration's supertypes, so no library member was inherited: the brief's shape (1), `portion focusedState: Camera subsets timeSlices;` (`Behavior Examples/Camera.kerml:4,5`) and all 25 of `A-3-8-ChangingFeatureValues.kerml`. Traversal also had to follow same-named subsettings/redefinitions to the *inherited* feature rather than the local binding, and the library cache had to carry semantic supertype edges (format 17) or a cached restore lost the inheritance. **15 — import visibility.** The brief's shape (2) is not a workspace-indexing or bridge artifact: `OneToOneConnectorsExecution` in the sibling file *is* indexed, and the failures were that a `public import` was not re-exported to importers of the importing namespace, that a root-level import was invisible from a nested package, and that an imported name could not serve as the prefix of a qualified name. **39 — a declaration's header did not see its own body.** Names written in a header (`featured by`, `crosses`, subsetting) that a member of the same declaration's body declares, and the same members reached from outside by qualified path or feature chain — the brief's shape (3): `member feature inCart: ShoppingCart[0..1] featured by Product_Account { member feature Product_Account : Account featured by Product; }` (`Association Examples/ProductSelection_N_ary.kerml:37,46,55`) and `member step merge : … featured by TakePicture_snapshots { … }` (`TimeVaryingSteps.kerml`). **4 — the implicit base was suppressed by any declared generalization.** `struct MyWheel1 specializes Wheel` (`A-3-5-TimingForStructures.kerml:148,154,159,164`) still implicitly specializes `Objects::Object`, because KerML 1.0 §8.4.2 suppresses the implicit specialization only when the type already specializes that base directly or indirectly, and `classifier Wheel;` reaches only `Base::Anything`; `ExtendedOccurrences.kerml:51` redefining `Objects::Object::self` under `struct ExtendedObject :> ExtendedOccurrence` is the pilot-side witness for the same reading. **4 — downstream of notation we do not parse, not ours:** `rep inOCL language "ocl"` (`Simple Tests/TextualRepresentation.kerml:7`, 3, follow-up F70) and `in timeslice : Timeslice;` inside `expr while { … }` (`ExtendedOccurrences.kerml:27`, follow-up F71 — the parameter's name lands in `Usage.Keyword` with an empty `Ident`, so it never reaches symbol construction). **3 — open, mechanism not established:** `Product_Account1 subsets Product_Account` and its two siblings (`ProductSelection_N_ary.kerml:93,101,109`, follow-up F72). No cause in this class is a reference-implementation artifact, and none is a fixture artifact. |
 | K4 | SysML-shaped semantic checks firing on KerML: `only a definition may specialize; found a usage` (21), `type must be a definition, found attributeUsage` (2), `metaclass cannot specialize metaclass (kind mismatch)` (1), `rollsOn (typed by MyWheel) redefines rollsOn (typed by Wheel): types do not conform` (1) | 25 | **Ours.** KerML has no definition/usage split, so the first row misfires on ordinary declarations (`class Person specializes Object`, `Individuals Examples/JohnIndividualExample.kerml:4,12,34`; `Mass Roll-up Example/Vehicles_3.kerml:32`; `Simple Tests/Inheritance.kerml:21`). `metaclass <atom> AtomMetadata specializes Metaobject` (`KerML Spec Annex A Examples/A-2-Atoms.kerml:11`) is a metaclass specializing a metaclass, which the reference allows. The conformance row misses `classifier MyWheel unions MyWheel1, MyWheel2;` as a supertype of `Wheel` (`KerML Spec Annex A Examples/A-3-2-WithoutConnectors.kerml:32`). **Fixed in F32:** all 25 are gone, the root's only-ours count falling 439 → 417 with the SysML roots byte-identical. Three of the 22 the count moved by are replaced by a different diagnostic in `A-3-4-OneToUnrestrictedConnectors.kerml:43,48,56` — a redefinition conformance failure that only surfaces now that the type tier no longer errors in that file, and that is downstream of the unresolved `BikeFork` import in `A-3-3-OneToOneConnectors.kerml:33,35` (K3/F31), not of the definition/usage classification. |
 | K5 | `x`/`y`/`z` `participates in a specialization cycle` (`unmapped`) | 3 | **Ours is right, and the reference has no such check** — the same one-sided finding F4 settled on the SysML side, now with a KerML witness the corpus's own authors committed: `feature x :> z; feature y :> x; feature z :> y;` in `Simple Tests/Circular.kerml:9-11` is a cycle, and `KerMLValidator.checkSpecialization` is exactly the validator F4 read. Our extension of the reference rather than a disagreement, so it stays `unmapped`. |
+
+#### The 150, adjudicated diagnostic by diagnostic (K7–K18)
+
+K1–K5 above are a history of a root that stood at 439. This section adjudicates the root as it
+stands **now**: all **150** only-ours diagnostics, 140 `syntax` + 7 `unresolved-reference` + 3
+`unmapped`, spread over **25** of the root's 58 files (33 carry none, which is the root's
+`fullyAgreeing` count). Method is the SysML section's, tightened in one way: because the KerML
+root is small enough to enumerate, **attribution is per diagnostic, not per file** — every one of
+the 150 is read on the construct it sits on, so no class inherits diagnostics that belong to
+another. `Simple Tests/Features.kerml` is the case that makes the difference: its 18 diagnostics
+split across four classes, and grouping by its *first* one (line 8) would have credited all 18 to
+`typed by`. 75 reproducers were run through both checkers (`bin/sysml <file>` and
+`build/pilot-kerml-validator/validate-kerml <file>` on the same file), quoted inline below and
+kept outside the repository, so no corpus root gains a file and the baseline does not move.
+
+**118 of the 150 are recovery, not findings.** The generic messages our bodies unwind with after
+the first unparsed member are `expected a namespace member` (95) and `expected a body member`
+(23). The other 32 carry a construct-specific message: `expected '{' or ';' after declaration`
+(17), `expected a name` (4), `expected '{' or ';'` (1), the 7 `unresolved-reference` and the 3
+`unmapped`. So the 150 are produced by **12 constructs plus the 8 already settled**, and a single
+accepted member can retire dozens: `Simple Tests/Expressions.kerml` alone is 34 diagnostics from
+one gap.
+
+**25 of the 150 are already adjudicated** and are not re-litigated here, only counted:
+K5's specialization cycles (3, `Simple Tests/Circular.kerml:9-11`, one-sided and staying
+`unmapped`), F50 (2, `Variable Feature Examples/TimeVaryingCarDriver.kerml:53,100`), F70 (3,
+`Simple Tests/TextualRepresentation.kerml:7`), F71 (1,
+`Variable Feature Examples/Enhancements/ExtendedOccurrences.kerml:27`), F72 (3,
+`Association Examples/ProductSelection_N_ary.kerml:93,101,109`), F81 (8), F82 (1,
+`Simple Tests/FeatureChains.kerml:28`) and F83 (4,
+`KerML Spec Annex A Examples/A-2-ModelingInstances.kerml:8,9`). Two of those counts are corrected
+by the per-diagnostic pass, without any change to their verdicts: **F81's `differences` is 8, not
+4** — beyond `Simple Tests/Classifiers.kerml:13` and `FeatureChains.kerml:31` it also leads
+`Features.kerml:21` (`feature z1 intersects f,g differences y, y1, z;`) and `:28`
+(`feature adult differences person, child;`), 2 diagnostics each — and **F83's is 4, not 2**,
+because `A-2-ModelingInstances.kerml:8` carries the same `classifier MyBike [1] specializes
+Bicycle;` shape as `:9`. The 125 that remain are the classes below.
+
+| # | Class — the construct each diagnostic sits on | Files | Diags | Verdict | Follow-up |
+|---|---|---:|---:|---|---|
+| K7 | Keyword-less feature members: any at namespace level; and in a body, one whose declaration is a specialization without a typing, one whose multiplicity precedes the typing, or one prefixed `var`/`const` | 7 | 60 | **Ours** — `Feature`'s keyword-less alternative | [F84](#follow-ups-not-fixed-here--this-pr-is-advisory) |
+| K8 | `type` declarations — the keyword itself, in every form the file writes it | 1 | 17 | **Ours** — `Type` | [F85](#follow-ups-not-fixed-here--this-pr-is-advisory) |
+| K9 | Explicit relationship-member keywords: `specialization`/`subtype`/`subclassifier`/`typing`/`subset`/`redefinition`/`conjugation`/`inverse`/`inverting`/`featuring` | 5 | 19 | **Ours** — the `NonFeatureElement` relationship productions | [F86](#follow-ups-not-fixed-here--this-pr-is-advisory) |
+| K10 | `typed by` as the long spelling of `:` in a feature declaration | 1 | 4 | **Ours** — `TypedBy` | [F87](#follow-ups-not-fixed-here--this-pr-is-advisory) |
+| K11 | A connector end that is a feature chain (`connector f.a to a.g;`) | 2 | 6 | **Ours** — `ConnectorEnd`, `OwnedReferenceSubsetting` | [F88](#follow-ups-not-fixed-here--this-pr-is-advisory) |
+| K12 | `binding`/`succession` declarations: anonymous with a body, and `binding n : T of a = b` | 1 | 5 | **Ours** — `BindingConnectorDeclaration`, `SuccessionDeclaration` | [F89](#follow-ups-not-fixed-here--this-pr-is-advisory) |
+| K13 | Conjugation in a declaration: `conjugates` on a classifier, `~` in a feature declaration | 2 | 6 | **Ours** — `ConjugationPart`, `FeatureConjugationPart` | [F90](#follow-ups-not-fixed-here--this-pr-is-advisory) |
+| K14 | `const` before `end` in an end-feature prefix | 1 | 2 | **Ours** — `EndFeaturePrefix` | [F91](#follow-ups-not-fixed-here--this-pr-is-advisory) |
+| K15 | Annotating elements: an anonymous comment carrying only `locale`, and `doc` with a short name | 1 | 2 | **Ours** — `Comment`, `Documentation` | [F92](#follow-ups-not-fixed-here--this-pr-is-advisory) |
+| K16 | A second filter bracket on a filter-package import (`::**[@A][cond]`) | 1 | 2 | **Ours** — `FilterPackage` | [F93](#follow-ups-not-fixed-here--this-pr-is-advisory) |
+| K17 | Prefix metadata standing in for the `feature` keyword (`abstract #Classified z2;`) | 1 | 1 | **Ours** — `Feature`'s `PrefixMetadataMember` alternative | [F94](#follow-ups-not-fixed-here--this-pr-is-advisory) |
+| K18 | A named `expr` whose body is a brace-enclosed expression with no `;` | 1 | 1 | **Ours** — `Expression` body | [F95](#follow-ups-not-fixed-here--this-pr-is-advisory) |
+
+125 + the 25 settled = 150, each diagnostic in exactly one class. The verdict across the twelve
+is **125 ours** — 12 parser gaps, no resolution defect among them, and **not one reference defect
+or one-sided check**: every file here was written by the reference's own authors and the pinned
+KerML validator is silent on all 25 (the root's `pilotOnly` 6 are K6's, adjudicated separately
+below). Two reproducers draw a *different* pilot diagnostic and are marked as such (K9's
+`redefinition` rows, K18's `;` variant); one candidate was **withdrawn** on the evidence rather
+than promoted (K7's expression bodies, below).
+
+#### K7 — keyword-less feature members (F84, 60)
+
+The class the two biggest files are made of: `Simple Tests/Expressions.kerml` (33 of its 34),
+`Vehicle Example/VehicleUsages.kerml` (14), `Simple Tests/Classifications.kerml` (6),
+`Mass Roll-up Example/Vehicles_1.kerml` (2) and `Vehicles_2.kerml` (2),
+`Simple Tests/Behaviors.kerml` (2), `Vehicle Example/VehicleDefinitions.kerml:16` (1). We do
+accept a keyword-less member in a *body* when it is a plain name, a value, or a typing
+(`p1;`, `p2 = 1;`, `p4 : Engine;`, `out p6;`, `composite p8;` all pass both checkers), which is
+why the class is four faces of one gap rather than a blanket rejection. Face 1 —
+**namespace level, at all** (`Classifications.kerml:3-7`, `Expressions.kerml:6-19`,
+`VehicleDefinitions.kerml:16`):
+
+```kerml
+package KF1 {
+	private import ScalarValues::*;
+	classifier T;
+	feature x : Integer;
+	a : Integer;
+	y = x as T;
+}
+```
+
+Ours:
+
+```text
+kf1.kerml:5:2: error: expected a namespace member
+	a : Integer;
+ ^
+kf1.kerml:6:2: error: expected a namespace member
+	y = x as T;
+ ^
+sysml: kf1.kerml did not analyse cleanly
+```
+
+Pilot: `kf1.kerml:6:6: warning: Cast argument should have conforming types`, exit 0 — it accepts
+both members. `x;` alone at namespace level draws the same single diagnostic from us and nothing
+from the pilot. Faces 2, 3 and 4 — **in a body: a declaration whose specialization carries no
+typing, a multiplicity before the typing, and a `var`/`const` prefix** (`VehicleUsages.kerml:48,
+49,69,95,96`, `Vehicles_1.kerml:32`, `Vehicles_2.kerml:29`, `Behaviors.kerml:11,14`,
+`Expressions.kerml:59`):
+
+```kerml
+package KF2 {
+	private import ScalarValues::*;
+	class V { feature m : Real; }
+	feature v : V {
+		composite e1 redefines V::m;
+		p5[1] : Real;
+		var p9 : Real;
+	}
+}
+```
+
+Ours:
+
+```text
+kf2.kerml:5:13: error: expected a body member
+		composite e1 redefines V::m;
+            ^~
+kf2.kerml:6:3: error: expected a body member
+		p5[1] : Real;
+  ^~
+kf2.kerml:7:3: error: expected a body member
+		var p9 : Real;
+  ^~~
+sysml: kf2.kerml did not analyse cleanly
+```
+
+Pilot: clean, exit 0. `Feature` (`KerML.xtext:538`) has an alternative with no `feature` keyword
+at all — `( EndFeaturePrefix | BasicFeaturePrefix ) FeatureDeclaration` (`:542-543`) — and
+`BasicFeaturePrefix` (`:515`) is where `var`/`const` live, so `var p9 : Real;` is that
+alternative and not an error. `FeatureDeclaration` (`:548`) is
+`Identification ( FeatureSpecializationPart | FeatureConjugationPart )?`, and
+`FeatureSpecializationPart` (`:574`) is `( -> FeatureSpecialization )+ MultiplicityPart?
+FeatureSpecialization* | MultiplicityPart FeatureSpecialization*` — so a `redefines` with no
+typing and a multiplicity written before the typing are both ordinary declarations. At namespace
+level the member is a `NamespaceFeatureMember` (`:158`), which takes a `FeatureElement` with no
+keyword requirement. **Ours, one parser gap with four faces**, and 55 of the 60 are the two
+recovery messages.
+
+**Withdrawn, not promoted:** the corpus's expression-body lines (`Expressions.kerml:15-19`,
+`c = x->collect {in xx; xx + 1};` and siblings, 15 diagnostics) look like a second gap and are
+not one. With the corpus's own imports both checkers accept them:
+
+```kerml
+package K8i {
+	private import ScalarFunctions::*;
+	private import ControlFunctions::*;
+	feature x : ScalarValues::Integer;
+	feature c = x->collect {in xx; xx + 1};
+	feature d = x->select {in xx; xx != null};
+	feature e = x->reduce {in s; in t; s + t}->reduce '+';
+}
+```
+
+Ours: `✓ package K8i`. Pilot: clean. Those 15 are K7's face 1 with a cascade inside the braces,
+so they are counted in K7 and no separate follow-up is opened. The same test retires
+`Expressions.kerml:41`'s multi-line `if`/`else`: written after `feature`, it passes both.
+
+#### K8 — `type` declarations (F85, 17)
+
+Every diagnostic in `Simple Tests/Types.kerml` except its four relationship-keyword lines
+(K9's `:17,18,25,26`) sits on the `type` keyword: `:2,3,6,8,10,15,20,22,23,24,28,29,31,33,34,35,36`.
+Reproducer:
+
+```kerml
+package K9a {
+	abstract type A specializes Base::Anything;
+	type all x specializes A, Base::things;
+	type Singleton[1] specializes Base::Anything;
+	type B :> Base::Anything;
+	type Conjugate3 conjugates A;
+}
+```
+
+Ours:
+
+```text
+k9a.kerml:2:11: error: expected a namespace member
+	abstract type A specializes Base::Anything;
+          ^~~~
+k9a.kerml:3:2: error: expected a namespace member
+	type all x specializes A, Base::things;
+ ^~~~
+k9a.kerml:4:2: error: expected a namespace member
+	type Singleton[1] specializes Base::Anything;
+ ^~~~
+k9a.kerml:5:2: error: expected a namespace member
+	type B :> Base::Anything;
+ ^~~~
+k9a.kerml:6:2: error: expected a namespace member
+	type Conjugate3 conjugates A;
+ ^~~~
+sysml: k9a.kerml did not analyse cleanly
+```
+
+Pilot: clean, exit 0. `Type` is `TypePrefix 'type' TypeDeclaration TypeBody`
+(`KerML.xtext:319`), and `TypeDeclaration` (`:324`) carries `all`, an optional
+`OwnedMultiplicity`, a `SpecializationPart | ConjugationPart` and `TypeRelationshipPart*` — so
+the multiplicity of `:6`, the conjugation of `:28,29` and the `unions`/`intersects`/`differences`
+of `:33,34,35` are all inside this one production, and the file's `}` cascades (`:22,36`) go with
+it. `type A;` with no specialization is *rejected by the pilot too*
+(`no viable alternative at input ';'`), which is why the reproducer specialises: the
+`SpecializationPart | ConjugationPart` is not optional in `TypeDeclaration`, unlike
+`ClassifierDeclaration` (`:468`). **Ours, one unparsed keyword.**
+
+#### K9 — explicit relationship-member keywords (F86, 19)
+
+KerML lets a relationship be written as a member in its own right, with the relationship's
+keyword first. We parse none of the ten spellings the corpus uses:
+`Simple Tests/Classifiers.kerml:5,6`, `Features.kerml:16,42,43,45,46,68,69,71`,
+`FeatureChains.kerml:23,24,26`, `Inverses.kerml:11,12`, `Types.kerml:17,18,25,26`.
+Reproducers:
+
+```kerml
+package K13d {
+	classifier A; classifier B;
+	feature f; feature g; feature person; feature parent;
+	specialization t1 typing f typed by B;
+	specialization t2 typing g : A;
+	specialization Sub subset parent subsets person;
+	specialization subset parent subsets person;
+	subset g subsets f;
+	subtype A specializes B;
+}
+```
+
+Ours — one `expected a namespace member` per line, pointing at the leading keyword:
+
+```text
+k13d.kerml:4:2: error: expected a namespace member
+	specialization t1 typing f typed by B;
+ ^~~~~~~~~~~~~~
+k13d.kerml:10:2: error: expected a namespace member
+	subset g subsets f;
+ ^~~~~~
+k13d.kerml:11:2: error: expected a namespace member
+	subtype A specializes B;
+ ^~~~~~~
+```
+
+Pilot: clean on all of those, exit 0. Same shape for `subclassifier`
+(`specialization Super subclassifier A specializes B;`), `inverse`/`inverting`
+(`inverse B::g of A::f;`, `inverting Invert inverse B::g of A::f;`), `featuring`
+(`featuring F of y by C;`) and `conjugation`
+(`conjugation c1 conjugate Conjugate1 conjugates Original;`) — each is one
+`expected a namespace member` from us and silence from the pilot. The productions are
+`Specialization` (`KerML.xtext:390`, `( 'specialization' Identification? )? 'subtype' …` — so
+both `specialization … subtype` and a bare `subtype` are legal), `Subclassification` (`:486`),
+`FeatureTyping` (`:665`), `Subsetting` (`:683`), `Redefinition` (`:712`), `Conjugation` (`:408`),
+`FeatureInverting` (`:634`) and `TypeFeaturing` (`:652`); all are `NonFeatureElement`
+alternatives, so any of them may open a member. **Ours, one parser gap across ten keywords.**
+
+**Reproducer caveat:** the `redefinition` rows do not discriminate in minimal form. With
+package-level features the pilot reports `A package-level feature cannot be redefined`, and with
+qualified targets it reports `Featuring types of redefining feature and redefined feature cannot
+be the same` / `Must be an accessible feature (use dot notation for nesting)` — semantic
+complaints, at a column inside the line, which prove it *parsed* the member but do not give a
+silent-pilot pair. The corpus lines (`Features.kerml:68,69,71`, whose targets are members of two
+different nested classes) are the evidence for those three; a fix must be validated against a
+fixture built from that file's declarations, not against the reproducer above.
+
+#### K10 — `typed by` (F87, 4)
+
+`Simple Tests/Features.kerml:8` is `feature x typed by A, B references f subsets g;` and `:11` is
+`feature x1 subsets g typed by A subsets f typed by B;`, 2 diagnostics each. Reproducer:
+
+```kerml
+package M1 {
+	classifier A; classifier B;
+	feature f; feature g; feature y; feature z;
+	feature x1 typed by A;
+}
+```
+
+Ours:
+
+```text
+m1.kerml:4:13: error: expected '{' or ';' after declaration
+	feature x1 typed by A;
+            ^~~~~
+m1.kerml:4:13: error: expected a namespace member
+	feature x1 typed by A;
+            ^~~~~
+sysml: m1.kerml did not analyse cleanly
+```
+
+Pilot: clean, exit 0. `TypedBy` (`KerML.xtext:600`) is
+`( ':' | 'typed' 'by' ) ownedRelationship += OwnedFeatureTyping …` — the two spellings are the
+same production, and we implement only the punctuation. Everything else on those two corpus lines
+parses on its own: `feature x2 : A, B;`, `feature x3 references f;` and
+`feature x8 :> g ::> f;` are all clean on both sides, and `feature x4 subsets g typed by A;`
+fails at the `typed`, not at the second specialization. **Ours, one missing keyword spelling.**
+
+#### K11 — feature-chain connector ends (F88, 6)
+
+`Named Collection Members Example/VehicleTanks.kerml:28,31` (`connector tanks.main1 to
+tanks.aux1;`) and `Simple Tests/FeatureChains.kerml:18` (`connector f.a to a.g;`), 2 diagnostics
+each. Reproducer:
+
+```kerml
+package K12a {
+	classifier A { feature g; }
+	classifier F { feature a : A; }
+	feature b : F {
+		feature f : F;
+		feature a : A;
+		connector f.a to a.g;
+	}
+}
+```
+
+Ours:
+
+```text
+k12a.kerml:7:14: error: expected '{' or ';' after declaration
+		connector f.a to a.g;
+             ^
+k12a.kerml:7:14: error: expected a body member
+		connector f.a to a.g;
+             ^
+sysml: k12a.kerml did not analyse cleanly
+```
+
+Pilot: one unrelated `Duplicate of inherited member name` warning, exit 0 — it accepts the
+connector. It is the *dotted* end and nothing else: `connector eng to x.g;` with a plain first
+end is clean on both sides, so the failure is our first-end parse, not feature chains in general
+and not the `to`. `ConnectorEnd` (`KerML.xtext:854`) ends in
+`ownedRelationship += OwnedReferenceSubsetting`, and `OwnedReferenceSubsetting` (`:699`) is
+`referencedFeature = [SysML::Feature | QualifiedName] | ownedRelatedElement +=
+OwnedFeatureChain` — a feature chain is one of its two alternatives, at either end.
+**Ours, one parser gap.**
+
+#### K12 — `binding` and `succession` declarations (F89, 5)
+
+`Simple Tests/Connectors.kerml:16` (`binding {`, 1), `:20` (`binding ab1 : AS of a = b;`, 3) and
+`:24` (`succession {`, 1). Reproducers:
+
+```kerml
+package K14a {
+	assoc struct AS { end a; end b; }
+	class A {
+		feature a : A;
+		feature b : A;
+		binding {
+			end feature references a;
+			end feature references b;
+		}
+	}
+}
+```
+
+Ours: `k14a.kerml:6:11: error: expected a name` on the `{` — we require a name after `binding`.
+The `succession` form is identical (`k14c.kerml:5:14: error: expected a name`). The typed form:
+
+```text
+k14b.kerml:6:15: error: expected '{' or ';' after declaration
+		binding ab1 : AS of a = b;
+              ^
+k14b.kerml:6:20: error: expected '{' or ';' after declaration
+		binding ab1 : AS of a = b;
+                   ^~
+k14b.kerml:6:20: error: expected a body member
+		binding ab1 : AS of a = b;
+                   ^~
+sysml: k14b.kerml did not analyse cleanly
+```
+
+Pilot: clean on all three, exit 0. `BindingConnectorDeclaration` (`KerML.xtext:875`) is
+`FeatureDeclaration ( 'of' … '=' … )? | ( isSufficient ?= 'all' )? ( 'of'? … '=' … )?` — so the
+declaration, the `of`/`=` ends and the name are each optional, and a `binding` may open straight
+into a body whose ends are ordinary members. `SuccessionDeclaration` (`:891`) is the same shape.
+**Ours, two faces of one gap:** an anonymous binding/succession, and a typing before `of`.
+
+#### K13 — conjugation in a declaration (F90, 6)
+
+`Simple Tests/Conjugation.kerml:6` (`class B conjugates A;`) and `:8` (`feature g ~ B::f;`),
+2 each, plus `Features.kerml:36` (`feature fuelOutPort ~ fuelInPort;`, 2). Reproducer:
+
+```kerml
+package K15a {
+	class A { in feature f; }
+	class B conjugates A;
+	feature g ~ B::f;
+}
+```
+
+Ours:
+
+```text
+k15a.kerml:3:10: error: expected '{' or ';' after declaration
+	class B conjugates A;
+         ^~~~~~~~~~
+k15a.kerml:3:10: error: expected a namespace member
+	class B conjugates A;
+         ^~~~~~~~~~
+k15a.kerml:4:12: error: expected '{' or ';' after declaration
+	feature g ~ B::f;
+           ^
+k15a.kerml:4:12: error: expected a namespace member
+	feature g ~ B::f;
+           ^
+sysml: k15a.kerml did not analyse cleanly
+```
+
+Pilot: clean, exit 0. `ClassifierDeclaration` (`KerML.xtext:468`) offers
+`SuperclassingPart | ClassifierConjugationPart`, and `FeatureConjugationPart` (`:730`) is
+`( '~' | 'conjugates' ) ownedRelationship += FeatureConjugation` — one production, two
+spellings, and we implement neither in a declaration. **Ours, one parser gap.** (`Types.kerml:28,
+29` write the same construct on a `type`; they are counted in K8, since the `type` keyword fails
+first.)
+
+#### K14 — `const` before `end` (F91, 2)
+
+`Simple Tests/Associations.kerml:16,17`. Reproducer:
+
+```kerml
+package K16 {
+	assoc struct C {
+		const end [1] feature a;
+		const end feature b;
+	}
+}
+```
+
+Ours:
+
+```text
+k16.kerml:3:3: error: expected a body member
+		const end [1] feature a;
+  ^~~~~
+k16.kerml:4:3: error: expected a body member
+		const end feature b;
+  ^~~~~
+sysml: k16.kerml did not analyse cleanly
+```
+
+Pilot: clean, exit 0. `end feature b;` without the `const` is accepted by us, so it is that one
+token in that one position: `EndFeaturePrefix` (`KerML.xtext:511`) is
+`( isConstant ?= 'const' )? isEnd ?= 'end'`. **Ours, one prefix ordering.**
+
+#### K15 — annotating elements (F92, 2)
+
+`Simple Tests/Comments.kerml:25` is an anonymous comment carrying only a locale and
+`:43` is a documentation comment with a short name. Reproducers and our output:
+
+```kerml
+package K18a {
+ locale "en_US" /*
+ * AAAA
+ */
+}
+```
+
+```text
+k18a.kerml:2:2: error: expected a namespace member
+ locale "en_US" /*
+ ^~~~~~
+```
+
+```kerml
+package K18b {
+	class A {
+		doc <a> /* Documentation comment on A*/
+	}
+}
+```
+
+```text
+k18b.kerml:3:7: error: expected a /* ... */ comment body
+		doc <a> /* Documentation comment on A*/
+      ^
+k18b.kerml:3:7: error: expected a body member
+		doc <a> /* Documentation comment on A*/
+      ^
+```
+
+Pilot: clean on both, exit 0. `Comment` (`KerML.xtext:94`) makes its whole
+`'comment' Identification? ('about' …)?` head optional and then allows
+`( 'locale' locale = STRING_VALUE )? body = REGULAR_COMMENT`, so `locale "…"` plus a comment body
+is an anonymous comment; `Documentation` (`:103`) is `'doc' Identification? ( 'locale' … )? body`,
+so `doc <a>` is a documentation comment with a short name. We accept
+`doc locale "en_US"/* … */`, which is why this is two narrow gaps rather than one: the optional
+`comment` keyword, and `Identification` after `doc`. **Ours.**
+
+#### K16 — a second filter bracket on an import (F93, 2)
+
+`Simple Tests/Filtering.kerml:35` — the second `[ … ]` of
+`private import DesignModel::**[@Structure][(as …).approved and (as …).level > 1];`.
+Reproducer:
+
+```kerml
+package K19c {
+	private import KerML::*;
+	package DesignModel {
+		struct System;
+	}
+	package One {
+		private import DesignModel::**[@Structure];
+		struct Test1 :> System;
+	}
+	package Two {
+		private import DesignModel::**[@Structure][@Structure];
+		struct Test2 :> System;
+	}
+}
+```
+
+Ours — the single-bracket import in `One` is accepted, the double-bracket import in `Two` is not:
+
+```text
+k19c.kerml:11:45: error: expected '{' or ';'
+		private import DesignModel::**[@Structure][@Structure];
+                                            ^
+k19c.kerml:11:45: error: expected a namespace member
+		private import DesignModel::**[@Structure][@Structure];
+                                            ^
+sysml: k19c.kerml did not analyse cleanly
+```
+
+Pilot: clean, exit 0. `FilterPackage` (`KerML.xtext:200`) is
+`ownedRelationship += FilterPackageImport ( ownedRelationship += FilterPackageMember )+` — one or
+more filter members, and we accept exactly one. A `filter` statement as a package member is
+unaffected (both checkers agree on it). **Ours, a cardinality of one where the grammar says
+one-or-more.**
+
+#### K17 — prefix metadata in place of the `feature` keyword (F94, 1)
+
+`Simple Tests/MetadataTest.kerml:33`, `abstract #Classified z2;`. Reproducer:
+
+```kerml
+package K20b {
+	metaclass Classified;
+	private #Classified feature z1;
+	abstract #Classified z2;
+}
+```
+
+Ours:
+
+```text
+k20b.kerml:4:11: error: expected a namespace member
+	abstract #Classified z2;
+          ^
+sysml: k20b.kerml did not analyse cleanly
+```
+
+Pilot: clean, exit 0 — and it accepts line 3 as well, which we also accept. `Feature`
+(`KerML.xtext:538`) is `FeaturePrefix ( 'feature' | ownedRelationship += PrefixMetadataMember )
+FeatureDeclaration?`: the metadata annotation is an *alternative to* the keyword, not an addition
+to it. This is the KerML twin of S1/F60 on the SysML side (`ExtendedUsage`). **Ours.**
+
+#### K18 — a named `expr` with a brace body (F95, 1)
+
+`Simple Tests/Expressions.kerml:23`, `in expr whileTest {v > 3}` inside a
+`ControlPerformances::LoopPerformance` step. Reproducer:
+
+```kerml
+package K21 {
+	private import ScalarValues::*;
+	feature v : Integer;
+	expr e1 {v > 3}
+	expr e2 {1 + 1};
+}
+```
+
+Ours:
+
+```text
+k21.kerml:4:11: error: expected a body member
+	expr e1 {v > 3}
+          ^
+k21.kerml:5:11: error: expected a body member
+	expr e2 {1 + 1};
+          ^
+k21.kerml:5:17: error: expected a namespace member
+	expr e2 {1 + 1};
+                ^
+```
+
+Pilot: `k21.kerml:5:17: error: extraneous input ';' expecting '}'`, exit 1 — it accepts line 4 and
+rejects only the `;` we also mis-handle on line 5, so **line 4 is the discriminating pair** and
+the trailing `;` is a defect in the reproducer, not in either implementation. `expr at { … }` and
+`expr while { … }` were unreserved by F30; the remaining gap is a *named* `expr` whose body is an
+expression rather than a member list. **Ours.**
+
+#### What this class list predicts
+
+If K7–K18 are fixed the root's 140 syntax diagnostics go with them, together with F50, F81, F82,
+F83 and F70 — F70's 3 are `unresolved-reference` only because the `rep` member is unparsed. What
+remains is F71 (1), F72 (3) and K5's 3 `unmapped` cycles, which are one-sided by design: the root
+would stand at **7** only-ours from 150, with `syntax` empty. K7 and K8 alone are 77 of the 125,
+and K7's `Expressions.kerml`/`VehicleUsages.kerml` are 47 — so the sequencing is parser-first and
+largest-file-first, and nothing downstream of an unparsed first member is measurable until it
+parses.
 
 ### KerML — only the pilot (6)
 
@@ -883,10 +1481,22 @@ one.
 | F72 | `member feature Product_Account1 subsets Product_Account …` inside `assoc SingleProductSelection3` (`Association Examples/ProductSelection_N_ary.kerml:93,101,109`, 3 diagnostics): the target is a member of a *nested* member of the end feature this end redefines, and the pilot resolves it. Which rule makes it visible — inherited nested members through a redefined end, or a featuring path — is not established, so no fix was guessed at. |
 | ~~F32~~ | **Done.** Adjudicated per row. The first two rows are SysML-only rules: KerML has no definition/usage distinction — a Specialization relates two Types and a FeatureTyping's type is any Type, a Feature among them (KerML 1.0 §8.3.3, §8.3.4.4) — so on a `.kerml` document `passes/typecheck.go` `compatMessage` checks only that the target *is* a type, reading the language from `source.KindOf` (the F3+F8 file-kind mechanism, no second notion). The metaclass row was our own bug in either language: `defSymbolKind` had no `ast.DefMetaclass` case, so a metaclass was incomparable with its own kind; `metaclass … specializes Metaobject` is a Class specializing a Class (§8.4.4). The `rollsOn` row is not a language gate but missing semantics: unioning was resolved nowhere, so `semantics/model.go` now resolves `unions` in its own cache (`UnioningTypes`) and `Conforms` accepts a union whose every unioning type conforms — a union is constrained by its members, not a generalization of them, so it stays out of `DirectSupertypes`. Nothing here was skipped wholesale: the KerML rows keep a non-type target an error, and `.sysml` counterpart tests lock in that each check still fires. |
 | ~~F33~~ | **Done.** The six are one cause and it is the reference's: the derived `Type::ownedDisjoining` is empty for a `Disjoining` whose `owningType` is that `Type`, so the `eOpposite` pair EMF checks is inconsistent in the pilot's own graph. Reproduced in three lines, surviving validation of a single file in a fresh resource set, so neither batching nor the bridge is implicated; the notation is `KerML.xtext:344` `DisjoiningPart` as the reference's own examples write it. Category stays `unmapped`. See [K6, diagnostic by diagnostic (F33)](#k6-diagnostic-by-diagnostic-f33). Spawned F80–F83. |
-| F80 | Report K6 upstream against the pilot at `2026-05`: `Type::ownedDisjoining`'s setting delegate does not see a `Disjoining` that `owningType` reports it owns, so every `disjoint from` in a type declaration draws EMF's unpaired-bidirectional-reference error. The reproducer and the probe output are in the K6 section; nothing on our side changes when it is fixed except the root's only-pilot count falling 6 → 0. |
+| F80 | **Written, not filed.** The upstream report for K6 against the pilot at `2026-05` — `Type::ownedDisjoining`'s setting delegate does not see a `Disjoining` that `owningType` reports it owns, so every `disjoint from` in a type declaration draws EMF's unpaired-bidirectional-reference error — is in [omg-issues.md](omg-issues.md#f80--typeowneddisjoining-does-not-contain-a-disjoining-whose-owningtype-is-that-type-pilot-2026-05), ready to paste into `Systems-Modeling/SysML-v2-Pilot-Implementation`. The reproducer and the probe output are in the K6 section; nothing on our side changes when it is fixed except the root's only-pilot count falling 6 → 0. |
 | F81 | `differences A, B` in a type declaration is not parsed: `classifier D differences A, B;` gives `expected '{' or ';' after declaration` and `expected a namespace member`, where the pilot is silent (`KerML.xtext:359` `DifferencingPart`). `intersects` and `unions` at the same position parse, so it is that one keyword. 4 of the root's 140 syntax diagnostics (`Simple Tests/Classifiers.kerml:13`, `FeatureChains.kerml:31`). |
 | F82 | A standalone disjoining as a namespace or body member is not parsed: `disjoint B from A;` gives `expected a namespace member` where the pilot is silent. `Disjoining` is a `NonFeatureElement` alternative (`KerML.xtext:257`, production at `:426`), so the keyword may open a member. 1 diagnostic (`Simple Tests/FeatureChains.kerml:28`). |
 | F83 | A multiplicity in a classifier declaration is not parsed: `classifier B [1] specializes A;` gives `expected '{' or ';' after declaration` and `expected a namespace member` where the pilot is silent. `ClassifierDeclaration` takes `( ownedRelationship += OwnedMultiplicity )?` before the superclassing part (`KerML.xtext:468-470`). 2 diagnostics (`KerML Spec Annex A Examples/A-2-ModelingInstances.kerml:9`). |
+| F84 | K7, 60 diagnostics over 7 files (55 of them the two generic recovery messages) — the KerML twin of S2/F61. Keyword-less feature members: any at namespace level (`a : Integer;`, `y = x as T;`, `x;`), and in a body one whose declaration specialises without typing (`composite e1 redefines V::m;`), one whose multiplicity precedes the typing (`p5[1] : Real;`), or one prefixed `var`/`const` (`var p9 : Real;`). `Feature`'s keyword-less alternative is `( EndFeaturePrefix \| BasicFeaturePrefix ) FeatureDeclaration` (`KerML.xtext:542`), `BasicFeaturePrefix` carries `var`/`const` (`:515`), `FeatureSpecializationPart` allows a multiplicity first (`:574`) and `NamespaceFeatureMember` (`:158`) needs no keyword. Retires `Simple Tests/Expressions.kerml` (33) and `Vehicle Example/VehicleUsages.kerml` (14) between them. |
+| F85 | K8, 17 diagnostics, all of `Simple Tests/Types.kerml` bar its four relationship-keyword lines. `type` is not parsed in any form the file writes it: `Type` is `TypePrefix 'type' TypeDeclaration TypeBody` (`KerML.xtext:319`) and `TypeDeclaration` (`:324`) carries `all`, an `OwnedMultiplicity`, a mandatory `SpecializationPart \| ConjugationPart` and `TypeRelationshipPart*`. Note the specialization is *not* optional — `type A;` is rejected by the reference too. |
+| F86 | K9, 19 diagnostics over 5 files. A relationship written as a member with its keyword first, ten spellings: `specialization`/`subtype` (`:390`), `subclassifier` (`:486`), `typing` (`:665`), `subset` (`:683`), `redefinition` (`:712`), `conjugation` (`:408`), `inverse`/`inverting` (`:634`) and `featuring` (`:652`), all `NonFeatureElement` alternatives. The `redefinition` rows' minimal reproducers draw *semantic* pilot errors rather than silence, so those three (`Simple Tests/Features.kerml:68,69,71`) need a corpus-faithful fixture before a fix is validated. |
+| F87 | K10, 4 diagnostics (`Simple Tests/Features.kerml:8,11`). `typed by` is the long spelling of `:` in the same production — `TypedBy` is `( ':' \| 'typed' 'by' ) …` (`KerML.xtext:600`) — and only the punctuation is implemented. |
+| F88 | K11, 6 diagnostics (`Named Collection Members Example/VehicleTanks.kerml:28,31`, `Simple Tests/FeatureChains.kerml:18`). A connector end that is a feature chain: `ConnectorEnd` ends in `OwnedReferenceSubsetting` (`KerML.xtext:854`) and that is `referencedFeature \| OwnedFeatureChain` (`:699`). A plain first end with a dotted second end already works, so the gap is the first end's parse. |
+| F89 | K12, 5 diagnostics (`Simple Tests/Connectors.kerml:16,20,24`). `BindingConnectorDeclaration` (`KerML.xtext:875`) and `SuccessionDeclaration` (`:891`) make the name, the declaration and the `of`/`=` ends all optional, so `binding { … }` with member ends and `binding ab1 : AS of a = b;` are both legal; we demand a name and reject a typing before `of`. |
+| F90 | K13, 6 diagnostics (`Simple Tests/Conjugation.kerml:6,8`, `Features.kerml:36`). Conjugation in a declaration: `ClassifierConjugationPart` in `ClassifierDeclaration` (`KerML.xtext:468`) and `FeatureConjugationPart` = `( '~' \| 'conjugates' ) …` (`:730`). |
+| F91 | K14, 2 diagnostics (`Simple Tests/Associations.kerml:16,17`). `EndFeaturePrefix` is `( isConstant ?= 'const' )? isEnd ?= 'end'` (`KerML.xtext:511`); `end feature b;` parses, `const end feature b;` does not. |
+| F92 | K15, 2 diagnostics (`Simple Tests/Comments.kerml:25,43`). Two annotating-element gaps: `Comment`'s whole head is optional so `locale "en_US" /* … */` is an anonymous comment (`KerML.xtext:94`), and `Documentation` takes an `Identification` so `doc <a> /* … */` is legal (`:103`). |
+| F93 | K16, 2 diagnostics (`Simple Tests/Filtering.kerml:35`). `FilterPackage` is `FilterPackageImport ( FilterPackageMember )+` (`KerML.xtext:200`); we accept exactly one filter bracket where the grammar says one or more. |
+| F94 | K17, 1 diagnostic (`Simple Tests/MetadataTest.kerml:33`). `Feature` is `FeaturePrefix ( 'feature' \| ownedRelationship += PrefixMetadataMember ) FeatureDeclaration?` (`KerML.xtext:538`) — the annotation replaces the keyword, so `abstract #Classified z2;` is a feature. The KerML twin of S1/F60. |
+| F95 | K18, 1 diagnostic (`Simple Tests/Expressions.kerml:23`). A *named* `expr` whose body is a brace-enclosed expression (`in expr whileTest {v > 3}`); F30 unreserved `expr at`/`expr while` but the named form with an expression body is still unparsed. |
 | F34 | Compare our own 11 `.kerml` fixtures (`testdata/lex/basic.kerml`, `examples/parser_features_demo_*.kerml`) too: a root carries one language today, so they are collected as SysML and excluded (see the known limitation above). Needs per-file language dispatch within a root, and a second pilot invocation per root. |
 
 F6 and F7 are deprioritised: they change how the comparison is *run*, not what it says about
