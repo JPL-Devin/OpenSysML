@@ -983,6 +983,25 @@ leaving each scope's declarations, inherited members and imports intact, so a
 
 ---
 
+### Pilot Constraint Rules We Do Not Implement (P6 of the pilot differential)
+
+Four constraint-tier rules the pinned reference implementation (pilot `2026-05`)
+enforces and we do not. They were adjudicated diagnostic by diagnostic in
+[pilot-differential.md](pilot-differential.md) (§P6, follow-ups F20–F23) against
+minimal reproducers run through that reference; the rule text is its validator
+(`org.omg.kerml.xtext/.../KerMLValidator.xtend`) plus the constraint text on the
+generated metamodel. Nothing here is implemented, so the "Implementation" column
+names where the rule would belong rather than where it lives.
+
+| Semantic Rule | Implementation | Test Case | Status |
+|--------------|----------------|-----------|--------|
+| `validateSubsettingFeaturingTypes` — `subsettingFeature.canAccess(subsettedFeature)` (KerML Subsetting): a feature of a type is not reachable by `::` from outside it, since the subsetting feature's featuring types must feature the subsetted one (transitively, through featuring types that are themselves features) | would be `passes/constraint.go` at `LevelConstraint`, over a `canAccess` predicate `semantics` does not compute today | `passes/pilot_p6_gaps_test.go` `TestConstraintSubsettingFeaturingTypesNotImplemented` (skipped, F20) | ❌ Not implemented (all five corpus occurrences are downstream of the pilot failing to parse our `namespace` over-acceptance; the rule itself is real — reproducer in the P6 adjudication) |
+| `validateFlowEndSubsetting` — a `FlowEnd` must subset a feature that is not merely redefined: each end names the feature the payload leaves from or arrives at, so it can redefine `Transfer::source::sourceOutput` / `Transfer::target::targetInput` (SysML v2 `FlowEnd`) | would be `passes/constraint.go` beside `checkConnectorEndRedefinition`, over the connector ends `semantics`/`lower` already build | `passes/pilot_p6_gaps_test.go` `TestConstraintFlowEndSubsettingNotImplemented` (skipped, F21), with the accepted counterpart `TestConstraintDottedFlowEndsAreAccepted` | ❌ Not implemented (`examples/views-demo.sysml:44` `flow of Fuel from tank to thruster;` violates it and we accept it) |
+| `validateElementFilterMembershipIsModelLevelEvaluable` — `condition.isModelLevelEvaluable`: an invocation is evaluable when its function is a model-level-evaluable library function and every argument is; a feature reference when its referent is a self-reference, or owned by a `Metaclass`/`MetadataFeature`, or has no featuring type and an evaluable value expression | ours exists but diverges: `passes/filter.go` `ElementFilterPass` / `semantics.Model.CheckElementFilter` (`filter-not-evaluable`, warning, `LevelType`) | `passes/pilot_p6_gaps_test.go` `TestFilterModelLevelEvaluableFalsePositive`, `TestFilterModelLevelEvaluableFalseNegative` (both skipped, F22) | ⚠️ Approximate, divergent both ways (we warn on `filter 1 + 2 > 0;`, which the reference accepts; we are silent on a reference to a feature with a featuring type, which it rejects) |
+| `validateInvocationExpressionInstantiatedType` — `instantiatedType` must be a `Behavior`, or a `Feature` typed by exactly one `Behavior` | would be `passes/typecheck_expr.go` beside `inferInvocation`, which checks arity and argument types but never the kind of the invoked declaration | `passes/pilot_p6_gaps_test.go` `TestTypeCheckInvocationInstantiatedTypeNotImplemented` (skipped, F23) | ❌ Not implemented (`part def Widget; part w = Widget();` draws `Must invoke a behavior or a behavioral feature` from the reference and nothing from us) |
+
+---
+
 ## What We Don't (Yet) Support
 
 ### Decisions to Reassess

@@ -83,7 +83,10 @@ func categorizePilot(message string) Category {
 	case strings.Contains(lower, "multiplicity"), strings.Contains(lower, "at most"),
 		strings.Contains(lower, "at least"), strings.Contains(lower, "cardinality"):
 		return CategoryMultiplicity
+	// `must invoke` constrains the metaclass of the instantiated type; the other
+	// three P6 messages stay unmapped (docs/project/pilot-differential.md).
 	case strings.Contains(lower, "must be typed by"),
+		strings.Contains(lower, "must invoke"),
 		strings.Contains(lower, "must reference"),
 		strings.Contains(lower, "must subset"),
 		strings.Contains(lower, "must specialize"),

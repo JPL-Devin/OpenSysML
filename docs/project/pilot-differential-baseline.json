@@ -4782,8 +4782,14 @@
             {
               "line": 4,
               "severity": "error",
+              "category": "kind-mismatch",
+              "count": 1
+            },
+            {
+              "line": 4,
+              "severity": "error",
               "category": "unmapped",
-              "count": 2
+              "count": 1
             },
             {
               "line": 4,
@@ -5981,11 +5987,6 @@
     {
       "side": "pilot",
       "message": "Must be model-level evaluable",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "Must invoke a behavior or a behavioral feature",
       "count": 1
     },
     {
