@@ -1915,11 +1915,27 @@ func (p *Parser) atResultExpression() bool {
 		return true
 	}
 	next := p.peekN(1)
+	if next.Kind == lexer.Keyword && wordBinaryOpKeywords[next.KeywordID] {
+		return true
+	}
 	isDecl := next.Kind == lexer.Colon || next.Kind == lexer.Semicolon ||
 		next.Kind == lexer.Keyword || next.Kind == lexer.LBracket ||
 		next.Kind == lexer.LBrace ||
 		beginsDeclarationTail(next, p.peekN(2))
 	return !isDecl
+}
+
+// wordBinaryOpKeywords are the keyword binary operators (binaryOpFor); a name
+// followed by one continues an expression, not a declaration.
+var wordBinaryOpKeywords = map[string]bool{
+	"implies": true,
+	"or":      true,
+	"xor":     true,
+	"and":     true,
+	"hastype": true,
+	"istype":  true,
+	"as":      true,
+	"meta":    true,
 }
 
 // parseEnumBody parses an enumeration body, whose enumerated values may be
