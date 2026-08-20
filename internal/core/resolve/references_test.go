@@ -183,8 +183,11 @@ package App {
 // resolvedDoc parses and resolves src the way the workspace does, with the model
 // attached before the walk.
 func resolvedDoc(t *testing.T, src string) (*resolve.Resolver, *ast.RootNamespace, *symbols.Scope) {
+	return resolvedDocNamed(t, "app.sysml", src)
+}
+
+func resolvedDocNamed(t *testing.T, name, src string) (*resolve.Resolver, *ast.RootNamespace, *symbols.Scope) {
 	t.Helper()
-	const name = "app.sysml"
 	p := parser.New(source.New(name, []byte(src)))
 	root := p.ParseFile()
 	if len(p.Diagnostics) != 0 {

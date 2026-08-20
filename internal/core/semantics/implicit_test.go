@@ -76,3 +76,115 @@ func TestImplicitBaseUsageContributesThat(t *testing.T) {
 		t.Errorf("`that` reported as a member of a definition")
 	}
 }
+
+func TestKerMLImplicitDefinitionBases(t *testing.T) {
+	m, root := buildModelNamed(t, "t.kerml", `package P {
+		class C;
+		behavior B;
+		datatype D;
+		feature F;
+	}
+	package Base { classifier Anything; datatype DataValue; }
+	package Occurrences { classifier Occurrence; }
+	package Objects { classifier Object; }
+	package Links { classifier Link; }
+	package Performances {
+		classifier Performance;
+		classifier Evaluation;
+		classifier BooleanEvaluation;
+	}
+	package Transfers { classifier Transfer; }
+	package Metaobjects { classifier Metaobject; }`)
+	p := sym(t, root, "P")
+	for _, tc := range []struct {
+		name string
+		want string
+	}{
+		{"C", "Occurrences::Occurrence"},
+		{"B", "Performances::Performance"},
+		{"D", "Base::DataValue"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			target := sym(t, p.Scope, tc.name)
+			got := m.DirectSupertypes(target)
+			if len(got) != 1 || m.resolver.Index().GetFQN(got[0]) != tc.want {
+				t.Fatalf("supertypes of %s = %v, want [%s]", tc.name, got, tc.want)
+			}
+		})
+	}
+	if got := m.DirectSupertypes(sym(t, p.Scope, "F")); len(got) != 0 {
+		t.Fatalf("KerML feature received an implicit datatype base: %v", got)
+	}
+}
+
+func TestSysMLImplicitDefinitionBasesRemainKindBased(t *testing.T) {
+	m, root := buildModelNamed(t, "t.sysml", `package P {
+		part def C;
+		action def A;
+		attribute def D;
+	}
+	package Parts { part def Part; }
+	package Actions { action def Action; }
+	package Base { attribute def DataValue; }`)
+	p := sym(t, root, "P")
+	for _, tc := range []struct {
+		name string
+		want string
+	}{
+		{"C", "Parts::Part"},
+		{"A", "Actions::Action"},
+		{"D", "Base::DataValue"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			target := sym(t, p.Scope, tc.name)
+			got := m.DirectSupertypes(target)
+			if len(got) != 1 || m.resolver.Index().GetFQN(got[0]) != tc.want {
+				t.Fatalf("supertypes of %s = %v, want [%s]", tc.name, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestImplicitBaseOfExplicitSupertypeIsTransitive(t *testing.T) {
+	m, root := buildModelNamed(t, "t.kerml", `package Occurrences {
+		class Occurrence { feature endShot; }
+	}
+	package Objects {
+		struct Object specializes Occurrences::Occurrence;
+	}
+	struct Wheel;
+	struct MyWheel specializes Wheel {
+		feature redefines endShot : EndShot;
+	}
+	struct EndShot;`)
+	myWheel := sym(t, root, "MyWheel")
+	supers := m.AllSupertypes(myWheel)
+	if len(supers) < 3 {
+		var fqns []string
+		for _, super := range supers {
+			fqns = append(fqns, m.resolver.Index().GetFQN(super))
+		}
+		t.Fatalf("AllSupertypes(MyWheel) = %v, want Wheel, Objects::Object, and Occurrences::Occurrence", fqns)
+	}
+	if inherited, ok := m.LookupContributedMember(myWheel, "endShot"); !ok {
+		t.Fatal("MyWheel does not inherit endShot through Wheel's implicit base")
+	} else if got := m.resolver.Index().GetFQN(inherited); got != "Occurrences::Occurrence::endShot" {
+		t.Fatalf("inherited endShot = %q, want Occurrences::Occurrence::endShot", got)
+	}
+}
+
+func TestSysMLImplicitBaseOfExplicitSupertypeIsTransitive(t *testing.T) {
+	m, root := buildModelNamed(t, "t.sysml", `package Parts {
+		part def Part { feature endShot; }
+	}
+	part def Wheel;
+	part def MyWheel specializes Wheel {
+		feature redefines endShot;
+	}`)
+	myWheel := sym(t, root, "MyWheel")
+	if inherited, ok := m.LookupContributedMember(myWheel, "endShot"); !ok {
+		t.Fatal("MyWheel does not inherit endShot through Wheel's implicit base")
+	} else if got := m.resolver.Index().GetFQN(inherited); got != "Parts::Part::endShot" {
+		t.Fatalf("inherited endShot = %q, want Parts::Part::endShot", got)
+	}
+}

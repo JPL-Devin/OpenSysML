@@ -7,7 +7,7 @@ import (
 
 // Build constructs the immutable scope tree for a parsed document.
 func Build(root *ast.RootNamespace) *Scope {
-	rootScope := NewScope(nil, nil)
+	rootScope := NewScope(nil, root)
 	if root == nil {
 		return rootScope
 	}

@@ -33,6 +33,18 @@ const semanticsLibrary = `standard library package Kit {
 	}
 }`
 
+const inheritedImplicitLibrary = `package Occurrences {
+	class Occurrence { feature endShot; }
+}
+package Objects {
+	struct Object specializes Occurrences::Occurrence;
+}
+struct Wheel;
+struct MyWheel specializes Wheel {
+	feature redefines endShot : EndShot;
+}
+struct EndShot;`
+
 // Conformance follows the specialization graph, which a restored library holds as
 // recorded supertype names: it must answer the same either way and transitively.
 func TestConformanceOverALibraryIsTheSameParsedAndRestored(t *testing.T) {
@@ -51,6 +63,33 @@ func TestConformanceOverALibraryIsTheSameParsedAndRestored(t *testing.T) {
 			if got != tc.want {
 				t.Errorf("%s: Conforms(%s, %s) = %v, want %v", path, tc.sub, tc.super, got, tc.want)
 			}
+		}
+	}
+}
+
+func TestInheritedImplicitBaseIsTheSameParsedAndRestored(t *testing.T) {
+	dir, cacheDir := t.TempDir(), t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "wheel.kerml"), []byte(inheritedImplicitLibrary), 0o600); err != nil {
+		t.Fatalf("write library: %v", err)
+	}
+	parsed := modelOver(t, loadLibrary(t, dir, cacheDir))
+	restored := modelOver(t, loadLibrary(t, dir, cacheDir))
+
+	for path, lib := range map[string]library{"parsed": parsed, "restored": restored} {
+		myWheel := lib.symbol(t, "MyWheel")
+		if path == "parsed" && myWheel.Decl == nil {
+			t.Fatal("the first load must parse MyWheel")
+		}
+		if path == "restored" && myWheel.Decl != nil {
+			t.Fatal("the second load must restore MyWheel")
+		}
+		inherited, ok := lib.model.LookupContributedMember(myWheel, "endShot")
+		if !ok {
+			t.Errorf("%s: MyWheel does not inherit endShot through Wheel's implicit base", path)
+			continue
+		}
+		if got := lib.idx.GetFQN(inherited); got != "Occurrences::Occurrence::endShot" {
+			t.Errorf("%s: inherited endShot = %q", path, got)
 		}
 	}
 }

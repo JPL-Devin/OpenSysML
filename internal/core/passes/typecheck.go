@@ -373,6 +373,9 @@ func compatMessage(decl declKind, rel ast.RelationshipKind, target symbols.Symbo
 		if isDef {
 			return fmt.Sprintf("a definition may not %s a feature", rel)
 		}
+		if target == symbols.SymbolUnknown {
+			return "" // an unclassified target constrains nothing
+		}
 		// Usages can subset/redefine other usages OR definitions
 		// Example: datatype MyReal :>> Real (usage redefines attributeDef)
 		// The check for isUsageKind OR isDefKind allows both patterns

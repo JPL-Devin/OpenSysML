@@ -12,8 +12,11 @@ import (
 // buildModel parses src, indexes and resolves it, and returns the semantic
 // model plus the document root scope for symbol lookups.
 func buildModel(t *testing.T, src string) (*Model, *symbols.Scope) {
+	return buildModelNamed(t, "t.sysml", src)
+}
+
+func buildModelNamed(t *testing.T, name, src string) (*Model, *symbols.Scope) {
 	t.Helper()
-	const name = "t.sysml"
 	p := parser.New(source.New(name, []byte(src)))
 	root := p.ParseFile()
 	if len(p.Diagnostics) != 0 {
@@ -110,6 +113,21 @@ func TestAllSupertypesTransitive(t *testing.T) {
 	got := map[*symbols.Symbol]bool{all[0]: true, all[1]: true}
 	if !got[a] || !got[b] {
 		t.Fatalf("AllSupertypes(C) missing A or B: %v", all)
+	}
+}
+
+func TestInheritedFeatureNamedUsesDeclarationOrderForUnrelatedSupertypes(t *testing.T) {
+	m, root := buildModel(t, `
+		part def A { feature shared; }
+		part def B { feature shared; }
+		part def C specializes A, B { feature local; }
+	`)
+	a := sym(t, root, "A")
+	c := sym(t, root, "C")
+	local := sym(t, c.Scope, "local")
+	got := m.inheritedFeatureNamed(local, "shared")
+	if got == nil || got.OwnerScope == nil || got.OwnerScope.Owner() != a {
+		t.Fatalf("inherited shared = %v, want A::shared from declaration order", got)
 	}
 }
 

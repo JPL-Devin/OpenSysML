@@ -12,6 +12,7 @@ package semantics
 import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -182,15 +183,12 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		} else {
 			continue
 		}
-		// A redefinition names the feature it refines, which the redefining
-		// feature shadows in its own scope (`part redefines engine`), so a
-		// target resolving to sym itself must be looked up in what sym's owner
-		// inherits. Self-reference through specializes/typing is preserved so
-		// cycle detection still sees it.
-		if target == sym && rel.Kind == ast.RelRedefines {
+		// Same-named subsettings and redefinitions target the inherited feature,
+		// not the binding that resolves first in the owner's scope.
+		if len(qn.Parts) == 1 && (rel.Kind == ast.RelRedefines || rel.Kind == ast.RelSubsets) {
 			if redefined := m.inheritedFeature(sym, qn); redefined != nil {
 				target = redefined
-			} else {
+			} else if target == sym {
 				continue
 			}
 		}
@@ -314,7 +312,7 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 	// An untyped usage still specializes its standard-library base feature.
 	// Implicit redefinition does not stand in for it: the two rules are
 	// independent, and the redefined parameter may itself be untyped.
-	if declared == 0 {
+	if declared == 0 || source.KindOf(sym.DocName) == source.KindKerML {
 		if base := m.implicitBase(sym); base != nil {
 			out = append(out, base)
 		}
@@ -344,12 +342,33 @@ func (m *Model) inheritedFeatureNamed(sym *symbols.Symbol, name string) *symbols
 	if owner == nil {
 		return nil
 	}
+	var candidates []*symbols.Symbol
+	seen := make(map[*symbols.Symbol]bool)
 	for _, sup := range m.AllSupertypes(owner) {
 		if found, ok := m.LookupMember(sup, name); ok && found != sym {
-			return found
+			if !seen[found] {
+				seen[found] = true
+				candidates = append(candidates, found)
+			}
 		}
 	}
-	return nil
+	for _, candidate := range candidates {
+		moreSpecificCandidateExists := false
+		for _, other := range candidates {
+			if other != candidate && m.Conforms(other, candidate) {
+				moreSpecificCandidateExists = true
+				break
+			}
+		}
+		if !moreSpecificCandidateExists {
+			// Unrelated ties use the breadth-first declaration order as a deterministic choice.
+			return candidate
+		}
+	}
+	if len(candidates) == 0 {
+		return nil
+	}
+	return candidates[0]
 }
 
 // AllSupertypes returns the transitive closure of DirectSupertypes, excluding

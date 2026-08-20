@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
@@ -170,5 +171,13 @@ func TestTypeCheckMetaclassSpecializesPartDefStillFires(t *testing.T) {
 	}
 	if !strings.Contains(diags[0].Message, "kind mismatch") {
 		t.Errorf("got %q", diags[0].Message)
+	}
+}
+
+func TestTypeCheckSubsettingUnknownTargetConstrainsNothing(t *testing.T) {
+	for _, rel := range []ast.RelationshipKind{ast.RelSubsets, ast.RelRedefines} {
+		if got := compatMessage(declKind{}, rel, symbols.SymbolUnknown); got != "" {
+			t.Errorf("%s with unknown target = %q, want no diagnostic", rel, got)
+		}
 	}
 }

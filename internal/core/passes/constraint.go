@@ -418,23 +418,31 @@ func (cc *constraintChecker) checkRedefinition(sym *symbols.Symbol) {
 		if !isQN {
 			continue
 		}
-		redefined, resolved := cc.resolveInheritedMember(owner, qn)
-		if !resolved || redefined == nil {
-			continue
-		}
-
-		// A library supertype restored from the cache carries no scope, so
-		// membership is decided by looking the name up in each supertype
-		// rather than by comparing the declaring scope.
-		name := qn.Parts[len(qn.Parts)-1].Text
-		inherited := false
-		if owner.Scope == nil || redefined.OwnerScope != owner.Scope {
-			for _, supertype := range cc.model.AllSupertypes(owner) {
-				if found, ok := cc.model.LookupMember(supertype, name); ok && found == redefined {
-					inherited = true
-					break
-				}
+		featuringOwners, hasFeaturing := cc.featuringOwners(sym)
+		if !hasFeaturing {
+			if owner.Kind == symbols.SymbolPackage || owner.Kind == symbols.SymbolNamespace {
+				continue
 			}
+			featuringOwners = []*symbols.Symbol{owner}
+		}
+		var redefined *symbols.Symbol
+		inherited := false
+		for _, featuringOwner := range featuringOwners {
+			candidate, resolved := cc.resolveInheritedMember(featuringOwner, qn)
+			if !resolved || candidate == nil {
+				continue
+			}
+			if isPackageLevelFeature(candidate) {
+				continue
+			}
+			redefined = candidate
+			inherited = cc.isInheritedMember(featuringOwner, candidate, qn.Parts[len(qn.Parts)-1].Text)
+			if inherited {
+				break
+			}
+		}
+		if redefined == nil {
+			continue
 		}
 
 		if !inherited {
@@ -508,6 +516,73 @@ func (cc *constraintChecker) checkRedefinition(sym *symbols.Symbol) {
 			}
 		}
 	}
+}
+
+func (cc *constraintChecker) featuringOwners(sym *symbols.Symbol) ([]*symbols.Symbol, bool) {
+	owners := make([]*symbols.Symbol, 0, 1)
+	for _, rel := range semantics.RelationshipsOf(sym) {
+		if rel == nil || rel.Kind != ast.RelFeaturedBy || rel.Target == nil {
+			continue
+		}
+		targetNode := rel.Target
+		if fr, ok := targetNode.(*ast.FeatureReference); ok {
+			targetNode = fr.Name
+		}
+		qn, ok := targetNode.(*ast.QualifiedName)
+		if !ok {
+			continue
+		}
+		resolveScope := sym.OwnerScope
+		if sym.Scope != nil {
+			resolveScope = sym.Scope
+		}
+		target, ok := cc.resolver.ResolveQualified(resolveScope, qn)
+		if !ok || target == nil {
+			continue
+		}
+		owners = append(owners, target)
+	}
+	return owners, len(owners) > 0
+}
+
+func (cc *constraintChecker) isInheritedMember(
+	owner, candidate *symbols.Symbol,
+	name string,
+) bool {
+	if owner == nil || candidate == nil {
+		return false
+	}
+
+	for _, supertype := range cc.model.AllSupertypes(owner) {
+		if found, ok := cc.model.LookupMember(supertype, name); ok && found == candidate {
+			return true
+		}
+		for scope := supertype.OwnerScope; scope != nil; scope = scope.Parent() {
+			if scope.Owner() == candidate {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+func isPackageLevelFeature(sym *symbols.Symbol) bool {
+	if sym == nil || sym.OwnerScope == nil || sym.OwnerScope.Owner() == nil {
+		return false
+	}
+	switch sym.OwnerScope.Owner().Kind {
+	case symbols.SymbolPackage, symbols.SymbolNamespace:
+	default:
+		return false
+	}
+	// A package-level feature has no featuring type to inherit its redefined member.
+	for _, rel := range semantics.RelationshipsOf(sym) {
+		if rel != nil && rel.Kind == ast.RelFeaturedBy && rel.Target != nil {
+			return false
+		}
+	}
+	return true
 }
 
 // extractUsageType extracts the type of a usage via its RelTyping relationship.

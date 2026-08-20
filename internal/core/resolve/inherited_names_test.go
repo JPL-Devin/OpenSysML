@@ -111,6 +111,42 @@ func TestSubsettingTargetIsTheInheritedFeature(t *testing.T) {
 	}
 }
 
+func TestInheritedMembersThroughGeneralFeature(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		file string
+		src  string
+	}{
+		{
+			name: "KerML",
+			file: "inherited.kerml",
+			src: `package R10 {
+				classifier A { feature f; }
+				classifier B specializes A { feature redefines f { feature g; } }
+				classifier C specializes A, B {
+					feature subsets f { feature redefines g; }
+				}
+			}`,
+		},
+		{
+			name: "SysML",
+			file: "inherited.sysml",
+			src: `package P {
+				part def A { part f; }
+				part def B :> A { part redefines f { part g; } }
+				part def C :> A, B { part redefines f { part redefines g; } }
+			}`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r, _, _ := resolvedDocNamed(t, tc.file, tc.src)
+			if len(r.Diagnostics) != 0 {
+				t.Fatalf("resolution diagnostics: %v", r.Diagnostics)
+			}
+		})
+	}
+}
+
 // The subject, actors and stakeholders of a requirement redefine the inherited
 // ones by name, which is not modelled here, so redeclaring them is no conflict.
 func TestRequirementParametersAreNotNameConflicts(t *testing.T) {

@@ -2,6 +2,7 @@ package semantics
 
 import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -84,19 +85,29 @@ var implicitDefinitionBases = map[ast.DefinitionKind]string{
 	ast.DefUseCase:          "UseCases::UseCase",
 }
 
+var implicitKerMLBases = map[string]string{
+	"classifier":  "Base::Anything",
+	"class":       "Occurrences::Occurrence",
+	"struct":      "Objects::Object",
+	"assoc":       "Links::Link",
+	"association": "Links::Link",
+	"behavior":    "Performances::Performance",
+	"function":    "Performances::Evaluation",
+	"predicate":   "Performances::BooleanEvaluation",
+	"interaction": "Transfers::Transfer",
+	"metaclass":   "Metaobjects::Metaobject",
+	"datatype":    "Base::DataValue",
+	"type":        "Base::Anything",
+}
+
 // implicitBase returns the stdlib definition sym is implicitly typed by, or nil
-// when sym is not an untyped usage or definition of a kind with a known base. A
-// declaration that declares any generalization (typing, subsetting,
-// redefinition, specialization) takes its supertypes from that declaration
-// instead.
+// when sym is not a declaration of a kind with a known base.
 func (m *Model) implicitBase(sym *symbols.Symbol) *symbols.Symbol {
+	isKerML := source.KindOf(sym.DocName) == source.KindKerML
 	var fqn string
 	var ok bool
 	switch d := sym.Decl.(type) {
 	case *ast.Usage:
-		if declaresGeneralization(d.Relationships) {
-			return nil
-		}
 		fqn, ok = implicitUsageBases[d.Kind]
 		if d.IsIndividual && d.Kind == ast.UsageOccurrence {
 			// An individual occurrence is a life, not an arbitrary occurrence
@@ -104,14 +115,24 @@ func (m *Model) implicitBase(sym *symbols.Symbol) *symbols.Symbol {
 			fqn, ok = implicitUsageBases[ast.UsageIndividual]
 		}
 	case *ast.Definition:
-		if declaresGeneralization(d.Relationships) {
-			return nil
-		}
 		fqn, ok = implicitDefinitionBases[d.Kind]
 	case *ast.SubstateMember:
 		// `state s;` in a state body: a bodyless, always-untyped state usage.
 		fqn, ok = implicitUsageBases[ast.UsageState]
 	default:
+		return nil
+	}
+	if isKerML {
+		switch d := sym.Decl.(type) {
+		case *ast.Usage:
+			fqn, ok = implicitKerMLBases[d.Keyword]
+		case *ast.Definition:
+			fqn, ok = implicitKerMLBases[d.Keyword]
+		}
+	} else if declaresGeneralization(RelationshipsOf(sym)) {
+		return nil
+	}
+	if isKerML && m.declaredGeneralizationReaches(sym, fqn, nil) {
 		return nil
 	}
 	if !ok || m.resolver == nil || m.resolver.Index() == nil {
@@ -123,6 +144,48 @@ func (m *Model) implicitBase(sym *symbols.Symbol) *symbols.Symbol {
 		}
 	}
 	return nil
+}
+
+func (m *Model) declaredGeneralizationReaches(sym *symbols.Symbol, want string, visiting map[*symbols.Symbol]bool) bool {
+	if sym == nil {
+		return false
+	}
+	if visiting == nil {
+		visiting = make(map[*symbols.Symbol]bool)
+	}
+	if visiting[sym] {
+		return false
+	}
+	visiting[sym] = true
+	defer delete(visiting, sym)
+
+	for _, rel := range RelationshipsOf(sym) {
+		if rel == nil || !GeneralizationKind(rel.Kind) {
+			continue
+		}
+		targetNode := rel.Target
+		if fr, ok := targetNode.(*ast.FeatureReference); ok {
+			targetNode = fr.Name
+		}
+		qn, ok := targetNode.(*ast.QualifiedName)
+		if !ok {
+			continue
+		}
+		target, ok := m.resolver.ResolveQualified(sym.OwnerScope, qn)
+		if !ok || target == nil {
+			continue
+		}
+		if resolved, aliasOK := m.resolver.ResolveAliasTarget(target); aliasOK {
+			target = resolved
+		} else {
+			continue
+		}
+		sameBase := m.resolver.Index() != nil && m.resolver.Index().GetFQN(target) == want
+		if sameBase || m.declaredGeneralizationReaches(target, want, visiting) {
+			return true
+		}
+	}
+	return false
 }
 
 // baseUsageFQN is the most general base usage every usage element subsets,

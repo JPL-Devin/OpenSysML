@@ -124,6 +124,61 @@ func TestNamespaceImportSkipsAPrivatelyImportedName(t *testing.T) {
 	}
 }
 
+func TestPublicMembershipImportIsReexported(t *testing.T) {
+	for _, ext := range []string{"sysml", "kerml"} {
+		idx := indexOf(t, map[string]string{
+			"base." + ext: "package Base { namespace Shown; }",
+			"mid." + ext:  "package Mid { public import Base::Shown; }",
+			"top." + ext:  "package Top { public import Mid::Shown; }",
+			"app." + ext:  "package App { private import Top::*; }",
+		})
+		app := scopeOf(t, idx.DocumentRoot("app."+ext), "App")
+		r := New(idx)
+		if _, ok := r.ResolveQualified(app, qn(false, "Mid", "Shown")); !ok {
+			t.Fatalf("%s: Mid::Shown unresolved through public membership import; diags=%v", ext, r.Diagnostics)
+		}
+		if _, ok := r.ResolveQualified(app, qn(false, "Top", "Shown")); !ok {
+			t.Fatalf("%s: Top::Shown unresolved through transitive public membership imports; diags=%v", ext, r.Diagnostics)
+		}
+		if _, ok := r.ResolveName(app, "Shown", ident("Shown")); !ok {
+			t.Fatalf("%s: Shown unresolved through wildcard import over Top; diags=%v", ext, r.Diagnostics)
+		}
+	}
+}
+
+func TestPrivateMembershipImportIsNotReexported(t *testing.T) {
+	for _, ext := range []string{"sysml", "kerml"} {
+		idx := indexOf(t, map[string]string{
+			"base." + ext: "package Base { namespace Hidden; }",
+			"mid." + ext:  "package Mid { private import Base::Hidden; }",
+			"app." + ext:  "package App { import Mid::*; }",
+		})
+		app := scopeOf(t, idx.DocumentRoot("app."+ext), "App")
+		r := New(idx)
+		if _, ok := r.ResolveName(app, "Hidden", ident("Hidden")); ok {
+			t.Fatalf("%s: Hidden leaked through Mid::* after a private membership import", ext)
+		}
+		if _, ok := r.ResolveQualified(app, qn(false, "Mid", "Hidden")); ok {
+			t.Fatalf("%s: Mid::Hidden exposed a private membership import", ext)
+		}
+	}
+}
+
+func TestCyclicMembershipImportsTerminate(t *testing.T) {
+	for _, ext := range []string{"sysml", "kerml"} {
+		idx := indexOf(t, map[string]string{
+			"a." + ext: "package A { public import B::Missing; }",
+			"b." + ext: "package B { public import A::Missing; }",
+			"c." + ext: "package C { import A::*; }",
+		})
+		c := scopeOf(t, idx.DocumentRoot("c."+ext), "C")
+		r := New(idx)
+		if _, ok := r.ResolveName(c, "Missing", ident("Missing")); ok {
+			t.Fatalf("%s: cyclic imports unexpectedly resolved Missing", ext)
+		}
+	}
+}
+
 // The same, for symbols restored from the library cache: they carry no scope, so
 // a wildcard import enumerates them through the index alone.
 func TestNamespaceImportSkipsAPrivatelyImportedCachedName(t *testing.T) {
