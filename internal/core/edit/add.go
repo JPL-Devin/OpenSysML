@@ -164,11 +164,22 @@ func (m Model) memberInsertion(owner ast.Node, text string) (source.Span, string
 	indent := m.memberIndent(owner.Span())
 	if hasBody {
 		close := lastToken(m.Source, body, lexer.RBrace)
+		closeOffset := close.Span.Offset
+		lineStart := closeOffset
+		for lineStart > 0 && m.Source.Bytes()[lineStart-1] != '\n' {
+			lineStart--
+		}
+		closeIndent := string(m.Source.Bytes()[lineStart:closeOffset])
+		if closeIndent != "" && !onlyWhitespace([]byte(closeIndent)) {
+			lineStart = closeOffset
+			closeIndent = ownerIndent
+		}
 		prefix := "\n"
-		if close.Span.Offset > 0 && m.Source.Bytes()[close.Span.Offset-1] == '\n' {
+		if lineStart > 0 && m.Source.Bytes()[lineStart-1] == '\n' {
 			prefix = ""
 		}
-		return source.Span{Offset: close.Span.Offset}, prefix + indent + text + "\n" + ownerIndent
+		return source.Span{Offset: lineStart, Len: closeOffset - lineStart},
+			prefix + indent + text + "\n" + closeIndent
 	}
 	semi := lastToken(m.Source, owner.Span(), lexer.Semicolon)
 	return source.Span{Offset: semi.Span.Offset, Len: semi.Span.Len},

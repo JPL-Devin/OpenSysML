@@ -280,9 +280,14 @@ func TestAddMemberIndentationAndRootEOF(t *testing.T) {
 		name, src, want string
 	}{
 		{
-			name: "tabs and existing body",
-			src:  "package P {\n\tpart def Existing;\n}\n",
-			want: "package P {\n\tpart def Existing;\n\tpart def Added;\n}\n",
+			name: "four spaces and indented closing brace",
+			src:  "package P {\n    part def Existing;\n    }\n",
+			want: "package P {\n    part def Existing;\n    part def Added;\n    }\n",
+		},
+		{
+			name: "tabs and indented closing brace",
+			src:  "package P {\n\tpart def Existing;\n\t}\n",
+			want: "package P {\n\tpart def Existing;\n\tpart def Added;\n\t}\n",
 		},
 		{
 			name: "two spaces",
@@ -314,8 +319,9 @@ func TestAddMemberIndentationAndRootEOF(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			m := loadContent(t, "add.sysml", tc.src)
 			res, err := Apply(m, []Operation{AddMember("", "part def", "Added")})
-			if tc.name == "tabs and existing body" || tc.name == "two spaces" ||
-				tc.name == "empty body" {
+			if tc.name == "four spaces and indented closing brace" ||
+				tc.name == "tabs and indented closing brace" ||
+				tc.name == "two spaces" || tc.name == "empty body" {
 				res, err = Apply(m, []Operation{AddMember("P", "part def", "Added")})
 			} else if tc.name == "bodyless owner" {
 				res, err = Apply(m, []Operation{AddMember("P", "part", "x")})
