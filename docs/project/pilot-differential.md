@@ -182,30 +182,32 @@ nor double-counted as two independent disagreements.
 
 ---
 
-## Results (pilot `2026-05`, 338 files)
+## Results (pilot `2026-05`, 349 files)
 
 | Root | Files | Fully agreeing | Ours | Pilot | Agreed | Severity-only | Only ours | Only pilot |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | `examples/sysml-v2-training` | 100 | 100 | 0 | 0 | 0 | 0 | 0 | 0 |
-| `examples/pilot-corpora/sysml-examples` | 98 | 42 | 314 | 0 | 0 | 0 | 314 | 0 |
-| `examples/pilot-corpora/sysml-validation` | 56 | 39 | 59 | 0 | 0 | 0 | 59 | 0 |
-| `examples/pilot-corpora/kerml-examples` | 58 | 33 | 150 | 6 | 0 | 0 | 150 | 6 |
-| `testdata` | 10 | 2 | 27 | 54 | 20 | 4 | 3 | 30 |
-| `examples` | 12 | 4 | 40 | 121 | 0 | 12 | 28 | 109 |
+| `examples/pilot-corpora/sysml-examples` | 98 | 65 | 167 | 0 | 0 | 0 | 167 | 0 |
+| `examples/pilot-corpora/sysml-validation` | 56 | 46 | 37 | 0 | 0 | 0 | 37 | 0 |
+| `examples/pilot-corpora/kerml-examples` | 58 | 35 | 98 | 6 | 0 | 0 | 98 | 6 |
+| `testdata` | 11 | 3 | 27 | 54 | 20 | 4 | 3 | 30 |
+| `examples` | 22 | 4 | 44 | 435 | 0 | 12 | 32 | 423 |
 | `cmd/pilot-diff/testdata` (probes) | 4 | 1 | 6 | 0 | 0 | 0 | 6 | 0 |
-| **Total** | **338** | **221** | **596** | **181** | **20** | **16** | **560** | **145** |
+| **Total** | **349** | **254** | **379** | **495** | **20** | **16** | **343** | **459** |
 
-This table is a clean full run on the F33 branch, with #343, #349 (F32), #350 (F30) and #353
-(F31) merged, and it is the run the committed baseline was regenerated from. Two consecutive
-runs produce byte-identical JSON, so the numbers are not order- or timing-dependent.
+This table is a clean full run on `main` at `30449705`, with #358 (F34), #359, #360 (F51), #361
+(F67), #362 (F69), #363 (F62/F63) and #364 (F60/F61) merged, and it is the run the committed
+baseline was regenerated from. Two consecutive runs produce byte-identical JSON, so the numbers
+are not order- or timing-dependent.
 
-Per category, the only-ours totals are: `pilot-examples` 220 syntax, 79
-`unresolved-reference`, 12 `kind-mismatch`, 2 `unmapped`, 1 `units`; `pilot-validation` 54
-syntax, 3 `unresolved-reference`, 2 `kind-mismatch`; `kerml-examples` 140 syntax, 7
-`unresolved-reference`, 3 `unmapped`; `examples` 28 syntax; `testdata` 2 `unmapped`, 1
-`multiplicity`; `probes` 6 `unmapped`. Only-pilot: `testdata` 18 `kind-mismatch`, 6 `unmapped`,
-3 syntax, 3 `unresolved-reference`; `examples` 54 syntax, 27 `unmapped`, 13 `kind-mismatch`, 12
-`unresolved-reference`, 3 `multiplicity`; `kerml-examples` 6 `unmapped` (K6).
+Per category, the only-ours totals are: `pilot-examples` 93 syntax, 51
+`unresolved-reference`, 20 `kind-mismatch`, 2 `unmapped`, 1 `units`; `pilot-validation` 34
+syntax, 3 `kind-mismatch`; `kerml-examples` 85 syntax, 10 `unresolved-reference`, 3 `unmapped`;
+`examples` 32 syntax; `testdata` 2 `unmapped`, 1 `multiplicity`; `probes` 6 `unmapped`.
+Only-pilot: `testdata` 18 `kind-mismatch`, 6 `unmapped`, 3 syntax, 3 `unresolved-reference`;
+`examples` 167 + 27 `unmapped`, 111 + 54 syntax, 23 + 12 `unresolved-reference`, 9 + 13
+`kind-mismatch`, 4 + 3 `multiplicity` (`.kerml` files first, `.sysml` second);
+`kerml-examples` 6 `unmapped` (K6).
 
 The ordering fix removed all 539 pilot-only diagnostics from `pilot-examples`: the reference
 now processes `SysML v2 Spec Annex A SimpleVehicleModel.sysml` before its importer,
@@ -214,31 +216,30 @@ longer reported by the pilot. The importer still has OpenSysML-only syntax diagn
 remain part of the parser-gap follow-up below.
 
 `pilot-validation` was unchanged by the ordering fix: it contributed 121 only-ours syntax
-diagnostics in the pre-merge comparison, and 59 now.
+diagnostics in the pre-merge comparison, and 37 now.
 
 The headline is the first row: on the 100-file OMG training corpus the pilot reports
 **nothing at all**, and so do we. That is the corpus written to be valid, and it is the row
 that most directly answers "are we right?".
 
-What moved when F33 regenerated the committed baseline, and why. The earlier movements — F2's
-fixtures, F3's warn-not-error decision, the probes root and the ordering fix — were already in
-the previous baseline and are not repeated here:
+What moved when the F60–F69 fix round regenerated the committed baseline, and why. Each of the
+five fix PRs measured its own movement from the same 338-file baseline, so their individually
+reported deltas do not sum — this is the one combined measurement:
 
 | Count | Was | Now | Reason |
 |---|---|---|---|
-| overall: fully agreeing / only ours / our diagnostics | 196 / 851 / 887 | 221 / 560 / 596 | The previous baseline predates #349 (F32), #350 (F30) and #353 (F31). Agreement (20), severity-only (16), only-pilot (145) and the pilot's diagnostic total (181) are unchanged: nothing merged since moves the reference's side. |
-| `kerml-examples`: only ours | 439 | 150 | F30 on syntax (368 → 140), F31 on names (`unresolved-reference` 43 → 7), F32 on the SysML-shaped checks (`kind-mismatch` 4 → 0, `unmapped` 24 → 3). 23 of the root's files become fully agreeing (48 disagreeing → 25) and no file gains a diagnostic. |
-| `kerml-examples`: only pilot | 6 | 6 | K6, unmoved. Adjudicated by F33 below as the reference's own defect, so there is nothing on our side for it to move with. |
-| `pilot-examples`: only ours | 316 | 314 | F31: `Packet Example/Packets.sysml:22` (a redefinition of an inherited packet field) and `Simple Tests/ImportTest.sysml:5` (an unresolved reference through an import) are now fully agreeing. |
-| `unmapped`, our side | 35 | 13 | F32 retires K4's 21 `only a definition may specialize; found a usage` rows, F31 the `Packets.sysml` one. The 11 specialization-cycle rows (F4/K5) and the two remaining messages are unmoved. |
+| overall: fully agreeing / only ours / our diagnostics | 221 / 560 / 596 | 254 / 343 / 379 | #364 (F60/F61 prefix metadata and keyword-less members), #363 (F62/F63 node bodies), #361 (F67 resolution) and #362 (F69 typing rules). Agreement (20) and severity-only (16) are unchanged. |
+| `pilot-examples`: only ours | 314 | 167 | Mostly the parser rounds: syntax 220 → 93 and the recovery cascade with it, `unresolved-reference` 79 → 51. `kind-mismatch` rises 12 → 20 because newly-parsed declarations reach the type tier for the first time — unmasked diagnostics of other classes, not new false positives (documented per file in #363). |
+| `pilot-validation`: only ours | 59 | 37 | syntax 54 → 34; `unresolved-reference` 3 → 0; `kind-mismatch` 2 → 3. |
+| `kerml-examples`: only ours | 150 | 98 | The parser fixes are language-independent, so KerML syntax 140 → 85. `unresolved-reference` 7 → 10 is again unmasking. The open KerML rows (F50, F70–F72, F81–F83) are untouched: their files are `defusage.go`/`behavior.go` work that this round did not claim. |
+| `examples`: only pilot | 109 | 423 | Entirely #358 (F34): per-file language dispatch now compares our own 10 `.kerml` demo fixtures, and the KerML reference floods them (314 of the 423). Adjudicated as F84–F86 — our fixtures carry SysML notation under a `.kerml` suffix. The `.sysml` side is unchanged at 109. |
+| `testdata` / `examples`: files | 10 / 12 | 11 / 22 | F34 again: the previously-excluded `.kerml` fixtures are now in the comparison. |
+| `unmapped`, our side | 13 | 13 | Unmoved: the 11 specialization-cycle rows (F4/K5) and two remaining messages. |
 
-No movement above comes from the harness: `cmd/pilot-diff` and the KerML bridge are unchanged
-by F33, and the run is reproducible byte-for-byte.
-
-The KerML row is still the harshest in the table, and it is almost entirely ours: 150 only-ours
-against 6 only-pilot, with 33 of 58 files fully agreeing (439 / 6 and 10 / 58 when the root was
-added). Where the reference validates the corpus its authors wrote for it, we reject notation it
-accepts — adjudicated below.
+The KerML row is still the harshest of the three OMG roots and it is almost entirely ours: 98
+only-ours against 6 only-pilot, with 35 of 58 files fully agreeing (439 / 6 and 10 / 58 when the
+root was added). Where the reference validates the corpus its authors wrote for it, we reject
+notation it accepts — adjudicated below.
 
 One category label moved with this adjudication and **no count did**:
 `Must invoke a behavior or a behavioral feature` is now `kind-mismatch` rather than `unmapped`
@@ -255,8 +256,9 @@ mapping them would risk accidental agreement rather than record the debt.
 The `testdata`/`examples` rows are not a like-for-like verdict on our checker. `testdata/` and
 `examples/` are largely *our* fixtures — several are deliberately malformed negative fixtures,
 and many are written in notation the pilot's grammar rejects outright, after which its error
-recovery cascades. Their 139 pilot-only diagnostics are therefore dominated by a handful of
-root causes, adjudicated next.
+recovery cascades. Their 453 pilot-only diagnostics are therefore dominated by a handful of
+root causes, adjudicated next — 314 of them on the 10 `.kerml` demo fixtures F34 brought into
+the comparison (F84–F86).
 
 ---
 
@@ -287,8 +289,8 @@ are gone from the three files listed in the movement table above.
 
 ### SysML corpora — only ours (373)
 
-**The two OMG SysML roots' authoritative only-ours count is 373** — `pilot-examples` 314 and
-`pilot-validation` 59, measured by the run in the results table above: 274 syntax, 82
+**The two OMG SysML roots' only-ours count when these classes were adjudicated was 373** —
+`pilot-examples` 314 and `pilot-validation` 59: 274 syntax, 82
 `unresolved-reference`, 14 `kind-mismatch`, 2 `unmapped`, 1 `units`, spread over 73 of the two
 roots' 154 files (81 files carry none). Together with the KerML root's 150, `testdata`'s 3, the
 probes' 6 and `examples`' 28 that is the entire only-ours column. The `examples` 28 are all
@@ -296,6 +298,11 @@ probes' 6 and `examples`' 28 that is the entire only-ours column. The `examples`
 they are meant to: bare `transition <source> to <target>;` (24), `initial <state>;` (2),
 `region <name> { … }` (1) and `junction <name>;` (1). They carry the `syntax` category at
 `warning` severity, are one-sided by construction, and are adjudicated with F3, not here.
+
+Every count in this section is the **pre-fix** measurement, and it is left as measured so the
+adjudications stay checkable against the evidence that produced them. After the fix round
+(#361, #362, #363, #364) the same two roots carry **204** only-ours diagnostics; see the movement
+table above for where the 169 went and which categories were unmasked rather than removed.
 
 Method, per file: take the **first** only-ours diagnostic, read the construct it sits on, write
 the smallest file that shows the same construct, and run that file through both our checker and
@@ -546,12 +553,15 @@ nothing downstream of it is measurable.
 
 ### KerML — only ours
 
-**The root's authoritative only-ours count is 150** (140 syntax, 7 `unresolved-reference`, 3
-`unmapped`), measured by the run in the results table above. That is the one current number;
+**The root's only-ours count when these classes were adjudicated was 150** (140 syntax, 7
+`unresolved-reference`, 3 `unmapped`); after the SysML-side parser fix round it is **98** (85
+syntax, 10 `unresolved-reference`, 3 `unmapped`) — the parser fixes are language-independent, and
+the `unresolved-reference` rise is unmasking, not regression (movement table above). The counts
+below are left as measured so each verdict stays checkable against its evidence;
 the table below is a **history**, not an addition. Each row's count is what the class measured
 *when it was adjudicated* — K1–K5 were adjudicated when the root stood at 439, so those counts
 sum to 439 and no longer describe the root. K3 carries F31's before/after figures. For the 150 as
-they stand, adjudicated one diagnostic at a time, see
+they stood, adjudicated one diagnostic at a time, see
 [The 150, adjudicated diagnostic by diagnostic (K7–K18)](#the-150-adjudicated-diagnostic-by-diagnostic-k7k18).
 
 Verdicts across the five classes: **436 ours** and **3 one-sided** (K5, a check the reference

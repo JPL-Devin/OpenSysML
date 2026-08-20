@@ -9,12 +9,12 @@ The harness compares OpenSysML diagnostics against the OMG SysML v2 Pilot Implem
 (via `DeciSym/sysmlv2-validator`) over four corpus roots and writes
 `build/pilot-diff/pilot-diff.{txt,json}`. `docs/project/pilot-differential-baseline.json` is the
 committed result of the *last refreshed* run, so **the harness is testable by reproduction** —
-but only while the baseline is current. Check that first: as of `ac4ac4fb` the committed baseline
-is **stale** (it records 276 files / 175 fully agreeing / 18 agreement / 457 ours / 188 pilot's,
-while a live run gives 277 / 186 / 20 / 395 / 152), and `docs/project/pilot-differential.md`'s
-"Results" table and "Unmapped messages" table match the stale baseline, not the harness. So a
-non-empty `jq -S` baseline diff is *not* by itself evidence of a regression — see "Isolating one
-change's effect" below.
+but only while the baseline is current. Check that first. As of `30449705` it **is** current:
+a live run gives `349 file(s), 254 fully agreeing; 20 agreed, 343 only ours, 459 only the
+pilot's`, byte-identical to the committed baseline, and `docs/project/pilot-differential.md`'s
+"Results" table matches. When it is stale (it was at `ac4ac4fb`, and again while the F60–F69 fix
+PRs were in flight), a non-empty `jq -S` baseline diff is *not* by itself evidence of a
+regression — see "Isolating one change's effect" below.
 
 ## Prerequisites
 
