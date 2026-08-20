@@ -1,5 +1,5 @@
 package test {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 
 	// A loop containing a conditional, and the conditional containing a loop:
 	// every third count runs an inner loop that adds three to the total.

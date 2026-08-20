@@ -1,5 +1,5 @@
 package test {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 
 	// An invocation of a function yields exactly one result (KerML 7.4.9), so a
 	// calc computing several values is consumed as a usage whose `out` features

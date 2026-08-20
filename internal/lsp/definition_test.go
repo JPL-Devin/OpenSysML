@@ -52,8 +52,8 @@ func TestDefinitionBodyExpressionParameter(t *testing.T) {
 	s := NewServer(ws)
 	name := uri.File("/tmp/def_bodyparam.sysml").Filename()
 	src := `package P {
-	import ScalarValues::*;
-	import ControlFunctions::*;
+	private import ScalarValues::*;
+	private import ControlFunctions::*;
 	attribute s : Integer = 1;
 	action def Sample {
 		in attribute samples : Real[*];

@@ -721,7 +721,7 @@ func TestAddressedSendDescendsToNestedPort(t *testing.T) {
 func TestAddressedSendToUnreachablePortIsTyped(t *testing.T) {
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `
 	package test {
-		import ScalarValues::*;
+		private import ScalarValues::*;
 		item def Ping;
 		part def Node {
 			attribute count : Integer = 0;
@@ -776,7 +776,7 @@ func TestAddressedSendToQualifiedNameReachesReceiver(t *testing.T) {
 // in a package, so a sending object cannot address it rather than reach its own.
 func TestAddressedSendToQualifiedNameSkipsSameNamedFeature(t *testing.T) {
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
-		import ScalarValues::*;
+		private import ScalarValues::*;
 		package Other {
 			action reader accept n : Integer;
 		}
@@ -803,7 +803,7 @@ func TestAddressedSendToQualifiedNameSkipsSameNamedFeature(t *testing.T) {
 // still addresses a receiver of a package by name.
 func TestAddressedSendToQualifiedNameFromNoObjectIsDelivered(t *testing.T) {
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
-		import ScalarValues::*;
+		private import ScalarValues::*;
 		package Other {
 			action reader accept n : Integer;
 		}
@@ -822,7 +822,7 @@ func TestAddressedSendToQualifiedNameFromNoObjectIsDelivered(t *testing.T) {
 // object's own accepts take it — not a behavior of unknown performer.
 func TestAddressedSendToAnObjectNeedsThatObject(t *testing.T) {
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
-		import ScalarValues::*;
+		private import ScalarValues::*;
 		part def Leaf { attribute count : Integer = 0; }
 		part def Node {
 			part leaf : Leaf;
@@ -848,7 +848,7 @@ func TestAddressedSendToAnObjectNeedsThatObject(t *testing.T) {
 // own same-named receiver cannot take the message.
 func TestAddressedSendToReceiverOfAnotherObjectCarriesItsIdentity(t *testing.T) {
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
-		import ScalarValues::*;
+		private import ScalarValues::*;
 		part def Node { action reader accept n : Integer; }
 		part def Talker {
 			action reader accept n : Integer;
@@ -875,7 +875,7 @@ func TestAddressedSendToReceiverOfAnotherObjectCarriesItsIdentity(t *testing.T) 
 // name resolving to it addresses that node rather than the object's feature.
 func TestAddressedSendPrefersTheNearerDeclaration(t *testing.T) {
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
-		import ScalarValues::*;
+		private import ScalarValues::*;
 		part def Leaf { attribute count : Integer = 0; }
 		part def Node {
 			part reader : Leaf;
@@ -1009,7 +1009,7 @@ func TestAddressedSendThroughMultiplePartIsTyped(t *testing.T) {
 // performance is no object of its own, so identity must not exclude it.
 func TestAddressedSendReachesPerformedAction(t *testing.T) {
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
-		import ScalarValues::*;
+		private import ScalarValues::*;
 		action listener {
 			first start;
 			action reader accept n : Integer;
@@ -1042,7 +1042,7 @@ func TestAddressedSendReachesPerformedAction(t *testing.T) {
 // same behavior performed by no object has no identity to present and waits.
 func TestPerformedBehaviorRunsAsItsPerformer(t *testing.T) {
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
-		import ScalarValues::*;
+		private import ScalarValues::*;
 		action inner {
 			first start;
 			action reader accept n : Integer;
@@ -1077,7 +1077,7 @@ func TestPerformedBehaviorRunsAsItsPerformer(t *testing.T) {
 	}
 
 	idx, _, ctx = buildRuntime(t, "<test>", parseAndBuild(t, `package test {
-		import ScalarValues::*;
+		private import ScalarValues::*;
 		action inner {
 			first start;
 			action reader accept n : Integer;
@@ -1109,7 +1109,7 @@ func TestPerformedBehaviorRunsAsItsPerformer(t *testing.T) {
 // its identity has to come from the qualifier rather than from the sender.
 func TestAddressedSendToQualifiedElementOfATwinObject(t *testing.T) {
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package test {
-		import ScalarValues::*;
+		private import ScalarValues::*;
 		port def PingPort { in item ping : Integer; }
 		part def Node {
 			port inPort : PingPort;

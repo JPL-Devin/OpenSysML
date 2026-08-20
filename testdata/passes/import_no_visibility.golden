@@ -1,0 +1,2 @@
+8:2 warning [syntax/import-visibility] import without a visibility indicator: SysML v2 requires public, private or protected before 'import'
+12:3 warning [syntax/import-visibility] import without a visibility indicator: SysML v2 requires public, private or protected before 'import'

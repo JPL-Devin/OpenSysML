@@ -8,7 +8,7 @@ func TestRequirementParameterBinding(t *testing.T) {
 	ws := NewWorkspace()
 
 	src := `package test {
-		import ScalarValues::*;
+		private import ScalarValues::*;
 		
 		part def Vehicle {
 			attribute mass : Real;

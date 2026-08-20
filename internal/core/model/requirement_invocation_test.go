@@ -8,7 +8,7 @@ func TestRequirementInvocationParameters(t *testing.T) {
 	ws := NewWorkspace()
 
 	src := `package test {
-		import ScalarValues::*;
+		private import ScalarValues::*;
 		private import VerificationCases::*;
 		
 		part def Vehicle {

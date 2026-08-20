@@ -1,5 +1,5 @@
 package test {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 
 	// A conditional without an else branch does nothing when its condition
 	// fails, and the statements after it still run.

@@ -1,5 +1,5 @@
 package StateMachineDemo {
-    import ScalarValues::*;
+    private import ScalarValues::*;
     
     // Simplified state machine demo
     part def Vehicle {

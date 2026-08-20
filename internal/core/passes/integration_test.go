@@ -68,6 +68,12 @@ func TestPassesGoldenClean(t *testing.T)       { runPassesGolden(t, "clean") }
 func TestPassesGoldenErrors(t *testing.T)      { runPassesGolden(t, "errors") }
 func TestPassesGoldenConstraints(t *testing.T) { runPassesGolden(t, "constraints") }
 
+// A bare `import` is non-conforming notation: it warns, at every nesting depth,
+// and still resolves and type-checks (no other diagnostic follows).
+func TestPassesGoldenImportNoVisibility(t *testing.T) {
+	runPassesGolden(t, "import_no_visibility")
+}
+
 // The corpus notation stays clean at every tier: a regression in the conjugated
 // end or the portion prefix is a false positive on a flagship model.
 func TestPassesGoldenCorpusNotation(t *testing.T) { runPassesGolden(t, "corpus_notation") }

@@ -2,7 +2,7 @@
 // computed into a compound unit, one written in a scaled compound unit, one with
 // an integer magnitude, and one inside a nested part.
 package quantities {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 
 	part def Engine {
 		attribute power : ISQ::PowerValue = 300.0 [SI::W];

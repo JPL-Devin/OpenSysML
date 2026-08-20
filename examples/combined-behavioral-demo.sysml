@@ -1,5 +1,5 @@
 package CombinedBehavioralDemo {
-    import ScalarValues::*;
+    private import ScalarValues::*;
     
     // Simplified behavioral demo
     action def Example {

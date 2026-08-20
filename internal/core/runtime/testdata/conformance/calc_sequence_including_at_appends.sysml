@@ -1,7 +1,7 @@
 // An index of size+1 names the position after the last element, so includingAt
 // appends there; an index past it names no insertion point at all.
 package test {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 
 	calc def append {
 		in x : Integer;

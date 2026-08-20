@@ -10,7 +10,7 @@ func TestMessageTargetEventResolution(t *testing.T) {
 	ws := NewWorkspace()
 
 	src := `package Test {
-		import Flows::*;
+		private import Flows::*;
 		item def SetSpeed;
 		occurrence def TestInteraction {
 			part driver;

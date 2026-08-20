@@ -1,5 +1,5 @@
 package test {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 
 	action communicate {
 		attribute atA : Integer = 0;

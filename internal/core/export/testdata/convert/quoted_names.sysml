@@ -14,7 +14,7 @@ package 'Quoted Names' {
     part 'a state' : 'state';
 }
 package Consumer {
-    import 'Quoted Names'::*;
+    private import 'Quoted Names'::*;
     part r : 'Quoted Names'::'Rover Model';
     dependency from r to 'Quoted Names'::'Rover Model';
 }

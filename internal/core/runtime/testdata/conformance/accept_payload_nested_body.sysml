@@ -1,5 +1,5 @@
 package test {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 
 	// The payload an accept node binds is read from a nested if and loop body of
 	// a sibling node: those bodies resolve through the action body the payload

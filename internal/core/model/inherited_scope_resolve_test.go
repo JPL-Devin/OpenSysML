@@ -26,7 +26,7 @@ func TestInheritedMembersAreVisible(t *testing.T) {
 			part small : Vehicle { part redefines eng { part redefines cyl[4]; } }
 		}`},
 		{"member inherited from definition", `package P {
-			import ScalarValues::*;
+			private import ScalarValues::*;
 			part def Vehicle { attribute mass : Real; }
 			part v : Vehicle { attribute m = v::mass; }
 		}`},
@@ -95,7 +95,7 @@ func TestBodyLocalDeclarationsAreVisible(t *testing.T) {
 		src  string
 	}{
 		{"loop condition reads loop body", `package P {
-			import ScalarValues::*;
+			private import ScalarValues::*;
 			action def Monitor { out charge : Real; }
 			action def Charge {
 				loop action charging {
@@ -104,7 +104,7 @@ func TestBodyLocalDeclarationsAreVisible(t *testing.T) {
 			}
 		}`},
 		{"for body statement reads for body", `package P {
-			import ScalarValues::*;
+			private import ScalarValues::*;
 			action def Step { in x_in : Real; out x_out : Real; }
 			action def Move {
 				in attribute profile : Real[*];
@@ -116,7 +116,7 @@ func TestBodyLocalDeclarationsAreVisible(t *testing.T) {
 			}
 		}`},
 		{"if branch body reads its own declaration", `package P {
-			import ScalarValues::*;
+			private import ScalarValues::*;
 			action def Step { out done : Boolean; }
 			action def Drive {
 				in attribute fast : Boolean;
@@ -127,7 +127,7 @@ func TestBodyLocalDeclarationsAreVisible(t *testing.T) {
 			}
 		}`},
 		{"else branch reuses the then branch's name", `package P {
-			import ScalarValues::*;
+			private import ScalarValues::*;
 			action def Step { out done : Boolean; }
 			action def Drive {
 				in attribute fast : Boolean;
@@ -141,8 +141,8 @@ func TestBodyLocalDeclarationsAreVisible(t *testing.T) {
 			}
 		}`},
 		{"body expression parameter", `package P {
-			import ScalarValues::*;
-			import ControlFunctions::*;
+			private import ScalarValues::*;
+			private import ControlFunctions::*;
 			action def Sample {
 				in attribute samples : Real[*];
 				assert constraint { samples->forAll { in s : Real; s > 0 } }
@@ -168,14 +168,14 @@ func TestBodyLocalNamesDoNotEscape(t *testing.T) {
 		src  string
 	}{
 		{"loop member from outside", `package P {
-			import ScalarValues::*;
+			private import ScalarValues::*;
 			action def Charge {
 				loop action charging { } until true;
 				attribute c = charging;
 			}
 		}`},
 		{"if branch member from outside", `package P {
-			import ScalarValues::*;
+			private import ScalarValues::*;
 			action def Drive {
 				in attribute fast : Boolean;
 				if fast { action accelerate; }
@@ -183,7 +183,7 @@ func TestBodyLocalNamesDoNotEscape(t *testing.T) {
 			}
 		}`},
 		{"else branch member from the then branch", `package P {
-			import ScalarValues::*;
+			private import ScalarValues::*;
 			action def Drive {
 				in attribute fast : Boolean;
 				if fast {
@@ -194,8 +194,8 @@ func TestBodyLocalNamesDoNotEscape(t *testing.T) {
 			}
 		}`},
 		{"body expression parameter from outside", `package P {
-			import ScalarValues::*;
-			import ControlFunctions::*;
+			private import ScalarValues::*;
+			private import ControlFunctions::*;
 			action def Sample {
 				in attribute samples : Real[*];
 				assert constraint { samples->forAll { in s : Real; s > 0 } & s > 0 }

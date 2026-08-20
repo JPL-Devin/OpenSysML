@@ -107,6 +107,38 @@ func TestPublishDiagnosticsReportsSyntaxError(t *testing.T) {
 	}
 }
 
+// A bare import reaches the editor as a warning on the `import` keyword, never
+// as an error.
+func TestPublishDiagnosticsReportsBareImportAsWarning(t *testing.T) {
+	ws := model.NewWorkspace()
+	s := NewServer(ws)
+	fc := &fakeClient{}
+	s.client = fc
+
+	name := "bare.sysml"
+	ws.Open(name, []byte("package Q { part def W; }\npackage P {\n    import Q::*;\n}\n"), 1)
+	s.publishDiagnostics(context.Background(), name)
+
+	published := fc.all()
+	if len(published) != 1 || len(published[0].Diagnostics) != 1 {
+		t.Fatalf("published = %v, want one diagnostic", published)
+	}
+	d := published[0].Diagnostics[0]
+	if d.Severity != protocol.DiagnosticSeverityWarning {
+		t.Errorf("severity = %v, want %v", d.Severity, protocol.DiagnosticSeverityWarning)
+	}
+	if d.Code != "import-visibility" {
+		t.Errorf("code = %v, want %q", d.Code, "import-visibility")
+	}
+	want := protocol.Range{
+		Start: protocol.Position{Line: 2, Character: 4},
+		End:   protocol.Position{Line: 2, Character: 10},
+	}
+	if d.Range != want {
+		t.Errorf("range = %v, want %v (the `import` keyword)", d.Range, want)
+	}
+}
+
 func TestPublishDiagnosticsClearsWhenClean(t *testing.T) {
 	ws := model.NewWorkspace()
 	s := NewServer(ws)

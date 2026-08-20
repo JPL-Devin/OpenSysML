@@ -1,5 +1,5 @@
 package test {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 
 	// A body attribute may be written as a redefinition of the one it overrides
 	// (`attribute :>> x = 5;`). Such a declaration states no name of its

@@ -9,7 +9,7 @@ package Lib {
 }
 
 package App {
-	import Lib::*;
+	private import Lib::*;
 	alias W for Lib::Widgets;
 	dependency from App to Lib;
 }

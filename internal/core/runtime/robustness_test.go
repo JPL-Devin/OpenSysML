@@ -2452,7 +2452,7 @@ func testSendAddressedToAPartNoSiblingTakes(t *testing.T) {
 // on rather than consumes it, and the run reports that wait.
 func testInjectedMessageNamesAReceiverNoAcceptHas(t *testing.T) {
 	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, `package P {
-		import ScalarValues::*;
+		private import ScalarValues::*;
 		action pipeline {
 			first start;
 			action other accept n : Integer;
@@ -4684,8 +4684,8 @@ func testLibraryFunctionWrongArity(t *testing.T) {
 func testExtensionLibraryFunctionOutsideItsDomain(t *testing.T) {
 	src := `
 		package test {
-			import ScalarValues::*;
-			import OpenSysMLMathFunctions::*;
+			private import ScalarValues::*;
+			private import OpenSysMLMathFunctions::*;
 			calc root {
 				in x : Real;
 				return : Real = ln(x);

@@ -12,6 +12,7 @@ import (
 func DefaultRegistry() *Registry {
 	reg := NewRegistry()
 	reg.Register(SyntaxPass{})
+	reg.Register(ImportVisibilityPass{})
 	reg.Register(NameResolutionPass{})
 	reg.Register(StateTransitionPass{})
 	reg.Register(TypeCheckPass{})

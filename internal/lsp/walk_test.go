@@ -15,7 +15,7 @@ import (
 // offers. The declaration plus 13 uses means rename must produce 14 edits and
 // references must report 13.
 const bodyRefSource = `package P {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 	attribute speed : Integer = 0;
 	attribute bare : Integer = speed;
 	attribute paren : Integer = (speed);
@@ -94,7 +94,7 @@ func TestReferencesFindsBareReferencesInBehaviorBodies(t *testing.T) {
 func TestRenameLeavesSignalTriggerNames(t *testing.T) {
 	ws := model.NewWorkspace()
 	src := `package P {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 	attribute go : Integer = 0;
 	state Machine {
 		initial i;
@@ -195,8 +195,8 @@ func TestRenameRewritesConnectorEndRedefinitionTarget(t *testing.T) {
 func TestRenameLeavesBodyExpressionParameters(t *testing.T) {
 	ws := model.NewWorkspace()
 	src := `package P {
-	import ScalarValues::*;
-	import ControlFunctions::*;
+	private import ScalarValues::*;
+	private import ControlFunctions::*;
 	attribute s : Integer = 1;
 	action def Sample {
 		in attribute samples : Real[*];
@@ -228,8 +228,8 @@ func TestRenameLeavesBodyExpressionParameters(t *testing.T) {
 func TestRenameBodyExpressionParameterFromUse(t *testing.T) {
 	ws := model.NewWorkspace()
 	src := `package P {
-	import ScalarValues::*;
-	import ControlFunctions::*;
+	private import ScalarValues::*;
+	private import ControlFunctions::*;
 	attribute s : Integer = 1;
 	action def Sample {
 		in attribute samples : Real[*];

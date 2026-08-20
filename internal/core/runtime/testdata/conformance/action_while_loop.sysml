@@ -1,5 +1,5 @@
 package test {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 
 	// A pre-condition loop accumulates until its condition fails, so the loop
 	// runs a number of times the model does not spell out.

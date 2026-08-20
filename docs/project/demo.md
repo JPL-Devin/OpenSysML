@@ -59,7 +59,7 @@ Paste this once; §3–§5 all use it.
 ```bash
 cat > rover.sysml <<'EOF'
 package Rover {
-    import ScalarValues::*;
+    private import ScalarValues::*;
 
     part def Wheel {
         attribute diameter : Real = 0.25;
@@ -234,8 +234,8 @@ third line shows the negated assertion holding for the same object.
 ```bash
 cat > units.sysml <<'EOF'
 package Units {
-    import ISQ::*;
-    import SI::*;
+    private import ISQ::*;
+    private import SI::*;
 
     attribute wheelbase : LengthValue = 1.2 [m];
     attribute clearance : LengthValue = 30.0 [cm];
@@ -482,7 +482,7 @@ For the "does it talk to the rest of the toolchain?" question. Use a structural 
 ```bash
 cat > structure.sysml <<'EOF'
 package Structure {
-    import ScalarValues::*;
+    private import ScalarValues::*;
 
     part def Wheel {
         attribute diameter : Real = 0.25;
@@ -523,7 +523,7 @@ model that was loaded:
 ```console
 $ sysml -convert structure.ttl -to sysml
 package Structure {
-    import ScalarValues::*;
+    private import ScalarValues::*;
     part def Wheel {
         attribute diameter : Real = 0.25;
     }
