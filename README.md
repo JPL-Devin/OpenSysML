@@ -164,7 +164,7 @@ sysml> %advance 30
 | Expression evaluator & instance model (runtime Tiers 1-3) | ✅ Complete |
 | Runtime operators (equality, logical, negation) | ✅ Complete |
 | Workspace/reindex/file watching | ✅ Complete |
-| Behavioral parser (unified grammar with graceful fallback) | ✅ Complete (90 golden ASTs, 135 negative tests) |
+| Behavioral parser (unified grammar with graceful fallback) | ✅ Complete (102 golden ASTs, 169 negative tests) |
 | Calc invocation, constraint & requirement evaluation | ✅ Complete (conformance gate: 104 calc/constraint/requirement/satisfy cases passing) |
 | Action execution engine (Tier 5) | ✅ Complete (62 conformance cases passing) |
 | State machine runtime (Tier 5) | ✅ Complete (71 conformance cases: transitions, accept events, sourceless) |
@@ -180,9 +180,9 @@ sysml> %advance 30
 | Python client library | ✅ Complete for the RPCs that exist (connection lifecycle, parse/symbols/eval/instantiate/execute, constraint/requirement/satisfaction/calc verification, conversion, edits, Query, IPython hooks, DataFrame) |
 
 **Current commit:** All tests pass (`go test -race ./...`), builds clean (`go build ./...`).
-**Test coverage:** 5,477 tests and subtests (5,468 pass, 9 skip themselves; 2,922 top-level `Test` functions) covering parsers, semantics, runtime (actions, states, instances, operators, validation). Behavioral robustness: 90 golden ASTs, 135 negatives, 338 conformance cases, 106 golden traces, 194 runtime robustness cases and 8 gRPC ones.
+**Test coverage:** 5,717 tests and subtests (5,703 pass, 14 skip themselves; 3,031 top-level `Test` functions) covering parsers, semantics, runtime (actions, states, instances, operators, validation). Behavioral robustness: 102 golden ASTs, 169 negatives, 339 conformance cases, 106 golden traces, 195 runtime robustness cases and 8 gRPC ones.
 **Parser coverage:** 95/95 bundled library files parse cleanly — the 94 official SysML v2 standard library files and the non-normative `OpenSysML Libraries/OpenSysMLMathFunctions.kerml` extension. Conformance verified by [stdlib_conformance_test.go](internal/core/libs/stdlib_conformance_test.go). Grammar reference: [OMG Xtext grammar](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/org.omg.kerml.xtext/src/org/omg/kerml/xtext).
-**Behavioral execution:** Calc/constraint/requirement/satisfy fully functional. Action/state executors complete with nested invocation, control flow keywords, loop and conditional statements, send statement (338/338 conformance tests passing). See [spec compliance](docs/project/spec-compliance.md) for measured compliance (~98% faithful implementation).
+**Behavioral execution:** Calc/constraint/requirement/satisfy fully functional. Action/state executors complete with nested invocation, control flow keywords, loop and conditional statements, send statement (339/339 conformance tests passing). See [spec compliance](docs/project/spec-compliance.md) for measured compliance (~98% faithful implementation).
 **Training examples:** 100/100 files clean, gated by `internal/core/model/testdata/training_examples_expected.txt`. Download with `./scripts/download-training-examples.sh` (from the [OMG training directory](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training)). See [training examples](docs/project/training-examples.md) for analysis.
 **Semantic layer:** Complete implementation of runtime operators, feature chains, and validation rules. See [examples/semantic-layer/](examples/semantic-layer/) for comprehensive demo.
 
