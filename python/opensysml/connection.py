@@ -713,7 +713,7 @@ class Connection:
             elif kind == 'add_member':
                 if len(operation_data) != 8:
                     raise ValueError(
-                        f"unknown edit operation {kind!r}: malformed add_member operation"
+                        "malformed add_member operation: expected 8 fields"
                     )
                 _, owner, member_kind, name, type_name, multiplicity, value, specializes = operation_data
                 require(info, CAPABILITY_AUTHORING, upgrade_remedy(CAPABILITY_AUTHORING))
@@ -724,7 +724,7 @@ class Connection:
             elif kind == 'delete':
                 if len(operation_data) != 3 or not isinstance(operation_data[2], bool):
                     raise ValueError(
-                        f"unknown edit operation {kind!r}: malformed delete operation"
+                        "malformed delete operation: expected target and bool cascade"
                     )
                 _, target, cascade = operation_data
                 require(info, CAPABILITY_AUTHORING, upgrade_remedy(CAPABILITY_AUTHORING))

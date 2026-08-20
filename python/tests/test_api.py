@@ -53,6 +53,30 @@ class TestModuleLevelAPI:
             
             mock_conn.load.assert_called_once_with("test.sysml", strict=False)
             assert result == mock_model
+
+    def test_opensysml_loads_with_custom_host_port(self):
+        """Test opensysml.loads() with custom host and port."""
+        with patch('opensysml.Connection') as MockConnection:
+            mock_conn = MagicMock()
+            mock_model = MagicMock()
+            mock_conn.load_from_content.return_value = mock_model
+            MockConnection.return_value = mock_conn
+
+            opensysml._default_connection = None
+            opensysml._default_connection_params = None
+
+            result = opensysml.loads(
+                "package Demo;", host="example.com", port=9999,
+                language="sysml", strict=True,
+            )
+
+            MockConnection.assert_called_once_with(
+                'example.com', 9999, auto_start=True
+            )
+            mock_conn.load_from_content.assert_called_once_with(
+                "package Demo;", strict=True, language="sysml"
+            )
+            assert result == mock_model
     
     def test_opensysml_load_reuses_default_connection(self):
         """Test opensysml.load() reuses default connection for same host/port."""

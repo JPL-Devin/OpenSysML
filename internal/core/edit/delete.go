@@ -153,7 +153,7 @@ func (m Model) deleteSpan(sym *symbols.Symbol) source.Span {
 			// A blank line immediately before a leading comment belongs to
 			// that comment block and is removed with it.
 			start = prevLineStart
-			continue
+			break
 		}
 		if len(line) < 2 || (!strings.HasPrefix(line, "//") &&
 			!strings.HasPrefix(line, "/*") && !strings.HasPrefix(line, "*")) {

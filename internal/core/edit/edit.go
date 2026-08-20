@@ -87,12 +87,12 @@ type Model struct {
 	NewIndex func() *symbols.Index
 }
 
-// Applied is one byte range of the original source that an operation replaced.
+// Applied describes one replacement. Batch spans use the original source;
+// sequential spans use the intermediate source seen by that operation.
 type Applied struct {
 	OperationIndex int
 	Target         string
-	// Span is the range of the original source replaced; Len is 0 for an
-	// insertion.
+	// Span is the range replaced; Len is 0 for an insertion.
 	Span    source.Span
 	OldText string
 	NewText string
@@ -112,6 +112,9 @@ func Apply(m Model, ops []Operation) (*Result, error) {
 	}
 	if len(ops) == 0 {
 		return nil, &Error{Failure: FailureNoOperations, Message: "no edit operations requested"}
+	}
+	if err := duplicateAddNames(ops); err != nil {
+		return nil, err
 	}
 	if !needsSequential(ops) {
 		return applyBatch(m, ops)
@@ -161,7 +164,28 @@ func Apply(m Model, ops []Operation) (*Result, error) {
 	return &Result{Content: content, Applied: applied}, nil
 }
 
+func duplicateAddNames(ops []Operation) error {
+	seen := make(map[string]int)
+	for i, op := range ops {
+		if op.Kind != OpAddMember {
+			continue
+		}
+		key := op.Owner + "\x00" + op.MemberName
+		if previous, ok := seen[key]; ok {
+			return &Error{
+				Failure:        FailureMemberNameTaken,
+				OperationIndex: i,
+				Message: fmt.Sprintf("%q is declared more than once in owner %q (operations %d and %d)",
+					op.MemberName, op.Owner, previous, i),
+			}
+		}
+		seen[key] = i
+	}
+	return nil
+}
+
 func needsSequential(ops []Operation) bool {
+	// This conservative trigger reparses when a later add may target an earlier add.
 	addSeen := false
 	for _, op := range ops {
 		if op.Kind == OpAddMember {

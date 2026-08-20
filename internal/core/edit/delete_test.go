@@ -38,6 +38,12 @@ func TestDeleteOnlyMemberRootAndNeighborTrivia(t *testing.T) {
 			want:   "// keep\npart def Keep;\n",
 		},
 		{
+			name:   "blank line stops leading comment scan",
+			src:    "// keep this\n\n// remove this\npart def Gone;\n",
+			target: "Gone",
+			want:   "// keep this\n",
+		},
+		{
 			name:   "neighbor comment and blank line",
 			src:    "package P {\n    // keep\n    part def Keep;\n\n    // remove\n    part def Gone;\n\n    // neighbor\n    part def Next;\n}\n",
 			target: "P::Gone",

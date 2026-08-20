@@ -457,7 +457,7 @@ def test_an_unknown_operation_kind_is_refused(fake_service):
     """The connection's own operation form is checked before anything is sent."""
     port, service = fake_service()
     with Connection(port=port, auto_start=False) as conn:
-        with pytest.raises(ValueError, match="unknown edit operation"):
+        with pytest.raises(ValueError, match="malformed delete operation"):
             conn.apply_edits("fake-hash", [("delete", "Demo::SC", "")])
     assert service.requests == []
 

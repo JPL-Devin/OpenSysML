@@ -446,7 +446,9 @@ message AppliedEdit {
   // Index of the operation in the request, so an answer maps back to its ask.
   int32 operation_index = 1;
   string target = 2;    // element edited, as the request named it
-  int32 offset = 3;     // byte offset in the original source
+  // Batch offsets use the original source; sequential offsets use the
+  // intermediate source seen by that operation.
+  int32 offset = 3;
   int32 length = 4;     // bytes replaced; zero for text inserted
   string old_text = 5;  // what was there, empty for an insertion
   string new_text = 6;  // what was written

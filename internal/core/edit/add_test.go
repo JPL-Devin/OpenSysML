@@ -243,6 +243,21 @@ func TestAddMemberRefusals(t *testing.T) {
 	}
 }
 
+func TestAddMemberDuplicateRootNamesRefuse(t *testing.T) {
+	m := loadContent(t, "add.sysml", "package P;\n")
+	_, err := Apply(m, []Operation{
+		AddMember("", "part def", "Vehicle"),
+		AddMember("", "part def", "Vehicle"),
+	})
+	e := editError(t, err)
+	if e.Failure != FailureMemberNameTaken {
+		t.Fatalf("failure = %s, want member-name-taken: %s", e.Failure, e.Message)
+	}
+	if !strings.Contains(e.Message, "Vehicle") {
+		t.Fatalf("message %q does not mention duplicate name", e.Message)
+	}
+}
+
 func TestAddMemberKerMLNotation(t *testing.T) {
 	m := loadContent(t, "add.kerml", "package P {\n\tclass Base;\n}\n")
 	res, err := Apply(m, []Operation{

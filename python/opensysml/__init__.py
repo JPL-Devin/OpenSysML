@@ -113,9 +113,14 @@ def _get_default_connection(host='localhost', port=None):
     return _default_connection
 
 
-def loads(content, language=None, strict=False):
+def loads(content, host='localhost', port=None, language=None, strict=False):
     """Parse inline SysML or KerML content using the default connection."""
-    return _get_default_connection().load_from_content(
+    connection = (
+        _get_default_connection()
+        if host == 'localhost' and port is None
+        else _get_default_connection(host, port)
+    )
+    return connection.load_from_content(
         content, strict=strict, language=language
     )
 

@@ -7,12 +7,12 @@ operations reach and nothing else, so comments, blank lines and indentation
 outside an edited span come back unchanged, and it re-parses what it edited
 before returning it.
 
-Two operations exist: setting a feature's value, and renaming a declaration.
-Renaming rewrites the declaration's name token only and is refused for an element
-that is referenced — see :class:`~opensysml.errors.RenameReferencedError`.
+Operations include setting a feature's value, renaming a declaration, adding a
+member, and deleting a declaration. Renaming rewrites the declaration's name
+token only and is refused for an element that is referenced — see
+:class:`~opensysml.errors.RenameReferencedError`.
 """
 
-import builtins
 from dataclasses import dataclass, field
 from typing import List
 
@@ -94,13 +94,13 @@ def error_for_failure(failure, message, diagnostics=None, referring_elements=Non
 
 @dataclass(frozen=True)
 class AppliedEdit:
-    """One byte range of the original source that an operation replaced.
+    """One byte range an operation replaced in the source it saw.
 
     Attributes:
         operation_index: Position of the operation in the editor, so an applied
             edit is matched back to what asked for it.
         target: Element edited, by the id it was named with.
-        offset: Byte offset in the original source where the replacement starts.
+        offset: Byte offset where the replacement starts.
         length: Number of bytes replaced. Zero for a value added to a feature
             that had none: nothing was replaced, text was inserted.
         old_text: The bytes that were there.
@@ -248,10 +248,11 @@ class Editor:
         for label, text in (("kind", kind), ("name", name), ("type", type),
                             ("multiplicity", multiplicity), ("value", value)):
             if text is not None and not isinstance(text, str):
-                raise TypeError(f"{label} must be notation text, not {builtins.type(text).__name__}")
-        if not isinstance(owner, str) and not hasattr(owner, "id"):
-            owner = _target_id(owner)
-        owner = _target_id(owner) if not isinstance(owner, str) else owner
+                raise TypeError(
+                    f"{label} must be notation text, not "
+                    f"{text.__class__.__name__}"
+                )
+        owner = owner if isinstance(owner, str) else _target_id(owner)
         if specializes is None:
             specializes = []
         if isinstance(specializes, str) or not all(isinstance(x, str) for x in specializes):
@@ -260,10 +261,8 @@ class Editor:
                    value or "", list(specializes)))
         return self
 
-    def _add_kind(self, kind, owner, name, **kwargs):
-        return self.add_member(owner, kind, name, **kwargs)
-
     def delete(self, target, cascade=False):
+        """Delete a declaration, optionally removing declarations that refer to it."""
         if not isinstance(cascade, bool):
             raise TypeError("cascade must be bool")
         self._add(("delete", _target_id(target), cascade))
@@ -315,21 +314,93 @@ class Editor:
             f"operations={len(self._operations)}, applied={self._applied})"
         )
 
-def _member_helper(kind):
-    def helper(self, owner, name, **kwargs):
-        return self._add_kind(kind, owner, name, **kwargs)
-    return helper
+    def add_package(self, owner, name, **kwargs):
+        """Add a ``package`` declaration."""
+        return self.add_member(owner, "package", name, **kwargs)
 
+    def add_part_def(self, owner, name, **kwargs):
+        """Add a ``part def`` declaration."""
+        return self.add_member(owner, "part def", name, **kwargs)
 
-for _kind_name in (
-    "package", "part_def", "part", "attribute_def", "attribute", "item_def",
-    "item", "port_def", "port", "class", "struct", "datatype", "classifier",
-    "feature", "assoc", "behavior", "function", "predicate", "interaction",
-    "metaclass", "calc_def", "calc",
-):
-    setattr(Editor, "add_" + _kind_name,
-            _member_helper(_kind_name.replace("_", " ")))
+    def add_part(self, owner, name, **kwargs):
+        """Add a ``part`` declaration."""
+        return self.add_member(owner, "part", name, **kwargs)
 
+    def add_attribute_def(self, owner, name, **kwargs):
+        """Add an ``attribute def`` declaration."""
+        return self.add_member(owner, "attribute def", name, **kwargs)
+
+    def add_attribute(self, owner, name, **kwargs):
+        """Add an ``attribute`` declaration."""
+        return self.add_member(owner, "attribute", name, **kwargs)
+
+    def add_item_def(self, owner, name, **kwargs):
+        """Add an ``item def`` declaration."""
+        return self.add_member(owner, "item def", name, **kwargs)
+
+    def add_item(self, owner, name, **kwargs):
+        """Add an ``item`` declaration."""
+        return self.add_member(owner, "item", name, **kwargs)
+
+    def add_port_def(self, owner, name, **kwargs):
+        """Add a ``port def`` declaration."""
+        return self.add_member(owner, "port def", name, **kwargs)
+
+    def add_port(self, owner, name, **kwargs):
+        """Add a ``port`` declaration."""
+        return self.add_member(owner, "port", name, **kwargs)
+
+    def add_class(self, owner, name, **kwargs):
+        """Add a ``class`` declaration."""
+        return self.add_member(owner, "class", name, **kwargs)
+
+    def add_struct(self, owner, name, **kwargs):
+        """Add a ``struct`` declaration."""
+        return self.add_member(owner, "struct", name, **kwargs)
+
+    def add_datatype(self, owner, name, **kwargs):
+        """Add a ``datatype`` declaration."""
+        return self.add_member(owner, "datatype", name, **kwargs)
+
+    def add_classifier(self, owner, name, **kwargs):
+        """Add a ``classifier`` declaration."""
+        return self.add_member(owner, "classifier", name, **kwargs)
+
+    def add_feature(self, owner, name, **kwargs):
+        """Add a ``feature`` declaration."""
+        return self.add_member(owner, "feature", name, **kwargs)
+
+    def add_assoc(self, owner, name, **kwargs):
+        """Add an ``assoc`` declaration."""
+        return self.add_member(owner, "assoc", name, **kwargs)
+
+    def add_behavior(self, owner, name, **kwargs):
+        """Add a ``behavior`` declaration."""
+        return self.add_member(owner, "behavior", name, **kwargs)
+
+    def add_function(self, owner, name, **kwargs):
+        """Add a ``function`` declaration."""
+        return self.add_member(owner, "function", name, **kwargs)
+
+    def add_predicate(self, owner, name, **kwargs):
+        """Add a ``predicate`` declaration."""
+        return self.add_member(owner, "predicate", name, **kwargs)
+
+    def add_interaction(self, owner, name, **kwargs):
+        """Add an ``interaction`` declaration."""
+        return self.add_member(owner, "interaction", name, **kwargs)
+
+    def add_metaclass(self, owner, name, **kwargs):
+        """Add a ``metaclass`` declaration."""
+        return self.add_member(owner, "metaclass", name, **kwargs)
+
+    def add_calc_def(self, owner, name, **kwargs):
+        """Add a ``calc def`` declaration."""
+        return self.add_member(owner, "calc def", name, **kwargs)
+
+    def add_calc(self, owner, name, **kwargs):
+        """Add a ``calc`` declaration."""
+        return self.add_member(owner, "calc", name, **kwargs)
 
 
 def _target_id(target):
