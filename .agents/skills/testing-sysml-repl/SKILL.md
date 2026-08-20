@@ -4178,3 +4178,59 @@ regression net, but two traps ruin it:
   unimplemented gap, patch a temp copy replacing just that construct (e.g. a body on
   `first a then b { … }` / `merge m { … }` → `;`) and validate the copy — clean output proves the
   downstream diagnostics were recovery noise.
+
+## Proving an *executable* body ran — and ran exactly once
+
+A parser PR that makes an optional body legal on a node (control node, initial node, succession,
+transition) has a second, sharper failure mode than "the body was not read": the body parses and
+lowers but never *executes*, or executes more than once. `-validate` cannot see either. Drive the
+built REPL and judge on exact attribute values, never on `Action completed`:
+
+- Make every body write a **counter** (`assign forkRuns := forkRuns + 1;`) rather than a constant,
+  then read `Results:` after `%continue`. A constant assignment cannot distinguish "ran once" from
+  "ran three times"; a counter can.
+- Chain the reads so a dropped body is visible downstream: `fork split { assign x := 1; }` →
+  `action left { assign y := x + 1; }` → `join sync { assign z := y + 1; }` must give exactly
+  `x = 1, y = 2, z = 3`. A dropped fork body shows up as `y = 1`, not as an error.
+- The duplicate-execution hazards are structural, so build for them explicitly:
+  - a **fork** with two outgoing branches (a body run per emitted token gives `forkRuns = 2`);
+  - a **join** whose branches are of unequal length, so the short branch's token parks at the join
+    and the executor retries it for several steps (a body run per *arrival* gives `joinRuns > 1`).
+    `%step N` + `%tokens` shows `Token 2 @ sync` waiting with the counter still `0`, which is the
+    screenshot that proves the retry actually happened before `%continue` finishes.
+- For transitions, `%state <qname>`, then `%current` before and after `%advance 1`: the body effect
+  and the entry action of the substate reached by a dotted end (`then beta.work`) must be separate
+  attributes so `State data:` distinguishes them. `%current` also prints the `State stack (active
+  configuration)`, which is how you confirm a dotted end entered the *nested* state.
+- A body statement the runtime cannot execute should surface as
+  `error: execution failed: action node <n>: … is not executable`. If a construct is documented as
+  "parses but unsupported at runtime" (e.g. `send x via p to r`), assert that error text explicitly —
+  otherwise you cannot tell "reported as unsupported" from "silently skipped".
+- Adversarial: put a non-terminating `while true { … }` **inside a node body**. Expect
+  `evaluation step limit exceeded (… steps; raise SYSML_MAX_STEPS to allow more)` within a second,
+  and assert the session survives by running `%eval 1 + 1` right after in the same REPL.
+
+### A/B against a binary built from the parent commit
+
+The cheapest proof that a syntax fix is real (and the best screenshot) is a side-by-side with the
+pre-change compiler:
+
+```
+git worktree add /tmp/wt-old <parent-sha> && (cd /tmp/wt-old && go build -o /tmp/old-sysml ./cmd/sysml)
+/tmp/old-sysml -validate <fixture>   # expect the old parse error, exit 2
+./bin/sysml    -validate <fixture>   # expect "no errors", exit 0
+```
+
+Compare `grep -c 'error:'` counts per file for the corpus files the PR claims to unblock. Beware
+`| grep …` when you also want the exit status — `$?` is the exit of `grep`, so capture
+`${PIPESTATUS[0]}`.
+
+### REPL pitfalls that cost time here
+
+- Shell built-ins typed at the `sysml>` prompt are parsed as SysML: `clear; %tokens` yields
+  `error: expected a namespace member` and, worse, leaves an unresolved error in the buffer, so
+  later `%load`s print `note: deeper checks may not have run here…`. Quit the REPL before running
+  shell commands, or use `printf '%%load …\n%%continue\n%%quit\n' | ./bin/sysml` per case.
+- Naming fixture attributes after keywords or inherited features wastes a cycle: `after` is a
+  reserved keyword, and `done` collides with the inherited `Actions::Action::done`, which downgrades
+  the run to `did not analyse cleanly; no check was made`. Pick neutral names (`next`, `flag`).
