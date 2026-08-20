@@ -115,6 +115,7 @@ func buildLiteralIndex(repo string, roots []corpusRoot, lits *litTable) (*litera
 			return nil, err
 		}
 		for _, rel := range files {
+			// #nosec G304 -- the corpus roots are fixed, under the repository named on the command line.
 			data, err := os.ReadFile(filepath.Join(repo, root.Dir, rel))
 			if err != nil {
 				return nil, fmt.Errorf("read %s: %w", rel, err)

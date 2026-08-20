@@ -521,7 +521,7 @@ func newLitTable(literals []string) (*litTable, error) {
 func (t *litTable) mask(literal string) mask {
 	var m mask
 	if bit, ok := t.bit[literal]; ok {
-		m[bit/64] |= 1 << uint(bit%64)
+		m[bit/64] |= 1 << (bit % 64)
 	}
 	return m
 }

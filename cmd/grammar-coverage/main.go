@@ -13,7 +13,9 @@
 // It is advisory: nothing in the build or the test suite depends on it, and it
 // only reads the corpora. Provision the grammars with
 // scripts/download-pilot-grammars.sh, then run `go run ./cmd/grammar-coverage`.
-// See docs/project/grammar-coverage.md.
+// -baseline refreshes the committed docs/project/grammar-coverage-baseline.json,
+// which carries the counts and the gaps rather than every row. See
+// docs/project/grammar-coverage.md.
 package main
 
 import (
@@ -29,15 +31,16 @@ func main() {
 	repo := flag.String("repo", "", "repository root (default: the module root containing this command)")
 	grammars := flag.String("grammars", "", "directory holding the .xtext grammars (default: <repo>/build/pilot-grammars)")
 	out := flag.String("out", "", "output directory for the reports (default: <repo>/build/grammar-coverage)")
+	baseline := flag.String("baseline", "", "also write the compact baseline JSON to this file")
 	flag.Parse()
 
-	if err := run(*repo, *grammars, *out); err != nil {
+	if err := run(*repo, *grammars, *out, *baseline); err != nil {
 		fmt.Fprintf(os.Stderr, "grammar-coverage: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func run(repo, grammarDir, out string) error {
+func run(repo, grammarDir, out, baseline string) error {
 	var err error
 	if repo == "" {
 		repo, err = moduleRoot()
@@ -60,6 +63,7 @@ func run(repo, grammarDir, out string) error {
 	var parsedGrammars []*Grammar
 	var literals []string
 	for _, path := range files {
+		// #nosec G304 -- the grammar directory is named on the command line.
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return err
@@ -93,7 +97,14 @@ func run(repo, grammarDir, out string) error {
 	fmt.Fprintf(os.Stderr, "searched %d corpus file(s) for %d distinct literal(s)\n", corpusFiles, len(lits.order))
 
 	rows := classifyAll(parsedGrammars, newAnalyzer(parsedGrammars, lits), index)
-	return writeReports(out, buildReport(pilotTag(grammarDir), rows, index.Roots()))
+	report := buildReport(pilotTag(grammarDir), rows, index.Roots())
+	if err := writeReports(out, report); err != nil {
+		return err
+	}
+	if baseline == "" {
+		return nil
+	}
+	return writeBaseline(baseline, report)
 }
 
 // classifyAll classifies every production, keeping the grammars in the order
@@ -136,6 +147,7 @@ func grammarFiles(dir string) ([]string, error) {
 // pilotTag reads the release the grammars were fetched at, as recorded by the
 // download script.
 func pilotTag(dir string) string {
+	// #nosec G304 -- the grammar directory is named on the command line.
 	data, err := os.ReadFile(filepath.Join(dir, "PILOT_TAG"))
 	if err != nil {
 		return "unknown"

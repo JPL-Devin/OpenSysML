@@ -35,6 +35,39 @@ func TestBuildReportTotals(t *testing.T) {
 	}
 }
 
+// The committed baseline keeps the counts but only the rows worth reading: the
+// no-evidence productions and the ones with an unseen form.
+func TestSummaryKeepsCountsAndGapsOnly(t *testing.T) {
+	summary := testReport().Summary()
+	if summary.Totals != testReport().Totals {
+		t.Errorf("summary totals = %+v, want the full totals", summary.Totals)
+	}
+	var names []string
+	for _, row := range summary.Grammars[0].Productions {
+		names = append(names, row.Name)
+	}
+	if len(names) != 2 || names[0] != "Part" || names[1] != "Port" {
+		t.Errorf("summary rows = %v, want the unseen-form and no-evidence rows", names)
+	}
+}
+
+func TestWriteBaselineIsTheSummary(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "baseline.json")
+	if err := writeBaseline(path, testReport()); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path) // #nosec G304 -- the test wrote this path.
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), `"Name"`) {
+		t.Error("baseline carries an indistinguishable row; it should hold only the gaps")
+	}
+	if !strings.Contains(string(data), `"unseenForms": 1`) {
+		t.Error("baseline is missing the counts")
+	}
+}
+
 // The report is diffed against a committed artifact, so rendering must be a
 // function of the rows alone.
 func TestWriteReportsDeterministic(t *testing.T) {
@@ -45,7 +78,7 @@ func TestWriteReportsDeterministic(t *testing.T) {
 	if err := writeReports(second, testReport()); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"grammar-coverage-baseline.json", "grammar-coverage-tables.md", "grammar-coverage.txt"} {
+	for _, name := range []string{"grammar-coverage-tables.md", "grammar-coverage.json", "grammar-coverage.txt"} {
 		a, err := os.ReadFile(filepath.Join(first, name))
 		if err != nil {
 			t.Fatal(err)
