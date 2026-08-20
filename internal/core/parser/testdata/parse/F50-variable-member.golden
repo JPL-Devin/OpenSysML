@@ -16,4 +16,6 @@
                 (*ast.QualifiedName))
               (Multiplicity range=true
                 (LiteralInteger value="0")
-                (LiteralInfinity)))))))))
+                (LiteralInfinity))
+              (Membership visibility="default"
+                (Documentation locale="")))))))))

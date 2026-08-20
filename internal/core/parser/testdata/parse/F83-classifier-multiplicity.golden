@@ -8,4 +8,10 @@
           (Relationship kind="specializes" target=A
             (*ast.QualifiedName))
           (Multiplicity range=false
+            (LiteralInteger value="1"))))
+      (Membership visibility="default"
+        (Definition kind="metaclass" abstract=false variation=false name="S"
+          (Relationship kind="specializes" target=A
+            (*ast.QualifiedName))
+          (Multiplicity range=false
             (LiteralInteger value="1")))))))

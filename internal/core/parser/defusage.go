@@ -1172,7 +1172,7 @@ func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, keyword str
 		Visibility:  mods.visibility,
 		Ident:       p.parseIdentification(),
 	}
-	if kind == ast.DefClass && p.at(lexer.LBracket) {
+	if isKerMLClassifierDefinitionKind(kind) && p.at(lexer.LBracket) {
 		def.Multiplicity = p.parseMultiplicity()
 	}
 	def.Relationships = p.parseRelationships(false)
@@ -1255,6 +1255,18 @@ func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, keyword str
 	def.HasBody = hasBody
 	def.NodeSpan = p.spanFrom(start)
 	return def
+}
+
+// isKerMLClassifierDefinitionKind identifies definitions using KerML's
+// ClassifierDeclaration (and the shared TypeDeclaration) multiplicity slot.
+func isKerMLClassifierDefinitionKind(kind ast.DefinitionKind) bool {
+	switch kind {
+	case ast.DefAttribute, ast.DefMetaclass, ast.DefBehavior, ast.DefAssoc,
+		ast.DefStruct, ast.DefClass, ast.DefCalc, ast.DefPredicate:
+		return true
+	default:
+		return false
+	}
 }
 
 // defBodyContext returns the body notation a definition of the given kind

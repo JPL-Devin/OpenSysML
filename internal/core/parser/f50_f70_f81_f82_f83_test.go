@@ -57,6 +57,11 @@ func TestF50F70F81F82F83AndF62F63Parse(t *testing.T) {
 			"(Multiplicity",
 		},
 		{
+			"metaclass_multiplicity",
+			"package P { classifier A; metaclass S [1] specializes A; }",
+			`(Definition kind="metaclass"`,
+		},
+		{
 			"exhibit_chain",
 			"package P { state def S { state on; } part vehicle : S { exhibit vehicleStates.on; } }",
 			"FeatureChainExpr",
@@ -94,6 +99,7 @@ func TestNegativeF50F70F81F82F83AndF62F63(t *testing.T) {
 		{"differences", "package P { classifier D differences ; }"},
 		{"disjoint", "package P { disjoint from A; }"},
 		{"multiplicity", "package P { classifier B [ specializes A; }"},
+		{"sysml_definition_multiplicity", "package P { part def P [1] :> A; }"},
 		{"exhibit", "package P { part v { exhibit .on { } } }"},
 		{"reference", "package P { part v { ref { } } }"},
 	}
