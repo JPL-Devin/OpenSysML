@@ -36,7 +36,10 @@ func (s *Server) publishOpenDiagnostics(ctx context.Context, name string) {
 	s.sendDiagnosticsLocked(ctx, name)
 }
 
-// sendDiagnosticsLocked analyzes name and pushes the result. Caller holds pubMu.
+// sendDiagnosticsLocked analyzes name and pushes the result, then tells a
+// diagram client that the renderings of the document are stale. Caller holds
+// pubMu, so a client sees the diagnostics of an analysis before the render
+// notification of the same one.
 func (s *Server) sendDiagnosticsLocked(ctx context.Context, name string) {
 	out := []protocol.Diagnostic{}
 	if content, diags, ok := s.ws.AnalyzedContent(name); ok {
@@ -57,6 +60,7 @@ func (s *Server) sendDiagnosticsLocked(ctx context.Context, name string) {
 		URI:         nameToURI(name),
 		Diagnostics: out,
 	})
+	s.queueRenderChanged(ctx, name)
 }
 
 // clearDiagnostics withdraws the diagnostics published for a document, so

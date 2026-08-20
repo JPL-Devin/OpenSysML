@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "outDir": "../../out/webview"
+  },
+  // The extension project excludes this directory; that exclusion is inherited
+  // and would leave this project with nothing of the webview in it.
+  "exclude": [],
+  "include": ["../protocol.ts", "."]
+}

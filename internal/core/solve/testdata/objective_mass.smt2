@@ -6,9 +6,9 @@
 (set-logic QF_LRA)
 ; test::MassBudget::mass in base units of M, declared at objectives.sysml:13:3
 (declare-const |test::MassBudget::mass| Real)
-; required condition: mass >= 10 [kg] — analysis MassBudget
+; required condition: mass >= 10 [kg] — analysis MassBudget, at objectives.sysml:15:4
 (assert (>= |test::MassBudget::mass| 10000.0))
-; required condition: mass <= 90 [kg] — analysis MassBudget
+; required condition: mass <= 90 [kg] — analysis MassBudget, at objectives.sysml:18:4
 (assert (<= |test::MassBudget::mass| 90000.0))
 ; minimize: lightest = mass in gram, at objectives.sysml:21:25
 (minimize |test::MassBudget::mass|)

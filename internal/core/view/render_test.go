@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Open-MBEE/OpenSysML/internal/core/model"
+	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
@@ -34,7 +34,7 @@ func loadFixture(t *testing.T, file string) (*Renderer, *symbols.Index) {
 		t.Fatalf("%s: parse diagnostic: %v", file, diag)
 	}
 	idx := symbols.NewIndex()
-	model.LoadStdlibInto(idx)
+	libs.LoadInto(idx)
 	idx.AddDocument(file, root)
 	idx.ExpandWildcardImports()
 	resolver := resolve.New(idx)

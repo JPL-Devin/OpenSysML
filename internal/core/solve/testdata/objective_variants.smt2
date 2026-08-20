@@ -9,7 +9,7 @@
 (declare-datatypes ((|test::WheelChoice::wheel::rim| 0)) (((|test::WheelChoice::wheel::rim::steel|) (|test::WheelChoice::wheel::rim::carbon|))))
 ; test::WheelChoice::wheel.rim, declared at objectives.sysml:116:4
 (declare-const |test::WheelChoice::wheel.rim| |test::WheelChoice::wheel::rim|)
-; required condition: wheel::rim == wheel::rim::steel or wheel::rim == wheel::rim::carbon — analysis WheelChoice
+; required condition: wheel::rim == wheel::rim::steel or wheel::rim == wheel::rim::carbon — analysis WheelChoice, at objectives.sysml:122:4
 (assert (or (= |test::WheelChoice::wheel.rim| |test::WheelChoice::wheel::rim::steel|) (= |test::WheelChoice::wheel.rim| |test::WheelChoice::wheel::rim::carbon|)))
 ; minimize: lightestRim = operator if, at objectives.sysml:125:25
 (minimize (ite (= |test::WheelChoice::wheel.rim| |test::WheelChoice::wheel::rim::carbon|) 4 9))

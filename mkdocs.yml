@@ -107,6 +107,7 @@ nav:
       - CLI: reference/cli.md
       - REPL commands: reference/repl-commands.md
       - Environment variables: reference/environment.md
+      - Language server: reference/lsp.md
       - Go API: reference/api.md
       - Python API: reference/python-api.md
       - RDF mapping: reference/rdf-mapping.md

@@ -8,3 +8,4 @@ tools/**
 tsconfig.json
 examples/**
 *.vsix
+dist/**/*.map
