@@ -137,7 +137,7 @@ func run(repo, validator, kermlValidator, out string, timeout time.Duration) err
 	report.summarize()
 	// A mistyped -repo would otherwise look like a clean run.
 	if report.Totals.Files == 0 {
-		return fmt.Errorf("no .sysml files found under %s", repo)
+		return fmt.Errorf("no model files found under %s", repo)
 	}
 	return writeReports(out, report)
 }
