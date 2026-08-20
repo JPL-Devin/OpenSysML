@@ -146,6 +146,9 @@ func (m *Model) CompileElementFilter(f symbols.ElementFilter) *symbols.FilterPre
 func (m *Model) compileCondition(scope *symbols.Scope, n ast.Node) *symbols.FilterPredicate {
 	switch e := n.(type) {
 	case *ast.OperatorExpr:
+		if v, ok := evalConst(n); ok {
+			return &symbols.FilterPredicate{Op: symbols.FilterConst, Value: constValue(v), Span: spanOf(n)}
+		}
 		return m.compileOperator(scope, e)
 	case *ast.FeatureChainExpr:
 		return m.compileFeatureChain(scope, e)
@@ -323,6 +326,15 @@ func (m *Model) compileReference(scope *symbols.Scope, qn *ast.QualifiedName, sp
 			Span:    span,
 		}
 	}
+	if owner := m.ownerOf(sym); isFeaturingType(owner) && !isEnumerationType(owner) {
+		typeFQN := m.fqnOf(owner)
+		if typeFQN == "" {
+			return unsupported(span, fmt.Sprintf("%s has no known featuring type", qnText(qn)))
+		}
+		return unsupported(span, fmt.Sprintf(
+			"%s is featured within type %s and is not model-level evaluable",
+			qnText(qn), typeFQN))
+	}
 	fqn := m.fqnOf(sym)
 	if fqn == "" {
 		return unsupported(span, fmt.Sprintf("%s has no qualified name to compare", qnText(qn)))
@@ -332,6 +344,26 @@ func (m *Model) compileReference(scope *symbols.Scope, qn *ast.QualifiedName, sp
 		Value: symbols.FilterValue{Kind: symbols.FilterValueRef, RefFQN: fqn},
 		Span:  span,
 	}
+}
+
+func isFeaturingType(sym *symbols.Symbol) bool {
+	if sym == nil {
+		return false
+	}
+	switch sym.Kind {
+	case symbols.SymbolPackage, symbols.SymbolNamespace,
+		symbols.SymbolMetadataDef, symbols.SymbolMetaclass,
+		symbols.SymbolEnumerationDef, symbols.SymbolEnumerationUsage:
+		return false
+	}
+	return true
+}
+
+func isEnumerationType(sym *symbols.Symbol) bool {
+	if sym == nil {
+		return false
+	}
+	return sym.Kind == symbols.SymbolEnumerationDef || sym.Kind == symbols.SymbolEnumerationUsage
 }
 
 // evalPredicate runs a compiled condition against one candidate element.

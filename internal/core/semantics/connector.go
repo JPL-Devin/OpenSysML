@@ -334,6 +334,68 @@ func (m *Model) ConnectorEndAttachments(sym *symbols.Symbol) []ConnectorEndAttac
 	return out
 }
 
+// FlowEndAttachment is one declared from/to target of a flow usage.
+type FlowEndAttachment struct {
+	Attachment ast.Node
+}
+
+// FlowEndAttachments returns the declared from/to targets of a flow usage.
+func (m *Model) FlowEndAttachments(sym *symbols.Symbol) []FlowEndAttachment {
+	usage, ok := sym.Decl.(*ast.Usage)
+	if !ok || usage.Kind != ast.UsageFlow || usage.Keyword == "message" || usage.FlowEnds == nil {
+		return nil
+	}
+	out := make([]FlowEndAttachment, 0, 2)
+	for _, target := range []ast.Node{usage.FlowEnds.From, usage.FlowEnds.To} {
+		if target == nil {
+			continue
+		}
+		out = append(out, FlowEndAttachment{Attachment: target})
+	}
+	return out
+}
+
+// FlowEndHasDirectedFeature reports whether a flow end's participant or its
+// type declares an in, out, or inout feature.
+func (m *Model) FlowEndHasDirectedFeature(scope *symbols.Scope, target ast.Node) bool {
+	if m == nil || m.resolver == nil || scope == nil || target == nil {
+		return false
+	}
+	sym, ok := m.resolver.ResolveTarget(scope, target)
+	if !ok || sym == nil {
+		return false
+	}
+	candidates := []*symbols.Symbol{sym}
+	for _, rel := range RelationshipsOf(sym) {
+		if rel == nil || rel.Kind != ast.RelTyping || rel.Target == nil {
+			continue
+		}
+		typed, ok := m.resolver.ResolveTarget(sym.OwnerScope, rel.Target)
+		if ok && typed != nil {
+			candidates = append(candidates, typed)
+		}
+	}
+	for _, candidate := range candidates {
+		if usage, ok := candidate.Decl.(*ast.Usage); ok && usage.Direction != ast.DirNone {
+			return true
+		}
+		if candidate.Scope == nil {
+			continue
+		}
+		for _, member := range candidate.Scope.AllMembers() {
+			decl := member.Decl
+			if membership, ok := decl.(*ast.Membership); ok {
+				decl = membership.Member
+			}
+			usage, ok := decl.(*ast.Usage)
+			if ok && usage.Direction != ast.DirNone {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // generalConnectorEnds returns the effective ends of the connector sym
 // specializes, which its own ends redefine by position. As with parameters,
 // only a single general connector may supply them, and a general whose ends are

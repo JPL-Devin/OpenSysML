@@ -15,11 +15,13 @@ package Lander {
 
     #Safety part def Thruster {
         attribute thrust : Real = 4500.0;
+        in item fuelIn : Fuel;
         port supply : FuelPort;
     }
 
     part def Tank {
         attribute capacity : Real = 320.0;
+        out item fuelOut : Fuel;
         port outlet : FuelPort;
     }
 
@@ -41,7 +43,7 @@ package Lander {
         part antenna : Antenna;
 
         connection supply : FuelLine connect tank.outlet to thruster.supply;
-        flow of Fuel from tank to thruster;
+        flow of Fuel from tank.fuelOut to thruster.fuelIn;
     }
 
     // A machine a state view presents, states and transitions alike.
