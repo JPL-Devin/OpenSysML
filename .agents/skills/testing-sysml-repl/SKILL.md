@@ -1874,6 +1874,31 @@ Testing notes that generalize to any future built-in:
   — two `first` ends yield `action has multiple initial nodes`), and `and`/`or` are
   `unsupported operator` in constraint bodies — keep constraint expressions to a single comparison.
 
+## `.kerml` vs `.sysml` file kind: which surfaces actually keep it
+
+Anything in the parser gated on `p.src.Kind() == source.KindKerML` (e.g. `parser.unreserved` in
+`internal/core/parser/notation.go`, which reclassifies SysML-only literals such as `at`, `while`,
+`merge`, `decide` as names in a `.kerml` file) is **invisible on the REPL/`-validate` path**: the
+session buffers every submission into one document named by the constant `docName = "<repl>"`
+(`internal/repl/session.go:25`, opened at `session.go:728 ws.Open(docName, …)`), so
+`source.KindOf("<repl>")` is `KindUnknown` and the gate never fires. `%load`ing a `.kerml` file
+behaves the same way.
+
+Surfaces that *do* pass the real path, and are therefore the ones to test file-kind behavior on:
+
+- `sysml <file>.kerml -convert ttl` → `internal/core/export/convert.go:278 source.New(name, data)`.
+- the LSP / `model.newDocument` (`internal/core/model/document.go:26`) with a real URI.
+- the stdlib loader `internal/core/libs/loader.go` and `cmd/pilot-diff`.
+
+Only the *pass* layer has a compensating hack for the buffer's missing kind
+(`session.go dropKerMLNotationOfKerMLFiles` drops the `kerml-notation` warning for spans that came
+from a `.kerml` snippet), so a `featured by` warning behaves correctly in the REPL while the
+token-level reclassification does not. If a PR claims "these words are names in KerML", check both
+paths and expect them to disagree until the buffer carries a per-snippet kind. Note `-convert` prints
+no *warnings* at all, so a warning-suppression claim cannot be observed there — use an input where
+the keyword breaks parsing outright (e.g. `public import merge;`, or `member step merge : T …`) so
+the difference is an error count, not a warning.
+
 ## Testing parser changes end-to-end (keyword/symbol parity, dispatch rewrites)
 
 A parser change is only convincing if the *same input file* behaves differently on the two binaries,
