@@ -26,8 +26,10 @@ func analyzeInputs(t *testing.T, name, src string) (*ast.RootNamespace, []Diagno
 }
 
 func TestAnalyzeCleanDocument(t *testing.T) {
-	root, pd, idx := analyzeInputs(t, "a.sysml", "package P { namespace N; alias A for P::N; }")
-	got := Analyze("a.sysml", root, pd, idx)
+	// `namespace` would be reported here: it is KerML notation, so the clean
+	// document is a .kerml one.
+	root, pd, idx := analyzeInputs(t, "a.kerml", "package P { namespace N; alias A for P::N; }")
+	got := Analyze("a.kerml", root, pd, idx)
 	if len(got) != 0 {
 		t.Fatalf("got %+v, want no diagnostics", got)
 	}

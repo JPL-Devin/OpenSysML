@@ -1,7 +1,6 @@
 package model
 
 import (
-	"log/slog"
 	"sync"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -31,7 +30,7 @@ func NewWorkspace() *Workspace {
 	idx := symbols.NewIndex()
 
 	// Load stdlib into global index
-	loadStdlib(idx)
+	libs.LoadInto(idx)
 
 	return &Workspace{
 		docs:      map[string]*Document{},
@@ -46,42 +45,7 @@ func NewWorkspace() *Workspace {
 // resolves library names through an index of its own — the REPL's runtime,
 // which has to resolve the measurement unit a quantity expression names.
 func LoadStdlibInto(idx *symbols.Index) {
-	loadStdlib(idx)
-}
-
-// loadStdlib loads all SysML/KerML standard library files into the given index.
-// Uses cached symbols when available for fast loading. Failures are non-fatal
-// (logged but workspace still usable for non-stdlib models).
-func loadStdlib(idx *symbols.Index) {
-	src := libs.DefaultSource()
-	cache, err := libs.NewCache()
-	if err != nil {
-		// Cache initialization failed - continue without caching
-		slog.Warn("stdlib symbol cache unavailable, loading without cache", "error", err)
-		cache = nil
-	}
-	loader := libs.NewLoader(src, cache)
-
-	// Load all stdlib files
-	loaded := true
-	for _, name := range src.List() {
-		if err := loader.Load(name, idx); err != nil {
-			// Non-fatal: log but continue (allows REPL to work without stdlib)
-			slog.Warn("failed to load stdlib file", "file", name, "error", err)
-			loaded = false
-		}
-	}
-
-	// Expand wildcard imports (facade packages like ISQ re-exporting ISQMechanics)
-	idx.ExpandWildcardImports()
-
-	// Cache whatever had to be parsed, now that every library file is indexed
-	// and a supertype declared in another file resolves. A record is keyed by
-	// content alone, so nothing is cached from an incomplete library: it would
-	// be reused, minus the supertypes that file declared, on every later run.
-	if loaded {
-		loader.Persist(idx)
-	}
+	libs.LoadInto(idx)
 }
 
 // Open registers an authoritative open buffer for name and reindexes.

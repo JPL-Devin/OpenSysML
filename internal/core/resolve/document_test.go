@@ -22,6 +22,33 @@ func resolveDoc(t *testing.T, name, src string) *Resolver {
 	return r
 }
 
+type localMemberModel struct{}
+
+func (localMemberModel) LookupMember(sym *symbols.Symbol, name string) (*symbols.Symbol, bool) {
+	if sym != nil && sym.Scope != nil {
+		return sym.Scope.LookupLocal(name)
+	}
+	return nil, false
+}
+
+func (localMemberModel) LookupContributedMember(sym *symbols.Symbol, name string) (*symbols.Symbol, bool) {
+	return nil, false
+}
+
+func resolveDocWithModel(t *testing.T, name, src string) *Resolver {
+	t.Helper()
+	p := parser.New(source.New(name, []byte(src)))
+	root := p.ParseFile()
+	if len(p.Diagnostics) != 0 {
+		t.Fatalf("parse diagnostics: %v", p.Diagnostics)
+	}
+	idx := symbols.NewIndexFromDoc(name, root)
+	r := New(idx)
+	r.SetModel(localMemberModel{})
+	r.ResolveDocument(name, root)
+	return r
+}
+
 func TestResolveDocumentReportsUnresolved(t *testing.T) {
 	r := resolveDoc(t, "d.sysml",
 		"package P { alias A for P::Missing; }")
@@ -44,6 +71,63 @@ func TestResolveDocumentResolvesExpressionRefs(t *testing.T) {
 		"package P { filter Undefined; }")
 	if len(r.Diagnostics) == 0 {
 		t.Fatalf("expected unresolved diagnostic for expression ref Undefined")
+	}
+}
+
+func TestResolveDeclarationBodyMembersFromHeaders(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+	}{
+		{
+			name: "header-own-body.kerml",
+			src: `package R {
+				class A {
+					member feature x featured by A_snapshots {
+						member feature A_snapshots featured by A;
+					}
+				}
+			}`,
+		},
+		{
+			name: "header-own-body.sysml",
+			src: `package R {
+				part def A {
+					feature x : A_ref;
+					feature A_ref;
+				}
+			}`,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			r := resolveDocWithModel(t, tc.name, tc.src)
+			if len(r.Diagnostics) != 0 {
+				t.Fatalf("unexpected diagnostics: %v", r.Diagnostics)
+			}
+		})
+	}
+}
+
+func TestResolveFeatureChainThroughImportedBodyMember(t *testing.T) {
+	r := resolveDocWithModel(t, "chain.kerml", `package S {
+		class Cart { feature sel : Prod[0..*]; }
+		class Prod { feature inCart : Cart[0..1]; }
+		assoc PS {
+			end feature cart : Cart[1] crosses selectedProduct.inCart;
+			end feature selectedProduct : Prod[1] crosses cart.sel;
+		}
+		assoc PS2 {
+			end feature cart : Cart[1] crosses selectedProduct.inCart2 {
+				member feature inCart2 : Cart[0..1] featured by Prod;
+			}
+			end feature selectedProduct : Prod[1] {
+				public import cart::inCart2;
+			}
+		}
+	}`)
+	if len(r.Diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %v", r.Diagnostics)
 	}
 }
 

@@ -1,7 +1,7 @@
 // A calc body computing with VectorFunctions: a vector is the sequence of its
 // elements, so the library's Cartesian operations compute over a sequence.
 package test {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 
 	calc def scaledSum {
 		in x : Real;

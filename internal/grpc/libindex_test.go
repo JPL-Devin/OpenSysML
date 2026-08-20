@@ -17,7 +17,7 @@ import (
 // libraryModel names the standard library, so a model analysed against a
 // prewarmed index has something to resolve there.
 const libraryModel = `package Sweep {
-	import ISQ::*;
+	private import ISQ::*;
 	attribute def Reading {
 		attribute magnitude : ScalarValues::Real;
 	}

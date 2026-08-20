@@ -2,7 +2,7 @@
 // reported where it was written, rather than delivered to whatever else carries
 // the last segment's name.
 package SendIdentityUnroutable {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 
 	item def Ping;
 

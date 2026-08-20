@@ -39,7 +39,7 @@ package Declarations {
         doc
         /* Base classifier */
         
-        feature self: Anything[1];
+        feature self: Anything[1] redefines self;
     }
     
     classifier Thing specializes Anything {

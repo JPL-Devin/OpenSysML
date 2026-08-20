@@ -21,6 +21,9 @@ type Server struct {
 	baseServer
 	ws     *model.Workspace
 	client protocol.Client
+	// notifier sends the notifications the protocol library does not know, of
+	// which opensysml/renderChanged is one.
+	notifier notifier
 
 	// exited is closed by Exit so that Run returns from the read loop rather
 	// than a handler tearing the connection down under itself.
@@ -30,6 +33,10 @@ type Server struct {
 	// crossDoc coalesces the sweep that republishes the other open documents, so
 	// a burst of keystrokes costs one pass over them instead of one per change.
 	crossDoc *model.Debouncer
+
+	// renderNotify coalesces opensysml/renderChanged the same way, so a diagram
+	// client redraws from settled text rather than from every keystroke.
+	renderNotify *model.Debouncer
 
 	// pubMu serializes analyze-and-send, so the sweep's timer goroutine and a
 	// notification handler cannot deliver one document's diagnostics out of order.
@@ -41,6 +48,11 @@ type Server struct {
 	folders          []string
 }
 
+// notifier sends a notification by method name, which a client connection does.
+type notifier interface {
+	Notify(ctx context.Context, method string, params interface{}) error
+}
+
 // crossDocRefreshWindow is how long an edit burst has to settle before the
 // other open documents are re-analyzed.
 const crossDocRefreshWindow = 200 * time.Millisecond
@@ -48,9 +60,10 @@ const crossDocRefreshWindow = 200 * time.Millisecond
 // NewServer returns a Server bound to ws.
 func NewServer(ws *model.Workspace) *Server {
 	return &Server{
-		ws:       ws,
-		exited:   make(chan struct{}),
-		crossDoc: model.NewDebouncer(crossDocRefreshWindow),
+		ws:           ws,
+		exited:       make(chan struct{}),
+		crossDoc:     model.NewDebouncer(crossDocRefreshWindow),
+		renderNotify: model.NewDebouncer(crossDocRefreshWindow),
 	}
 }
 
@@ -66,6 +79,7 @@ func (s *Server) Run(ctx context.Context, rwc io.ReadWriteCloser) error {
 	client := protocol.ClientDispatcher(conn, zap.NewNop())
 	ctx = protocol.WithClient(ctx, client)
 	s.client = client
+	s.notifier = conn
 	conn.Go(ctx, runHandler(s))
 	select {
 	case <-conn.Done():
@@ -81,7 +95,7 @@ func (s *Server) Run(ctx context.Context, rwc io.ReadWriteCloser) error {
 // runHandler is the chain a served session reads with: cancellation, async
 // dispatch so one slow request cannot stall the stream, and a reply per request.
 func runHandler(s *Server) jsonrpc2.Handler {
-	serve := s.changeHandler(protocol.ServerHandler(s, jsonrpc2.MethodNotFoundHandler))
+	serve := s.renderHandler(s.changeHandler(protocol.ServerHandler(s, jsonrpc2.MethodNotFoundHandler)))
 	// The lifecycle wrapper runs outside AsyncHandler so that shutdown, exit and
 	// the messages after them are ordered as the client sent them.
 	return s.lifecycleHandler(cancelHandler(jsonrpc2.AsyncHandler(jsonrpc2.ReplyHandler(serve))))

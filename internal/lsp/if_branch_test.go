@@ -15,7 +15,7 @@ import (
 // conditional — plus a same-named feature outside it, so editor features must
 // distinguish the three.
 const ifBranchSource = `package P {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 	action def Step { out done : Boolean; }
 	action def Drive {
 		in attribute fast : Boolean;

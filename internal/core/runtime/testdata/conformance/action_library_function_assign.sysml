@@ -1,7 +1,7 @@
 // An action assignment whose value calls a library function and exponentiates.
 package test {
-	import ScalarValues::*;
-	import RealFunctions::*;
+	private import ScalarValues::*;
+	private import RealFunctions::*;
 
 	action tune {
 		attribute gain : Real = 0.0;

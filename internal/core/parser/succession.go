@@ -84,11 +84,17 @@ func (b *bodyBuilder) atSuccession() bool {
 		return false
 	}
 	next := p.peekN(1)
-	if next.Kind != lexer.Keyword {
-		// `then a b;` and `then a;` name members; the edge parser reads them.
+	// `then a b;` and `then a;` name members; the edge parser reads them. The
+	// unreserved node words (`then done;`) are names to the lexer, so they are
+	// taken from the notation shape (see notation.go).
+	kw := ""
+	if next.Kind == lexer.Keyword {
+		kw = next.KeywordID
+	} else if w, ok := p.actionNodeWordAt(1); ok {
+		kw = w
+	} else {
 		return false
 	}
-	kw := next.KeywordID
 	if b.namesEdgeEnd(kw) {
 		// `then end;` and `then end b;`: a keyword this body declares a member
 		// with names an edge end, not the kind of a member being declared.
@@ -141,7 +147,7 @@ func (b *bodyBuilder) atSuccession() bool {
 	return true
 }
 
-// actionNodeKeywords are the keywords that begin an action node member
+// actionNodeKeywords are the words that begin an action node member
 // (SysML.xtext ActionNodeMember, plus the final node `done` reaches): a node in
 // the token flow that declares no name unless the author writes one, so a `then`
 // before it sequences to the node itself. `if` and `else` are not among them:
@@ -221,14 +227,19 @@ func (b *bodyBuilder) illegalTarget() (string, bool) {
 	p := b.p
 	for i := 0; ; i++ {
 		tok := p.peekN(i)
-		if tok.Kind != lexer.Keyword {
-			if tok.Kind == lexer.Identifier {
-				// A bare name is a DefaultReferenceUsage.
-				return "a reference usage", true
-			}
+		kw := ""
+		if tok.Kind == lexer.Keyword {
+			kw = tok.KeywordID
+		} else if _, ok := p.actionNodeWordAt(i); ok {
+			// An action node whose word the lexer does not reserve is a legal
+			// target, as the keyword-spelled ones are.
+			return "", false
+		} else if tok.Kind == lexer.Identifier {
+			// A bare name is a DefaultReferenceUsage.
+			return "a reference usage", true
+		} else {
 			return "", false
 		}
-		kw := tok.KeywordID
 		if what, ok := namespaceMemberKeywords[kw]; ok {
 			return what, true
 		}

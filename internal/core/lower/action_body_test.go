@@ -210,6 +210,46 @@ func TestActionBodyUnexecutableMemberIsLowered(t *testing.T) {
 	}
 }
 
+// An accept node written in a loop body would have to suspend the action, which
+// the block's flow has no token to park, so it is lowered as unsupported rather
+// than passed over silently.
+func TestAcceptInALoopBodyIsLoweredAsUnsupported(t *testing.T) {
+	graph := actionGraphFor(t, `
+		action test {
+			first start;
+			action driver {
+				loop {
+					accept n : Integer;
+				}
+			}
+			done end;
+			then start driver;
+			then driver end;
+		}
+	`)
+
+	body := graph.Bodies[nodeNamed(t, graph, "driver")]
+	loop, ok := body[0].(Loop)
+	if !ok {
+		t.Fatalf("statement 0 = %T, want Loop", body[0])
+	}
+	flow := loop.Body.Graph
+	if flow == nil {
+		t.Fatalf("the loop body lowered to statements, want the flow its accept node states")
+	}
+	stmts := flow.Bodies[flow.Initial]
+	if len(stmts) != 1 {
+		t.Fatalf("the accept node lowered to %d statements, want 1", len(stmts))
+	}
+	unsupported, ok := stmts[0].(Unsupported)
+	if !ok {
+		t.Fatalf("the accept node lowered to %T, want Unsupported", stmts[0])
+	}
+	if !strings.Contains(unsupported.Description, "'accept'") {
+		t.Errorf("description = %q, want it to name the accept", unsupported.Description)
+	}
+}
+
 // A loop body written as an action body parameter is the body itself, whether or
 // not it was named and whether or not it declares members, so it lowers to the
 // block whose owner scopes the members — not to an unexecutable nested node.

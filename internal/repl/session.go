@@ -557,12 +557,47 @@ func (s *Session) openDiagnostics() []passes.Diagnostic {
 	return out
 }
 
+// dropKerMLNotationOfKerMLFiles drops the KerML-notation-in-SysML finding for a
+// snippet loaded from a .kerml file, where that notation is legal: the buffer is
+// one document of no file kind, so the snippet the span falls in decides.
+func (s *Session) dropKerMLNotationOfKerMLFiles(diags []passes.Diagnostic) []passes.Diagnostic {
+	type span struct{ start, end int }
+	var kerml []span
+	acc := 0
+	for _, sn := range s.snippets {
+		end := acc + len(sn.src)
+		if source.KindOf(sn.origin) == source.KindKerML {
+			kerml = append(kerml, span{acc, end})
+		}
+		acc = end + 1 // the newline joined() writes between snippets
+	}
+	if len(kerml) == 0 {
+		return diags
+	}
+	kept := make([]passes.Diagnostic, 0, len(diags))
+	for _, d := range diags {
+		legal := false
+		if d.Code == passes.CodeKerMLNotation {
+			for _, sp := range kerml {
+				if d.Span.Offset >= sp.start && d.Span.Offset < sp.end {
+					legal = true
+					break
+				}
+			}
+		}
+		if !legal {
+			kept = append(kept, d)
+		}
+	}
+	return kept
+}
+
 // diagnostics reports the analysis of the buffer together with the syntax errors
 // of the submissions masked out of it. The masked text is blanked rather than
 // removed, so what the analysis finds is about the submissions that did parse
 // and is reported as it stands.
 func (s *Session) diagnostics() []passes.Diagnostic {
-	analyzed := s.ws.Diagnostics(docName)
+	analyzed := s.dropKerMLNotationOfKerMLFiles(s.ws.Diagnostics(docName))
 	open := s.openDiagnostics()
 	if len(open) == 0 {
 		return analyzed

@@ -8,7 +8,7 @@ func TestMessagingExample(t *testing.T) {
 	ws := NewWorkspace()
 
 	src := `package test {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 	
 	item def Scene;
 	item def Image;

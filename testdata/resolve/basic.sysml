@@ -1,10 +1,15 @@
 package Lib {
-	public namespace Widgets;
-	namespace Gadgets;
+	public package Widgets {
+		public part def Widget;
+	}
+
+	private package Gadgets {
+		part def Gadget;
+	}
 }
 
 package App {
-	import Lib::*;
+	private import Lib::*;
 	alias W for Lib::Widgets;
 	dependency from App to Lib;
 }

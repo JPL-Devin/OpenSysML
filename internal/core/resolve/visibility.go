@@ -28,6 +28,45 @@ func inheritedThroughSpecialization(imp *ast.Import) bool {
 	return imp.Visibility != ast.VisibilityPrivate
 }
 
+func (r *Resolver) specializes(from, target *symbols.Symbol) bool {
+	if from == nil || target == nil {
+		return false
+	}
+	if from == target {
+		return true
+	}
+	for _, sup := range r.specializationChain(from) {
+		if sup == target {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *Resolver) specializationChain(from *symbols.Symbol) []*symbols.Symbol {
+	if from == nil {
+		return nil
+	}
+	model, ok := r.model.(supertypeLookup)
+	if !ok {
+		return nil
+	}
+	seen := map[*symbols.Symbol]bool{from: true}
+	queue := model.DirectSupertypes(from)
+	var chain []*symbols.Symbol
+	for len(queue) > 0 {
+		sup := queue[0]
+		queue = queue[1:]
+		if sup == nil || seen[sup] {
+			continue
+		}
+		seen[sup] = true
+		chain = append(chain, sup)
+		queue = append(queue, model.DirectSupertypes(sup)...)
+	}
+	return chain
+}
+
 // lookupInheritedImports resolves name through the imports declared by what
 // scope's owner specializes, walking the specialization graph upward: inside
 // `part def Sub :> Base` it consults Base's protected imports. A feature typing
@@ -37,7 +76,7 @@ func (r *Resolver) lookupInheritedImports(scope *symbols.Scope, name string) (*s
 	if owner == nil || r.inheritedImports[owner] {
 		return nil, false
 	}
-	model, ok := r.model.(supertypeLookup)
+	_, ok := r.model.(supertypeLookup)
 	if !ok {
 		return nil, false
 	}
@@ -46,18 +85,13 @@ func (r *Resolver) lookupInheritedImports(scope *symbols.Scope, name string) (*s
 	r.inheritedImports[owner] = true
 	defer delete(r.inheritedImports, owner)
 
-	seen := map[*symbols.Symbol]bool{owner: true}
-	queue := model.DirectSupertypes(owner)
-	for len(queue) > 0 {
-		sup := queue[0]
-		queue = queue[1:]
-		if sup == nil || seen[sup] {
-			continue
-		}
-		seen[sup] = true
+	for _, sup := range r.specializationChain(owner) {
 		if sup.Scope != nil {
 			for _, imp := range importsOf(sup.Scope.Node()) {
 				if !inheritedThroughSpecialization(imp) {
+					continue
+				}
+				if !r.importPrefixAvailable(sup.Scope, imp, name) {
 					continue
 				}
 				if sym, ok := r.matchImport(sup.Scope, imp, name); ok {
@@ -65,7 +99,6 @@ func (r *Resolver) lookupInheritedImports(scope *symbols.Scope, name string) (*s
 				}
 			}
 		}
-		queue = append(queue, model.DirectSupertypes(sup)...)
 	}
 	return nil, false
 }

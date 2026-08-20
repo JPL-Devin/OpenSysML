@@ -1,7 +1,7 @@
 (RootNamespace
   (Membership visibility="default"
     (Package name="test" library=false standard=false
-      (Import visibility="default" all=false kind=namespace recursive=false imported="ScalarValues" filtered=false)
+      (Import visibility="private" all=false kind=namespace recursive=false imported="ScalarValues" filtered=false)
       (Membership visibility="default"
         (Usage kind="action" name="communicate" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (Membership visibility="default"
@@ -14,7 +14,7 @@
           (Membership visibility="default"
             (Usage kind="port" name="inPort" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
           (Membership visibility="default"
-            (Usage kind="connection" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (Usage kind="connection" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="connect"
               (ConnectorEnd target="outPort"
                 (*ast.QualifiedName))
               (ConnectorEnd target="inPort"

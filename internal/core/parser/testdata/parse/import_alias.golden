@@ -1,5 +1,5 @@
 (RootNamespace
-  (Import visibility="default" all=false kind=membership recursive=false imported="ScalarValues::Real" filtered=false)
+  (Import visibility="private" all=false kind=membership recursive=false imported="ScalarValues::Real" filtered=false)
   (Alias visibility="default" name="Distance" for="Real")
   (Membership visibility="default"
     (Definition kind="part" abstract=false variation=false name="Engine"

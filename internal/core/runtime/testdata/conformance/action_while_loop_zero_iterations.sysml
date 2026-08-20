@@ -1,5 +1,5 @@
 package test {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 
 	// A pre-condition loop tests before it iterates, so a condition that is
 	// false on entry runs the body no times at all.

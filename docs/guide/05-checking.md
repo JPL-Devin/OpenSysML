@@ -37,7 +37,7 @@ part Vehicle {
 ## Composite structures
 
 ```sysml
-import ScalarValues::*;
+private import ScalarValues::*;
 
 part def Engine {
     attribute power : Real = 200.0;

@@ -12,8 +12,11 @@ import (
 // buildModel parses src, indexes and resolves it, and returns the semantic
 // model plus the document root scope for symbol lookups.
 func buildModel(t *testing.T, src string) (*Model, *symbols.Scope) {
+	return buildModelNamed(t, "t.sysml", src)
+}
+
+func buildModelNamed(t *testing.T, name, src string) (*Model, *symbols.Scope) {
 	t.Helper()
-	const name = "t.sysml"
 	p := parser.New(source.New(name, []byte(src)))
 	root := p.ParseFile()
 	if len(p.Diagnostics) != 0 {
@@ -52,6 +55,37 @@ func TestDirectSupertypes(t *testing.T) {
 	}
 }
 
+func TestDirectSupertypesResolvesAliasTargets(t *testing.T) {
+	m, root := buildModel(t, `
+		part def Base { part inherited; }
+		alias BaseAlias for Base;
+		alias BaseAlias2 for BaseAlias;
+		part def Derived :> BaseAlias2;
+		part usage : BaseAlias2;
+	`)
+	base := sym(t, root, "Base")
+	derived := sym(t, root, "Derived")
+	usage := sym(t, root, "usage")
+	for _, tc := range []struct {
+		name string
+		sym  *symbols.Symbol
+	}{
+		{"Derived", derived},
+		{"usage", usage},
+	} {
+		supers := m.DirectSupertypes(tc.sym)
+		if len(supers) != 1 || supers[0] != base {
+			t.Fatalf("DirectSupertypes(%s) = %v, want [Base]", tc.name, supers)
+		}
+	}
+	if _, ok := m.LookupMember(derived, "inherited"); !ok {
+		t.Fatal("alias supertype members should be visible on Derived")
+	}
+	if _, ok := m.LookupMember(usage, "inherited"); !ok {
+		t.Fatal("alias typing target members should be visible on usage")
+	}
+}
+
 func TestDirectSupertypesMemoizedAndDeduped(t *testing.T) {
 	// A specializes B twice (odd but legal syntax); dedupe to one edge.
 	m, root := buildModel(t, "part def B; part def A specializes B, B;")
@@ -79,6 +113,21 @@ func TestAllSupertypesTransitive(t *testing.T) {
 	got := map[*symbols.Symbol]bool{all[0]: true, all[1]: true}
 	if !got[a] || !got[b] {
 		t.Fatalf("AllSupertypes(C) missing A or B: %v", all)
+	}
+}
+
+func TestInheritedFeatureNamedUsesDeclarationOrderForUnrelatedSupertypes(t *testing.T) {
+	m, root := buildModel(t, `
+		part def A { feature shared; }
+		part def B { feature shared; }
+		part def C specializes A, B { feature local; }
+	`)
+	a := sym(t, root, "A")
+	c := sym(t, root, "C")
+	local := sym(t, c.Scope, "local")
+	got := m.inheritedFeatureNamed(local, "shared")
+	if got == nil || got.OwnerScope == nil || got.OwnerScope.Owner() != a {
+		t.Fatalf("inherited shared = %v, want A::shared from declaration order", got)
 	}
 }
 

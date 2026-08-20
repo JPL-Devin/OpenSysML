@@ -42,7 +42,15 @@ func (m *Model) semanticMetadataBases(sym *symbols.Symbol) []*symbols.Symbol {
 			continue
 		}
 		def, ok := m.resolver.ResolveQualified(sym.OwnerScope, p.Type)
-		if !ok || def == nil || !m.isSemanticMetadata(def) {
+		if !ok || def == nil {
+			continue
+		}
+		if resolved, aliasOK := m.resolver.ResolveAliasTarget(def); aliasOK {
+			def = resolved
+		} else {
+			continue
+		}
+		if !m.isSemanticMetadata(def) {
 			continue
 		}
 		base := m.baseTypeOf(def)
@@ -108,7 +116,9 @@ func (m *Model) baseTypeOf(def *symbols.Symbol) *symbols.Symbol {
 			continue
 		}
 		if base, ok := m.resolver.ResolveQualified(def.Scope, name); ok {
-			return base
+			if resolved, aliasOK := m.resolver.ResolveAliasTarget(base); aliasOK {
+				return resolved
+			}
 		}
 	}
 	return nil

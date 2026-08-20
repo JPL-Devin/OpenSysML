@@ -135,10 +135,32 @@ func lowerFlowNode(graph *ActionGraph, node ast.Node, scope *symbols.Scope) {
 			graph.Bodies[node] = []Statement{Effect{Kind: EffectPerform, Node: n, Scope: scope}}
 			return
 		}
+		// An accept node suspends the action it is a node of, which a block's flow
+		// has no token to park; it is lowered as unsupported so that reaching it is
+		// reported rather than passed over.
+		if acceptsMessage(n) {
+			graph.Bodies[node] = []Statement{Unsupported{
+				Description: "'accept' in a loop or branch body",
+				Node:        n,
+				Scope:       scope,
+			}}
+			return
+		}
 		graph.Bodies[node] = []Statement{nestedActionBlock(n, childScope(scope, n))}
 	default:
 		graph.Bodies[node] = []Statement{lowerStatement(node, scope)}
 	}
+}
+
+// acceptsMessage reports whether an action node declares an accept payload, so
+// that reaching it waits for a message (SysML.xtext AcceptNode).
+func acceptsMessage(node *ast.Usage) bool {
+	for _, member := range node.Members {
+		if u, ok := unwrapMembership(member).(*ast.Usage); ok && u.IsAccept {
+			return true
+		}
+	}
+	return false
 }
 
 // nestedActionBlock lowers a nested action declared in a block: a block of its

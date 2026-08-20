@@ -2,8 +2,8 @@
 // the first two characters of a string holding a multi-byte one are both of them:
 // "héllo" is 5 characters and 6 bytes.
 package test {
-	import ScalarValues::*;
-	import StringFunctions::*;
+	private import ScalarValues::*;
+	private import StringFunctions::*;
 
 	calc def firstTwo {
 		in text : String;

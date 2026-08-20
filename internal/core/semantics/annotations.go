@@ -175,6 +175,11 @@ func (m *Model) prefixAnnotation(scope *symbols.Scope, p *ast.PrefixMetadata) (a
 	if !ok || typ == nil {
 		return annotation{}, false
 	}
+	if resolved, aliasOK := m.resolver.ResolveAliasTarget(typ); aliasOK {
+		typ = resolved
+	} else {
+		return annotation{}, false
+	}
 	return m.annotationOfType(typ, scope, p.Body), true
 }
 
@@ -191,6 +196,11 @@ func (m *Model) usageAnnotation(scope *symbols.Scope, u *ast.Usage) (annotation,
 		}
 		typ, ok := m.resolver.ResolveQualified(scope, qn)
 		if !ok || typ == nil {
+			continue
+		}
+		if resolved, aliasOK := m.resolver.ResolveAliasTarget(typ); aliasOK {
+			typ = resolved
+		} else {
 			continue
 		}
 		return m.annotationOfType(typ, bodyScope(u, scope), u.Members), true

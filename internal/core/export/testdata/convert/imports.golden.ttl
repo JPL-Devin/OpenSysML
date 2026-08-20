@@ -26,6 +26,7 @@ elmt:Importer___401
     sysml:qualifiedName "Importer::@1" ;
     sysml:owningNamespace elmt:Importer ;
     sysx:memberIndex "1"^^xsd:integer ;
+    sysml:visibility "private" ;
     sysml:importedNamespace "ScalarValues::Real" ;
     sysx:hasBody "false"^^xsd:boolean .
 
@@ -34,6 +35,7 @@ elmt:Importer___402
     sysml:qualifiedName "Importer::@2" ;
     sysml:owningNamespace elmt:Importer ;
     sysx:memberIndex "2"^^xsd:integer ;
+    sysml:visibility "private" ;
     sysml:importedNamespace "Deep" ;
     sysx:isRecursive "true"^^xsd:boolean ;
     sysx:hasBody "false"^^xsd:boolean .

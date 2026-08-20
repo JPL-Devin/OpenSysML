@@ -1,5 +1,5 @@
 package test {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 
 	// The standard action-body spelling: a succession to a loop node written as an
 	// action body parameter, whose `until` condition is tested after each

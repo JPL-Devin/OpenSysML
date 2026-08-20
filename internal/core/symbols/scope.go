@@ -10,7 +10,7 @@ import (
 type Scope struct {
 	parent           *Scope
 	owner            *Symbol              // the symbol that owns this scope (for inheritance lookup)
-	node             ast.Node             // the owning declaration node (nil for the doc root)
+	node             ast.Node             // the owning declaration node
 	members          map[string][]*Symbol // name key -> symbols defined under that key (in definition order)
 	memberOrder      []string             // name keys in first-seen order (for deterministic enumeration)
 	anonymousMembers []*Symbol            // anonymous symbols (no name) that aren't in members map
@@ -41,7 +41,7 @@ func (s *Scope) Owner() *Symbol { return s.owner }
 // SetOwner sets the symbol that owns this scope (for inheritance lookup).
 func (s *Scope) SetOwner(sym *Symbol) { s.owner = sym }
 
-// Node returns the AST node that owns this scope, or nil for the document root.
+// Node returns the AST node that owns this scope, or nil for synthetic scopes.
 func (s *Scope) Node() ast.Node { return s.node }
 
 // BodyLocal reports whether this scope's names exist only inside the body that

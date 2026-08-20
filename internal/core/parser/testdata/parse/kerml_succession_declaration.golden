@@ -1,0 +1,63 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="SuccessionDeclaration" library=false standard=false
+      (Membership visibility="default"
+        (Usage kind="behavior" name="Paint" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="behavior" name="Dry" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="assoc" name="Paint_Before_Dry" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="paint" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" end=true
+              (Relationship kind="typing" target=Paint
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="dry" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" end=true
+              (Relationship kind="typing" target=Dry
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Usage kind="behavior" name="Process" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="step" name="paint" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Paint
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="step" name="dry" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Dry
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="succession" name="named" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Paint_Before_Dry
+                (*ast.QualifiedName))
+              (Multiplicity range=false
+                (LiteralInteger value="1"))
+              (ConnectorEnd target="paint"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="dry"
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="redefines" target=named
+                (*ast.QualifiedName))
+              (Relationship kind="typing" target=Paint_Before_Dry
+                (*ast.QualifiedName))
+              (Multiplicity range=false
+                (LiteralInteger value="1"))
+              (ConnectorEnd target="paint"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="dry"
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="paint"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="dry"
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Multiplicity range=false
+                (LiteralInteger value="1"))
+              (ConnectorEnd target="paint"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="dry"
+                (*ast.QualifiedName)))))))))

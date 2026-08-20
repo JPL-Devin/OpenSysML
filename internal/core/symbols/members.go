@@ -48,7 +48,9 @@ func SetDocName(scope *Scope, name string) {
 		return
 	}
 	scope.docName = name
-	for _, sym := range scope.Members() {
+	// AllMembers, so an anonymous declaration — a `connect a to b;` with no name
+	// of its own — is stamped as well and stays locatable.
+	for _, sym := range scope.AllMembers() {
 		sym.DocName = name
 	}
 	for _, child := range scope.Children() {

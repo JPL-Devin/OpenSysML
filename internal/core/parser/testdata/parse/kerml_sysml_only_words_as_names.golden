@@ -1,0 +1,45 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="SysMLOnlyWordsAreNames" library=false standard=false
+      (Membership visibility="default"
+        (Usage kind="class" name="Timeslice" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="behavior" name="Occurrences" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="expr" name="at" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Membership visibility="default"
+                (Usage kind="attribute" name="ts" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+                  (Relationship kind="typing" target=Timeslice
+                    (*ast.QualifiedName))))
+              (Usage kind="attribute" name="result" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+                (Relationship kind="typing" target=Timeslice
+                  (*ast.QualifiedName)))))
+          (Membership visibility="default"
+            (Usage kind="expr" name="while" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Membership visibility="default"
+                (Usage kind="attribute" name="ts" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+                  (Relationship kind="typing" target=Timeslice
+                    (*ast.QualifiedName))))
+              (Usage kind="attribute" name="result" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+                (Relationship kind="typing" target=Timeslice
+                  (*ast.QualifiedName))
+                (InvocationExpr type="at"
+                  (FeatureReference name="ts")))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="merge" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+              (Relationship kind="typing" target=Timeslice
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="decide" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+              (Relationship kind="typing" target=Timeslice
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="chained" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+              (FeatureChainExpr member="at"
+                (FeatureReference name="merge"))))))
+      (Membership visibility="default"
+        (Package name="Uses" library=false standard=false
+          (Import visibility="public" all=false kind=membership recursive=false imported="Occurrences::merge" filtered=false)
+          (Membership visibility="default"
+            (Usage kind="attribute" name="refersToAt" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+              (FeatureReference name="Occurrences::at"))))))))

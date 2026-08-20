@@ -4,7 +4,9 @@ import "testing"
 
 func TestWorkspaceDiagnosticsClean(t *testing.T) {
 	ws := NewWorkspace()
-	ws.Open("a.sysml", []byte("package P { namespace N; alias A for P::N; }"), 1)
+	// A nested `package`, not a `namespace`: the latter is KerML notation and is
+	// warned about in a .sysml file.
+	ws.Open("a.sysml", []byte("package P { package N; alias A for P::N; }"), 1)
 	if d := ws.Diagnostics("a.sysml"); len(d) != 0 {
 		t.Fatalf("diagnostics = %d, want 0: %+v", len(d), d)
 	}
@@ -28,7 +30,7 @@ func TestWorkspaceDiagnosticsRecomputeAfterEdit(t *testing.T) {
 	if len(ws.Diagnostics("a.sysml")) == 0 {
 		t.Fatal("expected diagnostics before fix")
 	}
-	ws.Update("a.sysml", []byte("package P { namespace Missing; alias A for P::Missing; }"), 2)
+	ws.Update("a.sysml", []byte("package P { package Missing; alias A for P::Missing; }"), 2)
 	if d := ws.Diagnostics("a.sysml"); len(d) != 0 {
 		t.Fatalf("diagnostics after fix = %d, want 0: %+v", len(d), d)
 	}

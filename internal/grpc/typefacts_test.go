@@ -73,7 +73,7 @@ package Demo {
 func TestTypeInfoDeclaredPrimitive(t *testing.T) {
 	get := parseForFacts(t, `
 package Demo {
-    import ScalarValues::*;
+    private import ScalarValues::*;
     part def Vehicle {
         attribute wheels : Integer;
         attribute label : String;
@@ -141,7 +141,7 @@ package Demo {
 func TestTypeInfoQuantity(t *testing.T) {
 	get := parseForFacts(t, `
 package Demo {
-    import SI::*;
+    private import SI::*;
     part def Vehicle {
         attribute mass = 1500.0 [kg];
     }
@@ -272,7 +272,7 @@ func TestSymbolContextConcurrentConversion(t *testing.T) {
 	parsed, err := srv.ParseFile(context.Background(), &pb.ParseFileRequest{
 		Source: &pb.ParseFileRequest_Content{Content: `
 package Demo {
-    import ScalarValues::*;
+    private import ScalarValues::*;
     part def Engine {
         attribute power : Real;
     }

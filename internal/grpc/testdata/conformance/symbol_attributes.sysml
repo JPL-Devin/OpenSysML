@@ -2,7 +2,7 @@
 // string-valued, one with no constant default, plus one inherited and one
 // redefined so masking is visible.
 package demo {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 
 	part def Base {
 		attribute mass : ISQ::MassValue = 1500.0 [SI::kg];

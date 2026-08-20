@@ -269,8 +269,8 @@ func TestRenameShorthandRedefinitionEditsOnce(t *testing.T) {
 // bodyParamSrc declares a body-expression parameter that shadows a same-named
 // outer feature, so an edit that confuses the two is visible.
 const bodyParamSrc = `package P {
-	import ScalarValues::*;
-	import ControlFunctions::*;
+	private import ScalarValues::*;
+	private import ControlFunctions::*;
 	attribute s : Integer = 1;
 	action def Sample {
 		in attribute samples : Real[*];

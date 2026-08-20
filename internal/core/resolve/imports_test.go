@@ -23,6 +23,60 @@ func TestImportMembership(t *testing.T) {
 	}
 }
 
+func TestMembershipImportAcceptsDeclaredAndShortNames(t *testing.T) {
+	idx := indexOf(t, map[string]string{
+		"lib.sysml": "package SI { attribute <kg> kilogram; attribute <g> gram; }",
+		"app.sysml": "package App { import SI::kilogram; }",
+	})
+	r := New(idx)
+	appScope := scopeOf(t, idx.DocumentRoot("app.sysml"), "App")
+
+	for _, name := range []string{"kilogram", "kg"} {
+		if _, ok := r.ResolveName(appScope, name, ident(name)); !ok {
+			t.Fatalf("%s unresolved via membership import; diags=%v", name, r.Diagnostics)
+		}
+	}
+	if _, ok := r.ResolveName(appScope, "g", ident("g")); ok {
+		t.Fatal("gram's short name must not resolve through an import of kilogram")
+	}
+}
+
+func TestRootImportVisibleInNestedPackage(t *testing.T) {
+	for _, ext := range []string{"sysml", "kerml"} {
+		idx := indexOf(t, map[string]string{
+			"base." + ext: "package Base { namespace Real; }",
+			"app." + ext:  "private import Base::Real; package App { namespace Uses; }",
+		})
+		app := scopeOf(t, idx.DocumentRoot("app."+ext), "App")
+		uses := scopeOf(t, app, "Uses")
+		r := New(idx)
+		if _, ok := r.ResolveName(uses, "Real", ident("Real")); !ok {
+			t.Fatalf("%s: root import was not visible in nested package; diags=%v", ext, r.Diagnostics)
+		}
+	}
+}
+
+func TestImportPrefixResolvesThroughSiblingImport(t *testing.T) {
+	for _, ext := range []string{"sysml", "kerml"} {
+		idx := indexOf(t, map[string]string{
+			"base." + ext: "package Occurrences { namespace Occurrence { namespace Coincident; } }",
+			"app." + ext:  "package R8 { private import Occurrences::Occurrence; private import Occurrence::Coincident; }",
+		})
+		r8 := scopeOf(t, idx.DocumentRoot("app."+ext), "R8")
+		r := New(idx)
+		if _, ok := r.ResolveName(r8, "Occurrence", ident("Occurrence")); !ok {
+			t.Fatalf("%s: sibling import did not expose Occurrence; diags=%v", ext, r.Diagnostics)
+		}
+		qualified := qn(false, "Occurrence", "Coincident")
+		if _, ok := r.ResolveQualified(r8, qualified); !ok {
+			t.Fatalf("%s: imported prefix did not resolve through sibling import; diags=%v", ext, r.Diagnostics)
+		}
+		if _, ok := r.ResolveName(r8, "Coincident", ident("Coincident")); !ok {
+			t.Fatalf("%s: member imported through sibling prefix remained unresolved; diags=%v", ext, r.Diagnostics)
+		}
+	}
+}
+
 func TestImportNamespaceStar(t *testing.T) {
 	idx := indexOf(t, map[string]string{
 		"a.sysml": "package Lib { namespace Widget; namespace Gadget; }",

@@ -1,7 +1,7 @@
 // The comparison operators StringFunctions declares order strings by their
 // characters, and the empty string precedes every other.
 package test {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 
 	calc def precedes {
 		in earlier : String;

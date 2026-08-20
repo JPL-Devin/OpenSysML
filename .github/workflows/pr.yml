@@ -52,13 +52,14 @@ jobs:
           sudo install -m 0755 /tmp/cvc5-bin /usr/local/bin/cvc5
           cvc5 --version | head -1
 
-      # Keyed on the download script, so a change to the pinned pilot tag or the
-      # layout invalidates the cache. A restored cache is still verified below.
+      # Keyed on the download script and the shared pilot pin, so a change to the
+      # pinned tag or the layout invalidates the cache. A restored cache is still
+      # verified below.
       - name: Cache the OMG training corpus
         uses: actions/cache@v4
         with:
           path: examples/sysml-v2-training
-          key: training-corpus-${{ hashFiles('scripts/download-training-examples.sh') }}
+          key: training-corpus-${{ hashFiles('scripts/download-training-examples.sh', 'scripts/pilot-pin.sh') }}
 
       - name: Download the OMG training corpus
         run: ./scripts/download-training-examples.sh

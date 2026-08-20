@@ -36,6 +36,30 @@ func TestRedefinitionTargetFoundTwoSupertypesUp(t *testing.T) {
 	}
 }
 
+func TestRedefinitionThroughAliasSupertype(t *testing.T) {
+	r, _, docRoot := resolvedDoc(t, `package P {
+		part def Base { attribute length; }
+		alias BaseAlias for Base;
+		alias BaseAlias2 for BaseAlias;
+		part def Derived :> BaseAlias2 {
+			attribute :>> length;
+		}
+	}`)
+	if len(r.Diagnostics) != 0 {
+		t.Fatalf("resolution diagnostics: %v", r.Diagnostics)
+	}
+	pkg := local(t, docRoot, "P")
+	derived := local(t, pkg.Scope, "Derived")
+	base := local(t, pkg.Scope, "Base")
+	want := local(t, base.Scope, "length")
+	redefined := local(t, derived.Scope, "length")
+	target := redefinitionTarget(t, redefined)
+	got, ok := r.ResolveQualified(derived.Scope, target)
+	if !ok || got != want {
+		t.Fatalf("alias-supertype redefinition target = %v, %v; want %v", got, ok, want)
+	}
+}
+
 // Redeclaring an inherited name is a conflict, unless the declaration redefines or
 // subsets what it shares the name with (SysML v2 §7.6.1).
 func TestRedeclaringAnInheritedNameConflictsUnlessItRedefines(t *testing.T) {
@@ -84,6 +108,42 @@ func TestSubsettingTargetIsTheInheritedFeature(t *testing.T) {
 	}
 	if got != inherited {
 		t.Errorf("the subsetting target names %s, want the wheel Vehicle declares", got.Name)
+	}
+}
+
+func TestInheritedMembersThroughGeneralFeature(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		file string
+		src  string
+	}{
+		{
+			name: "KerML",
+			file: "inherited.kerml",
+			src: `package R10 {
+				classifier A { feature f; }
+				classifier B specializes A { feature redefines f { feature g; } }
+				classifier C specializes A, B {
+					feature subsets f { feature redefines g; }
+				}
+			}`,
+		},
+		{
+			name: "SysML",
+			file: "inherited.sysml",
+			src: `package P {
+				part def A { part f; }
+				part def B :> A { part redefines f { part g; } }
+				part def C :> A, B { part redefines f { part redefines g; } }
+			}`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r, _, _ := resolvedDocNamed(t, tc.file, tc.src)
+			if len(r.Diagnostics) != 0 {
+				t.Fatalf("resolution diagnostics: %v", r.Diagnostics)
+			}
+		})
 	}
 }
 

@@ -26,7 +26,7 @@ func TestInheritedMembersAreVisible(t *testing.T) {
 			part small : Vehicle { part redefines eng { part redefines cyl[4]; } }
 		}`},
 		{"member inherited from definition", `package P {
-			import ScalarValues::*;
+			private import ScalarValues::*;
 			part def Vehicle { attribute mass : Real; }
 			part v : Vehicle { attribute m = v::mass; }
 		}`},
@@ -38,6 +38,36 @@ func TestInheritedMembersAreVisible(t *testing.T) {
 				t.Fatalf("expected no findings in a well-formed model, got %d: %v", len(found), found)
 			}
 		})
+	}
+}
+
+func TestAliasSupertypeInheritanceWithGeometryAndUnits(t *testing.T) {
+	src := `package LRU_Assembly {
+		private import ShapeItems::Box;
+		private import ShapeItems::CircularCylinder;
+		private import SI::mm;
+		part def AvionicsLRU :> Box {
+			:>> length = 100 [mm];
+			:>> width = 50 [mm];
+			:>> height = 20 [mm];
+		}
+		part def MountingBushing :> CircularCylinder {
+			:>> radius = 5 [mm];
+			:>> height = 1 [mm];
+		}
+		alias AvionicsLRUType for AvionicsLRU;
+		part lru : AvionicsLRUType {
+			:>> length = 100 [mm];
+			:>> width = 50 [mm];
+			:>> height = 20 [mm];
+		}
+	}`
+	ws := NewWorkspace()
+	const uri = "file:///alias_geometry.sysml"
+	ws.Open(uri, []byte(src), 1)
+	defer ws.Close(uri)
+	if diagnostics := ws.Diagnostics(uri); len(diagnostics) != 0 {
+		t.Fatalf("expected alias-based geometry model to be clean, got %d: %v", len(diagnostics), diagnostics)
 	}
 }
 
@@ -65,7 +95,7 @@ func TestBodyLocalDeclarationsAreVisible(t *testing.T) {
 		src  string
 	}{
 		{"loop condition reads loop body", `package P {
-			import ScalarValues::*;
+			private import ScalarValues::*;
 			action def Monitor { out charge : Real; }
 			action def Charge {
 				loop action charging {
@@ -74,7 +104,7 @@ func TestBodyLocalDeclarationsAreVisible(t *testing.T) {
 			}
 		}`},
 		{"for body statement reads for body", `package P {
-			import ScalarValues::*;
+			private import ScalarValues::*;
 			action def Step { in x_in : Real; out x_out : Real; }
 			action def Move {
 				in attribute profile : Real[*];
@@ -86,7 +116,7 @@ func TestBodyLocalDeclarationsAreVisible(t *testing.T) {
 			}
 		}`},
 		{"if branch body reads its own declaration", `package P {
-			import ScalarValues::*;
+			private import ScalarValues::*;
 			action def Step { out done : Boolean; }
 			action def Drive {
 				in attribute fast : Boolean;
@@ -97,7 +127,7 @@ func TestBodyLocalDeclarationsAreVisible(t *testing.T) {
 			}
 		}`},
 		{"else branch reuses the then branch's name", `package P {
-			import ScalarValues::*;
+			private import ScalarValues::*;
 			action def Step { out done : Boolean; }
 			action def Drive {
 				in attribute fast : Boolean;
@@ -111,8 +141,8 @@ func TestBodyLocalDeclarationsAreVisible(t *testing.T) {
 			}
 		}`},
 		{"body expression parameter", `package P {
-			import ScalarValues::*;
-			import ControlFunctions::*;
+			private import ScalarValues::*;
+			private import ControlFunctions::*;
 			action def Sample {
 				in attribute samples : Real[*];
 				assert constraint { samples->forAll { in s : Real; s > 0 } }
@@ -138,14 +168,14 @@ func TestBodyLocalNamesDoNotEscape(t *testing.T) {
 		src  string
 	}{
 		{"loop member from outside", `package P {
-			import ScalarValues::*;
+			private import ScalarValues::*;
 			action def Charge {
 				loop action charging { } until true;
 				attribute c = charging;
 			}
 		}`},
 		{"if branch member from outside", `package P {
-			import ScalarValues::*;
+			private import ScalarValues::*;
 			action def Drive {
 				in attribute fast : Boolean;
 				if fast { action accelerate; }
@@ -153,7 +183,7 @@ func TestBodyLocalNamesDoNotEscape(t *testing.T) {
 			}
 		}`},
 		{"else branch member from the then branch", `package P {
-			import ScalarValues::*;
+			private import ScalarValues::*;
 			action def Drive {
 				in attribute fast : Boolean;
 				if fast {
@@ -164,8 +194,8 @@ func TestBodyLocalNamesDoNotEscape(t *testing.T) {
 			}
 		}`},
 		{"body expression parameter from outside", `package P {
-			import ScalarValues::*;
-			import ControlFunctions::*;
+			private import ScalarValues::*;
+			private import ControlFunctions::*;
 			action def Sample {
 				in attribute samples : Real[*];
 				assert constraint { samples->forAll { in s : Real; s > 0 } & s > 0 }

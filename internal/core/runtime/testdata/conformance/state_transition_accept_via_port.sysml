@@ -1,5 +1,5 @@
 package StateAcceptViaPort {
-    import ScalarValues::*;
+    private import ScalarValues::*;
 
     item def Ping;
 

@@ -48,7 +48,7 @@ func (r *Renderer) featureNode(sym *symbols.Symbol, ids *nodeIDs, nodes map[*sym
 	if !qualified {
 		name = notationName(simpleName(r.fqn(sym)))
 	}
-	node := &Node{ID: ids.take(), Kind: declKind(sym), Name: name, Detail: declType(sym)}
+	node := &Node{ID: ids.take(), Kind: declKind(sym), Name: name, Detail: declType(sym), Origin: symbolOrigin(sym)}
 	if existing, ok := nodes[sym]; ok {
 		node.Detail = detailWith(node.Detail, "already shown as "+existing.ID)
 		return node
@@ -93,7 +93,9 @@ func (r *Renderer) connectionEdges(connector *symbols.Symbol, nodes map[*symbols
 	}
 	for i := 0; i < len(resolved); i++ {
 		for j := i + 1; j < len(resolved); j++ {
-			out.Edges = append(out.Edges, Edge{From: resolved[i].ID, To: resolved[j].ID, Label: label, Kind: kind})
+			out.Edges = append(out.Edges, Edge{
+				From: resolved[i].ID, To: resolved[j].ID, Label: label, Kind: kind, Origin: symbolOrigin(connector),
+			})
 		}
 	}
 }

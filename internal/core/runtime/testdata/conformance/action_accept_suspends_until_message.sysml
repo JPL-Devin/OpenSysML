@@ -1,5 +1,5 @@
 package test {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 
 	// An accept reached before its message suspends the action rather than
 	// failing. The fork puts `reader` and the sending branch in parallel, and

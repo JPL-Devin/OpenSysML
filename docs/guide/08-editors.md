@@ -36,6 +36,33 @@ build one. Point the extension at a specific build with `.vscode/settings.json`:
 }
 ```
 
+### The diagram panel
+
+`SysML: Open Diagram`, from the command palette with a `.sysml` or `.kerml` file
+open, puts a diagram of the model beside the editor. It draws the same
+renderings the REPL's `%view` prints, as Mermaid, and it redraws as the model is
+typed.
+
+- **What it draws.** The view the document declares, picked from the dropdown
+  when it declares several, or — the usual case for a model being written — the
+  document itself, as a tree, an interconnection diagram, a state diagram, an
+  action flow or a table. A view whose rendering is not supported (`sequence`,
+  `geometry`, `textual`) stays in the picker, saying why it cannot be drawn.
+- **Click a node** to jump to the declaration it was built from; move the cursor
+  in the editor and the node containing it is highlighted. A node with no
+  locatable declaration — a standard library symbol — is not clickable.
+- **While typing.** A keystroke that leaves the model unparseable dims the last
+  good diagram and puts the error in the status line under it; the panel never
+  blanks. What the rendering could not represent is listed under the diagram.
+- **Cost.** The panel asks for a diagram only while it is visible, and only once
+  an editing burst settles. Mermaid is bundled into the extension, so nothing is
+  fetched from the network.
+
+It is read-only: it renders the model, and editing the diagram does not edit the
+model. The panel appears only when the server it is talking to serves the render
+methods ([LSP extensions](../reference/lsp.md)), so an older `sysml-lsp` simply
+does not offer the command.
+
 Run `SysML: Restart Language Server` from the command palette after rebuilding
 the binary. `editors/vscode/README.md` documents every setting, the grammar
 generator (keywords come from `internal/core/lexer.Keywords()`, so they cannot
@@ -62,6 +89,10 @@ from a live session with `bin/sysml-lsp`:
   keywords/comments/literals from the token stream, names classified from the
   symbol table and the resolver, with the `declaration`, `definition`, `readonly`
   and `abstract` modifiers)
+- ✅ Renderings, as the custom `opensysml/render` and `opensysml/views` requests
+  and the `opensysml/renderChanged` notification, announced as
+  `experimental: { openSysmlRender: true }` — what the diagram panel is built on,
+  documented in [LSP extensions](../reference/lsp.md)
 - ✅ Code actions, quick-fix kind only (`textDocument/codeAction`: spelling of an
   unresolved name, importing the namespace that declares it, inserting a missing
   semicolon the parser located exactly)

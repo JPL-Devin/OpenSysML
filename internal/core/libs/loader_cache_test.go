@@ -109,6 +109,33 @@ func TestLoaderCacheKeepsTypingEdge(t *testing.T) {
 	}
 }
 
+func TestLoaderCachePreservesRedefinitionMemberEdges(t *testing.T) {
+	dir := t.TempDir()
+	src := `package P {
+		classifier A { feature f { feature g; } }
+		classifier B specializes A { feature redefines f { feature h; } }
+	}`
+	if err := os.WriteFile(filepath.Join(dir, "lib.kerml"), []byte(src), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	cacheDir := t.TempDir()
+	loadWholeLibrary(t, dir, cacheDir)
+	idx := loadWholeLibrary(t, dir, cacheDir)
+	r := resolve.New(idx)
+	m := semantics.NewModel(r)
+	b := idx.LookupQualified("P::B")
+	if len(b) != 1 {
+		t.Fatal("cached B not found")
+	}
+	f, ok := m.LookupMember(b[0], "f")
+	if !ok {
+		t.Fatal("cached B does not expose f")
+	}
+	if _, ok := m.LookupMember(f, "g"); !ok {
+		t.Fatal("cached redefined f does not expose inherited g")
+	}
+}
+
 // A record whose supertypes are not all reachable yet must not be cached when
 // the loader requires resolution: its key does not describe the index it was
 // built in, so it would be restored — minus that edge — where the target exists.
@@ -314,11 +341,12 @@ type indexView struct {
 
 func snapshotIndex(idx *symbols.Index) indexView {
 	r := resolve.New(idx)
+	model := semantics.NewModel(r)
 	view := indexView{fqns: idx.FQNs(), entries: map[string]string{}}
 	for _, fqn := range view.fqns {
 		var descs []string
 		for _, sym := range idx.LookupQualified(fqn) {
-			descs = append(descs, describeSymbol(sym, idx, r))
+			descs = append(descs, describeSymbol(sym, idx, r, model))
 		}
 		sort.Strings(descs)
 		view.entries[fqn] = fmt.Sprintf("%v imports=%v", descs, idx.WildcardImportsOf(fqn))
@@ -329,10 +357,10 @@ func snapshotIndex(idx *symbols.Index) indexView {
 // describeSymbol renders the state a symbol contributes to name resolution.
 // A parsed symbol carries it in its declaration, a restored one in the fields
 // its record populated; both must describe the same thing.
-func describeSymbol(sym *symbols.Symbol, idx *symbols.Index, r *resolve.Resolver) string {
+func describeSymbol(sym *symbols.Symbol, idx *symbols.Index, r *resolve.Resolver, model *semantics.Model) string {
 	supers, alias, short := sym.SuperFQNs, sym.AliasTargetFQN, sym.ShortName
 	if sym.Decl != nil {
-		supers, _ = supersOf(sym, idx, r)
+		supers, _ = supersOf(sym, idx, r, model)
 		alias = aliasTargetOf(sym.Decl)
 	}
 	sort.Strings(supers)

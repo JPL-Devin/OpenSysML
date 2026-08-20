@@ -107,10 +107,12 @@ nav:
       - CLI: reference/cli.md
       - REPL commands: reference/repl-commands.md
       - Environment variables: reference/environment.md
+      - Language server: reference/lsp.md
       - Go API: reference/api.md
       - Python API: reference/python-api.md
       - RDF mapping: reference/rdf-mapping.md
       - Grammar: reference/grammar/README.md
+      - Grammar conformance audit: reference/grammar/conformance-audit.md
   - Internals:
       - internals/README.md
       - Architecture: internals/architecture.md
@@ -127,6 +129,7 @@ nav:
           - internals/design/python-grpc-phase3-plan.md
           - internals/design/python-grpc-phase3-fixes.md
           - internals/design/python-grpc-phase4-plan.md
+          - internals/design/vscode-visual-modeling.md
       - Plans:
           - internals/notes/README.md
           - internals/notes/behavior-robustness-plan.md
@@ -136,6 +139,8 @@ nav:
       - project/README.md
       - Spec compliance: project/spec-compliance.md
       - Training examples: project/training-examples.md
+      - Pilot differential: project/pilot-differential.md
+      - Grammar coverage: project/grammar-coverage.md
       - Roadmap: project/roadmap.md
       - Releasing: project/releasing.md
       - macOS distribution: project/macos-distribution.md

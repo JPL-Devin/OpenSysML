@@ -12,6 +12,9 @@ func (m *Model) MembersOf(sym *symbols.Symbol) []*symbols.Symbol {
 	if sym == nil {
 		return nil
 	}
+	if target, ok := m.resolver.ResolveAliasTarget(sym); ok {
+		sym = target
+	}
 	var out []*symbols.Symbol
 	seenName := make(map[string]bool)
 	seenSym := make(map[*symbols.Symbol]bool)
@@ -52,6 +55,9 @@ func (m *Model) LookupMember(sym *symbols.Symbol, name string) (*symbols.Symbol,
 	if sym == nil || name == "" {
 		return nil, false
 	}
+	if target, ok := m.resolver.ResolveAliasTarget(sym); ok {
+		sym = target
+	}
 	// Local first.
 	if sym.Scope != nil {
 		if s, ok := sym.Scope.LookupLocal(name); ok {
@@ -84,6 +90,9 @@ func (m *Model) LookupMember(sym *symbols.Symbol, name string) (*symbols.Symbol,
 func (m *Model) LookupContributedMember(sym *symbols.Symbol, name string) (*symbols.Symbol, bool) {
 	if sym == nil || name == "" {
 		return nil, false
+	}
+	if target, ok := m.resolver.ResolveAliasTarget(sym); ok {
+		sym = target
 	}
 	for _, sup := range m.MemberSources(sym) {
 		if sup.Scope != nil {

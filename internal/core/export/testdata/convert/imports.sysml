@@ -1,5 +1,5 @@
 package Importer {
     private import ISQ::*;
-    import ScalarValues::Real;
-    import Deep::**;
+    private import ScalarValues::Real;
+    private import Deep::**;
 }

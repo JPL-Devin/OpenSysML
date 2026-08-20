@@ -10,7 +10,7 @@ func TestSendActionSentMessageAccess(t *testing.T) {
 	ws := NewWorkspace()
 
 	src := `package Test {
-		import Actions::*;
+		private import Actions::*;
 		item def SetSpeed;
 		part driver_a {
 			action driverBehavior {

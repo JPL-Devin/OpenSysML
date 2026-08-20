@@ -22,7 +22,7 @@ func writeFile(t *testing.T, path, content string) string {
 // file of a load is accepted before the buffer is analyzed.
 func TestSubmitAllIsOrderIndependent(t *testing.T) {
 	a := "package A { part def Wheel; }\n"
-	b := "package B { import A::*; part w : Wheel; }\n"
+	b := "package B { private import A::*; part w : Wheel; }\n"
 
 	for _, order := range [][]string{{b, a}, {a, b}} {
 		s := NewSession()

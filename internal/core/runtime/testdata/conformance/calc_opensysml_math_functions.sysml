@@ -2,8 +2,8 @@
 // the built-in implementations of exp, ln, log and the two-argument atan2, the
 // functions the OMG Kernel Function Library declares nowhere.
 package test {
-	import ScalarValues::*;
-	import OpenSysMLMathFunctions::*;
+	private import ScalarValues::*;
+	private import OpenSysMLMathFunctions::*;
 
 	calc def descentSteering {
 		in altitude : Real;

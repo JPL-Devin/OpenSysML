@@ -50,10 +50,11 @@ func TestNegative(t *testing.T) {
 		{"allocate_missing_target", "package q { allocate a to ; }"},
 		{"message_payload_declaration_no_type", "message m of pay : from a to b;"},
 		{"message_payload_declaration_no_target", "message m of pay : T from a;"},
-		{"defer_no_event", "state s { defer ; }"},
+		// `state s { defer ; }` and `state s { history ; }` are no longer malformed:
+		// neither word is a grammar literal, so each names a reference usage there
+		// (docs/reference/grammar/conformance-audit.md).
 		{"defer_no_semicolon", "state s { defer Ping state t; }"},
 		{"defer_trailing_comma", "state s { defer Ping, ; }"},
-		{"history_no_name", "state s { history ; }"},
 		{"deep_without_history", "state s { deep resume; }"},
 		{"shallow_without_history", "state s { shallow resume; }"},
 		{"history_no_semicolon", "state s { history resume state t; }"},
@@ -64,6 +65,18 @@ func TestNegative(t *testing.T) {
 		{"entry_reference_no_semicolon", "state s { entry warmUp state t; }"},
 		{"exit_reference_no_semicolon", "state s { exit coolDown state t; }"},
 		{"do_reference_dangling_chain", "state s { do warmUp.; }"},
+
+		// `on` and `var` are names, not keywords, so genuine misuse around them
+		// is still reported: a state named `on` without its `;`, a transition
+		// whose trigger is missing after a source named `on`, and a `var`-marked
+		// declaration with no type. A `var` prefix with the kind keyword left out
+		// (KerML BasicFeaturePrefix, `var a : Integer;`) is not supported and is
+		// reported rather than read as a reference to a feature named `var`.
+		{"state_named_on_no_semicolon", "state def S { state on }"},
+		{"transition_from_on_no_trigger", "state def S { state on; transition first on accept then off; }"},
+		{"var_prefixed_declaration_no_type", "part def D { var attribute x : ; }"},
+		{"attribute_named_var_no_type", "part def D { attribute var : ; }"},
+		{"var_prefix_without_kind_keyword", "calc def C { var a : Integer; }"},
 		{"end_no_feature", "connection def C { end ; }"},
 		{"end_unclosed_multiplicity", "connection def C { end [1 part bead : T; }"},
 		{"connector_end_no_reference_target", "part p { connection : C connect bead references to rim; }"},
@@ -207,12 +220,77 @@ func TestNegative(t *testing.T) {
 		{"binding_end_chain_trailing_dot_qualified", "package P { part c; binding bind R::a. = c; }"},
 		{"binding_end_unterminated", "package P { part a; binding bind R::a }"},
 		{"binding_end_no_target", "package P { part a; binding bind R::a = ; }"},
+
+		// A connection, interface or flow usage stating its ends where its name
+		// would go still states both ends and closes the body it opens.
+		{"connect_no_ends", "part def P { connect; }"},
+		{"connect_body_no_ends", "part def P { connect { attribute x; } }"},
+		{"connect_body_unclosed", "part def P { part a; part b; connect a to b { attribute x; }"},
+		{"connect_to_no_target_before_body", "part def P { part a; connect a to { } }"},
+		{"interface_ends_no_target", "package P { part a; interface a.p to ; }"},
+		{"interface_ends_no_to", "package P { part a; part b; interface a.p b.p; }"},
+		{"interface_ends_unclosed_body", "package P { part a; part b; interface a.p to b.p { attribute x; }"},
+		{"flow_ends_no_target_before_body", "action def A { action a; flow a.x to { } }"},
+		{"flow_ends_unclosed_body", "action def A { action a; action b; flow a.x to b.x { attribute y; }"},
+		// An accept node standing as a statement states its payload and, where it
+		// names one, the port it accepts through.
+		{"accept_statement_no_payload", "action def A { loop { accept; } }"},
+		{"accept_statement_no_payload_type", "action def A { loop { accept e : ; } }"},
+		{"accept_statement_via_no_port", "action def A { loop { accept e : E via; } }"},
+		{"then_accept_no_payload", "action def A { action b; then accept; }"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			sf := source.New(tt.name+".sysml", []byte(tt.input))
 			p := New(sf)
+			_ = p.ParseFile()
+
+			if len(p.Diagnostics) == 0 {
+				t.Errorf("Expected parse errors for malformed input, got none.\nInput: %s", tt.input)
+			}
+		})
+	}
+}
+
+// TestNegativeKerML covers the KerML notation whose malformed variants must
+// still be reported: accepting them would be a conformance failure of its own.
+func TestNegativeKerML(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		// `featured by` states one target or a list of them, so the keyword pair
+		// and every target in the list are required (KerML.xtext:569).
+		{"featured_without_by", "package P { class A; feature f featured A; }"},
+		{"featured_by_no_target", "package P { feature f featured by ; }"},
+		{"featured_by_trailing_comma", "package P { class A; feature f featured by A, ; }"},
+		{"featured_by_no_terminator", "package P { class A; feature f featured by A }"},
+		{"by_without_featured", "package P { class A; feature f by A; }"},
+
+		// A parenthesized end list holds at least two ends and closes
+		// (KerML.xtext:842).
+		{"nary_connector_unclosed", "package P { feature a; feature b; connector c (a, b; }"},
+		{"nary_connector_trailing_comma", "package P { feature a; feature b; connector c (a, b, ); }"},
+		{"nary_connector_empty", "package P { connector c (); }"},
+		{"nary_connector_one_end", "package P { feature a; connector c (a); }"},
+		{"nary_connector_end_no_target", "package P { feature a; connector c ([1], a); }"},
+
+		// A succession states both ends around `then` (KerML.xtext:891).
+		{"succession_declaration_no_then", "package P { behavior B { step a; step b; succession s : L [1] first a b; } }"},
+		{"succession_declaration_no_target", "package P { behavior B { step a; succession s : L [1] first a then ; } }"},
+		{"succession_declaration_no_ends", "package P { behavior B { succession s : L [1] first then; } }"},
+
+		// A word the KerML grammar does not reserve names a feature, so a
+		// declaration so named that is malformed is still reported.
+		{"feature_named_merge_no_type", "package P { feature merge : ; }"},
+		{"feature_named_at_no_terminator", "package P { feature at }"},
+		{"import_named_while_no_terminator", "package P { public import while }"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := New(source.New(tt.name+".kerml", []byte(tt.input)))
 			_ = p.ParseFile()
 
 			if len(p.Diagnostics) == 0 {

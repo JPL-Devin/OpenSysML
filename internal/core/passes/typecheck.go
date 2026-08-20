@@ -5,6 +5,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -30,6 +31,7 @@ func (TypeCheckPass) Run(ctx *Context, name string, root *ast.RootNamespace) []D
 	tc := &typeChecker{
 		resolver: ctx.Resolver(),
 		expr:     &exprChecker{resolver: ctx.Resolver(), model: model},
+		lang:     source.KindOf(name),
 	}
 	tc.walk(rootScope, root.Members)
 	return append(tc.diags, tc.expr.diags...)
@@ -38,19 +40,25 @@ func (TypeCheckPass) Run(ctx *Context, name string, root *ast.RootNamespace) []D
 type typeChecker struct {
 	resolver *resolve.Resolver
 	expr     *exprChecker
-	diags    []Diagnostic
+	// lang is the document's language; a document of no known kind — the REPL
+	// buffer — reads as SysML, the notation its prompt takes.
+	lang  source.Kind
+	diags []Diagnostic
 }
 
 func (tc *typeChecker) walk(scope *symbols.Scope, members []ast.Node) {
 	for _, m := range members {
 		switch d := unwrapType(m).(type) {
 		case *ast.Definition:
-			tc.checkRelationships(scope, d.Relationships, declKind{isDef: true, defKind: d.Kind, keyword: d.Keyword})
+			tc.checkRelationships(scope, d.Relationships, declKind{
+				lang: tc.lang, isDef: true, defKind: d.Kind, keyword: d.Keyword,
+			})
 			if child := childScopeOf(scope, d); child != nil {
 				tc.walk(child, d.Members)
 			}
 		case *ast.Usage:
 			tc.checkRelationships(scope, d.Relationships, declKind{
+				lang:         tc.lang,
 				useKind:      d.Kind,
 				direction:    d.Direction,
 				isEnd:        d.IsEnd,
@@ -136,9 +144,9 @@ func (tc *typeChecker) checkBehaviorMember(scope *symbols.Scope, n ast.Node) {
 // escape the usage-kind rules.
 func (tc *typeChecker) checkSubjectMember(scope *symbols.Scope, m *ast.SubjectMember) {
 	if m.TypeRef != nil {
-		tc.checkTypeTarget(scope, m.TypeRef, ast.RelTyping, declKind{useKind: ast.UsageSubject})
+		tc.checkTypeTarget(scope, m.TypeRef, ast.RelTyping, declKind{lang: tc.lang, useKind: ast.UsageSubject})
 	}
-	tc.checkRelationships(scope, m.Relationships, declKind{useKind: ast.UsageSubject})
+	tc.checkRelationships(scope, m.Relationships, declKind{lang: tc.lang, useKind: ast.UsageSubject})
 	if m.BindingExpr != nil {
 		tc.expr.infer(scope, m.BindingExpr)
 	}
@@ -172,6 +180,9 @@ func (tc *typeChecker) checkTrigger(scope *symbols.Scope, trigger ast.Node) {
 // declKind describes the declaration a relationship is declared on: what the
 // kind-compatibility rules are checked against.
 type declKind struct {
+	// lang is the language of the document the declaration is written in: the
+	// KerML type layer has no definition/usage split to check against.
+	lang      source.Kind
 	isDef     bool
 	defKind   ast.DefinitionKind
 	useKind   ast.UsageKind
@@ -197,6 +208,10 @@ func (d declKind) isPlainClassifier() bool {
 	return d.isDef && d.defKind == ast.DefClass &&
 		(d.keyword == "classifier" || d.keyword == "subclassifier")
 }
+
+// isKerML reports whether the declaration is written in KerML, which has no
+// definition/usage distinction to classify it against (KerML 1.0 §8.3).
+func (d declKind) isKerML() bool { return d.lang == source.KindKerML }
 
 // isOccurrenceUsage reports whether the `individual` modifier or a portion
 // prefix makes the declaration an occurrence usage.
@@ -241,11 +256,13 @@ func (tc *typeChecker) checkTypeTarget(scope *symbols.Scope, target ast.Node, re
 	if !ok || sym == nil {
 		return // unresolved: name-resolution tier owns this
 	}
-	// Resolve aliases to their underlying types for typing relationships and
-	// for a satisfy reference, both of which check the target's kind.
+	// Resolve aliases to their underlying types for the relationships whose
+	// check depends on the target's kind: a typing and a generalization.
 	targetSym := sym
-	aliasMatters := relKind == ast.RelTyping ||
-		(relKind == ast.RelSubsets && decl.useKind == ast.UsageSatisfy)
+	aliasMatters := relKind == ast.RelSpecializes ||
+		relKind == ast.RelSubsets ||
+		relKind == ast.RelRedefines ||
+		relKind == ast.RelTyping
 	if aliasMatters && sym.Kind == symbols.SymbolAlias {
 		if resolved, ok := tc.resolver.ResolveAliasTarget(sym); ok && resolved != nil {
 			targetSym = resolved
@@ -312,7 +329,15 @@ func compatMessage(decl declKind, rel ast.RelationshipKind, target symbols.Symbo
 	case ast.RelSpecializes:
 		want := defSymbolKind(defKind)
 		if !isDef {
-			return "only a definition may specialize; found a usage"
+			if !decl.isKerML() {
+				return "only a definition may specialize; found a usage"
+			}
+			// Every KerML declaration is a Type and specializes a Type; the
+			// definition/usage taxonomy does not apply (KerML 1.0 §8.3.3).
+			if !isTypeKind(target) {
+				return fmt.Sprintf("a KerML type may specialize only a type, found %s", target)
+			}
+			return ""
 		}
 		if target == symbols.SymbolUnknown || target == symbols.SymbolKerMLType {
 			return "" // a KerML type or an unclassified kind constrains nothing
@@ -348,6 +373,9 @@ func compatMessage(decl declKind, rel ast.RelationshipKind, target symbols.Symbo
 		if isDef {
 			return fmt.Sprintf("a definition may not %s a feature", rel)
 		}
+		if target == symbols.SymbolUnknown {
+			return "" // an unclassified target constrains nothing
+		}
 		// Usages can subset/redefine other usages OR definitions
 		// Example: datatype MyReal :>> Real (usage redefines attributeDef)
 		// The check for isUsageKind OR isDefKind allows both patterns
@@ -362,6 +390,14 @@ func compatMessage(decl declKind, rel ast.RelationshipKind, target symbols.Symbo
 	case ast.RelTyping:
 		if isDef {
 			return "" // typing on a definition is not produced by the parser; ignore
+		}
+		// A KerML FeatureTyping's type is any Type, a Feature among them (KerML
+		// 1.0 §8.3.4.4); KerML has no usage-kind taxonomy to check further.
+		if decl.isKerML() {
+			if !isTypeKind(target) {
+				return fmt.Sprintf("type must be a type, found %s", target)
+			}
+			return ""
 		}
 		if !isDefKind(target) {
 			return fmt.Sprintf("type must be a definition, found %s", target)
@@ -410,6 +446,9 @@ func defSymbolKind(k ast.DefinitionKind) symbols.SymbolKind {
 		return symbols.SymbolIndividualDef
 	case ast.DefMetadata:
 		return symbols.SymbolMetadataDef
+	case ast.DefMetaclass:
+		// A Metaclass is a Class (KerML 1.0 §8.4.4), so it specializes a metaclass.
+		return symbols.SymbolMetaclass
 	case ast.DefEnumeration:
 		return symbols.SymbolEnumerationDef
 	case ast.DefView:
@@ -581,6 +620,29 @@ func isDefKind(k symbols.SymbolKind) bool {
 
 func isUsageKind(k symbols.SymbolKind) bool {
 	return usageSymbolKinds[k]
+}
+
+// typeSymbolKinds is the set of SymbolKinds that classify a Type: every
+// definition and usage kind, plus a KerML type declaration. Enumerated rather
+// than derived by negation so a kind added later is rejected until classified.
+var typeSymbolKinds = func() map[symbols.SymbolKind]bool {
+	m := map[symbols.SymbolKind]bool{symbols.SymbolKerMLType: true}
+	for k := range defSymbolKinds {
+		m[k] = true
+	}
+	for k := range usageSymbolKinds {
+		m[k] = true
+	}
+	// An alias is a naming, not a Type; a resolvable one is resolved upstream.
+	delete(m, symbols.SymbolAlias)
+	return m
+}()
+
+// isTypeKind reports whether k classifies a Type, which alone may be a KerML
+// specialization or typing target — a Feature is one too (KerML 1.0 §8.3.3).
+// An unclassified kind constrains nothing, as on the definition path.
+func isTypeKind(k symbols.SymbolKind) bool {
+	return k == symbols.SymbolUnknown || typeSymbolKinds[k]
 }
 
 // occurrenceDefSymbolKinds is the set of SymbolKinds that classify a definition

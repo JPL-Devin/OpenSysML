@@ -14,6 +14,7 @@ Runnable models are in [examples/](../examples/), with a catalog of what each on
 
 - **[CLI](reference/cli.md)** — every flag of `sysml`, the modes, and the exit status
 - **[REPL commands](reference/repl-commands.md)** — every `%` command and its arguments
+- **[LSP extensions](reference/lsp.md)** — the custom render requests `sysml-lsp` serves a diagram client
 - **[Environment variables](reference/environment.md)** — the bounds one run may spend, and paths
 - **[Go API](reference/api.md)** — the public API of every package
 - **[Python API](reference/python-api.md)** — `opensysml`, its generated typed classes and latency
@@ -31,6 +32,8 @@ Runnable models are in [examples/](../examples/), with a catalog of what each on
 
 - **[Spec compliance](project/spec-compliance.md)** — faithful, approximate, or not implemented
 - **[Training examples](project/training-examples.md)** — the OMG corpus, 100/100 clean
+- **[Pilot differential](project/pilot-differential.md)** — our diagnostics against the OMG pilot implementation
+- **[Grammar coverage](project/grammar-coverage.md)** — which OMG grammar productions our inputs exercise
 - **[Roadmap](project/roadmap.md)** — the known gaps, in the order they should be picked up
 - **[Releasing](project/releasing.md)** — the pre-tag gate, tagging, artifacts, Homebrew
 - **[macOS distribution](project/macos-distribution.md)** — Gatekeeper and the signing decision

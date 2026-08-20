@@ -73,6 +73,12 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 			all = symbols.PreferDeclared(cur.Scope.LookupLocalAll(seg.Text))
 		}
 
+		if len(all) == 0 && cur.Scope != nil {
+			if sym, ok := r.lookupImportedMember(cur, cur.Scope, scope, seg.Text); ok {
+				all = []*symbols.Symbol{sym}
+			}
+		}
+
 		// If local lookup fails (or no scope), look the segment up under the FQN
 		// walked so far. This handles cases like ScalarValues::Real where
 		// ScalarValues is a package from stdlib that was indexed with full FQNs

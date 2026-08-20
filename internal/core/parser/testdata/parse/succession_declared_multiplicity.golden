@@ -1,0 +1,45 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="SuccessionDeclarations" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="connection" abstract=false variation=false name="Before"))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="Process"
+          (Usage kind="action" name="paint" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)
+          (Usage kind="action" name="dry" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)
+          (Membership visibility="default"
+            (Usage kind="succession" name="named" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Before
+                (*ast.QualifiedName))
+              (Multiplicity range=false
+                (LiteralInteger value="1"))
+              (ConnectorEnd target="paint"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="dry"
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="redefines" target=named
+                (*ast.QualifiedName))
+              (Relationship kind="typing" target=Before
+                (*ast.QualifiedName))
+              (Multiplicity range=false
+                (LiteralInteger value="1"))
+              (ConnectorEnd target="paint"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="dry"
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Multiplicity range=false
+                (LiteralInteger value="1"))
+              (ConnectorEnd target="paint"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="dry"
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (ConnectorEnd target="paint"
+                (*ast.QualifiedName))
+              (ConnectorEnd target="dry"
+                (*ast.QualifiedName)))))))))

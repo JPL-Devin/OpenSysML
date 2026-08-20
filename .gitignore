@@ -15,6 +15,9 @@
 # Downloaded training examples (run scripts/download-training-examples.sh)
 /examples/sysml-v2-training/
 
+# Downloaded OMG corpora (run scripts/download-pilot-corpora.sh)
+/examples/pilot-corpora/
+
 # Python
 /src/  # Legacy Python layout shadow directory (superseded by python/)
 __pycache__/

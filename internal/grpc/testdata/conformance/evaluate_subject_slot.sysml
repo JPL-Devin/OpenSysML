@@ -1,7 +1,7 @@
 // An expression evaluated against an object reads that object's slots: `car`
 // redefines the definition's default, so `mass * 2` is about 1600, not 1500.
 package demo {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 
 	part def Car {
 		attribute mass : Real = 1500.0;

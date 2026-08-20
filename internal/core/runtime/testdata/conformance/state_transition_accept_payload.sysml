@@ -1,5 +1,5 @@
 package StateAcceptPayload {
-    import ScalarValues::*;
+    private import ScalarValues::*;
 
     item def Warning;
 
