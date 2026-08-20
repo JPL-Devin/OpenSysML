@@ -25,6 +25,11 @@ func TestGetServerInfo(t *testing.T) {
 	if !slices.Contains(resp.Capabilities, CapabilityTypeFacts) {
 		t.Errorf("capabilities = %v, want it to contain %q", resp.Capabilities, CapabilityTypeFacts)
 	}
+	for _, capability := range []string{CapabilityAuthoring, CapabilityInlineLanguage} {
+		if !slices.Contains(resp.Capabilities, capability) {
+			t.Errorf("capabilities = %v, want it to contain %q", resp.Capabilities, capability)
+		}
+	}
 }
 
 // TestGetServerInfoTypeFactsCapabilityIsHonest verifies the reported

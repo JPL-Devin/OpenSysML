@@ -4,6 +4,8 @@ Notable changes per release. Format follows [Keep a Changelog](https://keepachan
 versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Cutting a release
 is described in [docs/project/releasing.md](docs/project/releasing.md).
 
+* Add source-preserving declaration authoring and deletion to the gRPC and Python edit APIs.
+
 ## 0.1.1 — 2026-08-19
 
 A fix release: every change below corrects something 0.1.0 got wrong about a valid model, so a

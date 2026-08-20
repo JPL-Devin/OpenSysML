@@ -59,6 +59,12 @@ const CapabilityUnsetValue = "unset_value"
 // a parsed model's own source, preserving everything the edit did not touch.
 const CapabilityApplyEdits = "apply_edits"
 
+// CapabilityAuthoring names add-member and delete source authoring operations.
+const CapabilityAuthoring = "authoring"
+
+// CapabilityInlineLanguage names explicit language selection for inline content.
+const CapabilityInlineLanguage = "inline_language"
+
 // CapabilityFeatureValues names the capability of populating
 // Instance.feature_values, which replaced the pre-0.1.0 Instance.slots.
 const CapabilityFeatureValues = "feature_values"
@@ -69,6 +75,7 @@ var capabilities = []string{
 	CapabilityTypeFacts, CapabilityConvert, CapabilityVerification, CapabilityQuery,
 	CapabilityEnumValues, CapabilityEvaluateSubject, CapabilitySymbolAttributes,
 	CapabilityUnsetValue, CapabilityFeatureValues, CapabilityApplyEdits,
+	CapabilityAuthoring, CapabilityInlineLanguage,
 }
 
 // Capabilities returns the capability names this build of the service reports.
@@ -157,13 +164,24 @@ func (s *Service) ParseFile(ctx context.Context, req *pb.ParseFileRequest) (*pb.
 	// Extract source content and file path
 	var content string
 	var filePath string
+	var kind source.Kind
 
 	switch src := req.Source.(type) {
 	case *pb.ParseFileRequest_Content:
 		content = src.Content
 		filePath = "<content>"
+		kind = source.KindSysML
+		switch req.Language {
+		case "", "sysml":
+		case "kerml":
+			kind = source.KindKerML
+		default:
+			return nil, status.Errorf(codes.InvalidArgument,
+				"language must be sysml or kerml, got %q", req.Language)
+		}
 	case *pb.ParseFileRequest_FilePath:
 		filePath = src.FilePath
+		kind = source.KindOf(filePath)
 		// #nosec G304 -- the client names the model file it wants parsed; reading
 		// arbitrary paths is the service's purpose, and it runs with the caller's
 		// own privileges.
@@ -179,13 +197,13 @@ func (s *Service) ParseFile(ctx context.Context, req *pb.ParseFileRequest) (*pb.
 	// Keyed by what was read, not by the hash the request carried: a hash
 	// disagreeing with its content would serve another model. The file name is
 	// part of the key, since a record's diagnostics name the file it came from.
-	modelHash := computeHash(filePath + "\x00" + content)
+	modelHash := computeHash(filePath + "\x00" + req.Language + "\x00" + content)
 	if cached, ok := s.cache.Get(modelHash); ok {
 		return s.buildParseResponse(modelHash, cached), nil
 	}
 
 	// Parse the file
-	srcFile := source.New(filePath, []byte(content))
+	srcFile := source.NewWithKind(filePath, []byte(content), kind)
 	p := parser.New(srcFile)
 	root := p.ParseFile()
 
@@ -207,7 +225,7 @@ func (s *Service) ParseFile(ctx context.Context, req *pb.ParseFileRequest) (*pb.
 	if len(parseDiags) == 0 {
 		// passes.Analyze expects parser diagnostics converted to passes.Diagnostic
 		parseDiagsConverted := make([]passes.Diagnostic, 0) // No parse errors to convert
-		passesDiags = passes.Analyze(filePath, root, parseDiagsConverted, idx)
+		passesDiags = passes.AnalyzeWithKind(filePath, kind, root, parseDiagsConverted, idx)
 	}
 
 	// Create cached model

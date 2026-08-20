@@ -69,6 +69,8 @@ CAPABILITY_FEATURE_VALUES = "feature_values"
 #: the edited notation. Without it an edit fails as an unimplemented method,
 #: which is indistinguishable from a broken channel.
 CAPABILITY_APPLY_EDITS = "apply_edits"
+CAPABILITY_AUTHORING = "authoring"
+CAPABILITY_INLINE_LANGUAGE = "inline_language"
 
 
 @dataclass(frozen=True)

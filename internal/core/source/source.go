@@ -20,11 +20,18 @@ type Pos struct {
 type SourceFile struct {
 	name    string
 	content []byte
+	kind    Kind
 }
 
 // New creates a SourceFile from a name and its raw bytes.
 func New(name string, content []byte) *SourceFile {
-	return &SourceFile{name: name, content: content}
+	return &SourceFile{name: name, content: content, kind: KindOf(name)}
+}
+
+// NewWithKind creates a source file whose language is explicit rather than
+// inferred from its name. This is used for inline KerML content.
+func NewWithKind(name string, content []byte, kind Kind) *SourceFile {
+	return &SourceFile{name: name, content: content, kind: kind}
 }
 
 // Name returns the file name.

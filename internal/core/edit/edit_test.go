@@ -78,6 +78,59 @@ func requireClean(t *testing.T, m Model) {
 	}
 }
 
+func TestAddMemberIntoBodyAndRoot(t *testing.T) {
+	m := loadContent(t, "add.sysml", "package P {\n}\n")
+	res, err := Apply(m, []Operation{
+		AddMember("P", "part def", "Wheel"),
+		AddMember("", "part def", "Vehicle"),
+	})
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	want := "package P {\n    part def Wheel;\n}\npart def Vehicle;\n"
+	if string(res.Content) != want {
+		t.Fatalf("content = %q, want %q", res.Content, want)
+	}
+}
+
+func TestAddMemberBodylessOwner(t *testing.T) {
+	m := loadContent(t, "add.sysml", "part def Vehicle;\n")
+	res, err := Apply(m, []Operation{AddMember("Vehicle", "part", "wheel")})
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if got, want := string(res.Content), "part def Vehicle {\n    part wheel;\n}\n"; got != want {
+		t.Fatalf("content = %q, want %q", got, want)
+	}
+}
+
+func TestAddMemberSameOwnerPreservesRequestOrder(t *testing.T) {
+	m := loadContent(t, "add.sysml", "package P {\n}\n")
+	res, err := Apply(m, []Operation{
+		AddMember("P", "part def", "First"),
+		AddMember("P", "part def", "Second"),
+	})
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if got, want := string(res.Content),
+		"package P {\n    part def First;\n    part def Second;\n}\n"; got != want {
+		t.Fatalf("content = %q, want %q", got, want)
+	}
+}
+
+func TestDeleteOwnCommentAndLine(t *testing.T) {
+	m := loadContent(t, "delete.sysml", "package P {\n    // keep this\n    part def Keep;\n\n    // remove this\n    part def Gone;\n}\n")
+	res, err := Apply(m, []Operation{Delete("P::Gone", false)})
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	want := "package P {\n    // keep this\n    part def Keep;\n}\n"
+	if got := string(res.Content); got != want {
+		t.Fatalf("content = %q, want %q", got, want)
+	}
+}
+
 // applyOne applies a single operation and returns the edited content.
 func applyOne(t *testing.T, m Model, op Operation) *Result {
 	t.Helper()

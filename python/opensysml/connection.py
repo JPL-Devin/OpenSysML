@@ -15,6 +15,7 @@ from opensysml.model import Model
 from opensysml.binary import cached_release, ensure_binary, resolve_latest_version
 from opensysml.capabilities import (
     CAPABILITY_APPLY_EDITS,
+    CAPABILITY_AUTHORING, CAPABILITY_INLINE_LANGUAGE,
     CAPABILITY_CONVERT,
     CAPABILITY_EVALUATE_SUBJECT,
     CAPABILITY_FEATURE_VALUES,
@@ -538,7 +539,7 @@ class Connection:
             model.raise_for_errors()
         return model
     
-    def load_from_content(self, content, strict=False):
+    def load_from_content(self, content, strict=False, language=None):
         """Load a model from inline SysML content.
         
         Args:
@@ -551,7 +552,15 @@ class Connection:
         Raises:
             ModelError: If strict and the model has error diagnostics
         """
-        request = sysml_pb2.ParseFileRequest(content=content)
+        if language is not None:
+            require(
+                self.server_info(),
+                CAPABILITY_INLINE_LANGUAGE,
+                upgrade_remedy(CAPABILITY_INLINE_LANGUAGE),
+            )
+            if language not in ("sysml", "kerml"):
+                raise ValueError("language must be 'sysml' or 'kerml'")
+        request = sysml_pb2.ParseFileRequest(content=content, language=language or "")
         with translate_rpc_errors():
             response = self._stub.ParseFile(request)
         model = Model(response, self)
@@ -687,23 +696,42 @@ class Connection:
             MissingCapabilityError: If the service cannot apply edits
             ModelNotFoundError: If the model is no longer cached
         """
-        require(
-            self.server_info(),
-            CAPABILITY_APPLY_EDITS,
-            upgrade_remedy(CAPABILITY_APPLY_EDITS),
-        )
+        info = self.server_info()
+        require(info, CAPABILITY_APPLY_EDITS, upgrade_remedy(CAPABILITY_APPLY_EDITS))
         request = sysml_pb2.ApplyEditsRequest(model_hash=model_hash)
-        for kind, target, text in operations:
+        for operation_data in operations:
             operation = request.operations.add()
+            kind = operation_data[0]
             if kind == 'set_value':
+                _, target, text = operation_data
                 operation.set_value.target = target
                 operation.set_value.value = text
             elif kind == 'rename':
+                _, target, text = operation_data
                 operation.rename.target = target
                 operation.rename.new_name = text
+            elif kind == 'add_member':
+                if len(operation_data) != 8:
+                    raise ValueError(
+                        f"unknown edit operation {kind!r}: malformed add_member operation"
+                    )
+                _, owner, member_kind, name, type_name, multiplicity, value, specializes = operation_data
+                require(info, CAPABILITY_AUTHORING, upgrade_remedy(CAPABILITY_AUTHORING))
+                add = operation.add_member
+                add.owner, add.kind, add.name = owner, member_kind, name
+                add.type, add.multiplicity, add.value = type_name, multiplicity, value
+                add.specializes.extend(specializes)
+            elif kind == 'delete':
+                if len(operation_data) != 3 or not isinstance(operation_data[2], bool):
+                    raise ValueError(
+                        f"unknown edit operation {kind!r}: malformed delete operation"
+                    )
+                _, target, cascade = operation_data
+                require(info, CAPABILITY_AUTHORING, upgrade_remedy(CAPABILITY_AUTHORING))
+                operation.delete.target, operation.delete.cascade = target, cascade
             else:
                 raise ValueError(
-                    f"unknown edit operation {kind!r}: expected 'set_value' or 'rename'"
+                    f"unknown edit operation {kind!r}: expected set_value, rename, add_member or delete"
                 )
 
         with translate_rpc_errors():

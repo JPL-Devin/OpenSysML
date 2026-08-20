@@ -27,6 +27,11 @@ class EditFailure(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     EDIT_FAILURE_RENAME_REFERENCED: _ClassVar[EditFailure]
     EDIT_FAILURE_OVERLAPPING_EDITS: _ClassVar[EditFailure]
     EDIT_FAILURE_RESULT_INVALID: _ClassVar[EditFailure]
+    EDIT_FAILURE_OWNER_UNKNOWN: _ClassVar[EditFailure]
+    EDIT_FAILURE_OWNER_NOT_NAMESPACE: _ClassVar[EditFailure]
+    EDIT_FAILURE_ILLEGAL_KIND: _ClassVar[EditFailure]
+    EDIT_FAILURE_MEMBER_NAME_TAKEN: _ClassVar[EditFailure]
+    EDIT_FAILURE_DELETE_REFERENCED: _ClassVar[EditFailure]
 
 class PrimitiveOperator(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -55,6 +60,11 @@ EDIT_FAILURE_NOT_NAMED: EditFailure
 EDIT_FAILURE_RENAME_REFERENCED: EditFailure
 EDIT_FAILURE_OVERLAPPING_EDITS: EditFailure
 EDIT_FAILURE_RESULT_INVALID: EditFailure
+EDIT_FAILURE_OWNER_UNKNOWN: EditFailure
+EDIT_FAILURE_OWNER_NOT_NAMESPACE: EditFailure
+EDIT_FAILURE_ILLEGAL_KIND: EditFailure
+EDIT_FAILURE_MEMBER_NAME_TAKEN: EditFailure
+EDIT_FAILURE_DELETE_REFERENCED: EditFailure
 PRIMITIVE_OPERATOR_UNSPECIFIED: PrimitiveOperator
 PRIMITIVE_OPERATOR_EQUAL: PrimitiveOperator
 PRIMITIVE_OPERATOR_GREATER: PrimitiveOperator
@@ -184,14 +194,16 @@ class CalcOutput(_message.Message):
     def __init__(self, name: _Optional[str] = ..., value: _Optional[_Union[Value, _Mapping]] = ...) -> None: ...
 
 class ParseFileRequest(_message.Message):
-    __slots__ = ("file_path", "content", "content_hash")
+    __slots__ = ("file_path", "content", "content_hash", "language")
     FILE_PATH_FIELD_NUMBER: _ClassVar[int]
     CONTENT_FIELD_NUMBER: _ClassVar[int]
     CONTENT_HASH_FIELD_NUMBER: _ClassVar[int]
+    LANGUAGE_FIELD_NUMBER: _ClassVar[int]
     file_path: str
     content: str
     content_hash: str
-    def __init__(self, file_path: _Optional[str] = ..., content: _Optional[str] = ..., content_hash: _Optional[str] = ...) -> None: ...
+    language: str
+    def __init__(self, file_path: _Optional[str] = ..., content: _Optional[str] = ..., content_hash: _Optional[str] = ..., language: _Optional[str] = ...) -> None: ...
 
 class ParseFileResponse(_message.Message):
     __slots__ = ("model_hash", "root", "diagnostics", "error")
@@ -414,12 +426,42 @@ class ApplyEditsRequest(_message.Message):
     def __init__(self, model_hash: _Optional[str] = ..., operations: _Optional[_Iterable[_Union[EditOperation, _Mapping]]] = ...) -> None: ...
 
 class EditOperation(_message.Message):
-    __slots__ = ("set_value", "rename")
+    __slots__ = ("set_value", "rename", "add_member", "delete")
     SET_VALUE_FIELD_NUMBER: _ClassVar[int]
     RENAME_FIELD_NUMBER: _ClassVar[int]
+    ADD_MEMBER_FIELD_NUMBER: _ClassVar[int]
+    DELETE_FIELD_NUMBER: _ClassVar[int]
     set_value: SetValueEdit
     rename: RenameEdit
-    def __init__(self, set_value: _Optional[_Union[SetValueEdit, _Mapping]] = ..., rename: _Optional[_Union[RenameEdit, _Mapping]] = ...) -> None: ...
+    add_member: AddMemberEdit
+    delete: DeleteEdit
+    def __init__(self, set_value: _Optional[_Union[SetValueEdit, _Mapping]] = ..., rename: _Optional[_Union[RenameEdit, _Mapping]] = ..., add_member: _Optional[_Union[AddMemberEdit, _Mapping]] = ..., delete: _Optional[_Union[DeleteEdit, _Mapping]] = ...) -> None: ...
+
+class AddMemberEdit(_message.Message):
+    __slots__ = ("owner", "kind", "name", "type", "multiplicity", "value", "specializes")
+    OWNER_FIELD_NUMBER: _ClassVar[int]
+    KIND_FIELD_NUMBER: _ClassVar[int]
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    TYPE_FIELD_NUMBER: _ClassVar[int]
+    MULTIPLICITY_FIELD_NUMBER: _ClassVar[int]
+    VALUE_FIELD_NUMBER: _ClassVar[int]
+    SPECIALIZES_FIELD_NUMBER: _ClassVar[int]
+    owner: str
+    kind: str
+    name: str
+    type: str
+    multiplicity: str
+    value: str
+    specializes: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, owner: _Optional[str] = ..., kind: _Optional[str] = ..., name: _Optional[str] = ..., type: _Optional[str] = ..., multiplicity: _Optional[str] = ..., value: _Optional[str] = ..., specializes: _Optional[_Iterable[str]] = ...) -> None: ...
+
+class DeleteEdit(_message.Message):
+    __slots__ = ("target", "cascade")
+    TARGET_FIELD_NUMBER: _ClassVar[int]
+    CASCADE_FIELD_NUMBER: _ClassVar[int]
+    target: str
+    cascade: bool
+    def __init__(self, target: _Optional[str] = ..., cascade: _Optional[bool] = ...) -> None: ...
 
 class SetValueEdit(_message.Message):
     __slots__ = ("target", "value")

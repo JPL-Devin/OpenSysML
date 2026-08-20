@@ -25,6 +25,10 @@ const (
 	OpSetValue OpKind = iota
 	// OpRename rewrites the name token of a declaration.
 	OpRename
+	// OpAddMember inserts a declaration into a namespace.
+	OpAddMember
+	// OpDelete removes a declaration and its owned trivia.
+	OpDelete
 )
 
 // Operation is one change to make to a model's source.
@@ -36,6 +40,15 @@ type Operation struct {
 	Value string
 	// NewName is the new declared name, for OpRename.
 	NewName string
+	// Owner is the namespace receiving an OpAddMember; empty means the root.
+	Owner string
+	// Declaration details for OpAddMember.
+	MemberKind   string
+	MemberName   string
+	Type         string
+	Multiplicity string
+	Specializes  []string
+	Cascade      bool
 }
 
 // SetValue is an operation setting target's value to the expression value.
@@ -46,6 +59,16 @@ func SetValue(target, value string) Operation {
 // Rename is an operation rewriting target's declared name to newName.
 func Rename(target, newName string) Operation {
 	return Operation{Kind: OpRename, Target: target, NewName: newName}
+}
+
+// AddMember creates an operation inserting a declaration into owner.
+func AddMember(owner, kind, name string) Operation {
+	return Operation{Kind: OpAddMember, Owner: owner, MemberKind: kind, MemberName: name}
+}
+
+// Delete creates an operation removing target, optionally including referrers.
+func Delete(target string, cascade bool) Operation {
+	return Operation{Kind: OpDelete, Target: target, Cascade: cascade}
 }
 
 // Model is a parsed model to edit: the source that was read, its parse, and the
@@ -90,9 +113,78 @@ func Apply(m Model, ops []Operation) (*Result, error) {
 	if len(ops) == 0 {
 		return nil, &Error{Failure: FailureNoOperations, Message: "no edit operations requested"}
 	}
+	if !needsSequential(ops) {
+		return applyBatch(m, ops)
+	}
 
+	current := m
+	content := append([]byte(nil), m.Source.Bytes()...)
+	applied := make([]Applied, 0, len(ops))
+	for i, op := range ops {
+		var splices []splice
+		if op.Kind == OpDelete {
+			deletes, err := current.deleteSplices(i, op)
+			if err != nil {
+				return nil, err
+			}
+			splices = deletes
+		} else {
+			sp, err := current.spliceFor(i, op)
+			if err != nil {
+				return nil, err
+			}
+			splices = []splice{sp}
+		}
+		if err := checkOverlap(splices); err != nil {
+			return nil, err
+		}
+		next := current.splice(splices)
+		for _, sp := range splices {
+			applied = append(applied, Applied{
+				OperationIndex: sp.opIndex,
+				Target:         sp.target,
+				Span:           sp.span,
+				OldText:        current.Source.Text(sp.span),
+				NewText:        sp.text,
+			})
+		}
+		content = next
+		var err error
+		current, err = reparseModel(m, content)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if err := m.validate(content); err != nil {
+		return nil, err
+	}
+	return &Result{Content: content, Applied: applied}, nil
+}
+
+func needsSequential(ops []Operation) bool {
+	addSeen := false
+	for _, op := range ops {
+		if op.Kind == OpAddMember {
+			if addSeen && op.Owner != "" {
+				return true
+			}
+			addSeen = true
+		}
+	}
+	return false
+}
+
+func applyBatch(m Model, ops []Operation) (*Result, error) {
 	splices := make([]splice, 0, len(ops))
 	for i, op := range ops {
+		if op.Kind == OpDelete {
+			deletes, err := m.deleteSplices(i, op)
+			if err != nil {
+				return nil, err
+			}
+			splices = append(splices, deletes...)
+			continue
+		}
 		sp, err := m.spliceFor(i, op)
 		if err != nil {
 			return nil, err
@@ -102,12 +194,10 @@ func Apply(m Model, ops []Operation) (*Result, error) {
 	if err := checkOverlap(splices); err != nil {
 		return nil, err
 	}
-
 	content := m.splice(splices)
 	if err := m.validate(content); err != nil {
 		return nil, err
 	}
-
 	applied := make([]Applied, len(splices))
 	for i, sp := range splices {
 		applied[i] = Applied{
@@ -121,6 +211,29 @@ func Apply(m Model, ops []Operation) (*Result, error) {
 	return &Result{Content: content, Applied: applied}, nil
 }
 
+func reparseModel(base Model, content []byte) (Model, error) {
+	sf := source.NewWithKind(base.Source.Name(), content, base.Source.Kind())
+	p := parser.New(sf)
+	root := p.ParseFile()
+	var idx *symbols.Index
+	if base.NewIndex != nil {
+		idx = base.NewIndex()
+		idx.AddDocument(sf.Name(), root)
+	} else {
+		idx = symbols.NewIndex()
+		idx.AddDocument(sf.Name(), root)
+	}
+	var semDiags []passes.Diagnostic
+	if len(p.Diagnostics) == 0 {
+		semDiags = passes.AnalyzeWithKind(sf.Name(), sf.Kind(), root, nil, idx)
+	}
+	return Model{
+		Source: sf, Root: root, Index: idx,
+		ParseDiags: p.Diagnostics, SemDiags: semDiags,
+		NewIndex: base.NewIndex,
+	}, nil
+}
+
 // splice is one byte range of the original source to replace with text.
 type splice struct {
 	span    source.Span
@@ -131,6 +244,9 @@ type splice struct {
 
 // spliceFor turns one operation into the byte range it rewrites.
 func (m Model) spliceFor(i int, op Operation) (splice, error) {
+	if op.Kind == OpAddMember {
+		return m.addMemberSplice(i, op)
+	}
 	sym, err := m.target(i, op)
 	if err != nil {
 		return splice{}, err
@@ -140,6 +256,16 @@ func (m Model) spliceFor(i int, op Operation) (splice, error) {
 		return m.valueSplice(i, op, sym)
 	case OpRename:
 		return m.renameSplice(i, op, sym)
+	case OpDelete:
+		deletes, err := m.deleteSplices(i, op)
+		if err != nil {
+			return splice{}, err
+		}
+		if len(deletes) == 0 {
+			return splice{}, &Error{Failure: FailureResultInvalid, OperationIndex: i,
+				Message: "delete selected no declaration"}
+		}
+		return deletes[0], nil
 	default:
 		return splice{}, &Error{
 			Failure:        FailureResultInvalid,
@@ -155,7 +281,12 @@ func (m Model) splice(splices []splice) []byte {
 	ordered := make([]splice, len(splices))
 	copy(ordered, splices)
 	sort.SliceStable(ordered, func(a, b int) bool {
-		return ordered[a].span.Offset > ordered[b].span.Offset
+		if ordered[a].span.Offset != ordered[b].span.Offset {
+			return ordered[a].span.Offset > ordered[b].span.Offset
+		}
+		// At one insertion point, apply later requests first so the result
+		// retains request order.
+		return ordered[a].opIndex > ordered[b].opIndex
 	})
 
 	src := m.Source.Bytes()
@@ -171,9 +302,7 @@ func (m Model) splice(splices []splice) []byte {
 	return out
 }
 
-// checkOverlap refuses edits covering the same bytes, which no order of
-// application can satisfy. Two insertions at one offset overlap as well: their
-// result would depend on the order they happened to be applied in.
+// checkOverlap refuses edits covering the same non-empty source bytes.
 func checkOverlap(splices []splice) error {
 	ordered := make([]splice, len(splices))
 	copy(ordered, splices)
@@ -182,7 +311,7 @@ func checkOverlap(splices []splice) error {
 	})
 	for i := 1; i < len(ordered); i++ {
 		prev, cur := ordered[i-1], ordered[i]
-		if cur.span.Offset < prev.span.End() || (cur.span.Offset == prev.span.Offset && prev.span.Len == 0) {
+		if cur.span.Offset < prev.span.End() && (cur.span.Len > 0 || prev.span.Len > 0) {
 			return &Error{
 				Failure:        FailureOverlappingEdits,
 				OperationIndex: cur.opIndex,

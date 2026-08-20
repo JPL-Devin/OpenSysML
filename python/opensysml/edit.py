@@ -12,6 +12,7 @@ Renaming rewrites the declaration's name token only and is refused for an elemen
 that is referenced — see :class:`~opensysml.errors.RenameReferencedError`.
 """
 
+import builtins
 from dataclasses import dataclass, field
 from typing import List
 
@@ -25,6 +26,8 @@ from opensysml.errors import (
     NoEditsError,
     OverlappingEditsError,
     RenameReferencedError,
+    OwnerNotFoundError, OwnerNotNamespaceError, IllegalMemberKindError,
+    MemberNameTakenError, DeleteReferencedError,
 )
 
 #: Refusal kinds, as the wire enum names them, and the error each raises. A kind
@@ -41,6 +44,11 @@ _FAILURE_ERRORS = {
     "EDIT_FAILURE_RENAME_REFERENCED": RenameReferencedError,
     "EDIT_FAILURE_OVERLAPPING_EDITS": OverlappingEditsError,
     "EDIT_FAILURE_RESULT_INVALID": EditResultError,
+    "EDIT_FAILURE_OWNER_UNKNOWN": OwnerNotFoundError,
+    "EDIT_FAILURE_OWNER_NOT_NAMESPACE": OwnerNotNamespaceError,
+    "EDIT_FAILURE_ILLEGAL_KIND": IllegalMemberKindError,
+    "EDIT_FAILURE_MEMBER_NAME_TAKEN": MemberNameTakenError,
+    "EDIT_FAILURE_DELETE_REFERENCED": DeleteReferencedError,
 }
 
 
@@ -234,6 +242,33 @@ class Editor:
         self._add(("rename", _target_id(target), new_name))
         return self
 
+    def add_member(self, owner, kind, name, type=None, multiplicity=None,
+                   value=None, specializes=None):
+        """Add one declaration, using strings for all SysML/KerML notation."""
+        for label, text in (("kind", kind), ("name", name), ("type", type),
+                            ("multiplicity", multiplicity), ("value", value)):
+            if text is not None and not isinstance(text, str):
+                raise TypeError(f"{label} must be notation text, not {builtins.type(text).__name__}")
+        if not isinstance(owner, str) and not hasattr(owner, "id"):
+            owner = _target_id(owner)
+        owner = _target_id(owner) if not isinstance(owner, str) else owner
+        if specializes is None:
+            specializes = []
+        if isinstance(specializes, str) or not all(isinstance(x, str) for x in specializes):
+            raise TypeError("specializes must be a sequence of notation strings")
+        self._add(("add_member", owner, kind, name, type or "", multiplicity or "",
+                   value or "", list(specializes)))
+        return self
+
+    def _add_kind(self, kind, owner, name, **kwargs):
+        return self.add_member(owner, kind, name, **kwargs)
+
+    def delete(self, target, cascade=False):
+        if not isinstance(cascade, bool):
+            raise TypeError("cascade must be bool")
+        self._add(("delete", _target_id(target), cascade))
+        return self
+
     def apply(self):
         """Have the service perform these operations and return the edited model.
 
@@ -258,7 +293,7 @@ class Editor:
             )
         if not self._operations:
             raise NoEditsError(
-                "this editor has no operations: add a set_value or rename before "
+                "this editor has no operations: add an edit before "
                 "applying it",
                 failure="EDIT_FAILURE_NO_OPERATIONS",
             )
@@ -279,6 +314,22 @@ class Editor:
             f"Editor(model_hash={self._model_hash!r}, "
             f"operations={len(self._operations)}, applied={self._applied})"
         )
+
+def _member_helper(kind):
+    def helper(self, owner, name, **kwargs):
+        return self._add_kind(kind, owner, name, **kwargs)
+    return helper
+
+
+for _kind_name in (
+    "package", "part_def", "part", "attribute_def", "attribute", "item_def",
+    "item", "port_def", "port", "class", "struct", "datatype", "classifier",
+    "feature", "assoc", "behavior", "function", "predicate", "interaction",
+    "metaclass", "calc_def", "calc",
+):
+    setattr(Editor, "add_" + _kind_name,
+            _member_helper(_kind_name.replace("_", " ")))
+
 
 
 def _target_id(target):

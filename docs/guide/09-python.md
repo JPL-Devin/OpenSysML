@@ -478,6 +478,18 @@ reports it) or a `Symbol` itself, so an element found by a read is edited by
 handing it back. Both calls return the editor, so operations chain, and `len(edit)`
 counts them.
 
+The same editor authors declarations:
+
+```python
+model = opensysml.loads("package Demo {}", strict=True)
+result = model.edit().add_part_def("", "Vehicle").apply()
+```
+
+`add_member(owner, kind, name, type=None, multiplicity=None, value=None,
+specializes=None)` accepts notation strings for the declaration. Typed
+`add_*` helpers cover the common SysML and KerML kinds, and
+`delete(target, cascade=False)` removes declarations transactionally.
+
 `apply()` sends the operations in one call and returns an `EditResult`, which *is*
 a `Conversion`: `str(result)` is the edited notation, `result.save(path)` and
 `result.write(path)` write it. `result.applied` lists what changed, as

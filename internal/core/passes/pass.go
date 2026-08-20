@@ -4,6 +4,7 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -47,6 +48,7 @@ type Pass interface {
 // import the parser, so these enter here).
 type Context struct {
 	Name             string
+	Kind             source.Kind
 	Index            *symbols.Index
 	ParseDiagnostics []Diagnostic
 
@@ -56,7 +58,13 @@ type Context struct {
 
 // NewContext builds a Context for a document.
 func NewContext(name string, idx *symbols.Index, parseDiags []Diagnostic) *Context {
-	return &Context{Name: name, Index: idx, ParseDiagnostics: parseDiags}
+	return NewContextWithKind(name, source.KindOf(name), idx, parseDiags)
+}
+
+// NewContextWithKind builds a context with an explicit source language.
+func NewContextWithKind(name string, kind source.Kind, idx *symbols.Index,
+	parseDiags []Diagnostic) *Context {
+	return &Context{Name: name, Kind: kind, Index: idx, ParseDiagnostics: parseDiags}
 }
 
 // Resolver returns the shared resolver for this context, creating it on first

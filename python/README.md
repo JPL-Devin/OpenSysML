@@ -28,6 +28,16 @@ model.verify_satisfaction()                        # every assert satisfy … by
 model.save("model.ttl")                            # RDF Turtle (experimental)
 ```
 
+Declarations can be authored from notation strings while preserving the
+untouched source:
+
+```python
+model.edit().add_part_def("", "Vehicle").apply()
+model.edit().add_part("Vehicle", "engine", type="Engine").apply()
+```
+
+Use `opensysml.loads(text, language="kerml")` for inline KerML content.
+
 Every call goes through the `sysml-grpc` service, which `opensysml` starts for you from
 `~/.opensysml/bin/sysml-grpc`; the guide below says how to put it there.
 
