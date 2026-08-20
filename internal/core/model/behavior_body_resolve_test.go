@@ -46,11 +46,11 @@ func TestBehaviorBodyReferencesAreResolved(t *testing.T) {
 		{"requirement assumption", `package P { requirement r { assume zzz > 1; } }`},
 		{"requirement condition", `package P { requirement r { require zzz > 1; } }`},
 		{"action assignment value", `package P {
-			import ScalarValues::*;
+			private import ScalarValues::*;
 			action a { attribute v : Integer = 0; assign v := zzz; }
 		}`},
 		{"state entry action", `package P {
-			import ScalarValues::*;
+			private import ScalarValues::*;
 			state S {
 				attribute v : Integer = 0;
 				initial i;
@@ -59,7 +59,7 @@ func TestBehaviorBodyReferencesAreResolved(t *testing.T) {
 			}
 		}`},
 		{"state do action", `package P {
-			import ScalarValues::*;
+			private import ScalarValues::*;
 			state S {
 				attribute v : Integer = 0;
 				initial i;
@@ -68,7 +68,7 @@ func TestBehaviorBodyReferencesAreResolved(t *testing.T) {
 			}
 		}`},
 		{"state exit action", `package P {
-			import ScalarValues::*;
+			private import ScalarValues::*;
 			state S {
 				attribute v : Integer = 0;
 				initial i;
@@ -80,7 +80,7 @@ func TestBehaviorBodyReferencesAreResolved(t *testing.T) {
 			state S { initial i; state a; state b; i then a; transition a to b if zzz; }
 		}`},
 		{"transition effect", `package P {
-			import ScalarValues::*;
+			private import ScalarValues::*;
 			state S {
 				attribute v : Integer = 0;
 				initial i; state a; state b; i then a;
@@ -141,7 +141,7 @@ func TestBehaviorDeclarationsAreVisible(t *testing.T) {
 			}
 		}`},
 		{"region body reads outer feature", `package P {
-			import ScalarValues::*;
+			private import ScalarValues::*;
 			state S {
 				attribute v : Integer = 0;
 				region r { initial s; state x { entry { assign v := 1; } } then s x; }
@@ -163,7 +163,7 @@ func TestBehaviorDeclarationsAreVisible(t *testing.T) {
 			state S { initial i; state a; state b; i then a; transition a to b accept setSpeed(value) if value > 0; }
 		}`},
 		{"call trigger parameter in effect", `package P {
-			import ScalarValues::*;
+			private import ScalarValues::*;
 			state S {
 				attribute v : Integer = 0;
 				initial i; state b; i then a;
@@ -171,7 +171,7 @@ func TestBehaviorDeclarationsAreVisible(t *testing.T) {
 			}
 		}`},
 		{"accept payload in effect and guard", `package P {
-			import ScalarValues::*;
+			private import ScalarValues::*;
 			item def Warning;
 			state S {
 				attribute level : Integer = 0;
@@ -180,7 +180,7 @@ func TestBehaviorDeclarationsAreVisible(t *testing.T) {
 			}
 		}`},
 		{"action accept trigger names", `package P {
-			import ScalarValues::*;
+			private import ScalarValues::*;
 			action A {
 				attribute maxTemp : Integer = 100;
 				attribute temp : Integer = 0;
@@ -192,7 +192,7 @@ func TestBehaviorDeclarationsAreVisible(t *testing.T) {
 			}
 		}`},
 		{"named transition trigger parameters", `package P {
-			import ScalarValues::*;
+			private import ScalarValues::*;
 			item def Warning;
 			state S {
 				attribute level : Integer = 0;
@@ -202,12 +202,12 @@ func TestBehaviorDeclarationsAreVisible(t *testing.T) {
 			}
 		}`},
 		{"requirement actor binding", `package P {
-			import ScalarValues::*;
+			private import ScalarValues::*;
 			attribute userId : Integer = 42;
 			requirement U { actor user = userId; require user > 0; }
 		}`},
 		{"requirement subject", `package P {
-			import ScalarValues::*;
+			private import ScalarValues::*;
 			part def Vehicle { attribute speed : Integer = 0; }
 			requirement R { subject v : Vehicle; require v.speed > 0; }
 		}`},
@@ -227,7 +227,7 @@ func TestBehaviorDeclarationsAreVisible(t *testing.T) {
 // else, so a recursive import of the state does not bring them into scope.
 func TestTriggerParametersDoNotEscapeTheirTransition(t *testing.T) {
 	src := `package P {
-		import ScalarValues::*;
+		private import ScalarValues::*;
 		item def Warning;
 		state S {
 			attribute level : Integer = 0;
@@ -237,7 +237,7 @@ func TestTriggerParametersDoNotEscapeTheirTransition(t *testing.T) {
 		}
 	}
 	package Q {
-		import P::S::**;
+		private import P::S::**;
 		attribute payload = w;
 		attribute speed = value;
 	}`

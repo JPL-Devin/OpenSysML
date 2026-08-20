@@ -1,5 +1,5 @@
 package test {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 
 	// A named action body parameter is still the loop's body: the name only scopes
 	// the members it declares, so the loop runs instead of failing as unsupported.

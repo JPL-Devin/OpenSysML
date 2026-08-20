@@ -1,5 +1,5 @@
 package test {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 
 	// The reader is declared before the accept node that binds the payload and
 	// runs after it: a body's feature space is not ordered by declaration

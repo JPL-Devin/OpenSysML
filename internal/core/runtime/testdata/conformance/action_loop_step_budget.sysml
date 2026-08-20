@@ -1,5 +1,5 @@
 package test {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 
 	// A loop whose condition never fails ends the execution with the step
 	// budget's diagnostic instead of running forever.

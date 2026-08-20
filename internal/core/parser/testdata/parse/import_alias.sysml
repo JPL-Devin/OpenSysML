@@ -1,4 +1,4 @@
-import ScalarValues::Real;
+private import ScalarValues::Real;
 alias Distance for Real;
 
 part def Engine {

@@ -1,7 +1,7 @@
 package P {
 	public import A::B::*;
 	private import C::D;
-	import E::**;
+	private import E::**;
 	namespace N {
 		alias X for P::Q;
 	}

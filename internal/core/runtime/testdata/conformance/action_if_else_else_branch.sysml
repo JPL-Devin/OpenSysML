@@ -1,5 +1,5 @@
 package test {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 
 	// The same conditional with a condition that fails takes the else branch.
 	action decide {

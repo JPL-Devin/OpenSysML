@@ -1,5 +1,5 @@
 package OrthogonalRegionsDemo {
-    import ScalarValues::*;
+    private import ScalarValues::*;
     
     // Demonstrates concurrent orthogonal regions in state machines
     // Each region executes independently and processes events in parallel

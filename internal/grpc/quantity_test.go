@@ -17,7 +17,7 @@ import (
 // compound unit, and one inside a nested part.
 const quantityModel = `
 package P {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 
 	part def Engine {
 		attribute power : ISQ::PowerValue = 300.0 [SI::W];
@@ -362,7 +362,7 @@ func TestQuantityAsAnActionInput(t *testing.T) {
 	srv := mustNewService(t, 4)
 	content := `
 package A {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 
 	action heavier {
 		attribute mass : ISQ::MassValue = 1.0 [SI::kg];
@@ -430,7 +430,7 @@ func TestQuantityInVerdict(t *testing.T) {
 	srv := mustNewService(t, 4)
 	content := `
 package V {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 
 	part def Car {
 		attribute mass : ISQ::MassValue = 2500.0 [SI::kg];

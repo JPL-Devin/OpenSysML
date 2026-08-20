@@ -24,8 +24,8 @@ func findBodyScopes(scope *Scope) []*Scope {
 // scope rather than one built on the side.
 func TestBuildLinksBodyExpressionScopes(t *testing.T) {
 	src := `package P {
-	import ScalarValues::*;
-	import ControlFunctions::*;
+	private import ScalarValues::*;
+	private import ControlFunctions::*;
 	action def Sample {
 		in attribute samples : Real[*];
 		assert constraint { samples->forAll { in s : Real; s > 0 } }
@@ -54,8 +54,8 @@ func TestBuildLinksBodyExpressionScopes(t *testing.T) {
 // Nested bodies nest their scopes, so an inner parameter shadows an outer one.
 func TestBuildNestsBodyExpressionScopes(t *testing.T) {
 	root := build(t, `package P {
-	import ScalarValues::*;
-	import ControlFunctions::*;
+	private import ScalarValues::*;
+	private import ControlFunctions::*;
 	action def Sample {
 		in attribute samples : Real[*];
 		assert constraint { samples->forAll { in s : Real; samples->exists { in s : Real; s > 0 } } }
@@ -80,8 +80,8 @@ func TestBuildNestsBodyExpressionScopes(t *testing.T) {
 // and its result resolves in the enclosing scope.
 func TestBodyExprScopeWithoutParameters(t *testing.T) {
 	root := build(t, `package P {
-	import ScalarValues::*;
-	import ControlFunctions::*;
+	private import ScalarValues::*;
+	private import ControlFunctions::*;
 	action def Sample {
 		in attribute samples : Real[*];
 		assert constraint { samples->forAll { samples > 0 } }

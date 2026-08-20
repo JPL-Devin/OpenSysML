@@ -17,7 +17,7 @@ import (
 
 const (
 	libSource  = "package Lib {\n    part def Widget;\n}\n"
-	mainSource = "package Main {\n    import Lib::*;\n    part w : Widget;\n}\n"
+	mainSource = "package Main {\n    private import Lib::*;\n    part w : Widget;\n}\n"
 )
 
 // multiFileWorkspace writes lib.sysml and main.sysml into a temporary folder and
@@ -157,7 +157,7 @@ func TestWatchedFileCreateAndChangeReindex(t *testing.T) {
 		t.Fatalf("extra.sysml not indexed after a create event")
 	}
 
-	usesGizmo := "package Main {\n    import Extra::*;\n    part g : Gizmo;\n}\n"
+	usesGizmo := "package Main {\n    private import Extra::*;\n    part g : Gizmo;\n}\n"
 	if err := s.DidChange(ctx, &protocol.DidChangeTextDocumentParams{
 		TextDocument: protocol.VersionedTextDocumentIdentifier{
 			TextDocumentIdentifier: protocol.TextDocumentIdentifier{URI: uri.File(main)},
@@ -398,7 +398,7 @@ func TestDidChangeWorkspaceFoldersIndexesAddedFolder(t *testing.T) {
 
 	// main.sysml uses a name declared in a folder added after initialize; the
 	// client's watcher reports changes only, so the folder has to be walked.
-	openFile(t, s, main, "package Main {\n    import Extra::*;\n    part g : Gadget;\n}\n")
+	openFile(t, s, main, "package Main {\n    private import Extra::*;\n    part g : Gadget;\n}\n")
 	if msgs := diagnosticsFor(fc, main); len(msgs) == 0 {
 		t.Fatalf("diagnostics for main = none, want Gadget unresolved before the folder is added")
 	}

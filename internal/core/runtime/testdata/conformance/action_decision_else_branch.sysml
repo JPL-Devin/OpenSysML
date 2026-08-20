@@ -1,5 +1,5 @@
 package test {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 
 	// A decision node in an action flow, with a guarded branch and the `else`
 	// branch the notation writes after it: the else branch is taken because no

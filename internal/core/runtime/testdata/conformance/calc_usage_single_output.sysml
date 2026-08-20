@@ -1,5 +1,5 @@
 package test {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 
 	// One output and no `return`: that output is the calculation's result, so
 	// the calc stays invocable as an expression while the usage's output is

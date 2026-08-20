@@ -9,7 +9,7 @@ func TestSIWildcardImportIntegration(t *testing.T) {
 	ws := NewWorkspace()
 
 	src := `package Test {
-		import SI::*;
+		private import SI::*;
 		attribute mass = 100[kg];
 		attribute length = 50[mm];
 		attribute time = 2[h];
@@ -35,7 +35,7 @@ func TestSIMemberImportIntegration(t *testing.T) {
 	ws := NewWorkspace()
 
 	src := `package Test {
-		import SI::kg;
+		private import SI::kg;
 		attribute mass = 100[kg];
 	}`
 

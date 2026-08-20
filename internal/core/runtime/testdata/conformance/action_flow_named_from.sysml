@@ -1,5 +1,5 @@
 package test {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 
 	// The standard flow spelling: a flow with a name of its own and both ends
 	// written as feature chains, which moves the value one action node produced at

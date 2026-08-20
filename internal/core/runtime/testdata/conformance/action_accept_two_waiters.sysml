@@ -1,5 +1,5 @@
 package test {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 
 	// Two accepts park at once, in parallel branches, and each resumes on the
 	// message of its own type: the String sent first does not resume the

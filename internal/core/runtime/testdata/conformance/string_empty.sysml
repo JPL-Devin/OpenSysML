@@ -1,8 +1,8 @@
 // The empty string is a String like any other: it has no character, concatenates
 // to itself, and a substring selecting no character is it.
 package test {
-	import ScalarValues::*;
-	import StringFunctions::*;
+	private import ScalarValues::*;
+	private import StringFunctions::*;
 
 	calc def emptyIsAString {
 		in blank : String;

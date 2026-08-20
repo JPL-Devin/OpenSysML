@@ -1,9 +1,9 @@
 // A feature default and a carried constraint that compute with library
 // functions, evaluated when the part is instantiated.
 package test {
-	import ScalarValues::*;
-	import RealFunctions::*;
-	import TrigFunctions::*;
+	private import ScalarValues::*;
+	private import RealFunctions::*;
+	private import TrigFunctions::*;
 
 	part def Tank {
 		attribute area = 16.0;

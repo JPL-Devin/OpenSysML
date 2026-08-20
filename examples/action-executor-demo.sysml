@@ -1,5 +1,5 @@
 package ActionExecutorDemo {
-    import ScalarValues::*;
+    private import ScalarValues::*;
 
     // A calculation an action can bind an output from, with no control flow.
     action def SimpleAction {

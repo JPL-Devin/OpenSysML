@@ -52,7 +52,7 @@ func TestWorkspaceCrossFileConverges(t *testing.T) {
 	ws := NewWorkspace()
 	// Two files; b imports a. Diagnostics must be clean once both present.
 	ws.Open("a.sysml", []byte("package Lib { public namespace Widgets; }"), 1)
-	ws.Open("b.sysml", []byte("package App { import Lib::*; alias W for Lib::Widgets; }"), 1)
+	ws.Open("b.sysml", []byte("package App { private import Lib::*; alias W for Lib::Widgets; }"), 1)
 	if d := ws.Diagnostics("b.sysml"); len(d) != 0 {
 		t.Fatalf("cross-file clean: %d diagnostics, want 0: %v", len(d), d)
 	}

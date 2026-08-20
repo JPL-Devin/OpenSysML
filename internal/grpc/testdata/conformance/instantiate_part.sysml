@@ -1,5 +1,5 @@
 package test {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 
 	part def Vehicle {
 		attribute mass : Integer = 1500;

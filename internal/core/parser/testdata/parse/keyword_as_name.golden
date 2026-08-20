@@ -1,7 +1,7 @@
 (RootNamespace
   (Membership visibility="default"
     (Package name="test" library=false standard=false
-      (Import visibility="default" all=false kind=namespace recursive=false imported="ScalarValues" filtered=false)
+      (Import visibility="private" all=false kind=namespace recursive=false imported="ScalarValues" filtered=false)
       (Membership visibility="default"
         (Usage kind="action" name="flow" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (Membership visibility="default"

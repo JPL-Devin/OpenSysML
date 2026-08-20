@@ -1,5 +1,5 @@
 package test {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 
 	// A post-condition loop tests after it iterates, so the body runs once even
 	// though the condition already holds when the loop is entered.

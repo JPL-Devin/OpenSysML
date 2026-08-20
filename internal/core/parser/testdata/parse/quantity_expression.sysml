@@ -1,7 +1,7 @@
 // Quantity expressions and the sequence index, which share a node but not a
 // syntax: `[unit]` pairs a magnitude with a measurement reference, `#(i)` indexes.
 package quantities {
-	import SI::*;
+	private import SI::*;
 
 	attribute maxVerticalSpeed = 1.5 [m/s];
 	attribute descentDistance = 3.0 [km];

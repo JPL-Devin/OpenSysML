@@ -599,7 +599,7 @@ package Nested {
 
 func TestAFileLevelFilteredImportHidesWhatItRejects(t *testing.T) {
 	lib := `package Lib { metadata def Safety; part def Radio; #Safety part def Belt; }`
-	src := `import Lib::*[@Lib::Safety];
+	src := `private import Lib::*[@Lib::Safety];
 part x :> Radio;
 part y :> Belt;`
 	ws := NewWorkspace()
@@ -616,10 +616,10 @@ part y :> Belt;`
 
 func TestARootFilterRestrictsOnlyItsOwnDocument(t *testing.T) {
 	lib := `package Lib { metadata def Safety; part def Radio; #Safety part def Belt; }`
-	filtered := `import Lib::*;
+	filtered := `private import Lib::*;
 filter @Lib::Safety;
 part inA :> Belt;`
-	other := `import Lib::*;
+	other := `private import Lib::*;
 part inB :> Radio;`
 	ws := NewWorkspace()
 	ws.Open("file:///lib.sysml", []byte(lib), 1)
@@ -630,7 +630,7 @@ part inB :> Radio;`
 			t.Fatalf("%s: one document's root filter should not restrict another's imports: %s", doc, d.Message)
 		}
 	}
-	unresolvable := `import Lib::*;
+	unresolvable := `private import Lib::*;
 filter @Lib::Safety;
 part inA :> Radio;`
 	ws.Open("file:///a.sysml", []byte(unresolvable), 2)
@@ -649,7 +649,7 @@ func TestAnImportFilterMayNameAMetadataTypeThatImportSurfaces(t *testing.T) {
 	lib := `package Lib { metadata def Safety; part def Radio; #Safety part def Belt; }`
 	for name, src := range map[string]string{
 		"in a package": `package P { private import Lib::*[@Safety]; part x :> Radio; part y :> Belt; }`,
-		"at the root": `import Lib::*[@Safety];
+		"at the root": `private import Lib::*[@Safety];
 part x :> Radio;
 part y :> Belt;`,
 	} {
@@ -762,7 +762,7 @@ func TestCompletionOffersOnlyAdmittedRootNames(t *testing.T) {
 	part seatBelt { @Safety; }
 	part radio;
 }`), 1)
-	ws.Open("file:///a.sysml", []byte("import Lib::*[@Lib::Safety];\npart x;"), 1)
+	ws.Open("file:///a.sysml", []byte("private import Lib::*[@Lib::Safety];\npart x;"), 1)
 	ws.Open("file:///b.sysml", []byte("part y;"), 1)
 
 	for doc, want := range map[string]map[string]bool{

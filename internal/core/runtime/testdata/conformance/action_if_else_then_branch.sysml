@@ -1,5 +1,5 @@
 package test {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 
 	// The then branch runs and the else branch does not, so only one of the two
 	// assignments is observable.

@@ -1,5 +1,5 @@
 package PseudostatesDemo {
-    import ScalarValues::*;
+    private import ScalarValues::*;
     
     // Demonstrates choice and junction pseudostates for conditional branching
     

@@ -1,5 +1,5 @@
 package test {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 
 	// The post-condition is re-tested after every iteration, so the loop keeps
 	// going until the value it watches reaches the bound.

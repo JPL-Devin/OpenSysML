@@ -120,6 +120,7 @@ elmt:Consumer___400
     sysml:qualifiedName "Consumer::@0" ;
     sysml:owningNamespace elmt:Consumer ;
     sysx:memberIndex "0"^^xsd:integer ;
+    sysml:visibility "private" ;
     sysml:importedNamespace "Quoted Names" ;
     sysx:isNamespaceImport "true"^^xsd:boolean ;
     sysx:hasBody "false"^^xsd:boolean .

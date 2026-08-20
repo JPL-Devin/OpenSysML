@@ -1,11 +1,11 @@
 // Open-MBEE's BallAndChain variant-configuration cost roll-up: an instance
 // package specializes the family and selects a variant per variation point.
 package designModel{
-    import SI::mm;
-    import ScalarValues::Real;
-    import NumericalFunctions::*;
+    public import SI::mm;
+    public import ScalarValues::Real;
+    public import NumericalFunctions::*;
 
-    import partDefinitions::*;
+    public import partDefinitions::*;
 
     package externalSystem{
         attribute def Budget;
@@ -81,8 +81,8 @@ package designModel{
 }
 
 package sharedAssetSuperset {
-    import designModel::*;
-    import partsTree::*;
+    public import designModel::*;
+    public import partsTree::*;
 
     package partsTree{
         // part superset model
@@ -194,7 +194,7 @@ package sharedAssetSuperset {
 
 
 package productAssetInstance {
-    import sharedAssetSuperset::*;
+    public import sharedAssetSuperset::*;
 
     part newBallAndChain :>partsTree::ballAndChainFamily{
         part :>> diamond{

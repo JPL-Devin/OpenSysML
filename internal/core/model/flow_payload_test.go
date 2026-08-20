@@ -8,7 +8,7 @@ func TestFlowPayloadRedefinition(t *testing.T) {
 	ws := NewWorkspace()
 
 	src := `package test {
-		import Flows::*;
+		private import Flows::*;
 		
 		part def Fuel;
 		

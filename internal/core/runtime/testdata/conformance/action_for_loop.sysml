@@ -1,5 +1,5 @@
 package test {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 
 	// A `for` loop runs its body once per element of the sequence it iterates
 	// over, with the element bound to the loop's own variable.

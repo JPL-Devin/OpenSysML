@@ -1,5 +1,5 @@
 package test {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 
 	// A message is typed by what was sent, and an accept takes only the type it
 	// declares. Both messages are addressed to `counter`, and the String is sent

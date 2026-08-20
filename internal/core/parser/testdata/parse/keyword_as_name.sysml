@@ -1,5 +1,5 @@
 package test {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 
 	// A keyword after a kind keyword is the declaration's name.
 	action flow {

@@ -21,7 +21,7 @@ package Kit {
 	private part def Internal;
 }
 package Mid {
-	import Kit::*;
+	public import Kit::*;
 	filter @Critical;
 }`
 
@@ -30,9 +30,9 @@ package Mid {
 const borrowingClient = `private import Kit::*;`
 
 const filteredClient = `package App {
-	import Kit::*[@Critical];
-	import Mid::*;
-	import Kit::Trim;
+	private import Kit::*[@Critical];
+	private import Mid::*;
+	private import Kit::Trim;
 }`
 
 // The elements an import surfaces are the ones a lookup through it reaches, for

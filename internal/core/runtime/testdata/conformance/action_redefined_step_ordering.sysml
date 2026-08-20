@@ -1,5 +1,5 @@
 package test {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 
 	// A step may be written as a redefinition of the one it overrides
 	// (`action redefines bump;`), and answers to the name of what it redefines

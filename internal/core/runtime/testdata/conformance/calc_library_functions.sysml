@@ -1,9 +1,9 @@
 // A calc body that computes with the KerML function library: the built-in
 // implementations of sqrt and sin, and the ** operator.
 package test {
-	import ScalarValues::*;
-	import RealFunctions::*;
-	import TrigFunctions::*;
+	private import ScalarValues::*;
+	private import RealFunctions::*;
+	private import TrigFunctions::*;
 
 	calc def diagonalGain {
 		in x : Real;

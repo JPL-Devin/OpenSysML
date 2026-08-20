@@ -1,5 +1,5 @@
 package test {
-	import ScalarValues::*;
+	private import ScalarValues::*;
 
 	// `accept when <condition>` waits for a change: the condition is re-tested
 	// every step, and the token leaves the accept the step it holds.
