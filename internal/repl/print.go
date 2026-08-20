@@ -7,6 +7,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/export"
+	"github.com/Open-MBEE/OpenSysML/internal/core/model"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -50,13 +51,16 @@ func (s *Session) printElement(name string) ([]string, bool, error) {
 	if shown == "" {
 		shown = name
 	}
-	doc := s.ws.Document(docName)
-	if doc == nil || sym == nil || sym.Decl == nil || sym.DocName != docName {
+	var doc *model.Document
+	if sym != nil && (sym.DocName == docName || sym.DocName == kermlDocName) {
+		doc = s.ws.Document(sym.DocName)
+	}
+	if doc == nil || sym == nil || sym.Decl == nil {
 		// A symbol the library index answered with is declared in a file this
 		// session never read, or was restored from an index cache holding no tree.
 		return []string{fmt.Sprintf("no notation to print for %s: this session declares it nowhere", shown)}, false, nil
 	}
-	file := source.New(docName, doc.Content)
+	file := source.New(doc.Name, doc.Content)
 	out, syntax, err := export.SysMLElement(file, declarationSpan(sym))
 	if err != nil {
 		if errors.Is(err, export.ErrNoNotation) {
