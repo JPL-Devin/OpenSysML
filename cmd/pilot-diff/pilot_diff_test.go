@@ -39,6 +39,7 @@ func TestCategorizeOpenSysML(t *testing.T) {
 		{"subsetting-multiplicity", "type", "upper bound exceeds subsetted cap", CategoryMultiplicity},
 		{"", "type", "incommensurable units mm and s", CategoryUnits},
 		{"specialization-cycle", "type", "A participates in a specialization cycle", CategoryUnmapped},
+		{"specialization-cycle", "type", "C3 participates in a specialization cycle", CategoryUnmapped},
 	}
 	for _, c := range cases {
 		if got := categorizeOpenSysML(c.code, c.pass, c.message); got != c.want {

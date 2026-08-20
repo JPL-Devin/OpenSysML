@@ -192,7 +192,7 @@ are gone from the three files listed in the movement table above.
 | Files | Diagnostic | Verdict |
 |---|---|---|
 | `passes/errors.sysml:4`, `resolve/errors.sysml:4` | `unresolved reference: Nowhere` | **Ours is right**, and these are negative fixtures where the diagnostic is the point. The pilot is silent only because a bare `import` earlier in the same file broke its parse before it got there (see P1) — a cascade artifact, not a disagreement about `Nowhere`. |
-| `passes/constraints.sysml:2,3` | `A`/`B` `participates in a specialization cycle` (`unmapped`) | **Ours is right**: `part def A specializes B; part def B specializes A;`. The pilot reports nothing for the cycle. Recorded as `unmapped` because no pilot message pattern corresponds; whether the pilot has no such check or suppressed it is not established here. Follow-up F4. |
+| `passes/constraints.sysml:2,3` | `A`/`B` `participates in a specialization cycle` (`unmapped`) | **Ours is right, and the pilot has no such check** — settled by F4, both by reading its validators and by probing it on clean files (see [Specialization cycles](#specialization-cycles-f4)). The silence is not the bare-`import` cascade that silences the `errors.sysml` rows above: the same three cycle shapes in files with nothing else in them are accepted by the pilot with zero diagnostics. A one-sided finding, so it is our extension of the reference rather than a disagreement — kept `unmapped` because no coarse category honestly covers it. |
 | `passes/constraints.sysml:9` | `multiplicity lower bound exceeds upper bound on lo` | **Ours is right**: `part lo [5..2];`. No pilot counterpart. |
 
 ### Severity-only (1)
@@ -234,6 +234,50 @@ Recorded so the categorisation's debt is visible rather than hidden:
 | opensysml | `A participates in a specialization cycle` | 1 |
 | opensysml | `B participates in a specialization cycle` | 1 |
 
+The two cycle rows stay `unmapped` **by adjudication, not by omission** (F4): the finding is
+one-sided, and none of the five coarse categories describes a cycle in the specialization graph
+— it is neither a name that failed to resolve, nor a metaclass used where it is not allowed, nor
+bounds, units or syntax. Inventing a sixth category for a single check would empty the bucket
+without adding a comparison, since the pilot has nothing to put in it.
+
+### Specialization cycles (F4)
+
+The question was whether the pilot is silent because it has no cycle check or because our
+harness never got the question asked. Evidence, in the pinned release `2026-05`
+(`jupyter-sysml-kernel` 0.60.1):
+
+- **The validators have no such check.** `KerMLValidator.checkSpecialization(Specialization)`
+  ([`KerMLValidator.xtend:531-537`](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/blob/2026-05/org.omg.kerml.xtext/src/org/omg/kerml/xtext/validation/KerMLValidator.xtend#L531-L537),
+  tag `2026-05`, commit `fa709f28`) implements exactly one constraint,
+  `validateSpecializationSpecificNotConjugated`. Across `KerMLValidator` and `SysMLValidator` in
+  the pinned jar, 219 diagnostic message constants mention no cycle, circularity or recursion.
+  The pilot *does* check self-reference elsewhere — `Type cannot union with itself`,
+  `... intersect ...`, `... difference ...`, `Feature cannot have itself in a feature chain` —
+  so the absence for specialization is a gap in the checks, not in the idiom.
+- **The normative model shipped with the pilot names nine `validate*Specialization` constraints**
+  (`org.omg.sysml/src/org/omg/sysml/generation/SysML.uml`: binary association/connector,
+  behavior, class, data type, cross-feature, structure, definition- and usage-variation), none
+  about cycles. Circularity appears in that model only as something the *derivation* operations
+  must tolerate (`the closure operation automatically handles circular relationships`), never as
+  something to report; the pilot's scoping does the same, excluding a specialization edge "to
+  avoid possible circular name resolution".
+- **Probed directly**, which is the strongest of the three. Each probe is a package with nothing
+  in it but the cycle, so no parse can fail earlier:
+
+| Probe | Pilot `2026-05` | OpenSysML |
+|---|---|---|
+| [`specialization-cycle-self.sysml`](../../cmd/pilot-diff/testdata/specialization-cycle-self.sysml) (`part def A specializes A;`) | no diagnostics, exit 0 | 1 error, `constraint/specialization-cycle` |
+| [`specialization-cycle-pair.sysml`](../../cmd/pilot-diff/testdata/specialization-cycle-pair.sysml) (`B1` ↔ `B2`) | no diagnostics, exit 0 | 2 errors |
+| [`specialization-cycle-three.sysml`](../../cmd/pilot-diff/testdata/specialization-cycle-three.sysml) (`C1` → `C2` → `C3` → `C1`) | no diagnostics, exit 0 | 3 errors |
+
+That the pilot reports *something* in such a file when there is something to report was checked
+the same way: adding `part p : Nowhere;` to the pair probe makes it emit
+`Couldn't resolve reference to Type 'Nowhere'.` and exit 1. Silence on the cycle is therefore a
+result, not an unreached validation stage.
+
+The probes are part of the `probes` root, so their six only-ours diagnostics will appear the next
+time the baseline is refreshed; the committed baseline and the results table above predate them.
+
 ---
 
 ## The alias case that motivated this
@@ -272,7 +316,7 @@ one.
 | F9 | Contextual keywords are neither highlighted nor completed: the VS Code grammars and the LSP keyword completion are generated from `lexer.Keywords()`, which `point`, `chain`, `on` and `var` are deliberately absent from. `var` is real KerML notation, so a second list of contextual words for those two surfaces would restore it without reserving it. |
 | ~~F2~~ | **Done.** A bare `import` (no visibility) is non-conforming: the pilot's grammars make the indicator mandatory — `fragment ImportPrefix returns SysML::Import : visibility = VisibilityIndicator 'import' ...` with no `?`, unlike the sibling `MemberPrefix` (`KerML.xtext:169-172`, `SysML.xtext:241-244`) — and all 574 imports across the 254 OMG-authored corpus files carry one. Decision: **warn, not error** (`passes/import_visibility.go`, `LevelSyntax`, code `syntax/import-visibility`, spanned on the `import` keyword). The form is unambiguous to parse, so hard-failing would reject existing models over notation; the warning surfaces the non-conformance without gating the higher tiers. `expose` is exempt — the pilot grammar gives it implicit `protected` visibility (`SysML.xtext:2366-2372`). Our own fixtures now write an explicit visibility, with `testdata/passes/import_no_visibility.sysml` kept to lock the warning in. |
 | ~~F3~~ | **Done.** Audited in [conformance-audit.md](../reference/grammar/conformance-audit.md): `namespace` is a literal in `KerML.xtext` only (`:125`) and a `.sysml` root admits package members only (`SysML.xtext:38`), so **both** body forms are the defect, not the semicolon one — the wording in P2 above was wrong. `region`, `choice`, `junction`, the history forms, `entry`/`exit point`, `defer`, and the `initial`/`final`/`decision` spellings have no production either. Decision: **warn, not error**, as F2 did — `passes/nonstandard_notation.go`, `LevelSyntax`, codes `nonstandard-notation` and `kerml-notation`, spanned on the word. The notation stays parsed, so existing models keep working; `namespace` stays silent in `.kerml`, where it is legal. `TestStdlibHasNoNonstandardNotation` locks in that no OMG-authored library file draws either warning. |
-| F4 | Specialization cycles: confirm whether the pilot checks them at all, and categorise the diagnostic (currently `unmapped`). |
+| ~~F4~~ | **Done.** The pilot has no specialization-cycle check at `2026-05`: `KerMLValidator.checkSpecialization` implements only `validateSpecializationSpecificNotConjugated`, no message constant in either validator concerns cycles, and the pilot accepts self-, two- and three-element cycles with zero diagnostics on otherwise-empty probe files. Our diagnostic stays, and stays `unmapped` — the finding is one-sided and no coarse category describes it. See [Specialization cycles (F4)](#specialization-cycles-f4). |
 | F5 | Read the P6 pilot checks (accessible-feature, flow-end, model-level-evaluable, behavior-invocation) file by file; each is a candidate gap in our constraint tier. |
 | F6 | Build `Fabi303/sysmlv2tool` (needs a Tycho-capable Maven) and re-run with true single-batch loading, which would eliminate the P4 artifact and the ordering machinery. |
 | F7 | Add [Sensmetry `syside check`](https://github.com/sensmetry/syside) as an *additional* cross-check. It is a different implementation, not the reference, so it can only corroborate — never adjudicate. |
