@@ -1480,9 +1480,10 @@ worth asserting, with the wording each produces:
   warns and the contrast proves nothing. Delete the sidecar and pick a version the cache is not,
   then assert on the presence/absence of the `Replacing the cached sysml-grpc` `UserWarning`
   (capture it with `warnings.catch_warnings(record=True)`).
-- `CHANGELOG.md` lists `PYSYSML_GRPC_BINARY` among the renamed client variables, but no code reads it
-  (`get_binary_path()` is hard-coded to `~/.pysysml/bin`, as this skill notes) — treat any request to
-  "verify PYSYSML_GRPC_BINARY" as a documentation claim to disprove, not a feature to exercise.
+- `PYSYSML_GRPC_BINARY` is read by no code (`get_binary_path()` is hard-coded to `~/.pysysml/bin`, as
+  this skill notes), which is why `CHANGELOG.md` no longer lists it among the renamed client
+  variables — treat any request to "verify PYSYSML_GRPC_BINARY" as a claim to disprove, not a feature
+  to exercise.
 
 #### Proving a *pinned release digest* really unblocks a download (PR #316)
 
