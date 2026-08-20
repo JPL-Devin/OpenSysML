@@ -89,6 +89,20 @@ messages measured **102** `expected a body member` + **73** `expected a namespac
 (the doc claimed 74 + 64 = 138, so recovery-vs-finding splits in these docs are the claim most
 likely to be stale — always recount).
 
+## Single-file `-validate` is not the harness's loading model
+
+The harness opens each corpus root as **one workspace batch** (import-topologically sorted, see
+`order.go` / `openSysMLDiagnostics` in `opensysml.go`), so a corpus file that imports a sibling
+file — e.g. `Vehicle Example/VehicleIndividuals.sysml`, which does `private import
+VehicleUsages::*` from `VehicleUsages.sysml` in the same directory — reports unresolved-reference
+errors under a bare single-file `bin/sysml -validate <f>` even when the differential shows it
+fully agreeing. Before calling such a file a failure, either pass the sibling files on the same
+`-validate` command line or check the file's entry in `build/pilot-diff/pilot-diff.json`
+(`.roots[].files[]` omits only files both tools are silent on; a fully-agreeing file with shared
+diagnostics is still listed with empty `openSysMLOnly`/`pilotOnly`/`severityMismatch` buckets, so
+treat absence — or all-empty disagreement buckets — as full agreement, confirming by comparing
+against the same file's entry in `docs/project/pilot-differential-baseline.json`).
+
 ## Running a doc's inline reproducers through both tools
 
 Adjudication rows quote a reproducer instead of committing a fixture, so re-derive them:
