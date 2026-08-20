@@ -802,7 +802,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		p.advance() // 'case'
 		if p.atKeyword("def") {
 			p.advance() // 'def'
-			return applyPrefixes(p.parseDefinition(start, ast.DefUseCase, "use case", mods, false))
+			return applyPrefixes(p.parseDefinition(start, ast.DefUseCase, "use case", mods, false, true))
 		}
 		return applyPrefixes(p.parseUsage(start, ast.UsageUseCase, "use case", mods, false))
 	}
@@ -1070,7 +1070,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 	if p.atKeyword("def") {
 		p.advance() // consume 'def'
 		// Use generic definition kind (or could extract from prefix)
-		return applyPrefixes(p.parseDefinition(start, ast.DefClass, "", mods, false))
+		return applyPrefixes(p.parseDefinition(start, ast.DefClass, "", mods, false, true))
 	}
 
 	defKind, ok := definitionKindKeywords[kw]
@@ -1134,7 +1134,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 
 	if p.atKeyword("def") {
 		p.advance() // consume 'def'
-		return applyPrefixes(p.parseDefinition(start, defKind, kindKeyword, mods, isAll))
+		return applyPrefixes(p.parseDefinition(start, defKind, kindKeyword, mods, isAll, true))
 	}
 
 	// Check if this is a definition-only keyword (not in usageKindKeywords)
@@ -1143,7 +1143,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 	_, hasUsageForm := usageKindKeywords[kw]
 	if !hasUsageForm {
 		// Definition-only keyword - parse as definition directly
-		return applyPrefixes(p.parseDefinition(start, defKind, kindKeyword, mods, isAll))
+		return applyPrefixes(p.parseDefinition(start, defKind, kindKeyword, mods, isAll, false))
 	}
 
 	// Note: 'datatype' is treated uniformly as a usage keyword by the parser.
@@ -1159,8 +1159,9 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 
 // parseDefinition parses a definition. keyword is the kind keyword as consumed
 // from the token stream, kept so a synonym spelling can be told from the
-// canonical one.
-func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, keyword string, mods featureMods, isAll bool) *ast.Definition {
+// canonical one. defKeywordConsumed distinguishes SysML <kind> def from
+// KerML classifier declarations, which share DefinitionKind values.
+func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, keyword string, mods featureMods, isAll bool, defKeywordConsumed bool) *ast.Definition {
 	def := &ast.Definition{
 		Kind:        kind,
 		Keyword:     keyword,
@@ -1172,7 +1173,7 @@ func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, keyword str
 		Visibility:  mods.visibility,
 		Ident:       p.parseIdentification(),
 	}
-	if isKerMLClassifierDefinitionKind(kind) && p.at(lexer.LBracket) {
+	if !defKeywordConsumed && isKerMLClassifierDefinitionKeyword(keyword) && p.at(lexer.LBracket) {
 		def.Multiplicity = p.parseMultiplicity()
 	}
 	def.Relationships = p.parseRelationships(false)
@@ -1257,12 +1258,12 @@ func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, keyword str
 	return def
 }
 
-// isKerMLClassifierDefinitionKind identifies definitions using KerML's
+// isKerMLClassifierDefinitionKeyword identifies keyword forms using KerML's
 // ClassifierDeclaration (and the shared TypeDeclaration) multiplicity slot.
-func isKerMLClassifierDefinitionKind(kind ast.DefinitionKind) bool {
-	switch kind {
-	case ast.DefAttribute, ast.DefMetaclass, ast.DefBehavior, ast.DefAssoc,
-		ast.DefStruct, ast.DefClass, ast.DefCalc, ast.DefPredicate:
+func isKerMLClassifierDefinitionKeyword(keyword string) bool {
+	switch keyword {
+	case "classifier", "class", "datatype", "struct", "assoc", "behavior",
+		"function", "predicate", "interaction", "metaclass":
 		return true
 	default:
 		return false

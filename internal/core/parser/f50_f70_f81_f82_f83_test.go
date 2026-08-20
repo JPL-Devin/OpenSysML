@@ -100,6 +100,8 @@ func TestNegativeF50F70F81F82F83AndF62F63(t *testing.T) {
 		{"disjoint", "package P { disjoint from A; }"},
 		{"multiplicity", "package P { classifier B [ specializes A; }"},
 		{"sysml_definition_multiplicity", "package P { part def P [1] :> A; }"},
+		{"sysml_attribute_definition_multiplicity", "package P { attribute def A [1]; }"},
+		{"sysml_calc_definition_multiplicity", "package P { calc def C [1] { return x; } }"},
 		{"exhibit", "package P { part v { exhibit .on { } } }"},
 		{"reference", "package P { part v { ref { } } }"},
 	}
@@ -116,6 +118,35 @@ func TestNegativeF50F70F81F82F83AndF62F63(t *testing.T) {
 			}
 			if len(diags) == 0 {
 				t.Fatal("expected a diagnostic")
+			}
+		})
+	}
+}
+
+func TestF83ClassifierMultiplicitySyntaxBoundary(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+	}{
+		{"classifier", "package P { classifier S [1] specializes A; }"},
+		{"class", "package P { class S [1] specializes A; }"},
+		{"datatype", "package P { datatype S [1] specializes A; }"},
+		{"struct", "package P { struct S [1] specializes A; }"},
+		{"assoc", "package P { assoc S [1] specializes A; }"},
+		{"behavior", "package P { behavior S [1] specializes A; }"},
+		{"function", "package P { function S [1] specializes A; }"},
+		{"predicate", "package P { predicate S [1] specializes A; }"},
+		{"interaction", "package P { interaction S [1] specializes A; }"},
+		{"metaclass", "package P { metaclass S [1] specializes A; }"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root, diags := parseFeatureFix(t, tt.name+".kerml", tt.src)
+			if root == nil {
+				t.Fatal("ParseFile returned nil")
+			}
+			if len(diags) != 0 {
+				t.Fatalf("unexpected diagnostics: %v", diags)
 			}
 		})
 	}
