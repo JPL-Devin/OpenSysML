@@ -1,0 +1,388 @@
+{
+  "pilotTag": "2026-05",
+  "roots": [
+    {
+      "name": "stdlib",
+      "dir": "internal/core/libs/stdlib",
+      "files": 95,
+      "lines": 28736
+    },
+    {
+      "name": "training",
+      "dir": "examples/sysml-v2-training",
+      "files": 100,
+      "lines": 3072
+    },
+    {
+      "name": "pilot-sysml-examples",
+      "dir": "examples/pilot-corpora/sysml-examples",
+      "files": 98,
+      "lines": 8563
+    },
+    {
+      "name": "pilot-sysml-validation",
+      "dir": "examples/pilot-corpora/sysml-validation",
+      "files": 56,
+      "lines": 4615
+    },
+    {
+      "name": "pilot-kerml-examples",
+      "dir": "examples/pilot-corpora/kerml-examples",
+      "files": 58,
+      "lines": 2848
+    },
+    {
+      "name": "testdata",
+      "dir": "testdata",
+      "files": 11,
+      "lines": 144
+    },
+    {
+      "name": "parser-fixtures",
+      "dir": "internal/core/parser/testdata/parse",
+      "files": 96,
+      "lines": 1927
+    },
+    {
+      "name": "examples",
+      "dir": "examples",
+      "files": 22,
+      "lines": 2097
+    }
+  ],
+  "totals": {
+    "productions": 727,
+    "evidence": 483,
+    "noEvidence": 0,
+    "indistinguishable": 244,
+    "forms": 807,
+    "unseenForms": 5
+  },
+  "grammars": [
+    {
+      "name": "KerML.xtext",
+      "totals": {
+        "productions": 176,
+        "evidence": 117,
+        "noEvidence": 0,
+        "indistinguishable": 59,
+        "forms": 273,
+        "unseenForms": 4
+      },
+      "productions": [
+        {
+          "grammar": "KerML.xtext",
+          "name": "Namespace",
+          "kind": "rule",
+          "line": 119,
+          "returns": "SysML::Namespace",
+          "bucket": "evidence",
+          "requiredLiterals": [
+            ";",
+            "namespace"
+          ],
+          "file": "testdata/parse/namespaces.sysml",
+          "evidence": [
+            {
+              "literal": ";",
+              "root": "testdata",
+              "file": "testdata/parse/namespaces.sysml",
+              "line": 2
+            },
+            {
+              "literal": "namespace",
+              "root": "testdata",
+              "file": "testdata/parse/namespaces.sysml",
+              "line": 5
+            }
+          ],
+          "branches": [
+            {
+              "literals": [
+                "#",
+                "namespace"
+              ]
+            }
+          ]
+        },
+        {
+          "grammar": "KerML.xtext",
+          "name": "Conjugation",
+          "kind": "rule",
+          "line": 408,
+          "returns": "SysML::Conjugation",
+          "bucket": "evidence",
+          "literals": [
+            "conjugate",
+            "conjugates",
+            "conjugation",
+            "~"
+          ],
+          "requiredLiterals": [
+            ";",
+            "conjugate",
+            "~"
+          ],
+          "file": "examples/pilot-corpora/kerml-examples/Simple Tests/Types.kerml",
+          "evidence": [
+            {
+              "literal": ";",
+              "root": "pilot-kerml-examples",
+              "file": "examples/pilot-corpora/kerml-examples/Simple Tests/Types.kerml",
+              "line": 2
+            },
+            {
+              "literal": "conjugate",
+              "root": "pilot-kerml-examples",
+              "file": "examples/pilot-corpora/kerml-examples/Simple Tests/Types.kerml",
+              "line": 25
+            },
+            {
+              "literal": "~",
+              "root": "pilot-kerml-examples",
+              "file": "examples/pilot-corpora/kerml-examples/Simple Tests/Types.kerml",
+              "line": 26
+            }
+          ],
+          "branches": [
+            {
+              "literals": [
+                "conjugate",
+                "conjugation"
+              ],
+              "file": "examples/pilot-corpora/kerml-examples/Simple Tests/Types.kerml",
+              "line": 25
+            },
+            {
+              "literals": [
+                ".",
+                "conjugate"
+              ]
+            },
+            {
+              "literals": [
+                "conjugate",
+                "~"
+              ],
+              "file": "examples/pilot-corpora/kerml-examples/Simple Tests/Types.kerml",
+              "line": 26
+            },
+            {
+              "literals": [
+                "conjugate",
+                "conjugates"
+              ],
+              "file": "examples/pilot-corpora/kerml-examples/Simple Tests/Types.kerml",
+              "line": 25
+            }
+          ]
+        },
+        {
+          "grammar": "KerML.xtext",
+          "name": "Disjoining",
+          "kind": "rule",
+          "line": 426,
+          "returns": "SysML::Disjoining",
+          "bucket": "evidence",
+          "literals": [
+            "disjoining",
+            "disjoint",
+            "from"
+          ],
+          "requiredLiterals": [
+            ";",
+            "disjoint",
+            "from"
+          ],
+          "file": "internal/core/libs/stdlib/Kernel Libraries/Kernel Semantic Library/Occurrences.kerml",
+          "evidence": [
+            {
+              "literal": ";",
+              "root": "stdlib",
+              "file": "internal/core/libs/stdlib/Kernel Libraries/Kernel Semantic Library/Occurrences.kerml",
+              "line": 8
+            },
+            {
+              "literal": "disjoint",
+              "root": "stdlib",
+              "file": "internal/core/libs/stdlib/Kernel Libraries/Kernel Semantic Library/Occurrences.kerml",
+              "line": 23
+            },
+            {
+              "literal": "from",
+              "root": "stdlib",
+              "file": "internal/core/libs/stdlib/Kernel Libraries/Kernel Semantic Library/Occurrences.kerml",
+              "line": 23
+            }
+          ],
+          "branches": [
+            {
+              "literals": [
+                "disjoining",
+                "disjoint",
+                "from"
+              ],
+              "missingLiterals": [
+                "disjoining"
+              ]
+            },
+            {
+              "literals": [
+                ".",
+                "disjoint",
+                "from"
+              ],
+              "file": "internal/core/libs/stdlib/Kernel Libraries/Kernel Semantic Library/Occurrences.kerml",
+              "line": 40
+            }
+          ]
+        },
+        {
+          "grammar": "KerML.xtext",
+          "name": "Redefinition",
+          "kind": "rule",
+          "line": 712,
+          "returns": "SysML::Redefinition",
+          "bucket": "evidence",
+          "literals": [
+            ":\u003e\u003e",
+            "redefines",
+            "redefinition",
+            "specialization"
+          ],
+          "requiredLiterals": [
+            ";",
+            "redefines",
+            "redefinition"
+          ],
+          "file": "examples/pilot-corpora/kerml-examples/Simple Tests/FeatureChains.kerml",
+          "evidence": [
+            {
+              "literal": ";",
+              "root": "pilot-kerml-examples",
+              "file": "examples/pilot-corpora/kerml-examples/Simple Tests/FeatureChains.kerml",
+              "line": 3
+            },
+            {
+              "literal": "redefines",
+              "root": "pilot-kerml-examples",
+              "file": "examples/pilot-corpora/kerml-examples/Simple Tests/FeatureChains.kerml",
+              "line": 24
+            },
+            {
+              "literal": "redefinition",
+              "root": "pilot-kerml-examples",
+              "file": "examples/pilot-corpora/kerml-examples/Simple Tests/FeatureChains.kerml",
+              "line": 24
+            }
+          ],
+          "branches": [
+            {
+              "literals": [
+                "redefinition",
+                "specialization"
+              ],
+              "file": "examples/pilot-corpora/kerml-examples/Simple Tests/Features.kerml",
+              "line": 68
+            },
+            {
+              "literals": [
+                ".",
+                "redefinition"
+              ],
+              "file": "examples/pilot-corpora/kerml-examples/Simple Tests/FeatureChains.kerml",
+              "line": 24
+            },
+            {
+              "literals": [
+                ":\u003e\u003e",
+                "redefinition"
+              ]
+            },
+            {
+              "literals": [
+                "redefines",
+                "redefinition"
+              ],
+              "file": "examples/pilot-corpora/kerml-examples/Simple Tests/FeatureChains.kerml",
+              "line": 24
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "KerMLExpressions.xtext",
+      "totals": {
+        "productions": 108,
+        "evidence": 39,
+        "noEvidence": 0,
+        "indistinguishable": 69,
+        "forms": 71,
+        "unseenForms": 1
+      },
+      "productions": [
+        {
+          "grammar": "KerMLExpressions.xtext",
+          "name": "MultiplicativeOperator",
+          "kind": "rule",
+          "line": 267,
+          "bucket": "evidence",
+          "literals": [
+            "%",
+            "*",
+            "/"
+          ],
+          "requiredLiterals": [
+            "*"
+          ],
+          "file": "internal/core/libs/stdlib/Domain Libraries/Analysis/AnalysisTooling.sysml",
+          "evidence": [
+            {
+              "literal": "*",
+              "root": "stdlib",
+              "file": "internal/core/libs/stdlib/Domain Libraries/Analysis/AnalysisTooling.sysml",
+              "line": 8
+            }
+          ],
+          "branches": [
+            {
+              "literals": [
+                "*"
+              ],
+              "file": "internal/core/libs/stdlib/Domain Libraries/Analysis/AnalysisTooling.sysml",
+              "line": 8
+            },
+            {
+              "literals": [
+                "/"
+              ],
+              "file": "internal/core/libs/stdlib/Domain Libraries/Analysis/SampledFunctions.sysml",
+              "line": 109
+            },
+            {
+              "literals": [
+                "%"
+              ],
+              "missingLiterals": [
+                "%"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "SysML.xtext",
+      "totals": {
+        "productions": 443,
+        "evidence": 327,
+        "noEvidence": 0,
+        "indistinguishable": 116,
+        "forms": 463,
+        "unseenForms": 0
+      },
+      "productions": null
+    }
+  ]
+}
