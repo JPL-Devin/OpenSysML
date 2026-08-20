@@ -73,14 +73,14 @@ jobs:
       # release tag could be cut over a corpus regression without it.
       - restore_cache:
           keys:
-            - training-corpus-v1-{{ checksum "scripts/download-training-examples.sh" }}
+            - training-corpus-v1-{{ checksum "scripts/download-training-examples.sh" }}-{{ checksum "scripts/pilot-pin.sh" }}
 
       - run:
           name: Download the OMG training corpus
           command: ./scripts/download-training-examples.sh
 
       - save_cache:
-          key: training-corpus-v1-{{ checksum "scripts/download-training-examples.sh" }}
+          key: training-corpus-v1-{{ checksum "scripts/download-training-examples.sh" }}-{{ checksum "scripts/pilot-pin.sh" }}
           paths:
             - examples/sysml-v2-training
 
