@@ -35,6 +35,25 @@ func TestIndexQualifiedLookup(t *testing.T) {
 	}
 }
 
+func TestIndexDocumentKindUsesExplicitKindAndNameFallback(t *testing.T) {
+	idx := NewIndex()
+	addDoc(t, idx, "fallback.kerml", "class C;")
+	if got := idx.DocumentKind("fallback.kerml"); got != source.KindKerML {
+		t.Fatalf("DocumentKind(fallback.kerml) = %s, want KerML", got)
+	}
+
+	sf := source.NewWithKind("<content>", []byte("class C;"), source.KindKerML)
+	root := parser.New(sf).ParseFile()
+	idx.AddDocumentWithKind("<content>", root, source.KindKerML)
+	if got := idx.DocumentKind("<content>"); got != source.KindKerML {
+		t.Fatalf("DocumentKind(<content>) = %s, want KerML", got)
+	}
+	idx.RemoveDocument("<content>")
+	if got := idx.DocumentKind("<content>"); got != source.KindUnknown {
+		t.Fatalf("DocumentKind(<content>) after removal = %s, want unknown", got)
+	}
+}
+
 func TestIndexAmbiguousQualified(t *testing.T) {
 	idx := NewIndex()
 	addDoc(t, idx, "a.sysml", "package P { namespace D; }")

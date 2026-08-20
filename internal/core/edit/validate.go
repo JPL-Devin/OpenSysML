@@ -91,7 +91,7 @@ func (m Model) validate(content []byte) error {
 		return nil
 	}
 	idx := m.NewIndex()
-	idx.AddDocument(sf.Name(), root)
+	idx.AddDocumentWithKind(sf.Name(), root, sf.Kind())
 	// The parse diagnostics are handed to the analysis, so a model that already
 	// had syntax errors is not judged by tiers its own parse never reached.
 	before := errorsOnly(m.baseline(editedParse))
@@ -122,7 +122,7 @@ func (m Model) baseline(gate []passes.Diagnostic) []passes.Diagnostic {
 	p := parser.New(m.Source)
 	root := p.ParseFile()
 	idx := m.NewIndex()
-	idx.AddDocument(m.Source.Name(), root)
+	idx.AddDocumentWithKind(m.Source.Name(), root, m.Source.Kind())
 	return passes.AnalyzeWithKind(m.Source.Name(), m.Source.Kind(), root, gate, idx)
 }
 

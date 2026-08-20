@@ -242,10 +242,10 @@ func reparseModel(base Model, content []byte) (Model, error) {
 	var idx *symbols.Index
 	if base.NewIndex != nil {
 		idx = base.NewIndex()
-		idx.AddDocument(sf.Name(), root)
+		idx.AddDocumentWithKind(sf.Name(), root, sf.Kind())
 	} else {
 		idx = symbols.NewIndex()
-		idx.AddDocument(sf.Name(), root)
+		idx.AddDocumentWithKind(sf.Name(), root, sf.Kind())
 	}
 	var semDiags []passes.Diagnostic
 	if len(p.Diagnostics) == 0 {

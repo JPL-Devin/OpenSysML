@@ -103,7 +103,8 @@ var implicitKerMLBases = map[string]string{
 // implicitBase returns the stdlib definition sym is implicitly typed by, or nil
 // when sym is not a declaration of a kind with a known base.
 func (m *Model) implicitBase(sym *symbols.Symbol) *symbols.Symbol {
-	isKerML := source.KindOf(sym.DocName) == source.KindKerML
+	isKerML := m.resolver != nil && m.resolver.Index() != nil &&
+		m.resolver.Index().DocumentKind(sym.DocName) == source.KindKerML
 	var fqn string
 	var ok bool
 	switch d := sym.Decl.(type) {

@@ -217,7 +217,7 @@ func (s *Service) ParseFile(ctx context.Context, req *pb.ParseFileRequest) (*pb.
 	idx := s.libIndexes.get()
 
 	// Add user document
-	idx.AddDocument(filePath, root)
+	idx.AddDocumentWithKind(filePath, root, kind)
 
 	// Run semantic passes (name-resolution, type, constraint)
 	// Only run if no parse errors (tier gating per AGENTS.md §4)

@@ -312,7 +312,9 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 	// An untyped usage still specializes its standard-library base feature.
 	// Implicit redefinition does not stand in for it: the two rules are
 	// independent, and the redefined parameter may itself be untyped.
-	if declared == 0 || source.KindOf(sym.DocName) == source.KindKerML {
+	isKerML := m.resolver != nil && m.resolver.Index() != nil &&
+		m.resolver.Index().DocumentKind(sym.DocName) == source.KindKerML
+	if declared == 0 || isKerML {
 		if base := m.implicitBase(sym); base != nil {
 			out = append(out, base)
 		}
