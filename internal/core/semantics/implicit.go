@@ -100,42 +100,57 @@ var implicitKerMLBases = map[string]string{
 	"type":        "Base::Anything",
 }
 
-// implicitBase returns the stdlib definition sym is implicitly typed by, or nil
-// when sym is not a declaration of a kind with a known base.
-func (m *Model) implicitBase(sym *symbols.Symbol) *symbols.Symbol {
+// kindBaseFQN returns the standard-library base every declaration of sym's
+// kind conforms to, implicitly or through its declared chain.
+func kindBaseFQN(sym *symbols.Symbol) (string, bool) {
+	if sym == nil {
+		return "", false
+	}
 	isKerML := source.KindOf(sym.DocName) == source.KindKerML
-	var fqn string
-	var ok bool
 	switch d := sym.Decl.(type) {
 	case *ast.Usage:
-		fqn, ok = implicitUsageBases[d.Kind]
+		if isKerML {
+			fqn, ok := implicitKerMLBases[d.Keyword]
+			return fqn, ok
+		}
 		if d.IsIndividual && d.Kind == ast.UsageOccurrence {
 			// An individual occurrence is a life, not an arbitrary occurrence
 			// (SysML v2 §7.9.4), however the modifier is spelled.
-			fqn, ok = implicitUsageBases[ast.UsageIndividual]
+			fqn, ok := implicitUsageBases[ast.UsageIndividual]
+			return fqn, ok
 		}
+		fqn, ok := implicitUsageBases[d.Kind]
+		return fqn, ok
 	case *ast.Definition:
-		fqn, ok = implicitDefinitionBases[d.Kind]
+		if isKerML {
+			fqn, ok := implicitKerMLBases[d.Keyword]
+			return fqn, ok
+		}
+		fqn, ok := implicitDefinitionBases[d.Kind]
+		return fqn, ok
 	case *ast.SubstateMember:
 		// `state s;` in a state body: a bodyless, always-untyped state usage.
-		fqn, ok = implicitUsageBases[ast.UsageState]
-	default:
-		return nil
+		fqn, ok := implicitUsageBases[ast.UsageState]
+		return fqn, ok
 	}
-	if isKerML {
-		switch d := sym.Decl.(type) {
-		case *ast.Usage:
-			fqn, ok = implicitKerMLBases[d.Keyword]
-		case *ast.Definition:
-			fqn, ok = implicitKerMLBases[d.Keyword]
-		}
-	} else if declaresGeneralization(RelationshipsOf(sym)) {
-		return nil
-	}
-	if isKerML && m.declaredGeneralizationReaches(sym, fqn, nil) {
-		return nil
-	}
+	return "", false
+}
+
+// implicitBase returns the stdlib definition sym is implicitly typed by, or nil
+// when sym is not a declaration of a kind with a known base.
+func (m *Model) implicitBase(sym *symbols.Symbol) *symbols.Symbol {
+	fqn, ok := kindBaseFQN(sym)
 	if !ok || m.resolver == nil || m.resolver.Index() == nil {
+		return nil
+	}
+	isKerML := source.KindOf(sym.DocName) == source.KindKerML
+	if _, isDef := sym.Decl.(*ast.Definition); !isDef && !isKerML && declaresGeneralization(RelationshipsOf(sym)) {
+		return nil
+	}
+	// A definition keeps its kind's base unless a declared chain already
+	// conforms to it: `item def SpatialItem :> SpatialFrame` still specializes
+	// Items::Item, since SpatialFrame is not an item definition (SysML 7.9.3).
+	if m.declaredGeneralizationReaches(sym, fqn, nil) {
 		return nil
 	}
 	for _, base := range m.resolver.Index().LookupQualified(fqn) {
@@ -181,6 +196,13 @@ func (m *Model) declaredGeneralizationReaches(sym *symbols.Symbol, want string, 
 			continue
 		}
 		sameBase := m.resolver.Index() != nil && m.resolver.Index().GetFQN(target) == want
+		if !sameBase {
+			// A declaration conforms to its kind's base whether the edge is
+			// declared or implicit, so reaching one of the same kind suffices.
+			if base, ok := kindBaseFQN(target); ok && base == want {
+				sameBase = true
+			}
+		}
 		if sameBase || m.declaredGeneralizationReaches(target, want, visiting) {
 			return true
 		}

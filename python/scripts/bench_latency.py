@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Measure opensysml call latency against a running sysml-grpc.
+"""Measure pysysml call latency against a running sysml-grpc.
 
 Reports p50/p95/p99 per operation, which is what an analytics loop has to budget
 for: a mean hides the tail, and the tail is what a deadline meets or misses.
@@ -18,7 +18,7 @@ import statistics
 import sys
 import time
 
-from opensysml import Connection
+from pysysml import Connection
 
 # A model of a few dozen elements: large enough that parsing is not measuring an
 # empty file, small enough to stay a per-call cost rather than a document load.

@@ -68,7 +68,7 @@ github.com/Open-MBEE/OpenSysML
 ├── internal/lsp/           # LSP protocol implementation
 ├── internal/repl/          # REPL loop implementation
 ├── internal/grpc/          # gRPC service implementation
-├── python/                 # Python client bindings (opensysml)
+├── python/                 # Python client bindings (pysysml)
 ├── api/proto/              # Protobuf service definitions
 ├── testdata/               # Test fixtures (.sysml, .kerml)
 ├── examples/               # Example models and demos

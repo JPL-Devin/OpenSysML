@@ -609,6 +609,9 @@ func (e *ActionExecutor) stepInitialNode(tokenIdx int) error {
 	if len(e.graph.Edges[token.Location]) == 0 {
 		return fmt.Errorf("initial node has no successors")
 	}
+	if err := e.runNodeBody(token.Location); err != nil {
+		return err
+	}
 
 	successors, err := e.enabledSuccessions(token.Location)
 	if err != nil {
@@ -650,6 +653,9 @@ func (e *ActionExecutor) stepForkNode(tokenIdx int) error {
 
 	if len(e.graph.Edges[node]) == 0 {
 		return fmt.Errorf("fork node %s has no successors", node.Name)
+	}
+	if err := e.runNodeBody(node); err != nil {
+		return err
 	}
 
 	// A guard on a branch out of a fork prunes it: only the enabled branches run,
@@ -703,6 +709,10 @@ func (e *ActionExecutor) stepJoinNode(tokenIdx int) error {
 		// Not ready yet - barrier synchronization requires ALL incoming tokens.
 		// Returns nil (no-op) until all tokens arrive. Deadlock detection handled separately (Task 11).
 		return nil
+	}
+
+	if err := e.runNodeBody(node); err != nil {
+		return err
 	}
 
 	// Ready: the branches' tokens are consumed, every other token stays.
@@ -796,7 +806,11 @@ func (e *ActionExecutor) stepMergeNode(tokenIdx int) error {
 	}
 
 	// First-wins counts the token that traverses, not the one that arrives: a
-	// token whose succession was pruned leaves the merge open for a later one.
+	// token whose succession was pruned leaves the merge open for a later one,
+	// so the body runs with that traversal rather than on every arrival.
+	if err := e.runNodeBody(mergeNode); err != nil {
+		return err
+	}
 	e.mergeVisited[mergeNode] = true
 	token.Location = successors[0]
 	return nil
@@ -814,6 +828,9 @@ func (e *ActionExecutor) stepDecisionNode(tokenIdx int) error {
 	successors := e.graph.Edges[decisionNode]
 	if len(successors) == 0 {
 		return fmt.Errorf("decision node %s has no successors", decisionNode.Name)
+	}
+	if err := e.runNodeBody(decisionNode); err != nil {
+		return err
 	}
 
 	// A guard resolves in the action's scope, with the action's current feature

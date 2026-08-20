@@ -66,13 +66,13 @@ func TestValueUnrelatedInstanceDoesNot(t *testing.T) {
 	}`, "cannot bind a value of type Boat to a feature typed by Vehicle")
 }
 
-// A supertype instance is not an instance of the subtype, so the direction of
-// conformance matters.
-func TestValueSupertypeInstanceDoesNot(t *testing.T) {
-	wantOneValueDiag(t, `package P {
+// A binding equates the two features, so a supertype-typed value may still
+// hold an instance of the subtype; only unrelated types are rejected.
+func TestValueSupertypeInstanceConforms(t *testing.T) {
+	wantNoValueDiags(t, `package P {
 		part v : M::Vehicle;
 		part t : M::Truck = v;
-	}`, "cannot bind a value of type Vehicle to a feature typed by Truck")
+	}`)
 }
 
 func TestValueTooManyValuesForUpperBound(t *testing.T) {

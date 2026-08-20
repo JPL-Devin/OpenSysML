@@ -13,8 +13,9 @@ const probeDecl = "\npart def " + probeName + ";\n"
 
 // closesItsOwnText reports whether a declaration written after src is still read
 // as one: text leaving a brace, comment or quoted name open absorbs what follows.
-func closesItsOwnText(src string) bool {
-	root := parser.New(source.New(docName, []byte(src+probeDecl))).ParseFile()
+// doc is the session document the text parses in, which carries its kind.
+func closesItsOwnText(doc, src string) bool {
+	root := parser.New(source.New(doc, []byte(src+probeDecl))).ParseFile()
 	for _, name := range declaredNames(root) {
 		if name == probeName {
 			return true

@@ -1,0 +1,13 @@
+{
+	"type": "state",
+	"trace": true,
+	"events": [
+		{"signal": "Leave", "args": null}
+	],
+	"finalState": "done",
+	"stateVisits": ["start", "beta", "work", "done"],
+	"outputs": {
+		"marker": {"type": "Integer", "value": 2},
+		"stepped": {"type": "Integer", "value": 1}
+	}
+}

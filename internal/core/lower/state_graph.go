@@ -686,11 +686,19 @@ func lowerTransitionMember(graph *StateGraph, member *ast.TransitionMember, cont
 		Target:    target,
 		Trigger:   classifyTrigger(member.Trigger),
 		Guard:     member.Guard,
-		Effect:    LowerBehaviors(member.Effect, bodyScope),
+		Effect:    transitionEffects(member, bodyScope),
 		Via:       FeaturePath(member.Via),
 		Scope:     scope,
 		BodyScope: bodyScope,
 	}, nil
+}
+
+// transitionEffects are the behaviors a transition performs: those written with
+// `do`, then the steps its body states (SysML.xtext:1863, where TransitionUsage
+// ends in ActionBody).
+func transitionEffects(member *ast.TransitionMember, scope *symbols.Scope) []StateBehavior {
+	effects := LowerBehaviors(member.Effect, scope)
+	return append(effects, LowerBehaviors(BodyStatementMembers(member.Members), scope)...)
 }
 
 // isEntrySubaction reports whether member is the entry subaction of the body a

@@ -234,7 +234,7 @@ github.com/Open-MBEE/OpenSysML
 ├── internal/lsp/           # LSP protocol implementation
 ├── internal/grpc/          # gRPC service implementation
 ├── internal/repl/          # REPL loop implementation
-├── python/                 # Python client bindings (opensysml)
+├── python/                 # Python client bindings (pysysml)
 ├── docs/                   # Design specs, architecture docs
 └── testdata/               # Test fixtures (.sysml, .kerml)
 ```
@@ -263,7 +263,7 @@ Pre-built binaries for Linux, macOS, and Windows are available on the [Releases 
   binaries are published to GitHub Releases. Maintainer procedure:
   [docs/project/releasing.md](docs/project/releasing.md); what changed per release:
   [CHANGELOG.md](CHANGELOG.md)
-- The Python client is released on its own tag (`opensysml-v*`), which uploads `opensysml` to
+- The Python client is released on its own tag (`pysysml-v*`), which uploads `pysysml` to
   PyPI — its version is not coupled to the core's, since it resolves a `sysml-grpc` binary
   at runtime from whichever release the caller names
 
@@ -294,11 +294,11 @@ go build -o bin/sysml-grpc ./cmd/sysml-grpc
 
 ## Python Client
 
-**opensysml** provides a Python client library for programmatic access to OpenSysML's parsing and runtime capabilities via gRPC.
+**pysysml** provides a Python client library for programmatic access to OpenSysML's parsing and runtime capabilities via gRPC.
 
 **Installation:**
 ```bash
-pip install opensysml          # from PyPI, once the first release is published
+pip install pysysml          # from PyPI, once the first release is published
 
 # Or from a checkout, in development mode
 pip install -e python/
@@ -306,17 +306,17 @@ pip install -e python/
 
 **Quick example:**
 ```python
-import opensysml
+import pysysml
 
 # Load and parse a SysML model
-model = opensysml.load("vehicle.sysml")
+model = pysysml.load("vehicle.sysml")
 
 # Evaluate expressions
 result = model.eval("2 + 2")
 print(result)  # 4
 
 # Instantiate parts
-instance = opensysml.instantiate("Vehicle", model_hash=model.hash)
+instance = pysysml.instantiate("Vehicle", model_hash=model.hash)
 print(instance.slots["mass"])
 ```
 

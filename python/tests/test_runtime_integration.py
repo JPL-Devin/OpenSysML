@@ -1,11 +1,11 @@
 """Integration tests for runtime operations against real service.
 
 Without a service they skip, as a developer with no binary wants; with
-$OPENSYSML_REQUIRE_SERVICE set, as CI sets it, an absent service fails instead.
+$PYSYSML_REQUIRE_SERVICE set, as CI sets it, an absent service fails instead.
 """
 import pytest
-from opensysml import Connection
-from opensysml.errors import ExecutionError
+from pysysml import Connection
+from pysysml.errors import ExecutionError
 from tests.service_gate import skip_or_fail_without_service
 
 @pytest.mark.integration
@@ -18,7 +18,7 @@ class TestRuntimeIntegration:
         try:
             self.conn = Connection(auto_start=False)
             # Probe health
-            from opensysml.proto import sysml_pb2
+            from pysysml.proto import sysml_pb2
             req = sysml_pb2.DiagnosticsRequest(model_hash="")
             self.conn._stub.GetDiagnostics(req)
         except grpc.RpcError as e:
@@ -100,7 +100,7 @@ class TestRuntimeIntegration:
 
     def test_instantiate_resolves_nested_instances(self):
         """A part slot resolves to a nested Instance, not a bare id."""
-        from opensysml.instance import Instance
+        from pysysml.instance import Instance
 
         src = '''
         package Demo {
@@ -123,7 +123,7 @@ class TestRuntimeIntegration:
 
     def test_instantiate_cyclic_attribute_reports_error(self):
         """A cyclic derived attribute surfaces as FeatureValueError, never as None."""
-        from opensysml.errors import FeatureValueError
+        from pysysml.errors import FeatureValueError
 
         src = '''
         package Demo {
@@ -143,7 +143,7 @@ class TestRuntimeIntegration:
 
     def test_enum_typed_slot_and_eval_return_the_literal(self):
         """An enumeration literal reaches the client as the literal it is."""
-        from opensysml import EnumLiteral
+        from pysysml import EnumLiteral
 
         src = '''
         package D {
@@ -163,14 +163,14 @@ class TestRuntimeIntegration:
 
     def test_service_reports_the_enum_values_capability(self):
         """The wire form is a contract, so the service says it honours it."""
-        from opensysml.capabilities import CAPABILITY_ENUM_VALUES
+        from pysysml.capabilities import CAPABILITY_ENUM_VALUES
 
         assert self.conn.server_info().has(CAPABILITY_ENUM_VALUES)
 
     def test_a_valueless_feature_of_a_value_type_crosses_as_unset(self):
         """The service says it sends the unset arm, and does."""
-        from opensysml.capabilities import CAPABILITY_UNSET_VALUE
-        from opensysml.values import UNSET
+        from pysysml.capabilities import CAPABILITY_UNSET_VALUE
+        from pysysml.values import UNSET
 
         assert self.conn.server_info().has(CAPABILITY_UNSET_VALUE)
 

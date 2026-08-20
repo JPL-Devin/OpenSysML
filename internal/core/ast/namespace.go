@@ -18,6 +18,9 @@ const (
 type NameSegment struct {
 	Text string
 	Span source.Span
+	// Chained records that the segment was written after '.' rather than after
+	// '::': a feature chain step (`S2.S3`) rather than a namespace member.
+	Chained bool
 }
 
 // QualifiedName is an unresolved dotted/`::`-separated name reference.

@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 func TestCategorizePilot(t *testing.T) {
@@ -139,13 +141,15 @@ func TestCollectFilesSkipsNestedRoots(t *testing.T) {
 	}
 }
 
-func TestCollectFilesByLanguage(t *testing.T) {
+// F34: a root carries both languages, so collection is extension-agnostic and
+// the language is decided per file.
+func TestCollectFilesBothLanguages(t *testing.T) {
 	repo := t.TempDir()
 	for _, rel := range []string{
-		"kerml/Example.kerml",
-		"kerml/Example.sysml",
-		"sysml/Example.kerml",
-		"sysml/Example.sysml",
+		"models/Example.kerml",
+		"models/Example.sysml",
+		"models/notes.md",
+		"models/nested/Other.kerml",
 	} {
 		path := filepath.Join(repo, filepath.FromSlash(rel))
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -156,32 +160,34 @@ func TestCollectFilesByLanguage(t *testing.T) {
 		}
 	}
 
-	tests := []struct {
-		name string
-		root corpusRoot
-		want []string
-	}{
-		{
-			name: "KerML",
-			root: corpusRoot{Name: "kerml", Dir: "kerml", Lang: languageKerML},
-			want: []string{"Example.kerml"},
-		},
-		{
-			name: "SysML",
-			root: corpusRoot{Name: "sysml", Dir: "sysml"},
-			want: []string{"Example.sysml"},
-		},
+	got, err := collectFiles(repo, corpusRoot{Name: "models", Dir: "models"})
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			got, err := collectFiles(repo, test.root)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !reflect.DeepEqual(got, test.want) {
-				t.Errorf("collectFiles() = %v, want %v", got, test.want)
-			}
-		})
+	want := []string{"Example.kerml", "Example.sysml", "nested/Other.kerml"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("collectFiles() = %v, want %v", got, want)
+	}
+}
+
+// F34: each language is one batch, so the reference still resolves cross-file
+// references within it, and SysML is compared first.
+func TestBatchByLanguage(t *testing.T) {
+	files := []string{"a.kerml", "b.sysml", "nested/c.kerml", "nested/d.sysml"}
+	got := batchByLanguage(files)
+	want := []languageBatch{
+		{Kind: source.KindSysML, Files: []string{"b.sysml", "nested/d.sysml"}},
+		{Kind: source.KindKerML, Files: []string{"a.kerml", "nested/c.kerml"}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("batchByLanguage() = %+v, want %+v", got, want)
+	}
+
+	if got := batchByLanguage([]string{"only.sysml"}); len(got) != 1 || got[0].Kind != source.KindSysML {
+		t.Errorf("batchByLanguage() = %+v, want the SysML batch alone", got)
+	}
+	if got := batchByLanguage([]string{"only.kerml"}); len(got) != 1 || got[0].Kind != source.KindKerML {
+		t.Errorf("batchByLanguage() = %+v, want the KerML batch alone", got)
 	}
 }
 

@@ -266,7 +266,11 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 		return nil, false
 	}
 	r.resolvingImports[imp] = true
-	target, ok := r.ResolveQualified(scope, imp.Imported)
+	// Resolved aside: a miss here may only mean sibling imports were suspended
+	// for cycle safety, so it must not be memoized or reported as unresolved.
+	var target *symbols.Symbol
+	var ok bool
+	r.aside(func() { target, ok = r.ResolveQualified(scope, imp.Imported) })
 	delete(r.resolvingImports, imp)
 	if !ok {
 		return nil, false
@@ -305,11 +309,12 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 		// it but not a visible one, so a wildcard import does not re-export it
 		// (KerML 8.2.3.3) — unless this is an `import all`, which takes the
 		// target's private memberships too.
+		targetFQN := r.registeredFQN(target)
 		var children []*symbols.Symbol
 		if importAllowsPrivate(imp) {
-			children = r.idx.LookupDirectChildren(target.Name)
+			children = r.idx.LookupDirectChildren(targetFQN)
 		} else {
-			children = r.idx.LookupDirectChildrenFrom(target.Name, r.ReferringNamespaceFQN(scope))
+			children = r.idx.LookupDirectChildrenFrom(targetFQN, r.ReferringNamespaceFQN(scope))
 		}
 		for _, sym := range children {
 			// Extract short name from FQN for comparison
@@ -323,7 +328,7 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 			// The target may itself have surfaced the name through an import of
 			// its own, filtered by its `filter` members: what it re-exports
 			// onward is what those select.
-			if !r.admitsUnderName("", r.ReferringNamespaceFQN(scope), target.Name+"::"+name, sym) {
+			if !r.admitsUnderName("", r.ReferringNamespaceFQN(scope), targetFQN+"::"+name, sym) {
 				continue
 			}
 			if visibleThroughImport(imp, sym) && admit(sym) {

@@ -65,6 +65,15 @@ func bodyScopeChild(scope *Scope, decl ast.Node) *Scope {
 	return scope.ChildFor(decl)
 }
 
+// nodeBodyScope returns the scope the body of an action node resolves against:
+// its own where the builder gave it one, and the enclosing scope otherwise.
+func nodeBodyScope(scope *Scope, node ast.Node) *Scope {
+	if child := bodyScopeChild(scope, node); child != nil {
+		return child
+	}
+	return scope
+}
+
 // bodyScopesInDecl walks the expressions a declaration carries, descending into
 // the child scopes its body resolves against.
 func bodyScopesInDecl(scope *Scope, decl ast.Node) {
@@ -116,6 +125,9 @@ func bodyScopesInDecl(scope *Scope, decl ast.Node) {
 		}
 	case *ast.InitialNode:
 		bodyScopesInExpr(scope, d.Guard)
+		buildBodyScopes(nodeBodyScope(scope, d), d.Members)
+	case *ast.ForkNode, *ast.JoinNode, *ast.MergeNode, *ast.DecisionNode:
+		buildBodyScopes(nodeBodyScope(scope, d), ast.NodeBodyMembers(d))
 	case *ast.ResultMember:
 		bodyScopesInExpr(scope, d.Expression)
 	case *ast.ConstraintMember:
@@ -162,9 +174,12 @@ func bodyScopesInDecl(scope *Scope, decl ast.Node) {
 		body := newTriggerScope(scope, d)
 		bodyScopesInExpr(body, d.Guard)
 		buildBodyScopes(body, d.Effect)
+		buildBodyScopes(body, d.Members)
 	case *ast.SendStatement:
 		bodyScopesInExpr(scope, d.Message)
 		bodyScopesInExpr(scope, d.Target)
+		bodyScopesInExpr(scope, d.Receiver)
+		buildBodyScopes(nodeBodyScope(scope, d), d.Members)
 	case *ast.TerminateStatement:
 		bodyScopesInExpr(scope, d.Target)
 	case *ast.AssignmentActionNode:
