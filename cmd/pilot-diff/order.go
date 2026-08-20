@@ -138,6 +138,7 @@ func declaredNames(root *ast.RootNamespace) []string {
 
 func addDeclaredNames(seen map[string]bool, prefixes []string, ident ast.Identification) []string {
 	var next []string
+	emitted := make(map[string]bool)
 	add := func(prefix, name string) {
 		name = unquote(name)
 		if name == "" {
@@ -147,8 +148,9 @@ func addDeclaredNames(seen map[string]bool, prefixes []string, ident ast.Identif
 		if prefix != "" {
 			full = prefix + "::" + name
 		}
-		if !seen[full] {
+		if !emitted[full] {
 			next = append(next, full)
+			emitted[full] = true
 		}
 		seen[full] = true
 	}

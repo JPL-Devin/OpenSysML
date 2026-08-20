@@ -202,6 +202,24 @@ func TestOrderByImportsDeclarations(t *testing.T) {
 	}
 }
 
+// Repeated declarations must still propagate child prefixes from each occurrence.
+func TestOrderByImportsRepeatedPackage(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, content string) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("z-provider.sysml", "package Provider {\n\tpart first;\n}\npackage Provider {\n\tpackage Inner {\n\t\tpart second;\n\t}\n}\n")
+	write("a-importer.sysml", "package Views {\n\tprivate import Provider::Inner::*;\n}\n")
+
+	files := []string{"a-importer.sysml", "z-provider.sysml"}
+	want := []string{"z-provider.sysml", "a-importer.sysml"}
+	if got := orderByImports(dir, ".", files); !reflect.DeepEqual(got, want) {
+		t.Errorf("orderByImports() = %v, want %v", got, want)
+	}
+}
+
 // An import cycle must not hang or drop files.
 func TestOrderByImportsCycle(t *testing.T) {
 	dir := t.TempDir()
