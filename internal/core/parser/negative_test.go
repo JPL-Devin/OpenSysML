@@ -219,6 +219,24 @@ func TestNegative(t *testing.T) {
 		{"binding_end_chain_trailing_dot_qualified", "package P { part c; binding bind R::a. = c; }"},
 		{"binding_end_unterminated", "package P { part a; binding bind R::a }"},
 		{"binding_end_no_target", "package P { part a; binding bind R::a = ; }"},
+
+		// A connection, interface or flow usage stating its ends where its name
+		// would go still states both ends and closes the body it opens.
+		{"connect_no_ends", "part def P { connect; }"},
+		{"connect_body_no_ends", "part def P { connect { attribute x; } }"},
+		{"connect_body_unclosed", "part def P { part a; part b; connect a to b { attribute x; }"},
+		{"connect_to_no_target_before_body", "part def P { part a; connect a to { } }"},
+		{"interface_ends_no_target", "package P { part a; interface a.p to ; }"},
+		{"interface_ends_no_to", "package P { part a; part b; interface a.p b.p; }"},
+		{"interface_ends_unclosed_body", "package P { part a; part b; interface a.p to b.p { attribute x; }"},
+		{"flow_ends_no_target_before_body", "action def A { action a; flow a.x to { } }"},
+		{"flow_ends_unclosed_body", "action def A { action a; action b; flow a.x to b.x { attribute y; }"},
+		// An accept node standing as a statement states its payload and, where it
+		// names one, the port it accepts through.
+		{"accept_statement_no_payload", "action def A { loop { accept; } }"},
+		{"accept_statement_no_payload_type", "action def A { loop { accept e : ; } }"},
+		{"accept_statement_via_no_port", "action def A { loop { accept e : E via; } }"},
+		{"then_accept_no_payload", "action def A { action b; then accept; }"},
 	}
 
 	for _, tt := range tests {

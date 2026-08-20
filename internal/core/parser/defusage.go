@@ -467,6 +467,11 @@ func (p *Parser) atDefUsageStart() bool {
 	if t.KeywordID == "use" {
 		return p.atUseCase()
 	}
+	// `connect` starts an anonymous connection usage without being a kind
+	// keyword: `connection c connect a to b` states it after the kind.
+	if t.KeywordID == "connect" {
+		return true
+	}
 	_, isDef := definitionKindKeywords[t.KeywordID]
 	_, isUsage := usageKindKeywords[t.KeywordID]
 	return isDef || isUsage
@@ -741,7 +746,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		mods.prefixKeyword = "perform"
 		kw = "action" // treat as regular action keyword
 		// Continue to dual-keyword path (don't enter usage-only block)
-	} else if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connector" || kw == "bind" || kw == "satisfy" || kw == "verify" || kw == "include" || kw == "step" || kw == "expr" || kw == "interaction" || kw == "require" || kw == "transition" || kw == "perform" || kw == "exhibit" || kw == "variant" || kw == "assert" || kw == "assume" || kw == "event" || kw == "stakeholder" || kw == "frame" || kw == "actor" || kw == "expose" || kw == "render" {
+	} else if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connect" || kw == "connector" || kw == "bind" || kw == "satisfy" || kw == "verify" || kw == "include" || kw == "step" || kw == "expr" || kw == "interaction" || kw == "require" || kw == "transition" || kw == "perform" || kw == "exhibit" || kw == "variant" || kw == "assert" || kw == "assume" || kw == "event" || kw == "stakeholder" || kw == "frame" || kw == "actor" || kw == "expose" || kw == "render" {
 		// Check for usage-only keywords that never have def forms
 
 		// Special case: perform <ref>; (shorthand without action keyword)
@@ -757,6 +762,13 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		// unless what follows can begin the member form.
 		if (kw == "frame" || kw == "render") && !p.atMemberKeywordUsedAsKeyword(kw) {
 			return applyPrefixes(p.parseUsage(start, ast.UsageAttribute, "", mods, false))
+		}
+
+		// `connect a to b { … }` is a connection usage whose ends the keyword
+		// introduces; it declares nothing of its own (SysML.xtext ConnectionUsage).
+		if kw == "connect" {
+			p.advance() // consume 'connect'
+			return applyPrefixes(p.parseUsage(start, ast.UsageConnection, "connect", mods, false))
 		}
 
 		p.advance() // consume the kind keyword
@@ -1537,10 +1549,14 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 	preRels := p.parseRelationships(true)
 	// A bare flow shorthand `flow x to y` and anonymous succession `succession x then y` have no declaration name
 	// Anonymous connector starts with 'from' keyword (e.g., `connector : X from y to z`)
-	skipIdentification := (kind == ast.UsageFlow && p.atFlowShorthand()) ||
+	// A connection or interface stating ends where its name would go declares
+	// nothing of its own either: `interface b1.p to b2.p`.
+	skipIdentification := (kind == ast.UsageFlow && (p.atFlowShorthand() || p.atKeyword("from"))) ||
 		(kind == ast.UsageSuccession && isAnonymous) ||
 		(kind == ast.UsageAllocation && p.atAllocateShorthand()) ||
-		(kind == ast.UsageConnector && p.atKeyword("from"))
+		(kind == ast.UsageConnector && p.atKeyword("from")) ||
+		((kind == ast.UsageConnection || kind == ast.UsageInterface) &&
+			(keyword == "connect" || p.atConnectorShorthandEnds()))
 	if !skipIdentification {
 		u.Ident = p.parseUsageIdentification(kind)
 	}
@@ -1551,7 +1567,9 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 
 	// For anonymous succession/flow, skip multiplicity parsing - it belongs to connector ends
 	// UNLESS earlyMultiplicity was already parsed (e.g., `succession [mult] first ...`)
-	skipMultiplicity := (kind == ast.UsageSuccession || kind == ast.UsageFlow) && u.Ident.Name == "" && earlyMultiplicity == nil
+	// In the shorthand forms a multiplicity here is the first end's.
+	skipMultiplicity := ((kind == ast.UsageSuccession || kind == ast.UsageFlow) && u.Ident.Name == "" && earlyMultiplicity == nil) ||
+		((kind == ast.UsageConnection || kind == ast.UsageInterface) && skipIdentification)
 	if !skipMultiplicity {
 		if earlyMultiplicity != nil {
 			u.Multiplicity = earlyMultiplicity
@@ -2000,131 +2018,6 @@ func (p *Parser) parseBodyMember() ast.Node {
 		p.expect(lexer.Semicolon, "expected ';' after expose statement")
 
 		return imp
-	}
-
-	// Anonymous connection usage: `connect X to Y;` or `connect (X, Y, Z);`.
-	if p.atKeyword("connect") {
-		p.advance() // consume 'connect'
-
-		u := &ast.Usage{
-			Kind: ast.UsageConnection,
-		}
-		u.SetLeadingTrivia(trivia)
-
-		p.parseConnectorEnds(u, "")
-		if len(u.ConnectorEnds) == 0 {
-			return &ast.ErrorNode{Message: "expected connector end"}
-		}
-
-		p.expect(lexer.Semicolon, "expected ';' after connect statement")
-		u.NodeBase.NodeSpan = p.spanFrom(start)
-
-		m := &ast.Membership{
-			Visibility: vis,
-			Member:     u,
-		}
-		m.NodeBase.NodeSpan = u.Span()
-		m.SetLeadingTrivia(trivia)
-		return m
-	}
-
-	// Check for the shorthand flow statement `flow X to Y;`, whose first name is
-	// an end rather than the flow's own name (SysML.xtext `FlowDeclaration`
-	// second alternative). Every other form — `flow : Type …`, `flow name …`,
-	// `flow [name] from X to Y` — declares the flow itself and is parsed as a
-	// usage declaration below.
-	if p.atKeyword("flow") {
-		// Lookahead: flow <id/featureChain> to ... = shorthand ends
-		//            flow : Type ... = flow usage declaration
-		//            flow <name> [from X] to Y ... = flow usage declaration
-		nextTok := p.peekN(1)
-		isInlineFlow := false
-		if nextTok.Kind == lexer.Identifier || nextTok.Kind == lexer.Keyword {
-			// Could be flow name or flow source
-			// `flow f from x to y` names the flow, so only `to` or a feature
-			// chain after the first name marks the shorthand.
-			tok2 := p.peekN(2)
-			if tok2.Kind == lexer.Keyword && tok2.KeywordID == "to" {
-				isInlineFlow = true
-			} else if tok2.Kind == lexer.Dot || tok2.Kind == lexer.ColonColon {
-				// Feature chain - the name is an end, not the flow's own name
-				isInlineFlow = true
-			}
-		}
-
-		if isInlineFlow {
-			p.advance() // consume 'flow'
-
-			u := &ast.Usage{
-				Kind: ast.UsageFlow,
-			}
-			u.SetLeadingTrivia(trivia)
-
-			// Check for optional 'from' keyword
-			optionalFrom := p.acceptKeyword("from")
-			_ = optionalFrom // both forms valid
-
-			// Parse flow ends: source to target
-			p.parseTierBEnds(u, ast.UsageFlow)
-
-			p.expect(lexer.Semicolon, "expected ';' after flow statement")
-			// The ends belong to the declaration, so its span covers them.
-			u.NodeBase.NodeSpan = p.spanFrom(start)
-
-			m := &ast.Membership{
-				Visibility: vis,
-				Member:     u,
-			}
-			m.NodeBase.NodeSpan = u.Span()
-			m.SetLeadingTrivia(trivia)
-			return m
-		}
-	}
-
-	// Check for inline allocate statement: allocate X to Y;
-	// This is anonymous allocation usage
-	// Distinguish from allocation declarations: allocation : Type ... or allocation name : Type ...
-	if p.atKeyword("allocate") {
-		// Lookahead: allocate <id/featureChain> to ... = inline allocate
-		//            allocate : Type ... = allocation usage declaration
-		//            allocate <name> : Type ... = allocation usage declaration
-		nextTok := p.peekN(1)
-		isInlineAllocate := false
-		if nextTok.Kind == lexer.Identifier || nextTok.Kind == lexer.Keyword {
-			// Could be allocation name or source
-			// Check if followed by 'to' (inline) vs colon/relationship (declaration)
-			tok2 := p.peekN(2)
-			if tok2.Kind == lexer.Keyword && tok2.KeywordID == "to" {
-				isInlineAllocate = true
-			} else if tok2.Kind == lexer.Dot || tok2.Kind == lexer.ColonColon {
-				// Feature chain - likely inline allocate
-				isInlineAllocate = true
-			}
-		}
-
-		if isInlineAllocate {
-			p.advance() // consume 'allocate'
-
-			u := &ast.Usage{
-				Kind: ast.UsageAllocation,
-			}
-			u.SetLeadingTrivia(trivia)
-
-			// Parse allocation ends: source to target
-			p.parseTierBEnds(u, ast.UsageAllocation)
-
-			p.expect(lexer.Semicolon, "expected ';' after allocate statement")
-			// The ends belong to the declaration, so its span covers them.
-			u.NodeBase.NodeSpan = p.spanFrom(start)
-
-			m := &ast.Membership{
-				Visibility: vis,
-				Member:     u,
-			}
-			m.NodeBase.NodeSpan = u.Span()
-			m.SetLeadingTrivia(trivia)
-			return m
-		}
 	}
 
 	// An accept node (SysML.xtext `AcceptNode`):
@@ -2584,6 +2477,9 @@ func (p *Parser) parseBodyMember() ast.Node {
 	// Also exclude constraint (has both def/usage forms but shouldn't be enum literal name)
 	isUsageOnlyKwForEnum := p.at(lexer.Keyword) && (p.peek().KeywordID == "subject" || p.peek().KeywordID == "objective" ||
 		p.peek().KeywordID == "succession" || p.peek().KeywordID == "inv" || p.peek().KeywordID == "connector" ||
+		// `connect` introduces a connection usage's ends, so `connect;` is that
+		// usage missing them rather than a literal named `connect`.
+		p.peek().KeywordID == "connect" ||
 		p.peek().KeywordID == "satisfy" || p.peek().KeywordID == "verify" || p.peek().KeywordID == "step" || p.peek().KeywordID == "expr" || p.peek().KeywordID == "constraint" ||
 		p.peek().KeywordID == "interaction" || p.peek().KeywordID == "bool" || p.peek().KeywordID == "assoc" || p.peek().KeywordID == "struct" ||
 		p.peek().KeywordID == "class" || p.peek().KeywordID == "predicate" ||
@@ -2995,7 +2891,21 @@ func (p *Parser) parseRelationshipClauseTarget(kind ast.RelationshipKind) *ast.R
 func (p *Parser) parseTierBEnds(u *ast.Usage, kind ast.UsageKind) {
 	switch kind {
 	case ast.UsageConnection, ast.UsageInterface:
-		p.parseConnectorEnds(u, "connect")
+		// `connection c connect a to b` states its ends after `connect`; `connect a
+		// to b` and `interface a.p to b.p` state them after the kind keyword itself.
+		switch {
+		case p.atKeyword("connect"):
+			p.parseConnectorEnds(u, "connect")
+		case u.Keyword == "connect":
+			// The keyword introduced the ends, so it is the ConnectorPart of the
+			// grammar and states at least one end.
+			p.parseConnectorEnds(u, "")
+			if len(u.ConnectorEnds) == 0 {
+				p.error(p.peek().Span, "expected connector end after 'connect'")
+			}
+		case p.atConnectorShorthandEnds():
+			p.parseConnectorEnds(u, "")
+		}
 	case ast.UsageConnector:
 		// Connector can use three syntaxes:
 		// 1. "connect X to Y" - standard connector ends
@@ -3212,26 +3122,76 @@ func (p *Parser) parseConnectorFromTo(u *ast.Usage) {
 	}
 }
 
-// atFlowShorthand reports whether the parser sits at a bare flow shorthand
-// `x to y` (a name immediately followed by the `to` keyword), which has no
-// declaration name.
-func (p *Parser) atFlowShorthand() bool {
-	if !p.atName() {
+// atEndThenKeyword reports whether the cursor is at a connector end — a name or
+// arbitrarily deep feature chain such as `differential.leftDiffPort` — followed
+// by kw.
+func (p *Parser) atEndThenKeyword(kw string) bool {
+	return p.endThenKeywordAt(0, kw)
+}
+
+// endThenKeywordAt is atEndThenKeyword from the token at offset from.
+func (p *Parser) endThenKeywordAt(from int, kw string) bool {
+	switch p.peekN(from).Kind {
+	case lexer.Identifier, lexer.UnrestrictedName:
+	default:
 		return false
 	}
-	n := p.peekN(1)
-	return n.Kind == lexer.Keyword && n.KeywordID == "to"
+	i := from + 1
+	for p.peekN(i).Kind == lexer.Dot || p.peekN(i).Kind == lexer.ColonColon {
+		switch p.peekN(i + 1).Kind {
+		case lexer.Identifier, lexer.UnrestrictedName, lexer.Keyword:
+			i += 2
+		default:
+			return false
+		}
+	}
+	return p.peekIsKeyword(i, kw)
+}
+
+// atFlowShorthand reports whether the parser sits at a bare flow shorthand
+// `x to y` (an end immediately followed by the `to` keyword), which has no
+// declaration name (SysML.xtext `FlowDeclaration`, second alternative).
+func (p *Parser) atFlowShorthand() bool {
+	return p.atEndThenKeyword("to")
 }
 
 // atAllocateShorthand reports whether an allocation usage names its first
 // connector end rather than itself: in `allocate torqueGenerator to powerTrain`
 // both names are ends, while `allocate a1 : AllocDef` declares a named usage.
 func (p *Parser) atAllocateShorthand() bool {
-	if !p.atName() {
-		return false
+	return p.atEndThenKeyword("to")
+}
+
+// atConnectorShorthandEnds reports whether the cursor is at connector ends stated
+// with no keyword of their own: `connect x.p to y.p`, `interface (a.p, b.p)`
+// (SysML.xtext ConnectorPart, InterfacePart). A multiplicity written here is the
+// first end's, so the ends are recognized past it.
+func (p *Parser) atConnectorShorthandEnds() bool {
+	if p.at(lexer.LParen) {
+		return true
 	}
-	n := p.peekN(1)
-	return n.Kind == lexer.Keyword && n.KeywordID == "to"
+	return p.endThenKeywordAt(p.pastBracketed(0), "to")
+}
+
+// pastBracketed returns the offset of the token after the balanced `[…]` group
+// at offset from, or from itself where no group starts there.
+func (p *Parser) pastBracketed(from int) int {
+	if p.peekN(from).Kind != lexer.LBracket {
+		return from
+	}
+	depth := 0
+	for i := from; p.peekN(i).Kind != lexer.EOF; i++ {
+		switch p.peekN(i).Kind {
+		case lexer.LBracket:
+			depth++
+		case lexer.RBracket:
+			depth--
+			if depth == 0 {
+				return i + 1
+			}
+		}
+	}
+	return from
 }
 
 // parseFlowEnds parses an optional `of <payload>` followed by either

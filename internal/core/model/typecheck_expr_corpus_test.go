@@ -54,8 +54,17 @@ func TestExprTypeCheckNoExampleFalsePositives(t *testing.T) {
 	var found []string
 	for _, root := range roots {
 		err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-			if err != nil || info.IsDir() {
+			if err != nil {
 				return err
+			}
+			// The pilot corpora are third-party models downloaded under
+			// examples/, not models this repository ships; the advisory
+			// differential harness reports on those.
+			if info.IsDir() {
+				if info.Name() == "pilot-corpora" {
+					return filepath.SkipDir
+				}
+				return nil
 			}
 			if !strings.HasSuffix(path, ".sysml") && !strings.HasSuffix(path, ".kerml") {
 				return nil
