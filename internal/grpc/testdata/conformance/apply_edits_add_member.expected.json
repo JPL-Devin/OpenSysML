@@ -1,0 +1,12 @@
+{
+  "rpc": "ApplyEdits",
+  "operations": [
+    {
+      "kind": "add_member",
+      "owner": "Demo",
+      "member_kind": "part def",
+      "member_name": "Vehicle"
+    }
+  ],
+  "expected_content": "package Demo {\n    part def Vehicle;\n}\n"
+}
