@@ -30,7 +30,7 @@
               (Relationship kind="typing" target=Assembly
                 (*ast.QualifiedName))))
           (Membership visibility="default"
-            (Usage kind="connection" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (Usage kind="connection" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="connect"
               (ConnectorEnd target="*ast.FeatureChainExpr"
                 (FeatureChainExpr member="p"
                   (FeatureReference name="x")))
@@ -40,7 +40,7 @@
               (Membership visibility="default"
                 (Documentation locale=""))))
           (Membership visibility="default"
-            (Usage kind="connection" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (Usage kind="connection" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="connect"
               (ConnectorEnd target="*ast.FeatureChainExpr"
                 (FeatureChainExpr member="p"
                   (FeatureReference name="x")))
@@ -48,6 +48,18 @@
                 (FeatureChainExpr member="p"
                   (FeatureChainExpr member="inner"
                     (FeatureReference name="assembly"))))))
+          (Membership visibility="default"
+            (Usage kind="connection" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="connect"
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (Multiplicity range=false
+                  (LiteralInteger value="1"))
+                (FeatureChainExpr member="p"
+                  (FeatureReference name="x")))
+              (ConnectorEnd target="*ast.FeatureChainExpr"
+                (Multiplicity range=false
+                  (LiteralInteger value="1"))
+                (FeatureChainExpr member="p"
+                  (FeatureReference name="r")))))
           (Membership visibility="default"
             (Usage kind="connection" name="named" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
               (ConnectorEnd target="*ast.FeatureChainExpr"
@@ -59,7 +71,7 @@
               (Membership visibility="default"
                 (Documentation locale=""))))
           (Membership visibility="default"
-            (Usage kind="connection" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (Usage kind="connection" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="connect"
               (ConnectorEnd target="*ast.FeatureChainExpr"
                 (FeatureChainExpr member="p"
                   (FeatureReference name="x")))

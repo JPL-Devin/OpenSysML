@@ -1059,7 +1059,9 @@ func (w *featureValueWalk) connectors(inst *runtime.Instance, indent string) []s
 // connectorKeyword names the kind of connector an object materializes, for a
 // connector that has no name to show.
 func connectorKeyword(conn *runtime.Instance) string {
-	if usage, ok := conn.Type.Decl.(*ast.Usage); ok && usage.Keyword != "" {
+	// `connect a.p to b.q` states its ends after the keyword rather than naming a
+	// kind, so it is labelled by the kind it declares.
+	if usage, ok := conn.Type.Decl.(*ast.Usage); ok && usage.Keyword != "" && usage.Keyword != "connect" {
 		return usage.Keyword
 	}
 	return "connector"

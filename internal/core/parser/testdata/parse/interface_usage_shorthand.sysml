@@ -21,6 +21,7 @@ package Interfaces {
 	}
 	interface b1.p to b2.p;
 	interface b1.p to rearAxle.half.p;
+	interface [1] b1.p to [1] b2.p;
 	interface named : Coupling connect b1.p to b2.p {
 		doc /* a named interface states its ends after `connect` */
 	}

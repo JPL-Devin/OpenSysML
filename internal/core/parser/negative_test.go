@@ -222,6 +222,8 @@ func TestNegative(t *testing.T) {
 
 		// A connection, interface or flow usage stating its ends where its name
 		// would go still states both ends and closes the body it opens.
+		{"connect_no_ends", "part def P { connect; }"},
+		{"connect_body_no_ends", "part def P { connect { attribute x; } }"},
 		{"connect_body_unclosed", "part def P { part a; part b; connect a to b { attribute x; }"},
 		{"connect_to_no_target_before_body", "part def P { part a; connect a to { } }"},
 		{"interface_ends_no_target", "package P { part a; interface a.p to ; }"},

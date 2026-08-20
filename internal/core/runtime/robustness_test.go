@@ -2598,9 +2598,9 @@ func testAcceptDeadlockReportsEveryWaitingAccept(t *testing.T) {
 	}
 }
 
-// testAcceptStatementDeadlockInALoop: an accept node standing as a statement of a
-// loop body suspends that body, and a suspension nothing can end is reported as a
-// typed deadlock rather than looping forever.
+// testAcceptStatementDeadlockInALoop: an accept node written in a loop body would
+// have to suspend a flow that has no token to park, so it is reported when reached
+// rather than passed over or looped on forever.
 func testAcceptStatementDeadlockInALoop(t *testing.T) {
 	done := make(chan error, 1)
 	go func() {
@@ -2628,12 +2628,10 @@ func testAcceptStatementDeadlockInALoop(t *testing.T) {
 	}
 
 	if err == nil {
-		t.Fatal("expected an error, the suspended accept statement completed")
+		t.Fatal("expected an error, the accept in the loop body was passed over")
 	}
-	// The loop keeps the action live around its parked accept, so the run ends on
-	// the step budget rather than on the deadlock a lone accept reports.
-	if !errors.Is(err, ErrAcceptDeadlock) && !errors.Is(err, ErrStepLimitExceeded) {
-		t.Errorf("expected a typed deadlock or step-limit error, got: %v", err)
+	if !strings.Contains(err.Error(), "'accept' in a loop or branch body") {
+		t.Errorf("expected the accept in a loop body to be reported, got: %v", err)
 	}
 }
 

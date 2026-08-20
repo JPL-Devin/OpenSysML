@@ -17,6 +17,7 @@ package Interconnection {
 			doc /* the ports the connection joins */
 		}
 		connect x.p to assembly.inner.p;
+		connect [1] x.p to [1] r.p;
 		connection named connect x.p to r.p {
 			doc /* a named connection states its ends after `connect` */
 		}

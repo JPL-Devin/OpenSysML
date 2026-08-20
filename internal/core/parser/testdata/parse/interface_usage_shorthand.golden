@@ -65,6 +65,18 @@
               (FeatureChainExpr member="half"
                 (FeatureReference name="rearAxle"))))))
       (Membership visibility="default"
+        (Usage kind="interface" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (ConnectorEnd target="*ast.FeatureChainExpr"
+            (Multiplicity range=false
+              (LiteralInteger value="1"))
+            (FeatureChainExpr member="p"
+              (FeatureReference name="b1")))
+          (ConnectorEnd target="*ast.FeatureChainExpr"
+            (Multiplicity range=false
+              (LiteralInteger value="1"))
+            (FeatureChainExpr member="p"
+              (FeatureReference name="b2")))))
+      (Membership visibility="default"
         (Usage kind="interface" name="named" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (Relationship kind="typing" target=Coupling
             (*ast.QualifiedName))

@@ -768,7 +768,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		// introduces; it declares nothing of its own (SysML.xtext ConnectionUsage).
 		if kw == "connect" {
 			p.advance() // consume 'connect'
-			return applyPrefixes(p.parseUsage(start, ast.UsageConnection, "", mods, false))
+			return applyPrefixes(p.parseUsage(start, ast.UsageConnection, "connect", mods, false))
 		}
 
 		p.advance() // consume the kind keyword
@@ -1555,7 +1555,8 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		(kind == ast.UsageSuccession && isAnonymous) ||
 		(kind == ast.UsageAllocation && p.atAllocateShorthand()) ||
 		(kind == ast.UsageConnector && p.atKeyword("from")) ||
-		((kind == ast.UsageConnection || kind == ast.UsageInterface) && p.atConnectorShorthandEnds())
+		((kind == ast.UsageConnection || kind == ast.UsageInterface) &&
+			(keyword == "connect" || p.atConnectorShorthandEnds()))
 	if !skipIdentification {
 		u.Ident = p.parseUsageIdentification(kind)
 	}
@@ -2476,6 +2477,9 @@ func (p *Parser) parseBodyMember() ast.Node {
 	// Also exclude constraint (has both def/usage forms but shouldn't be enum literal name)
 	isUsageOnlyKwForEnum := p.at(lexer.Keyword) && (p.peek().KeywordID == "subject" || p.peek().KeywordID == "objective" ||
 		p.peek().KeywordID == "succession" || p.peek().KeywordID == "inv" || p.peek().KeywordID == "connector" ||
+		// `connect` introduces a connection usage's ends, so `connect;` is that
+		// usage missing them rather than a literal named `connect`.
+		p.peek().KeywordID == "connect" ||
 		p.peek().KeywordID == "satisfy" || p.peek().KeywordID == "verify" || p.peek().KeywordID == "step" || p.peek().KeywordID == "expr" || p.peek().KeywordID == "constraint" ||
 		p.peek().KeywordID == "interaction" || p.peek().KeywordID == "bool" || p.peek().KeywordID == "assoc" || p.peek().KeywordID == "struct" ||
 		p.peek().KeywordID == "class" || p.peek().KeywordID == "predicate" ||
@@ -2889,9 +2893,17 @@ func (p *Parser) parseTierBEnds(u *ast.Usage, kind ast.UsageKind) {
 	case ast.UsageConnection, ast.UsageInterface:
 		// `connection c connect a to b` states its ends after `connect`; `connect a
 		// to b` and `interface a.p to b.p` state them after the kind keyword itself.
-		if p.atKeyword("connect") {
+		switch {
+		case p.atKeyword("connect"):
 			p.parseConnectorEnds(u, "connect")
-		} else if p.atConnectorShorthandEnds() {
+		case u.Keyword == "connect":
+			// The keyword introduced the ends, so it is the ConnectorPart of the
+			// grammar and states at least one end.
+			p.parseConnectorEnds(u, "")
+			if len(u.ConnectorEnds) == 0 {
+				p.error(p.peek().Span, "expected connector end after 'connect'")
+			}
+		case p.atConnectorShorthandEnds():
 			p.parseConnectorEnds(u, "")
 		}
 	case ast.UsageConnector:
@@ -3114,10 +3126,17 @@ func (p *Parser) parseConnectorFromTo(u *ast.Usage) {
 // arbitrarily deep feature chain such as `differential.leftDiffPort` — followed
 // by kw.
 func (p *Parser) atEndThenKeyword(kw string) bool {
-	if !p.atName() {
+	return p.endThenKeywordAt(0, kw)
+}
+
+// endThenKeywordAt is atEndThenKeyword from the token at offset from.
+func (p *Parser) endThenKeywordAt(from int, kw string) bool {
+	switch p.peekN(from).Kind {
+	case lexer.Identifier, lexer.UnrestrictedName:
+	default:
 		return false
 	}
-	i := 1
+	i := from + 1
 	for p.peekN(i).Kind == lexer.Dot || p.peekN(i).Kind == lexer.ColonColon {
 		switch p.peekN(i + 1).Kind {
 		case lexer.Identifier, lexer.UnrestrictedName, lexer.Keyword:
@@ -3145,9 +3164,34 @@ func (p *Parser) atAllocateShorthand() bool {
 
 // atConnectorShorthandEnds reports whether the cursor is at connector ends stated
 // with no keyword of their own: `connect x.p to y.p`, `interface (a.p, b.p)`
-// (SysML.xtext ConnectorPart, InterfacePart).
+// (SysML.xtext ConnectorPart, InterfacePart). A multiplicity written here is the
+// first end's, so the ends are recognized past it.
 func (p *Parser) atConnectorShorthandEnds() bool {
-	return p.at(lexer.LParen) || p.atEndThenKeyword("to")
+	if p.at(lexer.LParen) {
+		return true
+	}
+	return p.endThenKeywordAt(p.pastBracketed(0), "to")
+}
+
+// pastBracketed returns the offset of the token after the balanced `[…]` group
+// at offset from, or from itself where no group starts there.
+func (p *Parser) pastBracketed(from int) int {
+	if p.peekN(from).Kind != lexer.LBracket {
+		return from
+	}
+	depth := 0
+	for i := from; p.peekN(i).Kind != lexer.EOF; i++ {
+		switch p.peekN(i).Kind {
+		case lexer.LBracket:
+			depth++
+		case lexer.RBracket:
+			depth--
+			if depth == 0 {
+				return i + 1
+			}
+		}
+	}
+	return from
 }
 
 // parseFlowEnds parses an optional `of <payload>` followed by either

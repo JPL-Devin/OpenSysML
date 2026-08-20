@@ -34,13 +34,13 @@
           (ConnectorEnd target="d"
             (*ast.QualifiedName))))
       (Membership visibility="default"
-        (Usage kind="connection" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+        (Usage kind="connection" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="connect"
           (ConnectorEnd target="a"
             (*ast.QualifiedName))
           (ConnectorEnd target="b"
             (*ast.QualifiedName))))
       (Membership visibility="default"
-        (Usage kind="connection" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+        (Usage kind="connection" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="connect"
           (ConnectorEnd target="a"
             (*ast.QualifiedName))
           (ConnectorEnd target="b"
@@ -48,7 +48,7 @@
           (ConnectorEnd target="c"
             (*ast.QualifiedName))))
       (Membership visibility="default"
-        (Usage kind="connection" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+        (Usage kind="connection" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="connect"
           (ConnectorEnd target="a"
             (*ast.QualifiedName))
           (ConnectorEnd target="b"

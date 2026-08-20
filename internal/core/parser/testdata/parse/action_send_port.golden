@@ -14,7 +14,7 @@
           (Membership visibility="default"
             (Usage kind="port" name="inPort" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
           (Membership visibility="default"
-            (Usage kind="connection" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (Usage kind="connection" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="connect"
               (ConnectorEnd target="outPort"
                 (*ast.QualifiedName))
               (ConnectorEnd target="inPort"
