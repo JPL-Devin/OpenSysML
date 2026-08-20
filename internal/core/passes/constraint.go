@@ -432,11 +432,8 @@ func (cc *constraintChecker) checkRedefinition(sym *symbols.Symbol) {
 			if !resolved || candidate == nil {
 				continue
 			}
-			if candidate.OwnerScope != nil && candidate.OwnerScope.Owner() != nil {
-				switch candidate.OwnerScope.Owner().Kind {
-				case symbols.SymbolPackage, symbols.SymbolNamespace:
-					continue
-				}
+			if isPackageLevelFeature(candidate) {
+				continue
 			}
 			redefined = candidate
 			inherited = cc.isInheritedMember(featuringOwner, candidate, qn.Parts[len(qn.Parts)-1].Text)
@@ -565,18 +562,30 @@ func (cc *constraintChecker) isInheritedMember(
 		if found, ok := cc.model.LookupMember(supertype, name); ok && found == candidate {
 			return true
 		}
-
-		if candidateFQN == "" || cc.resolver.Index() == nil {
-			continue
-		}
-		supertypeFQN := cc.resolver.Index().GetFQN(supertype)
-		if supertypeFQN == candidateFQN ||
-			strings.HasPrefix(supertypeFQN, candidateFQN+"::") {
-			return true
+		// KerML featured-by members can inherit a nested specialization rooted
+		// at the redefined feature, as in TimeVaryingFeatures.kerml.
+		if candidateFQN != "" && cc.resolver.Index() != nil {
+			supertypeFQN := cc.resolver.Index().GetFQN(supertype)
+			if strings.HasPrefix(supertypeFQN, candidateFQN+"::") {
+				return true
+			}
 		}
 	}
 
 	return false
+}
+
+func isPackageLevelFeature(sym *symbols.Symbol) bool {
+	if sym == nil || sym.OwnerScope == nil || sym.OwnerScope.Owner() == nil {
+		return false
+	}
+	switch sym.OwnerScope.Owner().Kind {
+	case symbols.SymbolPackage, symbols.SymbolNamespace:
+	default:
+		return false
+	}
+	usage, ok := sym.Decl.(*ast.Usage)
+	return ok && usage.Keyword == "feature"
 }
 
 // extractUsageType extracts the type of a usage via its RelTyping relationship.

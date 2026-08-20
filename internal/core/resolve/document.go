@@ -476,6 +476,7 @@ func (r *Resolver) resolveRelationships(scope *symbols.Scope, decl ast.Node, rel
 			}
 
 			// Special case: redefinitions should resolve in inherited scope
+			// Self-subsetting must resolve in the declaration scope so cycle checks see `p4 :> p4`.
 			if rel.Kind == ast.RelRedefines || (rel.Kind == ast.RelSubsets && !relationshipTargetsDecl(rel, decl)) {
 				if qn, ok := target.(*ast.QualifiedName); ok {
 					r.resolveRedefinition(scope, qn, decl)
@@ -552,6 +553,7 @@ func (r *Resolver) headerHasName(scope *symbols.Scope, name string) bool {
 }
 
 func relationshipTargetsDecl(rel *ast.Relationship, decl ast.Node) bool {
+	// Keep a declaration's self-reference out of inherited lookup; cycle detection handles it.
 	if rel == nil || decl == nil || rel.Target == nil {
 		return false
 	}
