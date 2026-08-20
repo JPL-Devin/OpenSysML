@@ -28,6 +28,7 @@ type Model struct {
 	primTypes     map[*symbols.Symbol]PrimType
 	scalars       map[*symbols.Symbol]PrimType // stdlib scalar symbols, resolved once
 	params        map[*symbols.Symbol]behaviorParameters
+	unioning      map[*symbols.Symbol][]*symbols.Symbol
 	ends          map[*symbols.Symbol][]*symbols.Symbol
 
 	superEdgeCache map[*symbols.Symbol][]superEdge      // generalization edges with conjugation
@@ -65,6 +66,7 @@ func NewModel(resolver *resolve.Resolver) *Model {
 		memberSources: make(map[*symbols.Symbol][]*symbols.Symbol),
 		primTypes:     make(map[*symbols.Symbol]PrimType),
 		params:        make(map[*symbols.Symbol]behaviorParameters),
+		unioning:      make(map[*symbols.Symbol][]*symbols.Symbol),
 		ends:          make(map[*symbols.Symbol][]*symbols.Symbol),
 
 		superEdgeCache: make(map[*symbols.Symbol][]superEdge),
@@ -378,9 +380,13 @@ func (m *Model) AllSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 	return order
 }
 
-// Conforms reports whether a conforms to b: a == b, or b is a (transitive)
-// supertype of a.
+// Conforms reports whether a conforms to b: a == b, b is a (transitive)
+// supertype of a, or a is the union of types that all conform to b.
 func (m *Model) Conforms(a, b *symbols.Symbol) bool {
+	return m.conforms(a, b, nil)
+}
+
+func (m *Model) conforms(a, b *symbols.Symbol, unioning map[*symbols.Symbol]bool) bool {
 	if a == nil || b == nil {
 		return false
 	}
@@ -392,7 +398,76 @@ func (m *Model) Conforms(a, b *symbols.Symbol) bool {
 			return true
 		}
 	}
-	return false
+	return m.unionConforms(a, b, unioning)
+}
+
+// unionConforms reports whether a is declared as the union of types that all
+// conform to b. A union's instances are exactly those of its unioning types
+// (KerML 1.0 §8.3.3), so `classifier MyWheel unions MyWheel1, MyWheel2`
+// conforms to every type both of them conform to. unioning guards a cycle.
+func (m *Model) unionConforms(a, b *symbols.Symbol, unioning map[*symbols.Symbol]bool) bool {
+	unions := m.UnioningTypes(a)
+	if len(unions) == 0 || unioning[a] {
+		return false
+	}
+	if unioning == nil {
+		unioning = make(map[*symbols.Symbol]bool)
+	}
+	unioning[a] = true
+	defer delete(unioning, a)
+	for _, u := range unions {
+		if !m.conforms(u, b, unioning) {
+			return false
+		}
+	}
+	return true
+}
+
+// UnioningTypes returns the resolved targets of sym's `unions` relationships:
+// the types sym is declared to be the union of (KerML 1.0 §8.3.3). Unioning is
+// not a generalization edge — a union is constrained by its members rather than
+// inheriting from them — so it is resolved on its own. The result is memoized.
+func (m *Model) UnioningTypes(sym *symbols.Symbol) []*symbols.Symbol {
+	if sym == nil {
+		return nil
+	}
+	if cached, ok := m.unioning[sym]; ok {
+		return cached
+	}
+	m.unioning[sym] = nil
+
+	var out []*symbols.Symbol
+	seen := make(map[*symbols.Symbol]bool)
+	for _, rel := range RelationshipsOf(sym) {
+		if rel == nil || rel.Target == nil || rel.Kind != ast.RelUnions {
+			continue
+		}
+		targetNode := rel.Target
+		if fr, ok := targetNode.(*ast.FeatureReference); ok {
+			targetNode = fr.Name
+		}
+		qn, isQN := targetNode.(*ast.QualifiedName)
+		if !isQN {
+			continue
+		}
+		target, ok := m.resolver.ResolveQualified(sym.OwnerScope, qn)
+		if !ok || target == nil {
+			continue
+		}
+		if resolved, aliasOK := m.resolver.ResolveAliasTarget(target); aliasOK {
+			target = resolved
+		} else {
+			continue
+		}
+		if target == sym || seen[target] {
+			continue
+		}
+		seen[target] = true
+		out = append(out, target)
+	}
+
+	m.unioning[sym] = out
+	return out
 }
 
 // isAnything reports whether sym is Base::Anything, the classifier every type
