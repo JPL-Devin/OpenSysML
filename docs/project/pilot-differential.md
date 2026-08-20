@@ -132,13 +132,13 @@ nor double-counted as two independent disagreements.
 
 | Root | Files | Fully agreeing | Ours | Pilot | Agreed | Severity-only | Only ours | Only pilot |
 |---|---|---|---|---|---|---|---|---|
-| `examples/sysml-v2-training` | 100 | 98 | 2 | 0 | 0 | 0 | 2 | 0 |
-| `examples/pilot-corpora/sysml-examples` | 98 | 38 | 337 | 539 | 0 | 0 | 337 | 0 |
-| `examples/pilot-corpora/sysml-validation` | 56 | 33 | 121 | 0 | 0 | 0 | 121 | 0 |
+| `examples/sysml-v2-training` | 100 | 100 | 0 | 0 | 0 | 0 | 0 | 0 |
+| `examples/pilot-corpora/sysml-examples` | 98 | 38 | 334 | 0 | 0 | 0 | 334 | 0 |
+| `examples/pilot-corpora/sysml-validation` | 56 | 34 | 118 | 0 | 0 | 0 | 118 | 0 |
 | `testdata` | 9 | 0 | 24 | 67 | 18 | 1 | 5 | 48 |
-| `examples` | 12 | 1 | 2 | 140 | 0 | 0 | 2 | 140 |
+| `examples` | 12 | 2 | 0 | 140 | 0 | 0 | 0 | 140 |
 | `cmd/pilot-diff/testdata` (probes) | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **Total** | **276** | **171** | **486** | **207** | **18** | **1** | **467** | **188** |
+| **Total** | **276** | **175** | **476** | **207** | **18** | **1** | **457** | **188** |
 
 The important change in this run is the second corpus row: the pilot-only diagnostics in
 `pilot-examples` fell from 539 to 0 after the root order stopped relying on filenames and
@@ -146,8 +146,10 @@ started ordering by declared namespace names. `Annex_A_VehicleViews.sysml` now r
 `SysML v2 Spec Annex A SimpleVehicleModel.sysml`, so the reference no longer sees a missing
 `SimpleVehicleModel` namespace at line 2.
 
-`pilot-validation` is unchanged by that harness fix: it still contributes 121 only-ours
-syntax diagnostics, and those are parser gaps, not ordering artifacts.
+`pilot-validation` is unchanged by that harness fix. It contributes 121 only-ours syntax
+diagnostics in the pre-merge comparison used for this adjudication; the current main-based
+baseline has 118 after the unrelated keyword-as-name fix in #335. These are parser gaps, not
+ordering artifacts.
 
 ---
 
@@ -158,8 +160,10 @@ syntax diagnostics, and those are parser gaps, not ordering artifacts.
 The 121 `pilot-validation` syntax-only discrepancies and the bulk of the
 `pilot-examples` syntax-only discrepancies come from four missing productions: `connect a to b
 { ... }`, `flow a.x to b.y { ... }`, anonymous `interface a.p to b.q`, and `accept` on an
-action usage declaration (`action got accept e : E { ... }`). The child session is fixing
-those parser gaps; they remain open here.
+action usage declaration (`action got accept e : E { ... }`). Representative corpus locations are
+`02-Parts Interconnection/2a-Parts Interconnection.sysml:97,157,162` and
+`03-Function-based Behavior/3a-Function-based Behavior-1.sysml:58,102,112`. The child session is
+fixing those parser gaps; they remain open here.
 
 | Files | Diagnostic | Verdict |
 |---|---|---|

@@ -3,43 +3,14 @@
   "roots": [
     {
       "dir": "examples/sysml-v2-training",
-      "files": [
-        {
-          "agreement": [],
-          "openSysMLOnly": [
-            {
-              "category": "syntax",
-              "count": 1,
-              "line": 26,
-              "severity": "warning"
-            }
-          ],
-          "path": "24. States/State Actions.sysml",
-          "pilotOnly": [],
-          "severityMismatch": []
-        },
-        {
-          "agreement": [],
-          "openSysMLOnly": [
-            {
-              "category": "syntax",
-              "count": 1,
-              "line": 34,
-              "severity": "warning"
-            }
-          ],
-          "path": "25. Transitions/Transition Actions.sysml",
-          "pilotOnly": [],
-          "severityMismatch": []
-        }
-      ],
+      "files": [],
       "name": "training",
       "totals": {
         "agreement": 0,
         "files": 100,
-        "filesFullyAgreeing": 98,
-        "openSysMLDiagnostics": 2,
-        "openSysMLOnly": 2,
+        "filesFullyAgreeing": 100,
+        "openSysMLDiagnostics": 0,
+        "openSysMLOnly": 0,
         "pilotDiagnostics": 0,
         "pilotOnly": 0,
         "severityMismatch": 0
@@ -1406,12 +1377,6 @@
             {
               "category": "syntax",
               "count": 1,
-              "line": 434,
-              "severity": "warning"
-            },
-            {
-              "category": "syntax",
-              "count": 1,
               "line": 463,
               "severity": "warning"
             },
@@ -1534,19 +1499,7 @@
             {
               "category": "syntax",
               "count": 1,
-              "line": 47,
-              "severity": "warning"
-            },
-            {
-              "category": "syntax",
-              "count": 1,
               "line": 76,
-              "severity": "warning"
-            },
-            {
-              "category": "syntax",
-              "count": 1,
-              "line": 126,
               "severity": "warning"
             },
             {
@@ -2118,8 +2071,8 @@
         "agreement": 0,
         "files": 98,
         "filesFullyAgreeing": 38,
-        "openSysMLDiagnostics": 337,
-        "openSysMLOnly": 337,
+        "openSysMLDiagnostics": 334,
+        "openSysMLOnly": 334,
         "pilotDiagnostics": 0,
         "pilotOnly": 0,
         "severityMismatch": 0
@@ -2486,12 +2439,6 @@
             {
               "category": "syntax",
               "count": 1,
-              "line": 105,
-              "severity": "warning"
-            },
-            {
-              "category": "syntax",
-              "count": 1,
               "line": 129,
               "severity": "warning"
             },
@@ -2530,12 +2477,6 @@
             {
               "category": "syntax",
               "count": 1,
-              "line": 106,
-              "severity": "warning"
-            },
-            {
-              "category": "syntax",
-              "count": 1,
               "line": 130,
               "severity": "warning"
             },
@@ -2553,20 +2494,6 @@
             }
           ],
           "path": "05-State-based Behavior/5-State-based Behavior-1a.sysml",
-          "pilotOnly": [],
-          "severityMismatch": []
-        },
-        {
-          "agreement": [],
-          "openSysMLOnly": [
-            {
-              "category": "syntax",
-              "count": 1,
-              "line": 59,
-              "severity": "warning"
-            }
-          ],
-          "path": "05-State-based Behavior/5-State-based Behavior-2.sysml",
           "pilotOnly": [],
           "severityMismatch": []
         },
@@ -2851,9 +2778,9 @@
       "totals": {
         "agreement": 0,
         "files": 56,
-        "filesFullyAgreeing": 33,
-        "openSysMLDiagnostics": 121,
-        "openSysMLOnly": 121,
+        "filesFullyAgreeing": 34,
+        "openSysMLDiagnostics": 118,
+        "openSysMLOnly": 118,
         "pilotDiagnostics": 0,
         "pilotOnly": 0,
         "severityMismatch": 0
@@ -3513,26 +3440,6 @@
         },
         {
           "agreement": [],
-          "openSysMLOnly": [
-            {
-              "category": "syntax",
-              "count": 1,
-              "line": 38,
-              "severity": "warning"
-            },
-            {
-              "category": "syntax",
-              "count": 1,
-              "line": 65,
-              "severity": "warning"
-            }
-          ],
-          "path": "parser_features_demo_action_semantics.sysml",
-          "pilotOnly": [],
-          "severityMismatch": []
-        },
-        {
-          "agreement": [],
           "openSysMLOnly": [],
           "path": "phase-c-behavioral-bodies.sysml",
           "pilotOnly": [
@@ -3952,9 +3859,9 @@
       "totals": {
         "agreement": 0,
         "files": 12,
-        "filesFullyAgreeing": 1,
-        "openSysMLDiagnostics": 2,
-        "openSysMLOnly": 2,
+        "filesFullyAgreeing": 2,
+        "openSysMLDiagnostics": 0,
+        "openSysMLOnly": 0,
         "pilotDiagnostics": 140,
         "pilotOnly": 140,
         "severityMismatch": 0
@@ -3979,9 +3886,9 @@
   "totals": {
     "agreement": 18,
     "files": 276,
-    "filesFullyAgreeing": 171,
-    "openSysMLDiagnostics": 486,
-    "openSysMLOnly": 467,
+    "filesFullyAgreeing": 175,
+    "openSysMLDiagnostics": 476,
+    "openSysMLOnly": 457,
     "pilotDiagnostics": 207,
     "pilotOnly": 188,
     "severityMismatch": 1
