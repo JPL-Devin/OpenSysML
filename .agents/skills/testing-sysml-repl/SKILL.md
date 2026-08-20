@@ -4089,3 +4089,42 @@ values (`crates = 36`; `MassPerCrate` → `crates = 1`, `mass = 0.0`), the unsat
 `%configure test::ringFamily::variantsAgree all` on `nested_variants.sysml` (3 selections; the
 solvers list them in different orders, which is not a defect). `%configure` names the **constraint**
 (`…::variantsAgree`), not the part.
+
+## Proving parser fixes: "was the body actually read?" and corpus sweeps
+
+For parser PRs that make a previously-rejected notation parse (connector/interface/flow bodies,
+accept nodes as statements, …), a clean `-validate` alone is weak evidence: the parser could be
+skipping the body it now tolerates. Two probes settle it, and both are worth having in the plan:
+
+- **Members of an *anonymous* usage are not in the symbol index at all.** `%search wireGauge` after
+  loading `connect a.p to b.p { attribute wireGauge : Gauge; }` answers `no symbol matches` — and so
+  does a plain anonymous `part : Sensor { attribute anonPartMember : Gauge; }`, so this is
+  pre-existing ownership behavior, **not** a dropped body. Don't report it as a bug; always compare
+  against an anonymous *part* body before concluding anything.
+- **The authoritative body-visibility probe is a deliberately unresolvable type inside the body**:
+  `connect a.p to b.p { attribute a : NoSuchType; }` must report
+  `unresolved reference: NoSuchType` at the in-body column. A dropped body prints nothing and
+  exits 0. Use the named form (`connection c connect a to b { … }`, `action n accept e : E { … }`)
+  when you want `%search` to show `Pkg::Owner::c::member` instead.
+- For `accept`, assert the action name, the payload and any body member resolve as three separate
+  rows: `%search engineStart` yields `Demo::Startup::engineStarted::engineStart attributeUsage`
+  while `%search engineStarted` yields the `actionUsage` — proof they did not collapse into one.
+
+**Corpus sweep against a contrast binary** (`examples/pilot-corpora`, ~454 files) is the cheapest
+regression net, but two traps ruin it:
+
+- The corpus paths **contain spaces**: `for f in $(find …)` word-splits and every validate silently
+  runs on a nonexistent fragment, producing a bogus "0 differences, all identical" result. Use
+  `find … -print0 | while IFS= read -r -d '' f`.
+- Compare **per-file `grep -c 'error:'` counts**, not the clean/total ratio: most corpus files fail
+  for unrelated unimplemented features, so the ratio barely moves while individual files improve.
+- Expect some files to get *more* errors after a syntax fix. Validation is tiered, so a file that
+  used to die at Tier 1 (`did not analyse cleanly; no check was made`) now reaches name resolution
+  and reports pre-existing unresolved references. Confirm this reading by validating the file
+  **together with the model it imports** (copy both into a temp dir and `-validate <dir>/`); if the
+  remaining diagnostics are all `unresolved member/reference` in other feature areas, it is
+  tier-unmasking, not a regression.
+- To show that leftover errors in a partially-fixed file are only **cascade** from a known
+  unimplemented gap, patch a temp copy replacing just that construct (e.g. a body on
+  `first a then b { … }` / `merge m { … }` → `;`) and validate the copy — clean output proves the
+  downstream diagnostics were recovery noise.
