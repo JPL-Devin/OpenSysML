@@ -450,6 +450,33 @@ func (p *Parser) atFeatureSpecialization() bool {
 	return false
 }
 
+// beginsDeclarationTail reports whether the token after a name continues a
+// keyword-less usage declaration (SysML.xtext DefaultReferenceUsage): a
+// specialization or a feature value, e.g. `T1 = 10.0;`, `x :> y = e;`.
+func beginsDeclarationTail(t, t2 lexer.Token) bool {
+	switch t.Kind {
+	case lexer.Eq, lexer.ColonEq, lexer.ColonGt, lexer.ColonGtGt, lexer.ColonColonGt, lexer.EqGt:
+		return true
+	case lexer.Colon:
+		// A typing (`kpl : DerivedUnit = km / L;`) names its type next.
+		return t2.Kind == lexer.Identifier || t2.Kind == lexer.UnrestrictedName
+	case lexer.Keyword:
+		switch t.KeywordID {
+		case "subsets", "references", "crosses", "redefines":
+			return true
+		case "defined":
+			return t2.Kind == lexer.Keyword && t2.KeywordID == "by"
+		}
+	}
+	return false
+}
+
+// atKeywordlessUsage reports whether a name begins a usage declared with no
+// kind keyword at all (SysML.xtext DefaultReferenceUsage).
+func (p *Parser) atKeywordlessUsage() bool {
+	return p.atName() && beginsDeclarationTail(p.peekN(1), p.peekN(2))
+}
+
 // atDefUsageStart reports whether the current token begins a def/usage
 // declaration: a feature specialization stated in place of a name, a
 // conjugation, a feature-modifier keyword or a kind keyword.
@@ -1014,12 +1041,15 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 			mods.isComposite || mods.isDerived || mods.isIndividual || mods.isEvent ||
 			mods.portion != ast.PortionNone
 		hasNameWithMultOrMods := p.atNameOrKeyword() && (p.peekN(1).Kind == lexer.LBracket || p.peekN(1).Kind == lexer.Colon || isPostModifierKeyword(p.peekN(1)))
+		// A DefaultReferenceUsage needs no keyword at all (SysML.xtext:632):
+		// `T1 = 10.0;`, `distancePerVolume :> scalarQuantities = d / v;`.
+		keywordlessDecl := p.atKeywordlessUsage()
 		// SysML v2 §7.27.4: a user-defined keyword may declare a usage without
 		// any language-defined keyword (`#cause 'battery old' { ... }`). The
 		// kind of such a usage comes from the metadata, not the syntax.
 		keywordOnlyUsage := len(prefixes) > 0 &&
 			(p.at(lexer.Identifier) || p.at(lexer.UnrestrictedName) || p.atFeatureSpecialization())
-		if hasModifiers || hasNameWithMultOrMods || keywordOnlyUsage {
+		if hasModifiers || hasNameWithMultOrMods || keywordOnlyUsage || keywordlessDecl {
 			kind, keyword := modifierImpliedKind(mods)
 			return applyPrefixes(p.parseUsage(start, kind, keyword, mods, false))
 		}
@@ -1147,6 +1177,24 @@ func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, keyword str
 			hasBody = false
 		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
 			members = p.parseStateBody()
+			hasBody = true
+		}
+	case ast.DefCase, ast.DefAnalysisCase, ast.DefVerificationCase, ast.DefUseCase:
+		// Case bodies may end in a ResultExpressionMember (SysML.xtext
+		// CalculationBodyPart): `vehicle.mass` as the last member.
+		if p.accept2(lexer.Semicolon) {
+			hasBody = false
+		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
+			members = p.parseCaseBody()
+			hasBody = true
+		}
+	case ast.DefEnumeration:
+		// Enumeration bodies hold EnumeratedValues, whose keyword and
+		// declaration are both optional (SysML.xtext EnumeratedValue): `= 60.0;`.
+		if p.accept2(lexer.Semicolon) {
+			hasBody = false
+		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
+			members = p.parseEnumBody()
 			hasBody = true
 		}
 	default:
@@ -1738,6 +1786,15 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 			members = p.parseRequirementBody()
 			hasBody = true
 		}
+	case ast.UsageCase, ast.UsageAnalysisCase, ast.UsageVerificationCase, ast.UsageUseCase:
+		// Case bodies may end in a ResultExpressionMember (SysML.xtext
+		// CalculationBodyPart): `vehicle.mass` as the last member.
+		if p.accept2(lexer.Semicolon) {
+			hasBody = false
+		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
+			members = p.parseCaseBody()
+			hasBody = true
+		}
 	case ast.UsageState:
 		// State usage bodies: always use parseStateBody (it handles both state-specific and generic members)
 		// Optional: parallel or exclusive keyword before body
@@ -1804,6 +1861,85 @@ func (p *Parser) parseDefUsageBodyMembers() []ast.Node {
 		// form a converted model is written back as.
 		if p.atKeyword("then") {
 			body.add(p.parseSuccessionEdge(p.advance()))
+			continue
+		}
+		body.add(p.parseBodyMember())
+		if p.peek().Span.Offset == before && !p.at(lexer.RBrace) && !p.atEOF() {
+			p.advance()
+		}
+	}
+	p.expect(lexer.RBrace, "expected '}' to close body")
+	return body.finish()
+}
+
+// parseCaseBody parses a case body's members, which may end in a result
+// expression member (SysML.xtext CalculationBodyPart): `vehicle.mass`.
+func (p *Parser) parseCaseBody() []ast.Node {
+	body := p.newBodyBuilder()
+	for !p.at(lexer.RBrace) && !p.atEOF() {
+		before := p.peek().Span.Offset
+		if body.atSuccession() {
+			body.takeSuccession()
+			continue
+		}
+		if p.atKeyword("then") {
+			body.add(p.parseSuccessionEdge(p.advance()))
+			continue
+		}
+		if p.atResultExpression() {
+			body.add(p.ParseExpression())
+			continue
+		}
+		body.add(p.parseBodyMember())
+		if p.peek().Span.Offset == before && !p.at(lexer.RBrace) && !p.atEOF() {
+			p.advance()
+		}
+	}
+	p.expect(lexer.RBrace, "expected '}' to close body")
+	return body.finish()
+}
+
+// atResultExpression reports whether the current token begins a bare result
+// expression rather than a member declaration. Keyword-led members belong to
+// the member parser, and a name whose next token continues a declaration is a
+// declaration.
+func (p *Parser) atResultExpression() bool {
+	t := p.peek()
+	if t.Kind == lexer.Keyword || t.Kind == lexer.LBrace {
+		return false
+	}
+	if !p.atExprStart() || p.atVarDeclaration() {
+		return false
+	}
+	if !p.atName() {
+		return true
+	}
+	next := p.peekN(1)
+	isDecl := next.Kind == lexer.Colon || next.Kind == lexer.Semicolon ||
+		next.Kind == lexer.Keyword || next.Kind == lexer.LBracket ||
+		next.Kind == lexer.LBrace ||
+		beginsDeclarationTail(next, p.peekN(2))
+	return !isDecl
+}
+
+// parseEnumBody parses an enumeration body, whose enumerated values may be
+// anonymous (SysML.xtext EnumeratedValue): `= 60.0;`.
+func (p *Parser) parseEnumBody() []ast.Node {
+	body := p.newBodyBuilder()
+	for !p.at(lexer.RBrace) && !p.atEOF() {
+		before := p.peek().Span.Offset
+		if p.at(lexer.Eq) || p.at(lexer.ColonEq) {
+			start := p.peek().Span.Offset
+			trivia := p.takeTrivia()
+			u := &ast.Usage{Kind: ast.UsageEnumeration}
+			p.acceptValueOperator()
+			u.Value = p.ParseExpression()
+			p.expect(lexer.Semicolon, "expected ';' after enumerated value")
+			u.NodeSpan = p.spanFrom(start)
+			m := &ast.Membership{Member: u}
+			m.NodeSpan = p.spanFrom(start)
+			m.SetLeadingTrivia(trivia)
+			body.add(m)
 			continue
 		}
 		body.add(p.parseBodyMember())

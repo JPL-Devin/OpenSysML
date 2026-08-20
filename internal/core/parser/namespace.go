@@ -254,6 +254,15 @@ func (p *Parser) parseMember() ast.Node {
 // Returns the parsed node if successful, nil if current position doesn't start a declaration.
 // Uses backtracking to avoid consuming tokens on failure.
 func (p *Parser) tryParseDeclaration() ast.Node {
+	// In a statement position `name = expr;` is an assignment shorthand,
+	// not a keyword-less usage; leave it to the caller.
+	if p.atName() {
+		switch p.peekN(1).Kind {
+		case lexer.Eq, lexer.ColonEq:
+			return nil
+		}
+	}
+
 	start := p.peek().Span.Offset
 	cp := p.checkpoint()
 
@@ -294,7 +303,14 @@ func (p *Parser) parseDeclaration(start int) ast.Node {
 		return p.parseMultiplicityDecl(start)
 	case p.atKeyword("filter"):
 		return p.parseFilter(start)
+	case p.atKeyword("locale"):
+		// An anonymous comment carrying a locale (SysML.xtext Comment: the
+		// `comment` keyword is optional).
+		return p.parseAnonymousLocaleComment(start)
 	case p.atDefUsageStart():
+		return p.parseDefUsage(start)
+	case p.atKeywordlessUsage():
+		// A DefaultReferenceUsage declared with no keyword: `T1 = 10.0;`.
 		return p.parseDefUsage(start)
 	case p.at(lexer.At):
 		// A metadata usage is a namespace member as much as it is a body member.
@@ -472,6 +488,19 @@ func (p *Parser) parseComment(start int) ast.Node {
 		if tok, ok := p.expect(lexer.String, "expected locale string"); ok {
 			c.Locale = p.src.Text(tok.Span)
 		}
+	}
+	c.BodySpan = p.expectCommentBody(start)
+	c.NodeSpan = p.spanFrom(start)
+	return c
+}
+
+// parseAnonymousLocaleComment parses `locale "en_US" /* ... */`, a Comment
+// whose optional `comment` keyword is omitted (SysML.xtext:86).
+func (p *Parser) parseAnonymousLocaleComment(start int) ast.Node {
+	p.advance() // 'locale'
+	c := &ast.Comment{}
+	if tok, ok := p.expect(lexer.String, "expected locale string"); ok {
+		c.Locale = p.src.Text(tok.Span)
 	}
 	c.BodySpan = p.expectCommentBody(start)
 	c.NodeSpan = p.spanFrom(start)
