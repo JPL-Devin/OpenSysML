@@ -56,6 +56,16 @@ where it used to be silent. Nothing was renamed and no interface changed.
   `Type::ownedDisjoining` / `Disjoining::owningType` opposite, reproducible from three lines
   (`classifier A; classifier B disjoint from A;`) in a fresh resource set. It is recorded with
   its reproducer rather than absorbed into our own numbers.
+- **The harness picks the reference validator per file**, by the file's own language rather than
+  per corpus, so a directory holding both `.sysml` and `.kerml` is judged by the SysML validator
+  and the KerML one respectively, and a missing KerML validator is reported rather than silently
+  skipped.
+- **The 373 diagnostics only we report on the two OMG SysML corpora are adjudicated construct by
+  construct**, into ten classes recorded in `docs/project/spec-compliance.md` with the grammar
+  production each one cites (`ExtendedUsage`, keyword-less members, node bodies, `return`,
+  `binding`/`message`/`event` declarations, requirement members, resolution through imports and
+  inheritance, and textual representation). Four of the ten are wholly or partly fixed below; the
+  rest name the site that rejects the notation, so the work is scoped rather than discovered.
 - **`cmd/grammar-coverage` measures the pinned OMG grammars against every corpus we hold**:
   483 of 727 productions and 802 of 807 notational forms have input-presence evidence. The
   number is deliberately an over-approximation — presence of an input a production admits, never
@@ -89,6 +99,9 @@ where it used to be silent. Nothing was renamed and no interface changed.
   Resolution of a member inherited through an implicit base no longer recurses.
 - **An unknown subsetting target is tolerated** rather than reported as a KerML type error about
   something else.
+- **The REPL reads each snippet as the kind of file it came from**, so a `.kerml` snippet gets
+  KerML's contextual names and a `.sysml` snippet keeps SysML's reservations, and a session mixing
+  the two keeps each snippet's language rather than analyzing everything as SysML.
 
 ### KerML notation the reference accepts now parses
 
@@ -134,6 +147,12 @@ where it used to be silent. Nothing was renamed and no interface changed.
   gives it, so `var a : Integer;` without a kind is still reported.
 - **A modifier before a kind prefix keeps the kind**, which was dropped from the tree and from
   every diagnostic that read it.
+- **Every node production's optional body parses, lowers and executes**: a transition, send or
+  accept node and every control node may carry `{ ... }`, a transition target may be qualified
+  (`then done.stop`), a `for` variable may be typed and a body parameter may redefine. A merge
+  node's body runs with the traversal that wins rather than on every arrival. Three corpus forms
+  stay rejected and are recorded as such: `exhibit vehicleStates.on { ... }`, a bare
+  `ref patient { ... }`, and `send x via p to r`, which parses but is reported as not executable.
 
 ### Notation accepted beyond the grammars now says so
 
@@ -155,6 +174,16 @@ where it used to be silent. Nothing was renamed and no interface changed.
   mismatch)" and inherits what the aliased definition declares. An alias cycle terminates.
 - **An invocation of an aliased action or function is type-checked** against its parameters
   instead of going unchecked.
+- **An unqualified name resolves through imports and inheritance as a written reference does**, so
+  a name a namespace acquired *by* an import is visible to a wildcard import of it, a feature
+  reachable by feature chain may be subset, and a redefinition may introduce the type its own
+  members are looked up through (`item :>> shape : Box [1] { ... }`). A private import still
+  re-exports nothing.
+- **A usage may be typed by anything its kind's taxonomy admits** — a part by any occurrence
+  definition, a use case by a use-case definition, a succession by what the reference's own rule
+  allows — where a narrower table reported a kind mismatch on models the reference accepts.
+  `action d : OccurrenceFunctions::destroy` is still rejected: the cached library symbol for a
+  KerML `function` is recorded as a calc usage, which is a different layer.
 - **A declaration with a short name is listed once** among a document's members, not twice.
 - **A part typing check that read an unrelated declaration is gone**, with the diagnostics it
   produced on valid models.
