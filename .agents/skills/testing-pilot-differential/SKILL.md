@@ -246,6 +246,37 @@ Two cheap surfaces that *do* prove the split:
    payloads. `languageId` is irrelevant — the URI extension is what `KindOf` reads. This is the
    closest thing to the real editor-facing surface and takes seconds.
 
+## The library index cache can hold *poisoned* records from an abandoned iteration
+
+`internal/core/libs/record.go` invalidates on-disk records by a single integer, `formatVersion`,
+and the record filename ends in `-v<N>.idx` under `$XDG_CACHE_HOME/sysml-ls/libs/`. The records
+persist a symbol's **kind**, and for a cached library symbol (`sym.Decl == nil`) the runtime reads
+that kind directly (`runtime/invoke_calc.go: isCalcSymbol`, `isActionSymbol`, …). Consequences when
+testing a PR that changes how a library element is classified *and* bumps `formatVersion`:
+
+- If any earlier build on the same machine already wrote records under the **same** version number
+  (e.g. an abandoned iteration that classified `function` as `SymbolKerMLType` instead of
+  `SymbolCalcDef`), the new binary happily reuses those records and misbehaves — observed as
+  `sysml -constraint C model.sysml` → `not a calc: invalid symbol` for a library function call
+  (`RealFunctions::sqrt`), while the same command in a fresh `XDG_CACHE_HOME` passes. Both caches
+  contain the same file names and sizes, so `ls`/`stat` proves nothing.
+- So always run the *same* command in (a) the ambient cache and (b) a fresh
+  `XDG_CACHE_HOME=$(mktemp -d)`, and treat a difference as a cache-record problem, not a code bug.
+  A green `go test ./...` will not catch it: tests use `t.TempDir()` caches.
+- To find out *which* kind a record persisted, drop a throwaway `*_test.go` into
+  `internal/core/libs` that `gob`-decodes each `*.idx` into `IndexRecord` and prints
+  `symRecord.FQN` + `.Kind` (`symRecord` is unexported, so it must live in that package). Run it
+  with `go test -v -run ... ./internal/core/libs` — plain `go test` swallows stdout. Delete the file
+  afterwards and confirm `git status` is clean.
+- Selective bisect: copy the cache aside and delete only `*-v<old>.idx` or only `*-v<new>.idx` to
+  see which generation is responsible.
+- Worth flagging to the author: a version bump only protects users who never ran an intermediate
+  build of the same branch; if development churned through the same number, bumping once more is
+  the cheap fix.
+- Cross-check the harness too: re-run `go run ./cmd/pilot-diff` under a fresh `XDG_CACHE_HOME` and
+  diff the JSON against the ambient-cache run (observed identical at `501d70fd`) — otherwise the
+  differential numbers you reproduce may be a property of your cache.
+
 ## Running the pilot validator directly
 
 `build/pilot-validator/validate-sysml <file.sysml>` prints diagnostics on **stderr** in GNU
