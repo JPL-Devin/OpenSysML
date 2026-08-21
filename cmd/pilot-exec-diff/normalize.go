@@ -45,7 +45,7 @@ func normalizePilot(raw string) sideResult {
 		return sideResult{Raw: raw, PilotSilent: true}
 	}
 	for _, line := range lines {
-		if strings.HasPrefix(line, "ERROR:") {
+		if strings.HasPrefix(line, "ERROR:") || strings.HasPrefix(line, "EXCEPTION:") {
 			return sideResult{Raw: raw, Error: true}
 		}
 	}

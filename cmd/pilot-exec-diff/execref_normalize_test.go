@@ -21,6 +21,7 @@ func TestNormalizePilotSamples(t *testing.T) {
 		{"silent", "", normalized{}, false},
 		{"unevaluated", "OperatorExpression + (fb98f88c-9172-45bc-8ed8-b78fe546719b)", normalized{Unevaluated: true}, false},
 		{"error", "ERROR: evaluation failed", normalized{}, true},
+		{"exception", "EXCEPTION:java.lang.RuntimeException: evaluation failed", normalized{}, true},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -105,6 +106,7 @@ func TestBucketResults(t *testing.T) {
 		{"order", sideResult{Value: normalized{Kind: kindSequence, Elements: []normalized{{Kind: kindInt, Value: "1"}, {Kind: kindInt, Value: "2"}}}}, sideResult{Value: normalized{Kind: kindSequence, Elements: []normalized{{Kind: kindInt, Value: "2"}, {Kind: kindInt, Value: "1"}}}}, "order-only"},
 		{"pilot unevaluated", sideResult{Value: normalized{Unevaluated: true}}, sideResult{Value: normalized{Kind: kindQuantity, Value: "3.00 [kg]"}}, "pilot-unevaluated"},
 		{"pilot error", sideResult{Error: true}, sideResult{Value: normalized{Kind: kindInt, Value: "1"}}, "pilot-error"},
+		{"pilot exception", normalizePilot("EXCEPTION:java.lang.RuntimeException: evaluation failed"), sideResult{Value: normalized{Kind: kindInt, Value: "1"}}, "pilot-error"},
 		{"ours error", sideResult{Value: normalized{Kind: kindInt, Value: "1"}}, sideResult{Error: true}, "ours-error"},
 		{"both error", sideResult{Error: true}, sideResult{Error: true}, "both-error"},
 		{"pilot silent", normalizePilot(""), sideResult{}, "pilot-silent"},
