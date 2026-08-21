@@ -197,9 +197,15 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		r.walkMembers(scope, d.Body)
 	case *ast.AssumeMember:
 		r.resolveExpr(scope, d.Expression)
+		r.resolveRelationships(scope, d, d.Relationships)
+		r.resolveMultiplicity(scope, d.Multiplicity)
+		r.resolveExpr(scope, d.Value)
 		r.walkConstraintBody(scope, d, r.resolveConstraintReference(scope, d.Reference), d.Body)
 	case *ast.RequireMember:
 		r.resolveExpr(scope, d.Expression)
+		r.resolveRelationships(scope, d, d.Relationships)
+		r.resolveMultiplicity(scope, d.Multiplicity)
+		r.resolveExpr(scope, d.Value)
 		r.walkConstraintBody(scope, d, r.resolveConstraintReference(scope, d.Reference), d.Body)
 	case *ast.EntryMember:
 		r.walkMembers(scope, d.Actions)
@@ -461,6 +467,16 @@ func (r *Resolver) resolvePrefixes(scope *symbols.Scope, prefixes []*ast.PrefixM
 			r.ResolveQualified(scope, p.Type)
 		}
 	}
+}
+
+// resolveMultiplicity resolves the bounds of a multiplicity, which may name
+// features rather than state literals (`[n..m]`).
+func (r *Resolver) resolveMultiplicity(scope *symbols.Scope, mult *ast.Multiplicity) {
+	if mult == nil {
+		return
+	}
+	r.resolveExpr(scope, mult.Lower)
+	r.resolveExpr(scope, mult.Upper)
 }
 
 // resolveRelationships resolves each relationship target of decl as a qualified

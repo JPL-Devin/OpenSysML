@@ -1453,6 +1453,23 @@ func continuesCondition(tok lexer.Token) bool {
 	return isOperator
 }
 
+// atReturnedUsage reports whether `return` is followed by a usage declaration
+// rather than an expression (`'return' UsageElement`, SysML.xtext:1961): a
+// specialization begins one, as does a name a specialization follows.
+func (p *Parser) atReturnedUsage() bool {
+	if p.atFeatureSpecialization() {
+		return true
+	}
+	if !p.atName() {
+		return false
+	}
+	cp := p.checkpoint()
+	p.parseIdentification()
+	specialized := p.atFeatureSpecialization()
+	p.restore(cp)
+	return specialized
+}
+
 // parseResultMemberIn parses a `return` member. In a statement position
 // (inStatement) a lone name after `return` is the value returned, since a
 // result parameter is declared among the body's own members, not inside a
@@ -1519,7 +1536,7 @@ func (p *Parser) parseResultMemberIn(inStatement bool) ast.Node {
 	// Pattern 6: return [modifiers] name : Type { body } (with body)
 	// Pattern 7: return :>> name : Type = expr; (leading relationships before name)
 	// Use lookahead to distinguish Pattern 1 from Pattern 4
-	if len(leadingRels) > 0 || p.at(lexer.Colon) || (p.atName() && p.peekN(1).Kind == lexer.Colon) {
+	if len(leadingRels) > 0 || p.atReturnedUsage() {
 		// Parse as result parameter (named or anonymous usage with typing)
 		u := &ast.Usage{
 			Kind:        usageKind,
@@ -1543,24 +1560,9 @@ func (p *Parser) parseResultMemberIn(inStatement bool) ast.Node {
 			u.Ident = p.parseIdentification()
 		}
 
-		// Parse typing relationship ': Type'
-		if !p.at(lexer.Colon) {
-			p.error(p.peek().Span, "expected ':' after result parameter name")
-		} else {
-			p.advance() // consume ':'
-
-			// Parse type name directly (QualifiedName)
-			qn := p.parseQualifiedName()
-			if qn != nil {
-				rel := &ast.Relationship{Kind: ast.RelTyping, Target: qn}
-				rel.NodeSpan = qn.NodeSpan
-				u.Relationships = append(u.Relationships, rel)
-			}
-		}
-
-		// Parse additional relationships (e.g., :>> redefines)
-		additionalRels := p.parseRelationships(false)
-		u.Relationships = append(u.Relationships, additionalRels...)
+		// FeatureSpecializationPart: the typing and the specializations, in the
+		// order written (`: T`, `:> engine`, `: T :>> x`).
+		u.Relationships = append(u.Relationships, p.parseRelationships(true)...)
 
 		// Parse optional multiplicity '[n..m]'
 		if p.at(lexer.LBracket) {
@@ -2019,21 +2021,18 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 func (p *Parser) parseAssumeMember(start int) ast.Node {
 	// 'assume' already consumed
 
-	// Check for 'assume constraint { body }' pattern
+	// Check for 'assume constraint [<decl>] (; | { body })' pattern
 	if p.atKeyword("constraint") {
 		p.advance() // consume 'constraint'
-
-		// Parse constraint body (expect '{')
-		if !p.at(lexer.LBrace) {
-			p.error(p.peek().Span, "expected '{' after 'assume constraint'")
-			en := &ast.ErrorNode{Message: "expected '{' after assume constraint"}
-			en.NodeSpan = p.spanFrom(start)
-			return en
-		}
-		p.advance() // consume '{'
-
+		d := p.parseOwnedConstraintDecl("assume constraint")
 		node := &ast.AssumeMember{
-			Body: p.parseNestedConstraintConditions(),
+			Name:          d.name,
+			NameSpan:      d.nameSpan,
+			Relationships: d.relationships,
+			Multiplicity:  d.multiplicity,
+			Value:         d.value,
+			HasBody:       d.hasBody,
+			Body:          d.body,
 		}
 		node.NodeSpan = p.spanFrom(start)
 		return node
@@ -2065,21 +2064,18 @@ func (p *Parser) parseAssumeMember(start int) ast.Node {
 func (p *Parser) parseRequireMember(start int) ast.Node {
 	// 'require' already consumed
 
-	// Check for 'require constraint { body }' pattern
+	// Check for 'require constraint [<decl>] (; | { body })' pattern
 	if p.atKeyword("constraint") {
 		p.advance() // consume 'constraint'
-
-		// Parse constraint body (expect '{')
-		if !p.at(lexer.LBrace) {
-			p.error(p.peek().Span, "expected '{' after 'require constraint'")
-			en := &ast.ErrorNode{Message: "expected '{' after require constraint"}
-			en.NodeSpan = p.spanFrom(start)
-			return en
-		}
-		p.advance() // consume '{'
-
+		d := p.parseOwnedConstraintDecl("require constraint")
 		node := &ast.RequireMember{
-			Body: p.parseNestedConstraintConditions(),
+			Name:          d.name,
+			NameSpan:      d.nameSpan,
+			Relationships: d.relationships,
+			Multiplicity:  d.multiplicity,
+			Value:         d.value,
+			HasBody:       d.hasBody,
+			Body:          d.body,
 		}
 		node.NodeSpan = p.spanFrom(start)
 		return node
@@ -2105,6 +2101,46 @@ func (p *Parser) parseRequireMember(start int) ast.Node {
 	}
 	node.NodeSpan = p.spanFrom(start)
 	return node
+}
+
+// ownedConstraintDecl is the declaration and body of the constraint an
+// `assume`/`require constraint …` member owns.
+type ownedConstraintDecl struct {
+	name          string
+	nameSpan      source.Span
+	relationships []*ast.Relationship
+	multiplicity  *ast.Multiplicity
+	value         ast.Node
+	body          []ast.Node
+	hasBody       bool
+}
+
+// parseOwnedConstraintDecl parses `ConstraintUsageDeclaration CalculationBody`
+// (SysML.xtext:2015, :2070) with `constraint` already consumed: the declaration
+// and the body are both optional, so `assume constraint c1 : C;` and
+// `assume constraint { … }` are equally well formed.
+func (p *Parser) parseOwnedConstraintDecl(what string) ownedConstraintDecl {
+	var d ownedConstraintDecl
+	if p.atName() {
+		ident := p.parseIdentification()
+		d.name = ident.Name
+		d.nameSpan = ident.NameSpan
+	}
+	d.relationships = p.parseRelationships(true)
+	if p.at(lexer.LBracket) {
+		d.multiplicity = p.parseMultiplicity()
+	}
+	if p.acceptValueOperator() {
+		d.value = p.ParseExpression()
+	}
+	if p.at(lexer.LBrace) {
+		p.advance() // consume '{'
+		d.hasBody = true
+		d.body = p.parseNestedConstraintConditions()
+		return d
+	}
+	p.expect(lexer.Semicolon, "expected ';' or '{' after '"+what+"'")
+	return d
 }
 
 // tryParseConstraintReference parses the reference-subsetting form of a

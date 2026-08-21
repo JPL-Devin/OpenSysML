@@ -1,0 +1,28 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="Portions" library=false standard=false
+      (Membership visibility="default"
+        (Usage kind="class" name="Interval" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="class" name="Timeslice" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="interval" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+              (Relationship kind="typing" target=Interval
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Usage kind="class" name="Occ" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="expr" name="while" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Membership visibility="default"
+                (Usage kind="attribute" name="timeslice" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+                  (Relationship kind="typing" target=Timeslice
+                    (*ast.QualifiedName))))
+              (Membership visibility="default"
+                (Usage kind="attribute" name="snapshot" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+                  (Relationship kind="typing" target=Timeslice
+                    (*ast.QualifiedName))))
+              (Usage kind="attribute" name="result" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+                (Relationship kind="typing" target=Interval
+                  (*ast.QualifiedName))
+                (FeatureChainExpr member="interval"
+                  (FeatureReference name="timeslice"))))))))))

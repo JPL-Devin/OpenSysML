@@ -210,6 +210,7 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 				kids = append(kids, r)
 			}
 		}
+		kids = append(kids, v.Members...)
 		if v.Result != nil {
 			kids = append(kids, v.Result)
 		}
@@ -410,9 +411,12 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 			fmt.Fprintf(b, `(RequireMember name=%q`, qnString(v.Reference))
 			writeChildren(b, depth, v.Body)
 		} else if v.Expression == nil {
-			// Nested-constraint form: require constraint { expr }
+			// Constraint form: require constraint [decl] (; | { expr })
 			b.WriteString(`(RequireMember`)
-			writeChildren(b, depth, v.Body)
+			if v.Name != "" {
+				fmt.Fprintf(b, ` constraint=%q`, v.Name)
+			}
+			writeChildren(b, depth, ownedConstraintChildren(v.Relationships, v.Multiplicity, v.Value, v.Body))
 		} else {
 			// Expression form: require expr;
 			b.WriteString(`(RequireMember`)
@@ -427,7 +431,10 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		}
 		b.WriteString(`(AssumeMember`)
 		if v.Expression == nil {
-			writeChildren(b, depth, v.Body)
+			if v.Name != "" {
+				fmt.Fprintf(b, ` constraint=%q`, v.Name)
+			}
+			writeChildren(b, depth, ownedConstraintChildren(v.Relationships, v.Multiplicity, v.Value, v.Body))
 		} else {
 			writeChildren(b, depth, []Node{v.Expression})
 		}
@@ -697,6 +704,22 @@ func defusageChildren(prefixes []*PrefixMetadata, rels []*Relationship, mult *Mu
 	}
 	kids = append(kids, members...)
 	return kids
+}
+
+// ownedConstraintChildren are the children of the constraint an assume/require
+// member declares, in written order.
+func ownedConstraintChildren(rels []*Relationship, mult *Multiplicity, value Node, body []Node) []Node {
+	kids := make([]Node, 0, len(rels)+len(body)+2)
+	for _, r := range rels {
+		kids = append(kids, r)
+	}
+	if mult != nil {
+		kids = append(kids, mult)
+	}
+	if value != nil {
+		kids = append(kids, value)
+	}
+	return append(kids, body...)
 }
 
 // usageChildren is defusageChildren for a Usage, additionally emitting the

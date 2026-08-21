@@ -1,0 +1,7 @@
+{
+  "type": "calc",
+  "inputs": [
+    {"type": "Real", "value": 21.0}
+  ],
+  "error": "no result expression"
+}
