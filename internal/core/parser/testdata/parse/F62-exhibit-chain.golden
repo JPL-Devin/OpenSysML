@@ -1,0 +1,23 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="F62Exhibit" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="state" abstract=false variation=false name="VehicleStates"
+          (SubstateMember name="on")
+          (SubstateMember name="off")))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Vehicle"
+          (Membership visibility="default"
+            (Usage kind="state" name="vehicleStates" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="exhibit state"
+              (Relationship kind="typing" target=VehicleStates
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Usage kind="part" name="vehicle" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Vehicle
+            (*ast.QualifiedName))
+          (Membership visibility="default"
+            (Usage kind="state" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="exhibit"
+              (Relationship kind="references" target=(expr)
+                (FeatureChainExpr member="on"
+                  (FeatureReference name="vehicleStates")))
+              (Documentation locale=""))))))))

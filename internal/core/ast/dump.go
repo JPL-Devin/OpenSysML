@@ -223,6 +223,9 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		return
 	case *Membership:
 		fmt.Fprintf(b, `(Membership visibility=%q`, visibilityString(v.Visibility))
+		if v.IsTypeFeature {
+			b.WriteString(` typeFeature=true`)
+		}
 		writeChildren(b, depth, []Node{v.Member})
 		return
 	case *Package:
@@ -260,7 +263,11 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 	case *Documentation:
 		fmt.Fprintf(b, `(Documentation locale=%q)`, v.Locale)
 	case *TextualRepresentation:
-		fmt.Fprintf(b, `(TextualRepresentation language=%q)`, v.Language)
+		fmt.Fprintf(b, `(TextualRepresentation language=%q`, v.Language)
+		if v.Ident.Name != "" {
+			fmt.Fprintf(b, ` name=%q`, v.Ident.Name)
+		}
+		b.WriteString(`)`)
 	case *PrefixMetadata:
 		fmt.Fprintf(b, `(PrefixMetadata type=%q)`, qnString(v.Type))
 	case *FilterMember:
@@ -270,7 +277,7 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 	case *Definition:
 		fmt.Fprintf(b, `(Definition kind=%q abstract=%t variation=%t name=%q`,
 			v.Kind.String(), v.IsAbstract, v.IsVariation, identName(v.Ident))
-		writeChildren(b, depth, defusageChildren(v.Prefixes, v.Relationships, nil, nil, v.Members))
+		writeChildren(b, depth, defusageChildren(v.Prefixes, v.Relationships, v.Multiplicity, nil, v.Members))
 		return
 	case *Usage:
 		fmt.Fprintf(b, `(Usage kind=%q name=%q ref=%t direction=%q composite=%t derived=%t ordered=%t nonunique=%t`,
@@ -281,6 +288,9 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		}
 		if v.IsVariant {
 			b.WriteString(` variant=true`)
+		}
+		if v.IsVariable {
+			b.WriteString(` variable=true`)
 		}
 		// The keyword a usage was written with, when it says more than the kind
 		// does: `exhibit state modes` is a state usage the enclosing part

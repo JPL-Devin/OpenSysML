@@ -333,7 +333,8 @@ const (
 	// RelFeaturedBy models a KerML TypeFeaturing written in a feature
 	// declaration: `featured by T` states a type the feature is a feature of
 	// (KerML.xtext TypeFeaturingPart, 8.3.3.1.4). KerML notation only.
-	RelFeaturedBy // 'featured by'
+	RelFeaturedBy  // 'featured by'
+	RelDifferences // 'differences'
 )
 
 func (k RelationshipKind) String() string {
@@ -370,6 +371,8 @@ func (k RelationshipKind) String() string {
 		return "by"
 	case RelFeaturedBy:
 		return "featured by"
+	case RelDifferences:
+		return "differences"
 	default:
 		return "unknown"
 	}
@@ -436,6 +439,7 @@ type Definition struct {
 	IsEvent       bool // 'event' modifier for event-driven occurrences
 	Visibility    Visibility
 	Ident         Identification
+	Multiplicity  *Multiplicity
 	Relationships []*Relationship
 	Members       []Node
 	HasBody       bool
@@ -458,6 +462,7 @@ type Usage struct {
 	IsVariation   bool // 'variation' modifier: the usage is a variation point
 	IsVariant     bool // declared with 'variant': a variant of the enclosing variation
 	IsReference   bool
+	IsVariable    bool // 'var' feature modifier
 	IsAll         bool // 'all' multiplicity propagation modifier
 	IsEnd         bool // 'end' feature modifier
 	IsChain       bool // 'chain' feature modifier
