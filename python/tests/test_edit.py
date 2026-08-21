@@ -594,12 +594,15 @@ class TestEditRoundTripAgainstRealService:
             assert "attribute callSign : ScalarValues::String" in edited
             assert conn.load_from_content(edited).find("callSign") is not None
 
-    def test_a_referenced_declaration_is_not_renamed(self, real_service):
+    def test_a_referenced_declaration_is_renamed_with_its_references(self, real_service):
         with Connection(port=real_service, auto_start=False) as conn:
             model = conn.load_from_content(MODEL)
-            with pytest.raises(RenameReferencedError) as excinfo:
-                model.edit().rename("Demo::SC::unitMass", "unitWeight").apply()
-        assert excinfo.value.referring_elements, "the refusal named no referrer"
+            result = model.edit().rename("Demo::SC::unitMass", "unitWeight").apply()
+            edited = str(result)
+            assert "attribute unitWeight : ISQ::MassValue = 1000.0[SI::kg];" in edited
+            assert "attribute total : ISQ::MassValue = unitWeight;" in edited
+            assert "unitMass" not in edited
+            assert conn.load_from_content(edited).find("unitWeight") is not None
 
     @pytest.mark.parametrize(
         "operation,expected",

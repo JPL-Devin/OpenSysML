@@ -2,8 +2,6 @@ package edit
 
 import (
 	"fmt"
-	"sort"
-	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
@@ -158,44 +156,6 @@ func (m Model) terminator(usage *ast.Usage) (source.Span, bool) {
 	return last, found
 }
 
-// renameSplice is the byte range a rename rewrites: the declaration's own name
-// token. References are not rewritten, so a referenced declaration is refused.
-func (m Model) renameSplice(i int, op Operation, sym *symbols.Symbol) (splice, error) {
-	ident, ok := declIdent(sym.Decl)
-	if !ok || ident.Name == "" || ident.NameSpan.Len == 0 {
-		return splice{}, &Error{
-			Failure:        FailureNotNamed,
-			OperationIndex: i,
-			Message: fmt.Sprintf("%s declares no name of its own to rename"+
-				" (a shorthand redefinition names the feature it redefines)", op.Target),
-		}
-	}
-	if err := checkName(i, op.NewName); err != nil {
-		return splice{}, err
-	}
-	if taken, ok := m.nameTaken(sym, op.NewName); ok {
-		return splice{}, &Error{
-			Failure:        FailureInvalidName,
-			OperationIndex: i,
-			Message: fmt.Sprintf("%s cannot be renamed to %q: that name already means %s where"+
-				" %s is declared, so the rename would make it ambiguous or silently rebind"+
-				" what reads that name",
-				op.Target, op.NewName, taken, op.Target),
-		}
-	}
-	if referring := m.referringTo(sym, ident.NameSpan); len(referring) > 0 {
-		return splice{}, &Error{
-			Failure:        FailureRenameReferenced,
-			OperationIndex: i,
-			Referring:      referring,
-			Message: fmt.Sprintf("%s is referenced by %s; renaming it would break those"+
-				" references, which this edit does not rewrite",
-				op.Target, strings.Join(referring, ", ")),
-		}
-	}
-	return splice{span: ident.NameSpan, text: op.NewName, opIndex: i, target: op.Target}, nil
-}
-
 // nameTaken names what the new name already means where sym is declared, with
 // sym's own binding hidden — a sibling, or a name reached through an enclosing
 // namespace, an import or inheritance. Renaming onto such a name says something
@@ -252,41 +212,6 @@ func declIdent(node ast.Node) (ast.Identification, bool) {
 	default:
 		return ast.Identification{}, false
 	}
-}
-
-// referringTo returns where this document refers to sym, by the FQN of each
-// referring namespace. The declaration's own name occurrence is not a reference:
-// a shorthand redefinition is collected at the very span being rewritten.
-func (m Model) referringTo(sym *symbols.Symbol, nameSpan source.Span) []string {
-	rootScope := m.Index.DocumentRoot(m.Source.Name())
-	if rootScope == nil {
-		return nil
-	}
-	r := m.resolver()
-	seen := map[string]bool{}
-	var out []string
-	for _, ref := range resolve.References(m.Root, rootScope) {
-		if ref.QN == nil {
-			continue
-		}
-		r.ResolveReference(ref)
-		for i, part := range ref.QN.Parts {
-			if part.Span == nameSpan {
-				continue
-			}
-			seg, ok := r.PartSymbol(ref.QN, i)
-			if !ok || !symbols.SameElement(seg, sym) {
-				continue
-			}
-			site := referenceSite(r, ref, part.Text)
-			if !seen[site] {
-				seen[site] = true
-				out = append(out, site)
-			}
-		}
-	}
-	sort.Strings(out)
-	return out
 }
 
 // referenceSite names where a reference is made: the namespace containing it,
