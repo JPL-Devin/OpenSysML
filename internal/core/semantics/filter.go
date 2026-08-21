@@ -352,8 +352,7 @@ func isFeaturingType(sym *symbols.Symbol) bool {
 	switch sym.Kind {
 	case symbols.SymbolPartDef, symbols.SymbolAttributeDef,
 		symbols.SymbolItemDef, symbols.SymbolOccurrenceDef,
-		symbols.SymbolIndividualDef, symbols.SymbolMetadataDef,
-		symbols.SymbolMetaclass, symbols.SymbolViewDef,
+		symbols.SymbolIndividualDef, symbols.SymbolViewDef,
 		symbols.SymbolViewpointDef, symbols.SymbolRenderingDef,
 		symbols.SymbolConcernDef, symbols.SymbolConnectionDef,
 		symbols.SymbolFlowDef, symbols.SymbolPortDef,

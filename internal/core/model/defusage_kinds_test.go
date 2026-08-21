@@ -8,8 +8,8 @@ func TestWorkspaceMixedNewKindsResolveClean(t *testing.T) {
 package Sys {
 	item def Fuel;
 	port def FuelPort;
-		part def Tank { port supply : FuelPort; out item fuelOut : Fuel; }
-		part def Engine { port intake : FuelPort; in item fuelIn : Fuel; }
+	part def Tank { port supply : FuelPort; out item fuelOut : Fuel; }
+	part def Engine { port intake : FuelPort; in item fuelIn : Fuel; }
 	part def Vehicle {
 		part tank : Tank;
 		part engine : Engine;
