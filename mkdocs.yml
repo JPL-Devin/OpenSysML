@@ -139,6 +139,7 @@ nav:
       - project/README.md
       - Spec compliance: project/spec-compliance.md
       - Training examples: project/training-examples.md
+      - Pilot corpora gate: project/pilot-corpora.md
       - Pilot differential: project/pilot-differential.md
       - Grammar coverage: project/grammar-coverage.md
       - Roadmap: project/roadmap.md

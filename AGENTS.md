@@ -53,6 +53,11 @@ fetch it once with `./scripts/download-training-examples.sh` and re-run
 too and sets `OPENSYSML_REQUIRE_TRAINING_CORPUS=1`, so there an absent corpus fails rather
 than skips.
 
+The three OMG pilot corpora are gated the same way: fetch them with
+`./scripts/download-pilot-corpora.sh` and run
+`go test -count=1 ./internal/core/model -run TestPilotCorpora`. CI sets
+`OPENSYSML_REQUIRE_PILOT_CORPORA=1`. See `docs/project/pilot-corpora.md`.
+
 ---
 
 ## 3. Repository Map
