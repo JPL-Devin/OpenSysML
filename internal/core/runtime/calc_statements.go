@@ -59,7 +59,7 @@ func (h *calcStmtHost) acceptReturn(value Value, _ lower.Return) error {
 }
 
 func (h *calcStmtHost) performer() *Instance {
-	// A direct calculation invocation may carry its performing object.
+	// A calculation's steps see the object in its evaluation context, or nil without one.
 	return h.self
 }
 

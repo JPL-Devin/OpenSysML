@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 )
 
@@ -199,6 +200,76 @@ func TestInvokeOperationPerformedByTheObject(t *testing.T) {
 			}
 		})
 	}
+}
+
+const nestedCalcOperationFixture = `
+	package test {
+		private import ScalarValues::*;
+		part def Tank {
+			attribute level : Integer = 2;
+			calc def ReadsLevel {
+				attribute observed : Integer = 0;
+				assign observed := level;
+				return value : Integer = observed;
+			}
+			calc reading : ReadsLevel;
+			calc capacityViaUsage {
+				return result : Integer = reading.value;
+			}
+		}
+	}
+`
+
+// A calc operation preserves its performing object through a nested calc usage.
+func TestCalcOperationNestedUsageSeesPerformingObject(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, nestedCalcOperationFixture))
+	root := idx.DocumentRoot("<test>")
+	tank := findSymbolByName(root, "Tank", ast.DefPart)
+	if tank == nil {
+		t.Fatal("Tank not found")
+	}
+	inst, err := ctx.Instantiate(tank)
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	if err := inst.SetFeatureValue(ctx, "level", intArgument(7)); err != nil {
+		t.Fatalf("SetFeatureValue: %v", err)
+	}
+
+	results, err := ctx.InvokeOperation(inst, "capacityViaUsage", nil)
+	if err != nil {
+		t.Fatalf("InvokeOperation: %v", err)
+	}
+	if got, ok := results["result"]; !ok || got.Const.Int != 7 {
+		t.Errorf("nested calc result = %v, want result = 7", results)
+	}
+}
+
+// An object-scoped calc usage keeps the materialized object's feature context.
+func TestObjectScopedCalcUsageSeesPerformingObject(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, nestedCalcOperationFixture))
+	root := idx.DocumentRoot("<test>")
+	tank := findSymbolByName(root, "Tank", ast.DefPart)
+	if tank == nil {
+		t.Fatal("Tank not found")
+	}
+	inst, err := ctx.Instantiate(tank)
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	if err := inst.SetFeatureValue(ctx, "level", intArgument(7)); err != nil {
+		t.Fatalf("SetFeatureValue: %v", err)
+	}
+	matches := idx.LookupQualified("test::Tank::reading")
+	if len(matches) != 1 {
+		t.Fatalf("test::Tank::reading: %d matching symbols, want 1", len(matches))
+	}
+
+	outputs, err := ctx.CalcUsageOutputs(matches[0], matches[0].OwnerScope, inst)
+	if err != nil {
+		t.Fatalf("CalcUsageOutputs: %v", err)
+	}
+	wantInt(t, outputs, "value", 7)
 }
 
 // Every path %invoke cannot run reports a typed error naming what it was asked.
