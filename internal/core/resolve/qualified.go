@@ -68,13 +68,14 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 	for i, seg := range qn.Parts[1:] {
 		var all []*symbols.Symbol
 
-		// Try local scope lookup first if available
+		// Try local scope lookup first if available. A segment names a member of
+		// the namespace the walk has reached, so it reaches only the visible ones.
 		if cur.Scope != nil {
-			all = symbols.PreferDeclared(cur.Scope.LookupLocalAll(seg.Text))
+			all = r.namedThroughNamespaces(symbols.PreferDeclared(cur.Scope.LookupLocalAll(seg.Text)))
 		}
 
 		if len(all) == 0 && cur.Scope != nil {
-			if sym, ok := r.lookupImportedMember(cur, cur.Scope, scope, seg.Text); ok {
+			if sym, ok := r.lookupImportedMember(cur, cur.Scope, scope, seg.Text); ok && r.namedThroughNamespace(sym) {
 				all = []*symbols.Symbol{sym}
 			}
 		}
@@ -86,7 +87,7 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 		memberFQN := curFQN + "::" + seg.Text
 		if len(all) == 0 && r.idx != nil {
 			found := r.idx.LookupQualifiedFrom(memberFQN, from)
-			candidates := r.admittedUnder(r.documentOf(scope), from, memberFQN, found)
+			candidates := r.namedThroughNamespaces(r.admittedUnder(r.documentOf(scope), from, memberFQN, found))
 			switch {
 			case len(candidates) == 1:
 				all = candidates
@@ -114,7 +115,7 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 		// declares: `engine::'4cylEngine'` reaches the variants of the type
 		// `engine` is typed by.
 		if len(all) == 0 {
-			if sym, ok := r.lookupMember(cur, seg.Text); ok {
+			if sym, ok := r.lookupMember(cur, seg.Text); ok && r.namedThroughNamespace(sym) {
 				all = []*symbols.Symbol{sym}
 			}
 		}
