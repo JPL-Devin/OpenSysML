@@ -744,14 +744,3 @@ func (cc *constraintChecker) resolveInheritedMember(owner *symbols.Symbol, qn *a
 	// For multi-part names, resolve normally (qualifiers won't be local members)
 	return cc.resolver.ResolveQualified(owner.Scope, qn)
 }
-
-// formatBound formats a Bound for display (infinite = "*", else numeric value).
-func formatBound(b semantics.Bound) string {
-	if b.Infinite {
-		return "*"
-	}
-	if b.Known {
-		return fmt.Sprintf("%d", b.Value)
-	}
-	return "?"
-}
