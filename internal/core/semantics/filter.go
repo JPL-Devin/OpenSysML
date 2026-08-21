@@ -299,7 +299,7 @@ func (m *Model) compileFeatureChain(scope *symbols.Scope, e *ast.FeatureChainExp
 			return &symbols.FilterPredicate{Op: symbols.FilterFeature, TypeFQN: typeFQN, Feature: feature, Span: span}
 		}
 	}
-	return unsupported(span, "a filter condition reads a feature of an annotation of the filtered element, as in `(as Safety).isMandatory`")
+	return unsupported(span, "a filter condition reads a feature through a chain of features, which OpenSysML does not evaluate (known limitation: the reference accepts chains rooted in a feature with no featuring type)")
 }
 
 // compileReference compiles a name a filter condition uses as a value: a feature

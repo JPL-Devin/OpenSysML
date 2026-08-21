@@ -1,6 +1,7 @@
 package passes
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
@@ -52,6 +53,21 @@ func TestF22EnumerationIdentityRemainsEvaluable(t *testing.T) {
 	}`
 	if diags := only(filterDiags(t, src), "filter-not-evaluable"); len(diags) != 0 {
 		t.Fatalf("enumeration identity should remain evaluable, got %v", diags)
+	}
+}
+
+func TestF22FeatureChainMessageNamesLimitation(t *testing.T) {
+	const src = `package ScalarValues { attribute def Integer; }
+	package E2 {
+		private import ScalarValues::*;
+		part def P { attribute n : Integer = 1; }
+		part p : P;
+		package Q { filter E2::p.n > 0; }
+	}`
+	const want = "a filter condition reads a feature through a chain of features, which OpenSysML does not evaluate (known limitation: the reference accepts chains rooted in a feature with no featuring type)"
+	diags := only(filterDiags(t, src), "filter-not-evaluable")
+	if len(diags) != 1 || !strings.Contains(diags[0].Message, want) {
+		t.Fatalf("expected the feature-chain limitation message, got %v", diags)
 	}
 }
 
