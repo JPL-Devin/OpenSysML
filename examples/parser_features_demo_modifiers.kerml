@@ -3,8 +3,8 @@
  * 
  * Demonstrates visibility modifiers and feature modifiers:
  * - protected/public/private visibility
- * - readonly modifier
- * - constant modifier
+ * - const modifier
+ * - var modifier
  * - nonunique/ordered post-multiplicity modifiers
  */
 
@@ -14,8 +14,8 @@ package demo_modifiers {
 	private import Items::Item;
 
 	// The types the demos below refer to.
-	classifier Config;
-	port def ConnectionPort;
+	struct Config;
+	classifier ConnectionPort;
 
 	feature VisibilityExample {
 		doc /*
@@ -30,18 +30,25 @@ package demo_modifiers {
 	}
 	
 	feature readonlyConfig: Config[1] {
-		doc /* Readonly modifier creates immutable features */
+		doc /* The const modifier creates immutable features */
 		
-		readonly feature systemName: String[1];
-		readonly feature version: String[1];
+		const feature systemName: String[1];
+		const feature version: String[1];
 	}
 	
-	feature constants {
-		doc /* Constant modifier for compile-time constants */
+	struct Variables {
+		doc /* The var modifier marks features whose value may change */
 		
-		abstract constant ref maxConnections: Integer[1];
-		abstract constant ref timeout: Real[1];
-		abstract constant ref defaultPort: Integer[1];
+		var feature currentConnections: Integer[1];
+		var feature elapsed: Real[1];
+	}
+	
+	struct Constants {
+		doc /* Const features act as compile-time constants */
+		
+		const feature maxConnections: Integer[1];
+		const feature timeout: Real[1];
+		const feature defaultPort: Integer[1];
 	}
 	
 	feature collections {
@@ -59,14 +66,14 @@ package demo_modifiers {
 			doc /* Combined: ordered bag */
 		}
 		
-		port connections: ConnectionPort[1..*] nonunique {
-			doc /* Port with nonunique after multiplicity (from Interfaces.sysml pattern) */
+		feature connections: ConnectionPort[1..*] nonunique {
+			doc /* Typed feature with nonunique after multiplicity */
 		}
 	}
 	
-	interface ExampleInterface {
-		doc /* Protected reference pattern from real stdlib */
+	struct ExampleInterface {
+		doc /* Protected redefinition pattern from real stdlib */
 		
-		protected ref thisParticipant :>> self;
+		protected feature thisParticipant :>> self;
 	}
 }

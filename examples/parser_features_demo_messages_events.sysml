@@ -1,10 +1,10 @@
 /*
  * Parser Features Demo: Messages & Events
  * 
- * Demonstrates message and event keywords:
- * - message keyword (Task 88)
- * - event modifier (Task 89)
- * - ref with body (Task 90)
+ * Demonstrates SysML message and event notation:
+ * - message keyword
+ * - event occurrence parameters
+ * - ref with body
  * 
  * Based on real stdlib patterns from Flows.sysml
  */
@@ -15,39 +15,35 @@ package MessagesAndEvents {
     private import ScalarValues::*;
 
     
-    // ===== Message Keyword (Task 88) =====
+    // ===== Message Keyword =====
     
     // A message is a flow, so a flow definition types one
     abstract flow def Message {
-        feature content: String;
-        feature timestamp: Real;
+        attribute content: String;
+        attribute timestamp: Real;
     }
     
-    // Message usage
-    abstract message messages: Message[0..*] nonunique;
+    // ===== Event Occurrences =====
     
-    // ===== Event Modifier (Task 89) =====
-    
-    // Event modifier marks occurrences/features as events
-    feature EventBasedFlow {
+    part def EventBasedFlow {
         // Event occurrence as parameter
         in event occurrence sourceEvent [1];
         in event occurrence targetEvent [0..1];
     }
     
-    // ===== Ref with Body (Task 90) =====
+    // ===== Ref with Body =====
     
     ref payload [0..*] {
         doc
         /* Reference feature with body members */
         
-        feature dataType: String;
-        feature size: Integer;
+        attribute dataType: String;
+        attribute size: Integer;
     }
     
     // ===== Combined Pattern =====
     
-    feature MessageChannel {
+    part def MessageChannel {
         // Message flows
         message incoming: Message[*] nonunique;
         message outgoing: Message[*] nonunique;
@@ -57,8 +53,8 @@ package MessagesAndEvents {
         
         // Ref with body
         ref config [1] {
-            feature maxSize: Integer;
-            feature timeout: Real;
+            attribute maxSize: Integer;
+            attribute timeout: Real;
         }
     }
 }

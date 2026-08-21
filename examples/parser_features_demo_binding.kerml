@@ -1,10 +1,10 @@
 /*
  * Parser Features Demo - Binding Usage
  * 
- * Demonstrates binding usage special syntax patterns:
- * - Basic binding with multiplicity
- * - Binding with name[mult] pattern
- * - Binding with source expression
+ * Demonstrates binding connector syntax patterns:
+ * - Anonymous binding with multiplicity
+ * - Binding with name[mult] declaration
+ * - Binding with feature chain ends
  * - Binding with 'of' keyword
  */
 
@@ -18,8 +18,8 @@ package demo_binding {
 		feature featureA[1];
 		feature featureB[1];
 		
-		// Multiplicity before name
-		binding [1] sourceToTarget = targetValue;
+		// Anonymous binding with multiplicity
+		binding [1] featureA = targetValue;
 		
 		// Named binding
 		binding linkAToB of [1] featureA = [1] featureB;
@@ -28,7 +28,7 @@ package demo_binding {
 	// Advanced binding: name[mult] with source (from ShapeItems.sysml)
 	feature advancedBindings {
 		doc /* 
-		 * Pattern: binding [outer_mult] name[inner_mult] source = value
+		 * Pattern: binding name[mult] of [mult] source = [mult] value
 		 * This pattern was a key fix in Task 54.
 		 */
 		
@@ -43,10 +43,10 @@ package demo_binding {
 			feature inputs[0..*];
 		}
 		
-		binding [1] bind [0..*] base.edges = [0..*] boundaryEdges;
+		binding edgeBinding [1] of [0..*] base.edges = [0..*] boundaryEdges;
 		
 		// Feature chain as source
-		binding [1] dataLink [0..*] system.outputs = [0..*] monitor.inputs;
+		binding dataLink [1] of [0..*] system.outputs = [0..*] monitor.inputs;
 	}
 	
 	// Binding with feature chains
@@ -64,8 +64,7 @@ package demo_binding {
 		feature serverAddress[1];
 		feature serverPort[1];
 		
-		binding startBinding = startEvent.timestamp;
-		binding endBinding = endEvent.timestamp;
+		binding startBinding of [1] startEvent.timestamp = [1] endEvent.timestamp;
 		
 		// Multiple bindings in sequence
 		binding [1] config.host = serverAddress;
@@ -73,7 +72,7 @@ package demo_binding {
 	}
 	
 	// Real-world pattern from stdlib
-	item part Shape {
+	struct Shape {
 		feature base {
 			feature edges[0..*];
 		}
@@ -81,7 +80,7 @@ package demo_binding {
 		feature boundaryEdges[0..*];
 		
 		// Bind collection elements
-		binding [1] bind [0..*] base.edges = [0..*] boundaryEdges {
+		binding edgeBinding [1] of [0..*] base.edges = [0..*] boundaryEdges {
 			doc /* Binds each edge in base to boundary */
 		}
 	}

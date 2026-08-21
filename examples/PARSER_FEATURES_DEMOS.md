@@ -21,8 +21,8 @@ These demos showcase parser improvements across multiple development sessions (S
 
 **Example:**
 ```kerml
-feature parent: Node[1];
-feature child: Node[0..*] inverse of parent;
+end feature parent: Node[1];
+end feature child: Node[0..*] inverse of parent;
 
 feature dataPath chains source.target;
 ```
@@ -31,8 +31,8 @@ feature dataPath chains source.target;
 
 **Visibility modifiers:**
 - `public` / `protected` / `private` - Access control
-- `readonly` - Immutable features
-- `constant` - Compile-time constants
+- `const` - Immutable features
+- `var` - Features whose value may change
 
 **Post-multiplicity modifiers:**
 - `ordered` - Maintains insertion order
@@ -40,36 +40,40 @@ feature dataPath chains source.target;
 
 **Example:**
 ```kerml
-protected ref thisParticipant :>> self;
-readonly feature version: String[1];
-abstract constant ref maxConnections: Integer[1];
-port connections: Connection[1..*] nonunique;
+protected feature thisParticipant :>> self;
+const feature version: String[1];
+var feature currentConnections: Integer[1];
+feature connections: ConnectionPort[1..*] nonunique;
 ```
 
 #### 3. Binding Demo (`parser_features_demo_binding.kerml`)
 
-**Binding usage patterns:**
-- Basic: `binding [mult] name = value`
-- With source: `binding [mult] name[mult2] source = value`
-- With 'of' keyword: `binding name of [mult] target = value`
-- Feature chains: `binding data = source.field`
+**Binding connector patterns:**
+- Anonymous with multiplicity: `binding [mult] target = value`
+- Named declaration: `binding name [mult] of [mult] source = [mult] value`
+- With 'of' keyword: `binding name of [mult] target = [mult] value`
+- Feature chains as ends: `binding [1] config.host = serverAddress`
 
 **Example:**
 ```kerml
-binding [1] bind [0..*] base.edges = [0..*] boundaryEdges;
-binding startTime = startEvent.timestamp;
+binding edgeBinding [1] of [0..*] base.edges = [0..*] boundaryEdges;
+binding startBinding of [1] startEvent.timestamp = [1] endEvent.timestamp;
 ```
 
-#### 4. Connectors & Succession Demo (`parser_features_demo_connectors.kerml`)
+#### 4. Connectors & Succession Demo (`parser_features_demo_connectors.sysml`)
 
 **Connection patterns:**
 - Named connections with typing
 - `connect` keyword: `connection :Type connect [1] a to [1] b`
 
+This demo uses SysML usage notation (`connection def`, `connect`, `action`), so it is a `.sysml`
+file. The KerML side of the same features (`connector`, `succession`, connector ends) is covered by
+demo 6, `parser_features_demo_advanced_connectors.kerml`.
+
 **Succession patterns:**
-- Named: `succession name first [1] x then [1] y`
-- Anonymous: `succession [1] x then [1] y`
-- With `first` keyword
+- Named: `succession name first x then y`
+- Anonymous: `succession first x then y`
+- Multiplicities on the ends: `succession first [1] x then [1] y`
 
 #### 5. Default Values Demo (`parser_features_demo_defaults.kerml`)
 
@@ -134,7 +138,7 @@ then action Step2 { assign result := data; }
 - Body params with multiplicity after type
 - Shorthand body param syntax (no `in` keyword)
 - Bool bodies with return statements
-- General members in constraint bodies
+- General members in predicate bodies
 
 **Example:**
 ```kerml
@@ -153,26 +157,29 @@ bool earlierCheck : Boolean {
 }
 ```
 
-#### 9. Messages & Events Demo (`parser_features_demo_messages_events.kerml`)
+#### 9. Messages & Events Demo (`parser_features_demo_messages_events.sysml`)
 
 **Features from Tasks 88-90:**
 - `message` keyword (synonym for flow)
-- `event` modifier
+- `event occurrence` parameters
 - `ref` with body members
 
+These are SysML-only keywords, so this demo is a `.sysml` file. The KerML counterparts
+(`interaction`/`flow`, features with bodies) are covered by demos 6 and 11.
+
 **Example:**
-```kerml
-// Message
-abstract message Message {
-    feature content: String;
+```sysml
+// Message flow definition
+abstract flow def Message {
+    attribute content: String;
 }
 
-// Event modifier
+// Event occurrence parameter
 in event occurrence sourceEvent [1];
 
 // Ref with body
 ref payload [0..*] {
-    feature dataType: String;
+    attribute dataType: String;
 }
 ```
 
@@ -198,7 +205,7 @@ abstract classifier Anything {
 }
 
 // Multiple typing
-ref multiTyped: Type1, Type2, Type3;
+feature multiTyped: Type1, Type2, Type3;
 
 // Subset statement
 subset laterOccurrence.successors subsets earlierOccurrence.successors;
@@ -209,10 +216,9 @@ subset laterOccurrence.successors subsets earlierOccurrence.successors;
 **Features from Tasks 62, 67, 70, 76, 79:**
 - Keywords as feature names in expressions
 - Identifier-based multiplicities
-- `bind` keyword shorthand
+- `binding` connectors in a behavior body
 - `step` usage with `do` as name
-- `require` constraint usage
-- Double redefines relationships
+- Features with bodies
 
 **Example:**
 ```kerml
@@ -220,10 +226,10 @@ subset laterOccurrence.successors subsets earlierOccurrence.successors;
 feature entrySequence = state.entry;
 
 // Identifier multiplicity
-succession [itemCount] items first [1] initialize then [maxCount] process;
+succession items [itemCount] first [1] initialize then [1] process;
 
-// Bind shorthand
-bind payload = accepter.payload;
+// Binding connector
+binding payload = accepter.payload;
 
 // Step with keyword name
 step do[1] subsets middle;
