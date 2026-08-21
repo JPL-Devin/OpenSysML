@@ -202,12 +202,10 @@ func TestInvokeOperationPerformedByTheObject(t *testing.T) {
 	}
 }
 
-// Each public operation invocation gets a fresh step budget, including calcs and
-// constraints that do not enter an executor.
-func TestInvokeOperationResetsRunBudgetForCalcsAndConstraints(t *testing.T) {
-	const maxSteps = 20
-
-	newInvocation := func() (*Context, *Instance) {
+// An operation invocation counts its own calc or constraint cost against the
+// step budget, while separate invocations receive separate budgets.
+func TestInvokeOperationCountsItsOwnCostAgainstBudget(t *testing.T) {
+	newInvocation := func(maxSteps int64) (*Context, *Instance) {
 		model, resolver, root := parseAndBuildModel(t, invokeFixture)
 		ctx := NewContext(model, resolver, maxSteps)
 		inst, err := ctx.Instantiate(resolveSymbol(t, root, "Tank"))
@@ -218,11 +216,20 @@ func TestInvokeOperationResetsRunBudgetForCalcsAndConstraints(t *testing.T) {
 	}
 
 	t.Run("calc", func(t *testing.T) {
-		ctx, inst := newInvocation()
-		for i := 0; i < 10; i++ {
+		ctx, inst := newInvocation(2)
+		results, err := ctx.InvokeOperation(inst, "rawCapacity", nil)
+		if !errors.Is(err, ErrStepLimitExceeded) {
+			t.Fatalf("InvokeOperation(rawCapacity) with budget 2: %v, want ErrStepLimitExceeded", err)
+		}
+		if results != nil {
+			t.Fatalf("InvokeOperation(rawCapacity) with budget 2 = %v, want no results", results)
+		}
+
+		ctx, inst = newInvocation(3)
+		for i := 0; i < 2; i++ {
 			results, err := ctx.InvokeOperation(inst, "rawCapacity", nil)
 			if err != nil {
-				t.Fatalf("InvokeOperation(rawCapacity), call %d: %v", i, err)
+				t.Fatalf("InvokeOperation(rawCapacity), call %d with budget 3: %v", i, err)
 			}
 			if got, ok := results["result"]; !ok || got.Const.Int != 3 {
 				t.Fatalf("rawCapacity result on call %d = %v, want 3", i, results)
@@ -231,13 +238,24 @@ func TestInvokeOperationResetsRunBudgetForCalcsAndConstraints(t *testing.T) {
 	})
 
 	t.Run("constraint", func(t *testing.T) {
-		ctx, inst := newInvocation()
-		for i := 0; i < 10; i++ {
+		ctx, inst := newInvocation(2)
+		results, err := ctx.InvokeOperation(inst, "acceptable", map[string]Value{
+			"minimum": intArgument(1),
+		})
+		if !errors.Is(err, ErrStepLimitExceeded) {
+			t.Fatalf("InvokeOperation(acceptable) with budget 2: %v, want ErrStepLimitExceeded", err)
+		}
+		if results != nil {
+			t.Fatalf("InvokeOperation(acceptable) with budget 2 = %v, want no results", results)
+		}
+
+		ctx, inst = newInvocation(3)
+		for i := 0; i < 2; i++ {
 			results, err := ctx.InvokeOperation(inst, "acceptable", map[string]Value{
 				"minimum": intArgument(1),
 			})
 			if err != nil {
-				t.Fatalf("InvokeOperation(acceptable), call %d: %v", i, err)
+				t.Fatalf("InvokeOperation(acceptable), call %d with budget 3: %v", i, err)
 			}
 			got, ok := results["result"]
 			if !ok || got.Kind != ValConst || got.Const.Kind != semantics.ValBool || !got.Const.Bool {
