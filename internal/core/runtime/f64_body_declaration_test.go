@@ -1,23 +1,25 @@
 package runtime
 
-import (
-	"errors"
-	"testing"
-)
+import "testing"
 
-// F64: the parser now keeps the features a body expression declares, but the
-// evaluator binds only its parameters — so applying such a body must fail with a
-// typed error rather than evaluate its result against unbound names.
-func TestF64BodyDeclarationIsUnsupported(t *testing.T) {
-	for _, expr := range []string{
-		"xs->select { in i; private attribute k = i * 2; k > 2 }",
-		"xs->collect { in i; attribute k = i + 1; k }",
-		"xs->reject { in i; private attribute k = i; k > 1 }",
+// F64: the parser keeps the features a body expression declares, and the
+// evaluator resolves those declarations lazily when the result reads them.
+func TestF64BodyDeclarationEvaluates(t *testing.T) {
+	for _, tt := range []struct {
+		expr string
+		want []int64
+	}{
+		{"xs->select { in i; private attribute k = i * 2; k > 2 }", []int64{2, 3}},
+		{"xs->collect { in i; attribute k = i + 1; k }", []int64{2, 3, 4}},
+		{"xs->reject { in i; private attribute k = i; k > 1 }", []int64{1}},
 	} {
-		t.Run(expr, func(t *testing.T) {
-			_, err := evalCollectionExpr(t, expr)
-			if !errors.Is(err, ErrUnsupportedBodyDeclaration) {
-				t.Fatalf("err = %v, want ErrUnsupportedBodyDeclaration", err)
+		t.Run(tt.expr, func(t *testing.T) {
+			got, err := evalCollectionExpr(t, tt.expr)
+			if err != nil {
+				t.Fatalf("err = %v, want %v", err, tt.want)
+			}
+			if ints := intsOf(t, got); !equalInts(ints, tt.want) {
+				t.Errorf("result = %v, want %v", ints, tt.want)
 			}
 		})
 	}

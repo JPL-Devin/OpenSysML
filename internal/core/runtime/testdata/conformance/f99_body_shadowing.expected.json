@@ -1,0 +1,17 @@
+{
+  "type": "instance",
+  "instantiate": "test::Holder",
+  "slots": {
+    "shared": {"type": "Integer", "value": 7},
+    "values": {"type": "Sequence", "elements": [
+      {"type": "Integer", "value": 1},
+      {"type": "Integer", "value": 2},
+      {"type": "Integer", "value": 3}
+    ]},
+    "doubled": {"type": "Sequence", "elements": [
+      {"type": "Integer", "value": 2},
+      {"type": "Integer", "value": 4},
+      {"type": "Integer", "value": 6}
+    ]}
+  }
+}

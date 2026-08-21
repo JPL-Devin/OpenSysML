@@ -88,6 +88,9 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("multiple_outputs_invoked_as_an_expression", testMultipleOutputsInvokedAsAnExpression)
 	t.Run("body_local_usage_of_a_non_calc", testBodyLocalUsageOfANonCalc)
 	t.Run("body_local_declaration_not_executable", testBodyLocalDeclarationNotExecutable)
+	t.Run("f99_body_member_without_value", testF99BodyMemberWithoutValue)
+	t.Run("f99_unsupported_body_member", testF99UnsupportedBodyMember)
+	t.Run("f99_cyclic_body_declaration", testF99CyclicBodyDeclaration)
 	t.Run("range_bound_is_not_an_integer", testRangeBoundIsNotAnInteger)
 	t.Run("range_spends_the_step_budget", testRangeSpendsTheStepBudget)
 	t.Run("collection_spends_the_element_budget", testCollectionSpendsTheElementBudget)
@@ -6129,6 +6132,33 @@ func testBodyLocalDeclarationNotExecutable(t *testing.T) {
 	err := calcErrorWithLibraries(t, src, "Holder", []Value{constInt(1)}, 10000)
 	if err == nil || !strings.Contains(err.Error(), "broken") {
 		t.Errorf("error should name the declaration it cannot execute, got: %v", err)
+	}
+}
+
+func testF99BodyMemberWithoutValue(t *testing.T) {
+	_, err := evalCollectionExprBounded(t,
+		"xs->collect { in i; private missing : Integer; missing }", 10000)
+	if !errors.Is(err, ErrNoValue) {
+		t.Fatalf("error = %v, want ErrNoValue", err)
+	}
+}
+
+func testF99UnsupportedBodyMember(t *testing.T) {
+	_, err := evalCollectionExprBounded(t,
+		"xs->select { in i; private import ScalarValues::*; i > 0 }", 10000)
+	if !errors.Is(err, ErrUnsupportedBodyDeclaration) {
+		t.Fatalf("error = %v, want ErrUnsupportedBodyDeclaration", err)
+	}
+	if !strings.Contains(err.Error(), "Import") {
+		t.Errorf("unsupported-member error = %q, want it to name the form", err)
+	}
+}
+
+func testF99CyclicBodyDeclaration(t *testing.T) {
+	_, err := evalCollectionExprBounded(t,
+		"xs->collect { in i; private attribute cycleValue : Integer = cycleValue; cycleValue }", 10000)
+	if !errors.Is(err, ErrCyclicFeatureValue) {
+		t.Fatalf("error = %v, want ErrCyclicFeatureValue", err)
 	}
 }
 

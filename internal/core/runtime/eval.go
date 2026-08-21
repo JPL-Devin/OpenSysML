@@ -260,6 +260,33 @@ func (ec *EvalContext) evalName(qn *ast.QualifiedName) (Value, error) {
 	// Simple case: single-part name lookup in frame stack or scope
 	if len(qn.Parts) == 1 {
 		name := qn.Parts[0].Text
+		// A declaration inside an expression body is local to that body and
+		// shadows features of the element carrying the expression.
+		if ec.scope != nil {
+			if sym, ok := symbols.LookupBodyLocal(ec.scope, name); ok {
+				// Body parameters and statement locals are supplied by the frame lookup below.
+				_, bodyMember := sym.OwnerScope.Node().(*ast.BodyExpr)
+				_, param := sym.Decl.(*ast.BodyExpr)
+				if bodyMember && !param {
+					if ec.resolving[name] {
+						return Value{}, fmt.Errorf("%w: %s", ErrCyclicFeatureValue, name)
+					}
+					if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Value != nil {
+						if ec.resolving == nil {
+							ec.resolving = map[string]bool{}
+						}
+						ec.resolving[name] = true
+						val, err := ec.evalIn(sym.OwnerScope).Eval(usage.Value)
+						delete(ec.resolving, name)
+						if err != nil {
+							return Value{}, err
+						}
+						return ec.bindVariationOf(sym, val)
+					}
+					return Value{}, fmt.Errorf("%w for feature %s", ErrNoValue, name)
+				}
+			}
+		}
 		// Try frame stack first (local bindings from calc/lambda params)
 		if val, ok := ec.Lookup(name); ok {
 			return val, nil
