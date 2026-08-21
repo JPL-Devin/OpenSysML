@@ -204,7 +204,7 @@ func TestConstraintAllocationNaryFails(t *testing.T) {
 
 func TestConstraintFlowCompleteOK(t *testing.T) {
 	diags := constraintDiags(t,
-		"part def C { item Fuel; part a; part b; flow f of Fuel from a to b; }")
+		"part def C { item Fuel; part a { out item outFuel : Fuel; } part b { in item inFuel : Fuel; } flow f of Fuel from a.outFuel to b.inFuel; }")
 	if hasCode(diags, "flow-ends") {
 		t.Fatalf("unexpected flow-ends diagnostic, got %v", diags)
 	}

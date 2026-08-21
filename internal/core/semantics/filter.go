@@ -326,14 +326,13 @@ func (m *Model) compileReference(scope *symbols.Scope, qn *ast.QualifiedName, sp
 			Span:    span,
 		}
 	}
-	if owner := m.ownerOf(sym); isFeaturingType(owner) && !isEnumerationType(owner) {
+	if owner := m.ownerOf(sym); isFeaturingType(owner) {
 		typeFQN := m.fqnOf(owner)
-		if typeFQN == "" {
-			return unsupported(span, fmt.Sprintf("%s has no known featuring type", qnText(qn)))
+		if typeFQN != "" {
+			return unsupported(span, fmt.Sprintf(
+				"%s is featured within type %s and is not model-level evaluable",
+				qnText(qn), typeFQN))
 		}
-		return unsupported(span, fmt.Sprintf(
-			"%s is featured within type %s and is not model-level evaluable",
-			qnText(qn), typeFQN))
 	}
 	fqn := m.fqnOf(sym)
 	if fqn == "" {
@@ -351,19 +350,34 @@ func isFeaturingType(sym *symbols.Symbol) bool {
 		return false
 	}
 	switch sym.Kind {
-	case symbols.SymbolPackage, symbols.SymbolNamespace,
-		symbols.SymbolMetadataDef, symbols.SymbolMetaclass,
-		symbols.SymbolEnumerationDef, symbols.SymbolEnumerationUsage:
-		return false
+	case symbols.SymbolPartDef, symbols.SymbolAttributeDef,
+		symbols.SymbolItemDef, symbols.SymbolOccurrenceDef,
+		symbols.SymbolIndividualDef, symbols.SymbolMetadataDef,
+		symbols.SymbolMetaclass, symbols.SymbolViewDef,
+		symbols.SymbolViewpointDef, symbols.SymbolRenderingDef,
+		symbols.SymbolConcernDef, symbols.SymbolConnectionDef,
+		symbols.SymbolFlowDef, symbols.SymbolPortDef,
+		symbols.SymbolInterfaceDef, symbols.SymbolAllocationDef,
+		symbols.SymbolActionDef, symbols.SymbolStateDef,
+		symbols.SymbolCalcDef, symbols.SymbolConstraintDef,
+		symbols.SymbolRequirementDef, symbols.SymbolCaseDef,
+		symbols.SymbolAnalysisCaseDef, symbols.SymbolVerificationCaseDef,
+		symbols.SymbolUseCaseDef, symbols.SymbolPartUsage,
+		symbols.SymbolAttributeUsage, symbols.SymbolItemUsage,
+		symbols.SymbolOccurrenceUsage, symbols.SymbolIndividualUsage,
+		symbols.SymbolMetadataUsage, symbols.SymbolViewUsage,
+		symbols.SymbolViewpointUsage, symbols.SymbolRenderingUsage,
+		symbols.SymbolConcernUsage, symbols.SymbolConnectionUsage,
+		symbols.SymbolFlowUsage, symbols.SymbolPortUsage,
+		symbols.SymbolInterfaceUsage, symbols.SymbolAllocationUsage,
+		symbols.SymbolActionUsage, symbols.SymbolStateUsage,
+		symbols.SymbolCalcUsage, symbols.SymbolConstraintUsage,
+		symbols.SymbolRequirementUsage, symbols.SymbolCaseUsage,
+		symbols.SymbolAnalysisCaseUsage, symbols.SymbolVerificationCaseUsage,
+		symbols.SymbolUseCaseUsage:
+		return true
 	}
-	return true
-}
-
-func isEnumerationType(sym *symbols.Symbol) bool {
-	if sym == nil {
-		return false
-	}
-	return sym.Kind == symbols.SymbolEnumerationDef || sym.Kind == symbols.SymbolEnumerationUsage
+	return false
 }
 
 // evalPredicate runs a compiled condition against one candidate element.

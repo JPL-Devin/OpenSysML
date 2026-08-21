@@ -108,9 +108,6 @@ func (cc *constraintChecker) checkFlowEndSubsetting(sym *symbols.Symbol) {
 		if !ok || qn == nil || len(qn.Parts) != 1 {
 			continue
 		}
-		if !cc.model.FlowEndHasDirectedFeature(sym.OwnerScope, attachment.Attachment) {
-			continue
-		}
 		cc.diags = append(cc.diags, Diagnostic{
 			Severity: SeverityError,
 			Span:     attachment.Attachment.Span(),

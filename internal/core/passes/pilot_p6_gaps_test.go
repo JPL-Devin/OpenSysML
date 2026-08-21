@@ -3,8 +3,7 @@ package passes
 import "testing"
 
 // Constraint-tier rules the pinned pilot reports and we do not, adjudicated as
-// P6 in docs/project/pilot-differential.md (F20-F23). Each is skipped, not
-// asserted: the skip goes away when the rule lands.
+// P6 in docs/project/pilot-differential.md (F20-F23).
 
 // F20 validateSubsettingFeaturingTypes: `subsettingFeature.canAccess(subsettedFeature)`
 // — a feature of a type is not reachable by `::` from outside it.
@@ -74,8 +73,10 @@ func TestFilterModelLevelEvaluableFalsePositive(t *testing.T) {
 // F22 the other way: a referent with a featuring type is not evaluable (a
 // top-level `part p : P` has none, so `filter p.n > 1` is — featuring, not constancy).
 func TestFilterModelLevelEvaluableFalseNegative(t *testing.T) {
-	const src = `package E {
-		part def P { attribute n = 1; }
+	const src = `package ScalarValues { attribute def Integer; }
+	package E {
+		private import ScalarValues::*;
+		part def P { attribute n : Integer = 1; }
 		package Q { filter E::P::n > 0; }
 	}`
 	if diags := only(filterDiags(t, src), "filter-not-evaluable"); len(diags) != 1 {

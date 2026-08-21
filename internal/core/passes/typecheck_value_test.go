@@ -143,13 +143,16 @@ func TestValueUntypedFeatureNotReported(t *testing.T) {
 	}`)
 }
 
-// A value that is an expression over the type, rather than a literal or a name,
-// is not judged: the checker cannot type it.
-func TestValueExpressionNotReported(t *testing.T) {
-	wantNoValueDiags(t, `package P {
+// A part constructor is not an invocation target because parts are not
+// behaviors.
+func TestValuePartConstructorInvocationReported(t *testing.T) {
+	diags := valueDiags(t, `package P {
 		part def Wheel;
 		part w : Wheel = Wheel();
 	}`)
+	if len(diags) != 1 || diags[0].Code != "invocation-not-behavior" {
+		t.Fatalf("expected invocation-not-behavior, got %v", diags)
+	}
 }
 
 // A referenced value's type name must resolve where the value was declared: the

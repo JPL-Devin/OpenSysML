@@ -16,10 +16,9 @@ import (
 // diagnostic is only produced when both the expected and the actual type are
 // known, so partial type information never yields a false positive.
 type exprChecker struct {
-	resolver   *resolve.Resolver
-	model      *semantics.Model
-	diags      []Diagnostic
-	valueUsage *ast.Usage
+	resolver *resolve.Resolver
+	model    *semantics.Model
+	diags    []Diagnostic
 	// chaining guards the type of a feature read through a chain against a
 	// feature whose value names itself, directly or through another feature.
 	chaining map[*symbols.Symbol]bool
@@ -51,9 +50,6 @@ func (ec *exprChecker) checkUsageValue(scope *symbols.Scope, u *ast.Usage) {
 	if u.Value == nil {
 		return
 	}
-	previous := ec.valueUsage
-	ec.valueUsage = u
-	defer func() { ec.valueUsage = previous }()
 	want := ec.declaredPrimType(scope, u.Relationships)
 	// A collection literal binds elementwise, so each element is checked
 	// against the feature's type rather than the sequence as a whole.
@@ -581,7 +577,7 @@ func (ec *exprChecker) inferInvocation(scope *symbols.Scope, e *ast.InvocationEx
 	}
 	sym = resolved
 	if !ec.isInvocationBehavior(sym, map[*symbols.Symbol]bool{}) {
-		if ec.isDefinitelyNonBehavior(sym) && !ec.suppressPartValueInvocation(scope) {
+		if ec.isDefinitelyNonBehavior(sym) {
 			ec.diags = append(ec.diags, Diagnostic{
 				Severity: SeverityError,
 				Span:     e.Type.Span(),
@@ -592,40 +588,15 @@ func (ec *exprChecker) inferInvocation(scope *symbols.Scope, e *ast.InvocationEx
 		}
 		return semantics.PrimUnknown
 	}
+	if isInvocationBehaviorKind(sym.Kind) && !isBehaviorKind(sym.Kind) {
+		return semantics.PrimUnknown
+	}
 	params, ok := ec.effectiveInParameters(sym)
 	if !ok {
 		return semantics.PrimUnknown
 	}
 	ec.checkArguments(e, sym, args, argTypes, params)
 	return semantics.PrimUnknown
-}
-
-func (ec *exprChecker) suppressPartValueInvocation(scope *symbols.Scope) bool {
-	if ec.valueUsage != nil {
-		if ec.valueUsage.Kind != ast.UsagePart {
-			return false
-		}
-		return ec.valueUsage.PrefixKeyword == "subject" || hasTyping(ec.valueUsage.Relationships)
-	}
-	for current := scope; current != nil; current = current.Parent() {
-		owner := current.Owner()
-		if owner == nil {
-			continue
-		}
-		if owner.Kind == symbols.SymbolRequirementDef || owner.Kind == symbols.SymbolRequirementUsage {
-			return true
-		}
-	}
-	return false
-}
-
-func hasTyping(rels []*ast.Relationship) bool {
-	for _, rel := range rels {
-		if rel != nil && rel.Kind == ast.RelTyping {
-			return true
-		}
-	}
-	return false
 }
 
 func (ec *exprChecker) checkArguments(
@@ -682,8 +653,17 @@ func (ec *exprChecker) checkArguments(
 	}
 }
 
-// isBehaviorKind reports the behavior kinds whose parameter lists are known.
+// isBehaviorKind reports the behavior kinds whose parameter lists are checked.
 func isBehaviorKind(k symbols.SymbolKind) bool {
+	switch k {
+	case symbols.SymbolCalcDef, symbols.SymbolCalcUsage,
+		symbols.SymbolActionDef, symbols.SymbolActionUsage:
+		return true
+	}
+	return false
+}
+
+func isInvocationBehaviorKind(k symbols.SymbolKind) bool {
 	switch k {
 	case symbols.SymbolCalcDef, symbols.SymbolCalcUsage,
 		symbols.SymbolActionDef, symbols.SymbolActionUsage,
@@ -698,7 +678,7 @@ func (ec *exprChecker) isInvocationBehavior(sym *symbols.Symbol, visiting map[*s
 	if sym == nil || visiting[sym] {
 		return false
 	}
-	if isBehaviorKind(sym.Kind) || isBehaviorDeclaration(sym.Decl) {
+	if isInvocationBehaviorKind(sym.Kind) || isBehaviorDeclaration(sym.Decl) {
 		return true
 	}
 	if sym.Decl == nil {
@@ -743,7 +723,7 @@ func (ec *exprChecker) isDefinitelyNonBehavior(sym *symbols.Symbol) bool {
 	if sym == nil {
 		return false
 	}
-	if isBehaviorKind(sym.Kind) || isBehaviorDeclaration(sym.Decl) {
+	if isInvocationBehaviorKind(sym.Kind) || isBehaviorDeclaration(sym.Decl) {
 		return false
 	}
 	if isRequirementDeclaration(sym.Decl) {

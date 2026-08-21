@@ -3,10 +3,12 @@ package Plant {
 
 	part def Pump {
 		port outlet : FluidPort;
+		out item waterOut : Water;
 	}
 
 	part def Tank {
 		port inlet : FluidPort;
+		in item waterIn : Water;
 	}
 
 	item def Water;
@@ -15,7 +17,7 @@ package Plant {
 		part pump : Pump;
 		part tank : Tank;
 		connection supply : Connection connect pump.outlet to tank.inlet;
-		flow of Water from pump to tank;
+		flow of Water from pump.waterOut to tank.waterIn;
 		// An end outside the exposed set, reported rather than drawn.
 		part sensor : Pump;
 	}

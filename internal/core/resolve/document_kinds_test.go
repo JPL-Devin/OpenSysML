@@ -12,7 +12,7 @@ func TestResolveConnectorEndsClean(t *testing.T) {
 
 func TestResolveFlowEndsAndPayloadClean(t *testing.T) {
 	r := resolveDoc(t, "d.sysml",
-		"part def Sys { item Fuel; part a; part b; flow f of Fuel from a to b; }")
+		"part def Sys { item Fuel; part a { out item outFuel : Fuel; } part b { in item inFuel : Fuel; } flow f of Fuel from a.outFuel to b.inFuel; }")
 	if len(r.Diagnostics) != 0 {
 		t.Fatalf("expected no diagnostics, got %v", r.Diagnostics)
 	}
