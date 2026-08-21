@@ -136,9 +136,11 @@ func TestW5CParseProblemsAreReported(t *testing.T) {
 	cases := map[string]string{
 		"no XPECT_SETUP block":                             "package p {}\n",
 		"XPECT_SETUP block is not terminated by END_SETUP": "//*\nXPECT_SETUP a.B\n\tResourceSet { ThisFile {} }\n",
-		"no ResourceSet block in XPECT_SETUP":              "//*\nXPECT_SETUP a.B\nEND_SETUP\n*/\n",
-		"is not terminated":                                "//*\nXPECT_SETUP a.B\n\tResourceSet { ThisFile {} }\nEND_SETUP\n*/\n//* XPECT errors ---\n\"x\" at \"y\"\n",
-		"XPECT errors declares no expectation":             "//*\nXPECT_SETUP a.B\n\tResourceSet { ThisFile {} }\nEND_SETUP\n*/\n// XPECT errors -->\nclass A;\n",
+		// A corrupted terminator does not terminate: it is not the token.
+		"is not terminated by END_SETUP":       "//*\nXPECT_SETUP a.B\n\tResourceSet { ThisFile {} }\nEND_SETUPX\n*/\n",
+		"no ResourceSet block in XPECT_SETUP":  "//*\nXPECT_SETUP a.B\nEND_SETUP\n*/\n",
+		"is not terminated":                    "//*\nXPECT_SETUP a.B\n\tResourceSet { ThisFile {} }\nEND_SETUP\n*/\n//* XPECT errors ---\n\"x\" at \"y\"\n",
+		"XPECT errors declares no expectation": "//*\nXPECT_SETUP a.B\n\tResourceSet { ThisFile {} }\nEND_SETUP\n*/\n// XPECT errors -->\nclass A;\n",
 	}
 	for want, content := range cases {
 		f := parseXT("t.kerml.xt", "kerml", []byte(content))

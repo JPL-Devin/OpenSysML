@@ -65,7 +65,9 @@ type xtFile struct {
 
 var (
 	setupClassRe = regexp.MustCompile(`XPECT_SETUP\s+(\S+)`)
-	xpectLineRe  = regexp.MustCompile(`^[ \t]*//(\*?)[ \t]*XPECT[ \t]+([A-Za-z][A-Za-z0-9_]*)(.*)$`)
+	// The terminator is a whole token, so `END_SETUPX` does not terminate.
+	endSetupRe  = regexp.MustCompile(`\bEND_SETUP\b`)
+	xpectLineRe = regexp.MustCompile(`^[ \t]*//(\*?)[ \t]*XPECT[ \t]+([A-Za-z][A-Za-z0-9_]*)(.*)$`)
 	// Resource entries: `ThisFile {}`, `File {from ="/p"}` and `File "p" {}`.
 	fileFromRe = regexp.MustCompile(`\b(ThisFile\b|File\s*\{\s*from\s*=\s*"([^"]*)"|File\s*"([^"]*)"\s*\{)`)
 	quotedRe   = regexp.MustCompile(`"((?:[^"\\]|\\.)*)"(?:[ \t]*at[ \t]*"((?:[^"\\]|\\.)*)")?`)
@@ -103,13 +105,14 @@ func (f *xtFile) parseSetup(text string) (int, bool) {
 	}
 	f.SetupClass = text[match[2]:match[3]]
 
-	end := strings.Index(text, "END_SETUP")
-	if end < 0 {
+	term := endSetupRe.FindStringIndex(text)
+	if term == nil {
 		f.Problems = append(f.Problems, "XPECT_SETUP block is not terminated by END_SETUP")
 		return 0, false
 	}
+	end := term[0]
 	// The setup lives in a `//* ... */` note; the body starts after it closes.
-	bodyStart := end + len("END_SETUP")
+	bodyStart := term[1]
 	if closer := strings.Index(text[bodyStart:], "*/"); closer >= 0 {
 		bodyStart += closer + len("*/")
 	}
