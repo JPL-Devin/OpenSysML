@@ -345,7 +345,23 @@ func (r *Resolver) resolveTrigger(scope *symbols.Scope, trigger ast.Node) {
 		r.resolveExpr(scope, t.Duration)
 	case *ast.ChangeEvent:
 		r.resolveExpr(scope, t.Condition)
-	case *ast.QualifiedName, *ast.FeatureReference, *ast.AcceptEvent, *ast.CallEvent:
+	case *ast.AcceptEvent:
+		// The payload of an accept names a type, and `:> f` an event feature,
+		// as the pinned validator resolves them; a bare `when` name does not.
+		if t.SignalType != nil {
+			r.resolveQualified(scope, t.SignalType, nil)
+		}
+		if t.Subsets != nil {
+			r.resolveQualified(scope, t.Subsets, nil)
+		}
+		if t.Payload != nil {
+			r.resolveDecl(scope, t.Payload)
+		}
+	case *ast.Usage:
+		// A named payload (`accept m : Warning`) declares a parameter, so its
+		// typing resolves like any other declaration's.
+		r.resolveDecl(scope, t)
+	case *ast.QualifiedName, *ast.FeatureReference, *ast.CallEvent:
 		// Signal and call triggers name events, not model elements.
 	default:
 		r.resolveExpr(scope, trigger)
@@ -459,11 +475,11 @@ func (r *Resolver) resolveHeaderRelationships(parent, header *symbols.Scope, dec
 		case *ast.QualifiedName:
 			if len(target.Parts) > 0 {
 				resolvesInHeader = rel.Kind != ast.RelTyping &&
-					r.headerHasName(header, target.Parts[0].Text)
+					r.headerHasName(header, target.Parts[0].Text, rel.Kind)
 			}
 		case *ast.FeatureChainExpr:
 			if len(target.Member.Parts) > 0 {
-				resolvesInHeader = r.headerHasName(header, target.Member.Parts[0].Text)
+				resolvesInHeader = r.headerHasName(header, target.Member.Parts[0].Text, rel.Kind)
 			}
 		}
 		if resolvesInHeader {
@@ -474,7 +490,7 @@ func (r *Resolver) resolveHeaderRelationships(parent, header *symbols.Scope, dec
 	}
 }
 
-func (r *Resolver) headerHasName(scope *symbols.Scope, name string) bool {
+func (r *Resolver) headerHasName(scope *symbols.Scope, name string, kind ast.RelationshipKind) bool {
 	if scope == nil {
 		return false
 	}
@@ -486,6 +502,13 @@ func (r *Resolver) headerHasName(scope *symbols.Scope, name string) bool {
 			continue
 		}
 		if _, ok := r.matchImport(scope, imp, name); ok {
+			return true
+		}
+	}
+	// A featuring or crossing name may be one the declaration inherits from its
+	// type; a redefinition or subsetting target may not, as it would find itself.
+	if kind == ast.RelFeaturedBy || kind == ast.RelCrosses {
+		if _, ok := r.lookupContributedMember(scope.Owner(), name); ok {
 			return true
 		}
 	}
