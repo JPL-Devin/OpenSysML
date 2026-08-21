@@ -9,6 +9,7 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -44,6 +45,15 @@ func (s *Server) Completion(ctx context.Context, params *protocol.CompletionPara
 			Label:  kw,
 			Kind:   protocol.CompletionItemKindKeyword,
 			Detail: "keyword",
+		})
+	}
+	// Words the parser reads as syntax positionally but the lexer does not
+	// reserve, so they are offered without being usable only as a keyword.
+	for _, kw := range lexer.ContextualWords(source.KindOf(name)) {
+		c.add(protocol.CompletionItem{
+			Label:  kw,
+			Kind:   protocol.CompletionItemKindKeyword,
+			Detail: "contextual keyword",
 		})
 	}
 

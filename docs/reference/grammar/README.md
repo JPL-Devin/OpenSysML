@@ -84,6 +84,12 @@ Notes:
   time and change events cannot be deferred and are reported at lowering.
 - `defer` is only meaningful inside a state: one in the machine's own body is
   reported by `lower.ToStateGraph`.
+- Unreserved does not mean invisible to editors: `lexer.ContextualWords(kind)`
+  lists these words for the two surfaces that want them — the VS Code grammars
+  (`keywords-contextual`) and LSP keyword completion — without the lexer
+  reserving any of them. `var` is in the `.kerml` list only, and `on` is in
+  neither, being syntax in no position. The two lists are asserted disjoint at
+  grammar-generation time, so a word cannot become reserved by being listed.
 
 ## Validation
 
