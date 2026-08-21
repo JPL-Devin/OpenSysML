@@ -69,6 +69,7 @@ func TestF84F95KerMLDeclarations(t *testing.T) {
 		// F92: an anonymous comment with only a locale; `doc` with a short name.
 		{"f92_anonymous_locale", "package P { comment locale \"en\" /* text */ }", `(Comment`},
 		{"f92_doc_short_name", "package P { doc <a> /* text */ feature q; }", `name="q"`},
+		{"f92_anonymous_comment_keeps_next_name", "package P { comment /* text */ x : Integer; }", `name="x"`},
 
 		// F93: a second filter bracket on a filter-package import.
 		{"f93_two_filters", "package P { private import DesignModel::**[@Structure][x]; }", `operator="and"`},
@@ -144,6 +145,21 @@ func TestF84F95DeclarationFields(t *testing.T) {
 		d := member(t, root, 0, 0).(*ast.Documentation)
 		if d.Ident.ShortName != "a" || d.Ident.Name != "" {
 			t.Errorf("identification = %+v, want short name a only", d.Ident)
+		}
+	})
+
+	// An anonymous comment must not read the following member's name as its own.
+	t.Run("f92_anonymous_comment_keeps_next_name", func(t *testing.T) {
+		root, diags := parseKerML(t, "f92_anon_comment.kerml", "package P { comment /* text */ x : Integer; }")
+		if len(diags) != 0 {
+			t.Fatalf("unexpected diagnostics: %v", diags)
+		}
+		c := member(t, root, 0, 0).(*ast.Comment)
+		if c.Ident.Name != "" || c.Ident.ShortName != "" {
+			t.Errorf("comment identification = %+v, want empty", c.Ident)
+		}
+		if u := member(t, root, 0, 1).(*ast.Usage); u.Ident.Name != "x" {
+			t.Errorf("following usage name = %q, want x", u.Ident.Name)
 		}
 	})
 }

@@ -519,8 +519,9 @@ func (p *Parser) pendingCommentAfter(off int) bool {
 func (p *Parser) parseComment(start int) ast.Node {
 	p.advance() // 'comment'
 	c := &ast.Comment{}
-	// An identification may be a short name alone: `comment <c> /* ... */`.
-	if (p.atName() || p.at(lexer.Lt)) && !p.atKeyword("about") && !p.atKeyword("locale") {
+	// An identification may be a short name alone: `comment <c> /* ... */`. A name
+	// after the body belongs to the next member, not to this comment.
+	if (p.atName() || p.at(lexer.Lt)) && !p.atKeyword("about") && !p.atKeyword("locale") && !p.pendingCommentAfter(start) {
 		c.Ident = p.parseAnnotationIdentification()
 	}
 	if p.acceptKeyword("about") {
