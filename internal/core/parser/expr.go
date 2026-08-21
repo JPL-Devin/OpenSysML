@@ -517,7 +517,30 @@ func (p *Parser) parseInvocationTail(start int, recv ast.Node, typ *ast.Qualifie
 	return inv
 }
 
-// parseBodyExpr parses `{ [doc] (in param ;)* resultExpr }`.
+// atBodyExprMember reports whether a declaration follows in a body expression,
+// rather than its result expression: a visibility or a kind keyword introduces
+// one (`private attribute lbcf = …;`), neither of which starts an expression.
+func (p *Parser) atBodyExprMember() bool {
+	if !p.at(lexer.Keyword) {
+		return false
+	}
+	switch p.peek().KeywordID {
+	case "public", "private", "protected":
+		return true
+	}
+	if !isKindKeyword(p.peek()) {
+		return false
+	}
+	// A kind keyword is the kind only when the name of a declaration follows;
+	// otherwise the result expression reads it as a name (`objective(a)`).
+	switch p.peekN(1).Kind {
+	case lexer.Identifier, lexer.UnrestrictedName, lexer.Lt:
+		return true
+	}
+	return false
+}
+
+// parseBodyExpr parses `{ [doc] (in param ;)* (member)* resultExpr }`.
 func (p *Parser) parseBodyExpr(start int) ast.Node {
 	p.advance() // {
 	b := &ast.BodyExpr{}
@@ -560,7 +583,18 @@ func (p *Parser) parseBodyExpr(start int) ast.Node {
 		p.expect(lexer.Semicolon, "expected ';' after body parameter")
 	}
 
-	for p.atKeyword("in") {
+	for p.atKeyword("in") || p.atBodyExprMember() {
+		// A body expression is a calculation body, so it may declare features of
+		// its own between its parameters and its result.
+		if !p.atKeyword("in") {
+			before := p.peek().Span.Offset
+			b.Members = append(b.Members, p.parseBodyMember())
+			// Force progress: a member that consumed nothing would spin the loop.
+			if p.peek().Span.Offset == before && !p.at(lexer.RBrace) && !p.atEOF() {
+				p.advance()
+			}
+			continue
+		}
 		p.advance() // in
 		var paramType *ast.QualifiedName
 		var paramMult *ast.Multiplicity

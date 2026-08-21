@@ -216,6 +216,11 @@ var (
 	// declaring two parameters has no second argument to receive.
 	ErrBodyArity = errors.New("body parameter count mismatch")
 
+	// ErrUnsupportedBodyDeclaration is returned when a body expression declares
+	// features of its own: the evaluator binds its parameters, not its
+	// declarations, so applying it would read them as unresolved.
+	ErrUnsupportedBodyDeclaration = errors.New("unsupported declaration in a body expression")
+
 	// ErrReceiverWithNamedArgs is returned when a receiver is written before a
 	// call whose arguments are named, `x->f(a = 1)`. The receiver binds by
 	// position and the arguments by name, so which parameter the receiver binds

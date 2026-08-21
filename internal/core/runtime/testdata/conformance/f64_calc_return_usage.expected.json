@@ -1,0 +1,10 @@
+{
+  "type": "calc",
+  "inputs": [
+    {"type": "Real", "value": 21.0}
+  ],
+  "result": {
+    "type": "Real",
+    "value": 42.0
+  }
+}

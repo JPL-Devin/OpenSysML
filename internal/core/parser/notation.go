@@ -28,13 +28,16 @@ var notationWords = map[string]bool{
 // sysmlOnlyWords are literals of SysML.xtext that appear in neither
 // KerML.xtext nor KerMLExpressions.xtext: `at` (`SysML.xtext:1480`, an accept
 // trigger), `while` (`:1617`, a loop action), `merge` (`:1666`) and `decide`
-// (`:1672`, control nodes). A word the file's own grammar does not reserve is a
+// (`:1672`, control nodes) and the portion modifiers `snapshot`/`timeslice`
+// (`:864`, PortionKind). A word the file's own grammar does not reserve is a
 // name there, so in a `.kerml` file these read as ordinary names.
 var sysmlOnlyWords = map[string]bool{
-	"at":     true,
-	"while":  true,
-	"merge":  true,
-	"decide": true,
+	"at":        true,
+	"while":     true,
+	"merge":     true,
+	"decide":    true,
+	"snapshot":  true,
+	"timeslice": true,
 }
 
 // unreserved reclassifies a keyword the file's grammar does not reserve as the

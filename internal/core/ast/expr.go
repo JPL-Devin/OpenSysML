@@ -166,7 +166,10 @@ type ConstructorExpr struct {
 type BodyExpr struct {
 	NodeBase
 	Params []BodyParam
-	Result Node
+	// Members are the features the body declares between its parameters and its
+	// result: `private attribute lbcf = …;`.
+	Members []Node
+	Result  Node
 }
 
 // BodyParam is `in name` inside a body expression.

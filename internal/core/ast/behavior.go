@@ -447,6 +447,16 @@ type AssumeMember struct {
 	Expression Node           // assumption condition (for expression form)
 	Reference  *QualifiedName // referenced constraint/requirement (reference-subsetting form)
 	Body       []Node         // ConstraintMembers of the nested constraint (for the braced form)
+	// Declaration of the constraint the member owns, when it is written with
+	// one: `assume constraint c1 : C;`.
+	Name          string
+	NameSpan      source.Span
+	Relationships []*Relationship
+	Multiplicity  *Multiplicity
+	Value         Node
+	// HasBody records that the member was written with braces, which an empty
+	// body does not otherwise show.
+	HasBody bool
 }
 
 // RequireMember represents a requirement constraint.
@@ -456,6 +466,16 @@ type RequireMember struct {
 	Expression Node           // requirement condition (for expression form)
 	Reference  *QualifiedName // referenced requirement (reference-subsetting form, SysML v2 §7.20)
 	Body       []Node         // nested members: ConstraintMembers for the braced form, requirement members for the reference form
+	// Declaration of the constraint the member owns, when it is written with
+	// one: `require constraint c1 : C;`.
+	Name          string
+	NameSpan      source.Span
+	Relationships []*Relationship
+	Multiplicity  *Multiplicity
+	Value         Node
+	// HasBody records that the member was written with braces, which an empty
+	// body does not otherwise show.
+	HasBody bool
 }
 
 // Phase C4: State Body Members

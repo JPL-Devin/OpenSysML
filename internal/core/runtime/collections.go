@@ -174,6 +174,10 @@ func (ec *EvalContext) applyBody(body *ast.BodyExpr, args ...Value) (Value, erro
 	if body.Result == nil {
 		return Value{}, fmt.Errorf("%w: body expression states no result", ErrNoResultExpression)
 	}
+	if len(body.Members) > 0 {
+		return Value{}, fmt.Errorf("%w: the body declares %d feature(s) of its own",
+			ErrUnsupportedBodyDeclaration, len(body.Members))
+	}
 	bindings := make(map[string]Value, len(body.Params))
 	for i := range body.Params {
 		bindings[body.Params[i].Name] = args[i]
