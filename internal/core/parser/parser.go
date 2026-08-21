@@ -175,46 +175,6 @@ func (p *Parser) atKeyword(kw string) bool {
 	return t.Kind == lexer.Keyword && t.KeywordID == kw
 }
 
-// wordAt returns the lowercase word the token n ahead spells, whether the
-// language reserves it or not, and "" when that token is neither.
-func (p *Parser) wordAt(n int) string {
-	t := p.peekN(n)
-	switch t.Kind {
-	case lexer.Keyword:
-		return t.KeywordID
-	case lexer.Identifier:
-		return p.src.Text(t.Span)
-	}
-	return ""
-}
-
-// atWord reports whether the current token spells the given word. A word the
-// other grammar reserves arrives as an identifier here, so notation shared
-// with that grammar must be matched by spelling.
-func (p *Parser) atWord(w string) bool { return p.wordAt(0) == w }
-
-// peekIsWord reports whether the token n ahead of the cursor spells the word.
-func (p *Parser) peekIsWord(n int, w string) bool { return p.wordAt(n) == w }
-
-// acceptWord consumes the current token if it spells the given word.
-func (p *Parser) acceptWord(w string) bool {
-	if p.atWord(w) {
-		p.advance()
-		return true
-	}
-	return false
-}
-
-// expectWord records a diagnostic if the word is not present, consuming it
-// when it is.
-func (p *Parser) expectWord(w string) bool {
-	if p.acceptWord(w) {
-		return true
-	}
-	p.error(p.peek().Span, "expected '"+w+"'")
-	return false
-}
-
 // acceptSufficientAll consumes the `all` of a declaration prefix
 // (`isSufficient ?= 'all'`, KerML.xtext:325). SysML.xtext declares `all` only
 // after `import`, so there the word names the declaration instead.
