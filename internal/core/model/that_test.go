@@ -108,8 +108,12 @@ func TestRootImportServesItsOwnDocumentOnly(t *testing.T) {
 			ws.Open("b.sysml", []byte("package B { attribute there : Real; }\n"), 1)
 
 			// The importing document resolves the name; the other one does not.
+			// A non-private root import is itself invalid (KerML
+			// validateImportTopLevelVisibility), which is not a resolution error.
 			if importer != "" {
-				if got := errorsIn(t, ws, "a.sysml"); got != "" {
+				got := strings.ReplaceAll(errorsIn(t, ws, "a.sysml"),
+					"Top level import must be private", "")
+				if strings.Trim(got, "; ") != "" {
 					t.Errorf("importing document reports %q", got)
 				}
 			}
