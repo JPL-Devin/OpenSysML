@@ -89,6 +89,9 @@ var notKindPrefixKeywords = map[string]bool{
 	"include": true, "exhibit": true, "variant": true, "event": true,
 	"timeslice": true, "snapshot": true, "transition": true, "bind": true,
 	"binding": true, "member": true,
+	// `not satisfy r by p` negates the satisfaction; the prefix path would drop
+	// the `not` (SysML.xtext:2118, SatisfyRequirementUsage isNegated).
+	"not": true,
 	// `individual part p` keeps the modifier; the prefix path would drop it.
 	"individual": true,
 	"in":         true, "out": true, "inout": true,

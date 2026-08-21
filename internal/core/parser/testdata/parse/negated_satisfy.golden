@@ -26,13 +26,13 @@
       (Membership visibility="default"
         (Usage kind="part" name="context" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (Membership visibility="default"
-            (Usage kind="satisfy" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (Usage kind="satisfy" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false negated=true
               (Relationship kind="subsets" target=r1
                 (*ast.QualifiedName))
               (Relationship kind="by" target=prototype
                 (*ast.QualifiedName))))
           (Membership visibility="default"
-            (Usage kind="satisfy" name="r2" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (Usage kind="satisfy" name="r2" ref=false direction="none" composite=false derived=false ordered=false nonunique=false negated=true
               (Relationship kind="typing" target=R1
                 (*ast.QualifiedName))
               (Relationship kind="by" target=prototype
