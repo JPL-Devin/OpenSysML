@@ -90,7 +90,7 @@ jobs:
       - name: Verify the pilot corpora are present
         run: |
           for root in sysml-examples sysml-validation kerml-examples; do
-            count=$(find "examples/pilot-corpora/$root" -name '*.sysml' -o -name '*.kerml' | wc -l)
+            count=$(find "examples/pilot-corpora/$root" -type f \( -name '*.sysml' -o -name '*.kerml' \) | wc -l)
             echo "pilot corpus $root: $count model files"
             if [ "$count" -eq 0 ]; then
               echo "error: pilot corpus $root is empty; the corpora gate would not run" >&2
