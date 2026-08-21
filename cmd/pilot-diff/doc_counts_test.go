@@ -23,6 +23,7 @@ const (
 	docCountReferenceMarker       = "**Reference differential:**"
 	docCountMeasuredStatusMarker  = "**Measured status:**"
 	docCountCurrentCoverageMarker = "**Current coverage:**"
+	docCountMapHeaderMarker       = "The map below tracks"
 )
 
 type docLine struct {
@@ -66,6 +67,7 @@ var (
 	docReferencePattern      = regexp.MustCompile("^\\*\\*Reference differential:\\*\\* ([0-9]+) files compared diagnostic-by-diagnostic against the pinned OMG pilot implementation \\(`([^`]+)`\\), ([0-9]+) in full agreement;")
 	docMeasuredStatusPattern = regexp.MustCompile(`^\*\*Measured status:\*\* of the ([0-9]+) semantic rules tracked in .*?, ([0-9]+) are ✅ faithful, ([0-9]+) ⚠️ approximate and ([0-9]+) ❌ not implemented\.`)
 	docCoveragePattern       = regexp.MustCompile(`^\*\*Current coverage:\*\* of the ([0-9]+) rules tracked in the compliance map, ([0-9]+) are faithful, ([0-9]+) approximate and ([0-9]+) not implemented`)
+	docMapHeaderPattern      = regexp.MustCompile(`^The map below tracks ([0-9]+) semantic rules: \*\*([0-9]+) ✅ faithful, ([0-9]+) ⚠️ approximate, ([0-9]+) ❌ not implemented\.\*\*`)
 	docMovementRowsUnchecked = map[string]bool{"new checks of ours": true}
 )
 
@@ -74,7 +76,7 @@ var (
 // The committed baseline JSON is the only input; validators and corpora are unnecessary.
 // Causal claims, attributions, historical movement columns and adjudication-section counts are
 // out of scope: this checks numbers, not why they moved. It also guards the README and
-// architecture coverage claims against the compliance map.
+// architecture coverage claims, and the compliance map's own header, against the compliance map rows.
 func TestPilotDifferentialDocumentCountsMatchBaseline(t *testing.T) {
 	lines := docReadNumberedDocument(t)
 	report := docReadBaselineReport(t)
@@ -98,6 +100,8 @@ func TestPilotDifferentialDocumentCountsMatchBaseline(t *testing.T) {
 	docAssertReferenceLine(t, docRequireLineContainingPath(t, readmeLines, docCountReadmePath, docCountReferenceMarker), report)
 	docAssertRuleStatusLine(t, docCountReadmePath, docRequireLineContainingPath(t, readmeLines, docCountReadmePath, docCountMeasuredStatusMarker), ruleCounts, docMeasuredStatusPattern)
 	docAssertRuleStatusLine(t, docCountArchitecturePath, docRequireLineContainingPath(t, architectureLines, docCountArchitecturePath, docCountCurrentCoverageMarker), ruleCounts, docCoveragePattern)
+	complianceLines := docReadNumberedFile(t, docCountSpecCompliancePath)
+	docAssertRuleStatusLine(t, docCountSpecCompliancePath, docRequireLineContainingPath(t, complianceLines, docCountSpecCompliancePath, docCountMapHeaderMarker), ruleCounts, docMapHeaderPattern)
 }
 
 func docReadNumberedDocument(t *testing.T) []docLine {
