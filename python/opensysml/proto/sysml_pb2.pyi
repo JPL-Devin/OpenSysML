@@ -697,12 +697,14 @@ class ServerInfoResponse(_message.Message):
     def __init__(self, version: _Optional[str] = ..., capabilities: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class QueryRequest(_message.Message):
-    __slots__ = ("model_hash", "query")
+    __slots__ = ("model_hash", "query", "oslc_query")
     MODEL_HASH_FIELD_NUMBER: _ClassVar[int]
     QUERY_FIELD_NUMBER: _ClassVar[int]
+    OSLC_QUERY_FIELD_NUMBER: _ClassVar[int]
     model_hash: str
     query: Query
-    def __init__(self, model_hash: _Optional[str] = ..., query: _Optional[_Union[Query, _Mapping]] = ...) -> None: ...
+    oslc_query: str
+    def __init__(self, model_hash: _Optional[str] = ..., query: _Optional[_Union[Query, _Mapping]] = ..., oslc_query: _Optional[str] = ...) -> None: ...
 
 class QueryResponse(_message.Message):
     __slots__ = ("elements",)

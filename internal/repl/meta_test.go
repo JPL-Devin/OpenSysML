@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	corequery "github.com/Open-MBEE/OpenSysML/internal/core/query"
 )
 
 func TestMetaHelpAndList(t *testing.T) {
@@ -52,6 +54,67 @@ func TestMetaLoad(t *testing.T) {
 func TestIsMeta(t *testing.T) {
 	if !isMeta("%help") || isMeta("package P") || isMeta("") {
 		t.Fatal("isMeta classification wrong")
+	}
+}
+
+func TestQueryAndMetaQuery(t *testing.T) {
+	fresh := NewSession()
+	if _, err := fresh.Query(`oslc.where=rdf:type="PartUsage"`); err == nil {
+		t.Fatal("fresh Session.Query unexpectedly succeeded")
+	} else if queryErr, ok := err.(*corequery.Error); !ok || queryErr.Kind != corequery.ErrNoModel {
+		t.Fatalf("fresh Session.Query error = %#v, want ErrNoModel", err)
+	}
+	freshLines, _, err := fresh.runMeta(`%query oslc.where=rdf:type="PartUsage"`)
+	if err != nil || len(freshLines) != 1 || !strings.HasPrefix(freshLines[0], "error: no model loaded") {
+		t.Fatalf("fresh %%query = lines %v, err %v", freshLines, err)
+	}
+	broken := NewSession()
+	if result := broken.Submit("package Broken {"); len(result.Diagnostics) == 0 {
+		t.Fatal("broken model unexpectedly had no diagnostics")
+	}
+	if _, err := broken.Query(`oslc.where=rdf:type="PartUsage"`); err == nil {
+		t.Fatal("query against broken model unexpectedly succeeded")
+	} else if queryErr, ok := err.(*corequery.Error); !ok || queryErr.Kind != corequery.ErrNoModel {
+		t.Fatalf("broken Session.Query error = %#v, want ErrNoModel", err)
+	}
+	s := NewSession()
+	if result := s.Submit("package Demo { part def Wheel; part wheel : Wheel; }"); len(result.Diagnostics) != 0 {
+		t.Fatalf("Submit diagnostics = %v", result.Diagnostics)
+	}
+	lines, err := s.Query(`oslc.where=rdf:type="PartUsage"&oslc.select=sysml:name`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lines) != 1 || lines[0] != "Demo::wheel  PartUsage  name=wheel" {
+		t.Fatalf("Session.Query = %v", lines)
+	}
+	lines, err = s.Query(`oslc.where=sysml:name="spare"`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lines) != 0 {
+		t.Fatalf("no-match Session.Query = %v", lines)
+	}
+	lines, _, err = s.runMeta(`%query oslc.where=rdf:type="PartUsage"&oslc.select=sysml:name`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lines) != 1 || lines[0] != "Demo::wheel  PartUsage  name=wheel" {
+		t.Fatalf("%%query = %v", lines)
+	}
+	lines, _, err = s.runMeta(`  %query oslc.where=rdf:type="PartUsage"&oslc.select=sysml:name`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lines) != 1 || lines[0] != "Demo::wheel  PartUsage  name=wheel" {
+		t.Fatalf("indented %%query = %v", lines)
+	}
+	lines, _, err = s.runMeta(`%query oslc.where=rdf:type=`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lines) != 1 || !strings.HasPrefix(lines[0], "error: ") {
+		t.Fatalf("malformed %%query = %v", lines)
 	}
 }
 

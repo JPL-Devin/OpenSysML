@@ -119,6 +119,7 @@ var metaCommandTable = []metaCommand{
 	{name: "%load", args: "<path>...", desc: "submit the contents of files, directories or globs"},
 	{name: "%print", args: "[name]", desc: "print the session model as SysML notation, or just the named element"},
 	{name: "%save", args: "<file>", desc: "write the session model to a file (.sysml notation, or .ttl RDF — experimental)"},
+	{name: "%query", args: "<oslc-query>", desc: "identify model elements using OSLC Query text"},
 	{name: "%verbosity", args: "[level]", desc: "show or set output level: quiet, normal or debug"},
 	{name: "%trace", args: "[on|off]", desc: "show or set execution tracing (evaluation, calc, action and state steps)"},
 	{name: "%budget", desc: "show the bounds one run may spend, and the variable raising each"},
@@ -380,6 +381,15 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 			return []string{"usage: %invoke <object> <operation> [<parameter>=<expression> ...]"}, false, nil
 		}
 		return s.doInvoke(fields[1], fields[2], fields[3:])
+	case "%query":
+		if len(fields) < 2 {
+			return []string{"usage: %query <oslc-query>"}, false, nil
+		}
+		lines, err := s.query(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "%query")))
+		if err != nil {
+			return []string{"error: " + err.Error()}, false, nil
+		}
+		return lines, false, nil
 	case "%events":
 		return s.doEvents()
 	case "%current":

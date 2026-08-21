@@ -106,6 +106,7 @@ nav:
       - reference/README.md
       - CLI: reference/cli.md
       - REPL commands: reference/repl-commands.md
+      - OSLC Query text: reference/oslc-query.md
       - Environment variables: reference/environment.md
       - Language server: reference/lsp.md
       - Go API: reference/api.md

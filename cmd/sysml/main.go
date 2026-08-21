@@ -104,6 +104,7 @@ var (
 	quietMode     bool
 	traceMode     bool
 	convertFormat string
+	queryText     string
 	outputPath    string
 	fromFormat    string
 	renderView    string
@@ -236,6 +237,7 @@ func runCLI() int {
 	flag.BoolVar(&quietMode, "quiet", false, "Report errors only, suppressing warnings")
 	flag.BoolVar(&traceMode, "trace", false, "Report each execution step: expression evaluation, calc invocation, action tokens, state transitions")
 	flag.StringVar(&convertFormat, "convert", "", "Convert the model to this format instead of running it: sysml, kerml, ttl, turtle or rdf (RDF is experimental)")
+	flag.StringVar(&queryText, "query", "", "Evaluate OSLC Query text against the model instead of running the REPL")
 	flag.StringVar(&outputPath, "output", "", "Write conversion output to this file (default: stdout)")
 	flag.StringVar(&outputPath, "o", "", "Write conversion output to this file (shorthand)")
 	flag.StringVar(&fromFormat, "from", "", "Input format for -convert: sysml, kerml, ttl, turtle or rdf (default: from the input's extension)")
@@ -297,6 +299,10 @@ func runCLI() int {
 	}
 
 	if convertFormat != "" {
+		if queryText != "" {
+			fmt.Fprintln(os.Stderr, "sysml: -convert and -query are mutually exclusive")
+			return 2
+		}
 		if modelChecks.requested() {
 			return refuse(modelChecks,
 				"-convert writes the model out and decides nothing about it; check it in its own run")
@@ -309,6 +315,14 @@ func runCLI() int {
 			return fail(err)
 		}
 		return exitHolds
+	}
+
+	if queryText != "" {
+		if modelChecks.requested() || renderView != "" || len(evalExprs) > 0 || outputPath != "" || fromFormat != "" {
+			fmt.Fprintln(os.Stderr, "sysml: -query cannot be combined with checks, -eval, -render, -output or -from")
+			return 2
+		}
+		return runQuery(args, queryText)
 	}
 
 	if renderView != "" {

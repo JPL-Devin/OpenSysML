@@ -569,6 +569,11 @@ repl.Loop(reader, os.Stdout, session)
 
 ## SysML v2 API & Services `Query`
 
+This section describes the structured API Query surface. OpenSysML also accepts
+OSLC Query text for element identification; see [OSLC Query text](oslc-query.md).
+The two surfaces intentionally differ: structured queries support `or`, while
+OSLC compound terms support only `and`, so neither surface subsumes the other.
+
 The gRPC service implements the query surface the **SysML v2 API & Services**
 standard defines, so a client that speaks that API — the
 [`SysML-v2-API-Java-Client`](https://github.com/Systems-Modeling/SysML-v2-API-Java-Client),
