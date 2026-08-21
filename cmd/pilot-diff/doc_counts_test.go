@@ -1,5 +1,3 @@
-// This guards headline totals, Results cells and root rows, per-category only-ours/only-pilot prose, and the movement table's Now column against the committed baseline JSON without validators or corpora. Causal claims and attributions are out of scope; historical movement columns, narrative paragraphs, and adjudication-section counts remain unguarded.
-// The test deliberately checks only mechanically comparable numbers: “this moved because #391 reached a trigger's payload” is not mechanically checkable and must not be implied by this guard.
 package main
 
 import (
@@ -17,27 +15,27 @@ import (
 )
 
 const (
-	docPath      = "docs/project/pilot-differential.md"
-	baselinePath = "docs/project/pilot-differential-baseline.json"
+	docCountPath         = "docs/project/pilot-differential.md"
+	docCountBaselinePath = "docs/project/pilot-differential-baseline.json"
 )
 
-type numberedLine struct {
+type docLine struct {
 	number int
 	text   string
 }
 
-type table struct {
+type docTable struct {
 	header     []string
 	headerLine int
-	rows       []tableRow
+	rows       []docTableRow
 }
 
-type tableRow struct {
+type docTableRow struct {
 	line  int
 	cells []string
 }
 
-type numberToken struct {
+type docNumber struct {
 	start int
 	end   int
 	text  string
@@ -45,131 +43,140 @@ type numberToken struct {
 }
 
 var (
-	headlinePattern      = regexp.MustCompile(`^## Results \(pilot ` + "`" + `([^` + "`" + `]+)` + "`" + `, ([0-9]+) files\)$`)
-	parentheticalPattern = regexp.MustCompile(`\s+\([^()]*\)$`)
-	categoryItemPattern  = regexp.MustCompile("^(\\d+)\\s+(`?[A-Za-z][A-Za-z0-9-]*`?)")
-	nextCategoryPattern  = regexp.MustCompile(",\\s*\\d+\\s+`?[A-Za-z][A-Za-z0-9-]*`?")
-	integerPattern       = regexp.MustCompile(`^-?[0-9]+$`)
+	docHeadlinePattern       = regexp.MustCompile(`^## Results \(pilot ` + "`" + `([^` + "`" + `]+)` + "`" + `, ([0-9]+) files\)$`)
+	docParentheticalPattern  = regexp.MustCompile(`\s+\([^()]*\)$`)
+	docCategoryItemPattern   = regexp.MustCompile("^(\\d+)\\s+(`?[A-Za-z][A-Za-z0-9-]*`?)")
+	docNextCategoryPattern   = regexp.MustCompile(",\\s*\\d+\\s+`?[A-Za-z][A-Za-z0-9-]*`?")
+	docIntegerPattern        = regexp.MustCompile(`^-?[0-9]+$`)
+	docRootPattern           = regexp.MustCompile("(?s)^\\s*`([^`]+)`\\s*(.*)$")
+	docMovementRowsUnchecked = map[string]bool{"new checks of ours": true}
 )
 
 func TestPilotDifferentialDocumentCountsMatchBaseline(t *testing.T) {
-	lines := readNumberedDocument(t)
-	report := readBaselineReport(t)
+	// This guards headline totals, Results cells and root rows, per-category
+	// only-ours/only-pilot prose, and the movement table's Now column.
+	// The committed baseline JSON is the only input; validators and corpora are
+	// unnecessary. Causal claims and attributions are explicitly out of scope.
+	// Historical movement columns, narrative paragraphs, and adjudication-section
+	// counts remain unguarded; “this moved because #391 reached a trigger's
+	// payload” is not mechanically checked or implied by this test.
+	lines := docReadNumberedDocument(t)
+	report := docReadBaselineReport(t)
 
-	heading := requireResultsHeading(t, lines)
-	assertHeadline(t, heading, report)
+	heading := docRequireResultsHeading(t, lines)
+	docAssertHeadline(t, heading, report)
 
-	results := requireTable(t, lines, heading.number+1, "")
-	assertResultsTable(t, results, report)
+	results := docRequireTable(t, lines, heading.number+1, "")
+	docAssertResultsTable(t, results, report)
 
-	categoryStart := requireLineContaining(t, lines, "Per category, the only-ours totals are:")
-	assertCategoryProse(t, lines, categoryStart, report)
+	categoryStart := docRequireLineContaining(t, lines, "Per category, the only-ours totals are:")
+	docAssertCategoryProse(t, lines, categoryStart, report)
 
-	movementStart := requireLineContaining(t, lines, "What has moved since the adjudication")
-	movement := requireTable(t, lines, movementStart.number+1, "Count")
-	assertMovementTable(t, movement, report)
+	movementStart := docRequireLineContaining(t, lines, "What has moved since the adjudication")
+	movement := docRequireTable(t, lines, movementStart.number+1, "Count")
+	docAssertMovementTable(t, movement, report)
 }
 
-func readNumberedDocument(t *testing.T) []numberedLine {
+func docReadNumberedDocument(t *testing.T) []docLine {
 	t.Helper()
-	content, err := os.ReadFile(filepath.FromSlash("../../" + docPath))
+	content, err := os.ReadFile(filepath.FromSlash("../../" + docCountPath))
 	if err != nil {
-		t.Fatalf("%s:1: read document: %v", docPath, err)
+		t.Fatalf("%s:1: read document: %v", docCountPath, err)
 	}
 	raw := strings.Split(string(content), "\n")
-	lines := make([]numberedLine, len(raw))
+	lines := make([]docLine, len(raw))
 	for i, text := range raw {
-		lines[i] = numberedLine{number: i + 1, text: text}
+		lines[i] = docLine{number: i + 1, text: text}
 	}
 	return lines
 }
 
-func readBaselineReport(t *testing.T) Report {
+func docReadBaselineReport(t *testing.T) Report {
 	t.Helper()
-	content, err := os.ReadFile(filepath.FromSlash("../../" + baselinePath))
+	content, err := os.ReadFile(filepath.FromSlash("../../" + docCountBaselinePath))
 	if err != nil {
-		t.Fatalf("%s:1: read baseline: %v", docPath, err)
+		t.Fatalf("%s:1: read baseline: %v", docCountBaselinePath, err)
 	}
 	var report Report
 	if err := json.Unmarshal(content, &report); err != nil {
-		t.Fatalf("%s:1: parse baseline: %v", docPath, err)
+		t.Fatalf("%s:1: parse baseline: %v", docCountBaselinePath, err)
 	}
 	return report
 }
 
-func requireResultsHeading(t *testing.T, lines []numberedLine) numberedLine {
+func docRequireResultsHeading(t *testing.T, lines []docLine) docLine {
 	t.Helper()
 	for _, line := range lines {
 		if strings.HasPrefix(line.text, "## Results (pilot ") {
 			return line
 		}
 	}
-	failAt(t, 1, "missing Results heading")
-	return numberedLine{}
+	docFailAt(t, 1, "missing Results heading")
+	return docLine{}
 }
 
-func assertHeadline(t *testing.T, heading numberedLine, report Report) {
+func docAssertHeadline(t *testing.T, heading docLine, report Report) {
 	t.Helper()
-	match := headlinePattern.FindStringSubmatch(heading.text)
+	match := docHeadlinePattern.FindStringSubmatch(heading.text)
 	if match == nil {
-		failAt(t, heading.number, "malformed Results heading")
+		docFailAt(t, heading.number, "malformed Results heading")
 	}
 	wantRelease := report.Pilot
 	if before, _, ok := strings.Cut(report.Pilot, " ("); ok {
 		wantRelease = before
 	}
 	if got := match[1]; got != wantRelease {
-		failAt(t, heading.number, "headline release: want %q (baseline pilotRelease), got %q", wantRelease, got)
+		docErrorAt(t, heading.number, "headline release: want %q (baseline pilotRelease), got %q", wantRelease, got)
 	}
 	gotFiles, err := strconv.Atoi(match[2])
 	if err != nil {
-		failAt(t, heading.number, "headline files: malformed number %q", match[2])
+		docFailAt(t, heading.number, "headline files: malformed number %q", match[2])
 	}
 	if gotFiles != report.Totals.Files {
-		failAt(t, heading.number, "headline files: want %d (baseline totals.files), got %d", report.Totals.Files, gotFiles)
+		docErrorAt(t, heading.number, "headline files: want %d (baseline totals.files), got %d", report.Totals.Files, gotFiles)
 	}
 }
 
-func requireLineContaining(t *testing.T, lines []numberedLine, marker string) numberedLine {
+func docRequireLineContaining(t *testing.T, lines []docLine, marker string) docLine {
 	t.Helper()
 	for _, line := range lines {
 		if strings.Contains(line.text, marker) {
 			return line
 		}
 	}
-	failAt(t, 1, "missing required section marker %q", marker)
-	return numberedLine{}
+	docFailAt(t, 1, "missing required section marker %q", marker)
+	return docLine{}
 }
 
-func requireTable(t *testing.T, lines []numberedLine, from int, firstHeader string) table {
+func docRequireTable(t *testing.T, lines []docLine, from int, firstHeader string) docTable {
 	t.Helper()
 	for i := from - 1; i < len(lines); i++ {
-		if !isTableLine(lines[i].text) {
+		if !docIsTableLine(lines[i].text) {
 			continue
 		}
-		header := splitTableCells(lines[i].text)
+		header := docSplitTableCells(lines[i].text)
 		if firstHeader != "" && (len(header) == 0 || header[0] != firstHeader) {
 			continue
 		}
-		rows := make([]tableRow, 0)
-		for j := i + 1; j < len(lines) && isTableLine(lines[j].text); j++ {
-			rows = append(rows, tableRow{line: lines[j].number, cells: splitTableCells(lines[j].text)})
+		rows := make([]docTableRow, 0)
+		for j := i + 1; j < len(lines) && docIsTableLine(lines[j].text); j++ {
+			rows = append(rows, docTableRow{line: lines[j].number, cells: docSplitTableCells(lines[j].text)})
 		}
-		return table{header: header, headerLine: lines[i].number, rows: rows}
+		return docTable{header: header, headerLine: lines[i].number, rows: rows}
 	}
 	if firstHeader == "" {
-		failAt(t, from, "missing Results table")
+		docFailAt(t, from, "missing Results table")
 	} else {
-		failAt(t, from, "missing movement table with first header %q", firstHeader)
+		docFailAt(t, from, "missing movement table with first header %q", firstHeader)
 	}
-	return table{}
+	return docTable{}
 }
 
-func isTableLine(line string) bool {
+func docIsTableLine(line string) bool {
 	return strings.HasPrefix(strings.TrimSpace(line), "|")
 }
 
-func splitTableCells(line string) []string {
+func docSplitTableCells(line string) []string {
 	line = strings.TrimSpace(line)
 	line = strings.TrimPrefix(line, "|")
 	line = strings.TrimSuffix(line, "|")
@@ -180,7 +187,7 @@ func splitTableCells(line string) []string {
 	return parts
 }
 
-func isSeparatorRow(cells []string) bool {
+func docIsSeparatorRow(cells []string) bool {
 	if len(cells) == 0 {
 		return false
 	}
@@ -193,15 +200,15 @@ func isSeparatorRow(cells []string) bool {
 	return true
 }
 
-func assertResultsTable(t *testing.T, results table, report Report) {
+func docAssertResultsTable(t *testing.T, results docTable, report Report) {
 	t.Helper()
 	wantHeader := []string{"Root", "Files", "Fully agreeing", "Ours", "Pilot", "Agreed", "Severity-only", "Only ours", "Only pilot"}
 	if len(results.header) != len(wantHeader) {
-		failAt(t, results.headerLine, "Results table header: want %q, got %q", wantHeader, results.header)
+		docFailAt(t, results.headerLine, "Results table header: want %q, got %q", wantHeader, results.header)
 	}
 	for i := range wantHeader {
 		if results.header[i] != wantHeader[i] {
-			failAt(t, results.headerLine, "Results table header column %d: want %q, got %q", i+1, wantHeader[i], results.header[i])
+			docFailAt(t, results.headerLine, "Results table header column %d: want %q, got %q", i+1, wantHeader[i], results.header[i])
 		}
 	}
 
@@ -212,34 +219,34 @@ func assertResultsTable(t *testing.T, results table, report Report) {
 	foundDirs := make(map[string]bool)
 	totalSeen := false
 	for _, row := range results.rows {
-		if isSeparatorRow(row.cells) {
+		if docIsSeparatorRow(row.cells) {
 			continue
 		}
 		if len(row.cells) != len(wantHeader) {
-			failAt(t, row.line, "Results table row has %d cells, want %d", len(row.cells), len(wantHeader))
+			docFailAt(t, row.line, "Results table row has %d cells, want %d", len(row.cells), len(wantHeader))
 		}
-		label := stripMarkdown(row.cells[0])
-		label = parentheticalPattern.ReplaceAllString(label, "")
+		label := docStripMarkdown(row.cells[0])
+		label = docParentheticalPattern.ReplaceAllString(label, "")
 		if label == "Total" {
 			if totalSeen {
-				failAt(t, row.line, "Results table total row appears more than once")
+				docFailAt(t, row.line, "Results table total row appears more than once")
 			}
 			totalSeen = true
-			assertTotalsRow(t, row, report.Totals)
+			docAssertTotalsRow(t, row, report.Totals)
 			continue
 		}
 		root, ok := rootByDir[label]
 		if !ok {
-			failAt(t, row.line, "Results table root %q is not in baseline roots", label)
+			docFailAt(t, row.line, "Results table root %q is not in baseline roots", label)
 		}
 		if foundDirs[label] {
-			failAt(t, row.line, "Results table root %q appears more than once", label)
+			docFailAt(t, row.line, "Results table root %q appears more than once", label)
 		}
 		foundDirs[label] = true
-		assertTotalsCells(t, row, root.Totals, "roots["+root.Name+"].totals", "root "+root.Dir)
+		docAssertTotalsCells(t, row, root.Totals, "roots["+root.Name+"].totals", "root "+root.Dir)
 	}
 	if !totalSeen {
-		failAt(t, results.headerLine, "Results table is missing the Total row")
+		docFailAt(t, results.headerLine, "Results table is missing the Total row")
 	}
 	wantDirs := make([]string, 0, len(report.Roots))
 	for _, root := range report.Roots {
@@ -252,16 +259,16 @@ func assertResultsTable(t *testing.T, results table, report Report) {
 	sort.Strings(wantDirs)
 	sort.Strings(gotDirs)
 	if strings.Join(wantDirs, "\x00") != strings.Join(gotDirs, "\x00") {
-		failAt(t, results.headerLine, "Results table root set: want %q (baseline roots[].dir), got %q", wantDirs, gotDirs)
+		docErrorAt(t, results.headerLine, "Results table root set: want %q (baseline roots[].dir), got %q", wantDirs, gotDirs)
 	}
 }
 
-func assertTotalsRow(t *testing.T, row tableRow, totals Totals) {
+func docAssertTotalsRow(t *testing.T, row docTableRow, totals Totals) {
 	t.Helper()
-	assertTotalsCells(t, row, totals, "totals", "root Total")
+	docAssertTotalsCells(t, row, totals, "totals", "root Total")
 }
 
-func assertTotalsCells(t *testing.T, row tableRow, totals Totals, jsonPrefix, subject string) {
+func docAssertTotalsCells(t *testing.T, row docTableRow, totals Totals, jsonPrefix, subject string) {
 	t.Helper()
 	columns := []struct {
 		header string
@@ -278,35 +285,35 @@ func assertTotalsCells(t *testing.T, row tableRow, totals Totals, jsonPrefix, su
 		{"Only pilot", totals.PilotOnly, "pilotOnly"},
 	}
 	for i, column := range columns {
-		got := parseCellInteger(t, row, i+1, column.header)
+		got := docParseCellInteger(t, row, i+1, column.header)
 		if got != column.want {
-			failAt(t, row.line, `%s column %q: want %d (baseline %s.%s), got %d`, subject, column.header, column.want, jsonPrefix, column.field, got)
+			docErrorAt(t, row.line, `%s column %q: want %d (baseline %s.%s), got %d`, subject, column.header, column.want, jsonPrefix, column.field, got)
 		}
 	}
 }
 
-func parseCellInteger(t *testing.T, row tableRow, cell int, label string) int {
+func docParseCellInteger(t *testing.T, row docTableRow, cell int, label string) int {
 	t.Helper()
-	value := stripMarkdown(row.cells[cell])
-	if !integerPattern.MatchString(value) {
-		failAt(t, row.line, "column %q: expected integer, got %q", label, value)
+	value := docStripMarkdown(row.cells[cell])
+	if !docIntegerPattern.MatchString(value) {
+		docFailAt(t, row.line, "column %q: expected integer, got %q", label, value)
 	}
 	got, err := strconv.Atoi(value)
 	if err != nil {
-		failAt(t, row.line, "column %q: malformed integer %q", label, value)
+		docFailAt(t, row.line, "column %q: malformed integer %q", label, value)
 	}
 	return got
 }
 
-func stripMarkdown(value string) string {
+func docStripMarkdown(value string) string {
 	value = strings.ReplaceAll(value, "**", "")
 	value = strings.ReplaceAll(value, "`", "")
 	return strings.TrimSpace(value)
 }
 
-func assertCategoryProse(t *testing.T, lines []numberedLine, start numberedLine, report Report) {
+func docAssertCategoryProse(t *testing.T, lines []docLine, start docLine, report Report) {
 	t.Helper()
-	paragraphLines := []numberedLine{start}
+	paragraphLines := []docLine{start}
 	for i := start.number; i < len(lines) && strings.TrimSpace(lines[i].text) != ""; i++ {
 		paragraphLines = append(paragraphLines, lines[i])
 	}
@@ -320,31 +327,31 @@ func assertCategoryProse(t *testing.T, lines []numberedLine, start numberedLine,
 	oursAt := strings.Index(paragraph, onlyOursMarker)
 	pilotAt := strings.Index(paragraph, onlyPilotMarker)
 	if oursAt < 0 {
-		failAt(t, start.number, "category paragraph is missing marker %q", onlyOursMarker)
+		docFailAt(t, start.number, "category paragraph is missing marker %q", onlyOursMarker)
 	}
 	if pilotAt < 0 {
-		failAt(t, start.number, "category paragraph is missing marker %q", onlyPilotMarker)
+		docFailAt(t, start.number, "category paragraph is missing marker %q", onlyPilotMarker)
 	}
 	if pilotAt <= oursAt+len(onlyOursMarker) {
-		failAt(t, start.number, "category paragraph markers are out of order")
+		docFailAt(t, start.number, "category paragraph markers are out of order")
 	}
 
-	starts := paragraphLineStarts(paragraph)
+	starts := docParagraphLineStarts(paragraph)
 	prose := map[string]map[string]map[Category]int{}
 	proseLines := map[string]map[string]int{}
-	var consumed []numberToken
-	parseCategoryPart(t, paragraph, starts, paragraphLines, oursAt+len(onlyOursMarker), pilotAt, "only-ours", report, prose, proseLines, &consumed)
-	parseCategoryPart(t, paragraph, starts, paragraphLines, pilotAt+len(onlyPilotMarker), len(paragraph), "only-pilot", report, prose, proseLines, &consumed)
+	var consumed []docNumber
+	docParseCategoryPart(t, paragraph, starts, paragraphLines, oursAt+len(onlyOursMarker), pilotAt, "only-ours", report, prose, proseLines, &consumed)
+	docParseCategoryPart(t, paragraph, starts, paragraphLines, pilotAt+len(onlyPilotMarker), len(paragraph), "only-pilot", report, prose, proseLines, &consumed)
 
-	assertCategoryMaps(t, report, prose, proseLines)
-	for _, token := range bareNumberTokens(paragraph, starts, paragraphLines) {
-		if !numberWasConsumed(consumed, token) {
-			failAt(t, token.line, "unaccounted number %q in category paragraph", token.text)
+	docAssertCategoryMaps(t, report, prose, proseLines)
+	for _, token := range docBareNumberTokens(paragraph, starts, paragraphLines) {
+		if !docNumberWasConsumed(consumed, token) {
+			docErrorAt(t, token.line, "unaccounted number %q in category paragraph", token.text)
 		}
 	}
 }
 
-func parseCategoryPart(t *testing.T, paragraph string, starts []int, lines []numberedLine, from, to int, direction string, report Report, prose map[string]map[string]map[Category]int, proseLines map[string]map[string]int, consumed *[]numberToken) {
+func docParseCategoryPart(t *testing.T, paragraph string, starts []int, lines []docLine, from, to int, direction string, report Report, prose map[string]map[string]map[Category]int, proseLines map[string]map[string]int, consumed *[]docNumber) {
 	t.Helper()
 	part := paragraph[from:to]
 	partOffset := from
@@ -365,7 +372,7 @@ func parseCategoryPart(t *testing.T, paragraph string, starts []int, lines []num
 			part = paragraph[partOffset:to]
 			continue
 		}
-		parseCategorySegment(t, segment, segmentStart, starts, lines, direction, report, prose, proseLines, consumed)
+		docParseCategorySegment(t, segment, segmentStart, starts, lines, direction, report, prose, proseLines, consumed)
 		if semicolon < 0 {
 			break
 		}
@@ -374,20 +381,20 @@ func parseCategoryPart(t *testing.T, paragraph string, starts []int, lines []num
 	}
 }
 
-func parseCategorySegment(t *testing.T, segment string, segmentStart int, starts []int, lines []numberedLine, direction string, report Report, prose map[string]map[string]map[Category]int, proseLines map[string]map[string]int, consumed *[]numberToken) {
+func docParseCategorySegment(t *testing.T, segment string, segmentStart int, starts []int, lines []docLine, direction string, report Report, prose map[string]map[string]map[Category]int, proseLines map[string]map[string]int, consumed *[]docNumber) {
 	t.Helper()
-	rootMatch := regexp.MustCompile("(?s)^\\s*`([^`]+)`\\s*(.*)$").FindStringSubmatchIndex(segment)
+	rootMatch := docRootPattern.FindStringSubmatchIndex(segment)
 	if rootMatch == nil {
-		if tokens := bareNumberSpans(segment); len(tokens) > 0 {
+		if tokens := docBareNumberSpans(segment); len(tokens) > 0 {
 			token := tokens[0]
-			failAt(t, lineAt(starts, lines, segmentStart+token.start), "unaccounted number %q in category paragraph", token.text)
+			docErrorAt(t, docLineAt(starts, lines, segmentStart+token.start), "unaccounted number %q in category paragraph", token.text)
 		}
-		failAt(t, lineAt(starts, lines, segmentStart), "category %s segment must start with a backticked root name: %q", direction, segment)
+		docFailAt(t, docLineAt(starts, lines, segmentStart), "category %s segment must start with a backticked root name: %q", direction, segment)
 	}
 	rootName := segment[rootMatch[2]:rootMatch[3]]
-	root, ok := rootByName(report, rootName)
+	root, ok := docRootByName(report, rootName)
 	if !ok {
-		failAt(t, lineAt(starts, lines, segmentStart+rootMatch[2]), "category %s names unknown root %q", direction, rootName)
+		docFailAt(t, docLineAt(starts, lines, segmentStart+rootMatch[2]), "category %s names unknown root %q", direction, rootName)
 	}
 	restStart := segmentStart + rootMatch[4]
 	rest := segment[rootMatch[4]:rootMatch[5]]
@@ -399,45 +406,45 @@ func parseCategorySegment(t *testing.T, segment string, segmentStart int, starts
 		prose[direction][rootName] = map[Category]int{}
 	}
 	if _, exists := proseLines[direction][rootName]; !exists {
-		proseLines[direction][rootName] = lineAt(starts, lines, segmentStart+rootMatch[2])
+		proseLines[direction][rootName] = docLineAt(starts, lines, segmentStart+rootMatch[2])
 	}
 
-	knownCategories := reportCategories(report)
+	knownCategories := docReportCategories(report)
 	parsed := 0
 	for {
 		leading := len(rest) - len(strings.TrimLeft(rest, " \t\n"))
 		rest = rest[leading:]
 		restStart += leading
-		match := categoryItemPattern.FindStringSubmatchIndex(rest)
+		match := docCategoryItemPattern.FindStringSubmatchIndex(rest)
 		if match == nil {
 			if parsed == 0 {
-				failAt(t, lineAt(starts, lines, restStart), "category %s root %q has no count/category items", direction, root.Name)
+				docFailAt(t, docLineAt(starts, lines, restStart), "category %s root %q has no count/category items", direction, root.Name)
 			}
 			break
 		}
 		categoryText := strings.Trim(rest[match[4]:match[5]], "`")
 		category := Category(categoryText)
 		if !knownCategories[category] {
-			failAt(t, lineAt(starts, lines, restStart+match[4]), "category %s root %q names unknown category %q", direction, root.Name, categoryText)
+			docFailAt(t, docLineAt(starts, lines, restStart+match[4]), "category %s root %q names unknown category %q", direction, root.Name, categoryText)
 		}
 		count, err := strconv.Atoi(rest[match[2]:match[3]])
 		if err != nil {
-			failAt(t, lineAt(starts, lines, restStart), "category %s root %q has malformed count", direction, root.Name)
+			docFailAt(t, docLineAt(starts, lines, restStart), "category %s root %q has malformed count", direction, root.Name)
 		}
 		numberStart := restStart + match[2]
 		numberEnd := restStart + match[3]
-		boundary := nextCategoryPattern.FindStringIndex(rest[match[1]:])
+		boundary := docNextCategoryPattern.FindStringIndex(rest[match[1]:])
 		tailEnd := len(rest)
 		if boundary != nil {
 			tailEnd = match[1] + boundary[0]
 		}
 		tail := rest[match[1]:tailEnd]
-		if tokens := bareNumberSpans(tail); len(tokens) > 0 {
+		if tokens := docBareNumberSpans(tail); len(tokens) > 0 {
 			token := tokens[0]
-			failAt(t, lineAt(starts, lines, restStart+match[1]+token.start), "unaccounted number %q in %s %s tail", token.text, direction, root.Name)
+			docErrorAt(t, docLineAt(starts, lines, restStart+match[1]+token.start), "unaccounted number %q in %s %s tail", token.text, direction, root.Name)
 		}
 		prose[direction][rootName][category] += count
-		*consumed = append(*consumed, numberToken{start: numberStart, end: numberEnd, text: rest[match[2]:match[3]], line: lineAt(starts, lines, numberStart)})
+		*consumed = append(*consumed, docNumber{start: numberStart, end: numberEnd, text: rest[match[2]:match[3]], line: docLineAt(starts, lines, numberStart)})
 		parsed++
 		if boundary == nil {
 			break
@@ -448,38 +455,41 @@ func parseCategorySegment(t *testing.T, segment string, segmentStart int, starts
 	}
 }
 
-func assertCategoryMaps(t *testing.T, report Report, prose map[string]map[string]map[Category]int, proseLines map[string]map[string]int) {
+func docAssertCategoryMaps(t *testing.T, report Report, prose map[string]map[string]map[Category]int, proseLines map[string]map[string]int) {
 	t.Helper()
 	for _, direction := range []string{"only-ours", "only-pilot"} {
 		for rootName, categories := range prose[direction] {
-			root, ok := rootByName(report, rootName)
+			root, ok := docRootByName(report, rootName)
 			if !ok {
-				failAt(t, proseLines[direction][rootName], "root %s %s is not present in baseline roots", rootName, direction)
+				docFailAt(t, proseLines[direction][rootName], "root %s %s is not present in baseline roots", rootName, direction)
 			}
 			for category, got := range categories {
-				want := categoryTotal(root, direction, category)
+				want := docCategoryTotal(root, direction, category)
 				if want == 0 || got != want {
-					failAt(t, proseLines[direction][rootName], "root %s %s category %q: want %d (baseline roots[%s].files[].%s[].count), got %d", root.Name, direction, category, want, root.Name, directionJSONField(direction), got)
+					docErrorAt(t, proseLines[direction][rootName], "root %s %s category %q: want %d (baseline roots[%s].files[].%s[].count), got %d", root.Name, direction, category, want, root.Name, docDirectionJSONField(direction), got)
 				}
 			}
 		}
 		for _, root := range report.Roots {
-			for category, want := range categoryTotals(root, direction) {
-				if want == 0 || prose[direction][root.Name][category] == want {
+			for category, want := range docCategoryTotals(root, direction) {
+				if want == 0 {
 					continue
 				}
-				got := prose[direction][root.Name][category]
+				if _, present := prose[direction][root.Name][category]; present {
+					continue
+				}
+				got := 0
 				line := proseLines[direction][root.Name]
 				if line == 0 {
 					line = 1
 				}
-				failAt(t, line, "root %s %s category %q: want %d (baseline roots[%s].files[].%s[].count), got %d (missing from prose)", root.Name, direction, category, want, root.Name, directionJSONField(direction), got)
+				docErrorAt(t, line, "root %s %s category %q: want %d (baseline roots[%s].files[].%s[].count), got %d (missing from prose)", root.Name, direction, category, want, root.Name, docDirectionJSONField(direction), got)
 			}
 		}
 	}
 }
 
-func rootByName(report Report, name string) (RootReport, bool) {
+func docRootByName(report Report, name string) (RootReport, bool) {
 	for _, root := range report.Roots {
 		if root.Name == name {
 			return root, true
@@ -488,7 +498,7 @@ func rootByName(report Report, name string) (RootReport, bool) {
 	return RootReport{}, false
 }
 
-func reportCategories(report Report) map[Category]bool {
+func docReportCategories(report Report) map[Category]bool {
 	categories := map[Category]bool{}
 	for _, root := range report.Roots {
 		for _, file := range root.Files {
@@ -503,7 +513,7 @@ func reportCategories(report Report) map[Category]bool {
 	return categories
 }
 
-func categoryTotals(root RootReport, direction string) map[Category]int {
+func docCategoryTotals(root RootReport, direction string) map[Category]int {
 	totals := map[Category]int{}
 	for _, file := range root.Files {
 		var entries []Entry
@@ -519,18 +529,18 @@ func categoryTotals(root RootReport, direction string) map[Category]int {
 	return totals
 }
 
-func categoryTotal(root RootReport, direction string, category Category) int {
-	return categoryTotals(root, direction)[category]
+func docCategoryTotal(root RootReport, direction string, category Category) int {
+	return docCategoryTotals(root, direction)[category]
 }
 
-func directionJSONField(direction string) string {
+func docDirectionJSONField(direction string) string {
 	if direction == "only-ours" {
 		return "openSysMLOnly"
 	}
 	return "pilotOnly"
 }
 
-func paragraphLineStarts(paragraph string) []int {
+func docParagraphLineStarts(paragraph string) []int {
 	starts := []int{0}
 	for i, char := range paragraph {
 		if char == '\n' {
@@ -540,7 +550,7 @@ func paragraphLineStarts(paragraph string) []int {
 	return starts
 }
 
-func lineAt(starts []int, lines []numberedLine, offset int) int {
+func docLineAt(starts []int, lines []docLine, offset int) int {
 	line := 0
 	for i, start := range starts {
 		if start > offset {
@@ -551,10 +561,10 @@ func lineAt(starts []int, lines []numberedLine, offset int) int {
 	return lines[line].number
 }
 
-func bareNumberSpans(text string) []numberToken {
-	var tokens []numberToken
+func docBareNumberSpans(text string) []docNumber {
+	var tokens []docNumber
 	for i := 0; i < len(text); {
-		if text[i] < '0' || text[i] > '9' || (i > 0 && isWordBefore(text, i)) {
+		if text[i] < '0' || text[i] > '9' || (i > 0 && docIsWordBefore(text, i)) {
 			i++
 			continue
 		}
@@ -562,23 +572,23 @@ func bareNumberSpans(text string) []numberToken {
 		for j < len(text) && text[j] >= '0' && text[j] <= '9' {
 			j++
 		}
-		if j == len(text) || !isWordAt(text, j) {
-			tokens = append(tokens, numberToken{start: i, end: j, text: text[i:j]})
+		if j == len(text) || !docIsWordAt(text, j) {
+			tokens = append(tokens, docNumber{start: i, end: j, text: text[i:j]})
 		}
 		i = j
 	}
 	return tokens
 }
 
-func bareNumberTokens(text string, starts []int, lines []numberedLine) []numberToken {
-	tokens := bareNumberSpans(text)
+func docBareNumberTokens(text string, starts []int, lines []docLine) []docNumber {
+	tokens := docBareNumberSpans(text)
 	for i := range tokens {
-		tokens[i].line = lineAt(starts, lines, tokens[i].start)
+		tokens[i].line = docLineAt(starts, lines, tokens[i].start)
 	}
 	return tokens
 }
 
-func numberWasConsumed(consumed []numberToken, token numberToken) bool {
+func docNumberWasConsumed(consumed []docNumber, token docNumber) bool {
 	for _, item := range consumed {
 		if item.start == token.start && item.end == token.end {
 			return true
@@ -587,18 +597,18 @@ func numberWasConsumed(consumed []numberToken, token numberToken) bool {
 	return false
 }
 
-func isWordBefore(text string, offset int) bool {
+func docIsWordBefore(text string, offset int) bool {
 	_, size := utf8.DecodeLastRuneInString(text[:offset])
 	r, _ := utf8.DecodeLastRuneInString(text[offset-size : offset])
 	return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_'
 }
 
-func isWordAt(text string, offset int) bool {
+func docIsWordAt(text string, offset int) bool {
 	r, _ := utf8.DecodeRuneInString(text[offset:])
 	return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_'
 }
 
-func assertMovementTable(t *testing.T, movement table, report Report) {
+func docAssertMovementTable(t *testing.T, movement docTable, report Report) {
 	t.Helper()
 	now := -1
 	for i, header := range movement.header {
@@ -608,32 +618,31 @@ func assertMovementTable(t *testing.T, movement table, report Report) {
 		}
 	}
 	if now < 0 {
-		failAt(t, movement.headerLine, "movement table is missing a Now column")
+		docFailAt(t, movement.headerLine, "movement table is missing a Now column")
 	}
 	if len(movement.header) == 0 || movement.header[0] != "Count" {
-		failAt(t, movement.headerLine, "movement table first header: want %q, got %q", "Count", movement.header)
+		docFailAt(t, movement.headerLine, "movement table first header: want %q, got %q", "Count", movement.header)
 	}
 	seen := map[string]bool{}
 	for _, row := range movement.rows {
-		if isSeparatorRow(row.cells) {
+		if docIsSeparatorRow(row.cells) {
 			continue
 		}
 		if len(row.cells) <= now {
-			failAt(t, row.line, "movement table row has %d cells, missing Now column", len(row.cells))
+			docFailAt(t, row.line, "movement table row has %d cells, missing Now column", len(row.cells))
 		}
-		label := stripMarkdown(row.cells[0])
-		if label == "new checks of ours" {
-			seen[label] = true
-			continue
-		}
+		label := docStripMarkdown(row.cells[0])
 		if seen[label] {
-			failAt(t, row.line, "movement table row %q appears more than once", label)
+			docFailAt(t, row.line, "movement table row %q appears more than once", label)
 		}
 		seen[label] = true
+		if docMovementRowsUnchecked[label] {
+			continue
+		}
 		if label == "overall: fully agreeing / only ours / our diagnostics" {
-			values := strings.Split(stripMarkdown(row.cells[now]), "/")
+			values := strings.Split(docStripMarkdown(row.cells[now]), "/")
 			if len(values) != 3 {
-				failAt(t, row.line, "movement row %q column %q: want three slash-separated counts, got %q", label, movement.header[now], row.cells[now])
+				docFailAt(t, row.line, "movement row %q column %q: want three slash-separated counts, got %q", label, movement.header[now], row.cells[now])
 			}
 			wants := []struct {
 				value int
@@ -644,37 +653,37 @@ func assertMovementTable(t *testing.T, movement table, report Report) {
 				{report.Totals.OpenSysMLTotal, "totals.openSysMLDiagnostics"},
 			}
 			for i, want := range wants {
-				got := parseMovementInteger(t, row.line, strings.TrimSpace(values[i]), movement.header[now])
+				got := docParseMovementInteger(t, row.line, strings.TrimSpace(values[i]), movement.header[now])
 				if got != want.value {
-					failAt(t, row.line, "movement row %q item %d column %q: want %d (baseline %s), got %d", label, i+1, movement.header[now], want.value, want.path, got)
+					docErrorAt(t, row.line, "movement row %q item %d column %q: want %d (baseline %s), got %d", label, i+1, movement.header[now], want.value, want.path, got)
 				}
 			}
 			continue
 		}
-		want, jsonPath, ok := movementValue(report, label)
+		want, jsonPath, ok := docMovementValue(report, label)
 		if !ok {
-			failAt(t, row.line, "movement table row %q is not mapped or allowlisted", label)
+			docFailAt(t, row.line, "movement table row %q is not mapped or allowlisted", label)
 		}
-		got := parseCellInteger(t, tableRow{line: row.line, cells: row.cells}, now, "Now")
+		got := docParseCellInteger(t, docTableRow{line: row.line, cells: row.cells}, now, "Now")
 		if got != want {
-			failAt(t, row.line, "movement row %q column %q: want %d (baseline %s), got %d", label, movement.header[now], want, jsonPath, got)
+			docErrorAt(t, row.line, "movement row %q column %q: want %d (baseline %s), got %d", label, movement.header[now], want, jsonPath, got)
 		}
 	}
 }
 
-func parseMovementInteger(t *testing.T, line int, value, column string) int {
+func docParseMovementInteger(t *testing.T, line int, value, column string) int {
 	t.Helper()
-	if !integerPattern.MatchString(value) {
-		failAt(t, line, "column %q: expected integer, got %q", column, value)
+	if !docIntegerPattern.MatchString(value) {
+		docFailAt(t, line, "column %q: expected integer, got %q", column, value)
 	}
 	got, err := strconv.Atoi(value)
 	if err != nil {
-		failAt(t, line, "column %q: malformed integer %q", column, value)
+		docFailAt(t, line, "column %q: malformed integer %q", column, value)
 	}
 	return got
 }
 
-func movementValue(report Report, label string) (int, string, bool) {
+func docMovementValue(report Report, label string) (int, string, bool) {
 	switch label {
 	case "unmapped, our side":
 		total := 0
@@ -702,7 +711,12 @@ func movementValue(report Report, label string) (int, string, bool) {
 	return 0, "", false
 }
 
-func failAt(t *testing.T, line int, format string, args ...any) {
+func docFailAt(t *testing.T, line int, format string, args ...any) {
 	t.Helper()
-	t.Fatalf("%s:%d: %s", docPath, line, fmt.Sprintf(format, args...))
+	t.Fatalf("%s:%d: %s", docCountPath, line, fmt.Sprintf(format, args...))
+}
+
+func docErrorAt(t *testing.T, line int, format string, args ...any) {
+	t.Helper()
+	t.Errorf("%s:%d: %s", docCountPath, line, fmt.Sprintf(format, args...))
 }
