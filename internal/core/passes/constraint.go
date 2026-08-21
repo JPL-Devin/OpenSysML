@@ -474,8 +474,8 @@ func (cc *constraintChecker) checkRedefinition(sym *symbols.Symbol) {
 			continue
 		}
 
-		// A target that is no inherited member may still be reachable through
-		// the featuring context (KerML validateSubsettingFeaturingTypes).
+		// A target that is not an inherited member may still be reachable
+		// through the featuring context (KerML validateRedefinitionFeaturingTypes).
 		if !inherited {
 			inherited = cc.redefinedAccessible(sym, redefined, map[*symbols.Symbol]bool{})
 		}
