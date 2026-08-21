@@ -140,6 +140,7 @@ nav:
       - Spec compliance: project/spec-compliance.md
       - Training examples: project/training-examples.md
       - Pilot differential: project/pilot-differential.md
+      - Pilot execution referee: project/pilot-execution-referee.md
       - Grammar coverage: project/grammar-coverage.md
       - Roadmap: project/roadmap.md
       - Releasing: project/releasing.md
