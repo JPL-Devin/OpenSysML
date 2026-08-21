@@ -59,8 +59,11 @@ in [docs/reference/lsp.md](../../docs/reference/lsp.md).
 ## Grammar generation
 
 `syntaxes/*.tmLanguage.json` are generated — do not edit them by hand. The
-keyword list comes from `internal/core/lexer.Keywords()`, so highlighting cannot
-drift from the lexer:
+keyword list comes from `internal/core/lexer.Keywords()`, and the contextual
+words the parser reads as syntax without the lexer reserving them (`point`,
+`region`, `var` in `.kerml`, …) from `lexer.ContextualWords()`, so highlighting
+cannot drift from either. Generation fails if a word is in both lists, and the
+two languages differ where the grammars do — `var` is KerML notation only:
 
 ```bash
 make vscode-grammar    # regenerate
