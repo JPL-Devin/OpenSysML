@@ -37,9 +37,9 @@ where it used to be silent. Nothing was renamed and no interface changed.
 ### The pilot implementation judges every corpus, KerML included
 
 - **`cmd/pilot-diff` compares our diagnostics against the pinned OMG pilot implementation**
-  (`2026-05`, jupyter-sysml-kernel 0.60.1) file by file, over 338 files in seven roots: the OMG
+  (`2026-05`, jupyter-sysml-kernel 0.60.1) file by file, over 349 files in seven roots: the OMG
   training corpus, the pilot's own SysML example and validation corpora, its KerML examples, our
-  testdata, our examples and our probes. 221 files agree exactly. It is advisory — a harness that
+  testdata, our examples and our probes. 254 files agree exactly. It is advisory — a harness that
   finds work, not a gate — so nothing in CI depends on it, and its committed baseline
   (`docs/project/pilot-differential-baseline.json`) makes a rerun a diff rather than a reading.
   On the 100-file training corpus both implementations report nothing at all.
@@ -48,9 +48,11 @@ where it used to be silent. Nothing was renamed and no interface changed.
   `KerMLStandaloneSetup`, loads `sysml.library` and the corpus into one EMF `ResourceSet`, and
   asks the pilot's `IResourceValidator` with `CheckMode.ALL`. It contributes no rule of its own,
   so a disagreement it prints is the reference's verdict. Over the pilot's 58 KerML examples, the
-  diagnostics only we reported fell from 439 to 150 as the KerML work below landed — the syntax
-  class from 360 to 140, and the genuine name-resolution class from 123 to 7 — and 33 of the 58
-  files now agree exactly.
+  diagnostics only we reported fell from 439 to 98 as the work below landed — the syntax class
+  from 360 to 85, and the genuine name-resolution class from 123 to 10 — and 35 of the 58 files
+  now agree exactly. Ten of that root's remaining diagnostics are name resolution rather than
+  seven: parsing notation that used to be rejected exposes references behind it, so the class
+  rose by three as the parser improved.
 - **Six diagnostics the pilot reports and we do not are a defect in the pilot**, not a gap here:
   EMF's unpaired-bidirectional-reference check firing on the pilot's own
   `Type::ownedDisjoining` / `Disjoining::owningType` opposite, reproducible from three lines
@@ -60,12 +62,15 @@ where it used to be silent. Nothing was renamed and no interface changed.
   per corpus, so a directory holding both `.sysml` and `.kerml` is judged by the SysML validator
   and the KerML one respectively, and a missing KerML validator is reported rather than silently
   skipped.
-- **The 373 diagnostics only we report on the two OMG SysML corpora are adjudicated construct by
-  construct**, into ten classes recorded in `docs/project/spec-compliance.md` with the grammar
+- **The 373 diagnostics only we reported on the two OMG SysML corpora were adjudicated construct
+  by construct**, into ten classes recorded in `docs/project/spec-compliance.md` with the grammar
   production each one cites (`ExtendedUsage`, keyword-less members, node bodies, `return`,
   `binding`/`message`/`event` declarations, requirement members, resolution through imports and
-  inheritance, and textual representation). Four of the ten are wholly or partly fixed below; the
-  rest name the site that rejects the notation, so the work is scoped rather than discovered.
+  inheritance, and textual representation). Six of the ten are wholly or partly fixed below,
+  taking those two corpora to 204; the rest name the site that rejects the notation, so the work
+  is scoped rather than discovered. Where a newly-parsed declaration reaches the type tier for the
+  first time it may report there instead, which is why one narrower class rises as the parser
+  gains ground — those are unmasked diagnostics, adjudicated per file, not new false positives.
 - **`cmd/grammar-coverage` measures the pinned OMG grammars against every corpus we hold**:
   483 of 727 productions and 802 of 807 notational forms have input-presence evidence. The
   number is deliberately an over-approximation — presence of an input a production admits, never
@@ -102,6 +107,9 @@ where it used to be silent. Nothing was renamed and no interface changed.
 - **The REPL reads each snippet as the kind of file it came from**, so a `.kerml` snippet gets
   KerML's contextual names and a `.sysml` snippet keeps SysML's reservations, and a session mixing
   the two keeps each snippet's language rather than analyzing everything as SysML.
+- **Inline content keeps the language it was submitted with** through parsing, analysis and type
+  checking, so a service request that hands over `namespace N;` as KerML is judged by KerML's
+  rules for the whole pipeline rather than only at the parse step.
 
 ### KerML notation the reference accepts now parses
 
@@ -147,6 +155,19 @@ where it used to be silent. Nothing was renamed and no interface changed.
   gives it, so `var a : Integer;` without a kind is still reported.
 - **A modifier before a kind prefix keeps the kind**, which was dropped from the tree and from
   every diagnostic that read it.
+- **Prefix metadata may stand in for a member's keyword**, as the grammar allows, so `#Classified
+  connect a to b;` declares the connection, a prefix may follow a modifier (`abstract #Classified
+  z;`) or `end`, and it composes with redefinition (`#service :>> sd : PD;`). Some accepted prefix
+  forms still reach the type tier with the wrong usage kind and report a kind mismatch, recorded
+  as an approximation rather than closed.
+- **A member may be written with no keyword at all**: `T1 = 10.0;`, a typing-only member
+  (`kpl : D = km;`), an enum value list (`= 60.0; = 70.0;`), a `locale "en_US"` body, and a
+  bare result expression as the last member of an analysis or case. An assignment is still an
+  assignment rather than a declaration, and an empty assignment, a malformed specialization-only
+  member, a malformed enum value and an incomplete `locale` are still reported.
+- **A case or analysis body's result expression may begin with a keyword or a word operator**, so
+  `if v.m > 1.0 ? v.m else 1.0` and `small and large` are read as the body's result instead of
+  being parsed as another member declaration.
 - **Every node production's optional body parses, lowers and executes**: a transition, send or
   accept node and every control node may carry `{ ... }`, a transition target may be qualified
   (`then done.stop`), a `for` variable may be typed and a body parameter may redefine. A merge
@@ -187,6 +208,15 @@ where it used to be silent. Nothing was renamed and no interface changed.
 - **A declaration with a short name is listed once** among a document's members, not twice.
 - **A part typing check that read an unrelated declaration is gone**, with the diagnostics it
   produced on valid models.
+
+### Source-preserving edits over gRPC
+
+- **`ApplyEdits` adds a member and deletes a declaration**, alongside the value-set and rename it
+  already offered, and preserves the source it did not touch — comments, blank lines and layout
+  survive, and the result is reparsed and reanalyzed rather than trusted. An edit that would break
+  a reference is refused with a typed failure and no content: `EDIT_FAILURE_RENAME_REFERENCED` for
+  renaming a referenced element, `EDIT_FAILURE_DELETE_REFERENCED` for deleting one without asking
+  for a cascade. The client wrappers for these calls ship on the Python client's own tag.
 
 ### Diagrams in the VS Code extension
 
