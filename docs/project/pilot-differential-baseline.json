@@ -3,13 +3,13 @@
   "pilotRelease": "2026-05 (jupyter-sysml-kernel 0.60.1)",
   "totals": {
     "files": 349,
-    "filesFullyAgreeing": 254,
+    "filesFullyAgreeing": 273,
     "agreement": 20,
     "severityMismatch": 16,
-    "openSysMLOnly": 343,
-    "pilotOnly": 459,
-    "openSysMLDiagnostics": 379,
-    "pilotDiagnostics": 495
+    "openSysMLOnly": 281,
+    "pilotOnly": 142,
+    "openSysMLDiagnostics": 317,
+    "pilotDiagnostics": 178
   },
   "roots": [
     {
@@ -32,12 +32,12 @@
       "dir": "examples/pilot-corpora/sysml-examples",
       "totals": {
         "files": 98,
-        "filesFullyAgreeing": 65,
+        "filesFullyAgreeing": 70,
         "agreement": 0,
         "severityMismatch": 0,
-        "openSysMLOnly": 167,
+        "openSysMLOnly": 138,
         "pilotOnly": 0,
-        "openSysMLDiagnostics": 167,
+        "openSysMLDiagnostics": 138,
         "pilotDiagnostics": 0
       },
       "files": [
@@ -61,92 +61,34 @@
           "severityMismatch": [],
           "openSysMLOnly": [
             {
-              "line": 207,
+              "line": 214,
               "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 286,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            }
-          ],
-          "pilotOnly": []
-        },
-        {
-          "path": "Arrowhead Framework Example/AHFCoreLib.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [
-            {
-              "line": 28,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 32,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 40,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
-            }
-          ],
-          "pilotOnly": []
-        },
-        {
-          "path": "Arrowhead Framework Example/AHFNorwayTopics.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [
-            {
-              "line": 49,
-              "severity": "error",
-              "category": "kind-mismatch",
+              "category": "unresolved-reference",
               "count": 2
             },
             {
-              "line": 50,
+              "line": 215,
               "severity": "error",
-              "category": "kind-mismatch",
+              "category": "unresolved-reference",
               "count": 1
             },
             {
-              "line": 71,
+              "line": 216,
               "severity": "error",
-              "category": "kind-mismatch",
-              "count": 2
-            },
-            {
-              "line": 72,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 2
-            },
-            {
-              "line": 73,
-              "severity": "error",
-              "category": "kind-mismatch",
+              "category": "unresolved-reference",
               "count": 1
             },
             {
-              "line": 105,
+              "line": 217,
               "severity": "error",
-              "category": "kind-mismatch",
-              "count": 2
+              "category": "unresolved-reference",
+              "count": 1
             },
             {
-              "line": 106,
+              "line": 218,
               "severity": "error",
-              "category": "kind-mismatch",
-              "count": 2
+              "category": "unresolved-reference",
+              "count": 1
             }
           ],
           "pilotOnly": []
@@ -210,41 +152,15 @@
           "pilotOnly": []
         },
         {
-          "path": "Cause and Effect Examples/MedicalDeviceFailure.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [
-            {
-              "line": 12,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 25,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            }
-          ],
-          "pilotOnly": []
-        },
-        {
           "path": "Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml",
           "agreement": [],
           "severityMismatch": [],
           "openSysMLOnly": [
             {
-              "line": 56,
+              "line": 62,
               "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 130,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
+              "category": "unresolved-reference",
+              "count": 2
             }
           ],
           "pilotOnly": []
@@ -539,9 +455,15 @@
           "severityMismatch": [],
           "openSysMLOnly": [
             {
-              "line": 22,
+              "line": 12,
               "severity": "error",
-              "category": "syntax",
+              "category": "unmapped",
+              "count": 1
+            },
+            {
+              "line": 13,
+              "severity": "error",
+              "category": "unmapped",
               "count": 1
             }
           ],
@@ -563,32 +485,6 @@
               "severity": "error",
               "category": "syntax",
               "count": 3
-            }
-          ],
-          "pilotOnly": []
-        },
-        {
-          "path": "Requirements Examples/RequirementDerivationExample.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [
-            {
-              "line": 32,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 33,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 34,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
             }
           ],
           "pilotOnly": []
@@ -687,18 +583,6 @@
           "severityMismatch": [],
           "openSysMLOnly": [
             {
-              "line": 6,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 16,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
               "line": 26,
               "severity": "error",
               "category": "syntax",
@@ -723,20 +607,6 @@
               "severity": "error",
               "category": "kind-mismatch",
               "count": 1
-            }
-          ],
-          "pilotOnly": []
-        },
-        {
-          "path": "Simple Tests/TextualRepresentationTest.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [
-            {
-              "line": 7,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 3
             }
           ],
           "pilotOnly": []
@@ -805,30 +675,6 @@
               "count": 2
             },
             {
-              "line": 627,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 631,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 635,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 674,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
               "line": 689,
               "severity": "error",
               "category": "syntax",
@@ -879,30 +725,6 @@
               "count": 1
             },
             {
-              "line": 1060,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 1065,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 1069,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 1110,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
               "line": 1121,
               "severity": "error",
               "category": "syntax",
@@ -922,12 +744,6 @@
             },
             {
               "line": 1139,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 1198,
               "severity": "error",
               "category": "syntax",
               "count": 1
@@ -1104,29 +920,15 @@
       "dir": "examples/pilot-corpora/sysml-validation",
       "totals": {
         "files": 56,
-        "filesFullyAgreeing": 46,
+        "filesFullyAgreeing": 50,
         "agreement": 0,
         "severityMismatch": 0,
-        "openSysMLOnly": 37,
+        "openSysMLOnly": 22,
         "pilotOnly": 0,
-        "openSysMLDiagnostics": 37,
+        "openSysMLDiagnostics": 22,
         "pilotDiagnostics": 0
       },
       "files": [
-        {
-          "path": "03-Function-based Behavior/3c-Function-based Behavior-structure mod-1.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [
-            {
-              "line": 42,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
-            }
-          ],
-          "pilotOnly": []
-        },
         {
           "path": "05-State-based Behavior/5-State-based Behavior-1.sysml",
           "agreement": [],
@@ -1156,70 +958,6 @@
           "pilotOnly": []
         },
         {
-          "path": "06-Individual and Snapshots/6-Individual and Snapshots.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [
-            {
-              "line": 113,
-              "severity": "error",
-              "category": "syntax",
-              "count": 2
-            },
-            {
-              "line": 137,
-              "severity": "error",
-              "category": "syntax",
-              "count": 2
-            },
-            {
-              "line": 157,
-              "severity": "error",
-              "category": "syntax",
-              "count": 2
-            },
-            {
-              "line": 167,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            }
-          ],
-          "pilotOnly": []
-        },
-        {
-          "path": "08-Requirements/8-Requirements.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [
-            {
-              "line": 111,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 117,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 129,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 131,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            }
-          ],
-          "pilotOnly": []
-        },
-        {
           "path": "09-Verification/9-Verification-simplified.sysml",
           "agreement": [],
           "severityMismatch": [],
@@ -1234,36 +972,10 @@
           "pilotOnly": []
         },
         {
-          "path": "10-Analysis and Trades/10b-Trade-off Among Alternative Configurations.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [
-            {
-              "line": 82,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 83,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            }
-          ],
-          "pilotOnly": []
-        },
-        {
           "path": "10-Analysis and Trades/10d-Dynamics Analysis.sysml",
           "agreement": [],
           "severityMismatch": [],
           "openSysMLOnly": [
-            {
-              "line": 60,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
             {
               "line": 65,
               "severity": "error",
@@ -1356,12 +1068,12 @@
       "dir": "examples/pilot-corpora/kerml-examples",
       "totals": {
         "files": 58,
-        "filesFullyAgreeing": 35,
+        "filesFullyAgreeing": 37,
         "agreement": 0,
         "severityMismatch": 0,
-        "openSysMLOnly": 98,
+        "openSysMLOnly": 80,
         "pilotOnly": 6,
-        "openSysMLDiagnostics": 98,
+        "openSysMLDiagnostics": 80,
         "pilotDiagnostics": 6
       },
       "files": [
@@ -1395,20 +1107,7 @@
           "path": "KerML Spec Annex A Examples/A-2-ModelingInstances.kerml",
           "agreement": [],
           "severityMismatch": [],
-          "openSysMLOnly": [
-            {
-              "line": 8,
-              "severity": "error",
-              "category": "syntax",
-              "count": 2
-            },
-            {
-              "line": 9,
-              "severity": "error",
-              "category": "syntax",
-              "count": 2
-            }
-          ],
+          "openSysMLOnly": [],
           "pilotOnly": [
             {
               "line": 9,
@@ -1534,12 +1233,6 @@
               "severity": "error",
               "category": "syntax",
               "count": 1
-            },
-            {
-              "line": 13,
-              "severity": "error",
-              "category": "syntax",
-              "count": 2
             }
           ],
           "pilotOnly": [
@@ -1665,18 +1358,6 @@
               "severity": "error",
               "category": "syntax",
               "count": 1
-            },
-            {
-              "line": 28,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 31,
-              "severity": "error",
-              "category": "syntax",
-              "count": 2
             }
           ],
           "pilotOnly": [
@@ -1710,18 +1391,6 @@
               "severity": "error",
               "category": "syntax",
               "count": 1
-            },
-            {
-              "line": 21,
-              "severity": "error",
-              "category": "syntax",
-              "count": 2
-            },
-            {
-              "line": 28,
-              "severity": "error",
-              "category": "syntax",
-              "count": 2
             },
             {
               "line": 36,
@@ -1832,20 +1501,6 @@
               "severity": "error",
               "category": "unresolved-reference",
               "count": 1
-            }
-          ],
-          "pilotOnly": []
-        },
-        {
-          "path": "Simple Tests/TextualRepresentation.kerml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [
-            {
-              "line": 7,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 3
             }
           ],
           "pilotOnly": []
@@ -1992,34 +1647,14 @@
           ]
         },
         {
-          "path": "Variable Feature Examples/Enhancements/ExtendedOccurrences.kerml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [
-            {
-              "line": 27,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            }
-          ],
-          "pilotOnly": []
-        },
-        {
           "path": "Variable Feature Examples/TimeVaryingCarDriver.kerml",
           "agreement": [],
           "severityMismatch": [],
           "openSysMLOnly": [
             {
-              "line": 53,
+              "line": 93,
               "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 100,
-              "severity": "error",
-              "category": "syntax",
+              "category": "unmapped",
               "count": 1
             }
           ],
@@ -2446,13 +2081,13 @@
       "dir": "examples",
       "totals": {
         "files": 22,
-        "filesFullyAgreeing": 4,
+        "filesFullyAgreeing": 12,
         "agreement": 0,
         "severityMismatch": 12,
         "openSysMLOnly": 32,
-        "pilotOnly": 423,
+        "pilotOnly": 106,
         "openSysMLDiagnostics": 44,
-        "pilotDiagnostics": 435
+        "pilotDiagnostics": 118
       },
       "files": [
         {
@@ -2629,784 +2264,6 @@
           ]
         },
         {
-          "path": "parser_features_demo_advanced_bodies.kerml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [],
-          "pilotOnly": [
-            {
-              "line": 32,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 44,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 48,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 54,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 3
-            },
-            {
-              "line": 54,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 55,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 3
-            },
-            {
-              "line": 55,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 57,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 3
-            },
-            {
-              "line": 57,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 62,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 6
-            },
-            {
-              "line": 62,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 2
-            },
-            {
-              "line": 68,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 3
-            },
-            {
-              "line": 68,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 69,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 69,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 6
-            },
-            {
-              "line": 69,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 71,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 3
-            },
-            {
-              "line": 71,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 72,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 72,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 6
-            },
-            {
-              "line": 72,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 78,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 3
-            },
-            {
-              "line": 78,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 79,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 3
-            },
-            {
-              "line": 79,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 86,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 3
-            },
-            {
-              "line": 86,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 88,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 93,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 98,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 98,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 3
-            },
-            {
-              "line": 98,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 98,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 2
-            },
-            {
-              "line": 99,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 99,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 3
-            },
-            {
-              "line": 99,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 99,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 102,
-              "severity": "error",
-              "category": "syntax",
-              "count": 3
-            },
-            {
-              "line": 102,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 104,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            }
-          ]
-        },
-        {
-          "path": "parser_features_demo_advanced_connectors.kerml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [],
-          "pilotOnly": [
-            {
-              "line": 38,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
-            }
-          ]
-        },
-        {
-          "path": "parser_features_demo_binding.kerml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [],
-          "pilotOnly": [
-            {
-              "line": 22,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 4
-            },
-            {
-              "line": 22,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 22,
-              "severity": "warning",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 38,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 42,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 46,
-              "severity": "error",
-              "category": "syntax",
-              "count": 3
-            },
-            {
-              "line": 46,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 4
-            },
-            {
-              "line": 46,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 46,
-              "severity": "warning",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 46,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 49,
-              "severity": "error",
-              "category": "syntax",
-              "count": 4
-            },
-            {
-              "line": 49,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 4
-            },
-            {
-              "line": 49,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 49,
-              "severity": "warning",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 49,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 67,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 4
-            },
-            {
-              "line": 67,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 67,
-              "severity": "warning",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 68,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 4
-            },
-            {
-              "line": 68,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 68,
-              "severity": "warning",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 76,
-              "severity": "error",
-              "category": "syntax",
-              "count": 2
-            },
-            {
-              "line": 81,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 84,
-              "severity": "error",
-              "category": "syntax",
-              "count": 3
-            },
-            {
-              "line": 84,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 4
-            },
-            {
-              "line": 84,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 84,
-              "severity": "warning",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 84,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            }
-          ]
-        },
-        {
-          "path": "parser_features_demo_connectors.kerml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [],
-          "pilotOnly": [
-            {
-              "line": 16,
-              "severity": "error",
-              "category": "syntax",
-              "count": 2
-            },
-            {
-              "line": 16,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 2
-            },
-            {
-              "line": 17,
-              "severity": "error",
-              "category": "syntax",
-              "count": 2
-            },
-            {
-              "line": 17,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 2
-            },
-            {
-              "line": 18,
-              "severity": "error",
-              "category": "syntax",
-              "count": 2
-            },
-            {
-              "line": 18,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 2
-            },
-            {
-              "line": 24,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 25,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 26,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 27,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 28,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 31,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 31,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 37,
-              "severity": "error",
-              "category": "syntax",
-              "count": 6
-            },
-            {
-              "line": 37,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 2
-            },
-            {
-              "line": 37,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 3
-            },
-            {
-              "line": 40,
-              "severity": "error",
-              "category": "syntax",
-              "count": 7
-            },
-            {
-              "line": 40,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 2
-            },
-            {
-              "line": 40,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 3
-            },
-            {
-              "line": 41,
-              "severity": "error",
-              "category": "syntax",
-              "count": 7
-            },
-            {
-              "line": 41,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 2
-            },
-            {
-              "line": 41,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 3
-            },
-            {
-              "line": 61,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 62,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 79,
-              "severity": "error",
-              "category": "multiplicity",
-              "count": 1
-            },
-            {
-              "line": 79,
-              "severity": "error",
-              "category": "syntax",
-              "count": 2
-            },
-            {
-              "line": 79,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 2
-            },
-            {
-              "line": 83,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 87,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 87,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 88,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 88,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 89,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 89,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 90,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 90,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 91,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 91,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 104,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 107,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 110,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 115,
-              "severity": "error",
-              "category": "syntax",
-              "count": 6
-            },
-            {
-              "line": 115,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 2
-            },
-            {
-              "line": 115,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 3
-            },
-            {
-              "line": 118,
-              "severity": "error",
-              "category": "syntax",
-              "count": 6
-            },
-            {
-              "line": 118,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 2
-            },
-            {
-              "line": 118,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 3
-            }
-          ]
-        },
-        {
-          "path": "parser_features_demo_declarations.kerml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [],
-          "pilotOnly": [
-            {
-              "line": 55,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 2
-            },
-            {
-              "line": 55,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 67,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 70,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 70,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 98,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 2
-            },
-            {
-              "line": 98,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            }
-          ]
-        },
-        {
           "path": "parser_features_demo_defaults.kerml",
           "agreement": [],
           "severityMismatch": [],
@@ -3424,26 +2281,7 @@
               "count": 1
             }
           ],
-          "pilotOnly": [
-            {
-              "line": 52,
-              "severity": "error",
-              "category": "syntax",
-              "count": 2
-            },
-            {
-              "line": 64,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 74,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            }
-          ]
+          "pilotOnly": []
         },
         {
           "path": "parser_features_demo_edge_cases.kerml",
@@ -3463,326 +2301,7 @@
               "count": 1
             }
           ],
-          "pilotOnly": [
-            {
-              "line": 31,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 32,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 34,
-              "severity": "error",
-              "category": "multiplicity",
-              "count": 1
-            },
-            {
-              "line": 34,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 4
-            },
-            {
-              "line": 34,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 34,
-              "severity": "warning",
-              "category": "multiplicity",
-              "count": 1
-            },
-            {
-              "line": 35,
-              "severity": "error",
-              "category": "syntax",
-              "count": 3
-            },
-            {
-              "line": 35,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 36,
-              "severity": "error",
-              "category": "syntax",
-              "count": 2
-            },
-            {
-              "line": 36,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 43,
-              "severity": "error",
-              "category": "syntax",
-              "count": 2
-            },
-            {
-              "line": 44,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 45,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 45,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 47,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 49,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 52,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 52,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 2
-            },
-            {
-              "line": 53,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 53,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 2
-            },
-            {
-              "line": 70,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            }
-          ]
-        },
-        {
-          "path": "parser_features_demo_messages_events.kerml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [],
-          "pilotOnly": [
-            {
-              "line": 21,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 27,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 34,
-              "severity": "error",
-              "category": "syntax",
-              "count": 2
-            },
-            {
-              "line": 34,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 2
-            },
-            {
-              "line": 35,
-              "severity": "error",
-              "category": "syntax",
-              "count": 2
-            },
-            {
-              "line": 35,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 2
-            },
-            {
-              "line": 40,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 52,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 52,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 53,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 53,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 56,
-              "severity": "error",
-              "category": "syntax",
-              "count": 2
-            },
-            {
-              "line": 59,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            }
-          ]
-        },
-        {
-          "path": "parser_features_demo_modifiers.kerml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [],
-          "pilotOnly": [
-            {
-              "line": 18,
-              "severity": "error",
-              "category": "syntax",
-              "count": 2
-            },
-            {
-              "line": 35,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 35,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 36,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 36,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 42,
-              "severity": "error",
-              "category": "syntax",
-              "count": 2
-            },
-            {
-              "line": 42,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 2
-            },
-            {
-              "line": 43,
-              "severity": "error",
-              "category": "syntax",
-              "count": 2
-            },
-            {
-              "line": 43,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 2
-            },
-            {
-              "line": 44,
-              "severity": "error",
-              "category": "syntax",
-              "count": 2
-            },
-            {
-              "line": 44,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 2
-            },
-            {
-              "line": 62,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 67,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 70,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            }
-          ]
-        },
-        {
-          "path": "parser_features_demo_relationships.kerml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [],
-          "pilotOnly": [
-            {
-              "line": 25,
-              "severity": "error",
-              "category": "multiplicity",
-              "count": 1
-            }
-          ]
+          "pilotOnly": []
         },
         {
           "path": "phase-c-behavioral-bodies.sysml",
@@ -4310,37 +2829,25 @@
           "openSysMLOnly": [],
           "pilotOnly": [
             {
-              "line": 32,
+              "line": 34,
               "severity": "error",
               "category": "multiplicity",
               "count": 1
             },
             {
-              "line": 44,
-              "severity": "error",
-              "category": "multiplicity",
-              "count": 1
-            },
-            {
-              "line": 44,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 2
-            },
-            {
-              "line": 81,
+              "line": 83,
               "severity": "error",
               "category": "syntax",
               "count": 1
             },
             {
-              "line": 85,
+              "line": 87,
               "severity": "error",
               "category": "syntax",
               "count": 2
             },
             {
-              "line": 88,
+              "line": 90,
               "severity": "error",
               "category": "syntax",
               "count": 1
@@ -4430,7 +2937,7 @@
     {
       "side": "pilot",
       "message": "Duplicate of other owned member name",
-      "count": 100
+      "count": 25
     },
     {
       "side": "pilot",
@@ -4440,11 +2947,6 @@
     {
       "side": "opensysml",
       "message": "A participates in a specialization cycle",
-      "count": 2
-    },
-    {
-      "side": "pilot",
-      "message": "Cannot identify flow end (use dot notation)",
       "count": 2
     },
     {
@@ -4484,7 +2986,22 @@
     },
     {
       "side": "opensysml",
+      "message": "isLicensed1 redefines isLicensed, but isLicensed is not an inherited member of driver",
+      "count": 1
+    },
+    {
+      "side": "opensysml",
+      "message": "name conflict: explanation is already the name of the inherited feature ModelingMetadata::Rationale::explanation",
+      "count": 1
+    },
+    {
+      "side": "opensysml",
       "message": "name conflict: text is already the name of the inherited feature ModelingMetadata::Issue::text",
+      "count": 1
+    },
+    {
+      "side": "opensysml",
+      "message": "name conflict: text is already the name of the inherited feature ModelingMetadata::Rationale::text",
       "count": 1
     },
     {
@@ -4505,416 +3022,6 @@
     {
       "side": "pilot",
       "message": "Must be model-level evaluable",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "Only one return parameter is allowed",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'instantiatedType' of 'org.omg.sysml.lang.sysml.impl.InvocationExpressionImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.4/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.AcceptActionUsageImpl{parser_features_demo_advanced_bodies.kerml#|22}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'instantiatedType' of 'org.omg.sysml.lang.sysml.impl.InvocationExpressionImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.4/@ownedRelatedElement.0/@ownedRelationship.2/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.AcceptActionUsageImpl{parser_features_demo_advanced_bodies.kerml#|28}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'member' of 'org.omg.sysml.lang.sysml.impl.InvocationExpressionImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.4/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.AcceptActionUsageImpl{parser_features_demo_advanced_bodies.kerml#|22}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'member' of 'org.omg.sysml.lang.sysml.impl.InvocationExpressionImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.4/@ownedRelatedElement.0/@ownedRelationship.2/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.AcceptActionUsageImpl{parser_features_demo_advanced_bodies.kerml#|28}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'memberElement' of 'org.omg.sysml.lang.sysml.impl.MembershipImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.4/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.1}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.AcceptActionUsageImpl{parser_features_demo_advanced_bodies.kerml#|22}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'memberElement' of 'org.omg.sysml.lang.sysml.impl.MembershipImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.4/@ownedRelatedElement.0/@ownedRelationship.2/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.1}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.AcceptActionUsageImpl{parser_features_demo_advanced_bodies.kerml#|28}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'redefinedFeature' of 'org.omg.sysml.lang.sysml.impl.RedefinitionImpl{parser_features_demo_declarations.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.15/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_declarations.kerml#|27}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'referencedFeature' of 'org.omg.sysml.lang.sysml.impl.ReferenceSubsettingImpl{parser_features_demo_binding.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.4/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.1}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_binding.kerml#|0}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'referencedFeature' of 'org.omg.sysml.lang.sysml.impl.ReferenceSubsettingImpl{parser_features_demo_binding.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.5/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.1}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_binding.kerml#|4}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'referencedFeature' of 'org.omg.sysml.lang.sysml.impl.ReferenceSubsettingImpl{parser_features_demo_binding.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.8/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.1}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_binding.kerml#|7}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'referencedFeature' of 'org.omg.sysml.lang.sysml.impl.ReferenceSubsettingImpl{parser_features_demo_binding.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.2/@ownedRelatedElement.0/@ownedRelationship.5/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_binding.kerml#|10}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'referencedFeature' of 'org.omg.sysml.lang.sysml.impl.ReferenceSubsettingImpl{parser_features_demo_binding.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.2/@ownedRelatedElement.0/@ownedRelationship.6/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_binding.kerml#|13}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'referencedFeature' of 'org.omg.sysml.lang.sysml.impl.ReferenceSubsettingImpl{parser_features_demo_binding.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.5/@ownedRelatedElement.0/@ownedRelationship.2/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.1}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_binding.kerml#|22}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'referencedFeature' of 'org.omg.sysml.lang.sysml.impl.ReferenceSubsettingImpl{parser_features_demo_edge_cases.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.3/@ownedRelatedElement.0/@ownedRelationship.3/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.1}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_edge_cases.kerml#|11}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'relatedElement' of 'org.omg.sysml.lang.sysml.impl.FeatureTypingImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.2/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|14}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'relatedElement' of 'org.omg.sysml.lang.sysml.impl.FeatureTypingImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.2/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|15}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'relatedElement' of 'org.omg.sysml.lang.sysml.impl.FeatureTypingImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.2/@ownedRelatedElement.0/@ownedRelationship.2/@ownedRelatedElement.0/@ownedRelationship.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|16}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'relatedElement' of 'org.omg.sysml.lang.sysml.impl.FeatureTypingImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.3/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|17}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'relatedElement' of 'org.omg.sysml.lang.sysml.impl.FeatureTypingImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.3/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|18}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'relatedElement' of 'org.omg.sysml.lang.sysml.impl.FeatureTypingImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.4/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|20}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'relatedElement' of 'org.omg.sysml.lang.sysml.impl.FeatureTypingImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.4/@ownedRelatedElement.0/@ownedRelationship.2/@ownedRelatedElement.0/@ownedRelationship.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|26}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'relatedElement' of 'org.omg.sysml.lang.sysml.impl.FeatureTypingImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.5/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|32}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'relatedElement' of 'org.omg.sysml.lang.sysml.impl.FeatureTypingImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.5/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|33}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'relatedElement' of 'org.omg.sysml.lang.sysml.impl.FeatureTypingImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.6/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|34}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'relatedElement' of 'org.omg.sysml.lang.sysml.impl.FeatureTypingImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.8/@ownedRelatedElement.0/@ownedRelationship.2/@ownedRelatedElement.0/@ownedRelationship.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|36}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'relatedElement' of 'org.omg.sysml.lang.sysml.impl.FeatureTypingImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.8/@ownedRelatedElement.0/@ownedRelationship.4/@ownedRelatedElement.0/@ownedRelationship.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|37}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'relatedElement' of 'org.omg.sysml.lang.sysml.impl.MembershipImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.4/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.1}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.AcceptActionUsageImpl{parser_features_demo_advanced_bodies.kerml#|22}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'relatedElement' of 'org.omg.sysml.lang.sysml.impl.MembershipImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.4/@ownedRelatedElement.0/@ownedRelationship.2/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.1}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.AcceptActionUsageImpl{parser_features_demo_advanced_bodies.kerml#|28}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'relatedElement' of 'org.omg.sysml.lang.sysml.impl.RedefinitionImpl{parser_features_demo_declarations.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.15/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_declarations.kerml#|27}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'relatedElement' of 'org.omg.sysml.lang.sysml.impl.ReferenceSubsettingImpl{parser_features_demo_binding.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.4/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.1}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_binding.kerml#|0}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'relatedElement' of 'org.omg.sysml.lang.sysml.impl.ReferenceSubsettingImpl{parser_features_demo_binding.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.5/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.1}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_binding.kerml#|4}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'relatedElement' of 'org.omg.sysml.lang.sysml.impl.ReferenceSubsettingImpl{parser_features_demo_binding.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.8/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.1}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_binding.kerml#|7}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'relatedElement' of 'org.omg.sysml.lang.sysml.impl.ReferenceSubsettingImpl{parser_features_demo_binding.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.2/@ownedRelatedElement.0/@ownedRelationship.5/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_binding.kerml#|10}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'relatedElement' of 'org.omg.sysml.lang.sysml.impl.ReferenceSubsettingImpl{parser_features_demo_binding.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.2/@ownedRelatedElement.0/@ownedRelationship.6/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_binding.kerml#|13}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'relatedElement' of 'org.omg.sysml.lang.sysml.impl.ReferenceSubsettingImpl{parser_features_demo_binding.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.5/@ownedRelatedElement.0/@ownedRelationship.2/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.1}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_binding.kerml#|22}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'relatedElement' of 'org.omg.sysml.lang.sysml.impl.ReferenceSubsettingImpl{parser_features_demo_edge_cases.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.3/@ownedRelatedElement.0/@ownedRelationship.3/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.1}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_edge_cases.kerml#|11}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'relatedElement' of 'org.omg.sysml.lang.sysml.impl.SubclassificationImpl{parser_features_demo_declarations.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.8/@ownedRelatedElement.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.ClassifierImpl{parser_features_demo_declarations.kerml#|7}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'relatedFeature' of 'org.omg.sysml.lang.sysml.impl.BindingConnectorImpl{parser_features_demo_binding.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.4/@ownedRelatedElement.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_binding.kerml#|0}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'relatedFeature' of 'org.omg.sysml.lang.sysml.impl.BindingConnectorImpl{parser_features_demo_binding.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.5/@ownedRelatedElement.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_binding.kerml#|4}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'relatedFeature' of 'org.omg.sysml.lang.sysml.impl.BindingConnectorImpl{parser_features_demo_binding.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.8/@ownedRelatedElement.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_binding.kerml#|7}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'relatedFeature' of 'org.omg.sysml.lang.sysml.impl.BindingConnectorImpl{parser_features_demo_binding.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.2/@ownedRelatedElement.0/@ownedRelationship.5/@ownedRelatedElement.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_binding.kerml#|10}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'relatedFeature' of 'org.omg.sysml.lang.sysml.impl.BindingConnectorImpl{parser_features_demo_binding.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.2/@ownedRelatedElement.0/@ownedRelationship.6/@ownedRelatedElement.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_binding.kerml#|13}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'relatedFeature' of 'org.omg.sysml.lang.sysml.impl.BindingConnectorImpl{parser_features_demo_binding.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.5/@ownedRelatedElement.0/@ownedRelationship.2/@ownedRelatedElement.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_binding.kerml#|22}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'relatedFeature' of 'org.omg.sysml.lang.sysml.impl.SuccessionImpl{parser_features_demo_edge_cases.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.3/@ownedRelatedElement.0/@ownedRelationship.3/@ownedRelatedElement.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_edge_cases.kerml#|11}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'sourceFeature' of 'org.omg.sysml.lang.sysml.impl.BindingConnectorImpl{parser_features_demo_binding.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.4/@ownedRelatedElement.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_binding.kerml#|0}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'sourceFeature' of 'org.omg.sysml.lang.sysml.impl.BindingConnectorImpl{parser_features_demo_binding.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.5/@ownedRelatedElement.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_binding.kerml#|4}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'sourceFeature' of 'org.omg.sysml.lang.sysml.impl.BindingConnectorImpl{parser_features_demo_binding.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.8/@ownedRelatedElement.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_binding.kerml#|7}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'sourceFeature' of 'org.omg.sysml.lang.sysml.impl.BindingConnectorImpl{parser_features_demo_binding.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.2/@ownedRelatedElement.0/@ownedRelationship.5/@ownedRelatedElement.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_binding.kerml#|10}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'sourceFeature' of 'org.omg.sysml.lang.sysml.impl.BindingConnectorImpl{parser_features_demo_binding.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.2/@ownedRelatedElement.0/@ownedRelationship.6/@ownedRelatedElement.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_binding.kerml#|13}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'sourceFeature' of 'org.omg.sysml.lang.sysml.impl.BindingConnectorImpl{parser_features_demo_binding.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.5/@ownedRelatedElement.0/@ownedRelationship.2/@ownedRelatedElement.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_binding.kerml#|22}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'sourceFeature' of 'org.omg.sysml.lang.sysml.impl.SuccessionImpl{parser_features_demo_edge_cases.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.3/@ownedRelatedElement.0/@ownedRelationship.3/@ownedRelatedElement.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_edge_cases.kerml#|11}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'subclassifier' of 'org.omg.sysml.lang.sysml.impl.SubclassificationImpl{parser_features_demo_declarations.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.8/@ownedRelatedElement.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.ClassifierImpl{parser_features_demo_declarations.kerml#|7}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'type' of 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.2/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|14}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'type' of 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.2/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|15}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'type' of 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.2/@ownedRelatedElement.0/@ownedRelationship.2/@ownedRelatedElement.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|16}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'type' of 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.3/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|17}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'type' of 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.3/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|18}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'type' of 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.4/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.2/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|17}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'type' of 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.4/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.2/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.2/@ownedRelatedElement.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|17}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'type' of 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.4/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|20}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'type' of 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.4/@ownedRelatedElement.0/@ownedRelationship.2/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.2/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|17}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'type' of 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.4/@ownedRelatedElement.0/@ownedRelationship.2/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.2/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.2/@ownedRelatedElement.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|17}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'type' of 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.4/@ownedRelatedElement.0/@ownedRelationship.2/@ownedRelatedElement.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|26}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'type' of 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.5/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|32}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'type' of 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.5/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|33}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'type' of 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.6/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|34}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'type' of 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.6/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|34}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'type' of 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.8/@ownedRelatedElement.0/@ownedRelationship.2/@ownedRelatedElement.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|36}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'type' of 'org.omg.sysml.lang.sysml.impl.FeatureImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.8/@ownedRelatedElement.0/@ownedRelationship.4/@ownedRelatedElement.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|37}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'type' of 'org.omg.sysml.lang.sysml.impl.FeatureTypingImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.2/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|14}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'type' of 'org.omg.sysml.lang.sysml.impl.FeatureTypingImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.2/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|15}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'type' of 'org.omg.sysml.lang.sysml.impl.FeatureTypingImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.2/@ownedRelatedElement.0/@ownedRelationship.2/@ownedRelatedElement.0/@ownedRelationship.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|16}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'type' of 'org.omg.sysml.lang.sysml.impl.FeatureTypingImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.3/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|17}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'type' of 'org.omg.sysml.lang.sysml.impl.FeatureTypingImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.3/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|18}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'type' of 'org.omg.sysml.lang.sysml.impl.FeatureTypingImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.4/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|20}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'type' of 'org.omg.sysml.lang.sysml.impl.FeatureTypingImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.4/@ownedRelatedElement.0/@ownedRelationship.2/@ownedRelatedElement.0/@ownedRelationship.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|26}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'type' of 'org.omg.sysml.lang.sysml.impl.FeatureTypingImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.5/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|32}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'type' of 'org.omg.sysml.lang.sysml.impl.FeatureTypingImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.5/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|33}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'type' of 'org.omg.sysml.lang.sysml.impl.FeatureTypingImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.6/@ownedRelatedElement.0/@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|34}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'type' of 'org.omg.sysml.lang.sysml.impl.FeatureTypingImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.8/@ownedRelatedElement.0/@ownedRelationship.2/@ownedRelatedElement.0/@ownedRelationship.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|36}'",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The feature 'type' of 'org.omg.sysml.lang.sysml.impl.FeatureTypingImpl{parser_features_demo_advanced_bodies.kerml#//@ownedRelationship.8/@ownedRelatedElement.0/@ownedRelationship.4/@ownedRelatedElement.0/@ownedRelationship.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.TypeImpl{parser_features_demo_advanced_bodies.kerml#|37}'",
       "count": 1
     },
     {
@@ -4945,56 +3052,6 @@
     {
       "side": "pilot",
       "message": "The opposite features 'owningType' of 'org.omg.sysml.lang.sysml.impl.DisjoiningImpl{Simple Tests/Types.kerml#//@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.14/@ownedRelatedElement.0/@ownedRelationship.1}' and 'ownedDisjoining' of 'org.omg.sysml.lang.sysml.impl.TypeImpl{Simple Tests/Types.kerml#//@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.14/@ownedRelatedElement.0}' do not refer to each other",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The required feature 'general' of 'org.omg.sysml.lang.sysml.impl.FeatureTypingImpl{parser_features_demo_connectors.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.10/@ownedRelatedElement.0/@ownedRelationship.14/@ownedRelatedElement.0/@ownedRelationship.0}' must be set",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The required feature 'general' of 'org.omg.sysml.lang.sysml.impl.FeatureTypingImpl{parser_features_demo_connectors.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.10/@ownedRelatedElement.0/@ownedRelationship.20/@ownedRelatedElement.0/@ownedRelationship.0}' must be set",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The required feature 'general' of 'org.omg.sysml.lang.sysml.impl.FeatureTypingImpl{parser_features_demo_connectors.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.10/@ownedRelatedElement.0/@ownedRelationship.8/@ownedRelatedElement.0/@ownedRelationship.0}' must be set",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The required feature 'general' of 'org.omg.sysml.lang.sysml.impl.FeatureTypingImpl{parser_features_demo_connectors.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.14/@ownedRelatedElement.0/@ownedRelationship.3/@ownedRelatedElement.0/@ownedRelationship.0}' must be set",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The required feature 'general' of 'org.omg.sysml.lang.sysml.impl.FeatureTypingImpl{parser_features_demo_connectors.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.14/@ownedRelatedElement.0/@ownedRelationship.8/@ownedRelatedElement.0/@ownedRelationship.0}' must be set",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The required feature 'type' of 'org.omg.sysml.lang.sysml.impl.FeatureTypingImpl{parser_features_demo_connectors.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.10/@ownedRelatedElement.0/@ownedRelationship.14/@ownedRelatedElement.0/@ownedRelationship.0}' must be set",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The required feature 'type' of 'org.omg.sysml.lang.sysml.impl.FeatureTypingImpl{parser_features_demo_connectors.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.10/@ownedRelatedElement.0/@ownedRelationship.20/@ownedRelatedElement.0/@ownedRelationship.0}' must be set",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The required feature 'type' of 'org.omg.sysml.lang.sysml.impl.FeatureTypingImpl{parser_features_demo_connectors.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.10/@ownedRelatedElement.0/@ownedRelationship.8/@ownedRelatedElement.0/@ownedRelationship.0}' must be set",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The required feature 'type' of 'org.omg.sysml.lang.sysml.impl.FeatureTypingImpl{parser_features_demo_connectors.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.14/@ownedRelatedElement.0/@ownedRelationship.3/@ownedRelatedElement.0/@ownedRelationship.0}' must be set",
-      "count": 1
-    },
-    {
-      "side": "pilot",
-      "message": "The required feature 'type' of 'org.omg.sysml.lang.sysml.impl.FeatureTypingImpl{parser_features_demo_connectors.kerml#//@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.14/@ownedRelatedElement.0/@ownedRelationship.8/@ownedRelatedElement.0/@ownedRelationship.0}' must be set",
       "count": 1
     }
   ]
