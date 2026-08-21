@@ -109,10 +109,28 @@ func (ec *exprChecker) checkBoolean(scope *symbols.Scope, n ast.Node, context st
 		return
 	}
 	got := ec.infer(scope, n)
-	if got == semantics.PrimUnknown || got == semantics.PrimBoolean {
+	if got == semantics.PrimBoolean {
+		return
+	}
+	if got == semantics.PrimUnknown {
+		ec.checkNonScalarCondition(scope, n, context)
 		return
 	}
 	ec.errorf(n.Span(), "%s must be Boolean, found %s", context, got)
+}
+
+// checkNonScalarCondition reports a condition naming a feature typed by
+// something no Boolean can come from: a part, an item, an enumeration.
+func (ec *exprChecker) checkNonScalarCondition(scope *symbols.Scope, n ast.Node, context string) {
+	typeSym := ec.valueTypeSymbol(scope, n)
+	if typeSym == nil {
+		typeSym = ec.invocationResultTypeSymbol(scope, n)
+	}
+	if typeSym == nil || !ec.isDefinitelyNonBehavior(typeSym) ||
+		ec.model.CouldHold(typeSym, semantics.PrimBoolean) {
+		return
+	}
+	ec.errorf(n.Span(), "%s must be Boolean, found %s", context, typeSym.Name)
 }
 
 // infer returns the scalar type of an expression, checking its operands on the

@@ -32,6 +32,12 @@ func (ec *exprChecker) checkValueConformance(scope *symbols.Scope, u *ast.Usage)
 			}
 			continue
 		}
+		if got := ec.invocationResultTypeSymbol(scope, value); got != nil {
+			if !ec.model.Conforms(got, want) && !ec.model.Conforms(want, got) {
+				ec.errorf(value.Span(), "cannot bind a value of type %s to a feature typed by %s", got.Name, want.Name)
+			}
+			continue
+		}
 		// The feature's type has no scalar ancestor, so no literal value can
 		// conform to it. Only literals are judged here: any other expression
 		// may produce an instance of the type.
@@ -197,6 +203,34 @@ func (ec *exprChecker) valueTypeSymbol(scope *symbols.Scope, value ast.Node) *sy
 		return ec.owningEnumeration(sym)
 	}
 	return nil
+}
+
+// invocationResultTypeSymbol returns the type of the result parameter of the
+// behavior an invocation names, which is the type of the value it produces.
+func (ec *exprChecker) invocationResultTypeSymbol(scope *symbols.Scope, value ast.Node) *symbols.Symbol {
+	inv, ok := value.(*ast.InvocationExpr)
+	if !ok || inv.Type == nil {
+		return nil
+	}
+	sym, resolved := ec.resolver.ResolveQualified(scope, inv.Type)
+	if !resolved || sym == nil {
+		return nil
+	}
+	if target, ok := ec.resolver.ResolveAliasTarget(sym); ok && target != nil {
+		sym = target
+	}
+	if !ec.isInvocationBehavior(sym, map[*symbols.Symbol]bool{}) {
+		return nil
+	}
+	result := ec.model.ResultParameterOf(sym)
+	if result == nil {
+		return nil
+	}
+	u, isUsage := result.Decl.(*ast.Usage)
+	if !isUsage {
+		return nil
+	}
+	return ec.declaredTypeSymbol(result.OwnerScope, u.Relationships)
 }
 
 // owningEnumeration returns the enumeration definition a literal belongs to, or
