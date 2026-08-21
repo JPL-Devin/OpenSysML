@@ -860,10 +860,11 @@ func compatibleTyping(useKind ast.UsageKind, direction ast.FeatureDirection, def
 		return defKindSpecializes(defKind, symbols.SymbolCaseDef)
 	}
 
-	// A succession types through a plain UsageDeclaration (SysML.xtext:1033
-	// SuccessionAsUsage), so any definition types it; the pilot enforces only
-	// the generic `A usage must be typed by definitions`.
-	if useKind == ast.UsageSuccession {
+	// A succession or binding types through a plain UsageDeclaration
+	// (SysML.xtext:1033 SuccessionAsUsage, :1020 BindingConnectorAsUsage), so
+	// any definition types it; the pilot enforces only the generic
+	// `A usage must be typed by definitions`.
+	if useKind == ast.UsageSuccession || useKind == ast.UsageBinding {
 		return true
 	}
 
