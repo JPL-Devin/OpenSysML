@@ -139,7 +139,10 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("send_addressed_to_an_unreachable_target", testSendAddressedToAnUnreachableTarget)
 	t.Run("routed_send_via_unknown_port", testRoutedSendViaUnknownPort)
 	t.Run("routed_send_port_type_mismatch", testRoutedSendPortTypeMismatch)
+	t.Run("routed_send_port_type_match", testRoutedSendPortTypeMatch)
+	t.Run("routed_send_scalar_typed_flow_mismatch", testRoutedSendScalarTypedFlowMismatch)
 	t.Run("routed_send_unreachable_receiver", testRoutedSendUnreachableReceiver)
+	t.Run("routed_send_receiver_name_mismatch_deadlock", testRoutedSendReceiverNameMismatchDeadlock)
 	t.Run("send_addressed_through_several_occurrences", testSendAddressedThroughSeveralOccurrences)
 	t.Run("send_addressed_to_an_object_that_cannot_be_built", testSendAddressedToAnObjectThatCannotBeBuilt)
 	t.Run("send_addressed_to_a_part_no_sibling_takes", testSendAddressedToAPartNoSiblingTakes)
@@ -2434,6 +2437,55 @@ func testRoutedSendPortTypeMismatch(t *testing.T) {
 	}
 }
 
+func testRoutedSendPortTypeMatch(t *testing.T) {
+	_, err := executeActionSource(t, "pipeline", `package P {
+		item def IntMessage;
+		port def IntegerPort { in item value : IntMessage; }
+		action pipeline {
+			port outPort;
+			port inPort : IntegerPort;
+			connect outPort to inPort;
+			first start;
+			action sender { send IntMessage via outPort to reader; }
+			action reader accept : IntMessage via inPort;
+			done end;
+			then start sender;
+			then sender reader;
+			then reader end;
+		}
+	}`)
+	if err != nil {
+		t.Fatalf("execute routed send through matching typed flow: %v", err)
+	}
+}
+
+func testRoutedSendScalarTypedFlowMismatch(t *testing.T) {
+	_, err := executeActionSource(t, "pipeline", `package P {
+		item def Integer;
+		item def TextMessage;
+		port def TextPort { in item text : TextMessage; }
+		action pipeline {
+			port outPort;
+			port inPort : TextPort;
+			connect outPort to inPort;
+			first start;
+			action sender { send 42 via outPort to reader; }
+			action reader accept msg : Integer via inPort;
+			done end;
+			then start sender;
+			then sender reader;
+			then reader end;
+		}
+	}`)
+	var typed *SendPortTypeMismatchError
+	if !errors.As(err, &typed) {
+		t.Fatalf("expected scalar SendPortTypeMismatchError, got: %v", err)
+	}
+	if !errors.Is(err, ErrSendPortTypeMismatch) {
+		t.Errorf("expected ErrSendPortTypeMismatch for scalar message, got: %v", err)
+	}
+}
+
 func testRoutedSendUnreachableReceiver(t *testing.T) {
 	_, err := executeActionSource(t, "pipeline", `package P {
 		action pipeline {
@@ -2457,6 +2509,30 @@ func testRoutedSendUnreachableReceiver(t *testing.T) {
 	if !strings.Contains(err.Error(), `"outPort"`) ||
 		!strings.Contains(err.Error(), `"missing"`) {
 		t.Errorf("error = %v, want port and receiver names", err)
+	}
+}
+
+func testRoutedSendReceiverNameMismatchDeadlock(t *testing.T) {
+	_, err := executeActionSource(t, "pipeline", `package P {
+		action pipeline {
+			port outPort;
+			port inPort;
+			connect outPort to inPort;
+			first start;
+			action sender { send 42 via outPort to receiver; }
+			action receiver;
+			action sibling accept msg : Integer via inPort;
+			done end;
+			then start sender;
+			then sender sibling;
+			then sibling end;
+		}
+	}`)
+	if err == nil {
+		t.Fatal("expected a deadlock: sibling must not consume receiver's message")
+	}
+	if !errors.Is(err, ErrAcceptDeadlock) {
+		t.Fatalf("expected ErrAcceptDeadlock, got: %v", err)
 	}
 }
 

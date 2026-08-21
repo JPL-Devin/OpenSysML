@@ -2,6 +2,7 @@
 	"type": "action",
 	"trace": true,
 	"outputs": {
-		"got": {"type": "Integer", "value": 42}
+		"receiverGot": {"type": "Integer", "value": 42},
+		"siblingGot": {"type": "Integer", "value": 7}
 	}
 }

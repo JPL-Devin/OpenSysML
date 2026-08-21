@@ -1,8 +1,13 @@
 step 1: token 1@sender
 stmt send
   eval literal 42 -> 42
-step 2: token 1@receiver
-stmt assign got
+stmt send
+  eval literal 7 -> 7
+step 2: token 1@split
+step 3: token 2@receiver, token 3@sibling
+stmt assign siblingGot
+  eval feature value -> 7
+stmt assign receiverGot
   eval feature value -> 42
-step 3: token 1@end
-step 4: no active tokens
+step 4: token 2@sync, token 3@sync
+step 5: no active tokens

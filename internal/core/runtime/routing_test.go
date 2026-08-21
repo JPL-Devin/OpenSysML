@@ -144,6 +144,34 @@ func TestSendReachesThePortsOfThePerformingPart(t *testing.T) {
 	assertIntOutput(t, outputs, "got", 3)
 }
 
+// A routed send from a behavior performed by a materialized part keeps that
+// part's identity while constraining delivery to the named receiver.
+func TestRoutedSendKeepsPerformingObjectIdentity(t *testing.T) {
+	outputs, err := executePerformedAction(t, `package P {
+		part def Node {
+			port src;
+			port dst;
+			connect src to dst;
+		}
+		part node : Node {
+			action ship {
+				attribute got : Integer = 0;
+				first start;
+				action sender { send 3 via src to reader; }
+				action reader accept n : Integer via dst { assign got := n; }
+				done end;
+				then start sender;
+				then sender reader;
+				then reader end;
+			}
+		}
+	}`, "P::node", "P::node::ship")
+	if err != nil {
+		t.Fatalf("execute routed action: %v", err)
+	}
+	assertIntOutput(t, outputs, "got", 3)
+}
+
 // The part a behavior is declared in performs it by owning it, so its ports are
 // reachable even when no instance was created to perform the behavior.
 func TestSendReachesEnclosingPartPortsWithoutAnInstance(t *testing.T) {

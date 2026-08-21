@@ -115,22 +115,36 @@ func testSendViaAPortToAReceiver(t *testing.T) {
 				port p : Pt;
 				port inPort : Pt;
 				connect p to inPort;
-				attribute x = 1;
+				attribute receiverGot : Integer = 0;
+				attribute siblingGot : Integer = 0;
 				first start;
 				action sender {
-					send x via p to receiver;
+					send 42 via p to receiver;
+					send 7 via p to sibling;
 				}
-				action receiver accept n : Integer via inPort;
-				action sibling accept n : Integer via inPort;
+				action receiver accept n : Integer via inPort {
+					assign receiverGot := n;
+				}
+				action sibling accept n : Integer via inPort {
+					assign siblingGot := n;
+				}
+				fork split;
+				join sync;
 				done end;
 				then start sender;
-				then sender receiver;
-				then receiver end;
+				then sender split;
+				then split receiver;
+				then split sibling;
+				then receiver sync;
+				then sibling sync;
+				then sync end;
 			}
 		}
 	`
-	err := runActionForError(t, src, "talk")
+	outputs, err := executeActionSource(t, "talk", src)
 	if err != nil {
 		t.Fatalf("send routed to its named receiver: %v", err)
 	}
+	assertIntOutput(t, outputs, "receiverGot", 42)
+	assertIntOutput(t, outputs, "siblingGot", 7)
 }

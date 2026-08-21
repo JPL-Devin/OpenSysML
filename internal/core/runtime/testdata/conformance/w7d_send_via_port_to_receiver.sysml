@@ -1,22 +1,30 @@
 package W7D {
 	action route {
-		attribute got : Integer = 0;
+		attribute receiverGot : Integer = 0;
+		attribute siblingGot : Integer = 0;
 		port senderPort;
 		port receiverPort;
 		connect senderPort to receiverPort;
 		first start;
 		action sender {
 			send 42 via senderPort to receiver;
+			send 7 via senderPort to sibling;
 		}
 		action receiver accept value : Integer via receiverPort {
-			assign got := value;
+			assign receiverGot := value;
 		}
 		action sibling accept value : Integer via receiverPort {
-			assign got := -1;
+			assign siblingGot := value;
 		}
+		fork split;
+		join sync;
 		done end;
 		then start sender;
-		then sender receiver;
-		then receiver end;
+		then sender split;
+		then split receiver;
+		then split sibling;
+		then receiver sync;
+		then sibling sync;
+		then sync end;
 	}
 }

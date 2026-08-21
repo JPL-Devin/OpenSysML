@@ -7,7 +7,6 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/lower"
-	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -328,7 +327,7 @@ func (ctx *Context) endReceivesMessage(scope *symbols.Scope, end, signalType str
 		if feature.Direction == ast.DirOut {
 			continue
 		}
-		typeSym := ctx.flowFeatureType(feature.Symbol)
+		typeSym := ctx.extractType(feature.Symbol)
 		if typeSym == nil {
 			continue
 		}
@@ -360,37 +359,6 @@ func (ctx *Context) resolveType(scope *symbols.Scope, name string) *symbols.Symb
 		return canonical
 	}
 	return sym
-}
-
-func (ctx *Context) flowFeatureType(sym *symbols.Symbol) *symbols.Symbol {
-	if sym == nil {
-		return nil
-	}
-	for _, rel := range semantics.RelationshipsOf(sym) {
-		if rel == nil || rel.Kind != ast.RelTyping || rel.Target == nil {
-			continue
-		}
-		target := rel.Target
-		if ref, ok := target.(*ast.FeatureReference); ok {
-			target = ref.Name
-		}
-		qn, ok := target.(*ast.QualifiedName)
-		if !ok || sym.OwnerScope == nil {
-			continue
-		}
-		if ctx.resolver == nil {
-			continue
-		}
-		resolved, ok := ctx.resolver.ResolveQualified(sym.OwnerScope, qn)
-		if !ok || resolved == nil {
-			continue
-		}
-		if canonical, ok := ctx.resolver.ResolveAliasTarget(resolved); ok {
-			return canonical
-		}
-		return resolved
-	}
-	return nil
 }
 
 // portSymbol resolves the path an end names — `p` or a nested `p.q` — to the
