@@ -202,6 +202,7 @@ func runPilot(launcher string, models []string, cases []execCase) (map[string]st
 	for _, model := range models {
 		args = append(args, "--model", model)
 	}
+	// #nosec G204 -- launcher is an explicit CLI override or repo-local artifact.
 	command := exec.Command(launcher, args...)
 	var stdout, stderr bytes.Buffer
 	command.Stdout, command.Stderr = &stdout, &stderr
@@ -307,14 +308,14 @@ func canonicalPilot(raw string) string {
 }
 
 func writeReport(dir string, report *execReport) error {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return fmt.Errorf("create report directory: %w", err)
 	}
 	encoded, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode report: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "pilot-exec-diff.json"), append(encoded, '\n'), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "pilot-exec-diff.json"), append(encoded, '\n'), 0o600); err != nil {
 		return fmt.Errorf("write JSON report: %w", err)
 	}
 	var text strings.Builder
@@ -331,7 +332,7 @@ func writeReport(dir string, report *execReport) error {
 	for _, name := range bucketNames {
 		fmt.Fprintf(&text, "  %s: %d\n", name, report.Buckets[name])
 	}
-	if err := os.WriteFile(filepath.Join(dir, "pilot-exec-diff.txt"), []byte(text.String()), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "pilot-exec-diff.txt"), []byte(text.String()), 0o600); err != nil {
 		return fmt.Errorf("write text report: %w", err)
 	}
 	return nil

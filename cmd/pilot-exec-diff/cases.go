@@ -42,6 +42,7 @@ func readCaseFiles(dir string) ([]execCaseFile, error) {
 }
 
 func readCaseFile(path string) (execCaseFile, error) {
+	// #nosec G304 -- case paths come from the selected cases directory.
 	f, err := os.Open(path)
 	if err != nil {
 		return execCaseFile{}, fmt.Errorf("open %s: %w", path, err)
