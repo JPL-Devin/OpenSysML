@@ -40,6 +40,12 @@ type KindTotals struct {
 	SameLine        int `json:"sameLine"`
 	OtherSeverity   int `json:"severityDiffers"`
 	Elsewhere       int `json:"elsewhereInFile"`
+	// Scope tolerance classes, counted only for the scope kind.
+	OtherPaths      int `json:"otherPaths,omitempty"`
+	ExtraNames      int `json:"extraNames,omitempty"`
+	MissingNames    int `json:"missingNames,omitempty"`
+	MissingAndExtra int `json:"missingAndExtra,omitempty"`
+	LibraryNames    int `json:"libraryNames,omitempty"`
 }
 
 // SuiteReport is one Xpect plugin's adjudication.
@@ -138,6 +144,16 @@ func (r *Report) summarize() {
 					kt.OtherSeverity++
 				case toleranceAnywhere:
 					kt.Elsewhere++
+				case toleranceScopeSpelling:
+					kt.OtherPaths++
+				case toleranceScopeExtra:
+					kt.ExtraNames++
+				case toleranceScopeMissing:
+					kt.MissingNames++
+				case toleranceScopeBoth:
+					kt.MissingAndExtra++
+				case toleranceScopeLibrary:
+					kt.LibraryNames++
 				}
 			}
 			file.Expectations = len(file.Rows)
@@ -173,6 +189,11 @@ func (r *Report) summarize() {
 			m.SameLine += kt.SameLine
 			m.OtherSeverity += kt.OtherSeverity
 			m.Elsewhere += kt.Elsewhere
+			m.OtherPaths += kt.OtherPaths
+			m.ExtraNames += kt.ExtraNames
+			m.MissingNames += kt.MissingNames
+			m.MissingAndExtra += kt.MissingAndExtra
+			m.LibraryNames += kt.LibraryNames
 		}
 	}
 	for _, kt := range merged {
@@ -355,5 +376,18 @@ func writeKinds(b *strings.Builder, kinds []KindTotals) {
 		fmt.Fprintf(b, "  %-16s %9d %7d %9d %7d %9d %10d %14d %10d %10d %8d %10d\n",
 			kt.Kind, kt.Assertions, kt.BlockAssertions, kt.Rows, kt.Agree, kt.Disagree, kt.Unlocated,
 			kt.NotAdjudicated, kt.SameLocation, kt.SameLine, kt.OtherSeverity, kt.Elsewhere)
+	}
+	writeScopeClasses(b, kinds)
+}
+
+// writeScopeClasses breaks scope disagreements down by which half of the
+// declared set differs, which the shared tolerance columns cannot hold.
+func writeScopeClasses(b *strings.Builder, kinds []KindTotals) {
+	for _, kt := range kinds {
+		if kt.Kind != kindScope || kt.Disagree == 0 {
+			continue
+		}
+		fmt.Fprintf(b, "  scope classes: other-paths %d | extra-names %d | missing-names %d | missing-and-extra %d | library-names %d\n",
+			kt.OtherPaths, kt.ExtraNames, kt.MissingNames, kt.MissingAndExtra, kt.LibraryNames)
 	}
 }

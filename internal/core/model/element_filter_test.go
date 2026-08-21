@@ -77,8 +77,8 @@ package UnqualifiedFilter {
 const filterClientSource = `package Client {
 	private import SafetyFeatures::*;
 
-	part a :> seatBelt;
-	part b :> airBag;
+	alias a for seatBelt;
+	alias b for airBag;
 }`
 
 // openFilterWorkspace opens the filter model plus one client document and
@@ -104,8 +104,8 @@ func TestNamespaceFilterFromAnotherDocumentGatesItsImports(t *testing.T) {
 	ws.Open("file:///filter.sysml", []byte("package Split { filter @Vehicles::Safety; }"), 1)
 	ws.Open("file:///imports.sysml", []byte(`package Split {
 		public import Vehicles::vehicle::*;
-		part a :> seatBelt;
-		part c :> keylessEntry;
+		alias a for seatBelt;
+		alias c for keylessEntry;
 	}`), 1)
 
 	var msgs []string
@@ -148,7 +148,7 @@ func TestFilteredMembersAreNotOfferedForCompletion(t *testing.T) {
 func TestFilteredImportClassifiesATaggedPackage(t *testing.T) {
 	client := `package Client {
 		private import FilteredPackages::*;
-		part a :> Restraints::strap;
+		alias a for Restraints::strap;
 	}`
 	if got := openFilterWorkspace(t, client); len(got) != 0 {
 		t.Fatalf("a #Safety package must pass a filter selecting @Safety, got %v", got)
@@ -156,7 +156,7 @@ func TestFilteredImportClassifiesATaggedPackage(t *testing.T) {
 
 	client = `package Client {
 		private import FilteredPackages::*;
-		part a :> Audio::radio;
+		alias a for Audio::radio;
 	}`
 	got := openFilterWorkspace(t, client)
 	if len(got) != 1 || !strings.Contains(got[0], "Audio") {
@@ -173,7 +173,7 @@ func TestNamespaceFilterSurfacesAnnotatedMembers(t *testing.T) {
 func TestNamespaceFilterHidesUnannotatedMember(t *testing.T) {
 	client := `package Client {
 		private import SafetyFeatures::*;
-		part c :> keylessEntry;
+		alias c for keylessEntry;
 	}`
 	got := openFilterWorkspace(t, client)
 	if len(got) != 1 || !strings.Contains(got[0], "keylessEntry") {
@@ -184,7 +184,7 @@ func TestNamespaceFilterHidesUnannotatedMember(t *testing.T) {
 func TestFilteredImportHidesUnannotatedMember(t *testing.T) {
 	client := `package Client {
 		private import FilteredImport::*;
-		part c :> keylessEntry;
+		alias c for keylessEntry;
 	}`
 	got := openFilterWorkspace(t, client)
 	if len(got) != 1 || !strings.Contains(got[0], "keylessEntry") {
@@ -215,9 +215,9 @@ func TestFilterOnReflectiveMetadataType(t *testing.T) {
 		client  string
 		wantErr string
 	}{
-		{"package C1 { private import ReflectiveUsages::*; part a :> seatBelt; }", ""},
-		{"package C2 { private import ReflectiveAll::*; part a :> vehicle; }", ""},
-		{"package C3 { private import ReflectiveAll::*; part a :> Wheel; }", "Wheel"},
+		{"package C1 { private import ReflectiveUsages::*; alias a for seatBelt; }", ""},
+		{"package C2 { private import ReflectiveAll::*; alias a for vehicle; }", ""},
+		{"package C3 { private import ReflectiveAll::*; alias a for Wheel; }", "Wheel"},
 	} {
 		ws.Open("file:///client.sysml", []byte(tc.client), 1)
 		var msgs []string
@@ -236,7 +236,7 @@ func TestFilterOnReflectiveMetadataType(t *testing.T) {
 func TestFilteredImportComparesAnnotationFeature(t *testing.T) {
 	client := `package Client {
 		private import MandatorySafety::*;
-		part a :> seatBelt;
+		alias a for seatBelt;
 	}`
 	if got := openFilterWorkspace(t, client); len(got) != 0 {
 		t.Fatalf("the mandatory-safety element should be visible, got %v", got)
@@ -244,7 +244,7 @@ func TestFilteredImportComparesAnnotationFeature(t *testing.T) {
 
 	client = `package Client {
 		private import MandatorySafety::*;
-		part b :> airBag;
+		alias b for airBag;
 	}`
 	got := openFilterWorkspace(t, client)
 	if len(got) != 1 || !strings.Contains(got[0], "airBag") {
@@ -255,7 +255,7 @@ func TestFilteredImportComparesAnnotationFeature(t *testing.T) {
 	// no annotation to read from, so it is filtered out rather than kept.
 	client = `package Client {
 		private import MandatorySafety::*;
-		part c :> keylessEntry;
+		alias c for keylessEntry;
 	}`
 	got = openFilterWorkspace(t, client)
 	if len(got) != 1 || !strings.Contains(got[0], "keylessEntry") {
@@ -269,7 +269,7 @@ func TestFilteredImportComparesAnnotationFeature(t *testing.T) {
 func TestFilteredImportRejectsAnUnboundAnnotationFeature(t *testing.T) {
 	client := `package Client {
 		private import FilteredImport::*;
-		part a :> mirror;
+		alias a for mirror;
 	}`
 	if got := openFilterWorkspace(t, client); len(got) != 0 {
 		t.Fatalf("an annotated element should pass a filter testing only the annotation, got %v", got)
@@ -277,7 +277,7 @@ func TestFilteredImportRejectsAnUnboundAnnotationFeature(t *testing.T) {
 
 	client = `package Client {
 		private import MandatorySafety::*;
-		part a :> mirror;
+		alias a for mirror;
 	}`
 	got := openFilterWorkspace(t, client)
 	if len(got) != 1 || !strings.Contains(got[0], "mirror") {
@@ -290,8 +290,8 @@ func TestFilteredImportRejectsAnUnboundAnnotationFeature(t *testing.T) {
 // either.
 func TestFilteredElementIsUnresolvableQualified(t *testing.T) {
 	client := `package Client {
-		part c :> SafetyFeatures::keylessEntry;
-		part d :> FilteredImport::keylessEntry;
+		alias c for SafetyFeatures::keylessEntry;
+		alias d for FilteredImport::keylessEntry;
 	}`
 	got := openFilterWorkspace(t, client)
 	if len(got) != 2 {
@@ -306,8 +306,8 @@ func TestFilteredElementIsUnresolvableQualified(t *testing.T) {
 	// The elements the filters admit do resolve under the same qualified route,
 	// so the restriction is the filter's verdict and not the route itself.
 	client = `package Client {
-		part a :> SafetyFeatures::seatBelt;
-		part b :> FilteredImport::airBag;
+		alias a for SafetyFeatures::seatBelt;
+		alias b for FilteredImport::airBag;
 	}`
 	if got := openFilterWorkspace(t, client); len(got) != 0 {
 		t.Fatalf("admitted elements should resolve qualified, got %v", got)
@@ -321,8 +321,8 @@ func TestNamespaceFilterHoldsThroughChainedImports(t *testing.T) {
 	for _, route := range []string{"OnwardSafety", "FurtherOnward"} {
 		client := `package Client {
 			private import ` + route + `::*;
-			part c :> keylessEntry;
-			part d :> ` + route + `::keylessEntry;
+			alias c for keylessEntry;
+			alias d for ` + route + `::keylessEntry;
 		}`
 		got := openFilterWorkspace(t, client)
 		if len(got) != 2 {
@@ -331,8 +331,8 @@ func TestNamespaceFilterHoldsThroughChainedImports(t *testing.T) {
 
 		client = `package Client {
 			private import ` + route + `::*;
-			part a :> seatBelt;
-			part b :> ` + route + `::seatBelt;
+			alias a for seatBelt;
+			alias b for ` + route + `::seatBelt;
 		}`
 		if got := openFilterWorkspace(t, client); len(got) != 0 {
 			t.Fatalf("%s: an admitted element should still resolve onward, got %v", route, got)
@@ -344,7 +344,7 @@ func TestNamespaceFilterHoldsThroughChainedImports(t *testing.T) {
 // second segment of the name.
 func TestFilterAppliesToDeeplyQualifiedRoute(t *testing.T) {
 	client := `package Client {
-		part c :> Nested::SafetyInner::keylessEntry;
+		alias c for Nested::SafetyInner::keylessEntry;
 	}`
 	got := openFilterWorkspace(t, client)
 	if len(got) != 1 || !strings.Contains(got[0], "keylessEntry") {
@@ -352,7 +352,7 @@ func TestFilterAppliesToDeeplyQualifiedRoute(t *testing.T) {
 	}
 
 	client = `package Client {
-		part a :> Nested::SafetyInner::seatBelt;
+		alias a for Nested::SafetyInner::seatBelt;
 	}`
 	if got := openFilterWorkspace(t, client); len(got) != 0 {
 		t.Fatalf("an admitted element should resolve through a nested qualified route, got %v", got)
@@ -364,7 +364,7 @@ func TestFilterAppliesToDeeplyQualifiedRoute(t *testing.T) {
 func TestFilterNamesMetadataTypeThroughAnImport(t *testing.T) {
 	client := `package Client {
 		private import UnqualifiedFilter::*;
-		part c :> keylessEntry;
+		alias c for keylessEntry;
 	}`
 	got := openFilterWorkspace(t, client)
 	if len(got) != 1 || !strings.Contains(got[0], "keylessEntry") {
@@ -373,7 +373,7 @@ func TestFilterNamesMetadataTypeThroughAnImport(t *testing.T) {
 
 	client = `package Client {
 		private import UnqualifiedFilter::*;
-		part a :> seatBelt;
+		alias a for seatBelt;
 	}`
 	if got := openFilterWorkspace(t, client); len(got) != 0 {
 		t.Fatalf("the annotated element should pass a filter naming an imported type, got %v", got)
@@ -396,8 +396,8 @@ func TestFilteredExposeSurfacesSubset(t *testing.T) {
 	client := `package Client {
 		view safetyView {
 			expose Vehicles::vehicle::**[@Vehicles::Safety];
-			part a :> seatBelt;
-			part b :> airBag;
+			alias a for seatBelt;
+			alias b for airBag;
 		}
 	}`
 	if got := openFilterWorkspace(t, client); len(got) != 0 {
@@ -407,7 +407,7 @@ func TestFilteredExposeSurfacesSubset(t *testing.T) {
 	client = `package Client {
 		view safetyView {
 			expose Vehicles::vehicle::**[@Vehicles::Safety];
-			part c :> keylessEntry;
+			alias c for keylessEntry;
 		}
 	}`
 	got := openFilterWorkspace(t, client)
@@ -420,7 +420,7 @@ func TestFilteredExposeSurfacesSubset(t *testing.T) {
 	client = `package Client {
 		view allView {
 			expose Vehicles::vehicle::**;
-			part c :> keylessEntry;
+			alias c for keylessEntry;
 		}
 	}`
 	if got := openFilterWorkspace(t, client); len(got) != 0 {
@@ -443,12 +443,12 @@ func TestFilterMemberOfADefinitionBodyRestrictsItsImports(t *testing.T) {
 		view safetyView {
 			expose Vehicles::vehicle::*;
 			filter @Meta::Safety;
-			part a :> seatBelt;
+			alias a for seatBelt;
 		}
 		view rejectingView {
 			expose Vehicles::vehicle::*;
 			filter @Meta::Safety;
-			part b :> keylessEntry;
+			alias b for keylessEntry;
 		}
 	}`
 	ws := NewWorkspace()
@@ -476,7 +476,7 @@ func TestFilterConditionResolvesThroughTheImportsItFilters(t *testing.T) {
 		private import Meta::*;
 		public import Vehicles::vehicle::*;
 		filter @Safety;
-		part a :> seatBelt;
+		alias a for seatBelt;
 	}`
 	ws := NewWorkspace()
 	ws.Open("file:///f.sysml", []byte(src), 1)
@@ -505,7 +505,7 @@ func TestFilterEvaluationReportsOnlyThisDocument(t *testing.T) {
 	package Views {
 		view safetyView {
 			expose Vehicles::vehicle::**[@Meta::Safety];
-			part c :> keylessEntry;
+			alias c for keylessEntry;
 		}
 	}`
 	var first []string
@@ -565,11 +565,11 @@ package Nested {
 
 	client := `package C {
 		private import SafeReexport::*;
-		part a :> keylessEntry;
-		part b :> SafeReexport::keylessEntry;
-		part c :> SafeReexport::seatBelt;
-		part d :> Nested::SafeInner::keylessEntry;
-		part e :> Nested::SafeInner::seatBelt;
+		alias a for keylessEntry;
+		alias b for SafeReexport::keylessEntry;
+		alias c for SafeReexport::seatBelt;
+		alias d for Nested::SafeInner::keylessEntry;
+		alias e for Nested::SafeInner::seatBelt;
 	}`
 	var first []string
 	for run := 1; run <= 3; run++ { // run 1 parses the library, later runs restore it
@@ -600,8 +600,8 @@ package Nested {
 func TestAFileLevelFilteredImportHidesWhatItRejects(t *testing.T) {
 	lib := `package Lib { metadata def Safety; part def Radio; #Safety part def Belt; }`
 	src := `private import Lib::*[@Lib::Safety];
-part x :> Radio;
-part y :> Belt;`
+alias x for Radio;
+alias y for Belt;`
 	ws := NewWorkspace()
 	ws.Open("file:///lib.sysml", []byte(lib), 1)
 	ws.Open("file:///a.sysml", []byte(src), 1)
@@ -618,9 +618,9 @@ func TestARootFilterRestrictsOnlyItsOwnDocument(t *testing.T) {
 	lib := `package Lib { metadata def Safety; part def Radio; #Safety part def Belt; }`
 	filtered := `private import Lib::*;
 filter @Lib::Safety;
-part inA :> Belt;`
+alias inA for Belt;`
 	other := `private import Lib::*;
-part inB :> Radio;`
+alias inB for Radio;`
 	ws := NewWorkspace()
 	ws.Open("file:///lib.sysml", []byte(lib), 1)
 	ws.Open("file:///a.sysml", []byte(filtered), 1)
@@ -632,7 +632,7 @@ part inB :> Radio;`
 	}
 	unresolvable := `private import Lib::*;
 filter @Lib::Safety;
-part inA :> Radio;`
+alias inA for Radio;`
 	ws.Open("file:///a.sysml", []byte(unresolvable), 2)
 	var msgs []string
 	for _, d := range ws.Diagnostics("file:///a.sysml") {
@@ -648,10 +648,10 @@ part inA :> Radio;`
 func TestAnImportFilterMayNameAMetadataTypeThatImportSurfaces(t *testing.T) {
 	lib := `package Lib { metadata def Safety; part def Radio; #Safety part def Belt; }`
 	for name, src := range map[string]string{
-		"in a package": `package P { private import Lib::*[@Safety]; part x :> Radio; part y :> Belt; }`,
+		"in a package": `package P { private import Lib::*[@Safety]; alias x for Radio; alias y for Belt; }`,
 		"at the root": `private import Lib::*[@Safety];
-part x :> Radio;
-part y :> Belt;`,
+alias x for Radio;
+alias y for Belt;`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			ws := NewWorkspace()
@@ -670,7 +670,7 @@ part y :> Belt;`,
 
 func TestAnUnresolvedNameInAnImportFilterIsReported(t *testing.T) {
 	lib := `package Lib { metadata def Safety; part def Radio; }`
-	src := `package P { private import Lib::*[@NoSuchMeta]; part x :> Radio; }`
+	src := `package P { private import Lib::*[@NoSuchMeta]; alias x for Radio; }`
 	ws := NewWorkspace()
 	ws.Open("file:///lib.sysml", []byte(lib), 1)
 	ws.Open("file:///a.sysml", []byte(src), 1)
@@ -728,8 +728,8 @@ package Vehicles {
 
 	client := `package C {
 		private import Vehicles::vehicle::*[@Meta::Safety and Meta::Safety::isMandatory == true];
-		part a :> seatBelt;
-		part b :> mirror;
+		alias a for seatBelt;
+		alias b for mirror;
 	}`
 	var first []string
 	for run := 1; run <= 3; run++ { // run 1 parses the library, later runs restore it
