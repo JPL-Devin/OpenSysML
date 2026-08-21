@@ -8,7 +8,14 @@
 
 ## Current Implementation Status
 
-### ✅ Fully Implemented & Tested (~98% of Targeted Features)
+### ✅ Fully Implemented & Tested
+
+The map below tracks 649 semantic rules: **565 ✅ faithful, 77 ⚠️ approximate, 7 ❌ not implemented.**
+Read that as progress, not as a compliance percentage — the denominator is the list of rules *we*
+chose to track, so it moves when we add a row, and a specification-derived denominator does not
+exist. What is externally checked is enumerated in [the pilot differential](pilot-differential.md);
+what cannot be checked by anything is in
+[What Can't Be Claimed for Spec Compliance](#what-cant-be-claimed-for-spec-compliance).
 
 **Calculations (14/14 features):**
 - Invocation with typed parameters
@@ -1122,6 +1129,21 @@ are tracked here):
 - Binding and flow connector objects (their ends reach routing, but neither is materialized as a connector object — see the Structural map)
 - Interruptible regions (spec exists, needs token cancellation)
 - Exception handlers (spec exists, needs exception propagation)
+
+**No External Referee Exists (the limit of the evidence, not of the implementation):**
+- **Behavioral execution is self-assessed.** The pinned OMG pilot implementation's only execution
+  surface is model-level expression evaluation, so token-flow ordering, transition selection,
+  concurrency and quiescence are checked against the specification text, the normative library and
+  our own traces — not against another implementation. Sensmetry SysIDE (F7) is a checker and can
+  corroborate static rows only. Every ⚠️ in the Action, State Machine and Classifier Behaviors maps
+  should be read with that in mind.
+- **The OMG corpora are demonstrations, not a conformance suite.** They were written to show the
+  notation off. Agreement over them means we agree where they happen to look; there is no official
+  SysML v2 conformance test suite to run.
+- **The differential is one-directional.** It finds notation the reference accepts and we reject.
+  Notation *we* accept and the reference does not is only visible when a corpus file happens to
+  contain it — so our permissiveness is largely unmeasured, and `examples/` still carries
+  constructs no pinned production admits (see the S1–S10 map).
 
 ---
 

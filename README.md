@@ -1,6 +1,8 @@
 # Open Source SysML v2 Implementation
 
-A complete, production-grade SysML v2 implementation in Go—providing language server, interactive REPL, execution runtime, and Python client library. Spanning the full lifecycle from authoring to execution, delivering the integrated tooling experience systems engineers expect from modern language ecosystems.
+A SysML v2 and KerML 1.1 implementation in Go—providing language server, interactive REPL, execution runtime, and Python client library. Spanning the lifecycle from authoring to execution, delivering the integrated tooling experience systems engineers expect from modern language ecosystems.
+
+What that is measured against, and what it is not, is in [spec compliance](docs/project/spec-compliance.md) and the [pilot differential](docs/project/pilot-differential.md): we compare every diagnostic against the pinned OMG pilot implementation over its own corpora, and we do not claim conformance certification.
 
 ## Quick Start
 
@@ -182,7 +184,9 @@ sysml> %advance 30
 **Current commit:** All tests pass (`go test -race ./...`), builds clean (`go build ./...`).
 **Test coverage:** 5,884 tests and subtests (5,870 pass, 14 skip themselves; 3,095 top-level `Test` functions) covering parsers, semantics, runtime (actions, states, instances, operators, validation). Behavioral robustness: 107 golden ASTs, 167 negatives, 344 conformance cases, 109 golden traces, 195 runtime robustness cases, 15 gRPC conformance cases and 8 gRPC robustness cases.
 **Parser coverage:** 95/95 bundled library files parse cleanly — the 94 official SysML v2 standard library files and the non-normative `OpenSysML Libraries/OpenSysMLMathFunctions.kerml` extension. Conformance verified by [stdlib_conformance_test.go](internal/core/libs/stdlib_conformance_test.go). Grammar reference: [OMG Xtext grammar](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/org.omg.kerml.xtext/src/org/omg/kerml/xtext).
-**Behavioral execution:** Calc/constraint/requirement/satisfy fully functional. Action/state executors complete with nested invocation, control flow keywords, loop and conditional statements, send statement (344/344 conformance tests passing). See [spec compliance](docs/project/spec-compliance.md) for measured compliance (~98% faithful implementation).
+**Behavioral execution:** Calc/constraint/requirement/satisfy functional. Action/state executors handle nested invocation, control flow keywords, loop and conditional statements and the send statement (344/344 conformance cases passing). Coverage is self-assessed against the specification text and the normative library: the pinned OMG pilot implementation evaluates expressions but does not execute actions or state machines headlessly, so no external implementation currently adjudicates these rows. See [spec compliance](docs/project/spec-compliance.md).
+**Measured status:** of the 649 semantic rules tracked in [spec compliance](docs/project/spec-compliance.md), 565 are ✅ faithful, 77 ⚠️ approximate and 7 ❌ not implemented. That denominator is our own list of rules, not the specification's, so it is a progress measure and not a compliance percentage.
+**Reference differential:** 349 files compared diagnostic-by-diagnostic against the pinned OMG pilot implementation (`2026-05`), 283 in full agreement; every divergence is enumerated and adjudicated in [the differential](docs/project/pilot-differential.md), reproducible with `go run ./cmd/pilot-diff`.
 **Training examples:** 100/100 files clean, gated by `internal/core/model/testdata/training_examples_expected.txt`. Download with `./scripts/download-training-examples.sh` (from the [OMG training directory](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training)). See [training examples](docs/project/training-examples.md) for analysis.
 **Semantic layer:** Complete implementation of runtime operators, feature chains, and validation rules. See [examples/semantic-layer/](examples/semantic-layer/) for comprehensive demo.
 
