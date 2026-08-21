@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
@@ -11,12 +12,9 @@ import (
 // performer: what the body reads and writes is that object's feature values, and
 // what it sends and accepts carries that object's identity. Arguments bind to the
 // operation's `in` and `inout` parameters by name.
-//
-// Known limitation: only an action member is executable as an operation. A calc
-// member is invoked as an expression against a scope rather than performed by an
-// object, and a state member runs as the object's exhibited machine instead
-// (see Instance.ExhibitedState).
 func (ctx *Context) InvokeOperation(inst *Instance, name string, args map[string]Value) (map[string]Value, error) {
+	defer ctx.beginRun()()
+
 	if inst == nil {
 		return nil, fmt.Errorf("%w: no object to perform %s", ErrNoSuchBehavior, name)
 	}
@@ -28,19 +26,46 @@ func (ctx *Context) InvokeOperation(inst *Instance, name string, args map[string
 	if err != nil {
 		return nil, err
 	}
-	results, err := ctx.ExecuteActionPerformedBy(sym, inst, inputs)
-	if err != nil {
-		return nil, fmt.Errorf("invoke %s on object #%d: %w", name, inst.ID, err)
-	}
-
-	_, out := actionParameters(sym.Decl)
-	outputs := make(map[string]Value, len(out))
-	for _, param := range out {
-		if value, ok := results[param]; ok {
-			outputs[param] = value
+	switch {
+	case isActionSymbol(sym):
+		results, err := ctx.ExecuteActionPerformedBy(sym, inst, inputs)
+		if err != nil {
+			return nil, fmt.Errorf("invoke %s on object #%d: %w", name, inst.ID, err)
 		}
+
+		_, out := actionParameters(sym.Decl)
+		outputs := make(map[string]Value, len(out))
+		for _, param := range out {
+			if value, ok := results[param]; ok {
+				outputs[param] = value
+			}
+		}
+		return outputs, nil
+	case isCalcSymbol(sym):
+		shape, err := ctx.calcShapeOf(sym)
+		if err != nil {
+			return nil, fmt.Errorf("invoke %s on object #%d: %w", name, inst.ID, err)
+		}
+		result, err := ctx.invokeCalcNamedShapeOn(shape, inputs, declScope(sym), inst)
+		if err != nil {
+			return nil, fmt.Errorf("invoke %s on object #%d: %w", name, inst.ID, err)
+		}
+		key := "result"
+		for _, output := range shape.Outputs {
+			if output.IsResult && output.Name != "" {
+				key = output.Name
+				break
+			}
+		}
+		return map[string]Value{key: result}, nil
+	case isConstraintSymbol(sym):
+		holds, err := ctx.evaluateConstraintInvocation(sym, declScope(sym), inst, inputs)
+		if err != nil {
+			return nil, fmt.Errorf("invoke %s on object #%d: %w", name, inst.ID, err)
+		}
+		return map[string]Value{"result": boolValue(holds)}, nil
 	}
-	return outputs, nil
+	return nil, fmt.Errorf("%w: %s of %s", ErrNotABehavior, name, symbolText(inst.Type))
 }
 
 // operationOf resolves the member of the object's type that name invokes, and
@@ -65,12 +90,46 @@ func (ctx *Context) operationOf(inst *Instance, name string) (*symbols.Symbol, e
 			ErrUnsupportedClassifierBehavior, name, symbolText(inst.Type))
 	case symbols.SymbolCalcDef, symbols.SymbolCalcUsage,
 		symbols.SymbolConstraintDef, symbols.SymbolConstraintUsage:
-		return nil, fmt.Errorf("%w: %s of %s is a %s, which is evaluated as an expression rather than performed by an object",
-			ErrUnsupportedClassifierBehavior, name, symbolText(inst.Type), member.Kind)
+		return member, nil
 	default:
 		return nil, fmt.Errorf("%w: %s of %s is a %s",
 			ErrNotABehavior, name, symbolText(inst.Type), member.Kind)
 	}
+}
+
+func isConstraintSymbol(sym *symbols.Symbol) bool {
+	if sym == nil {
+		return false
+	}
+	switch decl := sym.Decl.(type) {
+	case *ast.Definition:
+		return decl.Kind == ast.DefConstraint
+	case *ast.Usage:
+		return decl.Kind == ast.UsageConstraint
+	}
+	return sym.Kind == symbols.SymbolConstraintDef || sym.Kind == symbols.SymbolConstraintUsage
+}
+
+func (ctx *Context) evaluateConstraintInvocation(sym *symbols.Symbol, scope *symbols.Scope, self *Instance, bindings map[string]Value) (bool, error) {
+	if err := RequireConstraint(sym); err != nil {
+		return false, err
+	}
+	subject, err := ctx.checkSubject("constraint", sym.Name, sym, self)
+	if err != nil {
+		return false, err
+	}
+	holds, err := ctx.evaluateConditions(conditionCheck{
+		sym:      sym,
+		kind:     "constraint",
+		what:     "assertion",
+		self:     subject.instance,
+		bindings: bindings,
+		negated:  NegatedDecl(sym),
+	}, conditionsOf(ctx.chainMembers(sym, scope)))
+	if errors.Is(err, ErrViolated) {
+		return false, nil
+	}
+	return holds, err
 }
 
 // operationInputs binds arguments to the operation's input parameters, reporting

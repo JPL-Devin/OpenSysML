@@ -46,6 +46,8 @@ const (
 	DeliverAnyone DeliveryKind = iota
 	// DeliverPort is the port of an object, reached by a connection or addressed.
 	DeliverPort
+	// DeliverPortReceiver is a receiver of an object reached through a port.
+	DeliverPortReceiver
 	// DeliverReceiver is the receiving node named within an object.
 	DeliverReceiver
 	// DeliverObject is an object itself, whichever of its consumers accepts.
@@ -76,6 +78,8 @@ func (ctx *Context) PostMessage(msg Message) {
 // specific first: only a message naming nothing is open to any consumer.
 func deliveryOf(msg Message) DeliveryKind {
 	switch {
+	case msg.Port != "" && msg.Target != "":
+		return DeliverPortReceiver
 	case msg.Port != "":
 		return DeliverPort
 	case msg.Target != "":
@@ -118,6 +122,8 @@ func (m Message) reaches(name, port string, object int64) bool {
 	switch m.Delivery {
 	case DeliverPort, DeliverObject:
 		return m.Object == object
+	case DeliverPortReceiver:
+		return m.Target == name && m.Object == object
 	case DeliverReceiver:
 		return m.Target == name && (m.Object == object || m.Object == 0 || object == 0)
 	}
@@ -138,20 +144,125 @@ func objectID(inst *Instance) int64 {
 // nowhere, which is a typed error rather than a message quietly dropped — the
 // model asked for a delivery the connections it declares cannot make.
 func (ctx *Context) postVia(conns []lower.Connection, msg Message, send lower.Send, self *Instance) error {
+	if send.Receiver != "" && send.Scope != nil {
+		sym, ok := ctx.portSymbol(send.Scope, send.Target)
+		if !ok || sym == nil || sym.Kind != symbols.SymbolPortUsage ||
+			!ctx.ownPortPath(send.Scope, strings.Split(send.Target, ".")) {
+			return &UnknownSendPortError{Port: send.Target, Receiver: send.Receiver}
+		}
+	}
+	receiver := send.Receiver
+	if receiver != "" {
+		receiverSend := send
+		receiverSend.Target = send.Receiver
+		receiverSend.TargetPath = send.ReceiverPath
+		receiverSend.IsVia = false
+		addr, err := ctx.resolveRoutedReceiver(receiverSend, self)
+		if err != nil || (addr.Object != 0 && addr.Object != objectID(self)) {
+			return &UnreachableSendReceiverError{Port: send.Target, Receiver: send.Receiver}
+		}
+		receiver = addr.Name
+	}
 	routable := ctx.realizedConnections(ctx.routableConnections(conns, self, send.Scope), self)
-	receiving, outbound := ctx.receivingEnds(routable, send.Target)
+	var receiving, outbound []string
+	var typeMismatch bool
+	if receiver != "" {
+		receiving, outbound, typeMismatch = ctx.receivingEndsForMessage(
+			routable, send.Target, msg.SignalType,
+		)
+	} else {
+		receiving, outbound = ctx.receivingEnds(routable, send.Target)
+	}
 	if len(receiving) == 0 {
+		if typeMismatch && receiver != "" {
+			return &SendPortTypeMismatchError{
+				Port: send.Target, Receiver: receiver, SignalType: msg.SignalType,
+			}
+		}
 		return &UnroutableSendError{Port: send.Target, Outbound: outbound}
 	}
 	for _, peer := range receiving {
 		routed := msg
-		routed.Target = ""
+		routed.Target = receiver
 		routed.Port = peer
 		routed.Object = objectID(self)
 		routed.Delivery = DeliverPort
+		if receiver != "" {
+			routed.Delivery = DeliverPortReceiver
+		}
 		ctx.PostMessage(routed)
 	}
 	return nil
+}
+
+// resolveRoutedReceiver requires the named receiver to be an action or state
+// reachable on the sending object before it can accept the routed message.
+func (ctx *Context) resolveRoutedReceiver(send lower.Send, self *Instance) (messageAddress, error) {
+	separator := "::"
+	if send.TargetPath {
+		separator = "."
+	}
+	segments := strings.Split(send.Target, separator)
+	if !ctx.routedReceiverExists(send.Scope, segments, len(segments) > 1, self) {
+		return messageAddress{}, fmt.Errorf("receiver %q is unresolved", send.Target)
+	}
+	addr, err := ctx.resolveAddress(send, self)
+	if err != nil || addr.Delivery != DeliverReceiver {
+		if err == nil {
+			err = fmt.Errorf("receiver %q is not a receiving node", send.Target)
+		}
+		return messageAddress{}, err
+	}
+	return addr, nil
+}
+
+// routedReceiverExists prefers a directly declared receiving node over inherited
+// feature names, then checks behavior features of the object being addressed.
+func (ctx *Context) routedReceiverExists(scope *symbols.Scope, segments []string, path bool, self *Instance) bool {
+	if len(segments) == 0 || segments[0] == "" {
+		return false
+	}
+	if path {
+		sym, ok := ctx.pathSymbol(scope, segments)
+		return ok && isRoutedReceiverSymbol(sym)
+	}
+	name := segments[0]
+	for current := scope; current != nil; {
+		for _, sym := range symbols.PreferDeclared(current.LookupLocalAll(name)) {
+			if isRoutedReceiverSymbol(sym) {
+				return true
+			}
+		}
+		parent := current.Parent()
+		if parent == nil || !isRoutedReceiverSymbol(parent.Owner()) {
+			break
+		}
+		current = parent
+	}
+	if self == nil {
+		return false
+	}
+	for _, feature := range ctx.FeaturesOf(self.Type) {
+		if feature.Name == name && isRoutedReceiverSymbol(feature.Symbol) {
+			return true
+		}
+	}
+	return false
+}
+
+// isRoutedReceiverSymbol accepts only actions and states as routed receivers,
+// leaving other named members out of receiver address resolution.
+func isRoutedReceiverSymbol(sym *symbols.Symbol) bool {
+	if sym == nil {
+		return false
+	}
+	switch sym.Kind {
+	case symbols.SymbolActionDef, symbols.SymbolActionUsage,
+		symbols.SymbolStateDef, symbols.SymbolStateUsage:
+		return true
+	default:
+		return false
+	}
 }
 
 // messageAddress is where an addressed send delivers: what the address resolved
@@ -462,13 +573,12 @@ func (m Message) carriesSignal(signalType string) bool {
 // for a signal that carries nothing. Any other message expression is evaluated,
 // and the message is typed by the value's type, carrying it as `value`.
 //
-// A `via` send addresses a port rather than a receiver, so the built message
-// carries no Target: postVia fills in the port the message reaches, as postTo
-// fills in the object and port an addressed send resolved to.
+// A via send keeps a receiver target when one was stated; postVia fills in the
+// reached port and final delivery kind.
 func (e *EvalContext) buildMessage(scope *symbols.Scope, send lower.Send) (Message, error) {
 	target := send.Target
 	if send.IsVia {
-		target = ""
+		target = send.Receiver
 	}
 	if typeName, ok := e.namedType(scope, send.Message); ok {
 		return Message{SignalType: typeName, Target: target, Payload: map[string]Value{}}, nil

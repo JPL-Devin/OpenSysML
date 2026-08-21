@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 )
 
@@ -122,14 +123,17 @@ func TestExhibitedMachineWritesItsObjectsFeatureValues(t *testing.T) {
 	}
 }
 
-// invokeFixture owns an operation, a machine, a calc and an attribute, so one
-// object exercises both the executable and the rejected invocation paths.
+// invokeFixture owns an operation, a machine, calcs, constraints and an
+// attribute, so one object exercises each classifier behavior path.
 const invokeFixture = `
 	part def Tank {
 		attribute level: Integer = 2;
 		action fillBy { in n; out filled; first apply; action apply { assign level := level + n; assign filled := level; } }
 		exhibit state modes { entry; then holding; state holding; }
-		calc capacity { return : Integer = 10; }
+		calc capacity { in bonus : Integer; return total : Integer = level + bonus; }
+		calc rawCapacity { return : Integer = level + 1; }
+		constraint acceptable { in minimum : Integer; assert level >= minimum; }
+		constraint rejected { assert level > 10; }
 	}
 `
 
@@ -157,6 +161,243 @@ func TestInvokeOperationPerformedByTheObject(t *testing.T) {
 	if got := fv.HeldValue(); got.Const.Int != 5 {
 		t.Errorf("level = %v, want 5", got.Const)
 	}
+
+	results, err = ctx.InvokeOperation(inst, "capacity", map[string]Value{"bonus": intArgument(3)})
+	if err != nil {
+		t.Fatalf("InvokeOperation(calc): %v", err)
+	}
+	if got, ok := results["total"]; !ok || got.Const.Int != 8 {
+		t.Errorf("calc result = %v, want total = 8", results)
+	}
+	results, err = ctx.InvokeOperation(inst, "rawCapacity", nil)
+	if err != nil {
+		t.Fatalf("InvokeOperation(anonymous calc): %v", err)
+	}
+	if got, ok := results["result"]; !ok || got.Const.Int != 6 {
+		t.Errorf("anonymous calc result = %v, want result = 6", results)
+	}
+
+	for _, tc := range []struct {
+		name string
+		args map[string]Value
+		want bool
+	}{
+		{"acceptable", map[string]Value{"minimum": intArgument(3)}, true},
+		{"acceptable", map[string]Value{"minimum": intArgument(6)}, false},
+		{"rejected", nil, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			results, err := ctx.InvokeOperation(inst, tc.name, tc.args)
+			if err != nil {
+				t.Fatalf("InvokeOperation(constraint): %v", err)
+			}
+			got, ok := results["result"]
+			if !ok || got.Kind != ValConst || got.Const.Kind != semantics.ValBool {
+				t.Fatalf("constraint result = %v, want Boolean result", results)
+			}
+			if got.Const.Bool != tc.want {
+				t.Errorf("constraint result = %v, want %v", got.Const.Bool, tc.want)
+			}
+		})
+	}
+}
+
+// An operation invocation counts its own calc or constraint cost against the
+// step budget, while separate invocations receive separate budgets.
+func TestInvokeOperationCountsItsOwnCostAgainstBudget(t *testing.T) {
+	newInvocation := func(maxSteps int64) (*Context, *Instance) {
+		model, resolver, root := parseAndBuildModel(t, invokeFixture)
+		ctx := NewContext(model, resolver, maxSteps)
+		inst, err := ctx.Instantiate(resolveSymbol(t, root, "Tank"))
+		if err != nil {
+			t.Fatalf("Instantiate: %v", err)
+		}
+		return ctx, inst
+	}
+
+	t.Run("calc", func(t *testing.T) {
+		ctx, inst := newInvocation(2)
+		results, err := ctx.InvokeOperation(inst, "rawCapacity", nil)
+		if !errors.Is(err, ErrStepLimitExceeded) {
+			t.Fatalf("InvokeOperation(rawCapacity) with budget 2: %v, want ErrStepLimitExceeded", err)
+		}
+		if results != nil {
+			t.Fatalf("InvokeOperation(rawCapacity) with budget 2 = %v, want no results", results)
+		}
+
+		ctx, inst = newInvocation(3)
+		for i := 0; i < 2; i++ {
+			results, err := ctx.InvokeOperation(inst, "rawCapacity", nil)
+			if err != nil {
+				t.Fatalf("InvokeOperation(rawCapacity), call %d with budget 3: %v", i, err)
+			}
+			if got, ok := results["result"]; !ok || got.Const.Int != 3 {
+				t.Fatalf("rawCapacity result on call %d = %v, want 3", i, results)
+			}
+		}
+	})
+
+	t.Run("constraint", func(t *testing.T) {
+		ctx, inst := newInvocation(2)
+		results, err := ctx.InvokeOperation(inst, "acceptable", map[string]Value{
+			"minimum": intArgument(1),
+		})
+		if !errors.Is(err, ErrStepLimitExceeded) {
+			t.Fatalf("InvokeOperation(acceptable) with budget 2: %v, want ErrStepLimitExceeded", err)
+		}
+		if results != nil {
+			t.Fatalf("InvokeOperation(acceptable) with budget 2 = %v, want no results", results)
+		}
+
+		ctx, inst = newInvocation(3)
+		for i := 0; i < 2; i++ {
+			results, err := ctx.InvokeOperation(inst, "acceptable", map[string]Value{
+				"minimum": intArgument(1),
+			})
+			if err != nil {
+				t.Fatalf("InvokeOperation(acceptable), call %d with budget 3: %v", i, err)
+			}
+			got, ok := results["result"]
+			if !ok || got.Kind != ValConst || got.Const.Kind != semantics.ValBool || !got.Const.Bool {
+				t.Fatalf("acceptable result on call %d = %v, want true", i, results)
+			}
+		}
+	})
+}
+
+const nestedCalcOperationFixture = `
+	package test {
+		private import ScalarValues::*;
+		part def Tank {
+			attribute level : Integer = 2;
+			calc def ReadsLevel {
+				attribute observed : Integer = 0;
+				assign observed := level;
+				return value : Integer = observed;
+			}
+			calc reading : ReadsLevel;
+			calc capacityViaUsage {
+				return result : Integer = reading.value;
+			}
+		}
+	}
+`
+
+// A calc operation preserves its performing object through a nested calc usage.
+func TestCalcOperationNestedUsageSeesPerformingObject(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, nestedCalcOperationFixture))
+	root := idx.DocumentRoot("<test>")
+	tank := findSymbolByName(root, "Tank", ast.DefPart)
+	if tank == nil {
+		t.Fatal("Tank not found")
+	}
+	inst, err := ctx.Instantiate(tank)
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	if err := inst.SetFeatureValue(ctx, "level", intArgument(7)); err != nil {
+		t.Fatalf("SetFeatureValue: %v", err)
+	}
+
+	results, err := ctx.InvokeOperation(inst, "capacityViaUsage", nil)
+	if err != nil {
+		t.Fatalf("InvokeOperation: %v", err)
+	}
+	if got, ok := results["result"]; !ok || got.Const.Int != 7 {
+		t.Errorf("nested calc result = %v, want result = 7", results)
+	}
+}
+
+// An object-scoped calc usage keeps the materialized object's feature context.
+func TestObjectScopedCalcUsageSeesPerformingObject(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, nestedCalcOperationFixture))
+	root := idx.DocumentRoot("<test>")
+	tank := findSymbolByName(root, "Tank", ast.DefPart)
+	if tank == nil {
+		t.Fatal("Tank not found")
+	}
+	inst, err := ctx.Instantiate(tank)
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	if err := inst.SetFeatureValue(ctx, "level", intArgument(7)); err != nil {
+		t.Fatalf("SetFeatureValue: %v", err)
+	}
+	matches := idx.LookupQualified("test::Tank::reading")
+	if len(matches) != 1 {
+		t.Fatalf("test::Tank::reading: %d matching symbols, want 1", len(matches))
+	}
+
+	outputs, err := ctx.CalcUsageOutputs(matches[0], matches[0].OwnerScope, inst)
+	if err != nil {
+		t.Fatalf("CalcUsageOutputs: %v", err)
+	}
+	wantInt(t, outputs, "value", 7)
+}
+
+const nestedCalcInvocationFixture = `
+	package test {
+		private import ScalarValues::*;
+		part def Robot {
+			attribute charge : Integer = 10;
+			calc direct { return : Integer = charge + 100; }
+			calc anon { return : Integer = charge * 2; }
+			calc nested { return : Integer = anon() + 1; }
+			calc usesDirect { return : Integer = direct() + 1000; }
+			action drain {
+				first start;
+				action cut { assign charge := 3; }
+				done end;
+				then start cut;
+				then cut end;
+			}
+		}
+	}
+`
+
+// A calc invocation expression preserves its enclosing calc's performing object.
+func TestCalcInvocationExpressionSeesPerformingObject(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, nestedCalcInvocationFixture))
+	root := idx.DocumentRoot("<test>")
+	robot := findSymbolByName(root, "Robot", ast.DefPart)
+	if robot == nil {
+		t.Fatal("Robot not found")
+	}
+	inst, err := ctx.Instantiate(robot)
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	if _, err := ctx.InvokeOperation(inst, "drain", nil); err != nil {
+		t.Fatalf("InvokeOperation(drain): %v", err)
+	}
+	charge, err := inst.GetFeatureValue(ctx, "charge")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(charge): %v", err)
+	}
+	if got := charge.HeldValue().Const.Int; got != 3 {
+		t.Fatalf("charge = %d, want 3", got)
+	}
+
+	for _, tc := range []struct {
+		name string
+		want int64
+	}{
+		{"direct", 103},
+		{"anon", 6},
+		{"nested", 7},
+		{"usesDirect", 1103},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			results, err := ctx.InvokeOperation(inst, tc.name, nil)
+			if err != nil {
+				t.Fatalf("InvokeOperation(%s): %v", tc.name, err)
+			}
+			got, ok := results["result"]
+			if !ok || got.Const.Int != tc.want {
+				t.Errorf("%s result = %v, want result = %d", tc.name, results, tc.want)
+			}
+		})
+	}
 }
 
 // Every path %invoke cannot run reports a typed error naming what it was asked.
@@ -178,7 +419,6 @@ func TestInvokeOperationFailureModes(t *testing.T) {
 		{"no object", nil, "fillBy", nil, ErrNoSuchBehavior},
 		{"unknown operation", inst, "drain", nil, ErrNoSuchBehavior},
 		{"state machine", inst, "modes", nil, ErrUnsupportedClassifierBehavior},
-		{"calc", inst, "capacity", nil, ErrUnsupportedClassifierBehavior},
 		{"attribute", inst, "level", nil, ErrNotABehavior},
 		{"unbound parameter", inst, "fillBy", nil, ErrUnboundParameter},
 		{"argument naming no parameter", inst, "fillBy", map[string]Value{"n": intArgument(1), "m": intArgument(2)}, ErrUnboundParameter},

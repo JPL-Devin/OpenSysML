@@ -1512,7 +1512,9 @@ func (e *StateExecutor) run(atCurrentTime bool) error {
 		}
 		doSteps += int64(ran)
 		if doSteps >= maxDoSteps {
-			return fmt.Errorf("state machine exceeded max do action steps (%d steps; raise %s to allow more), possible non-terminating do behavior", maxDoSteps, MaxDoStepsEnvVar)
+			return budgetExceeded(ErrDoStepLimitExceeded,
+				fmt.Sprintf("state machine exceeded max do action steps (%d steps; raise %s to allow more), possible non-terminating do behavior",
+					maxDoSteps, MaxDoStepsEnvVar))
 		}
 		fired, err := e.pollChangeEvents()
 		if err != nil {
@@ -1520,7 +1522,9 @@ func (e *StateExecutor) run(atCurrentTime bool) error {
 		}
 		if fired {
 			if events >= maxStateEvents {
-				return fmt.Errorf("state machine exceeded max events (%d events; raise %s to allow more), possible infinite loop", maxStateEvents, MaxStateEventsEnvVar)
+				return budgetExceeded(ErrStateEventLimitExceeded,
+					fmt.Sprintf("state machine exceeded max events (%d events; raise %s to allow more), possible infinite loop",
+						maxStateEvents, MaxStateEventsEnvVar))
 			}
 			events++
 			continue
@@ -1533,7 +1537,9 @@ func (e *StateExecutor) run(atCurrentTime bool) error {
 			return nil
 		}
 		if events >= maxStateEvents {
-			return fmt.Errorf("state machine exceeded max events (%d events; raise %s to allow more), possible infinite loop", maxStateEvents, MaxStateEventsEnvVar)
+			return budgetExceeded(ErrStateEventLimitExceeded,
+				fmt.Sprintf("state machine exceeded max events (%d events; raise %s to allow more), possible infinite loop",
+					maxStateEvents, MaxStateEventsEnvVar))
 		}
 		events++
 		if err := e.processNextEvent(); err != nil {

@@ -64,6 +64,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("calc_output_assigned_in_a_branch_not_taken", testCalcOutputAssignedInABranchNotTaken)
 	t.Run("calc_output_valued_and_assigned", testCalcOutputValuedAndAssigned)
 	t.Run("calc_output_assigned_twice", testCalcOutputAssignedTwice)
+	t.Run("operation_constraint_body_cannot_be_evaluated", testOperationConstraintBodyCannotBeEvaluated)
 	t.Run("binding_conflict", testBindingConflict)
 	t.Run("binding_collection_conflicts_do_not_use_hashes", testBindingCollectionConflictsDoNotUseHashes)
 	t.Run("binding_multiple_scalar_contributors", testBindingMultipleScalarContributors)
@@ -137,6 +138,14 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("accept_of_unsent_type", testAcceptOfUnsentTypeReports)
 	t.Run("send_via_unconnected_port", testSendViaUnconnectedPort)
 	t.Run("send_addressed_to_an_unreachable_target", testSendAddressedToAnUnreachableTarget)
+	t.Run("routed_send_via_unknown_port", testRoutedSendViaUnknownPort)
+	t.Run("routed_send_port_type_mismatch", testRoutedSendPortTypeMismatch)
+	t.Run("routed_send_port_type_match", testRoutedSendPortTypeMatch)
+	t.Run("routed_send_scalar_typed_flow_mismatch", testRoutedSendScalarTypedFlowMismatch)
+	t.Run("routed_send_unreachable_receiver", testRoutedSendUnreachableReceiver)
+	t.Run("routed_send_receiver_name_mismatch_deadlock", testRoutedSendReceiverNameMismatchDeadlock)
+	t.Run("type_classification_unresolved_type", testTypeClassificationUnresolvedType)
+	t.Run("type_classification_undetermined_value_type", testTypeClassificationUndeterminedValueType)
 	t.Run("send_addressed_through_several_occurrences", testSendAddressedThroughSeveralOccurrences)
 	t.Run("send_addressed_to_an_object_that_cannot_be_built", testSendAddressedToAnObjectThatCannotBeBuilt)
 	t.Run("send_addressed_to_a_part_no_sibling_takes", testSendAddressedToAPartNoSiblingTakes)
@@ -2371,6 +2380,200 @@ func testSendViaUnconnectedPort(t *testing.T) {
 	}
 	if !errors.Is(err, ErrUnroutableSend) {
 		t.Errorf("expected ErrUnroutableSend, got: %v", err)
+	}
+}
+
+func testRoutedSendViaUnknownPort(t *testing.T) {
+	_, err := executeActionSource(t, "pipeline", `package P {
+		action pipeline {
+			first start;
+			action sender { send 42 via missing to reader; }
+			action reader accept msg : Integer;
+			done end;
+			then start sender;
+			then sender end;
+		}
+	}`)
+	var typed *UnknownSendPortError
+	if !errors.As(err, &typed) {
+		t.Fatalf("expected UnknownSendPortError, got: %v", err)
+	}
+	if !errors.Is(err, ErrSendViaUnknownPort) {
+		t.Errorf("expected ErrSendViaUnknownPort, got: %v", err)
+	}
+	if errors.Is(err, ErrUnroutableSend) {
+		t.Errorf("unknown routed port must not be ErrUnroutableSend: %v", err)
+	}
+	if !strings.Contains(err.Error(), `"missing"`) || !strings.Contains(err.Error(), `"reader"`) {
+		t.Errorf("error = %v, want port and receiver names", err)
+	}
+}
+
+func testRoutedSendPortTypeMismatch(t *testing.T) {
+	_, err := executeActionSource(t, "pipeline", `package P {
+		item def IntMessage;
+		item def TextMessage;
+		port def IntegerPort { in item text : TextMessage; }
+		action pipeline {
+			port outPort;
+			port inPort : IntegerPort;
+			connect outPort to inPort;
+			first start;
+			action sender { send IntMessage via outPort to reader; }
+			action reader accept msg : Integer via inPort;
+			done end;
+			then start sender;
+			then sender reader;
+			then reader end;
+		}
+	}`)
+	var typed *SendPortTypeMismatchError
+	if !errors.As(err, &typed) {
+		t.Fatalf("expected SendPortTypeMismatchError, got: %v", err)
+	}
+	if !errors.Is(err, ErrSendPortTypeMismatch) {
+		t.Errorf("expected ErrSendPortTypeMismatch, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), `"outPort"`) ||
+		!strings.Contains(err.Error(), `"reader"`) {
+		t.Errorf("error = %v, want port and receiver names", err)
+	}
+}
+
+func testRoutedSendPortTypeMatch(t *testing.T) {
+	_, err := executeActionSource(t, "pipeline", `package P {
+		item def IntMessage;
+		port def IntegerPort { in item value : IntMessage; }
+		action pipeline {
+			port outPort;
+			port inPort : IntegerPort;
+			connect outPort to inPort;
+			first start;
+			action sender { send IntMessage via outPort to reader; }
+			action reader accept : IntMessage via inPort;
+			done end;
+			then start sender;
+			then sender reader;
+			then reader end;
+		}
+	}`)
+	if err != nil {
+		t.Fatalf("execute routed send through matching typed flow: %v", err)
+	}
+}
+
+func testRoutedSendScalarTypedFlowMismatch(t *testing.T) {
+	_, err := executeActionSource(t, "pipeline", `package P {
+		item def Integer;
+		item def TextMessage;
+		port def TextPort { in item text : TextMessage; }
+		action pipeline {
+			port outPort;
+			port inPort : TextPort;
+			connect outPort to inPort;
+			first start;
+			action sender { send 42 via outPort to reader; }
+			action reader accept msg : Integer via inPort;
+			done end;
+			then start sender;
+			then sender reader;
+			then reader end;
+		}
+	}`)
+	var typed *SendPortTypeMismatchError
+	if !errors.As(err, &typed) {
+		t.Fatalf("expected scalar SendPortTypeMismatchError, got: %v", err)
+	}
+	if !errors.Is(err, ErrSendPortTypeMismatch) {
+		t.Errorf("expected ErrSendPortTypeMismatch for scalar message, got: %v", err)
+	}
+}
+
+func testRoutedSendUnreachableReceiver(t *testing.T) {
+	_, err := executeActionSource(t, "pipeline", `package P {
+		action pipeline {
+			port outPort;
+			port inPort;
+			connect outPort to inPort;
+			first start;
+			action sender { send 42 via outPort to missing; }
+			done end;
+			then start sender;
+			then sender end;
+		}
+	}`)
+	var typed *UnreachableSendReceiverError
+	if !errors.As(err, &typed) {
+		t.Fatalf("expected UnreachableSendReceiverError, got: %v", err)
+	}
+	if !errors.Is(err, ErrUnreachableSendReceiver) {
+		t.Errorf("expected ErrUnreachableSendReceiver, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), `"outPort"`) ||
+		!strings.Contains(err.Error(), `"missing"`) {
+		t.Errorf("error = %v, want port and receiver names", err)
+	}
+}
+
+func testRoutedSendReceiverNameMismatchDeadlock(t *testing.T) {
+	_, err := executeActionSource(t, "pipeline", `package P {
+		action pipeline {
+			port outPort;
+			port inPort;
+			connect outPort to inPort;
+			first start;
+			action sender { send 42 via outPort to receiver; }
+			action receiver;
+			action sibling accept msg : Integer via inPort;
+			done end;
+			then start sender;
+			then sender sibling;
+			then sibling end;
+		}
+	}`)
+	if err == nil {
+		t.Fatal("expected a deadlock: sibling must not consume receiver's message")
+	}
+	if !errors.Is(err, ErrAcceptDeadlock) {
+		t.Fatalf("expected ErrAcceptDeadlock, got: %v", err)
+	}
+}
+
+func testTypeClassificationUnresolvedType(t *testing.T) {
+	model, resolver, root := parseAndBuildModel(t, `package P {
+		item def Integer;
+		calc classify { return : Boolean = 1 istype MissingType; }
+	}`)
+	pkg := resolveSymbol(t, root, "P")
+	calc := resolveSymbol(t, pkg.Scope, "classify")
+	_, err := NewContext(model, resolver, 1000).InvokeCalc(calc, nil, pkg.Scope)
+	if err == nil {
+		t.Fatal("expected unresolved type classification to fail")
+	}
+	if !errors.Is(err, ErrUnresolvedType) {
+		t.Fatalf("expected ErrUnresolvedType, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "MissingType") {
+		t.Errorf("error = %v, want unresolved type name", err)
+	}
+}
+
+func testTypeClassificationUndeterminedValueType(t *testing.T) {
+	model, resolver, root := parseAndBuildModel(t, `package P {
+		item def Integer;
+		calc classify { return : Boolean = null istype Integer; }
+	}`)
+	pkg := resolveSymbol(t, root, "P")
+	calc := resolveSymbol(t, pkg.Scope, "classify")
+	_, err := NewContext(model, resolver, 1000).InvokeCalc(calc, nil, pkg.Scope)
+	if err == nil {
+		t.Fatal("expected undetermined value type classification to fail")
+	}
+	if !errors.Is(err, ErrUndeterminedValueType) {
+		t.Fatalf("expected ErrUndeterminedValueType, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "null") {
+		t.Errorf("error = %v, want undecidable value description", err)
 	}
 }
 
@@ -6375,6 +6578,28 @@ func testOperationInvokedWithUnboundParameters(t *testing.T) {
 	}
 	if _, err := ctx.InvokeOperation(inst, "total", nil); !errors.Is(err, ErrNotABehavior) {
 		t.Errorf("invoke of an attribute = %v, want ErrNotABehavior", err)
+	}
+}
+
+// testOperationConstraintBodyCannotBeEvaluated: invoking a constraint whose
+// assertion names no feature returns its evaluation error without panicking.
+func testOperationConstraintBodyCannotBeEvaluated(t *testing.T) {
+	src := `
+	package test {
+		part def Tank {
+			constraint broken { assert missing > 0; }
+		}
+	}`
+	ctx, inst, err := instantiateInSource(t, src, "test::Tank")
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	_, err = ctx.InvokeOperation(inst, "broken", nil)
+	if err == nil {
+		t.Fatal("expected an error for an unevaluable constraint body")
+	}
+	if !errors.Is(err, ErrUnresolvedReference) {
+		t.Fatalf("error = %v, want ErrUnresolvedReference", err)
 	}
 }
 
