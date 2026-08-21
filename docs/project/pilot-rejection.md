@@ -47,9 +47,10 @@ systematically from three sources, one subdirectory each:
    spells entry as `entry; then <state>`, concurrency as `state ... parallel`, and transitions as
    `first <src> then <tgt>`, and has no pseudostates or deferral at all. Adjudication: these are
    **intended OpenSysML extensions**, not accidents — each has dedicated parser tests
-   (`internal/core/parser/state_notation_test.go`) and runtime support. But they are not yet
-   documented as extensions nor gated behind anything a conformance-minded user can turn off;
-   that gating is an open finding for a later wave, recorded in the gap table below.
+   (`internal/core/parser/state_notation_test.go`) and runtime support. They are documented as
+   extensions and, since W8E, gated behind an opt-in
+   [strict conformance mode](../guide/03-command-line.md#strict-conformance) a conformance-minded
+   user can turn on; the default mode keeps accepting them on purpose.
 3. **`xpect/` — the pilot's own negative expectations** (7 cases). The Xpect suites declare 513
    `errors` expectations ([pilot-xpect.md](pilot-xpect.md)); where a suite declares an error we do
    not report anywhere in the file, that is a candidate rejection gap. Each case here re-derives
@@ -59,10 +60,11 @@ systematically from three sources, one subdirectory each:
    standard library loaded, `feature f;` gets an implicit type and is legal — so only
    library-independent expectations became cases.
 
-What this corpus cannot see: it tests the invalid models we thought to write. It is a **sample of
-the rejection surface, not a proof** — a clean bucket here does not mean OpenSysML rejects
+What this corpus cannot see: it tests the invalid models we thought to write. **We authored all 34
+cases ourselves**, so the denominator measures our coverage of the rejection surface, not our
+conformance: it is a **sample, not a proof** — a clean bucket here does not mean OpenSysML rejects
 everything the reference rejects, and no official conformance suite exists to make that claim
-testable.
+testable. The pilot's verdict on each case is externally refereed; the choice of cases is not.
 
 ## Running it
 
@@ -114,6 +116,10 @@ extensions that the default mode accepts on purpose and strict mode reports as e
 the default mode the same corpus gives 20 agreements and 14 gaps — the numbers this document
 carried before strict mode existed, and still what `-conformance default` prints. The divergence is
 intended and unchanged; strict mode only lets us ask the other question.
+
+Read the five as agreement *when asked strictly*, not as five gaps that disappeared. An opt-in check
+is weaker evidence than a default one: it says the strict question has an answer we agree on, not
+that the pipeline a user gets by default rejects the notation — by design it does not.
 
 The two `extensions/` cases that agree in either mode (`x02` choice, `x03` junction) are rejected
 by us for a different reason than by the pilot: our own state-connectivity validation flags a
