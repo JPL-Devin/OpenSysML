@@ -34,6 +34,30 @@ Then `/tmp/old-sysml` vs `./bin/sysml` on identical input is the strongest evide
 it rules out "the test would have passed anyway". Especially valuable for diagnostic wording and
 line/column numbers, where a screenshot of the new behavior alone proves nothing.
 
+## Library-cache cold/warm testing (`XDG_CACHE_HOME`)
+
+`bin/sysml` persists stdlib symbol indexes under `$XDG_CACHE_HOME/sysml-ls/libs/*-v<N>.idx`
+(`internal/core/libs`, `formatVersion` in `record.go`). Cache-dependent bugs only show up on the
+*second* run, so any change touching `symbols`/`libs`/`resolve` should be tested like this:
+
+```bash
+export C=/tmp/cachetest && rm -rf $C && mkdir $C
+XDG_CACHE_HOME=$C ./bin/sysml -validate file.kerml > cold.out 2>&1; echo $?
+XDG_CACHE_HOME=$C ./bin/sysml -validate file.kerml > warm.out 2>&1; echo $?
+cmp cold.out warm.out    # cold and warm must be byte-identical
+```
+
+- A known reproducer class: implicit parameter redefinition against cached (Decl-less) library
+  symbols, e.g. `package R { behavior b { step u : FeatureReferencingPerformances::FeatureWritePerformance { in onOccurrence { feature redefines startingAt; } } } }`
+  in a `.kerml` file — cold-clean/warm-broken before cache format 21.
+- Stale-format handling: warm the cache with a binary built from an older commit (worktree trick
+  above), then run the new binary against the same `XDG_CACHE_HOME`. It must ignore the old
+  `-v<N-1>.idx` files and write `-v<N>.idx` alongside them (`find $C -name '*.idx'` shows both);
+  output must equal a fresh-cache run. Versions coexist — the old binary keeps using its own files.
+- For corpus-level sweeps, run every file twice against one shared cache dir and `cmp` per-file
+  outputs and exit codes; only the first file of pass 1 is truly cold, which is fine for
+  warm-identity checks.
+
 ## Profiling flags: `-memstats`, `-cpuprofile`, `-memprofile` (PR #156)
 
 `main()` is a one-liner over `runCLI()` returning an exit status, so every profile is flushed by a
