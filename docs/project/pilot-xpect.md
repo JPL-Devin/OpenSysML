@@ -469,7 +469,9 @@ report rather than to fix:
    Test1.A.B.B`; we offer every element it names but stop the path at the first repeat of an element,
    so `A.B.B` is missing while `A.B` and `B.B` are present. Emitting the re-entry was measured and
    costs more than it buys (four rows lost elsewhere), so the truncation rule stays and the class
-   records it as a path-convention difference, not a missing name.
+   records it as a path-convention difference, not a missing name. All eight names that fixture
+   declares do resolve when written as a reference — "missing" in a `scope` row always means missing
+   from the *enumeration*, which is the conservative direction: it under-reports our agreement.
 4. **`missing-names` / `missing-and-extra` (17 rows) — import plus inheritance from the container.**
    Reproducer: `imports/SimpleImportTests_ImportPackageAndInheritanceFromContainer.kerml.xt`:23, where
    `classifier A { public import test::*; classifier a specializes A; }` declares `A.A`, `A.A.a` and
