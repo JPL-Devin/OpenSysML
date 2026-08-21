@@ -860,10 +860,10 @@ func compatibleTyping(useKind ast.UsageKind, direction ast.FeatureDirection, def
 		return defKindSpecializes(defKind, symbols.SymbolCaseDef)
 	}
 
-	// A succession is a binary connector (SysML v2 §8.3.13), so a connection
-	// definition of any kind types it.
-	if useKind == ast.UsageSuccession {
-		return defKindSpecializes(defKind, symbols.SymbolConnectionDef)
+	// Successions and bindings type through a plain UsageDeclaration
+	// (SysML.xtext:1033, :1020), so any definition types them.
+	if useKind == ast.UsageSuccession || useKind == ast.UsageBinding {
+		return true
 	}
 
 	// SysML v2 §8.3.22.4: an ObjectiveMembership's ownedObjectiveRequirement is a

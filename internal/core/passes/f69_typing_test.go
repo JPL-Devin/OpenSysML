@@ -97,8 +97,8 @@ func TestF69ActionRejections(t *testing.T) {
 	}
 }
 
-// F53 bonus: a succession is a connector, so a connection definition of any
-// kind types it (the pilot validates no succession typing at all).
+// F53: a succession types through a plain UsageDeclaration
+// (SysML.xtext:1033), so a definition of any kind types it.
 func TestF69SuccessionTypedByConnectionDefKinds(t *testing.T) {
 	for _, src := range []string{
 		"part def A; connection def CD; part p1 : A; part p2 : A; succession s : CD first p1 then p2;",
@@ -107,17 +107,6 @@ func TestF69SuccessionTypedByConnectionDefKinds(t *testing.T) {
 		if diags := typeDiags(t, src); len(diags) != 0 {
 			t.Errorf("%s: expected no type diagnostics, got %v", src, diags)
 		}
-	}
-}
-
-// A succession typed by a non-connector definition keeps its diagnostic.
-func TestF69SuccessionTypedByPartDefRejected(t *testing.T) {
-	diags := typeDiags(t, "part def A; part p1 : A; part p2 : A; succession s : A first p1 then p2;")
-	if len(diags) != 1 {
-		t.Fatalf("expected one type diagnostic, got %v", diags)
-	}
-	if !strings.Contains(diags[0].Message, "kind mismatch") {
-		t.Errorf("got %q", diags[0].Message)
 	}
 }
 

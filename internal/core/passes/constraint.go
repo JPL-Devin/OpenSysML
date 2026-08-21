@@ -474,6 +474,12 @@ func (cc *constraintChecker) checkRedefinition(sym *symbols.Symbol) {
 			continue
 		}
 
+		// A target that is not an inherited member may still be reachable
+		// through the featuring context (KerML validateRedefinitionFeaturingTypes).
+		if !inherited {
+			inherited = cc.redefinedAccessible(sym, redefined, map[*symbols.Symbol]bool{})
+		}
+
 		if !inherited {
 			cc.diags = append(cc.diags, Diagnostic{
 				Severity: SeverityError,
@@ -572,6 +578,121 @@ func (cc *constraintChecker) featuringOwners(sym *symbols.Symbol) ([]*symbols.Sy
 		owners = append(owners, target)
 	}
 	return owners, len(owners) > 0
+}
+
+// redefinedAccessible reports whether redefined is reachable from sym's
+// featuring contexts, walking outward through feature-valued contexts
+// (KerML 1.0 §8.3.3.3 validateRedefinitionFeaturingTypes).
+func (cc *constraintChecker) redefinedAccessible(sym, redefined *symbols.Symbol, visited map[*symbols.Symbol]bool) bool {
+	if sym == nil || visited[sym] {
+		return false
+	}
+	visited[sym] = true
+	for _, t := range cc.featuringContexts(sym) {
+		if cc.featuredWithin(redefined, t) {
+			return true
+		}
+		if isUsageKind(t.Kind) && cc.redefinedAccessible(t, redefined, visited) {
+			return true
+		}
+	}
+	return false
+}
+
+// featuringContexts returns sym's explicit featured-by targets, or its owning
+// type when it declares none.
+func (cc *constraintChecker) featuringContexts(sym *symbols.Symbol) []*symbols.Symbol {
+	if owners, ok := cc.featuringOwners(sym); ok {
+		return owners
+	}
+	if sym.OwnerScope == nil {
+		return nil
+	}
+	owner := sym.OwnerScope.Owner()
+	if owner == nil || owner.Kind == symbols.SymbolPackage || owner.Kind == symbols.SymbolNamespace {
+		return nil
+	}
+	return []*symbols.Symbol{owner}
+}
+
+// featuredWithin reports whether feature b is featured within type t: every
+// featuring context of b accepts t (KerML 1.0 §8.3.3.3, Feature::isFeaturedWithin).
+func (cc *constraintChecker) featuredWithin(b, t *symbols.Symbol) bool {
+	ctxs := cc.featuringContexts(b)
+	if len(ctxs) == 0 {
+		return false
+	}
+	for _, f := range ctxs {
+		if !cc.featuringContextConforms(t, f) {
+			return false
+		}
+	}
+	return true
+}
+
+// featuringContextConforms reports whether featuring context t conforms to f:
+// by specialization, or because both redefine a common feature and t's own
+// contexts conform to f's (the variable-feature snapshot encoding).
+func (cc *constraintChecker) featuringContextConforms(t, f *symbols.Symbol) bool {
+	if t == nil || f == nil {
+		return false
+	}
+	if t == f || cc.model.Conforms(t, f) {
+		return true
+	}
+	if !cc.shareRedefinedTarget(t, f) {
+		return false
+	}
+	fCtxs := cc.featuringContexts(f)
+	for _, ct := range cc.featuringContexts(t) {
+		for _, cf := range fCtxs {
+			if ct == cf || cc.model.Conforms(ct, cf) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// shareRedefinedTarget reports whether t and f redefine a common feature,
+// directly or transitively.
+func (cc *constraintChecker) shareRedefinedTarget(t, f *symbols.Symbol) bool {
+	tTargets := make(map[*symbols.Symbol]bool)
+	cc.collectRedefined(t, tTargets)
+	if len(tTargets) == 0 {
+		return false
+	}
+	fTargets := make(map[*symbols.Symbol]bool)
+	cc.collectRedefined(f, fTargets)
+	for g := range fTargets {
+		if tTargets[g] {
+			return true
+		}
+	}
+	return false
+}
+
+// collectRedefined resolves sym's redefinition targets into `into`, transitively.
+func (cc *constraintChecker) collectRedefined(sym *symbols.Symbol, into map[*symbols.Symbol]bool) {
+	for _, rel := range semantics.RelationshipsOf(sym) {
+		if rel == nil || rel.Kind != ast.RelRedefines || rel.Target == nil {
+			continue
+		}
+		targetNode := rel.Target
+		if fr, ok := targetNode.(*ast.FeatureReference); ok {
+			targetNode = fr.Name
+		}
+		qn, ok := targetNode.(*ast.QualifiedName)
+		if !ok {
+			continue
+		}
+		target, ok := cc.resolver.ResolveQualified(sym.OwnerScope, qn)
+		if !ok || target == nil || into[target] {
+			continue
+		}
+		into[target] = true
+		cc.collectRedefined(target, into)
+	}
 }
 
 func (cc *constraintChecker) isInheritedMember(
