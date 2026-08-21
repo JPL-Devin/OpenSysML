@@ -42,6 +42,8 @@ func unwrapMember(m ast.Node) (ast.Node, ast.Visibility) {
 		return v, v.Visibility
 	case *ast.Alias:
 		return v, v.Visibility
+	case *ast.RelationshipMember:
+		return v, v.Visibility
 	default:
 		return m, ast.VisibilityDefault
 	}
@@ -70,6 +72,14 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 	case *ast.Dependency:
 		sym := newSymbol(d.Ident, SymbolDependency, d, vis, nil, scope, trivia)
 		defineIdent(scope, d.Ident, sym)
+	case *ast.RelationshipMember:
+		// A keyword-first relationship owns its members, and names one only when
+		// the notation gives it an identification.
+		child := NewScope(scope, d)
+		sym := newSymbol(d.Ident, SymbolRelationship, d, vis, child, scope, trivia)
+		defineIdent(scope, d.Ident, sym)
+		scope.AddChild(child)
+		buildMembers(child, d.Members)
 	case *ast.Comment:
 		sym := newSymbol(d.Ident, SymbolComment, d, vis, nil, scope, trivia)
 		defineIdent(scope, d.Ident, sym)

@@ -181,6 +181,7 @@ var metamodelTypeNames = map[symbols.SymbolKind]string{
 	symbols.SymbolNamespace:             "Namespace",
 	symbols.SymbolAlias:                 "Membership",
 	symbols.SymbolDependency:            "Dependency",
+	symbols.SymbolRelationship:          "Relationship",
 	symbols.SymbolComment:               "Comment",
 	symbols.SymbolDocumentation:         "Documentation",
 	symbols.SymbolTextualRepresentation: "TextualRepresentation",

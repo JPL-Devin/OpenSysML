@@ -108,7 +108,8 @@ func containedMembers(sym *symbols.Symbol) []*symbols.Symbol {
 func containedKind(sym *symbols.Symbol) bool {
 	switch sym.Kind {
 	case symbols.SymbolComment, symbols.SymbolDocumentation, symbols.SymbolTextualRepresentation,
-		symbols.SymbolAlias, symbols.SymbolDependency, symbols.SymbolConnectorEnd, symbols.SymbolUnknown:
+		symbols.SymbolAlias, symbols.SymbolDependency, symbols.SymbolRelationship,
+		symbols.SymbolConnectorEnd, symbols.SymbolUnknown:
 		return false
 	}
 	return true

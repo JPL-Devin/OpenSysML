@@ -105,6 +105,12 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		c.conditionExpr(scope, d.FilterExpr)
 	case *ast.Alias:
 		c.add(scope, d.For)
+	case *ast.RelationshipMember:
+		c.target(scope, d.Source)
+		c.target(scope, d.Target)
+		if child := c.childScope(scope, d); child != nil {
+			c.walkMembers(child, d.Members)
+		}
 	case *ast.Dependency:
 		c.prefixes(scope, d.Prefixes)
 		for _, cl := range d.Clients {

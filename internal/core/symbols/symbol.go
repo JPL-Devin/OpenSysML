@@ -90,6 +90,10 @@ const (
 	// RequirementUsage specialization (SysML v2 §8.3.19) with its own kind, since
 	// only a satisfy usage may be an assertion of a requirement's satisfaction.
 	SymbolSatisfyRequirementUsage
+	// SymbolRelationship classifies a relationship written keyword-first as a
+	// member of its own (`specialization Gen subtype A specializes B`), whose two
+	// ends are ordered (KerML §7.2).
+	SymbolRelationship
 )
 
 var symbolKindNames = map[SymbolKind]string{
@@ -98,6 +102,7 @@ var symbolKindNames = map[SymbolKind]string{
 	SymbolNamespace:               "namespace",
 	SymbolAlias:                   "alias",
 	SymbolDependency:              "dependency",
+	SymbolRelationship:            "relationship",
 	SymbolComment:                 "comment",
 	SymbolDocumentation:           "documentation",
 	SymbolTextualRepresentation:   "textualRepresentation",
