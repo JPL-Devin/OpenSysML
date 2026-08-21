@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -18,59 +17,40 @@ import (
 var pilotLine = regexp.MustCompile(`^(.+\.(?:sysml|kerml)):(\d+):(\d+): (error|warning|info|ignore): (.*)$`)
 
 // pilotVersion reports which pilot release the validator was built against,
-// read from the wrapper's pinned Maven properties.
+// read from the pin its provisioning script wrote beside it.
 func pilotVersion(validator string) (string, error) {
-	pom, err := os.ReadFile(filepath.Join(filepath.Dir(validator), "pom.xml"))
+	pin, err := os.ReadFile(filepath.Join(filepath.Dir(validator), "pilot-pin.txt"))
 	if err != nil {
-		return "", fmt.Errorf("read the validator's pom.xml: %w", err)
+		return "", fmt.Errorf("read the validator's pilot-pin.txt: %w", err)
 	}
-	tag := mavenProperty(string(pom), "sysml.release.tag")
-	version := mavenProperty(string(pom), "sysml.artifact.version")
+	tag := pinnedValue(string(pin), "sysml.release.tag")
+	version := pinnedValue(string(pin), "sysml.artifact.version")
 	if tag == "" || version == "" {
 		return "", fmt.Errorf("%s does not pin sysml.release.tag/sysml.artifact.version", validator)
 	}
 	return fmt.Sprintf("%s (jupyter-sysml-kernel %s)", tag, version), nil
 }
 
-func mavenProperty(pom, name string) string {
-	open, close := "<"+name+">", "</"+name+">"
-	start := strings.Index(pom, open)
-	end := strings.Index(pom, close)
-	if start < 0 || end < start {
-		return ""
+func pinnedValue(pin, name string) string {
+	for _, line := range strings.Split(pin, "\n") {
+		key, value, ok := strings.Cut(line, "=")
+		if ok && strings.TrimSpace(key) == name {
+			return strings.TrimSpace(value)
+		}
 	}
-	return strings.TrimSpace(pom[start+len(open) : end])
+	return ""
 }
 
-// pilotDiagnostics runs the reference validator over the batch and returns its
-// diagnostics per file.
+// pilotDiagnostics runs a reference validator over one corpus root as a single
+// batch and returns its diagnostics per file.
 //
-// The wrapper feeds every input to one accumulating SysMLInteractive session and
-// reports each diagnostic under the input's base name, which constrains a batch
-// twice: the inputs must be ordered so a file's cross-file imports are processed
-// before it, and base names within one invocation must be unique for the output
-// to be attributable. Files are therefore ordered by their import dependencies
-// and split into invocations with distinct base names.
+// Both validators load every input into one resource set before validating any
+// of it, and report each diagnostic under its path relative to --root, so the
+// batch needs neither an import ordering nor unique base names.
 func pilotDiagnostics(validator, repo, dir string, files []string, timeout time.Duration) (map[string][]diagnostic, error) {
-	out := make(map[string][]diagnostic, len(files))
-	for _, batch := range batchByBaseName(orderByImports(repo, dir, files)) {
-		byBase := make(map[string]string, len(batch))
-		args := make([]string, 0, len(batch))
-		for _, rel := range batch {
-			byBase[path.Base(rel)] = rel
-			args = append(args, filepath.Join(repo, dir, rel))
-		}
-		if err := runPilot(validator, args, byBase, out, timeout, categorizePilot); err != nil {
-			return nil, err
-		}
-	}
-	return out, nil
-}
-
-func kermlDiagnostics(validator, repo, dir string, files []string, timeout time.Duration) (map[string][]diagnostic, error) {
 	root, err := filepath.Abs(filepath.Join(repo, dir))
 	if err != nil {
-		return nil, fmt.Errorf("resolve KerML corpus root: %w", err)
+		return nil, fmt.Errorf("resolve corpus root: %w", err)
 	}
 
 	byPath := make(map[string]string, len(files))
@@ -89,7 +69,7 @@ func kermlDiagnostics(validator, repo, dir string, files []string, timeout time.
 
 // runPilot reads GNU-format diagnostics from a validator's stderr. categorize
 // is the mapping for that validator's diagnostic vocabulary.
-func runPilot(validator string, args []string, byBase map[string]string, out map[string][]diagnostic, timeout time.Duration, categorize func(string) Category) error {
+func runPilot(validator string, args []string, byPath map[string]string, out map[string][]diagnostic, timeout time.Duration, categorize func(string) Category) error {
 	ctx := context.Background()
 	if timeout > 0 {
 		var cancel context.CancelFunc
@@ -119,7 +99,7 @@ func runPilot(validator string, args []string, byBase map[string]string, out map
 			}
 			continue
 		}
-		rel, ok := byBase[match[1]]
+		rel, ok := byPath[match[1]]
 		if !ok {
 			unattributed = append(unattributed, line)
 			continue
@@ -155,21 +135,4 @@ func runPilot(validator string, args []string, byBase map[string]string, out map
 		fmt.Fprintf(os.Stderr, "pilot output not attributable to a corpus file: %s\n", line)
 	}
 	return nil
-}
-
-// batchByBaseName splits files, in order, into groups whose base names are
-// unique: the nth file sharing a base name goes into the nth group.
-func batchByBaseName(files []string) [][]string {
-	var batches [][]string
-	seen := make(map[string]int, len(files))
-	for _, rel := range files {
-		base := path.Base(rel)
-		index := seen[base]
-		seen[base] = index + 1
-		for len(batches) <= index {
-			batches = append(batches, nil)
-		}
-		batches[index] = append(batches[index], rel)
-	}
-	return batches
 }

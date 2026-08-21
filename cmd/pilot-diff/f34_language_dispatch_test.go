@@ -88,8 +88,8 @@ func writeMixedRoot(t *testing.T, repo, sysmlLog, kermlLog string) (string, stri
 
 	write("mixed/Model.sysml", "package P;\n", 0o644)
 	write("mixed/Lib.kerml", "package Q;\n", 0o644)
-	write("bin/pom.xml", "<sysml.release.tag>2026-05</sysml.release.tag>\n<sysml.artifact.version>0.60.1</sysml.artifact.version>\n", 0o644)
-	validator := write("bin/validate-sysml", stubValidator(sysmlLog,
+	write("bin/pilot-pin.txt", "sysml.release.tag=2026-05\nsysml.artifact.version=0.60.1\n", 0o644)
+	validator := write("bin/validate-sysml-batch", stubValidator(sysmlLog,
 		"Model.sysml:3:1: error: no viable alternative at input 'x'"), 0o700)
 	kermlValidator := write("bin/validate-kerml", stubValidator(kermlLog,
 		"Lib.kerml:2:1: error: Couldn't resolve reference to Type 'T'."), 0o700)
