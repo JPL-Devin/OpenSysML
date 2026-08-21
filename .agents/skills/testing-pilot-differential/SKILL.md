@@ -164,6 +164,8 @@ agreement).
 `build/pilot-kerml-validator/validate-kerml`, which drives the pilot's own `KerMLValidator`
 through Xtext's `IResourceValidator` in **one** resource-set batch and prints GNU-format
 diagnostics **relative to `--root`** (paths, not basenames — so no basename batching).
+For the K6 `disjoint from` reproducer, the wrapper injects the library itself, so no
+`--library` flag is needed: `validate-kerml --root /tmp/k6 /tmp/k6/Decl.kerml`.
 
 Provisioning script checks that actually distinguish working from broken:
 
