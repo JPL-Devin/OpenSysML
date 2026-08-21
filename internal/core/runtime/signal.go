@@ -203,8 +203,7 @@ func (ctx *Context) resolveRoutedReceiver(send lower.Send, self *Instance) (mess
 		separator = "."
 	}
 	segments := strings.Split(send.Target, separator)
-	sym, ok := ctx.pathSymbol(send.Scope, segments)
-	if !ok || !isRoutedReceiverSymbol(sym) {
+	if !ctx.routedReceiverExists(send.Scope, segments, send.TargetPath, self) {
 		return messageAddress{}, fmt.Errorf("receiver %q is unresolved", send.Target)
 	}
 	addr, err := ctx.resolveAddress(send, self)
@@ -215,6 +214,35 @@ func (ctx *Context) resolveRoutedReceiver(send lower.Send, self *Instance) (mess
 		return messageAddress{}, err
 	}
 	return addr, nil
+}
+
+// routedReceiverExists prefers a directly declared receiving node over inherited
+// feature names, then checks behavior features of the object being addressed.
+func (ctx *Context) routedReceiverExists(scope *symbols.Scope, segments []string, path bool, self *Instance) bool {
+	if len(segments) == 0 || segments[0] == "" {
+		return false
+	}
+	if path {
+		sym, ok := ctx.pathSymbol(scope, segments)
+		return ok && isRoutedReceiverSymbol(sym)
+	}
+	name := segments[0]
+	for current := scope; current != nil; current = current.Parent() {
+		for _, sym := range current.LookupLocalAll(name) {
+			if isRoutedReceiverSymbol(sym) && !sym.EffectiveName {
+				return true
+			}
+		}
+	}
+	if self == nil {
+		return false
+	}
+	for _, feature := range ctx.FeaturesOf(self.Type) {
+		if feature.Name == name && isRoutedReceiverSymbol(feature.Symbol) {
+			return true
+		}
+	}
+	return false
 }
 
 // isRoutedReceiverSymbol accepts only actions and states as routed receivers,

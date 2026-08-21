@@ -223,6 +223,40 @@ func TestSendViaPortReachesConnectedAccept(t *testing.T) {
 	assertIntOutput(t, outputs, "got", 42)
 }
 
+// A standard-library feature named receiver must not shadow the sibling
+// receiving node a routed send addresses.
+func TestSendViaPortToReceiverWithLibraries(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `package P {
+		private import ScalarValues::*;
+		action pipeline {
+			attribute got : Integer = 0;
+			port senderPort;
+			port receiverPort;
+			connect senderPort to receiverPort;
+			first start;
+			action sender {
+				send 42 via senderPort to receiver;
+			}
+			action receiver accept value : Integer via receiverPort {
+				assign got := value;
+			}
+			done end;
+			then start sender;
+			then sender receiver;
+			then receiver end;
+		}
+	}`))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "pipeline", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action pipeline not found")
+	}
+	outputs, err := ctx.ExecuteAction(sym)
+	if err != nil {
+		t.Fatalf("execute action with libraries: %v", err)
+	}
+	assertIntOutput(t, outputs, "got", 42)
+}
+
 // A port-routed message is only for the accept on the port it arrived at: an
 // accept listening on no port does not take it, however well its type matches.
 func TestPortRoutedMessageBypassesPortlessAccept(t *testing.T) {
