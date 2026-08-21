@@ -8,21 +8,21 @@ import platform
 import stat
 import urllib.request
 import warnings
-from pysysml.errors import (
+from opensysml.errors import (
     ChecksumMismatchError,
     ConnectionError,
     UnpinnedReleaseError,
 )
 
 # Releases publish sysml-grpc-<goos>-<goarch> raw, with a .sha256 sidecar.
-# PYSYSML_GITHUB_REPO overrides the repository they are fetched from.
+# OPENSYSML_GITHUB_REPO overrides the repository they are fetched from.
 DEFAULT_GITHUB_REPO = 'Open-MBEE/OpenSysML'
 
 # A cached binary is now checked against the releases API before being reused, and
 # that happens while the service-start lock is held, so it must not hang there.
 NETWORK_TIMEOUT = 15
 
-#: SHA-256 digest this release of pysysml expects of each release asset, keyed by
+#: SHA-256 digest this release of opensysml expects of each release asset, keyed by
 #: repository, release tag and asset name. A digest pinned here does not come from
 #: the origin serving the download, so a release republished with another binary is
 #: refused rather than trusted. Produced by python/scripts/pin_release_checksums.py;
@@ -70,20 +70,20 @@ PINNED_SHA256 = {
 #: Set to the repository whose unpinned downloads may be accepted (`1` for any),
 #: which is same-origin trust: the checksum then comes from whoever served the
 #: binary.
-ALLOW_UNPINNED_ENV = 'PYSYSML_ALLOW_UNPINNED_DOWNLOAD'
+ALLOW_UNPINNED_ENV = 'OPENSYSML_ALLOW_UNPINNED_DOWNLOAD'
 
 
 def default_github_repo():
     """Repository releases are downloaded from.
 
     Returns:
-        str: owner/repo, from $PYSYSML_GITHUB_REPO or the default
+        str: owner/repo, from $OPENSYSML_GITHUB_REPO or the default
     """
-    return os.environ.get('PYSYSML_GITHUB_REPO') or DEFAULT_GITHUB_REPO
+    return os.environ.get('OPENSYSML_GITHUB_REPO') or DEFAULT_GITHUB_REPO
 
 
 def pinned_digest(version, asset, github_repo=None):
-    """The digest this release of pysysml pins for a release asset.
+    """The digest this release of opensysml pins for a release asset.
 
     Args:
         version (str): Release tag, resolved (never 'latest')
@@ -139,15 +139,15 @@ def expected_digest(version, asset, served_digest, github_repo=None):
     if pinned is None:
         if not unpinned_downloads_allowed(repo):
             raise UnpinnedReleaseError(
-                f"pysysml pins no SHA-256 digest for {asset} of {version} of {repo}, so "
+                f"opensysml pins no SHA-256 digest for {asset} of {version} of {repo}, so "
                 f"the only checksum available is the one served beside the binary, which "
-                f"a compromised release would serve too. Upgrade pysysml to a release "
+                f"a compromised release would serve too. Upgrade opensysml to a release "
                 f"that pins {version}, ask for a pinned release with version=, or accept "
                 f"same-origin trust for this repository by setting "
                 f"${ALLOW_UNPINNED_ENV}={repo} (or =1 for any repository)."
             )
         warnings.warn(
-            f"pysysml pins no digest for {asset} of {version} of {repo}; verifying it "
+            f"opensysml pins no digest for {asset} of {version} of {repo}; verifying it "
             f"against the checksum served beside it, which detects corruption but not a "
             f"compromised release (${ALLOW_UNPINNED_ENV} is set).",
             RuntimeWarning,
@@ -157,7 +157,7 @@ def expected_digest(version, asset, served_digest, github_repo=None):
     if served_digest != pinned:
         raise ChecksumMismatchError(
             f"Checksum mismatch for {asset} of {version}: {repo} serves {served_digest}, "
-            f"but pysysml pins {pinned}. The release was republished with another binary, "
+            f"but opensysml pins {pinned}. The release was republished with another binary, "
             f"or the download is being tampered with; it was not installed."
         )
     return pinned
@@ -243,12 +243,12 @@ def get_binary_path():
     """Get the local path where sysml-grpc binary should be stored.
     
     Returns:
-        str: Absolute path to binary (e.g. ~/.pysysml/bin/sysml-grpc)
+        str: Absolute path to binary (e.g. ~/.opensysml/bin/sysml-grpc)
     """
     os_name, _ = detect_platform()
     binary_name = 'sysml-grpc.exe' if os_name == 'windows' else 'sysml-grpc'
     
-    base_dir = os.path.expanduser('~/.pysysml/bin')
+    base_dir = os.path.expanduser('~/.opensysml/bin')
     return os.path.join(base_dir, binary_name)
 
 
@@ -256,7 +256,7 @@ def metadata_path():
     """Path of the record of which release the cached binary was downloaded from.
 
     Returns:
-        str: Absolute path to the sidecar (e.g. ~/.pysysml/bin/sysml-grpc.json)
+        str: Absolute path to the sidecar (e.g. ~/.opensysml/bin/sysml-grpc.json)
     """
     return get_binary_path() + '.json'
 
@@ -482,7 +482,7 @@ def ensure_binary(force_download=False, version=None, github_repo=None):
         force_download (bool): If True, download even if binary exists
         version (str, optional): Specific version tag to download (e.g. 'v0.1.0'),
                                  or 'latest' for the newest release. If None,
-                                 $PYSYSML_GRPC_VERSION is used; without it
+                                 $OPENSYSML_GRPC_VERSION is used; without it
                                  auto-download is disabled and the binary must be
                                  pre-installed via `make build` or downloaded manually.
     
@@ -492,10 +492,10 @@ def ensure_binary(force_download=False, version=None, github_repo=None):
     Raises:
         ConnectionError: If binary cannot be obtained
     """
-    from pysysml.errors import ConnectionError
+    from opensysml.errors import ConnectionError
     binary_path = get_binary_path()
     if version is None:
-        version = os.environ.get('PYSYSML_GRPC_VERSION') or None
+        version = os.environ.get('OPENSYSML_GRPC_VERSION') or None
     
     # Check if binary already exists and is executable
     cached = None
@@ -514,7 +514,7 @@ def ensure_binary(force_download=False, version=None, github_repo=None):
     if version is None:
         raise ConnectionError(
             f"Binary not found at {binary_path} and auto-download disabled. "
-            f"Build via `make build`, set $PYSYSML_GRPC_VERSION, or specify "
+            f"Build via `make build`, set $OPENSYSML_GRPC_VERSION, or specify "
             f"version= parameter for download."
         )
     
@@ -522,7 +522,7 @@ def ensure_binary(force_download=False, version=None, github_repo=None):
     try:
         return download_binary(version=version, github_repo=github_repo)
     except UnpinnedReleaseError as e:
-        # A release this pysysml pins nothing for contradicts nothing, so a
+        # A release this opensysml pins nothing for contradicts nothing, so a
         # working cache stands.
         if cached is None:
             raise

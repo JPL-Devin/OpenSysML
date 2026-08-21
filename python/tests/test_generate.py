@@ -1,8 +1,8 @@
-"""Tests for the type mapping and emitter of pysysml.generate."""
+"""Tests for the type mapping and emitter of opensysml.generate."""
 
 import pytest
 
-from pysysml.generate import (
+from opensysml.generate import (
     Definition,
     Feature,
     class_names,
@@ -13,7 +13,7 @@ from pysysml.generate import (
     is_feature_kind,
     render_module,
 )
-from pysysml.typefacts import Multiplicity, Specialization, SymbolFacts, TypeFacts
+from opensysml.typefacts import Multiplicity, Specialization, SymbolFacts, TypeFacts
 
 
 def definition(fqn, kind="partDef", features=(), specializations=()):
@@ -316,7 +316,7 @@ def test_render_module_is_importable_and_deterministic(tmp_path):
     namespace: dict = {}
     exec(compile(source, str(module_path), "exec"), namespace)
     assert namespace["Vehicle"].sysml_id == "Demo::Vehicle"
-    assert issubclass(namespace["Engine"], __import__("pysysml.typed", fromlist=["typed"]).TypedObject)
+    assert issubclass(namespace["Engine"], __import__("opensysml.typed", fromlist=["typed"]).TypedObject)
 
 
 def test_render_module_emits_bases_before_subclasses():

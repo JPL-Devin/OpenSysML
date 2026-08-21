@@ -29,7 +29,7 @@ each of these is a deliberate property of it rather than a defect to report:
 
 Every surface reports this where it is used: the command line writes a `note:` to
 stderr, `%save` prints one, and `ConvertResponse` carries `experimental` and
-`experimental_notice`, which pysysml raises as an `ExperimentalFeatureWarning`.
+`experimental_notice`, which opensysml raises as an `ExperimentalFeatureWarning`.
 The wording is one constant, `export.ExperimentalNotice`.
 
 ## The RDF mapping

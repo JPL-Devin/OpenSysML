@@ -1,6 +1,6 @@
-"""Exception hierarchy for pysysml.
+"""Exception hierarchy for opensysml.
 
-Every failure a caller can act on is a :class:`PySysMLError`, including the ones
+Every failure a caller can act on is a :class:`OpenSysMLError`, including the ones
 the service reports over gRPC: :func:`from_rpc_error` translates a status code
 into the class for it at the client boundary and keeps the original
 ``grpc.RpcError`` as ``__cause__``. A script therefore never has to ``import
@@ -14,11 +14,11 @@ from contextlib import contextmanager
 import grpc
 
 
-class PySysMLError(Exception):
-    """Base class for all pysysml errors."""
+class OpenSysMLError(Exception):
+    """Base class for all opensysml errors."""
 
 
-class ConnectionError(PySysMLError, builtins.ConnectionError):
+class ConnectionError(OpenSysMLError, builtins.ConnectionError):
     """Raised when the client cannot connect to or start the sysml-grpc service.
 
     Also a built-in :class:`ConnectionError`, for the same reason
@@ -55,10 +55,10 @@ class ChecksumMismatchError(ConnectionError):
 
 
 class UnpinnedReleaseError(ChecksumMismatchError):
-    """Raised when this pysysml pins no digest for the release being downloaded.
+    """Raised when this opensysml pins no digest for the release being downloaded.
 
     Nothing contradicts anything here, so calling it a checksum mismatch named
-    the wrong cause: the release is simply not one this pysysml vouches for. A
+    the wrong cause: the release is simply not one this opensysml vouches for. A
     :class:`ChecksumMismatchError` still, so an ``except`` clause written before
     this class existed keeps catching it, and a working cached binary may still
     be used because no download is under suspicion.
@@ -95,11 +95,11 @@ class StaleServiceError(ConnectionError):
         self.info = info
 
 
-class UnsupportedValueError(PySysMLError):
+class UnsupportedValueError(OpenSysMLError):
     """Raised when the service sends a value the wire format cannot represent."""
 
 
-class FeatureValueError(PySysMLError):
+class FeatureValueError(OpenSysMLError):
     """Raised when a feature value could not be evaluated or was never materialized.
 
     Attributes:
@@ -113,7 +113,7 @@ class FeatureValueError(PySysMLError):
         self.message = message
 
 
-class TypeMismatchError(PySysMLError):
+class TypeMismatchError(OpenSysMLError):
     """Raised when a feature holds a value of another type than its generated view declares.
 
     Attributes:
@@ -131,7 +131,7 @@ class TypeMismatchError(PySysMLError):
         self.value = value
 
 
-class InstanceTypeError(PySysMLError):
+class InstanceTypeError(OpenSysMLError):
     """Raised when a generated typed view is asked to wrap an instance of another type.
 
     Attributes:
@@ -148,7 +148,7 @@ class InstanceTypeError(PySysMLError):
         self.actual = actual
 
 
-class ConversionError(PySysMLError):
+class ConversionError(OpenSysMLError):
     """Raised when the service could not write a model in the requested format.
 
     Attributes:
@@ -163,11 +163,11 @@ class ConversionError(PySysMLError):
         self.diagnostics = diagnostics or []
 
 
-class ExecutionError(PySysMLError, builtins.RuntimeError):
+class ExecutionError(OpenSysMLError, builtins.RuntimeError):
     """Raised when a runtime operation (eval/instantiate/execute/verify) fails.
 
     Also a built-in :class:`RuntimeError`, so ``except RuntimeError`` catches it
-    — which is what the traceback's ``pysysml.errors.RuntimeError`` used to
+    — which is what the traceback's ``opensysml.errors.RuntimeError`` used to
     promise and not deliver. That old name is a deprecated alias of this class.
 
     Attributes:
@@ -190,7 +190,7 @@ class WrongKindError(ExecutionError):
     """
 
 
-class ModelError(PySysMLError):
+class ModelError(OpenSysMLError):
     """Raised when a model the service parsed has errors and the caller wanted none.
 
     Raised by ``load(..., strict=True)``, and by :meth:`Model.raise_for_errors`.
@@ -208,7 +208,7 @@ class ModelError(PySysMLError):
         self.model = model
 
 
-class SymbolNotFoundError(PySysMLError, KeyError):
+class SymbolNotFoundError(OpenSysMLError, KeyError):
     """Raised when a symbol a lookup required is not in the model.
 
     Also a :class:`KeyError`, since ``model["Vehicle"]`` is a subscript and is
@@ -235,7 +235,7 @@ class SymbolNotFoundError(PySysMLError, KeyError):
         return self.args[0]
 
 
-class EditError(PySysMLError):
+class EditError(OpenSysMLError):
     """Raised when an edit to a model was refused, and nothing was changed.
 
     The subclasses name the refusals a caller acts on differently. An edit is
@@ -327,7 +327,7 @@ class DeleteReferencedError(EditError):
     """Raised when a referenced declaration is deleted without cascade."""
 
 
-class ServiceError(PySysMLError):
+class ServiceError(OpenSysMLError):
     """Raised when the service fails a call, translated from its gRPC status.
 
     The subclasses below name the statuses a caller acts on differently; this
@@ -377,7 +377,7 @@ class UnsupportedOperationError(ServiceError):
     """Raised when the connected service does not implement the call at all.
 
     A service that reports its capabilities fails such a call with
-    :class:`~pysysml.capabilities.MissingCapabilityError` before it is made; this
+    :class:`~opensysml.capabilities.MissingCapabilityError` before it is made; this
     is the fallback for one too old to be asked.
     """
 
@@ -413,7 +413,7 @@ def _not_found_error(details, default):
 
 
 def from_rpc_error(exc, not_found=ModelNotFoundError):
-    """Translate a ``grpc.RpcError`` into the :class:`PySysMLError` for it.
+    """Translate a ``grpc.RpcError`` into the :class:`OpenSysMLError` for it.
 
     Args:
         exc (grpc.RpcError): The failure as gRPC reported it.
@@ -451,7 +451,7 @@ def from_rpc_error(exc, not_found=ModelNotFoundError):
 
 @contextmanager
 def translate_rpc_errors(not_found=ModelNotFoundError):
-    """Re-raise any ``grpc.RpcError`` raised in the block as a PySysMLError.
+    """Re-raise any ``grpc.RpcError`` raised in the block as a OpenSysMLError.
 
     Wraps a stub call at the client boundary, so gRPC's status codes stop at the
     boundary and callers see this package's hierarchy.
@@ -474,15 +474,15 @@ def __getattr__(name):
     """Serve the deprecated ``RuntimeError`` alias, warning about its use.
 
     It is the same class as :class:`ExecutionError`, so ``except
-    pysysml.errors.RuntimeError`` keeps working; it is gone from ``__all__`` so
+    opensysml.errors.RuntimeError`` keeps working; it is gone from ``__all__`` so
     that a star-import no longer shadows the built-in with it.
     """
     replacement = _DEPRECATED_NAMES.get(name)
     if replacement is None:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
     warnings.warn(
-        f"pysysml.errors.{name} is deprecated; use "
-        f"pysysml.errors.{replacement.__name__} instead",
+        f"opensysml.errors.{name} is deprecated; use "
+        f"opensysml.errors.{replacement.__name__} instead",
         DeprecationWarning,
         stacklevel=2,
     )
@@ -490,7 +490,7 @@ def __getattr__(name):
 
 
 __all__ = [
-    "PySysMLError",
+    "OpenSysMLError",
     "ChecksumMismatchError",
     "ConnectionError",
     "ConversionError",

@@ -10,7 +10,7 @@ Read in order the first time; each chapter assumes the ones before it.
 6. [Behavior: actions and state machines](06-behavior.md) — running and debugging behavior
 7. [Saving, and converting to RDF](07-saving-and-rdf.md) — `%save`, `-convert`, round trips
 8. [Editors](08-editors.md) — `sysml-lsp` and the VS Code extension
-9. [From Python](09-python.md) — the `pysysml` client over `sysml-grpc`
+9. [From Python](09-python.md) — the `opensysml` client over `sysml-grpc`
 10. [Troubleshooting](10-troubleshooting.md) — when a run stops short
 
 Looking up one thing rather than reading? The [reference](../reference/) has the CLI flags, the
