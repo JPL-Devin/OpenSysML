@@ -64,8 +64,8 @@ var (
 	docIntegerPattern        = regexp.MustCompile(`^-?[0-9]+$`)
 	docRootPattern           = regexp.MustCompile("(?s)^\\s*`([^`]+)`\\s*(.*)$")
 	docReferencePattern      = regexp.MustCompile("^\\*\\*Reference differential:\\*\\* ([0-9]+) files compared diagnostic-by-diagnostic against the pinned OMG pilot implementation \\(`([^`]+)`\\), ([0-9]+) in full agreement;")
-	docMeasuredStatusPattern = regexp.MustCompile("^\\*\\*Measured status:\\*\\* of the ([0-9]+) semantic rules tracked in .*?, ([0-9]+) are ✅ faithful, ([0-9]+) ⚠️ approximate and ([0-9]+) ❌ not implemented\\.")
-	docCoveragePattern       = regexp.MustCompile("^\\*\\*Current coverage:\\*\\* of the ([0-9]+) rules tracked in the compliance map, ([0-9]+) are faithful, ([0-9]+) approximate and ([0-9]+) not implemented")
+	docMeasuredStatusPattern = regexp.MustCompile(`^\*\*Measured status:\*\* of the ([0-9]+) semantic rules tracked in .*?, ([0-9]+) are ✅ faithful, ([0-9]+) ⚠️ approximate and ([0-9]+) ❌ not implemented\.`)
+	docCoveragePattern       = regexp.MustCompile(`^\*\*Current coverage:\*\* of the ([0-9]+) rules tracked in the compliance map, ([0-9]+) are faithful, ([0-9]+) approximate and ([0-9]+) not implemented`)
 	docMovementRowsUnchecked = map[string]bool{"new checks of ours": true}
 )
 
