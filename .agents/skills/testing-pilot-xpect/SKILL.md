@@ -118,11 +118,13 @@ census in `w5c_census_test.go` is live two ways: perturb one pinned triple (e.g.
 
 ## Regression neighbour
 
-`go run ./cmd/pilot-diff` (~1m12s) must still print `349 file(s), 283 fully agreeing; 20 agreed
-diagnostic(s), 232 only ours, 142 only the pilot's`. Note that at `19a3ce03`
-`docs/project/pilot-differential-baseline.json` is **stale** against that (it holds 273 / 281 /
-317), so `cmp` against it fails for reasons unrelated to any Xpect work — compare the summary line,
-and see `testing-pilot-differential`'s "Isolating one change's effect" for the entry-keyed delta.
+`go run ./cmd/pilot-diff` (~1m12s) must still print the headline the *committed* baseline holds —
+after the wave-5 rebaseline that is `349 file(s), 291 fully agreeing; 20 agreed diagnostic(s), 167
+only ours, 139 only the pilot's`. Read the number out of
+`docs/project/pilot-differential-baseline.json` rather than trusting this line, since a landing fix
+round moves it. When the baseline is itself stale (it was at `19a3ce03`, holding 273 / 281 / 317), a
+failing `cmp` against it is *not* evidence of an Xpect regression — compare the summary line, and see
+`testing-pilot-differential`'s "Isolating one change's effect" for the entry-keyed delta.
 
 ## Recording
 
