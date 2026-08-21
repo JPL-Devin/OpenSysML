@@ -5,7 +5,7 @@
 
 ## Overview
 
-A complete, production-grade SysML v2 implementation delivering the integrated tooling experience systems engineers expect from modern language ecosystems (Python, Rust, Go).
+A SysML v2 and KerML 1.1 implementation delivering the integrated tooling experience systems engineers expect from modern language ecosystems (Python, Rust, Go).
 
 ### Core Components
 
@@ -213,7 +213,7 @@ Parse + model all behavioral bodies with unified fallback grammar:
 
 **Package:** `internal/core/runtime`  
 **Status:** Complete. Conformance gate: every case passing (calc/constraint/requirement/satisfy/action/state all functional); count in [the measured counts](../project/spec-compliance.md).  
-**Spec Alignment:** The governing reference is the SysML v2 metamodel or the bundled KerML semantic library (`internal/core/libs/stdlib/`); UML 2.5.1 is a fallback only where the SysML v2 notation has no production for a concept *and* the KerML library no performance for it (state-body `fork`/`join`, history, entry/exit points, regions). Token flow is succession-ordered: a succession is a KerML `HappensBefore` link (`Occurrences.kerml`), which orders occurrences in time and carries no values — a `SuccessionFlow` is the form that carries a payload (`KerML.kerml`: `Succession specializes Connector`, `SuccessionFlow specializes Succession, Flow`). State machine execution is `Occurrences::Occurrence::isRunToCompletion` over its `runToCompletionScope` ("determines whether transition performances might happen during state entry performances within the run to completion scope"), with event dispatch `isDispatch` / `dispatchScope`. See [SPEC_COMPLIANCE.md](../project/spec-compliance.md) for detailed compliance mapping (~98% faithful implementation).
+**Spec Alignment:** The governing reference is the SysML v2 metamodel or the bundled KerML semantic library (`internal/core/libs/stdlib/`); UML 2.5.1 is a fallback only where the SysML v2 notation has no production for a concept *and* the KerML library no performance for it (state-body `fork`/`join`, history, entry/exit points, regions). Token flow is succession-ordered: a succession is a KerML `HappensBefore` link (`Occurrences.kerml`), which orders occurrences in time and carries no values — a `SuccessionFlow` is the form that carries a payload (`KerML.kerml`: `Succession specializes Connector`, `SuccessionFlow specializes Succession, Flow`). State machine execution is `Occurrences::Occurrence::isRunToCompletion` over its `runToCompletionScope` ("determines whether transition performances might happen during state entry performances within the run to completion scope"), with event dispatch `isDispatch` / `dispatchScope`. See [SPEC_COMPLIANCE.md](../project/spec-compliance.md) for the detailed compliance mapping, and [the pilot differential](../project/pilot-differential.md) for what is checked against the reference implementation.
 
 **Architecture:**
 
@@ -651,7 +651,7 @@ Every behavioral feature must have:
 - Test case(s) exercising the feature
 - Status: ✅ Faithful / ⚠️ Approximate / ❌ Not Yet Implemented / 🚧 Known Failure
 
-**Current coverage:** ~98% faithful implementation. Calc/constraint/requirement fully functional. Action/state executor infrastructure complete (fork/join/decision, TimeEvent/ChangeEvent, guards, hierarchy, orthogonal regions all tested); every conformance case passes. Fork/join, shallow/deep history, entry/exit points and deferred events are implemented and reachable from source text — see docs/project/spec-compliance.md and docs/reference/grammar/README.md.
+**Current coverage:** of the 649 rules tracked in the compliance map, 565 are faithful, 77 approximate and 7 not implemented — a progress measure over our own row list, not a compliance percentage. Behavioral rows are self-assessed: the pinned reference implementation evaluates expressions but does not execute actions or state machines, so nothing external adjudicates them. Calc/constraint/requirement functional. Action/state executor infrastructure complete (fork/join/decision, TimeEvent/ChangeEvent, guards, hierarchy, orthogonal regions all tested); every conformance case passes. Fork/join, shallow/deep history, entry/exit points and deferred events are implemented and reachable from source text — see docs/project/spec-compliance.md and docs/reference/grammar/README.md.
 
 ---
 

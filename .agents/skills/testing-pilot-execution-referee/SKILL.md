@@ -101,7 +101,7 @@ nondeterministic 0`.
   `pilot-exec-diff: <file>:<line>: model no/such/model.sysml: stat <abs>: no
   such file or directory`.
 - **Additivity.** `go run ./cmd/pilot-diff` must still print
-  `349 file(s), 273 fully agreeing; 20 agreed diagnostic(s), 281 only ours, 142
+  `349 file(s), 283 fully agreeing; 20 agreed diagnostic(s), 232 only ours, 139
   only the pilot's` and `jq -S` diff clean against
   `docs/project/pilot-differential-baseline.json`; `git status --porcelain`
   empty at the end.

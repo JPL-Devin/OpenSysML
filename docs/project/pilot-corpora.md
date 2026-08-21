@@ -18,6 +18,39 @@ fail the test
 **Required in CI:** `OPENSYSML_REQUIRE_PILOT_CORPORA=1` in both `.circleci/config.yml` and
 `.github/workflows/pr.yml`, under which an absent or empty corpus fails instead of skipping
 
+## One mechanism, two policies
+
+All four OMG model roots — these three plus the training corpus in
+`examples/sysml-v2-training` — come from the same pinned pilot release and share one gate
+mechanism in `internal/core/model/corpus_gate_test.go`: one walker, one whole-root loader, one
+`GATE NOT RUN` skip banner, one expectation-file format, one cache-independence test
+(`TestCorpusGatesCacheStateIndependent`, which covers all four roots), and one downloader
+(`pilot_fetch_subtrees` in `scripts/pilot-pin.sh`, called with one entry by
+`download-training-examples.sh` and three by `download-pilot-corpora.sh`).
+
+The two *policies* over that mechanism deliberately differ:
+
+- **Training asserts.** The reference validates all 100 files of `sysml/src/training` clean and so
+  do we, so `TestTrainingExamplesSemanticErrors` asserts that: `training_examples_expected.txt`
+  records the corpus size and nothing else, and a reporting file fails the gate instead of being
+  recorded. `-update-training` refuses to write a per-file count, so the assertion cannot be
+  ratcheted into a baseline by a future PR with a plausible-sounding justification.
+- **The other three ratchet.** They are not clean under our implementation (109, 10 and 72 files'
+  worth of diagnostics the reference does not report, per `cmd/pilot-diff`), so there is nothing to
+  assert yet; the per-file counts are pinned instead, and every movement in either direction has to
+  be adjudicated.
+
+Do not "simplify" the training gate into the ratchet: an absolute gate that can be re-baselined is
+not an absolute gate. The scopes also differ on purpose — training counts `SeverityError` over
+`.sysml` only, the corpora count every severity over `.sysml` and `.kerml`. (Measured, not assumed:
+the training corpus is clean on *every* severity too, so its narrower scope costs nothing today; it
+is kept because a future warning there is a warning, not a broken gate.)
+
+The two require-env vars stay separate (`OPENSYSML_REQUIRE_TRAINING_CORPUS`,
+`OPENSYSML_REQUIRE_PILOT_CORPORA`), because the two corpora are fetched, cached and run
+independently in both CI configurations: one absent corpus must fail its own gate, not silently
+un-gate the other.
+
 ## What the gate does not do
 
 - **It is not a conformance claim.** The counts are *our* verdicts on those 212 files, recorded as
@@ -47,9 +80,9 @@ fail the test
   so the file is machine-independent.
 - The run sets `XDG_CACHE_HOME` to a temporary directory, so it measures the implementation on an
   empty semantic cache — what a fresh checkout and CI do — rather than the developer's machine.
-- `TestPilotCorporaCacheStateIndependent` pins that a run restored from a populated library cache
-  agrees with a cold one. `TestTrainingExamplesCacheStateIndependent` already asserts that property
-  for SysML; this is the KerML half, which the training corpus contains no files for.
+- `TestCorpusGatesCacheStateIndependent` pins that a run restored from a populated library cache
+  agrees with a cold one, over all four roots in one test — the training corpus for SysML, and
+  `kerml-examples` for the KerML half it contains no files for.
 
 ## Starting baseline
 

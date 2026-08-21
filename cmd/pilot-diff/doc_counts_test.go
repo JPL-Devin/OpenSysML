@@ -1,0 +1,898 @@
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strconv"
+	"strings"
+	"testing"
+	"unicode"
+	"unicode/utf8"
+)
+
+const (
+	docCountPath                  = "docs/project/pilot-differential.md"
+	docCountBaselinePath          = "docs/project/pilot-differential-baseline.json"
+	docCountReadmePath            = "README.md"
+	docCountArchitecturePath      = "docs/internals/architecture.md"
+	docCountSpecCompliancePath    = "docs/project/spec-compliance.md"
+	docCountReferenceMarker       = "**Reference differential:**"
+	docCountMeasuredStatusMarker  = "**Measured status:**"
+	docCountCurrentCoverageMarker = "**Current coverage:**"
+)
+
+type docLine struct {
+	number int
+	text   string
+}
+
+type docTable struct {
+	header     []string
+	headerLine int
+	rows       []docTableRow
+}
+
+type docTableRow struct {
+	line  int
+	cells []string
+}
+
+type docNumber struct {
+	start int
+	end   int
+	text  string
+	line  int
+}
+
+type docRuleCounts struct {
+	total          int
+	faithful       int
+	approximate    int
+	notImplemented int
+	knownFailure   int
+}
+
+var (
+	docHeadlinePattern       = regexp.MustCompile(`^## Results \(pilot ` + "`" + `([^` + "`" + `]+)` + "`" + `, ([0-9]+) files\)$`)
+	docParentheticalPattern  = regexp.MustCompile(`\s+\([^()]*\)$`)
+	docCategoryItemPattern   = regexp.MustCompile("^(\\d+)\\s+(`?[A-Za-z][A-Za-z0-9-]*`?)")
+	docNextCategoryPattern   = regexp.MustCompile(",\\s*\\d+\\s+`?[A-Za-z][A-Za-z0-9-]*`?")
+	docIntegerPattern        = regexp.MustCompile(`^-?[0-9]+$`)
+	docRootPattern           = regexp.MustCompile("(?s)^\\s*`([^`]+)`\\s*(.*)$")
+	docReferencePattern      = regexp.MustCompile("^\\*\\*Reference differential:\\*\\* ([0-9]+) files compared diagnostic-by-diagnostic against the pinned OMG pilot implementation \\(`([^`]+)`\\), ([0-9]+) in full agreement;")
+	docMeasuredStatusPattern = regexp.MustCompile(`^\*\*Measured status:\*\* of the ([0-9]+) semantic rules tracked in .*?, ([0-9]+) are ✅ faithful, ([0-9]+) ⚠️ approximate and ([0-9]+) ❌ not implemented\.`)
+	docCoveragePattern       = regexp.MustCompile(`^\*\*Current coverage:\*\* of the ([0-9]+) rules tracked in the compliance map, ([0-9]+) are faithful, ([0-9]+) approximate and ([0-9]+) not implemented`)
+	docMovementRowsUnchecked = map[string]bool{"new checks of ours": true}
+)
+
+// TestPilotDifferentialDocumentCountsMatchBaseline guards headline totals, Results cells and
+// root rows, per-category only-ours/only-pilot prose, and the movement table's Now column.
+// The committed baseline JSON is the only input; validators and corpora are unnecessary.
+// Causal claims, attributions, historical movement columns and adjudication-section counts are
+// out of scope: this checks numbers, not why they moved. It also guards the README and
+// architecture coverage claims against the compliance map.
+func TestPilotDifferentialDocumentCountsMatchBaseline(t *testing.T) {
+	lines := docReadNumberedDocument(t)
+	report := docReadBaselineReport(t)
+
+	heading := docRequireResultsHeading(t, lines)
+	docAssertHeadline(t, heading, report)
+
+	results := docRequireTable(t, lines, heading.number+1, "")
+	docAssertResultsTable(t, results, report)
+
+	categoryStart := docRequireLineContaining(t, lines, "Per category, the only-ours totals are:")
+	docAssertCategoryProse(t, lines, categoryStart, report)
+
+	movementStart := docRequireLineContaining(t, lines, "What has moved since the adjudication")
+	movement := docRequireTable(t, lines, movementStart.number+1, "Count")
+	docAssertMovementTable(t, movement, report)
+
+	readmeLines := docReadNumberedFile(t, docCountReadmePath)
+	architectureLines := docReadNumberedFile(t, docCountArchitecturePath)
+	ruleCounts := docReadSpecComplianceCounts(t)
+	docAssertReferenceLine(t, docRequireLineContainingPath(t, readmeLines, docCountReadmePath, docCountReferenceMarker), report)
+	docAssertRuleStatusLine(t, docCountReadmePath, docRequireLineContainingPath(t, readmeLines, docCountReadmePath, docCountMeasuredStatusMarker), ruleCounts, docMeasuredStatusPattern)
+	docAssertRuleStatusLine(t, docCountArchitecturePath, docRequireLineContainingPath(t, architectureLines, docCountArchitecturePath, docCountCurrentCoverageMarker), ruleCounts, docCoveragePattern)
+}
+
+func docReadNumberedDocument(t *testing.T) []docLine {
+	t.Helper()
+	return docReadNumberedFile(t, docCountPath)
+}
+
+func docReadNumberedFile(t *testing.T, path string) []docLine {
+	t.Helper()
+	content, err := os.ReadFile(filepath.FromSlash("../../" + path))
+	if err != nil {
+		t.Fatalf("%s:1: read document: %v", path, err)
+	}
+	raw := strings.Split(string(content), "\n")
+	lines := make([]docLine, len(raw))
+	for i, text := range raw {
+		lines[i] = docLine{number: i + 1, text: text}
+	}
+	return lines
+}
+
+func docReadBaselineReport(t *testing.T) Report {
+	t.Helper()
+	content, err := os.ReadFile(filepath.FromSlash("../../" + docCountBaselinePath))
+	if err != nil {
+		t.Fatalf("%s:1: read baseline: %v", docCountBaselinePath, err)
+	}
+	var report Report
+	if err := json.Unmarshal(content, &report); err != nil {
+		t.Fatalf("%s:1: parse baseline: %v", docCountBaselinePath, err)
+	}
+	return report
+}
+
+func docReadSpecComplianceCounts(t *testing.T) docRuleCounts {
+	t.Helper()
+	lines := docReadNumberedFile(t, docCountSpecCompliancePath)
+	counts := docRuleCounts{}
+	for _, line := range lines {
+		text := strings.TrimSpace(line.text)
+		if !strings.HasPrefix(text, "|") {
+			continue
+		}
+		cells := strings.Split(strings.Trim(text, "|"), "|")
+		hits := make([]rune, 0, 1)
+		for _, cell := range cells {
+			for _, marker := range []rune{'✅', '⚠', '❌', '🚧'} {
+				for range strings.Count(cell, string(marker)) {
+					hits = append(hits, marker)
+				}
+			}
+		}
+		if len(hits) != 1 {
+			continue
+		}
+		switch hits[0] {
+		case '✅':
+			counts.faithful++
+		case '⚠':
+			counts.approximate++
+		case '❌':
+			counts.notImplemented++
+		case '🚧':
+			counts.knownFailure++
+		}
+	}
+	counts.total = counts.faithful + counts.approximate + counts.notImplemented + counts.knownFailure
+	return counts
+}
+
+func docAssertReferenceLine(t *testing.T, line docLine, report Report) {
+	t.Helper()
+	match := docReferencePattern.FindStringSubmatchIndex(line.text)
+	if match == nil {
+		docFailPathAt(t, docCountReadmePath, line.number, "malformed Reference differential line")
+	}
+	consumed := append(
+		docNumbersInRange(line, match[2], match[3]),
+		docNumbersInRange(line, match[4], match[5])...,
+	)
+	consumed = append(consumed, docNumbersInRange(line, match[6], match[7])...)
+
+	gotFiles, err := strconv.Atoi(line.text[match[2]:match[3]])
+	if err != nil {
+		docFailPathAt(t, docCountReadmePath, line.number, "Reference differential files: malformed number %q", line.text[match[2]:match[3]])
+	}
+	if gotFiles != report.Totals.Files {
+		docErrorPathAt(t, docCountReadmePath, line.number, "Reference differential files: want %d (baseline totals.files), got %d", report.Totals.Files, gotFiles)
+	}
+	wantRelease := report.Pilot
+	if before, _, ok := strings.Cut(report.Pilot, " ("); ok {
+		wantRelease = before
+	}
+	gotRelease := line.text[match[4]:match[5]]
+	if gotRelease != wantRelease {
+		docErrorPathAt(t, docCountReadmePath, line.number, "Reference differential release: want %q (baseline pilotRelease), got %q", wantRelease, gotRelease)
+	}
+	gotAgreement, err := strconv.Atoi(line.text[match[6]:match[7]])
+	if err != nil {
+		docFailPathAt(t, docCountReadmePath, line.number, "Reference differential fully agreeing: malformed number %q", line.text[match[6]:match[7]])
+	}
+	if gotAgreement != report.Totals.FilesAgreeing {
+		docErrorPathAt(t, docCountReadmePath, line.number, "Reference differential fully agreeing: want %d (baseline totals.filesFullyAgreeing), got %d", report.Totals.FilesAgreeing, gotAgreement)
+	}
+	docAssertBareNumbersConsumed(t, docCountReadmePath, line, consumed, "Reference differential line")
+}
+
+func docAssertRuleStatusLine(t *testing.T, path string, line docLine, counts docRuleCounts, pattern *regexp.Regexp) {
+	t.Helper()
+	match := pattern.FindStringSubmatchIndex(line.text)
+	if match == nil {
+		docFailPathAt(t, path, line.number, "malformed coverage status line")
+	}
+	values := make([]int, 4)
+	for i := range values {
+		value, err := strconv.Atoi(line.text[match[2+i*2]:match[3+i*2]])
+		if err != nil {
+			docFailPathAt(t, path, line.number, "coverage count %d: malformed number %q", i+1, line.text[match[2+i*2]:match[3+i*2]])
+		}
+		values[i] = value
+	}
+	wants := []int{counts.total, counts.faithful, counts.approximate, counts.notImplemented}
+	sources := []string{
+		"spec-compliance.md total rows",
+		"spec-compliance.md ✅ rows",
+		"spec-compliance.md ⚠️ rows",
+		"spec-compliance.md ❌ rows",
+	}
+	labels := []string{"total", "✅ faithful", "⚠️ approximate", "❌ not implemented"}
+	for i := range values {
+		if values[i] != wants[i] {
+			docErrorPathAt(t, path, line.number, "coverage %s: want %d (%s), got %d", labels[i], wants[i], sources[i], values[i])
+		}
+	}
+	if counts.knownFailure != 0 {
+		docFailPathAt(t, path, line.number, "coverage status omits %d 🚧 rows from spec-compliance.md", counts.knownFailure)
+	}
+	sum := values[1] + values[2] + values[3]
+	if values[0] != sum {
+		docErrorPathAt(t, path, line.number, "coverage counts are internally inconsistent: total %d, status sum %d", values[0], sum)
+	}
+	consumed := make([]docNumber, 0, len(values))
+	for i := range values {
+		consumed = append(consumed, docNumbersInRange(line, match[2+i*2], match[3+i*2])...)
+	}
+	docAssertBareNumbersConsumed(t, path, line, consumed, "coverage status line")
+}
+
+func docNumbersInRange(line docLine, start, end int) []docNumber {
+	tokens := docBareNumberSpans(line.text[start:end])
+	for i := range tokens {
+		tokens[i].start += start
+		tokens[i].end += start
+		tokens[i].line = line.number
+	}
+	return tokens
+}
+
+func docAssertBareNumbersConsumed(t *testing.T, path string, line docLine, consumed []docNumber, context string) {
+	t.Helper()
+	for _, token := range docBareNumberTokens(line.text, []int{0}, []docLine{line}) {
+		if !docNumberWasConsumed(consumed, token) {
+			docErrorPathAt(t, path, token.line, "unaccounted number %q in %s", token.text, context)
+		}
+	}
+}
+
+func docRequireResultsHeading(t *testing.T, lines []docLine) docLine {
+	t.Helper()
+	for _, line := range lines {
+		if strings.HasPrefix(line.text, "## Results (pilot ") {
+			return line
+		}
+	}
+	docFailAt(t, 1, "missing Results heading")
+	return docLine{}
+}
+
+func docAssertHeadline(t *testing.T, heading docLine, report Report) {
+	t.Helper()
+	match := docHeadlinePattern.FindStringSubmatch(heading.text)
+	if match == nil {
+		docFailAt(t, heading.number, "malformed Results heading")
+	}
+	wantRelease := report.Pilot
+	if before, _, ok := strings.Cut(report.Pilot, " ("); ok {
+		wantRelease = before
+	}
+	if got := match[1]; got != wantRelease {
+		docErrorAt(t, heading.number, "headline release: want %q (baseline pilotRelease), got %q", wantRelease, got)
+	}
+	gotFiles, err := strconv.Atoi(match[2])
+	if err != nil {
+		docFailAt(t, heading.number, "headline files: malformed number %q", match[2])
+	}
+	if gotFiles != report.Totals.Files {
+		docErrorAt(t, heading.number, "headline files: want %d (baseline totals.files), got %d", report.Totals.Files, gotFiles)
+	}
+}
+
+func docRequireLineContaining(t *testing.T, lines []docLine, marker string) docLine {
+	t.Helper()
+	return docRequireLineContainingPath(t, lines, docCountPath, marker)
+}
+
+func docRequireLineContainingPath(t *testing.T, lines []docLine, path, marker string) docLine {
+	t.Helper()
+	for _, line := range lines {
+		if strings.Contains(line.text, marker) {
+			return line
+		}
+	}
+	docFailPathAt(t, path, 1, "missing required section marker %q", marker)
+	return docLine{}
+}
+
+func docRequireTable(t *testing.T, lines []docLine, from int, firstHeader string) docTable {
+	t.Helper()
+	for i := from - 1; i < len(lines); i++ {
+		if !docIsTableLine(lines[i].text) {
+			continue
+		}
+		header := docSplitTableCells(lines[i].text)
+		if firstHeader != "" && (len(header) == 0 || header[0] != firstHeader) {
+			continue
+		}
+		rows := make([]docTableRow, 0)
+		for j := i + 1; j < len(lines) && docIsTableLine(lines[j].text); j++ {
+			rows = append(rows, docTableRow{line: lines[j].number, cells: docSplitTableCells(lines[j].text)})
+		}
+		return docTable{header: header, headerLine: lines[i].number, rows: rows}
+	}
+	if firstHeader == "" {
+		docFailAt(t, from, "missing Results table")
+	} else {
+		docFailAt(t, from, "missing movement table with first header %q", firstHeader)
+	}
+	return docTable{}
+}
+
+func docIsTableLine(line string) bool {
+	return strings.HasPrefix(strings.TrimSpace(line), "|")
+}
+
+func docSplitTableCells(line string) []string {
+	line = strings.TrimSpace(line)
+	line = strings.TrimPrefix(line, "|")
+	line = strings.TrimSuffix(line, "|")
+	parts := strings.Split(line, "|")
+	for i := range parts {
+		parts[i] = strings.TrimSpace(parts[i])
+	}
+	return parts
+}
+
+func docIsSeparatorRow(cells []string) bool {
+	if len(cells) == 0 {
+		return false
+	}
+	for _, cell := range cells {
+		cell = strings.TrimSpace(cell)
+		if len(cell) < 3 || strings.Trim(cell, ":-") != "" {
+			return false
+		}
+	}
+	return true
+}
+
+func docAssertResultsTable(t *testing.T, results docTable, report Report) {
+	t.Helper()
+	wantHeader := []string{"Root", "Files", "Fully agreeing", "Ours", "Pilot", "Agreed", "Severity-only", "Only ours", "Only pilot"}
+	if len(results.header) != len(wantHeader) {
+		docFailAt(t, results.headerLine, "Results table header: want %q, got %q", wantHeader, results.header)
+	}
+	for i := range wantHeader {
+		if results.header[i] != wantHeader[i] {
+			docFailAt(t, results.headerLine, "Results table header column %d: want %q, got %q", i+1, wantHeader[i], results.header[i])
+		}
+	}
+
+	rootByDir := make(map[string]RootReport, len(report.Roots))
+	for _, root := range report.Roots {
+		rootByDir[root.Dir] = root
+	}
+	foundDirs := make(map[string]bool)
+	totalSeen := false
+	for _, row := range results.rows {
+		if docIsSeparatorRow(row.cells) {
+			continue
+		}
+		if len(row.cells) != len(wantHeader) {
+			docFailAt(t, row.line, "Results table row has %d cells, want %d", len(row.cells), len(wantHeader))
+		}
+		label := docStripMarkdown(row.cells[0])
+		label = docParentheticalPattern.ReplaceAllString(label, "")
+		if label == "Total" {
+			if totalSeen {
+				docFailAt(t, row.line, "Results table total row appears more than once")
+			}
+			totalSeen = true
+			docAssertTotalsRow(t, row, report.Totals)
+			continue
+		}
+		root, ok := rootByDir[label]
+		if !ok {
+			docFailAt(t, row.line, "Results table root %q is not in baseline roots", label)
+		}
+		if foundDirs[label] {
+			docFailAt(t, row.line, "Results table root %q appears more than once", label)
+		}
+		foundDirs[label] = true
+		docAssertTotalsCells(t, row, root.Totals, "roots["+root.Name+"].totals", "root "+root.Dir)
+	}
+	if !totalSeen {
+		docFailAt(t, results.headerLine, "Results table is missing the Total row")
+	}
+	wantDirs := make([]string, 0, len(report.Roots))
+	for _, root := range report.Roots {
+		wantDirs = append(wantDirs, root.Dir)
+	}
+	gotDirs := make([]string, 0, len(foundDirs))
+	for dir := range foundDirs {
+		gotDirs = append(gotDirs, dir)
+	}
+	sort.Strings(wantDirs)
+	sort.Strings(gotDirs)
+	if strings.Join(wantDirs, "\x00") != strings.Join(gotDirs, "\x00") {
+		docErrorAt(t, results.headerLine, "Results table root set: want %q (baseline roots[].dir), got %q", wantDirs, gotDirs)
+	}
+}
+
+func docAssertTotalsRow(t *testing.T, row docTableRow, totals Totals) {
+	t.Helper()
+	docAssertTotalsCells(t, row, totals, "totals", "root Total")
+}
+
+func docAssertTotalsCells(t *testing.T, row docTableRow, totals Totals, jsonPrefix, subject string) {
+	t.Helper()
+	columns := []struct {
+		header string
+		want   int
+		field  string
+	}{
+		{"Files", totals.Files, "files"},
+		{"Fully agreeing", totals.FilesAgreeing, "filesFullyAgreeing"},
+		{"Ours", totals.OpenSysMLTotal, "openSysMLDiagnostics"},
+		{"Pilot", totals.PilotTotal, "pilotDiagnostics"},
+		{"Agreed", totals.Agreement, "agreement"},
+		{"Severity-only", totals.SeverityMismatch, "severityMismatch"},
+		{"Only ours", totals.OpenSysMLOnly, "openSysMLOnly"},
+		{"Only pilot", totals.PilotOnly, "pilotOnly"},
+	}
+	for i, column := range columns {
+		got := docParseCellInteger(t, row, i+1, column.header)
+		if got != column.want {
+			docErrorAt(t, row.line, `%s column %q: want %d (baseline %s.%s), got %d`, subject, column.header, column.want, jsonPrefix, column.field, got)
+		}
+	}
+}
+
+func docParseCellInteger(t *testing.T, row docTableRow, cell int, label string) int {
+	t.Helper()
+	value := docStripMarkdown(row.cells[cell])
+	if !docIntegerPattern.MatchString(value) {
+		docFailAt(t, row.line, "column %q: expected integer, got %q", label, value)
+	}
+	got, err := strconv.Atoi(value)
+	if err != nil {
+		docFailAt(t, row.line, "column %q: malformed integer %q", label, value)
+	}
+	return got
+}
+
+func docStripMarkdown(value string) string {
+	value = strings.ReplaceAll(value, "**", "")
+	value = strings.ReplaceAll(value, "`", "")
+	return strings.TrimSpace(value)
+}
+
+func docAssertCategoryProse(t *testing.T, lines []docLine, start docLine, report Report) {
+	t.Helper()
+	paragraphLines := []docLine{start}
+	for i := start.number; i < len(lines) && strings.TrimSpace(lines[i].text) != ""; i++ {
+		paragraphLines = append(paragraphLines, lines[i])
+	}
+	text := make([]string, len(paragraphLines))
+	for i, line := range paragraphLines {
+		text[i] = line.text
+	}
+	paragraph := strings.Join(text, "\n")
+	onlyOursMarker := "only-ours totals are:"
+	onlyPilotMarker := "Only-pilot:"
+	oursAt := strings.Index(paragraph, onlyOursMarker)
+	pilotAt := strings.Index(paragraph, onlyPilotMarker)
+	if oursAt < 0 {
+		docFailAt(t, start.number, "category paragraph is missing marker %q", onlyOursMarker)
+	}
+	if pilotAt < 0 {
+		docFailAt(t, start.number, "category paragraph is missing marker %q", onlyPilotMarker)
+	}
+	if pilotAt <= oursAt+len(onlyOursMarker) {
+		docFailAt(t, start.number, "category paragraph markers are out of order")
+	}
+
+	starts := docParagraphLineStarts(paragraph)
+	prose := map[string]map[string]map[Category]int{}
+	proseLines := map[string]map[string]int{}
+	var consumed []docNumber
+	docParseCategoryPart(t, paragraph, starts, paragraphLines, oursAt+len(onlyOursMarker), pilotAt, "only-ours", report, prose, proseLines, &consumed)
+	docParseCategoryPart(t, paragraph, starts, paragraphLines, pilotAt+len(onlyPilotMarker), len(paragraph), "only-pilot", report, prose, proseLines, &consumed)
+
+	docAssertCategoryMaps(t, report, prose, proseLines)
+	for _, token := range docBareNumberTokens(paragraph, starts, paragraphLines) {
+		if !docNumberWasConsumed(consumed, token) {
+			docErrorAt(t, token.line, "unaccounted number %q in category paragraph", token.text)
+		}
+	}
+}
+
+func docParseCategoryPart(t *testing.T, paragraph string, starts []int, lines []docLine, from, to int, direction string, report Report, prose map[string]map[string]map[Category]int, proseLines map[string]map[string]int, consumed *[]docNumber) {
+	t.Helper()
+	part := paragraph[from:to]
+	partOffset := from
+	for len(part) > 0 {
+		semicolon := strings.IndexByte(part, ';')
+		rawSegment := part
+		if semicolon >= 0 {
+			rawSegment = part[:semicolon]
+		}
+		leading := len(rawSegment) - len(strings.TrimLeft(rawSegment, " \t\n"))
+		segmentStart := partOffset + leading
+		segment := strings.TrimSpace(rawSegment)
+		if segment == "" {
+			if semicolon < 0 {
+				break
+			}
+			partOffset += semicolon + 1
+			part = paragraph[partOffset:to]
+			continue
+		}
+		docParseCategorySegment(t, segment, segmentStart, starts, lines, direction, report, prose, proseLines, consumed)
+		if semicolon < 0 {
+			break
+		}
+		partOffset += semicolon + 1
+		part = paragraph[partOffset:to]
+	}
+}
+
+func docParseCategorySegment(t *testing.T, segment string, segmentStart int, starts []int, lines []docLine, direction string, report Report, prose map[string]map[string]map[Category]int, proseLines map[string]map[string]int, consumed *[]docNumber) {
+	t.Helper()
+	rootMatch := docRootPattern.FindStringSubmatchIndex(segment)
+	if rootMatch == nil {
+		if tokens := docBareNumberSpans(segment); len(tokens) > 0 {
+			token := tokens[0]
+			docErrorAt(t, docLineAt(starts, lines, segmentStart+token.start), "unaccounted number %q in category paragraph", token.text)
+		}
+		docFailAt(t, docLineAt(starts, lines, segmentStart), "category %s segment must start with a backticked root name: %q", direction, segment)
+	}
+	rootName := segment[rootMatch[2]:rootMatch[3]]
+	root, ok := docRootByName(report, rootName)
+	if !ok {
+		docFailAt(t, docLineAt(starts, lines, segmentStart+rootMatch[2]), "category %s names unknown root %q", direction, rootName)
+	}
+	restStart := segmentStart + rootMatch[4]
+	rest := segment[rootMatch[4]:rootMatch[5]]
+	if prose[direction] == nil {
+		prose[direction] = map[string]map[Category]int{}
+		proseLines[direction] = map[string]int{}
+	}
+	if prose[direction][rootName] == nil {
+		prose[direction][rootName] = map[Category]int{}
+	}
+	if _, exists := proseLines[direction][rootName]; !exists {
+		proseLines[direction][rootName] = docLineAt(starts, lines, segmentStart+rootMatch[2])
+	}
+
+	knownCategories := docReportCategories(report)
+	parsed := 0
+	for {
+		leading := len(rest) - len(strings.TrimLeft(rest, " \t\n"))
+		rest = rest[leading:]
+		restStart += leading
+		match := docCategoryItemPattern.FindStringSubmatchIndex(rest)
+		if match == nil {
+			if parsed == 0 {
+				docFailAt(t, docLineAt(starts, lines, restStart), "category %s root %q has no count/category items", direction, root.Name)
+			}
+			break
+		}
+		categoryText := strings.Trim(rest[match[4]:match[5]], "`")
+		category := Category(categoryText)
+		if !knownCategories[category] {
+			docFailAt(t, docLineAt(starts, lines, restStart+match[4]), "category %s root %q names unknown category %q", direction, root.Name, categoryText)
+		}
+		count, err := strconv.Atoi(rest[match[2]:match[3]])
+		if err != nil {
+			docFailAt(t, docLineAt(starts, lines, restStart), "category %s root %q has malformed count", direction, root.Name)
+		}
+		numberStart := restStart + match[2]
+		numberEnd := restStart + match[3]
+		boundary := docNextCategoryPattern.FindStringIndex(rest[match[1]:])
+		tailEnd := len(rest)
+		if boundary != nil {
+			tailEnd = match[1] + boundary[0]
+		}
+		tail := rest[match[1]:tailEnd]
+		if tokens := docBareNumberSpans(tail); len(tokens) > 0 {
+			token := tokens[0]
+			docErrorAt(t, docLineAt(starts, lines, restStart+match[1]+token.start), "unaccounted number %q in %s %s tail", token.text, direction, root.Name)
+		}
+		prose[direction][rootName][category] += count
+		*consumed = append(*consumed, docNumber{start: numberStart, end: numberEnd, text: rest[match[2]:match[3]], line: docLineAt(starts, lines, numberStart)})
+		parsed++
+		if boundary == nil {
+			break
+		}
+		nextStart := match[1] + boundary[0] + 1
+		restStart += nextStart
+		rest = rest[nextStart:]
+	}
+}
+
+func docAssertCategoryMaps(t *testing.T, report Report, prose map[string]map[string]map[Category]int, proseLines map[string]map[string]int) {
+	t.Helper()
+	for _, direction := range []string{"only-ours", "only-pilot"} {
+		for rootName, categories := range prose[direction] {
+			root, ok := docRootByName(report, rootName)
+			if !ok {
+				docFailAt(t, proseLines[direction][rootName], "root %s %s is not present in baseline roots", rootName, direction)
+			}
+			for category, got := range categories {
+				want := docCategoryTotal(root, direction, category)
+				if want == 0 || got != want {
+					docErrorAt(t, proseLines[direction][rootName], "root %s %s category %q: want %d (baseline roots[%s].files[].%s[].count), got %d", root.Name, direction, category, want, root.Name, docDirectionJSONField(direction), got)
+				}
+			}
+		}
+		for _, root := range report.Roots {
+			for category, want := range docCategoryTotals(root, direction) {
+				if want == 0 {
+					continue
+				}
+				if _, present := prose[direction][root.Name][category]; present {
+					continue
+				}
+				got := 0
+				line := proseLines[direction][root.Name]
+				if line == 0 {
+					line = 1
+				}
+				docErrorAt(t, line, "root %s %s category %q: want %d (baseline roots[%s].files[].%s[].count), got %d (missing from prose)", root.Name, direction, category, want, root.Name, docDirectionJSONField(direction), got)
+			}
+		}
+	}
+}
+
+func docRootByName(report Report, name string) (RootReport, bool) {
+	for _, root := range report.Roots {
+		if root.Name == name {
+			return root, true
+		}
+	}
+	return RootReport{}, false
+}
+
+func docReportCategories(report Report) map[Category]bool {
+	categories := map[Category]bool{}
+	for _, root := range report.Roots {
+		for _, file := range root.Files {
+			for _, entry := range file.OpenSysMLOnly {
+				categories[entry.Category] = true
+			}
+			for _, entry := range file.PilotOnly {
+				categories[entry.Category] = true
+			}
+		}
+	}
+	return categories
+}
+
+func docCategoryTotals(root RootReport, direction string) map[Category]int {
+	totals := map[Category]int{}
+	for _, file := range root.Files {
+		var entries []Entry
+		if direction == "only-ours" {
+			entries = file.OpenSysMLOnly
+		} else {
+			entries = file.PilotOnly
+		}
+		for _, entry := range entries {
+			totals[entry.Category] += entry.Count
+		}
+	}
+	return totals
+}
+
+func docCategoryTotal(root RootReport, direction string, category Category) int {
+	return docCategoryTotals(root, direction)[category]
+}
+
+func docDirectionJSONField(direction string) string {
+	if direction == "only-ours" {
+		return "openSysMLOnly"
+	}
+	return "pilotOnly"
+}
+
+func docParagraphLineStarts(paragraph string) []int {
+	starts := []int{0}
+	for i, char := range paragraph {
+		if char == '\n' {
+			starts = append(starts, i+1)
+		}
+	}
+	return starts
+}
+
+func docLineAt(starts []int, lines []docLine, offset int) int {
+	line := 0
+	for i, start := range starts {
+		if start > offset {
+			break
+		}
+		line = i
+	}
+	return lines[line].number
+}
+
+func docBareNumberSpans(text string) []docNumber {
+	var tokens []docNumber
+	for i := 0; i < len(text); {
+		if text[i] < '0' || text[i] > '9' || (i > 0 && docIsWordBefore(text, i)) {
+			i++
+			continue
+		}
+		j := i + 1
+		for j < len(text) && text[j] >= '0' && text[j] <= '9' {
+			j++
+		}
+		if j == len(text) || !docIsWordAt(text, j) {
+			tokens = append(tokens, docNumber{start: i, end: j, text: text[i:j]})
+		}
+		i = j
+	}
+	return tokens
+}
+
+func docBareNumberTokens(text string, starts []int, lines []docLine) []docNumber {
+	tokens := docBareNumberSpans(text)
+	for i := range tokens {
+		tokens[i].line = docLineAt(starts, lines, tokens[i].start)
+	}
+	return tokens
+}
+
+func docNumberWasConsumed(consumed []docNumber, token docNumber) bool {
+	for _, item := range consumed {
+		if item.start == token.start && item.end == token.end {
+			return true
+		}
+	}
+	return false
+}
+
+func docIsWordBefore(text string, offset int) bool {
+	_, size := utf8.DecodeLastRuneInString(text[:offset])
+	r, _ := utf8.DecodeLastRuneInString(text[offset-size : offset])
+	return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_'
+}
+
+func docIsWordAt(text string, offset int) bool {
+	r, _ := utf8.DecodeRuneInString(text[offset:])
+	return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_'
+}
+
+func docAssertMovementTable(t *testing.T, movement docTable, report Report) {
+	t.Helper()
+	now := -1
+	for i, header := range movement.header {
+		if header == "Now" {
+			now = i
+			break
+		}
+	}
+	if now < 0 {
+		docFailAt(t, movement.headerLine, "movement table is missing a Now column")
+	}
+	if len(movement.header) == 0 || movement.header[0] != "Count" {
+		docFailAt(t, movement.headerLine, "movement table first header: want %q, got %q", "Count", movement.header)
+	}
+	seen := map[string]bool{}
+	for _, row := range movement.rows {
+		if docIsSeparatorRow(row.cells) {
+			continue
+		}
+		if len(row.cells) <= now {
+			docFailAt(t, row.line, "movement table row has %d cells, missing Now column", len(row.cells))
+		}
+		label := docStripMarkdown(row.cells[0])
+		if seen[label] {
+			docFailAt(t, row.line, "movement table row %q appears more than once", label)
+		}
+		seen[label] = true
+		if docMovementRowsUnchecked[label] {
+			continue
+		}
+		if label == "overall: fully agreeing / only ours / our diagnostics" {
+			values := strings.Split(docStripMarkdown(row.cells[now]), "/")
+			if len(values) != 3 {
+				docFailAt(t, row.line, "movement row %q column %q: want three slash-separated counts, got %q", label, movement.header[now], row.cells[now])
+			}
+			wants := []struct {
+				value int
+				path  string
+			}{
+				{report.Totals.FilesAgreeing, "totals.filesFullyAgreeing"},
+				{report.Totals.OpenSysMLOnly, "totals.openSysMLOnly"},
+				{report.Totals.OpenSysMLTotal, "totals.openSysMLDiagnostics"},
+			}
+			for i, want := range wants {
+				got := docParseMovementInteger(t, row.line, strings.TrimSpace(values[i]), movement.header[now])
+				if got != want.value {
+					docErrorAt(t, row.line, "movement row %q item %d column %q: want %d (baseline %s), got %d", label, i+1, movement.header[now], want.value, want.path, got)
+				}
+			}
+			continue
+		}
+		want, jsonPath, ok := docMovementValue(report, label)
+		if !ok {
+			docFailAt(t, row.line, "movement table row %q is not mapped or allowlisted", label)
+		}
+		got := docParseCellInteger(t, docTableRow{line: row.line, cells: row.cells}, now, "Now")
+		if got != want {
+			docErrorAt(t, row.line, "movement row %q column %q: want %d (baseline %s), got %d", label, movement.header[now], want, jsonPath, got)
+		}
+	}
+}
+
+func docParseMovementInteger(t *testing.T, line int, value, column string) int {
+	t.Helper()
+	if !docIntegerPattern.MatchString(value) {
+		docFailAt(t, line, "column %q: expected integer, got %q", column, value)
+	}
+	got, err := strconv.Atoi(value)
+	if err != nil {
+		docFailAt(t, line, "column %q: malformed integer %q", column, value)
+	}
+	return got
+}
+
+func docMovementValue(report Report, label string) (int, string, bool) {
+	switch label {
+	case "unmapped, our side":
+		total := 0
+		for _, row := range report.Unmapped {
+			if row.Side == "opensysml" {
+				total += row.Count
+			}
+		}
+		return total, "unmapped[side=opensysml].count", true
+	}
+	for _, root := range report.Roots {
+		prefix := root.Name + ": "
+		if !strings.HasPrefix(label, prefix) {
+			continue
+		}
+		switch strings.TrimPrefix(label, prefix) {
+		case "only ours":
+			return root.Totals.OpenSysMLOnly, "roots[" + root.Name + "].totals.openSysMLOnly", true
+		case "only pilot":
+			return root.Totals.PilotOnly, "roots[" + root.Name + "].totals.pilotOnly", true
+		case "fully agreeing":
+			return root.Totals.FilesAgreeing, "roots[" + root.Name + "].totals.filesFullyAgreeing", true
+		}
+	}
+	return 0, "", false
+}
+
+func docFailAt(t *testing.T, line int, format string, args ...any) {
+	t.Helper()
+	docFailPathAt(t, docCountPath, line, format, args...)
+}
+
+func docErrorAt(t *testing.T, line int, format string, args ...any) {
+	t.Helper()
+	docErrorPathAt(t, docCountPath, line, format, args...)
+}
+
+func docFailPathAt(t *testing.T, path string, line int, format string, args ...any) {
+	t.Helper()
+	t.Fatalf("%s:%d: %s", path, line, fmt.Sprintf(format, args...))
+}
+
+func docErrorPathAt(t *testing.T, path string, line int, format string, args ...any) {
+	t.Helper()
+	t.Errorf("%s:%d: %s", path, line, fmt.Sprintf(format, args...))
+}
