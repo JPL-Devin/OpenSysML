@@ -302,14 +302,3 @@ func enclosedBy(sym, owner *symbols.Symbol) bool {
 	}
 	return false
 }
-
-// declaresGeneralization reports whether rels contain a conformance edge, which
-// makes a declaration take its supertypes from the declaration itself.
-func declaresGeneralization(rels []*ast.Relationship) bool {
-	for _, rel := range rels {
-		if rel != nil && GeneralizationKind(rel.Kind) {
-			return true
-		}
-	}
-	return false
-}
