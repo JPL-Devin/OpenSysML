@@ -205,8 +205,7 @@ func (ec *EvalContext) applyBody(body *ast.BodyExpr, args ...Value) (Value, erro
 	// can name, not only a runtime binding.
 	inner := ec
 	if ec.scope != nil {
-		bodyScope := symbols.BodyExprScope(ec.scope, body)
-		inner = ec.evalIn(bodyScope)
+		inner = ec.evalIn(symbols.BodyExprScope(ec.scope, body))
 	}
 	return inner.Eval(body.Result)
 }
