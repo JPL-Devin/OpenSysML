@@ -9,11 +9,12 @@ const msgTopLevelImportPrivate = "Top level import must be private"
 
 // TopLevelImportPass checks that an import owned by the root namespace is
 // private (KerML 8.2.3.4.2, validateImportTopLevelVisibility): a root namespace
-// has no owner, so a non-private import there exports into nothing. It runs
-// above LevelSyntax so a recovered parse is not reported on twice.
+// has no owner, so a non-private import there exports into nothing. It runs at
+// the constraint tier so a recovered parse is not reported on twice and this
+// error does not gate the type and constraint tiers.
 type TopLevelImportPass struct{}
 
-func (TopLevelImportPass) Level() PassLevel { return LevelNameResolution }
+func (TopLevelImportPass) Level() PassLevel { return LevelConstraint }
 
 func (TopLevelImportPass) Run(ctx *Context, name string, root *ast.RootNamespace) []Diagnostic {
 	if root == nil {

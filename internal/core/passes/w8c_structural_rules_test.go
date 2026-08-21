@@ -65,11 +65,8 @@ func TestW8CReferenceSubsettingLegal(t *testing.T) {
 
 func TestW8CTopLevelImportMustBePrivate(t *testing.T) {
 	src := "public import ScalarValues::*;\npackage P {\n\tpublic import ScalarValues::*;\n}"
-	root := parser.New(source.New("<t>.kerml", []byte(src))).ParseFile()
-	idx := symbols.NewIndex()
-	idx.AddDocument("<t>.kerml", root)
 	var got []Diagnostic
-	for _, d := range Analyze("<t>.kerml", root, nil, idx) {
+	for _, d := range w8cLibraryDiagnostics(t, "import-public.kerml", src) {
 		if d.Message == msgTopLevelImportPrivate {
 			got = append(got, d)
 		}
@@ -85,15 +82,7 @@ func TestW8CTopLevelImportMustBePrivate(t *testing.T) {
 
 func TestW8CTopLevelImportProtectedIsReported(t *testing.T) {
 	src := "protected import ScalarValues::*;\n"
-	root := parser.New(source.New("<t>.kerml", []byte(src))).ParseFile()
-	idx := symbols.NewIndex()
-	idx.AddDocument("<t>.kerml", root)
-	var n int
-	for _, d := range Analyze("<t>.kerml", root, nil, idx) {
-		if d.Message == msgTopLevelImportPrivate {
-			n++
-		}
-	}
+	n := w8cCount(w8cLibraryMessagesIn(t, "import-protected.kerml", src), msgTopLevelImportPrivate)
 	if n != 1 {
 		t.Errorf("want one %q, got %d", msgTopLevelImportPrivate, n)
 	}
@@ -101,13 +90,8 @@ func TestW8CTopLevelImportProtectedIsReported(t *testing.T) {
 
 func TestW8CTopLevelImportPrivateIsLegal(t *testing.T) {
 	src := "private import ScalarValues::*;\nexpose ScalarValues::*;\npackage P {\n}"
-	root := parser.New(source.New("<t>.kerml", []byte(src))).ParseFile()
-	idx := symbols.NewIndex()
-	idx.AddDocument("<t>.kerml", root)
-	for _, d := range Analyze("<t>.kerml", root, nil, idx) {
-		if d.Message == msgTopLevelImportPrivate {
-			t.Errorf("unexpected %q", d.Message)
-		}
+	if n := w8cCount(w8cLibraryMessagesIn(t, "import-private.kerml", src), msgTopLevelImportPrivate); n != 0 {
+		t.Errorf("unexpected %q", msgTopLevelImportPrivate)
 	}
 }
 
