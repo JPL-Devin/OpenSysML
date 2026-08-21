@@ -6,7 +6,6 @@
 # files: kerml-examples 58
 # files: sysml-examples 98
 # files: sysml-validation 56
-1	kerml-examples/Simple Tests/Associations.kerml
 3	kerml-examples/Simple Tests/Circular.kerml
 1	kerml-examples/Simple Tests/MetadataTest.kerml
 1	sysml-examples/Analysis Examples/Turbojet Stage Analysis.sysml

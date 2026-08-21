@@ -79,15 +79,17 @@ func (cc *constraintChecker) walk(scope *symbols.Scope) {
 func (cc *constraintChecker) check(sym *symbols.Symbol) {
 	cc.checkSpecializationCycle(sym)
 	cc.checkMultiplicityRange(sym)
-	cc.checkSubsettingMultiplicity(sym)
+	cc.checkMultiplicityConformance(sym)
 	cc.checkConnectorEnds(sym)
 	cc.checkConnectorEndRedefinition(sym)
 	cc.checkFlowEndSubsetting(sym)
 	cc.checkInterfaceEndConjugation(sym)
 	cc.checkRedefinition(sym)
+	cc.checkSubsettingFeaturingTypes(sym)
 	cc.checkUnnamedRedefinitionValue(sym)
 	cc.checkVariantOutsideVariation(sym)
 	cc.checkViewSatisfyTarget(sym)
+	cc.checkAtMostOneMember(sym)
 }
 
 // checkFlowEndSubsetting requires each declared flow end to name a payload
@@ -216,57 +218,6 @@ func (cc *constraintChecker) checkMultiplicityRange(sym *symbols.Symbol) {
 		Code:     "multiplicity-range",
 		Source:   "constraint",
 	})
-}
-
-// checkSubsettingMultiplicity flags a subsetting usage whose upper bound exceeds
-// the upper bound of a usage it subsets (design §4.1): a subset may not admit
-// more elements than its superset. Bounds that are not evaluable are skipped.
-func (cc *constraintChecker) checkSubsettingMultiplicity(sym *symbols.Symbol) {
-	subRange, ok := cc.model.MultiplicityOf(sym)
-	if !ok || !subRange.Upper.Known {
-		return
-	}
-	for _, rel := range semantics.RelationshipsOf(sym) {
-		if rel == nil || rel.Target == nil || rel.Kind != ast.RelSubsets {
-			continue
-		}
-		// Unwrap FeatureReference if needed
-		targetNode := rel.Target
-		if fr, ok := targetNode.(*ast.FeatureReference); ok {
-			targetNode = fr.Name
-		}
-		qn, isQN := targetNode.(*ast.QualifiedName)
-		if !isQN {
-			continue
-		}
-		target, resolved := cc.resolver.ResolveQualified(sym.OwnerScope, qn)
-		if !resolved || target == nil {
-			continue
-		}
-		if canonical, aliasOK := cc.resolver.ResolveAliasTarget(target); aliasOK {
-			target = canonical
-		} else {
-			continue
-		}
-		superRange, ok := cc.model.MultiplicityOf(target)
-		if !ok || !superRange.Upper.Known {
-			continue
-		}
-		if superRange.Upper.Infinite {
-			continue // superset is unbounded: any subset upper conforms
-		}
-		if subRange.Upper.Infinite || subRange.Upper.Value > superRange.Upper.Value {
-			cc.diags = append(cc.diags, Diagnostic{
-				Severity: SeverityError,
-				Span:     rel.Target.Span(),
-				Message: fmt.Sprintf(
-					"subsetting %s: upper bound exceeds subsetted %s",
-					sym.Name, target.Name),
-				Code:   "subsetting-multiplicity",
-				Source: "constraint",
-			})
-		}
-	}
 }
 
 // checkConnectorEnds validates the declared ends of connector-like usages
@@ -506,46 +457,6 @@ func (cc *constraintChecker) checkRedefinition(sym *symbols.Symbol) {
 						"%s (typed by %s) redefines %s (typed by %s): types do not conform",
 						sym.Name, usageType.Name, redefined.Name, redefinedType.Name),
 					Code:   "redefinition-type-mismatch",
-					Source: "constraint",
-				})
-			}
-		}
-
-		// Check multiplicity bounds (SysML: redefining multiplicity must tighten)
-		symMult, symOk := cc.model.MultiplicityOf(sym)
-		redefinedMult, redefinedOk := cc.model.MultiplicityOf(redefined)
-
-		// Only validate if both multiplicities are known and evaluable.
-		// MultiplicityOf returns ok=false for non-usages or missing multiplicity.
-		// Bound.Known=false means expression is not model-level-evaluable.
-		// This guards against nil/uninitialized bounds and non-evaluable expressions.
-		if symOk && redefinedOk && symMult.Lower.Known && symMult.Upper.Known &&
-			redefinedMult.Lower.Known && redefinedMult.Upper.Known {
-			// Lower bound must be >= redefined lower bound
-			lowerViolated := false
-			if !symMult.Lower.Infinite && !redefinedMult.Lower.Infinite {
-				lowerViolated = symMult.Lower.Value < redefinedMult.Lower.Value
-			}
-
-			// Upper bound must be <= redefined upper bound (or both unbounded)
-			upperViolated := false
-			if !redefinedMult.Upper.Infinite { // redefined has finite upper bound
-				if symMult.Upper.Infinite { // sym is unbounded
-					upperViolated = true
-				} else if symMult.Upper.Value > redefinedMult.Upper.Value {
-					upperViolated = true
-				}
-			}
-
-			if lowerViolated || upperViolated {
-				cc.diags = append(cc.diags, Diagnostic{
-					Severity: SeverityError,
-					Span:     rel.Target.Span(),
-					Message: fmt.Sprintf(
-						"%s [%s..%s] redefines %s [%s..%s]: multiplicity bounds incompatible",
-						sym.Name, formatBound(symMult.Lower), formatBound(symMult.Upper),
-						redefined.Name, formatBound(redefinedMult.Lower), formatBound(redefinedMult.Upper)),
-					Code:   "redefinition-multiplicity",
 					Source: "constraint",
 				})
 			}
