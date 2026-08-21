@@ -8,11 +8,8 @@
 # files: sysml-validation 56
 1	kerml-examples/Simple Tests/Associations.kerml
 3	kerml-examples/Simple Tests/Circular.kerml
-2	kerml-examples/Simple Tests/Conjugation.kerml
-1	kerml-examples/Simple Tests/Features.kerml
 3	kerml-examples/Simple Tests/Filtering.kerml
 1	kerml-examples/Simple Tests/MetadataTest.kerml
-4	kerml-examples/Simple Tests/Types.kerml
 1	sysml-examples/Analysis Examples/Turbojet Stage Analysis.sysml
 15	sysml-examples/Arrowhead Framework Example/AHFSequences.sysml
 6	sysml-examples/Cause and Effect Examples/CauseAndEffectExample.sysml
