@@ -310,8 +310,9 @@ func behaviorsExcept(behaviors []*ObjectBehavior, dropped map[*ObjectBehavior]bo
 func (ctx *Context) drainObjectBehaviors() error {
 	for rounds := int64(0); ; rounds++ {
 		if rounds >= ctx.maxStateEvents {
-			return fmt.Errorf("%w: exceeded max events (%d rounds; raise %s to allow more), possible non-terminating exchange between objects",
-				ErrBehaviorBudget, ctx.maxStateEvents, MaxStateEventsEnvVar)
+			return budgetExceeded(ErrStateEventLimitExceeded,
+				fmt.Sprintf("%s: exceeded max events (%d rounds; raise %s to allow more), possible non-terminating exchange between objects",
+					ErrBehaviorBudget, ctx.maxStateEvents, MaxStateEventsEnvVar), ErrBehaviorBudget)
 		}
 		behavior, ok := ctx.nextRunnableBehavior()
 		if !ok {
