@@ -178,6 +178,43 @@ func TestVisibleNamesSubsettingDoesNotMask(t *testing.T) {
 	has(t, names, []string{"A.a", "B.a", "B.b"}, nil)
 }
 
+// The cases below pin the composition of the two filters on one enumeration:
+// membership visibility (KerML 8.2.3.5) and redefinition masking (7.4.7).
+func TestVisibleNamesRedefinitionMasksAProtectedInheritedMember(t *testing.T) {
+	src := "package test {\n\tfeature A {\n\t\tprotected feature a;\n\t}\n" +
+		"\tfeature B subsets A {\n\t\tfeature %s;\n\t\tfeature keep;\n\t}\n\tfeature X;\n}\n"
+	// Inside B a protected inherited member is visible, so its absence is the
+	// mask and nothing else: subsetting the same feature keeps it.
+	masking := strings.Replace(src, "%s", "b redefines a", 1)
+	has(t, namesAt(t, masking, "feature keep", VisibleNamesOptions{}), []string{"b", "keep"}, []string{"a", "B.a"})
+	subsetting := strings.Replace(src, "%s", "b subsets a", 1)
+	has(t, namesAt(t, subsetting, "feature keep", VisibleNamesOptions{}), []string{"a", "b"}, nil)
+	// From outside, `B.a` is gone twice over — masked, and protected members
+	// cannot be named through their namespace — and `A.a` for the second reason.
+	has(t, namesAt(t, masking, "feature X", VisibleNamesOptions{}), []string{"B.b", "B.keep"}, []string{"B.a", "A.a"})
+}
+
+func TestVisibleNamesRedefinedNameWithNoVisiblePathIsGone(t *testing.T) {
+	// The redefinition target is private, so no path reaches it: not as an
+	// inherited member of B, and not as `A::a` either (8A). The name is absent
+	// whether or not the target resolves well enough to mask anything.
+	src := "package test {\n\tfeature A {\n\t\tprivate feature a;\n\t}\n" +
+		"\tfeature B subsets A {\n\t\tfeature b redefines A::a;\n\t\tfeature keep;\n\t}\n}\n"
+	names := namesAt(t, src, "feature keep", VisibleNamesOptions{})
+	has(t, names, []string{"b", "keep", "B.b"}, []string{"a", "A.a", "B.a"})
+}
+
+func TestVisibleNamesMaskingLeavesAnotherRouteToTheElement(t *testing.T) {
+	// Masking removes B's inherited member, not every path to the element: the
+	// import route survives inside the namespace declaring it, where 8A admits
+	// a private import, while `Q.B.a` is gone.
+	src := "package P {\n\tfeature A {\n\t\tfeature a;\n\t}\n}\n" +
+		"package Q {\n\tprivate import P::A::*;\n" +
+		"\tfeature B subsets P::A {\n\t\tfeature b redefines a;\n\t\tfeature keep;\n\t}\n}\n"
+	names := namesAt(t, src, "feature keep", VisibleNamesOptions{})
+	has(t, names, []string{"a", "P.A.a", "b", "keep"}, []string{"Q.B.a", "B.a"})
+}
+
 func TestElementOnPathResolvesSegmentsAndAliases(t *testing.T) {
 	src := "package P {\n\tclassifier A {\n\t\tclassifier a1;\n\t}\n\talias AA for A;\n}\n"
 	ws := NewWorkspace()

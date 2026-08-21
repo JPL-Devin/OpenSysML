@@ -212,7 +212,7 @@ func (nw *nameWalk) locals(s *symbols.Scope, prefix string, depth int, inside, i
 	// binds a name to another element (KerML 7.3.4.4).
 	for _, name := range s.MemberNames() {
 		for _, sym := range s.LookupLocalAll(name) {
-			if !visibleAs(sym.Visibility, inside, inheriting) {
+			if !symbols.VisibleAs(sym.Visibility, inside, inheriting) {
 				continue
 			}
 			if decl.hide && semantics.NotYetMember(sym, decl.sym) {
@@ -232,8 +232,10 @@ func (nw *nameWalk) inherited(owner *symbols.Symbol, prefix string, depth int, i
 	if owner == nil || owner.Kind == symbols.SymbolPackage || owner.Kind == symbols.SymbolNamespace {
 		return
 	}
+	// One filter chain: the semantic member view drops what a redefinition
+	// masks, then membership visibility drops what cannot be named here.
 	for _, sym := range nw.membersOf(owner) {
-		if !visibleAs(sym.Visibility, false, inheriting) {
+		if !symbols.VisibleAs(sym.Visibility, false, inheriting) {
 			continue
 		}
 		nw.add(prefix, leafName(sym.Name), sym, depth)
@@ -246,7 +248,7 @@ func (nw *nameWalk) inherited(owner *symbols.Symbol, prefix string, depth int, i
 			continue
 		}
 		for _, child := range nw.idx.LookupDirectChildrenFrom(nw.fqnOf(src), "") {
-			if !visibleAs(child.Visibility, false, inheriting) {
+			if !symbols.VisibleAs(child.Visibility, false, inheriting) {
 				continue
 			}
 			nw.add(prefix, leafName(child.Name), child, depth)
@@ -362,19 +364,6 @@ func (nw *nameWalk) fqnOf(sym *symbols.Symbol) string {
 		return fqn
 	}
 	return sym.Name
-}
-
-// visibleAs reports whether a member of the stated visibility is seen from
-// outside its namespace (inside), or through a specialization (inheriting).
-func visibleAs(v ast.Visibility, inside, inheriting bool) bool {
-	switch v {
-	case ast.VisibilityPrivate:
-		return inside
-	case ast.VisibilityProtected:
-		return inside || inheriting
-	default:
-		return true
-	}
 }
 
 // importedName is the last name segment a membership import writes.
