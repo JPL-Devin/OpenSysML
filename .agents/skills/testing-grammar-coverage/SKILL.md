@@ -20,9 +20,11 @@ form-level unseen diagnostics.
 - All eight corpus roots must be present, which takes two more downloads: the OMG training corpus
   (`./scripts/download-training-examples.sh`) and the OMG example/validation corpora
   (`./scripts/download-pilot-corpora.sh`, which writes `examples/pilot-corpora/`, 212 of the files).
-  A missing corpus silently lowers the file count (expect `searched 536 corpus file(s) for 217
-  distinct literal(s)` when everything is present) and shifts every bucket — check that line before
-  believing a diff, since `cmp` against the committed baseline fails on the root stats alone.
+  A missing corpus silently lowers the file count and shifts every bucket. Compare the
+  `searched N corpus file(s)` line with the count implied by the committed baseline's `roots`
+  entries (the sum of their `files` values). A mismatch means either the corpus or the committed
+  baseline is stale; do not diagnose it as a missing corpus from the count alone. No test enforces
+  reproduction of the compact baseline, so it can go stale silently when fixtures are added.
 
 ## The core check
 

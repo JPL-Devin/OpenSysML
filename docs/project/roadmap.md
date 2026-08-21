@@ -24,13 +24,13 @@ Full gate green: `gofmt -l .` empty, `go build ./...`, `go vet ./...`,
 |---|---|
 | OMG training corpus | **100/100 clean** — no file reports a semantic error |
 | Stdlib parser conformance | 95/95 clean — 94 vendored OMG files and 1 non-normative OpenSysML extension |
-| Execution conformance cases | 338 |
-| gRPC conformance fixtures | 14 |
-| Golden execution traces | 106 |
-| Runtime robustness cases | 194 |
+| Execution conformance cases | 344 |
+| gRPC conformance fixtures | 15 |
+| Golden execution traces | 109 |
+| Runtime robustness cases | 195 |
 | gRPC robustness cases | 8 |
-| Golden AST fixtures | 90 |
-| Negative parser subtests | 135 |
+| Golden AST fixtures | 107 |
+| Negative parser subtests | 167 |
 
 Statement coverage, measured with `go test -cover ./...` at the baseline commit. It counts only
 each package's own tests, which understates a package consumed by others: `internal/core/ast`
