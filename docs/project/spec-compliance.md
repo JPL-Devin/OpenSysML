@@ -995,15 +995,16 @@ leaving each scope's declarations, inherited members and imports intact, so a
 
 ---
 
-### Pilot Constraint Rules We Do Not Implement (P6 of the pilot differential)
+### Pilot Constraint Rules from the P6 Adjudication (F20–F23)
 
-Four constraint-tier rules the pinned reference implementation (pilot `2026-05`)
-enforces and we do not. They were adjudicated diagnostic by diagnostic in
+Four constraint-tier rules from the pinned reference implementation (pilot `2026-05`)
+are covered here. They were adjudicated diagnostic by diagnostic in
 [pilot-differential.md](pilot-differential.md) (§P6, follow-ups F20–F23) against
-minimal reproducers run through that reference; the rule text is its validator
+minimal reproducers run through that reference; F21 is implemented faithfully,
+F22 and F23 are approximate with divergences named in their rows, and F20 remains
+unimplemented. The rule text is its validator
 (`org.omg.kerml.xtext/.../KerMLValidator.xtend`) plus the constraint text on the
-generated metamodel. Nothing here is implemented, so the "Implementation" column
-names where the rule would belong rather than where it lives.
+generated metamodel.
 
 | Semantic Rule | Implementation | Test Case | Status |
 |--------------|----------------|-----------|--------|
