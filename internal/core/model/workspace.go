@@ -32,6 +32,12 @@ func NewWorkspace() *Workspace {
 	// Load stdlib into global index
 	libs.LoadInto(idx)
 
+	return NewWorkspaceWithIndex(idx)
+}
+
+// NewWorkspaceWithIndex returns a workspace over a caller-built index, for a
+// consumer whose resource set is not the bundled standard library.
+func NewWorkspaceWithIndex(idx *symbols.Index) *Workspace {
 	return &Workspace{
 		docs:      map[string]*Document{},
 		onDisk:    map[string][]byte{},

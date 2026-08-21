@@ -200,14 +200,20 @@ func TestNamespaceImportSkipsAPrivatelyImportedCachedName(t *testing.T) {
 	}
 }
 
-func TestQualifiedAccessIgnoresPrivate(t *testing.T) {
+// A qualified name reaches a namespace's visible memberships only, so a private
+// member is unreachable through one: the pilot rejects `A::X` for a private X
+// with "Couldn't resolve reference to Classifier 'A::X'" (KerML 8.2.3.5).
+func TestQualifiedAccessSkipsPrivate(t *testing.T) {
 	idx := indexOf(t, map[string]string{
-		"lib.sysml": "package Lib { private namespace Sec; }",
+		"lib.sysml": "package Lib { private namespace Sec; public namespace Open; }",
 	})
 	root := idx.DocumentRoot("lib.sysml")
 
 	r := New(idx)
-	if _, ok := r.ResolveQualified(root, qn(false, "Lib", "Sec")); !ok {
-		t.Fatalf("expected qualified path Lib::Sec to resolve even though Sec is private")
+	if sym, ok := r.ResolveQualified(root, qn(false, "Lib", "Sec")); ok {
+		t.Errorf("Lib::Sec resolved to %q, want unresolved: Sec is private", sym.Name)
+	}
+	if _, ok := r.ResolveQualified(root, qn(false, "Lib", "Open")); !ok {
+		t.Error("Lib::Open did not resolve, want the public member reachable")
 	}
 }
