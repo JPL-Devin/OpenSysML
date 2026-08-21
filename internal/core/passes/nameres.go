@@ -35,8 +35,12 @@ func (NameResolutionPass) Run(ctx *Context, name string, root *ast.RootNamespace
 				code = "ambiguous"
 			}
 		}
+		severity := SeverityError
+		if d.Warning {
+			severity = SeverityWarning
+		}
 		out = append(out, Diagnostic{
-			Severity: SeverityError,
+			Severity: severity,
 			Span:     d.Span,
 			Message:  d.Message,
 			Code:     code,

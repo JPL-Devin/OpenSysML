@@ -74,6 +74,7 @@ func TestPassesGoldenImportNoVisibility(t *testing.T) {
 	runPassesGolden(t, "import_no_visibility")
 }
 
-// The corpus notation stays clean at every tier: a regression in the conjugated
-// end or the portion prefix is a false positive on a flagship model.
+// The corpus notation reports only the two duplicate-name warnings the pinned
+// validator reports on the same fixture, at the same positions (matched run,
+// w6c): a regression in the conjugated end or portion prefix would add more.
 func TestPassesGoldenCorpusNotation(t *testing.T) { runPassesGolden(t, "corpus_notation") }
