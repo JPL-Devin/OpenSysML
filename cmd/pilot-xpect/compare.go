@@ -2,9 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"path"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -78,6 +75,8 @@ type fileResult struct {
 	Ignored []string `json:"ignored,omitempty"`
 	// Missing lists declared resources that are absent from the download.
 	Missing []string `json:"missing,omitempty"`
+	// Foreign counts diagnostics dropped as another resource's, see elsewhere.
+	Foreign int `json:"foreignDiagnostics,omitempty"`
 }
 
 // diag is one of our diagnostics, reduced to what an assertion declares.
@@ -88,49 +87,37 @@ type diag struct {
 	Message  string
 }
 
+// foreignDiagnostic reports whether a diagnostic lands outside the file's model
+// text — inside a note or past its end — so it was raised for another declared
+// resource and is not the file's to answer for.
+func foreignDiagnostic(f xtFile, offset int) bool {
+	if offset < 0 || offset >= len(f.Noted) {
+		return true
+	}
+	return f.Noted[offset]
+}
+
 // compareFile loads the resource set the file's setup declares and adjudicates
 // every assertion in it.
-func compareFile(suiteDir string, f xtFile) fileResult {
+func compareFile(suiteDir string, f xtFile, libs *libraryCache) fileResult {
 	res := fileResult{Path: f.Path, SetupClass: f.SetupClass, Problems: f.Problems, Ignored: f.Ignored}
 	if len(f.Problems) > 0 {
 		return res
 	}
 
-	ws := model.NewWorkspace()
+	set := loadResourceSet(suiteDir, f, libs)
+	ws, libraryRoots := set.ws, set.libraryRoots
+	res.Missing = set.missing
 	main := strings.TrimSuffix(f.Path, ".xt")
-	var libraryRoots []string
-	for _, r := range f.Resources {
-		if r.ThisFile {
-			continue
-		}
-		// Our workspace embeds the standard library, so a declared copy of it
-		// is not loaded again: it only records which roots are in scope here.
-		if isLibrary(r.From) {
-			libraryRoots = append(libraryRoots, rootPackagesOf(suiteDir, r.From)...)
-			continue
-		}
-		// A declared path is either project-relative (`/a/b.kerml`) or beside
-		// the .xt file itself.
-		rel := strings.TrimPrefix(r.From, "/")
-		if !strings.HasPrefix(r.From, "/") {
-			rel = path.Join(path.Dir(f.Path), r.From)
-		}
-		// #nosec G304 -- the suite directory is named on the command line.
-		content, err := os.ReadFile(filepath.Join(suiteDir, filepath.FromSlash(rel)))
-		if err != nil {
-			res.Missing = append(res.Missing, r.From)
-			continue
-		}
-		ws.Open(rel, content, 1)
-	}
-	ws.Open(main, f.Content, 1)
-	sort.Strings(res.Missing)
-	res.Missing = dedupe(res.Missing)
 
 	src := squeeze(f.Masked)
 	lines := source.New(main, f.Content).Lines()
 	var diags []diag
 	for _, d := range ws.Diagnostics(main) {
+		if foreignDiagnostic(f, d.Span.Offset) {
+			res.Foreign++
+			continue
+		}
 		diags = append(diags, diag{
 			Offset:   d.Span.Offset,
 			Line:     lines.PosAt(d.Span.Offset).Line,
@@ -139,8 +126,6 @@ func compareFile(suiteDir string, f xtFile) fileResult {
 		})
 	}
 
-	sort.Strings(libraryRoots)
-	libraryRoots = dedupe(libraryRoots)
 	for _, a := range f.Assertions {
 		res.Rows = append(res.Rows, adjudicate(ws, main, a, diags, lines, src, libraryRoots)...)
 	}
@@ -178,6 +163,8 @@ func adjudicate(ws *model.Workspace, main string, a assertion, diags []diag, lin
 		return []row{linkedNameRow(ws, main, a, src)}
 	case kindScope:
 		return []row{scopeRow(ws, main, a, src, libraryRoots)}
+	case kindExportedObjects:
+		return []row{exportedObjectsRow(ws, main, a)}
 	default:
 		return []row{{
 			Kind: a.Kind, Block: a.Block, Line: a.Line, At: a.At, Verdict: verdictNotAdjudicated,
@@ -410,14 +397,9 @@ func identChar(c byte) bool {
 // file is one of its root packages.
 var rootPackageRe = regexp.MustCompile(`(?m)^(?:standard\s+)?(?:library\s+)?package\s+('[^']*'|[A-Za-z_]\w*)`)
 
-// rootPackagesOf reads the root packages a declared library resource declares,
+// rootPackagesIn reads the root packages a declared library resource declares,
 // which is what names its contents are reachable under.
-func rootPackagesOf(suiteDir, from string) []string {
-	// #nosec G304 -- the suite directory is named on the command line.
-	content, err := os.ReadFile(filepath.Join(suiteDir, filepath.FromSlash(strings.TrimPrefix(from, "/"))))
-	if err != nil {
-		return nil
-	}
+func rootPackagesIn(content []byte) []string {
 	var roots []string
 	for _, m := range rootPackageRe.FindAllStringSubmatch(string(content), -1) {
 		roots = append(roots, strings.Trim(m[1], "'"))
@@ -426,7 +408,7 @@ func rootPackagesOf(suiteDir, from string) []string {
 }
 
 // isLibrary reports whether a declared resource is one of the suite's copies of
-// the standard library, which our workspace already has embedded.
+// a standard library file.
 func isLibrary(from string) bool {
 	return strings.HasPrefix(from, "/library")
 }

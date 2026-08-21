@@ -5,8 +5,8 @@
   "conformance": "auto",
   "totals": {
     "cases": 34,
-    "bothReject": 25,
-    "pilotOnlyRejects": 9,
+    "bothReject": 30,
+    "pilotOnlyRejects": 4,
     "oursOnlyRejects": 0,
     "bothAccept": 0
   },
@@ -37,8 +37,8 @@
     {
       "source": "xpect",
       "cases": 7,
-      "bothReject": 1,
-      "pilotOnlyRejects": 6,
+      "bothReject": 6,
+      "pilotOnlyRejects": 1,
       "oursOnlyRejects": 0,
       "bothAccept": 0
     }
@@ -312,36 +312,27 @@
       "source": "xpect",
       "rule": "a root-namespace import must be private (KerML 8.2.3.5.2 validateImportTopLevelVisibility; pilot Import_RootNamspace_invalid.kerml.xt).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 2: Top level import must be private"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "xpect/p02-association-end-two-types.kerml",
       "source": "xpect",
       "rule": "an association end must have exactly one type (KerML 8.2.4.6.2 checkAssociationEndTypes; pilot AssociationTest_EndTypes_invalid.kerml.xt).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 7: An association end must have exactly one type"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "xpect/p03-variable-in-datatype.kerml",
       "source": "xpect",
       "rule": "a variable feature must be owned by an occurrence type (KerML 8.3.3.3 validateFeatureOwnedVariable; pilot Feature_variable_invalid.kerml.xt).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 4: Must be owned by an occurrence type"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "xpect/p04-nonunique-subsets-unique.kerml",
@@ -360,26 +351,18 @@
       "source": "xpect",
       "rule": "a feature chain needs at least two chaining features (KerML 8.3.3.3 validateFeatureChainingFeaturesNotOne; pilot FeatureChain_invalid.kerml.xt).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 6: Cannot have only one chaining feature"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "xpect/p06-private-member-reference.kerml",
       "source": "xpect",
       "rule": "a private member is not visible outside its namespace (KerML 8.2.3.5 name resolution; pilot Import_All.kerml.xt).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 3,
-      "pilot": [
-        "line 6: Couldn't resolve reference to Classifier 'A::X'.",
-        "line 6: The feature 'relatedElement' of 'org.omg.sysml.lang.sysml.impl.SubclassificationImpl{xpect/p06-private-member-reference.kerml#//@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.ClassifierImpl{xpect/p06-private-member-reference.kerml#|0}'",
-        "line 6: The feature 'superclassifier' of 'org.omg.sysml.lang.sysml.impl.SubclassificationImpl{xpect/p06-private-member-reference.kerml#//@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.ClassifierImpl{xpect/p06-private-member-reference.kerml#|0}'"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
     },
     {
       "path": "xpect/p07-extraneous-closing-brace.kerml",

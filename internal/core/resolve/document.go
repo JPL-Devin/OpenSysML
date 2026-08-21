@@ -64,7 +64,7 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 			r.checkDistinguishability(child)
 		}
 	case *ast.Import:
-		r.ResolveQualified(scope, d.Imported)
+		r.resolveImportTarget(scope, d)
 		if d.FilterExpr != nil {
 			r.InCondition(func() { r.resolveExpr(scope, d.FilterExpr) })
 		}
@@ -1016,13 +1016,17 @@ func (r *Resolver) resolveFeatureChain(scope *symbols.Scope, fc *ast.FeatureChai
 // chainMember looks a chain segment up as the member walk does: as a member of
 // sym when a model is attached, else in sym's own scope.
 func (r *Resolver) chainMember(sym *symbols.Symbol, name string) (*symbols.Symbol, bool) {
-	if found, ok := r.lookupMember(sym, name); ok {
+	if found, ok := r.lookupMember(sym, name); ok && r.namedThroughNamespace(found) {
 		return found, true
 	}
 	if sym == nil || sym.Scope == nil {
 		return nil, false
 	}
-	return sym.Scope.LookupLocal(name)
+	found, ok := sym.Scope.LookupLocal(name)
+	if !ok || !r.namedThroughNamespace(found) {
+		return nil, false
+	}
+	return found, true
 }
 
 // resolveMemberChain walks a qualified name member-by-member in the given scope,
@@ -1032,44 +1036,30 @@ func (r *Resolver) resolveMemberChain(parentSym *symbols.Symbol, qn *ast.Qualifi
 		return nil
 	}
 
-	// Resolve first part using model.LookupMember if available, else scope.LookupLocal
-	cur, ok := r.lookupMember(parentSym, qn.Parts[0].Text)
+	// Resolve first part using model.LookupMember if available, else
+	// scope.LookupLocal. A chained feature names a member of what precedes it,
+	// so it reaches only the visible ones (KerML 8.2.3.5).
+	cur, ok := r.chainMember(parentSym, qn.Parts[0].Text)
 
 	if !ok {
-		// Fall back to local scope lookup if model unavailable
+		msg := "unresolved member: " + qn.Parts[0].Text
 		if parentSym.Scope == nil {
-			r.Diagnostics = append(r.Diagnostics, Diagnostic{
-				Span:    qn.Parts[0].Span,
-				Message: "no scope for member lookup in " + parentSym.Name,
-			})
-			return nil
+			msg = "no scope for member lookup in " + parentSym.Name
 		}
-		cur, ok = parentSym.Scope.LookupLocal(qn.Parts[0].Text)
-	}
-
-	if !ok {
-		r.Diagnostics = append(r.Diagnostics, Diagnostic{
-			Span:    qn.Parts[0].Span,
-			Message: "unresolved member: " + qn.Parts[0].Text,
-		})
+		r.Diagnostics = append(r.Diagnostics, Diagnostic{Span: qn.Parts[0].Span, Message: msg})
 		return nil
 	}
 	r.recordPart(qn, 0, cur)
 
 	// Walk remaining parts via member lookup
 	for i := 1; i < len(qn.Parts); i++ {
-		next, found := r.lookupMember(cur, qn.Parts[i].Text)
-
-		if !found {
-			// Fall back to local scope lookup
-			if cur.Scope == nil {
-				r.Diagnostics = append(r.Diagnostics, Diagnostic{
-					Span:    qn.Parts[i].Span,
-					Message: "no members in " + cur.Name,
-				})
-				return nil
-			}
-			next, found = cur.Scope.LookupLocal(qn.Parts[i].Text)
+		next, found := r.chainMember(cur, qn.Parts[i].Text)
+		if !found && cur.Scope == nil {
+			r.Diagnostics = append(r.Diagnostics, Diagnostic{
+				Span:    qn.Parts[i].Span,
+				Message: "no members in " + cur.Name,
+			})
+			return nil
 		}
 
 		if !found {

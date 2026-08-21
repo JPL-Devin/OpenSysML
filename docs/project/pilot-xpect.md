@@ -48,16 +48,18 @@ Cannot:
 - **Diagnostic wording.** Our messages are our own; a declared message and ours can describe the same
   defect in different words. Strict agreement requires the declared message, so an `errors` row can
   only agree by coincidence of wording. See [How agreement is decided](#how-agreement-is-decided).
-- **Which standard-library file a fixture loads.** Each fixture declares its own resource set, often
-  `/library/Base.kerml` alone, and the pilot's implicit supertypes therefore resolve only as far as
-  that set reaches. We always carry our whole embedded library, which is what the `library-names`
-  scope class below counts.
+- **What a declared library file leaves unresolved.** A fixture's resource set is often a subset of
+  the library its own files reference — `Objects.kerml` without `Occurrences.kerml`, say. Those
+  unresolved references arrive against the file under test, because name resolution resolves the
+  whole index rather than one document, and the harness drops them by their location: it counts them
+  as *foreign* and adjudicates only diagnostics inside the fixture's own model text.
 - **Anything the suites do not cover.** These are the pilot's *tests*, not the specification. A
   construct with no assertion is not endorsed by their absence.
 
-The comparison also replaces one input deliberately: each suite ships its own copy of the standard
-library under `/library*`, and the harness loads **our** embedded stdlib instead. Comparing against
-their library copy would mean adjudicating a library-import path rather than the file under test.
+The comparison loads what each fixture declares: the `.xt` body itself, the `/src/` files its
+`XPECT_SETUP` `ResourceSet` names, and exactly the `/library*` copies it names — never our embedded
+standard library in their place. A declared resource absent from the download is reported as such,
+never silently treated as loaded.
 
 ---
 

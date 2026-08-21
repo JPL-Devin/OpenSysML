@@ -101,7 +101,7 @@ carry no timestamps or absolute paths, so repeated runs are byte-identical
 Under the default `-conformance auto`:
 
 ```
-34 case(s): 25 both reject, 9 only the pilot rejects, 0 only we reject, 0 both accept
+34 case(s): 30 both reject, 4 only the pilot rejects, 0 only we reject, 0 both accept
   of which 5 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
@@ -109,17 +109,21 @@ Under the default `-conformance auto`:
 | --- | --- | --- | --- | --- | --- |
 | extensions | 7 | 7 | 0 | 0 | 0 |
 | grammar | 20 | 17 | 3 | 0 | 0 |
-| xpect | 7 | 1 | 6 | 0 | 0 |
+| xpect | 7 | 6 | 1 | 0 | 0 |
 
 The five strict-only agreements are `x01`, `x04`, `x05`, `x06` and `x07`: OpenSysML notation
 extensions that the default mode accepts on purpose and strict mode reports as errors. Judged in
-the default mode the same corpus gives 20 agreements and 14 gaps — the numbers this document
-carried before strict mode existed, and still what `-conformance default` prints. The divergence is
-intended and unchanged; strict mode only lets us ask the other question.
+the default mode the same corpus gives 25 agreements and 9 gaps, which is what `-conformance
+default` prints. Of the 14 gaps this document carried before wave 8, five were closed by the
+validation waves themselves — `p01`, `p02`, `p03`, `p05` (wave 8C) and `p06` (wave 8A) — and only
+the five `extensions/` cases belong to strict mode.
 
-Read the five as agreement *when asked strictly*, not as five gaps that disappeared. An opt-in check
-is weaker evidence than a default one: it says the strict question has an answer we agree on, not
-that the pipeline a user gets by default rejects the notation — by design it does not.
+Read those five as agreement *when asked strictly*, not as five gaps that disappeared. An opt-in
+check is weaker evidence than a default one: it says the strict question has an answer we agree on,
+not that the pipeline a user gets by default rejects the notation — by design it does not. And
+because we authored all 34 cases ourselves, a small gap count means we ran out of questions we
+thought to ask, not that we stopped being permissive: the denominator measures our coverage of the
+rejection surface, not our conformance.
 
 The two `extensions/` cases that agree in either mode (`x02` choice, `x03` junction) are rejected
 by us for a different reason than by the pilot: our own state-connectivity validation flags a
@@ -128,7 +132,7 @@ records rejection, not agreement on the rule.
 
 ## Permissiveness gaps
 
-All 9 gaps, each with its reproducer (the corpus file is the minimal reproducer), both verdicts,
+All 4 gaps, each with its reproducer (the corpus file is the minimal reproducer), both verdicts,
 and the package the root cause is likely in. **None are fixed here** — this oracle measures;
 fixing is later work.
 
@@ -137,12 +141,7 @@ fixing is later work.
 | `grammar/g02-import-without-visibility.sysml` | accepts | `mismatched input 'import'` | `internal/core/parser` — treats the import visibility keyword as optional; the pinned `ImportPrefix` requires it |
 | `grammar/g15-keyword-as-name.sysml` | accepts | `no viable alternative at input 'part'` | `internal/core/parser` — allows a reserved keyword as a declared name |
 | `grammar/k02-sysml-keyword-in-kerml.kerml` | accepts | `no viable alternative at input 'def'` | `internal/core/parser` — `.kerml` files are parsed with the full SysML grammar; no per-language restriction |
-| `xpect/p01-public-root-import.kerml` | accepts | `Top level import must be private` | `internal/core/passes` — `validateImportTopLevelVisibility` (KerML 8.2.3.5.2) not implemented |
-| `xpect/p02-association-end-two-types.kerml` | accepts | `An association end must have exactly one type` | `internal/core/passes` — association-end type-count check (KerML 8.2.4.6.2) not implemented |
-| `xpect/p03-variable-in-datatype.kerml` | accepts | `Must be owned by an occurrence type` | `internal/core/passes` — variable-feature owner check (KerML 8.3.3.3) not implemented |
 | `xpect/p04-nonunique-subsets-unique.kerml` | accepts | `Subsetting/redefining feature cannot be nonunique...` | `internal/core/passes` — uniqueness conformance (KerML 8.3.3.3) not implemented |
-| `xpect/p05-single-chaining-feature.kerml` | accepts | `Cannot have only one chaining feature` | `internal/core/passes` — feature-chain length check (KerML 8.3.3.3) not implemented |
-| `xpect/p06-private-member-reference.kerml` | accepts | `Couldn't resolve reference to Classifier 'A::X'` | `internal/core/resolve` — qualified-name resolution does not enforce `private` visibility |
 
 Each pilot message above is the first error the validator reports for the case; the full lists are
 in the baseline JSON's `pilot` arrays.

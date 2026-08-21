@@ -46,6 +46,13 @@ func NewWorkspace(opts ...Option) *Workspace {
 	// Load stdlib into global index
 	libs.LoadInto(idx)
 
+	return NewWorkspaceWithIndex(idx, opts...)
+}
+
+// NewWorkspaceWithIndex returns a workspace over a caller-built index, for a
+// consumer whose resource set is not the bundled standard library. The options
+// travel with the resource set, so any index is analyzed under the asked mode.
+func NewWorkspaceWithIndex(idx *symbols.Index, opts ...Option) *Workspace {
 	w := &Workspace{
 		docs:      map[string]*Document{},
 		onDisk:    map[string][]byte{},

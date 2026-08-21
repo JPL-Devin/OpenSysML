@@ -20,6 +20,15 @@ func DefaultRegistry() *Registry {
 	reg.Register(TypeCheckPass{})
 	reg.Register(ElementFilterPass{})
 	reg.Register(ConstraintPass{})
+	reg.Register(TypeRelationshipsPass{})
+	reg.Register(MultiplicityBoundsPass{})
+	reg.Register(ReferenceSubsettingPass{})
+	reg.Register(TopLevelImportPass{})
+	reg.Register(AssociationEndTypesPass{})
+	reg.Register(VariableFeaturePass{})
+	reg.Register(ResultExpressionPass{})
+	reg.Register(FeatureReferencePass{})
+	reg.Register(MetadataTypePass{})
 	return reg
 }
 
