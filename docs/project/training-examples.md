@@ -596,8 +596,8 @@ This generates error frequency analysis and per-file diagnostics.
 The gate indexes the standard library from an empty semantic cache — it points
 `XDG_CACHE_HOME` at a temporary directory — so it reports the same numbers on a
 fresh machine as on one whose `~/.cache/sysml-ls` is already populated.
-`TestTrainingExamplesCacheStateIndependent` runs the corpus twice over one cache
-directory and fails if any file's diagnostics differ between the two.
+`TestCorpusGatesCacheStateIndependent` runs each of the four OMG roots twice over
+one cache directory and fails if any file's diagnostics differ between the two.
 
 ---
 

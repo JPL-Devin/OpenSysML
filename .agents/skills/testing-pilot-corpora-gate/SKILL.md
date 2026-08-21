@@ -14,7 +14,8 @@ Shell-only; no GUI or recording needed. Runs in ~7s, so repeated runs are cheap.
 OPENSYSML_REQUIRE_PILOT_CORPORA=1 go test -count=1 -v ./internal/core/model -run TestPilotCorpora
 ```
 
-Expect `--- PASS` for `TestPilotCorporaDiagnostics` and `TestPilotCorporaCacheStateIndependent`,
+Expect `--- PASS` for `TestPilotCorporaDiagnostics` (the shared cache-independence case over all
+four OMG roots is `TestCorpusGatesCacheStateIndependent` in `corpus_gate_test.go`),
 plus three `N/M pilot corpus files clean` lines (baseline at the time of writing:
 sysml-examples 70/98, sysml-validation 50/56, kerml-examples 38/58 — these move whenever
 diagnostics change, so read the current numbers from
