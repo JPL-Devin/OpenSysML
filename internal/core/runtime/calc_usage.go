@@ -500,7 +500,7 @@ func (ctx *Context) checkCalcTyping(sym *symbols.Symbol) error {
 func (ctx *Context) runCalcUsage(
 	shape *calcShape, ec, nested *EvalContext, env map[string]Value, reader *EvalContext,
 ) (*calcRun, error) {
-	result, returned, activation, err := ctx.runCalcSteps(shape, env)
+	result, returned, activation, err := ctx.runCalcSteps(shape, env, reader.self)
 	if err != nil {
 		if ec.trace != nil {
 			ec.trace.RecordCalcExitError(shape.Name, err)

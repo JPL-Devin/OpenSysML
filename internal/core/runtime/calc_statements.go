@@ -10,6 +10,7 @@ import (
 // output features and its returned value, and rejects every outside effect.
 type calcStmtHost struct {
 	shape  *calcShape
+	self   *Instance
 	result Value // the value its `return` yielded
 }
 
@@ -57,10 +58,8 @@ func (h *calcStmtHost) acceptReturn(value Value, _ lower.Return) error {
 	return nil
 }
 
-// performer is no object: a calculation is invoked as an expression, not
-// performed by something, so its names read what its invocation supplies.
 func (h *calcStmtHost) performer() *Instance {
-	return nil
+	return h.self
 }
 
 func (h *calcStmtHost) effect(s lower.Effect) error {

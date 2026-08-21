@@ -64,6 +64,7 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("calc_output_assigned_in_a_branch_not_taken", testCalcOutputAssignedInABranchNotTaken)
 	t.Run("calc_output_valued_and_assigned", testCalcOutputValuedAndAssigned)
 	t.Run("calc_output_assigned_twice", testCalcOutputAssignedTwice)
+	t.Run("operation_constraint_body_cannot_be_evaluated", testOperationConstraintBodyCannotBeEvaluated)
 	t.Run("binding_conflict", testBindingConflict)
 	t.Run("binding_collection_conflicts_do_not_use_hashes", testBindingCollectionConflictsDoNotUseHashes)
 	t.Run("binding_multiple_scalar_contributors", testBindingMultipleScalarContributors)
@@ -6577,6 +6578,28 @@ func testOperationInvokedWithUnboundParameters(t *testing.T) {
 	}
 	if _, err := ctx.InvokeOperation(inst, "total", nil); !errors.Is(err, ErrNotABehavior) {
 		t.Errorf("invoke of an attribute = %v, want ErrNotABehavior", err)
+	}
+}
+
+// testOperationConstraintBodyCannotBeEvaluated: invoking a constraint whose
+// assertion names no feature returns its evaluation error without panicking.
+func testOperationConstraintBodyCannotBeEvaluated(t *testing.T) {
+	src := `
+	package test {
+		part def Tank {
+			constraint broken { assert missing > 0; }
+		}
+	}`
+	ctx, inst, err := instantiateInSource(t, src, "test::Tank")
+	if err != nil {
+		t.Fatalf("instantiate: %v", err)
+	}
+	_, err = ctx.InvokeOperation(inst, "broken", nil)
+	if err == nil {
+		t.Fatal("expected an error for an unevaluable constraint body")
+	}
+	if !errors.Is(err, ErrUnresolvedReference) {
+		t.Fatalf("error = %v, want ErrUnresolvedReference", err)
 	}
 }
 

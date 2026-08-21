@@ -122,14 +122,17 @@ func TestExhibitedMachineWritesItsObjectsFeatureValues(t *testing.T) {
 	}
 }
 
-// invokeFixture owns an operation, a machine, a calc and an attribute, so one
-// object exercises both the executable and the rejected invocation paths.
+// invokeFixture owns an operation, a machine, calcs, constraints and an
+// attribute, so one object exercises each classifier behavior path.
 const invokeFixture = `
 	part def Tank {
 		attribute level: Integer = 2;
 		action fillBy { in n; out filled; first apply; action apply { assign level := level + n; assign filled := level; } }
 		exhibit state modes { entry; then holding; state holding; }
-		calc capacity { return : Integer = 10; }
+		calc capacity { in bonus : Integer; return total : Integer = level + bonus; }
+		calc rawCapacity { return : Integer = level + 1; }
+		constraint acceptable { in minimum : Integer; assert level >= minimum; }
+		constraint rejected { assert level > 10; }
 	}
 `
 
@@ -157,6 +160,45 @@ func TestInvokeOperationPerformedByTheObject(t *testing.T) {
 	if got := fv.HeldValue(); got.Const.Int != 5 {
 		t.Errorf("level = %v, want 5", got.Const)
 	}
+
+	results, err = ctx.InvokeOperation(inst, "capacity", map[string]Value{"bonus": intArgument(3)})
+	if err != nil {
+		t.Fatalf("InvokeOperation(calc): %v", err)
+	}
+	if got, ok := results["total"]; !ok || got.Const.Int != 8 {
+		t.Errorf("calc result = %v, want total = 8", results)
+	}
+	results, err = ctx.InvokeOperation(inst, "rawCapacity", nil)
+	if err != nil {
+		t.Fatalf("InvokeOperation(anonymous calc): %v", err)
+	}
+	if got, ok := results["result"]; !ok || got.Const.Int != 6 {
+		t.Errorf("anonymous calc result = %v, want result = 6", results)
+	}
+
+	for _, tc := range []struct {
+		name string
+		args map[string]Value
+		want bool
+	}{
+		{"acceptable", map[string]Value{"minimum": intArgument(3)}, true},
+		{"acceptable", map[string]Value{"minimum": intArgument(6)}, false},
+		{"rejected", nil, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			results, err := ctx.InvokeOperation(inst, tc.name, tc.args)
+			if err != nil {
+				t.Fatalf("InvokeOperation(constraint): %v", err)
+			}
+			got, ok := results["result"]
+			if !ok || got.Kind != ValConst || got.Const.Kind != semantics.ValBool {
+				t.Fatalf("constraint result = %v, want Boolean result", results)
+			}
+			if got.Const.Bool != tc.want {
+				t.Errorf("constraint result = %v, want %v", got.Const.Bool, tc.want)
+			}
+		})
+	}
 }
 
 // Every path %invoke cannot run reports a typed error naming what it was asked.
@@ -178,7 +220,6 @@ func TestInvokeOperationFailureModes(t *testing.T) {
 		{"no object", nil, "fillBy", nil, ErrNoSuchBehavior},
 		{"unknown operation", inst, "drain", nil, ErrNoSuchBehavior},
 		{"state machine", inst, "modes", nil, ErrUnsupportedClassifierBehavior},
-		{"calc", inst, "capacity", nil, ErrUnsupportedClassifierBehavior},
 		{"attribute", inst, "level", nil, ErrNotABehavior},
 		{"unbound parameter", inst, "fillBy", nil, ErrUnboundParameter},
 		{"argument naming no parameter", inst, "fillBy", map[string]Value{"n": intArgument(1), "m": intArgument(2)}, ErrUnboundParameter},
