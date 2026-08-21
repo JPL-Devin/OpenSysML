@@ -1,8 +1,6 @@
+private import ScalarValues::*;
+
 package W7D {
-	item def Real;
-	item def Integer :> Real;
-	item def Natural :> Integer;
-	item def String;
 	part def Vehicle;
 	part def Car :> Vehicle;
 	part def Sys;

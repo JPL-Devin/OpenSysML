@@ -824,6 +824,7 @@ func (ec *EvalContext) evalTypeSubject(node ast.Node) (Value, error) {
 	if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Value == nil {
 		mult, _ := ec.ctx.extractMultiplicity(sym)
 		if !mult.Lower.Infinite && mult.Lower.Value == 0 {
+			// Classification treats an optional valueless usage as its empty collection.
 			return Value{Kind: ValSequence, Sequence: NewSequence()}, nil
 		}
 	}

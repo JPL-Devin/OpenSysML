@@ -101,6 +101,44 @@ func evalTypeClassificationExpr(t *testing.T, expr string) (bool, error) {
 	return value.Const.Bool, nil
 }
 
+func TestTypeClassificationFollowsSelectedVariant(t *testing.T) {
+	const src = `
+		part def Vehicle;
+		variation part choice : Vehicle {
+			variant part car : Vehicle;
+		}
+		part def Garage {
+			part chosen : Vehicle = choice::car;
+		}
+		part garage : Garage;
+		attribute exact = garage.chosen hastype choice::car;
+		attribute declared = garage.chosen hastype Vehicle;
+	`
+	model, resolver, root := parseAndBuildModel(t, src)
+	ctx := NewContext(model, resolver, 10000)
+	for _, tt := range []struct {
+		name string
+		want bool
+	}{
+		{name: "exact", want: true},
+		{name: "declared", want: false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			sym := resolveSymbol(t, root, tt.name)
+			value, err := ctx.Eval(sym.Decl.(*ast.Usage).Value)
+			if err != nil {
+				t.Fatalf("Eval: %v", err)
+			}
+			if value.Kind != ValConst || value.Const.Kind != semantics.ValBool {
+				t.Fatalf("value = %v, want Boolean", value)
+			}
+			if value.Const.Bool != tt.want {
+				t.Errorf("value = %v, want %v", value.Const.Bool, tt.want)
+			}
+		})
+	}
+}
+
 // strValue is a String runtime value, the representation of a string literal.
 func strValue(s string) Value { return Value{Kind: ValString, Str: s} }
 

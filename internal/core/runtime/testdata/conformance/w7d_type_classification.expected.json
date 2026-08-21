@@ -1,6 +1,7 @@
 {
 	"type": "calc",
 	"evaluate": "W7D::classify",
+	"libraries": true,
 	"result": {
 		"type": "Sequence",
 		"elements": [
