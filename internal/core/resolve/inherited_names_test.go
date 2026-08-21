@@ -60,8 +60,10 @@ func TestRedefinitionThroughAliasSupertype(t *testing.T) {
 	}
 }
 
-// Redeclaring an inherited name is a conflict, unless the declaration redefines or
-// subsets what it shares the name with (SysML v2 §7.6.1).
+// Redeclaring an inherited name is indistinguishable from it unless the
+// declaration redefines what it shares the name with: a redefined feature is no
+// longer inherited (SysML v2 §7.6.1, KerML §7.2.2). Reference subsetting keeps
+// it, so the reference reports the duplicate there — matched runs, w6c.
 func TestRedeclaringAnInheritedNameConflictsUnlessItRedefines(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
@@ -70,7 +72,8 @@ func TestRedeclaringAnInheritedNameConflictsUnlessItRedefines(t *testing.T) {
 	}{
 		{"plain redeclaration", "part wheel;", true},
 		{"redefinition", "part wheel :>> wheel;", false},
-		{"reference", "ref part wheel references wheel;", false},
+		{"reference", "ref part wheel references wheel;", true},
+		{"subsetting", "part wheel :> wheel;", true},
 		{"another name", "part spare;", false},
 	} {
 		r, _, _ := resolvedDoc(t, `package P {
@@ -81,7 +84,7 @@ func TestRedeclaringAnInheritedNameConflictsUnlessItRedefines(t *testing.T) {
 		if got := len(conflicts) != 0; got != tc.conflict {
 			t.Errorf("%s: name conflict reported = %v, want %v (%v)", tc.name, got, tc.conflict, r.Diagnostics)
 		}
-		if len(conflicts) != 0 && !strings.Contains(conflicts[0].Message, "Vehicle::wheel") {
+		if len(conflicts) != 0 && !strings.Contains(conflicts[0].Message, "'wheel' from Vehicle") {
 			t.Errorf("%s: conflict message %q does not name the inherited feature", tc.name, conflicts[0].Message)
 		}
 	}

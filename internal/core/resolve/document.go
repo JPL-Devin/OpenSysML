@@ -1,10 +1,7 @@
 package resolve
 
 import (
-	"fmt"
-
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
-	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -16,6 +13,7 @@ func (r *Resolver) ResolveDocument(name string, root *ast.RootNamespace) {
 		return
 	}
 	r.walkMembers(rootScope, membersOf(root))
+	r.checkDistinguishability(rootScope)
 }
 
 // membersOf returns the top-level members of a RootNamespace.
@@ -57,11 +55,13 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		r.resolvePrefixes(scope, d.Prefixes)
 		if child := r.childScope(scope, d); child != nil {
 			r.walkMembers(child, d.Members)
+			r.checkDistinguishability(child)
 		}
 	case *ast.Namespace:
 		r.resolvePrefixes(scope, d.Prefixes)
 		if child := r.childScope(scope, d); child != nil {
 			r.walkMembers(child, d.Members)
+			r.checkDistinguishability(child)
 		}
 	case *ast.Import:
 		r.ResolveQualified(scope, d.Imported)
@@ -94,7 +94,7 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		r.resolveHeaderRelationships(scope, child, d, d.Relationships)
 		if child != nil {
 			r.walkMembers(child, d.Members)
-			r.checkInheritedNames(child)
+			r.checkDistinguishability(child)
 		}
 	case *ast.Usage:
 		r.resolvePrefixes(scope, d.Prefixes)
@@ -164,7 +164,7 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		}
 		if child != nil {
 			r.walkMembers(child, d.Members)
-			r.checkInheritedNames(child)
+			r.checkDistinguishability(child)
 		}
 	case *ast.SubjectMember:
 		// Resolve subject type reference
@@ -352,34 +352,6 @@ func (r *Resolver) resolveTrigger(scope *symbols.Scope, trigger ast.Node) {
 	}
 }
 
-// checkInheritedNames reports each usage declared in scope whose name is
-// already the name of a member its owner inherits: a namespace's names are
-// distinct, and inherited memberships count (SysML 7.6.1, KerML 7.3.2.1).
-// Redefining what it shares the name with is how the name is used legitimately.
-func (r *Resolver) checkInheritedNames(scope *symbols.Scope) {
-	owner := scope.Owner()
-	if r.model == nil || owner == nil || parameterizedByName(owner) {
-		return
-	}
-	// Nothing is inherited without a supertype, and asking for the
-	// contributed members of every scope is not free.
-	if model, ok := r.model.(supertypeLookup); !ok || len(model.DirectSupertypes(owner)) == 0 {
-		return
-	}
-	for _, name := range scope.MemberNames() {
-		for _, sym := range scope.LookupLocalAll(name) {
-			if !conflictable(sym) || sym.Name != name {
-				continue
-			}
-			inherited, ok := r.lookupContributedMember(owner, name)
-			if !ok || inherited == sym || r.redefines(sym, inherited) {
-				continue
-			}
-			r.nameConflict(sym, inherited)
-		}
-	}
-}
-
 // parameterizedByName reports whether sym is a case or requirement — including
 // a concern or viewpoint, which are requirements — whose subject, actors and
 // stakeholders redefine the inherited ones by name (SysML 7.18.4, 7.19.4). That
@@ -403,57 +375,6 @@ func parameterizedByName(sym *symbols.Symbol) bool {
 		}
 	}
 	return false
-}
-
-// conflictable reports whether a symbol is a usage whose name has to be
-// distinct from the inherited ones: a redefining feature does not conflict with
-// what it redefines, and a parameter redefines its counterpart implicitly.
-func conflictable(sym *symbols.Symbol) bool {
-	usage, ok := sym.Decl.(*ast.Usage)
-	if !ok || sym.EffectiveName || isParameter(sym) {
-		return false
-	}
-	for _, rel := range usage.Relationships {
-		if rel == nil {
-			continue
-		}
-		if rel.Kind == ast.RelRedefines || rel.Kind == ast.RelReferences {
-			return false
-		}
-	}
-	return true
-}
-
-// redefines reports whether sym specializes target, which is how a declaration
-// legitimately reuses an inherited name.
-func (r *Resolver) redefines(sym, target *symbols.Symbol) bool {
-	model, ok := r.model.(supertypeLookup)
-	if !ok {
-		return false
-	}
-	for _, sup := range model.DirectSupertypes(sym) {
-		if sup == target {
-			return true
-		}
-	}
-	return false
-}
-
-// nameConflict records that sym redeclares an inherited name.
-func (r *Resolver) nameConflict(sym, inherited *symbols.Symbol) {
-	span := sym.NameSpan
-	if span == (source.Span{}) {
-		span = sym.DeclSpan
-	}
-	from := inherited.Name
-	if inherited.OwnerScope != nil && inherited.OwnerScope.Owner() != nil {
-		from = inherited.OwnerScope.Owner().Name + "::" + from
-	}
-	r.Diagnostics = append(r.Diagnostics, Diagnostic{
-		Span:    span,
-		Message: fmt.Sprintf("name conflict: %s is already the name of the inherited feature %s", sym.Name, from),
-		Code:    CodeNameConflict,
-	})
 }
 
 // childScope finds the child scope whose node is decl.

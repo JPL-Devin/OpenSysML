@@ -1,0 +1,398 @@
+package resolve
+
+import (
+	"fmt"
+	"sort"
+	"strings"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
+)
+
+// checkDistinguishability reports the member names of one namespace that are not
+// distinguishable: an owned name repeating another owned name, and — for a type
+// — an owned name repeating one the type inherits (KerML 7.2.2, SysML 7.6.1).
+// Both are warnings, as in the reference implementation.
+func (r *Resolver) checkDistinguishability(scope *symbols.Scope) {
+	if scope == nil {
+		return
+	}
+	r.checkOwnedNames(scope)
+	r.checkInheritedNames(scope)
+}
+
+// checkOwnedNames reports each name a namespace declares twice. Aliases are a
+// separate namespace of their own: an alias collides with an owned name and with
+// another alias, each under its own wording.
+func (r *Resolver) checkOwnedNames(scope *symbols.Scope) {
+	owned, aliases := declaredMembers(scope)
+	ownedByName := byName(owned)
+	aliasByName := byName(aliases)
+	for _, sym := range owned {
+		if len(r.duplicatesOf(sym, ownedByName[sym.Name])) > 0 {
+			r.duplicateName(sym, "Duplicate of other owned member name", nil)
+		}
+	}
+	for _, sym := range aliases {
+		if len(r.duplicatesOf(sym, ownedByName[sym.Name])) > 0 {
+			r.duplicateName(sym, "Duplicate of owned member name", nil)
+		}
+		if len(r.duplicatesOf(sym, aliasByName[sym.Name])) > 0 {
+			r.duplicateName(sym, "Duplicate of other alias name", nil)
+		}
+	}
+}
+
+// checkInheritedNames reports each member a type declares whose name is already
+// the name of a member the type inherits. A feature the type redefines is not
+// inherited any more, which is how the name is legitimately reused.
+func (r *Resolver) checkInheritedNames(scope *symbols.Scope) {
+	owner := scope.Owner()
+	if r.model == nil || owner == nil || parameterizedByName(owner) {
+		return
+	}
+	// Nothing is inherited without a supertype, and collecting the inherited
+	// members of every scope is not free.
+	model, ok := r.model.(supertypeLookup)
+	if !ok || len(model.DirectSupertypes(owner)) == 0 {
+		return
+	}
+	inherited := r.inheritedMembers(owner, model)
+	if len(inherited) == 0 {
+		return
+	}
+	owned, aliases := distinguishableMembers(scope)
+	for _, sym := range append(owned, aliases...) {
+		if implicitlyRedefined(sym) || r.hasUnresolvedRedefinition(sym) {
+			continue
+		}
+		dups := r.duplicatesOf(sym, inherited[sym.Name])
+		if len(dups) == 0 {
+			continue
+		}
+		r.duplicateName(sym, "Duplicate of inherited member name", dups)
+	}
+}
+
+// hasUnresolvedRedefinition reports whether sym declares a redefinition whose
+// target we could not resolve: the name it reuses is then not evidence of a
+// duplicate. See docs/project/spec-compliance.md for the resolution gaps.
+func (r *Resolver) hasUnresolvedRedefinition(sym *symbols.Symbol) bool {
+	for _, rel := range redefinesRelationships(sym.Decl) {
+		if _, ok := r.resolveTarget(sym.OwnerScope, rel.Target, nil); !ok {
+			return true
+		}
+	}
+	return false
+}
+
+// inheritedMembers collects the members owner inherits, keyed by name: what each
+// supertype contributes, less the ones owner's own members redefine. Library
+// supertypes are not walked — see docs/project/spec-compliance.md.
+func (r *Resolver) inheritedMembers(owner *symbols.Symbol, model supertypeLookup) map[string][]*symbols.Symbol {
+	var candidates []*symbols.Symbol
+	seen := map[*symbols.Symbol]bool{owner: true}
+	for _, sup := range model.DirectSupertypes(owner) {
+		candidates = append(candidates, r.inheritableMembers(sup, model, seen)...)
+	}
+	out := map[string][]*symbols.Symbol{}
+	for _, sym := range r.removeRedefinedFeatures(owner, candidates) {
+		out[sym.Name] = append(out[sym.Name], sym)
+	}
+	return out
+}
+
+// inheritableMembers is what a supertype contributes to its subtypes: its own
+// non-private members plus what it inherits itself, redefined ones removed at
+// each level, so a redefinition anywhere up the chain hides its target.
+func (r *Resolver) inheritableMembers(sup *symbols.Symbol, model supertypeLookup, seen map[*symbols.Symbol]bool) []*symbols.Symbol {
+	if sup == nil || seen[sup] || r.idx.Library(sup) {
+		return nil
+	}
+	seen[sup] = true
+	var out []*symbols.Symbol
+	for _, next := range model.DirectSupertypes(sup) {
+		out = append(out, r.inheritableMembers(next, model, seen)...)
+	}
+	if sup.Scope != nil {
+		owned, aliases := distinguishableMembers(sup.Scope)
+		for _, sym := range append(owned, aliases...) {
+			if sym.Visibility != ast.VisibilityPrivate {
+				out = append(out, sym)
+			}
+		}
+	}
+	return r.removeRedefinedFeatures(sup, out)
+}
+
+// removeRedefinedFeatures drops the inherited members that are no longer
+// inherited: one whose redefinitions reach a feature an owned member redefines,
+// and one another inherited member redefines (KerML 7.4.3).
+func (r *Resolver) removeRedefinedFeatures(owner *symbols.Symbol, inherited []*symbols.Symbol) []*symbols.Symbol {
+	byOwner := r.redefinedByMembers(owner.Scope)
+	byInherited := map[*symbols.Symbol]bool{}
+	kept := make([]*symbols.Symbol, 0, len(inherited))
+	for _, sym := range inherited {
+		redefines := r.redefinedClosure(sym)
+		if meets(redefines, byOwner) {
+			continue
+		}
+		for target := range redefines {
+			if target != sym {
+				byInherited[target] = true
+			}
+		}
+		kept = append(kept, sym)
+	}
+	out := make([]*symbols.Symbol, 0, len(kept))
+	for _, sym := range kept {
+		if !byInherited[sym] {
+			out = append(out, sym)
+		}
+	}
+	return out
+}
+
+// redefinedByMembers collects the features the members of scope redefine.
+func (r *Resolver) redefinedByMembers(scope *symbols.Scope) map[*symbols.Symbol]bool {
+	out := map[*symbols.Symbol]bool{}
+	if scope == nil {
+		return out
+	}
+	for _, sym := range scope.Members() {
+		for _, target := range r.redefinedFeatures(sym) {
+			out[target] = true
+		}
+	}
+	return out
+}
+
+// redefinedClosure is sym together with every feature it redefines, directly or
+// through a chain of redefinitions.
+func (r *Resolver) redefinedClosure(sym *symbols.Symbol) map[*symbols.Symbol]bool {
+	out := map[*symbols.Symbol]bool{}
+	queue := []*symbols.Symbol{sym}
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+		if cur == nil || out[cur] {
+			continue
+		}
+		out[cur] = true
+		queue = append(queue, r.redefinedFeatures(cur)...)
+	}
+	return out
+}
+
+func meets(a, b map[*symbols.Symbol]bool) bool {
+	for sym := range a {
+		if b[sym] {
+			return true
+		}
+	}
+	return false
+}
+
+// duplicatesOf returns the members of others that make sym's name ambiguous:
+// every one naming a different element.
+func (r *Resolver) duplicatesOf(sym *symbols.Symbol, others []*symbols.Symbol) []*symbols.Symbol {
+	var out []*symbols.Symbol
+	for _, other := range others {
+		if r.sameElement(sym, other) {
+			continue
+		}
+		out = append(out, other)
+	}
+	return out
+}
+
+// sameElement reports whether two members name the same element, which no
+// distinguishability rule objects to: an alias for what it sits beside is the
+// same element under two memberships.
+func (r *Resolver) sameElement(a, b *symbols.Symbol) bool {
+	if a == b {
+		return true
+	}
+	return r.aliasTarget(a) == b || r.aliasTarget(b) == a
+}
+
+// aliasTarget is what an alias names, or the symbol itself.
+func (r *Resolver) aliasTarget(sym *symbols.Symbol) *symbols.Symbol {
+	if target, ok := r.ResolveAliasTarget(sym); ok {
+		return target
+	}
+	return sym
+}
+
+// duplicateName reports one indistinguishable name at the member declaring it.
+// from names the namespaces a duplicate comes from, which the reference's
+// wording carries for a name it did not find in the namespace itself.
+func (r *Resolver) duplicateName(sym *symbols.Symbol, message string, from []*symbols.Symbol) {
+	span := sym.NameSpan
+	if span == (source.Span{}) {
+		span = sym.DeclSpan
+	}
+	if names := ownerNames(sym, from); len(names) > 0 {
+		message = fmt.Sprintf("%s '%s' from %s", message, sym.Name, strings.Join(names, ", "))
+	}
+	r.reportDuplicate(span, message)
+}
+
+// duplicateInherited reports a name owner inherits twice, at owner's own
+// declaration: no member of owner is at fault for it.
+func (r *Resolver) duplicateInherited(owner *symbols.Symbol, name string, from []*symbols.Symbol) {
+	message := "Duplicate of inherited member name"
+	if names := ownerNames(nil, from); len(names) > 0 {
+		message = fmt.Sprintf("%s '%s' from %s", message, name, strings.Join(names, ", "))
+	}
+	r.reportDuplicate(owner.DeclSpan, message)
+}
+
+func (r *Resolver) reportDuplicate(span source.Span, message string) {
+	r.report(Diagnostic{
+		Span:    span,
+		Message: message,
+		Code:    CodeNameConflict,
+		Warning: true,
+	})
+}
+
+// ownerNames are the distinct names of the namespaces the duplicates belong to,
+// sorted, skipping the namespace the reported member is in.
+func ownerNames(sym *symbols.Symbol, dups []*symbols.Symbol) []string {
+	var own *symbols.Scope
+	if sym != nil {
+		own = sym.OwnerScope
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, dup := range dups {
+		if dup.OwnerScope == nil || dup.OwnerScope == own {
+			continue
+		}
+		owner := dup.OwnerScope.Owner()
+		if owner == nil || seen[owner.Name] {
+			continue
+		}
+		seen[owner.Name] = true
+		out = append(out, owner.Name)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// declaredMembers is distinguishableMembers restricted to members declaring a
+// name of their own: an effective name our model borrows from a reference is not
+// reliable enough to report an owned duplicate on.
+func declaredMembers(scope *symbols.Scope) (owned, aliases []*symbols.Symbol) {
+	owned, aliases = distinguishableMembers(scope)
+	return declaredOnly(owned), declaredOnly(aliases)
+}
+
+func declaredOnly(syms []*symbols.Symbol) []*symbols.Symbol {
+	out := make([]*symbols.Symbol, 0, len(syms))
+	for _, sym := range syms {
+		if !sym.EffectiveName {
+			out = append(out, sym)
+		}
+	}
+	return out
+}
+
+// distinguishableMembers splits the members of scope whose names the
+// distinguishability rules compare into owned members and aliases.
+func distinguishableMembers(scope *symbols.Scope) (owned, aliases []*symbols.Symbol) {
+	for _, name := range scope.MemberNames() {
+		for _, sym := range scope.LookupLocalAll(name) {
+			// A member declaring both a short and a primary name is registered
+			// under both keys; it is compared once, under its own name.
+			if sym.Name != name || !contributesName(sym) {
+				continue
+			}
+			if sym.Kind == symbols.SymbolAlias {
+				aliases = append(aliases, sym)
+				continue
+			}
+			owned = append(owned, sym)
+		}
+	}
+	return owned, aliases
+}
+
+// contributesName reports whether a member contributes a name to its namespace,
+// as Membership::memberName does in the reference: a member naming an existing
+// feature rather than declaring one contributes none.
+func contributesName(sym *symbols.Symbol) bool {
+	switch decl := sym.Decl.(type) {
+	case *ast.Usage:
+		if decl.Ident.Name == "" && decl.Ident.ShortName == "" {
+			// An unnamed feature takes a name from the feature it redefines,
+			// never from one it merely references (KerML 7.4.9).
+			return sym.EffectiveName && !namedByReference(sym)
+		}
+		// `metadata M about x` declares no name: the grammar requires the
+		// typing M there (SysML.xtext MetadataUsageDeclaration), which our
+		// parser records as the declared name instead.
+		if decl.Kind == ast.UsageMetadata && !hasTypingRelationship(decl) {
+			return false
+		}
+		// `connector a to b` names no connector either: a name may only precede
+		// `from` (KerML.xtext BinaryConnectorDeclaration). Our parser records
+		// the first end as the declared name and keeps one end.
+		if decl.Keyword == "connector" && len(decl.ConnectorEnds) == 1 {
+			return false
+		}
+		return true
+	case *ast.Definition:
+		return decl.Ident.Name != "" || decl.Ident.ShortName != ""
+	}
+	// A `first x` node borrows the name of the node it sequences.
+	return sym.NameSpan != (source.Span{})
+}
+
+func hasTypingRelationship(decl *ast.Usage) bool {
+	for _, rel := range decl.Relationships {
+		if rel != nil && rel.Kind == ast.RelTyping {
+			return true
+		}
+	}
+	return false
+}
+
+// implicitlyRedefined reports whether a member takes an inherited feature's name
+// by implicitly redefining it: a behavior parameter matched by position, and the
+// subject, actors, stakeholders and objective of a requirement or case
+// (KerML 7.3.4.5, SysML 7.18.4).
+func implicitlyRedefined(sym *symbols.Symbol) bool {
+	if isParameter(sym) {
+		return true
+	}
+	switch decl := sym.Decl.(type) {
+	case *ast.SubjectMember:
+		return true
+	case *ast.ConnectorEnd:
+		// A connect-clause end redefines the end of the typing connector
+		// definition at the same position (SysML 7.13.2).
+		return true
+	case *ast.Usage:
+		// An end of a specializing association or connector redefines the
+		// corresponding end by position (KerML 8.4.4.6).
+		if decl.IsEnd {
+			return true
+		}
+		switch decl.Kind {
+		case ast.UsageSubject, ast.UsageActor, ast.UsageStakeholder, ast.UsageObjective:
+			return true
+		}
+	}
+	return false
+}
+
+func byName(syms []*symbols.Symbol) map[string][]*symbols.Symbol {
+	out := map[string][]*symbols.Symbol{}
+	for _, sym := range syms {
+		out[sym.Name] = append(out[sym.Name], sym)
+	}
+	return out
+}

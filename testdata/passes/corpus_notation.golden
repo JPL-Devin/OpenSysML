@@ -1,1 +1,2 @@
-(no diagnostics)
+33:18 warning [name-resolution/name-conflict] Duplicate of other owned member name
+34:17 warning [name-resolution/name-conflict] Duplicate of other owned member name
