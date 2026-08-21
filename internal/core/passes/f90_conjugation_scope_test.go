@@ -1,8 +1,6 @@
 package passes
 
 import (
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -11,23 +9,14 @@ import (
 // counted so a fixture's other diagnostics do not stand in for it.
 const f90PortMessage = "'~' names the conjugated port definition of a port definition"
 
-// f90FixtureDiags analyzes a fixture under testdata/passes as the document it is
-// named, whose extension decides the language.
-func f90FixtureDiags(t *testing.T, file, diagSource string) []Diagnostic {
-	t.Helper()
-	data, err := os.ReadFile(filepath.Join("..", "..", "..", "testdata", "passes", file))
-	if err != nil {
-		t.Fatalf("read fixture: %v", err)
-	}
-	return diagsIn(t, file, string(data), diagSource)
-}
-
 // A KerML declaration conjugation is a Conjugation between Types, not a
 // ConjugatedPortTyping, so the port-definition demand must not reach it — KerML
 // has no ports at all. validate-kerml is silent on every shape in the fixture.
+// The fixture names `Base::Anything`, so it is analyzed against the library:
+// otherwise the unresolved name would skip the type tier and pass vacuously.
 func TestF90KerMLConjugationIsNotAPortTyping(t *testing.T) {
-	if diags := f90FixtureDiags(t, "f90_conjugation.kerml", "type"); len(diags) != 0 {
-		t.Fatalf("expected no type diagnostics on legal KerML conjugation, got %v", diags)
+	if diags := libraryFixtureDiags(t, "f90_conjugation.kerml"); len(diags) != 0 {
+		t.Fatalf("expected no diagnostics on legal KerML conjugation, got %v", diags)
 	}
 }
 
@@ -51,8 +40,8 @@ func TestF90KerMLConjugationFormsAreClean(t *testing.T) {
 // The notation the SysML rule accepts stays clean: a port typed by the conjugate
 // of a port definition.
 func TestF90SysMLConjugatedPortTypingIsClean(t *testing.T) {
-	if diags := f90FixtureDiags(t, "f90_conjugation_ports.sysml", "type"); len(diags) != 0 {
-		t.Fatalf("expected no type diagnostics on `port p : ~P`, got %v", diags)
+	if diags := libraryFixtureDiags(t, "f90_conjugation_ports.sysml"); len(diags) != 0 {
+		t.Fatalf("expected no diagnostics on `port p : ~P`, got %v", diags)
 	}
 }
 

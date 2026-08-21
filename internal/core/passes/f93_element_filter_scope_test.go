@@ -18,11 +18,12 @@ import (
 // of which `passes/` or `resolve/` can reach.
 const f93Blocked = "blocked on internal/core/semantics: metaclassName maps no KerML kind and a metaclass feature is not read reflectively"
 
-// f93LibraryDiags analyzes a library-backed fixture as the document it is named,
-// whose extension decides the language. The reflective metaclasses a filter
-// condition names (`Element`, `Type`, `Feature`, `Structure`) are library
-// elements, so the standard library has to be loaded for the condition to compile.
-func f93LibraryDiags(t *testing.T, file string) []Diagnostic {
+// libraryFixtureDiags analyzes a fixture under testdata/passes as the document it
+// is named, whose extension decides the language, against the standard library. A
+// fixture naming a library element (`Base::Anything`, the reflective metaclasses a
+// filter condition reads) is unresolved without it, and an unresolved name skips
+// the type tier — which would make a type-tier assertion vacuous.
+func libraryFixtureDiags(t *testing.T, file string) []Diagnostic {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join("..", "..", "..", "testdata", "passes", file))
 	if err != nil {
@@ -52,7 +53,7 @@ func f93LibraryDiags(t *testing.T, file string) []Diagnostic {
 // the candidates and then report their names unresolved.
 func TestF93ElementFilterOverKerMLCandidates(t *testing.T) {
 	t.Skip(f93Blocked)
-	if diags := f93LibraryDiags(t, "f93_element_filter.kerml"); len(diags) != 0 {
+	if diags := libraryFixtureDiags(t, "f93_element_filter.kerml"); len(diags) != 0 {
 		t.Fatalf("expected no diagnostics, got %v", diags)
 	}
 }
@@ -61,7 +62,7 @@ func TestF93ElementFilterOverKerMLCandidates(t *testing.T) {
 // what remains is the metaclass feature read.
 func TestF93ElementFilterOverSysMLCandidates(t *testing.T) {
 	t.Skip(f93Blocked)
-	if diags := f93LibraryDiags(t, "f93_element_filter.sysml"); len(diags) != 0 {
+	if diags := libraryFixtureDiags(t, "f93_element_filter.sysml"); len(diags) != 0 {
 		t.Fatalf("expected no diagnostics, got %v", diags)
 	}
 }
@@ -77,7 +78,7 @@ func TestF93DroppedCandidatesAreTheOnlyDiagnostics(t *testing.T) {
 		{"f93_element_filter.kerml", 3}, // ByMetaclass::Test, ByMetaFeature::Test and its feature
 		{"f93_element_filter.sysml", 1}, // ByMetaFeature::Test
 	} {
-		diags := f93LibraryDiags(t, tc.file)
+		diags := libraryFixtureDiags(t, tc.file)
 		if len(diags) != tc.want {
 			t.Fatalf("%s: got %d diagnostics, want %d: %v", tc.file, len(diags), tc.want, diags)
 		}
