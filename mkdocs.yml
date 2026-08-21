@@ -142,6 +142,7 @@ nav:
       - Pilot corpora gate: project/pilot-corpora.md
       - Pilot differential: project/pilot-differential.md
       - Pilot execution referee: project/pilot-execution-referee.md
+      - Pilot Xpect expectations: project/pilot-xpect.md
       - Grammar coverage: project/grammar-coverage.md
       - Roadmap: project/roadmap.md
       - Releasing: project/releasing.md
