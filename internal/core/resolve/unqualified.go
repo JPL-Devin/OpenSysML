@@ -280,6 +280,11 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 	}
 	admit := r.importAdmits(scope, imp)
 	if imp.Kind == ast.ImportMembership {
+		// A membership import names a membership: `import P::Car` where Car is an
+		// alias imports that name, so the alias is what it surfaces.
+		if alias, isAlias := r.PartAlias(imp.Imported, len(imp.Imported.Parts)-1); isAlias {
+			target = alias
+		}
 		// The imported member itself (last segment) is visible by its own name.
 		// For FQN-indexed symbols (stdlib), target.Name may be the full FQN, so extract last segment.
 		targetName := target.Name
