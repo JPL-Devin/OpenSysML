@@ -77,16 +77,21 @@ function requireSyside(home) {
 function stageWorkspace(root, files) {
 	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "syside-batch-"));
 	const staged = [];
-	for (const file of files) {
-		const rel = path.relative(root, file);
-		if (rel.startsWith("..") || path.isAbsolute(rel)) {
-			process.stderr.write(`Error: ${file} is outside the workspace root ${root}\n`);
-			process.exit(2);
+	try {
+		for (const file of files) {
+			const rel = path.relative(root, file);
+			if (rel.startsWith("..") || path.isAbsolute(rel)) {
+				throw new Error(`${file} is outside the workspace root ${root}`);
+			}
+			const target = path.join(dir, rel);
+			fs.mkdirSync(path.dirname(target), { recursive: true });
+			fs.copyFileSync(file, target);
+			staged.push({ rel, target });
 		}
-		const target = path.join(dir, rel);
-		fs.mkdirSync(path.dirname(target), { recursive: true });
-		fs.copyFileSync(file, target);
-		staged.push({ rel, target });
+	} catch (error) {
+		fs.rmSync(dir, { recursive: true, force: true });
+		process.stderr.write(`Error: ${error?.message ?? error}\n`);
+		process.exit(2);
 	}
 	return { dir, staged };
 }
@@ -117,6 +122,7 @@ async function main() {
 
 	const syside = requireSyside(home);
 	const { dir, staged } = stageWorkspace(options.root, options.files);
+	let status = 2;
 	try {
 		const services = syside.languageserver.createSysMLServices(syside.node.SysMLNodeFileSystem, {
 			standardLibraryPath: options.library,
@@ -148,10 +154,13 @@ async function main() {
 			}
 		}
 		process.stderr.write(out);
-		process.exit(errors > 0 ? 1 : 0);
+		status = errors > 0 ? 1 : 0;
 	} finally {
 		fs.rmSync(dir, { recursive: true, force: true });
 	}
+	// exit rather than return: the language server leaves handles that would keep
+	// the event loop alive.
+	process.exit(status);
 }
 
 main().catch((error) => {
