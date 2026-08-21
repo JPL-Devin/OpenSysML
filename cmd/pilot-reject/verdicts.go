@@ -89,6 +89,7 @@ func pilotErrors(validator, repo, dir string, files []string, timeout time.Durat
 		defer cancel()
 	}
 
+	// #nosec G204 -- the validator to run is named on the command line.
 	cmd := exec.CommandContext(ctx, validator, args...)
 	cmd.Stdout = nil // "Reading <library file>..." progress noise
 	stderr, err := cmd.StderrPipe()

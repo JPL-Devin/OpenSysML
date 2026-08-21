@@ -73,16 +73,22 @@ func run(repo, validator, kermlValidator, corpus, out string, timeout time.Durat
 	if out == "" {
 		out = filepath.Join(repo, "build", "pilot-reject")
 	}
-	if _, err := os.Stat(validator); err != nil {
-		return fmt.Errorf("pilot validator not found at %s: run ./scripts/download-pilot-sysml-validator.sh", validator)
-	}
-
 	files, err := collectCases(repo, corpusDir)
 	if err != nil {
 		return err
 	}
 	if len(files) == 0 {
 		return fmt.Errorf("no .sysml or .kerml files under %s", corpusDir)
+	}
+
+	batches := batchByLanguage(files)
+	for _, batch := range batches {
+		if _, err := os.Stat(pilotFor(batch.Kind, validator, kermlValidator)); err != nil {
+			if batch.Kind == source.KindKerML {
+				return fmt.Errorf("KerML pilot validator not found at %s: run ./scripts/download-pilot-kerml-validator.sh", kermlValidator)
+			}
+			return fmt.Errorf("pilot validator not found at %s: run ./scripts/download-pilot-sysml-validator.sh", validator)
+		}
 	}
 
 	cases := make(map[string]*Case, len(files))
@@ -94,15 +100,9 @@ func run(repo, validator, kermlValidator, corpus, out string, timeout time.Durat
 		cases[rel] = c
 	}
 
-	for _, batch := range batchByLanguage(files) {
+	for _, batch := range batches {
 		fmt.Fprintf(os.Stderr, "negative corpus: %d %s case(s)\n", len(batch.Files), batch.Kind)
-		pilot := validator
-		if batch.Kind == source.KindKerML {
-			pilot = kermlValidator
-			if _, err := os.Stat(pilot); err != nil {
-				return fmt.Errorf("KerML pilot validator not found at %s: run ./scripts/download-pilot-kerml-validator.sh", pilot)
-			}
-		}
+		pilot := pilotFor(batch.Kind, validator, kermlValidator)
 		ours, err := openSysMLErrors(repo, corpusDir, batch.Files)
 		if err != nil {
 			return err
@@ -127,6 +127,14 @@ func run(repo, validator, kermlValidator, corpus, out string, timeout time.Durat
 	return writeReports(out, report)
 }
 
+// pilotFor picks the reference validator for a language batch.
+func pilotFor(kind source.Kind, validator, kermlValidator string) string {
+	if kind == source.KindKerML {
+		return kermlValidator
+	}
+	return validator
+}
+
 // classify fills the case's verdicts. A side rejects when it reports at least
 // one error-severity diagnostic; warnings do not count.
 func classify(c *Case, ours, theirs []string) {
@@ -149,6 +157,7 @@ func classify(c *Case, ours, theirs []string) {
 // readCase reads one corpus file and its mandatory header: the first line must
 // state the violated rule and its citation, so no case is anecdotal.
 func readCase(repo, dir, rel string) (*Case, error) {
+	// #nosec G304 -- the corpus root to validate is named on the command line.
 	content, err := os.ReadFile(filepath.Join(repo, dir, filepath.FromSlash(rel)))
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", rel, err)
