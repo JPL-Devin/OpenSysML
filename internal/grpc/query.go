@@ -222,6 +222,7 @@ var metamodelTypeNames = map[symbols.SymbolKind]string{
 	symbols.SymbolRenderingUsage:        "RenderingUsage",
 	symbols.SymbolConcernUsage:          "ConcernUsage",
 	symbols.SymbolConnectionUsage:       "ConnectionUsage",
+	symbols.SymbolSuccessionUsage:       "SuccessionAsUsage",
 	symbols.SymbolFlowUsage:             "FlowUsage",
 	symbols.SymbolPortUsage:             "PortUsage",
 	symbols.SymbolInterfaceUsage:        "InterfaceUsage",

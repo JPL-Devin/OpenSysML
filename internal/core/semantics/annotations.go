@@ -564,6 +564,8 @@ func metaclassName(kind symbols.SymbolKind) string {
 		return "ConnectionDefinition"
 	case symbols.SymbolConnectionUsage:
 		return "ConnectionUsage"
+	case symbols.SymbolSuccessionUsage:
+		return "SuccessionAsUsage"
 	case symbols.SymbolFlowDef:
 		return "FlowDefinition"
 	case symbols.SymbolFlowUsage:

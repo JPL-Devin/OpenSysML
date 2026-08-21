@@ -926,9 +926,11 @@ func (r *Resolver) resolveExpr(scope *symbols.Scope, e ast.Node) {
 			r.resolveRelationships(scope, v, p.Relationships)
 			r.resolveExpr(scope, p.Value)
 		}
-		// A body expression's parameters live in a scope of their own, built
-		// into the document scope tree alongside the declarations.
-		r.resolveExpr(symbols.BodyExprScope(scope, v), v.Result)
+		// A body expression's parameters and declarations live in a scope of its
+		// own, and its declarations are members of it (F64).
+		inner := symbols.BodyExprScope(scope, v)
+		r.walkMembers(inner, v.Members)
+		r.resolveExpr(inner, v.Result)
 	case *ast.SequenceExpr:
 		for _, el := range v.Elements {
 			r.resolveExpr(scope, el)

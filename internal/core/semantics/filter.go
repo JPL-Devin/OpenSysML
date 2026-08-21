@@ -403,6 +403,7 @@ func isFeaturingType(sym *symbols.Symbol) bool {
 		symbols.SymbolMetadataUsage, symbols.SymbolViewUsage,
 		symbols.SymbolViewpointUsage, symbols.SymbolRenderingUsage,
 		symbols.SymbolConcernUsage, symbols.SymbolConnectionUsage,
+		symbols.SymbolSuccessionUsage,
 		symbols.SymbolFlowUsage, symbols.SymbolPortUsage,
 		symbols.SymbolInterfaceUsage, symbols.SymbolAllocationUsage,
 		symbols.SymbolActionUsage, symbols.SymbolStateUsage,

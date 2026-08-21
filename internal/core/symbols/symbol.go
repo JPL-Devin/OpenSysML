@@ -62,6 +62,9 @@ const (
 	SymbolConcernUsage
 	// Tier B usages.
 	SymbolConnectionUsage
+	// SymbolSuccessionUsage classifies a succession usage: a SuccessionAsUsage
+	// (SysML v2 §8.3.13.7), a ConnectorAsUsage that is not a ConnectionUsage.
+	SymbolSuccessionUsage
 	SymbolFlowUsage
 	SymbolPortUsage
 	SymbolInterfaceUsage
@@ -136,6 +139,7 @@ var symbolKindNames = map[SymbolKind]string{
 	SymbolRenderingUsage:          "renderingUsage",
 	SymbolConcernUsage:            "concernUsage",
 	SymbolConnectionUsage:         "connectionUsage",
+	SymbolSuccessionUsage:         "successionUsage",
 	SymbolFlowUsage:               "flowUsage",
 	SymbolPortUsage:               "portUsage",
 	SymbolInterfaceUsage:          "interfaceUsage",

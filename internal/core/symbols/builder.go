@@ -481,6 +481,10 @@ func usageSymbolKind(k ast.UsageKind) SymbolKind {
 		// A KerML `connector` is the connection usage of the kernel layer
 		// (KerML 1.0 §7.4.6), so it is one kind of symbol.
 		return SymbolConnectionUsage
+	case ast.UsageSuccession:
+		// A succession is a SuccessionAsUsage (SysML v2 §8.3.13.7): a connector
+		// usage of its own kind, so it is a redefinition target like any feature.
+		return SymbolSuccessionUsage
 	case ast.UsageFlow:
 		return SymbolFlowUsage
 	case ast.UsagePort:
