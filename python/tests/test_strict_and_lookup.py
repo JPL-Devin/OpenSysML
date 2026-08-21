@@ -4,10 +4,10 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from pysysml.connection import Connection
-from pysysml.errors import ModelError, SymbolNotFoundError
-from pysysml.model import Model
-from pysysml.proto import sysml_pb2
+from opensysml.connection import Connection
+from opensysml.errors import ModelError, SymbolNotFoundError
+from opensysml.model import Model
+from opensysml.proto import sysml_pb2
 
 
 def _response(diagnostics=(), children=()):
@@ -94,7 +94,7 @@ class TestStrictLoading:
             stub = Mock()
             stub.ParseFile.return_value = response
             with patch(
-                'pysysml.proto.sysml_pb2_grpc.SysMLServiceStub', return_value=stub
+                'opensysml.proto.sysml_pb2_grpc.SysMLServiceStub', return_value=stub
             ):
                 return Connection(auto_start=False)
 

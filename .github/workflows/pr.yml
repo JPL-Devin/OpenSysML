@@ -301,9 +301,9 @@ jobs:
 
       - name: Install sysml-grpc binary
         run: |
-          mkdir -p ~/.pysysml/bin
-          cp bin/sysml-grpc ~/.pysysml/bin/
-          chmod +x ~/.pysysml/bin/sysml-grpc
+          mkdir -p ~/.opensysml/bin
+          cp bin/sysml-grpc ~/.opensysml/bin/
+          chmod +x ~/.opensysml/bin/sysml-grpc
 
       - name: Install Python package
         working-directory: python
@@ -315,8 +315,8 @@ jobs:
       # which exercises nothing, so one runs here for the rest of the job.
       - name: Start sysml-grpc service
         run: |
-          chmod +x ~/.pysysml/bin/sysml-grpc
-          nohup ~/.pysysml/bin/sysml-grpc -port 50051 > /tmp/sysml-grpc.log 2>&1 &
+          chmod +x ~/.opensysml/bin/sysml-grpc
+          nohup ~/.opensysml/bin/sysml-grpc -port 50051 > /tmp/sysml-grpc.log 2>&1 &
           python3 - <<'PY'
           import socket, sys, time
 
@@ -330,13 +330,13 @@ jobs:
           sys.exit("sysml-grpc never listened on 50051")
           PY
 
-      # PYSYSML_REQUIRE_SERVICE turns "no service, so skip" into a failure: a
+      # OPENSYSML_REQUIRE_SERVICE turns "no service, so skip" into a failure: a
       # service is provided here, so its absence is the bug, not a pass.
       - name: Run Python tests
         working-directory: python
         env:
-          PYSYSML_REQUIRE_SERVICE: 1
+          OPENSYSML_REQUIRE_SERVICE: 1
         run: pytest tests/ -v
 
       - name: Verify import
-        run: python3 -c "import pysysml; print(f'pysysml {pysysml.__version__} imported successfully')"
+        run: python3 -c "import opensysml; print(f'opensysml {opensysml.__version__} imported successfully')"

@@ -1,16 +1,16 @@
 """Tests for runtime methods (eval, instantiate, etc.)."""
 import pytest
 from unittest.mock import Mock, patch
-from pysysml.capabilities import CAPABILITY_FEATURE_VALUES
-from pysysml.connection import Connection
-from pysysml.proto import sysml_pb2
-from pysysml.errors import ExecutionError
+from opensysml.capabilities import CAPABILITY_FEATURE_VALUES
+from opensysml.connection import Connection
+from opensysml.proto import sysml_pb2
+from opensysml.errors import ExecutionError
 
 
 def test_eval_simple_expression():
     """Test eval() with mocked RPC."""
     with patch('grpc.insecure_channel'):
-        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub') as mock_stub_cls:
+        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub') as mock_stub_cls:
             mock_stub = Mock()
             mock_stub_cls.return_value = mock_stub
             
@@ -31,7 +31,7 @@ def test_eval_simple_expression():
 def test_instantiate_returns_instance():
     """Test instantiate() with mocked RPC."""
     with patch('grpc.insecure_channel'):
-        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub') as mock_stub_cls:
+        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub') as mock_stub_cls:
             mock_stub = Mock()
             mock_stub_cls.return_value = mock_stub
             
@@ -59,7 +59,7 @@ def test_instantiate_returns_instance():
 def test_eval_raises_on_error():
     """Test eval() raises ExecutionError on failure."""
     with patch('grpc.insecure_channel'):
-        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub') as mock_stub_cls:
+        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub') as mock_stub_cls:
             mock_stub = Mock()
             mock_stub_cls.return_value = mock_stub
             
@@ -78,7 +78,7 @@ def test_eval_raises_on_error():
 def test_execute_action_with_inputs():
     """Test execute_action() returns outputs correctly."""
     with patch('grpc.insecure_channel'):
-        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub') as mock_stub_cls:
+        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub') as mock_stub_cls:
             mock_stub = Mock()
             mock_stub_cls.return_value = mock_stub
             
@@ -103,7 +103,7 @@ def test_execute_action_with_inputs():
 def test_execute_state_visits_states():
     """Test execute_state() returns trace of states_visited."""
     with patch('grpc.insecure_channel'):
-        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub') as mock_stub_cls:
+        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub') as mock_stub_cls:
             mock_stub = Mock()
             mock_stub_cls.return_value = mock_stub
             
@@ -126,10 +126,10 @@ def test_execute_state_visits_states():
 
 def test_execute_action_unsupported_output_keeps_the_others():
     """One value the wire format cannot represent must not discard the result."""
-    from pysysml.errors import UnsupportedValueError
+    from opensysml.errors import UnsupportedValueError
 
     with patch('grpc.insecure_channel'):
-        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub') as mock_stub_cls:
+        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub') as mock_stub_cls:
             mock_stub = Mock()
             mock_stub_cls.return_value = mock_stub
 
@@ -150,10 +150,10 @@ def test_execute_action_unsupported_output_keeps_the_others():
 
 def test_execute_state_unsupported_context_value_is_reported_in_place():
     """A final-context value the service cannot send is kept as its error."""
-    from pysysml.errors import UnsupportedValueError
+    from opensysml.errors import UnsupportedValueError
 
     with patch('grpc.insecure_channel'):
-        with patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub') as mock_stub_cls:
+        with patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub') as mock_stub_cls:
             mock_stub = Mock()
             mock_stub_cls.return_value = mock_stub
 

@@ -68,7 +68,7 @@ github.com/Open-MBEE/OpenSysML
 ├── internal/lsp/           # LSP protocol implementation
 ├── internal/repl/          # REPL loop implementation
 ├── internal/grpc/          # gRPC service implementation
-├── python/                 # Python client bindings (pysysml)
+├── python/                 # Python client bindings (opensysml)
 ├── api/proto/              # Protobuf service definitions
 ├── testdata/               # Test fixtures (.sysml, .kerml)
 ├── examples/               # Example models and demos
@@ -651,7 +651,7 @@ Every behavioral feature must have:
 - Test case(s) exercising the feature
 - Status: ✅ Faithful / ⚠️ Approximate / ❌ Not Yet Implemented / 🚧 Known Failure
 
-**Current coverage:** of the 653 rules tracked in the compliance map, 573 are faithful, 73 approximate and 7 not implemented — a progress measure over our own row list, not a compliance percentage. Behavioral rows are self-assessed: the pinned reference implementation evaluates expressions but does not execute actions or state machines, so nothing external adjudicates them. Calc/constraint/requirement functional. Action/state executor infrastructure complete (fork/join/decision, TimeEvent/ChangeEvent, guards, hierarchy, orthogonal regions all tested); every conformance case passes. Fork/join, shallow/deep history, entry/exit points and deferred events are implemented and reachable from source text — see docs/project/spec-compliance.md and docs/reference/grammar/README.md.
+**Current coverage:** of the 653 rules tracked in the compliance map, 577 are faithful, 69 approximate and 7 not implemented — a progress measure over our own row list, not a compliance percentage. Behavioral rows are self-assessed: the pinned reference implementation evaluates expressions but does not execute actions or state machines, so nothing external adjudicates them. Calc/constraint/requirement functional. Action/state executor infrastructure complete (fork/join/decision, TimeEvent/ChangeEvent, guards, hierarchy, orthogonal regions all tested); every conformance case passes. Fork/join, shallow/deep history, entry/exit points and deferred events are implemented and reachable from source text — see docs/project/spec-compliance.md and docs/reference/grammar/README.md.
 
 ---
 

@@ -274,6 +274,20 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		}
 	}
 
+	// An action usage with an accept payload is an AcceptActionUsage, implicitly
+	// typed by AcceptAction, which supplies `receiver` and `acceptedMessage`
+	// (SysML v2 §7.16.5, §8.3.17).
+	if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Kind == ast.UsageAction && hasAcceptPayload(usage) {
+		for _, acceptDef := range m.resolver.Index().LookupQualified("Actions::AcceptAction") {
+			if acceptDef == nil || acceptDef == sym || seen[acceptDef] {
+				continue
+			}
+			seen[acceptDef] = true
+			out = append(out, acceptDef)
+			break
+		}
+	}
+
 	// A variant specializes the variation it is a variant of, so it carries the
 	// variation's type and features and restates only what it chooses
 	// (SysML v2 §7.20).
@@ -284,10 +298,12 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 
 	// Semantic metadata annotating this element — a `#keyword` prefix — adds the
 	// implicit specialization of its baseType (SysML v2 §7.27.3, §7.27.4).
+	fromMetadata := false
 	for _, base := range m.semanticMetadataBases(sym) {
 		if base == nil || base == sym || seen[base] {
 			continue
 		}
+		fromMetadata = true
 		seen[base] = true
 		out = append(out, base)
 	}
@@ -295,7 +311,6 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 	// A parameter of a behavior or step implicitly redefines the corresponding
 	// parameter of each behavior or step its owner specializes, and so takes
 	// that parameter's type when it declares none (see redefinition.go).
-	declared := len(out)
 	for _, redefined := range m.implicitParameterRedefinitions(sym) {
 		if seen[redefined] {
 			continue
@@ -315,16 +330,12 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		out = append(out, redefined)
 	}
 
-	// An untyped usage still specializes its standard-library base feature.
-	// Implicit redefinition does not stand in for it: the two rules are
-	// independent, and the redefined parameter may itself be untyped.
-	// A definition is asked even when it declares supertypes: implicitBase
-	// checks whether the declared chain already reaches its kind's base.
-	_, isDef := sym.Decl.(*ast.Definition)
-	if declared == 0 || isDef || m.isKerMLDoc(sym) {
-		if base := m.implicitBase(sym); base != nil {
-			out = append(out, base)
-		}
+	// A declaration keeps its kind's base whatever else it declares; implicitBase
+	// suppresses it only when a declared chain already reaches that base. A
+	// metadata keyword supplies the kind itself, so its baseType stands in.
+	if base := m.implicitBase(sym); !fromMetadata && base != nil && !seen[base] {
+		seen[base] = true
+		out = append(out, base)
 	}
 
 	m.directSupers[sym] = out
@@ -531,6 +542,17 @@ func (m *Model) HasSpecializationCycle(sym *symbols.Symbol) bool {
 func hasSendStatement(usage *ast.Usage) bool {
 	for _, member := range usage.Members {
 		if _, ok := member.(*ast.SendStatement); ok {
+			return true
+		}
+	}
+	return false
+}
+
+// hasAcceptPayload reports whether an action usage declares an accept payload
+// parameter, which is what makes it an AcceptActionUsage (SysML v2 §8.3.17).
+func hasAcceptPayload(usage *ast.Usage) bool {
+	for _, member := range usage.Members {
+		if payload, ok := unwrapUsage(member); ok && payload.IsAccept {
 			return true
 		}
 	}
