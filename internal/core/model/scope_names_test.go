@@ -121,6 +121,47 @@ func TestVisibleNamesRedefinitionSeesOnlyInherited(t *testing.T) {
 	has(t, names, []string{"a"}, nil)
 }
 
+// The redefinition-anchor cases below follow the reference's `*_Rdef` fixtures:
+// a redefinition removes the redefined feature's names from the type owning it.
+func TestVisibleNamesRedefinitionMasksTheRedefinedName(t *testing.T) {
+	src := "package test {\n\tfeature A {\n\t\tfeature a;\n\t}\n" +
+		"\tfeature B subsets A {\n\t\tfeature b redefines a;\n\t}\n\tfeature X;\n}\n"
+	names := namesAt(t, src, "feature X", VisibleNamesOptions{})
+	has(t, names, []string{"A.a", "B.b", "test.B.b"}, []string{"B.a", "test.B.a"})
+}
+
+func TestVisibleNamesRedefinitionAnchorSeesTheChainedTarget(t *testing.T) {
+	// MemberNameTests_MultipleInheritance_Rdef: at `c redefines b`, C offers the
+	// inherited `b` and no `a` — B's redefinition masked it.
+	src := "package test {\n\tfeature A {\n\t\tfeature a;\n\t}\n" +
+		"\tfeature B subsets A {\n\t\tfeature b redefines a;\n\t}\n" +
+		"\tfeature C subsets B {\n\t\tfeature c redefines b;\n\t}\n}\n"
+	names := namesAt(t, src, "redefines b", VisibleNamesOptions{Redefinition: true})
+	has(t, names, []string{"b", "C.b", "A.a"}, []string{"a", "C.a", "C.c"})
+}
+
+func TestVisibleNamesRedefinitionMasksTheShortName(t *testing.T) {
+	src := "package test {\n\tfeature A {\n\t\tfeature <a_id> a;\n\t}\n" +
+		"\tfeature B subsets A {\n\t\tfeature b redefines a;\n\t}\n\tfeature X;\n}\n"
+	names := namesAt(t, src, "feature X", VisibleNamesOptions{})
+	has(t, names, []string{"A.a", "A.a_id", "B.b"}, []string{"B.a", "B.a_id"})
+}
+
+func TestVisibleNamesRedefinitionMasksOnlyTheFeatureItNames(t *testing.T) {
+	// Two inherited features named `a`, one redefined: the other keeps the name.
+	src := "package test {\n\tfeature A1 {\n\t\tfeature a;\n\t}\n\tfeature A2 {\n\t\tfeature a;\n\t}\n" +
+		"\tfeature B subsets A1, A2 {\n\t\tfeature b redefines A1::a;\n\t}\n\tfeature X;\n}\n"
+	names := namesAt(t, src, "feature X", VisibleNamesOptions{})
+	has(t, names, []string{"B.a", "B.b", "A1.a", "A2.a"}, nil)
+}
+
+func TestVisibleNamesSubsettingDoesNotMask(t *testing.T) {
+	src := "package test {\n\tfeature A {\n\t\tfeature a;\n\t}\n" +
+		"\tfeature B subsets A {\n\t\tfeature b subsets a;\n\t}\n\tfeature X;\n}\n"
+	names := namesAt(t, src, "feature X", VisibleNamesOptions{})
+	has(t, names, []string{"A.a", "B.a", "B.b"}, nil)
+}
+
 func TestElementOnPathResolvesSegmentsAndAliases(t *testing.T) {
 	src := "package P {\n\tclassifier A {\n\t\tclassifier a1;\n\t}\n\talias AA for A;\n}\n"
 	ws := NewWorkspace()

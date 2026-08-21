@@ -4,11 +4,45 @@ import "github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 
 // MembersOf returns the members visible on sym: those declared directly in its
 // owned scope plus members inherited from what it specializes and what it
-// reference-subsets, with name masking — a member declared closer to sym hides
-// an inherited member of the same name (approximating redefinition/masking).
+// reference-subsets. Two maskings apply: a member declared closer to sym hides
+// an inherited member of the same name, and a feature redefined by one of sym's
+// features is not inherited at all (see masking.go).
 // Results are deterministic: local members first (declaration order), then
 // contributed members in MemberSources order.
 func (m *Model) MembersOf(sym *symbols.Symbol) []*symbols.Symbol {
+	return m.membersOf(sym, memberViewEffective)
+}
+
+// MembersOfIncludingRedefined is MembersOf without redefinition masking: the
+// members a type would have if none of its features redefined anything. A
+// redefinition shares its target's feature value, so the runtime shape needs
+// both.
+func (m *Model) MembersOfIncludingRedefined(sym *symbols.Symbol) []*symbols.Symbol {
+	return m.membersOf(sym, memberViewUnmasked)
+}
+
+// InheritedMembersOf returns what sym inherits plus the names it merely binds,
+// leaving out the features it declares and the mask they cause. It is the scope
+// a declaration written in sym resolves a redefinition target in (KerML
+// 8.3.3.3.6): a feature being declared is not yet a member of its own owner.
+func (m *Model) InheritedMembersOf(sym *symbols.Symbol) []*symbols.Symbol {
+	return m.membersOf(sym, memberViewInherited)
+}
+
+// memberView selects which of a type's members MembersOf reports.
+type memberView int
+
+const (
+	// memberViewEffective is what the type actually has: declarations plus
+	// unmasked inherited members.
+	memberViewEffective memberView = iota
+	// memberViewUnmasked applies no redefinition mask.
+	memberViewUnmasked
+	// memberViewInherited leaves out the features the type declares itself.
+	memberViewInherited
+)
+
+func (m *Model) membersOf(sym *symbols.Symbol, view memberView) []*symbols.Symbol {
 	if sym == nil {
 		return nil
 	}
@@ -19,7 +53,7 @@ func (m *Model) MembersOf(sym *symbols.Symbol) []*symbols.Symbol {
 	seenName := make(map[string]bool)
 	seenSym := make(map[*symbols.Symbol]bool)
 
-	collect := func(scope *symbols.Scope) {
+	collect := func(scope *symbols.Scope, inherited bool) {
 		if scope == nil {
 			return
 		}
@@ -28,6 +62,13 @@ func (m *Model) MembersOf(sym *symbols.Symbol) []*symbols.Symbol {
 				continue // masked by a closer declaration
 			}
 			for _, s := range scope.LookupLocalAll(key) {
+				if !inherited && view == memberViewInherited && s.Kind != symbols.SymbolAlias {
+					continue // a feature being declared is not yet a member
+				}
+				if inherited && view != memberViewUnmasked &&
+					m.inheritanceMasked(sym, s, view != memberViewInherited) {
+					continue // redefined by a feature of sym
+				}
 				if !seenSym[s] {
 					seenSym[s] = true
 					out = append(out, s)
@@ -35,15 +76,21 @@ func (m *Model) MembersOf(sym *symbols.Symbol) []*symbols.Symbol {
 			}
 		}
 		// Mark this scope's names only after processing it, so a short+primary
-		// pair in the same scope does not mask its own second key.
+		// pair in the same scope does not mask its own second key. A name no
+		// kept member binds masks nothing.
 		for _, key := range scope.MemberNames() {
-			seenName[key] = true
+			for _, s := range scope.LookupLocalAll(key) {
+				if seenSym[s] {
+					seenName[key] = true
+					break
+				}
+			}
 		}
 	}
 
-	collect(sym.Scope)
+	collect(sym.Scope, false)
 	for _, src := range m.MemberSources(sym) {
-		collect(src.Scope)
+		collect(src.Scope, true)
 	}
 	return out
 }

@@ -20,6 +20,7 @@ func DefaultRegistry() *Registry {
 	reg.Register(TypeCheckPass{})
 	reg.Register(ElementFilterPass{})
 	reg.Register(ConstraintPass{})
+	reg.Register(RedefinitionConformancePass{})
 	return reg
 }
 

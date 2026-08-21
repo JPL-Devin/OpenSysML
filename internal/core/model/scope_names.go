@@ -129,11 +129,43 @@ type nameWalk struct {
 	// expanding are the elements whose members are being enumerated on the
 	// current path, so a namespace that contains itself ends the descent.
 	expanding map[*symbols.Symbol]bool
+	// pending are the elements a declaration is being written in: the features
+	// they declare are not yet members, and mask nothing (KerML 8.3.3.3.6).
+	pending map[*symbols.Symbol]bool
+}
+
+// markPending records a type a declaration is being written in. A package
+// declares no features and nothing is pending in it.
+func (nw *nameWalk) markPending(sym *symbols.Symbol) {
+	if sym == nil || sym.Kind == symbols.SymbolPackage || sym.Kind == symbols.SymbolNamespace {
+		return
+	}
+	nw.pending[sym] = true
+}
+
+// membersOf reports the members of owner as the walk sees them: a type whose
+// declaration is still being written offers only what it inherits.
+func (nw *nameWalk) membersOf(owner *symbols.Symbol) []*symbols.Symbol {
+	if nw.pending[owner] {
+		return nw.sem.InheritedMembersOf(owner)
+	}
+	return nw.sem.MembersOf(owner)
 }
 
 // walk enumerates the anchor scope and its ancestors, then the index roots.
 func (nw *nameWalk) walk(anchor *symbols.Scope, redefinition bool) {
 	nw.expanding = map[*symbols.Symbol]bool{}
+	nw.pending = map[*symbols.Symbol]bool{}
+	if redefinition && anchor != nil {
+		// The anchor is the namespace a redefinition is written in, unless it
+		// is the redefining declaration's own scope — a cursor in its head —
+		// in which case the namespace is its owner.
+		owner := anchor.Owner()
+		nw.markPending(owner)
+		if semantics.DeclaresRedefinition(owner) && owner.OwnerScope != nil {
+			nw.markPending(owner.OwnerScope.Owner())
+		}
+	}
 	for s := anchor; s != nil; s = s.Parent() {
 		if s == anchor && redefinition {
 			nw.inherited(s.Owner(), "", 1, true)
@@ -161,7 +193,7 @@ func (nw *nameWalk) roots() {
 // members, as a reference written within the namespace sees them; inheriting
 // admits protected ones, which a specialization sees (KerML 8.2.3.3).
 func (nw *nameWalk) locals(s *symbols.Scope, prefix string, depth int, inside, inheriting bool) {
-	if s == nil {
+	if s == nil || nw.pending[s.Owner()] {
 		return
 	}
 	// The binding name is the key, not the symbol's own name: an alias member
@@ -185,7 +217,7 @@ func (nw *nameWalk) inherited(owner *symbols.Symbol, prefix string, depth int, i
 	if owner == nil || owner.Kind == symbols.SymbolPackage || owner.Kind == symbols.SymbolNamespace {
 		return
 	}
-	for _, sym := range nw.sem.MembersOf(owner) {
+	for _, sym := range nw.membersOf(owner) {
 		if !visibleAs(sym.Visibility, false, inheriting) {
 			continue
 		}
