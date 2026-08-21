@@ -486,7 +486,7 @@ Timings at `286f420f` (8 vCPU): two-way `1m14s`, three-way `2m44s`, SysIDE alone
 SysIDE prints `Collected standard library: [...]` on **stdout**; the harness discards stdout, so
 only stderr matters.
 
-## Refereeing the name-distinguishability rule (`resolve/distinguishability.go`)
+## Refereeing the name-distinguishability rule (`internal/core/resolve/distinguishability.go`)
 
 `build/pilot-validator/validate-sysml <one file>` is a faithful oracle for this rule — the four
 messages reproduce on a single file with no `--root` — so hand fixtures are the right surface, and
