@@ -13,7 +13,7 @@ import (
 // formatVersion is the on-disk index record format version. Bump it whenever
 // the persisted shape changes, or the resolution a record captures changes; a
 // mismatch invalidates all cached records.
-const formatVersion = 21
+const formatVersion = 22
 
 // symRecord is the reduced, gob-encodable projection of a symbols.Symbol.
 // It deliberately excludes the AST-backed Decl and the Scope/OwnerScope
@@ -358,6 +358,8 @@ func shortNameOf(decl ast.Node) string {
 	case *ast.Usage:
 		return d.Ident.ShortName
 	case *ast.Alias:
+		return d.Ident.ShortName
+	case *ast.RelationshipMember:
 		return d.Ident.ShortName
 	default:
 		return ""

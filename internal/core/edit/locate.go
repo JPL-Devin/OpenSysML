@@ -203,6 +203,8 @@ func declIdent(node ast.Node) (ast.Identification, bool) {
 		return d.Ident, true
 	case *ast.Dependency:
 		return d.Ident, true
+	case *ast.RelationshipMember:
+		return d.Ident, true
 	case *ast.Comment:
 		return d.Ident, true
 	case *ast.Documentation:

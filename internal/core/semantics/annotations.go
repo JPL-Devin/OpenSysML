@@ -382,12 +382,15 @@ func (m *Model) metaclassOf(sym *symbols.Symbol) *symbols.Symbol {
 	if sym == nil {
 		return nil
 	}
-	if name := kermlMetaclassName(sym, m.isKerMLDoc(sym)); name != "" {
-		for _, prefix := range kermlMetaclassPrefixes {
-			if meta := m.symbolByFQN(prefix + name); meta != nil {
-				return meta
-			}
+	// A relationship written keyword-first is classified by its own kind in
+	// either language, since no symbol kind distinguishes its forms.
+	if rel, ok := sym.Decl.(*ast.RelationshipMember); ok {
+		if meta := m.kermlMetaclass(relationshipMetaclassName(rel)); meta != nil {
+			return meta
 		}
+	}
+	if meta := m.kermlMetaclass(kermlMetaclassName(sym, m.isKerMLDoc(sym))); meta != nil {
+		return meta
 	}
 	name := metaclassName(sym.Kind)
 	if name == "" {
@@ -397,6 +400,40 @@ func (m *Model) metaclassOf(sym *symbols.Symbol) *symbols.Symbol {
 		return meta
 	}
 	return m.symbolByFQN(name)
+}
+
+// kermlMetaclass is the library element declaring the named KerML metaclass,
+// or nil for an unnamed or undeclared one.
+func (m *Model) kermlMetaclass(name string) *symbols.Symbol {
+	if name == "" {
+		return nil
+	}
+	for _, prefix := range kermlMetaclassPrefixes {
+		if meta := m.symbolByFQN(prefix + name); meta != nil {
+			return meta
+		}
+	}
+	return nil
+}
+
+// relationshipMetaclassName is the metaclass of a keyword-first relationship,
+// which conjugation writes as a form of its own (KerML §7.2).
+func relationshipMetaclassName(rel *ast.RelationshipMember) string {
+	if rel.Conjugated {
+		return "Conjugation"
+	}
+	return relationshipMetaclassNames[rel.Kind]
+}
+
+// relationshipMetaclassNames maps the kind of a relationship written
+// keyword-first to the KerML metaclass classifying it (KerML §7.2).
+var relationshipMetaclassNames = map[ast.RelationshipKind]string{
+	ast.RelSpecializes: "Specialization",
+	ast.RelTyping:      "FeatureTyping",
+	ast.RelSubsets:     "Subsetting",
+	ast.RelRedefines:   "Redefinition",
+	ast.RelInverseOf:   "FeatureInverting",
+	ast.RelFeaturedBy:  "TypeFeaturing",
 }
 
 // sysmlMetaclassPrefix qualifies the reflective metadata types of the SysML
@@ -564,6 +601,8 @@ func metaclassName(kind symbols.SymbolKind) string {
 		return "ConnectionDefinition"
 	case symbols.SymbolConnectionUsage:
 		return "ConnectionUsage"
+	case symbols.SymbolSuccessionUsage:
+		return "SuccessionAsUsage"
 	case symbols.SymbolFlowDef:
 		return "FlowDefinition"
 	case symbols.SymbolFlowUsage:

@@ -237,6 +237,26 @@ type Dependency struct {
 	HasBody   bool
 }
 
+// RelationshipMember is a KerML relationship written keyword-first as a member
+// of its own: `specialization Gen subtype A specializes B;` (KerML.xtext:390).
+// Its two ends are ordered — Source relates to Target, never the reverse.
+type RelationshipMember struct {
+	NodeBase
+	Ident Identification
+	Kind  RelationshipKind
+	// Keyword is the relationship keyword as written (`subtype`, `subclassifier`),
+	// and PrefixKeyword the one that may precede it (`specialization`).
+	Keyword       string
+	PrefixKeyword string
+	Source        Node // the specific/subsetting/featured end
+	Target        Node // the general/subsetted/featuring end
+	// Conjugated marks a Conjugation, whose target is the conjugate of Source.
+	Conjugated bool
+	Visibility Visibility
+	Members    []Node
+	HasBody    bool
+}
+
 // Comment is `[comment <id> [about refs]] [locale s] /* ... */`.
 type Comment struct {
 	NodeBase

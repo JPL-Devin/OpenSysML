@@ -89,18 +89,19 @@ func (p *Parser) atRelationshipMemberFirstEnd(off int) bool {
 }
 
 // parseRelationshipMember parses a keyword-first KerML relationship member into
-// an anonymous feature carrying one relationship per end, as the `disjoint`
-// member does.
+// the relationship element it declares, whose two ends are ordered.
 func (p *Parser) parseRelationshipMember(start int, vis ast.Visibility, trivia []ast.Trivia) ast.Node {
 	if p.atKeyword("featuring") {
 		return p.parseTypeFeaturingMember(start, vis, trivia)
 	}
 	var ident ast.Identification
+	var prefix string
 	kw := p.peek().KeywordID
 	form, ok := relationshipMemberForms[kw]
 	if !ok {
 		// A prefix keyword: `specialization Gen subtype A specializes B;`,
 		// whose identification is optional.
+		prefix = kw
 		p.advance()
 		if !p.atRelationshipMemberKeyword() {
 			ident = p.parseIdentification()
@@ -123,22 +124,20 @@ func (p *Parser) parseRelationshipMember(start int, vis ast.Visibility, trivia [
 	}
 	targetEnd := p.parseRelationshipTarget()
 
-	u := &ast.Usage{
-		Kind:  ast.UsageAttribute,
-		Ident: ident,
-		Relationships: []*ast.Relationship{
-			{Kind: form.kind, Target: sourceEnd},
-			{Kind: form.kind, Target: targetEnd, Conjugated: form.conjugated},
-		},
+	rel := &ast.RelationshipMember{
+		Ident:         ident,
+		Kind:          form.kind,
+		Keyword:       kw,
+		PrefixKeyword: prefix,
+		Source:        sourceEnd,
+		Target:        targetEnd,
+		Conjugated:    form.conjugated,
+		Visibility:    vis,
 	}
-	u.Members, u.HasBody = p.parseDefUsageBody()
-	u.NodeSpan = p.spanFrom(start)
-	u.SetLeadingTrivia(trivia)
-
-	m := &ast.Membership{Visibility: vis, Member: u}
-	m.NodeSpan = u.Span()
-	m.SetLeadingTrivia(trivia)
-	return m
+	rel.Members, rel.HasBody = p.parseDefUsageBody()
+	rel.NodeSpan = p.spanFrom(start)
+	rel.SetLeadingTrivia(trivia)
+	return rel
 }
 
 // acceptRelationshipSeparator consumes the separator between the two ends, in
@@ -181,20 +180,16 @@ func (p *Parser) parseTypeFeaturingMember(start int, vis ast.Visibility, trivia 
 	}
 	featuring := p.parseRelationshipTarget()
 
-	u := &ast.Usage{
-		Kind:  ast.UsageAttribute,
-		Ident: ident,
-		Relationships: []*ast.Relationship{
-			{Kind: ast.RelFeaturedBy, Target: featured},
-			{Kind: ast.RelFeaturedBy, Target: featuring},
-		},
+	rel := &ast.RelationshipMember{
+		Ident:      ident,
+		Kind:       ast.RelFeaturedBy,
+		Keyword:    "featuring",
+		Source:     featured,
+		Target:     featuring,
+		Visibility: vis,
 	}
-	u.Members, u.HasBody = p.parseDefUsageBody()
-	u.NodeSpan = p.spanFrom(start)
-	u.SetLeadingTrivia(trivia)
-
-	m := &ast.Membership{Visibility: vis, Member: u}
-	m.NodeSpan = u.Span()
-	m.SetLeadingTrivia(trivia)
-	return m
+	rel.Members, rel.HasBody = p.parseDefUsageBody()
+	rel.NodeSpan = p.spanFrom(start)
+	rel.SetLeadingTrivia(trivia)
+	return rel
 }

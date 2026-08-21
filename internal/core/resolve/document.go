@@ -70,6 +70,14 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		}
 	case *ast.Alias:
 		r.ResolveQualified(scope, d.For)
+	case *ast.RelationshipMember:
+		// Both ends of a keyword-first relationship name elements, in the scope
+		// the relationship is a member of.
+		r.resolveRelationshipEnd(scope, d.Source)
+		r.resolveRelationshipEnd(scope, d.Target)
+		if child := r.childScope(scope, d); child != nil {
+			r.walkMembers(child, d.Members)
+		}
 	case *ast.Dependency:
 		r.resolvePrefixes(scope, d.Prefixes)
 		for _, c := range d.Clients {
@@ -454,6 +462,19 @@ func (r *Resolver) resolveRelationships(scope *symbols.Scope, decl ast.Node, rel
 				r.resolveFeatureChain(scope, fc)
 			}
 		}
+	}
+}
+
+// resolveRelationshipEnd resolves one end of a keyword-first relationship,
+// which the notation writes as a name or a feature chain.
+func (r *Resolver) resolveRelationshipEnd(scope *symbols.Scope, end ast.Node) {
+	switch e := end.(type) {
+	case *ast.QualifiedName:
+		r.ResolveQualified(scope, e)
+	case *ast.FeatureReference:
+		r.ResolveQualified(scope, e.Name)
+	case *ast.FeatureChainExpr:
+		r.resolveFeatureChain(scope, e)
 	}
 }
 
@@ -926,9 +947,11 @@ func (r *Resolver) resolveExpr(scope *symbols.Scope, e ast.Node) {
 			r.resolveRelationships(scope, v, p.Relationships)
 			r.resolveExpr(scope, p.Value)
 		}
-		// A body expression's parameters live in a scope of their own, built
-		// into the document scope tree alongside the declarations.
-		r.resolveExpr(symbols.BodyExprScope(scope, v), v.Result)
+		// A body expression's parameters and declarations live in a scope of its
+		// own, and its declarations are members of it (F64).
+		inner := symbols.BodyExprScope(scope, v)
+		r.walkMembers(inner, v.Members)
+		r.resolveExpr(inner, v.Result)
 	case *ast.SequenceExpr:
 		for _, el := range v.Elements {
 			r.resolveExpr(scope, el)

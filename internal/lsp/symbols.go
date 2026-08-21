@@ -56,7 +56,7 @@ func lspSymbolKind(k symbols.SymbolKind) protocol.SymbolKind {
 		return protocol.SymbolKindNamespace
 	case symbols.SymbolAlias:
 		return protocol.SymbolKindVariable
-	case symbols.SymbolDependency:
+	case symbols.SymbolDependency, symbols.SymbolRelationship:
 		return protocol.SymbolKindModule
 	case symbols.SymbolComment, symbols.SymbolDocumentation, symbols.SymbolTextualRepresentation:
 		return protocol.SymbolKindString

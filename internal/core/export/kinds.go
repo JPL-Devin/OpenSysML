@@ -137,6 +137,45 @@ var relationshipProperty = map[ast.RelationshipKind]string{
 	ast.RelFeaturedBy:  "featuringType",
 }
 
+// relationshipEndForm describes how a keyword-first relationship element is
+// written as a graph: its metaclass and the properties naming its two ends,
+// which the OMG metamodel keeps ordered.
+type relationshipEndForm struct {
+	metaclass string
+	source    string
+	target    string
+}
+
+// relationshipElementForm maps a keyword-first relationship to its metaclass and
+// its ordered end properties (KerML §7.2, §8.3).
+var relationshipElementForm = map[ast.RelationshipKind]relationshipEndForm{
+	ast.RelSpecializes: {"Specialization", "specific", "general"},
+	ast.RelTyping:      {"FeatureTyping", "typedFeature", "type"},
+	ast.RelSubsets:     {"Subsetting", "subsettingFeature", "subsettedFeature"},
+	ast.RelRedefines:   {"Redefinition", "redefiningFeature", "redefinedFeature"},
+	ast.RelInverseOf:   {"FeatureInverting", "invertingFeature", "featureInverted"},
+	ast.RelFeaturedBy:  {"TypeFeaturing", "featureOfType", "featuringType"},
+}
+
+// conjugationForm is the form a `conjugate x conjugates y` member takes, which
+// is a Conjugation rather than the Specialization its kind records.
+var conjugationForm = relationshipEndForm{"Conjugation", "conjugatedType", "originalType"}
+
+// relationshipMemberSyntax reads a keyword-first relationship back from its
+// graph, keyed by the keyword the notation states.
+var relationshipMemberSyntax = map[string]struct {
+	source, target, separator string
+}{
+	"subtype":       {"specific", "general", "specializes"},
+	"subclassifier": {"specific", "general", "specializes"},
+	"typing":        {"typedFeature", "type", "typed by"},
+	"subset":        {"subsettingFeature", "subsettedFeature", "subsets"},
+	"redefinition":  {"redefiningFeature", "redefinedFeature", "redefines"},
+	"conjugate":     {"conjugatedType", "originalType", "conjugates"},
+	"inverse":       {"invertingFeature", "featureInverted", "of"},
+	"featuring":     {"featureOfType", "featuringType", "by"},
+}
+
 // relationshipSyntax gives the source syntax that introduces a relationship
 // when a declaration head is rebuilt from RDF.
 var relationshipSyntax = map[ast.RelationshipKind]string{

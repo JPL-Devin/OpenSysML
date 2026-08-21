@@ -22,6 +22,11 @@ type exprChecker struct {
 	// chaining guards the type of a feature read through a chain against a
 	// feature whose value names itself, directly or through another feature.
 	chaining map[*symbols.Symbol]bool
+	// walkMembers checks the declarations an expression body owns, which are
+	// members of the body's own scope (F64); bodiesChecked keeps one body from
+	// being checked twice when its type is inferred more than once.
+	walkMembers   func(*symbols.Scope, []ast.Node)
+	bodiesChecked map[*ast.BodyExpr]bool
 }
 
 func (ec *exprChecker) errorf(span source.Span, format string, args ...any) {
@@ -301,6 +306,7 @@ func (ec *exprChecker) inferCollect(scope *symbols.Scope, e *ast.CollectExpr) se
 func (ec *exprChecker) inferSelect(scope *symbols.Scope, e *ast.SelectExpr) semantics.PrimType {
 	ec.infer(scope, e.Operand)
 	if body, ok := e.Body.(*ast.BodyExpr); ok && body.Result != nil {
+		ec.checkBodyMembers(scope, body)
 		ec.checkBoolean(ec.bodyScope(scope, body), body.Result, "select predicate")
 		return semantics.PrimUnknown
 	}
@@ -312,6 +318,7 @@ func (ec *exprChecker) inferSelect(scope *symbols.Scope, e *ast.SelectExpr) sema
 // checking that result in the scope the body's parameters are declared in.
 func (ec *exprChecker) inferBody(scope *symbols.Scope, e *ast.BodyExpr) semantics.PrimType {
 	inner := ec.bodyScope(scope, e)
+	ec.checkBodyMembers(scope, e)
 	for i := range e.Params {
 		ec.infer(scope, e.Params[i].Value)
 	}
@@ -329,6 +336,21 @@ func (ec *exprChecker) bodyScope(scope *symbols.Scope, body *ast.BodyExpr) *symb
 		return nil
 	}
 	return symbols.BodyExprScope(scope, body)
+}
+
+// checkBodyMembers types the declarations an expression body owns, once per
+// body, in the scope they are members of.
+func (ec *exprChecker) checkBodyMembers(scope *symbols.Scope, body *ast.BodyExpr) {
+	if ec.walkMembers == nil || body == nil || len(body.Members) == 0 {
+		return
+	}
+	if ec.bodiesChecked == nil {
+		ec.bodiesChecked = make(map[*ast.BodyExpr]bool)
+	} else if ec.bodiesChecked[body] {
+		return
+	}
+	ec.bodiesChecked[body] = true
+	ec.walkMembers(ec.bodyScope(scope, body), body.Members)
 }
 
 func (ec *exprChecker) inferQualified(scope *symbols.Scope, qn *ast.QualifiedName) semantics.PrimType {

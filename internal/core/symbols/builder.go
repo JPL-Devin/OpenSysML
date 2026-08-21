@@ -42,6 +42,8 @@ func unwrapMember(m ast.Node) (ast.Node, ast.Visibility) {
 		return v, v.Visibility
 	case *ast.Alias:
 		return v, v.Visibility
+	case *ast.RelationshipMember:
+		return v, v.Visibility
 	default:
 		return m, ast.VisibilityDefault
 	}
@@ -70,6 +72,14 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 	case *ast.Dependency:
 		sym := newSymbol(d.Ident, SymbolDependency, d, vis, nil, scope, trivia)
 		defineIdent(scope, d.Ident, sym)
+	case *ast.RelationshipMember:
+		// A keyword-first relationship owns its members, and names one only when
+		// the notation gives it an identification.
+		child := NewScope(scope, d)
+		sym := newSymbol(d.Ident, SymbolRelationship, d, vis, child, scope, trivia)
+		defineIdent(scope, d.Ident, sym)
+		scope.AddChild(child)
+		buildMembers(child, d.Members)
 	case *ast.Comment:
 		sym := newSymbol(d.Ident, SymbolComment, d, vis, nil, scope, trivia)
 		defineIdent(scope, d.Ident, sym)
@@ -481,6 +491,10 @@ func usageSymbolKind(k ast.UsageKind) SymbolKind {
 		// A KerML `connector` is the connection usage of the kernel layer
 		// (KerML 1.0 §7.4.6), so it is one kind of symbol.
 		return SymbolConnectionUsage
+	case ast.UsageSuccession:
+		// A succession is a SuccessionAsUsage (SysML v2 §8.3.13.7): a connector
+		// usage of its own kind, so it is a redefinition target like any feature.
+		return SymbolSuccessionUsage
 	case ast.UsageFlow:
 		return SymbolFlowUsage
 	case ast.UsagePort:

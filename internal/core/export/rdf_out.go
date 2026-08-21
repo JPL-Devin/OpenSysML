@@ -353,6 +353,25 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
 		return e.encode(n.Body, fqn, subject)
 
+	case *ast.RelationshipMember:
+		form, ok := relationshipElementForm[n.Kind]
+		if n.Conjugated {
+			form, ok = conjugationForm, true
+		}
+		if !ok {
+			return &UnsupportedError{What: fmt.Sprintf("the %s relationship at %s", n.Keyword, e.where(n))}
+		}
+		head(rdf.SysMLTerm(form.metaclass))
+		e.ident(subject, n.Ident)
+		e.graph.Add(subject, e.sysx(xDeclaredKeyword), rdf.String(n.Keyword))
+		if n.PrefixKeyword != "" {
+			e.graph.Add(subject, e.sysx(xDeclaredPrefix), rdf.String(n.PrefixKeyword))
+		}
+		e.relationshipEnd(subject, owner, form.source, n.Source)
+		e.relationshipEnd(subject, owner, form.target, n.Target)
+		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
+		return e.encode(n.Members, fqn, subject)
+
 	case *ast.Dependency:
 		head(rdf.SysMLTerm("Dependency"))
 		e.ident(subject, n.Ident)
@@ -704,6 +723,19 @@ func (e *encoder) relationships(subject rdf.Term, owner string, rels []*ast.Rela
 	}
 }
 
+// relationshipEnd writes one end of a keyword-first relationship, as a link
+// when it names an element of this graph and as its written text otherwise.
+func (e *encoder) relationshipEnd(subject rdf.Term, owner, property string, end ast.Node) {
+	if end == nil {
+		return
+	}
+	if name, ok := end.(*ast.QualifiedName); ok {
+		e.graph.Add(subject, e.sysml(property), e.reference(owner, qualifiedText(name)))
+		return
+	}
+	e.graph.Add(subject, e.sysml(property), rdf.TypedLiteral(e.text(end), rdf.OpenSysML+dtExpression))
+}
+
 func (e *encoder) multiplicity(subject rdf.Term, owner string, mult *ast.Multiplicity) {
 	if mult == nil {
 		return
@@ -817,6 +849,8 @@ func unwrapMember(member ast.Node) (ast.Node, ast.Visibility) {
 		return n, n.Visibility
 	case *ast.Alias:
 		return n, n.Visibility
+	case *ast.RelationshipMember:
+		return n, n.Visibility
 	}
 	return member, ast.VisibilityDefault
 }
@@ -859,6 +893,8 @@ func declaredNameAndMembers(node ast.Node) (string, []ast.Node) {
 		return n.Ident.Name, n.Body
 	case *ast.Dependency:
 		return n.Ident.Name, n.Body
+	case *ast.RelationshipMember:
+		return n.Ident.Name, n.Members
 	case *ast.MultiplicityDecl:
 		return n.Ident.Name, n.Members
 	case *ast.ConstraintMember:
