@@ -28,19 +28,36 @@ func TestW8DMetadataBodyFeatureMustRedefineOwningTypeFeature(t *testing.T) {
 	w8dWantLines(t, src, "metadata-body-feature", 14, 16)
 }
 
-// The reference's INVALID_METADATA_FEATURE_METACLASS_NOT_ABSTRACT: annotating
-// with an abstract metadata definition has no concrete type.
-func TestW8DMetadataAnnotationTypeMustBeConcrete(t *testing.T) {
+// The reference's INVALID_METADATA_FEATURE_METACLASS_NOT_ABSTRACT on the
+// `metadata … : A` form, which MetadataTypePass (prefix annotations) does not
+// read. A prefix annotation must stay reported exactly once, by that pass.
+func TestW8DMetadataUsageTypeMustBeConcrete(t *testing.T) {
 	src := `package Test {
 	abstract metadata def Abs;
 	metadata def Concrete;
+	item p;
+	metadata m : Abs about p;
+	metadata n : Concrete about p;
+}
+`
+	w8dWantLines(t, src, "metadata-concrete-type", 5)
+
+	prefix := `package Test {
+	abstract metadata def Abs;
 	item p {
 		@Abs;
-		@Concrete;
 	}
 }
 `
-	w8dWantLines(t, src, "metadata-abstract-type", 5)
+	var concrete []Diagnostic
+	for _, d := range w8dDiags(t, prefix) {
+		if d.Message == msgMetadataConcreteType {
+			concrete = append(concrete, d)
+		}
+	}
+	if len(concrete) != 1 {
+		t.Fatalf("prefix annotation: got %d concrete-type diagnostics, want 1", len(concrete))
+	}
 }
 
 func TestW8DLegalMetadataAnnotationsStaySilent(t *testing.T) {
@@ -70,7 +87,7 @@ func TestW8DLegalMetadataAnnotationsStaySilent(t *testing.T) {
 	}
 }
 `
-	for _, code := range []string{"metadata-body-feature", "metadata-abstract-type"} {
+	for _, code := range []string{"metadata-body-feature", "metadata-concrete-type"} {
 		if lines := w8dLines(t, src, code); len(lines) != 0 {
 			t.Fatalf("%s on a legal model at lines %v", code, lines)
 		}

@@ -156,7 +156,7 @@ func TestW5CParseProblemsAreReported(t *testing.T) {
 
 func TestW5CMaskNotesKeepsOffsets(t *testing.T) {
 	content := []byte("package p {\n\t// XPECT errors --> \"m\" at \"class A;\"\n\tclass A;\n}\n")
-	masked := maskNotes(content)
+	masked, _ := maskNotes(content)
 	if len(masked) != len(content) {
 		t.Fatalf("masked length = %d, want %d", len(masked), len(content))
 	}

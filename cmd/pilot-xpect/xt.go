@@ -13,6 +13,9 @@ const (
 	kindNoErrors   = "noErrors"
 	kindLinkedName = "linkedName"
 	kindScope      = "scope"
+	// kindExportedObjects declares what the file contributes to the index, as
+	// `sysml::<Metaclass>: <qualified name>` lines.
+	kindExportedObjects = "exportedObjects"
 )
 
 // resource is one entry of an XPECT_SETUP ResourceSet block: either the .xt
@@ -42,6 +45,8 @@ type assertion struct {
 	Expected string        `json:"expected,omitempty"`
 	// Names is the comma-separated list an XPECT scope note declares.
 	Names []string `json:"names,omitempty"`
+	// Exported is the line-per-object list an XPECT exportedObjects note declares.
+	Exported []string `json:"exported,omitempty"`
 }
 
 // xtFile is one parsed .xt test: the resource set its setup declares and the
@@ -57,6 +62,8 @@ type xtFile struct {
 	// text is searched in model source only: an assertion is regularly followed
 	// by another XPECT note quoting the same text.
 	Masked []byte
+	// Noted records, per byte of Content, whether a note covers that offset.
+	Noted []bool
 	// Problems records what could not be read. A file with problems is counted
 	// as unparsed rather than compared.
 	Problems []string
@@ -88,7 +95,8 @@ var (
 // parseXT reads one .xt file: the XPECT_SETUP block, then every XPECT comment
 // in the body. Anything it cannot read lands in Problems, never dropped.
 func parseXT(path, language string, content []byte) xtFile {
-	f := xtFile{Path: path, Language: language, Content: content, Masked: maskNotes(content)}
+	f := xtFile{Path: path, Language: language, Content: content}
+	f.Masked, f.Noted = maskNotes(content)
 	text := string(content)
 
 	setupEnd, ok := f.parseSetup(text)
@@ -275,6 +283,13 @@ func (a *assertion) parseBody(rest string) error {
 			return fmt.Errorf("XPECT scope declares no name")
 		}
 		return nil
+	case kindExportedObjects:
+		a.Exported = exportedLines(rest)
+		a.Expected = strings.Join(a.Exported, "; ")
+		if len(a.Exported) == 0 {
+			return fmt.Errorf("XPECT exportedObjects declares no object")
+		}
+		return nil
 	default:
 		return nil
 	}
@@ -299,6 +314,20 @@ func scopeNames(rest string) []string {
 	return out
 }
 
+// exportedLines splits the object list of an XPECT exportedObjects note, one
+// `sysml::<Metaclass>: <qualified name>` per line inside a `---` fence.
+func exportedLines(rest string) []string {
+	var out []string
+	for _, line := range strings.Split(rest, "\n") {
+		line = strings.TrimSpace(strings.Trim(strings.TrimSpace(line), "-"))
+		if line == "" {
+			continue
+		}
+		out = append(out, strings.Join(strings.Fields(line), " "))
+	}
+	return out
+}
+
 // unescape undoes the backslash escapes a declared message is written with.
 func unescape(s string) string {
 	if !strings.Contains(s, `\`) {
@@ -309,13 +338,16 @@ func unescape(s string) string {
 }
 
 // maskNotes returns content with the text of every note replaced by spaces,
-// keeping every offset. KerML and SysML write notes as `//` to end of line and
-// `//* ... */`, and both forms carry XPECT assertions.
-func maskNotes(content []byte) []byte {
+// keeping every offset, and a per-byte record of which offsets a note covers.
+// KerML and SysML write notes as `//` to end of line and `//* ... */`, and both
+// forms carry XPECT assertions.
+func maskNotes(content []byte) ([]byte, []bool) {
 	out := make([]byte, len(content))
 	copy(out, content)
+	noted := make([]bool, len(content))
 	blank := func(from, to int) {
 		for i := from; i < to && i < len(out); i++ {
+			noted[i] = true
 			if out[i] != '\n' && out[i] != '\r' {
 				out[i] = ' '
 			}
@@ -339,7 +371,7 @@ func maskNotes(content []byte) []byte {
 		blank(i, end)
 		i = end - 1
 	}
-	return out
+	return out, noted
 }
 
 // indexPast returns the offset just past sep at or after from, or the end.

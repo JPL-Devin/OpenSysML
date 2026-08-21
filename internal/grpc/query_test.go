@@ -91,6 +91,9 @@ func TestQueryCapabilityIsReported(t *testing.T) {
 	if !slices.Contains(info.Capabilities, CapabilityQuery) {
 		t.Errorf("capabilities = %v, want it to contain %q", info.Capabilities, CapabilityQuery)
 	}
+	if !slices.Contains(info.Capabilities, CapabilityOSLCQuery) {
+		t.Errorf("capabilities = %v, want it to contain %q", info.Capabilities, CapabilityOSLCQuery)
+	}
 }
 
 // TestQueryByTypeSelectsThatMetamodelType verifies the cookbook payload shape:
