@@ -67,7 +67,7 @@ func run(repo, out string, jobs int) error {
 	report := &Report{
 		Pilot:   pilotPin(repo),
 		Corpus:  "build/pilot-xpect-corpus",
-		Library: "our embedded standard library, in place of the /library* copies each suite ships",
+		Library: "the suite's own /library* copies, loaded per fixture as its XPECT_SETUP declares them",
 	}
 	for _, s := range defaultSuites {
 		dir := filepath.Join(repo, filepath.FromSlash(s.Dir))
@@ -96,6 +96,7 @@ func run(repo, out string, jobs int) error {
 // report does not depend on the scheduler.
 func compareAll(dir string, files []string, jobs int) []fileResult {
 	results := make([]fileResult, len(files))
+	libs := newLibraryCache()
 	var wg sync.WaitGroup
 	work := make(chan int)
 	for range jobs {
@@ -103,7 +104,7 @@ func compareAll(dir string, files []string, jobs int) []fileResult {
 		go func() {
 			defer wg.Done()
 			for i := range work {
-				results[i] = compareOne(dir, files[i])
+				results[i] = compareOne(dir, files[i], libs)
 			}
 		}()
 	}
@@ -115,7 +116,7 @@ func compareAll(dir string, files []string, jobs int) []fileResult {
 	return results
 }
 
-func compareOne(dir, rel string) fileResult {
+func compareOne(dir, rel string, libs *libraryCache) fileResult {
 	// #nosec G304 -- the suite directory is named on the command line.
 	content, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(rel)))
 	if err != nil {
@@ -125,7 +126,7 @@ func compareOne(dir, rel string) fileResult {
 	if source.KindOf(strings.TrimSuffix(rel, ".xt")) == source.KindKerML {
 		language = "kerml"
 	}
-	return compareFile(dir, parseXT(rel, language, content))
+	return compareFile(dir, parseXT(rel, language, content), libs)
 }
 
 // collectXT lists a suite's .xt files, relative to its directory, sorted.
