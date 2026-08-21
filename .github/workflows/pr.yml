@@ -13,6 +13,9 @@ env:
   # absent" into a test failure instead of a skip, so the gate cannot pass green
   # without actually running (see internal/core/model/training_examples_test.go).
   OPENSYSML_REQUIRE_TRAINING_CORPUS: "1"
+  # Same for the three pinned OMG pilot corpora, which are downloaded below and
+  # gated by internal/core/model/pilot_corpora_test.go.
+  OPENSYSML_REQUIRE_PILOT_CORPORA: "1"
   # z3 is installed below, so "no solver, therefore skip" would exercise nothing:
   # this turns an absent solver into a failure (see internal/core/solve).
   OPENSYSML_REQUIRE_SMT: "1"
@@ -73,6 +76,28 @@ jobs:
             exit 1
           fi
 
+      # Same keying as the training corpus: the download script plus the shared
+      # pilot pin. A restored cache is verified below rather than trusted.
+      - name: Cache the OMG pilot corpora
+        uses: actions/cache@v4
+        with:
+          path: examples/pilot-corpora
+          key: pilot-corpora-${{ hashFiles('scripts/download-pilot-corpora.sh', 'scripts/pilot-pin.sh') }}
+
+      - name: Download the OMG pilot corpora
+        run: ./scripts/download-pilot-corpora.sh
+
+      - name: Verify the pilot corpora are present
+        run: |
+          for root in sysml-examples sysml-validation kerml-examples; do
+            count=$(find "examples/pilot-corpora/$root" -name '*.sysml' -o -name '*.kerml' | wc -l)
+            echo "pilot corpus $root: $count model files"
+            if [ "$count" -eq 0 ]; then
+              echo "error: pilot corpus $root is empty; the corpora gate would not run" >&2
+              exit 1
+            fi
+          done
+
       - name: Check gofmt
         run: |
           unformatted=$(gofmt -l .)
@@ -100,6 +125,20 @@ jobs:
           grep -E 'training files clean' corpus-gate.log
           if grep -qE '^\s*--- SKIP' corpus-gate.log; then
             echo "error: the corpus gate skipped" >&2
+            exit 1
+          fi
+
+      # The pilot corpora gate on its own, for the same reason: its per-root
+      # verdict lines are the reviewable output, and a skip must not pass.
+      # It gates our own diagnostics only; the comparison against the reference
+      # implementation (cmd/pilot-diff) needs Java validators and is not run here.
+      - name: Pilot corpora gate
+        run: |
+          set -o pipefail
+          go test -count=1 -v ./internal/core/model -run 'TestPilotCorpora' | tee pilot-corpora-gate.log
+          grep -E 'pilot corpus files clean' pilot-corpora-gate.log
+          if grep -qE '^\s*--- SKIP' pilot-corpora-gate.log; then
+            echo "error: the pilot corpora gate skipped" >&2
             exit 1
           fi
 
