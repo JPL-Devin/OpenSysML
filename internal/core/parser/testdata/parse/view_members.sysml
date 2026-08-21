@@ -29,12 +29,8 @@ package ViewMembers {
 		render rendering : AsTree;
 		satisfy SafetyViewpoint;
 	}
-
-	// KerML has no `frame` or `render` keyword, so both are legal names: only a
-	// name or the notation's kind keyword can follow the member keyword, and
-	// anything else declares a feature named after the keyword.
-	part def Anchored {
-		frame[0..1] : Engineer;
-		render :> frame;
-	}
 }
+
+// SysML.xtext holds both `frame` and `render`, so neither names a SysML
+// declaration; w7c_sysml_only_words_name_kerml_features.kerml covers the KerML
+// grammar, which has neither keyword and reads both as names.

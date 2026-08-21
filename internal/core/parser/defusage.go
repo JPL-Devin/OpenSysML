@@ -442,6 +442,41 @@ func namesDeclaration(t lexer.Token) bool {
 	return false
 }
 
+// atAssertedReference reports whether an `assert` names an existing constraint,
+// as against stating a condition of its own: the name is the whole declaration,
+// so only a body or a terminator may follow it.
+func (p *Parser) atAssertedReference() bool {
+	if p.isKindKeyword(p.peek()) || !p.namesReference(0) {
+		return false
+	}
+	for i := 1; ; i += 2 {
+		switch sep := p.peekN(i).Kind; sep {
+		case lexer.Dot, lexer.ColonColon:
+			if next := p.peekN(i + 1); next.Kind != lexer.Identifier &&
+				next.Kind != lexer.UnrestrictedName && next.Kind != lexer.Keyword {
+				return false
+			}
+		case lexer.Semicolon, lexer.LBrace, lexer.LBracket:
+			return true
+		default:
+			return false
+		}
+	}
+}
+
+// namesReference reports whether the token at n can name a referenced usage —
+// `assert c;`, `assert not c;` — rather than beginning an expression.
+func (p *Parser) namesReference(n int) bool {
+	t := p.peekN(n)
+	switch t.Kind {
+	case lexer.Identifier, lexer.UnrestrictedName:
+		return true
+	case lexer.Keyword:
+		return !p.reservedWord(t.KeywordID)
+	}
+	return false
+}
+
 // atFeatureSpecialization reports whether the current token begins a feature
 // specialization — typing, subsetting, reference, crossing or redefinition
 // (SysML.xtext FeatureSpecialization). Both spellings of each clause answer
@@ -506,6 +541,23 @@ func (p *Parser) keywordlessFeatureAt(off int) bool {
 	default:
 		return beginsDeclarationTail(next, p.peekN(off+2))
 	}
+}
+
+// atKindlessFeatureTyping reports whether a name is declared with no kind
+// keyword and states a specialization or multiplicity (`mass : MassValue;`),
+// the unambiguous half of a keyword-less declaration.
+func (p *Parser) atKindlessFeatureTyping() bool {
+	if t := p.peek(); t.Kind != lexer.Identifier && t.Kind != lexer.UnrestrictedName {
+		return false
+	}
+	next := p.peekN(1)
+	if next.Kind == lexer.LBracket {
+		return true
+	}
+	if next.Kind == lexer.Eq || next.Kind == lexer.ColonEq || next.Kind == lexer.EqGt {
+		return false
+	}
+	return beginsDeclarationTail(next, p.peekN(2))
 }
 
 // atKeywordlessFeature reports whether the cursor is at such a feature, either
@@ -825,7 +877,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		mods.portion = portion
 		// Without a kind keyword the portion itself declares an occurrence usage.
 		if !p.atPortionedKind() {
-			isAll := p.acceptKeyword("all")
+			isAll := p.acceptSufficientAll()
 			return applyPrefixes(p.parseUsage(start, ast.UsageOccurrence, tok.KeywordID, mods, isAll))
 		}
 	}
@@ -890,7 +942,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		if kw == "variant" {
 			mods.isVariant = true
 		}
-		isAll := p.acceptKeyword("all")
+		isAll := p.acceptSufficientAll()
 		if kw == "exhibit" && !p.atKeyword("state") && p.atFeatureChainTarget() {
 			return applyPrefixes(p.parseReferenceMemberUsage(
 				start, ast.UsageState, kw, "state", mods, p.parseStateBody, false))
@@ -1042,11 +1094,45 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		// second keyword is the variant's own name.
 		// `assert not constraint { … }` and `assert not satisfy … by …` negate the
 		// declaration the prefix qualifies (Invariant::isNegated), so the `not`
-		// belongs to it rather than to an expression. It is only a negation when a
-		// kind keyword follows: `assert not (x > 1);` negates an expression.
-		if kindPrefixKeywords[kw] && p.atKeyword("not") && p.isKindKeyword(p.peekN(1)) {
+		// belongs to it rather than to an expression. `assert not c { … }` negates
+		// the reference form the same way, where `assert not (x > 1);` does negate
+		// an expression (SysML.xtext:2008, AssertConstraintUsage).
+		if kindPrefixKeywords[kw] && p.atKeyword("not") &&
+			(p.isKindKeyword(p.peekN(1)) || p.namesReference(1)) {
 			mods.isNegated = true
 			p.advance()
+		}
+
+		// A `not` with nothing after it negates neither a declaration nor an
+		// expression, so the assertion states no condition at all.
+		if kindPrefixKeywords[kw] && p.atKeyword("not") {
+			switch p.peekN(1).Kind {
+			case lexer.Semicolon, lexer.RBrace, lexer.EOF:
+				p.advance() // 'not'
+				return p.errorNodeSkip(start, "expected a condition after 'not'")
+			}
+		}
+
+		// `assert c;` and `assert not c { … }` name an existing constraint rather
+		// than declaring one named `c` (SysML.xtext:2009, AssertConstraintUsage's
+		// OwnedReferenceSubsetting).
+		if kw == "assert" && p.atAssertedReference() {
+			u := p.parseReferenceMemberUsage(
+				start, ast.UsageConstraint, kw, "constraint", mods, p.parseConstraintBody, true)
+			u.IsNegated = mods.isNegated
+			return applyPrefixes(u)
+		}
+
+		// A prefix keyword qualifies a two-word kind as well as a one-word one:
+		// `variant use case uc11;` is a use case usage (SysML.xtext:700,
+		// VariantUsageElement).
+		if (kindPrefixKeywords[kw] || kw == "variant") && p.atUseCase() {
+			p.advance() // 'use'
+			p.advance() // 'case'
+			if kindPrefixKeywords[kw] {
+				mods.prefixKeyword = kw
+			}
+			return applyPrefixes(p.parseUsage(start, ast.UsageUseCase, "use case", mods, isAll))
 		}
 
 		kindKeyword := kw
@@ -1109,7 +1195,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 	}
 
 	// Parse 'all' modifier if present (appears after keyword, before name)
-	isAll := p.acceptKeyword("all")
+	isAll := p.acceptSufficientAll()
 
 	// Parse 'chain' modifier if present (identifier, not keyword)
 	t2 := p.peek()
@@ -1513,10 +1599,16 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 			declRels := p.parseRelationships(true)
 			u.Relationships = append(u.Relationships, declRels...)
 		} else if reqName := p.parseQualifiedName(); reqName != nil {
+			// SysML.xtext:2119 owns a ReferenceSubsetting here; recorded as a
+			// plain subsetting until its passes/runtime readers migrate.
 			u.Relationships = append(u.Relationships, &ast.Relationship{
 				Kind:   ast.RelSubsets,
 				Target: reqName,
 			})
+			// The reference form takes specializations of its own:
+			// `verify r :>> massRequirement;` (SysML.xtext:2272,
+			// RequirementVerificationUsage's `FeatureSpecialization*`).
+			u.Relationships = append(u.Relationships, p.parseRelationships(true)...)
 		}
 
 		// ValuePart? — a satisfy usage may bind a value like any usage.
@@ -1697,7 +1789,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 	// (SysML.xtext FeatureDeclaration): `part redefines wheel` is the same unnamed
 	// usage as `part :>> wheel`. The name it answers to is its redefinition's, and
 	// the symbol layer derives that (KerML 7.3.4.5, symbols.effectiveIdent).
-	preRels := p.parseRelationships(true)
+	preRels := p.parsePreNameRelationships(true)
 	// A bare flow shorthand `flow x to y` and anonymous succession `succession x then y` have no declaration name
 	// Anonymous connector starts with 'from' keyword (e.g., `connector : X from y to z`)
 	// A connection or interface stating ends where its name would go declares
@@ -2714,6 +2806,16 @@ func (p *Parser) parseBodyMember() ast.Node {
 			// Parse additional relationships
 			u.Relationships = append(u.Relationships, p.parseRelationships(true)...)
 
+			// A multiplicity may follow the specializations instead of preceding
+			// them (KerML.xtext FeatureSpecializationPart): `ref redefines x[4];`.
+			if u.Multiplicity == nil && p.at(lexer.LBracket) {
+				u.Multiplicity = p.parseMultiplicity()
+				if post := p.parsePostModifiers(); post.isOrdered || post.isNonunique {
+					u.IsOrdered = u.IsOrdered || post.isOrdered
+					u.IsNonunique = u.IsNonunique || post.isNonunique
+				}
+			}
+
 			// Parse optional value (= expr or default expr)
 			if p.acceptValueOperator() {
 				u.Value = p.ParseExpression()
@@ -2948,6 +3050,11 @@ func (p *Parser) parsePerformedActionReference(start int, mods featureMods, kw s
 // type, a body — can only follow a name, and `frame` and `render` are legal
 // names in KerML.
 func (p *Parser) atMemberKeywordUsedAsKeyword(kw string) bool {
+	// SysML.xtext holds both literals, so neither can name a declaration there;
+	// only KerML, which has neither, reads them as names.
+	if p.src.Kind() != source.KindKerML {
+		return true
+	}
 	next := p.peekN(1)
 	switch next.Kind {
 	case lexer.Identifier, lexer.UnrestrictedName:
@@ -2990,7 +3097,10 @@ func (p *Parser) parseReferenceMemberUsage(start int, kind ast.UsageKind, kw, no
 	}
 	u.NodeBase.NodeSpan = p.spanFrom(start)
 
-	target := p.parseRelationshipTarget()
+	var target ast.Node
+	if p.atNameOrKeyword() {
+		target = p.parseRelationshipTarget()
+	}
 	if target != nil {
 		u.Relationships = append(u.Relationships, &ast.Relationship{
 			Kind:   ast.RelReferences,
@@ -3129,6 +3239,16 @@ func (p *Parser) atFeatureChainTarget() bool {
 			return false
 		}
 	}
+}
+
+// parsePreNameRelationships parses the specializations a declaration may state
+// where its name would go. A word the grammar does not reserve names the
+// declaration instead, so only a reserved spelling begins a clause here.
+func (p *Parser) parsePreNameRelationships(isUsage bool) []*ast.Relationship {
+	if t := p.peek(); t.Kind == lexer.Keyword && !p.reservedWord(t.KeywordID) {
+		return nil
+	}
+	return p.parseRelationships(isUsage)
 }
 
 // parseRelationships parses zero or more relationship clauses. isUsage selects

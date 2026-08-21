@@ -9,8 +9,14 @@ import (
 // warningCodes parses input and returns the codes of the warnings it produced,
 // failing the test if the parse is ill-formed.
 func warningCodes(t *testing.T, input string) []string {
+	return warningCodesIn(t, "modifier_kind.sysml", input)
+}
+
+// warningCodesIn parses input as the named source, so a case can state which
+// language reserves the words it writes.
+func warningCodesIn(t *testing.T, name, input string) []string {
 	t.Helper()
-	p := New(source.New("modifier_kind.sysml", []byte(input)))
+	p := New(source.New(name, []byte(input)))
 	p.ParseFile()
 	for _, d := range p.Diagnostics {
 		t.Errorf("parse error in %q: %s", input, d.Message)
@@ -67,14 +73,23 @@ func TestUnambiguousModifiedUsagesDoNotWarn(t *testing.T) {
 		"snapshot part sp : Vehicle;",
 		"part : Vehicle;",
 		"timeslice item ts : Integer;",
-		// `frame` and `render` name the declaration here, as the Kernel Semantic
-		// Library writes them, so they are not read as a kind at all.
-		"ref frame : SpatialFrame[1];",
-		"ref render : Rendering;",
 	}
 	for _, input := range unambiguous {
 		t.Run(input, func(t *testing.T) {
 			if codes := warningCodes(t, input); hasCode(codes, codeAmbiguousModifierKind) {
+				t.Errorf("unexpected %s warning, warnings = %v", codeAmbiguousModifierKind, codes)
+			}
+		})
+	}
+}
+
+// The Kernel Semantic Library names features `frame` and `render`, which only
+// KerML admits: SysML.xtext holds both literals, and the pinned validator
+// answers `no viable alternative at input 'frame'` to `ref frame : F;`.
+func TestFrameAndRenderNameKerMLFeatures(t *testing.T) {
+	for _, input := range []string{"feature frame : SpatialFrame[1];", "feature render : Rendering;"} {
+		t.Run(input, func(t *testing.T) {
+			if codes := warningCodesIn(t, "modifier_kind.kerml", input); hasCode(codes, codeAmbiguousModifierKind) {
 				t.Errorf("unexpected %s warning, warnings = %v", codeAmbiguousModifierKind, codes)
 			}
 		})

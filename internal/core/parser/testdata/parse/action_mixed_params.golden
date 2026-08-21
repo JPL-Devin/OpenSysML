@@ -24,11 +24,11 @@
       (Membership visibility="default"
         (Usage kind="action" name="step2" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (Membership visibility="default"
-            (Usage kind="part" name="x" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+            (Usage kind="attribute" name="x" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
               (Relationship kind="typing" target=Real
                 (*ast.QualifiedName))))
           (Membership visibility="default"
-            (Usage kind="part" name="y" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+            (Usage kind="attribute" name="y" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
               (Relationship kind="typing" target=String
                 (*ast.QualifiedName))))))
       (Usage kind="action" name="step3" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))))

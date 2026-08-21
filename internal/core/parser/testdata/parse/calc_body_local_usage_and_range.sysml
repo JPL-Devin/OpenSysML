@@ -42,7 +42,7 @@ package CalcBodyLocalUsage {
 
     calc def Squares {
         in n : Integer;
-        attribute all = (1..n)->collect { in i; i * i };
+        attribute squares = (1..n)->collect { in i; i * i };
         attribute window = (2..3)->collect { in i; i };
         attribute total : Integer = 0;
         for i in 1..n {

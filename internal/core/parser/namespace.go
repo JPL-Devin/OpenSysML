@@ -8,10 +8,31 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
-// atName reports whether the current token can begin a name segment.
+// atName reports whether the current token can begin a name segment. A keyword
+// of the *other* language is an ordinary name: Xtext reserves a literal only
+// inside the grammar declaring it, and the two grammars share only
+// KerMLExpressions.xtext (`part chains : T;` is a SysML part named `chains`).
 func (p *Parser) atName() bool {
-	k := p.peek().Kind
-	return k == lexer.Identifier || k == lexer.UnrestrictedName
+	t := p.peek()
+	switch t.Kind {
+	case lexer.Identifier, lexer.UnrestrictedName:
+		return true
+	case lexer.Keyword:
+		return !p.reservedWord(t.KeywordID)
+	}
+	return false
+}
+
+// reservedWord reports whether the word is a literal of this file's grammar,
+// and so cannot spell a name in it.
+func (p *Parser) reservedWord(w string) bool {
+	kind := p.src.Kind()
+	if kind == source.KindUnknown {
+		// A buffer with no model extension is read as SysML, as the
+		// nonstandard-notation pass already reads it.
+		kind = source.KindSysML
+	}
+	return lexer.IsKeywordIn(w, kind)
 }
 
 // atNameOrKeyword reports whether the current token can begin a name segment,
@@ -184,9 +205,11 @@ func (p *Parser) parseIdentificationStopping(stop ...string) ast.Identification 
 			return id
 		}
 		// Any other keyword here is the name the author meant, so it is read as
-		// one rather than dropped. SysML reserves it though (KerML §7.2.4): only
-		// an unrestricted name may spell a keyword.
-		p.warn(p.peek().Span, fmt.Sprintf("%q is a reserved keyword; write '%s' to use it as a name", kw, kw), codeReservedKeywordName)
+		// one rather than dropped. Only a word this language reserves needs the
+		// quotes of an unrestricted name to spell it (KerML §7.2.4).
+		if p.reservedWord(kw) {
+			p.warn(p.peek().Span, fmt.Sprintf("%q is a reserved keyword; write '%s' to use it as a name", kw, kw), codeReservedKeywordName)
+		}
 	}
 	if seg, ok := p.parseNameSegmentRelaxed(); ok {
 		id.Name = seg.Text

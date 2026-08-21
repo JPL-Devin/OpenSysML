@@ -10,11 +10,11 @@
               (Relationship kind="subsets" target=Wheel
                 (*ast.QualifiedName))))
           (Membership visibility="default"
-            (Usage kind="part" name="mass" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+            (Usage kind="attribute" name="mass" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
               (Relationship kind="specializes" target=Wheel
                 (*ast.QualifiedName))))
           (Membership visibility="default"
-            (Usage kind="part" name="r" ref=true direction="in" composite=false derived=false ordered=false nonunique=false
+            (Usage kind="attribute" name="r" ref=true direction="in" composite=false derived=false ordered=false nonunique=false
               (Relationship kind="references" target=Wheel
                 (*ast.QualifiedName))))
           (Membership visibility="default"

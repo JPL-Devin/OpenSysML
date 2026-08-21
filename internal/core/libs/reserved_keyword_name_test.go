@@ -18,19 +18,11 @@ import (
 // upstream library change or a parser bug that mistook a grammar keyword for a
 // name (`binding [1] bind x = y` used to land here).
 func TestStdlibReservedKeywordNames(t *testing.T) {
-	want := []string{
-		`Domain Libraries/Metadata/ImageMetadata.sysml: "type"`,
-		`Domain Libraries/Quantities and Units/ISQChemistryMolecular.sysml: "multiplicity"`,
-		// KerML has no `frame` keyword, so the Kernel Semantic Library writes
-		// `in frame : SpatialFrame[1]`. The name is read and warned about here
-		// rather than dropped, which is what it used to be.
-		`Kernel Libraries/Kernel Semantic Library/SpatialFrames.kerml: "frame"`,
-		`Kernel Libraries/Kernel Semantic Library/StatePerformances.kerml: "entry"`,
-		`Kernel Libraries/Kernel Semantic Library/StatePerformances.kerml: "exit"`,
-		`Kernel Libraries/Kernel Semantic Library/TransitionPerformances.kerml: "accept"`,
-		// `done` is not here: it is a literal in none of the pinned grammars, so
-		// the lexer no longer reserves it (docs/reference/grammar/conformance-audit.md).
-	}
+	// Empty: every former site named a declaration with a keyword of the *other*
+	// language (`type`, `multiplicity` are KerML.xtext literals absent from
+	// SysML.xtext; `frame`, `entry`, `exit`, `accept` the reverse), and a word a
+	// grammar never spells is not reserved there.
+	var want []string
 
 	src := &embedSource{}
 	seen := map[string]bool{}

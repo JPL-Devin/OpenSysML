@@ -1,0 +1,113 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="W7CContextualNames" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="T"))
+      (Membership visibility="default"
+        (Usage kind="part" name="chains" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=T
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="part" name="differences" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=T
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="part" name="disjoint" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=T
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="part" name="inverse" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=T
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="part" name="unions" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=T
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="part" name="intersects" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=T
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="part" name="conjugates" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=T
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="part" name="type" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=T
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="part" name="namespace" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=T
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="part" name="multiplicity" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=T
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="part" name="step" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=T
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="part" name="class" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=T
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="part" name="struct" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=T
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="part" name="behavior" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=T
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="part" name="feature" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=T
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="part" name="function" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=T
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="part" name="predicate" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=T
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="part" name="specialization" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=T
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="part" name="subsets2" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=T
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Holder"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="redefinition" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Real
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="inverting" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Real
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="disjoining" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Real
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="typing" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Real
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="portion" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Real
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="member" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Real
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Usage kind="part" name="chained" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=T
+            (*ast.QualifiedName))
+          (Relationship kind="subsets" target=chains
+            (*ast.QualifiedName)))))))
