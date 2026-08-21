@@ -177,8 +177,14 @@ func (r *Resolver) ImportedElements(scope *symbols.Scope, imp *ast.Import) []*sy
 	out := newElementList()
 	if imp.Kind == ast.ImportMembership {
 		// `import P::x` surfaces x itself; the recursive form adds its subtree.
+		// An import of an alias imports that membership, so the name it surfaces
+		// is the alias's own (KerML §8.2.3.2).
+		named := target
+		if alias, ok := r.PartAlias(imp.Imported, len(imp.Imported.Parts)-1); ok {
+			named = alias
+		}
 		if admit(target) {
-			out.add(target)
+			out.add(named)
 		}
 	} else {
 		r.appendNamespaceMembers(out, scope, target, imp, admit)

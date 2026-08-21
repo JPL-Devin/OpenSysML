@@ -158,7 +158,8 @@ func leafName(name string) string {
 // distinguish definitions, usages, behaviors and packages.
 func completionKind(k symbols.SymbolKind) protocol.CompletionItemKind {
 	switch k {
-	case symbols.SymbolPackage, symbols.SymbolNamespace, symbols.SymbolDependency:
+	case symbols.SymbolPackage, symbols.SymbolNamespace, symbols.SymbolDependency,
+		symbols.SymbolRelationship:
 		return protocol.CompletionItemKindModule
 	case symbols.SymbolAlias:
 		return protocol.CompletionItemKindReference

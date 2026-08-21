@@ -105,6 +105,12 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		c.conditionExpr(scope, d.FilterExpr)
 	case *ast.Alias:
 		c.add(scope, d.For)
+	case *ast.RelationshipMember:
+		c.target(scope, d.Source)
+		c.target(scope, d.Target)
+		if child := c.childScope(scope, d); child != nil {
+			c.walkMembers(child, d.Members)
+		}
 	case *ast.Dependency:
 		c.prefixes(scope, d.Prefixes)
 		for _, cl := range d.Clients {
@@ -414,9 +420,11 @@ func (c *refCollector) expr(scope *symbols.Scope, e ast.Node) {
 			c.relationships(scope, v, p.Relationships)
 			c.expr(scope, p.Value)
 		}
-		// The same scope the resolver uses, so a reference to a parameter and
-		// its declaration denote one symbol.
-		c.expr(symbols.BodyExprScope(scope, v), v.Result)
+		// The same scope the resolver uses, so a reference to a parameter or a
+		// body declaration and its declaration denote one symbol.
+		inner := symbols.BodyExprScope(scope, v)
+		c.walkMembers(inner, v.Members)
+		c.expr(inner, v.Result)
 	case *ast.SequenceExpr:
 		for _, el := range v.Elements {
 			c.expr(scope, el)

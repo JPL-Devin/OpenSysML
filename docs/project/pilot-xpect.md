@@ -18,8 +18,9 @@ as data — no Java, no Xtext, no Eclipse — and adjudicate each one against ou
 
 The `linkedName` assertions are the point of the exercise: they are the first external oracle we have
 for **name resolution**, the largest block of self-assessed rows in
-[spec-compliance.md](spec-compliance.md). They are broken out in their own section below, and they
-produced the single clearest finding in this report.
+[spec-compliance.md](spec-compliance.md). They are broken out in their own section below. The first
+run of this harness put them at 151 of 194; after the wave-6 alias-identity round they are **194 of
+194**, and that section now records what the oracle found and what closed it.
 
 ---
 
@@ -133,7 +134,7 @@ Every difference from the published numbers is accounted for, and none of it is 
   (`//\t\tXPECT linkedName at aa --> test.A.a`) rather than `// ` or `//`, so a grep for the two
   common spellings misses them: `MemberNameTests_NamedMemberFromInheritance.kerml.xt`:41 and
   `MemberNameTests_NamedMemberFromInheritance_Rdef.kerml.xt`:50. Both are ordinary executable notes;
-  both land in the disagreement list below, so dropping them would have flattered us by two rows.
+  both were disagreements on the first run, so dropping them would have flattered us by two rows.
 - **`exportedObjects` (1).** One note in `indexing/NameEscape.kerml.xt` opens with a bare `//*` and
   puts `XPECT exportedObjects` on the following line. The kind is unsupported here and reported as
   not adjudicated rather than ignored.
@@ -168,18 +169,29 @@ Per suite:
 | `kerml` | 303 | 968 | 454 | 513 | 1 |
 | `sysml` | 125 | 358 | 68 | 290 | 0 |
 
-**Read the `errors` and `warnings` rows carefully: the zeros are a property of the strict rule, not a
-measurement of how wrong we are.** Strict agreement demands the pilot's message text, and our
-diagnostics are worded independently, so `errors` and `warnings` are effectively unable to agree
-strictly and the interesting number is the tolerance breakdown. `noErrors` and `linkedName` are
-wording-independent, and they are where this oracle actually adjudicates.
+**Read the `errors` row carefully: its zero is a property of the strict rule, not a measurement of
+how wrong we are.** Strict agreement demands the pilot's message text, and our diagnostics are
+worded independently, so an `errors` row can only agree by coincidence of wording and the
+interesting number is the tolerance breakdown. `warnings` shows what that coincidence costs: 11 of
+113 now agree strictly, and all 11 are the duplicate-member-name rules implemented in the wave-6
+round against the pilot's declared text, so their wording matches by construction rather than by
+luck. `noErrors` and `linkedName` are wording-independent, and they are where this oracle adjudicates
+most directly.
 
-**These tables and the baseline are a fresh run on `main` plus wave 7A; the `linkedName`, `noErrors`
-and `warnings` sections below, and items 1–3 of [Not fixed here](#not-fixed-here), still cite the
-earlier run they were written for** (`linkedName` 151/194, `noErrors` 231/275, `warnings` 0/113). They
-are rebaselined centrally, not here: this slice regenerated the baseline because the `scope` numbers
-are its own to establish, and the count tables move with the baseline. Where a table and a narrative
-section disagree, the table is the live number.
+Movement since the first run of this harness (the harness itself is unchanged; every difference is a
+change in our behaviour):
+
+| Kind | First run | Now | What moved |
+|---|---|---|---|
+| `linkedName` | 151 / 194 | **194 / 194** | alias-introduced names resolve to the aliased element, and the `~ B::f` conjugation form parses |
+| `noErrors` | 231 / 275 | **244 / 275** | 6 `ParsingTests_*` files, 4 inherited-name-conflict files and 3 others no longer draw an error |
+| `warnings` | 0 / 113 | **11 / 113** | the duplicate-inherited and duplicate-owned member-name warnings now exist, with the declared wording |
+| `errors` | 0 / 513 | 0 / 513 | strict agreement unchanged; the tolerance mix moved, and not only in our favour (see below) |
+
+**Adjudicating the 230 `scope` assertions moved the aggregate line, not only the `not adjudicated`
+column:** every one of the 230 now carries a verdict, so `agree` rose by the 73 that agree exactly and
+`disagree` by the 157 that do not, and no other kind's counts moved. The tables and the baseline are a
+single fresh run on the merged tree.
 
 The **complete** per-row evidence — every disagreement with its file, line, declared expectation and
 our actual behaviour — is in [pilot-xpect-baseline.json](pilot-xpect-baseline.json). The sections
@@ -187,15 +199,16 @@ below group the disagreements by cause and name the files; they do not repeat 80
 
 ---
 
-## linkedName — 151 of 194 agree
+## linkedName — 194 of 194 agree
 
-This is the section that matters, and the result is unusually clean: **all 43 disagreements have two
-causes, 41 of them one cause.**
+**This oracle is now clean, and it was not clean when it was built: the first run agreed on 151 of
+194.** The section is kept because what it found is the reason the harness exists, and because a
+future regression here is the single most informative failure this report can produce.
 
-### Cause 1 — an alias resolves to itself instead of to its target (41 of 43)
+### What it found — an alias resolved to itself instead of to its target (41 of the 43)
 
 The pilot's `linkedName` reports the qualified name of the **element** a reference reaches. Where the
-name reached it through an `alias`, that is the aliased element's own qualified name. We report the
+name reached it through an `alias`, that is the aliased element's own qualified name; we reported the
 qualified name of the **alias**:
 
 ```kerml
@@ -207,76 +220,18 @@ package test {
 }
 ```
 
-`testsuite/MemberNameTests_LocalNamedMember.kerml.xt`:37 — declared `test.A`, ours `test.A_alias`.
+`testsuite/MemberNameTests_LocalNamedMember.kerml.xt`:37 declared `test.A` and we answered
+`test.A_alias`. The reference *resolved* — nothing downstream broke — so what differed was the
+identity of the thing it resolved to: our symbol index made an alias a symbol in its own right rather
+than a second name for an existing element. The pilot was right. A KerML `alias` declares a
+`Membership` with a name whose `memberElement` is the existing element: it introduces a name, not an
+element, so the resolved element's qualified name cannot contain the alias.
 
-The reference *resolves*; nothing downstream breaks. What differs is the identity of the thing it
-resolved to: our symbol index makes an alias a symbol in its own right rather than a second name for
-an existing element. **First read: the pilot is right.** A KerML `alias` declares a `Membership` with
-a name whose `memberElement` is the existing element — it introduces a name, not an element — so the
-resolved element's qualified name cannot contain the alias.
+All 41 were the single-declaration form `alias X for <target>;`, spread over targets in the same or an
+imported package (28), inherited members (9) and private members (4) — one defect in
+`internal/core/symbols`/`internal/core/resolve` plus an inheritance hop, not four.
 
-All 41 are the single-declaration form `alias X for <target>;`; what varies is where the target lives,
-which is why this reads as one defect in `internal/core/symbols`/`internal/core/resolve` rather than
-four:
-
-| Target of the alias | Rows | Example |
-|---|---:|---|
-| an element in the same or an imported package | 28 | `testsuite/MultipleImport_ImportClassWithAlias.kerml.xt`:23 — declared `OuterPackage.A`, ours `test.aliass` |
-| an *inherited* member | 9 | `testsuite/MemberNameTests_NamedMemberFromInheritance.kerml.xt`:41 — declared `test.A.a`, ours `test.A.aa` |
-| a *private* member | 4 | `testsuite/MemberNameTests_NamedMemberForPrivate.kerml.xt`:27,29 — declared `test.something`, ours `test.k` |
-
-The inherited-member rows are worth a second look during the fix: there the alias is declared on the
-supertype and reached through inheritance, so the correct answer (`test.A.a`) names the *supertype's*
-member while we name the subtype-visible alias. That is the same root cause plus an inheritance hop,
-not a separate defect.
-
-Full list of the 41, all KerML:
-
-| File | Line | Declared | Ours |
-|---|---:|---|---|
-| `scoping/ShortName_Import_Valid5.kerml.xt` | 29 | `Test.Test2.VP.VVP.VVVP.VVVVP` | `Test.Test2.VP.VVP.VVVP.VVVVP_Id_alias` |
-| `testsuite/MemberNameTests_LocalNamedMember.kerml.xt` | 37 | `test.A` | `test.A_alias` |
-| `testsuite/MemberNameTests_LocalNamedMember.kerml.xt` | 41 | `test.A` | `test.A_Id_alias` |
-| `testsuite/MemberNameTests_NamedMemberForPrivate.kerml.xt` | 27 | `test.something` | `test.k` |
-| `testsuite/MemberNameTests_NamedMemberForPrivate.kerml.xt` | 29 | `test.something` | `test.kk` |
-| `testsuite/MemberNameTests_NamedMemberForPrivate_FT.kerml.xt` | 28 | `test.something` | `test.k` |
-| `testsuite/MemberNameTests_NamedMemberForPrivate_Rdef.kerml.xt` | 27 | `test.something` | `test.k` |
-| `testsuite/MemberNameTests_NamedMemberFromInheritance.kerml.xt` | 41 | `test.A.a` | `test.A.aa` |
-| `testsuite/MemberNameTests_NamedMemberFromInheritance_2.kerml.xt` | 32 | `test.A.a` | `test.A.aa` |
-| `testsuite/MemberNameTests_NamedMemberFromInheritance_Rdef.kerml.xt` | 50 | `test.A.a` | `test.A.aa` |
-| `testsuite/MemberNameTests_NamedMemberFromInheritance2.kerml.xt` | 29 | `test.A` | `test.AA` |
-| `testsuite/MemberNameTests_NamedMemberFromInheritance2.kerml.xt` | 47 | `test.A.a` | `test.A.aa` |
-| `testsuite/MemberNameTests_NamedMemberFromInheritance2_FT.kerml.xt` | 41 | `test.A` | `test.AA` |
-| `testsuite/MemberNameTests_NamedMemberFromInheritance2_FT.kerml.xt` | 61 | `test.A.a` | `test.A.aa` |
-| `testsuite/MemberNameTests_NamedMemberFromInheritance2_Rdef.kerml.xt` | 38 | `test.A` | `test.AA` |
-| `testsuite/MemberNameTests_NamedMemberFromInheritance2_Rdef.kerml.xt` | 56 | `test.A.a` | `test.A.aa` |
-| `testsuite/MemberNameTests_NamedMemberFromOtherPackage.kerml.xt` | 24 | `test.P.A` | `test.P.A_alias` |
-| `testsuite/MemberNameTests_NamedMemberFromOtherPackage2.kerml.xt` | 30 | `test.P.A` | `test.P.A_alias` |
-| `testsuite/MultipleImport_ImportClassWithAlias.kerml.xt` | 23 | `OuterPackage.A` | `test.aliass` |
-| `testsuite/MultipleImport_ImportClassWithAlias_FT.kerml.xt` | 23 | `OuterPackage.A` | `test.aliass` |
-| `testsuite/MultipleImport_ImportClassWithAlias_Rdef.kerml.xt` | 23 | `OuterPackage.A` | `test.aliass` |
-| `testsuite/MultipleImport_ImportFeatureAlias.kerml.xt` | 24 | `OuterPackage.B.b` | `test.aliass` |
-| `testsuite/MultipleImportTests_ImportFeatureWithAlias.kerml.xt` | 25 | `OuterPackage.B.b` | `test.bb` |
-| `testsuite/ShadowingTests_ImportPackageAlias1.kerml.xt` | 40 | `PackageAlias1.A` | `PackageAlias1.A_alias` |
-| `testsuite/ShadowingTests_ImportPackageAlias1_FT.kerml.xt` | 68 | `PackageAlias1.A` | `PackageAlias1.A_alias` |
-| `testsuite/ShadowingTests_ImportPackageAlias1_Rdef.kerml.xt` | 68 | `PackageAlias1.A` | `PackageAlias1.A_alias` |
-| `testsuite/ShadowingTests_ImportPackageAlias2.kerml.xt` | 27 | `test.A` | `test.A_alias` |
-| `testsuite/ShadowingTests_ImportPackageAlias2_FT.kerml.xt` | 27 | `test.A` | `test.A_alias` |
-| `testsuite/ShadowingTests_ImportPackageAlias2_Rdef.kerml.xt` | 27 | `test.A` | `test.A_alias` |
-| `testsuite/SimpleImportAsFeatureTests_ImportClassAlias.kerml.xt` | 24 | `OuterPackage.A` | `test.aliass` |
-| `testsuite/SimpleImportAsFeatureTests_ImportFeatureAlias.kerml.xt` | 24 | `OuterPackage.B.b` | `test.aliass` |
-| `visibility/VisibilityTests_ImportAsFeatureInheritanceAlias.kerml.xt` | 23 | `VisibilityPackage.c_Public` | `Classes.aliass` |
-| `visibility/VisibilityTests_ImportAsFeatureInheritanceAlias_FT.kerml.xt` | 23 | `VisibilityPackage.c_Public` | `Classes.aliass` |
-| `visibility/VisibilityTests_ImportAsFeatureInheritanceAlias_Rdef.kerml.xt` | 23 | `VisibilityPackage.c_Public` | `Classes.aliass` |
-| `visibility/VisibilityTests_ImportClassAndUseAlias2.kerml.xt` | 21 | `VisibilityPackage.c_Public_alias.c_public` | `VisibilityPackage.c_Public_alias.alias_public` |
-| `visibility/VisibilityTests_PublicImportAsFeatureAlias.kerml.xt` | 36 | `VisibilityPackage.c_Public.c_public` | `Classes.aliass` |
-| `visibility/VisibilityTests_PublicImportAsFeatureAlias.kerml.xt` | 38 | `VisibilityPackage.c_Public` | `Classes.Aliass` |
-| `visibility/VisibilityTests_PublicImportAsFeatureAlias_FT.kerml.xt` | 57 | `VisibilityPackage.c_Public.c_public` | `Classes.aliass` |
-| `visibility/VisibilityTests_PublicImportAsFeatureAlias_FT.kerml.xt` | 59 | `VisibilityPackage.c_Public` | `Classes.Aliass` |
-| `visibility/VisibilityTests_PublicImportAsFeatureAlias_Rdef.kerml.xt` | 60 | `VisibilityPackage.c_Public.c_public` | `Classes.aliass` |
-| `visibility/VisibilityTests_PublicImportAsFeatureAlias_Rdef.kerml.xt` | 62 | `VisibilityPackage.c_Public` | `Classes.Aliass` |
-
-### Cause 2 — a member reached through a conjugated type is not a reference at all (2 of 43)
+### What it found — a member reached through a conjugated type was not a reference at all (2 of the 43)
 
 ```kerml
 classifier B conjugates A;
@@ -284,54 +239,70 @@ classifier B conjugates A;
 feature g ~ B::f;
 ```
 
-`testsuite/MemberNameTests_NamedMemberFromConjugation.kerml.xt`:41 and :43 — declared `test.A.f`,
-ours *"we index no name reference at offset 1595"*. We index no reference for the `f` segment here at
-all, and the same file's `noErrors` assertion also fails with `expected '{' or ';' after declaration`
-at line 39: we do not parse the `feature g ~ B::f;` conjugation form, so nothing downstream can
-resolve. **First read: the pilot is right, and the root cause is in the parser, not in resolution.**
+`testsuite/MemberNameTests_NamedMemberFromConjugation.kerml.xt`:41 and :43 declared `test.A.f`; we
+indexed no name reference at that offset at all, because we did not parse the `feature g ~ B::f;`
+conjugation form. The root cause was in the parser, not in resolution, and the same file's `noErrors`
+assertion failed with it.
+
+### What closed them
+
+Both causes closed in the wave-6 round (alias-introduced names resolving to the aliased element, and
+the conjugation form parsing), and the same file's `noErrors` row closed with the second. The split
+of the 43 between the individual PRs in that round is **not** separately measured here: this report
+compares two revisions of the tree, not one PR at a time.
 
 ### What the agreements are worth
 
-The 151 agreements are not trivial passes: they cover qualified names through public and private
-imports, `import ::*` recursion, short names and `<id>` forms, shadowing between an import and an
-inner classifier, redefinition scoping, and inherited-member lookup. Where an alias is not involved,
-our resolution matches the pilot's declared answer on 151 of 153 rows.
+The 194 are not trivial passes: they cover qualified names through public and private imports,
+`import ::*` recursion, short names and `<id>` forms, shadowing between an import and an inner
+classifier, redefinition scoping, inherited-member lookup, and every alias shape above. This is the
+only external, per-reference verdict on our name resolution that exists at the pinned tag, and it is
+also the narrowest: it says which element a written reference reaches, never which names *were*
+visible. That second question is the 230 `scope` assertions below.
 
----
+## noErrors — 244 of 275 agree
 
-## noErrors — 231 of 275 agree
-
-44 disagreements: we report an error where the pilot's implementers declared the file clean. Grouped
+31 disagreements: we report an error where the pilot's implementers declared the file clean. Grouped
 by our first diagnostic:
 
 | Cause | Rows | Read |
 |---|---:|---|
-| **Parse recovery** — `expected a body member`, `expected a namespace member`, `expected '{' or ';' after declaration`, `expected ')'`, `expected a /* ... */ comment body`, `expected 'then' between connector ends` | 20 | **Ours is wrong.** These are notation the reference accepts and we do not parse; each one also cascades, so the count overstates the number of defects. |
-| **Unresolved / ambiguous reference** — e.g. `unresolved reference: a1 — did you mean test::A::a1?`, `ambiguous reference: SamePackage::container (2 candidates)` | 11 | **Ours is wrong**, and this is the same shadowing/import family the `linkedName` rows probe. |
-| **Name conflict on an inherited member** — `name conflict: p is already the name of the inherited feature A::p` | 4 | **Ours is wrong twice over:** the pilot declares these files clean, and where it does object to a duplicate inherited name it does so as a *warning* (see below), never an error. |
+| **Parse recovery** — `expected a namespace member`, `expected '{' or ';' after declaration`, `expected ')'`, `expected 'then' between connector ends` | 10 | **Ours is wrong.** Notation the reference accepts and we do not parse; each one also cascades, so the count overstates the number of defects. 10 of the original 20 closed in the wave-6 round, all six `ParsingTests_*` files among them. |
+| **Unresolved / ambiguous reference** — e.g. `unresolved reference: a1 — did you mean test::A::a1?`, `ambiguous reference: SamePackage::container (2 candidates)` | 11 | **Ours is wrong**, and unmoved: this is the shadowing/import family, and it is the one `linkedName`'s 194 agreements do *not* reach, because these files' references resolve to nothing at all rather than to the wrong element. |
 | **Specialization cycle** — `x participates in a specialization cycle` | 4 | **Ours is wrong.** Files the pilot declares clean (`PartTest.sysml.xt`, `Redefinition_OwningType_Cyclic_Gen.sysml.xt`) — our cycle detection is counting a legitimate redefinition chain as a cycle. |
-| **Conformance / multiplicity** — `redefines y [1..*]: multiplicity bounds incompatible`, `types do not conform` | 3 | Needs adjudication per row; the declared expectation says clean, so ours is the suspect. |
+| **Conformance / multiplicity** — `y1 [0..*] redefines y [1..*]: multiplicity bounds incompatible`, `types do not conform` | 4 | The declared expectation says clean, so ours is the suspect. One of the four surfaced *because* a parse-recovery row above it closed: the count rose from 3 while the underlying behaviour did not change. |
 | **State/transition** — `transition endpoint done is not a state or pseudostate` | 1 | `simpletests/StateTest.sysml.xt`:73. Ours is wrong; `done` is a legal endpoint. |
 | **Library lookup** — `unresolved reference: Real — did you mean ScalarValues::Real?` | 1 | `validation/valid/KernelLibraryTest.sysml.xt`:80 — an unqualified library name we do not bring into scope. |
 
-By suite: 29 KerML, 15 SysML. In every one of the 44 the declared expectation is *silence*, so every
+The **inherited-name-conflict** family that cost 4 rows on the first run is gone: those files are the
+same defect as the `warnings` severity finding below, and making a duplicate inherited name a warning
+rather than an error made all four files clean.
+
+By suite: 18 KerML, 13 SysML. In every one of the 31 the declared expectation is *silence*, so every
 one is a place where we reject something the reference accepts — the same class of finding as the
 "only ours" column in [pilot-differential.md](pilot-differential.md), but here backed by a declared
 intent rather than an observed verdict.
 
 ---
 
-## warnings — 0 of 113 strictly, and one real finding
+## warnings — 11 of 113 strictly, and the severity finding is narrowed, not closed
 
-No `warnings` row agrees strictly, because none of our messages match the pilot's wording. The
-tolerance columns carry the finding:
+11 rows now agree strictly, which is the first strict agreement any `errors`/`warnings` row in this
+harness has produced. All 11 are duplicate-member-name warnings implemented in the wave-6 round from
+the pilot's declared text — 6 in `MembershipTests_Distinguishability.kerml.xt`, and 5 across the
+`Redefinition_Diamond*_invalid` / `RedefinitionDiamond*_invalid` pairs. Their wording matches by
+construction, not by luck.
+
+The remaining 102:
 
 | Outcome | Rows | Read |
 |---|---:|---|
-| `severity-differs` — a diagnostic of ours **is** there, as an **error** | 64 | **Ours is wrong, and this is the report's second substantive finding.** |
-| nothing of ours there at all | 49 | We do not implement these checks. |
+| `severity-differs` — a diagnostic of ours **is** there, as an **error** | 61 | **Ours is still wrong.** 57 of the 61 are `Duplicate of inherited member name`. |
+| `elsewhere-in-file` | 7 | All `Duplicate of inherited member name`: we warn, but not where the declaration points. |
+| nothing of ours there at all | 34 | We do not implement these checks. |
 
-The 64 are dominated by one rule. The pilot declares:
+**The severity defect the first run found is narrowed by roughly a sixth, not fixed.** The pilot
+declares:
 
 ```
 //* XPECT warnings ---
@@ -339,22 +310,26 @@ The 64 are dominated by one rule. The pilot declares:
 --- */
 ```
 
-and we produce, at the same line, `error: name conflict: p is already the name of the inherited
-feature A2` (`validation/Redefinition_Diamond1_invalid.kerml.xt`:36). **First read: the pilot is
-right on severity.** A duplicate inherited member name is a warning there — the model is still
-usable — and we reject it. This is the same defect that fails 4 of the 44 `noErrors` rows, which is
-the stronger evidence: the pilot ships files it declares *clean* that we reject over it. 23 of the 64
-are the `Action, Part` diamond shape, the rest are other supertype pairs.
+and on 57 rows we still produce an error at that line. The shapes that closed are the ones the
+wave-6 rule covers; the 23-row `Action, Part` diamond and 34 further supertype pairs are not among
+them, so this stays the largest open severity finding in the report. Counting the family end to end:
+of the 82 `Duplicate of inherited member name` rows, 11 agree, 57 are ours as an error, 7 are ours in
+the wrong place and 18 draw nothing at all.
 
-The 49 unimplemented warnings are, by declared message:
+The 34 unimplemented warnings are, by declared message:
 
 | Declared warning | Rows |
 |---|---:|
-| `Duplicate of inherited member name '...' from ...` (shapes where we emit nothing at all) | 27 |
-| `Duplicate of other owned member name` | 8 |
+| `Duplicate of inherited member name '...' from ...` (shapes where we emit nothing at all) | 18 |
 | `Subsetting/redefining feature should not have larger multiplicity upper bound` | 8 |
+| `Duplicate of other owned member name` | 4 |
 | `Bound features should have conforming types` | 3 |
-| other one-offs | 3 |
+| `User library packages should not be marked as standard` | 1 |
+
+One reading trap in the per-kind table above: its `nothing` column is computed as expectations minus
+the tolerance columns, so for `warnings` it reads **45** — the 34 rows where nothing of ours is there
+plus the 11 that agree strictly, which have no tolerance recorded because they need none. The 34 here
+is the count of checks we do not implement.
 
 ---
 
@@ -365,23 +340,32 @@ result and not a measurement.** What the tolerances say:
 
 | Tolerance | Rows | Meaning |
 |---|---:|---|
-| `same-location` | 152 | we flag the exact declared offset, in our own words — agreement in substance |
-| `same-line` | 70 | we flag the declared line at a different offset — almost certainly the same defect |
-| `severity-differs` | 15 | we report the declared defect as a *warning* |
-| `elsewhere-in-file` | 89 | we report errors, but not where the declaration points |
-| nothing | 187 | **we accept a file the pilot's implementers declared invalid** |
+| `same-location` | 153 | we flag the exact declared offset, in our own words — agreement in substance |
+| `same-line` | 69 | we flag the declared line at a different offset — almost certainly the same defect |
+| `severity-differs` | 16 | we report the declared defect as a *warning* |
+| `elsewhere-in-file` | 80 | we report errors, but not where the declaration points |
+| nothing | 195 | **we accept a file the pilot's implementers declared invalid** |
 
-The split by suite is informative: KerML is 149 `same-location` / 11 `same-line`, SysML is 3 / 59.
+The split by suite is informative: KerML is 150 `same-location` / 10 `same-line` / 6 `severity-differs`,
+SysML is 3 / 59 / 10.
 The SysML suite's assertions anchor at a whole declaration (`at "part def P { ... }"`) while ours
 land on the offending token inside it, so `same-line` there means what `same-location` means in
 KerML. Together, **222 of 513 declared errors are ours at the declared location or line, in different
 words** — the largest block of substantive agreement this harness finds, and the one it cannot score.
 
-The 187 "nothing at all" rows are the actionable set: declared-invalid models we accept silently.
+**The wave-6 round moved this mix in both directions, and the adverse move is the interesting one.**
+Eight rows left `elsewhere-in-file` for `nothing` — 4 in `Redefinition_DirectionConformance_invalid.kerml.xt`
+and 4 in `ResultExpressionMembership_Invalid.kerml.xt` — because the only errors we raised in those
+files were duplicate-inherited-name errors, and demoting that rule to a warning left us silent on
+files the pilot declares invalid. That is the correct severity paying for a missing rule: two rows
+also gained `same-location` and one gained `severity-differs`, so the net is 187 → 195 on "nothing".
+Fixing the severity did not fix the rule those files are actually testing.
+
+The 195 "nothing at all" rows are the actionable set: declared-invalid models we accept silently.
 They are missing validation rules rather than parse failures, e.g. `Must be model-level evaluable`
 and `Must have a Boolean result` (constraint/expression checks we do not perform),
 `A variant must be an owned member of a variation.`, and the SysML `validation/invalid/*` family. The
-15 `severity-differs` rows are the mirror image of the warnings finding — for example
+16 `severity-differs` rows are the mirror image of the warnings finding — for example
 `parsing/ParsingTests_Import_Visibility.kerml.xt`:23, where the pilot declares an error and we emit
 `warning: import without a visibility indicator`.
 
@@ -508,18 +492,23 @@ They are `not-adjudicated` in the report and the baseline, never counted as agre
 
 ---
 
-## Not fixed here
+## What this report does not fix
 
-**No disagreement in this report is fixed in this PR.** This session builds the oracle and records
-what it says; the fixes are scoped from it. In priority order, as this report reads them:
+**No disagreement recorded here is fixed by this document**; it records what the oracle says, and the
+fixes are scoped from it in later rounds. The first two items of the original list are now closed
+(alias identity, and the duplicate-member-name warnings existing at all); what is open, in the order
+this report reads it:
 
-1. **Alias identity in resolution** (41 `linkedName` rows) — an alias must resolve to its target
-   element, not to itself.
-2. **Duplicate inherited member name is a warning, not an error** (64 `warnings` rows + 4 `noErrors`
-   rows) — the clearest severity defect the harness found.
-3. **The 20 parse-recovery `noErrors` rows** — notation the reference accepts and we reject,
-   including the `~ B::f` conjugation form that also costs 2 `linkedName` rows.
-4. **The 187 declared errors we do not report** — missing validation rules, not parse defects.
+1. **`Duplicate of inherited member name` severity and coverage** — 57 `warnings` rows still ours as
+   an error, 18 drawing nothing, 7 in the wrong place. The wave-6 rule covers some shapes and not the
+   `Action, Part` diamond; this is now the largest open severity finding.
+2. **The 195 declared errors we do not report** — missing validation rules, not parse defects, and 8
+   of them are files where demoting the name-conflict error left us silent on a declared-invalid
+   model.
+3. **The 10 remaining parse-recovery `noErrors` rows** — notation the reference accepts and we
+   reject.
+4. **The 11 unresolved/ambiguous-reference `noErrors` rows** — the shadowing/import family, which
+   `linkedName`'s 194 agreements do not reach.
 5. **The 157 `scope` disagreements**, with the class breakdown and root-cause packages in
    [scope](#scope--73-of-230-agree-exactly): redefinition masking in `semantics`, import-plus-
    inheritance paths in `resolve`, and the library-substitution class that is a property of the

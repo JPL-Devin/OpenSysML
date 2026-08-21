@@ -28,11 +28,12 @@ rm -rf build/pilot-xpect && go run ./cmd/pilot-xpect
 cmp build/pilot-xpect/pilot-xpect.json docs/project/pilot-xpect-baseline.json   # must be silent
 ```
 
-Observed at `19a3ce03`: `428 .xt file(s), 0 unparsed; 1261 assertion(s), 1326 expectation(s):
-382 agree, 713 disagree, 0 unlocated, 231 not adjudicated`, byte-identical to the committed
-baseline, and the numeric tables in `docs/project/pilot-xpect.md` match it (per-suite kerml
-303/968/319/418/231, sysml 125/358/63/295/0; 10 ignored XPECT-shaped fragments; 0 missing
-resources).
+Observed on `main` after the wave-6 round: `428 .xt file(s), 0 unparsed; 1261 assertion(s),
+1326 expectation(s): 449 agree, 646 disagree, 0 unlocated, 231 not adjudicated`, byte-identical to
+the committed baseline, and the numeric tables in `docs/project/pilot-xpect.md` match it (per-suite
+kerml 303/968/381/356/231, sysml 125/358/68/290/0; 10 ignored XPECT-shaped fragments; 0 missing
+resources). Read the live totals from the baseline rather than this paragraph; it is an anchor, not
+the check.
 See `testing-pilot-differential/SKILL.md` for the complete mechanical-guard scope and review-only surfaces.
 
 **Determinism under concurrency is the main risk** (`compareAll` in `main.go` fans N goroutines
@@ -73,11 +74,11 @@ must be shown to mean *agree*, not *silently dropped*. Use `bin/sysml-lsp` over 
 sibling files:
 
 - `textDocument/definition` on the `linkedName` target text tells you which symbol we bound.
-  Example at `19a3ce03`: in `testsuite/MemberNameTests_LocalNamedMember.kerml.xt`, `A_alias`
-  (line 37, declared `test.A`) jumps to the `alias A_alias for A;` line → ours `test.A_alias`,
-  confirming the report's headline finding (an alias resolves to itself, 41 of 43 linkedName
-  disagreements); the sibling note at line 39 (`at A_Id --> test.A`) jumps to `classifier <A_Id> A;`
-  → a genuine agreement.
+  Historical example, and the one that proved the surface works: at `19a3ce03`, in
+  `testsuite/MemberNameTests_LocalNamedMember.kerml.xt`, `A_alias` (line 37, declared `test.A`)
+  jumped to the `alias A_alias for A;` line → ours `test.A_alias`, which was the report's headline
+  finding (an alias resolving to itself, 41 of the 43 `linkedName` disagreements). Wave 6 fixed it
+  and that column is now 194 of 194, so the same probe today lands on `classifier <A_Id> A;`.
 - `textDocument/publishDiagnostics` after `didOpen` reproduces `noErrors`/`errors` rows. Copy the
   `.xt` verbatim to a `.kerml` file (the XPECT notes are ordinary comments, so it is valid source)
   and, when the `XPECT_SETUP` `ResourceSet` names `/src/...` files, drop those beside it and pass
@@ -120,8 +121,8 @@ census in `w5c_census_test.go` is live two ways: perturb one pinned triple (e.g.
 ## Regression neighbour
 
 `go run ./cmd/pilot-diff` (~1m12s) must still print the headline the *committed* baseline holds —
-after the wave-5 rebaseline that is `349 file(s), 291 fully agreeing; 20 agreed diagnostic(s), 167
-only ours, 139 only the pilot's`. Read the number out of
+after the wave-6 + 7A rebaseline that is `353 file(s), 300 fully agreeing; 22 agreed diagnostic(s), 147
+only ours, 137 only the pilot's`. Read the number out of
 `docs/project/pilot-differential-baseline.json` rather than trusting this line, since a landing fix
 round moves it. When the baseline is itself stale (it was at `19a3ce03`, holding 273 / 281 / 317), a
 failing `cmp` against it is *not* evidence of an Xpect regression — compare the summary line, and see
