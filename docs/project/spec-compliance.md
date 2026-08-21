@@ -1039,8 +1039,10 @@ apart from the path.
 The KerML half of the silent declared-error families in the pinned reference's Xpect suites
 (pilot `2026-05`), clustered from `build/pilot-xpect/pilot-xpect.txt`. Each row's scope comes
 from the pilot's own `KerMLValidator.xtend` constraint, not from its message string. Xpect
-`errors` agreement moved 563 → 590 and the silent declared-error rows 266 → 229; the pilot
-differential moved 301 → 306 fully agreeing with only-ours 147 → 125.
+`errors` agreement moved 563 → 590 and the silent declared-error rows 266 → 229; the rejection
+oracle moved 20 → 24 both-reject. The pilot differential is unchanged at 306 fully agreeing with
+125 only-ours (byte-identical to the parent commit): none of these rules fires on a corpus file the
+reference disagrees about, which is the false-positive result this wave wanted.
 
 | Semantic Rule | Implementation | Test Case | Status |
 |--------------|----------------|-----------|--------|
