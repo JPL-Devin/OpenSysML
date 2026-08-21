@@ -2,10 +2,7 @@ package repl
 
 import (
 	"fmt"
-	"strconv"
-	"strings"
 
-	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	corequery "github.com/Open-MBEE/OpenSysML/internal/core/query"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
@@ -31,8 +28,11 @@ func (s *Session) query(text string) ([]string, error) {
 	}
 	resolver := resolve.New(idx)
 	model := semantics.NewModel(resolver)
-	adapter := &replQueryModel{session: s, index: idx, semantics: model}
-	adapter.resolver = resolver
+	adapter := &replQueryModel{
+		session: s,
+		index:   idx,
+		reader:  corequery.NewPropertyReader(idx, resolver, model),
+	}
 	elements, err := corequery.Evaluate(adapter, q)
 	if err != nil {
 		return nil, err
@@ -51,10 +51,9 @@ func (s *Session) query(text string) ([]string, error) {
 }
 
 type replQueryModel struct {
-	session   *Session
-	index     *symbols.Index
-	semantics *semantics.Model
-	resolver  *resolve.Resolver
+	session *Session
+	index   *symbols.Index
+	reader  *corequery.PropertyReader
 }
 
 func (m *replQueryModel) Candidates(scope []string) ([]*symbols.Symbol, error) {
@@ -114,81 +113,10 @@ func collectQuerySymbol(sym *symbols.Symbol, out *[]*symbols.Symbol, seen map[*s
 }
 
 func (m *replQueryModel) Value(sym *symbols.Symbol, property string) ([]string, bool) {
-	fqn := m.index.GetFQN(sym)
-	switch property {
-	case corequery.PropertyID, corequery.PropertyQualifiedName:
-		return presentQuery(fqn)
-	case corequery.PropertyName:
-		return presentQuery(lastQueryName(fqn))
-	case corequery.PropertyDeclaredName:
-		if sym.EffectiveName {
-			return nil, false
-		}
-		return presentQuery(lastQueryName(fqn))
-	case corequery.PropertyOwner:
-		if i := strings.LastIndex(fqn, "::"); i >= 0 {
-			return presentQuery(fqn[:i])
-		}
-	case corequery.PropertyType:
-		if name := corequery.MetamodelTypeNameOf(sym); name != "" {
-			return []string{name}, true
-		}
-	case corequery.PropertyElementType:
-		if usage, ok := sym.Decl.(*ast.Usage); ok {
-			for _, relationship := range usage.Relationships {
-				if relationship.Kind != ast.RelTyping || m.resolver == nil {
-					continue
-				}
-				if target, ok := m.resolver.ResolveTarget(sym.OwnerScope, relationship.Target); ok {
-					return presentQuery(m.index.GetFQN(target))
-				}
-			}
-		}
-	case corequery.PropertyIsAbstract:
-		switch decl := sym.Decl.(type) {
-		case *ast.Usage:
-			return []string{strconv.FormatBool(decl.IsAbstract)}, true
-		case *ast.Definition:
-			return []string{strconv.FormatBool(decl.IsAbstract)}, true
-		}
-	case corequery.PropertyMultiplicityLower, corequery.PropertyMultiplicityUpper:
-		rng, ok := m.semantics.MultiplicityOf(sym)
-		if !ok {
-			return nil, false
-		}
-		if property == corequery.PropertyMultiplicityLower {
-			return boundQuery(rng.Lower)
-		}
-		return boundQuery(rng.Upper)
-	}
-	return nil, false
+	return m.reader.Values(sym, property)
 }
 
 func (m *replQueryModel) Identity(sym *symbols.Symbol) string { return m.index.GetFQN(sym) }
 func (m *replQueryModel) Type(sym *symbols.Symbol) string {
 	return corequery.MetamodelTypeNameOf(sym)
-}
-
-func lastQueryName(fqn string) string {
-	if i := strings.LastIndex(fqn, "::"); i >= 0 {
-		return fqn[i+2:]
-	}
-	return fqn
-}
-
-func presentQuery(value string) ([]string, bool) {
-	if value == "" {
-		return nil, false
-	}
-	return []string{value}, true
-}
-
-func boundQuery(bound semantics.Bound) ([]string, bool) {
-	if !bound.Known {
-		return nil, false
-	}
-	if bound.Infinite {
-		return []string{"*"}, true
-	}
-	return []string{strconv.FormatInt(bound.Value, 10)}, true
 }

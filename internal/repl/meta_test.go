@@ -55,6 +55,34 @@ func TestIsMeta(t *testing.T) {
 	}
 }
 
+func TestQueryAndMetaQuery(t *testing.T) {
+	s := NewSession()
+	if result := s.Submit("package Demo { part def Wheel; part wheel : Wheel; }"); len(result.Diagnostics) != 0 {
+		t.Fatalf("Submit diagnostics = %v", result.Diagnostics)
+	}
+	lines, err := s.Query(`oslc.where=rdf:type="PartUsage"&oslc.select=sysml:name`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lines) != 1 || lines[0] != "Demo::wheel  PartUsage  name=wheel" {
+		t.Fatalf("Session.Query = %v", lines)
+	}
+	lines, _, err = s.runMeta(`%query oslc.where=rdf:type="PartUsage"&oslc.select=sysml:name`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lines) != 1 || lines[0] != "Demo::wheel  PartUsage  name=wheel" {
+		t.Fatalf("%%query = %v", lines)
+	}
+	lines, _, err = s.runMeta(`%query oslc.where=rdf:type=`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lines) != 1 || !strings.HasPrefix(lines[0], "error: ") {
+		t.Fatalf("malformed %%query = %v", lines)
+	}
+}
+
 // A body-expression parameter and a loop- or branch-body declaration exist only
 // inside their body, so the scope-tree search backing %eval must not surface them.
 func TestLookupInScopeTreeSkipsBodyLocalNames(t *testing.T) {

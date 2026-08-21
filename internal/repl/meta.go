@@ -119,6 +119,7 @@ var metaCommandTable = []metaCommand{
 	{name: "%load", args: "<path>...", desc: "submit the contents of files, directories or globs"},
 	{name: "%print", args: "[name]", desc: "print the session model as SysML notation, or just the named element"},
 	{name: "%save", args: "<file>", desc: "write the session model to a file (.sysml notation, or .ttl RDF — experimental)"},
+	{name: "%query", args: "<oslc-query>", desc: "identify model elements using OSLC Query text"},
 	{name: "%verbosity", args: "[level]", desc: "show or set output level: quiet, normal or debug"},
 	{name: "%trace", args: "[on|off]", desc: "show or set execution tracing (evaluation, calc, action and state steps)"},
 	{name: "%budget", desc: "show the bounds one run may spend, and the variable raising each"},
@@ -135,7 +136,6 @@ var metaCommandTable = []metaCommand{
 	{group: "Runtime commands:", name: "%features", args: "<name>", desc: "show an object's features and their values"},
 	{group: "Runtime commands:", name: "%instances", desc: "list all instantiated objects"},
 	{group: "Runtime commands:", name: "%invoke", args: "<object> <op> [<p>=<expr>]", desc: "invoke an operation of an object's type, performed by that object"},
-	{group: "Runtime commands:", name: "%query", args: "<oslc-query>", desc: "identify model elements using OSLC Query text"},
 
 	{group: "Behavioral commands:", name: "%calc", args: "<name> <args>", desc: "invoke a calculation with arguments"},
 	{group: "Behavioral commands:", name: "%constraint", args: "<name>", desc: "evaluate a constraint definition"},

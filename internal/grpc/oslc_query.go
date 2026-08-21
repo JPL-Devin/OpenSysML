@@ -17,11 +17,7 @@ func (m *coreQueryModel) Candidates(scope []string) ([]*symbols.Symbol, error) {
 }
 
 func (m *coreQueryModel) Value(sym *symbols.Symbol, property string) ([]string, bool) {
-	value, ok := m.eval.value(sym, property)
-	if !ok {
-		return nil, false
-	}
-	return []string{value}, true
+	return m.eval.reader.Values(sym, property)
 }
 
 func (m *coreQueryModel) Identity(sym *symbols.Symbol) string {

@@ -22,8 +22,10 @@ The supported typed literal suffixes are `^^xsd:string`, `^^xsd:boolean`,
 `^^xsd:integer`, `^^xsd:decimal`, and `^^xsd:double`.
 
 The `oslc.where`, `oslc.select`, `oslc.orderBy`, and `oslc.prefix` parameters
-may be supplied as a query-parameter string. `oslc.orderBy` accepts `+` and
-`-` prefixes. Selection and ordering are comma-separated.
+may be supplied as a URL-encoded query-parameter string. Standard decoding
+applies: `+` means a space and percent-encoded sequences are decoded. A bare
+where-clause remains accepted. `oslc.orderBy` accepts `+` and `-` prefixes.
+Selection and ordering are comma-separated.
 
 ## Prefixes and properties
 
@@ -56,6 +58,8 @@ one operand.
 Results retain declaration order, with parents before their children, unless
 `oslc.orderBy` is supplied. `oslc.select` controls the reported property
 projection; identity and metamodel type remain present on every result.
+For ordered multiplicity comparisons, `*` is positive infinity. For `=`, `!=`,
+and `in`, a value `*` is compared lexically.
 
 OSLC compound terms have no `or`, so OSLC text and the structured API Query
 surface are deliberately not interchangeable: structured queries retain their
@@ -67,7 +71,7 @@ operators.
 | Construct | Behavior |
 | --- | --- |
 | `scoped_term` / nested property query | Typed error. The OSLC rationale is to match a resource using a related resource's property; graph-pattern traversal is not implemented by this symbol-index evaluator. |
-| `*` wildcard query value | Typed error. This surface identifies concrete elements and does not implement wildcard matching. |
+| Property wildcard (`*` in `oslc.where`, `oslc.select`, or `oslc.orderBy`) | Typed error. Generic property wildcards are not implemented. |
 | `oslc.searchTerms` | Typed error. Free-text search is distinct from property identification. |
 | Language-tagged literals | Typed error; model properties do not carry language tags. |
 | Non-`xsd:` or unsupported `xsd:` datatypes | Typed error rather than a potentially misleading lexical comparison. |

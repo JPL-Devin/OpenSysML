@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
-	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	corequery "github.com/Open-MBEE/OpenSysML/internal/core/query"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 	"google.golang.org/grpc/codes"
@@ -67,168 +66,23 @@ func queryErrorf(kind QueryErrorKind, format string, args ...any) *QueryError {
 	return &QueryError{Kind: kind, Message: fmt.Sprintf(format, args...)}
 }
 
-// localName returns the last segment of a qualified name: a library element
-// restored from cache is registered under its qualified name.
-func localName(fqn string) string {
-	if i := strings.LastIndex(fqn, "::"); i >= 0 {
-		return fqn[i+len("::"):]
-	}
-	return fqn
-}
-
-// owningName returns the namespace part of a qualified name, or "" for a
-// top-level one.
-func owningName(fqn string) string {
-	if i := strings.LastIndex(fqn, "::"); i >= 0 {
-		return fqn[:i]
-	}
-	return ""
-}
-
-// present reports a property value, treating an empty one as absent: an element
-// with no name has no name to compare, rather than one that is the empty string.
-func present(value string) (string, bool) {
-	return value, value != ""
-}
-
 // QueryPropertyNames returns every queryable property name, sorted. It is what
 // an unknown-property error lists, and what docs/reference/api.md's table documents.
 func QueryPropertyNames() []string {
 	return corequery.PropertyNames()
 }
 
-// metamodelTypeNames maps OpenSysML's symbol kinds onto the metamodel type names
-// the standard's clients write as `@type`, and is the single source of truth for
-// that mapping. A kind that spans several metaclasses is refined from the
-// declaration by MetamodelTypeNameOf; docs/reference/api.md reproduces the table.
-var metamodelTypeNames = map[symbols.SymbolKind]string{
-	symbols.SymbolPackage:               "Package",
-	symbols.SymbolNamespace:             "Namespace",
-	symbols.SymbolAlias:                 "Membership",
-	symbols.SymbolDependency:            "Dependency",
-	symbols.SymbolRelationship:          "Relationship",
-	symbols.SymbolComment:               "Comment",
-	symbols.SymbolDocumentation:         "Documentation",
-	symbols.SymbolTextualRepresentation: "TextualRepresentation",
-	symbols.SymbolPartDef:               "PartDefinition",
-	symbols.SymbolAttributeDef:          "AttributeDefinition",
-	symbols.SymbolPartUsage:             "PartUsage",
-	symbols.SymbolAttributeUsage:        "AttributeUsage",
-	symbols.SymbolItemDef:               "ItemDefinition",
-	symbols.SymbolOccurrenceDef:         "OccurrenceDefinition",
-	symbols.SymbolIndividualDef:         "OccurrenceDefinition",
-	symbols.SymbolMetadataDef:           "MetadataDefinition",
-	symbols.SymbolMetaclass:             "Metaclass",
-	symbols.SymbolEnumerationDef:        "EnumerationDefinition",
-	symbols.SymbolViewDef:               "ViewDefinition",
-	symbols.SymbolViewpointDef:          "ViewpointDefinition",
-	symbols.SymbolRenderingDef:          "RenderingDefinition",
-	symbols.SymbolConcernDef:            "ConcernDefinition",
-	symbols.SymbolConnectionDef:         "ConnectionDefinition",
-	symbols.SymbolFlowDef:               "FlowDefinition",
-	symbols.SymbolPortDef:               "PortDefinition",
-	symbols.SymbolInterfaceDef:          "InterfaceDefinition",
-	symbols.SymbolAllocationDef:         "AllocationDefinition",
-	symbols.SymbolActionDef:             "ActionDefinition",
-	symbols.SymbolStateDef:              "StateDefinition",
-	symbols.SymbolCalcDef:               "CalculationDefinition",
-	symbols.SymbolConstraintDef:         "ConstraintDefinition",
-	symbols.SymbolRequirementDef:        "RequirementDefinition",
-	symbols.SymbolCaseDef:               "CaseDefinition",
-	symbols.SymbolAnalysisCaseDef:       "AnalysisCaseDefinition",
-	symbols.SymbolVerificationCaseDef:   "VerificationCaseDefinition",
-	symbols.SymbolUseCaseDef:            "UseCaseDefinition",
-	symbols.SymbolItemUsage:             "ItemUsage",
-	symbols.SymbolOccurrenceUsage:       "OccurrenceUsage",
-	symbols.SymbolIndividualUsage:       "OccurrenceUsage",
-	symbols.SymbolMetadataUsage:         "MetadataUsage",
-	symbols.SymbolEnumerationUsage:      "EnumerationUsage",
-	symbols.SymbolViewUsage:             "ViewUsage",
-	symbols.SymbolViewpointUsage:        "ViewpointUsage",
-	symbols.SymbolRenderingUsage:        "RenderingUsage",
-	symbols.SymbolConcernUsage:          "ConcernUsage",
-	symbols.SymbolConnectionUsage:       "ConnectionUsage",
-	symbols.SymbolSuccessionUsage:       "SuccessionAsUsage",
-	symbols.SymbolFlowUsage:             "FlowUsage",
-	symbols.SymbolPortUsage:             "PortUsage",
-	symbols.SymbolInterfaceUsage:        "InterfaceUsage",
-	symbols.SymbolAllocationUsage:       "AllocationUsage",
-	symbols.SymbolActionUsage:           "ActionUsage",
-	symbols.SymbolStateUsage:            "StateUsage",
-	symbols.SymbolCalcUsage:             "CalculationUsage",
-	symbols.SymbolConstraintUsage:       "ConstraintUsage",
-	symbols.SymbolRequirementUsage:      "RequirementUsage",
-	symbols.SymbolCaseUsage:             "CaseUsage",
-	symbols.SymbolAnalysisCaseUsage:     "AnalysisCaseUsage",
-	symbols.SymbolVerificationCaseUsage: "VerificationCaseUsage",
-	symbols.SymbolUseCaseUsage:          "UseCaseUsage",
-	// An end of a connect clause is a ReferenceUsage (SysML.xtext ConnectorEnd);
-	// an interface's is a PortUsage, which MetamodelTypeNameOf refines.
-	symbols.SymbolConnectorEnd:            "ReferenceUsage",
-	symbols.SymbolSatisfyRequirementUsage: "SatisfyRequirementUsage",
-}
-
-// kermlTypeNames maps a KerML type declaration's keyword onto its metaclass, the
-// distinction symbols.SymbolKerMLType does not carry (KerML.xtext § Types).
-var kermlTypeNames = map[ast.DefinitionKind]string{
-	ast.DefClass:     "Class",
-	ast.DefStruct:    "Structure",
-	ast.DefAssoc:     "Association",
-	ast.DefBehavior:  "Behavior",
-	ast.DefPredicate: "Predicate",
-}
-
-// kermlUsageTypeNames maps the same declarations where the parser records them as
-// usages, which is how a KerML type written without `def` is parsed.
-var kermlUsageTypeNames = map[ast.UsageKind]string{
-	ast.UsageClass:       "Class",
-	ast.UsageStruct:      "Structure",
-	ast.UsageAssoc:       "Association",
-	ast.UsageBehavior:    "Behavior",
-	ast.UsagePredicate:   "Predicate",
-	ast.UsageInteraction: "Interaction",
-}
-
 // MetamodelTypeNameOf returns the metamodel type name an element reports as
 // `@type`, refining the kinds one symbol kind spans several metaclasses for.
 func MetamodelTypeNameOf(sym *symbols.Symbol) string {
-	switch sym.Kind {
-	case symbols.SymbolConnectorEnd:
-		return connectorEndTypeName(sym)
-	case symbols.SymbolKerMLType:
-		return kermlTypeName(sym)
-	}
-	return metamodelTypeNames[sym.Kind]
-}
-
-// connectorEndTypeName names an end feature by the connector that declares it:
-// an interface's end is a PortUsage, every other connector's a ReferenceUsage.
-func connectorEndTypeName(sym *symbols.Symbol) string {
-	if sym.OwnerScope != nil {
-		if usage, ok := sym.OwnerScope.Node().(*ast.Usage); ok && usage.Kind == ast.UsageInterface {
-			return "PortUsage"
-		}
-	}
-	return metamodelTypeNames[symbols.SymbolConnectorEnd]
-}
-
-// kermlTypeName names a KerML type declaration by its keyword. A symbol with no
-// declaration — one restored from the library cache — reports none.
-func kermlTypeName(sym *symbols.Symbol) string {
-	switch decl := sym.Decl.(type) {
-	case *ast.Definition:
-		return kermlTypeNames[decl.Kind]
-	case *ast.Usage:
-		return kermlUsageTypeNames[decl.Kind]
-	}
-	return ""
+	return corequery.MetamodelTypeNameOf(sym)
 }
 
 // MetamodelTypeName returns the metamodel type name a symbol kind reports as
 // `@type`, or "" for a kind that has none, which is only an unclassified
 // declaration. An element with no type name never matches a `@type` comparison.
 func MetamodelTypeName(kind symbols.SymbolKind) string {
-	return metamodelTypeNames[kind]
+	return corequery.MetamodelTypeName(kind)
 }
 
 // Query evaluates a SysML v2 API & Services Query against a parsed model.
@@ -246,7 +100,7 @@ func (s *Service) Query(ctx context.Context, req *pb.QueryRequest) (*pb.QueryRes
 
 	sc := cached.SymbolContext()
 	defer sc.Lock()()
-	eval := &queryEval{sc: sc}
+	eval := &queryEval{sc: sc, reader: corequery.NewPropertyReader(sc.Index, sc.Resolver, sc.Semantics)}
 	if req.OslcQuery != "" {
 		parsed, err := corequery.ParseOSLC(req.OslcQuery)
 		if err != nil {
@@ -293,7 +147,8 @@ func (s *Service) Query(ctx context.Context, req *pb.QueryRequest) (*pb.QueryRes
 // element state of its own: every property is read from the index and semantic
 // model on demand.
 type queryEval struct {
-	sc *SymbolContext
+	sc     *SymbolContext
+	reader *corequery.PropertyReader
 }
 
 // candidates returns the elements a query considers, in declaration order: the
@@ -451,12 +306,12 @@ func unknownProperty(name string) *QueryError {
 func (e *queryEval) project(sym *symbols.Symbol, selected []string) *pb.QueryResultElement {
 	element := &pb.QueryResultElement{
 		Id:         e.sc.Index.GetFQN(sym),
-		Type:       MetamodelTypeNameOf(sym),
+		Type:       corequery.MetamodelTypeNameOf(sym),
 		Properties: make(map[string]string, len(selected)),
 	}
 	for _, name := range selected {
-		if value, ok := e.value(sym, name); ok {
-			element.Properties[name] = value
+		if values, ok := e.reader.Values(sym, name); ok && len(values) != 0 {
+			element.Properties[name] = values[0]
 		}
 	}
 	return element
@@ -548,7 +403,11 @@ func (e *queryEval) matches(sym *symbols.Symbol, constraint *pb.Constraint) bool
 // matchesPrimitive compares one property of an element, negating the verdict
 // when the constraint is inverse.
 func (e *queryEval) matchesPrimitive(sym *symbols.Symbol, c *pb.PrimitiveConstraint) bool {
-	value, has := e.value(sym, c.Property)
+	values, has := e.reader.Values(sym, c.Property)
+	value := ""
+	if len(values) != 0 {
+		value = values[0]
+	}
 	var verdict bool
 	if c.Operator == pb.PrimitiveOperator_PRIMITIVE_OPERATOR_EQUAL {
 		verdict = has && equalsAny(value, c.Value)
@@ -559,56 +418,6 @@ func (e *queryEval) matchesPrimitive(sym *symbols.Symbol, c *pb.PrimitiveConstra
 		return !verdict
 	}
 	return verdict
-}
-
-func (e *queryEval) value(sym *symbols.Symbol, property string) (string, bool) {
-	switch property {
-	case QueryPropID, QueryPropQualifiedName:
-		return present(e.sc.Index.GetFQN(sym))
-	case QueryPropType:
-		return present(corequery.MetamodelTypeNameOf(sym))
-	case QueryPropName:
-		return present(localName(e.sc.Index.GetFQN(sym)))
-	case QueryPropDeclaredName:
-		if sym.EffectiveName {
-			return "", false
-		}
-		return present(localName(e.sc.Index.GetFQN(sym)))
-	case QueryPropOwner:
-		if sym.OwnerScope != nil && sym.OwnerScope.Owner() != nil {
-			return present(e.sc.Index.GetFQN(sym.OwnerScope.Owner()))
-		}
-		return present(owningName(e.sc.Index.GetFQN(sym)))
-	case QueryPropIsAbstract:
-		switch decl := sym.Decl.(type) {
-		case *ast.Usage:
-			return strconv.FormatBool(decl.IsAbstract), true
-		case *ast.Definition:
-			return strconv.FormatBool(decl.IsAbstract), true
-		default:
-			return "", false
-		}
-	case QueryPropElementType:
-		info := e.sc.typeInfoOf(sym)
-		if info == nil {
-			return "", false
-		}
-		return present(info.ResolvedId)
-	case QueryPropMultiplicityLower:
-		mult := e.sc.multiplicityOf(sym)
-		if mult == nil {
-			return "", false
-		}
-		return present(mult.Lower)
-	case QueryPropMultiplicityUpper:
-		mult := e.sc.multiplicityOf(sym)
-		if mult == nil {
-			return "", false
-		}
-		return present(mult.Upper)
-	default:
-		return "", false
-	}
 }
 
 // equalsAny reports whether the property's value is one of the constraint's.

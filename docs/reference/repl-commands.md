@@ -15,6 +15,7 @@ quoted segment holding a space and one in the middle of a chain: `%instantiate '
 | `%load <path>...` | Submit the contents of files, directories or globs |
 | `%print [name]` | Print the session model as SysML notation at the prompt, or just the named element and its body (`%print 'My Pkg'::Car`). Comments are kept, since the same writer `%save` writes notation with is used, and what is printed can be typed back in. Notation only: nothing about RDF is reported. Reading the model materializes nothing and leaves a debugging session running |
 | `%save <file>` | Write the session model to a file: `.sysml` notation (comments preserved) or `.ttl` RDF, which is [experimental](rdf-mapping.md#status-experimental) and reported as such on each save |
+| `%query <oslc-query>` | Identify model elements using OSLC Query text |
 | `%verbosity [level]` | Show or set output level: `quiet` (errors only), `normal`, `debug` (every diagnostic over the whole buffer) |
 | `%trace [on\|off]` | Show or set execution tracing: each evaluation, calc invocation, action step and state transition |
 | `%budget` | Show the five bounds one run may spend, each with the variable that raises it |
@@ -28,7 +29,6 @@ quoted segment holding a space and one in the middle of a chain: `%instantiate '
 | `%features <name>` | Show what an object holds for each feature of its type |
 | `%instances` | List all created objects |
 | `%eval <expr>` | Evaluate expression, in the last namespace the session declared |
-| `%query <oslc-query>` | Identify model elements using OSLC Query text |
 | `%eval in <name> : <expr>` | Evaluate expression in the named element's own namespace, or — when an object was materialized under that name — on that object, so a feature reads its value. The separator is the first `:` outside a quoted name that is not part of a `::`, so `%eval in Demo : Vehicle::mass` works |
 | **Behavioral Execution** | |
 | `%calc <name> [args...]` | Invoke calculation with arguments |

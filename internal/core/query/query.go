@@ -14,19 +14,29 @@ import (
 )
 
 const (
-	PropertyID                = "@id"
-	PropertyType              = "@type"
-	PropertyName              = "name"
-	PropertyDeclaredName      = "declaredName"
-	PropertyQualifiedName     = "qualifiedName"
-	PropertyOwner             = "owner"
-	PropertyElementType       = "type"
-	PropertyIsAbstract        = "isAbstract"
+	// PropertyID is the element identity property.
+	PropertyID = "@id"
+	// PropertyType is the metamodel type property.
+	PropertyType = "@type"
+	// PropertyName is the effective local name property.
+	PropertyName = "name"
+	// PropertyDeclaredName is the explicitly declared name property.
+	PropertyDeclaredName = "declaredName"
+	// PropertyQualifiedName is the fully qualified name property.
+	PropertyQualifiedName = "qualifiedName"
+	// PropertyOwner is the owning element's qualified name property.
+	PropertyOwner = "owner"
+	// PropertyElementType is the resolved declared element type property.
+	PropertyElementType = "type"
+	// PropertyIsAbstract is the abstractness property.
+	PropertyIsAbstract = "isAbstract"
+	// PropertyMultiplicityLower is the lower multiplicity bound property.
 	PropertyMultiplicityLower = "multiplicityLower"
+	// PropertyMultiplicityUpper is the upper multiplicity bound property.
 	PropertyMultiplicityUpper = "multiplicityUpper"
 )
 
-// PropertyNames is the closed set of properties supported by element queries.
+// propertyNames is the closed set of properties supported by element queries.
 var propertyNames = []string{
 	PropertyID, PropertyType, PropertyName, PropertyDeclaredName,
 	PropertyQualifiedName, PropertyOwner, PropertyIsAbstract, PropertyElementType,
@@ -59,14 +69,23 @@ func IsProperty(name string) bool {
 type ErrorKind int
 
 const (
+	// ErrUnknownProperty identifies an unknown query property.
 	ErrUnknownProperty ErrorKind = iota + 1
+	// ErrMalformed identifies malformed query syntax or structure.
 	ErrMalformed
+	// ErrUnorderedProperty identifies ordered comparison on an unordered property.
 	ErrUnorderedProperty
+	// ErrUnparsableValue identifies a value an operator cannot parse.
 	ErrUnparsableValue
+	// ErrUnknownScope identifies a scope absent from the model.
 	ErrUnknownScope
+	// ErrUnsupportedScopedTerm identifies an unsupported nested property query.
 	ErrUnsupportedScopedTerm
+	// ErrUnsupportedWildcard identifies an unsupported property wildcard.
 	ErrUnsupportedWildcard
+	// ErrUnsupportedSearchTerms identifies unsupported free-text search.
 	ErrUnsupportedSearchTerms
+	// ErrUnsupportedLiteral identifies an unsupported literal form.
 	ErrUnsupportedLiteral
 )
 
@@ -224,17 +243,17 @@ func Evaluate(model Model, q Query) ([]Element, error) {
 
 func validate(q Query) error {
 	for _, name := range q.Select {
-		if !isProperty(name) {
+		if !IsProperty(name) {
 			return unknownProperty(name)
 		}
 	}
 	for _, term := range q.OrderBy {
-		if !isProperty(term.Property) {
+		if !IsProperty(term.Property) {
 			return unknownProperty(term.Property)
 		}
 	}
 	for _, p := range q.Where {
-		if !isProperty(p.Property) {
+		if !IsProperty(p.Property) {
 			return unknownProperty(p.Property)
 		}
 		if len(p.Values) == 0 {
@@ -316,10 +335,6 @@ func ordered(text string) (float64, error) {
 		return math.Inf(1), nil
 	}
 	return strconv.ParseFloat(text, 64)
-}
-
-func isProperty(name string) bool {
-	return IsProperty(name)
 }
 
 func unknownProperty(name string) *Error {

@@ -5,13 +5,27 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/rdf"
 )
 
 // DefaultPrefixes are the prefixes available without an oslc.prefix binding.
 var DefaultPrefixes = map[string]string{
-	"sysml": "https://www.omg.org/spec/SysML#",
-	"rdf":   "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
-	"xsd":   "http://www.w3.org/2001/XMLSchema#",
+	"sysml": rdf.SysML,
+	"rdf":   rdf.RDFNS,
+	"xsd":   rdf.XSD,
+}
+
+var oslcPropertyMappings = map[string]string{
+	rdf.RDFNS + "type":              PropertyType,
+	rdf.SysML + "qualifiedName":     PropertyQualifiedName,
+	rdf.SysML + "name":              PropertyName,
+	rdf.SysML + "declaredName":      PropertyDeclaredName,
+	rdf.SysML + "owner":             PropertyOwner,
+	rdf.SysML + "isAbstract":        PropertyIsAbstract,
+	rdf.SysML + "type":              PropertyElementType,
+	rdf.SysML + "multiplicityLower": PropertyMultiplicityLower,
+	rdf.SysML + "multiplicityUpper": PropertyMultiplicityUpper,
 }
 
 // ParseOSLC parses a where expression. It also accepts a query-parameter
@@ -21,7 +35,7 @@ func ParseOSLC(text string) (Query, error) {
 		return ParseParameters(text)
 	}
 	p := oslcParser{s: text, prefixes: clonePrefixes(DefaultPrefixes)}
-	q, err := p.parseCompound("")
+	q, err := p.parseCompound()
 	if err != nil {
 		return Query{}, err
 	}
@@ -41,9 +55,9 @@ func isParameterText(text string) bool {
 }
 
 // ParseParameters parses oslc.where, oslc.select, oslc.orderBy, and
-// oslc.prefix parameters. Parameters may be URL encoded or use their raw form.
+// oslc.prefix parameters. Parameter text follows URL query decoding rules.
 func ParseParameters(text string) (Query, error) {
-	values, err := url.ParseQuery(strings.ReplaceAll(text, ";", "&"))
+	values, err := url.ParseQuery(text)
 	if err != nil {
 		return Query{}, errorf(ErrMalformed, "malformed OSLC query parameters: %v", err)
 	}
@@ -55,6 +69,9 @@ func ParseParameters(text string) (Query, error) {
 	}
 	if _, present := values["oslc.searchTerms"]; present {
 		return Query{}, errorf(ErrUnsupportedSearchTerms, "oslc.searchTerms is not implemented: the implementation performs element identification, not free-text search")
+	}
+	if properties, present := values["oslc.properties"]; present && len(properties) > 0 && strings.TrimSpace(properties[0]) == "*" {
+		return Query{}, wildcardError("oslc.properties")
 	}
 	selectTerms, err := splitCommaStrict(values.Get("oslc.select"), "oslc.select")
 	if err != nil {
@@ -70,13 +87,16 @@ func ParseParameters(text string) (Query, error) {
 	}
 	if where := values.Get("oslc.where"); where != "" {
 		p := oslcParser{s: where, prefixes: prefixes}
-		parsed, err := p.parseCompound("")
+		parsed, err := p.parseCompound()
 		if err != nil {
 			return Query{}, err
 		}
 		q.Where = parsed.Where
 	}
 	for _, name := range q.Select {
+		if name == "*" {
+			return Query{}, wildcardError("oslc.select")
+		}
 		if strings.ContainsAny(name, "{}") {
 			return Query{}, scopedError()
 		}
@@ -126,6 +146,9 @@ func parseOrder(text string, prefixes map[string]string) ([]OrderTerm, error) {
 		if strings.ContainsAny(raw, "{}") {
 			return nil, scopedError()
 		}
+		if raw == "*" {
+			return nil, wildcardError("oslc.orderBy")
+		}
 		name, err := resolveProperty(raw, prefixes)
 		if err != nil {
 			return nil, err
@@ -141,11 +164,11 @@ type oslcParser struct {
 	prefixes map[string]string
 }
 
-func (p *oslcParser) parseCompound(end string) (Query, error) {
+func (p *oslcParser) parseCompound() (Query, error) {
 	var q Query
 	for {
 		p.skipSpace()
-		if p.pos >= len(p.s) || (end != "" && p.s[p.pos:p.pos+1] == end) {
+		if p.pos >= len(p.s) {
 			if len(q.Where) == 0 {
 				return Query{}, errorf(ErrMalformed, "OSLC compound term is empty")
 			}
@@ -158,6 +181,10 @@ func (p *oslcParser) parseCompound(end string) (Query, error) {
 		p.skipSpace()
 		if p.peek('{') {
 			return Query{}, scopedError()
+		}
+		prop, err := resolveProperty(identifier, p.prefixes)
+		if err != nil {
+			return Query{}, err
 		}
 		if p.consumeWord("in") {
 			p.skipSpace()
@@ -180,15 +207,6 @@ func (p *oslcParser) parseCompound(end string) (Query, error) {
 					return Query{}, errorf(ErrMalformed, "OSLC in term for %q needs ',' or ']'", identifier)
 				}
 			}
-			prop, err := resolveProperty(identifier, p.prefixes)
-			if err != nil {
-				return Query{}, err
-			}
-			for _, value := range vals {
-				if value == "*" {
-					return Query{}, wildcardError(prop)
-				}
-			}
 			q.Where = append(q.Where, Predicate{Property: prop, Operator: In, Values: vals})
 		} else {
 			op := p.operator()
@@ -200,17 +218,10 @@ func (p *oslcParser) parseCompound(end string) (Query, error) {
 			if err != nil {
 				return Query{}, err
 			}
-			prop, err := resolveProperty(identifier, p.prefixes)
-			if err != nil {
-				return Query{}, err
-			}
-			if value == "*" && op != Less && op != Greater && op != LessEqual && op != GreaterEqual {
-				return Query{}, wildcardError(prop)
-			}
 			q.Where = append(q.Where, Predicate{Property: prop, Operator: op, Values: []string{value}})
 		}
 		p.skipSpace()
-		if p.pos >= len(p.s) || (end != "" && p.consume(end[0])) {
+		if p.pos >= len(p.s) {
 			return q, nil
 		}
 		if !p.consumeWord("and") {
@@ -220,6 +231,10 @@ func (p *oslcParser) parseCompound(end string) (Query, error) {
 }
 
 func (p *oslcParser) identifier() (string, error) {
+	if p.peek('*') {
+		p.pos++
+		return "*", nil
+	}
 	start := p.pos
 	for p.pos < len(p.s) {
 		r := rune(p.s[p.pos])
@@ -351,32 +366,17 @@ func (p *oslcParser) consumeWord(word string) bool {
 }
 
 func resolveProperty(name string, prefixes map[string]string) (string, error) {
+	if name == "*" {
+		return "", wildcardError("oslc.where")
+	}
 	iri, err := expandName(name, prefixes)
 	if err != nil {
 		return "", err
 	}
-	switch iri {
-	case DefaultPrefixes["rdf"] + "type":
-		return PropertyType, nil
-	case DefaultPrefixes["sysml"] + "qualifiedName":
-		return PropertyQualifiedName, nil
-	case DefaultPrefixes["sysml"] + "name":
-		return PropertyName, nil
-	case DefaultPrefixes["sysml"] + "declaredName":
-		return PropertyDeclaredName, nil
-	case DefaultPrefixes["sysml"] + "owner":
-		return PropertyOwner, nil
-	case DefaultPrefixes["sysml"] + "isAbstract":
-		return PropertyIsAbstract, nil
-	case DefaultPrefixes["sysml"] + "type":
-		return PropertyElementType, nil
-	case DefaultPrefixes["sysml"] + "multiplicityLower":
-		return PropertyMultiplicityLower, nil
-	case DefaultPrefixes["sysml"] + "multiplicityUpper":
-		return PropertyMultiplicityUpper, nil
-	default:
-		return "", unknownProperty(name)
+	if property, ok := oslcPropertyMappings[iri]; ok {
+		return property, nil
 	}
+	return "", unknownProperty(name)
 }
 
 func resolveValue(name string, prefixes map[string]string) (string, error) {
@@ -384,8 +384,8 @@ func resolveValue(name string, prefixes map[string]string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if strings.HasPrefix(iri, DefaultPrefixes["sysml"]) {
-		return strings.TrimPrefix(iri, DefaultPrefixes["sysml"]), nil
+	if strings.HasPrefix(iri, rdf.SysML) {
+		return strings.TrimPrefix(iri, rdf.SysML), nil
 	}
 	return iri, nil
 }
