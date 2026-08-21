@@ -9,8 +9,8 @@ Third sibling of `testing-pilot-differential` and `testing-grammar-coverage` (sa
 `scripts/pilot-pin.sh`, same "committed artifact, testable by reproduction" shape, same
 `build/`-only unvendored corpus). This one reads the OMG pilot's own Xpect `.xt` test files as
 *data* — no Java, no Xtext — and adjudicates each **declared** expectation
-(`errors`/`warnings`/`noErrors`/`linkedName`; `scope` is counted but not adjudicated) against our
-front end.
+(`errors`/`warnings`/`noErrors`/`linkedName`, and since wave 7F also `scope`) against our
+front end. Only `exportedObjects` (1 assertion) is still `not adjudicated`.
 
 ## Prerequisites
 
@@ -29,11 +29,16 @@ cmp build/pilot-xpect/pilot-xpect.json docs/project/pilot-xpect-baseline.json   
 ```
 
 Observed on `main` after the wave-6 round: `428 .xt file(s), 0 unparsed; 1261 assertion(s),
-1326 expectation(s): 449 agree, 646 disagree, 0 unlocated, 231 not adjudicated`, byte-identical to
-the committed baseline, and the numeric tables in `docs/project/pilot-xpect.md` match it (per-suite
-kerml 303/968/381/356/231, sysml 125/358/68/290/0; 10 ignored XPECT-shaped fragments; 0 missing
-resources). Read the live totals from the baseline rather than this paragraph; it is an anchor, not
-the check.
+1326 expectation(s): 449 agree, 646 disagree, 0 unlocated, 231 not adjudicated`. After wave 7F
+(scope adjudicated) plus the central #421 rebaseline: `522 agree, 803 disagree, 0 unlocated,
+1 not adjudicated`, scope row `230 asserts / 229 block / 230 expects / 73 agree / 157 disagree`,
+classes `other-paths 12 | extra-names 32 | missing-names 10 | missing-and-extra 7 |
+library-names 96`; per-suite kerml 303/968/454/513/1, sysml 125/358/68/290/0. Read the live totals
+from the baseline rather than this paragraph; it is an anchor, not the check.
+
+Cross-check every numeric table in `docs/project/pilot-xpect.md` (kind table, tolerance tables,
+per-suite table, scope class table) against the fresh `.txt` — those tables are hand-maintained and
+are the usual thing to go stale after a merge or rebaseline.
 See `testing-pilot-differential/SKILL.md` for the complete mechanical-guard scope and review-only surfaces.
 
 **Determinism under concurrency is the main risk** (`compareAll` in `main.go` fans N goroutines
@@ -66,6 +71,16 @@ for j in 1 3 16 0; do cmp /tmp/xj$j/pilot-xpect.json docs/project/pilot-xpect-ba
 (same for sysml) then `pilot-xpect: no suite found under build/pilot-xpect-corpus; …`, and
 `/tmp/nocorpus` is never created. It must never exit 0 or report 100 % agreement.
 
+## Isolating a merge's effect on the adjudication (fast, covers all rows)
+
+When a branch merges `main` and you must prove no verdict silently moved, do not re-spot-check by
+hand: diff the *rows* of the old and new baselines. `git show <pre-merge-sha>:docs/project/pilot-xpect-baseline.json`
+and compare keyed on `suites[].files[].path` + `rows[].line` + `rows[].kind`, comparing
+`(verdict, tolerance, names, ours)`. If the two baselines are byte-identical (`cmp`), the merge
+provably changed nothing in the oracle's output. Beware: `suites[].dir` is the **full corpus path**,
+and agreeing rows are *pruned* from the JSON — never infer "agree" by matching on `dir`, and treat
+"absent from JSON" as agree only after confirming the totals.
+
 ## Spot-checking the oracle's truthfulness (the failure mode that matters)
 
 Agreeing rows are pruned from the baseline (`report.go: pruned`), so "absent from the baseline"
@@ -88,6 +103,17 @@ sibling files:
 - `bin/sysml`'s REPL is **not** useful here: `%print` echoes the declaration and there is no
   meta-command that prints a resolved FQN, and `cmd/sysml` analyses under the name `<repl>` so the
   KerML language tier is not honoured (see `testing-pilot-differential`).
+- **Probing a `scope` row:** copy the `.xt` to `Main.kerml` in a temp dir together with the `/src/`
+  files its `XPECT_SETUP` `ResourceSet` names, insert `alias __pN for <name with '.' → '::'>;` into
+  the *same namespace* as the anchor, and read `publishDiagnostics`: an in-scope name is clean, an
+  out-of-scope one gives `unresolved reference: …`. `model.VisibleNames`/`ElementOnPath`/`FQNOf`/
+  `ScopeAt` have no caller outside `cmd/pilot-xpect/scope.go` (grep to re-confirm), so the LSP
+  really is an independent surface.
+- **Caveat that will confuse you:** a scope "missing" name is missing from the *enumeration*, not
+  from the resolver. `VisibleNames` truncates a path at the first repeated element, so e.g.
+  `testsuite/ShadowingTests_CircleProblem2.kerml.xt:22` reports 3 missing names that all resolve
+  fine through the LSP. The direction is conservative (it under-reports our agreement) and is
+  documented in `pilot-xpect.md`; do not file it as a scoring bug.
 - `/library*` resources are deliberately replaced by our embedded stdlib, so a single-file LSP check
   is faithful for suites whose setup names only library files plus `ThisFile`.
 
@@ -98,6 +124,10 @@ sibling files:
 | delete the `END_SETUP` line | file listed under `unparsed files` as `XPECT_SETUP block is not terminated by END_SETUP`, `filesUnparsed` +1, `files` still 428 |
 | `XPECT_SETUP` → `XPECT_SETUPX` | `no XPECT_SETUP block` |
 | turn `// XPECT errors …` into `//* XPECT errors …` with no `*/` | `line N: `//* XPECT errors` note is not terminated` |
+| drop one declared name from an *agreeing* `scope` note | that row flips to `disagree(extra-names)` with `extra 1` — proves the set comparison is live |
+| add `ZZZ_not_a_name` to an agreeing `scope` note | `disagree(missing-names)` naming it, and *not* `other-paths`/`library-names` |
+| add a real member (`class zzz_extra {}`) to a `library-names` fixture's namespace | class moves to `extra-names` — proves the `self`/`that` filter covers *all* differences, not just the 5 names the row text samples |
+| delete a `/src/` file named by an `XPECT_SETUP` `ResourceSet` | totals report `N missing declared resource(s)` and list the declaring fixtures; assertion/expectation counts stay 1261/1326 — it must not silently agree |
 | `END_SETUP` → `END_SETUPX` | `XPECT_SETUP block is not terminated by END_SETUP` — the terminator is the token `\bEND_SETUP\b` (`xt.go`), so a suffixed keyword does not terminate. Locked by `w5c_xt_test.go`; a plain substring search here was the one real defect testing found. |
 
 An unparsed file lowers the assertion/row/disagree counts (it is counted, not compared), so always
