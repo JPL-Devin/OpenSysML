@@ -15,7 +15,7 @@
 2	kerml-examples/Simple Tests/Classifiers.kerml
 1	kerml-examples/Simple Tests/Comments.kerml
 4	kerml-examples/Simple Tests/Conjugation.kerml
-5	kerml-examples/Simple Tests/Connectors.kerml
+1	kerml-examples/Simple Tests/Connectors.kerml
 4	kerml-examples/Simple Tests/Expressions.kerml
 5	kerml-examples/Simple Tests/FeatureChains.kerml
 14	kerml-examples/Simple Tests/Features.kerml
@@ -28,11 +28,10 @@
 2	kerml-examples/Vehicle Example/VehicleUsages.kerml
 1	sysml-examples/Analysis Examples/Turbojet Stage Analysis.sysml
 6	sysml-examples/Analysis Examples/Vehicle Analysis Demo.sysml
-6	sysml-examples/Arrowhead Framework Example/AHFSequences.sysml
+15	sysml-examples/Arrowhead Framework Example/AHFSequences.sysml
 6	sysml-examples/Cause and Effect Examples/CauseAndEffectExample.sysml
 2	sysml-examples/Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml
 1	sysml-examples/Individuals Examples/AnalysisIndividualExample.sysml
-1	sysml-examples/Interaction Sequencing Examples/ServerSequenceModelOutside.sysml
 10	sysml-examples/Interaction Sequencing Examples/ServerSequenceOutsideRealization-2.sysml
 6	sysml-examples/Interaction Sequencing Examples/ServerSequenceOutsideRealization-3.sysml
 13	sysml-examples/Interaction Sequencing Examples/ServerSequenceRealization-2.sysml
@@ -41,7 +40,7 @@
 2	sysml-examples/Metadata Examples/RationaleMetadataExample.sysml
 5	sysml-examples/Metadata Examples/RequirementMetadataExample.sysml
 1	sysml-examples/Simple Tests/AllocationTest.sysml
-3	sysml-examples/Simple Tests/ConnectionTest.sysml
+1	sysml-examples/Simple Tests/ConnectionTest.sysml
 4	sysml-examples/Simple Tests/ConstraintTest.sysml
 2	sysml-examples/Simple Tests/DecisionTest.sysml
 1	sysml-examples/Simple Tests/PartTest.sysml
@@ -58,5 +57,3 @@
 1	sysml-validation/05-State-based Behavior/5-State-based Behavior-1a.sysml
 1	sysml-validation/09-Verification/9-Verification-simplified.sysml
 7	sysml-validation/10-Analysis and Trades/10d-Dynamics Analysis.sysml
-6	sysml-validation/17-Sequence Modeling/17a-Sequence-Modeling.sysml
-6	sysml-validation/17-Sequence Modeling/17b-Sequence-Modeling.sysml
