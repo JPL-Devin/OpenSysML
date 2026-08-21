@@ -149,3 +149,29 @@ func (m *Model) PrimTypeOf(sym *symbols.Symbol) PrimType {
 	m.primTypes[sym] = prim
 	return prim
 }
+
+// CouldHold reports whether a feature of the given type could hold a value of
+// the scalar type prim: either the type conforms to it, or it conforms to the
+// type, as every value does to `Anything`.
+func (m *Model) CouldHold(sym *symbols.Symbol, prim PrimType) bool {
+	if m == nil || sym == nil || prim == PrimUnknown {
+		return true
+	}
+	if p := m.PrimTypeOf(sym); p != PrimUnknown {
+		return PrimConforms(p, prim)
+	}
+	for scalar, p := range m.scalarTable() {
+		if p != prim {
+			continue
+		}
+		if scalar == sym {
+			return true
+		}
+		for _, super := range m.AllSupertypes(scalar) {
+			if super == sym {
+				return true
+			}
+		}
+	}
+	return false
+}
