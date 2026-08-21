@@ -73,6 +73,10 @@ CAPABILITY_APPLY_EDITS = "apply_edits"
 CAPABILITY_AUTHORING = "authoring"
 #: Declares the language of inline content passed to ``ParseFile``.
 CAPABILITY_INLINE_LANGUAGE = "inline_language"
+#: ``ParseFileRequest.strict_conformance``, which asks whether the source is
+#: conforming SysML v2 rather than accepting the OpenSysML notation extensions.
+#: Without it the field is ignored, so the answer would silently be the default one.
+CAPABILITY_STRICT_CONFORMANCE = "strict_conformance"
 
 
 @dataclass(frozen=True)

@@ -239,6 +239,7 @@ separator.
 | which values are best for an analysis case's objectives (experimental, needs [z3](01-install.md#installing-a-solver-optional)) | `%optimize` | [reference](../reference/repl-commands.md) |
 | what a behavior does, step by step | `%action`, `%state`, `%step`, `%tokens`, `%advance` | [6](06-behavior.md) |
 | where a run stopped and why | `%trace`, `%budget`, `%verbosity` | [10](10-troubleshooting.md) |
+| whether what is typed is conforming SysML v2 | `%strict` | [3](03-command-line.md#strict-conformance) |
 
 Every command, with its arguments, is [reference/repl-commands.md](../reference/repl-commands.md).
 

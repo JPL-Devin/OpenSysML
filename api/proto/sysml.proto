@@ -200,6 +200,10 @@ message ParseFileRequest {
   string content_hash = 3 [deprecated = true];
   // Language for inline content: "sysml" or "kerml". Empty defaults to SysML.
   string language = 4;
+  // Judge the source as conforming SysML v2: notation no pinned production
+  // admits is an error rather than a warning. Part of the cache key, so the two
+  // modes never serve each other's diagnostics.
+  bool strict_conformance = 5;
 }
 
 // ParseFileResponse contains parsed model info

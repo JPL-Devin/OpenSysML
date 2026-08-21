@@ -2,19 +2,27 @@
   "pilot": "2026-05 (jupyter-sysml-kernel 0.60.1)",
   "validator": "build/pilot-sysml-validator/validate-sysml-batch",
   "corpus": "cmd/pilot-reject/testdata/negative",
+  "conformance": "auto",
   "totals": {
     "cases": 34,
-    "bothReject": 20,
-    "pilotOnlyRejects": 14,
+    "bothReject": 25,
+    "pilotOnlyRejects": 9,
     "oursOnlyRejects": 0,
     "bothAccept": 0
   },
+  "strictOnlyAgreements": [
+    "extensions/x01-initial-state-marker.sysml",
+    "extensions/x04-orthogonal-region.sysml",
+    "extensions/x05-defer-member.sysml",
+    "extensions/x06-history-member.sysml",
+    "extensions/x07-transition-to.sysml"
+  ],
   "sources": [
     {
       "source": "extensions",
       "cases": 7,
-      "bothReject": 2,
-      "pilotOnlyRejects": 5,
+      "bothReject": 7,
+      "pilotOnlyRejects": 0,
       "oursOnlyRejects": 0,
       "bothAccept": 0
     },
@@ -40,92 +48,79 @@
       "path": "extensions/x01-initial-state-marker.sysml",
       "source": "extensions",
       "rule": "'initial' is an OpenSysML invention; the pinned StateBodyItem has no such member (SysML.xtext StateBodyItem).",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
+      "mode": "strict",
+      "bucket": "both-reject",
+      "oursErrors": 1,
       "pilotErrors": 5,
-      "pilot": [
-        "line 4: no viable alternative at input 'initial'",
-        "line 4: no viable alternative at input 'start'",
-        "line 6: mismatched input 'transition' expecting '}'",
-        "line 6: no viable alternative at input 'then'",
-        "line 7: missing EOF at '}'"
-      ]
+      "defaultBucket": "pilot-only-rejects"
     },
     {
       "path": "extensions/x02-choice-pseudostate.sysml",
       "source": "extensions",
       "rule": "'choice' is an OpenSysML invention; the pinned StateBodyItem has no pseudostates (SysML.xtext StateBodyItem).",
+      "mode": "strict",
       "bucket": "both-reject",
       "oursErrors": 1,
-      "pilotErrors": 3
+      "pilotErrors": 3,
+      "defaultBucket": "both-reject",
+      "defaultErrors": 1
     },
     {
       "path": "extensions/x03-junction-pseudostate.sysml",
       "source": "extensions",
       "rule": "'junction' is an OpenSysML invention; the pinned StateBodyItem has no pseudostates (SysML.xtext StateBodyItem).",
+      "mode": "strict",
       "bucket": "both-reject",
       "oursErrors": 1,
-      "pilotErrors": 3
+      "pilotErrors": 3,
+      "defaultBucket": "both-reject",
+      "defaultErrors": 1
     },
     {
       "path": "extensions/x04-orthogonal-region.sysml",
       "source": "extensions",
       "rule": "'region' is an OpenSysML invention; the pinned grammar spells concurrency 'state ... parallel' (SysML.xtext StateDefBody).",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
+      "mode": "strict",
+      "bucket": "both-reject",
+      "oursErrors": 2,
       "pilotErrors": 4,
-      "pilot": [
-        "line 4: no viable alternative at input 'region'",
-        "line 4: no viable alternative at input 'r1'",
-        "line 7: no viable alternative at input 'r2'",
-        "line 11: extraneous input '}' expecting EOF"
-      ]
+      "defaultBucket": "pilot-only-rejects"
     },
     {
       "path": "extensions/x05-defer-member.sysml",
       "source": "extensions",
       "rule": "'defer' is an OpenSysML invention; the pinned StateBodyItem has no event deferral (SysML.xtext StateBodyItem).",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
+      "mode": "strict",
+      "bucket": "both-reject",
+      "oursErrors": 1,
       "pilotErrors": 4,
-      "pilot": [
-        "line 4: no viable alternative at input 'state'",
-        "line 5: no viable alternative at input 'defer'",
-        "line 5: no viable alternative at input 'Ping'",
-        "line 7: missing EOF at '}'"
-      ]
+      "defaultBucket": "pilot-only-rejects"
     },
     {
       "path": "extensions/x06-history-member.sysml",
       "source": "extensions",
       "rule": "'history' is an OpenSysML invention; the pinned StateBodyItem has no history pseudostate (SysML.xtext StateBodyItem).",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
+      "mode": "strict",
+      "bucket": "both-reject",
+      "oursErrors": 1,
       "pilotErrors": 3,
-      "pilot": [
-        "line 5: no viable alternative at input 'history'",
-        "line 5: no viable alternative at input 'resume'",
-        "line 7: extraneous input '}' expecting EOF"
-      ]
+      "defaultBucket": "pilot-only-rejects"
     },
     {
       "path": "extensions/x07-transition-to.sysml",
       "source": "extensions",
       "rule": "TransitionUsage connects with 'first ... then', never 'to' (SysML.xtext TransitionUsage).",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
+      "mode": "strict",
+      "bucket": "both-reject",
+      "oursErrors": 1,
       "pilotErrors": 4,
-      "pilot": [
-        "line 6: no viable alternative at input 'transition'",
-        "line 6: missing '}' at 'idle'",
-        "line 6: no viable alternative at input 'to'",
-        "line 8: extraneous input '}' expecting EOF"
-      ]
+      "defaultBucket": "pilot-only-rejects"
     },
     {
       "path": "grammar/g01-unclosed-package-body.sysml",
       "source": "grammar",
       "rule": "PackageBody requires a closing '}' (SysML.xtext PackageBody).",
+      "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
       "pilotErrors": 1
@@ -134,6 +129,7 @@
       "path": "grammar/g02-import-without-visibility.sysml",
       "source": "grammar",
       "rule": "ImportPrefix requires an explicit visibility keyword before 'import' (SysML.xtext ImportPrefix).",
+      "mode": "default",
       "bucket": "pilot-only-rejects",
       "oursErrors": 0,
       "pilotErrors": 2,
@@ -146,6 +142,7 @@
       "path": "grammar/g03-alias-without-for.sysml",
       "source": "grammar",
       "rule": "AliasMember requires 'for' and a target element (SysML.xtext AliasMember).",
+      "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
       "pilotErrors": 1
@@ -154,6 +151,7 @@
       "path": "grammar/g04-specialization-without-target.sysml",
       "source": "grammar",
       "rule": "OwnedSubclassification requires a superclassifier after ':\u003e' (SysML.xtext OwnedSubclassification).",
+      "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
       "pilotErrors": 1
@@ -162,6 +160,7 @@
       "path": "grammar/g05-typing-without-type.sysml",
       "source": "grammar",
       "rule": "OwnedFeatureTyping requires a type after ':' (SysML.xtext TypedBy/OwnedFeatureTyping).",
+      "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
       "pilotErrors": 1
@@ -170,6 +169,7 @@
       "path": "grammar/g06-definition-with-multiplicity.sysml",
       "source": "grammar",
       "rule": "DefinitionDeclaration admits no multiplicity; '[..]' belongs to FeatureDeclaration (SysML.xtext DefinitionDeclaration).",
+      "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 2,
       "pilotErrors": 1
@@ -178,6 +178,7 @@
       "path": "grammar/g07-entry-outside-state-body.sysml",
       "source": "grammar",
       "rule": "EntryActionMember is a StateBodyItem; a part def body admits no 'entry' (SysML.xtext StateBodyItem).",
+      "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
       "pilotErrors": 2
@@ -186,6 +187,7 @@
       "path": "grammar/g08-do-outside-state-body.sysml",
       "source": "grammar",
       "rule": "DoActionMember is a StateBodyItem; a part def body admits no 'do' (SysML.xtext StateBodyItem).",
+      "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
       "pilotErrors": 2
@@ -194,6 +196,7 @@
       "path": "grammar/g09-value-without-expression.sysml",
       "source": "grammar",
       "rule": "ValuePart requires an expression after '=' (SysML.xtext ValuePart/OwnedExpression).",
+      "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
       "pilotErrors": 2
@@ -202,6 +205,7 @@
       "path": "grammar/g10-operator-without-operand.sysml",
       "source": "grammar",
       "rule": "AdditiveExpression requires a right operand after '+' (KerMLExpressions.xtext AdditiveExpression).",
+      "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
       "pilotErrors": 1
@@ -210,6 +214,7 @@
       "path": "grammar/g11-assignment-without-target.sysml",
       "source": "grammar",
       "rule": "AssignmentNode requires a target and value after 'assign' (SysML.xtext AssignmentNode).",
+      "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 3,
       "pilotErrors": 2
@@ -218,6 +223,7 @@
       "path": "grammar/g12-unterminated-block-comment.sysml",
       "source": "grammar",
       "rule": "ML_COMMENT requires a closing '*/' (SysML.xtext terminal ML_COMMENT).",
+      "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 2,
       "pilotErrors": 1
@@ -226,6 +232,7 @@
       "path": "grammar/g13-entry-then-without-target.sysml",
       "source": "grammar",
       "rule": "EntryTransitionMember 'then' requires a transition target (SysML.xtext EntryTransitionMember).",
+      "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
       "pilotErrors": 1
@@ -234,6 +241,7 @@
       "path": "grammar/g14-connect-without-to.sysml",
       "source": "grammar",
       "rule": "BinaryConnectorPart requires 'to' between the two ends (SysML.xtext BinaryConnectorPart).",
+      "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 2,
       "pilotErrors": 3
@@ -242,6 +250,7 @@
       "path": "grammar/g15-keyword-as-name.sysml",
       "source": "grammar",
       "rule": "'part' is a reserved keyword, not a NAME token (SysML.xtext terminal ID / PartKeyword).",
+      "mode": "default",
       "bucket": "pilot-only-rejects",
       "oursErrors": 0,
       "pilotErrors": 1,
@@ -253,6 +262,7 @@
       "path": "grammar/k01-specializes-without-target.kerml",
       "source": "grammar",
       "rule": "OwnedSpecialization requires a general type after 'specializes' (KerML.xtext SpecializationPart).",
+      "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
       "pilotErrors": 3
@@ -261,6 +271,7 @@
       "path": "grammar/k02-sysml-keyword-in-kerml.kerml",
       "source": "grammar",
       "rule": "'part def' is a SysML production; the KerML grammar has no such keyword (KerML.xtext RootNamespace).",
+      "mode": "default",
       "bucket": "pilot-only-rejects",
       "oursErrors": 0,
       "pilotErrors": 2,
@@ -273,6 +284,7 @@
       "path": "grammar/k03-feature-typing-without-type.kerml",
       "source": "grammar",
       "rule": "FeatureTyping requires a type after ':' (KerML.xtext TypedBy/OwnedFeatureTyping).",
+      "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
       "pilotErrors": 1
@@ -281,6 +293,7 @@
       "path": "grammar/k04-dangling-visibility.kerml",
       "source": "grammar",
       "rule": "MemberPrefix visibility must be followed by a member element (KerML.xtext NamespaceBodyElement).",
+      "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
       "pilotErrors": 1
@@ -289,6 +302,7 @@
       "path": "grammar/k05-unclosed-body.kerml",
       "source": "grammar",
       "rule": "a Type body requires a closing '}' (KerML.xtext TypeBody).",
+      "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 2,
       "pilotErrors": 1
@@ -297,6 +311,7 @@
       "path": "xpect/p01-public-root-import.kerml",
       "source": "xpect",
       "rule": "a root-namespace import must be private (KerML 8.2.3.5.2 validateImportTopLevelVisibility; pilot Import_RootNamspace_invalid.kerml.xt).",
+      "mode": "default",
       "bucket": "pilot-only-rejects",
       "oursErrors": 0,
       "pilotErrors": 1,
@@ -308,6 +323,7 @@
       "path": "xpect/p02-association-end-two-types.kerml",
       "source": "xpect",
       "rule": "an association end must have exactly one type (KerML 8.2.4.6.2 checkAssociationEndTypes; pilot AssociationTest_EndTypes_invalid.kerml.xt).",
+      "mode": "default",
       "bucket": "pilot-only-rejects",
       "oursErrors": 0,
       "pilotErrors": 1,
@@ -319,6 +335,7 @@
       "path": "xpect/p03-variable-in-datatype.kerml",
       "source": "xpect",
       "rule": "a variable feature must be owned by an occurrence type (KerML 8.3.3.3 validateFeatureOwnedVariable; pilot Feature_variable_invalid.kerml.xt).",
+      "mode": "default",
       "bucket": "pilot-only-rejects",
       "oursErrors": 0,
       "pilotErrors": 1,
@@ -330,6 +347,7 @@
       "path": "xpect/p04-nonunique-subsets-unique.kerml",
       "source": "xpect",
       "rule": "a nonunique feature cannot subset a unique one (KerML 8.3.3.3 validateSubsettingUniquenessConformance; pilot Feature_nonunique_invalid.kerml.xt).",
+      "mode": "default",
       "bucket": "pilot-only-rejects",
       "oursErrors": 0,
       "pilotErrors": 1,
@@ -341,6 +359,7 @@
       "path": "xpect/p05-single-chaining-feature.kerml",
       "source": "xpect",
       "rule": "a feature chain needs at least two chaining features (KerML 8.3.3.3 validateFeatureChainingFeaturesNotOne; pilot FeatureChain_invalid.kerml.xt).",
+      "mode": "default",
       "bucket": "pilot-only-rejects",
       "oursErrors": 0,
       "pilotErrors": 1,
@@ -352,6 +371,7 @@
       "path": "xpect/p06-private-member-reference.kerml",
       "source": "xpect",
       "rule": "a private member is not visible outside its namespace (KerML 8.2.3.5 name resolution; pilot Import_All.kerml.xt).",
+      "mode": "default",
       "bucket": "pilot-only-rejects",
       "oursErrors": 0,
       "pilotErrors": 3,
@@ -365,6 +385,7 @@
       "path": "xpect/p07-extraneous-closing-brace.kerml",
       "source": "xpect",
       "rule": "a stray '}' after the root member is extraneous input (KerML.xtext RootNamespace; pilot ParsingTests_Import_Visibility.kerml.xt).",
+      "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,
       "pilotErrors": 1

@@ -108,6 +108,23 @@ except opensysml.ModelError as exc:
     partial = exc.model            # what the service did parse
 ```
 
+`strict_conformance=True`, on the same three calls, asks a different question:
+whether the source is conforming SysML v2. OpenSysML's own notation — the
+`initial`/`final` markers, `region`, `defer`, the pseudostates, `transition <src>
+to <tgt>` — is then reported as an error rather than a warning
+([3. Strict conformance](03-command-line.md#strict-conformance)). The two are
+independent: `strict` decides whether errors raise, `strict_conformance` decides
+what counts as one.
+
+```python
+model = opensysml.load("model.sysml", strict_conformance=True)
+model.ok                       # False if the model uses OpenSysML notation
+```
+
+A service too old to know the field raises `MissingCapabilityError` instead of
+silently answering the default question; it advertises
+`strict_conformance` in `Connection.server_info().capabilities`.
+
 ## Inspecting symbols
 
 `Model.find` takes a **short** name and searches the symbol tree, returning

@@ -194,16 +194,18 @@ class CalcOutput(_message.Message):
     def __init__(self, name: _Optional[str] = ..., value: _Optional[_Union[Value, _Mapping]] = ...) -> None: ...
 
 class ParseFileRequest(_message.Message):
-    __slots__ = ("file_path", "content", "content_hash", "language")
+    __slots__ = ("file_path", "content", "content_hash", "language", "strict_conformance")
     FILE_PATH_FIELD_NUMBER: _ClassVar[int]
     CONTENT_FIELD_NUMBER: _ClassVar[int]
     CONTENT_HASH_FIELD_NUMBER: _ClassVar[int]
     LANGUAGE_FIELD_NUMBER: _ClassVar[int]
+    STRICT_CONFORMANCE_FIELD_NUMBER: _ClassVar[int]
     file_path: str
     content: str
     content_hash: str
     language: str
-    def __init__(self, file_path: _Optional[str] = ..., content: _Optional[str] = ..., content_hash: _Optional[str] = ..., language: _Optional[str] = ...) -> None: ...
+    strict_conformance: bool
+    def __init__(self, file_path: _Optional[str] = ..., content: _Optional[str] = ..., content_hash: _Optional[str] = ..., language: _Optional[str] = ..., strict_conformance: _Optional[bool] = ...) -> None: ...
 
 class ParseFileResponse(_message.Message):
     __slots__ = ("model_hash", "root", "diagnostics", "error")

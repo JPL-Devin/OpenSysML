@@ -121,6 +121,7 @@ var metaCommandTable = []metaCommand{
 	{name: "%save", args: "<file>", desc: "write the session model to a file (.sysml notation, or .ttl RDF — experimental)"},
 	{name: "%verbosity", args: "[level]", desc: "show or set output level: quiet, normal or debug"},
 	{name: "%trace", args: "[on|off]", desc: "show or set execution tracing (evaluation, calc, action and state steps)"},
+	{name: "%strict", args: "[on|off]", desc: "show or set strict conformance: report notation no SysML v2 production admits as an error"},
 	{name: "%budget", desc: "show the bounds one run may spend, and the variable raising each"},
 	{name: "%quit", desc: "exit the REPL"},
 	{name: "%exit", desc: "exit the REPL", alias: true},
@@ -261,6 +262,8 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 			}
 		}
 		return []string{fmt.Sprintf("trace: %s", onOff(s.Tracing()))}, false, nil
+	case "%strict":
+		return s.doStrict(fields[1:]), false, nil
 	case "%budget":
 		return s.doBudget(), false, nil
 	case "%search":
