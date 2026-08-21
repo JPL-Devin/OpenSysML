@@ -19,6 +19,7 @@ var bucketNames = []string{
 	"order-only",
 	"disagree",
 	"pilot-unevaluated",
+	"pilot-silent",
 	"pilot-error",
 	"ours-error",
 	"both-error",
@@ -123,16 +124,16 @@ func execute(repo, launcher string, files []execCaseFile) (*execReport, error) {
 	report := &execReport{
 		PilotArtifact: filepath.ToSlash(relativeTo(repo, launcher)),
 		Scope:         "expressions only",
-		Note:          "Action, state-machine, and exhibit/perform execution are OUT OF REACH of the pinned artifact and are not compared here. Single-element sequence renderings are unwrapped on both sides; scalar-vs-singleton distinction is unobservable in this report.",
+		Note:          "Action, state-machine, and exhibit/perform execution are OUT OF REACH of the pinned artifact and are not compared here. Single-element sequence renderings are unwrapped on both sides; scalar-vs-singleton distinction is unobservable in this report. The pilot cannot distinguish \"no value\" from \"declined to evaluate\" when it emits no output.",
 		Buckets:       make(map[string]int, len(bucketNames)),
 	}
 	for _, name := range bucketNames {
 		report.Buckets[name] = 0
 	}
 	for _, file := range files {
-		models, err := resolveModels(repo, file.Models)
+		models, err := resolveModels(repo, file.Path, file.Models)
 		if err != nil {
-			return nil, fmt.Errorf("%s: %w", file.Path, err)
+			return nil, err
 		}
 		pilotOne, err := runPilot(launcher, models, file.Cases)
 		if err != nil {
@@ -156,7 +157,7 @@ func execute(repo, launcher string, files []execCaseFile) (*execReport, error) {
 				bucket = "nondeterministic"
 			}
 			report.Cases = append(report.Cases, caseReport{
-				ID: testCase.ID, Models: append([]string(nil), file.Models...),
+				ID: testCase.ID, Models: modelPaths(file.Models),
 				Target: testCase.Target, Expression: testCase.Expression,
 				RawPilot: pilotRaw, RawOurs: oursRaw.Raw,
 				Pilot: pilot.Value, Ours: ours.Value,
@@ -168,18 +169,26 @@ func execute(repo, launcher string, files []execCaseFile) (*execReport, error) {
 	return report, nil
 }
 
-func resolveModels(repo string, models []string) ([]string, error) {
+func resolveModels(repo, casePath string, models []execModel) ([]string, error) {
 	paths := make([]string, len(models))
 	for i, model := range models {
-		path := filepath.Join(repo, filepath.FromSlash(model))
+		path := filepath.Join(repo, filepath.FromSlash(model.Path))
 		if info, err := os.Stat(path); err != nil {
-			return nil, fmt.Errorf("model %s: %w", model, err)
+			return nil, fmt.Errorf("%s:%d: model %s: %w", casePath, model.Line, model.Path, err)
 		} else if !info.Mode().IsRegular() {
-			return nil, fmt.Errorf("model %s is not a regular file", model)
+			return nil, fmt.Errorf("%s:%d: model %s is not a regular file", casePath, model.Line, model.Path)
 		}
 		paths[i] = path
 	}
 	return paths, nil
+}
+
+func modelPaths(models []execModel) []string {
+	paths := make([]string, len(models))
+	for i, model := range models {
+		paths[i] = model.Path
+	}
+	return paths
 }
 
 func runPilot(launcher string, models []string, cases []execCase) (map[string]string, error) {

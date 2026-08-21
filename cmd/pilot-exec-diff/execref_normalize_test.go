@@ -18,7 +18,7 @@ func TestNormalizePilotSamples(t *testing.T) {
 		{"string", "LiteralString abc (fb98f88c-9172-45bc-8ed8-b78fe546719b)", normalized{Kind: kindString, Value: "abc"}, false},
 		{"boolean", "LiteralBoolean true (fb98f88c-9172-45bc-8ed8-b78fe546719b)", normalized{Kind: kindBool, Value: "true"}, false},
 		{"sequence", "LiteralInteger 3 (fb98f88c-9172-45bc-8ed8-b78fe546719b)\nLiteralInteger 1 (fb98f88c-9172-45bc-8ed8-b78fe546719b)", normalized{Kind: kindSequence, Elements: []normalized{{Kind: kindInt, Value: "3"}, {Kind: kindInt, Value: "1"}}}, false},
-		{"empty", "", normalized{}, false},
+		{"silent", "", normalized{}, false},
 		{"unevaluated", "OperatorExpression + (fb98f88c-9172-45bc-8ed8-b78fe546719b)", normalized{Unevaluated: true}, false},
 		{"error", "ERROR: evaluation failed", normalized{}, true},
 	}
@@ -35,6 +35,15 @@ func TestNormalizePilotSamples(t *testing.T) {
 				}
 			}
 		})
+	}
+	if !normalizePilot("").PilotSilent {
+		t.Fatal("normalizePilot(\"\") did not mark pilot silence")
+	}
+	if normalizePilot("ERROR: evaluation failed").PilotSilent {
+		t.Fatal("pilot error was marked silent")
+	}
+	if normalizePilot("LiteralInteger 7 (fb98f88c-9172-45bc-8ed8-b78fe546719b)").PilotSilent {
+		t.Fatal("pilot value was marked silent")
 	}
 }
 
@@ -80,8 +89,8 @@ func TestCanonicalValueSequenceEquivalences(t *testing.T) {
 		t.Fatalf("singleton bucket = %q, want agree", got)
 	}
 	oursEmpty := normalizeOurs("✓ x\n  = []", false)
-	if got := bucketResults(normalizePilot(""), oursEmpty); got != "agree" {
-		t.Fatalf("empty bucket = %q, want agree", got)
+	if got := bucketResults(normalizePilot(""), oursEmpty); got != "pilot-silent" {
+		t.Fatalf("empty bucket = %q, want pilot-silent", got)
 	}
 }
 
@@ -98,7 +107,8 @@ func TestBucketResults(t *testing.T) {
 		{"pilot error", sideResult{Error: true}, sideResult{Value: normalized{Kind: kindInt, Value: "1"}}, "pilot-error"},
 		{"ours error", sideResult{Value: normalized{Kind: kindInt, Value: "1"}}, sideResult{Error: true}, "ours-error"},
 		{"both error", sideResult{Error: true}, sideResult{Error: true}, "both-error"},
-		{"empty", sideResult{}, sideResult{}, "agree"},
+		{"pilot silent", normalizePilot(""), sideResult{}, "pilot-silent"},
+		{"pilot silent over ours error", normalizePilot(""), sideResult{Error: true}, "pilot-silent"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

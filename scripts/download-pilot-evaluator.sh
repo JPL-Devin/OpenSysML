@@ -10,6 +10,7 @@ source="$repo_root/scripts/pilot-evaluator/EvalSysML.java"
 target="$repo_root/build/pilot-evaluator"
 classes="$target/classes"
 validator_target="$repo_root/build/pilot-validator/target/sysml-download/sysml"
+# download-pilot-validator.sh provisions this artifact at PILOT_TAG; locate it here by version.
 pilot_jar="$validator_target/jupyter-sysml-kernel-${PILOT_ARTIFACT_VERSION}-all.jar"
 library="$validator_target/sysml.library"
 launcher="$target/eval-sysml"
@@ -127,4 +128,4 @@ rm -f "$launcher_tmp"
 trap - EXIT
 chmod +x "$launcher"
 
-echo "Built $launcher (pilot $PILOT_TAG, $PILOT_ARTIFACT_VERSION)"
+echo "Built $launcher (pilot artifact $PILOT_ARTIFACT_VERSION)"

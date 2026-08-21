@@ -15,9 +15,14 @@ type execCase struct {
 	Expression string
 }
 
+type execModel struct {
+	Path string
+	Line int
+}
+
 type execCaseFile struct {
 	Path   string
-	Models []string
+	Models []execModel
 	Cases  []execCase
 }
 
@@ -63,7 +68,7 @@ func readCaseFile(path string) (execCaseFile, error) {
 			if model == "" {
 				return execCaseFile{}, fmt.Errorf("%s:%d: model path is empty", path, lineNumber)
 			}
-			file.Models = append(file.Models, model)
+			file.Models = append(file.Models, execModel{Path: model, Line: lineNumber})
 			continue
 		}
 		fields := strings.SplitN(line, " :: ", 3)

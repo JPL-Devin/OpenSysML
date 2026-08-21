@@ -33,13 +33,17 @@ type normalized struct {
 }
 
 type sideResult struct {
-	Raw   string
-	Value normalized
-	Error bool
+	Raw         string
+	Value       normalized
+	Error       bool
+	PilotSilent bool
 }
 
 func normalizePilot(raw string) sideResult {
 	lines := nonEmptyLines(raw)
+	if len(lines) == 0 {
+		return sideResult{Raw: raw, PilotSilent: true}
+	}
 	for _, line := range lines {
 		if strings.HasPrefix(line, "ERROR:") {
 			return sideResult{Raw: raw, Error: true}
@@ -329,14 +333,16 @@ func sameMultiset(left, right []normalized) bool {
 
 func bucketResults(pilot, ours sideResult) string {
 	switch {
+	case pilot.PilotSilent:
+		return "pilot-silent"
+	case pilot.Value.Unevaluated:
+		return "pilot-unevaluated"
 	case pilot.Error && ours.Error:
 		return "both-error"
 	case pilot.Error:
 		return "pilot-error"
 	case ours.Error:
 		return "ours-error"
-	case pilot.Value.Unevaluated:
-		return "pilot-unevaluated"
 	case pilot.Value.Kind == "" && ours.Value.Kind == "":
 		return "agree"
 	case pilot.Value.Kind == "" || ours.Value.Kind == "":
