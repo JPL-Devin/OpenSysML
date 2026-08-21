@@ -58,6 +58,12 @@ The three OMG pilot corpora are gated the same way: fetch them with
 `go test -count=1 ./internal/core/model -run TestPilotCorpora`. CI sets
 `OPENSYSML_REQUIRE_PILOT_CORPORA=1`. See `docs/project/pilot-corpora.md`.
 
+All four roots share one mechanism (`internal/core/model/corpus_gate_test.go`) but two
+policies, and the difference is deliberate: the training corpus is **asserted** clean, so its
+expectation file holds no per-file counts and `-update-training` refuses to record one, while
+the other three are a **per-file ratchet** whose every movement must be adjudicated. Do not
+turn the assertion into a ratchet.
+
 ---
 
 ## 3. Repository Map

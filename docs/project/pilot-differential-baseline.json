@@ -1,5 +1,5 @@
 {
-  "validator": "build/pilot-validator/validate-sysml",
+  "validator": "build/pilot-sysml-validator/validate-sysml-batch",
   "pilotRelease": "2026-05 (jupyter-sysml-kernel 0.60.1)",
   "totals": {
     "files": 349,
@@ -7,9 +7,9 @@
     "agreement": 20,
     "severityMismatch": 16,
     "openSysMLOnly": 232,
-    "pilotOnly": 142,
+    "pilotOnly": 139,
     "openSysMLDiagnostics": 268,
-    "pilotDiagnostics": 178
+    "pilotDiagnostics": 175
   },
   "roots": [
     {
@@ -1391,9 +1391,9 @@
         "agreement": 20,
         "severityMismatch": 4,
         "openSysMLOnly": 3,
-        "pilotOnly": 30,
+        "pilotOnly": 29,
         "openSysMLDiagnostics": 27,
-        "pilotDiagnostics": 54
+        "pilotDiagnostics": 53
       },
       "files": [
         {
@@ -1554,14 +1554,7 @@
             }
           ],
           "openSysMLOnly": [],
-          "pilotOnly": [
-            {
-              "line": 4,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            }
-          ]
+          "pilotOnly": []
         },
         {
           "path": "passes/constraints.sysml",
@@ -1771,9 +1764,9 @@
         "agreement": 0,
         "severityMismatch": 12,
         "openSysMLOnly": 32,
-        "pilotOnly": 106,
+        "pilotOnly": 104,
         "openSysMLDiagnostics": 44,
-        "pilotDiagnostics": 118
+        "pilotDiagnostics": 116
       },
       "files": [
         {
@@ -1786,18 +1779,6 @@
               "line": 9,
               "severity": "error",
               "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 9,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 9,
-              "severity": "warning",
-              "category": "kind-mismatch",
               "count": 1
             },
             {

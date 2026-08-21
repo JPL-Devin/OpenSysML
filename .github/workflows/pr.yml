@@ -117,11 +117,12 @@ jobs:
         run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
 
       # Re-run the corpus gate on its own so its verdict is legible in the log
-      # and a skip is impossible to miss.
+      # and a skip is impossible to miss. TestCorpusGates is the shared
+      # cache-independence case over all four OMG roots, which skips with them.
       - name: Corpus gate
         run: |
           set -o pipefail
-          go test -count=1 -v ./internal/core/model -run 'TestTrainingExamples' | tee corpus-gate.log
+          go test -count=1 -v ./internal/core/model -run 'TestTrainingExamples|TestCorpusGates' | tee corpus-gate.log
           grep -E 'training files clean' corpus-gate.log
           if grep -qE '^\s*--- SKIP' corpus-gate.log; then
             echo "error: the corpus gate skipped" >&2
