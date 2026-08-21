@@ -35,8 +35,8 @@ END_SETUP
 package test {
 	class A;
 	// XPECT linkedName at A --> test.A
+	// XPECT scope at A ---> A, B, test.A, test.B
 	class B specializes A;
-	// XPECT scope at A ---> A
 }
 `
 
@@ -70,9 +70,8 @@ func TestW5CCompareCleanFile(t *testing.T) {
 	if r := byKind[kindLinkedName]; r.Verdict != verdictAgree || r.Actual != "test.A" {
 		t.Errorf("linkedName = %s %q", r.Verdict, r.Actual)
 	}
-	// scope is read but has no counterpart in this implementation.
-	if r := byKind[kindScope]; r.Verdict != verdictNotAdjudicated {
-		t.Errorf("scope = %s", r.Verdict)
+	if r := byKind[kindScope]; r.Verdict != verdictAgree {
+		t.Errorf("scope = %s (%s)", r.Verdict, r.Actual)
 	}
 }
 
