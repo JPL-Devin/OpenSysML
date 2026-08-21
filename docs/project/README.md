@@ -6,6 +6,8 @@ a release is cut.
 - **[Spec compliance](spec-compliance.md)** — faithful, approximate, or not implemented,
   rule by rule
 - **[Training examples](training-examples.md)** — the OMG corpus, adjudicated per file
+- **[Pilot corpora gate](pilot-corpora.md)** — our diagnostics on the three pinned OMG pilot
+  corpora, ratcheted in CI
 - **[Pilot differential](pilot-differential.md)** — our diagnostics against the OMG pilot
   implementation, advisory
 - **[Grammar coverage](grammar-coverage.md)** — which OMG grammar productions our inputs

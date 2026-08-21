@@ -32,6 +32,7 @@ Runnable models are in [examples/](../examples/), with a catalog of what each on
 
 - **[Spec compliance](project/spec-compliance.md)** — faithful, approximate, or not implemented
 - **[Training examples](project/training-examples.md)** — the OMG corpus, 100/100 clean
+- **[Pilot corpora gate](project/pilot-corpora.md)** — our diagnostics on the three pinned OMG pilot corpora, ratcheted in CI
 - **[Pilot differential](project/pilot-differential.md)** — our diagnostics against the OMG pilot implementation
 - **[Grammar coverage](project/grammar-coverage.md)** — which OMG grammar productions our inputs exercise
 - **[Roadmap](project/roadmap.md)** — the known gaps, in the order they should be picked up

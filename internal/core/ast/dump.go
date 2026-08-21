@@ -321,8 +321,14 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		writeChildren(b, depth, usageChildren(v))
 		return
 	case *FlowEnds:
-		fmt.Fprintf(b, `(FlowEnds from=%q to=%q payload=%q declared=%t)`,
+		fmt.Fprintf(b, `(FlowEnds from=%q to=%q payload=%q declared=%t`,
 			endString(v.From), endString(v.To), endString(v.Payload), v.PayloadDecl != nil)
+		var kids []Node
+		if v.PayloadMultiplicity != nil {
+			kids = append(kids, v.PayloadMultiplicity)
+		}
+		writeChildren(b, depth, kids)
+		return
 	case *SendStatement:
 		// The `to`/`via` distinction decides how the message is routed, so a
 		// golden that did not show it would not lock the parse.
