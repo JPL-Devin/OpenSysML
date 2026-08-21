@@ -64,10 +64,26 @@ func (f *refFilter) hides(sym *symbols.Symbol) bool {
 	if f == nil || sym == nil {
 		return false
 	}
-	if f.decl != nil && (sym.Decl == f.decl || sym.EffectiveName) {
+	if f.decl != nil && (sym.Decl == f.decl || namedByReference(sym)) {
 		return true
 	}
 	return f.namingTarget != nil && sym.NamingTarget == f.namingTarget
+}
+
+// namedByReference reports whether sym borrowed its name from a reference
+// subsetting rather than taking it from the feature it redefines: a redefining
+// feature is itself the feature of that name here (KerML 7.3.4.5), so it is a
+// valid target, while a borrowed binding never is.
+func namedByReference(sym *symbols.Symbol) bool {
+	if !sym.EffectiveName {
+		return false
+	}
+	usage, ok := sym.Decl.(*ast.Usage)
+	if !ok {
+		return true
+	}
+	rel := ast.NamingFeature(usage)
+	return rel == nil || rel.Kind != ast.RelRedefines
 }
 
 // contributedOnly reports whether a scope owner's own declarations are hidden,

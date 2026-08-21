@@ -60,6 +60,9 @@ func (r *Resolver) walkUnqualifiedHiding(scope *symbols.Scope, name string, hide
 			return resolution{sym: sym, ok: true}
 		}
 	}
+	if sym, ok := r.nestedInRedefined(scope, name, hide); ok {
+		return resolution{sym: sym, ok: true}
+	}
 	// Final fallback: check global index (cross-document top-level names)
 	if sym, n := r.lookupGlobalTop(scope, name); n == 1 && !hide.hides(sym) {
 		return resolution{sym: sym, ok: true}
