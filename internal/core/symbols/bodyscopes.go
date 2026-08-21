@@ -93,19 +93,6 @@ func bodyScopesInDecl(scope *Scope, decl ast.Node) {
 		bodyScopesInRelationships(scope, d.Relationships)
 		if child := bodyScopeChild(scope, d); child != nil {
 			buildBodyScopes(child, d.Members)
-			if d.Kind == ast.DefCalc {
-				for _, member := range d.Members {
-					decl := member
-					if membership, ok := member.(*ast.Membership); ok {
-						decl = membership.Member
-					}
-					if decl == nil {
-						continue
-					}
-					bodyScopesInDecl(child, decl)
-					bodyScopesInExpr(child, decl)
-				}
-			}
 		}
 	case *ast.Usage:
 		bodyScopesInRelationships(scope, d.Relationships)
@@ -224,6 +211,9 @@ func bodyScopesInDecl(scope *Scope, decl ast.Node) {
 			body = child
 		}
 		buildBodyScopes(body, d.Body)
+	default:
+		// Bare expression members can contain nested body expressions.
+		bodyScopesInExpr(scope, decl)
 	}
 }
 
