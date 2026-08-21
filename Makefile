@@ -87,19 +87,19 @@ python-proto: ## Regenerate Python protobuf stubs
 	@echo "Regenerating Python protobuf stubs..."
 	@$(PYTHON) -c "import grpc_tools.protoc" >/dev/null 2>&1 || { echo "Error: grpcio-tools not installed. Run: $(PYTHON) -m pip install grpcio-tools"; exit 1; }
 	$(PYTHON) -m grpc_tools.protoc --proto_path=api/proto \
-	       --python_out=$(PYTHON_DIR)/pysysml/proto \
-	       --pyi_out=$(PYTHON_DIR)/pysysml/proto \
-	       --grpc_python_out=$(PYTHON_DIR)/pysysml/proto \
+	       --python_out=$(PYTHON_DIR)/opensysml/proto \
+	       --pyi_out=$(PYTHON_DIR)/opensysml/proto \
+	       --grpc_python_out=$(PYTHON_DIR)/opensysml/proto \
 	       api/proto/sysml.proto
 	@# generated stubs import each other by top-level name; make it package-relative
-	sed -i.bak 's/^import sysml_pb2 as sysml__pb2$$/from . import sysml_pb2 as sysml__pb2/' $(PYTHON_DIR)/pysysml/proto/sysml_pb2_grpc.py
-	@rm -f $(PYTHON_DIR)/pysysml/proto/sysml_pb2_grpc.py.bak
+	sed -i.bak 's/^import sysml_pb2 as sysml__pb2$$/from . import sysml_pb2 as sysml__pb2/' $(PYTHON_DIR)/opensysml/proto/sysml_pb2_grpc.py
+	@rm -f $(PYTHON_DIR)/opensysml/proto/sysml_pb2_grpc.py.bak
 	@echo "✓ Regenerated Python stubs"
 
 python-install: ## Install Python package in editable mode
-	@echo "Installing pysysml..."
+	@echo "Installing opensysml..."
 	cd $(PYTHON_DIR) && pip install -e .
-	@echo "✓ Installed pysysml"
+	@echo "✓ Installed opensysml"
 
 python-test: ## Run Python tests
 	@echo "Running Python tests..."

@@ -1,8 +1,8 @@
-"""Where the installed pysysml distribution lives, and how it was installed.
+"""Where the installed opensysml distribution lives, and how it was installed.
 
 An editable install keeps its dist-info in site-packages while its modules stay
 in the checkout, so `Distribution.locate_file` answers with a site-packages path
-that holds no `pysysml/` at all. Resolution therefore reads the PEP 610 record
+that holds no `opensysml/` at all. Resolution therefore reads the PEP 610 record
 the installer wrote, which names the directory the install was made from.
 """
 
@@ -17,14 +17,14 @@ _PACKAGE_ROOTS = ('', 'src')
 
 
 def installed_distribution():
-    """The installed pysysml distribution.
+    """The installed opensysml distribution.
 
     Returns:
         importlib.metadata.Distribution or None: None when the source tree is
             not installed at all
     """
     try:
-        return distribution('pysysml')
+        return distribution('opensysml')
     except PackageNotFoundError:
         return None
 
@@ -58,7 +58,7 @@ def project_directory(dist):
 
 
 def package_location(dist):
-    """Path of the ``pysysml/__init__.py`` a distribution installed.
+    """Path of the ``opensysml/__init__.py`` a distribution installed.
 
     Args:
         dist (importlib.metadata.Distribution): The installed distribution
@@ -72,10 +72,10 @@ def package_location(dist):
     project = project_directory(dist) if editable_install(dist) else None
     if project is not None:
         for root in _PACKAGE_ROOTS:
-            candidate = os.path.join(project, root, 'pysysml', '__init__.py')
+            candidate = os.path.join(project, root, 'opensysml', '__init__.py')
             if os.path.isfile(candidate):
                 return os.path.realpath(candidate)
-    return os.path.realpath(str(dist.locate_file('pysysml/__init__.py')))
+    return os.path.realpath(str(dist.locate_file('opensysml/__init__.py')))
 
 
 def _direct_url_info(dist):

@@ -15,16 +15,16 @@ from concurrent import futures
 import grpc
 import pytest
 
-from pysysml.capabilities import (
+from opensysml.capabilities import (
     CAPABILITY_APPLY_EDITS,
     CAPABILITY_AUTHORING,
     CAPABILITY_INLINE_LANGUAGE,
     MissingCapabilityError,
 )
-from pysysml.connection import Connection
-from pysysml.conversion import Conversion, FORMAT_SYSML
-from pysysml.edit import EditResult
-from pysysml.errors import (
+from opensysml.connection import Connection
+from opensysml.conversion import Conversion, FORMAT_SYSML
+from opensysml.edit import EditResult
+from opensysml.errors import (
     EditError,
     EditResultError,
     EditTargetError,
@@ -39,7 +39,7 @@ from pysysml.errors import (
     MemberNameTakenError,
     DeleteReferencedError,
 )
-from pysysml.proto import sysml_pb2, sysml_pb2_grpc
+from opensysml.proto import sysml_pb2, sysml_pb2_grpc
 
 MODEL = """package Demo {
     // The mass of one unit, measured on the bench.
@@ -70,7 +70,7 @@ MODEL = """package Demo {
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 GRPC_BINARIES = (
     os.path.join(REPO_ROOT, "bin", "sysml-grpc"),
-    os.path.join(os.path.expanduser("~"), ".pysysml", "bin", "sysml-grpc"),
+    os.path.join(os.path.expanduser("~"), ".opensysml", "bin", "sysml-grpc"),
 )
 
 
@@ -279,14 +279,14 @@ def test_every_authoring_failure_is_typed(fake_service, failure, expected):
 
 
 def test_inline_language_capability_and_loads(monkeypatch, fake_service):
-    import pysysml
+    import opensysml
 
     port, _ = fake_service(
         capabilities=(CAPABILITY_APPLY_EDITS, CAPABILITY_INLINE_LANGUAGE)
     )
     conn = Connection(port=port, auto_start=False)
-    monkeypatch.setattr(pysysml, "_get_default_connection", lambda: conn)
-    model = pysysml.loads("namespace N;", language="kerml")
+    monkeypatch.setattr(opensysml, "_get_default_connection", lambda: conn)
+    model = opensysml.loads("namespace N;", language="kerml")
     assert model.root.name == "Demo"
 
 

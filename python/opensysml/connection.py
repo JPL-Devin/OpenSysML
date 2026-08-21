@@ -10,10 +10,10 @@ import time
 import warnings
 from typing import Any, Dict, Tuple
 from filelock import FileLock, Timeout
-from pysysml.proto import sysml_pb2, sysml_pb2_grpc
-from pysysml.model import Model
-from pysysml.binary import cached_release, ensure_binary, resolve_latest_version
-from pysysml.capabilities import (
+from opensysml.proto import sysml_pb2, sysml_pb2_grpc
+from opensysml.model import Model
+from opensysml.binary import cached_release, ensure_binary, resolve_latest_version
+from opensysml.capabilities import (
     CAPABILITY_APPLY_EDITS,
     CAPABILITY_AUTHORING, CAPABILITY_INLINE_LANGUAGE,
     CAPABILITY_CONVERT,
@@ -26,23 +26,23 @@ from pysysml.capabilities import (
     require,
     upgrade_remedy,
 )
-from pysysml.conversion import (
+from opensysml.conversion import (
     Conversion,
     EXPERIMENTAL_NOTICE,
     ExperimentalFeatureWarning,
     is_experimental,
 )
-from pysysml.diagnostic import Diagnostic
-from pysysml.edit import error_for_failure, failure_name, result_of
-from pysysml.enumeration import EnumLiteral
-from pysysml.errors import (
+from opensysml.diagnostic import Diagnostic
+from opensysml.edit import error_for_failure, failure_name, result_of
+from opensysml.enumeration import EnumLiteral
+from opensysml.errors import (
     ChecksumMismatchError,
     ConnectionError,
     ConversionError,
     ExecutionError,
     ModelFileNotFoundError,
     ModelNotFoundError,
-    PySysMLError,
+    OpenSysMLError,
     StaleServiceError,
     UnpinnedReleaseError,
     UnsupportedValueError,
@@ -50,9 +50,9 @@ from pysysml.errors import (
     from_rpc_error,
     translate_rpc_errors,
 )
-from pysysml.query import build_query, elements_of
-from pysysml.values import Quantity, value_to_python
-from pysysml.verdict import CalcResult, Verdict
+from opensysml.query import build_query, elements_of
+from opensysml.values import Quantity, value_to_python
+from opensysml.verdict import CalcResult, Verdict
 
 
 #: Port the service listens on when a caller names none.
@@ -61,9 +61,9 @@ DEFAULT_PORT = 50051
 #: A required release not looked up yet, distinct from 'none required'.
 _UNRESOLVED = object()
 
-#: Directory the lockfile and ownership records live in. $PYSYSML_STATE_DIR
+#: Directory the lockfile and ownership records live in. $OPENSYSML_STATE_DIR
 #: overrides it, so a test or a sandbox can run a service beside another's.
-STATE_DIR_ENV = 'PYSYSML_STATE_DIR'
+STATE_DIR_ENV = 'OPENSYSML_STATE_DIR'
 
 #: Start times are floats read back from JSON, so they are compared to the
 #: resolution the platform reports rather than for equality.
@@ -170,9 +170,9 @@ def _state_dir():
     """Directory the lockfile and ownership records are kept in.
 
     Returns:
-        str: $PYSYSML_STATE_DIR, or ~/.pysysml
+        str: $OPENSYSML_STATE_DIR, or ~/.opensysml
     """
-    return os.path.expanduser(os.environ.get(STATE_DIR_ENV) or '~/.pysysml')
+    return os.path.expanduser(os.environ.get(STATE_DIR_ENV) or '~/.opensysml')
 
 
 def _get_lockfile_path(port):
@@ -356,7 +356,7 @@ class Connection:
             port (int, optional): Service port (default: 50051)
             auto_start (bool): If True, automatically start service if not running (default: True)
             version (str, optional): Release tag the service must report, or
-                'latest'. Defaults to $PYSYSML_GRPC_VERSION, the same tag the
+                'latest'. Defaults to $OPENSYSML_GRPC_VERSION, the same tag the
                 binary cache is checked against; without either, whatever
                 release answers is accepted. Checked whether the service is
                 started here or managed by the caller, though only a service
@@ -387,7 +387,7 @@ class Connection:
         # only against the service identity it was taken on.
         self._holds_refcount = False
         self._referenced_service = None
-        self._version = version or os.environ.get('PYSYSML_GRPC_VERSION') or None
+        self._version = version or os.environ.get('OPENSYSML_GRPC_VERSION') or None
         self._required_capabilities = frozenset(require_capabilities or ())
         self._resolved_release = _UNRESOLVED
         # A caller-managed service that was not listening yet is checked at the
@@ -442,7 +442,7 @@ class Connection:
                 self._address, reason,
                 f"reach a {required} service with connect(port=<its port>), or "
                 f"accept what is running by passing version=None and unsetting "
-                f"$PYSYSML_GRPC_VERSION",
+                f"$OPENSYSML_GRPC_VERSION",
                 info=info,
             )
 
@@ -520,7 +520,7 @@ class Connection:
             file_path (str): Path to .sysml file
             strict (bool): Refuse a model the service reported errors for,
                 instead of returning one whose lookups fail later. The
-                :class:`~pysysml.errors.ModelError` raised carries the model, so
+                :class:`~opensysml.errors.ModelError` raised carries the model, so
                 its diagnostics stay inspectable.
         
         Returns:
@@ -684,7 +684,7 @@ class Connection:
             model_hash (str): Hash of the model to edit
             operations (list[tuple]): ``('set_value', target, value)`` and
                 ``('rename', target, new_name)`` tuples, as
-                :class:`~pysysml.edit.Editor` collects them
+                :class:`~opensysml.edit.Editor` collects them
 
         Returns:
             EditResult: The edited notation and what each operation changed
@@ -749,7 +749,7 @@ class Connection:
         """Run a SysML v2 API & Services Query over a loaded model.
 
         The query is the standard's JSON object, so a cookbook payload works
-        verbatim, or the same thing as keywords. See :mod:`pysysml.query`.
+        verbatim, or the same thing as keywords. See :mod:`opensysml.query`.
 
         Args:
             model_hash (str): Hash of the model to query
@@ -869,7 +869,7 @@ class Connection:
             ModelNotFoundError: If the service no longer holds the model
             MissingCapabilityError: If the service predates ``feature_values``
         """
-        from pysysml.instance import Instance
+        from opensysml.instance import Instance
 
         self._require_feature_values()
         req = sysml_pb2.InstantiateRequest(
@@ -1142,7 +1142,7 @@ class Connection:
 
     def _instances_of(self, response):
         """Wrap the instance graph a verification returned, roots first."""
-        from pysysml.instance import Instance
+        from opensysml.instance import Instance
 
         if response.instances:
             self._require_feature_values()
@@ -1155,7 +1155,7 @@ class Connection:
 
     def _python_to_value(self, py_value):
         """Convert Python type to protobuf Value."""
-        from pysysml.instance import Instance
+        from opensysml.instance import Instance
         
         if isinstance(py_value, bool):
             return sysml_pb2.Value(bool_value=py_value)
@@ -1401,7 +1401,7 @@ class Connection:
         Stopping a service to start the same build gains nothing, so a
         replacement that cannot differ is reported instead of made. A download
         failing its checksum is raised, never read as "the same build"; a
-        release this pysysml pins nothing for is only a build it cannot get.
+        release this opensysml pins nothing for is only a build it cannot get.
         """
         try:
             ensure_binary(version=self._version)
@@ -1409,7 +1409,7 @@ class Connection:
             return False
         except ChecksumMismatchError:
             raise
-        except PySysMLError:
+        except OpenSysMLError:
             return False
         return cached_release() == required
 
@@ -1436,7 +1436,7 @@ class Connection:
                 f"stop the service listening on {self._address} yourself, then "
                 f"retry so this client starts the one it asks for; or reach "
                 f"another one with connect(port=<other port>); or ask for what "
-                f"is running by unsetting $PYSYSML_GRPC_VERSION",
+                f"is running by unsetting $OPENSYSML_GRPC_VERSION",
                 info=info,
             )
         owned = self._owned_service()
@@ -1444,7 +1444,7 @@ class Connection:
         if holders > 0:
             raise StaleServiceError(
                 self._address, reason,
-                f"{holders} other pysysml connection(s) in this process still "
+                f"{holders} other opensysml connection(s) in this process still "
                 f"hold this service, so it is not this client's to stop; close "
                 f"them and retry, or reach a service of your own with "
                 f"connect(port=<other port>)",

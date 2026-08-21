@@ -10,15 +10,15 @@ before returning it.
 Operations include setting a feature's value, renaming a declaration, adding a
 member, and deleting a declaration. Renaming rewrites the declaration's name
 token only and is refused for an element that is referenced — see
-:class:`~pysysml.errors.RenameReferencedError`.
+:class:`~opensysml.errors.RenameReferencedError`.
 """
 
 from dataclasses import dataclass, field
 from typing import List
 
-from pysysml.conversion import Conversion, FORMAT_SYSML
-from pysysml.proto import sysml_pb2
-from pysysml.errors import (
+from opensysml.conversion import Conversion, FORMAT_SYSML
+from opensysml.proto import sysml_pb2
+from opensysml.errors import (
     EditError,
     EditResultError,
     EditTargetError,
@@ -123,7 +123,7 @@ class AppliedEdit:
 
 @dataclass(frozen=True)
 class EditResult(Conversion):
-    """The edited notation, as a :class:`~pysysml.conversion.Conversion`.
+    """The edited notation, as a :class:`~opensysml.conversion.Conversion`.
 
     ``str(result)`` is the edited text and ``result.save(path)`` writes it, so an
     edit is written the way a conversion is.
@@ -151,7 +151,7 @@ class Editor:
 
     Collected client-side and applied in one call, so the service edits and
     validates the model once. Every operation names its element by the id a read
-    reports (:attr:`Symbol.id`), or by the :class:`~pysysml.symbol.Symbol` itself.
+    reports (:attr:`Symbol.id`), or by the :class:`~opensysml.symbol.Symbol` itself.
 
     An editor is applied once: it describes an edit of the model it was made
     from, and the edited model is a different model. Build another editor from
@@ -227,7 +227,7 @@ class Editor:
         model's source, including qualified names, alias targets and imports. A
         rename that would make another name mean the renamed element, or make
         this one mean something else, is refused with
-        :class:`~pysysml.errors.InvalidEditError`.
+        :class:`~opensysml.errors.InvalidEditError`.
 
         Args:
             target (str or Symbol): Declaration to rename, by FQN/id or symbol

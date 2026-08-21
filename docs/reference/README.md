@@ -8,7 +8,7 @@ why. The handbook that puts them in order is [the guide](../guide/).
 - **[LSP extensions](lsp.md)** — the custom render requests `sysml-lsp` serves a diagram client
 - **[Environment variables](environment.md)** — the bounds one run may spend, and paths
 - **[Go API](api.md)** — the public API of every package
-- **[Python API](python-api.md)** — `pysysml`, its generated typed classes and latency
+- **[Python API](python-api.md)** — `opensysml`, its generated typed classes and latency
 - **[RDF mapping](rdf-mapping.md)** — which triples a model becomes, what is not mapped, and
   why the mapping is experimental
 - **[Grammar](grammar/README.md)** — grammar production → parser implementation
