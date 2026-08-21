@@ -86,6 +86,29 @@ and category counts. Parsing rules that matter:
 - Cross-check the doc's class table by summing its Files and Diags columns; they must equal the
   measured number of files carrying only-ours diagnostics (root `files` − `filesFullyAgreeing`)
   and the root only-ours totals.
+- Cheapest whole-report cross-check: `grep -c '^        opensysml:' pilot-diff.txt` must equal
+  `.totals.openSysMLDiagnostics` (317 at `0647cfe5`). If your parser disagrees with that, the
+  parser is wrong, not the harness.
+- Two claim shapes in these docs are almost always off by the same mistake, so recount them
+  explicitly: (a) a per-file claim like "now reports 5 `unresolved reference: …`" is usually the
+  number of *entry lines*, while the diagnostic count is the sum of `xK` (measured 6 at
+  `0647cfe5` for `Analysis Examples/Vehicle Analysis Demo.sysml:214-218`, because line 214 carries
+  `x2`); and (b) a per-root prose count that reads like "it contributed N only-ours **syntax**
+  diagnostics … and M now" often quotes the root's only-ours *total* as M (22 for
+  `pilot-validation`, whose syntax alone is 20). Quote which of the two you measured.
+- An "`unmapped`, our side" tally can mean either the number of `.unmapped[]` *rows* (distinct
+  messages) or the sum of their `.count`s — they differ (15 rows / 16 diagnostics at `0647cfe5`).
+  The historical columns in `pilot-differential.md` use the diagnostic sum, so use
+  `jq '[.unmapped[]|select(.side=="opensysml")|.count]|add'`.
+- To attribute a movement claim to specific files, diff per-file entries against the previous
+  committed baseline (`git show main:docs/project/pilot-differential-baseline.json`) keyed by
+  `(root, path)`. This catches "the two renamed files were added to the `.sysml` side"-style
+  causal claims where the renamed files actually contribute 0 and the whole delta is one other
+  file. Renames show up as *removed* `.kerml` entries with no matching added `.sysml` entry when
+  the renamed file is clean on both sides.
+- A claim that a newly implemented rule "adds no only-ours diagnostic to any root" is checkable in
+  one command: grep the report for that rule's message text (e.g. `flow end`, `evaluab`, `invoke`)
+  under `opensysml:` and expect no hit.
 
 Observed at `75672e91` (PR #356) — useful reference values: totals `338 / 221 / 20 agreed /
 560 only ours / 145 only pilot`, byte-identical to the committed baseline; `pilot-examples` 314
