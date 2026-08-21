@@ -4179,6 +4179,51 @@ regression net, but two traps ruin it:
   `first a then b { … }` / `merge m { … }` → `;`) and validate the copy — clean output proves the
   downstream diagnostics were recovery noise.
 
+## Authoring edits (`model.edit()` add_member / delete) via the Python client
+
+The edit API is service-side byte splicing plus re-analysis, so testing it needs the **freshly
+built** `bin/sysml-grpc` copied to `~/.opensysml/bin/sysml-grpc` (`pkill -x sysml-grpc` first) and
+a protobuf-new-enough interpreter — `/home/ubuntu/opensysml-proto-venv/bin/python` works
+(grpcio 1.83 / protobuf 7.36); the system Python's protobuf is too old for the regenerated stubs.
+Confirm the surface is actually present before blaming the client:
+`connect().server_info().capabilities` must contain `authoring` and `inline_language`.
+
+- **Good fixture:** `examples/rdf-interop-demo.sysml` — 4-space indent, a leading `//` comment, a
+  `doc`, blank lines between declarations, a body-less `port def TelemetryPort;`, a referenced
+  `part def Battery`, and a trailing `comment about Wheel`. That one file covers golden path,
+  body-less owner growth, delete-referenced refusal and comment-preservation in one go.
+- **Preservation must be proven by diff, not by eyeball:** run
+  `difflib.unified_diff(original, edited, n=0)` and assert **zero** `-` lines. Body-less owners are
+  the one legitimate exception (the `;` line is rewritten into `{ … }`).
+- **Known cosmetic artifact:** inserting into an owner whose closing `}` sits on an indented line
+  leaves a whitespace-only line (`"    \n"` / `"\t\n"`) where the indentation used to be. Byte
+  content elsewhere is intact, so treat it as a formatting nit, not a preservation failure — but do
+  flag trailing-whitespace-sensitive linting.
+- **KerML vs SysML discriminator:** `class B specializes A;` is clean in KerML and reports
+  `only a definition may specialize; found a usage` in SysML. Use it to prove
+  `loads(src, language='kerml')` really switched languages; plain `class`/`struct`/`feature`/`assoc`
+  declarations parse clean in *both* and prove nothing.
+- **Refusal expectations:** unknown owner → `OwnerNotFoundError`; a usage/attribute owner (or a
+  body-less usage) → `OwnerNotNamespaceError`; wrong-language kind → `IllegalMemberKindError`;
+  duplicate name → `MemberNameTakenError`; unresolvable type target → `EditResultError` (the whole
+  batch is refused after re-analysis, so include a *valid* sibling add in the same batch and assert
+  it did not land). Delete of a referenced declaration → `DeleteReferencedError` naming the
+  referrer.
+- Editors are single-shot: a second `.apply()` raises `RuntimeError`, an empty one `NoEditsError`.
+  Build a new editor from the reloaded model instead of reusing one.
+- `Symbol.parts()` exposes `multiplicity` but leaves `type_name` `None` even for pre-existing
+  members — verify added typing via the written notation or by resolving the type's FQN, not by
+  `type_name`.
+- **Proving `loads(..., language='kerml')` really analysed as KerML** needs a probe sensitive to the
+  KerML *implicit library base* (`class` → `Occurrences::Occurrence`, `struct` → `Objects::Object`,
+  `datatype` → `Base::DataValue`). The one that works: `class C { feature redefines endShot; }` —
+  clean inline-as-KerML and in a `.kerml` file, but reports
+  `unresolved reference: endShot` when the same text is loaded with no `language` argument.
+  Diagnostics parity between the inline load and the identical text saved as `.kerml` (compare the
+  messages with the file-name prefix stripped, since inline diagnostics are prefixed `<content>`)
+  is the assertion to make. Note `Symbol.specializations`/`type_facts`/`attributes()` do **not**
+  expose implicit library supertypes, so don't try to observe the base there.
+
 ## Proving an *executable* body ran — and ran exactly once
 
 A parser PR that makes an optional body legal on a node (control node, initial node, succession,
