@@ -108,6 +108,26 @@ nondeterministic 0`.
   `docs/project/pilot-differential-baseline.json`; `git status --porcelain`
   empty at the end.
 
+## The doc-counts gate is the usual casualty of a compliance-row change
+
+Any wave that flips a status flag in `docs/project/spec-compliance.md` (for
+example a row moving ⚠️ → ✅ because the pilot can now referee it) must also
+update **two aggregate count lines**, or
+`cmd/pilot-diff/doc_counts_test.go:TestPilotDifferentialDocumentCountsMatchBaseline`
+fails with `coverage ✅ faithful: want N (spec-compliance.md ✅ rows), got M`:
+
+- `README.md` — the `**Measured status:**` line
+- `docs/internals/architecture.md` — the `**Current coverage:**` line
+
+This is invisible to `go run ./cmd/pilot-exec-diff` and to the `jq -S`
+baseline comparison, and it is **not** in the blueprint's abbreviated
+`-run 'TestTrainingExamples|TestPilotCorpora|TestCorpusGates'` selector, so
+always run the unfiltered `go test ./...` too. Confirm any failure is
+attributable to the branch by building a `git worktree` at `HEAD~1` and running
+that one test there; count the flags per row with a script that reads the
+*last* table cell rather than `grep -c "✅"`, since the prose in other cells
+contains the same glyphs.
+
 ## Interpret — and the empty-output trap
 
 `agree` means the normalized results match. `disagree` means they do not.
@@ -138,6 +158,42 @@ Reproduce by hand with
 `build/pilot-evaluator/eval-sysml --cases <tsv> --model <model>`; the pilot
 does report real failures as `ERROR:` or `EXCEPTION:` lines (for example,
 `Probe::Nope` uses `ERROR:`).
+
+## Adjudicating a `disagree` before believing it
+
+A pilot `LiteralBoolean` is **not** evidence the pilot evaluated the operands.
+The pinned artifact folds a comparison against an *unevaluated* operand to
+`false`, so a predicate over a library function it cannot fold answers `false`
+for every input. Prove this rather than assuming it, by asking the evaluator for
+the operands and for the predicate on an input whose answer must differ:
+
+```sh
+printf 'a\t\tComplexFunctions::re(ComplexFunctions::rect(0.0,0.0)) == 0.0\n' > /tmp/c.tsv
+printf 'b\t\tComplexFunctions::isZero(ComplexFunctions::rect(3.0,4.0))\n' >> /tmp/c.tsv
+build/pilot-evaluator/eval-sysml --cases /tmp/c.tsv --model <model>
+```
+
+Observed at `40fd4184`: `re`, `im`, `abs`, `isZero` and even `rect` all come
+back as `InvocationExpression <name>` (unevaluated), `re(rect(0,0)) == 0.0` is
+`LiteralBoolean false`, and `isZero(rect(3,4))` is **also** `false`. A predicate
+that answers `false` for both a zero and a non-zero argument is an artifact, not
+a semantic verdict — adjudicate it as unrefereeable. Note the qualified/
+unqualified split is itself a pilot resolution artifact: `ComplexFunctions::isZero(...)`
+folds to `false` while bare `isZero(...)` stays `InvocationExpression isZero`.
+
+## Where the value-conformance checks stop (expect under-reports, not false positives)
+
+`passes/typecheck_value.go:checkValueConformance` returns early when the
+*declaring feature's* type is scalar (`ec.model.PrimTypeOf(want) != PrimUnknown`),
+so every branch after it — including `invocationResultTypeSymbol` — is
+unreachable for a scalar-typed target. Practical consequence when probing these
+checks against `build/pilot-validator/validate-sysml`: a mismatch reports only
+when the target is a non-scalar (`part w : Wheel = GetReal()` errors) and stays
+silent when it is scalar (`attribute s : String = GetReal()` is silent while the
+pilot warns `Bound features should have conforming types`). Likewise a behavior
+with **no** result parameter (`part w : Wheel = Build()` for `action def Build`)
+is deliberately left unjudged. Classify these as conservative gaps; only an
+error we raise where the pilot is clean is a real false positive.
 
 ## Reproducing a reported case by hand
 
