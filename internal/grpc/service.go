@@ -39,6 +39,9 @@ const CapabilityVerification = "verification"
 // SysML v2 API & Services Query over a parsed model.
 const CapabilityQuery = "query"
 
+// CapabilityOSLCQuery names the capability of evaluating OSLC Query text.
+const CapabilityOSLCQuery = "oslc_query"
+
 // CapabilityEnumValues names the capability of carrying an enumeration literal
 // as Value.enum_literal, rather than reporting it as an unsupported null.
 const CapabilityEnumValues = "enum_values"
@@ -78,6 +81,7 @@ const CapabilityFeatureValues = "feature_values"
 // only ever added: renaming or dropping one breaks clients that require it.
 var capabilities = []string{
 	CapabilityTypeFacts, CapabilityConvert, CapabilityVerification, CapabilityQuery,
+	CapabilityOSLCQuery,
 	CapabilityEnumValues, CapabilityEvaluateSubject, CapabilitySymbolAttributes,
 	CapabilityUnsetValue, CapabilityFeatureValues, CapabilityApplyEdits,
 	CapabilityAuthoring, CapabilityInlineLanguage, CapabilityStrictConformance,

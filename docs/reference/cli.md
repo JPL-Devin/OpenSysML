@@ -1,5 +1,16 @@
 # SysML CLI Usage Examples
 
+## OSLC element queries
+
+`-query <oslc-query>` loads the positional model and evaluates OSLC Query text,
+printing one matched element per line as qualified name and metamodel type,
+followed by any selected properties. It is a model-query mode alongside
+`-convert`.
+
+```bash
+sysml -query 'oslc.where=sysml:name="wheel"' model.sysml
+```
+
 ## Interactive Mode (Default)
 
 Start the REPL with no arguments:

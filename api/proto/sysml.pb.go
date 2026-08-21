@@ -4055,6 +4055,7 @@ type ServerInfoResponse struct {
 	//	               questions the REPL's %constraint, %requirement, %satisfy
 	//	               and %calc answer.
 	//	"query"      - the Query RPC evaluates a SysML v2 API & Services Query.
+	//	"oslc_query" - the Query RPC evaluates OSLC Query text.
 	//	"enum_values" - a Value carries an enumeration literal as enum_literal,
 	//	               rather than reporting it as an unsupported null.
 	//	"unset_value" - a valueless feature of a value type is reported as
@@ -4113,9 +4114,11 @@ func (x *ServerInfoResponse) GetCapabilities() []string {
 
 // QueryRequest runs a Query against a model the service already parsed.
 type QueryRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ModelHash     string                 `protobuf:"bytes,1,opt,name=model_hash,json=modelHash,proto3" json:"model_hash,omitempty"` // from ParseFile response
-	Query         *Query                 `protobuf:"bytes,2,opt,name=query,proto3" json:"query,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	ModelHash string                 `protobuf:"bytes,1,opt,name=model_hash,json=modelHash,proto3" json:"model_hash,omitempty"` // from ParseFile response
+	Query     *Query                 `protobuf:"bytes,2,opt,name=query,proto3" json:"query,omitempty"`
+	// OSLC Query 3.0 parameter text, mutually exclusive with query.
+	OslcQuery     string `protobuf:"bytes,3,opt,name=oslc_query,json=oslcQuery,proto3" json:"oslc_query,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4162,6 +4165,13 @@ func (x *QueryRequest) GetQuery() *Query {
 		return x.Query
 	}
 	return nil
+}
+
+func (x *QueryRequest) GetOslcQuery() string {
+	if x != nil {
+		return x.OslcQuery
+	}
+	return ""
 }
 
 // QueryResponse contains the elements the query selected, in the order they are
@@ -4864,11 +4874,13 @@ const file_sysml_proto_rawDesc = "" +
 	"\x11ServerInfoRequest\"R\n" +
 	"\x12ServerInfoResponse\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12\"\n" +
-	"\fcapabilities\x18\x02 \x03(\tR\fcapabilities\"Q\n" +
+	"\fcapabilities\x18\x02 \x03(\tR\fcapabilities\"p\n" +
 	"\fQueryRequest\x12\x1d\n" +
 	"\n" +
 	"model_hash\x18\x01 \x01(\tR\tmodelHash\x12\"\n" +
-	"\x05query\x18\x02 \x01(\v2\f.sysml.QueryR\x05query\"F\n" +
+	"\x05query\x18\x02 \x01(\v2\f.sysml.QueryR\x05query\x12\x1d\n" +
+	"\n" +
+	"oslc_query\x18\x03 \x01(\tR\toslcQuery\"F\n" +
 	"\rQueryResponse\x125\n" +
 	"\belements\x18\x01 \x03(\v2\x19.sysml.QueryResultElementR\belements\"^\n" +
 	"\x05Query\x12\x14\n" +

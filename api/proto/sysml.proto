@@ -651,6 +651,7 @@ message ServerInfoResponse {
   //                  questions the REPL's %constraint, %requirement, %satisfy
   //                  and %calc answer.
   //   "query"      - the Query RPC evaluates a SysML v2 API & Services Query.
+  //   "oslc_query" - the Query RPC evaluates OSLC Query text.
   //   "enum_values" - a Value carries an enumeration literal as enum_literal,
   //                  rather than reporting it as an unsupported null.
   //   "unset_value" - a valueless feature of a value type is reported as
@@ -665,6 +666,8 @@ message ServerInfoResponse {
 message QueryRequest {
   string model_hash = 1;  // from ParseFile response
   Query query = 2;
+  // OSLC Query 3.0 parameter text, mutually exclusive with query.
+  string oslc_query = 3;
 }
 
 // QueryResponse contains the elements the query selected, in the order they are
