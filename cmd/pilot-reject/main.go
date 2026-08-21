@@ -1,0 +1,239 @@
+// Command pilot-reject checks the rejection direction the differential cannot
+// see: it validates a hand-written negative corpus — models each violating one
+// named rule — with both this implementation and the OMG SysML v2 Pilot
+// Implementation, and buckets every case by who rejects it. A case the pilot
+// rejects and we accept is a permissiveness gap.
+//
+// It is advisory: nothing in the build or the test suite depends on its
+// verdicts. Provision the reference validators with
+// scripts/download-pilot-sysml-validator.sh and
+// scripts/download-pilot-kerml-validator.sh, then run
+// `go run ./cmd/pilot-reject`. See docs/project/pilot-rejection.md.
+package main
+
+import (
+	"flag"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+)
+
+// bucket names one quadrant of the two validators' verdicts.
+const (
+	bucketBothReject = "both-reject"
+	bucketPilotOnly  = "pilot-only-rejects"
+	bucketOursOnly   = "ours-only-rejects"
+	bucketBothAccept = "both-accept"
+)
+
+// languageBatch is the corpus files in a single language, in comparison order.
+type languageBatch struct {
+	Kind  source.Kind
+	Files []string
+}
+
+func main() {
+	repo := flag.String("repo", "", "repository root (default: the module root containing this command)")
+	validator := flag.String("validator", "", "pilot SysML validator executable (default: <repo>/build/pilot-sysml-validator/validate-sysml-batch)")
+	kermlValidator := flag.String("kerml-validator", "", "KerML pilot validator executable (default: <repo>/build/pilot-kerml-validator/validate-kerml)")
+	corpus := flag.String("corpus", "", "negative corpus directory (default: <repo>/cmd/pilot-reject/testdata/negative)")
+	out := flag.String("out", "", "output directory for the reports (default: <repo>/build/pilot-reject)")
+	timeout := flag.Duration("timeout", 0, "per-batch timeout for the pilot validator (0: no limit)")
+	flag.Parse()
+
+	if err := run(*repo, *validator, *kermlValidator, *corpus, *out, *timeout); err != nil {
+		fmt.Fprintf(os.Stderr, "pilot-reject: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func run(repo, validator, kermlValidator, corpus, out string, timeout time.Duration) error {
+	var err error
+	if repo == "" {
+		repo, err = moduleRoot()
+		if err != nil {
+			return err
+		}
+	}
+	if validator == "" {
+		validator = filepath.Join(repo, "build", "pilot-sysml-validator", "validate-sysml-batch")
+	}
+	if kermlValidator == "" {
+		kermlValidator = filepath.Join(repo, "build", "pilot-kerml-validator", "validate-kerml")
+	}
+	corpusDir := "cmd/pilot-reject/testdata/negative"
+	if corpus != "" {
+		corpusDir = relativeTo(repo, corpus)
+	}
+	if out == "" {
+		out = filepath.Join(repo, "build", "pilot-reject")
+	}
+	if _, err := os.Stat(validator); err != nil {
+		return fmt.Errorf("pilot validator not found at %s: run ./scripts/download-pilot-sysml-validator.sh", validator)
+	}
+
+	files, err := collectCases(repo, corpusDir)
+	if err != nil {
+		return err
+	}
+	if len(files) == 0 {
+		return fmt.Errorf("no .sysml or .kerml files under %s", corpusDir)
+	}
+
+	cases := make(map[string]*Case, len(files))
+	for _, rel := range files {
+		c, err := readCase(repo, corpusDir, rel)
+		if err != nil {
+			return err
+		}
+		cases[rel] = c
+	}
+
+	for _, batch := range batchByLanguage(files) {
+		fmt.Fprintf(os.Stderr, "negative corpus: %d %s case(s)\n", len(batch.Files), batch.Kind)
+		pilot := validator
+		if batch.Kind == source.KindKerML {
+			pilot = kermlValidator
+			if _, err := os.Stat(pilot); err != nil {
+				return fmt.Errorf("KerML pilot validator not found at %s: run ./scripts/download-pilot-kerml-validator.sh", pilot)
+			}
+		}
+		ours, err := openSysMLErrors(repo, corpusDir, batch.Files)
+		if err != nil {
+			return err
+		}
+		theirs, err := pilotErrors(pilot, repo, corpusDir, batch.Files, timeout)
+		if err != nil {
+			return err
+		}
+		for _, rel := range batch.Files {
+			classify(cases[rel], ours[rel], theirs[rel])
+		}
+	}
+
+	report := &Report{Validator: relativeTo(repo, validator), Corpus: corpusDir}
+	if report.Pilot, err = pilotVersion(validator); err != nil {
+		return err
+	}
+	for _, rel := range files {
+		report.Cases = append(report.Cases, *cases[rel])
+	}
+	report.summarize()
+	return writeReports(out, report)
+}
+
+// classify fills the case's verdicts. A side rejects when it reports at least
+// one error-severity diagnostic; warnings do not count.
+func classify(c *Case, ours, theirs []string) {
+	c.OursErrors = len(ours)
+	c.PilotErrors = len(theirs)
+	switch {
+	case len(theirs) > 0 && len(ours) > 0:
+		c.Bucket = bucketBothReject
+	case len(theirs) > 0:
+		c.Bucket = bucketPilotOnly
+		c.Pilot = theirs
+	case len(ours) > 0:
+		c.Bucket = bucketOursOnly
+		c.Ours = ours
+	default:
+		c.Bucket = bucketBothAccept
+	}
+}
+
+// readCase reads one corpus file and its mandatory header: the first line must
+// state the violated rule and its citation, so no case is anecdotal.
+func readCase(repo, dir, rel string) (*Case, error) {
+	content, err := os.ReadFile(filepath.Join(repo, dir, filepath.FromSlash(rel)))
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", rel, err)
+	}
+	first, _, _ := strings.Cut(string(content), "\n")
+	rule, ok := strings.CutPrefix(first, "// Invalid: ")
+	if !ok {
+		return nil, fmt.Errorf("%s: first line must be `// Invalid: <rule> (<citation>).`", rel)
+	}
+	src, _, _ := strings.Cut(rel, "/")
+	return &Case{Path: rel, Source: src, Rule: strings.TrimSpace(rule)}, nil
+}
+
+func relativeTo(repo, path string) string {
+	rel, err := filepath.Rel(repo, path)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		return path
+	}
+	return filepath.ToSlash(rel)
+}
+
+// moduleRoot walks up from the working directory to the directory holding go.mod.
+func moduleRoot() (string, error) {
+	dir, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir, nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", fmt.Errorf("no go.mod found above the working directory; pass -repo")
+		}
+		dir = parent
+	}
+}
+
+// batchByLanguage splits the corpus into one batch per language, SysML first.
+// Each language runs against its own reference validator; the cases are
+// mutually independent, so batching only amortizes the validator's startup.
+func batchByLanguage(files []string) []languageBatch {
+	batches := []languageBatch{{Kind: source.KindSysML}, {Kind: source.KindKerML}}
+	for _, rel := range files {
+		for i := range batches {
+			if batches[i].Kind == source.KindOf(rel) {
+				batches[i].Files = append(batches[i].Files, rel)
+			}
+		}
+	}
+	out := make([]languageBatch, 0, len(batches))
+	for _, batch := range batches {
+		if len(batch.Files) > 0 {
+			out = append(out, batch)
+		}
+	}
+	return out
+}
+
+// collectCases returns the corpus files, in either language, as sorted
+// slash-separated paths relative to the corpus directory.
+func collectCases(repo, dir string) ([]string, error) {
+	root := filepath.Join(repo, filepath.FromSlash(dir))
+	var files []string
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		if source.KindOf(path) == source.KindUnknown {
+			return nil
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		files = append(files, filepath.ToSlash(rel))
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("scan %s: %w", root, err)
+	}
+	sort.Strings(files)
+	return files, nil
+}
