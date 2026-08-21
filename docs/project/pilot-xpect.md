@@ -174,6 +174,13 @@ diagnostics are worded independently, so `errors` and `warnings` are effectively
 strictly and the interesting number is the tolerance breakdown. `noErrors` and `linkedName` are
 wording-independent, and they are where this oracle actually adjudicates.
 
+**These tables and the baseline are a fresh run on `main` plus wave 7A; the `linkedName`, `noErrors`
+and `warnings` sections below, and items 1–3 of [Not fixed here](#not-fixed-here), still cite the
+earlier run they were written for** (`linkedName` 151/194, `noErrors` 231/275, `warnings` 0/113). They
+are rebaselined centrally, not here: this slice regenerated the baseline because the `scope` numbers
+are its own to establish, and the count tables move with the baseline. Where a table and a narrative
+section disagree, the table is the live number.
+
 The **complete** per-row evidence — every disagreement with its file, line, declared expectation and
 our actual behaviour — is in [pilot-xpect-baseline.json](pilot-xpect-baseline.json). The sections
 below group the disagreements by cause and name the files; they do not repeat 803 rows.
