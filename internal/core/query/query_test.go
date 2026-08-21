@@ -85,6 +85,37 @@ func TestEvaluateOrdersByUnselectedProperty(t *testing.T) {
 	}
 }
 
+func TestEvaluateOrdersMultiplicityNumerically(t *testing.T) {
+	first, second, third, infinite := &symbols.Symbol{}, &symbols.Symbol{}, &symbols.Symbol{}, &symbols.Symbol{}
+	model := &testModel{
+		symbols: []*symbols.Symbol{first, second, third, infinite},
+		values: map[*symbols.Symbol]map[string][]string{
+			first:    {PropertyID: {"2"}, PropertyMultiplicityLower: {"2"}},
+			second:   {PropertyID: {"10"}, PropertyMultiplicityLower: {"10"}},
+			third:    {PropertyID: {"9"}, PropertyMultiplicityLower: {"9"}},
+			infinite: {PropertyID: {"*"}, PropertyMultiplicityLower: {"*"}},
+		},
+	}
+	results, err := Evaluate(model, Query{
+		OrderBy: []OrderTerm{{Property: PropertyMultiplicityLower}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := []string{results[0].ID, results[1].ID, results[2].ID, results[3].ID}; !slices.Equal(got, []string{"2", "9", "10", "*"}) {
+		t.Fatalf("ascending IDs = %v", got)
+	}
+	results, err = Evaluate(model, Query{
+		OrderBy: []OrderTerm{{Property: PropertyMultiplicityLower, Desc: true}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := []string{results[0].ID, results[1].ID, results[2].ID, results[3].ID}; !slices.Equal(got, []string{"*", "10", "9", "2"}) {
+		t.Fatalf("descending IDs = %v", got)
+	}
+}
+
 func TestEvaluateNotEqualAndIn(t *testing.T) {
 	one, two := &symbols.Symbol{}, &symbols.Symbol{}
 	model := &testModel{

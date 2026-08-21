@@ -58,6 +58,9 @@ one operand.
 Results retain declaration order, with parents before their children, unless
 `oslc.orderBy` is supplied. `oslc.select` controls the reported property
 projection; identity and metamodel type remain present on every result.
+`oslc.orderBy` compares multiplicity properties numerically, with `*` as
+positive infinity, and compares other properties lexically. Missing values
+retain the existing ordering behavior.
 For ordered multiplicity comparisons, `*` is positive infinity. For `=`, `!=`,
 and `in`, a value `*` is compared lexically.
 

@@ -79,6 +79,8 @@ const (
 	ErrUnparsableValue
 	// ErrUnknownScope identifies a scope absent from the model.
 	ErrUnknownScope
+	// ErrNoModel identifies a query without a loaded model.
+	ErrNoModel
 	// ErrUnsupportedScopedTerm identifies an unsupported nested property query.
 	ErrUnsupportedScopedTerm
 	// ErrUnsupportedWildcard identifies an unsupported property wildcard.
@@ -214,10 +216,20 @@ func Evaluate(model Model, q Query) ([]Element, error) {
 				if !bok {
 					return term.Desc
 				}
-				if term.Desc {
-					return a > b
+				less := func(left, right string) bool {
+					if IsOrdered(term.Property) {
+						leftValue, leftErr := ordered(left)
+						rightValue, rightErr := ordered(right)
+						if leftErr == nil && rightErr == nil {
+							return leftValue < rightValue
+						}
+					}
+					return left < right
 				}
-				return a < b
+				if term.Desc {
+					return less(b, a)
+				}
+				return less(a, b)
 			}
 			return false
 		})

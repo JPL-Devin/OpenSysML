@@ -126,7 +126,7 @@ func TestParseParametersPreservesEncodedSemicolonAndDecodesValues(t *testing.T) 
 }
 
 func TestParseOSLCMalformedNeverPanics(t *testing.T) {
-	inputs := []string{"", `sysml:name=`, `sysml:name="`, `sysml:name in [`, `sysml:name="x" or sysml:type="y"`, `oslc.select=sysml:name,`}
+	inputs := []string{"", `sysml:name=`, `sysml:name="`, `sysml:name in [`, `sysml:name="x" or sysml:type="y"`, `sysml:name="spare" and`, `oslc.select=sysml:name,`}
 	for _, input := range inputs {
 		func() {
 			defer func() {
@@ -134,7 +134,14 @@ func TestParseOSLCMalformedNeverPanics(t *testing.T) {
 					t.Errorf("ParseOSLC(%q) panicked: %v", input, recovered)
 				}
 			}()
-			_, _ = ParseOSLC(input)
+			_, err := ParseOSLC(input)
+			if err == nil {
+				t.Errorf("ParseOSLC(%q) unexpectedly succeeded", input)
+				return
+			}
+			if queryErr, ok := err.(*Error); !ok || queryErr.Kind != ErrMalformed {
+				t.Errorf("ParseOSLC(%q) error = %#v, want ErrMalformed", input, err)
+			}
 		}()
 	}
 }

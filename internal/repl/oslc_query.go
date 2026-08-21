@@ -22,9 +22,12 @@ func (s *Session) query(text string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	if len(s.sessionMembers()) == 0 || s.hasAnalysisErrors() {
+		return nil, &corequery.Error{Kind: corequery.ErrNoModel, Message: "no model loaded"}
+	}
 	idx := s.browseIndex()
 	if idx == nil {
-		return nil, fmt.Errorf("no model loaded")
+		return nil, &corequery.Error{Kind: corequery.ErrNoModel, Message: "no model loaded"}
 	}
 	resolver := resolve.New(idx)
 	model := semantics.NewModel(resolver)

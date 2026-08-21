@@ -227,6 +227,10 @@ func (p *oslcParser) parseCompound() (Query, error) {
 		if !p.consumeWord("and") {
 			return Query{}, errorf(ErrMalformed, "OSLC compound terms may be joined only by \" and \"")
 		}
+		p.skipSpace()
+		if p.pos >= len(p.s) {
+			return Query{}, errorf(ErrMalformed, "OSLC compound term has a trailing \"and\"")
+		}
 	}
 }
 
