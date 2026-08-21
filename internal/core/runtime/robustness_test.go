@@ -1915,7 +1915,8 @@ func testStateTransitionEffectReadsAnUnknownFeature(t *testing.T) {
 }
 
 // testNonTerminatingDoBehavior: a do behavior whose state is re-entered every
-// round never ends, so the run is bounded and reports instead of hanging.
+// round never ends, so the run is bounded and reports instead of hanging. The
+// self-transition restarts the do behavior, so either bound may report first.
 func testNonTerminatingDoBehavior(t *testing.T) {
 	spin := &ast.StateNode{
 		Name: "spin",
@@ -1942,7 +1943,7 @@ func testNonTerminatingDoBehavior(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected a budget error for a machine that never settles")
 	}
-	if !strings.Contains(err.Error(), "exceeded max") {
+	if !strings.Contains(err.Error(), "exceeded max") && !errors.Is(err, ErrStepLimitExceeded) {
 		t.Errorf("expected a budget error, got: %v", err)
 	}
 }
@@ -6296,7 +6297,7 @@ func testChainThroughALiteralWithoutThatAttribute(t *testing.T) {
 }
 
 // testObjectExhibitedMachineNeverSettles: a machine an object exhibits is bounded
-// by the same event budget as one run on its own, so materializing an object whose
+// by the same budgets as one run on its own, so materializing an object whose
 // machine never settles reports a budget error rather than spinning.
 func testObjectExhibitedMachineNeverSettles(t *testing.T) {
 	src := `
@@ -6316,7 +6317,7 @@ func testObjectExhibitedMachineNeverSettles(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected a budget error for an exhibited machine that never settles")
 	}
-	if !strings.Contains(err.Error(), "exceeded max") {
+	if !strings.Contains(err.Error(), "exceeded max") && !errors.Is(err, ErrStepLimitExceeded) {
 		t.Errorf("error = %v, want a budget error", err)
 	}
 }
