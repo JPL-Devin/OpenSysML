@@ -16,7 +16,7 @@
               (Relationship kind="typing" target=Dry
                 (*ast.QualifiedName))))))
       (Membership visibility="default"
-        (Usage kind="behavior" name="Process" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+        (Usage kind="behavior" name="Base" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (Membership visibility="default"
             (Usage kind="step" name="paint" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
               (Relationship kind="typing" target=Paint
@@ -34,7 +34,11 @@
               (ConnectorEnd target="paint"
                 (*ast.QualifiedName))
               (ConnectorEnd target="dry"
-                (*ast.QualifiedName))))
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Usage kind="behavior" name="Process" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="specializes" target=Base
+            (*ast.QualifiedName))
           (Membership visibility="default"
             (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
               (Relationship kind="redefines" target=named
