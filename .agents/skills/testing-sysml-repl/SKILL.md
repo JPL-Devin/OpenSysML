@@ -1494,6 +1494,20 @@ worth asserting, with the wording each produces:
   `UserWarning: Keeping the cached sysml-grpc … could not be downloaded` and returns the old path.
   That is the only observable half of the replacement without network; say so rather than claiming
   the replacement was proven. Always back up the cache + sidecar and restore them afterwards.
+- **On a box that *does* reach GitHub the replacement completes**: `PYSYSML_GRPC_VERSION=v0.0.8` will
+  download that release over `~/.pysysml/bin/sysml-grpc` and write a matching sidecar, so your local
+  `make build-grpc` binary is gone and `server_info().version` reports `v0.0.8` afterwards. Re-run
+  `cp bin/sysml-grpc ~/.pysysml/bin/ && rm -f ~/.pysysml/bin/sysml-grpc.json` before the next test.
+  The leftover sidecar is also the classic false negative when contrasting
+  `PYSYSML_GRPC_VERSION` (honoured, warns) against a stale `OPENSYSML_GRPC_VERSION` (must be
+  ignored, no warning): if the sidecar already records the version you are asking for, *neither*
+  warns and the contrast proves nothing. Delete the sidecar and pick a version the cache is not,
+  then assert on the presence/absence of the `Replacing the cached sysml-grpc` `UserWarning`
+  (capture it with `warnings.catch_warnings(record=True)`).
+- `PYSYSML_GRPC_BINARY` is read by no code (`get_binary_path()` is hard-coded to `~/.pysysml/bin`, as
+  this skill notes), which is why `CHANGELOG.md` no longer lists it among the renamed client
+  variables — treat any request to "verify PYSYSML_GRPC_BINARY" as a claim to disprove, not a feature
+  to exercise.
 
 #### Proving a *pinned release digest* really unblocks a download (PR #316)
 

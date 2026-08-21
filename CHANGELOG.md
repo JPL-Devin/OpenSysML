@@ -14,11 +14,10 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   The wire protocol is untouched, so a `pysysml` client talks to an already-released service.
 - **The names built on the old one move back with it:** `OPENSYSML_*` environment variables are
   `PYSYSML_*` (`PYSYSML_GRPC_VERSION`, `PYSYSML_STATE_DIR`, `PYSYSML_GITHUB_REPO`,
-  `PYSYSML_GRPC_BINARY`, `PYSYSML_VERSION`, `PYSYSML_REQUIRE_VERSION`, `PYSYSML_PRE_RELEASE`,
-  `PYSYSML_ALLOW_UNPINNED_DOWNLOAD`, `PYSYSML_REQUIRE_SERVICE`), the base error is `PySysMLError`,
-  the generator entry point is `pysysml-generate`, the state directory is `~/.pysysml` and the
-  release tag is `pysysml-v*`. A `~/.opensysml` left behind by an `opensysml` install is dead
-  weight and can be deleted.
+  `PYSYSML_ALLOW_UNPINNED_DOWNLOAD`, and `PYSYSML_REQUIRE_SERVICE` in the test suite), the base
+  error is `PySysMLError`, the generator entry point is `pysysml-generate`, the state directory is
+  `~/.pysysml` and the release tag is `pysysml-v*`. A `~/.opensysml` left behind by an `opensysml`
+  install is dead weight and can be deleted.
 - **The client is 0.4.0**, carrying on from `opensysml` 0.3.0 rather than reusing a version.
 - **`opensysml` 0.3.1 is a placeholder that raises `ImportError` naming `pysysml`**, so
   `pip install opensysml` reports the rename instead of installing a client that no longer gets
