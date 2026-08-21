@@ -609,4 +609,6 @@ directory and fails if any file's diagnostics differ between the two.
 OMG bugs: `start` and `done` are declared by `Items::Item` and redefined by `Parts::Part`, and every
 definition body now inherits the features its kind implies (see the re-pin below).
 
-The runtime implementation is **production-ready for complete SysML v2 models**. Training example "failures" reflect incomplete example files, not missing runtime features.
+A clean training corpus means these 100 files produce no diagnostic — it is not evidence about
+execution semantics, which this corpus does not run, nor about the notation these files happen not
+to use. See [spec compliance](spec-compliance.md) for what is and is not claimed.
