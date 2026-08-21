@@ -7,21 +7,25 @@ import (
 
 func TestNormalizePilotSamples(t *testing.T) {
 	tests := []struct {
-		name string
-		raw  string
-		want normalized
+		name      string
+		raw       string
+		want      normalized
+		wantError bool
 	}{
-		{"integer", "LiteralInteger 7 (fb98f88c-9172-45bc-8ed8-b78fe546719b)", normalized{Kind: kindInt, Value: "7"}},
-		{"rational", "LiteralRational 2.5 (fb98f88c-9172-45bc-8ed8-b78fe546719b)", normalized{Kind: kindReal, Value: "2.5"}},
-		{"exponent", "LiteralRational 1.099511627776E12 (fb98f88c-9172-45bc-8ed8-b78fe546719b)", normalized{Kind: kindReal, Value: "1.099511627776E12"}},
-		{"sequence", "LiteralInteger 3 (fb98f88c-9172-45bc-8ed8-b78fe546719b)\nLiteralInteger 1 (fb98f88c-9172-45bc-8ed8-b78fe546719b)", normalized{Kind: kindSequence, Elements: []normalized{{Kind: kindInt, Value: "3"}, {Kind: kindInt, Value: "1"}}}},
-		{"empty", "", normalized{}},
-		{"unevaluated", "OperatorExpression + (fb98f88c-9172-45bc-8ed8-b78fe546719b)", normalized{Unevaluated: true}},
+		{"integer", "LiteralInteger 7 (fb98f88c-9172-45bc-8ed8-b78fe546719b)", normalized{Kind: kindInt, Value: "7"}, false},
+		{"rational", "LiteralRational 2.5 (fb98f88c-9172-45bc-8ed8-b78fe546719b)", normalized{Kind: kindReal, Value: "2.5"}, false},
+		{"exponent", "LiteralRational 1.099511627776E12 (fb98f88c-9172-45bc-8ed8-b78fe546719b)", normalized{Kind: kindReal, Value: "1.099511627776E12"}, false},
+		{"string", "LiteralString abc (fb98f88c-9172-45bc-8ed8-b78fe546719b)", normalized{Kind: kindString, Value: "abc"}, false},
+		{"boolean", "LiteralBoolean true (fb98f88c-9172-45bc-8ed8-b78fe546719b)", normalized{Kind: kindBool, Value: "true"}, false},
+		{"sequence", "LiteralInteger 3 (fb98f88c-9172-45bc-8ed8-b78fe546719b)\nLiteralInteger 1 (fb98f88c-9172-45bc-8ed8-b78fe546719b)", normalized{Kind: kindSequence, Elements: []normalized{{Kind: kindInt, Value: "3"}, {Kind: kindInt, Value: "1"}}}, false},
+		{"empty", "", normalized{}, false},
+		{"unevaluated", "OperatorExpression + (fb98f88c-9172-45bc-8ed8-b78fe546719b)", normalized{Unevaluated: true}, false},
+		{"error", "ERROR: evaluation failed", normalized{}, true},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			got := normalizePilot(test.raw)
-			if got.Error || got.Value.Kind != test.want.Kind || got.Value.Value != test.want.Value ||
+			if got.Error != test.wantError || got.Value.Kind != test.want.Kind || got.Value.Value != test.want.Value ||
 				got.Value.Unevaluated != test.want.Unevaluated || len(got.Value.Elements) != len(test.want.Elements) {
 				t.Fatalf("normalizePilot(%q) = %+v, want %+v", test.raw, got, test.want)
 			}
@@ -51,6 +55,13 @@ func TestNormalizeOursSamples(t *testing.T) {
 			len(got.Value.Elements) != len(test.want.Elements) {
 			t.Errorf("normalizeOurs(%q) = %+v, want %+v", test.raw, got, test.want)
 		}
+	}
+}
+
+func TestNormalizeOursError(t *testing.T) {
+	got := normalizeOurs("sysml: evaluation failed", false)
+	if !got.Error {
+		t.Fatalf("normalizeOurs() = %+v, want error", got)
 	}
 }
 
