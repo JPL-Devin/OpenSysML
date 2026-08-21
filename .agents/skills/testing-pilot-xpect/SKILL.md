@@ -96,7 +96,7 @@ sibling files:
 | delete the `END_SETUP` line | file listed under `unparsed files` as `XPECT_SETUP block is not terminated by END_SETUP`, `filesUnparsed` +1, `files` still 428 |
 | `XPECT_SETUP` → `XPECT_SETUPX` | `no XPECT_SETUP block` |
 | turn `// XPECT errors …` into `//* XPECT errors …` with no `*/` | `line N: `//* XPECT errors` note is not terminated` |
-| **`END_SETUP` → `END_SETUPX`** | **not detected** — `xt.go` finds the terminator with a plain `strings.Index(text, "END_SETUP")`, so a corrupted/suffixed keyword still counts as terminated. Use a deleted line, not a renamed one, when you want the unparsed path. |
+| `END_SETUP` → `END_SETUPX` | `XPECT_SETUP block is not terminated by END_SETUP` — the terminator is the token `\bEND_SETUP\b` (`xt.go`), so a suffixed keyword does not terminate. Locked by `w5c_xt_test.go`; a plain substring search here was the one real defect testing found. |
 
 An unparsed file lowers the assertion/row/disagree counts (it is counted, not compared), so always
 restore and re-`cmp` against the baseline afterwards.
