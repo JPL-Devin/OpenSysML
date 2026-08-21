@@ -6,11 +6,11 @@ description: How to verify the advisory pilot-implementation differential harnes
 # Testing the pilot differential harness (`cmd/pilot-diff`)
 
 The harness compares OpenSysML diagnostics against the OMG SysML v2 Pilot Implementation
-(via `DeciSym/sysmlv2-validator`) over four corpus roots and writes
+(via two pinned plain-Java bridges over the pilot's own validators) over four corpus roots and writes
 `build/pilot-diff/pilot-diff.{txt,json}`. `docs/project/pilot-differential-baseline.json` is the
 committed result of the *last refreshed* run, so **the harness is testable by reproduction** —
 but only while the baseline is current. Check that first. As of the wave-4 rebaseline it **is**
-current: a live run gives `349 file(s), 283 fully agreeing; 20 agreed, 232 only ours, 142 only the
+current: a live run gives `349 file(s), 283 fully agreeing; 20 agreed, 232 only ours, 139 only the
 pilot's`, byte-identical to the committed baseline, and `docs/project/pilot-differential.md`'s
 "Results" table matches. When it is stale (it was at `ac4ac4fb`, and again while the F60–F69 fix
 PRs were in flight), a non-empty `jq -S` baseline diff is *not* by itself evidence of a
@@ -23,9 +23,16 @@ regression — see "Isolating one change's effect" below.
   blueprint's maintenance step) — without it the `training` root prints
   `skipping examples/sysml-v2-training: no .sysml files (corpus not downloaded?)` and the totals
   silently drop from 122 files to 22, which looks like a harness bug but is a missing corpus.
-- The validator: `./scripts/download-pilot-validator.sh`. It is **not** in the blueprint, takes
+- The pinned jar: `./scripts/download-pilot-validator.sh`. It is **not** in the blueprint, takes
   ~2-3 minutes (Maven downloads the pilot release ZIP and shades a jar), and needs network access
-  to github.com and Maven Central. Once built it no-ops.
+  to github.com and Maven Central. Once built it no-ops. Both bridges call it when the jar is
+  absent, so provisioning either is enough.
+- The SysML oracle: `./scripts/download-pilot-sysml-validator.sh` (needs `javac`). It compiles
+  `scripts/pilot-sysml-validator/ValidateSysML.java` into
+  `build/pilot-sysml-validator/validate-sysml-batch`, which is what `cmd/pilot-diff` runs by
+  default. It batch-loads: every file of a root enters one resource set before any is validated.
+  The older `build/pilot-validator/validate-sysml` (the DeciSym interactive CLI) is still built by
+  the provisioning script and is still the handiest way to ask the reference about a single file.
 - The KerML oracle: `./scripts/download-pilot-kerml-validator.sh` (needs `javac` too). It compiles
   `scripts/pilot-kerml-validator/ValidateKerML.java` against the pilot shaded jar into
   `build/pilot-kerml-validator/`, auto-provisioning the SysML validator first if the jar is
@@ -39,9 +46,9 @@ diff <(jq -S . docs/project/pilot-differential-baseline.json) \
      <(jq -S . build/pilot-diff/pilot-diff.json)          # must be empty
 ```
 
-Run it twice and diff the two JSONs against each other to prove determinism (the import
-topological sort in `order.go` and the basename batching in `pilot.go` are the parts that could
-introduce order-dependence). Observed at `3b2d14a3`: byte-identical across runs, and identical
+Run it twice and diff the two JSONs against each other to prove determinism (since F6 both sides
+load a whole root before validating any of it, so there is no ordering left to perturb — but the
+run order of roots and the EMF URI rewriting in the bridges still could). Observed at `3b2d14a3`: byte-identical across runs, and identical
 after a full validator rebuild from scratch — that last one is the strongest evidence available,
 because it shows the numbers are a property of the pinned pilot release, not of one local build.
 
@@ -120,8 +127,8 @@ likely to be stale — always recount).
 
 ## Single-file `-validate` is not the harness's loading model
 
-The harness opens each corpus root as **one workspace batch** (import-topologically sorted, see
-`order.go` / `openSysMLDiagnostics` in `opensysml.go`), so a corpus file that imports a sibling
+The harness opens each corpus root as **one workspace batch** on both sides (see
+`openSysMLDiagnostics` in `opensysml.go` and `pilotDiagnostics` in `pilot.go`), so a corpus file that imports a sibling
 file — e.g. `Vehicle Example/VehicleIndividuals.sysml`, which does `private import
 VehicleUsages::*` from `VehicleUsages.sysml` in the same directory — reports unresolved-reference
 errors under a bare single-file `bin/sysml -validate <f>` even when the differential shows it
@@ -259,7 +266,7 @@ Two cheap surfaces that *do* prove the split:
 
 1. **A synthetic two-language mini-repo through pilot-diff.** Put byte-identical content in
    `<tmp>/testdata/adv.sysml` and `<tmp>/examples/pilot-corpora/kerml-examples/adv.kerml`, then
-   `go run ./cmd/pilot-diff -repo <tmp> -validator <abs>/build/pilot-validator/validate-sysml \
+   `go run ./cmd/pilot-diff -repo <tmp> -validator <abs>/build/pilot-sysml-validator/validate-sysml-batch \
    -kerml-validator <abs>/build/pilot-kerml-validator/validate-kerml -out <tmp-out>`.
    The other five roots warn `skipping ...: no .sysml files` and are skipped, which is fine.
    Read `pilot-diff.txt`: the message must appear under `adv.sysml` and be absent under

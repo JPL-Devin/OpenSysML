@@ -135,7 +135,7 @@ For each of the four roots, in three shapes (moved aside / empty-but-present / o
 
 `actionlint`, `shellcheck`, `python3 scripts/check-doc-links.py`, `gofmt`, `go vet`,
 `go run ./cmd/pilot-diff` (validators pre-downloaded; ~4min, prints e.g.
-`349 file(s), 283 fully agreeing; 20 agreed diagnostic(s), 232 only ours, 142 only the pilot's`)
+`349 file(s), 283 fully agreeing; 20 agreed diagnostic(s), 232 only ours, 139 only the pilot's`)
 and `make lint` (staticcheck+gosec, ~2min) all work. There is **no** `yamllint` and **no**
 `circleci` CLI, so `.circleci/config.yml` can only be parsed as YAML, not schema-validated — say so
 in reports rather than implying it was validated.
