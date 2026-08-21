@@ -29,6 +29,24 @@ GNU-format diagnostics **relative to `--root`**. Consequences for testing:
 - `TestPilotDifferentialDocumentCountsMatchBaseline` reads only the *committed* baseline JSON, so
   it proves doc ↔ baseline consistency and cannot detect a committed baseline that no longer
   reproduces. A live harness run is still mandatory; both checks are needed.
+- **Guard scope:** mechanically guarded surfaces are:
+  - every count in `docs/project/pilot-differential.md` and `README.md` against
+    `pilot-differential-baseline.json` (the existing guard);
+  - differential headlines and `openSysMLDiagnostics`/`pilotDiagnostics`/`severityMismatch`
+    lines in every `.agents/skills/**/SKILL.md` against the same baseline (the new guard in
+    `cmd/pilot-diff/w6f_skill_counts_test.go`);
+  - the Totals block, per-kind table, per-suite table, and census prose in
+    `docs/project/pilot-xpect.md` against `pilot-xpect-baseline.json`.
+  - A live-looking headline is checked by default. `<!-- doc-count:historical -->` (optionally
+    `<!-- doc-count:historical: reason -->`) exempts exactly the next matching claim in file order
+    and is consumed; a marker with no following claim fails, so it cannot remain after its claim
+    is deleted. The marker must sit outside inline code and fenced blocks — marker syntax inside
+    them is documentation, not a marker.
+  - **Trust by review:** live reproduction of either committed baseline (both guards read committed
+    JSON only), the Xpect reconciliation table's `Published` column, and
+    `docs/project/grammar-coverage-baseline.json` remain unguarded. Per-file corpus clean counts
+    quoted in skills, prose `as of <wave> this is current` statements, tool-availability claims,
+    and pinned paths also remain unguarded.
 - Useful contrast to demo the change: three files where the importer sorts *before* the
   imported file (`a/Ref.sysml` importing `PkgB` from `b/Model.sysml`). The batch bridge is
   clean, exit 0; `build/pilot-validator/validate-sysml` on the same argv reports
@@ -110,11 +128,11 @@ run order of roots and the EMF URI rewriting in the bridges still could). Observ
 after a full validator rebuild from scratch — that last one is the strongest evidence available,
 because it shows the numbers are a property of the pinned pilot release, not of one local build.
 
-Observed at `90da2cad` (KerML root added): `338 file(s), 196 fully agreeing; 20 agreed, 851 only
+Observed at `90da2cad` (KerML root added): <!-- doc-count:historical -->`338 file(s), 196 fully agreeing; 20 agreed, 851 only
 ours, 145 only the pilot's`, wall time ~70 s (the KerML batch costs ~50 s), byte-identical to the
 committed baseline and across runs.
 
-Observed at `82ff0fac` (F34, per-file language dispatch): `349 file(s), 222 fully agreeing; 20
+Observed at `82ff0fac` (F34, per-file language dispatch): <!-- doc-count:historical -->`349 file(s), 222 fully agreeing; 20
 agreed diagnostic(s), 564 only ours, 459 only the pilot's`, wall time ~82 s, byte-identical across
 runs (both `.json` and `.txt`). The committed baseline is stale against this (338 / 221 / 20 / 560
 / 145), so use the entry-keyed delta below rather than `jq -S`.
