@@ -80,6 +80,14 @@ var (
 	// evaluation, so an expression naming it fails rather than yielding nothing.
 	ErrUnsupportedOperator = errors.New("unsupported operator")
 
+	// ErrUnresolvedType is returned when a type classification operand names no
+	// resolvable type.
+	ErrUnresolvedType = errors.New("unresolved type")
+
+	// ErrUndeterminedValueType is returned when a value classification has no
+	// direct runtime type to compare.
+	ErrUndeterminedValueType = errors.New("value type cannot be determined")
+
 	// ErrCalcNoReturn is returned when a calc body runs to its end without
 	// returning: it computed no result, which is not the same as a null one.
 	ErrCalcNoReturn = errors.New("calculation returned no value")

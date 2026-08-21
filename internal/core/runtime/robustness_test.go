@@ -143,6 +143,8 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("routed_send_scalar_typed_flow_mismatch", testRoutedSendScalarTypedFlowMismatch)
 	t.Run("routed_send_unreachable_receiver", testRoutedSendUnreachableReceiver)
 	t.Run("routed_send_receiver_name_mismatch_deadlock", testRoutedSendReceiverNameMismatchDeadlock)
+	t.Run("type_classification_unresolved_type", testTypeClassificationUnresolvedType)
+	t.Run("type_classification_undetermined_value_type", testTypeClassificationUndeterminedValueType)
 	t.Run("send_addressed_through_several_occurrences", testSendAddressedThroughSeveralOccurrences)
 	t.Run("send_addressed_to_an_object_that_cannot_be_built", testSendAddressedToAnObjectThatCannotBeBuilt)
 	t.Run("send_addressed_to_a_part_no_sibling_takes", testSendAddressedToAPartNoSiblingTakes)
@@ -2533,6 +2535,44 @@ func testRoutedSendReceiverNameMismatchDeadlock(t *testing.T) {
 	}
 	if !errors.Is(err, ErrAcceptDeadlock) {
 		t.Fatalf("expected ErrAcceptDeadlock, got: %v", err)
+	}
+}
+
+func testTypeClassificationUnresolvedType(t *testing.T) {
+	model, resolver, root := parseAndBuildModel(t, `package P {
+		item def Integer;
+		calc classify { return : Boolean = 1 istype MissingType; }
+	}`)
+	pkg := resolveSymbol(t, root, "P")
+	calc := resolveSymbol(t, pkg.Scope, "classify")
+	_, err := NewContext(model, resolver, 1000).InvokeCalc(calc, nil, pkg.Scope)
+	if err == nil {
+		t.Fatal("expected unresolved type classification to fail")
+	}
+	if !errors.Is(err, ErrUnresolvedType) {
+		t.Fatalf("expected ErrUnresolvedType, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "MissingType") {
+		t.Errorf("error = %v, want unresolved type name", err)
+	}
+}
+
+func testTypeClassificationUndeterminedValueType(t *testing.T) {
+	model, resolver, root := parseAndBuildModel(t, `package P {
+		item def Integer;
+		calc classify { return : Boolean = null istype Integer; }
+	}`)
+	pkg := resolveSymbol(t, root, "P")
+	calc := resolveSymbol(t, pkg.Scope, "classify")
+	_, err := NewContext(model, resolver, 1000).InvokeCalc(calc, nil, pkg.Scope)
+	if err == nil {
+		t.Fatal("expected undetermined value type classification to fail")
+	}
+	if !errors.Is(err, ErrUndeterminedValueType) {
+		t.Fatalf("expected ErrUndeterminedValueType, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "null") {
+		t.Errorf("error = %v, want undecidable value description", err)
 	}
 }
 
