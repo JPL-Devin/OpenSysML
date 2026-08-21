@@ -7,6 +7,7 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -175,16 +176,21 @@ func (cc *constraintChecker) checkVariantOutsideVariation(sym *symbols.Symbol) {
 // cycle. The diagnostic is anchored at the first generalization edge that leads
 // back to sym so the error points at the offending clause.
 func (cc *constraintChecker) checkSpecializationCycle(sym *symbols.Symbol) {
-	if !cc.model.HasSpecializationCycle(sym) {
+	selfSpan, selfLoop := cc.selfSpecialization(sym)
+	if !cc.model.HasSpecializationCycle(sym) && !selfLoop {
 		return
 	}
 	span := sym.DeclSpan
-	for _, rel := range semantics.RelationshipsOf(sym) {
-		if rel == nil || rel.Target == nil || !semantics.GeneralizationKind(rel.Kind) {
-			continue
+	if selfLoop {
+		span = selfSpan
+	} else {
+		for _, rel := range semantics.RelationshipsOf(sym) {
+			if rel == nil || rel.Target == nil || !semantics.GeneralizationKind(rel.Kind) {
+				continue
+			}
+			span = rel.Target.Span()
+			break
 		}
-		span = rel.Target.Span()
-		break
 	}
 	cc.diags = append(cc.diags, Diagnostic{
 		Severity: SeverityError,
@@ -193,6 +199,51 @@ func (cc *constraintChecker) checkSpecializationCycle(sym *symbols.Symbol) {
 		Code:     "specialization-cycle",
 		Source:   "constraint",
 	})
+}
+
+// selfSpecialization reports a `part p :> p` edge, which the specialization
+// graph drops: a same-named subsetting or redefinition with no inherited feature
+// to retarget resolves back to sym itself.
+func (cc *constraintChecker) selfSpecialization(sym *symbols.Symbol) (source.Span, bool) {
+	if sym == nil || sym.OwnerScope == nil {
+		return source.Span{}, false
+	}
+	for _, rel := range semantics.RelationshipsOf(sym) {
+		if rel == nil || rel.Target == nil ||
+			(rel.Kind != ast.RelSubsets && rel.Kind != ast.RelRedefines) {
+			continue
+		}
+		targetNode := rel.Target
+		if fr, ok := targetNode.(*ast.FeatureReference); ok {
+			targetNode = fr.Name
+		}
+		qn, ok := targetNode.(*ast.QualifiedName)
+		if !ok || len(qn.Parts) != 1 || qn.Parts[0].Text != sym.Name {
+			continue
+		}
+		if cc.inheritsFeatureNamed(sym, qn.Parts[0].Text) {
+			continue // the name denotes the inherited feature, not sym
+		}
+		if target, ok := cc.resolver.ResolveQualified(sym.OwnerScope, qn); ok && target == sym {
+			return rel.Target.Span(), true
+		}
+	}
+	return source.Span{}, false
+}
+
+// inheritsFeatureNamed reports whether sym's owner inherits a feature named
+// name from a supertype, skipping sym itself.
+func (cc *constraintChecker) inheritsFeatureNamed(sym *symbols.Symbol, name string) bool {
+	owner := sym.OwnerScope.Owner()
+	if owner == nil {
+		return false
+	}
+	for _, sup := range cc.model.AllSupertypes(owner) {
+		if found, ok := cc.model.LookupMember(sup, name); ok && found != sym {
+			return true
+		}
+	}
+	return false
 }
 
 // checkMultiplicityRange flags a usage whose evaluable multiplicity has a lower
