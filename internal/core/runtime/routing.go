@@ -249,6 +249,8 @@ func (ctx *Context) receivingEnds(conns []lower.Connection, sendingPort string) 
 	return receiving, outbound
 }
 
+// receivingEndsForMessage finds connected receiving ends and distinguishes
+// typed message mismatches from ends that are outbound or otherwise unroutable.
 func (ctx *Context) receivingEndsForMessage(
 	conns []lower.Connection, sendingPort, signalType string,
 ) (receiving, outbound []string, typeMismatch bool) {
@@ -300,6 +302,8 @@ func (ctx *Context) endReceives(scope *symbols.Scope, end string) bool {
 	return false
 }
 
+// endReceivesMessage classifies a port for this message, reporting a mismatch
+// only when typed inward features reject it; conformance is accepted either way.
 func (ctx *Context) endReceivesMessage(scope *symbols.Scope, end, signalType string) (bool, bool) {
 	sym, ok := ctx.portSymbol(scope, end)
 	if !ok {
@@ -342,6 +346,8 @@ func (ctx *Context) endReceivesMessage(scope *symbols.Scope, end, signalType str
 	return true, false
 }
 
+// resolveType resolves a routed message type through the sender's scope,
+// returning nil when the type is unavailable for conservative routing.
 func (ctx *Context) resolveType(scope *symbols.Scope, name string) *symbols.Symbol {
 	if ctx.resolver == nil || name == "" {
 		return nil

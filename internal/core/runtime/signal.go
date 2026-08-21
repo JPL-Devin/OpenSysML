@@ -195,6 +195,8 @@ func (ctx *Context) postVia(conns []lower.Connection, msg Message, send lower.Se
 	return nil
 }
 
+// resolveRoutedReceiver requires the named receiver to be an action or state
+// reachable on the sending object before it can accept the routed message.
 func (ctx *Context) resolveRoutedReceiver(send lower.Send, self *Instance) (messageAddress, error) {
 	separator := "::"
 	if send.TargetPath {
@@ -215,6 +217,8 @@ func (ctx *Context) resolveRoutedReceiver(send lower.Send, self *Instance) (mess
 	return addr, nil
 }
 
+// isRoutedReceiverSymbol accepts only actions and states as routed receivers,
+// leaving other named members out of receiver address resolution.
 func isRoutedReceiverSymbol(sym *symbols.Symbol) bool {
 	if sym == nil {
 		return false
