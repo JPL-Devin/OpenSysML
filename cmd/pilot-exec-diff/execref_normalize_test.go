@@ -65,6 +65,26 @@ func TestNormalizeOursError(t *testing.T) {
 	}
 }
 
+func TestCanonicalValueSequenceEquivalences(t *testing.T) {
+	singleton := normalized{Kind: kindSequence, Elements: []normalized{{Kind: kindInt, Value: "2"}}}
+	if got := canonicalValue(singleton); !reflect.DeepEqual(got, normalized{Kind: kindInt, Value: "2"}) {
+		t.Fatalf("canonicalValue(singleton) = %+v, want scalar", got)
+	}
+	empty := normalized{Kind: kindSequence, Elements: []normalized{}}
+	if got := canonicalValue(empty); got.Kind != "" {
+		t.Fatalf("canonicalValue(empty) = %+v, want empty", got)
+	}
+	pilot := normalizePilot("LiteralInteger 2 (fb98f88c-9172-45bc-8ed8-b78fe546719b)")
+	oursSingleton := normalizeOurs("✓ x\n  = [2]", false)
+	if got := bucketResults(pilot, oursSingleton); got != "agree" {
+		t.Fatalf("singleton bucket = %q, want agree", got)
+	}
+	oursEmpty := normalizeOurs("✓ x\n  = []", false)
+	if got := bucketResults(normalizePilot(""), oursEmpty); got != "agree" {
+		t.Fatalf("empty bucket = %q, want agree", got)
+	}
+}
+
 func TestBucketResults(t *testing.T) {
 	tests := []struct {
 		name        string

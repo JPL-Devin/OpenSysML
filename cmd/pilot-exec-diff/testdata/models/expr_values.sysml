@@ -18,6 +18,7 @@ package Probe {
     calc def Fact { in k : Integer; return : Integer = if k <= 1 ? 1 else k * Fact(k - 1); }
     calc def Size { return : Integer = (1, 2, 3)->size(); }
     calc def Sel { return : Integer[*] = (1, 2, 3, 4)->select { in x : Integer; x > 2 }; }
+    calc def Single { return : Integer[*] = (1, 2, 3)->select { in x : Integer; x == 2 }; }
     calc def Rev { return : Integer[*] = (1, 2, 3)->including(9); }
     calc def Cat { return : String = "ab" + "cd"; }
     calc def Div { return : Real = 1.0 / 3.0; }

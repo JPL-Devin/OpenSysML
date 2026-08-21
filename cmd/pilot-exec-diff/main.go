@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/repl"
@@ -16,9 +15,9 @@ import (
 
 var bucketNames = []string{
 	"agree",
-	"disagree",
 	"kind-only",
 	"order-only",
+	"disagree",
 	"pilot-unevaluated",
 	"pilot-error",
 	"ours-error",
@@ -124,7 +123,7 @@ func execute(repo, launcher string, files []execCaseFile) (*execReport, error) {
 	report := &execReport{
 		PilotArtifact: filepath.ToSlash(relativeTo(repo, launcher)),
 		Scope:         "expressions only",
-		Note:          "Action, state-machine, and exhibit/perform execution are OUT OF REACH of the pinned artifact and are not compared here.",
+		Note:          "Action, state-machine, and exhibit/perform execution are OUT OF REACH of the pinned artifact and are not compared here. Single-element sequence renderings are unwrapped on both sides; scalar-vs-singleton distinction is unobservable in this report.",
 		Buckets:       make(map[string]int, len(bucketNames)),
 	}
 	for _, name := range bucketNames {
@@ -270,17 +269,26 @@ func runOurs(models []string, cases []execCase) map[string]sideResult {
 		return results
 	}
 	if report.Errors {
+		raw := "sysml: model did not analyse cleanly"
+		if len(report.Found) > 0 {
+			limit := min(5, len(report.Found))
+			raw += "\n" + strings.Join(report.Found[:limit], "\n")
+		}
 		for _, testCase := range cases {
-			results[testCase.ID] = sideResult{Raw: "sysml: model did not analyse cleanly", Error: true}
+			results[testCase.ID] = sideResult{Raw: raw, Error: true}
 		}
 		return results
 	}
 	for _, testCase := range cases {
-		expression := testCase.Expression
+		var (
+			lines []string
+			err   error
+		)
 		if testCase.Target != "" {
-			expression = "in " + testCase.Target + " : " + expression
+			lines, _, err = session.RunMeta("%eval in " + testCase.Target + " : " + testCase.Expression)
+		} else {
+			lines, err = session.EvalExpr(testCase.Expression)
 		}
-		lines, err := session.EvalExpr(expression)
 		if err != nil {
 			results[testCase.ID] = sideResult{Raw: "sysml: " + err.Error(), Error: true}
 			continue
@@ -344,8 +352,4 @@ func relativeTo(repo, path string) string {
 		return path
 	}
 	return filepath.ToSlash(rel)
-}
-
-func init() {
-	sort.Strings(bucketNames)
 }

@@ -40,6 +40,8 @@ lines. Reports are written to `build/pilot-exec-diff/pilot-exec-diff.txt` and
 `nondeterministic` takes precedence whenever either side differs from itself
 between the two runs.
 
+Both runtimes render values as sequences; single-element sequences are unwrapped
+on both sides, so a scalar-versus-singleton distinction is unobservable here.
 Reals are compared after rounding both sides to two decimal places, matching
 OpenSysML's display precision. Pilot exponent-form rationals are parsed exactly
 with `math/big` before integer-vs-real comparison.

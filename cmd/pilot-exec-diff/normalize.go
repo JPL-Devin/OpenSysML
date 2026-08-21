@@ -80,7 +80,7 @@ func normalizePilot(raw string) sideResult {
 			return sideResult{Raw: raw, Value: normalized{Unevaluated: true}}
 		}
 	}
-	return sideResult{Raw: raw, Value: sequenceOrSingle(values)}
+	return sideResult{Raw: raw, Value: canonicalValue(sequenceOrSingle(values))}
 }
 
 func normalizeOurs(raw string, runErr bool) sideResult {
@@ -99,7 +99,7 @@ func normalizeOurs(raw string, runErr bool) sideResult {
 			if !ok {
 				return sideResult{Raw: raw, Error: true}
 			}
-			return sideResult{Raw: raw, Value: parsed}
+			return sideResult{Raw: raw, Value: canonicalValue(parsed)}
 		}
 	}
 	return sideResult{Raw: raw, Value: normalized{}}
@@ -195,6 +195,22 @@ func sequenceOrSingle(values []normalized) normalized {
 	default:
 		return normalized{Kind: kindSequence, Elements: values}
 	}
+}
+
+func canonicalValue(value normalized) normalized {
+	if value.Kind != kindSequence {
+		return value
+	}
+	if len(value.Elements) == 0 {
+		return normalized{}
+	}
+	if len(value.Elements) == 1 {
+		return canonicalValue(value.Elements[0])
+	}
+	for i, element := range value.Elements {
+		value.Elements[i] = canonicalValue(element)
+	}
+	return value
 }
 
 func nonEmptyLines(raw string) []string {
