@@ -17,6 +17,13 @@ import (
 // files are parsed here because internal/core/libs depends on this package.
 func stdlibModel(t *testing.T) *Model {
 	t.Helper()
+	return NewModel(resolve.New(stdlibIndex(t)))
+}
+
+// stdlibIndex indexes the standard-library sources, ready for a caller that
+// adds a document of its own before resolving.
+func stdlibIndex(t *testing.T) *symbols.Index {
+	t.Helper()
 	idx := symbols.NewIndex()
 	root := filepath.Join("..", "libs", "stdlib")
 	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
@@ -37,7 +44,7 @@ func stdlibModel(t *testing.T) *Model {
 		t.Fatalf("walk the standard library: %v", err)
 	}
 	idx.ExpandWildcardImports()
-	return NewModel(resolve.New(idx))
+	return idx
 }
 
 // TestW7AImplicitBaseTablesNameLibraryElements guards the keyword tables against

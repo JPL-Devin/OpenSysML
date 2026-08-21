@@ -309,6 +309,9 @@ func (d *decoder) head(el *element) (string, error) {
 		return d.aliasHead(el)
 	case "Dependency":
 		return d.dependencyHead(el)
+	case "Specialization", "FeatureTyping", "Subsetting", "Redefinition",
+		"FeatureInverting", "TypeFeaturing", "Conjugation":
+		return d.relationshipElementHead(el)
 	case "Comment":
 		return d.commentHead(el)
 	case "Documentation":
@@ -718,6 +721,61 @@ func (d *decoder) dependencyHead(el *element) (string, error) {
 	words = append(words, "from", strings.Join(clients, ", "))
 	words = append(words, "to", strings.Join(suppliers, ", "))
 	return strings.Join(words, " "), nil
+}
+
+// relationshipElementHead rebuilds a keyword-first relationship member from its
+// ordered ends: `specialization Gen subtype A specializes B`.
+func (d *decoder) relationshipElementHead(el *element) (string, error) {
+	keyword, ok := d.stringOf(el, rdf.OpenSysML+xDeclaredKeyword)
+	if !ok {
+		return "", d.missing(el, "sysx:"+xDeclaredKeyword,
+			"a relationship member is written keyword-first, and the keyword says which form")
+	}
+	form, ok := relationshipMemberSyntax[keyword]
+	if !ok {
+		return "", &UnsupportedError{What: fmt.Sprintf("the relationship keyword %q of %s", keyword, el.iri)}
+	}
+	source, err := d.relationshipEndName(el, form.source)
+	if err != nil {
+		return "", err
+	}
+	target, err := d.relationshipEndName(el, form.target)
+	if err != nil {
+		return "", err
+	}
+	var words []string
+	if keyword := d.visibility(el); keyword != "" {
+		words = append(words, keyword)
+	}
+	if prefix, ok := d.stringOf(el, rdf.OpenSysML+xDeclaredPrefix); ok {
+		words = append(words, prefix)
+		words = append(words, d.identWords(el)...)
+		words = append(words, keyword)
+	} else {
+		words = append(words, keyword)
+		words = append(words, d.identWords(el)...)
+	}
+	if keyword == "featuring" {
+		// `featuring of f by T` names the relationship before its featured end.
+		if len(d.identWords(el)) > 0 {
+			words = append(words, "of")
+		}
+		return strings.Join(append(words, source, "by", target), " "), nil
+	}
+	return strings.Join(append(words, source, form.separator, target), " "), nil
+}
+
+// relationshipEndName reads one end of a relationship element, which the
+// notation always writes.
+func (d *decoder) relationshipEndName(el *element, property string) (string, error) {
+	names, err := d.referenceList(el, rdf.SysML+property)
+	if err != nil {
+		return "", err
+	}
+	if len(names) != 1 {
+		return "", d.missing(el, "sysml:"+property, "a relationship relates exactly one element at each end")
+	}
+	return names[0], nil
 }
 
 func (d *decoder) commentHead(el *element) (string, error) {

@@ -138,6 +138,8 @@ func renderMember(m ast.Node) string {
 		return "import " + importTarget(d)
 	case *ast.Dependency:
 		return "dependency " + nameOrAnon(d.Ident)
+	case *ast.RelationshipMember:
+		return d.Keyword + " " + nameOrAnon(d.Ident)
 	case *ast.Comment:
 		return "comment"
 	case *ast.Definition:

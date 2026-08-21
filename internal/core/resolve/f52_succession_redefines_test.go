@@ -39,10 +39,10 @@ func TestF52SuccessionIsARedefinitionTarget(t *testing.T) {
 		if !ok {
 			t.Fatal("`succession redefines named` does not resolve its target")
 		}
-		// The symbol builder classifies no succession usage, so the target's kind
-		// is `unknown` (internal/core/symbols is owned elsewhere).
-		if sym.Kind != symbols.SymbolUnknown && sym.Kind != symbols.SymbolConnectionUsage {
-			t.Errorf("target kind %v, want a connection usage or the unclassified kind", sym.Kind)
+		// A succession usage is classified as one, so the target carries the
+		// succession kind rather than the unclassified one.
+		if sym.Kind != symbols.SymbolSuccessionUsage {
+			t.Errorf("target kind %v, want %v", sym.Kind, symbols.SymbolSuccessionUsage)
 		}
 	}
 	if found != 1 {
