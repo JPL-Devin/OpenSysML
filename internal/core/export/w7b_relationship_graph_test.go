@@ -135,6 +135,33 @@ func TestKeywordFirstRelationshipEndsAreOrdered(t *testing.T) {
 	}
 }
 
+// A relationship member states its own visibility, so the graph must carry the
+// keyword the wrapping membership used to hold.
+func TestKeywordFirstRelationshipKeepsItsVisibility(t *testing.T) {
+	const src = `package P {
+    classifier A;
+    classifier B;
+    private specialization Gen subtype A specializes B;
+}
+`
+	g := kermlTurtleOf(t, "visibility.kerml", src)
+	vis, ok := g.Lexical(rdf.IRI("urn:sysmlv2:element:P__Gen"), rdf.SysML+"visibility")
+	if !ok || vis != "private" {
+		t.Errorf("visibility = %q (present=%t), want private", vis, ok)
+	}
+	turtle, err := export.Convert("visibility.kerml", []byte(src), export.FormatSysML, export.FormatTurtle)
+	if err != nil {
+		t.Fatalf("to turtle: %v", err)
+	}
+	back, err := export.Convert("visibility.ttl", turtle, export.FormatTurtle, export.FormatSysML)
+	if err != nil {
+		t.Fatalf("back to notation: %v", err)
+	}
+	if !strings.Contains(string(back), "private specialization Gen") {
+		t.Errorf("round trip lost the declared visibility:\n%s", back)
+	}
+}
+
 // TestKeywordFirstRelationshipRoundTrips checks the graph is enough to write the
 // notation back, ends included.
 func TestKeywordFirstRelationshipRoundTrips(t *testing.T) {

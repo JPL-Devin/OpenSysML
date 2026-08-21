@@ -849,6 +849,8 @@ func unwrapMember(member ast.Node) (ast.Node, ast.Visibility) {
 		return n, n.Visibility
 	case *ast.Alias:
 		return n, n.Visibility
+	case *ast.RelationshipMember:
+		return n, n.Visibility
 	}
 	return member, ast.VisibilityDefault
 }
