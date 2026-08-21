@@ -76,10 +76,14 @@ func (r *Resolver) visibleMember(sym *symbols.Symbol, name string, hide *refFilt
 	if hide.contributedOnly() {
 		// The owner's own declarations are the local bindings already filtered
 		// by the caller, so only contributed ones remain.
-		return r.lookupContributedMember(sym, name)
+		found, ok := r.lookupContributedMember(sym, name)
+		if !ok || !visibleAsInheritedMember(sym, found) {
+			return nil, false
+		}
+		return found, true
 	}
 	found, ok := r.lookupMember(sym, name)
-	if !ok {
+	if !ok || !visibleAsInheritedMember(sym, found) {
 		return nil, false
 	}
 	if !hide.hides(found) {
@@ -273,7 +277,7 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 	// for cycle safety, so it must not be memoized or reported as unresolved.
 	var target *symbols.Symbol
 	var ok bool
-	r.aside(func() { target, ok = r.ResolveQualified(scope, imp.Imported) })
+	r.aside(func() { target, ok = r.resolveImportTarget(scope, imp) })
 	delete(r.resolvingImports, imp)
 	if !ok {
 		return nil, false
@@ -307,7 +311,7 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 		if sym, ok := target.Scope.LookupLocal(name); ok && visibleThroughImport(imp, sym) && admit(sym) {
 			return sym, true
 		}
-		if sym, ok := r.lookupImportedMember(target, target.Scope, scope, name); ok && visibleThroughImport(imp, sym) && admit(sym) {
+		if sym, ok := r.lookupImportedMember(target, target.Scope, scope, name); ok && symbols.VisibleOutside(sym.Visibility) && admit(sym) {
 			return sym, true
 		}
 	}
@@ -339,7 +343,7 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 			if !r.admitsUnderName("", r.ReferringNamespaceFQN(scope), targetFQN+"::"+name, sym) {
 				continue
 			}
-			if visibleThroughImport(imp, sym) && admit(sym) {
+			if r.importSurfaces(imp, targetFQN, sym) && admit(sym) {
 				return sym, true
 			}
 		}
@@ -385,6 +389,11 @@ func lookupInSubtree(scope *symbols.Scope, name string, imp *ast.Import, admit f
 		return sym, true
 	}
 	for _, child := range scope.Children() {
+		// A recursive import descends through the memberships it can see, so a
+		// namespace it cannot surface hides its own contents too.
+		if owner := child.Owner(); owner != nil && !visibleThroughImport(imp, owner) {
+			continue
+		}
 		if sym, ok := lookupInSubtree(child, name, imp, admit, seen); ok {
 			return sym, true
 		}

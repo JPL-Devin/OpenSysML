@@ -114,8 +114,9 @@ sibling files:
   `testsuite/ShadowingTests_CircleProblem2.kerml.xt:22` reports 3 missing names that all resolve
   fine through the LSP. The direction is conservative (it under-reports our agreement) and is
   documented in `pilot-xpect.md`; do not file it as a scoring bug.
-- `/library*` resources are deliberately replaced by our embedded stdlib, so a single-file LSP check
-  is faithful for suites whose setup names only library files plus `ThisFile`.
+- Each fixture loads exactly the resources its `XPECT_SETUP` `ResourceSet` names — its own body, the
+  `/src/` files and the `/library*` copies — never our embedded stdlib in their place, so an
+  independent LSP check must open the same set to be comparable.
 
 ## Adversarial mutations (mutate a copy or restore from the `mv`d backup, then `diff -r`)
 
