@@ -157,6 +157,7 @@ var pilotTagRe = regexp.MustCompile(`PILOT_TAG="\$\{PILOT_TAG:-([^}"]*)\}"`)
 // pilotPin reads the tag from scripts/pilot-pin.sh, the single source of the pin
 // the corpora, the validators and these suites all come from.
 func pilotPin(repo string) string {
+	// #nosec G304 -- the pin file is at a fixed path in this repository.
 	content, err := os.ReadFile(filepath.Join(repo, "scripts", "pilot-pin.sh"))
 	if err != nil {
 		return "unknown"
