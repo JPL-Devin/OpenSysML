@@ -486,6 +486,40 @@ Timings at `286f420f` (8 vCPU): two-way `1m14s`, three-way `2m44s`, SysIDE alone
 SysIDE prints `Collected standard library: [...]` on **stdout**; the harness discards stdout, so
 only stderr matters.
 
+## Refereeing the name-distinguishability rule (`resolve/distinguishability.go`)
+
+`build/pilot-validator/validate-sysml <one file>` is a faithful oracle for this rule — the four
+messages reproduce on a single file with no `--root` — so hand fixtures are the right surface, and
+`cmd/pilot-diff` is *not*: a corpus-scale scan at `2836471c` found 0 only-ours and 23 pilot-only
+`Duplicate of …` diagnostics, and **all 23 sit on a line where the pilot itself emits a syntax
+error** (`namespace` in `.sysml`, imports without visibility), i.e. recovery collateral. So the
+harness cannot see gaps in this rule; only fixtures can.
+
+Reference wording to match verbatim (all `warning:`): `Duplicate of other owned member name`
+(owned-vs-owned), `Duplicate of owned member name` (alias-vs-owned), `Duplicate of other alias
+name` (alias-vs-alias), `Duplicate of inherited member name '<n>' from <A>, <B>` (inherited).
+`bin/sysml -validate` exits 0 and prints `✓ …: no errors` when duplicates are the only findings —
+that exit code is the cheapest proof the rule is a warning, not an error.
+
+The fixture shapes that actually distinguish working from broken (a "silent both sides" fixture
+proves nothing on its own — always build the *positive* twin one edit away):
+
+| Shape | Reference verdict |
+|---|---|
+| `part def L1 {attribute p;} part def R1 {attribute p;} part def D2 :> L1, R1;` | warns **on D2's declaration line**, `'p' from L1, R1` (inherited-vs-inherited diamond) |
+| `action def L {in p;} action def R {in p;} action def D :> L, R;` | warns the same way — a parameter is not exempt when the two owners are unrelated |
+| `A{in p}` / `Outer{a : A {in p}}` / `Sub :> Outer {:>> a : A}` | silent — the inner parameter implicitly redefines `A::p`, so the name arrives once |
+| `part def Q { attribute portions; }` | warns `'portions' from Occurrence` — an inherited **library** member counts (OpenSysML does not walk library supertypes; known limitation) |
+| `B{p}` / `M :> B {:>> p}` / `D :> M {p}` | warns `'p' from M` — a member that redefines is still inherited by *its* subtypes |
+| `:>>` in the immediate subtype, or `q :> p`, or `alias X for X`, or `bind u = v;`, or a local name shadowing a `private import Q::*` | silent |
+
+Pitfalls: write binding fixtures as `bind a = b;` — `binding b of u = v;` and `binding b = u;` are
+OpenSysML extensions the reference rejects syntactically, and its recovery then emits duplicate
+warnings of its own, which looks like the rule under test. Build the merge-base binary
+(`git worktree add /tmp/wt-main <parent>; go build -o /tmp/sysml-main ./cmd/sysml`) and run every
+fixture through it too: a severity change (error → warning) and a *coverage* loss look identical
+from HEAD alone, and the second is the risk when a rule is rewritten to match a reference.
+
 ## Recording
 
 This is CLI work: record a maximized Konsole on `DISPLAY=:0` (see the "Recording setup" section
