@@ -185,8 +185,9 @@ sysml> %advance 30
 **Test coverage:** 5,884 tests and subtests (5,870 pass, 14 skip themselves; 3,095 top-level `Test` functions) covering parsers, semantics, runtime (actions, states, instances, operators, validation). Behavioral robustness: 107 golden ASTs, 167 negatives, 344 conformance cases, 109 golden traces, 195 runtime robustness cases, 15 gRPC conformance cases and 8 gRPC robustness cases.
 **Parser coverage:** 95/95 bundled library files parse cleanly — the 94 official SysML v2 standard library files and the non-normative `OpenSysML Libraries/OpenSysMLMathFunctions.kerml` extension. Conformance verified by [stdlib_conformance_test.go](internal/core/libs/stdlib_conformance_test.go). Grammar reference: [OMG Xtext grammar](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/org.omg.kerml.xtext/src/org/omg/kerml/xtext).
 **Behavioral execution:** Calc/constraint/requirement/satisfy functional. Action/state executors handle nested invocation, control flow keywords, loop and conditional statements and the send statement (344/344 conformance cases passing). Coverage is self-assessed against the specification text and the normative library: the pinned OMG pilot implementation evaluates expressions but does not execute actions or state machines headlessly, so no external implementation currently adjudicates these rows. See [spec compliance](docs/project/spec-compliance.md).
-**Measured status:** of the 653 semantic rules tracked in [spec compliance](docs/project/spec-compliance.md), 574 are ✅ faithful, 72 ⚠️ approximate and 7 ❌ not implemented. That denominator is our own list of rules, not the specification's, so it is a progress measure and not a compliance percentage.
+**Measured status:** of the 653 semantic rules tracked in [spec compliance](docs/project/spec-compliance.md), 578 are ✅ faithful, 68 ⚠️ approximate and 7 ❌ not implemented. That denominator is our own list of rules, not the specification's, so it is a progress measure and not a compliance percentage.
 **Reference differential:** 349 files compared diagnostic-by-diagnostic against the pinned OMG pilot implementation (`2026-05`), 291 in full agreement; every divergence is enumerated and adjudicated in [the differential](docs/project/pilot-differential.md), reproducible with `go run ./cmd/pilot-diff`.
+**Rejection oracle:** the reverse direction — do we reject what the reference rejects? 34 hand-written invalid models validated by both implementations, 20 rejected by both, 14 the pinned pilot rejects and we accept; every permissiveness gap is enumerated with a reproducer and likely root cause in [the rejection oracle](docs/project/pilot-rejection.md), reproducible with `go run ./cmd/pilot-reject`. It tests the cases we wrote — a sample, not a proof.
 **Training examples:** 100/100 files clean, gated by `internal/core/model/testdata/training_examples_expected.txt`. Download with `./scripts/download-training-examples.sh` (from the [OMG training directory](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/tree/master/sysml/src/training)). See [training examples](docs/project/training-examples.md) for analysis.
 **Semantic layer:** Complete implementation of runtime operators, feature chains, and validation rules. See [examples/semantic-layer/](examples/semantic-layer/) for comprehensive demo.
 
@@ -238,7 +239,7 @@ github.com/Open-MBEE/OpenSysML
 ├── internal/lsp/           # LSP protocol implementation
 ├── internal/grpc/          # gRPC service implementation
 ├── internal/repl/          # REPL loop implementation
-├── python/                 # Python client bindings (pysysml)
+├── python/                 # Python client bindings (opensysml)
 ├── docs/                   # Design specs, architecture docs
 └── testdata/               # Test fixtures (.sysml, .kerml)
 ```
@@ -267,7 +268,7 @@ Pre-built binaries for Linux, macOS, and Windows are available on the [Releases 
   binaries are published to GitHub Releases. Maintainer procedure:
   [docs/project/releasing.md](docs/project/releasing.md); what changed per release:
   [CHANGELOG.md](CHANGELOG.md)
-- The Python client is released on its own tag (`pysysml-v*`), which uploads `pysysml` to
+- The Python client is released on its own tag (`opensysml-v*`), which uploads `opensysml` to
   PyPI — its version is not coupled to the core's, since it resolves a `sysml-grpc` binary
   at runtime from whichever release the caller names
 
@@ -298,11 +299,11 @@ go build -o bin/sysml-grpc ./cmd/sysml-grpc
 
 ## Python Client
 
-**pysysml** provides a Python client library for programmatic access to OpenSysML's parsing and runtime capabilities via gRPC.
+**opensysml** provides a Python client library for programmatic access to OpenSysML's parsing and runtime capabilities via gRPC.
 
 **Installation:**
 ```bash
-pip install pysysml          # from PyPI, once the first release is published
+pip install opensysml          # from PyPI, once the first release is published
 
 # Or from a checkout, in development mode
 pip install -e python/
@@ -310,17 +311,17 @@ pip install -e python/
 
 **Quick example:**
 ```python
-import pysysml
+import opensysml
 
 # Load and parse a SysML model
-model = pysysml.load("vehicle.sysml")
+model = opensysml.load("vehicle.sysml")
 
 # Evaluate expressions
 result = model.eval("2 + 2")
 print(result)  # 4
 
 # Instantiate parts
-instance = pysysml.instantiate("Vehicle", model_hash=model.hash)
+instance = opensysml.instantiate("Vehicle", model_hash=model.hash)
 print(instance.slots["mass"])
 ```
 

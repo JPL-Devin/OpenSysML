@@ -103,12 +103,12 @@ would go missing without saying so.
 
 A response whose conversion went through the RDF mapping sets `experimental` and
 `experimental_notice`, on a refusal as well as on a success, so a client learns
-the status from the response rather than from this page. pysysml raises it as an
+the status from the response rather than from this page. opensysml raises it as an
 `ExperimentalFeatureWarning`, which `warnings.simplefilter` can silence:
 
 ```python
 import warnings
-from pysysml import ExperimentalFeatureWarning
+from opensysml import ExperimentalFeatureWarning
 
 warnings.simplefilter("ignore", ExperimentalFeatureWarning)
 ```
@@ -116,9 +116,9 @@ warnings.simplefilter("ignore", ExperimentalFeatureWarning)
 From Python:
 
 ```python
-model = pysysml.load("model.sysml")
+model = opensysml.load("model.sysml")
 model.save("model.ttl")                          # SysML notation to RDF
-pysysml.convert("sysml", file_path="model.ttl")  # and back
+opensysml.convert("sysml", file_path="model.ttl")  # and back
 ```
 
 The client API is [reference/python-api.md](../reference/python-api.md), and using it as a task is

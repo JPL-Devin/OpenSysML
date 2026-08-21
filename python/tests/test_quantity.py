@@ -9,10 +9,10 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from pysysml.errors import ExecutionError, FeatureValueError, UnsupportedValueError
-from pysysml.instance import Instance
-from pysysml.proto import sysml_pb2
-from pysysml.values import (
+from opensysml.errors import ExecutionError, FeatureValueError, UnsupportedValueError
+from opensysml.instance import Instance
+from opensysml.proto import sysml_pb2
+from opensysml.values import (
     IncommensurableUnitsError,
     Quantity,
     Unit,
@@ -179,10 +179,10 @@ def test_a_magnitude_that_is_not_a_number_is_refused():
 
 def test_a_quantity_argument_is_encoded_as_a_quantity_value():
     """The request carries the quantity itself, not a bare magnitude."""
-    from pysysml import Connection
+    from opensysml import Connection
 
     with patch('grpc.insecure_channel'), \
-            patch('pysysml.proto.sysml_pb2_grpc.SysMLServiceStub') as stub_cls:
+            patch('opensysml.proto.sysml_pb2_grpc.SysMLServiceStub') as stub_cls:
         stub_cls.return_value = Mock()
         conn = Connection(auto_start=False)
 
@@ -417,7 +417,7 @@ class TestQuantityAgainstTheService:
     def setup_method(self):
         import grpc
 
-        from pysysml import Connection
+        from opensysml import Connection
 
         try:
             self.conn = Connection(auto_start=False)

@@ -1,1 +1,1 @@
-"""Tests for pysysml Python bindings."""
+"""Tests for opensysml Python bindings."""
