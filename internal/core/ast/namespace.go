@@ -136,8 +136,9 @@ type Identification struct {
 // it to a SuccessionEdge of its own (see internal/core/parser/succession.go).
 type Membership struct {
 	NodeBase
-	Visibility Visibility
-	Member     Node
+	Visibility    Visibility
+	IsTypeFeature bool
+	Member        Node
 }
 
 // RootNamespace is the top of every parsed file: a flat list of members.

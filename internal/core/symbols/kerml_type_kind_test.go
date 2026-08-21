@@ -23,8 +23,9 @@ func TestKerMLTypeDeclarationsAreClassified(t *testing.T) {
 		"Q": SymbolKerMLType, "s": SymbolActionUsage,
 		// A `datatype` is a definition even with no specialization to name it one.
 		"T": SymbolAttributeDef,
-		// `function` stays a calc: the runtime resolves an invocation through it.
-		"F": SymbolCalcUsage,
+		// A `function` declares a Function, a Behavior specialization: the calc
+		// definition of the kernel layer, which may type a step or an action.
+		"F": SymbolCalcDef,
 	}
 	for name, kind := range want {
 		sym, ok := pkg.Scope.LookupLocal(name)

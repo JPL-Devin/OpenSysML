@@ -2,6 +2,14 @@
 
 Complete API reference for OpenSysML packages.
 
+## Python authoring
+
+`Editor.add_member(owner, kind, name, type=None, multiplicity=None, value=None,
+specializes=None)` and its typed `add_*` helpers create declarations while
+preserving untouched source bytes. `Editor.delete(target, cascade=False)`
+removes declarations transactionally. `pysysml.loads(content, language=None,
+strict=False)` loads inline SysML or KerML for this workflow.
+
 ## Overview
 
 OpenSysML is organized into core packages under `internal/core/`, with frontends in `internal/lsp/` and `internal/repl/`.

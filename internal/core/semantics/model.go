@@ -12,7 +12,6 @@ package semantics
 import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
-	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -322,7 +321,7 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 	// A definition is asked even when it declares supertypes: implicitBase
 	// checks whether the declared chain already reaches its kind's base.
 	_, isDef := sym.Decl.(*ast.Definition)
-	if declared == 0 || isDef || source.KindOf(sym.DocName) == source.KindKerML {
+	if declared == 0 || isDef || m.isKerMLDoc(sym) {
 		if base := m.implicitBase(sym); base != nil {
 			out = append(out, base)
 		}

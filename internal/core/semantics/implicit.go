@@ -102,11 +102,10 @@ var implicitKerMLBases = map[string]string{
 
 // kindBaseFQN returns the standard-library base every declaration of sym's
 // kind conforms to, implicitly or through its declared chain.
-func kindBaseFQN(sym *symbols.Symbol) (string, bool) {
+func kindBaseFQN(sym *symbols.Symbol, isKerML bool) (string, bool) {
 	if sym == nil {
 		return "", false
 	}
-	isKerML := source.KindOf(sym.DocName) == source.KindKerML
 	switch d := sym.Decl.(type) {
 	case *ast.Usage:
 		if isKerML {
@@ -136,14 +135,23 @@ func kindBaseFQN(sym *symbols.Symbol) (string, bool) {
 	return "", false
 }
 
+// isKerMLDoc reports whether sym is declared by a KerML document, as recorded
+// by the index rather than inferred from the document name.
+func (m *Model) isKerMLDoc(sym *symbols.Symbol) bool {
+	if m.resolver == nil || m.resolver.Index() == nil {
+		return false
+	}
+	return m.resolver.Index().DocumentKind(sym.DocName) == source.KindKerML
+}
+
 // implicitBase returns the stdlib definition sym is implicitly typed by, or nil
 // when sym is not a declaration of a kind with a known base.
 func (m *Model) implicitBase(sym *symbols.Symbol) *symbols.Symbol {
-	fqn, ok := kindBaseFQN(sym)
+	isKerML := m.isKerMLDoc(sym)
+	fqn, ok := kindBaseFQN(sym, isKerML)
 	if !ok || m.resolver == nil || m.resolver.Index() == nil {
 		return nil
 	}
-	isKerML := source.KindOf(sym.DocName) == source.KindKerML
 	if _, isDef := sym.Decl.(*ast.Definition); !isDef && !isKerML && declaresGeneralization(RelationshipsOf(sym)) {
 		return nil
 	}
@@ -199,7 +207,7 @@ func (m *Model) declaredGeneralizationReaches(sym *symbols.Symbol, want string, 
 		if !sameBase {
 			// A declaration conforms to its kind's base whether the edge is
 			// declared or implicit, so reaching one of the same kind suffices.
-			if base, ok := kindBaseFQN(target); ok && base == want {
+			if base, ok := kindBaseFQN(target, m.isKerMLDoc(target)); ok && base == want {
 				sameBase = true
 			}
 		}

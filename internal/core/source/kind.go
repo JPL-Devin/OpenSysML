@@ -40,4 +40,4 @@ func KindOf(name string) Kind {
 }
 
 // Kind reports the language of this file.
-func (sf *SourceFile) Kind() Kind { return KindOf(sf.name) }
+func (sf *SourceFile) Kind() Kind { return sf.kind }

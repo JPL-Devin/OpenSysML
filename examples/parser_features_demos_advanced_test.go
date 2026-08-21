@@ -65,12 +65,12 @@ func TestParserFeaturesAdvancedBodies(t *testing.T) {
 
 // TestParserFeaturesMessagesEvents tests messages & events demo
 func TestParserFeaturesMessagesEvents(t *testing.T) {
-	content, err := os.ReadFile(filepath.Join(".", "parser_features_demo_messages_events.kerml"))
+	content, err := os.ReadFile(filepath.Join(".", "parser_features_demo_messages_events.sysml"))
 	if err != nil {
 		t.Fatalf("Failed to read messages & events demo: %v", err)
 	}
 
-	p := parser.New(source.New("parser_features_demo_messages_events.kerml", content))
+	p := parser.New(source.New("parser_features_demo_messages_events.sysml", content))
 	_ = p.ParseFile()
 
 	if len(p.Diagnostics) > 0 {
@@ -124,14 +124,14 @@ func TestAllParserFeaturesDemos(t *testing.T) {
 		"parser_features_demo_relationships.kerml",
 		"parser_features_demo_modifiers.kerml",
 		"parser_features_demo_binding.kerml",
-		"parser_features_demo_connectors.kerml",
+		"parser_features_demo_connectors.sysml",
 		"parser_features_demo_defaults.kerml",
 
 		// New demos (Sessions 4-5)
 		"parser_features_demo_advanced_connectors.kerml",
 		"parser_features_demo_action_semantics.sysml",
 		"parser_features_demo_advanced_bodies.kerml",
-		"parser_features_demo_messages_events.kerml",
+		"parser_features_demo_messages_events.sysml",
 		"parser_features_demo_declarations.kerml",
 		"parser_features_demo_edge_cases.kerml",
 	}

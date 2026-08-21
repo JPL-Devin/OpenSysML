@@ -33,7 +33,7 @@ func (NonstandardNotationPass) Run(ctx *Context, name string, root *ast.RootName
 	// A document of no known kind — the REPL and CLI buffer — reads as SysML,
 	// the notation its prompt takes; the REPL drops the finding for a snippet it
 	// loaded from a .kerml file.
-	w := &notationWalker{sysml: source.KindOf(name) != source.KindKerML}
+	w := &notationWalker{sysml: ctx.Kind != source.KindKerML}
 	w.walk(root.Members)
 	return w.diags
 }

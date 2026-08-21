@@ -31,7 +31,7 @@ func (TypeCheckPass) Run(ctx *Context, name string, root *ast.RootNamespace) []D
 	tc := &typeChecker{
 		resolver: ctx.Resolver(),
 		expr:     &exprChecker{resolver: ctx.Resolver(), model: model},
-		lang:     source.KindOf(name),
+		lang:     ctx.Kind,
 	}
 	tc.walk(rootScope, root.Members)
 	return append(tc.diags, tc.expr.diags...)
@@ -64,6 +64,7 @@ func (tc *typeChecker) walk(scope *symbols.Scope, members []ast.Node) {
 				isEnd:        d.IsEnd,
 				isIndividual: d.IsIndividual,
 				portion:      d.Portion,
+				keyword:      d.Keyword,
 			})
 			tc.expr.checkUsageValue(scope, d)
 			if child := childScopeOf(scope, d); child != nil {
@@ -209,6 +210,14 @@ func (d declKind) isPlainClassifier() bool {
 		(d.keyword == "classifier" || d.keyword == "subclassifier")
 }
 
+// isReferenceUsage reports whether the usage was written with no kind keyword at
+// all: a ReferenceUsage (SysML.xtext DefaultReferenceUsage, `x : T;`, `ref x :
+// T;`) or a plain Usage (ExtendedUsage, `#meta x : T;`). Neither is a usage of
+// the default kind, so the usage-kind taxonomy does not constrain its type.
+func (d declKind) isReferenceUsage() bool {
+	return !d.isDef && d.keyword == "" && d.useKind == ast.UsageAttribute
+}
+
 // isKerML reports whether the declaration is written in KerML, which has no
 // definition/usage distinction to classify it against (KerML 1.0 §8.3).
 func (d declKind) isKerML() bool { return d.lang == source.KindKerML }
@@ -312,7 +321,7 @@ func (tc *typeChecker) checkConjugatedTyping(scope *symbols.Scope, rel *ast.Rela
 		})
 		return
 	}
-	if decl.isDef || (decl.useKind != ast.UsagePort && !decl.isEnd) {
+	if decl.isDef || (decl.useKind != ast.UsagePort && !decl.isEnd && !decl.isReferenceUsage()) {
 		tc.diags = append(tc.diags, Diagnostic{
 			Severity: SeverityError,
 			Span:     target.Span(),
@@ -406,6 +415,11 @@ func compatMessage(decl declKind, rel ast.RelationshipKind, target symbols.Symbo
 		// connects is typed by (`end supplierPort : FuelOutPort`), so the usage-kind
 		// taxonomy does not constrain it.
 		if decl.isEnd {
+			return ""
+		}
+		// Nor does it constrain a usage written with no kind keyword: that is a
+		// ReferenceUsage, whose type may be any definition.
+		if decl.isReferenceUsage() {
 			return ""
 		}
 		// Every SysML definition specializes a KerML type (a part def is a
@@ -585,33 +599,34 @@ var defSymbolKinds = map[symbols.SymbolKind]bool{
 
 // usageSymbolKinds is the set of SymbolKinds that classify a usage.
 var usageSymbolKinds = map[symbols.SymbolKind]bool{
-	symbols.SymbolPartUsage:             true,
-	symbols.SymbolAttributeUsage:        true,
-	symbols.SymbolItemUsage:             true,
-	symbols.SymbolOccurrenceUsage:       true,
-	symbols.SymbolIndividualUsage:       true,
-	symbols.SymbolMetadataUsage:         true,
-	symbols.SymbolEnumerationUsage:      true,
-	symbols.SymbolViewUsage:             true,
-	symbols.SymbolViewpointUsage:        true,
-	symbols.SymbolRenderingUsage:        true,
-	symbols.SymbolConcernUsage:          true,
-	symbols.SymbolConnectionUsage:       true,
-	symbols.SymbolFlowUsage:             true,
-	symbols.SymbolPortUsage:             true,
-	symbols.SymbolInterfaceUsage:        true,
-	symbols.SymbolAllocationUsage:       true,
-	symbols.SymbolActionUsage:           true,
-	symbols.SymbolStateUsage:            true,
-	symbols.SymbolCalcUsage:             true,
-	symbols.SymbolConstraintUsage:       true,
-	symbols.SymbolRequirementUsage:      true,
-	symbols.SymbolCaseUsage:             true,
-	symbols.SymbolAnalysisCaseUsage:     true,
-	symbols.SymbolVerificationCaseUsage: true,
-	symbols.SymbolUseCaseUsage:          true,
-	symbols.SymbolConnectorEnd:          true, // An end of a connect clause is a feature
-	symbols.SymbolAlias:                 true, // Aliases can be subsetting targets
+	symbols.SymbolPartUsage:               true,
+	symbols.SymbolAttributeUsage:          true,
+	symbols.SymbolItemUsage:               true,
+	symbols.SymbolOccurrenceUsage:         true,
+	symbols.SymbolIndividualUsage:         true,
+	symbols.SymbolMetadataUsage:           true,
+	symbols.SymbolEnumerationUsage:        true,
+	symbols.SymbolViewUsage:               true,
+	symbols.SymbolViewpointUsage:          true,
+	symbols.SymbolRenderingUsage:          true,
+	symbols.SymbolConcernUsage:            true,
+	symbols.SymbolConnectionUsage:         true,
+	symbols.SymbolFlowUsage:               true,
+	symbols.SymbolPortUsage:               true,
+	symbols.SymbolInterfaceUsage:          true,
+	symbols.SymbolAllocationUsage:         true,
+	symbols.SymbolActionUsage:             true,
+	symbols.SymbolStateUsage:              true,
+	symbols.SymbolCalcUsage:               true,
+	symbols.SymbolConstraintUsage:         true,
+	symbols.SymbolRequirementUsage:        true,
+	symbols.SymbolSatisfyRequirementUsage: true,
+	symbols.SymbolCaseUsage:               true,
+	symbols.SymbolAnalysisCaseUsage:       true,
+	symbols.SymbolVerificationCaseUsage:   true,
+	symbols.SymbolUseCaseUsage:            true,
+	symbols.SymbolConnectorEnd:            true, // An end of a connect clause is a feature
+	symbols.SymbolAlias:                   true, // Aliases can be subsetting targets
 }
 
 func isDefKind(k symbols.SymbolKind) bool {
@@ -748,7 +763,8 @@ func isDataTypeDefKind(k symbols.SymbolKind) bool {
 // specializations (ViewpointUsage, ConcernUsage).
 func isRequirementUsageKind(k symbols.SymbolKind) bool {
 	switch k {
-	case symbols.SymbolRequirementUsage, symbols.SymbolViewpointUsage, symbols.SymbolConcernUsage:
+	case symbols.SymbolRequirementUsage, symbols.SymbolSatisfyRequirementUsage,
+		symbols.SymbolViewpointUsage, symbols.SymbolConcernUsage:
 		return true
 	}
 	return false

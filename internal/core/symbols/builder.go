@@ -499,6 +499,9 @@ func usageSymbolKind(k ast.UsageKind) SymbolKind {
 		return SymbolConstraintUsage
 	case ast.UsageRequirement:
 		return SymbolRequirementUsage
+	case ast.UsageSatisfy:
+		// A satisfy requirement usage is a requirement usage (SysML v2 §8.3.19).
+		return SymbolSatisfyRequirementUsage
 	case ast.UsageCase:
 		return SymbolCaseUsage
 	case ast.UsageAnalysisCase:
@@ -543,6 +546,11 @@ func classifyUsage(u *ast.Usage) SymbolKind {
 	// it specializes, unlike the `attribute`/`feature` keywords classified below.
 	if u.Keyword == "datatype" {
 		return SymbolAttributeDef
+	}
+	// A KerML `function` declares a Function: a Behavior specialization, so a
+	// definition (KerML 1.0 §9.2.9), which is what `calc def` declares in SysML.
+	if u.Keyword == "function" {
+		return SymbolCalcDef
 	}
 	// Only classify attribute usages (datatype, attribute, feature keywords)
 	if u.Kind != ast.UsageAttribute {

@@ -9,12 +9,12 @@ The harness compares OpenSysML diagnostics against the OMG SysML v2 Pilot Implem
 (via `DeciSym/sysmlv2-validator`) over four corpus roots and writes
 `build/pilot-diff/pilot-diff.{txt,json}`. `docs/project/pilot-differential-baseline.json` is the
 committed result of the *last refreshed* run, so **the harness is testable by reproduction** —
-but only while the baseline is current. Check that first: as of `ac4ac4fb` the committed baseline
-is **stale** (it records 276 files / 175 fully agreeing / 18 agreement / 457 ours / 188 pilot's,
-while a live run gives 277 / 186 / 20 / 395 / 152), and `docs/project/pilot-differential.md`'s
-"Results" table and "Unmapped messages" table match the stale baseline, not the harness. So a
-non-empty `jq -S` baseline diff is *not* by itself evidence of a regression — see "Isolating one
-change's effect" below.
+but only while the baseline is current. Check that first. As of `30449705` it **is** current:
+a live run gives `349 file(s), 254 fully agreeing; 20 agreed, 343 only ours, 459 only the
+pilot's`, byte-identical to the committed baseline, and `docs/project/pilot-differential.md`'s
+"Results" table matches. When it is stale (it was at `ac4ac4fb`, and again while the F60–F69 fix
+PRs were in flight), a non-empty `jq -S` baseline diff is *not* by itself evidence of a
+regression — see "Isolating one change's effect" below.
 
 ## Prerequisites
 
@@ -77,6 +77,12 @@ and category counts. Parsing rules that matter:
 - Shortcut when a root has `pilotDiagnostics: 0` and `agreement: 0` (true for `pilot-examples`
   and `pilot-validation`): every `        opensysml:` line in that root's section is an only-ours
   diagnostic, so `grep -c` over the sliced section is an independent cross-check of the parser.
+- **Agreement and severity-only must be counted by summing the `xK` multiplicities, not the
+  message lines.** An agreement entry lists K `opensysml:` *and* K `pilot:` lines, so counting
+  messages doubles it; the severity bucket's header is `same line and category, different
+  severity:`, which a parser keyed on `only ...` silently mis-buckets.
+- **Root file counts must come from `.roots[].totals`, not `len(.roots[].files)`** — the per-file
+  array omits files both tools are silent on.
 - Cross-check the doc's class table by summing its Files and Diags columns; they must equal the
   measured number of files carrying only-ours diagnostics (root `files` − `filesFullyAgreeing`)
   and the root only-ours totals.

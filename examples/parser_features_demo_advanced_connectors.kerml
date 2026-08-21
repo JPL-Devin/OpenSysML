@@ -34,7 +34,7 @@ package AdvancedConnectors {
     // ===== Named Succession with Identifier Multiplicity (Task 81) =====
     // From TransitionPerformances.kerml line 35
     
-    feature triggerNum: Integer;
+    feature triggerNum: Natural[1] = 1;
     succession triggerAfter [triggerNum] 
         first [0..1] transitionLinkSource 
         then [*] trigger;
