@@ -81,7 +81,12 @@ func (m Model) renameOccurrences(i int, op Operation, sym *symbols.Symbol,
 				seen[segment.Span.Offset] {
 				continue
 			}
-			seg, ok := r.PartSymbol(ref.QN, part)
+			// A segment written as an alias name reads the alias membership, so
+			// renaming the alias rewrites it and renaming the target does not.
+			seg, ok := r.PartAlias(ref.QN, part)
+			if !ok {
+				seg, ok = r.PartSymbol(ref.QN, part)
+			}
 			if !ok || !symbols.SameElement(seg, sym) {
 				continue
 			}

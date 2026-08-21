@@ -55,6 +55,10 @@ type Resolver struct {
 	// can resolve differently in different document scopes.
 	featureChains map[featureChainKey]resolution
 	parts         map[*ast.QualifiedName][]*symbols.Symbol
+	// aliasNames are the alias memberships a segment's name went through, kept
+	// beside parts: the segment reaches the aliased element, and a consumer that
+	// asks about the name written (a rename) needs the alias too.
+	aliasNames map[*ast.QualifiedName][]*symbols.Symbol
 	// endpoints are the vertices transition endpoints resolve to, memoized per
 	// name node: lowering consumes what this tier resolved (see ResolveEndpoint).
 	endpoints map[*ast.QualifiedName]resolution
@@ -108,6 +112,7 @@ func New(idx *symbols.Index) *Resolver {
 		resolving:        map[ast.Node]bool{},
 		featureChains:    map[featureChainKey]resolution{},
 		parts:            map[*ast.QualifiedName][]*symbols.Symbol{},
+		aliasNames:       map[*ast.QualifiedName][]*symbols.Symbol{},
 		endpoints:        map[*ast.QualifiedName]resolution{},
 		imports:          map[ast.Node][]*ast.Import{},
 		importStack:      map[*ast.Import]bool{},
@@ -130,15 +135,32 @@ func New(idx *symbols.Index) *Resolver {
 // Per-segment results are kept here rather than on the AST, which stays
 // immutable after parsing so that concurrent readers may share it.
 func (r *Resolver) recordPart(qn *ast.QualifiedName, i int, sym *symbols.Symbol) {
+	r.resolvedPart(qn, i, sym)
+}
+
+// resolvedPart records what segment i of qn named and returns the element it
+// reaches: a name bound by an alias reaches the aliased element (see
+// AliasedElement), and the alias itself is kept in aliasNames.
+func (r *Resolver) resolvedPart(qn *ast.QualifiedName, i int, sym *symbols.Symbol) *symbols.Symbol {
+	element := r.AliasedElement(sym)
 	if qn == nil || i < 0 || i >= len(qn.Parts) {
-		return
+		return element
 	}
 	syms, ok := r.parts[qn]
 	if !ok {
 		syms = make([]*symbols.Symbol, len(qn.Parts))
 		r.parts[qn] = syms
 	}
-	syms[i] = sym
+	syms[i] = element
+	if element != sym {
+		aliases, ok := r.aliasNames[qn]
+		if !ok {
+			aliases = make([]*symbols.Symbol, len(qn.Parts))
+			r.aliasNames[qn] = aliases
+		}
+		aliases[i] = sym
+	}
+	return element
 }
 
 // PartSymbol returns the symbol the i-th segment of qn resolved to during a
@@ -151,6 +173,16 @@ func (r *Resolver) PartSymbol(qn *ast.QualifiedName, i int) (*symbols.Symbol, bo
 		return nil, false
 	}
 	return syms[i], true
+}
+
+// PartAlias returns the alias membership the i-th segment of qn was written as,
+// where the name it wrote is an alias of the element PartSymbol reports.
+func (r *Resolver) PartAlias(qn *ast.QualifiedName, i int) (*symbols.Symbol, bool) {
+	aliases, ok := r.aliasNames[qn]
+	if !ok || i < 0 || i >= len(aliases) || aliases[i] == nil {
+		return nil, false
+	}
+	return aliases[i], true
 }
 
 // Index returns the symbol index this resolver operates over.
@@ -247,6 +279,7 @@ func (r *Resolver) ResolveName(scope *symbols.Scope, name string, at ast.Node) (
 		}
 	}
 	res := r.walkUnqualified(scope, name)
+	res.sym = r.AliasedElement(res.sym)
 	if res.ok || r.quiet == 0 {
 		r.memoize(at, res)
 	}
@@ -287,6 +320,10 @@ func (r *Resolver) probe(qn *ast.QualifiedName, f func() bool) bool {
 	if had {
 		saved = append([]*symbols.Symbol(nil), saved...)
 	}
+	savedAliases, hadAliases := r.aliasNames[qn]
+	if hadAliases {
+		savedAliases = append([]*symbols.Symbol(nil), savedAliases...)
+	}
 	resolved := false
 	r.aside(func() { resolved = f() })
 	if resolved {
@@ -296,6 +333,11 @@ func (r *Resolver) probe(qn *ast.QualifiedName, f func() bool) bool {
 		r.parts[qn] = saved
 	} else {
 		delete(r.parts, qn)
+	}
+	if hadAliases {
+		r.aliasNames[qn] = savedAliases
+	} else {
+		delete(r.aliasNames, qn)
 	}
 	return false
 }

@@ -217,8 +217,7 @@ func (r *Resolver) memberChain(owner *symbols.Symbol, qn *ast.QualifiedName) (*s
 		if !ok {
 			return nil, false
 		}
-		cur = next
-		r.recordPart(qn, i, cur)
+		cur = r.resolvedPart(qn, i, next)
 	}
 	return cur, true
 }
