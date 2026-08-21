@@ -4279,3 +4279,56 @@ Compare `grep -c 'error:'` counts per file for the corpus files the PR claims to
 - Naming fixture attributes after keywords or inherited features wastes a cycle: `after` is a
   reserved keyword, and `done` collides with the inherited `Actions::Action::done`, which downgrades
   the run to `did not analyse cleanly; no check was made`. Pick neutral names (`next`, `flag`).
+
+## Testing behavior/expression parser fixes (F64/F66/F71-style PRs)
+
+Parser PRs that "unblock a form" are best proven with three surfaces, in this order:
+
+1. **`-validate` on minimal fixtures**, A/B against the parent binary (above). Positive fixtures must
+   go from an old parse error to `no errors`/exit 0; the PR's known-blocked fixtures must still exit 2
+   with a located `file:line:col: error:` and zero `panic`/`goroutine` lines.
+2. **The REPL for execution**, because parsing a form is not executing it. A returned usage
+   (`calc scaled { in x : Real; return attribute doubled : Real = x * 2.0; }`) is only proven by
+   `%calc Sc::scaled 21.0` printing `= 42.00`. Typed runtime errors are visible the same way, e.g.
+   `error: evaluation failed: unsupported declaration in a body expression: …` for a collection body
+   that declares a feature, and
+   `error: calc invocation failed: no result expression: …` for a returned usage with no value.
+   Always follow an error with `%eval 1 + 1` → `= 2` to show the session survived.
+3. **A whole-corpus A/B sweep** for regressions:
+
+```bash
+while IFS= read -r -d '' f; do cp "$f" /tmp/sw.sysml
+  diff <(./bin/sysml -validate /tmp/sw.sysml 2>&1; echo $?) \
+       <(/tmp/old-sysml -validate /tmp/sw.sysml 2>&1; echo $?) >/dev/null || echo "DIFF: $f"
+done < <(find examples internal/core/runtime/testdata/conformance -name '*.sysml' -print0)
+```
+
+Copy each file to a fixed path first — corpus paths contain spaces, and comparing the *output plus
+exit status* catches wording changes a count would miss.
+
+**Expect "tier unmasking" and classify it, do not report it as a regression.** Because higher
+validation tiers are skipped when a lower tier errors (see AGENTS.md §4), a parser fix makes files
+that previously died at a parse error reach name resolution, where *pre-existing* problems appear —
+so the raw `grep -c 'error:'` count can *rise* on a file the PR improved. Distinguish the two by
+reading both outputs: old = `expected ';' after return expression`, new = `unresolved reference: …`
+or `name conflict: …` at a different line is unmasking; a new *syntax* error at a line the old
+binary accepted is a real regression.
+
+**Known limitation to check for on F64-style body-declaration work:** the parser may keep the
+features a body expression declares (`ast.BodyExpr.Members`) without the resolver contributing them
+to the body's scope, so a model that *uses* the declared name still fails with
+`unresolved reference: <name>` even though it now parses. Test the using case explicitly
+(`(1..n)->forAll { in i; private attribute k = r * i; k > 0.0 }`), and don't assume a clean parse
+means the form works end to end.
+
+**Adversarial forms worth having as files** (each must exit 2, never 124, and never panic): truncated
+`return x :>` at EOF, `assume constraint c1 :`, an unclosed `[` in a returned usage multiplicity,
+EOF mid-declaration, and — for notation changes that reclassify keywords per file type — a `.kerml`
+file using the word as both a name and a modifier (`snapshot timeslice x : T;`). Verify the same
+change did *not* break the word's modifier role in `.sysml` (`snapshot start; timeslice cruise;`
+inside an `occurrence` must still validate clean).
+
+**An unclosed bracket in the REPL is not a diagnostic yet.** The prompt switches to `...>` and keeps
+buffering, so a following `%eval` is swallowed as model text. Press `ctrl+c` to flush the buffer —
+the diagnostics then print and the session stays usable. Budget for this when driving malformed
+input on camera, rather than reading it as a hang.
