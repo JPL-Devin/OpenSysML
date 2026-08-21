@@ -5,7 +5,7 @@
 //
 // It is advisory: nothing in the build or the test suite depends on it, and it
 // never touches internal/core/model/testdata/training_examples_expected.txt.
-// Provision the reference validator with scripts/download-pilot-validator.sh,
+// Provision the reference validator with scripts/download-pilot-sysml-validator.sh,
 // then run `go run ./cmd/pilot-diff`. See docs/project/pilot-differential.md.
 package main
 
@@ -22,8 +22,9 @@ import (
 )
 
 // corpusRoot is one directory of models. Each language in it is compared as its
-// own batch: every file of that language is loaded before any diagnostic is
-// read, on both sides, because corpus files import each other.
+// own single batch: every file of that language is loaded into one resource set
+// before any diagnostic is read, on both sides, because corpus files import
+// each other.
 type corpusRoot struct {
 	Name string
 	Dir  string
@@ -42,7 +43,6 @@ var defaultRoots = []corpusRoot{
 	{Name: "training", Dir: "examples/sysml-v2-training"},
 	{Name: "pilot-examples", Dir: "examples/pilot-corpora/sysml-examples"},
 	{Name: "pilot-validation", Dir: "examples/pilot-corpora/sysml-validation"},
-	// KerML is validated in one resource-set batch by the plain-Java bridge.
 	{Name: "kerml-examples", Dir: "examples/pilot-corpora/kerml-examples"},
 	{Name: "testdata", Dir: "testdata"},
 	{Name: "examples", Dir: "examples", Skip: []string{"sysml-v2-training", "pilot-corpora"}},
@@ -53,7 +53,7 @@ var defaultRoots = []corpusRoot{
 
 func main() {
 	repo := flag.String("repo", "", "repository root (default: the module root containing this command)")
-	validator := flag.String("validator", "", "pilot validator executable (default: <repo>/build/pilot-validator/validate-sysml)")
+	validator := flag.String("validator", "", "pilot SysML validator executable (default: <repo>/build/pilot-sysml-validator/validate-sysml-batch)")
 	kermlValidator := flag.String("kerml-validator", "", "KerML pilot validator executable (default: <repo>/build/pilot-kerml-validator/validate-kerml)")
 	syside := flag.String("syside", "", "optional Sensmetry SysIDE launcher for a third column (default: <repo>/build/syside/validate-syside if present)")
 	out := flag.String("out", "", "output directory for the reports (default: <repo>/build/pilot-diff)")
@@ -75,7 +75,7 @@ func run(repo, validator, kermlValidator, syside, out string, timeout time.Durat
 		}
 	}
 	if validator == "" {
-		validator = filepath.Join(repo, "build", "pilot-validator", "validate-sysml")
+		validator = filepath.Join(repo, "build", "pilot-sysml-validator", "validate-sysml-batch")
 	}
 	if kermlValidator == "" {
 		kermlValidator = filepath.Join(repo, "build", "pilot-kerml-validator", "validate-kerml")
@@ -84,7 +84,7 @@ func run(repo, validator, kermlValidator, syside, out string, timeout time.Durat
 		out = filepath.Join(repo, "build", "pilot-diff")
 	}
 	if _, err := os.Stat(validator); err != nil {
-		return fmt.Errorf("pilot validator not found at %s: run ./scripts/download-pilot-validator.sh", validator)
+		return fmt.Errorf("pilot validator not found at %s: run ./scripts/download-pilot-sysml-validator.sh", validator)
 	}
 
 	// Named explicitly: fail loudly. Defaulted: the third column is optional,
@@ -147,12 +147,7 @@ func run(repo, validator, kermlValidator, syside, out string, timeout time.Durat
 			if err != nil {
 				return err
 			}
-			var batchTheirs map[string][]diagnostic
-			if batch.Kind == source.KindKerML {
-				batchTheirs, err = kermlDiagnostics(pilot, repo, root.Dir, batch.Files, timeout)
-			} else {
-				batchTheirs, err = pilotDiagnostics(pilot, repo, root.Dir, batch.Files, timeout)
-			}
+			batchTheirs, err := pilotDiagnostics(pilot, repo, root.Dir, batch.Files, timeout)
 			if err != nil {
 				return err
 			}
