@@ -4483,3 +4483,47 @@ fixture's trigger is one the REPL can produce:
   `/tmp/pv` venv. Copies of hand-written fixtures must qualify stdlib types
   (`ScalarValues::Integer`) or add `private import ScalarValues::*;` when moved out of the
   conformance directory.
+
+## The conformance harness loads no libraries; the REPL does (wave 7D)
+
+`internal/core/runtime/testdata/conformance/*.sysml` runs with **no standard library loaded**, so a
+fixture that passes there can still fail at the CLI, where the stdlib is always present. Two defects
+of that exact shape were only visible through `bin/sysml`:
+
+- A receiving node named `receiver` made a routed `send x via p to receiver` report
+  `send receiver is unreachable`, because in the sending action's scope that name also resolves to
+  the inherited `Transfers::SendPerformance::receiver`. Renaming the node to `reader` "fixed" it —
+  that asymmetry is the tell for a name-shadowing bug, not a routing bug.
+- Any hand-written model, and any conformance fixture opened in the REPL, needs
+  `private import ScalarValues::*;` (or qualified `ScalarValues::Integer`) or the session fills with
+  unresolved-`Integer` noise that hides the result you are checking.
+
+So: for any change under `internal/core/runtime`, re-run the shipped fixture through the REPL with
+libraries loaded, and add a library-loaded unit test (`buildRuntimeWithLibraries`) beside the
+library-free one. Prefer a name a library also declares (`receiver`, `source`, `target`) when
+choosing fixture names — those are the ones that break.
+
+## Checking a mutated object is seen through *every* path that reaches it
+
+The high-value bug class for `%invoke`/calc work is a plausible wrong number, with no error. Drive
+it as a matrix, not a single call: mutate a feature through an action, then invoke calcs that reach
+it by different routes, and assert the mutated value in each.
+
+```
+%invoke bot drain                  # action assigns charge := 3
+%eval in Pkg::bot : charge         # = 3
+%invoke bot direct                 # charge + 100      -> 103
+%invoke bot anon                   # charge * 2        -> 6
+%invoke bot nested                 # anon() + 1        -> 7    (was 21: declared default)
+%invoke bot usesDirect             # direct() + 1000   -> 1103 (was 1110)
+```
+
+The two-hop rows are the ones that regress: a calc reached through a *calc invocation expression*
+took a different code path from a calc *usage* read, and only the usage shape had a unit test. Any
+"the body now sees the object" claim should be checked with at least one two-hop case per shape
+(anonymous result and named result), at the CLI, since the unit test passing proved nothing here.
+
+Bounds are worth a sweep in the same session — each of `SYSML_MAX_STEPS`, `SYSML_MAX_ACTION_STEPS`,
+`SYSML_MAX_EVENTS`, `SYSML_MAX_DO_STEPS`, `SYSML_MAX_ELEMENTS`, `SYSML_MAX_CALC_DEPTH` set to a tiny
+value must error naming that bound and return *no* result; a truncated-but-returned answer is the
+failure to look for.
