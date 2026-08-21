@@ -528,6 +528,10 @@ type FlowEnds struct {
 	// (`of name : Type`) instead of referring to an existing one. That usage is
 	// also a member of the owning flow, and Payload names it.
 	PayloadDecl *Usage
+	// PayloadMultiplicity is the multiplicity stated with a payload type that
+	// declares no feature of its own (`of Publish[1]`, `of [1] Publish`). Where
+	// the payload is a declaration the multiplicity is that usage's own.
+	PayloadMultiplicity *Multiplicity
 }
 
 // ConnectorEnd represents a single connector end with optional multiplicity.

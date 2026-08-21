@@ -932,53 +932,15 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 			return applyPrefixes(u)
 		}
 
-		// Special case: event <ref>; (shorthand event occurrence reference)
-		// If event is NOT followed by occurrence keyword or typing colon, parse as occurrence usage with reference
+		// `event m.start;` names an existing occurrence rather than declaring
+		// one, and takes a value part like any usage (SysML.xtext
+		// EventOccurrenceUsage: `'event' ( OwnedReferenceSubsetting
+		// FeatureSpecializationPart? | OccurrenceUsageKeyword UsageDeclaration? )
+		// UsageCompletion`).
 		if kw == "event" && !p.atKeyword("occurrence") && !p.at(lexer.Colon) {
-			// Parse reference target (qualified name like driver::setSpeedSent)
-			u := &ast.Usage{
-				Kind:        ast.UsageOccurrence,
-				IsEvent:     true,
-				IsAbstract:  mods.isAbstract,
-				IsReference: mods.isReference,
-				IsVariable:  mods.isVariable,
-				IsEnd:       mods.isEnd,
-				Visibility:  mods.visibility,
-				Direction:   mods.direction,
-				IsComposite: mods.isComposite,
-			}
-			u.NodeBase.NodeSpan = p.spanFrom(start)
-
-			// Parse reference target (qualified name or feature chain)
-			target := p.parseRelationshipTarget()
-			if target != nil {
-				// Add as references relationship
-				u.Relationships = append(u.Relationships, &ast.Relationship{
-					Kind:   ast.RelReferences,
-					Target: target,
-				})
-			}
-
-			// Optional multiplicity after reference
-			if p.at(lexer.LBracket) {
-				u.Multiplicity = p.parseMultiplicity()
-			}
-
-			// Optional relationships (e.g., :>> target)
-			rels := p.parseRelationships(true)
-			u.Relationships = append(u.Relationships, rels...)
-
-			// Expect semicolon or body
-			if p.accept2(lexer.Semicolon) {
-				u.HasBody = false
-			} else if p.at(lexer.LBrace) {
-				p.advance()
-				members, hasBody := p.parseDefUsageBody()
-				u.Members = members
-				u.HasBody = hasBody
-			}
-
-			u.NodeSpan = p.spanFrom(start)
+			u := p.parseReferenceMemberUsage(
+				start, ast.UsageOccurrence, kw, "occurrence", mods, p.parseDefUsageBodyMembers, true)
+			u.IsEvent = true
 			return applyPrefixes(u)
 		}
 
@@ -1559,10 +1521,18 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 			u.Multiplicity = p.parseMultiplicity()
 		}
 
-		// `binding [mult] bind [mult] src = [mult] tgt` states the connector's
-		// ends after the `bind` keyword instead of naming the connector, so the
-		// keyword is consumed rather than read as the name.
-		if p.atKeyword("bind") {
+		// The UsageDeclaration before `bind` may specialize without naming the
+		// connector: `binding : AB bind a = b;` (SysML.xtext BindingConnectorAsUsage).
+		u.Relationships = append(u.Relationships, p.parseRelationships(true)...)
+
+		// `binding { … }` states its ends as body members and so names nothing
+		// at all (KerML.xtext BindingConnectorDeclaration).
+		if p.at(lexer.LBrace) || p.at(lexer.Semicolon) {
+			// no declaration and no ends before the body
+		} else if p.atKeyword("bind") {
+			// `binding [mult] bind [mult] src = [mult] tgt` states the connector's
+			// ends after the `bind` keyword instead of naming the connector, so the
+			// keyword is consumed rather than read as the name.
 			p.advance()
 			if p.at(lexer.LBracket) {
 				p.parseMultiplicity() // end multiplicity, not the connector's
@@ -1589,14 +1559,19 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 			}
 		}
 
+		// A named declaration specializes either side of its multiplicity
+		// (FeatureSpecializationPart): `binding ab1 : AB bind a = b;`.
+		u.Relationships = append(u.Relationships, p.parseRelationships(true)...)
+
 		// Check for multiplicity after name (before "of"): name[mult] of ...
 		if p.at(lexer.LBracket) {
 			u.Multiplicity = p.parseMultiplicity()
+			u.Relationships = append(u.Relationships, p.parseRelationships(true)...)
 		}
 
 		// `binding name bind src = tgt` both names the connector and states its
-		// ends, so the keyword follows the name instead of replacing it.
-		if u.Ident.Name != "" && p.atKeyword("bind") {
+		// ends, so the keyword follows the declaration instead of replacing it.
+		if p.atKeyword("bind") {
 			p.advance()
 			if p.at(lexer.LBracket) {
 				p.parseMultiplicity() // end multiplicity, not the connector's
@@ -3502,6 +3477,18 @@ func (p *Parser) pastBracketed(from int) int {
 	return from
 }
 
+// atPayloadDeclaration reports whether the payload after `of` declares a feature
+// of its own (`of name : T`, `of name[1] : T`) rather than stating only the
+// payload's type (`of T`, `of T[1]`). The declaration form is the Payload
+// alternative carrying a PayloadFeatureSpecializationPart (SysML.xtext:1303),
+// whose multiplicity may precede the typing.
+func (p *Parser) atPayloadDeclaration() bool {
+	if !p.atName() {
+		return false
+	}
+	return p.peekN(p.pastBracketed(1)).Kind == lexer.Colon
+}
+
 // parseFlowEnds parses an optional `of <payload>` followed by either
 // `from <x> to <y>` or the shorthand `<x> to <y>`. On a malformed end it records
 // a diagnostic and keeps whatever ends were parsed so far.
@@ -3512,10 +3499,10 @@ func (p *Parser) parseFlowEnds(u *ast.Usage) {
 	if hasOf {
 		fe = &ast.FlowEnds{}
 		// Payload can be:
-		// 1. Simple reference: of Type
-		// 2. Typed declaration: of name : Type
+		// 1. Simple reference: of Type, of Type[1], of [1] Type
+		// 2. Typed declaration: of name : Type, of name[1] : Type, of name : Type[1]
 		// Check for (name + colon) pattern to distinguish
-		if p.atName() && p.peekN(1).Kind == lexer.Colon {
+		if p.atPayloadDeclaration() {
 			// Typed declaration - parse as nested member
 			// Create a usage for the payload declaration
 			payloadStart := p.peek().Span.Offset
@@ -3523,6 +3510,12 @@ func (p *Parser) parseFlowEnds(u *ast.Usage) {
 				Kind: ast.UsageAttribute, // default to attribute
 			}
 			payloadUsage.Ident = p.parseIdentification()
+
+			// A PayloadFeatureSpecializationPart takes the multiplicity on either
+			// side of the typing (SysML.xtext:1309).
+			if p.at(lexer.LBracket) {
+				payloadUsage.Multiplicity = p.parseMultiplicity()
+			}
 
 			// Parse typing relationship
 			if p.accept2(lexer.Colon) {
@@ -3533,6 +3526,9 @@ func (p *Parser) parseFlowEnds(u *ast.Usage) {
 						Target: typeName,
 					})
 				}
+			}
+			if payloadUsage.Multiplicity == nil && p.at(lexer.LBracket) {
+				payloadUsage.Multiplicity = p.parseMultiplicity()
 			}
 
 			// Parse optional value assignment: = expr
@@ -3556,9 +3552,19 @@ func (p *Parser) parseFlowEnds(u *ast.Usage) {
 			}
 			qn.NodeSpan = payloadUsage.Ident.NameSpan
 			fe.Payload = qn
+		} else if p.at(lexer.LBracket) {
+			// `of [1] Publish` — the multiplicity may precede the typing
+			// (SysML.xtext:1306).
+			fe.PayloadMultiplicity = p.parseMultiplicity()
+			fe.Payload = p.parseRelationshipTarget()
 		} else {
 			// Simple reference
 			fe.Payload = p.parseRelationshipTarget() // Allow feature chains, not just qualified names
+			// `of Publish[1]` — an OwnedFeatureTyping may be followed by an
+			// OwnedMultiplicity (SysML.xtext:1305).
+			if p.at(lexer.LBracket) {
+				fe.PayloadMultiplicity = p.parseMultiplicity()
+			}
 		}
 	}
 
