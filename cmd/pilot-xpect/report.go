@@ -22,6 +22,9 @@ type Totals struct {
 	Unlocated      int `json:"unlocated"`
 	NotAdjudicated int `json:"notAdjudicated"`
 	MissingFiles   int `json:"missingResources"`
+	// ForeignDiags counts diagnostics raised for another declared resource, not
+	// adjudicated against the file under test.
+	ForeignDiags int `json:"foreignDiagnostics"`
 }
 
 // KindTotals is one assertion kind's adjudication, with the tolerance columns
@@ -100,6 +103,7 @@ func (r *Report) summarize() {
 			for _, ignored := range file.Ignored {
 				r.Ignored = append(r.Ignored, fmt.Sprintf("%s/%s: %s", suite.Name, file.Path, ignored))
 			}
+			suite.Totals.ForeignDiags += file.Foreign
 			for _, missing := range file.Missing {
 				suite.Totals.MissingFiles++
 				r.Missing = append(r.Missing, fmt.Sprintf("%s/%s declares %s", suite.Name, file.Path, missing))
@@ -224,6 +228,7 @@ func (t *Totals) add(other Totals) {
 	t.Unlocated += other.Unlocated
 	t.NotAdjudicated += other.NotAdjudicated
 	t.MissingFiles += other.MissingFiles
+	t.ForeignDiags += other.ForeignDiags
 }
 
 func writeReports(dir string, report *Report) error {
@@ -363,6 +368,9 @@ func writeTotals(b *strings.Builder, label string, t Totals) {
 	fmt.Fprintf(b, "  %d assertion(s) declaring %d expectation(s)\n", t.Assertions, t.Rows)
 	fmt.Fprintf(b, "  agree %d | disagree %d | unlocated %d | not adjudicated %d\n",
 		t.Agree, t.Disagree, t.Unlocated, t.NotAdjudicated)
+	if t.ForeignDiags > 0 {
+		fmt.Fprintf(b, "  %d diagnostic(s) another declared resource raised, not adjudicated against the file\n", t.ForeignDiags)
+	}
 }
 
 func writeKinds(b *strings.Builder, kinds []KindTotals) {

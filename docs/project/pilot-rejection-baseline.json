@@ -4,8 +4,8 @@
   "corpus": "cmd/pilot-reject/testdata/negative",
   "totals": {
     "cases": 34,
-    "bothReject": 21,
-    "pilotOnlyRejects": 13,
+    "bothReject": 24,
+    "pilotOnlyRejects": 10,
     "oursOnlyRejects": 0,
     "bothAccept": 0
   },
@@ -29,8 +29,8 @@
     {
       "source": "xpect",
       "cases": 7,
-      "bothReject": 2,
-      "pilotOnlyRejects": 5,
+      "bothReject": 5,
+      "pilotOnlyRejects": 2,
       "oursOnlyRejects": 0,
       "bothAccept": 0
     }
@@ -297,53 +297,44 @@
       "path": "xpect/p01-public-root-import.kerml",
       "source": "xpect",
       "rule": "a root-namespace import must be private (KerML 8.2.3.5.2 validateImportTopLevelVisibility; pilot Import_RootNamspace_invalid.kerml.xt).",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 2: Top level import must be private"
-      ]
-    },
-    {
-      "path": "xpect/p02-association-end-two-types.kerml",
-      "source": "xpect",
-      "rule": "an association end must have exactly one type (KerML 8.2.4.6.2 checkAssociationEndTypes; pilot AssociationTest_EndTypes_invalid.kerml.xt).",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 7: An association end must have exactly one type"
-      ]
-    },
-    {
-      "path": "xpect/p03-variable-in-datatype.kerml",
-      "source": "xpect",
-      "rule": "a variable feature must be owned by an occurrence type (KerML 8.3.3.3 validateFeatureOwnedVariable; pilot Feature_variable_invalid.kerml.xt).",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 4: Must be owned by an occurrence type"
-      ]
-    },
-    {
-      "path": "xpect/p04-nonunique-subsets-unique.kerml",
-      "source": "xpect",
-      "rule": "a nonunique feature cannot subset a unique one (KerML 8.3.3.3 validateSubsettingUniquenessConformance; pilot Feature_nonunique_invalid.kerml.xt).",
       "bucket": "both-reject",
       "oursErrors": 1,
       "pilotErrors": 1
     },
     {
-      "path": "xpect/p05-single-chaining-feature.kerml",
+      "path": "xpect/p02-association-end-two-types.kerml",
       "source": "xpect",
-      "rule": "a feature chain needs at least two chaining features (KerML 8.3.3.3 validateFeatureChainingFeaturesNotOne; pilot FeatureChain_invalid.kerml.xt).",
+      "rule": "an association end must have exactly one type (KerML 8.2.4.6.2 checkAssociationEndTypes; pilot AssociationTest_EndTypes_invalid.kerml.xt).",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "xpect/p03-variable-in-datatype.kerml",
+      "source": "xpect",
+      "rule": "a variable feature must be owned by an occurrence type (KerML 8.3.3.3 validateFeatureOwnedVariable; pilot Feature_variable_invalid.kerml.xt).",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "xpect/p04-nonunique-subsets-unique.kerml",
+      "source": "xpect",
+      "rule": "a nonunique feature cannot subset a unique one (KerML 8.3.3.3 validateSubsettingUniquenessConformance; pilot Feature_nonunique_invalid.kerml.xt).",
       "bucket": "pilot-only-rejects",
       "oursErrors": 0,
       "pilotErrors": 1,
       "pilot": [
-        "line 6: Cannot have only one chaining feature"
+        "line 5: Subsetting/redefining feature cannot be nonunique if subsetted/redefined feature is unique"
       ]
+    },
+    {
+      "path": "xpect/p05-single-chaining-feature.kerml",
+      "source": "xpect",
+      "rule": "a feature chain needs at least two chaining features (KerML 8.3.3.3 validateFeatureChainingFeaturesNotOne; pilot FeatureChain_invalid.kerml.xt).",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "xpect/p06-private-member-reference.kerml",

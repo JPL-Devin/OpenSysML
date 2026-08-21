@@ -40,6 +40,15 @@ package test {
 }
 `
 
+// baseLib stands in for the suite's own copy of a library file a fixture
+// declares, so that a declared resource is present as it is in the download.
+const baseLib = `standard library package Base {
+	abstract classifier Anything {
+		feature self: Anything;
+	}
+}
+`
+
 const broken = `//*
 XPECT_SETUP a.B
 	ResourceSet {
@@ -55,8 +64,8 @@ package test {
 `
 
 func TestW5CCompareCleanFile(t *testing.T) {
-	dir := writeSuite(t, map[string]string{"a/clean.kerml.xt": clean})
-	res := compareOne(dir, "a/clean.kerml.xt")
+	dir := writeSuite(t, map[string]string{"a/clean.kerml.xt": clean, "library/Base.kerml": baseLib})
+	res := compareOne(dir, "a/clean.kerml.xt", newLibraryCache())
 	if len(res.Problems) != 0 || len(res.Missing) != 0 {
 		t.Fatalf("problems = %v, missing = %v", res.Problems, res.Missing)
 	}
@@ -77,7 +86,7 @@ func TestW5CCompareCleanFile(t *testing.T) {
 
 func TestW5CCompareDisagreements(t *testing.T) {
 	dir := writeSuite(t, map[string]string{"a/broken.kerml.xt": broken})
-	res := compareOne(dir, "a/broken.kerml.xt")
+	res := compareOne(dir, "a/broken.kerml.xt", newLibraryCache())
 	if len(res.Problems) != 0 {
 		t.Fatalf("problems = %v", res.Problems)
 	}
@@ -119,7 +128,7 @@ package test {
 }
 `
 	dir := writeSuite(t, map[string]string{"a/main.kerml.xt": main, "a/Dep.kerml": dep})
-	res := compareOne(dir, "a/main.kerml.xt")
+	res := compareOne(dir, "a/main.kerml.xt", newLibraryCache())
 
 	// The `File "Dep.kerml" {}` form resolves beside the .xt file, so the
 	// cross-file reference resolves; the absent one is reported, not ignored.
