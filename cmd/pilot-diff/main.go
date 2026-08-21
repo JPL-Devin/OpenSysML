@@ -55,17 +55,18 @@ func main() {
 	repo := flag.String("repo", "", "repository root (default: the module root containing this command)")
 	validator := flag.String("validator", "", "pilot validator executable (default: <repo>/build/pilot-validator/validate-sysml)")
 	kermlValidator := flag.String("kerml-validator", "", "KerML pilot validator executable (default: <repo>/build/pilot-kerml-validator/validate-kerml)")
+	syside := flag.String("syside", "", "optional Sensmetry SysIDE launcher for a third column (default: <repo>/build/syside/validate-syside if present)")
 	out := flag.String("out", "", "output directory for the reports (default: <repo>/build/pilot-diff)")
 	timeout := flag.Duration("timeout", 0, "per-batch timeout for the pilot validator (0: no limit)")
 	flag.Parse()
 
-	if err := run(*repo, *validator, *kermlValidator, *out, *timeout); err != nil {
+	if err := run(*repo, *validator, *kermlValidator, *syside, *out, *timeout); err != nil {
 		fmt.Fprintf(os.Stderr, "pilot-diff: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func run(repo, validator, kermlValidator, out string, timeout time.Duration) error {
+func run(repo, validator, kermlValidator, syside, out string, timeout time.Duration) error {
 	var err error
 	if repo == "" {
 		repo, err = moduleRoot()
@@ -86,11 +87,38 @@ func run(repo, validator, kermlValidator, out string, timeout time.Duration) err
 		return fmt.Errorf("pilot validator not found at %s: run ./scripts/download-pilot-validator.sh", validator)
 	}
 
+	// Named explicitly: fail loudly. Defaulted: the third column is optional,
+	// and its absence must leave the two-way report byte-identical.
+	requested := syside != ""
+	if !requested {
+		syside = filepath.Join(repo, "build", "syside", "validate-syside")
+	}
+	if _, err := os.Stat(syside); err != nil {
+		if requested {
+			return fmt.Errorf("SysIDE launcher not found at %s: run ./scripts/download-syside.sh", syside)
+		}
+		fmt.Fprintf(os.Stderr, "comparing against the pilot only; run ./scripts/download-syside.sh for a third column\n")
+		syside = ""
+	}
+
 	// Recorded relative to the repository where possible: the JSON is committed
 	// as a baseline, so it must not carry a machine-specific path.
 	report := &Report{Validator: relativeTo(repo, validator)}
 	if report.Pilot, err = pilotVersion(validator); err != nil {
 		return err
+	}
+	if syside != "" {
+		version, library, err := sysideRelease(syside)
+		if err != nil {
+			return err
+		}
+		report.Syside = &SysideInfo{
+			Validator: relativeTo(repo, syside),
+			Version:   version,
+			Library:   library,
+			Pilot:     report.Pilot,
+			Scope:     sysideScope,
+		}
 	}
 
 	for _, root := range defaultRoots {
@@ -135,7 +163,16 @@ func run(repo, validator, kermlValidator, out string, timeout time.Duration) err
 				theirs[rel] = diagnostics
 			}
 		}
-		report.Roots = append(report.Roots, compareRoot(root.Name, root.Dir, files, ours, theirs))
+		rootReport := compareRoot(root.Name, root.Dir, files, ours, theirs)
+		if syside != "" {
+			fmt.Fprintf(os.Stderr, "%s: %d file(s) through syside\n", root.Name, len(files))
+			third, err := sysideDiagnostics(syside, repo, root.Dir, files, timeout)
+			if err != nil {
+				return err
+			}
+			attachSyside(&rootReport, files, ours, theirs, third)
+		}
+		report.Roots = append(report.Roots, rootReport)
 	}
 
 	report.summarize()

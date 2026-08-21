@@ -60,7 +60,7 @@ func pilotDiagnostics(validator, repo, dir string, files []string, timeout time.
 			byBase[path.Base(rel)] = rel
 			args = append(args, filepath.Join(repo, dir, rel))
 		}
-		if err := runPilot(validator, args, byBase, out, timeout); err != nil {
+		if err := runPilot(validator, args, byBase, out, timeout, categorizePilot); err != nil {
 			return nil, err
 		}
 	}
@@ -81,13 +81,15 @@ func kermlDiagnostics(validator, repo, dir string, files []string, timeout time.
 	}
 
 	out := make(map[string][]diagnostic, len(files))
-	if err := runPilot(validator, args, byPath, out, timeout); err != nil {
+	if err := runPilot(validator, args, byPath, out, timeout, categorizePilot); err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func runPilot(validator string, args []string, byBase map[string]string, out map[string][]diagnostic, timeout time.Duration) error {
+// runPilot reads GNU-format diagnostics from a validator's stderr. categorize
+// is the mapping for that validator's diagnostic vocabulary.
+func runPilot(validator string, args []string, byBase map[string]string, out map[string][]diagnostic, timeout time.Duration, categorize func(string) Category) error {
 	ctx := context.Background()
 	if timeout > 0 {
 		var cancel context.CancelFunc
@@ -130,7 +132,7 @@ func runPilot(validator string, args []string, byBase map[string]string, out map
 			File:     rel,
 			Line:     lineNo,
 			Severity: match[4],
-			Category: categorizePilot(match[5]),
+			Category: categorize(match[5]),
 			Message:  match[5],
 		})
 	}

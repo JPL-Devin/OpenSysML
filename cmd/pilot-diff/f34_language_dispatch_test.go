@@ -18,7 +18,7 @@ func TestRunDispatchesBothLanguagesInOneRoot(t *testing.T) {
 	validator, kermlValidator := writeMixedRoot(t, repo, sysmlLog, kermlLog)
 
 	out := filepath.Join(repo, "out")
-	if err := run(repo, validator, kermlValidator, out, 0); err != nil {
+	if err := run(repo, validator, kermlValidator, "", out, 0); err != nil {
 		t.Fatal(err)
 	}
 
@@ -64,7 +64,7 @@ func TestRunReportsTheMissingKerMLValidator(t *testing.T) {
 	repo := t.TempDir()
 	validator, _ := writeMixedRoot(t, repo, filepath.Join(repo, "sysml-args.txt"), filepath.Join(repo, "kerml-args.txt"))
 
-	err := run(repo, validator, filepath.Join(repo, "absent", "validate-kerml"), filepath.Join(repo, "out"), 0)
+	err := run(repo, validator, filepath.Join(repo, "absent", "validate-kerml"), "", filepath.Join(repo, "out"), 0)
 	if err == nil || !strings.Contains(err.Error(), "download-pilot-kerml-validator.sh") {
 		t.Fatalf("run() error = %v", err)
 	}
