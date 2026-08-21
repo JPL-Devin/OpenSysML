@@ -576,7 +576,19 @@ func (ec *exprChecker) inferInvocation(scope *symbols.Scope, e *ast.InvocationEx
 		return semantics.PrimUnknown
 	}
 	sym = resolved
-	if !isBehaviorKind(sym.Kind) {
+	if !ec.isInvocationBehavior(sym, map[*symbols.Symbol]bool{}) {
+		if ec.isDefinitelyNonBehavior(sym) {
+			ec.diags = append(ec.diags, Diagnostic{
+				Severity: SeverityError,
+				Span:     e.Type.Span(),
+				Message:  "an invocation target must be a behavior or a behavioral feature",
+				Code:     "invocation-not-behavior",
+				Source:   "type",
+			})
+		}
+		return semantics.PrimUnknown
+	}
+	if isInvocationBehaviorKind(sym.Kind) && !isBehaviorKind(sym.Kind) {
 		return semantics.PrimUnknown
 	}
 	params, ok := ec.effectiveInParameters(sym)
@@ -641,14 +653,106 @@ func (ec *exprChecker) checkArguments(
 	}
 }
 
-// isBehaviorKind reports whether a symbol is a calc or action, the invocable
-// kinds whose parameter lists the checker understands.
+// isBehaviorKind reports the behavior kinds whose parameter lists are checked.
 func isBehaviorKind(k symbols.SymbolKind) bool {
 	switch k {
-	case symbols.SymbolCalcDef, symbols.SymbolCalcUsage, symbols.SymbolActionDef, symbols.SymbolActionUsage:
+	case symbols.SymbolCalcDef, symbols.SymbolCalcUsage,
+		symbols.SymbolActionDef, symbols.SymbolActionUsage:
 		return true
 	}
 	return false
+}
+
+func isInvocationBehaviorKind(k symbols.SymbolKind) bool {
+	switch k {
+	case symbols.SymbolCalcDef, symbols.SymbolCalcUsage,
+		symbols.SymbolActionDef, symbols.SymbolActionUsage,
+		symbols.SymbolConstraintDef, symbols.SymbolConstraintUsage,
+		symbols.SymbolStateDef, symbols.SymbolStateUsage:
+		return true
+	}
+	return false
+}
+
+func (ec *exprChecker) isInvocationBehavior(sym *symbols.Symbol, visiting map[*symbols.Symbol]bool) bool {
+	if sym == nil || visiting[sym] {
+		return false
+	}
+	if isInvocationBehaviorKind(sym.Kind) || isBehaviorDeclaration(sym.Decl) {
+		return true
+	}
+	if sym.Decl == nil {
+		return false
+	}
+	visiting[sym] = true
+	defer delete(visiting, sym)
+
+	typed := make([]*symbols.Symbol, 0, 1)
+	for _, rel := range semantics.RelationshipsOf(sym) {
+		if rel == nil || rel.Kind != ast.RelTyping || rel.Target == nil {
+			continue
+		}
+		target, ok := ec.resolver.ResolveTarget(sym.OwnerScope, rel.Target)
+		if !ok || target == nil {
+			return false
+		}
+		typed = append(typed, target)
+	}
+	if len(typed) != 1 {
+		return false
+	}
+	return ec.isInvocationBehavior(typed[0], visiting)
+}
+
+func isBehaviorDeclaration(decl ast.Node) bool {
+	switch d := decl.(type) {
+	case *ast.Definition:
+		return d.Kind == ast.DefBehavior || d.Kind == ast.DefState ||
+			d.Kind == ast.DefPredicate || d.Kind == ast.DefConstraint
+	case *ast.Usage:
+		switch d.Kind {
+		case ast.UsageBehavior, ast.UsageState, ast.UsagePredicate,
+			ast.UsageExpr, ast.UsageConstraint:
+			return true
+		}
+	}
+	return false
+}
+
+func (ec *exprChecker) isDefinitelyNonBehavior(sym *symbols.Symbol) bool {
+	if sym == nil {
+		return false
+	}
+	if isInvocationBehaviorKind(sym.Kind) || isBehaviorDeclaration(sym.Decl) {
+		return false
+	}
+	if isRequirementDeclaration(sym.Decl) {
+		return false
+	}
+	if sym.Decl != nil {
+		switch sym.Decl.(type) {
+		case *ast.Definition, *ast.Usage:
+			return true
+		}
+	}
+	switch sym.Kind {
+	case symbols.SymbolUnknown, symbols.SymbolKerMLType,
+		symbols.SymbolRequirementDef, symbols.SymbolRequirementUsage:
+		return false
+	default:
+		return true
+	}
+}
+
+func isRequirementDeclaration(decl ast.Node) bool {
+	switch d := decl.(type) {
+	case *ast.Definition:
+		return d.Kind == ast.DefRequirement
+	case *ast.Usage:
+		return d.Kind == ast.UsageRequirement
+	default:
+		return false
+	}
 }
 
 // parameter is one `in` parameter of an invoked behavior together with the

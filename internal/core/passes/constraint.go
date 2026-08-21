@@ -82,11 +82,40 @@ func (cc *constraintChecker) check(sym *symbols.Symbol) {
 	cc.checkSubsettingMultiplicity(sym)
 	cc.checkConnectorEnds(sym)
 	cc.checkConnectorEndRedefinition(sym)
+	cc.checkFlowEndSubsetting(sym)
 	cc.checkInterfaceEndConjugation(sym)
 	cc.checkRedefinition(sym)
 	cc.checkUnnamedRedefinitionValue(sym)
 	cc.checkVariantOutsideVariation(sym)
 	cc.checkViewSatisfyTarget(sym)
+}
+
+// checkFlowEndSubsetting requires each declared flow end to name a payload
+// feature of its participant with dot notation.
+func (cc *constraintChecker) checkFlowEndSubsetting(sym *symbols.Symbol) {
+	for _, attachment := range cc.model.FlowEndAttachments(sym) {
+		if attachment.Attachment == nil {
+			continue
+		}
+		if _, ok := cc.resolver.ResolveTarget(sym.OwnerScope, attachment.Attachment); !ok {
+			continue
+		}
+		target := attachment.Attachment
+		if ref, ok := target.(*ast.FeatureReference); ok {
+			target = ref.Name
+		}
+		qn, ok := target.(*ast.QualifiedName)
+		if !ok || qn == nil || len(qn.Parts) != 1 {
+			continue
+		}
+		cc.diags = append(cc.diags, Diagnostic{
+			Severity: SeverityError,
+			Span:     attachment.Attachment.Span(),
+			Message:  "a flow end must name the feature the payload flows from or to using dot notation",
+			Code:     "flow-end-subsetting",
+			Source:   "constraint",
+		})
+	}
 }
 
 // checkViewSatisfyTarget flags a `satisfy` claiming a view's conformance to a

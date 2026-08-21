@@ -35,8 +35,7 @@ func TestRequirementParameterBinding(t *testing.T) {
 		t.Logf("  %v", d)
 	}
 
-	// Should have 0 diagnostics - vehicle should resolve in requirement constraint
-	if len(diags) > 0 {
-		t.Errorf("Expected 0 diagnostics, got %d", len(diags))
+	if len(diags) != 1 || diags[0].Code != "invocation-not-behavior" {
+		t.Errorf("Expected one invocation-not-behavior diagnostic, got %v", diags)
 	}
 }

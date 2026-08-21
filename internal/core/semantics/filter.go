@@ -146,6 +146,9 @@ func (m *Model) CompileElementFilter(f symbols.ElementFilter) *symbols.FilterPre
 func (m *Model) compileCondition(scope *symbols.Scope, n ast.Node) *symbols.FilterPredicate {
 	switch e := n.(type) {
 	case *ast.OperatorExpr:
+		if v, ok := evalConst(n); ok {
+			return &symbols.FilterPredicate{Op: symbols.FilterConst, Value: constValue(v), Span: spanOf(n)}
+		}
 		return m.compileOperator(scope, e)
 	case *ast.FeatureChainExpr:
 		return m.compileFeatureChain(scope, e)
@@ -296,7 +299,7 @@ func (m *Model) compileFeatureChain(scope *symbols.Scope, e *ast.FeatureChainExp
 			return &symbols.FilterPredicate{Op: symbols.FilterFeature, TypeFQN: typeFQN, Feature: feature, Span: span}
 		}
 	}
-	return unsupported(span, "a filter condition reads a feature of an annotation of the filtered element, as in `(as Safety).isMandatory`")
+	return unsupported(span, "a filter condition reads a feature through a chain of features, which OpenSysML does not evaluate (known limitation: the reference accepts chains rooted in a feature with no featuring type)")
 }
 
 // compileReference compiles a name a filter condition uses as a value: a feature
@@ -323,6 +326,14 @@ func (m *Model) compileReference(scope *symbols.Scope, qn *ast.QualifiedName, sp
 			Span:    span,
 		}
 	}
+	if owner := m.ownerOf(sym); isFeaturingType(owner) {
+		typeFQN := m.fqnOf(owner)
+		if typeFQN != "" {
+			return unsupported(span, fmt.Sprintf(
+				"%s is featured within type %s and is not model-level evaluable",
+				qnText(qn), typeFQN))
+		}
+	}
 	fqn := m.fqnOf(sym)
 	if fqn == "" {
 		return unsupported(span, fmt.Sprintf("%s has no qualified name to compare", qnText(qn)))
@@ -332,6 +343,40 @@ func (m *Model) compileReference(scope *symbols.Scope, qn *ast.QualifiedName, sp
 		Value: symbols.FilterValue{Kind: symbols.FilterValueRef, RefFQN: fqn},
 		Span:  span,
 	}
+}
+
+func isFeaturingType(sym *symbols.Symbol) bool {
+	if sym == nil {
+		return false
+	}
+	switch sym.Kind {
+	case symbols.SymbolPartDef, symbols.SymbolAttributeDef,
+		symbols.SymbolItemDef, symbols.SymbolOccurrenceDef,
+		symbols.SymbolIndividualDef, symbols.SymbolViewDef,
+		symbols.SymbolViewpointDef, symbols.SymbolRenderingDef,
+		symbols.SymbolConcernDef, symbols.SymbolConnectionDef,
+		symbols.SymbolFlowDef, symbols.SymbolPortDef,
+		symbols.SymbolInterfaceDef, symbols.SymbolAllocationDef,
+		symbols.SymbolActionDef, symbols.SymbolStateDef,
+		symbols.SymbolCalcDef, symbols.SymbolConstraintDef,
+		symbols.SymbolRequirementDef, symbols.SymbolCaseDef,
+		symbols.SymbolAnalysisCaseDef, symbols.SymbolVerificationCaseDef,
+		symbols.SymbolUseCaseDef, symbols.SymbolPartUsage,
+		symbols.SymbolAttributeUsage, symbols.SymbolItemUsage,
+		symbols.SymbolOccurrenceUsage, symbols.SymbolIndividualUsage,
+		symbols.SymbolMetadataUsage, symbols.SymbolViewUsage,
+		symbols.SymbolViewpointUsage, symbols.SymbolRenderingUsage,
+		symbols.SymbolConcernUsage, symbols.SymbolConnectionUsage,
+		symbols.SymbolFlowUsage, symbols.SymbolPortUsage,
+		symbols.SymbolInterfaceUsage, symbols.SymbolAllocationUsage,
+		symbols.SymbolActionUsage, symbols.SymbolStateUsage,
+		symbols.SymbolCalcUsage, symbols.SymbolConstraintUsage,
+		symbols.SymbolRequirementUsage, symbols.SymbolCaseUsage,
+		symbols.SymbolAnalysisCaseUsage, symbols.SymbolVerificationCaseUsage,
+		symbols.SymbolUseCaseUsage:
+		return true
+	}
+	return false
 }
 
 // evalPredicate runs a compiled condition against one candidate element.

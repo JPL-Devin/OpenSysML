@@ -334,6 +334,27 @@ func (m *Model) ConnectorEndAttachments(sym *symbols.Symbol) []ConnectorEndAttac
 	return out
 }
 
+// FlowEndAttachment is one declared from/to target of a flow usage.
+type FlowEndAttachment struct {
+	Attachment ast.Node
+}
+
+// FlowEndAttachments returns the declared from/to targets of a flow usage.
+func (m *Model) FlowEndAttachments(sym *symbols.Symbol) []FlowEndAttachment {
+	usage, ok := sym.Decl.(*ast.Usage)
+	if !ok || usage.Kind != ast.UsageFlow || usage.Keyword == "message" || usage.FlowEnds == nil {
+		return nil
+	}
+	out := make([]FlowEndAttachment, 0, 2)
+	for _, target := range []ast.Node{usage.FlowEnds.From, usage.FlowEnds.To} {
+		if target == nil {
+			continue
+		}
+		out = append(out, FlowEndAttachment{Attachment: target})
+	}
+	return out
+}
+
 // generalConnectorEnds returns the effective ends of the connector sym
 // specializes, which its own ends redefine by position. As with parameters,
 // only a single general connector may supply them, and a general whose ends are
