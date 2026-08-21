@@ -243,7 +243,9 @@ func (tc *typeChecker) checkRelationships(scope *symbols.Scope, rels []*ast.Rela
 			continue
 		}
 		tc.checkTypeTarget(scope, rel.Target, rel.Kind, decl)
-		if rel.Conjugated {
+		// Only a conjugated *typing* is a ConjugatedPortTyping (SysML.xtext:974); a
+		// KerML Conjugation relates any two Types (KerML §7.4) and demands no port.
+		if rel.Conjugated && rel.Kind == ast.RelTyping {
 			tc.checkConjugatedTyping(scope, rel, decl)
 		}
 	}
@@ -288,8 +290,9 @@ func (tc *typeChecker) checkTypeTarget(scope *symbols.Scope, target ast.Node, re
 	}
 }
 
-// checkConjugatedTyping checks a `~T` typing: conjugation names the conjugated
-// port definition of a port definition, so T must be one (SysML v2 §7.12.3).
+// checkConjugatedTyping checks a `~T` typing: a ConjugatedPortTyping names the
+// conjugated port definition of a port definition, so T must be one (SysML v2
+// §7.12.3). A KerML declaration conjugation is a Conjugation, not a typing.
 func (tc *typeChecker) checkConjugatedTyping(scope *symbols.Scope, rel *ast.Relationship, decl declKind) {
 	target := rel.Target
 	if fr, ok := target.(*ast.FeatureReference); ok {

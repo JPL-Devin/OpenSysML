@@ -5,6 +5,19 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
+// AliasedElement is the element a name bound to sym reaches: an alias names an
+// existing element rather than being one (KerML 8.2.3.2). An alias whose target
+// is unresolvable stays itself, so its own diagnostic still fires.
+func (r *Resolver) AliasedElement(sym *symbols.Symbol) *symbols.Symbol {
+	if sym == nil || sym.Kind != symbols.SymbolAlias {
+		return sym
+	}
+	if target, ok := r.ResolveAliasTarget(sym); ok && target != nil {
+		return target
+	}
+	return sym
+}
+
 // ResolveAliasTarget follows an alias symbol to its ultimate non-alias target.
 // Non-alias symbols resolve to themselves. Cycles yield (nil, false).
 func (r *Resolver) ResolveAliasTarget(sym *symbols.Symbol) (*symbols.Symbol, bool) {
