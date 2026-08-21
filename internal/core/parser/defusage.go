@@ -170,6 +170,7 @@ var featureModifierKeywords = map[string]bool{
 	"ref":        true,
 	"end":        true,
 	"constant":   true,
+	"const":      true, // KerML spelling (KerML.xtext BasicFeaturePrefix)
 	"event":      true, // event-driven occurrence modifier
 	"individual": true, // individual occurrence/part modifier
 	"snapshot":   true, // snapshot occurrence/part modifier
@@ -329,7 +330,7 @@ func (p *Parser) atVarPrefix() bool {
 		return false
 	}
 	next := p.peekN(1)
-	return isKindKeyword(next) ||
+	return p.isKindKeyword(next) ||
 		(next.Kind == lexer.Keyword && featureModifierKeywords[next.KeywordID])
 }
 
@@ -341,7 +342,7 @@ func (p *Parser) atVarDeclaration() bool {
 		return false
 	}
 	next := p.peekN(1).Kind
-	return isKindKeyword(p.peekN(1)) || next == lexer.Identifier || next == lexer.UnrestrictedName
+	return p.isKindKeyword(p.peekN(1)) || next == lexer.Identifier || next == lexer.UnrestrictedName
 }
 
 // kindPrefixWord returns the word at the cursor that may qualify a following
@@ -374,7 +375,7 @@ func (p *Parser) atKindPrefix() bool {
 		featureModifierKeywords[p.peekN(1).KeywordID] {
 		return true
 	}
-	if !isKindKeyword(p.peekN(1)) {
+	if !p.isKindKeyword(p.peekN(1)) {
 		return false
 	}
 	return kindPrefixKeywords[kw] || !namesDeclaration(p.peekN(2))
@@ -384,7 +385,7 @@ func (p *Parser) atKindPrefix() bool {
 // of the declaration whose first kind keyword was already consumed, rather than
 // being that declaration's name.
 func (p *Parser) atSecondaryKind(firstKeyword string) bool {
-	if notKindPrefixKeywords[firstKeyword] || !isKindKeyword(p.peek()) {
+	if notKindPrefixKeywords[firstKeyword] || !p.isKindKeyword(p.peek()) {
 		return false
 	}
 	if compoundDefKinds[[2]string{firstKeyword, p.peek().KeywordID}] || kindPrefixKeywords[firstKeyword] {
@@ -401,17 +402,17 @@ func (p *Parser) atPortionedKind() bool {
 	if !p.at(lexer.Keyword) {
 		return false
 	}
-	_, ok := usageKindKeywords[p.peek().KeywordID]
+	_, ok := p.usageKind(p.peek().KeywordID)
 	return ok
 }
 
 // isKindKeyword reports whether the token is a def or usage kind keyword.
-func isKindKeyword(t lexer.Token) bool {
+func (p *Parser) isKindKeyword(t lexer.Token) bool {
 	if t.Kind != lexer.Keyword {
 		return false
 	}
-	_, isDef := definitionKindKeywords[t.KeywordID]
-	_, isUsage := usageKindKeywords[t.KeywordID]
+	_, isDef := p.definitionKind(t.KeywordID)
+	_, isUsage := p.usageKind(t.KeywordID)
 	return isDef || isUsage
 }
 
@@ -419,7 +420,7 @@ func isKindKeyword(t lexer.Token) bool {
 // of the declaration rather than as its name: `frame` and `render` name the
 // declaration unless they introduce their member form.
 func (p *Parser) declarationKindKeyword(t lexer.Token) bool {
-	if !isKindKeyword(t) {
+	if !p.isKindKeyword(t) {
 		return false
 	}
 	if kw := t.KeywordID; kw == "frame" || kw == "render" {
@@ -456,7 +457,7 @@ func (p *Parser) atFeatureSpecialization() bool {
 		switch t.KeywordID {
 		case "subsets", "references", "crosses", "redefines":
 			return true
-		case "defined":
+		case "defined", "typed":
 			n := p.peekN(1)
 			return n.Kind == lexer.Keyword && n.KeywordID == "by"
 		}
@@ -478,17 +479,48 @@ func beginsDeclarationTail(t, t2 lexer.Token) bool {
 		switch t.KeywordID {
 		case "subsets", "references", "crosses", "redefines":
 			return true
-		case "defined":
+		case "defined", "typed":
 			return t2.Kind == lexer.Keyword && t2.KeywordID == "by"
 		}
 	}
 	return false
 }
 
-// atKeywordlessUsage reports whether a name begins a usage declared with no
-// kind keyword at all (SysML.xtext DefaultReferenceUsage).
-func (p *Parser) atKeywordlessUsage() bool {
-	return p.atName() && beginsDeclarationTail(p.peekN(1), p.peekN(2))
+// keywordlessFeatureAt reports whether the tokens from offset off declare a
+// feature with no kind keyword (KerML.xtext Feature over BasicFeaturePrefix
+// FeatureDeclaration): a name followed by a specialization, a multiplicity, a
+// body, or nothing at all.
+func (p *Parser) keywordlessFeatureAt(off int) bool {
+	t := p.peekN(off)
+	if t.Kind != lexer.Identifier && t.Kind != lexer.UnrestrictedName {
+		return false
+	}
+	// KerML reserves `var`, so it prefixes a declaration and never names one.
+	if t.Kind == lexer.Identifier && p.src.Kind() == source.KindKerML &&
+		p.src.Text(t.Span) == varPrefixWord {
+		return false
+	}
+	switch next := p.peekN(off + 1); next.Kind {
+	case lexer.LBracket, lexer.Semicolon, lexer.LBrace:
+		return true
+	default:
+		return beginsDeclarationTail(next, p.peekN(off+2))
+	}
+}
+
+// atKeywordlessFeature reports whether the cursor is at such a feature, either
+// directly or behind a `var` prefix (`var p : Real;`).
+func (p *Parser) atKeywordlessFeature() bool {
+	if p.atVarPrefixedFeature() {
+		return true
+	}
+	return p.keywordlessFeatureAt(0)
+}
+
+// atVarPrefixedFeature reports whether `var` prefixes a keyword-less feature
+// rather than naming one. `var` is a prefix only in KerML (KerML.xtext:520).
+func (p *Parser) atVarPrefixedFeature() bool {
+	return p.src.Kind() == source.KindKerML && p.atVarWord() && p.keywordlessFeatureAt(1)
 }
 
 // atTextualRepresentationStart matches the KerML TextualRepresentation head
@@ -514,6 +546,9 @@ func (p *Parser) atDefUsageStart() bool {
 	if p.atTextualRepresentationStart() {
 		return true
 	}
+	if p.atVarPrefixedFeature() {
+		return true
+	}
 	if t.Kind != lexer.Keyword {
 		return false
 	}
@@ -528,8 +563,8 @@ func (p *Parser) atDefUsageStart() bool {
 	if t.KeywordID == "connect" {
 		return true
 	}
-	_, isDef := definitionKindKeywords[t.KeywordID]
-	_, isUsage := usageKindKeywords[t.KeywordID]
+	_, isDef := p.definitionKind(t.KeywordID)
+	_, isUsage := p.usageKind(t.KeywordID)
 	return isDef || isUsage
 }
 
@@ -544,10 +579,10 @@ func (p *Parser) atUseCase() bool {
 }
 
 // isModifierOrKindKeyword checks if keyword is a modifier or def/usage kind keyword
-func isModifierOrKindKeyword(kw string) bool {
+func (p *Parser) isModifierOrKindKeyword(kw string) bool {
 	_, isMod := featureModifierKeywords[kw]
-	_, isDef := definitionKindKeywords[kw]
-	_, isUsage := usageKindKeywords[kw]
+	_, isDef := p.definitionKind(kw)
+	_, isUsage := p.usageKind(kw)
 	return isMod || isDef || isUsage
 }
 
@@ -570,8 +605,9 @@ func (p *Parser) parseFeatureModifiers() featureMods {
 		}
 		if t.Kind == lexer.Identifier && p.src.Text(t.Span) == varPrefixWord {
 			next := p.peekN(1)
-			isModifier := isKindKeyword(next) ||
-				(next.Kind == lexer.Keyword && featureModifierKeywords[next.KeywordID])
+			isModifier := p.isKindKeyword(next) ||
+				(next.Kind == lexer.Keyword && featureModifierKeywords[next.KeywordID]) ||
+				p.atVarPrefixedFeature()
 			if isModifier {
 				m.isVariable = true
 				m.prefixKeyword = varPrefixWord
@@ -599,13 +635,13 @@ func (p *Parser) parseFeatureModifiers() featureMods {
 				m.earlyMultiplicity = p.parseMultiplicity()
 			}
 			continue
-		case "constant":
+		case "constant", "const":
 			m.isConstant = true
 		case "event":
 			// Check if standalone usage: event <name>; (no typing/body)
 			// If followed by identifier/qualified name (not keyword), it's usage keyword
 			nextTok := p.peekN(1)
-			if nextTok.Kind == lexer.Identifier || (nextTok.Kind == lexer.Keyword && !isModifierOrKindKeyword(nextTok.KeywordID)) {
+			if nextTok.Kind == lexer.Identifier || (nextTok.Kind == lexer.Keyword && !p.isModifierOrKindKeyword(nextTok.KeywordID)) {
 				// Treat as usage keyword, stop consuming modifiers
 				return m
 			}
@@ -860,7 +896,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 				start, ast.UsageState, kw, "state", mods, p.parseStateBody, false))
 		}
 		if kw == "bind" {
-			u := p.parseUsage(start, usageKindKeywords[kw], kw, mods, isAll)
+			u := p.parseUsage(start, p.usageKindOf(kw), kw, mods, isAll)
 			return applyPrefixes(normalizeAnonymousBindingEnd(u))
 		}
 
@@ -878,9 +914,9 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 				declKeyword, noun, body = "concern", "concern", p.parseRequirementBody
 			}
 			if p.acceptKeyword(declKeyword) {
-				return applyPrefixes(p.parseUsage(start, usageKindKeywords[kw], kw, mods, isAll))
+				return applyPrefixes(p.parseUsage(start, p.usageKindOf(kw), kw, mods, isAll))
 			}
-			return applyPrefixes(p.parseReferenceMemberUsage(start, usageKindKeywords[kw], kw, noun, mods, body, false))
+			return applyPrefixes(p.parseReferenceMemberUsage(start, p.usageKindOf(kw), kw, noun, mods, body, false))
 		}
 
 		// `exhibit state modes { … }` and `exhibit state modes : Modes;` state
@@ -1008,13 +1044,13 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		// declaration the prefix qualifies (Invariant::isNegated), so the `not`
 		// belongs to it rather than to an expression. It is only a negation when a
 		// kind keyword follows: `assert not (x > 1);` negates an expression.
-		if kindPrefixKeywords[kw] && p.atKeyword("not") && isKindKeyword(p.peekN(1)) {
+		if kindPrefixKeywords[kw] && p.atKeyword("not") && p.isKindKeyword(p.peekN(1)) {
 			mods.isNegated = true
 			p.advance()
 		}
 
 		kindKeyword := kw
-		if isKindKeyword(p.peek()) &&
+		if p.isKindKeyword(p.peek()) &&
 			(kindPrefixKeywords[kw] || (kw == "variant" && !namesDeclaration(p.peekN(1)))) {
 			kindKeyword = p.peek().KeywordID
 			// `variant` is a modifier of the declaration it prefixes, recorded
@@ -1024,7 +1060,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 			}
 			p.advance()
 		}
-		return applyPrefixes(p.parseUsage(start, usageKindKeywords[kindKeyword], kindKeyword, mods, isAll))
+		return applyPrefixes(p.parseUsage(start, p.usageKindOf(kindKeyword), kindKeyword, mods, isAll))
 	}
 
 	// Special case: if current token is 'def' (after prefixes/modifiers), parse as generic definition
@@ -1035,7 +1071,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		return applyPrefixes(p.parseDefinition(start, ast.DefClass, "", mods, false, true))
 	}
 
-	defKind, ok := definitionKindKeywords[kw]
+	defKind, ok := p.definitionKind(kw)
 	if !ok {
 		// Fallback: if we have modifiers but no kind keyword, assume it's a generic usage (e.g., "in x: Integer;")
 		// This is common for parameters in calc/action bodies.
@@ -1052,7 +1088,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		hasNameWithMultOrMods := p.atNameOrKeyword() && (p.peekN(1).Kind == lexer.LBracket || p.peekN(1).Kind == lexer.Colon || isPostModifierKeyword(p.peekN(1)))
 		// A DefaultReferenceUsage needs no keyword at all (SysML.xtext:632):
 		// `T1 = 10.0;`, `distancePerVolume :> scalarQuantities = d / v;`.
-		keywordlessDecl := p.atKeywordlessUsage()
+		keywordlessDecl := p.atKeywordlessFeature()
 		// SysML v2 §7.27.4: a user-defined keyword may declare a usage without
 		// any language-defined keyword (`#cause 'battery old' { ... }`). The
 		// kind of such a usage comes from the metadata, not the syntax.
@@ -1090,7 +1126,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 	kindKeyword := kw
 	if p.atSecondaryKind(kw) {
 		kindKeyword = p.peek().KeywordID
-		defKind = definitionKindKeywords[kindKeyword]
+		defKind = p.definitionKindOf(kindKeyword)
 		p.advance() // consume secondary keyword
 	}
 
@@ -1102,7 +1138,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 	// Check if this is a definition-only keyword (not in usageKindKeywords)
 	// Examples: metaclass, struct, class, predicate, bool
 	// These keywords don't require "def" suffix and can't be used as usages
-	_, hasUsageForm := usageKindKeywords[kw]
+	_, hasUsageForm := p.usageKind(kw)
 	if !hasUsageForm {
 		// Definition-only keyword - parse as definition directly
 		return applyPrefixes(p.parseDefinition(start, defKind, kindKeyword, mods, isAll, false))
@@ -1116,7 +1152,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 	// A secondary keyword refines a definition's kind (`individual item def`),
 	// but a usage keeps the kind of the first keyword (`item part Shape` is an
 	// item usage), so the keyword recorded here is that first one.
-	return applyPrefixes(p.parseUsage(start, usageKindKeywords[kw], kw, mods, isAll))
+	return applyPrefixes(p.parseUsage(start, p.usageKindOf(kw), kw, mods, isAll))
 }
 
 // parseDefinition parses a definition. keyword is the kind keyword as consumed
@@ -1224,7 +1260,7 @@ func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, keyword str
 // ClassifierDeclaration (and the shared TypeDeclaration) multiplicity slot.
 func isKerMLClassifierDefinitionKeyword(keyword string) bool {
 	switch keyword {
-	case "classifier", "class", "datatype", "struct", "assoc", "behavior",
+	case "type", "classifier", "class", "datatype", "struct", "assoc", "behavior",
 		"function", "predicate", "interaction", "metaclass":
 		return true
 	default:
@@ -1592,6 +1628,9 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		}
 
 		// Check for "of" keyword (binding name of [mult] target = value)
+		// In KerML, `of x = y` states both ends (KerML.xtext:875); SysML spells
+		// that form `bind` and keeps `=` as a value.
+		sawOf := p.atKeyword("of") && p.src.Kind() == source.KindKerML
 		if p.acceptKeyword("of") {
 			// Parse source multiplicity and target
 			if p.at(lexer.LBracket) {
@@ -1608,13 +1647,26 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 			}
 		}
 
+		// A KerML binding has no feature value, so `x = y` states its two ends and
+		// what looked like the name is the first (KerML.xtext:879).
+		endsOnly := sawOf || (p.src.Kind() == source.KindKerML && p.at(lexer.Eq))
+		if endsOnly && u.Ident.Name != "" && !hasBindingEnd(u) {
+			u = normalizeAnonymousBindingEnd(u)
+		}
+
 		// Parse value: = [mult] expr
 		if p.accept2(lexer.Eq) {
 			// Optional multiplicity before value expression
 			if p.at(lexer.LBracket) {
 				p.parseMultiplicity() // consume multiplicity prefix in value
 			}
-			u.Value = p.ParseExpression()
+			if endsOnly {
+				if target := p.parseRelationshipTarget(); target != nil {
+					u.Relationships = append(u.Relationships, bindingEnd(target))
+				}
+			} else {
+				u.Value = p.ParseExpression()
+			}
 		}
 
 		// Parse body or semicolon
@@ -1653,7 +1705,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 	skipIdentification := (kind == ast.UsageFlow && (p.atFlowShorthand() || p.atKeyword("from"))) ||
 		(kind == ast.UsageSuccession && isAnonymous) ||
 		(kind == ast.UsageAllocation && p.atAllocateShorthand()) ||
-		(kind == ast.UsageConnector && p.atKeyword("from")) ||
+		(kind == ast.UsageConnector && (p.atKeyword("from") || p.atConnectorChainFirstEnd())) ||
 		((kind == ast.UsageConnection || kind == ast.UsageInterface) &&
 			(keyword == "connect" || p.atConnectorShorthandEnds()))
 	if !skipIdentification {
@@ -1697,6 +1749,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 	// Parse additional relationships after modifiers (e.g., :> target)
 	postRels := p.parseRelationships(true)
 	u.Relationships = append(u.Relationships, postRels...)
+	p.checkTypeDeclarationSpecialization(u, keyword)
 
 	if p.acceptValueOperator() {
 		u.Value = p.ParseExpression()
@@ -1761,6 +1814,15 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 			hasBody = false
 		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
 			members = p.parseCalcBody()
+			hasBody = true
+		}
+	case ast.UsageExpr:
+		// An expression's body is members ending in the expression it computes
+		// (KerML.xtext Expression): `expr e1 {v > 3}`.
+		if p.accept2(lexer.Semicolon) {
+			hasBody = false
+		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
+			members = p.parseCaseBody()
 			hasBody = true
 		}
 	case ast.UsageBool:
@@ -2178,6 +2240,9 @@ func (p *Parser) parseBodyMember() ast.Node {
 	if p.atKeyword("disjoint") {
 		return p.parseDisjointMember(start, vis, trivia)
 	}
+	if p.atRelationshipMember() {
+		return p.parseRelationshipMember(start, vis, trivia)
+	}
 	if p.atKeyword("subset") {
 		p.advance() // skip "subset" or "disjoint"
 
@@ -2327,7 +2392,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 			var hasDefKeyword bool
 			var endRels []*ast.Relationship // relationships parsed before definition keyword
 
-			if isKindKeyword(p.peek()) {
+			if p.isKindKeyword(p.peek()) {
 				// `end [1] part bead : TireBead` — the kind keyword follows the
 				// modifiers directly, so there is no short name, and the
 				// multiplicity was already taken as an early one.
@@ -2363,6 +2428,9 @@ func (p *Parser) parseBodyMember() ast.Node {
 						if !isRelKeyword && (tok.KeywordID == "defined" || tok.KeywordID == "inverse") {
 							isRelKeyword = true
 						}
+						if !isRelKeyword && tok.KeywordID == "typed" && p.peekN(ahead+1).KeywordID == "by" {
+							isRelKeyword = true
+						}
 					}
 					if isRelKeyword {
 						// Skip relationship keyword
@@ -2376,8 +2444,8 @@ func (p *Parser) parseBodyMember() ast.Node {
 							t := p.peekN(ahead)
 							// Stop if we hit a definition or usage keyword
 							if t.Kind == lexer.Keyword {
-								_, isDef := definitionKindKeywords[t.KeywordID]
-								_, isUsage := usageKindKeywords[t.KeywordID]
+								_, isDef := p.definitionKind(t.KeywordID)
+								_, isUsage := p.usageKind(t.KeywordID)
 								if isDef || isUsage {
 									break
 								}
@@ -2403,8 +2471,8 @@ func (p *Parser) parseBodyMember() ast.Node {
 				nextTok := p.peekN(ahead)
 				isDefKeyword := false
 				if nextTok.Kind == lexer.Keyword {
-					_, isDef := definitionKindKeywords[nextTok.KeywordID]
-					_, isUsage := usageKindKeywords[nextTok.KeywordID]
+					_, isDef := p.definitionKind(nextTok.KeywordID)
+					_, isUsage := p.usageKind(nextTok.KeywordID)
 					isDefKeyword = isDef || isUsage
 				}
 
@@ -2452,6 +2520,9 @@ func (p *Parser) parseBodyMember() ast.Node {
 							if !isRelKeyword && (tok.KeywordID == "defined" || tok.KeywordID == "inverse") {
 								isRelKeyword = true
 							}
+							if !isRelKeyword && tok.KeywordID == "typed" && p.peekN(ahead+1).KeywordID == "by" {
+								isRelKeyword = true
+							}
 						}
 						if isRelKeyword {
 							ahead++
@@ -2462,8 +2533,8 @@ func (p *Parser) parseBodyMember() ast.Node {
 								t := p.peekN(ahead)
 								// Stop if we hit a definition or usage keyword
 								if t.Kind == lexer.Keyword {
-									_, isDef := definitionKindKeywords[t.KeywordID]
-									_, isUsage := usageKindKeywords[t.KeywordID]
+									_, isDef := p.definitionKind(t.KeywordID)
+									_, isUsage := p.usageKind(t.KeywordID)
 									if isDef || isUsage {
 										break
 									}
@@ -2487,8 +2558,8 @@ func (p *Parser) parseBodyMember() ast.Node {
 					nextTok := p.peekN(ahead)
 					isDefKeyword := false
 					if nextTok.Kind == lexer.Keyword {
-						_, isDef := definitionKindKeywords[nextTok.KeywordID]
-						_, isUsage := usageKindKeywords[nextTok.KeywordID]
+						_, isDef := p.definitionKind(nextTok.KeywordID)
+						_, isUsage := p.usageKind(nextTok.KeywordID)
 						isDefKeyword = isDef || isUsage
 					}
 
@@ -2544,10 +2615,10 @@ func (p *Parser) parseBodyMember() ast.Node {
 		// A feature modifier can precede the kind keyword: `ref part a : V`,
 		// `composite item i`, `derived attribute c`. The declaration is parsed
 		// as usual and the modifiers already consumed are applied to it.
-		if isKindKeyword(p.peek()) || p.atKindPrefix() {
+		if p.isKindKeyword(p.peek()) || p.atKindPrefix() {
 			// A keyword that only qualifies the kind after it is consumed first:
 			// `derived var feature x` declares a feature, not a `var`.
-			for p.atKindPrefix() && !isKindKeyword(p.peek()) {
+			for p.atKindPrefix() && !p.isKindKeyword(p.peek()) {
 				// A prefix saying what the declaration is for is part of it, whether
 				// or not a modifier was written before it (`derived var feature x`).
 				if w := p.kindPrefixWord(); kindPrefixKeywords[w] {
@@ -2738,7 +2809,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 	// A kind keyword before a body declares an anonymous usage of that kind
 	// (`action { … }`), not a literal named by it: a name spelling a reserved
 	// keyword must be written as an unrestricted name (KerML §7.2.4).
-	anonKindDecl := nextKind == lexer.LBrace && isKindKeyword(p.peek())
+	anonKindDecl := nextKind == lexer.LBrace && p.isKindKeyword(p.peek())
 	if !isUsageOnlyKwForEnum && !anonKindDecl && !p.atFeatureSpecialization() && p.atNameOrKeyword() && (nextKind == lexer.Eq || nextKind == lexer.Semicolon || nextKind == lexer.LBrace) {
 		seg, _ := p.parseNameSegmentRelaxed()
 		id := ast.Identification{Name: seg.Text, NameSpan: seg.Span}
@@ -2801,8 +2872,8 @@ func (p *Parser) parseBodyMember() ast.Node {
 	if p.atName() {
 		next := p.peekN(1)
 		if next.Kind == lexer.Keyword {
-			_, isDef := definitionKindKeywords[next.KeywordID]
-			_, isUsage := usageKindKeywords[next.KeywordID]
+			_, isDef := p.definitionKind(next.KeywordID)
+			_, isUsage := p.usageKind(next.KeywordID)
 			if isDef || isUsage {
 				// Parse as named usage: consume name token, then proceed with keyword
 				var id ast.Identification
@@ -2969,8 +3040,18 @@ func bindingEnd(target ast.Node) *ast.Relationship {
 	return &ast.Relationship{Kind: ast.RelReferences, Target: target}
 }
 
+// hasBindingEnd reports whether a binding already states an end.
+func hasBindingEnd(u *ast.Usage) bool {
+	for _, r := range u.Relationships {
+		if r.Kind == ast.RelReferences {
+			return true
+		}
+	}
+	return false
+}
+
 func normalizeAnonymousBindingEnd(u *ast.Usage) *ast.Usage {
-	if u == nil || u.Kind != ast.UsageBinding || u.Ident.Name == "" || len(u.Relationships) != 0 {
+	if u == nil || u.Kind != ast.UsageBinding || u.Ident.Name == "" || hasBindingEnd(u) {
 		return u
 	}
 	target := &ast.QualifiedName{
@@ -3056,6 +3137,10 @@ func (p *Parser) atFeatureChainTarget() bool {
 // target becomes its own Relationship sharing the clause kind.
 func (p *Parser) parseRelationships(isUsage bool) (rels []*ast.Relationship) {
 	for {
+		if p.atDeclarationConjugation() {
+			rels = append(rels, p.parseDeclarationConjugation())
+			continue
+		}
 		kind, ok := p.relationshipClauseKind(isUsage)
 		if !ok {
 			return rels
@@ -3184,6 +3269,9 @@ func (p *Parser) parseTierBEnds(u *ast.Usage, kind ast.UsageKind) {
 			p.parseConnectorEnds(u, "connect")
 		} else if p.at(lexer.LParen) {
 			p.parseNaryConnectorEnds(u)
+		} else if p.atConnectorChainFirstEnd() {
+			// A feature chain as the first end states the ends after the keyword.
+			p.parseConnectorEnds(u, "")
 		} else if p.atKeyword("to") {
 			// Single-end connector: "connector name to [mult] target"
 			// This is shorthand for a connector with one implicit end
@@ -3196,7 +3284,11 @@ func (p *Parser) parseTierBEnds(u *ast.Usage, kind ast.UsageKind) {
 			p.parseConnectorFromTo(u)
 		}
 	case ast.UsageSuccession:
-		p.parseConnectorEnds(u, "") // succession has no intermediate keyword
+		// A succession may state its ends as body members instead
+		// (KerML.xtext SuccessionDeclaration:891): `succession { end ...; }`.
+		if !p.at(lexer.LBrace) && !p.at(lexer.Semicolon) {
+			p.parseConnectorEnds(u, "") // succession has no intermediate keyword
+		}
 	case ast.UsageAllocation:
 		// Allocation usage syntax: allocate X to Y (no intermediate keyword, like succession)
 		// Can be:
@@ -3403,6 +3495,18 @@ func (p *Parser) parseConnectorFromTo(u *ast.Usage) {
 			to.Reference = refTarget
 		}
 	}
+}
+
+// atConnectorChainFirstEnd reports whether a connector states a feature chain as
+// its first end (`connector f.a to a.g;`), which cannot be its name
+// (KerML.xtext ConnectorEnd:854 over OwnedReferenceSubsetting:699).
+func (p *Parser) atConnectorChainFirstEnd() bool {
+	switch p.peekN(1).Kind {
+	case lexer.Dot, lexer.ColonColon:
+	default:
+		return false
+	}
+	return p.atEndThenKeyword("to")
 }
 
 // atEndThenKeyword reports whether the cursor is at a connector end — a name or
@@ -3639,6 +3743,11 @@ func (p *Parser) atRelationshipKeyword() bool {
 		if t.KeywordID == "defined" || t.KeywordID == "inverse" || t.KeywordID == "featured" {
 			return true
 		}
+		// `typed` states a relationship only in `typed by`; elsewhere it is a name.
+		if t.KeywordID == "typed" {
+			n := p.peekN(1)
+			return n.Kind == lexer.Keyword && n.KeywordID == "by"
+		}
 	}
 	return false
 }
@@ -3656,7 +3765,9 @@ func (p *Parser) relationshipClauseKind(isUsage bool) (ast.RelationshipKind, boo
 			}
 			return k, true
 		}
-		if t.KeywordID == "defined" {
+		// `typed by` is the long spelling of ':' (KerML.xtext TypedBy:600).
+		if t.KeywordID == "defined" ||
+			(t.KeywordID == "typed" && p.peekN(1).KeywordID == "by") {
 			p.advance()
 			p.expect2Keyword("by")
 			return ast.RelTyping, true

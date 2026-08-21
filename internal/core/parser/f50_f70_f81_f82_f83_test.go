@@ -92,18 +92,24 @@ func TestNegativeF50F70F81F82F83AndF62F63(t *testing.T) {
 	tests := []struct {
 		name string
 		src  string
+		// file overrides the default `<name>.sysml`, for notation whose
+		// malformedness is KerML-specific.
+		file string
 	}{
-		{"abstract_var", "package P { abstract var; }"},
-		{"member", "package P { classifier D { member ; } }"},
-		{"representation", "package P { classifier D { inv c { rep language; } } }"},
-		{"differences", "package P { classifier D differences ; }"},
-		{"disjoint", "package P { disjoint from A; }"},
-		{"multiplicity", "package P { classifier B [ specializes A; }"},
-		{"sysml_definition_multiplicity", "package P { part def P [1] :> A; }"},
-		{"sysml_attribute_definition_multiplicity", "package P { attribute def A [1]; }"},
-		{"sysml_calc_definition_multiplicity", "package P { calc def C [1] { return x; } }"},
-		{"exhibit", "package P { part v { exhibit .on { } } }"},
-		{"reference", "package P { part v { ref { } } }"},
+		// `var` is a KerML keyword (KerML.xtext BasicFeaturePrefix), so it
+		// cannot name the feature there; in SysML it is an ordinary name and
+		// the reference accepts `abstract var;` as a DefaultReferenceUsage.
+		{"abstract_var", "package P { abstract var; }", "abstract_var.kerml"},
+		{"member", "package P { classifier D { member ; } }", ""},
+		{"representation", "package P { classifier D { inv c { rep language; } } }", ""},
+		{"differences", "package P { classifier D differences ; }", ""},
+		{"disjoint", "package P { disjoint from A; }", ""},
+		{"multiplicity", "package P { classifier B [ specializes A; }", ""},
+		{"sysml_definition_multiplicity", "package P { part def P [1] :> A; }", ""},
+		{"sysml_attribute_definition_multiplicity", "package P { attribute def A [1]; }", ""},
+		{"sysml_calc_definition_multiplicity", "package P { calc def C [1] { return x; } }", ""},
+		{"exhibit", "package P { part v { exhibit .on { } } }", ""},
+		{"reference", "package P { part v { ref { } } }", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -112,7 +118,11 @@ func TestNegativeF50F70F81F82F83AndF62F63(t *testing.T) {
 					t.Fatalf("parser panicked: %v", r)
 				}
 			}()
-			root, diags := parseFeatureFix(t, tt.name+".sysml", tt.src)
+			file := tt.file
+			if file == "" {
+				file = tt.name + ".sysml"
+			}
+			root, diags := parseFeatureFix(t, file, tt.src)
 			if root == nil {
 				t.Fatal("ParseFile returned nil")
 			}
