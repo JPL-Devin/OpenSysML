@@ -55,6 +55,8 @@ func (m *Model) membersOf(sym *symbols.Symbol, view memberView, declaring *symbo
 	var out []*symbols.Symbol
 	seenName := make(map[string]bool)
 	seenSym := make(map[*symbols.Symbol]bool)
+	// One mask per enumeration: it depends only on sym and declaring.
+	mask := m.viewMask(sym, view, declaring)
 
 	collect := func(scope *symbols.Scope, inherited bool) {
 		if scope == nil {
@@ -68,7 +70,7 @@ func (m *Model) membersOf(sym *symbols.Symbol, view memberView, declaring *symbo
 				if !inherited && view == memberViewDeclaring && NotYetMember(s, declaring) {
 					continue // a feature being declared is not yet a member
 				}
-				if inherited && view != memberViewUnmasked && m.masked(sym, s, view, declaring) {
+				if inherited && m.maskedBy(mask, s) {
 					continue // redefined by a feature of sym
 				}
 				if !seenSym[s] {

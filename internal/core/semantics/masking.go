@@ -219,15 +219,17 @@ func (m *Model) InheritanceMasked(sym, candidate *symbols.Symbol) bool {
 	return m.maskedBy(m.redefinitionMask(sym, true), candidate)
 }
 
-// masked reports whether sym does not inherit candidate under the given view.
-func (m *Model) masked(sym, candidate *symbols.Symbol, view memberView, declaring *symbols.Symbol) bool {
-	if view == memberViewDeclaring {
-		if declaring == nil {
-			return m.maskedBy(m.redefinitionMask(sym, false), candidate)
-		}
-		return m.maskedBy(m.redefinitionMaskExcluding(sym, declaring), candidate)
+// viewMask returns the elements sym does not inherit under the given view.
+func (m *Model) viewMask(sym *symbols.Symbol, view memberView, declaring *symbols.Symbol) map[*symbols.Symbol]bool {
+	switch {
+	case view == memberViewUnmasked:
+		return nil
+	case view == memberViewDeclaring && declaring == nil:
+		return m.redefinitionMask(sym, false)
+	case view == memberViewDeclaring:
+		return m.redefinitionMaskExcluding(sym, declaring)
 	}
-	return m.maskedBy(m.redefinitionMask(sym, true), candidate)
+	return m.redefinitionMask(sym, true)
 }
 
 func (m *Model) maskedBy(mask map[*symbols.Symbol]bool, candidate *symbols.Symbol) bool {

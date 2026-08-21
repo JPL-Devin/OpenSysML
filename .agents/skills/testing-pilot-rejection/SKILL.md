@@ -30,7 +30,7 @@ cmp build/pilot-reject/pilot-reject.json docs/project/pilot-rejection-baseline.j
 ```
 
 Observed on the wave-7E branch:
-`34 case(s): 20 both reject, 14 only the pilot rejects, 0 only we reject, 0 both accept`,
+`34 case(s): 21 both reject, 13 only the pilot rejects, 0 only we reject, 0 both accept`,
 byte-identical to the committed baseline. Any `both accept` case is a bug in the corpus (the case
 is not actually invalid under the loaded standard library) — fix the case, never ignore it.
 

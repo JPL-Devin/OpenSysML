@@ -88,14 +88,14 @@ carry no timestamps or absolute paths, so repeated runs are byte-identical
 ## Totals
 
 ```
-34 case(s): 20 both reject, 14 only the pilot rejects, 0 only we reject, 0 both accept
+34 case(s): 21 both reject, 13 only the pilot rejects, 0 only we reject, 0 both accept
 ```
 
 | Source | Cases | Both reject | Pilot only | Ours only | Both accept |
 | --- | --- | --- | --- | --- | --- |
 | extensions | 7 | 2 | 5 | 0 | 0 |
 | grammar | 20 | 17 | 3 | 0 | 0 |
-| xpect | 7 | 1 | 6 | 0 | 0 |
+| xpect | 7 | 2 | 5 | 0 | 0 |
 
 The two `extensions/` cases in *both-reject* (`x02` choice, `x03` junction) are rejected by us for
 a different reason than by the pilot: our own state-connectivity validation flags a pseudostate
@@ -104,7 +104,7 @@ rejection, not agreement on the rule.
 
 ## Permissiveness gaps
 
-All 14 gaps, each with its reproducer (the corpus file is the minimal reproducer), both verdicts,
+All 13 gaps, each with its reproducer (the corpus file is the minimal reproducer), both verdicts,
 and the package the root cause is likely in. **None are fixed here** — this oracle measures;
 fixing is later work.
 
@@ -121,7 +121,6 @@ fixing is later work.
 | `xpect/p01-public-root-import.kerml` | accepts | `Top level import must be private` | `internal/core/passes` — `validateImportTopLevelVisibility` (KerML 8.2.3.5.2) not implemented |
 | `xpect/p02-association-end-two-types.kerml` | accepts | `An association end must have exactly one type` | `internal/core/passes` — association-end type-count check (KerML 8.2.4.6.2) not implemented |
 | `xpect/p03-variable-in-datatype.kerml` | accepts | `Must be owned by an occurrence type` | `internal/core/passes` — variable-feature owner check (KerML 8.3.3.3) not implemented |
-| `xpect/p04-nonunique-subsets-unique.kerml` | accepts | `Subsetting/redefining feature cannot be nonunique...` | `internal/core/passes` — uniqueness conformance (KerML 8.3.3.3) not implemented |
 | `xpect/p05-single-chaining-feature.kerml` | accepts | `Cannot have only one chaining feature` | `internal/core/passes` — feature-chain length check (KerML 8.3.3.3) not implemented |
 | `xpect/p06-private-member-reference.kerml` | accepts | `Couldn't resolve reference to Classifier 'A::X'` | `internal/core/resolve` — qualified-name resolution does not enforce `private` visibility |
 
