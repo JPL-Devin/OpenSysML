@@ -270,6 +270,28 @@ func (ec *EvalContext) evalName(qn *ast.QualifiedName) (Value, error) {
 		if value, ok, err := ec.calcRun.lookupOutput(ec.ctx, name); ok {
 			return value, err
 		}
+		// A declaration inside an expression body is local to that body and
+		// shadows features of the element carrying the expression.
+		if ec.scope != nil {
+			if sym, ok := symbols.LookupBodyLocal(ec.scope, name); ok {
+				if ec.resolving[name] {
+					return Value{}, fmt.Errorf("%w: %s", ErrCyclicFeatureValue, name)
+				}
+				if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Value != nil {
+					if ec.resolving == nil {
+						ec.resolving = map[string]bool{}
+					}
+					ec.resolving[name] = true
+					val, err := ec.evalIn(sym.OwnerScope).Eval(usage.Value)
+					delete(ec.resolving, name)
+					if err != nil {
+						return Value{}, err
+					}
+					return ec.bindVariationOf(sym, val)
+				}
+				return Value{}, fmt.Errorf("%w for feature %s", ErrNoValue, name)
+			}
+		}
 		// Then a valued feature of the element being evaluated: it is declared
 		// inside that element, so it masks a same-named member of the object
 		// carrying it, and a value a typed usage binds masks the default of the

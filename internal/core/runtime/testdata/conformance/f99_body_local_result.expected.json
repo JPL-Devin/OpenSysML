@@ -1,0 +1,15 @@
+{
+  "type": "calc",
+  "evaluate": "test::BodyLocalResult",
+  "inputs": [
+    {"type": "Integer", "value": 3}
+  ],
+  "result": {
+    "type": "Sequence",
+    "elements": [
+      {"type": "Integer", "value": 2},
+      {"type": "Integer", "value": 4},
+      {"type": "Integer", "value": 6}
+    ]
+  }
+}
