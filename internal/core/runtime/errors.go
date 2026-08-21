@@ -80,6 +80,14 @@ var (
 	// evaluation, so an expression naming it fails rather than yielding nothing.
 	ErrUnsupportedOperator = errors.New("unsupported operator")
 
+	// ErrUnresolvedType is returned when a type classification operand names no
+	// resolvable type.
+	ErrUnresolvedType = errors.New("unresolved type")
+
+	// ErrUndeterminedValueType is returned when a value classification has no
+	// direct runtime type to compare.
+	ErrUndeterminedValueType = errors.New("value type cannot be determined")
+
 	// ErrCalcNoReturn is returned when a calc body runs to its end without
 	// returning: it computed no result, which is not the same as a null one.
 	ErrCalcNoReturn = errors.New("calculation returned no value")
@@ -114,6 +122,18 @@ var (
 	// the run's calc depth budget, which an unbounded recursion would otherwise
 	// do until the process ran out of stack.
 	ErrCalcRecursionLimit = errors.New("calc recursion limit exceeded")
+
+	// ErrActionStepLimitExceeded is returned when an action executor exceeds
+	// its token-flow step budget.
+	ErrActionStepLimitExceeded = errors.New("action step limit exceeded")
+
+	// ErrStateEventLimitExceeded is returned when state processing exceeds its
+	// event budget.
+	ErrStateEventLimitExceeded = errors.New("state event limit exceeded")
+
+	// ErrDoStepLimitExceeded is returned when a state do behavior exceeds its
+	// action-step budget.
+	ErrDoStepLimitExceeded = errors.New("state do-step limit exceeded")
 
 	// ErrViolated is returned when an asserted constraint or a required
 	// condition evaluates to false. It is a verdict about the model, not a
@@ -265,6 +285,22 @@ var (
 	// it can be created.
 	ErrNoSubject = errors.New("no subject to satisfy the requirement")
 )
+
+type budgetExceededError struct {
+	message string
+	errs    []error
+}
+
+func (e *budgetExceededError) Error() string { return e.message }
+
+func (e *budgetExceededError) Unwrap() []error { return e.errs }
+
+func budgetExceeded(sentinel error, message string, causes ...error) error {
+	errs := make([]error, 0, len(causes)+1)
+	errs = append(errs, sentinel)
+	errs = append(errs, causes...)
+	return &budgetExceededError{message: message, errs: errs}
+}
 
 // ViolationError reports a condition that evaluated to false, naming the
 // condition so a verdict says which one failed. It unwraps to ErrViolated,

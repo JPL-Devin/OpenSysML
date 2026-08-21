@@ -336,6 +336,9 @@ func TestActionStepBudgetIsConfigurable(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected a token-flow budget of 1 to stop the action")
 	}
+	if !errors.Is(err, ErrActionStepLimitExceeded) {
+		t.Fatalf("expected ErrActionStepLimitExceeded, got %v", err)
+	}
 	if !strings.Contains(err.Error(), MaxActionStepsEnvVar) {
 		t.Errorf("error %q does not name %s", err, MaxActionStepsEnvVar)
 	}
@@ -389,6 +392,12 @@ func TestStateBudgetsAreConfigurable(t *testing.T) {
 			err := exec.RunToCompletion()
 			if err == nil {
 				t.Fatal("expected a budget error for a machine that never settles")
+			}
+			if tt.name == "events" && !errors.Is(err, ErrStateEventLimitExceeded) {
+				t.Fatalf("expected ErrStateEventLimitExceeded, got %v", err)
+			}
+			if tt.name == "do_steps" && !errors.Is(err, ErrDoStepLimitExceeded) {
+				t.Fatalf("expected ErrDoStepLimitExceeded, got %v", err)
 			}
 			if !strings.Contains(err.Error(), tt.wantVar) {
 				t.Errorf("error %q does not name %s", err, tt.wantVar)

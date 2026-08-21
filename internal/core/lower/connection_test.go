@@ -94,10 +94,12 @@ func TestLowerSendRecordsViaForm(t *testing.T) {
 			first start;
 			action viaSend { send 1 via p; }
 			action toSend { send 2 to other; }
+			action routedSend { send 3 via p to receiver; }
 			done end;
 			then start viaSend;
 			then viaSend toSend;
-			then toSend end;
+			then toSend routedSend;
+			then routedSend end;
 		}
 	`)
 	var sends []Send
@@ -108,18 +110,58 @@ func TestLowerSendRecordsViaForm(t *testing.T) {
 			}
 		}
 	}
-	if len(sends) != 2 {
-		t.Fatalf("lowered %d sends, want 2", len(sends))
+	if len(sends) != 3 {
+		t.Fatalf("lowered %d sends, want 3", len(sends))
 	}
-	via, addressed := sends[0], sends[1]
-	if via.Target != "p" {
-		via, addressed = addressed, via
+	var via, addressed, routed *Send
+	for i := range sends {
+		send := &sends[i]
+		switch {
+		case send.IsVia && send.Receiver != "":
+			routed = send
+		case send.IsVia:
+			via = send
+		default:
+			addressed = send
+		}
 	}
-	if !via.IsVia || via.Target != "p" {
+	if via == nil || via.Target != "p" {
 		t.Errorf("`send 1 via p` lowered to %+v, want IsVia with Target p", via)
 	}
-	if addressed.IsVia || addressed.Target != "other" {
+	if addressed == nil || addressed.IsVia || addressed.Target != "other" {
 		t.Errorf("`send 2 to other` lowered to %+v, want no IsVia with Target other", addressed)
+	}
+	if routed == nil || routed.Target != "p" || !routed.TargetPath ||
+		routed.Receiver != "receiver" || routed.ReceiverPath {
+		t.Errorf("`send 3 via p to receiver` lowered to %+v", routed)
+	}
+}
+
+func TestLowerSendRoutedReceiverKeepsFeaturePath(t *testing.T) {
+	graph := actionGraphFor(t, `
+		action a {
+			port p;
+			part outer { action receiver; }
+			action sender { send 1 via p to outer.receiver; }
+			first start;
+			done end;
+			then start sender;
+			then sender end;
+		}
+	`)
+	var sends []Send
+	for _, body := range graph.Bodies {
+		for _, stmt := range body {
+			if send, ok := stmt.(Send); ok {
+				sends = append(sends, send)
+			}
+		}
+	}
+	if len(sends) != 1 {
+		t.Fatalf("lowered %d sends, want 1", len(sends))
+	}
+	if got := sends[0]; got.Receiver != "outer.receiver" || !got.ReceiverPath {
+		t.Errorf("routed receiver lowered to %+v, want feature path", got)
 	}
 }
 

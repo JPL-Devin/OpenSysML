@@ -269,7 +269,9 @@ func (e *ActionExecutor) RunToCompletion() error {
 		}
 
 		if steps >= maxSteps {
-			return fmt.Errorf("execution exceeded max steps (%d steps; raise %s to allow more), possible infinite loop", maxSteps, MaxActionStepsEnvVar)
+			return budgetExceeded(ErrActionStepLimitExceeded,
+				fmt.Sprintf("execution exceeded max steps (%d steps; raise %s to allow more), possible infinite loop",
+					maxSteps, MaxActionStepsEnvVar))
 		}
 
 		if err := e.Step(); err != nil {

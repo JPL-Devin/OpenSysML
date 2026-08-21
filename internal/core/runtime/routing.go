@@ -16,6 +16,55 @@ import (
 // thing that raises it.
 var ErrUnroutableSend = errors.New("send reaches no receiving port")
 
+// ErrSendViaUnknownPort reports a routed send naming no sender port.
+var ErrSendViaUnknownPort = errors.New("send via names no port of the sender")
+
+// ErrSendPortTypeMismatch reports a typed receiving port rejecting a message.
+var ErrSendPortTypeMismatch = errors.New("send message type is not carried by the receiving port")
+
+// ErrUnreachableSendReceiver reports a routed receiver that cannot be resolved.
+var ErrUnreachableSendReceiver = errors.New("send receiver is unreachable")
+
+// UnknownSendPortError gives the routed send's invalid port and receiver.
+type UnknownSendPortError struct {
+	Port     string
+	Receiver string
+}
+
+func (e *UnknownSendPortError) Error() string {
+	return fmt.Sprintf("%s: port %q names no port of the sender for receiver %q",
+		ErrSendViaUnknownPort, e.Port, e.Receiver)
+}
+
+func (e *UnknownSendPortError) Unwrap() error { return ErrSendViaUnknownPort }
+
+// SendPortTypeMismatchError gives the routed send's incompatible type.
+type SendPortTypeMismatchError struct {
+	Port       string
+	Receiver   string
+	SignalType string
+}
+
+func (e *SendPortTypeMismatchError) Error() string {
+	return fmt.Sprintf("%s: port %q carries no flow feature for message type %q to receiver %q",
+		ErrSendPortTypeMismatch, e.Port, e.SignalType, e.Receiver)
+}
+
+func (e *SendPortTypeMismatchError) Unwrap() error { return ErrSendPortTypeMismatch }
+
+// UnreachableSendReceiverError gives the routed send's unresolved receiver.
+type UnreachableSendReceiverError struct {
+	Port     string
+	Receiver string
+}
+
+func (e *UnreachableSendReceiverError) Error() string {
+	return fmt.Sprintf("%s: receiver %q is not reachable through port %q",
+		ErrUnreachableSendReceiver, e.Receiver, e.Port)
+}
+
+func (e *UnreachableSendReceiverError) Unwrap() error { return ErrUnreachableSendReceiver }
+
 // UnroutableSendError reports a send that could not be delivered, naming the
 // port it was sent through and the ends joined to it that refused it, so the
 // model can be corrected. An addressed send names a target rather than a port it
@@ -200,6 +249,37 @@ func (ctx *Context) receivingEnds(conns []lower.Connection, sendingPort string) 
 	return receiving, outbound
 }
 
+// receivingEndsForMessage finds connected receiving ends and distinguishes
+// typed message mismatches from ends that are outbound or otherwise unroutable.
+func (ctx *Context) receivingEndsForMessage(
+	conns []lower.Connection, sendingPort, signalType string,
+) (receiving, outbound []string, typeMismatch bool) {
+	if sendingPort == "" {
+		return nil, nil, false
+	}
+	seen := map[string]bool{sendingPort: true}
+	for _, conn := range conns {
+		if !joins(conn.Ends, sendingPort) {
+			continue
+		}
+		for _, end := range conn.Ends {
+			if seen[end] {
+				continue
+			}
+			seen[end] = true
+			accepts, mismatch := ctx.endReceivesMessage(conn.Scope, end, signalType)
+			if accepts {
+				receiving = append(receiving, end)
+			} else if mismatch {
+				typeMismatch = true
+			} else {
+				outbound = append(outbound, end)
+			}
+		}
+	}
+	return receiving, outbound, typeMismatch
+}
+
 // endReceives reports whether a message can arrive at the port an end names: one
 // of its flow features carries inward, after conjugation. A port declaring no
 // flow features constrains nothing, so it receives whatever reaches it — as does
@@ -220,6 +300,71 @@ func (ctx *Context) endReceives(scope *symbols.Scope, end string) bool {
 		}
 	}
 	return false
+}
+
+// endReceivesMessage classifies a port for this message, reporting a mismatch
+// only when typed inward features reject it; conformance is accepted either way.
+func (ctx *Context) endReceivesMessage(scope *symbols.Scope, end, signalType string) (bool, bool) {
+	sym, ok := ctx.portSymbol(scope, end)
+	if !ok {
+		return true, false
+	}
+	features := ctx.model.PortFeatures(sym)
+	if len(features) == 0 {
+		return true, false
+	}
+	inward := false
+	for _, feature := range features {
+		if feature.Direction != ast.DirOut {
+			inward = true
+		}
+	}
+	if !inward {
+		return false, false
+	}
+	messageSym := ctx.resolveType(scope, signalType)
+	if messageSym == nil {
+		return true, false
+	}
+	typed := false
+	for _, feature := range features {
+		if feature.Direction == ast.DirOut {
+			continue
+		}
+		typeSym := ctx.extractType(feature.Symbol)
+		if typeSym == nil {
+			continue
+		}
+		typed = true
+		if ctx.model.Conforms(typeSym, messageSym) || ctx.model.Conforms(messageSym, typeSym) {
+			return true, false
+		}
+	}
+	if typed {
+		return false, true
+	}
+	return true, false
+}
+
+// resolveType resolves a routed message type through the sender's scope,
+// returning nil when the type is unavailable for conservative routing.
+func (ctx *Context) resolveType(scope *symbols.Scope, name string) *symbols.Symbol {
+	if ctx.resolver == nil || name == "" {
+		return nil
+	}
+	parts := strings.Split(name, "::")
+	qn := &ast.QualifiedName{Parts: make([]ast.NameSegment, len(parts))}
+	for i, part := range parts {
+		qn.Parts[i] = ast.NameSegment{Text: part}
+	}
+	sym, ok := ctx.resolver.ResolveQualified(scope, qn)
+	if !ok || sym == nil {
+		return nil
+	}
+	if canonical, ok := ctx.resolver.ResolveAliasTarget(sym); ok {
+		return canonical
+	}
+	return sym
 }
 
 // portSymbol resolves the path an end names — `p` or a nested `p.q` — to the
