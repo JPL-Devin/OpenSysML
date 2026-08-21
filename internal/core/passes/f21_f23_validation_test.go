@@ -56,7 +56,9 @@ func TestF22EnumerationIdentityRemainsEvaluable(t *testing.T) {
 	}
 }
 
-func TestF22FeatureChainMessageNamesLimitation(t *testing.T) {
+// A chain rooted in a feature with no featuring type is model-level evaluable
+// when what it reads is constant, which is what the pinned pilot accepts.
+func TestF22ChainFromUnfeaturedRootIsEvaluable(t *testing.T) {
 	const src = `package ScalarValues { attribute def Integer; }
 	package E2 {
 		private import ScalarValues::*;
@@ -64,10 +66,24 @@ func TestF22FeatureChainMessageNamesLimitation(t *testing.T) {
 		part p : P;
 		package Q { filter E2::p.n > 0; }
 	}`
-	const want = "a filter condition reads a feature through a chain of features, which OpenSysML does not evaluate (known limitation: the reference accepts chains rooted in a feature with no featuring type)"
+	if diags := only(filterDiags(t, src), "filter-not-evaluable"); len(diags) != 0 {
+		t.Fatalf("`E2::p.n > 0` is model-level evaluable, got %v", diags)
+	}
+}
+
+// A chain rooted in a feature that a type features is not, and still says so.
+func TestF22FeatureChainMessageNamesLimitation(t *testing.T) {
+	const src = `package ScalarValues { attribute def Integer; }
+	package E3 {
+		private import ScalarValues::*;
+		part def P { attribute n : Integer = 1; part q : P; }
+		part p : P;
+		package Q { filter E3::P::q.n > 0; }
+	}`
+	const want = "is featured within type"
 	diags := only(filterDiags(t, src), "filter-not-evaluable")
 	if len(diags) != 1 || !strings.Contains(diags[0].Message, want) {
-		t.Fatalf("expected the feature-chain limitation message, got %v", diags)
+		t.Fatalf("expected the featuring-type message, got %v", diags)
 	}
 }
 

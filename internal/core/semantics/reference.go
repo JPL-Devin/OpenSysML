@@ -123,13 +123,17 @@ func (m *Model) MemberSources(sym *symbols.Symbol) []*symbols.Symbol {
 }
 
 // contributors returns the direct member-contributing neighbours of sym: its
-// supertypes, the base usage every usage element subsets, then the feature it
-// reference-subsets. The base usage contributes members only, not conformance.
+// supertypes, the base usage every usage element subsets, the base feature a
+// KerML feature keyword implies, then the feature it reference-subsets. The two
+// bases contribute members only, not conformance.
 func (m *Model) contributors(sym *symbols.Symbol) []*symbols.Symbol {
 	supers := m.DirectSupertypes(sym)
 	out := make([]*symbols.Symbol, 0, len(supers)+2)
 	out = append(out, supers...)
 	if base := m.implicitBaseUsage(sym); base != nil {
+		out = append(out, base)
+	}
+	if base := m.implicitKerMLFeatureBase(sym); base != nil {
 		out = append(out, base)
 	}
 	if ref := m.ReferencedFeature(sym); ref != nil {
