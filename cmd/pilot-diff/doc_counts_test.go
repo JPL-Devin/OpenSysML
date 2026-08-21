@@ -52,14 +52,13 @@ var (
 	docMovementRowsUnchecked = map[string]bool{"new checks of ours": true}
 )
 
+// TestPilotDifferentialDocumentCountsMatchBaseline guards headline totals, Results cells and
+// root rows, per-category only-ours/only-pilot prose, and the movement table's Now column.
+// The committed baseline JSON is the only input; validators and corpora are unnecessary.
+// Causal claims and attributions are explicitly out of scope.
+// Historical movement columns, narrative paragraphs, and adjudication-section counts remain
+// unguarded; “this moved because #391 reached a trigger's payload” is not mechanically checked.
 func TestPilotDifferentialDocumentCountsMatchBaseline(t *testing.T) {
-	// This guards headline totals, Results cells and root rows, per-category
-	// only-ours/only-pilot prose, and the movement table's Now column.
-	// The committed baseline JSON is the only input; validators and corpora are
-	// unnecessary. Causal claims and attributions are explicitly out of scope.
-	// Historical movement columns, narrative paragraphs, and adjudication-section
-	// counts remain unguarded; “this moved because #391 reached a trigger's
-	// payload” is not mechanically checked or implied by this test.
 	lines := docReadNumberedDocument(t)
 	report := docReadBaselineReport(t)
 
