@@ -82,6 +82,10 @@ func (c *resultExpressionChecker) inheritedResultExpressions(sym *symbols.Symbol
 		if !ok || target == nil || target == sym {
 			continue
 		}
+		// An ancestor reached along two paths contributes its result once.
+		if seen[target] {
+			continue
+		}
 		if u, ok := w8cUsageOf(target); ok {
 			count += len(w8cResultExpressions(u))
 		}

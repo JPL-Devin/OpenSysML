@@ -181,3 +181,18 @@ func TestW8CResultExpressionLegal(t *testing.T) {
 		t.Errorf("unexpected %q in %v", msgResultExpressionAtMostOne, msgs)
 	}
 }
+
+// One result expression reached along two specialization paths is still one.
+func TestW8CResultExpressionDiamondIsLegal(t *testing.T) {
+	src := `package P {
+	function F {
+		1
+	}
+	function G :> F;
+	function H :> F;
+	function I :> G, H;
+}`
+	if msgs := w8cMessages(t, src); w8cCount(msgs, msgResultExpressionAtMostOne) != 0 {
+		t.Errorf("unexpected %q in %v", msgResultExpressionAtMostOne, msgs)
+	}
+}
