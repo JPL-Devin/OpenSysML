@@ -74,6 +74,9 @@ type Resolver struct {
 	// inCondition is nonzero while a filter condition's own names are resolved,
 	// which the condition does not filter.
 	inCondition int
+	// allVisible is nonzero while the target of an `import all` (or of an
+	// expose) is resolved, which reaches every membership, not the visible ones.
+	allVisible int
 	// nsFilters are the `filter` members of a namespace, extracted once per scope.
 	nsFilters map[*symbols.Scope][]symbols.ElementFilter
 	// payloads are the accept-node payloads a scope's body shares, collected
@@ -308,6 +311,15 @@ func (r *Resolver) report(d Diagnostic) {
 func (r *Resolver) aside(f func()) {
 	r.quiet++
 	defer func() { r.quiet-- }()
+	f()
+}
+
+// inAllVisible runs f with every membership of a namespace reachable through
+// it, as an `import all` and an expose resolve their target (KerML 8.2.3.5.2,
+// SysML v2 8.3.26.2).
+func (r *Resolver) inAllVisible(f func()) {
+	r.allVisible++
+	defer func() { r.allVisible-- }()
 	f()
 }
 

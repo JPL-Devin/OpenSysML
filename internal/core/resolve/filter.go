@@ -141,6 +141,10 @@ func (r *Resolver) AdmittedChildrenOf(scope *symbols.Scope, fqn string, children
 	doc, from := r.documentOf(scope), r.ReferringNamespaceFQN(scope)
 	kept := make([]*symbols.Symbol, 0, len(children))
 	for _, sym := range children {
+		// A qualified name reaches only the namespace's visible memberships.
+		if !r.namedThroughNamespace(sym) {
+			continue
+		}
 		if r.admitsUnderName(doc, from, fqn+"::"+localNameOf(sym), sym) {
 			kept = append(kept, sym)
 		}
@@ -169,7 +173,7 @@ func (r *Resolver) ImportedElements(scope *symbols.Scope, imp *ast.Import) []*sy
 	if scope == nil || imp == nil || imp.Imported == nil || len(imp.Imported.Parts) == 0 {
 		return nil
 	}
-	target, ok := r.ResolveQualified(scope, imp.Imported)
+	target, ok := r.resolveImportTarget(scope, imp)
 	if !ok || target == nil {
 		return nil
 	}
