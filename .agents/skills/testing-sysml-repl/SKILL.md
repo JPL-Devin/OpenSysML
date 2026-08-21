@@ -4483,3 +4483,65 @@ fixture's trigger is one the REPL can produce:
   `/tmp/pv` venv. Copies of hand-written fixtures must qualify stdlib types
   (`ScalarValues::Integer`) or add `private import ScalarValues::*;` when moved out of the
   conformance directory.
+
+## Per-source-language keyword reservation (wave 7C, PR #428)
+
+Reservation is decided per *source language* (`lexer.IsKeywordIn` + parser `reservedWord`), so the
+file extension of the fixture is part of the test, not an incidental detail.
+
+- A word only `KerML.xtext` spells (`chains`, `type`, `namespace`, `all`) is an ordinary name in a
+  `.sysml` file: `part chains : T;`, `part type : T;` validate clean (exit 0). The same word as a
+  *feature name* in a `.kerml` file must still error — always test both directions, one fixture
+  per extension, or you will pass a test that only proves the lexer is permissive everywhere.
+- Words that are SysML-only syntax (`frame`, `render`, `state`, `part`, `action`) are ordinary
+  names in `.kerml` (`feature frame : T;` clean) but are **syntax** in SysML positions:
+  `viewpoint def V { frame; }` and `view def V { render; }` must be diagnosed.
+- Watch the *severity*: `part frame : T;` in `.sysml` currently yields a **warning**
+  (`"frame" is a reserved keyword; write 'frame' to use it as a name`) and exit 0, not an error.
+  Assert on exit code *and* on whether the line says `warning:` or `error:`.
+- `%search <Pkg>::` is the cheapest confirmation that a name-shaped keyword really became a symbol:
+  it prints quoted names such as ``PosK::'frame'  attributeUsage``.
+- Recovery noise is expected on some of these: `viewpoint def V { frame; }` emits two diagnostics
+  (the real one at the `;`, plus `expected a body member`). Report it as message quality, not as a
+  missing diagnostic.
+
+### The REPL buffer has no extension
+
+The REPL document is `<repl>` with no extension, and unknown-extension buffers read as **SysML**
+for reservation. Two consequences worth knowing before writing assertions:
+
+- You cannot prove `.kerml`-specific parser behaviour by typing into the prompt. Use
+  `%load /path/x.kerml` (kind comes from the loaded file) or the CLI, and use the prompt only for
+  the SysML-side names.
+- REPL diagnostics print **`1:12: error: …`** — line:col with **no `<repl>` filename prefix**
+  (CLI output does print `path:line:col:`). If a test plan says "confirm diagnostics report
+  `<repl>:line:col`", that expectation does not match the current binary; check with the lead
+  before calling it a pass or a bug.
+
+### Escaping the continuation prompt
+
+Incomplete input (`part def U { ref redefines x[4;`) puts the REPL into a `...>` continuation
+prompt, and *anything* typed there — including `%eval 1+1` — is swallowed as more model text.
+Press **Ctrl-C** to abandon the continuation: the buffered text is then parsed, its diagnostics
+print, and the `sysml>` prompt returns usable. Always follow a malformed submission with
+`%eval 1 + 1` (expect `= 2`) to prove the session survived. Never type shell words like `clear`
+at the prompt; it parses as a model line and produces `expected a namespace member`.
+
+### Kindless parameters and the RDF shape
+
+A kindless parameter (`in x : Real`, `out mass : Real`) is a kindless/attribute usage, so
+`sysml -convert=turtle` emits `a sysml:AttributeUsage`. Hand-written fixtures are often *not*
+discriminating (both old and new binaries agree); the repo fixture
+`internal/core/export/testdata/convert/views_flows_parameters.sysml` is, because its
+`action def Measure { out mass : Real; }` prints `AttributeUsage` on the new binary and
+`PartUsage` on a parent-commit binary. Prefer an A/B against `/tmp/old-sysml` over asserting a
+single output.
+
+### Cross-checking against the pinned pilot validator
+
+`./build/pilot-validator/validate-sysml <file>` takes ~20 s per file (it reads the whole standard
+library) and prints hundreds of `Reading …` lines plus `log4j:WARN` noise — filter with
+`grep -v '^Reading \|log4j'` and capture `${PIPESTATUS[0]}` for the real exit code. The pilot is
+*narrower* on keyword-as-name forms: `part frame : T;` and `part all : T;` are
+`no viable alternative at input …` (exit 1) there while OpenSysML accepts them. Classify that as
+wider/narrower, not automatically as an OpenSysML defect.
