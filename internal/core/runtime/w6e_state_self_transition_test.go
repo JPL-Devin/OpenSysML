@@ -1,0 +1,77 @@
+package runtime
+
+import "testing"
+
+// KerML StateTransitionPerformance orders `guard then transitionLinkSource.exit`
+// for every state transition, so a transition back to its own simple state exits
+// and re-enters it: exit action, effect, entry action, in that order.
+func TestSimpleSelfTransitionExitsAndReEntersItsState(t *testing.T) {
+	exec := stateExecutorForSource(t, "sm", `package test {
+		state sm {
+			attribute log : Integer = 0;
+
+			initial start;
+			state s {
+				entry { log = log * 10 + 1; }
+				exit { log = log * 10 + 2; }
+			}
+
+			start then s;
+			transition s to s accept again do assign log := log * 10 + 9;
+		}
+	}`)
+
+	exec.SendSignal("again", nil)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	assertCurrentState(t, exec, "s")
+	// 1 (entry), 2 (exit), 9 (effect), 1 (entry again).
+	if got := exec.StateData()["log"]; got.Const.Int != 1291 {
+		t.Errorf("self-transition log is %v, want 1291 (entry, exit, effect, entry)", got.Const.Int)
+	}
+	assertVisits(t, exec.stateVisits, "start", "s", "s")
+}
+
+// The same rule inside an orthogonal region: the self-transitioning state is
+// exited and re-entered while its sibling region keeps its own active state.
+func TestSimpleSelfTransitionInARegionLeavesSiblingRegionsAlone(t *testing.T) {
+	exec := stateExecutorForSource(t, "sm", `package test {
+		state sm {
+			attribute log : Integer = 0;
+			attribute other : Integer = 0;
+
+			region left {
+				initial lstart;
+				state l1 {
+					entry { log = log * 10 + 1; }
+					exit { log = log * 10 + 2; }
+				}
+				then lstart l1;
+				transition l1 to l1 accept again do assign log := log * 10 + 9;
+			}
+
+			region right {
+				initial rstart;
+				state r1 {
+					entry { other = other * 10 + 1; }
+					exit { other = other * 10 + 2; }
+				}
+				then rstart r1;
+			}
+		}
+	}`)
+
+	exec.SendSignal("again", nil)
+	if err := exec.RunToCompletion(); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	if got := exec.StateData()["log"]; got.Const.Int != 1291 {
+		t.Errorf("self-transition log is %v, want 1291 (entry, exit, effect, entry)", got.Const.Int)
+	}
+	if got := exec.StateData()["other"]; got.Const.Int != 1 {
+		t.Errorf("the sibling region was disturbed, its log is %v, want 1", got.Const.Int)
+	}
+}
