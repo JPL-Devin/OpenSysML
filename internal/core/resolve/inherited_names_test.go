@@ -150,6 +150,74 @@ func TestInheritedMembersThroughGeneralFeature(t *testing.T) {
 	}
 }
 
+// A name inherited from two supertypes at once is ambiguous with no member of
+// the subtype at fault, so the reference reports it on the subtype itself
+// (SysML v2 §7.6.1) — matched run, w6c.
+func TestNameInheritedFromTwoSupertypesIsReportedOnTheSubtype(t *testing.T) {
+	r, _, _ := resolvedDoc(t, `package P {
+		part def L1 { attribute p; }
+		part def R1 { attribute p; }
+		part def D2 :> L1, R1;
+	}`)
+	conflicts := diagnosticsWithCode(r, resolve.CodeNameConflict)
+	if len(conflicts) != 1 {
+		t.Fatalf("conflicts = %v, want one for the diamond-inherited name", r.Diagnostics)
+	}
+	if want := "Duplicate of inherited member name 'p' from L1, R1"; conflicts[0].Message != want {
+		t.Errorf("message = %q, want %q", conflicts[0].Message, want)
+	}
+	if !conflicts[0].Warning {
+		t.Error("the diamond conflict is an error, want a warning")
+	}
+}
+
+// A feature an intermediate supertype redefines is still inherited by that
+// supertype's own subtypes under its name, so redeclaring it there conflicts.
+func TestNameRedefinedByAnIntermediateSupertypeStillConflicts(t *testing.T) {
+	r, _, _ := resolvedDoc(t, `package P {
+		part def B { attribute p; }
+		part def M :> B { attribute :>> p; }
+		part def D :> M { attribute p; }
+	}`)
+	conflicts := diagnosticsWithCode(r, resolve.CodeNameConflict)
+	if len(conflicts) != 1 {
+		t.Fatalf("conflicts = %v, want one for the name M redefines", r.Diagnostics)
+	}
+	if want := "Duplicate of inherited member name 'p' from M"; conflicts[0].Message != want {
+		t.Errorf("message = %q, want %q", conflicts[0].Message, want)
+	}
+}
+
+// A parameter inherited twice under one name is one feature when the owner of
+// one specializes the owner of the other, which implicitly redefines it —
+// matched run, w6c.
+func TestParameterInheritedThroughItsOwnSupertypeIsNotAmbiguous(t *testing.T) {
+	r, _, _ := resolvedDoc(t, `package P {
+		action def A { in p; }
+		action def Outer { action a : A { in p; } }
+		action def Sub :> Outer { action :>> a : A; }
+	}`)
+	if conflicts := diagnosticsWithCode(r, resolve.CodeNameConflict); len(conflicts) != 0 {
+		t.Errorf("conflicts = %v, want none for the implicitly redefined parameter", conflicts)
+	}
+}
+
+// Two parameters of unrelated supertypes are still ambiguous — matched run.
+func TestParameterInheritedFromTwoUnrelatedSupertypesIsAmbiguous(t *testing.T) {
+	r, _, _ := resolvedDoc(t, `package P {
+		action def L { in p; }
+		action def R { in p; }
+		action def D :> L, R;
+	}`)
+	conflicts := diagnosticsWithCode(r, resolve.CodeNameConflict)
+	if len(conflicts) != 1 {
+		t.Fatalf("conflicts = %v, want one for the diamond-inherited parameter", r.Diagnostics)
+	}
+	if want := "Duplicate of inherited member name 'p' from L, R"; conflicts[0].Message != want {
+		t.Errorf("message = %q, want %q", conflicts[0].Message, want)
+	}
+}
+
 // The subject, actors and stakeholders of a requirement redefine the inherited
 // ones by name, which is not modelled here, so redeclaring them is no conflict.
 func TestRequirementParametersAreNotNameConflicts(t *testing.T) {

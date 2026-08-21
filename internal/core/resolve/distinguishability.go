@@ -63,7 +63,9 @@ func (r *Resolver) checkInheritedNames(scope *symbols.Scope) {
 		return
 	}
 	owned, aliases := distinguishableMembers(scope)
+	declared := map[string]bool{}
 	for _, sym := range append(owned, aliases...) {
+		declared[sym.Name] = true
 		if implicitlyRedefined(sym) || r.hasUnresolvedRedefinition(sym) {
 			continue
 		}
@@ -73,6 +75,97 @@ func (r *Resolver) checkInheritedNames(scope *symbols.Scope) {
 		}
 		r.duplicateName(sym, "Duplicate of inherited member name", dups)
 	}
+	r.checkInheritedAmbiguity(owner, inherited, declared, model)
+}
+
+// checkInheritedAmbiguity reports a name the type inherits from two different
+// supertypes at once: the type declares nothing at fault, so the reference
+// reports it on the type itself. A name the type redeclares is reported there.
+// A member whose redefinition we could not resolve may be the one resolving the
+// ambiguity, so nothing is claimed for such a type.
+func (r *Resolver) checkInheritedAmbiguity(
+	owner *symbols.Symbol,
+	inherited map[string][]*symbols.Symbol,
+	declared map[string]bool,
+	model supertypeLookup,
+) {
+	if r.hasUnresolvedRedefinitions(owner.Scope) {
+		return
+	}
+	names := make([]string, 0, len(inherited))
+	for name := range inherited {
+		if name != "" && !declared[name] && len(inherited[name]) > 1 {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		members := r.withoutImplicitlyRedefined(inherited[name], model)
+		if len(members) < 2 {
+			continue
+		}
+		dups := r.duplicatesOf(members[0], members[1:])
+		if len(dups) == 0 {
+			continue
+		}
+		r.duplicateInherited(owner, name, members)
+	}
+}
+
+// withoutImplicitlyRedefined drops the members of one inherited name that a
+// same-named member implicitly redefines: a parameter redefines the one its
+// owner's own supertype declares under that name (KerML 8.4.4.6).
+func (r *Resolver) withoutImplicitlyRedefined(
+	members []*symbols.Symbol,
+	model supertypeLookup,
+) []*symbols.Symbol {
+	out := make([]*symbols.Symbol, 0, len(members))
+	for _, sym := range members {
+		hidden := false
+		for _, other := range members {
+			if other == sym || !implicitlyRedefined(other) {
+				continue
+			}
+			if r.inheritsFrom(ownerOf(other), ownerOf(sym), model) {
+				hidden = true
+				break
+			}
+		}
+		if !hidden {
+			out = append(out, sym)
+		}
+	}
+	return out
+}
+
+// inheritsFrom reports whether sub reaches sup through its supertypes.
+func (r *Resolver) inheritsFrom(sub, sup *symbols.Symbol, model supertypeLookup) bool {
+	if sub == nil || sup == nil || sub == sup {
+		return false
+	}
+	seen := map[*symbols.Symbol]bool{sub: true}
+	queue := model.DirectSupertypes(sub)
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+		if cur == nil || seen[cur] {
+			continue
+		}
+		if cur == sup {
+			return true
+		}
+		seen[cur] = true
+		queue = append(queue, model.DirectSupertypes(cur)...)
+	}
+	return false
+}
+
+// ownerOf is the namespace a member belongs to.
+func ownerOf(sym *symbols.Symbol) *symbols.Symbol {
+	if sym == nil || sym.OwnerScope == nil {
+		return nil
+	}
+	return sym.OwnerScope.Owner()
 }
 
 // hasUnresolvedRedefinition reports whether sym declares a redefinition whose
@@ -81,6 +174,20 @@ func (r *Resolver) checkInheritedNames(scope *symbols.Scope) {
 func (r *Resolver) hasUnresolvedRedefinition(sym *symbols.Symbol) bool {
 	for _, rel := range redefinesRelationships(sym.Decl) {
 		if _, ok := r.resolveTarget(sym.OwnerScope, rel.Target, nil); !ok {
+			return true
+		}
+	}
+	return false
+}
+
+// hasUnresolvedRedefinitions reports whether any member of scope declares a
+// redefinition whose target we could not resolve.
+func (r *Resolver) hasUnresolvedRedefinitions(scope *symbols.Scope) bool {
+	if scope == nil {
+		return false
+	}
+	for _, sym := range scope.AllMembers() {
+		if r.hasUnresolvedRedefinition(sym) {
 			return true
 		}
 	}
@@ -135,7 +242,7 @@ func (r *Resolver) removeRedefinedFeatures(owner *symbols.Symbol, inherited []*s
 	kept := make([]*symbols.Symbol, 0, len(inherited))
 	for _, sym := range inherited {
 		redefines := r.redefinedClosure(sym)
-		if meets(redefines, byOwner) {
+		if redefinedByOther(redefines, byOwner, sym) {
 			continue
 		}
 		for target := range redefines {
@@ -154,15 +261,18 @@ func (r *Resolver) removeRedefinedFeatures(owner *symbols.Symbol, inherited []*s
 	return out
 }
 
-// redefinedByMembers collects the features the members of scope redefine.
-func (r *Resolver) redefinedByMembers(scope *symbols.Scope) map[*symbols.Symbol]bool {
-	out := map[*symbols.Symbol]bool{}
+// redefinedByMembers maps each feature the members of scope redefine to the
+// members redefining it.
+func (r *Resolver) redefinedByMembers(scope *symbols.Scope) map[*symbols.Symbol][]*symbols.Symbol {
+	out := map[*symbols.Symbol][]*symbols.Symbol{}
 	if scope == nil {
 		return out
 	}
-	for _, sym := range scope.Members() {
+	// An unnamed member redefines just as a named one does, and one whose
+	// effective name only the semantic model knows is anonymous here.
+	for _, sym := range scope.AllMembers() {
 		for _, target := range r.redefinedFeatures(sym) {
-			out[target] = true
+			out[target] = append(out[target], sym)
 		}
 	}
 	return out
@@ -185,10 +295,19 @@ func (r *Resolver) redefinedClosure(sym *symbols.Symbol) map[*symbols.Symbol]boo
 	return out
 }
 
-func meets(a, b map[*symbols.Symbol]bool) bool {
-	for sym := range a {
-		if b[sym] {
-			return true
+// redefinedByOther reports whether a member other than sym redefines one of the
+// features sym's redefinition closure reaches: sym's own redefinition of an
+// inherited feature must not remove sym from what its owner contributes.
+func redefinedByOther(
+	closure map[*symbols.Symbol]bool,
+	byOwner map[*symbols.Symbol][]*symbols.Symbol,
+	sym *symbols.Symbol,
+) bool {
+	for target := range closure {
+		for _, redefiner := range byOwner[target] {
+			if redefiner != sym {
+				return true
+			}
 		}
 	}
 	return false
