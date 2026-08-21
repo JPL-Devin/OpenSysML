@@ -344,3 +344,27 @@ func (w *Workspace) ResolveReferenceSegmentsInDoc(name string, ref resolve.Refer
 	}
 	return out
 }
+
+// ResolveReferenceNameSegmentsInDoc is ResolveReferenceSegmentsInDoc reporting
+// what each segment's name *is* rather than the element it reaches, so a segment
+// written as an alias name is the alias. Rename edits names, not elements.
+func (w *Workspace) ResolveReferenceNameSegmentsInDoc(name string, ref resolve.Reference) []*symbols.Symbol {
+	if ref.QN == nil {
+		return nil
+	}
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	r, _ := w.newResolver()
+	r.ResolveReference(ref)
+	out := make([]*symbols.Symbol, len(ref.QN.Parts))
+	for i := range ref.QN.Parts {
+		if sym, ok := r.PartAlias(ref.QN, i); ok {
+			out[i] = sym
+			continue
+		}
+		if sym, ok := r.PartSymbol(ref.QN, i); ok {
+			out[i] = sym
+		}
+	}
+	return out
+}

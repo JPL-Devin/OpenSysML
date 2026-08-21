@@ -34,7 +34,7 @@ Expect `--- PASS` for `TestTrainingExamplesSemanticErrors`, `TestPilotCorporaDia
 `TestCorpusGatesCacheStateIndependent` (subtests `training` and `pilot-corpora` — the older
 `TestTrainingExamplesCacheStateIndependent` / `TestPilotCorporaCacheStateIndependent` no longer
 exist), plus `100/100 training files clean` and three `N/M pilot corpus files clean` lines
-(observed 2026-08: sysml-examples 76/98, sysml-validation 52/56, kerml-examples 40/58 — these move
+(observed 2026-08: sysml-examples 76/98, sysml-validation 52/56, kerml-examples 51/58 — these move
 whenever diagnostics change, so read the current numbers from `docs/project/pilot-corpora.md`
 rather than hard-coding them).
 

@@ -1,7 +1,7 @@
 {
   "type": "state",
   "finalState": "waiting",
-  "stateVisits": ["start", "waiting"],
+  "stateVisits": ["start", "waiting", "waiting"],
   "outputs": {
     "log": {"type": "Integer", "value": 1}
   }

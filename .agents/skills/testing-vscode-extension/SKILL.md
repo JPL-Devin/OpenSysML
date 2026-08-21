@@ -304,6 +304,46 @@ asserting the contextual list, and a separate fixture with them for the "still o
 Confirm the whole expected list cheaply first with a stdio JSON-RPC completion probe against
 `bin/sysml-lsp`, then prove it in the GUI.
 
+## Name resolution / alias / rename testing (`internal/core/resolve`, `internal/lsp/rename.go`)
+
+- **Never name a fixture package after a standard-library package.** `internal/core/libs/stdlib`
+  ships `Domain Libraries/Geometry/ShapeItems.sysml`, which itself declares
+  `alias Box for RectangularCuboid`. A fixture `package ShapeItems { ... alias Box for Cube; }`
+  therefore collides: `%explain ShapeItems::Box` reports `is ambiguous`, and a broken
+  `ShapeItems::Box` reference can still resolve (to the stdlib alias), silently masking failures.
+  Use a unique package name (`Shapes`, `Demo`) and re-run any assertion first taken with a colliding
+  name. Grep before choosing a name:
+  `grep -rn "\balias Box\b" internal/core/libs/`.
+- **LSP rename/references do NOT go through `internal/core/edit/rename.go`.** `Server.Rename` uses
+  `Workspace.ResolveReferenceNameSegmentsInDoc` (the name a segment *wrote*, so an alias use belongs
+  to the alias) and `References` unions that with `ResolveReferenceSegmentsInDoc`, comparing with
+  `symbols.SameElement`. A resolver change to segment identity therefore changes rename/references
+  even when `go test ./internal/core/edit` is green: test both in the editor *and* with a probe.
+- Cheap oracle before driving the GUI: a stdio JSON-RPC probe that sends `textDocument/rename`
+  (with `newName`) and `textDocument/references` for both the alias declaration and the target
+  declaration, printing `(line, char, newText)` per edit. Run the same probe against a
+  `origin/main`-built server; a swapped set of edit positions is the whole finding.
+- A **regression control inside one window**: `Ctrl+,` → `opensysml.server.path` → point at
+  `/tmp/old-sysml-lsp` (main build), redo the rename, then point it back. Editing
+  `~/.config/Code/User/settings.json` from the shell plus `Developer: Reload Window` is the most
+  reliable way to force the swap; confirm it with `pgrep -af sysml-lsp` (put it in a script so the
+  grep does not match itself).
+- **Expected alias difference vs main once references union both identities:** references on a target
+  (`Cube`) include alias-written uses (`part p : Box`, `Shapes::Box`) — e.g. 6 hits where a
+  main-built server reports 4 — while references on the alias list only occurrences of its own
+  written name. Main also still lands F12 on the `alias ... for ...` line instead of the target
+  declaration. Both are intended changes, not regressions; verify the direction before reporting.
+- Right after a window/server start, `F2` can answer **"The element can't be renamed / no renameable
+  name at this position"** even on a valid name. It is usually a not-yet-indexed document, not a
+  failure: `Escape`, wait a few seconds, click inside the identifier again and retry before
+  concluding anything.
+- `bin/sysml-lsp` accepts `--stdio`, so the `/tmp/lsp-wrap.sh` workaround above is not needed — check with `timeout 5 ./bin/sysml-lsp --stdio </dev/null; echo $?` (0 = fine).
+- Judging a rename: the oracle is the **Problems panel after the rename**. A rename that leaves the
+  model with new `unresolved reference: X` errors is a failure even if the declaration was renamed.
+- Completion after a trailing `Qualifier::` *does* work for member lookup (`Shapes::Box::` →
+  `length/width/height` with `attributeUsage` details) even though the file is momentarily a syntax
+  error; keep the fixture otherwise valid and `Escape` + revert the line afterwards.
+
 ## Recording tips
 
 Record the VS Code window maximized (wmctrl above). Verify visual claims by `zoom`ing the status bar

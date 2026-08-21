@@ -570,13 +570,14 @@ func (e *StateExecutor) nestedIn(state, composite *ast.StateNode) bool {
 	return false
 }
 
-// encloses reports whether the composite state is the target or contains it. A
-// simple state is never enclosing: a self-transition on one stays put.
-func (e *StateExecutor) encloses(composite, target *ast.StateNode) bool {
-	if composite == nil || target == nil || !e.isComposite(composite) {
+// encloses reports whether the source is the target or contains it, making the
+// transition external: KerML exits the source of every transition, so a state
+// transitioning to itself is left and entered afresh.
+func (e *StateExecutor) encloses(source, target *ast.StateNode) bool {
+	if source == nil || target == nil {
 		return false
 	}
-	return composite == target || e.nestedIn(target, composite)
+	return source == target || e.nestedIn(target, source)
 }
 
 // exitStates exits the states being left, innermost first.
@@ -602,19 +603,6 @@ func (e *StateExecutor) exitedByAncestorRegion(state *ast.StateNode, leaving []*
 	owner := e.graph.RegionOwner[region]
 	for _, other := range leaving {
 		if other == owner {
-			return true
-		}
-	}
-	return false
-}
-
-// isComposite reports whether the state owns orthogonal regions or substates.
-func (e *StateExecutor) isComposite(state *ast.StateNode) bool {
-	if len(e.graph.CompositeStates[state]) > 0 {
-		return true
-	}
-	for _, parent := range e.graph.ParentState {
-		if parent == state {
 			return true
 		}
 	}

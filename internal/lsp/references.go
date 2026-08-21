@@ -45,8 +45,12 @@ func (s *Server) References(ctx context.Context, params *protocol.ReferenceParam
 			continue
 		}
 		for _, ref := range collectRefs(refDoc.AST, refDoc.Scope) {
+			// Both identities of a segment: the element it reaches and, where it
+			// wrote an alias name, the alias — each names the target for a reader.
+			names := s.ws.ResolveReferenceNameSegmentsInDoc(docName, ref)
 			for i, seg := range s.ws.ResolveReferenceSegmentsInDoc(docName, ref) {
-				if symbols.SameElement(seg, target) {
+				if symbols.SameElement(seg, target) ||
+					(i < len(names) && symbols.SameElement(names[i], target)) {
 					add(docName, refDoc.Content, ref.QN.Parts[i].Span)
 				}
 			}

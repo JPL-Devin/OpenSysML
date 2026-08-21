@@ -33,6 +33,7 @@ Observed at `19a3ce03`: `428 .xt file(s), 0 unparsed; 1261 assertion(s), 1326 ex
 baseline, and the numeric tables in `docs/project/pilot-xpect.md` match it (per-suite kerml
 303/968/319/418/231, sysml 125/358/63/295/0; 10 ignored XPECT-shaped fragments; 0 missing
 resources).
+See `testing-pilot-differential/SKILL.md` for the complete mechanical-guard scope and review-only surfaces.
 
 **Determinism under concurrency is the main risk** (`compareAll` in `main.go` fans N goroutines
 into one shared result slice). Test it explicitly, not just by repeating the default run:
