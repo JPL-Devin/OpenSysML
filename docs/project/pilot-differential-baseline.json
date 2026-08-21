@@ -3,12 +3,12 @@
   "pilotRelease": "2026-05 (jupyter-sysml-kernel 0.60.1)",
   "totals": {
     "files": 353,
-    "filesFullyAgreeing": 297,
+    "filesFullyAgreeing": 300,
     "agreement": 22,
     "severityMismatch": 16,
-    "openSysMLOnly": 161,
+    "openSysMLOnly": 147,
     "pilotOnly": 137,
-    "openSysMLDiagnostics": 199,
+    "openSysMLDiagnostics": 185,
     "pilotDiagnostics": 175
   },
   "roots": [
@@ -35,9 +35,9 @@
         "filesFullyAgreeing": 78,
         "agreement": 0,
         "severityMismatch": 0,
-        "openSysMLOnly": 98,
+        "openSysMLOnly": 91,
         "pilotOnly": 0,
-        "openSysMLDiagnostics": 98,
+        "openSysMLDiagnostics": 91,
         "pilotDiagnostics": 0
       },
       "files": [
@@ -199,24 +199,6 @@
               "severity": "error",
               "category": "unresolved-reference",
               "count": 1
-            },
-            {
-              "line": 93,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 94,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 95,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
             }
           ],
           "pilotOnly": []
@@ -227,43 +209,7 @@
           "severityMismatch": [],
           "openSysMLOnly": [
             {
-              "line": 69,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 70,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 71,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
               "line": 96,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 98,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 99,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 100,
               "severity": "error",
               "category": "unresolved-reference",
               "count": 1
@@ -345,9 +291,21 @@
           "severityMismatch": [],
           "openSysMLOnly": [
             {
-              "line": 25,
+              "line": 49,
               "severity": "error",
-              "category": "unresolved-reference",
+              "category": "unmapped",
+              "count": 1
+            },
+            {
+              "line": 50,
+              "severity": "error",
+              "category": "unmapped",
+              "count": 1
+            },
+            {
+              "line": 51,
+              "severity": "error",
+              "category": "unmapped",
               "count": 1
             }
           ],
@@ -754,12 +712,12 @@
       "dir": "examples/pilot-corpora/kerml-examples",
       "totals": {
         "files": 58,
-        "filesFullyAgreeing": 48,
+        "filesFullyAgreeing": 49,
         "agreement": 0,
         "severityMismatch": 0,
-        "openSysMLOnly": 8,
+        "openSysMLOnly": 5,
         "pilotOnly": 6,
-        "openSysMLDiagnostics": 8,
+        "openSysMLDiagnostics": 5,
         "pilotDiagnostics": 6
       },
       "files": [
@@ -860,32 +818,6 @@
           ]
         },
         {
-          "path": "Simple Tests/Filtering.kerml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [
-            {
-              "line": 38,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 47,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 48,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            }
-          ],
-          "pilotOnly": []
-        },
-        {
           "path": "Simple Tests/Inverses.kerml",
           "agreement": [],
           "severityMismatch": [],
@@ -934,12 +866,12 @@
       "dir": "testdata",
       "totals": {
         "files": 15,
-        "filesFullyAgreeing": 6,
+        "filesFullyAgreeing": 8,
         "agreement": 22,
         "severityMismatch": 4,
-        "openSysMLOnly": 7,
+        "openSysMLOnly": 3,
         "pilotOnly": 27,
-        "openSysMLDiagnostics": 33,
+        "openSysMLDiagnostics": 29,
         "pilotDiagnostics": 53
       },
       "files": [
@@ -1195,46 +1127,6 @@
               "count": 1
             }
           ]
-        },
-        {
-          "path": "passes/f93_element_filter.kerml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [
-            {
-              "line": 32,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 40,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 41,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            }
-          ],
-          "pilotOnly": []
-        },
-        {
-          "path": "passes/f93_element_filter.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [
-            {
-              "line": 22,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            }
-          ],
-          "pilotOnly": []
         },
         {
           "path": "passes/import_no_visibility.sysml",
@@ -2241,6 +2133,21 @@
     {
       "side": "opensysml",
       "message": "interface Mounting connects ports AxleMountIF and WheelHubIF, whose directed features are not conjugate; one end usually names the conjugate port (~AxleMountIF)",
+      "count": 1
+    },
+    {
+      "side": "opensysml",
+      "message": "p1 participates in a specialization cycle",
+      "count": 1
+    },
+    {
+      "side": "opensysml",
+      "message": "p2 participates in a specialization cycle",
+      "count": 1
+    },
+    {
+      "side": "opensysml",
+      "message": "p3 participates in a specialization cycle",
       "count": 1
     },
     {
