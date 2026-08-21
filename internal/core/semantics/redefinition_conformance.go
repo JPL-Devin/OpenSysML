@@ -122,7 +122,7 @@ func (m *Model) restrictionViolations(sym *symbols.Symbol, usage *ast.Usage,
 			Kind: ViolationUniqueness, Feature: sym, Target: target, Ref: ref,
 		})
 	}
-	if usage.IsVariable && m.isConstantFeature(target, targetUsage) {
+	if usage.IsVariable && m.isConstantFeature(target, targetUsage, map[*symbols.Symbol]bool{}) {
 		out = append(out, ConformanceViolation{
 			Kind: ViolationConstancy, Feature: sym, Target: target, Ref: ref,
 		})
@@ -132,13 +132,16 @@ func (m *Model) restrictionViolations(sym *symbols.Symbol, usage *ast.Usage,
 
 // isConstantFeature reports whether target is constant, declared so or through a
 // feature it subsets or redefines: constancy is inherited by restriction.
-func (m *Model) isConstantFeature(target *symbols.Symbol, usage *ast.Usage) bool {
+// seen guards against cyclic subsetting.
+func (m *Model) isConstantFeature(target *symbols.Symbol, usage *ast.Usage,
+	seen map[*symbols.Symbol]bool) bool {
 	if usage.IsConstant {
 		return true
 	}
-	if usage.IsVariable {
+	if usage.IsVariable || seen[target] {
 		return false
 	}
+	seen[target] = true
 	for _, rel := range RelationshipsOf(target) {
 		if rel == nil || rel.Target == nil {
 			continue
@@ -151,7 +154,7 @@ func (m *Model) isConstantFeature(target *symbols.Symbol, usage *ast.Usage) bool
 			continue
 		}
 		nextUsage, ok := usageOf(next)
-		if ok && m.isConstantFeature(next, nextUsage) {
+		if ok && m.isConstantFeature(next, nextUsage, seen) {
 			return true
 		}
 	}

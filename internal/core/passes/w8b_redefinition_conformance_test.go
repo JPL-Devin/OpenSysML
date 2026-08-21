@@ -147,6 +147,23 @@ func TestW8BConstancyConformanceAllowsConstantRestriction(t *testing.T) {
 	}
 }
 
+// Constancy is inherited along the subsetting chain, which parseable input may
+// close into a cycle: the walk must terminate rather than recurse forever.
+func TestW8BConstancyConformanceTerminatesOnCyclicSubsetting(t *testing.T) {
+	diags := conformanceDiags(t, `
+		package P {
+			class A {
+				feature a :> b;
+				feature b :> a;
+				var feature v :> a;
+			}
+		}
+	`)
+	if len(diags) != 0 {
+		t.Fatalf("a cycle declares no constant feature, got %v", codes(diags))
+	}
+}
+
 // MetadataTests_MetadataFeature_invalid.kerml.xt: a metadata annotation body
 // restates features of the annotated type, so a name it does not offer — even
 // one that exists in the surrounding namespace — redefines nothing.
