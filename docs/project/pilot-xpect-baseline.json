@@ -7,8 +7,8 @@
     "filesUnparsed": 0,
     "assertions": 1261,
     "rows": 1326,
-    "agree": 382,
-    "disagree": 713,
+    "agree": 449,
+    "disagree": 646,
     "unlocated": 0,
     "notAdjudicated": 231,
     "missingResources": 0
@@ -23,18 +23,18 @@
       "disagree": 513,
       "unlocated": 0,
       "notAdjudicated": 0,
-      "sameLocation": 152,
-      "sameLine": 70,
-      "severityDiffers": 15,
-      "elsewhereInFile": 89
+      "sameLocation": 153,
+      "sameLine": 69,
+      "severityDiffers": 16,
+      "elsewhereInFile": 80
     },
     {
       "kind": "noErrors",
       "assertions": 275,
       "blockAssertions": 0,
       "rows": 275,
-      "agree": 231,
-      "disagree": 44,
+      "agree": 244,
+      "disagree": 31,
       "unlocated": 0,
       "notAdjudicated": 0,
       "sameLocation": 0,
@@ -47,8 +47,8 @@
       "assertions": 194,
       "blockAssertions": 0,
       "rows": 194,
-      "agree": 151,
-      "disagree": 43,
+      "agree": 194,
+      "disagree": 0,
       "unlocated": 0,
       "notAdjudicated": 0,
       "sameLocation": 0,
@@ -61,14 +61,14 @@
       "assertions": 75,
       "blockAssertions": 17,
       "rows": 113,
-      "agree": 0,
-      "disagree": 113,
+      "agree": 11,
+      "disagree": 102,
       "unlocated": 0,
       "notAdjudicated": 0,
       "sameLocation": 0,
       "sameLine": 0,
-      "severityDiffers": 64,
-      "elsewhereInFile": 0
+      "severityDiffers": 61,
+      "elsewhereInFile": 7
     },
     {
       "kind": "scope",
@@ -108,8 +108,8 @@
         "filesUnparsed": 0,
         "assertions": 952,
         "rows": 968,
-        "agree": 319,
-        "disagree": 418,
+        "agree": 381,
+        "disagree": 356,
         "unlocated": 0,
         "notAdjudicated": 231,
         "missingResources": 0
@@ -124,18 +124,18 @@
           "disagree": 328,
           "unlocated": 0,
           "notAdjudicated": 0,
-          "sameLocation": 149,
-          "sameLine": 11,
+          "sameLocation": 150,
+          "sameLine": 10,
           "severityDiffers": 6,
-          "elsewhereInFile": 49
+          "elsewhereInFile": 41
         },
         {
           "kind": "noErrors",
           "assertions": 200,
           "blockAssertions": 0,
           "rows": 200,
-          "agree": 171,
-          "disagree": 29,
+          "agree": 182,
+          "disagree": 18,
           "unlocated": 0,
           "notAdjudicated": 0,
           "sameLocation": 0,
@@ -148,8 +148,8 @@
           "assertions": 191,
           "blockAssertions": 0,
           "rows": 191,
-          "agree": 148,
-          "disagree": 43,
+          "agree": 191,
+          "disagree": 0,
           "unlocated": 0,
           "notAdjudicated": 0,
           "sameLocation": 0,
@@ -162,8 +162,8 @@
           "assertions": 18,
           "blockAssertions": 0,
           "rows": 18,
-          "agree": 0,
-          "disagree": 18,
+          "agree": 8,
+          "disagree": 10,
           "unlocated": 0,
           "notAdjudicated": 0,
           "sameLocation": 0,
@@ -1155,7 +1155,7 @@
               "line": 28,
               "verdict": "disagree",
               "declared": "no error anywhere in the file",
-              "ours": "2 error(s), first: line 44: expected a body member"
+              "ours": "1 error(s), first: line 40: y1 [0..*] redefines y [1..*]: multiplicity bounds incompatible"
             }
           ]
         },
@@ -1339,16 +1339,7 @@
           "path": "src/org/omg/kerml/xpect/tests/parsing/ParsingTests_Behaviors.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 1,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "noErrors",
-              "line": 30,
-              "verdict": "disagree",
-              "declared": "no error anywhere in the file",
-              "ours": "2 error(s), first: line 41: expected '{' or ';' after declaration"
-            }
-          ]
+          "agree": 1
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/parsing/ParsingTests_CircularReferences.kerml.xt",
@@ -1363,7 +1354,7 @@
               "verdict": "disagree",
               "tolerance": "same-line",
               "declared": "error: \"Must directly or indirectly specialize Base::Anything\"",
-              "ours": "line 33 offset 599: expected '{' or ';' after declaration"
+              "ours": "line 33 offset 601: C participates in a specialization cycle"
             },
             {
               "kind": "errors",
@@ -1372,7 +1363,7 @@
               "verdict": "disagree",
               "tolerance": "same-line",
               "declared": "error: \"Features must have at least one type\"",
-              "ours": "line 36 offset 701: expected '{' or ';' after declaration"
+              "ours": "line 36 offset 703: c participates in a specialization cycle"
             }
           ]
         },
@@ -1380,31 +1371,13 @@
           "path": "src/org/omg/kerml/xpect/tests/parsing/ParsingTests_Classifiers.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 1,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "noErrors",
-              "line": 19,
-              "verdict": "disagree",
-              "declared": "no error anywhere in the file",
-              "ours": "2 error(s), first: line 24: expected a namespace member"
-            }
-          ]
+          "agree": 1
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/parsing/ParsingTests_Comments.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 1,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "noErrors",
-              "line": 19,
-              "verdict": "disagree",
-              "declared": "no error anywhere in the file",
-              "ours": "1 error(s), first: line 62: expected a body member"
-            }
-          ]
+          "agree": 1
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/parsing/ParsingTests_Dependencies.kerml.xt",
@@ -1416,31 +1389,13 @@
           "path": "src/org/omg/kerml/xpect/tests/parsing/ParsingTests_Expressions.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 1,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "noErrors",
-              "line": 40,
-              "verdict": "disagree",
-              "declared": "no error anywhere in the file",
-              "ours": "4 error(s), first: line 64: expected a body member"
-            }
-          ]
+          "agree": 1
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/parsing/ParsingTests_FeatureChains.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 1,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "noErrors",
-              "line": 35,
-              "verdict": "disagree",
-              "declared": "no error anywhere in the file",
-              "ours": "5 error(s), first: line 71: expected '{' or ';' after declaration"
-            }
-          ]
+          "agree": 1
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/parsing/ParsingTests_Import_Visibility.kerml.xt",
@@ -1492,16 +1447,7 @@
           "path": "src/org/omg/kerml/xpect/tests/parsing/ParsingTests_LiteralExpression.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 1,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "noErrors",
-              "line": 24,
-              "verdict": "disagree",
-              "declared": "no error anywhere in the file",
-              "ours": "1 error(s), first: line 44: expected a namespace member"
-            }
-          ]
+          "agree": 1
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/parsing/ParsingTests_Metadata.kerml.xt",
@@ -1644,17 +1590,7 @@
           "path": "src/org/omg/kerml/xpect/tests/scoping/ShortName_Import_Valid5.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.scoping.KerMLScopingTest",
           "expectations": 6,
-          "agree": 5,
-          "rows": [
-            {
-              "kind": "linkedName",
-              "line": 29,
-              "at": "VVP_Id::VVVP_Id::VVVVP_Id_alias",
-              "verdict": "disagree",
-              "declared": "Test.Test2.VP.VVP.VVVP.VVVVP",
-              "ours": "Test.Test2.VP.VVP.VVVP.VVVVP_Id_alias"
-            }
-          ]
+          "agree": 6
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/scoping/ShortName_Scoping_Valid1.kerml.xt",
@@ -1666,16 +1602,7 @@
           "path": "src/org/omg/kerml/xpect/tests/scoping/ShortName_Scoping_Valid2.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.scoping.KerMLScopingTest",
           "expectations": 1,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "noErrors",
-              "line": 18,
-              "verdict": "disagree",
-              "declared": "no error anywhere in the file",
-              "ours": "2 error(s), first: line 22: expected a /* ... */ comment body"
-            }
-          ]
+          "agree": 1
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_FeatureRedefinition.kerml.xt",
@@ -1693,25 +1620,7 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_LocalNamedMember.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "linkedName",
-              "line": 37,
-              "at": "A_alias",
-              "verdict": "disagree",
-              "declared": "test.A",
-              "ours": "test.A_alias"
-            },
-            {
-              "kind": "linkedName",
-              "line": 41,
-              "at": "A_Id_alias",
-              "verdict": "disagree",
-              "declared": "test.A",
-              "ours": "test.A_Id_alias"
-            }
-          ]
+          "agree": 4
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_MultipleInheritance.kerml.xt",
@@ -1795,192 +1704,55 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_NamedMemberForPrivate.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 4,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "linkedName",
-              "line": 27,
-              "at": "k",
-              "verdict": "disagree",
-              "declared": "test.something",
-              "ours": "test.k"
-            },
-            {
-              "kind": "linkedName",
-              "line": 29,
-              "at": "kk",
-              "verdict": "disagree",
-              "declared": "test.something",
-              "ours": "test.kk"
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_NamedMemberForPrivate_FT.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "linkedName",
-              "line": 28,
-              "at": "k",
-              "verdict": "disagree",
-              "declared": "test.something",
-              "ours": "test.k"
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_NamedMemberForPrivate_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "linkedName",
-              "line": 27,
-              "at": "k",
-              "verdict": "disagree",
-              "declared": "test.something",
-              "ours": "test.k"
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_NamedMemberFromConjugation.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 4,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "noErrors",
-              "line": 18,
-              "verdict": "disagree",
-              "declared": "no error anywhere in the file",
-              "ours": "6 error(s), first: line 39: expected '{' or ';' after declaration"
-            },
-            {
-              "kind": "linkedName",
-              "line": 41,
-              "at": "B::f",
-              "verdict": "disagree",
-              "declared": "test.A.f",
-              "ours": "we index no name reference at offset 1595"
-            },
-            {
-              "kind": "linkedName",
-              "line": 43,
-              "at": "B::f_Id",
-              "verdict": "disagree",
-              "declared": "test.A.f",
-              "ours": "we index no name reference at offset 1658"
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_NamedMemberFromInheritance.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 4,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "linkedName",
-              "line": 41,
-              "at": "aa",
-              "verdict": "disagree",
-              "declared": "test.A.a",
-              "ours": "test.A.aa"
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_NamedMemberFromInheritance2.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "linkedName",
-              "line": 29,
-              "at": "AA",
-              "verdict": "disagree",
-              "declared": "test.A",
-              "ours": "test.AA"
-            },
-            {
-              "kind": "linkedName",
-              "line": 47,
-              "at": "aa",
-              "verdict": "disagree",
-              "declared": "test.A.a",
-              "ours": "test.A.aa"
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_NamedMemberFromInheritance2_FT.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "linkedName",
-              "line": 41,
-              "at": "AA",
-              "verdict": "disagree",
-              "declared": "test.A",
-              "ours": "test.AA"
-            },
-            {
-              "kind": "linkedName",
-              "line": 61,
-              "at": "aa",
-              "verdict": "disagree",
-              "declared": "test.A.a",
-              "ours": "test.A.aa"
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_NamedMemberFromInheritance2_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "linkedName",
-              "line": 38,
-              "at": "AA",
-              "verdict": "disagree",
-              "declared": "test.A",
-              "ours": "test.AA"
-            },
-            {
-              "kind": "linkedName",
-              "line": 56,
-              "at": "aa",
-              "verdict": "disagree",
-              "declared": "test.A.a",
-              "ours": "test.A.aa"
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_NamedMemberFromInheritance_2.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "linkedName",
-              "line": 32,
-              "at": "aa",
-              "verdict": "disagree",
-              "declared": "test.A.a",
-              "ours": "test.A.aa"
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_NamedMemberFromInheritance_FT.kerml.xt",
@@ -1992,49 +1764,19 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_NamedMemberFromInheritance_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 4,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "linkedName",
-              "line": 50,
-              "at": "aa",
-              "verdict": "disagree",
-              "declared": "test.A.a",
-              "ours": "test.A.aa"
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_NamedMemberFromOtherPackage.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "linkedName",
-              "line": 24,
-              "at": "P1::A_alias",
-              "verdict": "disagree",
-              "declared": "test.P.A",
-              "ours": "test.P.A_alias"
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_NamedMemberFromOtherPackage2.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "linkedName",
-              "line": 30,
-              "at": "P1::A_alias",
-              "verdict": "disagree",
-              "declared": "test.P.A",
-              "ours": "test.P.A_alias"
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_UseFQNInSamePackage.kerml.xt",
@@ -2064,17 +1806,7 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MultipleImportTests_ImportFeatureWithAlias.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 2,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "linkedName",
-              "line": 25,
-              "at": "bb",
-              "verdict": "disagree",
-              "declared": "OuterPackage.B.b",
-              "ours": "test.bb"
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MultipleImportTests_UseSuperclassParameter.kerml.xt",
@@ -2110,49 +1842,19 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MultipleImport_ImportClassWithAlias.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "linkedName",
-              "line": 23,
-              "at": "aliass",
-              "verdict": "disagree",
-              "declared": "OuterPackage.A",
-              "ours": "test.aliass"
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MultipleImport_ImportClassWithAlias_FT.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "linkedName",
-              "line": 23,
-              "at": "aliass",
-              "verdict": "disagree",
-              "declared": "OuterPackage.A",
-              "ours": "test.aliass"
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MultipleImport_ImportClassWithAlias_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "linkedName",
-              "line": 23,
-              "at": "aliass",
-              "verdict": "disagree",
-              "declared": "OuterPackage.A",
-              "ours": "test.aliass"
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MultipleImport_ImportClass_FT.kerml.xt",
@@ -2170,17 +1872,7 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MultipleImport_ImportFeatureAlias.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "linkedName",
-              "line": 24,
-              "at": "aliass",
-              "verdict": "disagree",
-              "declared": "OuterPackage.B.b",
-              "ours": "test.aliass"
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MultipleImport_ImportImportImp.kerml.xt",
@@ -2425,97 +2117,37 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_ImportPackageAlias1.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "linkedName",
-              "line": 40,
-              "at": "A_alias",
-              "verdict": "disagree",
-              "declared": "PackageAlias1.A",
-              "ours": "PackageAlias1.A_alias"
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_ImportPackageAlias1_FT.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "linkedName",
-              "line": 68,
-              "at": "A_alias",
-              "verdict": "disagree",
-              "declared": "PackageAlias1.A",
-              "ours": "PackageAlias1.A_alias"
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_ImportPackageAlias1_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "linkedName",
-              "line": 68,
-              "at": "A_alias",
-              "verdict": "disagree",
-              "declared": "PackageAlias1.A",
-              "ours": "PackageAlias1.A_alias"
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_ImportPackageAlias2.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "linkedName",
-              "line": 27,
-              "at": "A_alias",
-              "verdict": "disagree",
-              "declared": "test.A",
-              "ours": "test.A_alias"
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_ImportPackageAlias2_FT.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "linkedName",
-              "line": 27,
-              "at": "A_alias",
-              "verdict": "disagree",
-              "declared": "test.A",
-              "ours": "test.A_alias"
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_ImportPackageAlias2_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "linkedName",
-              "line": 27,
-              "at": "A_alias",
-              "verdict": "disagree",
-              "declared": "test.A",
-              "ours": "test.A_alias"
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_SameNamesGoodCase.kerml.xt",
@@ -2757,17 +2389,7 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/SimpleImportAsFeatureTests_ImportClassAlias.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "linkedName",
-              "line": 24,
-              "at": "aliass",
-              "verdict": "disagree",
-              "declared": "OuterPackage.A",
-              "ours": "test.aliass"
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/SimpleImportAsFeatureTests_ImportFeature.kerml.xt",
@@ -2779,17 +2401,7 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/SimpleImportAsFeatureTests_ImportFeatureAlias.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "linkedName",
-              "line": 24,
-              "at": "aliass",
-              "verdict": "disagree",
-              "declared": "OuterPackage.B.b",
-              "ours": "test.aliass"
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/SimpleImportTestsFromOtherFile_Import1.kerml.xt",
@@ -3032,16 +2644,7 @@
           "path": "src/org/omg/kerml/xpect/tests/validation/FeatureInvertingTest_valid.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.validation.KerMLValidationTest",
           "expectations": 1,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "noErrors",
-              "line": 23,
-              "verdict": "disagree",
-              "declared": "no error anywhere in the file",
-              "ours": "2 error(s), first: line 34: expected a namespace member"
-            }
-          ]
+          "agree": 1
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/validation/Feature_invalid_noType.kerml.xt",
@@ -3168,57 +2771,7 @@
           "path": "src/org/omg/kerml/xpect/tests/validation/MembershipTests_Distinguishability.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 6,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "warnings",
-              "line": 18,
-              "at": "A",
-              "verdict": "disagree",
-              "declared": "warning: \"Duplicate of other owned member name\"",
-              "ours": "no warning anywhere in the file"
-            },
-            {
-              "kind": "warnings",
-              "line": 20,
-              "at": "A",
-              "verdict": "disagree",
-              "declared": "warning: \"Duplicate of other owned member name\"",
-              "ours": "no warning anywhere in the file"
-            },
-            {
-              "kind": "warnings",
-              "line": 25,
-              "at": "A",
-              "verdict": "disagree",
-              "declared": "warning: \"Duplicate of other owned member name\"",
-              "ours": "no warning anywhere in the file"
-            },
-            {
-              "kind": "warnings",
-              "line": 27,
-              "at": "A",
-              "verdict": "disagree",
-              "declared": "warning: \"Duplicate of other owned member name\"",
-              "ours": "no warning anywhere in the file"
-            },
-            {
-              "kind": "warnings",
-              "line": 36,
-              "at": "D",
-              "verdict": "disagree",
-              "declared": "warning: \"Duplicate of inherited member name 'D' from C\"",
-              "ours": "no warning anywhere in the file"
-            },
-            {
-              "kind": "warnings",
-              "line": 41,
-              "at": "F",
-              "verdict": "disagree",
-              "declared": "warning: \"Duplicate of inherited member name 'F' from C\"",
-              "ours": "no warning anywhere in the file"
-            }
-          ]
+          "agree": 6
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/validation/MetadataTests_MetadataFeature_invalid.kerml.xt",
@@ -3455,65 +3008,25 @@
           "path": "src/org/omg/kerml/xpect/tests/validation/Redefinition_Diamond0_valid.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.validation.KerMLValidationTest",
           "expectations": 1,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "noErrors",
-              "line": 36,
-              "verdict": "disagree",
-              "declared": "no error anywhere in the file",
-              "ours": "1 error(s), first: line 37: name conflict: p is already the name of the inherited feature A::p"
-            }
-          ]
+          "agree": 1
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/validation/Redefinition_Diamond1_invalid.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.validation.KerMLValidationTest",
           "expectations": 1,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "warnings",
-              "line": 36,
-              "at": "p",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'p' from A2\"",
-              "ours": "no warning at line 37, but a error: line 37 offset 900: name conflict: p is already the name of the inherited feature A2::p"
-            }
-          ]
+          "agree": 1
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/validation/Redefinition_Diamond2_valid.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.validation.KerMLValidationTest",
           "expectations": 1,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "noErrors",
-              "line": 36,
-              "verdict": "disagree",
-              "declared": "no error anywhere in the file",
-              "ours": "1 error(s), first: line 37: name conflict: p is already the name of the inherited feature A::p"
-            }
-          ]
+          "agree": 1
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/validation/Redefinition_Diamond_Invalid.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.validation.KerMLValidationTest",
           "expectations": 1,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "warnings",
-              "line": 36,
-              "at": "p",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'p' from A2\"",
-              "ours": "no warning at line 37, but a error: line 37 offset 902: name conflict: p is already the name of the inherited feature A2::p"
-            }
-          ]
+          "agree": 1
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/validation/Redefinition_DirectionConformance_invalid.kerml.xt",
@@ -3526,45 +3039,40 @@
               "line": 29,
               "at": "in x1;",
               "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
               "declared": "error: \"Redefining feature must have a compatible direction\"",
-              "ours": "no error at line 30; nearest is line 49: expected '{' or ';' after declaration"
+              "ours": "no error anywhere in the file"
             },
             {
               "kind": "errors",
               "line": 34,
               "at": "out x1;",
               "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
               "declared": "error: \"Redefining feature must have a compatible direction\"",
-              "ours": "no error at line 35; nearest is line 49: expected '{' or ';' after declaration"
+              "ours": "no error anywhere in the file"
             },
             {
               "kind": "errors",
               "line": 42,
               "at": "z",
               "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
               "declared": "error: \"Redefining feature must have a compatible direction\"",
-              "ours": "no error at line 43; nearest is line 49: expected '{' or ';' after declaration"
+              "ours": "no error anywhere in the file"
             },
             {
               "kind": "errors",
               "line": 46,
               "at": "z",
               "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
               "declared": "error: \"Redefining feature must have a compatible direction\"",
-              "ours": "no error at line 47; nearest is line 49: expected '{' or ';' after declaration"
+              "ours": "no error anywhere in the file"
             },
             {
               "kind": "errors",
               "line": 51,
               "at": "z",
               "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
               "declared": "error: \"Redefining feature must have a compatible direction\"",
-              "ours": "no error at line 52; nearest is line 49: expected '{' or ';' after declaration"
+              "ours": "no error anywhere in the file"
             }
           ]
         },
@@ -3629,27 +3137,24 @@
               "line": 25,
               "at": "2",
               "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
               "declared": "error: \"Only one (owned or inherited) result expression is allowed\"",
-              "ours": "no error at line 26; nearest is line 31: expected a body member"
+              "ours": "no error anywhere in the file"
             },
             {
               "kind": "errors",
               "line": 30,
               "at": "1",
               "verdict": "disagree",
-              "tolerance": "same-location",
               "declared": "error: \"Only one (owned or inherited) result expression is allowed\"",
-              "ours": "line 31 offset 709: expected a body member"
+              "ours": "no error anywhere in the file"
             },
             {
               "kind": "errors",
               "line": 33,
               "at": "expr g :\u003e f;",
               "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
               "declared": "error: \"Only one (owned or inherited) result expression is allowed\"",
-              "ours": "no error at line 34; nearest is line 31: expected a body member"
+              "ours": "no error anywhere in the file"
             }
           ]
         },
@@ -4002,9 +3507,9 @@
               "line": 30,
               "at": "C",
               "verdict": "disagree",
-              "tolerance": "same-line",
+              "tolerance": "elsewhere-in-file",
               "declared": "error: \"Conjugated type cannot be a specialized type\"",
-              "ours": "line 31 offset 771: expected a namespace member"
+              "ours": "no error at line 31; nearest is line 57: S participates in a specialization cycle"
             },
             {
               "kind": "errors",
@@ -4014,7 +3519,7 @@
               "verdict": "disagree",
               "tolerance": "elsewhere-in-file",
               "declared": "error: \"Cannot specialize class or association\"",
-              "ours": "no error at line 40; nearest is line 28: expected '{' or ';' after declaration"
+              "ours": "no error at line 40; nearest is line 57: S participates in a specialization cycle"
             },
             {
               "kind": "errors",
@@ -4024,7 +3529,7 @@
               "verdict": "disagree",
               "tolerance": "elsewhere-in-file",
               "declared": "error: \"Cannot specialize class or association\"",
-              "ours": "no error at line 40; nearest is line 28: expected '{' or ';' after declaration"
+              "ours": "no error at line 40; nearest is line 57: S participates in a specialization cycle"
             },
             {
               "kind": "warnings",
@@ -4042,7 +3547,7 @@
               "verdict": "disagree",
               "tolerance": "elsewhere-in-file",
               "declared": "error: \"Cannot specialize data type or association\"",
-              "ours": "no error at line 49; nearest is line 28: expected '{' or ';' after declaration"
+              "ours": "no error at line 49; nearest is line 57: S participates in a specialization cycle"
             },
             {
               "kind": "errors",
@@ -4052,7 +3557,7 @@
               "verdict": "disagree",
               "tolerance": "elsewhere-in-file",
               "declared": "error: \"Cannot specialize data type or association\"",
-              "ours": "no error at line 49; nearest is line 28: expected '{' or ';' after declaration"
+              "ours": "no error at line 49; nearest is line 57: S participates in a specialization cycle"
             },
             {
               "kind": "warnings",
@@ -4067,34 +3572,36 @@
               "line": 55,
               "at": "B1",
               "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
+              "tolerance": "same-location",
               "declared": "error: \"Cannot specialize behavior\"",
-              "ours": "no error at line 57; nearest is line 28: expected '{' or ';' after declaration"
+              "ours": "line 57 offset 1768: S participates in a specialization cycle"
             },
             {
               "kind": "warnings",
               "line": 56,
               "at": "struct S specializes B1;",
               "verdict": "disagree",
+              "tolerance": "severity-differs",
               "declared": "warning: \"Duplicate of inherited member name 'self' from Object, Performance\"",
-              "ours": "no warning anywhere in the file"
+              "ours": "no warning at line 57, but a error: line 57 offset 1768: S participates in a specialization cycle"
             },
             {
               "kind": "errors",
               "line": 59,
               "at": "S",
               "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
+              "tolerance": "same-location",
               "declared": "error: \"Cannot specialize structure\"",
-              "ours": "no error at line 61; nearest is line 28: expected '{' or ';' after declaration"
+              "ours": "line 61 offset 1980: B1 participates in a specialization cycle"
             },
             {
               "kind": "warnings",
               "line": 60,
               "at": "behavior B1 specializes S;",
               "verdict": "disagree",
+              "tolerance": "severity-differs",
               "declared": "warning: \"Duplicate of inherited member name 'self' from Object, Performance\"",
-              "ours": "no warning anywhere in the file"
+              "ours": "no warning at line 61, but a error: line 61 offset 1980: B1 participates in a specialization cycle"
             }
           ]
         },
@@ -4303,17 +3810,7 @@
           "path": "src/org/omg/kerml/xpect/tests/visibility/VisibilityTests_ImportAsFeatureInheritanceAlias.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.visibility.KerMLVisibilityTest",
           "expectations": 3,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "linkedName",
-              "line": 23,
-              "at": "aliass",
-              "verdict": "disagree",
-              "declared": "VisibilityPackage.c_Public",
-              "ours": "Classes.aliass"
-            }
-          ],
+          "agree": 3,
           "ignored": [
             "line 24: `XPECT scope` opens no `//` or `//*` note, so this harness does not run it: /* XPECT scope at  aliass ---",
             "line 32: `XPECT scope` opens no `//` or `//*` note, so this harness does not run it: /* XPECT scope at c_public ---"
@@ -4323,33 +3820,13 @@
           "path": "src/org/omg/kerml/xpect/tests/visibility/VisibilityTests_ImportAsFeatureInheritanceAlias_FT.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.visibility.KerMLVisibilityTest",
           "expectations": 5,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "linkedName",
-              "line": 23,
-              "at": "aliass",
-              "verdict": "disagree",
-              "declared": "VisibilityPackage.c_Public",
-              "ours": "Classes.aliass"
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/visibility/VisibilityTests_ImportAsFeatureInheritanceAlias_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.visibility.KerMLVisibilityTest",
           "expectations": 5,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "linkedName",
-              "line": 23,
-              "at": "aliass",
-              "verdict": "disagree",
-              "declared": "VisibilityPackage.c_Public",
-              "ours": "Classes.aliass"
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/visibility/VisibilityTests_ImportAsFeatureInheritance_1.kerml.xt",
@@ -4411,17 +3888,7 @@
           "path": "src/org/omg/kerml/xpect/tests/visibility/VisibilityTests_ImportClassAndUseAlias2.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.visibility.KerMLVisibilityTest",
           "expectations": 3,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "linkedName",
-              "line": 21,
-              "at": "c_Public_alias::alias_public",
-              "verdict": "disagree",
-              "declared": "VisibilityPackage.c_Public_alias.c_public",
-              "ours": "VisibilityPackage.c_Public_alias.alias_public"
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/visibility/VisibilityTests_Import_Invalid_0.kerml.xt",
@@ -5831,73 +5298,19 @@
           "path": "src/org/omg/kerml/xpect/tests/visibility/VisibilityTests_PublicImportAsFeatureAlias.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.visibility.KerMLVisibilityTest",
           "expectations": 5,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "linkedName",
-              "line": 36,
-              "at": "aliass",
-              "verdict": "disagree",
-              "declared": "VisibilityPackage.c_Public.c_public",
-              "ours": "Classes.aliass"
-            },
-            {
-              "kind": "linkedName",
-              "line": 38,
-              "at": "Aliass",
-              "verdict": "disagree",
-              "declared": "VisibilityPackage.c_Public",
-              "ours": "Classes.Aliass"
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/visibility/VisibilityTests_PublicImportAsFeatureAlias_FT.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.visibility.KerMLVisibilityTest",
           "expectations": 5,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "linkedName",
-              "line": 57,
-              "at": "aliass",
-              "verdict": "disagree",
-              "declared": "VisibilityPackage.c_Public.c_public",
-              "ours": "Classes.aliass"
-            },
-            {
-              "kind": "linkedName",
-              "line": 59,
-              "at": "Aliass",
-              "verdict": "disagree",
-              "declared": "VisibilityPackage.c_Public",
-              "ours": "Classes.Aliass"
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/visibility/VisibilityTests_PublicImportAsFeatureAlias_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.visibility.KerMLVisibilityTest",
           "expectations": 5,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "linkedName",
-              "line": 60,
-              "at": "aliass",
-              "verdict": "disagree",
-              "declared": "VisibilityPackage.c_Public.c_public",
-              "ours": "Classes.aliass"
-            },
-            {
-              "kind": "linkedName",
-              "line": 62,
-              "at": "Aliass",
-              "verdict": "disagree",
-              "declared": "VisibilityPackage.c_Public",
-              "ours": "Classes.Aliass"
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/visibility/VisibilityTests_PublicPackImport.kerml.xt",
@@ -5915,8 +5328,8 @@
         "filesUnparsed": 0,
         "assertions": 309,
         "rows": 358,
-        "agree": 63,
-        "disagree": 295,
+        "agree": 68,
+        "disagree": 290,
         "unlocated": 0,
         "notAdjudicated": 0,
         "missingResources": 0
@@ -5933,16 +5346,16 @@
           "notAdjudicated": 0,
           "sameLocation": 3,
           "sameLine": 59,
-          "severityDiffers": 9,
-          "elsewhereInFile": 40
+          "severityDiffers": 10,
+          "elsewhereInFile": 39
         },
         {
           "kind": "noErrors",
           "assertions": 75,
           "blockAssertions": 0,
           "rows": 75,
-          "agree": 60,
-          "disagree": 15,
+          "agree": 62,
+          "disagree": 13,
           "unlocated": 0,
           "notAdjudicated": 0,
           "sameLocation": 0,
@@ -5969,14 +5382,14 @@
           "assertions": 57,
           "blockAssertions": 17,
           "rows": 95,
-          "agree": 0,
-          "disagree": 95,
+          "agree": 3,
+          "disagree": 92,
           "unlocated": 0,
           "notAdjudicated": 0,
           "sameLocation": 0,
           "sameLine": 0,
-          "severityDiffers": 62,
-          "elsewhereInFile": 0
+          "severityDiffers": 59,
+          "elsewhereInFile": 7
         }
       ],
       "files": [
@@ -6145,7 +5558,7 @@
               "line": 71,
               "verdict": "disagree",
               "declared": "no error anywhere in the file",
-              "ours": "3 error(s), first: line 170: expected '{' or ';'"
+              "ours": "1 error(s), first: line 170: expected '{' or ';'"
             }
           ]
         },
@@ -7676,8 +7089,9 @@
               "line": 78,
               "at": "end part ::\u003e tankAssy.fuel;",
               "verdict": "disagree",
+              "tolerance": "elsewhere-in-file",
               "declared": "warning: \"Duplicate of inherited member name 'self' from Part, Port\"",
-              "ours": "no warning anywhere in the file"
+              "ours": "no warning at line 79; nearest is line 67: Duplicate of inherited member name 'consumerPort' from FuelInterface, FuelInterface2"
             }
           ]
         },
@@ -7828,18 +7242,7 @@
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/Membership_distingushability_invalid.sysml.xt",
           "setupClass": "org.omg.sysml.xpect.tests.validation.invalid.SysMLTests",
           "expectations": 1,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "warnings",
-              "line": 42,
-              "at": "b",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'b' from A\"",
-              "ours": "no warning at line 43, but a error: line 43 offset 1303: name conflict: b is already the name of the inherited feature A::b"
-            }
-          ]
+          "agree": 1
         },
         {
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/MetadataUsage_Invalid.sysml.xt",
@@ -8294,35 +7697,13 @@
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/RedefinitionDiamond1_invalid.sysml.xt",
           "setupClass": "org.omg.sysml.xpect.tests.validation.invalid.SysMLTests",
           "expectations": 1,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "warnings",
-              "line": 40,
-              "at": "p",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'p' from A2\"",
-              "ours": "no warning at line 41, but a error: line 41 offset 1157: name conflict: p is already the name of the inherited feature A2::p"
-            }
-          ]
+          "agree": 1
         },
         {
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/RedefinitionDiamond_Invalid.sysml.xt",
           "setupClass": "org.omg.sysml.xpect.tests.validation.valid.SysMLTests",
           "expectations": 1,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "warnings",
-              "line": 40,
-              "at": "p",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'p' from A2\"",
-              "ours": "no warning at line 41, but a error: line 41 offset 1157: name conflict: p is already the name of the inherited feature A2::p"
-            }
-          ]
+          "agree": 1
         },
         {
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/Redefinition_MultiplicityConformance_Invalid.sysml.xt",
@@ -8823,9 +8204,9 @@
               "line": 83,
               "at": "s",
               "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
+              "tolerance": "severity-differs",
               "declared": "error: \"Must reference a state.\"",
-              "ours": "no error at line 84; nearest is line 52: state cannot be typed by partDef (kind mismatch)"
+              "ours": "no error at line 84, but a warning: line 84 offset 3212: Duplicate of other owned member name"
             },
             {
               "kind": "errors",
@@ -8842,8 +8223,9 @@
               "line": 87,
               "at": "exhibit s.sa;",
               "verdict": "disagree",
+              "tolerance": "elsewhere-in-file",
               "declared": "warning: \"Duplicate of inherited member name 'self' from Part, StateAction\"",
-              "ours": "no warning anywhere in the file"
+              "ours": "no warning at line 95; nearest is line 81: Duplicate of other owned member name"
             },
             {
               "kind": "warnings",
@@ -8851,8 +8233,9 @@
               "line": 87,
               "at": "exhibit s.sa;",
               "verdict": "disagree",
+              "tolerance": "elsewhere-in-file",
               "declared": "warning: \"Duplicate of inherited member name 'start' from Part, StateAction\"",
-              "ours": "no warning anywhere in the file"
+              "ours": "no warning at line 95; nearest is line 81: Duplicate of other owned member name"
             },
             {
               "kind": "warnings",
@@ -8860,8 +8243,9 @@
               "line": 87,
               "at": "exhibit s.sa;",
               "verdict": "disagree",
+              "tolerance": "elsewhere-in-file",
               "declared": "warning: \"Duplicate of inherited member name 'done' from Part, StateAction\"",
-              "ours": "no warning anywhere in the file"
+              "ours": "no warning at line 95; nearest is line 81: Duplicate of other owned member name"
             },
             {
               "kind": "warnings",
@@ -8869,8 +8253,9 @@
               "line": 87,
               "at": "s.sa",
               "verdict": "disagree",
+              "tolerance": "elsewhere-in-file",
               "declared": "warning: \"Duplicate of inherited member name 'self' from Part, StateAction\"",
-              "ours": "no warning anywhere in the file"
+              "ours": "no warning at line 95; nearest is line 81: Duplicate of other owned member name"
             },
             {
               "kind": "warnings",
@@ -8878,8 +8263,9 @@
               "line": 87,
               "at": "s.sa",
               "verdict": "disagree",
+              "tolerance": "elsewhere-in-file",
               "declared": "warning: \"Duplicate of inherited member name 'start' from Part, StateAction\"",
-              "ours": "no warning anywhere in the file"
+              "ours": "no warning at line 95; nearest is line 81: Duplicate of other owned member name"
             },
             {
               "kind": "warnings",
@@ -8887,8 +8273,9 @@
               "line": 87,
               "at": "s.sa",
               "verdict": "disagree",
+              "tolerance": "elsewhere-in-file",
               "declared": "warning: \"Duplicate of inherited member name 'done' from Part, StateAction\"",
-              "ours": "no warning anywhere in the file"
+              "ours": "no warning at line 95; nearest is line 81: Duplicate of other owned member name"
             }
           ]
         },
@@ -9330,31 +8717,13 @@
           "path": "src/org/omg/sysml/xpect/tests/validation/valid/RedefinitionDiamond0.sysml.xt",
           "setupClass": "org.omg.sysml.xpect.tests.validation.valid.SysMLTests",
           "expectations": 1,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "noErrors",
-              "line": 40,
-              "verdict": "disagree",
-              "declared": "no error anywhere in the file",
-              "ours": "1 error(s), first: line 41: name conflict: p is already the name of the inherited feature A::p"
-            }
-          ]
+          "agree": 1
         },
         {
           "path": "src/org/omg/sysml/xpect/tests/validation/valid/RedefinitionDiamond2.sysml.xt",
           "setupClass": "org.omg.sysml.xpect.tests.validation.valid.SysMLTests",
           "expectations": 1,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "noErrors",
-              "line": 40,
-              "verdict": "disagree",
-              "declared": "no error anywhere in the file",
-              "ours": "1 error(s), first: line 41: name conflict: p is already the name of the inherited feature A::p"
-            }
-          ]
+          "agree": 1
         },
         {
           "path": "src/org/omg/sysml/xpect/tests/validation/valid/RedefinitionHopthrough.sysml.xt",

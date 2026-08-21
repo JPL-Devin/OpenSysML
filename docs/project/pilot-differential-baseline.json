@@ -2,13 +2,13 @@
   "validator": "build/pilot-sysml-validator/validate-sysml-batch",
   "pilotRelease": "2026-05 (jupyter-sysml-kernel 0.60.1)",
   "totals": {
-    "files": 349,
-    "filesFullyAgreeing": 291,
-    "agreement": 20,
+    "files": 353,
+    "filesFullyAgreeing": 297,
+    "agreement": 22,
     "severityMismatch": 16,
-    "openSysMLOnly": 167,
-    "pilotOnly": 139,
-    "openSysMLDiagnostics": 203,
+    "openSysMLOnly": 161,
+    "pilotOnly": 137,
+    "openSysMLDiagnostics": 199,
     "pilotDiagnostics": 175
   },
   "roots": [
@@ -32,12 +32,12 @@
       "dir": "examples/pilot-corpora/sysml-examples",
       "totals": {
         "files": 98,
-        "filesFullyAgreeing": 76,
+        "filesFullyAgreeing": 78,
         "agreement": 0,
         "severityMismatch": 0,
-        "openSysMLOnly": 101,
+        "openSysMLOnly": 98,
         "pilotOnly": 0,
-        "openSysMLDiagnostics": 101,
+        "openSysMLDiagnostics": 98,
         "pilotDiagnostics": 0
       },
       "files": [
@@ -266,40 +266,6 @@
               "line": 100,
               "severity": "error",
               "category": "unresolved-reference",
-              "count": 1
-            }
-          ],
-          "pilotOnly": []
-        },
-        {
-          "path": "Metadata Examples/IssueMetadataExample.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [
-            {
-              "line": 7,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
-            }
-          ],
-          "pilotOnly": []
-        },
-        {
-          "path": "Metadata Examples/RationaleMetadataExample.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [
-            {
-              "line": 12,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 13,
-              "severity": "error",
-              "category": "unmapped",
               "count": 1
             }
           ],
@@ -788,12 +754,12 @@
       "dir": "examples/pilot-corpora/kerml-examples",
       "totals": {
         "files": 58,
-        "filesFullyAgreeing": 47,
+        "filesFullyAgreeing": 48,
         "agreement": 0,
         "severityMismatch": 0,
-        "openSysMLOnly": 15,
+        "openSysMLOnly": 8,
         "pilotOnly": 6,
-        "openSysMLDiagnostics": 15,
+        "openSysMLDiagnostics": 8,
         "pilotDiagnostics": 6
       },
       "files": [
@@ -866,26 +832,6 @@
           ]
         },
         {
-          "path": "Simple Tests/Conjugation.kerml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [
-            {
-              "line": 6,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 8,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
-            }
-          ],
-          "pilotOnly": []
-        },
-        {
           "path": "Simple Tests/FeatureChains.kerml",
           "agreement": [],
           "severityMismatch": [],
@@ -903,14 +849,7 @@
           "path": "Simple Tests/Features.kerml",
           "agreement": [],
           "severityMismatch": [],
-          "openSysMLOnly": [
-            {
-              "line": 36,
-              "severity": "error",
-              "category": "unmapped",
-              "count": 1
-            }
-          ],
+          "openSysMLOnly": [],
           "pilotOnly": [
             {
               "line": 20,
@@ -978,32 +917,7 @@
           "path": "Simple Tests/Types.kerml",
           "agreement": [],
           "severityMismatch": [],
-          "openSysMLOnly": [
-            {
-              "line": 25,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 26,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 28,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 29,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
-            }
-          ],
+          "openSysMLOnly": [],
           "pilotOnly": [
             {
               "line": 31,
@@ -1019,13 +933,13 @@
       "name": "testdata",
       "dir": "testdata",
       "totals": {
-        "files": 11,
-        "filesFullyAgreeing": 3,
-        "agreement": 20,
+        "files": 15,
+        "filesFullyAgreeing": 6,
+        "agreement": 22,
         "severityMismatch": 4,
-        "openSysMLOnly": 3,
-        "pilotOnly": 29,
-        "openSysMLDiagnostics": 27,
+        "openSysMLOnly": 7,
+        "pilotOnly": 27,
+        "openSysMLDiagnostics": 33,
         "pilotDiagnostics": 53
       },
       "files": [
@@ -1225,10 +1139,7 @@
         },
         {
           "path": "passes/corpus_notation.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [],
-          "pilotOnly": [
+          "agreement": [
             {
               "line": 33,
               "severity": "warning",
@@ -1241,7 +1152,10 @@
               "category": "unmapped",
               "count": 1
             }
-          ]
+          ],
+          "severityMismatch": [],
+          "openSysMLOnly": [],
+          "pilotOnly": []
         },
         {
           "path": "passes/errors.sysml",
@@ -1281,6 +1195,46 @@
               "count": 1
             }
           ]
+        },
+        {
+          "path": "passes/f93_element_filter.kerml",
+          "agreement": [],
+          "severityMismatch": [],
+          "openSysMLOnly": [
+            {
+              "line": 32,
+              "severity": "error",
+              "category": "unresolved-reference",
+              "count": 1
+            },
+            {
+              "line": 40,
+              "severity": "error",
+              "category": "unresolved-reference",
+              "count": 1
+            },
+            {
+              "line": 41,
+              "severity": "error",
+              "category": "unresolved-reference",
+              "count": 1
+            }
+          ],
+          "pilotOnly": []
+        },
+        {
+          "path": "passes/f93_element_filter.sysml",
+          "agreement": [],
+          "severityMismatch": [],
+          "openSysMLOnly": [
+            {
+              "line": 22,
+              "severity": "error",
+              "category": "unresolved-reference",
+              "count": 1
+            }
+          ],
+          "pilotOnly": []
         },
         {
           "path": "passes/import_no_visibility.sysml",
@@ -2246,12 +2200,12 @@
     },
     {
       "side": "opensysml",
-      "message": "'~' names the conjugated port definition of a port definition, found attributeUsage",
+      "message": "A participates in a specialization cycle",
       "count": 2
     },
     {
       "side": "opensysml",
-      "message": "A participates in a specialization cycle",
+      "message": "Duplicate of other owned member name",
       "count": 2
     },
     {
@@ -2287,21 +2241,6 @@
     {
       "side": "opensysml",
       "message": "interface Mounting connects ports AxleMountIF and WheelHubIF, whose directed features are not conjugate; one end usually names the conjugate port (~AxleMountIF)",
-      "count": 1
-    },
-    {
-      "side": "opensysml",
-      "message": "name conflict: explanation is already the name of the inherited feature ModelingMetadata::Rationale::explanation",
-      "count": 1
-    },
-    {
-      "side": "opensysml",
-      "message": "name conflict: text is already the name of the inherited feature ModelingMetadata::Issue::text",
-      "count": 1
-    },
-    {
-      "side": "opensysml",
-      "message": "name conflict: text is already the name of the inherited feature ModelingMetadata::Rationale::text",
       "count": 1
     },
     {

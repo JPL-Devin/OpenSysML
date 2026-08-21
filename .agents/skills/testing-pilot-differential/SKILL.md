@@ -21,8 +21,8 @@ GNU-format diagnostics **relative to `--root`**. Consequences for testing:
 - The pin `cmd/pilot-diff` reports comes from `build/pilot-sysml-validator/pilot-pin.txt`
   (written by the new script), not from the DeciSym `pom.xml`.
 - `-validator /nonexistent` now says `run ./scripts/download-pilot-sysml-validator.sh`.
-- Measured after the wave-5 KerML round (#403, #405): `349 file(s), 291 fully agreeing; 20 agreed,
-  167 only ours, 139 only the pilot's`, JSON totals `openSysMLDiagnostics 203 / pilotDiagnostics
+- Measured after the wave-6 round (#409, #415): `353 file(s), 297 fully agreeing; 22 agreed,
+  161 only ours, 137 only the pilot's`, JSON totals `openSysMLDiagnostics 199 / pilotDiagnostics
   175 / severityMismatch 16`; ~70 s wall, byte-identical across runs *and* after a from-scratch
   rebuild of `build/pilot-validator`. `kerml-examples` carries no `syntax` diagnostic on either
   side. Refresh this paragraph with every rebaseline, and treat a stale one as a finding.
@@ -64,7 +64,7 @@ The harness compares OpenSysML diagnostics against the OMG SysML v2 Pilot Implem
 `build/pilot-diff/pilot-diff.{txt,json}`. `docs/project/pilot-differential-baseline.json` is the
 committed result of the *last refreshed* run, so **the harness is testable by reproduction** —
 but only while the baseline is current. Check that first. As of the wave-5 rebaseline it **is**
-current: a live run gives `349 file(s), 291 fully agreeing; 20 agreed, 167 only ours, 139 only the
+current: a live run gives `353 file(s), 297 fully agreeing; 22 agreed, 161 only ours, 137 only the
 pilot's`, byte-identical to the committed baseline, and `docs/project/pilot-differential.md`'s
 "Results" table matches. When it is stale (it was at `ac4ac4fb`, and again while the F60–F69 fix
 PRs were in flight), a non-empty `jq -S` baseline diff is *not* by itself evidence of a
