@@ -175,3 +175,23 @@ func TestPrivateMemberIsNotOfferedOrResolved(t *testing.T) {
 		t.Fatal("nothing offered under P::A; the test proves nothing")
 	}
 }
+
+// An `import all` lifts the boundary only for its own target: a plain import
+// consulted while that target resolves still hides what it must, and nothing
+// resolved under the lifted boundary is memoized for a later reference.
+func TestImportAllDoesNotLeakThroughASiblingImport(t *testing.T) {
+	r := resolveVisibilityDoc(t, `package P {
+		package Vault { private class Secret; public class Open; }
+		package Outer { package Deep { package Inner { public class Thing; } } }
+		package Use {
+			import all Deep::Inner::*;
+			import Outer::*;
+			import Vault::Secret;
+			class A specializes Secret;
+			class B specializes Thing;
+		}
+		class C specializes Vault::Secret;
+	}`)
+	wantUnresolved(t, r, "Vault::Secret", "Secret")
+	wantNoUnresolved(t, r, "Thing")
+}

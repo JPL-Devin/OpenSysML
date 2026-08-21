@@ -146,7 +146,12 @@ func (r *Resolver) resolveImportTarget(scope *symbols.Scope, imp *ast.Import) (*
 		return nil, false
 	}
 	if !importAllowsPrivate(imp) {
-		return r.ResolveQualified(scope, imp.Imported)
+		// A plain import keeps the boundary even when it is consulted while an
+		// enclosing `import all` resolves its own target.
+		var sym *symbols.Symbol
+		var ok bool
+		r.outsideAllVisible(func() { sym, ok = r.ResolveQualified(scope, imp.Imported) })
+		return sym, ok
 	}
 	var sym *symbols.Symbol
 	var ok bool
