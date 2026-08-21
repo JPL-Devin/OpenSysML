@@ -1,12 +1,45 @@
 ---
 name: testing-pilot-differential
-description: How to verify the advisory pilot-implementation differential harness (cmd/pilot-diff + scripts/download-pilot-validator.sh) end to end on Linux — provisioning the DeciSym/pilot validator, reproducing the committed baseline, and the adversarial paths (bad pin, missing tools, wrong flags) worth checking.
+description: How to verify the advisory pilot-implementation differential harness (cmd/pilot-diff + scripts/download-pilot-sysml-validator.sh) end to end on Linux — provisioning the batch SysML/KerML oracles, reproducing the committed baseline, and the adversarial paths (bad pin, missing tools, wrong flags) worth checking.
 ---
 
 # Testing the pilot differential harness (`cmd/pilot-diff`)
 
+**Since F6 (PR #397) the default SysML oracle is the plain-Java batch bridge
+`build/pilot-sysml-validator/validate-sysml-batch`, not the DeciSym CLI
+`build/pilot-validator/validate-sysml`.** Provision it with
+`./scripts/download-pilot-sysml-validator.sh` (it auto-calls
+`download-pilot-validator.sh` when the pinned jar/library are absent, because the bridge
+compiles and runs against them). It loads every `.sysml` file of a corpus root into **one**
+resource set (`SysMLUtil.readResource`/`addInputResource`) and only then validates, printing
+GNU-format diagnostics **relative to `--root`**. Consequences for testing:
+
+- `cmd/pilot-diff/order.go` (`orderByImports`) and `batchByBaseName` are **deleted**; one root
+  is exactly one invocation regardless of duplicate base names or import order. Anything in
+  this file that still says "topologically sorted" or "split by basename" applies to history
+  only. The KerML and SysML sides now share one `pilotDiagnostics`.
+- The pin `cmd/pilot-diff` reports comes from `build/pilot-sysml-validator/pilot-pin.txt`
+  (written by the new script), not from the DeciSym `pom.xml`.
+- `-validator /nonexistent` now says `run ./scripts/download-pilot-sysml-validator.sh`.
+- Measured at `86514a44` (F6): `349 file(s), 283 fully agreeing; 20 agreed, 232 only ours,
+  139 only the pilot's`, JSON totals `openSysMLDiagnostics 268 / pilotDiagnostics 175 /
+  severityMismatch 16`; ~73 s wall, byte-identical across runs *and* after a from-scratch
+  rebuild of `build/pilot-validator`. `docs/project/pilot-differential{.md,-baseline.json}`
+  were **not** refreshed by that PR, so the committed baseline (273/281/142) and the doc's
+  "Provision"/"order.go"/"batchByBaseName" prose are stale against it — expect a non-empty
+  `jq -S` baseline diff and check claims against a live run instead.
+- Useful contrast to demo the change: three files where the importer sorts *before* the
+  imported file (`a/Ref.sysml` importing `PkgB` from `b/Model.sysml`). The batch bridge is
+  clean, exit 0; `build/pilot-validator/validate-sysml` on the same argv reports
+  `Couldn't resolve reference to Namespace 'PkgB'` — order dependence, exit 1.
+- `Duplicate of other owned member name` is **not** a wrapper artifact: it reproduces on a
+  single file in isolation under both oracles (e.g. `testdata/passes/corpus_notation.sysml`
+  lines 33/34, the `timeslice item item1` / `snapshot item item1` inside `item item1`), with
+  or without `--root`, and its count does not grow with batch size. 26 such lines remain in
+  the F6 report.
+
 The harness compares OpenSysML diagnostics against the OMG SysML v2 Pilot Implementation
-(via `DeciSym/sysmlv2-validator`) over four corpus roots and writes
+over several corpus roots and writes
 `build/pilot-diff/pilot-diff.{txt,json}`. `docs/project/pilot-differential-baseline.json` is the
 committed result of the *last refreshed* run, so **the harness is testable by reproduction** —
 but only while the baseline is current. Check that first. As of the wave-4 rebaseline it **is**
@@ -23,9 +56,32 @@ regression — see "Isolating one change's effect" below.
   blueprint's maintenance step) — without it the `training` root prints
   `skipping examples/sysml-v2-training: no .sysml files (corpus not downloaded?)` and the totals
   silently drop from 122 files to 22, which looks like a harness bug but is a missing corpus.
-- The validator: `./scripts/download-pilot-validator.sh`. It is **not** in the blueprint, takes
-  ~2-3 minutes (Maven downloads the pilot release ZIP and shades a jar), and needs network access
-  to github.com and Maven Central. Once built it no-ops.
+- The validator: `./scripts/download-pilot-sysml-validator.sh` (the DeciSym build it depends on,
+  `./scripts/download-pilot-validator.sh`, runs automatically when the jar/library are missing).
+  Neither is in the blueprint; the Maven step takes ~2-3 minutes cold (~18 s with a warm `~/.m2`)
+  and needs network access to github.com and Maven Central. Once built both no-op.
+- Provisioning checks for `download-pilot-sysml-validator.sh` that distinguish working from
+  broken (all observed at `86514a44`):
+  - no args → `SysML validator already compiled at .../classes/ValidateSysML.class` + `Built ...
+    (pilot 2026-05, 0.60.1)`, `.class` mtime unchanged; `--force` → `Compiling ...`, mtime
+    advances; `--bogus` → exit 1 `error: unknown option: --bogus (only --force is supported)`.
+  - `rm -rf build/pilot-sysml-validator` and re-run → recreated in seconds, and the launcher is
+    **byte-identical** (`sha256 2d6ec96f8469…`) with `pilot-pin.txt` = `sysml.release.tag=2026-05`
+    / `sysml.artifact.version=0.60.1` and no `__PILOT_ARTIFACT_VERSION__` placeholder left.
+  - bad pin: move `build/pilot-validator` aside, then
+    `PILOT_TAG=9999-99 ./scripts/download-pilot-sysml-validator.sh` → prints `Pilot validator
+    dependencies are missing; provisioning them first ...`, clones, then exits 1 with
+    `error: <commit> builds against sysml.release.tag=2026-05, this repository pins 9999-99`
+    *before* Maven; `build/pilot-sysml-validator/pilot-pin.txt` is left untouched.
+  - missing tools need `--force` (the already-compiled early return is after the tool guards but
+    before the compile): a stripped PATH without `javac` → `error: javac 21+ is required to build
+    the SysML validator`; without `java` too → `error: Java 21+ is required ...`. The pinned jar
+    must be present for these, otherwise the script tries to auto-provision first and you get
+    `error: git is required to build the pilot validator` instead.
+  - **Pitfall:** `mv build/pilot-validator /tmp/pv-aside` twice nests the backup
+    (`/tmp/pv-aside/pilot-validator`), and restoring onto an existing directory nests it again as
+    `build/pilot-validator/pv-aside`. Verify with `ls build/pilot-validator | tr '\n' ' '` — it
+    must contain `target` and no stray backup directory.
 - The KerML oracle: `./scripts/download-pilot-kerml-validator.sh` (needs `javac` too). It compiles
   `scripts/pilot-kerml-validator/ValidateKerML.java` against the pilot shaded jar into
   `build/pilot-kerml-validator/`, auto-provisioning the SysML validator first if the jar is
