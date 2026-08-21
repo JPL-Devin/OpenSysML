@@ -15,8 +15,14 @@ import (
 )
 
 const (
-	docCountPath         = "docs/project/pilot-differential.md"
-	docCountBaselinePath = "docs/project/pilot-differential-baseline.json"
+	docCountPath                  = "docs/project/pilot-differential.md"
+	docCountBaselinePath          = "docs/project/pilot-differential-baseline.json"
+	docCountReadmePath            = "README.md"
+	docCountArchitecturePath      = "docs/internals/architecture.md"
+	docCountSpecCompliancePath    = "docs/project/spec-compliance.md"
+	docCountReferenceMarker       = "**Reference differential:**"
+	docCountMeasuredStatusMarker  = "**Measured status:**"
+	docCountCurrentCoverageMarker = "**Current coverage:**"
 )
 
 type docLine struct {
@@ -42,6 +48,14 @@ type docNumber struct {
 	line  int
 }
 
+type docRuleCounts struct {
+	total          int
+	faithful       int
+	approximate    int
+	notImplemented int
+	knownFailure   int
+}
+
 var (
 	docHeadlinePattern       = regexp.MustCompile(`^## Results \(pilot ` + "`" + `([^` + "`" + `]+)` + "`" + `, ([0-9]+) files\)$`)
 	docParentheticalPattern  = regexp.MustCompile(`\s+\([^()]*\)$`)
@@ -49,6 +63,9 @@ var (
 	docNextCategoryPattern   = regexp.MustCompile(",\\s*\\d+\\s+`?[A-Za-z][A-Za-z0-9-]*`?")
 	docIntegerPattern        = regexp.MustCompile(`^-?[0-9]+$`)
 	docRootPattern           = regexp.MustCompile("(?s)^\\s*`([^`]+)`\\s*(.*)$")
+	docReferencePattern      = regexp.MustCompile("^\\*\\*Reference differential:\\*\\* ([0-9]+) files compared diagnostic-by-diagnostic against the pinned OMG pilot implementation \\(`([^`]+)`\\), ([0-9]+) in full agreement;")
+	docMeasuredStatusPattern = regexp.MustCompile("^\\*\\*Measured status:\\*\\* of the ([0-9]+) semantic rules tracked in .*?, ([0-9]+) are ✅ faithful, ([0-9]+) ⚠️ approximate and ([0-9]+) ❌ not implemented\\.")
+	docCoveragePattern       = regexp.MustCompile("^\\*\\*Current coverage:\\*\\* of the ([0-9]+) rules tracked in the compliance map, ([0-9]+) are faithful, ([0-9]+) approximate and ([0-9]+) not implemented")
 	docMovementRowsUnchecked = map[string]bool{"new checks of ours": true}
 )
 
@@ -56,7 +73,8 @@ var (
 // root rows, per-category only-ours/only-pilot prose, and the movement table's Now column.
 // The committed baseline JSON is the only input; validators and corpora are unnecessary.
 // Causal claims, attributions, historical movement columns and adjudication-section counts are
-// out of scope: this checks numbers, not why they moved.
+// out of scope: this checks numbers, not why they moved. It also guards the README and
+// architecture coverage claims against the compliance map.
 func TestPilotDifferentialDocumentCountsMatchBaseline(t *testing.T) {
 	lines := docReadNumberedDocument(t)
 	report := docReadBaselineReport(t)
@@ -73,13 +91,25 @@ func TestPilotDifferentialDocumentCountsMatchBaseline(t *testing.T) {
 	movementStart := docRequireLineContaining(t, lines, "What has moved since the adjudication")
 	movement := docRequireTable(t, lines, movementStart.number+1, "Count")
 	docAssertMovementTable(t, movement, report)
+
+	readmeLines := docReadNumberedFile(t, docCountReadmePath)
+	architectureLines := docReadNumberedFile(t, docCountArchitecturePath)
+	ruleCounts := docReadSpecComplianceCounts(t)
+	docAssertReferenceLine(t, docRequireLineContainingPath(t, readmeLines, docCountReadmePath, docCountReferenceMarker), report)
+	docAssertRuleStatusLine(t, docCountReadmePath, docRequireLineContainingPath(t, readmeLines, docCountReadmePath, docCountMeasuredStatusMarker), ruleCounts, docMeasuredStatusPattern)
+	docAssertRuleStatusLine(t, docCountArchitecturePath, docRequireLineContainingPath(t, architectureLines, docCountArchitecturePath, docCountCurrentCoverageMarker), ruleCounts, docCoveragePattern)
 }
 
 func docReadNumberedDocument(t *testing.T) []docLine {
 	t.Helper()
-	content, err := os.ReadFile(filepath.FromSlash("../../" + docCountPath))
+	return docReadNumberedFile(t, docCountPath)
+}
+
+func docReadNumberedFile(t *testing.T, path string) []docLine {
+	t.Helper()
+	content, err := os.ReadFile(filepath.FromSlash("../../" + path))
 	if err != nil {
-		t.Fatalf("%s:1: read document: %v", docCountPath, err)
+		t.Fatalf("%s:1: read document: %v", path, err)
 	}
 	raw := strings.Split(string(content), "\n")
 	lines := make([]docLine, len(raw))
@@ -100,6 +130,139 @@ func docReadBaselineReport(t *testing.T) Report {
 		t.Fatalf("%s:1: parse baseline: %v", docCountBaselinePath, err)
 	}
 	return report
+}
+
+func docReadSpecComplianceCounts(t *testing.T) docRuleCounts {
+	t.Helper()
+	lines := docReadNumberedFile(t, docCountSpecCompliancePath)
+	counts := docRuleCounts{}
+	for _, line := range lines {
+		text := strings.TrimSpace(line.text)
+		if !strings.HasPrefix(text, "|") {
+			continue
+		}
+		cells := strings.Split(strings.Trim(text, "|"), "|")
+		hits := make([]rune, 0, 1)
+		for _, cell := range cells {
+			for _, marker := range []rune{'✅', '⚠', '❌', '🚧'} {
+				for range strings.Count(cell, string(marker)) {
+					hits = append(hits, marker)
+				}
+			}
+		}
+		if len(hits) != 1 {
+			continue
+		}
+		switch hits[0] {
+		case '✅':
+			counts.faithful++
+		case '⚠':
+			counts.approximate++
+		case '❌':
+			counts.notImplemented++
+		case '🚧':
+			counts.knownFailure++
+		}
+	}
+	counts.total = counts.faithful + counts.approximate + counts.notImplemented + counts.knownFailure
+	return counts
+}
+
+func docAssertReferenceLine(t *testing.T, line docLine, report Report) {
+	t.Helper()
+	match := docReferencePattern.FindStringSubmatchIndex(line.text)
+	if match == nil {
+		docFailPathAt(t, docCountReadmePath, line.number, "malformed Reference differential line")
+	}
+	consumed := append(
+		docNumbersInRange(line, match[2], match[3]),
+		docNumbersInRange(line, match[4], match[5])...,
+	)
+	consumed = append(consumed, docNumbersInRange(line, match[6], match[7])...)
+
+	gotFiles, err := strconv.Atoi(line.text[match[2]:match[3]])
+	if err != nil {
+		docFailPathAt(t, docCountReadmePath, line.number, "Reference differential files: malformed number %q", line.text[match[2]:match[3]])
+	}
+	if gotFiles != report.Totals.Files {
+		docErrorPathAt(t, docCountReadmePath, line.number, "Reference differential files: want %d (baseline totals.files), got %d", report.Totals.Files, gotFiles)
+	}
+	wantRelease := report.Pilot
+	if before, _, ok := strings.Cut(report.Pilot, " ("); ok {
+		wantRelease = before
+	}
+	gotRelease := line.text[match[4]:match[5]]
+	if gotRelease != wantRelease {
+		docErrorPathAt(t, docCountReadmePath, line.number, "Reference differential release: want %q (baseline pilotRelease), got %q", wantRelease, gotRelease)
+	}
+	gotAgreement, err := strconv.Atoi(line.text[match[6]:match[7]])
+	if err != nil {
+		docFailPathAt(t, docCountReadmePath, line.number, "Reference differential fully agreeing: malformed number %q", line.text[match[6]:match[7]])
+	}
+	if gotAgreement != report.Totals.FilesAgreeing {
+		docErrorPathAt(t, docCountReadmePath, line.number, "Reference differential fully agreeing: want %d (baseline totals.filesFullyAgreeing), got %d", report.Totals.FilesAgreeing, gotAgreement)
+	}
+	docAssertBareNumbersConsumed(t, docCountReadmePath, line, consumed, "Reference differential line")
+}
+
+func docAssertRuleStatusLine(t *testing.T, path string, line docLine, counts docRuleCounts, pattern *regexp.Regexp) {
+	t.Helper()
+	match := pattern.FindStringSubmatchIndex(line.text)
+	if match == nil {
+		docFailPathAt(t, path, line.number, "malformed coverage status line")
+	}
+	values := make([]int, 4)
+	for i := range values {
+		value, err := strconv.Atoi(line.text[match[2+i*2]:match[3+i*2]])
+		if err != nil {
+			docFailPathAt(t, path, line.number, "coverage count %d: malformed number %q", i+1, line.text[match[2+i*2]:match[3+i*2]])
+		}
+		values[i] = value
+	}
+	wants := []int{counts.total, counts.faithful, counts.approximate, counts.notImplemented}
+	sources := []string{
+		"spec-compliance.md total rows",
+		"spec-compliance.md ✅ rows",
+		"spec-compliance.md ⚠️ rows",
+		"spec-compliance.md ❌ rows",
+	}
+	labels := []string{"total", "✅ faithful", "⚠️ approximate", "❌ not implemented"}
+	for i := range values {
+		if values[i] != wants[i] {
+			docErrorPathAt(t, path, line.number, "coverage %s: want %d (%s), got %d", labels[i], wants[i], sources[i], values[i])
+		}
+	}
+	if counts.knownFailure != 0 {
+		docFailPathAt(t, path, line.number, "coverage status omits %d 🚧 rows from spec-compliance.md", counts.knownFailure)
+	}
+	sum := values[1] + values[2] + values[3]
+	if values[0] != sum {
+		docErrorPathAt(t, path, line.number, "coverage counts are internally inconsistent: total %d, status sum %d", values[0], sum)
+	}
+	consumed := make([]docNumber, 0, len(values))
+	for i := range values {
+		consumed = append(consumed, docNumbersInRange(line, match[2+i*2], match[3+i*2])...)
+	}
+	docAssertBareNumbersConsumed(t, path, line, consumed, "coverage status line")
+}
+
+func docNumbersInRange(line docLine, start, end int) []docNumber {
+	tokens := docBareNumberSpans(line.text[start:end])
+	for i := range tokens {
+		tokens[i].start += start
+		tokens[i].end += start
+		tokens[i].line = line.number
+	}
+	return tokens
+}
+
+func docAssertBareNumbersConsumed(t *testing.T, path string, line docLine, consumed []docNumber, context string) {
+	t.Helper()
+	for _, token := range docBareNumberTokens(line.text, []int{0}, []docLine{line}) {
+		if !docNumberWasConsumed(consumed, token) {
+			docErrorPathAt(t, path, token.line, "unaccounted number %q in %s", token.text, context)
+		}
+	}
 }
 
 func docRequireResultsHeading(t *testing.T, lines []docLine) docLine {
@@ -137,12 +300,17 @@ func docAssertHeadline(t *testing.T, heading docLine, report Report) {
 
 func docRequireLineContaining(t *testing.T, lines []docLine, marker string) docLine {
 	t.Helper()
+	return docRequireLineContainingPath(t, lines, docCountPath, marker)
+}
+
+func docRequireLineContainingPath(t *testing.T, lines []docLine, path, marker string) docLine {
+	t.Helper()
 	for _, line := range lines {
 		if strings.Contains(line.text, marker) {
 			return line
 		}
 	}
-	docFailAt(t, 1, "missing required section marker %q", marker)
+	docFailPathAt(t, path, 1, "missing required section marker %q", marker)
 	return docLine{}
 }
 
@@ -711,10 +879,20 @@ func docMovementValue(report Report, label string) (int, string, bool) {
 
 func docFailAt(t *testing.T, line int, format string, args ...any) {
 	t.Helper()
-	t.Fatalf("%s:%d: %s", docCountPath, line, fmt.Sprintf(format, args...))
+	docFailPathAt(t, docCountPath, line, format, args...)
 }
 
 func docErrorAt(t *testing.T, line int, format string, args ...any) {
 	t.Helper()
-	t.Errorf("%s:%d: %s", docCountPath, line, fmt.Sprintf(format, args...))
+	docErrorPathAt(t, docCountPath, line, format, args...)
+}
+
+func docFailPathAt(t *testing.T, path string, line int, format string, args ...any) {
+	t.Helper()
+	t.Fatalf("%s:%d: %s", path, line, fmt.Sprintf(format, args...))
+}
+
+func docErrorPathAt(t *testing.T, path string, line int, format string, args ...any) {
+	t.Helper()
+	t.Errorf("%s:%d: %s", path, line, fmt.Sprintf(format, args...))
 }
