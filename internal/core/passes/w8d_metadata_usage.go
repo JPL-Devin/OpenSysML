@@ -106,9 +106,7 @@ func (mc *w8dMetadataChecker) checkAnnotation(scope *symbols.Scope, typeRef *ast
 	} else {
 		return
 	}
-	// A library symbol carries no declaration, so an abstract library metaclass
-	// is not judged here (known limitation: libs.symRecord records no
-	// abstractness).
+	// A library symbol carries no declaration, so its abstractness is unknown here.
 	if def, isDef := typ.Decl.(*ast.Definition); isDef && def.IsAbstract {
 		mc.diags = append(mc.diags, Diagnostic{
 			Severity: SeverityError,
