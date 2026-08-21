@@ -1,8 +1,10 @@
 package parser
 
 import (
+	"strings"
 	"testing"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
@@ -59,6 +61,23 @@ func TestW7CReservedWordsArePerLanguage(t *testing.T) {
 		}
 		if got != tc.want {
 			t.Errorf("%s %q: %d reserved-keyword-name warning(s), want %d", tc.file, tc.input, got, tc.want)
+		}
+	}
+}
+
+// A kindless body member named by an unreserved word keeps that name rather
+// than becoming an anonymous usage.
+func TestW7CUnreservedWordNamesBodyMember(t *testing.T) {
+	src := "part def T {\n  chains : T;\n  ref differences : T;\n}\n"
+	p := New(source.New("body.sysml", []byte(src)))
+	f := p.ParseFile()
+	if len(p.Diagnostics) > 0 {
+		t.Fatalf("unexpected diagnostics: %v", p.Diagnostics)
+	}
+	dump := ast.Dump(f)
+	for _, name := range []string{"chains", "differences"} {
+		if want := `name="` + name + `"`; !strings.Contains(dump, want) {
+			t.Errorf("no %s in\n%s", want, dump)
 		}
 	}
 }

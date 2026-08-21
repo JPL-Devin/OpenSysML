@@ -2750,7 +2750,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 			// Parse optional name
 			if hasNameAndType || hasNameAndRelationship || hasNameOnly || hasNameAndBody || hasNameAndMult {
 				tok := p.advance()
-				if tok.Kind == lexer.Identifier || tok.Kind == lexer.UnrestrictedName {
+				if p.nameToken(tok) {
 					id.Name = p.src.Text(tok.Span)
 					id.NameSpan = tok.Span
 				}
@@ -2839,7 +2839,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 	if p.atName() && nextKind == lexer.Colon {
 		var id ast.Identification
 		tok := p.advance()
-		if tok.Kind == lexer.Identifier || tok.Kind == lexer.UnrestrictedName {
+		if p.nameToken(tok) {
 			id.Name = p.src.Text(tok.Span)
 			id.NameSpan = tok.Span
 		}

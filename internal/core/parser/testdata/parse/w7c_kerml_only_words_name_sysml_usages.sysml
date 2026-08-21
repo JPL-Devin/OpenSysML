@@ -24,6 +24,9 @@ package W7CContextualNames {
     part subsets2 : T;
 
     part def Holder {
+        // A kindless member keeps the name it is written with.
+        chains : Real;
+        ref differences : Real;
         attribute redefinition : Real;
         attribute inverting : Real;
         attribute disjoining : Real;
