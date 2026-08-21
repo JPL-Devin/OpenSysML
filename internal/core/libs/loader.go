@@ -133,10 +133,12 @@ func recordEntries(rec *IndexRecord) []symbols.RecordEntry {
 			Kind:            s.Kind,
 			Span:            s.Span,
 			Supers:          s.Supers,
+			FeaturedBy:      s.FeaturedBy,
 			WildcardImports: wildcardImportEntries(s.WildcardImports),
 			AliasTarget:     s.AliasTarget,
 			Unit:            unitFactsEntry(s.Unit),
 			Dimension:       s.Dimension,
+			Behavior:        s.Behavior,
 
 			Annotations:      s.Annotations,
 			NamespaceFilters: s.NamespaceFilters,
