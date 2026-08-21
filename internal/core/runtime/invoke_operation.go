@@ -44,7 +44,7 @@ func (ctx *Context) InvokeOperation(inst *Instance, name string, args map[string
 		if err != nil {
 			return nil, fmt.Errorf("invoke %s on object #%d: %w", name, inst.ID, err)
 		}
-		result, err := ctx.invokeCalcNamedOn(sym, inputs, declScope(sym), inst)
+		result, err := ctx.invokeCalcNamedShapeOn(shape, inputs, declScope(sym), inst)
 		if err != nil {
 			return nil, fmt.Errorf("invoke %s on object #%d: %w", name, inst.ID, err)
 		}

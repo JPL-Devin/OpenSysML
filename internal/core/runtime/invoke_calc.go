@@ -215,7 +215,15 @@ func (ctx *Context) InvokeCalcNamed(sym *symbols.Symbol, args map[string]Value, 
 func (ctx *Context) invokeCalcNamedOn(sym *symbols.Symbol, args map[string]Value, scope *symbols.Scope, self *Instance) (Value, error) {
 	defer ctx.beginRun()()
 
-	return ctx.invokeCalcWithSelf(sym, calcArgs{named: args}, scope, self)
+	shape, err := ctx.calcShapeOf(sym)
+	if err != nil {
+		return Value{}, err
+	}
+	return ctx.invokeCalcNamedShapeOn(shape, args, scope, self)
+}
+
+func (ctx *Context) invokeCalcNamedShapeOn(shape *calcShape, args map[string]Value, scope *symbols.Scope, self *Instance) (Value, error) {
+	return ctx.invokeCalcShape(shape, calcArgs{named: args}, scope, self)
 }
 
 // invokeCalc resolves the calc's shape and invokes it, the single path every

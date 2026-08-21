@@ -59,6 +59,7 @@ func (h *calcStmtHost) acceptReturn(value Value, _ lower.Return) error {
 }
 
 func (h *calcStmtHost) performer() *Instance {
+	// A calculation evaluated from an object context sees that featuring object.
 	return h.self
 }
 
