@@ -259,6 +259,11 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		fmt.Fprintf(b, `(Dependency clients=%q suppliers=%q`, qnList(v.Clients), qnList(v.Suppliers))
 		writeChildren(b, depth, prefixesAnd(v.Prefixes, v.Body))
 		return
+	case *RelationshipMember:
+		fmt.Fprintf(b, `(RelationshipMember kind=%q name=%q keyword=%q source=%q target=%q conjugated=%t`,
+			v.Kind.String(), identName(v.Ident), v.Keyword, endString(v.Source), endString(v.Target), v.Conjugated)
+		writeChildren(b, depth, v.Members)
+		return
 	case *Comment:
 		fmt.Fprintf(b, `(Comment about=%q locale=%q)`, qnList(v.About), v.Locale)
 	case *Documentation:
