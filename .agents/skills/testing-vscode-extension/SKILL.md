@@ -273,6 +273,37 @@ main.sysml  package Main { import Lib::*; part w : Widget; }
 - Parse-error proof: delete a closing `}`. The previous SVG must stay on screen at reduced opacity
   (`.stale`) with a red status line; zoom on the status line, and compare box brightness before/after.
 
+## TextMate grammar changes (`editors/vscode/syntaxes/*.tmLanguage.json`, `tools/gengrammar`)
+
+- A *real* before/after for a grammar rule needs no branch switching and no repackaging: install the
+  vsix once, then swap the single JSON in the **installed** extension and reload the window.
+  ```bash
+  git show origin/main:editors/vscode/syntaxes/sysml.tmLanguage.json > /tmp/sysml-main.tmLanguage.json
+  EXT=~/.vscode/extensions/open-mbee.opensysml-sysml-0.1.0/syntaxes/sysml.tmLanguage.json
+  cp /tmp/sysml-main.tmLanguage.json "$EXT"                                    # BEFORE
+  cp editors/vscode/syntaxes/sysml.tmLanguage.json "$EXT"                      # AFTER (restore!)
+  ```
+  Command Palette → **Developer: Reload Window** picks the new grammar up; nothing else is needed.
+  Always restore the branch copy when done — the installed file is not under git, so `git status`
+  will not remind you.
+- **Semantic tokens beat TextMate for declared names**, so a word that a new TextMate rule colours
+  may still render plain where the LSP marks it as a usage/variable. Example: with the F9
+  `keyword.other.contextual` rule, `initial off;` / `region r { }` / `entry point p;` colour as
+  keywords, but `attribute point : ScalarValues::Real;` keeps the plain identifier colour. Pick the
+  screenshot line accordingly, and prove the scope with **Developer: Inspect Editor Tokens and
+  Colors** (`region` → `keyword.other.contextual.source.sysml`, foreground `#FF7B72`).
+
+### Completion oracle for keyword-ish items
+
+Type a real prefix (`poi`, `def`, `var`) then `ctrl+space` and read the **detail column** in a `zoom`:
+`keyword` = reserved, `contextual keyword` = the F9 list, no detail + `abc` icon = VS Code word-based
+noise. Language gating is visible this way too (`var` only in `.kerml`).
+Beware the server **dedupes by label**: in a document that already declares `attribute point`, the
+contextual item `point` disappears (a document symbol wins). Use a fixture *without* those names when
+asserting the contextual list, and a separate fixture with them for the "still ordinary names" test.
+Confirm the whole expected list cheaply first with a stdio JSON-RPC completion probe against
+`bin/sysml-lsp`, then prove it in the GUI.
+
 ## Recording tips
 
 Record the VS Code window maximized (wmctrl above). Verify visual claims by `zoom`ing the status bar
