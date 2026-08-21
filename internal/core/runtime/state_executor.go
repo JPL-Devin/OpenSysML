@@ -609,19 +609,6 @@ func (e *StateExecutor) exitedByAncestorRegion(state *ast.StateNode, leaving []*
 	return false
 }
 
-// isComposite reports whether the state owns orthogonal regions or substates.
-func (e *StateExecutor) isComposite(state *ast.StateNode) bool {
-	if len(e.graph.CompositeStates[state]) > 0 {
-		return true
-	}
-	for _, parent := range e.graph.ParentState {
-		if parent == state {
-			return true
-		}
-	}
-	return false
-}
-
 // activeLeaves returns the innermost active states, ordered by the declaration of
 // the regions they lie in rather than by their depth. A state owning an active
 // orthogonal region is not a leaf: the event reaches it walking outward.
