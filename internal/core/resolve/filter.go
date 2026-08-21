@@ -264,9 +264,8 @@ func (r *Resolver) indexedNameOf(target *symbols.Symbol) string {
 }
 
 // appendSubtree adds the descendants of target a recursive import surfaces. The
-// walk descends into every member, admitted or not: a lookup through the import
-// reaches a nested element whatever its namespace was judged to be, so filtering
-// the descent would hide elements the import surfaces (see lookupInSubtree).
+// walk descends through the members the import can see, as the lookup does: a
+// namespace it cannot surface hides its own contents too (see lookupInSubtree).
 func (r *Resolver) appendSubtree(out *elementList, scope *symbols.Scope, target *symbols.Symbol, imp *ast.Import, admit func(*symbols.Symbol) bool, seen map[symbols.ElementKey]bool) {
 	if target == nil || (target.Scope != nil && target.Scope.BodyLocal()) {
 		return
@@ -283,6 +282,9 @@ func (r *Resolver) appendSubtree(out *elementList, scope *symbols.Scope, target 
 		}
 	}
 	for _, sym := range children {
+		if !visibleThroughImport(imp, sym) {
+			continue
+		}
 		r.appendSubtree(out, scope, sym, imp, admit, seen)
 	}
 }

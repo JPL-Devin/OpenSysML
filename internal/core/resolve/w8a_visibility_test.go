@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -194,4 +196,59 @@ func TestImportAllDoesNotLeakThroughASiblingImport(t *testing.T) {
 	}`)
 	wantUnresolved(t, r, "Vault::Secret", "Secret")
 	wantNoUnresolved(t, r, "Thing")
+}
+
+// A recursive import cannot descend through a namespace it cannot surface, and
+// enumeration must offer exactly what that lookup reaches.
+func TestRecursiveImportOffersOnlyWhatItReaches(t *testing.T) {
+	src := `package P {
+		private package Hidden { public class Buried; }
+		package Shown { public class Seen; }
+	}
+	package Use {
+		import P::**;
+		class A specializes Buried;
+		class B specializes Seen;
+	}`
+	root := parsedRoot(t, "d.kerml", src)
+	idx := symbols.NewIndex()
+	idx.AddDocument("d.kerml", root)
+	idx.ExpandWildcardImports()
+	r := resolverWithSpecializations(idx)
+	r.ResolveDocument("d.kerml", root)
+	wantUnresolved(t, r, "Buried")
+	wantNoUnresolved(t, r, "Seen")
+
+	use := idx.LookupQualified("Use")
+	if len(use) != 1 || use[0].Scope == nil {
+		t.Fatalf("Use names %d symbols with a scope", len(use))
+	}
+	offered := map[string]bool{}
+	for _, imp := range importsIn(t, use[0].Scope) {
+		for _, sym := range r.ImportedElements(use[0].Scope, imp) {
+			offered[sym.Name] = true
+		}
+	}
+	if offered["Buried"] {
+		t.Error("the recursive import offers Buried, which resolution refuses")
+	}
+	if !offered["Seen"] {
+		t.Error("the recursive import does not offer Seen, which resolution reaches")
+	}
+}
+
+// importsIn are the import declarations written in scope's own namespace.
+func importsIn(t *testing.T, scope *symbols.Scope) []*ast.Import {
+	t.Helper()
+	pkg, ok := scope.Node().(*ast.Package)
+	if !ok {
+		t.Fatalf("the scope's node is %T, want a package", scope.Node())
+	}
+	var out []*ast.Import
+	for _, member := range pkg.Members {
+		if imp, isImport := member.(*ast.Import); isImport {
+			out = append(out, imp)
+		}
+	}
+	return out
 }
