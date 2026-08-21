@@ -192,8 +192,11 @@ No compliance row's status flag is changed on the strength of this work.
   `kind-only`, not `agree`.
 - **Quantities are out of reach** (see above), as is anything else the pilot returns as an
   unevaluated node.
-- **An empty result is ambiguous** on the pilot side: no value, and an expression it declined
-  to evaluate, render identically.
+- **Silence is its own state, and it is ambiguous.** The pilot prints *nothing at all* both for
+  an expression that legitimately yields the empty sequence and for one it silently gives up on
+  (`1 / 0` produces no lines and no diagnostic), so it cannot distinguish "no value" from
+  "declined to evaluate". Those cases bucket `pilot-silent` rather than being read as agreement
+  with our empty sequence or as our error.
 - **Collection order** is compared as order; a same-multiset/different-order result is its own
   bucket, so a real ordering difference is never hidden by sorting.
 - **Scalar vs one-element sequence is unobservable.** We print `[2]` where the pilot prints a
@@ -207,14 +210,14 @@ execution artifact absent it prints a provisioning instruction, exits 0 and writ
 `cmd/pilot-diff` and its committed baseline are untouched. Current state of the 32 committed cases:
 
 ```
-agree: 21 · kind-only: 1 · order-only: 0 · disagree: 0
-pilot-unevaluated: 2 · pilot-error: 2 · ours-error: 3 · both-error: 3 · nondeterministic: 0
+agree: 20 · kind-only: 1 · order-only: 0 · disagree: 0
+pilot-unevaluated: 2 · pilot-silent: 2 · pilot-error: 2 · ours-error: 2 · both-error: 3
+nondeterministic: 0
 ```
 
 No case disagrees on a value both tools evaluate. The one `kind-only` is `2 ** 40` (above); the
-`pilot-error` and `pilot-unevaluated` cases are the pilot's limits, not disagreements; the
-`ours-error` cases are finding 1 below plus `1 / 0`, where we raise `division by zero` and the pilot
-returns nothing at all.
+`pilot-error`, `pilot-unevaluated` and `pilot-silent` cases are the pilot's limits, not
+disagreements; the two `ours-error` cases are finding 1 below.
 
 ## Findings to carry forward
 
