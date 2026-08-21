@@ -272,6 +272,71 @@ func TestObjectScopedCalcUsageSeesPerformingObject(t *testing.T) {
 	wantInt(t, outputs, "value", 7)
 }
 
+const nestedCalcInvocationFixture = `
+	package test {
+		private import ScalarValues::*;
+		part def Robot {
+			attribute charge : Integer = 10;
+			calc direct { return : Integer = charge + 100; }
+			calc anon { return : Integer = charge * 2; }
+			calc nested { return : Integer = anon() + 1; }
+			calc usesDirect { return : Integer = direct() + 1000; }
+			action drain {
+				first start;
+				action cut { assign charge := 3; }
+				done end;
+				then start cut;
+				then cut end;
+			}
+		}
+	}
+`
+
+// A calc invocation expression preserves its enclosing calc's performing object.
+func TestCalcInvocationExpressionSeesPerformingObject(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, nestedCalcInvocationFixture))
+	root := idx.DocumentRoot("<test>")
+	robot := findSymbolByName(root, "Robot", ast.DefPart)
+	if robot == nil {
+		t.Fatal("Robot not found")
+	}
+	inst, err := ctx.Instantiate(robot)
+	if err != nil {
+		t.Fatalf("Instantiate: %v", err)
+	}
+	if _, err := ctx.InvokeOperation(inst, "drain", nil); err != nil {
+		t.Fatalf("InvokeOperation(drain): %v", err)
+	}
+	charge, err := inst.GetFeatureValue(ctx, "charge")
+	if err != nil {
+		t.Fatalf("GetFeatureValue(charge): %v", err)
+	}
+	if got := charge.HeldValue().Const.Int; got != 3 {
+		t.Fatalf("charge = %d, want 3", got)
+	}
+
+	for _, tc := range []struct {
+		name string
+		want int64
+	}{
+		{"direct", 103},
+		{"anon", 6},
+		{"nested", 7},
+		{"usesDirect", 1103},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			results, err := ctx.InvokeOperation(inst, tc.name, nil)
+			if err != nil {
+				t.Fatalf("InvokeOperation(%s): %v", tc.name, err)
+			}
+			got, ok := results["result"]
+			if !ok || got.Const.Int != tc.want {
+				t.Errorf("%s result = %v, want result = %d", tc.name, results, tc.want)
+			}
+		})
+	}
+}
+
 // Every path %invoke cannot run reports a typed error naming what it was asked.
 func TestInvokeOperationFailureModes(t *testing.T) {
 	model, resolver, root := parseAndBuildModel(t, invokeFixture)

@@ -1,4 +1,5 @@
 package W7D {
+	private import ScalarValues::*;
 	action route {
 		attribute receiverGot : Integer = 0;
 		attribute siblingGot : Integer = 0;

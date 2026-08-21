@@ -1544,9 +1544,9 @@ func (ec *EvalContext) evalInvocation(n *ast.InvocationExpr) (Value, error) {
 	// direct InvokeCalc bind parameters and trace identically. The notation keeps
 	// the argument forms mutually exclusive.
 	if len(named) > 0 {
-		return ec.ctx.InvokeCalcNamed(calcSym, named, ec.scope)
+		return ec.ctx.invokeCalcWithSelf(calcSym, calcArgs{named: named}, ec.scope, ec.self)
 	}
-	return ec.ctx.InvokeCalc(calcSym, args, ec.scope)
+	return ec.ctx.invokeCalcWithSelf(calcSym, calcArgs{positional: args}, ec.scope, ec.self)
 }
 
 // qualifiedNameToString converts a QualifiedName AST node to "Package::Name" format.
