@@ -375,17 +375,19 @@ func (m *Model) annotationValue(scope *symbols.Scope, value ast.Node) symbols.Fi
 	return symbols.FilterValue{}
 }
 
-// metaclassOf returns the reflective metadata type of the candidate's own
-// metaclass: `SysML::PartUsage` for a part usage. It is what `@@T` tests, and
-// what makes `@SysML::PartUsage` — the form the training corpus filters views
-// with — select by what an element *is* rather than by what annotates it.
-//
-// The metaclass follows the symbol's kind rather than its declaration, so an
-// element restored from an index cache is classified the same way as a parsed
-// one.
+// metaclassOf is the candidate's own metaclass — what `@@T` tests: a KerML
+// declaration by its keyword (its kind cannot tell `struct` from `datatype`),
+// anything else by its symbol kind, so a cached element classifies alike.
 func (m *Model) metaclassOf(sym *symbols.Symbol) *symbols.Symbol {
 	if sym == nil {
 		return nil
+	}
+	if name := kermlMetaclassName(sym, m.isKerMLDoc(sym)); name != "" {
+		for _, prefix := range kermlMetaclassPrefixes {
+			if meta := m.symbolByFQN(prefix + name); meta != nil {
+				return meta
+			}
+		}
 	}
 	name := metaclassName(sym.Kind)
 	if name == "" {
@@ -401,6 +403,112 @@ func (m *Model) metaclassOf(sym *symbols.Symbol) *symbols.Symbol {
 // abstract syntax, which the standard library declares in SysML::Systems and
 // re-exports through SysML.
 const sysmlMetaclassPrefix = "SysML::Systems::"
+
+// kermlMetaclassPrefixes qualify the KerML abstract syntax metaclasses, which
+// the library declares across KerML's three packages.
+var kermlMetaclassPrefixes = []string{"KerML::Kernel::", "KerML::Core::", "KerML::Root::"}
+
+// kermlMetaclassNames maps a KerML declaration keyword to the metaclass it
+// implies (KerML 1.1 §8.2, §9.2). `assoc struct` is recorded as `struct` by the
+// parser, so it is classified as a Structure rather than an AssociationStructure.
+var kermlMetaclassNames = map[string]string{
+	"type":         "Type",
+	"classifier":   "Classifier",
+	"class":        "Class",
+	"struct":       "Structure",
+	"assoc":        "Association",
+	"association":  "Association",
+	"datatype":     "DataType",
+	"behavior":     "Behavior",
+	"function":     "Function",
+	"predicate":    "Predicate",
+	"interaction":  "Interaction",
+	"metaclass":    "Metaclass",
+	"feature":      "Feature",
+	"step":         "Step",
+	"expr":         "Expression",
+	"bool":         "BooleanExpression",
+	"inv":          "Invariant",
+	"connector":    "Connector",
+	"binding":      "BindingConnector",
+	"bind":         "BindingConnector",
+	"flow":         "Flow",
+	"message":      "Flow",
+	"succession":   "Succession",
+	"multiplicity": "Multiplicity",
+}
+
+// kermlMetaclassName is the metaclass the keyword of sym's KerML declaration
+// implies, or "" for a declaration written in SysML or restored from a cache,
+// which is classified by its symbol kind instead.
+func kermlMetaclassName(sym *symbols.Symbol, isKerML bool) string {
+	if !isKerML {
+		return ""
+	}
+	switch d := sym.Decl.(type) {
+	case *ast.Definition:
+		return kermlMetaclassNames[d.Keyword]
+	case *ast.Usage:
+		return kermlMetaclassNames[d.Keyword]
+	}
+	return ""
+}
+
+// reflectiveFeatureValue is what the candidate's declaration states for a
+// metaclass feature of it, and whether that feature is derived here at all
+// (KerML 1.1 §8.2.4); an underived one is unevaluable, not false.
+func (m *Model) reflectiveFeatureValue(sym *symbols.Symbol, feature string) (symbols.FilterValue, bool) {
+	switch feature {
+	case "name", "declaredName":
+		return stringOrEmpty(simpleSymbolName(sym)), true
+	case "qualifiedName":
+		return stringOrEmpty(m.fqnOf(sym)), true
+	}
+	switch d := sym.Decl.(type) {
+	case *ast.Definition:
+		switch feature {
+		case "isAbstract":
+			return boolValue(d.IsAbstract), true
+		case "isSufficient":
+			return boolValue(d.IsAll), true
+		case "isConstant":
+			return boolValue(d.IsConstant), true
+		}
+	case *ast.Usage:
+		switch feature {
+		case "isAbstract":
+			return boolValue(d.IsAbstract), true
+		case "isSufficient":
+			return boolValue(d.IsAll), true
+		case "isComposite":
+			return boolValue(d.IsComposite), true
+		case "isDerived":
+			return boolValue(d.IsDerived), true
+		case "isEnd":
+			return boolValue(d.IsEnd), true
+		case "isOrdered":
+			return boolValue(d.IsOrdered), true
+		case "isUnique":
+			return boolValue(!d.IsNonunique), true
+		case "isVariable":
+			return boolValue(d.IsVariable), true
+		case "isConstant":
+			return boolValue(d.IsConstant), true
+		case "isPortion":
+			return boolValue(d.Portion != ast.PortionNone), true
+		}
+	}
+	return symbols.FilterValue{}, false
+}
+
+// stringOrEmpty is a string value, or the empty sequence for a name the
+// declaration does not have.
+func stringOrEmpty(s string) symbols.FilterValue {
+	if s == "" {
+		return emptyValue()
+	}
+	return symbols.FilterValue{Kind: symbols.FilterValueString, Str: s}
+}
 
 // metaclassName is the reflective SysML metadata type classifying a declaration
 // of the given kind, or "" for a kind the abstract syntax has no metaclass for.

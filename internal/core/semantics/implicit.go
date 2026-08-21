@@ -100,6 +100,33 @@ var implicitKerMLBases = map[string]string{
 	"type":        "Base::Anything",
 }
 
+// implicitKerMLFeatureBases maps a KerML feature keyword to the base feature
+// every feature of that kind subsets (KerML 1.1 §8.4.2).
+var implicitKerMLFeatureBases = map[string]string{
+	"type":        baseUsageFQN,
+	"classifier":  baseUsageFQN,
+	"feature":     baseUsageFQN,
+	"class":       "Occurrences::occurrences",
+	"struct":      "Objects::objects",
+	"datatype":    "Base::dataValues",
+	"assoc":       "Links::links",
+	"association": "Links::links",
+	"connector":   "Links::links",
+	"binding":     "Links::selfLinks",
+	"bind":        "Links::selfLinks",
+	"succession":  "Occurrences::happensBeforeLinks",
+	"behavior":    "Performances::performances",
+	"step":        "Performances::performances",
+	"function":    "Performances::evaluations",
+	"expr":        "Performances::evaluations",
+	"predicate":   "Performances::booleanEvaluations",
+	"bool":        "Performances::booleanEvaluations",
+	"inv":         "Performances::trueEvaluations",
+	"interaction": "Transfers::transfers",
+	"flow":        "Transfers::flowTransfers",
+	"metaclass":   "Metaobjects::metaobjects",
+}
+
 // kindBaseFQN returns the standard-library base every declaration of sym's
 // kind conforms to, implicitly or through its declared chain.
 func kindBaseFQN(sym *symbols.Symbol, isKerML bool) (string, bool) {
@@ -131,6 +158,11 @@ func kindBaseFQN(sym *symbols.Symbol, isKerML bool) (string, bool) {
 		// `state s;` in a state body: a bodyless, always-untyped state usage.
 		fqn, ok := implicitUsageBases[ast.UsageState]
 		return fqn, ok
+	case *ast.TransitionMember:
+		// A textual transition is a TransitionUsage (SysML v2 §7.19.2), so it
+		// gets the same base as `transition` written as a usage.
+		fqn, ok := implicitUsageBases[ast.UsageTransition]
+		return fqn, ok
 	}
 	return "", false
 }
@@ -152,12 +184,8 @@ func (m *Model) implicitBase(sym *symbols.Symbol) *symbols.Symbol {
 	if !ok || m.resolver == nil || m.resolver.Index() == nil {
 		return nil
 	}
-	if _, isDef := sym.Decl.(*ast.Definition); !isDef && !isKerML && declaresGeneralization(RelationshipsOf(sym)) {
-		return nil
-	}
-	// A definition keeps its kind's base unless a declared chain already
-	// conforms to it: `item def SpatialItem :> SpatialFrame` still specializes
-	// Items::Item, since SpatialFrame is not an item definition (SysML 7.9.3).
+	// A declaration keeps its kind's base unless a declared chain already reaches
+	// it — the same rule for a usage and in either language (KerML §8.4.2).
 	if m.declaredGeneralizationReaches(sym, fqn, nil) {
 		return nil
 	}
@@ -223,6 +251,26 @@ func (m *Model) declaredGeneralizationReaches(sym *symbols.Symbol, want string, 
 // `that`, the featuring instance of a usage's value, so subsetting it is what
 // makes an unqualified `that` resolve inside a usage body.
 const baseUsageFQN = "Base::things"
+
+// implicitKerMLFeatureBase returns the base feature a KerML feature declaration
+// subsets (KerML §8.4.2); it contributes members only, like implicitBaseUsage.
+func (m *Model) implicitKerMLFeatureBase(sym *symbols.Symbol) *symbols.Symbol {
+	usage, ok := sym.Decl.(*ast.Usage)
+	if !ok || m.resolver == nil || m.resolver.Index() == nil || !m.isKerMLDoc(sym) {
+		return nil
+	}
+	fqn, ok := implicitKerMLFeatureBases[usage.Keyword]
+	if !ok || m.declaredGeneralizationReaches(sym, fqn, nil) {
+		return nil
+	}
+	for _, base := range m.resolver.Index().LookupQualified(fqn) {
+		if base == nil || base == sym || enclosedBy(sym, base) {
+			continue
+		}
+		return base
+	}
+	return nil
+}
 
 // implicitBaseUsage returns Base::things for a usage element, or nil when sym is
 // not a usage, is that base usage, or is owned by it.
