@@ -7,10 +7,10 @@ than about how the client wraps a canned response.
 
 import pytest
 
-from pysysml import Connection
-from pysysml.errors import ExecutionError, ModelNotFoundError, WrongKindError
-from pysysml.model import Model
-from pysysml.proto import sysml_pb2
+from opensysml import Connection
+from opensysml.errors import ExecutionError, ModelNotFoundError, WrongKindError
+from opensysml.model import Model
+from opensysml.proto import sysml_pb2
 
 MODEL_SOURCE = '''
 package Demo {

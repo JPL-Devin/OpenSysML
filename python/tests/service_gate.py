@@ -3,7 +3,7 @@
 A developer without the binary is meant to skip the tests that need a service.
 CI builds the binary and starts one, so there an absent service is the failure
 these tests exist to catch, not a reason to pass quietly: exporting
-``$PYSYSML_REQUIRE_SERVICE`` turns every such skip into a failure.
+``$OPENSYSML_REQUIRE_SERVICE`` turns every such skip into a failure.
 """
 
 import os
@@ -13,7 +13,7 @@ import grpc
 import pytest
 
 #: Set where a service is provided, so a missing one fails instead of skipping.
-REQUIRE_SERVICE_ENV = 'PYSYSML_REQUIRE_SERVICE'
+REQUIRE_SERVICE_ENV = 'OPENSYSML_REQUIRE_SERVICE'
 
 
 def service_required():
@@ -30,7 +30,7 @@ def skip_or_fail_without_service(reason):
         reason (str): What was missing
 
     Raises:
-        Failed: If $PYSYSML_REQUIRE_SERVICE is set
+        Failed: If $OPENSYSML_REQUIRE_SERVICE is set
         Skipped: Otherwise
     """
     if service_required():
@@ -71,7 +71,7 @@ def is_server_available(host='localhost', port=50051, timeout=2):
     Returns:
         bool: True when a service answered
     """
-    from pysysml.proto import sysml_pb2, sysml_pb2_grpc
+    from opensysml.proto import sysml_pb2, sysml_pb2_grpc
 
     channel = grpc.insecure_channel(f'{host}:{port}')
     try:
@@ -94,7 +94,7 @@ def service_binary():
     Returns:
         str or None: An executable binary, from the cache or a local build
     """
-    from pysysml.binary import get_binary_path
+    from opensysml.binary import get_binary_path
 
     repo_build = os.path.join(
         os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),

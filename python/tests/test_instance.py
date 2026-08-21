@@ -1,8 +1,8 @@
 """Tests for Instance class."""
 import pytest
-from pysysml.errors import FeatureValueError
-from pysysml.proto import sysml_pb2
-from pysysml.instance import Instance
+from opensysml.errors import FeatureValueError
+from opensysml.proto import sysml_pb2
+from opensysml.instance import Instance
 
 
 def scalar_feature(name, **value_kwargs):

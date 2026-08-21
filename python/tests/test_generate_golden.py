@@ -4,7 +4,7 @@ The golden file is `tests/golden/vehicle_types.py`, generated from
 `internal/repl/testdata/vehicle_package.sysml`. Regenerate it with a running
 service from the repository root:
 
-    python -m pysysml.generate internal/repl/testdata/vehicle_package.sysml \
+    python -m opensysml.generate internal/repl/testdata/vehicle_package.sysml \
         -o python/tests/golden/vehicle_types.py
 """
 
@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from pysysml.generate import (
+from opensysml.generate import (
     GENERATOR_VERSION,
     UNSTAMPED,
     generate_source,
@@ -26,7 +26,7 @@ from pysysml.generate import (
     model_stamp,
     render_module,
 )
-from pysysml.typed import TypedObject
+from opensysml.typed import TypedObject
 from tests.service_gate import fail_if_service_promised, is_server_available
 
 PYTHON_ROOT = Path(__file__).resolve().parents[1]
@@ -34,7 +34,7 @@ REPO_ROOT = PYTHON_ROOT.parent
 GOLDEN = PYTHON_ROOT / "tests" / "golden" / "vehicle_types.py"
 FIXTURE = REPO_ROOT / "internal" / "repl" / "testdata" / "vehicle_package.sysml"
 REGENERATE = (
-    "python -m pysysml.generate internal/repl/testdata/vehicle_package.sysml "
+    "python -m opensysml.generate internal/repl/testdata/vehicle_package.sysml "
     "-o python/tests/golden/vehicle_types.py"
 )
 
@@ -104,7 +104,7 @@ def test_generated_code_is_mypy_clean_and_flags_misuse(tmp_path):
     (tmp_path / "usage_ok.py").write_text(
         textwrap.dedent(
             """
-            from pysysml.instance import Instance
+            from opensysml.instance import Instance
             from vehicle_types import Vehicle
 
 
@@ -117,7 +117,7 @@ def test_generated_code_is_mypy_clean_and_flags_misuse(tmp_path):
     (tmp_path / "usage_bad.py").write_text(
         textwrap.dedent(
             """
-            from pysysml.instance import Instance
+            from opensysml.instance import Instance
             from vehicle_types import Vehicle
 
 
@@ -143,7 +143,7 @@ def test_generated_code_is_mypy_clean_and_flags_misuse(tmp_path):
 @pytest.mark.skipif(not service_available(), reason="sysml-grpc service not running")
 def test_a_generated_quantity_property_is_typed_as_a_quantity(tmp_path):
     """A quantity property is a Quantity to mypy, so a unitless use is an error."""
-    from pysysml import Connection
+    from opensysml import Connection
 
     source = tmp_path / "quantities.sysml"
     source.write_text(
@@ -161,8 +161,8 @@ def test_a_generated_quantity_property_is_typed_as_a_quantity(tmp_path):
     (tmp_path / "usage_ok.py").write_text(
         textwrap.dedent(
             """
-            from pysysml.instance import Instance
-            from pysysml.values import Quantity
+            from opensysml.instance import Instance
+            from opensysml.values import Quantity
             from quantity_types import Car
 
 
@@ -175,7 +175,7 @@ def test_a_generated_quantity_property_is_typed_as_a_quantity(tmp_path):
     (tmp_path / "usage_bad.py").write_text(
         textwrap.dedent(
             """
-            from pysysml.instance import Instance
+            from opensysml.instance import Instance
             from quantity_types import Car
 
 
@@ -199,9 +199,9 @@ def test_typed_codegen_modules_are_mypy_clean():
     """The modules generated code depends on type-check cleanly themselves."""
     result = run_mypy(
         PYTHON_ROOT,
-        PYTHON_ROOT / "pysysml" / "typed.py",
-        PYTHON_ROOT / "pysysml" / "typefacts.py",
-        PYTHON_ROOT / "pysysml" / "generate.py",
+        PYTHON_ROOT / "opensysml" / "typed.py",
+        PYTHON_ROOT / "opensysml" / "typefacts.py",
+        PYTHON_ROOT / "opensysml" / "generate.py",
     )
     assert result.returncode == 0, result.stdout + result.stderr
 
@@ -210,7 +210,7 @@ def test_typed_codegen_modules_are_mypy_clean():
 @pytest.mark.skipif(not service_available(), reason="sysml-grpc service not running")
 def test_golden_matches_live_generation():
     """Regenerating from the live service reproduces the committed golden file."""
-    from pysysml import Connection
+    from opensysml import Connection
 
     with Connection(auto_start=False) as conn:
         model = conn.load(str(FIXTURE))
@@ -252,7 +252,7 @@ def test_check_passes_for_an_unchanged_model_and_fails_for_a_changed_one(tmp_pat
 
     def run(*args):
         return subprocess.run(
-            [sys.executable, "-m", "pysysml.generate", str(source), "-o", str(output), *args],
+            [sys.executable, "-m", "opensysml.generate", str(source), "-o", str(output), *args],
             cwd=PYTHON_ROOT,
             capture_output=True,
             text=True,
@@ -290,7 +290,7 @@ def test_generated_classes_read_a_live_instance(tmp_path):
     # $HOME; an isolated HOME keeps its exit from shutting the service down.
     env["HOME"] = str(tmp_path)
     result = subprocess.run(
-        [sys.executable, "-m", "pysysml.generate", str(FIXTURE), "-o", str(output)],
+        [sys.executable, "-m", "opensysml.generate", str(FIXTURE), "-o", str(output)],
         cwd=PYTHON_ROOT,
         capture_output=True,
         text=True,
@@ -298,7 +298,7 @@ def test_generated_classes_read_a_live_instance(tmp_path):
     )
     assert result.returncode == 0, result.stderr
 
-    from pysysml import Connection
+    from opensysml import Connection
 
     spec = importlib.util.spec_from_file_location("demo_types", output)
     demo_types = importlib.util.module_from_spec(spec)
@@ -314,8 +314,8 @@ def test_generated_classes_read_a_live_instance(tmp_path):
 
 def test_generated_class_reads_an_enum_typed_slot(tmp_path):
     """An enum-typed feature is generated as the literal it holds, not as a class."""
-    from pysysml import Connection, EnumLiteral
-    from pysysml.capabilities import CAPABILITY_ENUM_VALUES
+    from opensysml import Connection, EnumLiteral
+    from opensysml.capabilities import CAPABILITY_ENUM_VALUES
 
     source = textwrap.dedent(
         """

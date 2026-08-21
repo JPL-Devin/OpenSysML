@@ -17,7 +17,7 @@ Runnable models are in [examples/](../examples/), with a catalog of what each on
 - **[LSP extensions](reference/lsp.md)** — the custom render requests `sysml-lsp` serves a diagram client
 - **[Environment variables](reference/environment.md)** — the bounds one run may spend, and paths
 - **[Go API](reference/api.md)** — the public API of every package
-- **[Python API](reference/python-api.md)** — `pysysml`, its generated typed classes and latency
+- **[Python API](reference/python-api.md)** — `opensysml`, its generated typed classes and latency
 - **[RDF mapping](reference/rdf-mapping.md)** — which triples a model becomes, what is not mapped, and why the mapping is experimental
 - **[Grammar](reference/grammar/README.md)** — grammar production → parser implementation
 

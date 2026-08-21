@@ -86,19 +86,19 @@ Without one the tag builds artifacts and then fails at publish, having created n
 Nobody has verified which is set. Full procedure and post-tag verification:
 `docs/project/releasing.md`.
 
-## R2 — publish `pysysml` to PyPI (account-gated remainder)
+## R2 — publish `opensysml` to PyPI (account-gated remainder)
 
-The job exists: `publish-pypi` in the `release-python` workflow, filtered to `pysysml-v*`,
+The job exists: `publish-pypi` in the `release-python` workflow, filtered to `opensysml-v*`,
 building a wheel and an sdist, checking them with `twine check --strict`, installing the wheel
 into a clean virtualenv and only then uploading. The version is declared once, in
-`python/pysysml/_version.py`, and a tag that disagrees with it fails before upload. The
+`python/opensysml/_version.py`, and a tag that disagrees with it fails before upload. The
 package keeps its own version line on purpose: it resolves a `sysml-grpc` binary at runtime
 from whichever release the caller names, so its version and the core's are not lockstep.
 See `docs/project/releasing.md`.
 
-One decision precedes the upload, found in the 0.0.8 pre-release audit: `python/pysysml/_version.py`
+One decision precedes the upload, found in the 0.0.8 pre-release audit: `python/opensysml/_version.py`
 declares `0.2.0` while the newest published artifact is `0.1.1`, so the first upload has to be
-`pysysml-v0.2.0` (the tag-versus-source check refuses anything else) and 0.2.0's Python-side
+`opensysml-v0.2.0` (the tag-versus-source check refuses anything else) and 0.2.0's Python-side
 changes — `evaluate`/`ExecutionError`, pinned checksums, subject-aware `eval`, generated typed
 classes — all land in that one release rather than incrementally.
 
@@ -107,10 +107,10 @@ first release with an account-scoped token, then replace it with a project-scope
 the restricted CircleCI context `PyPI` holding `PYPI_API_TOKEN` (and optionally
 `TEST_PYPI_API_TOKEN` for pre-release tags).
 
-Also decide the default download repository. `python/pysysml/binary.py` defaults to
+Also decide the default download repository. `python/opensysml/binary.py` defaults to
 `Open-MBEE/OpenSysML`, releases are currently cut from `JPL-Devin/OpenSysML`, and
-`PYSYSML_GITHUB_REPO` is the override. `sysml-grpc` assets ship from 0.0.5 onward,
-so `pysysml` can fetch a binary from a released tag; `pip install pysysml` still waits on the
+`OPENSYSML_GITHUB_REPO` is the override. `sysml-grpc` assets ship from 0.0.5 onward,
+so `opensysml` can fetch a binary from a released tag; `pip install opensysml` still waits on the
 PyPI project above.
 
 ## R3 — Homebrew tap
