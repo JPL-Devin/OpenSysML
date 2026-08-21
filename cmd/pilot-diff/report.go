@@ -17,6 +17,9 @@ type Report struct {
 	Totals    Totals        `json:"totals"`
 	Roots     []RootReport  `json:"roots"`
 	Unmapped  []UnmappedRow `json:"unmapped"`
+	// Syside is the optional third implementation's column, additive in every
+	// respect: absent, the report is byte-identical to a two-way run.
+	Syside *SysideInfo `json:"syside,omitempty"`
 }
 
 type Totals struct {
@@ -31,10 +34,11 @@ type Totals struct {
 }
 
 type RootReport struct {
-	Name   string       `json:"name"`
-	Dir    string       `json:"dir"`
-	Totals Totals       `json:"totals"`
-	Files  []FileReport `json:"files"`
+	Name   string        `json:"name"`
+	Dir    string        `json:"dir"`
+	Totals Totals        `json:"totals"`
+	Files  []FileReport  `json:"files"`
+	Syside *SysideTotals `json:"syside,omitempty"`
 }
 
 // FileReport holds one file's buckets. Files where both implementations are
@@ -45,6 +49,7 @@ type FileReport struct {
 	SeverityMismatch []SeverityEntry `json:"severityMismatch"`
 	OpenSysMLOnly    []Entry         `json:"openSysMLOnly"`
 	PilotOnly        []Entry         `json:"pilotOnly"`
+	Syside           *SysideFile     `json:"syside,omitempty"`
 }
 
 // SeverityEntry is a (line, category) both implementations flag with different
@@ -234,6 +239,12 @@ func (r *Report) summarize() {
 					countUnmapped(unmapped, e.Examples)
 				}
 			}
+			if file.Syside != nil {
+				countSysideUnmapped(unmapped, *file.Syside)
+			}
+		}
+		if root.Syside != nil && r.Syside != nil {
+			r.Syside.Totals.addRoot(*root.Syside)
 		}
 	}
 
@@ -277,6 +288,7 @@ func writeReports(dir string, report *Report) error {
 				SeverityMismatch: stripSeverityExamples(file.SeverityMismatch),
 				OpenSysMLOnly:    stripExamples(file.OpenSysMLOnly),
 				PilotOnly:        stripExamples(file.PilotOnly),
+				Syside:           stripSysideExamples(file.Syside),
 			}
 		}
 	}
@@ -323,18 +335,30 @@ func renderText(report *Report) string {
 	var b strings.Builder
 	b.WriteString("OpenSysML vs OMG SysML v2 Pilot Implementation — diagnostic comparison\n")
 	fmt.Fprintf(&b, "pilot release: %s\nvalidator:     %s\n\n", report.Pilot, report.Validator)
+	if report.Syside != nil {
+		fmt.Fprintf(&b, "third implementation: Sensmetry SysIDE %s, %s standard library (%s)\n",
+			report.Syside.Version, report.Syside.Library, report.Syside.Validator)
+		fmt.Fprintf(&b, "scope: %s\n\n", report.Syside.Scope)
+	}
 	writeTotals(&b, "TOTAL", report.Totals)
+	if report.Syside != nil {
+		writeSysideTotals(&b, report.Syside.Totals)
+	}
 
 	for _, root := range report.Roots {
 		fmt.Fprintf(&b, "\n%s\n", strings.Repeat("=", 72))
 		fmt.Fprintf(&b, "%s (%s)\n", root.Name, root.Dir)
 		writeTotals(&b, root.Name, root.Totals)
+		if root.Syside != nil {
+			writeSysideTotals(&b, *root.Syside)
+		}
 		for _, file := range root.Files {
 			fmt.Fprintf(&b, "\n  %s\n", file.Path)
 			writeBucket(&b, "agreement", file.Agreement)
 			writeSeverityBucket(&b, file.SeverityMismatch)
 			writeBucket(&b, "only OpenSysML (candidate false positives)", file.OpenSysMLOnly)
 			writeBucket(&b, "only the pilot (candidate gaps)", file.PilotOnly)
+			writeSysideBucket(&b, file.Syside)
 		}
 	}
 

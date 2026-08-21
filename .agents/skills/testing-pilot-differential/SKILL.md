@@ -318,6 +318,43 @@ the target directory already exists again: that nests the backup at
 `build/pilot-validator/pv-backup` instead of restoring it. `rm -rf` the *new* directory first (or
 restore to a fresh path) and verify with `ls build/pilot-validator | tr '\n' ' '`.
 
+## The optional SysIDE third column (F7)
+
+`./scripts/download-syside.sh` builds Sensmetry SysIDE (`sensmetry/sysml-2ls`, pinned `0.9.1`,
+`2024-12` standard library) into `build/syside/`, and `cmd/pilot-diff` picks
+`build/syside/validate-syside` up automatically. Needs `node` (18+) and `pnpm`; ~15 s from a warm
+pnpm store, ~2 min cold. It is **static only** — SysIDE executes nothing, so it is never evidence
+about behavioral rows — and it never adjudicates: the two-way buckets and totals are byte-identical
+either way.
+
+The two checks that actually distinguish working from broken:
+
+```bash
+mv build/syside /tmp/syside-aside && go run ./cmd/pilot-diff -out /tmp/pd-two-way
+diff <(jq -S . docs/project/pilot-differential-baseline.json) \
+     <(jq -S . /tmp/pd-two-way/pilot-diff.json)             # must be empty (no third column)
+mv /tmp/syside-aside build/syside && go run ./cmd/pilot-diff -out /tmp/pd-three-way
+jq '.totals, .syside.totals' /tmp/pd-three-way/pilot-diff.json
+```
+
+The three-way run costs ~2m50s (SysIDE reloads its standard library per root). The `.syside` keys
+are additive: `.syside.totals`, `.roots[].syside`, `.roots[].files[].syside.entries[]` with a
+`sides` label (`opensysml+pilot+syside`, `opensysml+syside`, …). Observed at `b570dce8`: two-way
+totals unchanged, `349 files, 248 where all three agree exactly, 690 syside diagnostics, allThree
+20, withOpenSysMLAgainstPilot 7, withPilotAgainstOpenSysML 37`, byte-identical across runs.
+
+- Entries match on `(line, severity, category)`, not on message — the same tuple-matching the
+  two-way comparison uses. So read the verbatim messages under a row in `pilot-diff.txt` before
+  calling it corroboration; a coincidental line match happens (`Simple Tests/StateTest.sysml:21`
+  pairs our `unresolved member: s` with SysIDE's `Could not resolve reference to Feature named
+  'new'`).
+- `-syside <path>` overrides the launcher and is **fatal** when missing (a typo must not silently
+  degrade to two columns); the default path merely warns
+  `comparing against the pilot only; run ./scripts/download-syside.sh for a third column`.
+- Pin checks: `SYSIDE_TAG=0.0.0-nope`, `SYSIDE_SPEC=2026-05` and `SYSIDE_STDLIB_BRANCH=release/nope`
+  each exit 1 with a specific message and leave `build/syside` untouched (everything is staged in
+  a `mktemp -d`).
+
 ## Recording
 
 This is CLI work: record a maximized Konsole on `DISPLAY=:0` (see the "Recording setup" section
