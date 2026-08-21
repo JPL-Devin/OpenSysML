@@ -5,6 +5,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -34,6 +35,18 @@ const (
 	toleranceAnywhere = "elsewhere-in-file" // right severity, but not near the declaration
 )
 
+// Scope tolerances. A scope assertion declares a whole set, so a near-miss is
+// classified by which half of the set differs.
+const (
+	toleranceScopeSpelling = "other-paths"       // every declared element, some under another path
+	toleranceScopeExtra    = "extra-names"       // every declared name, and more besides
+	toleranceScopeMissing  = "missing-names"     // declared names we do not offer at all
+	toleranceScopeBoth     = "missing-and-extra" // both halves differ
+	// library-names: differs only in names inherited from the standard library,
+	// which a fixture sees only if its resource set loads it.
+	toleranceScopeLibrary = "library-names"
+)
+
 // row is one adjudicated expectation: one item of an errors/warnings assertion,
 // or one whole noErrors/linkedName assertion.
 type row struct {
@@ -47,6 +60,8 @@ type row struct {
 	Tolerance string `json:"tolerance,omitempty"`
 	Declared  string `json:"declared,omitempty"`
 	Actual    string `json:"ours,omitempty"`
+	// Names counts a scope assertion's set differences.
+	Names *scopeCounts `json:"names,omitempty"`
 }
 
 // fileResult is one .xt file's adjudication.
@@ -83,8 +98,15 @@ func compareFile(suiteDir string, f xtFile) fileResult {
 
 	ws := model.NewWorkspace()
 	main := strings.TrimSuffix(f.Path, ".xt")
+	var libraryRoots []string
 	for _, r := range f.Resources {
-		if r.ThisFile || isLibrary(r.From) {
+		if r.ThisFile {
+			continue
+		}
+		// Our workspace embeds the standard library, so a declared copy of it
+		// is not loaded again: it only records which roots are in scope here.
+		if isLibrary(r.From) {
+			libraryRoots = append(libraryRoots, rootPackagesOf(suiteDir, r.From)...)
 			continue
 		}
 		// A declared path is either project-relative (`/a/b.kerml`) or beside
@@ -117,14 +139,16 @@ func compareFile(suiteDir string, f xtFile) fileResult {
 		})
 	}
 
+	sort.Strings(libraryRoots)
+	libraryRoots = dedupe(libraryRoots)
 	for _, a := range f.Assertions {
-		res.Rows = append(res.Rows, adjudicate(ws, main, f, a, diags, lines, src)...)
+		res.Rows = append(res.Rows, adjudicate(ws, main, a, diags, lines, src, libraryRoots)...)
 	}
 	return res
 }
 
 // adjudicate turns one assertion into its rows.
-func adjudicate(ws *model.Workspace, main string, f xtFile, a assertion, diags []diag, lines *source.LineIndex, src squeezed) []row {
+func adjudicate(ws *model.Workspace, main string, a assertion, diags []diag, lines *source.LineIndex, src squeezed, libraryRoots []string) []row {
 	switch a.Kind {
 	case kindErrors, kindWarnings:
 		want := "error"
@@ -152,6 +176,8 @@ func adjudicate(ws *model.Workspace, main string, f xtFile, a assertion, diags [
 		return []row{r}
 	case kindLinkedName:
 		return []row{linkedNameRow(ws, main, a, src)}
+	case kindScope:
+		return []row{scopeRow(ws, main, a, src, libraryRoots)}
 	default:
 		return []row{{
 			Kind: a.Kind, Block: a.Block, Line: a.Line, At: a.At, Verdict: verdictNotAdjudicated,
@@ -378,6 +404,25 @@ func isSpace(c byte) bool {
 
 func identChar(c byte) bool {
 	return c == '_' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9'
+}
+
+// rootPackageRe matches an unindented package declaration, which in a library
+// file is one of its root packages.
+var rootPackageRe = regexp.MustCompile(`(?m)^(?:standard\s+)?(?:library\s+)?package\s+('[^']*'|[A-Za-z_]\w*)`)
+
+// rootPackagesOf reads the root packages a declared library resource declares,
+// which is what names its contents are reachable under.
+func rootPackagesOf(suiteDir, from string) []string {
+	// #nosec G304 -- the suite directory is named on the command line.
+	content, err := os.ReadFile(filepath.Join(suiteDir, filepath.FromSlash(strings.TrimPrefix(from, "/"))))
+	if err != nil {
+		return nil
+	}
+	var roots []string
+	for _, m := range rootPackageRe.FindAllStringSubmatch(string(content), -1) {
+		roots = append(roots, strings.Trim(m[1], "'"))
+	}
+	return roots
 }
 
 // isLibrary reports whether a declared resource is one of the suite's copies of

@@ -30,6 +30,10 @@ Can:
 
 - **Name resolution.** `linkedName` declares the qualified name a given reference must resolve to.
   This is a direct, per-reference verdict on our scoping, import, inheritance and alias handling.
+- **Name *visibility*.** `scope` declares the complete set of names visible at a point, so it catches
+  both halves of a scoping defect — a name that should be visible and is not, and a name that is
+  visible and should not be. `linkedName` can only see the first half. See
+  [scope](#scope--73-of-230-agree-exactly).
 - **Diagnostic presence and placement.** `errors`/`warnings` declare a severity and a message at a
   source location; `noErrors` declares silence over a whole resource set.
 - **The pilot's *intent*.** When we disagree with a declared expectation, the pilot's behaviour on
@@ -41,13 +45,13 @@ Cannot:
   execution assertions, and the pinned pilot has no headless action/state execution surface at all
   (see [pilot-execution-referee.md](pilot-execution-referee.md), and issue #386 for the referee's
   scope). Nothing in this report bears on a behaviour row.
-- **Scope contents.** 230 `scope` assertions declare the complete set of visible names at a point.
-  We read and count them but do **not** adjudicate them (see [Not adjudicated](#not-adjudicated));
-  our symbol tables do not expose an equivalent enumeration, and inventing one for this harness
-  would compare our reading of the assertion, not our behaviour.
 - **Diagnostic wording.** Our messages are our own; a declared message and ours can describe the same
   defect in different words. Strict agreement requires the declared message, so an `errors` row can
   only agree by coincidence of wording. See [How agreement is decided](#how-agreement-is-decided).
+- **Which standard-library file a fixture loads.** Each fixture declares its own resource set, often
+  `/library/Base.kerml` alone, and the pilot's implicit supertypes therefore resolve only as far as
+  that set reaches. We always carry our whole embedded library, which is what the `library-names`
+  scope class below counts.
 - **Anything the suites do not cover.** These are the pilot's *tests*, not the specification. A
   construct with no assertion is not endorsed by their absence.
 
@@ -66,6 +70,7 @@ Agreement is **strict**, and strict is what goes in the baseline:
 | `errors`, `warnings` | we report a diagnostic of the declared severity **at the declared offset**, whose message matches the declared one (whitespace and a trailing period aside) |
 | `noErrors` | we report **no error** anywhere in the declared resource set |
 | `linkedName` | the reference at the declared text resolves, and the resolved element's qualified name **equals** the declared one |
+| `scope` | the set of names we enumerate at the anchor **equals** the declared set, name for name, after filtering by the metatype the anchor's cross-reference admits |
 
 No tolerance ever turns a disagreement into an agreement. Weaker rules are recorded beside each
 disagreement, as evidence about *how far off* we are, and are summarized per kind in the report:
@@ -77,6 +82,17 @@ disagreement, as evidence about *how far off* we are, and are summarized per kin
 | `severity-differs` | a diagnostic of ours is there, of the *other* severity |
 | `elsewhere-in-file` | right severity, but nowhere near the declaration |
 | *(none)* | nothing of ours is there at all |
+
+The `scope` kind has its own tolerance classes, on the same rule — none of them turns a disagreement
+into an agreement:
+
+| Tolerance | Meaning |
+|---|---|
+| `other-paths` | every declared name we do not offer names an element we *do* offer under a different path — a spelling difference, not a visibility one |
+| `extra-names` | we offer names the declaration does not, and miss none |
+| `missing-names` | we miss declared names and offer no extra ones |
+| `missing-and-extra` | both |
+| `library-names` | every difference is a path tail through the implicit members `Base` contributes (`self`, `that`) — see the scope section |
 
 Two further honest limits of the mapping:
 
@@ -134,7 +150,7 @@ Every difference from the published numbers is accounted for, and none of it is 
 ```
 428 .xt file(s), 0 unparsed, 0 missing declared resource(s)
 1261 assertion(s) declaring 1326 expectation(s)
-agree 449 | disagree 646 | unlocated 0 | not adjudicated 231
+agree 522 | disagree 803 | unlocated 0 | not adjudicated 1
 ```
 
 | Kind | Expectations | Agree | Disagree | Not adjudicated | `same-location` | `same-line` | `severity-differs` | `elsewhere` | nothing |
@@ -143,14 +159,14 @@ agree 449 | disagree 646 | unlocated 0 | not adjudicated 231
 | `noErrors` | 275 | 244 | 31 | 0 | — | — | — | — | — |
 | `linkedName` | 194 | 194 | 0 | 0 | — | — | — | — | — |
 | `warnings` | 113 | 11 | 102 | 0 | 0 | 0 | 61 | 7 | 45 |
-| `scope` | 230 | 0 | 0 | 230 | — | — | — | — | — |
+| `scope` | 230 | 73 | 157 | 0 | — | — | — | — | — |
 | `exportedObjects` | 1 | 0 | 0 | 1 | — | — | — | — | — |
 
 Per suite:
 
 | Suite | Files | Expectations | Agree | Disagree | Not adjudicated |
 |---|---:|---:|---:|---:|---:|
-| `kerml` | 303 | 968 | 381 | 356 | 231 |
+| `kerml` | 303 | 968 | 454 | 513 | 1 |
 | `sysml` | 125 | 358 | 68 | 290 | 0 |
 
 **Read the `errors` row carefully: its zero is a property of the strict rule, not a measurement of
@@ -172,9 +188,14 @@ change in our behaviour):
 | `warnings` | 0 / 113 | **11 / 113** | the duplicate-inherited and duplicate-owned member-name warnings now exist, with the declared wording |
 | `errors` | 0 / 513 | 0 / 513 | strict agreement unchanged; the tolerance mix moved, and not only in our favour (see below) |
 
+**Adjudicating the 230 `scope` assertions moved the aggregate line, not only the `not adjudicated`
+column:** every one of the 230 now carries a verdict, so `agree` rose by the 73 that agree exactly and
+`disagree` by the 157 that do not, and no other kind's counts moved. The tables and the baseline are a
+single fresh run on the merged tree.
+
 The **complete** per-row evidence — every disagreement with its file, line, declared expectation and
 our actual behaviour — is in [pilot-xpect-baseline.json](pilot-xpect-baseline.json). The sections
-below group the disagreements by cause and name the files; they do not repeat 646 rows.
+below group the disagreements by cause and name the files; they do not repeat 803 rows.
 
 ---
 
@@ -237,7 +258,7 @@ The 194 are not trivial passes: they cover qualified names through public and pr
 classifier, redefinition scoping, inherited-member lookup, and every alias shape above. This is the
 only external, per-reference verdict on our name resolution that exists at the pinned tag, and it is
 also the narrowest: it says which element a written reference reaches, never which names *were*
-visible. That second question is the 230 unadjudicated `scope` assertions below.
+visible. That second question is the 230 `scope` assertions below.
 
 ## noErrors — 244 of 275 agree
 
@@ -353,13 +374,118 @@ Every one of the 513 rows, with the declared message and ours, is in
 
 ---
 
+## scope — 73 of 230 agree exactly
+
+`scope` is a different oracle from everything else here. `linkedName` asks what one reference
+resolves to; a `scope` assertion declares **the complete set of names visible at a point**, so it
+sees the half of a scoping defect nothing else we run can see — a name that is visible and should not
+be. All 230 live in the KerML suite; 229 of them use the `//*` block form.
+
+### What the assertion means
+
+The pilot's Xpect method takes the offset's `EObject` **and its cross-reference**, asks the scope
+provider for the `IScope` that reference sees, and compares the declared list against
+`scope.getAllElements()`:
+
+```java
+IScope scope = scopeProvider.getScope(arg1.getEObject(), arg1.getCrossEReference());
+expectation.assertEquals(new ScopeAllElements(scope), new IsInScope(converter, scope));
+```
+
+Read literally, that fixes six things, and each one had to be reproduced to adjudicate a row:
+
+- **The anchor is a reference, not a position.** `XPECT scope at P1::A` anchors at the cross-reference
+  written after the note; the metatype of that reference filters the result, so a specialization
+  reference sees types and a feature-typing reference sees features. Where a `scope` note anchors at a
+  declaration rather than a reference, the harness adjudicates the unfiltered scope at that offset.
+- **Every spelling is a separate entry.** The declared lists are qualified-name *paths*, not elements:
+  `A`, `P1.A`, `Import_Circular.P1.A` are three declared names for one element, and a path continues
+  through members — `Test1.x.that.self` is declared as well as `Test1.x`.
+- **Inherited, imported and recursively imported members are in**, under every path that reaches them.
+- **Implicit library members are in** when the fixture's resource set loads the library file that
+  declares them: `Base.kerml` gives a `classifier` `self` (hence `A.self`, `A.self.that`) and a
+  `feature` both `self` and `that`.
+- **A circular containment truncates.** `classifier A { import B::*; classifier B specializes A }`
+  declares `A.B.B` and stops there.
+- **Order is not meaningful** — the comparison is set-based. Our own output is sorted by name so two
+  runs are byte-identical.
+
+### The surface
+
+`Workspace.VisibleNames` / `VisibleNamesAt` (`internal/core/model/scope_names.go`) is a read-only
+enumeration over the same resolver the LSP and `resolve/unqualified.go` use — `Resolver.ResolveName`,
+`visibility.go`'s import and specialization rules, `semantics.MembersOf` — with no parallel scope walk
+in the harness, which is the only way the answer can be evidence about *our* behaviour rather than
+about the harness. It walks the anchor scope and its ancestors, their inherited and imported members,
+and the non-library index roots, emitting each path once, and returns `{Name, FQN, Kind, Depth}` so a
+caller can filter by metatype above it. `internal/core/model/scope_names_test.go` locks locals,
+private and protected members, imports, alias binding names, short-name membership imports,
+inheritance through typing, library gating, circular imports, redefinition anchors and determinism.
+
+### The result, by class
+
+| Class | Rows | Reading |
+|---|---:|---|
+| agree (exact) | 73 | the declared set, name for name |
+| `library-names` | 96 | differs **only** in path tails through `Base`'s implicit `self`/`that` |
+| `extra-names` | 32 | we offer names the pilot does not, and miss none |
+| `other-paths` | 12 | every name we miss is an element we offer under a different path |
+| `missing-names` | 10 | we miss declared names and offer no extra ones |
+| `missing-and-extra` | 7 | both |
+
+**This is a worklist, not a verdict, and it must not be averaged into a percentage.** 73 exact
+agreements on sets that routinely run past 50 entries is real evidence that our visible-name
+computation is broadly right; the 157 disagreements are four concrete defects, three of them ours to
+report rather than to fix:
+
+1. **`library-names` (96 rows) — implicit supertypes are resolved against our whole embedded library,
+   not against the fixture's declared resource set.** Reproducer:
+   `imports/global/DependencyPackageAlias0_A_alias.kerml.xt`:22 declares 20 names for
+   `class A { class a; }`; we offer 56, the extra 36 being `A_alias.a.that`, `A_alias.that` and
+   friends. The fixture loads `/library/Base.kerml` only, so the pilot's `class` — whose implicit
+   supertype is in `Occurrences`, which is *not* loaded — inherits nothing, while its `classifier` and
+   `feature` fixtures do declare `self`/`that` (see `imports/Import_Circular.kerml.xt`:38). We always
+   have the whole library, so we always contribute the implicit members. This is a property of the
+   harness's library substitution, documented at the top of this file, not a visibility defect — which
+   is why it is its own class and not counted as `extra-names`.
+2. **`extra-names` (32 rows) — a redefinition does not mask the inherited name it redefines.**
+   28 of the 32 are `*_Rdef` fixtures. Reproducer:
+   `name/MemberNameTests_MultipleInheritance2_Rdef.kerml.xt` — where a feature `redefines` an
+   inherited member under a new name, the pilot stops offering the old name and we still offer it.
+   Root cause in **`internal/core/semantics`** (inherited-member computation does not remove a
+   redefined name); reported, not fixed here — `semantics/**` is outside this slice's ownership.
+3. **`other-paths` (12 rows) — circular containment truncates one step earlier for us.**
+   All 12 are `shadowing/ShadowingTests_Circle*`. Reproducer:
+   `ShadowingTests_CircleProblem2.kerml.xt`:22 declares `A, A.B, A.B.B, B, B.B, Test1.A, Test1.A.B,
+   Test1.A.B.B`; we offer every element it names but stop the path at the first repeat of an element,
+   so `A.B.B` is missing while `A.B` and `B.B` are present. Emitting the re-entry was measured and
+   costs more than it buys (four rows lost elsewhere), so the truncation rule stays and the class
+   records it as a path-convention difference, not a missing name. All eight names that fixture
+   declares do resolve when written as a reference — "missing" in a `scope` row always means missing
+   from the *enumeration*, which is the conservative direction: it under-reports our agreement.
+4. **`missing-names` / `missing-and-extra` (17 rows) — import plus inheritance from the container.**
+   Reproducer: `imports/SimpleImportTests_ImportPackageAndInheritanceFromContainer.kerml.xt`:23, where
+   `classifier A { public import test::*; classifier a specializes A; }` declares `A.A`, `A.A.a` and
+   `A.a.A` paths we do not offer — the fixture's own authors annotate the missing ones in a trailing
+   comment. Root cause in **`internal/core/resolve`** (a member imported into a namespace is not
+   re-offered through the namespace's own inherited paths); reported, not fixed here.
+
+Short-name membership imports were the one defect inside this slice's ownership and are fixed in the
+surface: `public import VP::VP2::A_Id` where the element is declared `classifier <'A_Id'> B` now
+surfaces both of the element's names, as `imports/ShortName_Import_Valid4.kerml.xt` declares, while an
+alias membership import still surfaces the alias name only.
+
+The per-row evidence — declared count, our count, and the first missing/extra names for each of the
+157 disagreements — is in [pilot-xpect-baseline.json](pilot-xpect-baseline.json).
+
+---
+
 ## Not adjudicated
 
-231 assertions are read, counted and reported, and deliberately not scored:
+One assertion is read, counted and reported, and deliberately not scored:
 
 | Kind | Assertions | Why |
 |---|---:|---|
-| `scope` | 230 | Declares the full set of names visible at a point, often 70+ entries deep including `self`/`that` chains. We have no equivalent enumeration to compare against; producing one for this harness would adjudicate our reading of the assertion rather than our behaviour. This is the largest piece of unexploited evidence in the suites and is a natural follow-up for the name-resolution wave — it is a *scope* oracle, where `linkedName` is only a *reference* oracle. |
 | `exportedObjects` | 1 | `indexing/NameEscape.kerml.xt` — declares the index contents for escaped names. One assertion, no general mechanism worth building. |
 
 They are `not-adjudicated` in the report and the baseline, never counted as agreements.
@@ -383,5 +509,7 @@ this report reads it:
    reject.
 4. **The 11 unresolved/ambiguous-reference `noErrors` rows** — the shadowing/import family, which
    `linkedName`'s 194 agreements do not reach.
-5. **Adjudicating the 230 `scope` assertions**, which needs a scope-enumeration surface we do not
-   have yet — the last large block of unexploited external evidence at the pinned tag.
+5. **The 157 `scope` disagreements**, with the class breakdown and root-cause packages in
+   [scope](#scope--73-of-230-agree-exactly): redefinition masking in `semantics`, import-plus-
+   inheritance paths in `resolve`, and the library-substitution class that is a property of the
+   harness rather than a defect.

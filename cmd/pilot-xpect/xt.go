@@ -40,6 +40,8 @@ type assertion struct {
 	Expect   []expectation `json:"expect,omitempty"`
 	At       string        `json:"at,omitempty"`
 	Expected string        `json:"expected,omitempty"`
+	// Names is the comma-separated list an XPECT scope note declares.
+	Names []string `json:"names,omitempty"`
 }
 
 // xtFile is one parsed .xt test: the resource set its setup declares and the
@@ -74,6 +76,8 @@ var (
 	// The arrow is written `-->` or `--->`, with or without space around it.
 	linkedNameRe = regexp.MustCompile(`^[ \t]*at[ \t]+(\S+?)[ \t]*-{2,}>[ \t]*(\S+)`)
 	scopeAtRe    = regexp.MustCompile(`^[ \t]*at[ \t]+(\S+)`)
+	// The declared name list follows a `---` fence or a `-->` arrow.
+	scopeFenceRe = regexp.MustCompile(`-{2,}>?`)
 	// XPECT-shaped text outside a `//`/`//*` note, so not an assertion here.
 	strayRe = regexp.MustCompile(`XPECT[ \t]+([A-Za-z][A-Za-z0-9_]*)`)
 	// A `//*` alone on its line opens a note whose keyword is on the next one.
@@ -262,13 +266,37 @@ func (a *assertion) parseBody(rest string) error {
 		return nil
 	case kindScope:
 		if match := scopeAtRe.FindStringSubmatch(rest); match != nil {
-			a.At = match[1]
+			// The anchor text may run straight into the fence: `at aliass---`.
+			a.At = strings.TrimRight(match[1], "->")
 		}
 		a.Expected = strings.Join(strings.Fields(strings.Trim(strings.TrimSpace(rest), "-")), " ")
+		a.Names = scopeNames(rest)
+		if len(a.Names) == 0 {
+			return fmt.Errorf("XPECT scope declares no name")
+		}
 		return nil
 	default:
 		return nil
 	}
+}
+
+// scopeNames splits the declared name list of an XPECT scope note, which is
+// fenced by `---` and follows the `at <text>` clause.
+func scopeNames(rest string) []string {
+	body := strings.TrimSpace(rest)
+	if fence := scopeFenceRe.FindStringIndex(body); fence != nil {
+		body = body[fence[1]:]
+	}
+	if fence := scopeFenceRe.FindStringIndex(body); fence != nil && strings.TrimSpace(body[fence[1]:]) == "" {
+		body = body[:fence[0]]
+	}
+	var out []string
+	for _, item := range strings.Split(body, ",") {
+		if name := strings.Join(strings.Fields(item), ""); name != "" {
+			out = append(out, name)
+		}
+	}
+	return out
 }
 
 // unescape undoes the backslash escapes a declared message is written with.
