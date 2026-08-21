@@ -127,6 +127,15 @@ func (m *Model) parametersOf(sym *symbols.Symbol) behaviorParameters {
 	return out
 }
 
+// ResultParameterOf returns the result parameter of a behavior or step,
+// inherited ones included, or nil when it has none.
+func (m *Model) ResultParameterOf(sym *symbols.Symbol) *symbols.Symbol {
+	if m == nil || sym == nil {
+		return nil
+	}
+	return m.parametersOf(sym).result.sym
+}
+
 // claimedParameters returns the parameters of general that owned redefines,
 // each by the target its declaration names explicitly or, failing that, the one
 // at its own position with the same direction. Only what no owned parameter

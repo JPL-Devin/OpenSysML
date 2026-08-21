@@ -168,9 +168,10 @@ func TestImplicitlyRedefiningParameterDoesNotBindItsKeyword(t *testing.T) {
 	}
 }
 
-// A nested usage sharing a name with an inherited feature is a name conflict:
-// it is a distinct feature, not a redefinition of the inherited one
-// (SysML 7.6.1, KerML 7.3.2.1).
+// A nested usage sharing a name with an inherited feature is indistinguishable
+// from it, which the reference reports as a warning, not an error, and names the
+// namespace it is inherited from (SysML 7.6.1, KerML 7.2.2; matched run against
+// the pinned validator, w6c).
 func TestNameResolutionPassReportsInheritedNameConflict(t *testing.T) {
 	got := nameresDiags(t, `package P {
 		part def Engine;
@@ -181,10 +182,10 @@ func TestNameResolutionPassReportsInheritedNameConflict(t *testing.T) {
 		t.Fatalf("got %+v, want one diagnostic", got)
 	}
 	d := got[0]
-	if d.Code != "name-conflict" || d.Source != "name-resolution" || d.Severity != SeverityError {
-		t.Fatalf("got %+v, want code=name-conflict source=name-resolution severity=error", d)
+	if d.Code != "name-conflict" || d.Source != "name-resolution" || d.Severity != SeverityWarning {
+		t.Fatalf("got %+v, want code=name-conflict source=name-resolution severity=warning", d)
 	}
-	if want := "name conflict: engine is already the name of the inherited feature Vehicle::engine"; d.Message != want {
+	if want := "Duplicate of inherited member name 'engine' from Vehicle"; d.Message != want {
 		t.Fatalf("message = %q, want %q", d.Message, want)
 	}
 	if d.Span.Len != len("engine") {

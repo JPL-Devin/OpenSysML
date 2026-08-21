@@ -17,8 +17,6 @@
 1	sysml-examples/Individuals Examples/AnalysisIndividualExample.sysml
 4	sysml-examples/Interaction Sequencing Examples/ServerSequenceOutsideRealization-2.sysml
 7	sysml-examples/Interaction Sequencing Examples/ServerSequenceRealization-2.sysml
-1	sysml-examples/Metadata Examples/IssueMetadataExample.sysml
-2	sysml-examples/Metadata Examples/RationaleMetadataExample.sysml
 5	sysml-examples/Metadata Examples/RequirementMetadataExample.sysml
 1	sysml-examples/Simple Tests/AllocationTest.sysml
 2	sysml-examples/Simple Tests/ConstraintTest.sysml
