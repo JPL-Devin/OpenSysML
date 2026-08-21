@@ -54,7 +54,10 @@ type docRuleCounts struct {
 	faithful       int
 	approximate    int
 	notImplemented int
-	knownFailure   int
+	// deliberate counts the rows that diverge on purpose: the row states the
+	// reason and the test that pins it, so it is not a to-do.
+	deliberate   int
+	knownFailure int
 }
 
 var (
@@ -65,9 +68,9 @@ var (
 	docIntegerPattern        = regexp.MustCompile(`^-?[0-9]+$`)
 	docRootPattern           = regexp.MustCompile("(?s)^\\s*`([^`]+)`\\s*(.*)$")
 	docReferencePattern      = regexp.MustCompile("^\\*\\*Reference differential:\\*\\* ([0-9]+) files compared diagnostic-by-diagnostic against the pinned OMG pilot implementation \\(`([^`]+)`\\), ([0-9]+) in full agreement;")
-	docMeasuredStatusPattern = regexp.MustCompile(`^\*\*Measured status:\*\* of the ([0-9]+) semantic rules tracked in .*?, ([0-9]+) are ✅ faithful, ([0-9]+) ⚠️ approximate and ([0-9]+) ❌ not implemented\.`)
-	docCoveragePattern       = regexp.MustCompile(`^\*\*Current coverage:\*\* of the ([0-9]+) rules tracked in the compliance map, ([0-9]+) are faithful, ([0-9]+) approximate and ([0-9]+) not implemented`)
-	docMapHeaderPattern      = regexp.MustCompile(`^The map below tracks ([0-9]+) semantic rules: \*\*([0-9]+) ✅ faithful, ([0-9]+) ⚠️ approximate, ([0-9]+) ❌ not implemented\.\*\*`)
+	docMeasuredStatusPattern = regexp.MustCompile(`^\*\*Measured status:\*\* of the ([0-9]+) semantic rules tracked in .*?, ([0-9]+) are ✅ faithful, ([0-9]+) ⚠️ approximate, ([0-9]+) ❌ not implemented and ([0-9]+) ⛔ a deliberate divergence\.`)
+	docCoveragePattern       = regexp.MustCompile(`^\*\*Current coverage:\*\* of the ([0-9]+) rules tracked in the compliance map, ([0-9]+) are faithful, ([0-9]+) approximate, ([0-9]+) not implemented and ([0-9]+) a deliberate divergence`)
+	docMapHeaderPattern      = regexp.MustCompile(`^The map below tracks ([0-9]+) semantic rules: \*\*([0-9]+) ✅ faithful, ([0-9]+) ⚠️ approximate, ([0-9]+) ❌ not implemented, ([0-9]+) ⛔ deliberate divergence\.\*\*`)
 	docMovementRowsUnchecked = map[string]bool{"new checks of ours": true}
 )
 
@@ -148,7 +151,7 @@ func docReadSpecComplianceCounts(t *testing.T) docRuleCounts {
 		cells := strings.Split(strings.Trim(text, "|"), "|")
 		hits := make([]rune, 0, 1)
 		for _, cell := range cells {
-			for _, marker := range []rune{'✅', '⚠', '❌', '🚧'} {
+			for _, marker := range []rune{'✅', '⚠', '❌', '⛔', '🚧'} {
 				for range strings.Count(cell, string(marker)) {
 					hits = append(hits, marker)
 				}
@@ -164,11 +167,13 @@ func docReadSpecComplianceCounts(t *testing.T) docRuleCounts {
 			counts.approximate++
 		case '❌':
 			counts.notImplemented++
+		case '⛔':
+			counts.deliberate++
 		case '🚧':
 			counts.knownFailure++
 		}
 	}
-	counts.total = counts.faithful + counts.approximate + counts.notImplemented + counts.knownFailure
+	counts.total = counts.faithful + counts.approximate + counts.notImplemented + counts.deliberate + counts.knownFailure
 	return counts
 }
 
@@ -215,7 +220,7 @@ func docAssertRuleStatusLine(t *testing.T, path string, line docLine, counts doc
 	if match == nil {
 		docFailPathAt(t, path, line.number, "malformed coverage status line")
 	}
-	values := make([]int, 4)
+	values := make([]int, 5)
 	for i := range values {
 		value, err := strconv.Atoi(line.text[match[2+i*2]:match[3+i*2]])
 		if err != nil {
@@ -223,14 +228,15 @@ func docAssertRuleStatusLine(t *testing.T, path string, line docLine, counts doc
 		}
 		values[i] = value
 	}
-	wants := []int{counts.total, counts.faithful, counts.approximate, counts.notImplemented}
+	wants := []int{counts.total, counts.faithful, counts.approximate, counts.notImplemented, counts.deliberate}
 	sources := []string{
 		"spec-compliance.md total rows",
 		"spec-compliance.md ✅ rows",
 		"spec-compliance.md ⚠️ rows",
 		"spec-compliance.md ❌ rows",
+		"spec-compliance.md ⛔ rows",
 	}
-	labels := []string{"total", "✅ faithful", "⚠️ approximate", "❌ not implemented"}
+	labels := []string{"total", "✅ faithful", "⚠️ approximate", "❌ not implemented", "⛔ deliberate divergence"}
 	for i := range values {
 		if values[i] != wants[i] {
 			docErrorPathAt(t, path, line.number, "coverage %s: want %d (%s), got %d", labels[i], wants[i], sources[i], values[i])
@@ -239,7 +245,7 @@ func docAssertRuleStatusLine(t *testing.T, path string, line docLine, counts doc
 	if counts.knownFailure != 0 {
 		docFailPathAt(t, path, line.number, "coverage status omits %d 🚧 rows from spec-compliance.md", counts.knownFailure)
 	}
-	sum := values[1] + values[2] + values[3]
+	sum := values[1] + values[2] + values[3] + values[4]
 	if values[0] != sum {
 		docErrorPathAt(t, path, line.number, "coverage counts are internally inconsistent: total %d, status sum %d", values[0], sum)
 	}

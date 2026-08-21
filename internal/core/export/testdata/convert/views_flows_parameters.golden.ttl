@@ -79,7 +79,8 @@ elmt:FlowsAndViews__FuelInterface___402
     sysml:owningNamespace elmt:FlowsAndViews__FuelInterface ;
     sysx:memberIndex "2"^^xsd:integer ;
     sysx:sourceText "flow supplierPort.fuelSupply to consumerPort.fuelSupply;" ;
-    sysx:relatedFeature expr:FlowsAndViews__FuelInterface___402.flowSource, expr:FlowsAndViews__FuelInterface___402.flowTarget .
+    sysx:relatedFeature expr:FlowsAndViews__FuelInterface___402.flowSource, expr:FlowsAndViews__FuelInterface___402.flowTarget ;
+    sysx:endForm "flowTo" .
 
 expr:FlowsAndViews__FuelInterface___402.flowSource
     a sysml:FeatureChainExpression ;
@@ -188,7 +189,9 @@ elmt:FlowsAndViews__vehicle___404
     sysml:owningNamespace elmt:FlowsAndViews__vehicle ;
     sysx:memberIndex "4"^^xsd:integer ;
     sysx:sourceText "allocate tank to engine;" ;
-    sysx:relatedFeature expr:FlowsAndViews__vehicle___404.end0, expr:FlowsAndViews__vehicle___404.end1 .
+    sysx:relatedFeature expr:FlowsAndViews__vehicle___404.end0, expr:FlowsAndViews__vehicle___404.end1 ;
+    sysx:endForm "to" ;
+    sysx:declaredKeyword "allocate" .
 
 expr:FlowsAndViews__vehicle___404.end0
     a sysml:FeatureReferenceExpression ;

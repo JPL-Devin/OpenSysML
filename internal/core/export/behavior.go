@@ -171,7 +171,15 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 
 	case *ast.SuccessionEdge:
 		head(rdf.SysMLTerm(mSuccession))
-		return true, e.edgeEnds(subject, n, owner, n.Source, n.Target)
+		implied := impliedSource(n, n.Source)
+		if implied {
+			// `then b;` states no source end: the notation sequences from the
+			// member written before it, which the form records.
+			e.graph.Add(subject, e.sysx(xEndForm), rdf.String(formThen))
+		}
+		return true, e.edgeEnds(subject, n, owner,
+			edgeEnd{name: n.Source, member: n.SourceMember, implied: implied},
+			edgeEnd{name: n.Target, member: n.TargetMember})
 
 	case *ast.ControlFlowEdge:
 		// A guarded branch of a decision, or the `else` branch taken when no
@@ -182,7 +190,9 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 		if n.IsElse {
 			e.graph.Add(subject, e.sysx(xIsElse), rdf.Bool(true))
 		}
-		return true, e.edgeEnds(subject, n, owner, n.Source, n.Target)
+		return true, e.edgeEnds(subject, n, owner,
+			edgeEnd{name: n.Source, member: n.SourceMember, implied: impliedSource(n, n.Source)},
+			edgeEnd{name: n.Target, member: n.TargetMember})
 
 	case *ast.WhileLoopActionNode:
 		return true, e.encodeLoop(n, head, subject, fqn, owner)
@@ -335,30 +345,57 @@ func (e *encoder) encodeTransition(n *ast.TransitionMember, head func(rdf.Term),
 	return e.encode(n.Effect, fqn, subject)
 }
 
-// edgeEnds writes the ends of a succession as references to the members it
-// sequences. An end the notation leaves unnamed is refused: the order it
-// declares would otherwise be lost.
-func (e *encoder) edgeEnds(subject rdf.Term, node ast.Node, owner string, src, tgt *ast.QualifiedName) error {
-	source, target := qualifiedText(src), qualifiedText(tgt)
-	if source == "" || target == "" {
-		return &UnsupportedError{
-			What: fmt.Sprintf("the succession at %s", e.where(node)),
-			Note: "it does not name both of the members it sequences, so the order it declares cannot be written back",
-		}
+// impliedSource reports whether the source name came from the member before the
+// edge rather than the edge itself, which its span outside the edge's tells.
+func impliedSource(edge ast.Node, source *ast.QualifiedName) bool {
+	return source != nil && source.Span().Offset < edge.Span().Offset
+}
+
+// edgeEnd is one end of a succession: the member it names, or the member the
+// notation reaches by position where it names none.
+type edgeEnd struct {
+	name   *ast.QualifiedName
+	member ast.Node
+	// implied marks an end the notation states no name for, whose name the
+	// parser took from the member before the edge.
+	implied bool
+}
+
+// edgeEnds writes the ends of a succession: a name as a feature reference, an
+// unnamed end as the member it binds by position, anything else refused.
+func (e *encoder) edgeEnds(subject rdf.Term, node ast.Node, owner string, src, tgt edgeEnd) error {
+	ends := []struct {
+		end      edgeEnd
+		feature  string
+		member   string
+		sequence string
+	}{
+		{src, pSourceFeature, xSourceMember, "sequences from"},
+		{tgt, pTargetFeature, xTargetMember, "sequences to"},
 	}
-	// `then a b;` names both ends, a form the parser reads only when each is a
-	// basic name, so an end needing quotes would come back as notation it
-	// rejects.
-	for _, end := range []string{source, target} {
-		if quotedName(end) {
+	for _, end := range ends {
+		name := qualifiedText(end.end.name)
+		if name == "" {
+			fqn, ok := e.fqn[end.end.member]
+			if !ok {
+				return &UnsupportedError{
+					What: fmt.Sprintf("the succession at %s", e.where(node)),
+					Note: fmt.Sprintf("it neither names nor reaches the member it %s, so the order it declares cannot be written back", end.sequence),
+				}
+			}
+			e.graph.Add(subject, e.sysx(end.member), rdf.ElementIRI(fqn))
+			continue
+		}
+		// The two-name form is read only as basic names, so an end needing quotes
+		// is refused; an implied end is not written, so its spelling is free.
+		if quotedName(name) && !end.end.implied {
 			return &UnsupportedError{
 				What: fmt.Sprintf("the succession at %s", e.where(node)),
-				Note: fmt.Sprintf("it sequences %s, whose name is not a basic name, and the two-end form the graph is written back as reads only basic names", end),
+				Note: fmt.Sprintf("it sequences %s, whose name is not a basic name, and the two-end form the graph is written back as reads only basic names", name),
 			}
 		}
+		e.graph.Add(subject, e.sysml(end.feature), e.reference(owner, name))
 	}
-	e.graph.Add(subject, e.sysml(pSourceFeature), e.reference(owner, source))
-	e.graph.Add(subject, e.sysml(pTargetFeature), e.reference(owner, target))
 	return nil
 }
 
@@ -737,6 +774,11 @@ func (d *decoder) successionHead(el *element) (string, error) {
 		return "if " + guard + " then " + target, nil
 	}
 	words := []string{"then"}
+	if form, _ := d.stringOf(el, rdf.OpenSysML+xEndForm); form == formThen {
+		// The source end is the member written before, which this form leaves
+		// unwritten.
+		source = ""
+	}
 	if source != "" {
 		words = append(words, source)
 	}
@@ -747,11 +789,135 @@ func (d *decoder) successionHead(el *element) (string, error) {
 	return strings.Join(words, " "), nil
 }
 
+// positionalSuccessions resolves the successions of one body stating no source
+// name: each sequences from the member before it, folded in as `then action b;`.
+func (d *decoder) positionalSuccessions(children []*element) ([]*element, error) {
+	kept := make([]*element, 0, len(children))
+	// before is the member written that many places back, the end a succession
+	// stating no source name of its own sequences from.
+	before := func(back int) *element {
+		if len(kept) < back {
+			return nil
+		}
+		return kept[len(kept)-back]
+	}
+	for _, child := range children {
+		implied := false
+		if form, ok := d.stringOf(child, rdf.OpenSysML+xEndForm); ok {
+			implied = form == formThen
+		}
+		target, positional := d.endMember(child, xTargetMember)
+		if child.metaclass != mSuccession || (!implied && !positional) {
+			kept = append(kept, child)
+			continue
+		}
+		if !positional {
+			target = d.namedEnd(child, pTargetFeature)
+		}
+		if target == nil || target != before(1) {
+			// The target is a member elsewhere in the body, so the succession
+			// is written where it stands, sequencing from the member before it.
+			if positional {
+				return nil, d.positionalError(child, "to", "before it")
+			}
+			if err := d.impliedSource(child, before(1)); err != nil {
+				return nil, err
+			}
+			kept = append(kept, child)
+			continue
+		}
+		// The target is the member written just before, which this form
+		// introduces: `then` is written ahead of that member's declaration.
+		if err := d.attachable(child, before(2)); err != nil {
+			return nil, err
+		}
+		target.prefix = "then "
+	}
+	return kept, nil
+}
+
+// endMember returns the element an end of a succession reaches by position, and
+// whether the graph states that end that way at all.
+func (d *decoder) endMember(el *element, property string) (*element, bool) {
+	term, ok := d.graph.Object(rdf.IRI(el.iri), rdf.OpenSysML+property)
+	if !ok {
+		return nil, false
+	}
+	return d.byIRI[term.Value], true
+}
+
+// namedEnd returns the element an end of a succession names, or nil for a name
+// this body does not declare.
+func (d *decoder) namedEnd(el *element, property string) *element {
+	term, ok := d.graph.Object(rdf.IRI(el.iri), rdf.SysML+property)
+	if !ok {
+		return nil
+	}
+	return d.byIRI[term.Value]
+}
+
+// sourceEnd returns the element a succession sequences from, by position or by
+// the name it states, and whether it states either.
+func (d *decoder) sourceEnd(el *element) (*element, bool) {
+	if member, positional := d.endMember(el, xSourceMember); positional {
+		return member, true
+	}
+	if _, ok := d.graph.Object(rdf.IRI(el.iri), rdf.SysML+pSourceFeature); !ok {
+		return nil, false
+	}
+	return d.namedEnd(el, pSourceFeature), true
+}
+
+// impliedSource checks a `then <target>`, whose source end is the member before
+// it: the graph has to agree, or the order it states would not be written back.
+func (d *decoder) impliedSource(el, from *element) error {
+	source, states := d.sourceEnd(el)
+	if !states {
+		return d.missing(el, "sysml:"+pSourceFeature, "a succession written as `then` sequences from the member before it")
+	}
+	if source != from {
+		return d.positionalError(el, "from", "before it")
+	}
+	return nil
+}
+
+// attachable checks a succession folded into the member it introduces: a plain
+// `then` only, sequencing from the member written before that one.
+func (d *decoder) attachable(el, from *element) error {
+	if keyword := d.keywordOr(el, "then"); keyword != "then" {
+		return &UnsupportedError{
+			What: fmt.Sprintf("the succession <%s>", el.iri),
+			Note: fmt.Sprintf("it reaches a member that states no name, which only `then` is written beside, not `%s`", keyword),
+		}
+	}
+	if _, hasGuard := d.stringOf(el, rdf.OpenSysML+xGuard); hasGuard {
+		return &UnsupportedError{
+			What: fmt.Sprintf("the succession <%s>", el.iri),
+			Note: "it states a guard and reaches a member that states no name, a form that carries no guard",
+		}
+	}
+	source, states := d.sourceEnd(el)
+	if states && source != from {
+		return d.positionalError(el, "from", "before the member it introduces")
+	}
+	return nil
+}
+
+// positionalError reports a succession whose ends the graph states in an order
+// the notation it is written in cannot express.
+func (d *decoder) positionalError(el *element, end, where string) error {
+	return &UnsupportedError{
+		What: fmt.Sprintf("the succession <%s>", el.iri),
+		Note: fmt.Sprintf("it sequences %s the member written %s, which is another member of this body", end, where),
+	}
+}
+
 // printBehavior writes the behavioral elements whose notation is not a head
 // followed by a body: the loops and conditionals whose conditions are written
 // around the body, a state's subactions, and a transition's clauses.
-func (d *decoder) printBehavior(b *strings.Builder, el *element, depth int) (bool, error) {
-	indent := strings.Repeat("    ", depth)
+// indent is what the declaration is written after, including the `then` of a
+// succession folded into it.
+func (d *decoder) printBehavior(b *strings.Builder, el *element, indent string, depth int) (bool, error) {
 	switch el.metaclass {
 	case mWhileLoop, mForLoop:
 		text, err := d.loopText(el, depth)

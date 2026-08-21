@@ -55,6 +55,23 @@ const (
 	xRelatedFeature  = "relatedFeature"
 	xEndIndex        = "endIndex"
 	xEndRole         = "endRole"
+	xEndForm         = "endForm"
+	xEndVerb         = "endVerb"
+	xSourceMember    = "sourceMember"
+	xTargetMember    = "targetMember"
+)
+
+// The notations a head that binds ends writes its ends in, stated as
+// sysx:endForm. See docs/reference/rdf-mapping.md § End-binding heads.
+const (
+	formTo        = "to"        // connect a to b
+	formNary      = "nary"      // connect (a, b, c)
+	formEquals    = "equals"    // bind a = b
+	formFirstThen = "firstThen" // succession first a then b
+	formFromTo    = "fromTo"    // flow of P from a to b
+	formFlowTo    = "flowTo"    // flow a to b
+	formThen      = "then"      // then b, whose source end is the member before it
+	formSatisfy   = "satisfy"   // satisfy R by v, whose requirement is written bare
 )
 
 // dtExpression is the datatype of a relationship target that is not a name but
@@ -106,7 +123,12 @@ func ToRDF(file *source.SourceFile, root *ast.RootNamespace) (*rdf.Graph, error)
 	if file == nil || root == nil {
 		return nil, &UnsupportedError{What: "an empty document", Note: "nothing to convert"}
 	}
-	e := &encoder{file: file, graph: rdf.NewGraph(), declared: map[string]bool{}}
+	e := &encoder{
+		file:     file,
+		graph:    rdf.NewGraph(),
+		declared: map[string]bool{},
+		fqn:      map[ast.Node]string{},
+	}
 	// The first pass records which qualified names this document declares, so
 	// the second can decide whether a relationship target is a link to an
 	// element in the graph or a name that resolves outside it.
@@ -123,6 +145,9 @@ type encoder struct {
 	file     *source.SourceFile
 	graph    *rdf.Graph
 	declared map[string]bool
+	// fqn is the qualified name of each member node, which is how a succession
+	// end the notation leaves unnamed addresses the member it binds.
+	fqn map[ast.Node]string
 }
 
 // declaredKeyword records the kind keyword as written when it is a synonym of
@@ -166,6 +191,7 @@ func (e *encoder) collect(members []ast.Node, owner string) error {
 		if fqn == "" {
 			continue
 		}
+		e.fqn[node] = fqn
 		if e.declared[fqn] {
 			return &UnsupportedError{
 				What: fmt.Sprintf("the duplicate declaration of %q at %s", name, e.where(node)),
@@ -328,6 +354,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		if verbatimUsage(n) {
 			e.graph.Add(subject, e.sysx(xSourceText), rdf.String(e.text(n)))
 			e.bindingEnds(subject, owner, n)
+			e.endForm(subject, n)
 			return nil
 		}
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))

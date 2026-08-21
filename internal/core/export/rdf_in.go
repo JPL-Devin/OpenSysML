@@ -33,6 +33,9 @@ type element struct {
 	// in, which is what a reference written inside it is relative to.
 	scope    string
 	children []*element
+	// prefix is written ahead of the declaration, for a member a succession
+	// attached itself to (`then send Show(x) to screen;`).
+	prefix string
 	// expressions holds the notation of each expression-valued property, keyed
 	// by predicate, resolved from the expression graph the property points at.
 	expressions map[string]string
@@ -177,6 +180,10 @@ var referenceProperties = func() map[string]bool {
 		rdf.SysML + pSupplier:         true,
 		rdf.SysML + pAliasFor:         true,
 		rdf.SysML + pAnnotatedElement: true,
+		// The ends a succession reaches by position, which are elements of the
+		// graph rather than names a reference could be written from.
+		rdf.OpenSysML + xSourceMember: true,
+		rdf.OpenSysML + xTargetMember: true,
 	}
 	for _, property := range relationshipProperty {
 		set[rdf.SysML+property] = true
@@ -255,19 +262,20 @@ func sortByIndex(elements []*element) {
 // print writes one element and, recursively, its members.
 func (d *decoder) print(b *strings.Builder, el *element, depth int) error {
 	indent := strings.Repeat("    ", depth)
+	lead := indent + el.prefix
 	if text, ok := d.stringOf(el, rdf.OpenSysML+xSourceText); ok {
 		// A declaration whose head this mapping keeps verbatim.
-		b.WriteString(indent + strings.TrimSpace(text) + "\n")
+		b.WriteString(lead + strings.TrimSpace(text) + "\n")
 		return nil
 	}
-	if handled, err := d.printBehavior(b, el, depth); handled {
+	if handled, err := d.printBehavior(b, el, lead, depth); handled {
 		return err
 	}
 	head, err := d.head(el)
 	if err != nil {
 		return err
 	}
-	b.WriteString(indent + head)
+	b.WriteString(lead + head)
 	if annotationMetaclasses[el.metaclass] {
 		// A comment, doc or rep declaration ends with its comment body, and
 		// takes no terminator.
@@ -283,6 +291,10 @@ func (d *decoder) print(b *strings.Builder, el *element, depth int) error {
 				children = append(children, child)
 			}
 		}
+	}
+	children, err = d.positionalSuccessions(children)
+	if err != nil {
+		return err
 	}
 	if len(children) == 0 && !d.boolOf(el, rdf.OpenSysML+xHasBody) {
 		b.WriteString(";\n")
@@ -346,7 +358,9 @@ func (d *decoder) head(el *element) (string, error) {
 	// sequences the two members it names wherever they are declared, so the
 	// order survives the round trip. A `succession` declaration whose head was
 	// kept verbatim never reaches here — print() writes its source text.
-	if el.metaclass == mSuccession {
+	// A `succession` declaration that states the form its ends are written in
+	// is a head that binds ends, not an edge between two members.
+	if el.metaclass == mSuccession && !d.statesEnds(el) {
 		return d.successionHead(el)
 	}
 	// A control node, statement, state or region: the behavioral half of the
@@ -424,8 +438,19 @@ func (d *decoder) definitionHead(el *element, kind ast.DefinitionKind) (string, 
 }
 
 func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
-	var words []string
-	words = append(words, d.prefixWords(el)...)
+	// A head that binds ends is written from the form it states; one relating
+	// ends without a form is refused rather than written back without them.
+	endForm, hasEnds := d.stringOf(el, rdf.OpenSysML+xEndForm)
+	// A satisfy head names the requirement it subsets bare rather than through
+	// a relatedFeature end, so its form states no ends.
+	if endForm == formSatisfy {
+		hasEnds = false
+	}
+	if !hasEnds && d.statesEnds(el) {
+		return "", d.missing(el, "sysx:"+xEndForm,
+			"the ends it relates are written in the form the head states")
+	}
+	words := d.prefixWords(el)
 	if keyword := d.visibility(el); keyword != "" {
 		words = append(words, keyword)
 	}
@@ -500,6 +525,24 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 	// member declares a usage, spelling out the kind keyword (SysML.xtext
 	// ViewRenderingUsage, FramedConcernUsage) even when it declares no name.
 	var skip []ast.RelationshipKind
+	if endForm == formEquals {
+		// The bound feature is an end of the binding, written by the ends
+		// notation rather than as a `references` clause.
+		skip = append(skip, ast.RelReferences)
+	}
+	// A satisfy head writes the requirement it subsets bare, after the keyword.
+	if endForm == formSatisfy {
+		targets, err := d.referenceList(el, rdf.SysML+relationshipProperty[ast.RelSubsets])
+		if err != nil {
+			return "", err
+		}
+		if len(targets) == 0 {
+			return "", d.missing(el, "sysml:"+relationshipProperty[ast.RelSubsets],
+				"a satisfy head names the requirement it satisfies")
+		}
+		words = append(words, strings.Join(targets, ", "))
+		skip = append(skip, ast.RelSubsets)
+	}
 	if noun := memberDeclarationKeyword(kind); noun != "" {
 		targets, err := d.referenceList(el, rdf.SysML+relationshipProperty[ast.RelReferences])
 		if err != nil {
@@ -584,6 +627,17 @@ func (d *decoder) usageHead(el *element, kind ast.UsageKind) (string, error) {
 		return "", err
 	}
 	words = append(words, relationships...)
+	if hasEnds {
+		ends, err := d.endWords(el, endForm)
+		if err != nil {
+			return "", err
+		}
+		words = append(words, ends)
+		// The `= value` of a binding is one of its ends, already written above.
+		if endForm == formEquals {
+			return strings.Join(words, " ") + multPart, nil
+		}
+	}
 	head := strings.Join(words, " ") + multPart
 	if value, ok := d.stringOf(el, rdf.SysML+pValue); ok {
 		head += " = " + value
