@@ -24,7 +24,7 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 	if len(qn.Parts) == 1 && !qn.Global && scope != nil {
 		res := r.walkUnqualifiedHiding(scope, qn.Parts[0].Text, hide)
 		if res.ok {
-			r.recordPart(qn, 0, res.sym)
+			res.sym = r.resolvedPart(qn, 0, res.sym)
 		} else {
 			r.unresolved(scope, qn)
 		}
@@ -60,7 +60,7 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 		r.unresolvedNamespace(qn, first)
 		return resolution{nil, false}
 	}
-	r.recordPart(qn, 0, cur)
+	cur = r.resolvedPart(qn, 0, cur)
 
 	// Walk remaining segments as local members of the current symbol's scope.
 	from := r.ReferringNamespaceFQN(scope)
@@ -127,9 +127,8 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 			r.ambiguous(qn, len(all))
 			return resolution{nil, false}
 		}
-		cur = all[0]
+		cur = r.resolvedPart(qn, i+1, all[0])
 		curFQN = r.registeredFQN(cur)
-		r.recordPart(qn, i+1, cur)
 	}
 	return resolution{cur, true}
 }
