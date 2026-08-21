@@ -202,6 +202,51 @@ func TestInvokeOperationPerformedByTheObject(t *testing.T) {
 	}
 }
 
+// Each public operation invocation gets a fresh step budget, including calcs and
+// constraints that do not enter an executor.
+func TestInvokeOperationResetsRunBudgetForCalcsAndConstraints(t *testing.T) {
+	const maxSteps = 20
+
+	newInvocation := func() (*Context, *Instance) {
+		model, resolver, root := parseAndBuildModel(t, invokeFixture)
+		ctx := NewContext(model, resolver, maxSteps)
+		inst, err := ctx.Instantiate(resolveSymbol(t, root, "Tank"))
+		if err != nil {
+			t.Fatalf("Instantiate: %v", err)
+		}
+		return ctx, inst
+	}
+
+	t.Run("calc", func(t *testing.T) {
+		ctx, inst := newInvocation()
+		for i := 0; i < 10; i++ {
+			results, err := ctx.InvokeOperation(inst, "rawCapacity", nil)
+			if err != nil {
+				t.Fatalf("InvokeOperation(rawCapacity), call %d: %v", i, err)
+			}
+			if got, ok := results["result"]; !ok || got.Const.Int != 3 {
+				t.Fatalf("rawCapacity result on call %d = %v, want 3", i, results)
+			}
+		}
+	})
+
+	t.Run("constraint", func(t *testing.T) {
+		ctx, inst := newInvocation()
+		for i := 0; i < 10; i++ {
+			results, err := ctx.InvokeOperation(inst, "acceptable", map[string]Value{
+				"minimum": intArgument(1),
+			})
+			if err != nil {
+				t.Fatalf("InvokeOperation(acceptable), call %d: %v", i, err)
+			}
+			got, ok := results["result"]
+			if !ok || got.Kind != ValConst || got.Const.Kind != semantics.ValBool || !got.Const.Bool {
+				t.Fatalf("acceptable result on call %d = %v, want true", i, results)
+			}
+		}
+	})
+}
+
 const nestedCalcOperationFixture = `
 	package test {
 		private import ScalarValues::*;

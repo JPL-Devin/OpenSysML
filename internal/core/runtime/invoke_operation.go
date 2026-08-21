@@ -13,6 +13,8 @@ import (
 // what it sends and accepts carries that object's identity. Arguments bind to the
 // operation's `in` and `inout` parameters by name.
 func (ctx *Context) InvokeOperation(inst *Instance, name string, args map[string]Value) (map[string]Value, error) {
+	defer ctx.beginRun()()
+
 	if inst == nil {
 		return nil, fmt.Errorf("%w: no object to perform %s", ErrNoSuchBehavior, name)
 	}
