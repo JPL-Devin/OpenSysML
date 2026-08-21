@@ -232,6 +232,11 @@ func (p *Parser) parsePostfixes(start int, expr ast.Node) ast.Node {
 			fc := &ast.FeatureChainExpr{Operand: expr, Member: member}
 			fc.NodeSpan = p.spanFrom(start)
 			expr = fc
+			// `f.s(1)`: the instantiated type of an invocation may be a feature
+			// chain (KerMLExpressions InstantiatedTypeMember → OwnedFeatureChain).
+			if p.at(lexer.LParen) {
+				expr = p.parseInvocationTail(start, fc, nil)
+			}
 
 		case p.at(lexer.DotQuestion):
 			// `.?{ body }` (select). The body is a body expression whatever it
@@ -528,7 +533,7 @@ func (p *Parser) atBodyExprMember() bool {
 	case "public", "private", "protected":
 		return true
 	}
-	if !isKindKeyword(p.peek()) {
+	if !p.isKindKeyword(p.peek()) {
 		return false
 	}
 	// A kind keyword is the kind only when the name of a declaration follows;

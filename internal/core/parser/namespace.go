@@ -195,6 +195,34 @@ func (p *Parser) parseIdentificationStopping(stop ...string) ast.Identification 
 	return id
 }
 
+// parseAnnotationIdentification parses the identification of a comment,
+// documentation or representation. Its /* */ body ends the identification, so a
+// name after that body belongs to the next member: `doc <a> /* ... */ feature q;`.
+func (p *Parser) parseAnnotationIdentification() ast.Identification {
+	if !p.at(lexer.Lt) {
+		return p.parseIdentification()
+	}
+	var id ast.Identification
+	ltOff := p.peek().Span.Offset
+	p.advance() // <
+	if seg, ok := p.parseNameSegmentRelaxed(); ok {
+		id.ShortName = seg.Text
+		id.ShortNameSpan = seg.Span
+	} else {
+		p.error(p.peek().Span, "expected short name after '<'")
+	}
+	p.expect(lexer.Gt, "expected '>'")
+	p.peek() // force any trailing comment into the pending body
+	if p.pendingCommentAfter(ltOff) {
+		return id
+	}
+	if seg, ok := p.parseNameSegmentRelaxed(); ok {
+		id.Name = seg.Text
+		id.NameSpan = seg.Span
+	}
+	return id
+}
+
 // parseVisibility reads an optional public/private/protected prefix.
 func (p *Parser) parseVisibility() ast.Visibility {
 	switch {
@@ -230,6 +258,9 @@ func (p *Parser) parseMember() ast.Node {
 	}
 	if p.atKeyword("disjoint") {
 		return p.parseDisjointMember(start, vis, trivia)
+	}
+	if p.atRelationshipMember() {
+		return p.parseRelationshipMember(start, vis, trivia)
 	}
 
 	// A namespace member may be a succession stated without its keyword
@@ -312,8 +343,9 @@ func (p *Parser) parseDeclaration(start int) ast.Node {
 		return p.parseAnonymousLocaleComment(start)
 	case p.atDefUsageStart():
 		return p.parseDefUsage(start)
-	case p.atKeywordlessUsage():
-		// A DefaultReferenceUsage declared with no keyword: `T1 = 10.0;`.
+	case p.atKeywordlessFeature():
+		// A feature declared with no keyword: `T1 = 10.0;`, `a : Integer;`,
+		// `p5[1] : Real;`, `x;` (KerML.xtext Feature, SysML DefaultReferenceUsage).
 		return p.parseDefUsage(start)
 	case p.at(lexer.At):
 		// A metadata usage is a namespace member as much as it is a body member.
@@ -478,11 +510,18 @@ func (p *Parser) expectCommentBody(start int) source.Span {
 	return p.spanFrom(start)
 }
 
+// pendingCommentAfter reports whether the pending /* */ comment starts at or
+// after off, i.e. belongs to the element being parsed rather than an earlier one.
+func (p *Parser) pendingCommentAfter(off int) bool {
+	return p.hasPendingComment && p.pendingComment.Offset >= off
+}
+
 func (p *Parser) parseComment(start int) ast.Node {
 	p.advance() // 'comment'
 	c := &ast.Comment{}
-	if p.atName() && !p.atKeyword("about") && !p.atKeyword("locale") {
-		c.Ident = p.parseIdentification()
+	// An identification may be a short name alone: `comment <c> /* ... */`.
+	if (p.atName() || p.at(lexer.Lt)) && !p.atKeyword("about") && !p.atKeyword("locale") {
+		c.Ident = p.parseAnnotationIdentification()
 	}
 	if p.acceptKeyword("about") {
 		c.About = p.parseQualifiedNameList()
@@ -516,8 +555,8 @@ func (p *Parser) parseDocumentation(start int) ast.Node {
 
 	// Parse optional identification only if there's no pending comment
 	// Pattern: `doc name /* comment */` vs `doc /* comment */` (comment belongs to doc, not name)
-	if p.atName() && !p.atKeyword("locale") && !p.hasPendingComment {
-		d.Ident = p.parseIdentification()
+	if (p.atName() || p.at(lexer.Lt)) && !p.atKeyword("locale") && !p.pendingCommentAfter(start) {
+		d.Ident = p.parseAnnotationIdentification()
 	}
 	if p.acceptKeyword("locale") {
 		if tok, ok := p.expect(lexer.String, "expected locale string"); ok {
@@ -597,10 +636,26 @@ func (p *Parser) parseImportTail(imp *ast.Import) {
 		}
 	}
 
-	if p.at(lexer.LBracket) {
+	// A filter package takes one or more filter members (KerML.xtext
+	// FilterPackage:200); they select conjunctively, so they combine with `and`.
+	for p.at(lexer.LBracket) {
+		start := p.peek().Span.Offset
+		if imp.FilterExpr != nil {
+			start = imp.FilterExpr.Span().Offset
+		}
 		p.advance() // consume '['
-		imp.FilterExpr = p.ParseExpression()
+		expr := p.ParseExpression()
 		p.expect(lexer.RBracket, "expected ']' after import filter expression")
+		if imp.FilterExpr == nil {
+			imp.FilterExpr = expr
+			continue
+		}
+		and := &ast.OperatorExpr{
+			Operator: ast.OpConditionalAnd,
+			Operands: []ast.Node{imp.FilterExpr, expr},
+		}
+		and.NodeSpan = p.spanFrom(start)
+		imp.FilterExpr = and
 	}
 }
 
@@ -785,8 +840,8 @@ func (p *Parser) leadingPrefixIsDefUsage() bool {
 	if t.KeywordID == "connect" {
 		return true
 	}
-	_, isDef := definitionKindKeywords[t.KeywordID]
-	_, isUsage := usageKindKeywords[t.KeywordID]
+	_, isDef := p.definitionKind(t.KeywordID)
+	_, isUsage := p.usageKind(t.KeywordID)
 	return isDef || isUsage
 }
 

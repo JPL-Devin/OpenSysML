@@ -123,8 +123,8 @@ func (b *bodyBuilder) atSuccession() bool {
 			return false
 		}
 	} else {
-		_, isUsage := usageKindKeywords[kw]
-		_, isDef := definitionKindKeywords[kw]
+		_, isUsage := p.usageKind(kw)
+		_, isDef := p.definitionKind(kw)
 		if !isUsage && !isDef {
 			// `then first x;` and the guarded forms: edges with their own parsers.
 			return false
@@ -243,10 +243,10 @@ func (b *bodyBuilder) illegalTarget() (string, bool) {
 		if what, ok := namespaceMemberKeywords[kw]; ok {
 			return what, true
 		}
-		if _, isDef := definitionKindKeywords[kw]; isDef && p.peekN(i+1).Kind == lexer.Keyword && p.peekN(i+1).KeywordID == "def" {
+		if _, isDef := p.definitionKind(kw); isDef && p.peekN(i+1).Kind == lexer.Keyword && p.peekN(i+1).KeywordID == "def" {
 			return "a definition", true
 		}
-		if _, isUsage := usageKindKeywords[kw]; isUsage {
+		if _, isUsage := p.usageKind(kw); isUsage {
 			// `ref` is both a modifier and a usage keyword: `then ref part x;`
 			// is a part usage, `then ref x;` a reference usage.
 			if what, isNon := nonOccurrenceUsageKeywords[kw]; isNon && !(kw == "ref" && b.kindFollows(i+1)) {
@@ -267,7 +267,7 @@ func (b *bodyBuilder) kindFollows(i int) bool {
 	if tok.Kind != lexer.Keyword {
 		return false
 	}
-	_, ok := usageKindKeywords[tok.KeywordID]
+	_, ok := b.p.usageKind(tok.KeywordID)
 	return ok
 }
 

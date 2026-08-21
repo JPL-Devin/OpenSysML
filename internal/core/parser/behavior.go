@@ -816,10 +816,10 @@ func (p *Parser) atNamespaceSuccession() bool {
 	case "public", "private", "protected":
 		return true
 	}
-	if _, isDef := definitionKindKeywords[next.KeywordID]; isDef {
+	if _, isDef := p.definitionKind(next.KeywordID); isDef {
 		return true
 	}
-	_, isUsage := usageKindKeywords[next.KeywordID]
+	_, isUsage := p.usageKind(next.KeywordID)
 	return isUsage
 }
 
@@ -1492,7 +1492,7 @@ func (p *Parser) parseResultMemberIn(inStatement bool) ast.Node {
 	// Default to UsageAttribute if not specified
 	usageKind := ast.UsageAttribute
 	if p.at(lexer.Keyword) {
-		if kind, ok := usageKindKeywords[p.peek().KeywordID]; ok {
+		if kind, ok := p.usageKind(p.peek().KeywordID); ok {
 			usageKind = kind
 			p.advance() // consume kind keyword
 		}
