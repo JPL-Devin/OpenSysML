@@ -73,7 +73,7 @@ func checkName(i int, name string) error {
 // refuses it if it carries errors the original did not: an edit never hands back
 // a model that cannot be read again.
 func (m Model) validate(content []byte) error {
-	sf := source.New(m.Source.Name(), content)
+	sf := source.NewWithKind(m.Source.Name(), content, m.Source.Kind())
 	p := parser.New(sf)
 	root := p.ParseFile()
 	editedParse := parseDiagnostics(p.Diagnostics)
@@ -91,12 +91,12 @@ func (m Model) validate(content []byte) error {
 		return nil
 	}
 	idx := m.NewIndex()
-	idx.AddDocument(sf.Name(), root)
+	idx.AddDocumentWithKind(sf.Name(), root, sf.Kind())
 	// The parse diagnostics are handed to the analysis, so a model that already
 	// had syntax errors is not judged by tiers its own parse never reached.
 	before := errorsOnly(m.baseline(editedParse))
 	before = append(before, errorsOnly(originalParse)...)
-	after := errorsOnly(passes.Analyze(sf.Name(), root, editedParse, idx))
+	after := errorsOnly(passes.AnalyzeWithKind(sf.Name(), sf.Kind(), root, editedParse, idx))
 	if introduced := introduced(before, after); len(introduced) > 0 {
 		return &Error{
 			Failure:        FailureResultInvalid,
@@ -122,8 +122,8 @@ func (m Model) baseline(gate []passes.Diagnostic) []passes.Diagnostic {
 	p := parser.New(m.Source)
 	root := p.ParseFile()
 	idx := m.NewIndex()
-	idx.AddDocument(m.Source.Name(), root)
-	return passes.Analyze(m.Source.Name(), root, gate, idx)
+	idx.AddDocumentWithKind(m.Source.Name(), root, m.Source.Kind())
+	return passes.AnalyzeWithKind(m.Source.Name(), m.Source.Kind(), root, gate, idx)
 }
 
 // parseDiagnostics presents parse diagnostics as pass diagnostics, which is how

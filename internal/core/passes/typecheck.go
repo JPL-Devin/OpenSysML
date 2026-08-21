@@ -31,7 +31,7 @@ func (TypeCheckPass) Run(ctx *Context, name string, root *ast.RootNamespace) []D
 	tc := &typeChecker{
 		resolver: ctx.Resolver(),
 		expr:     &exprChecker{resolver: ctx.Resolver(), model: model},
-		lang:     source.KindOf(name),
+		lang:     ctx.Kind,
 	}
 	tc.walk(rootScope, root.Members)
 	return append(tc.diags, tc.expr.diags...)

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 // fqnEntry records one symbol registered under a fully-qualified name.
@@ -27,10 +28,11 @@ type reexportKey struct {
 // entries — the names it declared and the ones its wildcard imports surfaced
 // alike.
 type Index struct {
-	docRoots      map[string]*Scope     // document name -> root scope
-	docOfRoot     map[*Scope]string     // root scope -> document name
-	fqn           map[string][]*Symbol  // fully-qualified name -> symbols
-	contributions map[string][]fqnEntry // document name -> entries it added
+	docRoots      map[string]*Scope      // document name -> root scope
+	docOfRoot     map[*Scope]string      // root scope -> document name
+	docKinds      map[string]source.Kind // document name -> explicit language
+	fqn           map[string][]*Symbol   // fully-qualified name -> symbols
+	contributions map[string][]fqnEntry  // document name -> entries it added
 
 	// wildcardMeta holds the wildcard imports of a namespace per document that
 	// declares it, so removing a document stops its imports from being expanded
@@ -140,6 +142,7 @@ func NewIndex() *Index {
 	return &Index{
 		docRoots:      make(map[string]*Scope),
 		docOfRoot:     make(map[*Scope]string),
+		docKinds:      make(map[string]source.Kind),
 		fqn:           make(map[string][]*Symbol),
 		contributions: make(map[string][]fqnEntry),
 		wildcardMeta:  make(map[string]map[string][]WildcardImport),
@@ -166,10 +169,23 @@ func NewIndex() *Index {
 // indexed are in: adding a document cannot know whether the target of an import
 // it states is still to come.
 func (idx *Index) AddDocument(name string, root *ast.RootNamespace) {
+	idx.addDocument(name, root, source.KindOf(name), false)
+}
+
+// AddDocumentWithKind builds the scope tree for root and records its explicit
+// language, which is needed when the document name does not carry an extension.
+func (idx *Index) AddDocumentWithKind(name string, root *ast.RootNamespace, kind source.Kind) {
+	idx.addDocument(name, root, kind, true)
+}
+
+func (idx *Index) addDocument(name string, root *ast.RootNamespace, kind source.Kind, explicitKind bool) {
 	idx.RemoveDocument(name)
 	rs := Build(root)
 	SetDocName(rs, name)
 	idx.docRoots[name] = rs
+	if explicitKind {
+		idx.docKinds[name] = kind
+	}
 	idx.docOfRoot[rs] = name
 	idx.indexScope(name, rs, "")
 
@@ -595,6 +611,7 @@ func (idx *Index) RemoveDocument(name string) {
 		idx.deregister(e.fqn, e.sym)
 	}
 	delete(idx.libraryDocs, name)
+	delete(idx.docKinds, name)
 	delete(idx.contributions, name)
 	delete(idx.docOfRoot, idx.docRoots[name])
 	delete(idx.docRoots, name)
@@ -1393,6 +1410,15 @@ func (idx *Index) DocumentOfRoot(scope *Scope) string {
 // DocumentRoot returns the root scope for the named document, or nil.
 func (idx *Index) DocumentRoot(name string) *Scope {
 	return idx.docRoots[name]
+}
+
+// DocumentKind returns a document's recorded language, or infers it from its
+// name when the document was added without an explicit language.
+func (idx *Index) DocumentKind(name string) source.Kind {
+	if kind, ok := idx.docKinds[name]; ok {
+		return kind
+	}
+	return source.KindOf(name)
 }
 
 // NewIndexFromDoc builds an Index containing a single document.

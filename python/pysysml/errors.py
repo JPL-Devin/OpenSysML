@@ -307,6 +307,26 @@ class EditResultError(EditError):
     """
 
 
+class OwnerNotFoundError(EditError):
+    """Raised when an add-member owner is not declared in the model."""
+
+
+class OwnerNotNamespaceError(EditError):
+    """Raised when an add-member owner cannot contain members."""
+
+
+class IllegalMemberKindError(InvalidEditError):
+    """Raised when a declaration kind is invalid for the source language."""
+
+
+class MemberNameTakenError(EditError):
+    """Raised when an owner already declares the requested member name."""
+
+
+class DeleteReferencedError(EditError):
+    """Raised when a referenced declaration is deleted without cascade."""
+
+
 class ServiceError(PySysMLError):
     """Raised when the service fails a call, translated from its gRPC status.
 

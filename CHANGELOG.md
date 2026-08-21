@@ -25,6 +25,11 @@ is described in [docs/project/releasing.md](docs/project/releasing.md).
   fixes. It declares no dependency on `pysysml` and re-exports nothing; `opensysml==0.3.0` is the
   exact pin that still installs the last real release under that name.
 
+### Python authoring
+
+- **Source-preserving declaration authoring and deletion** are available through the gRPC and
+  `pysysml` edit APIs, including inline KerML loading with `pysysml.loads(..., language="kerml")`.
+
 ## 0.1.1 — 2026-08-19
 
 A fix release: every change below corrects something 0.1.0 got wrong about a valid model, so a

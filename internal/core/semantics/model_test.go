@@ -16,13 +16,18 @@ func buildModel(t *testing.T, src string) (*Model, *symbols.Scope) {
 }
 
 func buildModelNamed(t *testing.T, name, src string) (*Model, *symbols.Scope) {
+	return buildModelNamedWithKind(t, name, source.KindOf(name), src)
+}
+
+func buildModelNamedWithKind(t *testing.T, name string, kind source.Kind, src string) (*Model, *symbols.Scope) {
 	t.Helper()
 	p := parser.New(source.New(name, []byte(src)))
 	root := p.ParseFile()
 	if len(p.Diagnostics) != 0 {
 		t.Fatalf("parse diagnostics: %v", p.Diagnostics)
 	}
-	idx := symbols.NewIndexFromDoc(name, root)
+	idx := symbols.NewIndex()
+	idx.AddDocumentWithKind(name, root, kind)
 	r := resolve.New(idx)
 	m := NewModel(r)
 	// The workspace attaches the model before resolving so that feature chains

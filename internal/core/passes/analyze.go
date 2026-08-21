@@ -4,6 +4,7 @@ import (
 	"sort"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -27,7 +28,13 @@ func DefaultRegistry() *Registry {
 // parseDiags are the parser's diagnostics, already adapted to passes.Diagnostic
 // by the caller.
 func Analyze(name string, root *ast.RootNamespace, parseDiags []Diagnostic, idx *symbols.Index) []Diagnostic {
-	ctx := NewContext(name, idx, parseDiags)
+	return AnalyzeWithKind(name, source.KindOf(name), root, parseDiags, idx)
+}
+
+// AnalyzeWithKind validates a document whose language is not encoded in name.
+func AnalyzeWithKind(name string, kind source.Kind, root *ast.RootNamespace,
+	parseDiags []Diagnostic, idx *symbols.Index) []Diagnostic {
+	ctx := NewContextWithKind(name, kind, idx, parseDiags)
 	diags := DefaultRegistry().Run(ctx, name, root)
 	sort.SliceStable(diags, func(i, j int) bool {
 		a, b := diags[i], diags[j]

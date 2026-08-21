@@ -31,6 +31,8 @@ from pysysml.errors import (
     EditError, EditResultError, EditTargetError, ExecutionError,
     FeatureValueError, InvalidEditError, NoEditsError, OverlappingEditsError,
     RenameReferencedError,
+    OwnerNotFoundError, OwnerNotNamespaceError, IllegalMemberKindError,
+    MemberNameTakenError, DeleteReferencedError,
     InstanceTypeError, InvalidRequestError, ModelError,
     ModelFileNotFoundError, ModelNotFoundError, ServiceError,
     ServiceTimeoutError, StaleServiceError, SymbolNotFoundError,
@@ -53,6 +55,8 @@ __all__ = [
     "ConversionError", "ExecutionError", "FeatureValueError",
     "EditError", "NoEditsError", "EditTargetError", "InvalidEditError",
     "RenameReferencedError", "OverlappingEditsError", "EditResultError",
+    "OwnerNotFoundError", "OwnerNotNamespaceError", "IllegalMemberKindError",
+    "MemberNameTakenError", "DeleteReferencedError",
     "InstanceTypeError", "InvalidRequestError", "MissingCapabilityError",
     "ModelError", "ModelFileNotFoundError", "ModelNotFoundError",
     "ServiceError", "ServiceTimeoutError", "StaleServiceError",
@@ -60,7 +64,7 @@ __all__ = [
     "TypeMismatchError", "UnpinnedReleaseError",
     "UnsupportedOperationError", "UnsupportedValueError",
     "WrongKindError",
-    "load", "connect", "convert",
+    "load", "loads", "connect", "convert",
     # "eval" is deprecated in favour of "evaluate", so it is not exported.
     "evaluate", "instantiate",
     "DEFAULT_PORT", "split_target",
@@ -107,6 +111,18 @@ def _get_default_connection(host='localhost', port=None):
         _default_connection_params = params
     
     return _default_connection
+
+
+def loads(content, host='localhost', port=None, language=None, strict=False):
+    """Parse inline SysML or KerML content using the default connection."""
+    connection = (
+        _get_default_connection()
+        if host == 'localhost' and port is None
+        else _get_default_connection(host, port)
+    )
+    return connection.load_from_content(
+        content, strict=strict, language=language
+    )
 
 
 def load(file_path, host='localhost', port=None, strict=False):

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 // TestImplicitBaseNeedsTheLibrary covers a model resolved without the standard
@@ -114,6 +115,37 @@ func TestKerMLImplicitDefinitionBases(t *testing.T) {
 	}
 	if got := m.DirectSupertypes(sym(t, p.Scope, "F")); len(got) != 0 {
 		t.Fatalf("KerML feature received an implicit datatype base: %v", got)
+	}
+}
+
+func TestKerMLImplicitDefinitionBasesUseRecordedDocumentKind(t *testing.T) {
+	content := `package P {
+		class C;
+		struct S;
+	}
+	package Occurrences { classifier Occurrence; }
+	package Objects { classifier Object; }`
+	want := map[string]string{
+		"C": "Occurrences::Occurrence",
+		"S": "Objects::Object",
+	}
+	for _, tc := range []struct {
+		name string
+		kind source.Kind
+	}{
+		{"inline-content", source.KindKerML},
+		{"model.kerml", source.KindKerML},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, root := buildModelNamedWithKind(t, tc.name, tc.kind, content)
+			p := sym(t, root, "P")
+			for name, wantFQN := range want {
+				got := m.DirectSupertypes(sym(t, p.Scope, name))
+				if len(got) != 1 || m.resolver.Index().GetFQN(got[0]) != wantFQN {
+					t.Fatalf("supertypes of %s = %v, want [%s]", name, got, wantFQN)
+				}
+			}
+		})
 	}
 }
 

@@ -198,6 +198,8 @@ message ParseFileRequest {
   // Ignored: the service keys its cache by the source it read, so a repeated
   // parse hits the cache whether or not a client sends this.
   string content_hash = 3 [deprecated = true];
+  // Language for inline content: "sysml" or "kerml". Empty defaults to SysML.
+  string language = 4;
 }
 
 // ParseFileResponse contains parsed model info
@@ -365,13 +367,40 @@ message ApplyEditsRequest {
   repeated EditOperation operations = 2;
 }
 
-// EditOperation is one change to make. Only the two source-preserving forms
-// exist: setting a feature's value and renaming a declaration.
+// EditOperation is one source-preserving change to make.
 message EditOperation {
   oneof operation {
     SetValueEdit set_value = 1;
     RenameEdit rename = 2;
+    AddMemberEdit add_member = 3;
+    DeleteEdit delete = 4;
   }
+}
+
+// AddMemberEdit inserts a declaration into a namespace or the document root.
+message AddMemberEdit {
+  // Namespace FQN to receive the declaration; empty means the document root.
+  string owner = 1;
+  // Written declaration kind, such as "part def" or "class".
+  string kind = 2;
+  // Declared identifier.
+  string name = 3;
+  // Optional type target for a usage, written as notation.
+  string type = 4;
+  // Optional multiplicity, including brackets, such as "[0..*]".
+  string multiplicity = 5;
+  // Optional value expression, written as notation.
+  string value = 6;
+  // Optional specialization targets for a definition.
+  repeated string specializes = 7;
+}
+
+// DeleteEdit removes a declaration and its owned trivia.
+message DeleteEdit {
+  // Fully qualified name of the declaration to remove.
+  string target = 1;
+  // Also remove declarations that refer to target.
+  bool cascade = 2;
 }
 
 // SetValueEdit sets the value of a feature that already exists, replacing the
@@ -417,7 +446,9 @@ message AppliedEdit {
   // Index of the operation in the request, so an answer maps back to its ask.
   int32 operation_index = 1;
   string target = 2;    // element edited, as the request named it
-  int32 offset = 3;     // byte offset in the original source
+  // Batch offsets use the original source; sequential offsets use the
+  // intermediate source seen by that operation.
+  int32 offset = 3;
   int32 length = 4;     // bytes replaced; zero for text inserted
   string old_text = 5;  // what was there, empty for an insertion
   string new_text = 6;  // what was written
@@ -437,6 +468,11 @@ enum EditFailure {
   EDIT_FAILURE_RENAME_REFERENCED = 8; // references to the element would break
   EDIT_FAILURE_OVERLAPPING_EDITS = 9; // two edits cover the same bytes
   EDIT_FAILURE_RESULT_INVALID = 10;   // the edited source has errors the original had not
+  EDIT_FAILURE_OWNER_UNKNOWN = 11;    // add-member owner does not exist
+  EDIT_FAILURE_OWNER_NOT_NAMESPACE = 12; // owner cannot contain members
+  EDIT_FAILURE_ILLEGAL_KIND = 13;     // kind is invalid for document language
+  EDIT_FAILURE_MEMBER_NAME_TAKEN = 14; // owner already declares the name
+  EDIT_FAILURE_DELETE_REFERENCED = 15; // delete would leave references
 }
 
 // SymbolInfo represents any SysML element
