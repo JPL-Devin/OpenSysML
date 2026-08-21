@@ -20,6 +20,13 @@ func DefaultRegistry() *Registry {
 	reg.Register(TypeCheckPass{})
 	reg.Register(ElementFilterPass{})
 	reg.Register(ConstraintPass{})
+	reg.Register(W8DOccurrenceTypingPass{})
+	reg.Register(W8DConnectorFeaturingPass{})
+	reg.Register(W8DFlowEndPass{})
+	reg.Register(W8DVariabilityPass{})
+	reg.Register(W8DVerificationPass{})
+	reg.Register(W8DViewRenderingPass{})
+	reg.Register(W8DMetadataUsagePass{})
 	return reg
 }
 

@@ -128,13 +128,14 @@ func TestTypeCheckOccurrenceModifierRejectsDataType(t *testing.T) {
 	}
 }
 
-// Without the modifier the same typings are accepted, so the diagnostics above
-// come from the modifier and not from the kind keyword.
+// Without the modifier the same typings are accepted by the type checker, so
+// the diagnostics above come from the modifier and not from the kind keyword.
+// `occurrence m : Mass;` is rejected instead by W8DOccurrenceTypingPass, which
+// the pilot reports too (OccurrenceUsage_invalid.sysml.xt).
 func TestTypeCheckDataTypeTypingWithoutModifierOK(t *testing.T) {
 	for _, src := range []string{
 		"attribute def Mass; attribute m : Mass;",
 		"enum def Level; attribute l : Level;",
-		"attribute def Mass; occurrence m : Mass;",
 		"attribute def Mass; action collect { in m : Mass; }",
 	} {
 		if diags := typeDiags(t, src); len(diags) != 0 {
