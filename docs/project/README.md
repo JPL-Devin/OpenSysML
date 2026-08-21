@@ -10,6 +10,8 @@ a release is cut.
   corpora, ratcheted in CI
 - **[Pilot differential](pilot-differential.md)** — our diagnostics against the OMG pilot
   implementation, advisory
+- **[Pilot execution referee](pilot-execution-referee.md)** — how far the pinned pilot's
+  execution surface reaches, and which behavior rows it can adjudicate
 - **[Grammar coverage](grammar-coverage.md)** — which OMG grammar productions our inputs
   exercise, on input-presence evidence, advisory
 - **[Roadmap](roadmap.md)** — the known gaps, in the order they should be picked up
