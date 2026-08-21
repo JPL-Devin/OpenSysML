@@ -621,7 +621,7 @@ func (ec *exprChecker) inferInvocation(scope *symbols.Scope, e *ast.InvocationEx
 			ec.diags = append(ec.diags, Diagnostic{
 				Severity: SeverityError,
 				Span:     e.Type.Span(),
-				Message:  "an invocation target must be a behavior or a behavioral feature",
+				Message:  "Must invoke a behavior or a behavioral feature",
 				Code:     "invocation-not-behavior",
 				Source:   "type",
 			})

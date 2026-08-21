@@ -67,6 +67,7 @@ func (tc *typeChecker) walk(scope *symbols.Scope, members []ast.Node) {
 				portion:      d.Portion,
 				keyword:      d.Keyword,
 			})
+			tc.checkOneType(scope, d)
 			tc.expr.checkUsageValue(scope, d)
 			if child := childScopeOf(scope, d); child != nil {
 				tc.walk(child, d.Members)

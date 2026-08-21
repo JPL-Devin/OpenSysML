@@ -7,15 +7,22 @@ import "testing"
 
 // F20 validateSubsettingFeaturingTypes: `subsettingFeature.canAccess(subsettedFeature)`
 // — a feature of a type is not reachable by `::` from outside it.
-func TestConstraintSubsettingFeaturingTypesNotImplemented(t *testing.T) {
-	t.Skip("F20: canAccess over featuring types is not implemented; see docs/project/pilot-differential.md P6")
-
+// The rule constrains a Subsetting, so a nested feature named from outside its
+// type is reported where it is subsetted, not where it is merely referenced.
+func TestConstraintSubsettingFeaturingTypes(t *testing.T) {
 	const src = `package E {
-		part def P { attribute n : Integer = 1; }
+		part def P { attribute n; }
+		part def R { attribute m :> E::P::n; }
+	}`
+	if !hasCode(constraintDiags(t, src), "subsetting-featuring-types") {
+		t.Fatalf("expected an inaccessible-feature diagnostic for E::P::n")
+	}
+	const referenceOnly = `package E {
+		part def P { attribute n = 1; }
 		package Q { filter E::P::n > 0; }
 	}`
-	if !hasCode(constraintDiags(t, src), "feature-not-accessible") {
-		t.Fatalf("expected an inaccessible-feature diagnostic for E::P::n")
+	if hasCode(constraintDiags(t, referenceOnly), "subsetting-featuring-types") {
+		t.Fatalf("a filter condition is not a subsetting")
 	}
 }
 
