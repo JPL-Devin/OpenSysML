@@ -236,7 +236,7 @@ func assertResultsTable(t *testing.T, results table, report Report) {
 			failAt(t, row.line, "Results table root %q appears more than once", label)
 		}
 		foundDirs[label] = true
-		assertTotalsCells(t, row, root.Totals, "roots["+root.Name+"]", "root "+root.Dir)
+		assertTotalsCells(t, row, root.Totals, "roots["+root.Name+"].totals", "root "+root.Dir)
 	}
 	if !totalSeen {
 		failAt(t, results.headerLine, "Results table is missing the Total row")
