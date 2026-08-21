@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"math"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	corequery "github.com/Open-MBEE/OpenSysML/internal/core/query"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -19,16 +19,16 @@ import (
 // Query property names, as the SysML v2 API & Services standard's clients write
 // them. docs/reference/api.md documents what each one reports.
 const (
-	QueryPropID                = "@id"
-	QueryPropType              = "@type"
-	QueryPropName              = "name"
-	QueryPropDeclaredName      = "declaredName"
-	QueryPropQualifiedName     = "qualifiedName"
-	QueryPropOwner             = "owner"
-	QueryPropIsAbstract        = "isAbstract"
-	QueryPropElementType       = "type"
-	QueryPropMultiplicityLower = "multiplicityLower"
-	QueryPropMultiplicityUpper = "multiplicityUpper"
+	QueryPropID                = corequery.PropertyID
+	QueryPropType              = corequery.PropertyType
+	QueryPropName              = corequery.PropertyName
+	QueryPropDeclaredName      = corequery.PropertyDeclaredName
+	QueryPropQualifiedName     = corequery.PropertyQualifiedName
+	QueryPropOwner             = corequery.PropertyOwner
+	QueryPropIsAbstract        = corequery.PropertyIsAbstract
+	QueryPropElementType       = corequery.PropertyElementType
+	QueryPropMultiplicityLower = corequery.PropertyMultiplicityLower
+	QueryPropMultiplicityUpper = corequery.PropertyMultiplicityUpper
 )
 
 // QueryErrorKind classifies why a query could not be evaluated. Every kind fails
@@ -67,76 +67,6 @@ func queryErrorf(kind QueryErrorKind, format string, args ...any) *QueryError {
 	return &QueryError{Kind: kind, Message: fmt.Sprintf(format, args...)}
 }
 
-// queryProperty is one queryable property: how it reads off an element, and
-// whether its values are ordered, which is what > and < require.
-type queryProperty struct {
-	ordered bool
-	// read reports the property's value, and whether the element has one at all.
-	read func(*queryEval, *symbols.Symbol) (string, bool)
-}
-
-// queryProperties is the single source of truth for what a query may name. Each
-// entry reads the existing symbol index and semantic model.
-var queryProperties = map[string]queryProperty{
-	QueryPropID: {read: func(e *queryEval, sym *symbols.Symbol) (string, bool) {
-		return present(e.sc.Index.GetFQN(sym))
-	}},
-	QueryPropQualifiedName: {read: func(e *queryEval, sym *symbols.Symbol) (string, bool) {
-		return present(e.sc.Index.GetFQN(sym))
-	}},
-	QueryPropType: {read: func(e *queryEval, sym *symbols.Symbol) (string, bool) {
-		return present(MetamodelTypeNameOf(sym))
-	}},
-	QueryPropName: {read: func(e *queryEval, sym *symbols.Symbol) (string, bool) {
-		return present(localName(e.sc.Index.GetFQN(sym)))
-	}},
-	QueryPropDeclaredName: {read: func(e *queryEval, sym *symbols.Symbol) (string, bool) {
-		if sym.EffectiveName {
-			return "", false // the name was borrowed from a referenced feature
-		}
-		return present(localName(e.sc.Index.GetFQN(sym)))
-	}},
-	QueryPropOwner: {read: func(e *queryEval, sym *symbols.Symbol) (string, bool) {
-		if sym.OwnerScope != nil && sym.OwnerScope.Owner() != nil {
-			return present(e.sc.Index.GetFQN(sym.OwnerScope.Owner()))
-		}
-		// A library element restored from cache owns no scope chain, so its owner
-		// is the namespace its qualified name names; a top-level one has none.
-		return present(owningName(e.sc.Index.GetFQN(sym)))
-	}},
-	QueryPropIsAbstract: {read: func(e *queryEval, sym *symbols.Symbol) (string, bool) {
-		switch decl := sym.Decl.(type) {
-		case *ast.Usage:
-			return strconv.FormatBool(decl.IsAbstract), true
-		case *ast.Definition:
-			return strconv.FormatBool(decl.IsAbstract), true
-		default:
-			return "", false
-		}
-	}},
-	QueryPropElementType: {read: func(e *queryEval, sym *symbols.Symbol) (string, bool) {
-		info := e.sc.typeInfoOf(sym)
-		if info == nil {
-			return "", false
-		}
-		return present(info.ResolvedId)
-	}},
-	QueryPropMultiplicityLower: {ordered: true, read: func(e *queryEval, sym *symbols.Symbol) (string, bool) {
-		mult := e.sc.multiplicityOf(sym)
-		if mult == nil {
-			return "", false
-		}
-		return present(mult.Lower)
-	}},
-	QueryPropMultiplicityUpper: {ordered: true, read: func(e *queryEval, sym *symbols.Symbol) (string, bool) {
-		mult := e.sc.multiplicityOf(sym)
-		if mult == nil {
-			return "", false
-		}
-		return present(mult.Upper)
-	}},
-}
-
 // localName returns the last segment of a qualified name: a library element
 // restored from cache is registered under its qualified name.
 func localName(fqn string) string {
@@ -164,12 +94,7 @@ func present(value string) (string, bool) {
 // QueryPropertyNames returns every queryable property name, sorted. It is what
 // an unknown-property error lists, and what docs/reference/api.md's table documents.
 func QueryPropertyNames() []string {
-	out := make([]string, 0, len(queryProperties))
-	for name := range queryProperties {
-		out = append(out, name)
-	}
-	sort.Strings(out)
-	return out
+	return corequery.PropertyNames()
 }
 
 // metamodelTypeNames maps OpenSysML's symbol kinds onto the metamodel type names
@@ -312,13 +237,33 @@ func (s *Service) Query(ctx context.Context, req *pb.QueryRequest) (*pb.QueryRes
 	if !ok {
 		return nil, status.Errorf(codes.NotFound, "model not found: %s", req.ModelHash)
 	}
-	if req.Query == nil {
+	if req.Query != nil && req.OslcQuery != "" {
+		return nil, status.Error(codes.InvalidArgument, "query and oslc_query are mutually exclusive")
+	}
+	if req.Query == nil && req.OslcQuery == "" {
 		return nil, queryErrorf(QueryErrMalformedConstraint, "query is unset")
 	}
 
 	sc := cached.SymbolContext()
 	defer sc.Lock()()
 	eval := &queryEval{sc: sc}
+	if req.OslcQuery != "" {
+		parsed, err := corequery.ParseOSLC(req.OslcQuery)
+		if err != nil {
+			return nil, queryStatus(err)
+		}
+		elements, err := corequery.Evaluate(&coreQueryModel{eval: eval, cached: cached}, parsed)
+		if err != nil {
+			return nil, queryStatus(err)
+		}
+		out := make([]*pb.QueryResultElement, 0, len(elements))
+		for _, element := range elements {
+			out = append(out, &pb.QueryResultElement{
+				Id: element.ID, Type: element.Type, Properties: element.Properties,
+			})
+		}
+		return &pb.QueryResponse{Elements: out}, nil
+	}
 
 	// The query is judged before any element is: whether it is one the service
 	// can evaluate cannot depend on how many elements it happens to consider.
@@ -487,7 +432,7 @@ func projectedProperties(selected []string) ([]string, error) {
 	}
 	out := make([]string, 0, len(selected))
 	for _, name := range selected {
-		if _, ok := queryProperties[name]; !ok {
+		if !corequery.IsProperty(name) {
 			return nil, unknownProperty(name)
 		}
 		out = append(out, name)
@@ -510,7 +455,7 @@ func (e *queryEval) project(sym *symbols.Symbol, selected []string) *pb.QueryRes
 		Properties: make(map[string]string, len(selected)),
 	}
 	for _, name := range selected {
-		if value, ok := queryProperties[name].read(e, sym); ok {
+		if value, ok := e.value(sym, name); ok {
 			element.Properties[name] = value
 		}
 	}
@@ -541,8 +486,7 @@ func validatePrimitive(c *pb.PrimitiveConstraint) error {
 	if c == nil {
 		return queryErrorf(QueryErrMalformedConstraint, "PrimitiveConstraint is unset")
 	}
-	property, ok := queryProperties[c.Property]
-	if !ok {
+	if !corequery.IsProperty(c.Property) {
 		return unknownProperty(c.Property)
 	}
 	if len(c.Value) == 0 {
@@ -554,7 +498,7 @@ func validatePrimitive(c *pb.PrimitiveConstraint) error {
 		return nil
 	case pb.PrimitiveOperator_PRIMITIVE_OPERATOR_GREATER,
 		pb.PrimitiveOperator_PRIMITIVE_OPERATOR_LESS:
-		return validateOrdered(c, property)
+		return validateOrdered(c)
 	default:
 		return queryErrorf(QueryErrMalformedConstraint,
 			"PrimitiveConstraint on %q has no operator", c.Property)
@@ -604,8 +548,7 @@ func (e *queryEval) matches(sym *symbols.Symbol, constraint *pb.Constraint) bool
 // matchesPrimitive compares one property of an element, negating the verdict
 // when the constraint is inverse.
 func (e *queryEval) matchesPrimitive(sym *symbols.Symbol, c *pb.PrimitiveConstraint) bool {
-	property := queryProperties[c.Property]
-	value, has := property.read(e, sym)
+	value, has := e.value(sym, c.Property)
 	var verdict bool
 	if c.Operator == pb.PrimitiveOperator_PRIMITIVE_OPERATOR_EQUAL {
 		verdict = has && equalsAny(value, c.Value)
@@ -616,6 +559,56 @@ func (e *queryEval) matchesPrimitive(sym *symbols.Symbol, c *pb.PrimitiveConstra
 		return !verdict
 	}
 	return verdict
+}
+
+func (e *queryEval) value(sym *symbols.Symbol, property string) (string, bool) {
+	switch property {
+	case QueryPropID, QueryPropQualifiedName:
+		return present(e.sc.Index.GetFQN(sym))
+	case QueryPropType:
+		return present(corequery.MetamodelTypeNameOf(sym))
+	case QueryPropName:
+		return present(localName(e.sc.Index.GetFQN(sym)))
+	case QueryPropDeclaredName:
+		if sym.EffectiveName {
+			return "", false
+		}
+		return present(localName(e.sc.Index.GetFQN(sym)))
+	case QueryPropOwner:
+		if sym.OwnerScope != nil && sym.OwnerScope.Owner() != nil {
+			return present(e.sc.Index.GetFQN(sym.OwnerScope.Owner()))
+		}
+		return present(owningName(e.sc.Index.GetFQN(sym)))
+	case QueryPropIsAbstract:
+		switch decl := sym.Decl.(type) {
+		case *ast.Usage:
+			return strconv.FormatBool(decl.IsAbstract), true
+		case *ast.Definition:
+			return strconv.FormatBool(decl.IsAbstract), true
+		default:
+			return "", false
+		}
+	case QueryPropElementType:
+		info := e.sc.typeInfoOf(sym)
+		if info == nil {
+			return "", false
+		}
+		return present(info.ResolvedId)
+	case QueryPropMultiplicityLower:
+		mult := e.sc.multiplicityOf(sym)
+		if mult == nil {
+			return "", false
+		}
+		return present(mult.Lower)
+	case QueryPropMultiplicityUpper:
+		mult := e.sc.multiplicityOf(sym)
+		if mult == nil {
+			return "", false
+		}
+		return present(mult.Upper)
+	default:
+		return "", false
+	}
 }
 
 // equalsAny reports whether the property's value is one of the constraint's.
@@ -632,8 +625,8 @@ func equalsAny(value string, candidates []string) bool {
 
 // validateOrdered checks > or < has an ordered property and one numeric operand:
 // either fault is a fault in the query, never a false verdict.
-func validateOrdered(c *pb.PrimitiveConstraint, property queryProperty) error {
-	if !property.ordered {
+func validateOrdered(c *pb.PrimitiveConstraint) error {
+	if !corequery.IsOrdered(c.Property) {
 		return queryErrorf(QueryErrUnorderedProperty,
 			"query property %q is not ordered, so %s cannot compare it",
 			c.Property, operatorText(c.Operator))

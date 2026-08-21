@@ -135,6 +135,7 @@ var metaCommandTable = []metaCommand{
 	{group: "Runtime commands:", name: "%features", args: "<name>", desc: "show an object's features and their values"},
 	{group: "Runtime commands:", name: "%instances", desc: "list all instantiated objects"},
 	{group: "Runtime commands:", name: "%invoke", args: "<object> <op> [<p>=<expr>]", desc: "invoke an operation of an object's type, performed by that object"},
+	{group: "Runtime commands:", name: "%query", args: "<oslc-query>", desc: "identify model elements using OSLC Query text"},
 
 	{group: "Behavioral commands:", name: "%calc", args: "<name> <args>", desc: "invoke a calculation with arguments"},
 	{group: "Behavioral commands:", name: "%constraint", args: "<name>", desc: "evaluate a constraint definition"},
@@ -380,6 +381,15 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 			return []string{"usage: %invoke <object> <operation> [<parameter>=<expression> ...]"}, false, nil
 		}
 		return s.doInvoke(fields[1], fields[2], fields[3:])
+	case "%query":
+		if len(fields) < 2 {
+			return []string{"usage: %query <oslc-query>"}, false, nil
+		}
+		lines, err := s.query(strings.TrimSpace(strings.TrimPrefix(line, "%query")))
+		if err != nil {
+			return []string{"error: " + err.Error()}, false, nil
+		}
+		return lines, false, nil
 	case "%events":
 		return s.doEvents()
 	case "%current":

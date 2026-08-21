@@ -28,6 +28,7 @@ quoted segment holding a space and one in the middle of a chain: `%instantiate '
 | `%features <name>` | Show what an object holds for each feature of its type |
 | `%instances` | List all created objects |
 | `%eval <expr>` | Evaluate expression, in the last namespace the session declared |
+| `%query <oslc-query>` | Identify model elements using OSLC Query text |
 | `%eval in <name> : <expr>` | Evaluate expression in the named element's own namespace, or — when an object was materialized under that name — on that object, so a feature reads its value. The separator is the first `:` outside a quoted name that is not part of a `::`, so `%eval in Demo : Vehicle::mass` works |
 | **Behavioral Execution** | |
 | `%calc <name> [args...]` | Invoke calculation with arguments |
