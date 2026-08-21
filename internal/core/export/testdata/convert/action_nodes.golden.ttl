@@ -257,4 +257,17 @@ elmt:ActionNodes__Drive___4020
     sysml:qualifiedName "ActionNodes::Drive::@20" ;
     sysml:owningNamespace elmt:ActionNodes__Drive ;
     sysx:memberIndex "20"^^xsd:integer ;
-    sysx:sourceText "succession first brake then finish;" .
+    sysx:sourceText "succession first brake then finish;" ;
+    sysx:relatedFeature expr:ActionNodes__Drive___4020.end0, expr:ActionNodes__Drive___4020.end1 .
+
+expr:ActionNodes__Drive___4020.end0
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "brake" ;
+    sysml:referent elmt:ActionNodes__Drive__brake ;
+    sysx:endIndex "0"^^xsd:integer .
+
+expr:ActionNodes__Drive___4020.end1
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "finish" ;
+    sysml:referent elmt:ActionNodes__Drive__finish ;
+    sysx:endIndex "1"^^xsd:integer .

@@ -52,6 +52,9 @@ const (
 	xDeclaredPrefix  = "declaredPrefix"
 	xImplicitKind    = "isKindImplicit"
 	xCondition       = "condition"
+	xRelatedFeature  = "relatedFeature"
+	xEndIndex        = "endIndex"
+	xEndRole         = "endRole"
 )
 
 // dtExpression is the datatype of a relationship target that is not a name but
@@ -324,6 +327,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		// text: its head is not reconstructible from the properties above.
 		if verbatimUsage(n) {
 			e.graph.Add(subject, e.sysx(xSourceText), rdf.String(e.text(n)))
+			e.bindingEnds(subject, owner, n)
 			return nil
 		}
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
@@ -506,6 +510,37 @@ func verbatimUsage(n *ast.Usage) bool {
 		return true
 	}
 	return false
+}
+
+// bindingEnds states the features a binding head relates as structure beside the
+// text it is kept as, so a consumer reads the ends without reading notation.
+func (e *encoder) bindingEnds(subject rdf.Term, owner string, n *ast.Usage) {
+	for i, end := range n.ConnectorEnds {
+		if end == nil {
+			continue
+		}
+		e.bindingEnd(subject, owner, fmt.Sprintf("end%d", i), i, "", end.Target)
+	}
+	if n.FlowEnds != nil {
+		e.bindingEnd(subject, owner, "flowSource", 0, "source", n.FlowEnds.From)
+		e.bindingEnd(subject, owner, "flowTarget", 1, "target", n.FlowEnds.To)
+		e.bindingEnd(subject, owner, "flowPayload", -1, "payload", n.FlowEnds.Payload)
+	}
+}
+
+// bindingEnd emits one end as an expression node, tagged with its position.
+func (e *encoder) bindingEnd(subject rdf.Term, owner, slot string, index int, role string, target ast.Node) {
+	if target == nil {
+		return
+	}
+	e.expression(subject, e.sysx(xRelatedFeature), slot, owner, target)
+	end := rdf.ExpressionIRI(subject, slot)
+	if index >= 0 {
+		e.graph.Add(end, e.sysx(xEndIndex), rdf.Int(index))
+	}
+	if role != "" {
+		e.graph.Add(end, e.sysx(xEndRole), rdf.String(role))
+	}
 }
 
 func (e *encoder) sysml(name string) rdf.Term { return rdf.SysMLTerm(name) }
