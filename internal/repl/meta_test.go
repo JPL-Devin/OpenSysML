@@ -102,6 +102,13 @@ func TestQueryAndMetaQuery(t *testing.T) {
 	if len(lines) != 1 || lines[0] != "Demo::wheel  PartUsage  name=wheel" {
 		t.Fatalf("%%query = %v", lines)
 	}
+	lines, _, err = s.runMeta(`  %query oslc.where=rdf:type="PartUsage"&oslc.select=sysml:name`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lines) != 1 || lines[0] != "Demo::wheel  PartUsage  name=wheel" {
+		t.Fatalf("indented %%query = %v", lines)
+	}
 	lines, _, err = s.runMeta(`%query oslc.where=rdf:type=`)
 	if err != nil {
 		t.Fatal(err)

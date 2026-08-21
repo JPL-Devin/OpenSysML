@@ -385,7 +385,7 @@ func (s *Session) runMeta(line string) (out []string, quit bool, err error) {
 		if len(fields) < 2 {
 			return []string{"usage: %query <oslc-query>"}, false, nil
 		}
-		lines, err := s.query(strings.TrimSpace(strings.TrimPrefix(line, "%query")))
+		lines, err := s.query(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "%query")))
 		if err != nil {
 			return []string{"error: " + err.Error()}, false, nil
 		}
