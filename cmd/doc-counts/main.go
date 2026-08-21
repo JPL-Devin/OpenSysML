@@ -45,11 +45,19 @@ func run(root string, out io.Writer) (int, error) {
 		return 0, fmt.Errorf("%s states no rule rows, so there is no census to write", doccounts.SpecCompliancePath)
 	}
 
-	rewritten := 0
+	// Every file is rewritten in memory, and checked writable, before any is
+	// written, so a failure on a later file cannot leave an earlier one restated
+	// against a census the rest of the tree does not state.
+	type rewrite struct {
+		path    string
+		content string
+		mode    fs.FileMode
+	}
+	var pending []rewrite
 	for _, path := range paths() {
 		content, mode, err := readFile(root, path)
 		if err != nil {
-			return rewritten, err
+			return 0, err
 		}
 		updated := content
 		for _, line := range doccounts.Lines() {
@@ -57,19 +65,35 @@ func run(root string, out io.Writer) (int, error) {
 				continue
 			}
 			if updated, err = doccounts.Rewrite(updated, line, counts); err != nil {
-				return rewritten, err
+				return 0, err
 			}
 		}
 		if updated == content {
 			continue
 		}
-		if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(path)), []byte(updated), mode); err != nil {
-			return rewritten, err
+		if err := checkWritable(root, path); err != nil {
+			return 0, err
 		}
-		rewritten++
-		fmt.Fprintf(out, "doc-counts: rewrote %s\n", path)
+		pending = append(pending, rewrite{path: path, content: updated, mode: mode})
 	}
-	return rewritten, nil
+
+	for _, file := range pending {
+		if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(file.path)), []byte(file.content), file.mode); err != nil {
+			return 0, err
+		}
+		fmt.Fprintf(out, "doc-counts: rewrote %s\n", file.path)
+	}
+	return len(pending), nil
+}
+
+// checkWritable reports whether a file can be opened for writing, so an
+// unwritable file is refused before any file is rewritten.
+func checkWritable(root, path string) error {
+	file, err := os.OpenFile(filepath.Join(root, filepath.FromSlash(path)), os.O_WRONLY, 0) // #nosec G304 -- a documentation path this command declares
+	if err != nil {
+		return err
+	}
+	return file.Close()
 }
 
 // paths lists the files carrying a derived line, in the order the lines declare

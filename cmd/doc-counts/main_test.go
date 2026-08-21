@@ -69,6 +69,37 @@ func TestRunRewritesEveryDerivedLineAndIsIdempotent(t *testing.T) {
 	}
 }
 
+// TestRunWritesNothingWhenALaterFileCannotBeRewritten keeps the tree consistent:
+// a partly restated tree would state two different censuses at once.
+func TestRunWritesNothingWhenALaterFileCannotBeRewritten(t *testing.T) {
+	root := writeFixture(t)
+	writeAt(t, root, doccounts.ArchitecturePath, "**Row bookkeeping:** reworded, and no longer the line the pattern states.\n")
+	before := read(t, root, doccounts.SpecCompliancePath)
+
+	if _, err := run(root, io.Discard); err == nil {
+		t.Fatal("want an error for a derived line the pattern does not match")
+	}
+	if read(t, root, doccounts.SpecCompliancePath) != before {
+		t.Fatal("a failed run rewrote an earlier file")
+	}
+}
+
+func TestRunWritesNothingWhenAFileIsNotWritable(t *testing.T) {
+	root := writeFixture(t)
+	readonly := filepath.Join(root, filepath.FromSlash(doccounts.ReadmePath))
+	if err := os.Chmod(readonly, 0o444); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+	before := read(t, root, doccounts.SpecCompliancePath)
+
+	if _, err := run(root, io.Discard); err == nil {
+		t.Fatal("want an error for a file that cannot be written")
+	}
+	if read(t, root, doccounts.SpecCompliancePath) != before {
+		t.Fatal("a failed run rewrote an earlier file")
+	}
+}
+
 func TestRunReportsAMapWithNoRuleRows(t *testing.T) {
 	root := t.TempDir()
 	writeAt(t, root, doccounts.SpecCompliancePath, "# Compliance\n\nThe map below tracks 0 semantic rules: **0 ✅ faithful, 0 ⚠️ approximate, 0 ❌ not implemented, 0 ⛔ deliberate divergence.**\n")

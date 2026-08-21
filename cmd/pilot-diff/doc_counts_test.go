@@ -100,7 +100,7 @@ func TestPilotDifferentialDocumentCountsMatchBaseline(t *testing.T) {
 	readmeLines := docReadNumberedFile(t, docCountReadmePath)
 	architectureLines := docReadNumberedFile(t, docCountArchitecturePath)
 	ruleCounts := docReadSpecComplianceCounts(t)
-	refereed := docReadRefereedCounts(t, report, ruleCounts)
+	refereed := docReadRefereedCounts(t, report)
 	docAssertReferenceLine(t, docRequireLineContainingPath(t, readmeLines, docCountReadmePath, docCountReferenceMarker), report)
 	docAssertRejectionLine(t, docRequireLineContainingPath(t, readmeLines, docCountReadmePath, docCountRejectionMarker), refereed)
 	docAssertRefereedHeadline(t, docCountReadmePath, readmeLines, refereed)
@@ -183,17 +183,17 @@ type docRejectionBaseline struct {
 }
 
 // docRefereedCounts holds the five headline numbers, each derived from the baseline
-// of the harness that measured it, or from the compliance map's own rows.
+// of the harness that measured it.
 type docRefereedCounts struct {
 	files, filesAgreeing, oursOnly, pilotOnly         int
 	declaredErrors, silent, wordingOnly, locationOnly int
 	severityDiffers, elsewhere                        int
 	scopeExact, scopeTotal                            int
 	rejectCases, rejectPilotOnly, rejectBoth          int
-	selfAssessed, ruleTotal                           int
+	selfAssessed                                      int
 }
 
-func docReadRefereedCounts(t *testing.T, report Report, rules doccounts.RuleCounts) docRefereedCounts {
+func docReadRefereedCounts(t *testing.T, report Report) docRefereedCounts {
 	t.Helper()
 	var xpect docXpectBaseline
 	docReadJSON(t, docCountXpectBaselinePath, &xpect)
@@ -209,7 +209,6 @@ func docReadRefereedCounts(t *testing.T, report Report, rules doccounts.RuleCoun
 		rejectPilotOnly: rejection.Totals.PilotOnlyRejects,
 		rejectBoth:      rejection.Totals.BothReject,
 		selfAssessed:    docReadSelfAssessedRows(t),
-		ruleTotal:       rules.Total,
 	}
 	errors, scope := false, false
 	for _, kind := range xpect.Kinds {
