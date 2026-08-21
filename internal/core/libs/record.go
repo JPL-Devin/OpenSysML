@@ -13,7 +13,7 @@ import (
 // formatVersion is the on-disk index record format version. Bump it whenever
 // the persisted shape changes, or the resolution a record captures changes; a
 // mismatch invalidates all cached records.
-const formatVersion = 20
+const formatVersion = 21
 
 // symRecord is the reduced, gob-encodable projection of a symbols.Symbol.
 // It deliberately excludes the AST-backed Decl and the Scope/OwnerScope
@@ -25,6 +25,7 @@ type symRecord struct {
 	Kind            symbols.SymbolKind
 	Span            source.Span
 	Supers          []string         // FQNs of the generalization targets (see supersOf)
+	FeaturedBy      []string         // FQNs of the `featured by` targets (see featuredByOf)
 	WildcardImports []wildcardImport // for packages: its `import X::*` declarations
 	AliasTarget     string           // for aliases: raw target text of "alias X for Y"
 	Unit            *unitFacts       // for measurement units: their reduction to base units
@@ -33,6 +34,11 @@ type symRecord struct {
 	// definition states it as members with bound values, which a restored symbol
 	// has no declaration left to hold.
 	Dimension *symbols.DimensionFacts
+
+	// Behavior is the parameter list of a behavior or step, in order. Implicit
+	// parameter redefinition matches by position, which a restored symbol has no
+	// declaration left to state.
+	Behavior *symbols.BehaviorFacts
 
 	// Annotations is the metadata annotating the symbol. An element filter
 	// classifies a candidate by what annotates it, which a restored symbol has no
@@ -108,16 +114,20 @@ func collectScope(scope *symbols.Scope, prefix string, rec *IndexRecord, model *
 		}
 		supers, resolved := supersOf(sym, idx, r, model)
 		complete = complete && resolved
+		featuredBy, fbResolved := featuredByOf(sym, idx, r)
+		complete = complete && fbResolved
 		rec.Symbols = append(rec.Symbols, symRecord{
 			FQN:              fqn,
 			ShortName:        shortNameOf(sym.Decl),
 			Kind:             sym.Kind,
 			Span:             sym.DeclSpan,
 			Supers:           supers,
+			FeaturedBy:       featuredBy,
 			WildcardImports:  wildcardImportsOf(sym.Decl, sym.Scope, model),
 			AliasTarget:      aliasTargetOf(sym.Decl),
 			Unit:             unitFactsOf(sym, model, idx),
 			Dimension:        dimensionFactsOf(sym, model, idx),
+			Behavior:         model.BehaviorFactsOf(sym, idx),
 			Annotations:      model.AnnotationFactsOf(sym),
 			NamespaceFilters: namespaceFiltersOf(sym, model),
 		})
@@ -210,6 +220,52 @@ func supersOf(sym *symbols.Symbol, idx *symbols.Index, r *resolve.Resolver, mode
 		}
 		seen[superFQN] = true
 		out = append(out, superFQN)
+	}
+	return out, complete
+}
+
+// featuredByOf records the resolved `featured by` targets of a Definition or
+// Usage as FQNs, reporting whether every declared target resolved.
+func featuredByOf(sym *symbols.Symbol, idx *symbols.Index, r *resolve.Resolver) ([]string, bool) {
+	var rels []*ast.Relationship
+	switch d := sym.Decl.(type) {
+	case *ast.Definition:
+		rels = d.Relationships
+	case *ast.Usage:
+		rels = d.Relationships
+	default:
+		return nil, true
+	}
+	var out []string
+	seen := map[string]bool{}
+	complete := true
+	for _, rel := range rels {
+		if rel.Kind != ast.RelFeaturedBy {
+			continue
+		}
+		target := rel.Target
+		if ref, ok := target.(*ast.FeatureReference); ok {
+			target = ref.Name
+		}
+		qn, ok := target.(*ast.QualifiedName)
+		if !ok {
+			complete = false
+			continue
+		}
+		featurer, ok := r.ResolveQualified(sym.OwnerScope, qn)
+		if !ok || featurer == nil || featurer == sym {
+			complete = false
+			continue
+		}
+		fqn := idx.GetFQN(featurer)
+		if fqn == "" {
+			complete = false
+			continue
+		}
+		if !seen[fqn] {
+			seen[fqn] = true
+			out = append(out, fqn)
+		}
 	}
 	return out, complete
 }

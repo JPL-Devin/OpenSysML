@@ -196,6 +196,21 @@ type DimensionFactorFacts struct {
 	Exponent float64
 }
 
+// BehaviorFacts is a behavior or step as a cached library symbol carries it:
+// its parameters in declaration order, which implicit parameter redefinition
+// matches by position where the declaration is gone.
+type BehaviorFacts struct {
+	Params []ParamFacts
+}
+
+// ParamFacts is one parameter of a cached behavior or step: the qualified name
+// of its symbol, its direction, and whether it is the result parameter.
+type ParamFacts struct {
+	FQN       string
+	Direction ast.FeatureDirection
+	IsResult  bool
+}
+
 // Symbol describes one declared name. The same declaration may be reachable
 // through more than one Symbol only when it declares both a short and a
 // primary name; in that case a single Symbol is registered under both keys.
@@ -220,6 +235,14 @@ type Symbol struct {
 	// (specializes/subsets/redefines), populated for cached library symbols
 	// where Decl=nil. Empty for live-parsed symbols, which use Decl instead.
 	SuperFQNs []string
+
+	// FeaturedByFQNs are the fully-qualified names of the `featured by`
+	// targets, populated for cached library symbols where Decl=nil.
+	FeaturedByFQNs []string
+
+	// Behavior carries the parameter list of a behavior or step, populated for
+	// cached library symbols where Decl=nil. Nil for live-parsed symbols.
+	Behavior *BehaviorFacts
 
 	// AliasTargetFQN is the raw qualified name text of the alias target
 	// ("alias X for Y" → "Y"), populated for cached stdlib aliases where Decl=nil.

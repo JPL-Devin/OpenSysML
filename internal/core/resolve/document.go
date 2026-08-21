@@ -648,7 +648,9 @@ func (r *Resolver) lookupConstraintRefFeature(name string, decl ast.Node) (*symb
 }
 
 // featureOf finds the feature named name declared by sym or inherited through
-// its typings and specializations.
+// its typings, specializations and featurings, walking live-parsed and
+// cache-restored symbols alike. seen makes the walk cycle-safe: the standard
+// library holds specialization cycles, so every visited symbol is recorded.
 func (r *Resolver) featureOf(sym *symbols.Symbol, name string, seen map[*symbols.Symbol]bool) (*symbols.Symbol, bool) {
 	if sym == nil || seen[sym] {
 		return nil, false
@@ -658,29 +660,61 @@ func (r *Resolver) featureOf(sym *symbols.Symbol, name string, seen map[*symbols
 		if found, ok := sym.Scope.LookupLocal(name); ok {
 			return found, true
 		}
+	} else if sym.Decl == nil && r.idx != nil {
+		// A restored library symbol has no scope; its members are indexed.
+		for _, found := range r.idx.LookupQualified(sym.Name + "::" + name) {
+			if resolved, ok := r.ResolveAliasTarget(found); ok {
+				return resolved, true
+			}
+		}
 	}
+	for _, general := range r.generalsOf(sym) {
+		if found, ok := r.featureOf(general, name, seen); ok {
+			return found, true
+		}
+	}
+	return nil, false
+}
+
+// generalsOf returns the symbols sym inherits features from: the resolved
+// specialization, typing and featuring targets of a live declaration, or the
+// edges a symbol restored from the library cache carries as persisted FQNs.
+func (r *Resolver) generalsOf(sym *symbols.Symbol) []*symbols.Symbol {
 	var rels []*ast.Relationship
 	switch decl := sym.Decl.(type) {
 	case *ast.Definition:
 		rels = decl.Relationships
 	case *ast.Usage:
 		rels = decl.Relationships
+	case nil:
+		if r.idx == nil {
+			return nil
+		}
+		var out []*symbols.Symbol
+		for _, fqn := range sym.SuperFQNs {
+			for _, target := range r.idx.LookupQualified(fqn) {
+				if resolved, ok := r.ResolveAliasTarget(target); ok {
+					out = append(out, resolved)
+					break
+				}
+			}
+		}
+		for _, fqn := range sym.FeaturedByFQNs {
+			for _, target := range r.idx.LookupQualified(fqn) {
+				if resolved, ok := r.ResolveAliasTarget(target); ok {
+					out = append(out, resolved)
+					break
+				}
+			}
+		}
+		return out
 	default:
-		return nil, false
+		return nil
 	}
 	scope := sym.OwnerScope
-	if scope == nil {
-		return nil, false
-	}
 	generals := r.findSpecializationTargets(scope, rels)
 	generals = append(generals, r.findTypingTargets(scope, rels)...)
-	generals = append(generals, r.findFeaturedByTargets(scope, rels)...)
-	for _, general := range generals {
-		if found, ok := r.featureOf(general, name, seen); ok {
-			return found, true
-		}
-	}
-	return nil, false
+	return append(generals, r.findFeaturedByTargets(scope, rels)...)
 }
 
 // resolveRedefinition resolves a redefinition target by looking up the inheritance chain.
@@ -746,38 +780,11 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 			parents = append(parents, implicitParents...)
 		}
 
-		// Search each parent for the feature
+		// Search each parent's inheritance chain, cached and live alike.
+		seen := make(map[*symbols.Symbol]bool)
 		for _, parentSym := range parents {
-			if parentSym == nil {
-				continue
-			}
-
-			// Try scope-based lookup first (for live-parsed definitions)
-			if parentSym.Scope != nil {
-				if sym, ok := parentSym.Scope.LookupLocal(featureName); ok {
-					r.recordRedefined(qn, sym)
-					return
-				}
-			} else {
-				// No scope (likely cached stdlib symbol) - try index-based lookup
-				fqn := parentSym.Name + "::" + featureName
-				if r.idx != nil {
-					candidates := r.idx.LookupQualified(fqn)
-					if len(candidates) == 1 {
-						r.recordRedefined(qn, candidates[0])
-						return
-					} else if len(candidates) > 1 {
-					} else {
-						// Not found directly - search this parent's parents recursively
-						if r.searchInheritedFeatureViaIndex(parentSym, featureName, qn) {
-							return
-						}
-					}
-				}
-			}
-
-			// Recursively search parent's parents
-			if r.searchInheritedFeature(parentSym, featureName, qn) {
+			if sym, ok := r.featureOf(parentSym, featureName, seen); ok {
+				r.recordRedefined(qn, sym)
 				return
 			}
 		}
@@ -882,87 +889,6 @@ func (r *Resolver) findFeaturedByTargets(scope *symbols.Scope, rels []*ast.Relat
 		}
 	}
 	return parents
-}
-
-// searchInheritedFeature recursively searches for a feature in the parent's inheritance chain.
-func (r *Resolver) searchInheritedFeature(parentSym *symbols.Symbol, featureName string, qn *ast.QualifiedName) bool {
-	if parentSym == nil || parentSym.Decl == nil {
-		return false
-	}
-
-	// Get parent's relationships (to find its parents)
-	var parentRels []*ast.Relationship
-	switch decl := parentSym.Decl.(type) {
-	case *ast.Definition:
-		parentRels = decl.Relationships
-	case *ast.Usage:
-		parentRels = decl.Relationships
-	}
-
-	// Search in each grandparent
-	grandparents := r.findSpecializationTargets(parentSym.Scope.Parent(), parentRels)
-	grandparents = append(grandparents, r.findFeaturedByTargets(parentSym.Scope.Parent(), parentRels)...)
-	for _, gp := range grandparents {
-		if gp == nil || gp.Scope == nil {
-			continue
-		}
-
-		if sym, ok := gp.Scope.LookupLocal(featureName); ok {
-			r.recordRedefined(qn, sym)
-			return true
-		}
-
-		// Recurse further up
-		if r.searchInheritedFeature(gp, featureName, qn) {
-			return true
-		}
-	}
-
-	return false
-}
-
-// searchInheritedFeatureViaIndex searches for a feature in parent's inheritance chain using index lookups.
-// Used when parent symbol has no Scope (cached stdlib symbols).
-func (r *Resolver) searchInheritedFeatureViaIndex(parent *symbols.Symbol, featureName string, qn *ast.QualifiedName) bool {
-	// Get parent's specialization relationships from index
-	// For cached symbols, we need to look up specialization info from the FQN metadata
-	// For now, use a simpler approach: try common parent names
-
-	// Map of known implicit parents (this is a hack, but works for common cases)
-	implicitParents := map[string][]string{
-		"Flows::Flow":             {"Flows::Message", "Flows::FlowTransfer"},
-		"Flows::Message":          {"Transfers::Transfer"},
-		"Parts::Part":             {"Items::Item"},
-		"Items::Item":             {"Occurrences::Occurrence"},
-		"Connections::Connection": {"Links::Link", "Connectors::Connector"},
-		"Links::Link":             {"Occurrences::Occurrence"},
-		// Add more as needed
-	}
-
-	parentNames, ok := implicitParents[parent.Name]
-	if !ok {
-		return false
-	}
-
-	for _, gpName := range parentNames {
-		fqn := gpName + "::" + featureName
-		if r.idx != nil {
-			candidates := r.idx.LookupQualified(fqn)
-			if len(candidates) == 1 {
-				r.recordRedefined(qn, candidates[0])
-				return true
-			}
-		}
-
-		// Feature not found in this grandparent - recurse further
-		// Create a dummy symbol with just the name for recursive lookup
-		gpSym := &symbols.Symbol{Name: gpName}
-		if r.searchInheritedFeatureViaIndex(gpSym, featureName, qn) {
-			return true
-		}
-	}
-
-	return false
 }
 
 // findImplicitSpecializations returns implicit base types for a definition based on its kind.

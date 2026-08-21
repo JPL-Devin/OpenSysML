@@ -31,6 +31,9 @@ func behaviorLike(sym *symbols.Symbol) bool {
 	if sym == nil {
 		return false
 	}
+	if sym.Decl == nil {
+		return sym.Behavior != nil // a cached behavior carries its parameter facts
+	}
 	switch d := sym.Decl.(type) {
 	case *ast.Definition:
 		switch d.Kind {
@@ -66,11 +69,13 @@ func declMembers(sym *symbols.Symbol) []ast.Node {
 }
 
 // parameter is one owned parameter of a behavior or step: the symbol declared
-// for a directed feature in its body, plus whether it is the result parameter.
+// for a directed feature in its body, plus its direction and whether it is the
+// result parameter. usage is nil for a parameter restored from the cache.
 type parameter struct {
-	sym      *symbols.Symbol
-	usage    *ast.Usage
-	isResult bool
+	sym       *symbols.Symbol
+	usage     *ast.Usage
+	direction ast.FeatureDirection
+	isResult  bool
 }
 
 // behaviorParameters is the parameter list of a behavior or step: the
@@ -94,7 +99,7 @@ func (m *Model) parametersOf(sym *symbols.Symbol) behaviorParameters {
 	// Guard against re-entrancy on cyclic specialization graphs.
 	m.params[sym] = behaviorParameters{}
 
-	owned := ownedParameters(sym)
+	owned := m.ownedParametersOf(sym)
 	out := behaviorParameters{positional: positionalParameters(owned), result: resultParameter(owned)}
 
 	// Only a single general behavior or step may leave parameters inherited;
@@ -137,7 +142,7 @@ func claimedParameters(owned, general behaviorParameters) map[*symbols.Symbol]bo
 		}
 		// A position whose directions disagree is not a redefinition, so the
 		// general parameter there is neither redefined nor dropped.
-		if i < len(general.positional) && general.positional[i].usage.Direction == p.usage.Direction {
+		if i < len(general.positional) && general.positional[i].direction == p.direction {
 			claimed[general.positional[i].sym] = true
 		}
 	}
@@ -154,6 +159,9 @@ func claimedParameters(owned, general behaviorParameters) map[*symbols.Symbol]bo
 // namedParameters returns the parameters of general that a declaration's `:>>`
 // clauses name, matching on the last segment of each qualified name.
 func namedParameters(u *ast.Usage, general behaviorParameters) []parameter {
+	if u == nil {
+		return nil // a cache-restored parameter's redefinitions resolved at record time
+	}
 	var out []parameter
 	for _, rel := range u.Relationships {
 		if rel == nil || rel.Kind != ast.RelRedefines {
@@ -193,9 +201,47 @@ func ownedParameters(sym *symbols.Symbol) []parameter {
 		if found == nil {
 			continue
 		}
-		out = append(out, parameter{sym: found, usage: usage, isResult: usage.IsResult})
+		out = append(out, parameter{sym: found, usage: usage, direction: usage.Direction, isResult: usage.IsResult})
 	}
 	return out
+}
+
+// ownedParametersOf returns the parameters owned by sym: read from its parsed
+// declaration, or from the parameter facts a cache-restored symbol carries.
+func (m *Model) ownedParametersOf(sym *symbols.Symbol) []parameter {
+	if sym == nil {
+		return nil
+	}
+	if sym.Decl == nil && sym.Behavior != nil {
+		idx := m.resolver.Index()
+		var out []parameter
+		for _, p := range sym.Behavior.Params {
+			for _, target := range idx.LookupQualified(p.FQN) {
+				out = append(out, parameter{sym: target, direction: p.Direction, isResult: p.IsResult})
+				break
+			}
+		}
+		return out
+	}
+	return ownedParameters(sym)
+}
+
+// BehaviorFactsOf reduces a behavior or step to its parameter list, so the
+// order and directions implicit parameter redefinition matches on survive
+// caching. Returns nil for symbols that are not behavior-like.
+func (m *Model) BehaviorFactsOf(sym *symbols.Symbol, idx *symbols.Index) *symbols.BehaviorFacts {
+	if !behaviorLike(sym) || sym.Decl == nil {
+		return nil
+	}
+	facts := &symbols.BehaviorFacts{}
+	for _, p := range ownedParameters(sym) {
+		fqn := idx.GetFQN(p.sym)
+		if fqn == "" {
+			continue
+		}
+		facts.Params = append(facts.Params, symbols.ParamFacts{FQN: fqn, Direction: p.direction, IsResult: p.isResult})
+	}
+	return facts
 }
 
 // unwrapUsage returns the usage a body member node declares, unwrapping the
@@ -242,7 +288,7 @@ func (m *Model) implicitParameterRedefinitions(sym *symbols.Symbol) []*symbols.S
 		return nil
 	}
 	position := -1
-	for i, p := range positionalParameters(ownedParameters(owner)) {
+	for i, p := range positionalParameters(m.ownedParametersOf(owner)) {
 		if p.sym == sym {
 			position = i
 			break
@@ -272,7 +318,7 @@ func (m *Model) implicitParameterRedefinitions(sym *symbols.Symbol) []*symbols.S
 		}
 		// A redefining parameter has the same direction as the parameter it
 		// redefines; a position whose directions disagree is not a redefinition.
-		if target.usage.Direction != usage.Direction {
+		if target.direction != usage.Direction {
 			continue
 		}
 		out = append(out, target.sym)
