@@ -33,6 +33,7 @@ func (TypeCheckPass) Run(ctx *Context, name string, root *ast.RootNamespace) []D
 		expr:     &exprChecker{resolver: ctx.Resolver(), model: model},
 		lang:     ctx.Kind,
 	}
+	tc.expr.walkMembers = tc.walk
 	tc.walk(rootScope, root.Members)
 	return append(tc.diags, tc.expr.diags...)
 }
@@ -614,6 +615,7 @@ var usageSymbolKinds = map[symbols.SymbolKind]bool{
 	symbols.SymbolRenderingUsage:          true,
 	symbols.SymbolConcernUsage:            true,
 	symbols.SymbolConnectionUsage:         true,
+	symbols.SymbolSuccessionUsage:         true,
 	symbols.SymbolFlowUsage:               true,
 	symbols.SymbolPortUsage:               true,
 	symbols.SymbolInterfaceUsage:          true,

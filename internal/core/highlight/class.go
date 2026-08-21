@@ -162,7 +162,8 @@ func referenceClass(sym *symbols.Symbol) (Class, Modifier) {
 // is a definition rather than a usage or a namespace.
 func classOfKind(k symbols.SymbolKind) (Class, bool) {
 	switch k {
-	case symbols.SymbolPackage, symbols.SymbolNamespace, symbols.SymbolDependency:
+	case symbols.SymbolPackage, symbols.SymbolNamespace, symbols.SymbolDependency,
+		symbols.SymbolRelationship:
 		return ClassNamespace, false
 	case symbols.SymbolAlias:
 		return ClassNamespace, false
