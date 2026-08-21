@@ -97,6 +97,10 @@ carry no timestamps or absolute paths, so repeated runs are byte-identical
 | grammar | 20 | 17 | 3 | 0 | 0 |
 | xpect | 7 | 7 | 0 | 0 | 0 |
 
+Two `xpect/` cases moved into *both-reject* since the last baseline: `p04-nonunique-subsets-unique`
+by the redefinition uniqueness rule (wave 8B), and `p06-private-member-reference` by membership
+visibility in name resolution (wave 8A, closed but not re-baselined there).
+
 The two `extensions/` cases in *both-reject* (`x02` choice, `x03` junction) are rejected by us for
 a different reason than by the pilot: our own state-connectivity validation flags a pseudostate
 with no outgoing transition, while the pilot rejects the notation itself. The bucket records
