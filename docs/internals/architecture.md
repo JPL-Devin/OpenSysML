@@ -649,9 +649,21 @@ Every behavioral feature must have:
 - Semantic rule reference: the SysML v2 metamodel or the bundled KerML semantic library, and UML 2.5.1 only where neither has the concept
 - Implementation location (file:function)
 - Test case(s) exercising the feature
-- Status: ✅ Faithful / ⚠️ Approximate / ❌ Not Yet Implemented / 🚧 Known Failure
+- Status: ✅ Faithful / ⚠️ Approximate / ❌ Not Yet Implemented / ⛔ Deliberate Divergence / 🚧 Known Failure
 
-**Current coverage:** of the 661 rules tracked in the compliance map, 591 are faithful, 63 approximate, 1 not implemented and 6 a deliberate divergence — a progress measure over our own row list, not a compliance percentage. Behavioral rows are self-assessed: the pinned reference implementation evaluates expressions but does not execute actions or state machines, so nothing external adjudicates them. Calc/constraint/requirement functional. Action/state executor infrastructure complete (fork/join/decision, TimeEvent/ChangeEvent, guards, hierarchy, orthogonal regions all tested); every conformance case passes. Fork/join, shallow/deep history, entry/exit points and deferred events are implemented and reachable from source text — see docs/project/spec-compliance.md and docs/reference/grammar/README.md.
+**Measured against the pinned reference** (`PILOT_TAG=2026-05`, artifact `0.60.1`). Every number below is re-derived from a committed baseline by the doc-count guard in `cmd/pilot-diff`; none of them is typed in by hand.
+
+- **Corpus agreement:** 300 of 353 files agree diagnostic-by-diagnostic; 147 diagnostics are ours alone and 137 the reference's alone ([differential](../project/pilot-differential.md), `go run ./cmd/pilot-diff`).
+- **Declared-diagnostic silence:** of the 513 declared `errors` rows in the reference's own Xpect suites, we report nothing for 195. 153 wording-only and 69 location-only differences are agreement in substance and are not counted as gaps; 16 more we report as a warning and 80 elsewhere in the file ([Xpect oracle](../project/pilot-xpect.md), `go run ./cmd/pilot-xpect`).
+- **Scope agreement:** 73 of 230 declared scope assertions match exactly (same source).
+- **Permissiveness gaps:** of 34 invalid models we wrote ourselves, the reference rejects 14 that we accept, and 20 both reject — that total measures the reach of our own corpus, not our conformance ([rejection oracle](../project/pilot-rejection.md), `go run ./cmd/pilot-reject`).
+- **Self-assessed surface:** 125 of the tracked rules have no external referee at all — the action, state-machine and classifier-behavior rows, which the four numbers above cannot see, because the pinned artifact evaluates expressions but executes neither actions nor state machines.
+
+What these numbers cannot show: the OMG corpora are demonstrations rather than an official conformance suite; the differential is one-directional, comparing the diagnostics the two implementations report on the same files; the Xpect suites are the pilot authors' test intent rather than a certification oracle; and none of these is a percentage of the specification — no global compliance figure is claimed anywhere.
+
+**Row bookkeeping:** the ✅/⚠️/❌/⛔ status of each of the 661 tracked rules stays in [spec compliance](../project/spec-compliance.md) as a census of our own row list. It moves when rows are rewritten and does not move when an oracle does, so it is not the progress measure.
+
+Calc/constraint/requirement functional. Action/state executor infrastructure complete (fork/join/decision, TimeEvent/ChangeEvent, guards, hierarchy, orthogonal regions all tested); every conformance case passes. Fork/join, shallow/deep history, entry/exit points and deferred events are implemented and reachable from source text — see docs/project/spec-compliance.md and docs/reference/grammar/README.md.
 
 ---
 

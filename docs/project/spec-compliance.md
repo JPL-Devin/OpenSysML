@@ -368,6 +368,8 @@ and no golden AST fixture of their own. `calc_defaults_and_invocation.sysml`
 
 ### Action (SysML v2 Actions — `Systems Library/Actions.sysml`, over KerML `Performances`)
 
+**No external referee:** the pinned artifact evaluates expressions but executes neither actions nor state machines headlessly, so every row in this section is self-assessed against the specification text, the normative library and our own goldens.
+
 | Semantic Rule | Implementation | Test Case | Status |
 |--------------|----------------|-----------|--------|
 | Initial node token placement | `action_executor.go:425` initialize | `action_control_flow.sysml` | ✅ Faithful |
@@ -419,6 +421,8 @@ and no golden AST fixture of their own. `calc_defaults_and_invocation.sysml`
 | Step budget enforcement | `context.go` incrementStep; budget configured by `SYSML_MAX_STEPS` (`budget.go` `BudgetsFromEnv`) | `robustness_test.go:testStepBudgetExceeded`, `budget_test.go:TestRaisedBudgetRunsLongerLoop` | ✅ Faithful (the reported limit is the effective one, and names the variable that raises it) |
 
 ### State Machine (SysML v2 States — `Systems Library/States.sysml`, over KerML `StatePerformances`)
+
+**No external referee:** the pinned artifact evaluates expressions but executes neither actions nor state machines headlessly, so every row in this section is self-assessed against the specification text, the normative library and our own goldens.
 
 | Semantic Rule | Implementation | Test Case | Status |
 |--------------|----------------|-----------|--------|
@@ -494,6 +498,8 @@ and no golden AST fixture of their own. `calc_defaults_and_invocation.sysml`
 | Bodied `exhibit state` (`exhibit state spacecraftModes { … }`, SysML.xtext `ExhibitStateUsage`) | `parser/behavior.go` (the exhibited state's body is parsed as a state body); `ast/dump.go` (the `exhibit state` keyword is recorded) | `parse/behavior_exhibit_state_body.golden`, `parse/classifier_behaviors.golden`, `negative_test.go:exhibit_state_unclosed_body` | ✅ Faithful (the body parses, resolves and lowers as a state machine, and an object of the type runs it — see the Classifier Behaviors map) |
 
 ### Classifier Behaviors (KerML §8.4.4.3 Behaviors / `performances`; SysML v2 §7.16 `exhibit`/`perform`)
+
+**No external referee:** the pinned artifact evaluates expressions but executes neither actions nor state machines headlessly, so every row in this section is self-assessed against the specification text, the normative library and our own goldens.
 
 | Semantic Rule | Implementation | Test Case | Status |
 |--------------|----------------|-----------|--------|
