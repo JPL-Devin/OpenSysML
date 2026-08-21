@@ -12,7 +12,7 @@ elmt:Synonyms
     sysx:hasBody "true"^^xsd:boolean .
 
 elmt:Synonyms__Temperature
-    a sysml:AttributeUsage ;
+    a sysml:DataType ;
     sysml:qualifiedName "Synonyms::Temperature" ;
     sysml:owningNamespace elmt:Synonyms ;
     sysx:memberIndex "0"^^xsd:integer ;

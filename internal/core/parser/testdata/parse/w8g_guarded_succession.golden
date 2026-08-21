@@ -1,0 +1,20 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Definition kind="action" abstract=false variation=false name="GuardedSuccessions"
+      (Membership visibility="default"
+        (Usage kind="attribute" name="x" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (LiteralInteger value="1")))
+      (Usage kind="action" name="A1" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)
+      (Usage kind="action" name="A2" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)
+      (Usage kind="action" name="A3" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)
+      (Membership visibility="default"
+        (TransitionMember source="A1" target="A2" name="S"
+          (OperatorExpr operator="=="
+            (FeatureReference name="x")
+            (LiteralInteger value="0"))))
+      (Membership visibility="default"
+        (TransitionMember source="A2" target="A3" name="S2"
+          (OperatorExpr operator=">"
+            (FeatureReference name="x")
+            (LiteralInteger value="0"))
+          (Usage kind="action" name="inner" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))))))

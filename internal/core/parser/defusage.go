@@ -615,9 +615,23 @@ func (p *Parser) atDefUsageStart() bool {
 	if t.KeywordID == "connect" {
 		return true
 	}
+	if t.KeywordID == "not" {
+		return p.atNegatedSatisfy()
+	}
 	_, isDef := p.definitionKind(t.KeywordID)
 	_, isUsage := p.usageKind(t.KeywordID)
 	return isDef || isUsage
+}
+
+// atNegatedSatisfy reports whether the cursor is at `not satisfy`, the
+// satisfaction negated without an `assert` before it. `verify` has no negated
+// form (SysML.xtext:2118 is the only production spelling `isNegated`).
+func (p *Parser) atNegatedSatisfy() bool {
+	if !p.atKeyword("not") {
+		return false
+	}
+	n := p.peekN(1)
+	return n.Kind == lexer.Keyword && n.KeywordID == "satisfy"
 }
 
 // atUseCase reports whether the current token is `use` immediately followed by
@@ -853,6 +867,13 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 
 	mods := p.parseFeatureModifiers()
 
+	// A satisfaction is negated with no `assert` before it: `not satisfy r by p;`
+	// (SysML.xtext:2118, SatisfyRequirementUsage `'assert'? isNegated ?= 'not'?`).
+	if p.atNegatedSatisfy() {
+		mods.isNegated = true
+		p.advance() // 'not'
+	}
+
 	// UsagePrefix ends in UsageExtensionKeyword* (SysML.xtext:582), so prefix
 	// metadata may follow the modifiers: `abstract #Classified z;`.
 	for p.at(lexer.Hash) {
@@ -1003,6 +1024,13 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 				}
 			}
 			return applyPrefixes(u)
+		}
+
+		// A guard between the ends makes the succession a transition
+		// (SysML.xtext:1719 GuardedSuccession returns TransitionUsage):
+		// `succession S first a if g then b;`.
+		if kw == "succession" && p.atGuardedSuccession() {
+			return applyPrefixes(p.parseTransitionMember(start))
 		}
 
 		// Special case: succession flow from X to Y
@@ -1409,6 +1437,38 @@ func (p *Parser) parseUsageIdentification(kind ast.UsageKind) ast.Identification
 	}
 	// Default: use standard identification parsing
 	return p.parseIdentification()
+}
+
+// atGuardedSuccession reports whether the succession being read states a guard
+// between its ends (`succession [name] first a if g then b`), which is the
+// GuardedSuccession production and so a transition, not a connector.
+func (p *Parser) atGuardedSuccession() bool {
+	i := 0
+	if p.peek().Kind == lexer.Identifier || p.peek().Kind == lexer.UnrestrictedName {
+		i = 1
+	}
+	if !p.peekIsKeyword(i, "first") {
+		return false
+	}
+	for depth := 0; i < 60; i++ {
+		tok := p.peekN(i)
+		switch tok.Kind {
+		case lexer.EOF, lexer.Semicolon, lexer.LBrace, lexer.RBrace:
+			return false
+		case lexer.LParen, lexer.LBracket:
+			depth++
+		case lexer.RParen, lexer.RBracket:
+			depth--
+		case lexer.Keyword:
+			if depth == 0 && tok.KeywordID == "then" {
+				return false
+			}
+			if depth == 0 && tok.KeywordID == "if" {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // isAnonymousSuccession checks if we're at the start of anonymous succession ends (no name).

@@ -454,7 +454,7 @@ func (ctx *Context) CheckConstraintOn(sym *symbols.Symbol, scope *symbols.Scope,
 	}
 
 	// Evaluate every condition the constraint states, inherited ones included.
-	conds := conditionsOf(ctx.chainMembers(sym, scope))
+	conds := ctx.conditionsOf(ctx.chainMembers(sym, scope))
 	holds, err := ctx.evaluateConditions(conditionCheck{
 		sym:     sym,
 		kind:    "constraint",
@@ -638,7 +638,7 @@ func (ctx *Context) CheckRequirementOn(sym *symbols.Symbol, scope *symbols.Scope
 	}
 
 	// Second pass: evaluate the assumed and required conditions.
-	conds := conditionsOf(members)
+	conds := ctx.conditionsOf(members)
 	holds, err := ctx.evaluateConditions(conditionCheck{
 		sym:      sym,
 		kind:     "requirement",

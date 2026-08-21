@@ -2020,11 +2020,13 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 func (p *Parser) parseAssumeMember(start int) ast.Node {
 	// 'assume' already consumed
 
-	// Check for 'assume constraint [<decl>] (; | { body })' pattern
-	if p.atKeyword("constraint") {
-		p.advance() // consume 'constraint'
+	// Check for 'assume [#Meta...] [constraint] [<decl>] (; | { body })' pattern
+	prefixes := p.parsePrefixMetadata()
+	if p.atKeyword("constraint") || len(prefixes) > 0 {
+		p.acceptKeyword("constraint")
 		d := p.parseOwnedConstraintDecl("assume constraint")
 		node := &ast.AssumeMember{
+			Prefixes:      prefixes,
 			Name:          d.name,
 			NameSpan:      d.nameSpan,
 			Relationships: d.relationships,
@@ -2037,11 +2039,13 @@ func (p *Parser) parseAssumeMember(start int) ast.Node {
 		return node
 	}
 
-	// Reference-subsetting form: assume <QualifiedName> { body }
-	if ref, members, ok := p.tryParseConstraintReference(); ok {
+	// Reference-subsetting form: assume <QualifiedName> [specializations] (; | { body })
+	if cr, ok := p.tryParseConstraintReference(); ok {
 		node := &ast.AssumeMember{
-			Reference: ref,
-			Body:      members,
+			Reference:     cr.ref,
+			Relationships: cr.relationships,
+			HasBody:       cr.hasBody,
+			Body:          cr.body,
 		}
 		node.NodeSpan = p.spanFrom(start)
 		return node
@@ -2063,11 +2067,13 @@ func (p *Parser) parseAssumeMember(start int) ast.Node {
 func (p *Parser) parseRequireMember(start int) ast.Node {
 	// 'require' already consumed
 
-	// Check for 'require constraint [<decl>] (; | { body })' pattern
-	if p.atKeyword("constraint") {
-		p.advance() // consume 'constraint'
+	// Check for 'require [#Meta...] [constraint] [<decl>] (; | { body })' pattern
+	prefixes := p.parsePrefixMetadata()
+	if p.atKeyword("constraint") || len(prefixes) > 0 {
+		p.acceptKeyword("constraint")
 		d := p.parseOwnedConstraintDecl("require constraint")
 		node := &ast.RequireMember{
+			Prefixes:      prefixes,
 			Name:          d.name,
 			NameSpan:      d.nameSpan,
 			Relationships: d.relationships,
@@ -2080,11 +2086,13 @@ func (p *Parser) parseRequireMember(start int) ast.Node {
 		return node
 	}
 
-	// Reference-subsetting form: require <QualifiedName> { body }
-	if ref, members, ok := p.tryParseConstraintReference(); ok {
+	// Reference-subsetting form: require <QualifiedName> [specializations] (; | { body })
+	if cr, ok := p.tryParseConstraintReference(); ok {
 		node := &ast.RequireMember{
-			Reference: ref,
-			Body:      members,
+			Reference:     cr.ref,
+			Relationships: cr.relationships,
+			HasBody:       cr.hasBody,
+			Body:          cr.body,
 		}
 		node.NodeSpan = p.spanFrom(start)
 		return node
@@ -2142,22 +2150,41 @@ func (p *Parser) parseOwnedConstraintDecl(what string) ownedConstraintDecl {
 	return d
 }
 
-// tryParseConstraintReference parses the reference-subsetting form of a
-// requirement constraint member — a (possibly qualified) requirement name
-// followed by a body (SysML.xtext RequirementConstraintUsage). It returns
-// ok=false, consuming nothing, when the member is not that form.
-func (p *Parser) tryParseConstraintReference() (*ast.QualifiedName, []ast.Node, bool) {
+// constraintReference is the reference-subsetting form of a requirement
+// constraint member: the requirement referenced, its specializations, its body.
+type constraintReference struct {
+	ref           *ast.QualifiedName
+	relationships []*ast.Relationship
+	body          []ast.Node
+	hasBody       bool
+}
+
+// tryParseConstraintReference parses `OwnedReferenceSubsetting
+// FeatureSpecialization* CalculationBody` (SysML.xtext
+// RequirementConstraintUsage), consuming nothing when the member is not it.
+func (p *Parser) tryParseConstraintReference() (constraintReference, bool) {
 	if !p.atName() {
-		return nil, nil, false
+		return constraintReference{}, false
 	}
 	cp := p.checkpoint()
 	ref := p.parseQualifiedName()
-	if ref == nil || len(ref.Parts) == 0 || !p.at(lexer.LBrace) {
+	if ref == nil || len(ref.Parts) == 0 {
 		p.restore(cp)
-		return nil, nil, false
+		return constraintReference{}, false
 	}
-	p.advance() // consume '{'
-	return ref, p.parseRequirementBody(), true
+	rels := p.parseRelationships(true)
+	if p.at(lexer.LBrace) {
+		p.advance() // consume '{'
+		return constraintReference{ref: ref, relationships: rels, body: p.parseRequirementBody(), hasBody: true}, true
+	}
+	// A body-less bare name stays a condition expression; only a qualified name or
+	// a specialization part can be the reference form.
+	if p.at(lexer.Semicolon) && (len(ref.Parts) > 1 || len(rels) > 0) {
+		p.advance() // consume ';'
+		return constraintReference{ref: ref, relationships: rels}, true
+	}
+	p.restore(cp)
+	return constraintReference{}, false
 }
 
 // tryParseNestedConstraint parses `constraint [<name>] { <conditions> }`, the

@@ -1,0 +1,39 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="NegatedSatisfactions" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="requirement" abstract=false variation=false name="R1"))
+      (Membership visibility="default"
+        (Usage kind="part" name="vehicle" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="part" name="prototype" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))
+      (Membership visibility="default"
+        (Usage kind="requirement" name="r1" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=R1
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="satisfy" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false negated=true
+          (Relationship kind="subsets" target=r1
+            (*ast.QualifiedName))
+          (Relationship kind="by" target=prototype
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="satisfy" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false prefix="assert" negated=true
+          (Relationship kind="subsets" target=r1
+            (*ast.QualifiedName))
+          (Relationship kind="by" target=vehicle
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="part" name="context" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="satisfy" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="subsets" target=r1
+                (*ast.QualifiedName))
+              (Relationship kind="by" target=prototype
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="satisfy" name="r2" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=R1
+                (*ast.QualifiedName))
+              (Relationship kind="by" target=prototype
+                (*ast.QualifiedName)))))))))

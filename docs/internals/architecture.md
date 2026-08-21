@@ -651,7 +651,7 @@ Every behavioral feature must have:
 - Test case(s) exercising the feature
 - Status: ✅ Faithful / ⚠️ Approximate / ❌ Not Yet Implemented / 🚧 Known Failure
 
-**Current coverage:** of the 661 rules tracked in the compliance map, 588 are faithful, 66 approximate and 7 not implemented — a progress measure over our own row list, not a compliance percentage. Behavioral rows are self-assessed: the pinned reference implementation evaluates expressions but does not execute actions or state machines, so nothing external adjudicates them. Calc/constraint/requirement functional. Action/state executor infrastructure complete (fork/join/decision, TimeEvent/ChangeEvent, guards, hierarchy, orthogonal regions all tested); every conformance case passes. Fork/join, shallow/deep history, entry/exit points and deferred events are implemented and reachable from source text — see docs/project/spec-compliance.md and docs/reference/grammar/README.md.
+**Current coverage:** of the 661 rules tracked in the compliance map, 589 are faithful, 65 approximate and 7 not implemented — a progress measure over our own row list, not a compliance percentage. Behavioral rows are self-assessed: the pinned reference implementation evaluates expressions but does not execute actions or state machines, so nothing external adjudicates them. Calc/constraint/requirement functional. Action/state executor infrastructure complete (fork/join/decision, TimeEvent/ChangeEvent, guards, hierarchy, orthogonal regions all tested); every conformance case passes. Fork/join, shallow/deep history, entry/exit points and deferred events are implemented and reachable from source text — see docs/project/spec-compliance.md and docs/reference/grammar/README.md.
 
 ---
 

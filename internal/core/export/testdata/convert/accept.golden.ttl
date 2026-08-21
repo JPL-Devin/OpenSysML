@@ -44,7 +44,7 @@ elmt:Accepts__Observe__trigger
     sysx:hasBody "false"^^xsd:boolean .
 
 elmt:Accepts__Observe__trigger__scene
-    a sysml:AttributeUsage ;
+    a sysml:ReferenceUsage ;
     sysml:qualifiedName "Accepts::Observe::trigger::scene" ;
     sysml:owningNamespace elmt:Accepts__Observe__trigger ;
     sysx:memberIndex "0"^^xsd:integer ;
@@ -83,7 +83,7 @@ elmt:Accepts__Watch__framed
     sysx:hasBody "false"^^xsd:boolean .
 
 elmt:Accepts__Watch__framed__scene
-    a sysml:AttributeUsage ;
+    a sysml:ReferenceUsage ;
     sysml:qualifiedName "Accepts::Watch::framed::scene" ;
     sysml:owningNamespace elmt:Accepts__Watch__framed ;
     sysx:memberIndex "0"^^xsd:integer ;

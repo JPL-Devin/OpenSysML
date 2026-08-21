@@ -16,8 +16,10 @@ package QualifiedRequire {
             require FuelMassAnalysis::fuelMassRequirement {
                 :>> MaxFuelMassRequirement::actualFuelMass = calculatedFuelMass;
             }
-            // Body-less: read as a condition expression, not a reference.
+            // Body-less and specialized forms are references too
+            // (RequirementConstraintUsage's CalculationBody may be `;`).
             assume FuelMassAnalysis::fuelMassRequirement;
+            require FuelMassAnalysis::fuelMassRequirement : MaxFuelMassRequirement;
         }
     }
 }

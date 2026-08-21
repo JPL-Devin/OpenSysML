@@ -65,7 +65,7 @@ func (ctx *Context) ConditionsOf(sym *symbols.Symbol, scope *symbols.Scope) []Co
 	if scope == nil {
 		scope = sym.OwnerScope
 	}
-	return conditionsOf(ctx.chainMembers(sym, scope))
+	return ctx.conditionsOf(ctx.chainMembers(sym, scope))
 }
 
 // scopedExpr is an expression with the scope its names resolve in.
@@ -77,10 +77,10 @@ type scopedExpr struct {
 // conditionsOf returns the conditions the members state, inherited ones first.
 // A member states its condition either directly (`require x < y;`, `assert x < y;`)
 // or through the body of an anonymous nested constraint (`require constraint { x < y }`).
-func conditionsOf(members []scopedMember) []Condition {
+func (ctx *Context) conditionsOf(members []scopedMember) []Condition {
 	var out []Condition
 	for _, member := range members {
-		out = appendConditions(out, member.node, member.scope, true, false)
+		out = ctx.appendConditions(out, member.node, member.scope, true, false, nil)
 	}
 	return out
 }
@@ -88,7 +88,10 @@ func conditionsOf(members []scopedMember) []Condition {
 // appendConditions appends the conditions node states. required says whether the
 // enclosing member requires them to hold or only assumes them; negated is the
 // negation the enclosing member wrote, which a nested body inherits.
-func appendConditions(out []Condition, node ast.Node, scope *symbols.Scope, required, negated bool) []Condition {
+// seen holds the requirements a reference-subsetting member has been expanded
+// through, so a cycle between two of them ends.
+func (ctx *Context) appendConditions(out []Condition, node ast.Node, scope *symbols.Scope, required, negated bool,
+	seen map[*symbols.Symbol]bool) []Condition {
 	switch m := node.(type) {
 	case *ast.ConstraintMember:
 		negated = negated != m.IsNegated
@@ -101,7 +104,7 @@ func appendConditions(out []Condition, node ast.Node, scope *symbols.Scope, requ
 		}
 		var body []Condition
 		for _, nested := range m.Body {
-			body = appendConditions(body, nested, scope, true, false)
+			body = ctx.appendConditions(body, nested, scope, true, false, seen)
 		}
 		if !negated {
 			for _, c := range body {
@@ -124,22 +127,75 @@ func appendConditions(out []Condition, node ast.Node, scope *symbols.Scope, requ
 		if m.Expression != nil {
 			out = append(out, Condition{Expr: m.Expression, Scope: scope, Required: true})
 		}
+		out = ctx.appendReferencedConditions(out, m.Reference, scope, true, seen)
 		// The body is a scope of its own, which is where a condition it states
 		// reads the names it declares.
 		body := symbols.ConstraintBodyScope(scope, m)
 		for _, nested := range m.Body {
-			out = appendConditions(out, nested, body, true, false)
+			out = ctx.appendConditions(out, nested, body, true, false, seen)
 		}
 	case *ast.AssumeMember:
 		if m.Expression != nil {
 			out = append(out, Condition{Expr: m.Expression, Scope: scope})
 		}
+		out = ctx.appendReferencedConditions(out, m.Reference, scope, false, seen)
 		body := symbols.ConstraintBodyScope(scope, m)
 		for _, nested := range m.Body {
-			out = appendConditions(out, nested, body, false, false)
+			out = ctx.appendConditions(out, nested, body, false, false, seen)
 		}
 	}
 	return out
+}
+
+// appendReferencedConditions appends what a require/assume member that
+// reference-subsets a requirement states: that requirement's own conditions,
+// which requiring it requires. A reference naming anything else, or one that
+// does not resolve, states the condition its name evaluates to.
+func (ctx *Context) appendReferencedConditions(out []Condition, ref *ast.QualifiedName, scope *symbols.Scope,
+	required bool, seen map[*symbols.Symbol]bool) []Condition {
+	if ref == nil || len(ref.Parts) == 0 {
+		return out
+	}
+	sym := ctx.referencedRequirement(scope, ref)
+	if sym == nil {
+		return append(out, Condition{Expr: ref, Scope: scope, Required: required})
+	}
+	if seen[sym] {
+		return out
+	}
+	if seen == nil {
+		seen = map[*symbols.Symbol]bool{}
+	}
+	seen[sym] = true
+	defer delete(seen, sym)
+	var conds []Condition
+	for _, member := range ctx.chainMembers(sym, nil) {
+		conds = ctx.appendConditions(conds, member.node, member.scope, true, false, seen)
+	}
+	for i := range conds {
+		conds[i].Required = required
+	}
+	return append(out, conds...)
+}
+
+// referencedRequirement resolves the requirement or constraint a require/assume
+// member reference-subsets, and returns nil when the reference names anything
+// else or does not resolve.
+func (ctx *Context) referencedRequirement(scope *symbols.Scope, ref *ast.QualifiedName) *symbols.Symbol {
+	if ctx.resolver == nil {
+		return nil
+	}
+	sym, ok := ctx.resolver.ResolveQualified(scope, ref)
+	if !ok || sym == nil {
+		return nil
+	}
+	if canonical, ok := ctx.resolver.ResolveAliasTarget(sym); ok {
+		sym = canonical
+	}
+	if RequireRequirement(sym) != nil && RequireConstraint(sym) != nil {
+		return nil
+	}
+	return sym
 }
 
 // conditionCheck is one evaluation of the conditions an element states: the
