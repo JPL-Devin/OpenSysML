@@ -1,0 +1,8 @@
+step 1: token 1@sender
+stmt send
+  eval literal 42 -> 42
+step 2: token 1@receiver
+stmt assign got
+  eval feature value -> 42
+step 3: token 1@end
+step 4: no active tokens

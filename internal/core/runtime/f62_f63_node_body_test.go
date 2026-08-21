@@ -106,21 +106,22 @@ func testSendBodyDeclaresNoPayload(t *testing.T) {
 	}
 }
 
-// `send x via p to r` states both a port and a receiver (SysML.xtext
-// SenderReceiverPart). It parses, and the runtime reports it as unsupported
-// rather than dropping either end.
+// `send x via p to r` keeps both destination constraints through routing.
 func testSendViaAPortToAReceiver(t *testing.T) {
 	src := `
 		package test {
 			port def Pt;
 			action talk {
 				port p : Pt;
+				port inPort : Pt;
+				connect p to inPort;
 				attribute x = 1;
 				first start;
 				action sender {
 					send x via p to receiver;
 				}
-				action receiver accept n : Integer;
+				action receiver accept n : Integer via inPort;
+				action sibling accept n : Integer via inPort;
 				done end;
 				then start sender;
 				then sender receiver;
@@ -129,8 +130,7 @@ func testSendViaAPortToAReceiver(t *testing.T) {
 		}
 	`
 	err := runActionForError(t, src, "talk")
-	if err == nil {
-		t.Fatal("expected an unsupported error for a send stating both a port and a receiver")
+	if err != nil {
+		t.Fatalf("send routed to its named receiver: %v", err)
 	}
-	t.Logf("error: %v", err)
 }

@@ -1182,6 +1182,10 @@ func TestDeliveryHoldsAConsumerToTheWholeDestination(t *testing.T) {
 		{"port of the same object", Message{Port: "inPort", Object: 1, Delivery: DeliverPort}, "", "inPort", 1, true},
 		{"port of another object", Message{Port: "inPort", Object: 1, Delivery: DeliverPort}, "", "inPort", 2, false},
 		{"another port", Message{Port: "inPort", Object: 1, Delivery: DeliverPort}, "", "outPort", 1, false},
+		{"routed receiver of same port and object", Message{Target: "reader", Port: "inPort", Object: 1, Delivery: DeliverPortReceiver}, "reader", "inPort", 1, true},
+		{"routed sibling receiver", Message{Target: "reader", Port: "inPort", Object: 1, Delivery: DeliverPortReceiver}, "sibling", "inPort", 1, false},
+		{"routed receiver on another port", Message{Target: "reader", Port: "inPort", Object: 1, Delivery: DeliverPortReceiver}, "reader", "outPort", 1, false},
+		{"routed receiver of another object", Message{Target: "reader", Port: "inPort", Object: 1, Delivery: DeliverPortReceiver}, "reader", "inPort", 2, false},
 		{"object itself", Message{Object: 1, Delivery: DeliverObject}, "reader", "", 1, true},
 		{"object and no object performer", Message{Object: 1, Delivery: DeliverObject}, "reader", "", 0, false},
 	}

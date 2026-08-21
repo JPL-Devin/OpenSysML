@@ -96,7 +96,10 @@ type Send struct {
 	// the sender's features, rather than a name in a namespace (`R`, `P::R`).
 	TargetPath bool
 	IsVia      bool
-	Scope      *symbols.Scope // the scope the statement was declared in
+	// Receiver is the name addressed by a routed send, empty when omitted.
+	Receiver     string
+	ReceiverPath bool
+	Scope        *symbols.Scope // the scope the statement was declared in
 }
 
 func (Send) statement() {}
@@ -578,21 +581,15 @@ func lowerStatement(member ast.Node, scope *symbols.Scope) Statement {
 				Scope:       scope,
 			}
 		}
-		if m.Receiver != nil {
-			// Routing out of a port to a named receiver constrains both the
-			// connections and the address, which the message has no room to carry.
-			return Unsupported{
-				Description: "a send routed through a port to a named receiver",
-				Node:        m,
-				Scope:       scope,
-			}
-		}
+		receiver, receiverPath := SendTarget(m.Receiver)
 		return Send{
-			Message:    message,
-			Target:     target,
-			TargetPath: isPath,
-			IsVia:      m.IsVia,
-			Scope:      scope,
+			Message:      message,
+			Target:       target,
+			TargetPath:   isPath,
+			IsVia:        m.IsVia,
+			Receiver:     receiver,
+			ReceiverPath: receiverPath,
+			Scope:        scope,
 		}
 	case *ast.AssignmentActionNode:
 		// A target naming more than one segment reaches outside the body, which no

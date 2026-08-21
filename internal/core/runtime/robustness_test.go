@@ -137,6 +137,9 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("accept_of_unsent_type", testAcceptOfUnsentTypeReports)
 	t.Run("send_via_unconnected_port", testSendViaUnconnectedPort)
 	t.Run("send_addressed_to_an_unreachable_target", testSendAddressedToAnUnreachableTarget)
+	t.Run("routed_send_via_unknown_port", testRoutedSendViaUnknownPort)
+	t.Run("routed_send_port_type_mismatch", testRoutedSendPortTypeMismatch)
+	t.Run("routed_send_unreachable_receiver", testRoutedSendUnreachableReceiver)
 	t.Run("send_addressed_through_several_occurrences", testSendAddressedThroughSeveralOccurrences)
 	t.Run("send_addressed_to_an_object_that_cannot_be_built", testSendAddressedToAnObjectThatCannotBeBuilt)
 	t.Run("send_addressed_to_a_part_no_sibling_takes", testSendAddressedToAPartNoSiblingTakes)
@@ -2371,6 +2374,89 @@ func testSendViaUnconnectedPort(t *testing.T) {
 	}
 	if !errors.Is(err, ErrUnroutableSend) {
 		t.Errorf("expected ErrUnroutableSend, got: %v", err)
+	}
+}
+
+func testRoutedSendViaUnknownPort(t *testing.T) {
+	_, err := executeActionSource(t, "pipeline", `package P {
+		action pipeline {
+			first start;
+			action sender { send 42 via missing to reader; }
+			action reader accept msg : Integer;
+			done end;
+			then start sender;
+			then sender end;
+		}
+	}`)
+	var typed *UnknownSendPortError
+	if !errors.As(err, &typed) {
+		t.Fatalf("expected UnknownSendPortError, got: %v", err)
+	}
+	if !errors.Is(err, ErrSendViaUnknownPort) {
+		t.Errorf("expected ErrSendViaUnknownPort, got: %v", err)
+	}
+	if errors.Is(err, ErrUnroutableSend) {
+		t.Errorf("unknown routed port must not be ErrUnroutableSend: %v", err)
+	}
+	if !strings.Contains(err.Error(), `"missing"`) || !strings.Contains(err.Error(), `"reader"`) {
+		t.Errorf("error = %v, want port and receiver names", err)
+	}
+}
+
+func testRoutedSendPortTypeMismatch(t *testing.T) {
+	_, err := executeActionSource(t, "pipeline", `package P {
+		item def IntMessage;
+		item def TextMessage;
+		port def IntegerPort { in item text : TextMessage; }
+		action pipeline {
+			port outPort;
+			port inPort : IntegerPort;
+			connect outPort to inPort;
+			first start;
+			action sender { send IntMessage via outPort to reader; }
+			action reader accept msg : Integer via inPort;
+			done end;
+			then start sender;
+			then sender reader;
+			then reader end;
+		}
+	}`)
+	var typed *SendPortTypeMismatchError
+	if !errors.As(err, &typed) {
+		t.Fatalf("expected SendPortTypeMismatchError, got: %v", err)
+	}
+	if !errors.Is(err, ErrSendPortTypeMismatch) {
+		t.Errorf("expected ErrSendPortTypeMismatch, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), `"outPort"`) ||
+		!strings.Contains(err.Error(), `"reader"`) {
+		t.Errorf("error = %v, want port and receiver names", err)
+	}
+}
+
+func testRoutedSendUnreachableReceiver(t *testing.T) {
+	_, err := executeActionSource(t, "pipeline", `package P {
+		action pipeline {
+			port outPort;
+			port inPort;
+			connect outPort to inPort;
+			first start;
+			action sender { send 42 via outPort to missing; }
+			done end;
+			then start sender;
+			then sender end;
+		}
+	}`)
+	var typed *UnreachableSendReceiverError
+	if !errors.As(err, &typed) {
+		t.Fatalf("expected UnreachableSendReceiverError, got: %v", err)
+	}
+	if !errors.Is(err, ErrUnreachableSendReceiver) {
+		t.Errorf("expected ErrUnreachableSendReceiver, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), `"outPort"`) ||
+		!strings.Contains(err.Error(), `"missing"`) {
+		t.Errorf("error = %v, want port and receiver names", err)
 	}
 }
 
