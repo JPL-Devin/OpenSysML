@@ -238,6 +238,35 @@ func TestNegative(t *testing.T) {
 		{"accept_statement_no_payload_type", "action def A { loop { accept e : ; } }"},
 		{"accept_statement_via_no_port", "action def A { loop { accept e : E via; } }"},
 		{"then_accept_no_payload", "action def A { action b; then accept; }"},
+
+		// A word SysML.xtext does not reserve names a usage, so a declaration so
+		// named that is malformed is still reported rather than read as the
+		// KerML relationship the same word states elsewhere.
+		{"part_named_chains_no_type", "part chains : ;"},
+		{"part_named_differences_no_terminator", "part differences"},
+		{"part_named_disjoint_no_type", "part disjoint : ;"},
+		{"part_named_type_no_type", "part type : ;"},
+		// The relationship spelling still states the relationship where one
+		// belongs, so its missing operand is still an error.
+		{"usage_disjoint_from_no_target", "part def T { part a; part b disjoint from ; }"},
+		{"usage_inverse_of_no_target", "part def T { part a; part b inverse of ; }"},
+		{"usage_chains_no_target", "part def T { part a; part b chains ; }"},
+		{"usage_featured_by_no_target", "part def T { part b featured by ; }"},
+
+		// The generalized usage declaration widening keeps its neighbouring
+		// malformed spellings reported (F66).
+		{"ref_redefines_no_target", "part def T { ref redefines [4]; }"},
+		{"ref_redefines_unclosed_multiplicity", "part def T { ref redefines x[4; }"},
+		{"verify_redefines_no_target", "requirement def R { verify r :>> ; }"},
+		{"variant_use_case_no_type", "use case def U { variant use case uc : ; }"},
+		{"assert_not_no_condition", "part def T { assert not ; }"},
+		{"assert_not_no_body_end", "part def T { assert not c { }"},
+
+		// `frame` and `render` are SysML keywords, so a framing or rendering
+		// with no reference is reported rather than read as a name.
+		{"frame_no_concern", "viewpoint def V { frame; }"},
+		{"frame_concern_no_declaration", "viewpoint def V { frame concern }"},
+		{"render_no_rendering", "view def V { render; }"},
 	}
 
 	for _, tt := range tests {
@@ -286,6 +315,15 @@ func TestNegativeKerML(t *testing.T) {
 		{"feature_named_merge_no_type", "package P { feature merge : ; }"},
 		{"feature_named_at_no_terminator", "package P { feature at }"},
 		{"import_named_while_no_terminator", "package P { public import while }"},
+
+		// A KerML literal states its relationship where a name would go, so it
+		// does not name a feature there (the pinned KerML validator answers
+		// "no viable alternative at input 'chains'").
+		{"feature_named_chains", "package P { class T; feature chains : T; }"},
+		// A word KerML.xtext does not reserve names a feature, so a malformed
+		// declaration so named is still reported.
+		{"feature_named_frame_no_type", "package P { feature frame : ; }"},
+		{"feature_named_state_no_terminator", "package P { feature state }"},
 	}
 
 	for _, tt := range tests {

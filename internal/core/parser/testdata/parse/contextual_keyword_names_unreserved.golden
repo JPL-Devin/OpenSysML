@@ -69,11 +69,11 @@
       (Membership visibility="default"
         (Usage kind="action" name="Report" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
           (Membership visibility="default"
-            (Usage kind="part" name="done" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+            (Usage kind="attribute" name="done" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
               (Relationship kind="typing" target=Boolean
                 (*ast.QualifiedName))))
           (Membership visibility="default"
-            (Usage kind="part" name="decision" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+            (Usage kind="attribute" name="decision" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
               (Relationship kind="typing" target=Boolean
                 (*ast.QualifiedName))))
           (*ast.AssignmentActionNode))))))

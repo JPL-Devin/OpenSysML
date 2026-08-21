@@ -175,6 +175,16 @@ func (p *Parser) atKeyword(kw string) bool {
 	return t.Kind == lexer.Keyword && t.KeywordID == kw
 }
 
+// acceptSufficientAll consumes the `all` of a declaration prefix
+// (`isSufficient ?= 'all'`, KerML.xtext:325). SysML.xtext declares `all` only
+// after `import`, so there the word names the declaration instead.
+func (p *Parser) acceptSufficientAll() bool {
+	if p.src.Kind() == source.KindSysML {
+		return false
+	}
+	return p.acceptKeyword("all")
+}
+
 // peekIsKeyword reports whether the token n ahead of the cursor is the given
 // keyword literal.
 func (p *Parser) peekIsKeyword(n int, kw string) bool {

@@ -333,11 +333,10 @@ func (p *Parser) parseDirectionParameter() ast.Node {
 	p.warnAmbiguousModifierKind(mods, parameterKindKeyword)
 
 	// A parameter's kind keyword is optional; a lone occurrence modifier declares the
-	// kind, and with no keyword at all the parameter is a generic feature.
-	kind := ast.UsagePart
-	if k, kw := modifierImpliedKind(mods); kw != "" {
-		kind = k
-	}
+	// kind, and with no keyword at all the parameter is the same kindless
+	// reference usage as a keyword-less declaration outside a parameter list
+	// (SysML.xtext DefaultReferenceUsage, SysML v2 §7.6).
+	kind, _ := modifierImpliedKind(mods)
 	// Any other keyword is left as the parameter's name (kind stays default).
 	if p.at(lexer.Keyword) {
 		if k, ok := parameterKindKeywords[p.peek().KeywordID]; ok {
@@ -1727,7 +1726,7 @@ func (p *Parser) parseConstraintBody() []ast.Node {
 			// Parse return member (for constraint defs that return result)
 			// Example: return result = expr { doc }
 			members = append(members, p.parseBodyMember())
-		} else if p.atDefUsageStart() || p.atRelationshipKeyword() {
+		} else if p.atDefUsageStart() || p.atRelationshipKeyword() || p.atKindlessFeatureTyping() {
 			// A declaration, or a member that states a relationship where its
 			// name would go (`redefines partMasses = expr;`, `:>> x = value;`):
 			// both spellings reach parseBodyMember, which reads them as one form

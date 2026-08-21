@@ -1,19 +1,54 @@
 package lexer
 
+import "github.com/Open-MBEE/OpenSysML/internal/core/source"
+
 // keywords is the union of KerML and SysML lowercase keyword literals.
 // A scanned ID matching a key is emitted as Kind==Keyword with KeywordID set.
 var keywords = map[string]struct{}{}
+
+// keywordsKerML and keywordsSysML are the per-language sets. Xtext reserves a
+// literal only within the grammar that declares it, and the two grammars share
+// only KerMLExpressions.xtext, so the sets differ (see keywordListKerML).
+var (
+	keywordsKerML = map[string]struct{}{}
+	keywordsSysML = map[string]struct{}{}
+)
 
 func init() {
 	for _, kw := range keywordList {
 		keywords[kw] = struct{}{}
 	}
+	for _, kw := range keywordListKerML {
+		keywordsKerML[kw] = struct{}{}
+	}
+	for _, kw := range keywordListSysML {
+		keywordsSysML[kw] = struct{}{}
+	}
+}
+
+// keywordSet returns the reserved set of a language. A source of unknown kind
+// gets the union, so a name-less surface still lexes both notations.
+func keywordSet(kind source.Kind) map[string]struct{} {
+	switch kind {
+	case source.KindKerML:
+		return keywordsKerML
+	case source.KindSysML:
+		return keywordsSysML
+	default:
+		return keywords
+	}
 }
 
 // IsKeyword reports whether s is a KerML or SysML keyword, and so cannot be
-// used where a plain identifier is expected.
+// used where a plain identifier is expected in either language.
 func IsKeyword(s string) bool {
 	_, ok := keywords[s]
+	return ok
+}
+
+// IsKeywordIn reports whether s is reserved by one language's grammar.
+func IsKeywordIn(s string, kind source.Kind) bool {
+	_, ok := keywordSet(kind)[s]
 	return ok
 }
 
@@ -68,6 +103,51 @@ var keywordList = []string{
 	"true", "type", "typed", "typing", "unions", "until", "use", "variant",
 	"variation", "verification", "verify", "via", "view", "viewpoint", "when",
 	"while", "xor",
+}
+
+// keywordListKerML is every lowercase literal of KerML.xtext plus the shared
+// KerMLExpressions.xtext, generated from build/pilot-grammars (TestKeywordSets).
+var keywordListKerML = []string{
+	"about", "abstract", "alias", "all", "and", "as", "assoc", "behavior",
+	"binding", "bool", "by", "chains", "class", "classifier", "comment",
+	"composite", "conjugate", "conjugates", "conjugation", "connector", "const",
+	"crosses", "datatype", "default", "dependency", "derived", "differences",
+	"disjoining", "disjoint", "doc", "else", "end", "expr", "false", "feature",
+	"featured", "featuring", "filter", "first", "flow", "for", "from",
+	"function", "hastype", "if", "implies", "import", "in", "inout",
+	"interaction", "intersects", "inv", "inverse", "inverting", "istype",
+	"language", "library", "locale", "member", "meta", "metaclass", "metadata",
+	"multiplicity", "namespace", "new", "nonunique", "not", "null", "of", "or",
+	"ordered", "out", "package", "portion", "predicate", "private", "protected",
+	"public", "redefines", "redefinition", "references", "rep", "return",
+	"specialization", "specializes", "standard", "step", "struct",
+	"subclassifier", "subset", "subsets", "subtype", "succession", "then", "to",
+	"true", "type", "typed", "typing", "unions", "var", "xor",
+}
+
+// keywordListSysML is every lowercase literal of SysML.xtext plus the shared
+// KerMLExpressions.xtext. SysML.xtext extends KerMLExpressions, not KerML, so
+// `chains`, `type` and `namespace` are ordinary names in a `.sysml` file.
+var keywordListSysML = []string{
+	"about", "abstract", "accept", "action", "actor", "after", "alias", "all",
+	"allocate", "allocation", "analysis", "and", "as", "assert", "assign",
+	"assume", "at", "attribute", "bind", "binding", "by", "calc", "case",
+	"comment", "concern", "connect", "connection", "constant", "constraint",
+	"crosses", "decide", "def", "default", "defined", "dependency", "derived",
+	"do", "doc", "else", "end", "entry", "enum", "event", "exhibit", "exit",
+	"expose", "false", "filter", "first", "flow", "for", "fork", "frame",
+	"from", "hastype", "if", "implies", "import", "in", "include", "individual",
+	"inout", "interface", "istype", "item", "join", "language", "library",
+	"locale", "loop", "merge", "message", "meta", "metadata", "new",
+	"nonunique", "not", "null", "objective", "occurrence", "of", "or",
+	"ordered", "out", "package", "parallel", "part", "perform", "port",
+	"private", "protected", "public", "redefines", "ref", "references",
+	"render", "rendering", "rep", "require", "requirement", "return", "satisfy",
+	"send", "snapshot", "specializes", "stakeholder", "standard", "state",
+	"subject", "subsets", "succession", "terminate", "then", "timeslice", "to",
+	"transition", "true", "until", "use", "variant", "variation",
+	"verification", "verify", "via", "view", "viewpoint", "when", "while",
+	"xor",
 }
 
 // Keywords returns a copy of the KerML+SysML keyword list, for tooling

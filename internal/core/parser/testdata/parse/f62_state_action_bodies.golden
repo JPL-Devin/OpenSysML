@@ -50,7 +50,7 @@
                 (FeatureReference name="ignitionCmd")
                 (*ast.QualifiedName)
                 (Membership visibility="default"
-                  (Usage kind="part" name="ignitionCmd" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+                  (Usage kind="attribute" name="ignitionCmd" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
                     (Relationship kind="typing" target=Sig
                       (*ast.QualifiedName)))))))
           (Membership visibility="default"

@@ -6,7 +6,7 @@
       (Membership visibility="default"
         (Definition kind="action" abstract=false variation=false name="Iterate"
           (Membership visibility="default"
-            (Usage kind="part" name="items" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+            (Usage kind="attribute" name="items" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
               (Relationship kind="typing" target=Collection
                 (*ast.QualifiedName))))
           (WhileLoopActionNode kind="for" variable="step"
