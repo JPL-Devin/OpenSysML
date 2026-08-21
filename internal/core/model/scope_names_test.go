@@ -137,7 +137,23 @@ func TestVisibleNamesRedefinitionAnchorSeesTheChainedTarget(t *testing.T) {
 		"\tfeature B subsets A {\n\t\tfeature b redefines a;\n\t}\n" +
 		"\tfeature C subsets B {\n\t\tfeature c redefines b;\n\t}\n}\n"
 	names := namesAt(t, src, "redefines b", VisibleNamesOptions{Redefinition: true})
-	has(t, names, []string{"b", "C.b", "A.a"}, []string{"a", "C.a", "C.c"})
+	has(t, names, []string{"b", "C.b", "A.a"}, []string{"a", "C.a"})
+}
+
+func TestVisibleNamesRedefinitionAnchorOmitsTheRedefinitionBeingWritten(t *testing.T) {
+	// Anchored in C's body, the walk cannot tell which of C's declarations is
+	// being written, so each redefinition it declares is treated as the one:
+	// absent as a member, masking nothing.
+	src := "package test {\n\tfeature A {\n\t\tfeature a;\n\t}\n" +
+		"\tfeature C subsets A {\n\t\tfeature c redefines a;\n\t}\n}\n"
+	ws := NewWorkspace()
+	ws.Open("t.kerml", []byte(src), 1)
+	scope := ws.ScopeAt("t.kerml", strings.Index(src, "subsets A"))
+	var names []string
+	for _, n := range ws.VisibleNames(scope, VisibleNamesOptions{Redefinition: true}) {
+		names = append(names, n.Name)
+	}
+	has(t, names, []string{"a", "C.a"}, []string{"c", "C.c"})
 }
 
 func TestVisibleNamesRedefinitionMasksTheShortName(t *testing.T) {

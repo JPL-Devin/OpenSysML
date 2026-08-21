@@ -60,6 +60,16 @@ func DeclaresRedefinition(sym *symbols.Symbol) bool {
 	return false
 }
 
+// NotYetMember reports whether a member of a namespace a declaration is being
+// written in is that declaration: the one identified, or, when the caller cannot
+// tell which it is, any redefinition the namespace declares (KerML 8.3.3.3.6).
+func NotYetMember(sym, declaring *symbols.Symbol) bool {
+	if declaring != nil {
+		return sym == declaring
+	}
+	return DeclaresRedefinition(sym)
+}
+
 // redefinitionTarget resolves one redefinition target reference. A single-segment
 // name denotes the feature the owner inherits under it, not the declaration that
 // borrowed the name in the owner's own scope (KerML 7.3.4.5).
@@ -110,9 +120,32 @@ func (m *Model) redefinitionMask(sym *symbols.Symbol, declared bool) map[*symbol
 		return cached
 	}
 	cache[sym] = nil // re-entrancy guard: a nested query sees no mask
+	mask := m.buildMask(sym, m.maskCandidates(sym, declared))
+	cache[sym] = mask
+	return mask
+}
 
+// redefinitionMaskExcluding is the mask on sym with one of its own declarations
+// left out: the declaration being written, whose redefinition must not hide the
+// feature it names (KerML 8.3.3.3.6). Not memoized — it is asked per edit.
+func (m *Model) redefinitionMaskExcluding(sym, exclude *symbols.Symbol) map[*symbols.Symbol]bool {
+	if m == nil || sym == nil {
+		return nil
+	}
+	candidates := make([]*symbols.Symbol, 0, 8)
+	for _, candidate := range m.maskCandidates(sym, true) {
+		if candidate != exclude {
+			candidates = append(candidates, candidate)
+		}
+	}
+	return m.buildMask(sym, candidates)
+}
+
+// buildMask closes candidates' redefinitions transitively into the set of
+// elements sym does not inherit.
+func (m *Model) buildMask(sym *symbols.Symbol, candidates []*symbols.Symbol) map[*symbols.Symbol]bool {
 	mask := make(map[*symbols.Symbol]bool)
-	pending := m.maskCandidates(sym, declared)
+	pending := candidates
 	for i := 0; i < len(pending); i++ {
 		redefining := pending[i]
 		for _, target := range m.RedefinedFeatures(redefining) {
@@ -130,9 +163,8 @@ func (m *Model) redefinitionMask(sym *symbols.Symbol, declared bool) map[*symbol
 		}
 	}
 	if len(mask) == 0 {
-		mask = nil
+		return nil
 	}
-	cache[sym] = mask
 	return mask
 }
 
@@ -184,11 +216,21 @@ func maskLeafName(name string) string {
 // members ask here; resolving a redefinition target itself must not, as that
 // reference names the masked feature (KerML 7.3.4.5).
 func (m *Model) InheritanceMasked(sym, candidate *symbols.Symbol) bool {
-	return m.inheritanceMasked(sym, candidate, true)
+	return m.maskedBy(m.redefinitionMask(sym, true), candidate)
 }
 
-func (m *Model) inheritanceMasked(sym, candidate *symbols.Symbol, declared bool) bool {
-	mask := m.redefinitionMask(sym, declared)
+// masked reports whether sym does not inherit candidate under the given view.
+func (m *Model) masked(sym, candidate *symbols.Symbol, view memberView, declaring *symbols.Symbol) bool {
+	if view == memberViewDeclaring {
+		if declaring == nil {
+			return m.maskedBy(m.redefinitionMask(sym, false), candidate)
+		}
+		return m.maskedBy(m.redefinitionMaskExcluding(sym, declaring), candidate)
+	}
+	return m.maskedBy(m.redefinitionMask(sym, true), candidate)
+}
+
+func (m *Model) maskedBy(mask map[*symbols.Symbol]bool, candidate *symbols.Symbol) bool {
 	if len(mask) == 0 || candidate == nil {
 		return false
 	}

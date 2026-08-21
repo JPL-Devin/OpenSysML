@@ -10,7 +10,7 @@ import "github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 // Results are deterministic: local members first (declaration order), then
 // contributed members in MemberSources order.
 func (m *Model) MembersOf(sym *symbols.Symbol) []*symbols.Symbol {
-	return m.membersOf(sym, memberViewEffective)
+	return m.membersOf(sym, memberViewEffective, nil)
 }
 
 // MembersOfIncludingRedefined is MembersOf without redefinition masking: the
@@ -18,15 +18,17 @@ func (m *Model) MembersOf(sym *symbols.Symbol) []*symbols.Symbol {
 // redefinition shares its target's feature value, so the runtime shape needs
 // both.
 func (m *Model) MembersOfIncludingRedefined(sym *symbols.Symbol) []*symbols.Symbol {
-	return m.membersOf(sym, memberViewUnmasked)
+	return m.membersOf(sym, memberViewUnmasked, nil)
 }
 
-// InheritedMembersOf returns what sym inherits plus the names it merely binds,
-// leaving out the features it declares and the mask they cause. It is the scope
-// a declaration written in sym resolves a redefinition target in (KerML
-// 8.3.3.3.6): a feature being declared is not yet a member of its own owner.
-func (m *Model) InheritedMembersOf(sym *symbols.Symbol) []*symbols.Symbol {
-	return m.membersOf(sym, memberViewInherited)
+// MembersOfDeclaring returns the members of sym as a declaration being written
+// in it sees them: that declaration is not yet a member of its own owner and
+// the redefinition it carries masks nothing, so its target stays resolvable
+// (KerML 8.3.3.3.6). Sym's other declarations, and the masks they cause, are
+// present. A nil declaring — the caller cannot tell which declaration is being
+// written — stands for every redefinition sym declares.
+func (m *Model) MembersOfDeclaring(sym, declaring *symbols.Symbol) []*symbols.Symbol {
+	return m.membersOf(sym, memberViewDeclaring, declaring)
 }
 
 // memberView selects which of a type's members MembersOf reports.
@@ -38,11 +40,12 @@ const (
 	memberViewEffective memberView = iota
 	// memberViewUnmasked applies no redefinition mask.
 	memberViewUnmasked
-	// memberViewInherited leaves out the features the type declares itself.
-	memberViewInherited
+	// memberViewDeclaring is the view a declaration being written in the type
+	// has: itself absent, and the mask it causes suspended.
+	memberViewDeclaring
 )
 
-func (m *Model) membersOf(sym *symbols.Symbol, view memberView) []*symbols.Symbol {
+func (m *Model) membersOf(sym *symbols.Symbol, view memberView, declaring *symbols.Symbol) []*symbols.Symbol {
 	if sym == nil {
 		return nil
 	}
@@ -62,11 +65,10 @@ func (m *Model) membersOf(sym *symbols.Symbol, view memberView) []*symbols.Symbo
 				continue // masked by a closer declaration
 			}
 			for _, s := range scope.LookupLocalAll(key) {
-				if !inherited && view == memberViewInherited && s.Kind != symbols.SymbolAlias {
+				if !inherited && view == memberViewDeclaring && NotYetMember(s, declaring) {
 					continue // a feature being declared is not yet a member
 				}
-				if inherited && view != memberViewUnmasked &&
-					m.inheritanceMasked(sym, s, view != memberViewInherited) {
+				if inherited && view != memberViewUnmasked && m.masked(sym, s, view, declaring) {
 					continue // redefined by a feature of sym
 				}
 				if !seenSym[s] {

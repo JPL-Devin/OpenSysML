@@ -120,13 +120,20 @@ func TestMaskedFeatureStaysInTheUnmaskedView(t *testing.T) {
 	}
 }
 
-func TestInheritedMembersViewOmitsOwnDeclarationsAndTheirMasks(t *testing.T) {
-	// Resolving `b redefines a` sees `a`: inside its own declaration B offers
-	// what it inherits, not what it declares (KerML 8.3.3.3.6).
+func TestDeclaringViewOmitsTheDeclarationAndSuspendsItsMask(t *testing.T) {
+	// Resolving `b redefines a` sees `a` and not `b`: the declaration being
+	// written is not yet a member and masks nothing (KerML 8.3.3.3.6). B's
+	// other declarations, and the masks they cause, stay.
 	m, root := buildModel(t,
-		"part def A { part a; } part def B specializes A { part b redefines a; }")
+		"part def A { part a; part c; } "+
+			"part def B specializes A { part b redefines a; part d redefines c; }")
+	b := sym(t, root, "B")
+	declaring, ok := b.Scope.LookupLocal("b")
+	if !ok {
+		t.Fatal("B declares b")
+	}
 	names := map[string]bool{}
-	for _, s := range m.InheritedMembersOf(sym(t, root, "B")) {
+	for _, s := range m.MembersOfDeclaring(b, declaring) {
 		names[s.Name] = true
 	}
 	if !names["a"] {
@@ -134,6 +141,9 @@ func TestInheritedMembersViewOmitsOwnDeclarationsAndTheirMasks(t *testing.T) {
 	}
 	if names["b"] {
 		t.Fatalf("the declaration being written is not yet a member: %v", names)
+	}
+	if !names["d"] || names["c"] {
+		t.Fatalf("another declaration and its mask are unaffected: %v", names)
 	}
 }
 
