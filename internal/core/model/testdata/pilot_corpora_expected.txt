@@ -27,10 +27,9 @@
 1	kerml-examples/Vehicle Example/VehicleDefinitions.kerml
 2	kerml-examples/Vehicle Example/VehicleUsages.kerml
 1	sysml-examples/Analysis Examples/Turbojet Stage Analysis.sysml
-6	sysml-examples/Analysis Examples/Vehicle Analysis Demo.sysml
 15	sysml-examples/Arrowhead Framework Example/AHFSequences.sysml
 6	sysml-examples/Cause and Effect Examples/CauseAndEffectExample.sysml
-2	sysml-examples/Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml
+1	sysml-examples/Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml
 1	sysml-examples/Individuals Examples/AnalysisIndividualExample.sysml
 10	sysml-examples/Interaction Sequencing Examples/ServerSequenceOutsideRealization-2.sysml
 6	sysml-examples/Interaction Sequencing Examples/ServerSequenceOutsideRealization-3.sysml
