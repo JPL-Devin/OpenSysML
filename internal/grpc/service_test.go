@@ -25,6 +25,11 @@ func TestGetServerInfo(t *testing.T) {
 	if !slices.Contains(resp.Capabilities, CapabilityTypeFacts) {
 		t.Errorf("capabilities = %v, want it to contain %q", resp.Capabilities, CapabilityTypeFacts)
 	}
+	for _, capability := range []string{CapabilityAuthoring, CapabilityInlineLanguage} {
+		if !slices.Contains(resp.Capabilities, capability) {
+			t.Errorf("capabilities = %v, want it to contain %q", resp.Capabilities, capability)
+		}
+	}
 }
 
 // TestGetServerInfoTypeFactsCapabilityIsHonest verifies the reported
@@ -98,6 +103,37 @@ package Vehicle {
 
 	if resp.Error != "" {
 		t.Errorf("expected no error, got: %s", resp.Error)
+	}
+}
+
+func TestParseFile_InlineKerMLUsesImplicitLibraryBases(t *testing.T) {
+	srv := mustNewService(t, 10)
+	resp, err := srv.ParseFile(context.Background(), &pb.ParseFileRequest{
+		Source:   &pb.ParseFileRequest_Content{Content: "class C; struct S;"},
+		Language: "kerml",
+	})
+	if err != nil {
+		t.Fatalf("ParseFile failed: %v", err)
+	}
+	for _, d := range resp.Diagnostics {
+		if d.Severity == "error" {
+			t.Fatalf("unexpected diagnostic: %s", d.Message)
+		}
+	}
+	cached, ok := srv.cache.Get(resp.ModelHash)
+	if !ok {
+		t.Fatalf("model %s was not cached", resp.ModelHash)
+	}
+	for _, name := range []string{"C", "S"} {
+		syms := cached.Index.LookupQualified(name)
+		if len(syms) != 1 {
+			t.Fatalf("LookupQualified(%s) returned %d symbols, want one", name, len(syms))
+		}
+		if inherited, ok := cached.SymbolContext().Semantics.LookupMember(syms[0], "endShot"); !ok {
+			t.Fatalf("%s does not inherit endShot from the KerML library", name)
+		} else if got := cached.Index.GetFQN(inherited); got != "Occurrences::Occurrence::endShot" {
+			t.Fatalf("inherited endShot for %s = %q, want Occurrences::Occurrence::endShot", name, got)
+		}
 	}
 }
 

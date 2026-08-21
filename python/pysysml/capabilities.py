@@ -69,6 +69,10 @@ CAPABILITY_FEATURE_VALUES = "feature_values"
 #: the edited notation. Without it an edit fails as an unimplemented method,
 #: which is indistinguishable from a broken channel.
 CAPABILITY_APPLY_EDITS = "apply_edits"
+#: Source-preserving add-member and delete authoring operations.
+CAPABILITY_AUTHORING = "authoring"
+#: Declares the language of inline content passed to ``ParseFile``.
+CAPABILITY_INLINE_LANGUAGE = "inline_language"
 
 
 @dataclass(frozen=True)

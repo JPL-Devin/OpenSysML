@@ -63,9 +63,20 @@ func editOperations(pbOps []*pb.EditOperation) ([]edit.Operation, error) {
 			ops = append(ops, edit.SetValue(op.SetValue.GetTarget(), op.SetValue.GetValue()))
 		case *pb.EditOperation_Rename:
 			ops = append(ops, edit.Rename(op.Rename.GetTarget(), op.Rename.GetNewName()))
+		case *pb.EditOperation_AddMember:
+			add := op.AddMember
+			member := edit.AddMember(add.GetOwner(), add.GetKind(), add.GetName())
+			member.Type = add.GetType()
+			member.Multiplicity = add.GetMultiplicity()
+			member.Value = add.GetValue()
+			member.Specializes = append([]string(nil), add.GetSpecializes()...)
+			ops = append(ops, member)
+		case *pb.EditOperation_Delete:
+			del := op.Delete
+			ops = append(ops, edit.Delete(del.GetTarget(), del.GetCascade()))
 		default:
 			return nil, status.Errorf(codes.InvalidArgument,
-				"operation %d must be set_value or rename", i)
+				"operation %d must be set_value, rename, add_member or delete", i)
 		}
 	}
 	return ops, nil
@@ -114,17 +125,22 @@ func appliedToProto(applied []edit.Applied) []*pb.AppliedEdit {
 // editFailures maps every refusal kind to its wire value, so a client acts on
 // the kind rather than on the message text.
 var editFailures = map[edit.Failure]pb.EditFailure{
-	edit.FailureNone:             pb.EditFailure_EDIT_FAILURE_UNSPECIFIED,
-	edit.FailureNoOperations:     pb.EditFailure_EDIT_FAILURE_NO_OPERATIONS,
-	edit.FailureUnknownTarget:    pb.EditFailure_EDIT_FAILURE_UNKNOWN_TARGET,
-	edit.FailureAmbiguousTarget:  pb.EditFailure_EDIT_FAILURE_AMBIGUOUS_TARGET,
-	edit.FailureNotValued:        pb.EditFailure_EDIT_FAILURE_NOT_VALUED,
-	edit.FailureInvalidValue:     pb.EditFailure_EDIT_FAILURE_INVALID_VALUE,
-	edit.FailureInvalidName:      pb.EditFailure_EDIT_FAILURE_INVALID_NAME,
-	edit.FailureNotNamed:         pb.EditFailure_EDIT_FAILURE_NOT_NAMED,
-	edit.FailureRenameReferenced: pb.EditFailure_EDIT_FAILURE_RENAME_REFERENCED,
-	edit.FailureOverlappingEdits: pb.EditFailure_EDIT_FAILURE_OVERLAPPING_EDITS,
-	edit.FailureResultInvalid:    pb.EditFailure_EDIT_FAILURE_RESULT_INVALID,
+	edit.FailureNone:              pb.EditFailure_EDIT_FAILURE_UNSPECIFIED,
+	edit.FailureNoOperations:      pb.EditFailure_EDIT_FAILURE_NO_OPERATIONS,
+	edit.FailureUnknownTarget:     pb.EditFailure_EDIT_FAILURE_UNKNOWN_TARGET,
+	edit.FailureAmbiguousTarget:   pb.EditFailure_EDIT_FAILURE_AMBIGUOUS_TARGET,
+	edit.FailureNotValued:         pb.EditFailure_EDIT_FAILURE_NOT_VALUED,
+	edit.FailureInvalidValue:      pb.EditFailure_EDIT_FAILURE_INVALID_VALUE,
+	edit.FailureInvalidName:       pb.EditFailure_EDIT_FAILURE_INVALID_NAME,
+	edit.FailureNotNamed:          pb.EditFailure_EDIT_FAILURE_NOT_NAMED,
+	edit.FailureRenameReferenced:  pb.EditFailure_EDIT_FAILURE_RENAME_REFERENCED,
+	edit.FailureOverlappingEdits:  pb.EditFailure_EDIT_FAILURE_OVERLAPPING_EDITS,
+	edit.FailureResultInvalid:     pb.EditFailure_EDIT_FAILURE_RESULT_INVALID,
+	edit.FailureOwnerUnknown:      pb.EditFailure_EDIT_FAILURE_OWNER_UNKNOWN,
+	edit.FailureOwnerNotNamespace: pb.EditFailure_EDIT_FAILURE_OWNER_NOT_NAMESPACE,
+	edit.FailureIllegalKind:       pb.EditFailure_EDIT_FAILURE_ILLEGAL_KIND,
+	edit.FailureMemberNameTaken:   pb.EditFailure_EDIT_FAILURE_MEMBER_NAME_TAKEN,
+	edit.FailureDeleteReferenced:  pb.EditFailure_EDIT_FAILURE_DELETE_REFERENCED,
 }
 
 func editFailureToProto(f edit.Failure) pb.EditFailure {

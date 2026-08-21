@@ -478,6 +478,18 @@ reports it) or a `Symbol` itself, so an element found by a read is edited by
 handing it back. Both calls return the editor, so operations chain, and `len(edit)`
 counts them.
 
+The same editor authors declarations:
+
+```python
+model = pysysml.loads("package Demo {}", strict=True)
+result = model.edit().add_part_def("", "Vehicle").apply()
+```
+
+`add_member(owner, kind, name, type=None, multiplicity=None, value=None,
+specializes=None)` accepts notation strings for the declaration. Typed
+`add_*` helpers cover the common SysML and KerML kinds, and
+`delete(target, cascade=False)` removes declarations transactionally.
+
 `apply()` sends the operations in one call and returns an `EditResult`, which *is*
 a `Conversion`: `str(result)` is the edited notation, `result.save(path)` and
 `result.write(path)` write it. `result.applied` lists what changed, as
@@ -533,8 +545,10 @@ Known limitations, by design:
   enclosing namespace, an import or a supertype — is refused too: it would either
   be ambiguous or shadow what is already there, and either way expressions you
   did not name would start reading the renamed element.
-- **Elements are not created or deleted**, and a model is not built from Python:
-  editing changes the source of a model that already says what it says.
+- **A model is not built from Python.** Declarations are added to and deleted
+  from a model that is already loaded; there is no way to author one from
+  nothing, and no object facade — a declaration is described by the notation
+  arguments of an `add_*` call, not by a Python object you mutate.
 - An editor is applied **once** — it describes an edit of the model it was made
   from, so applying it twice raises `RuntimeError`. Load the saved file and edit
   that.

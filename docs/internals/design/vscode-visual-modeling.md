@@ -173,8 +173,9 @@ way symbols name it, splice bytes the parse located, re-analyze before returning
   `part engine : Engine;` into `part def Vehicle { … }`. The insertion point is the
   end of the owner's body span, indented to the body's own level, and an owner
   declared without a body gets one. The notation is emitted by a small writer in
-  `edit`, then the whole document is passed through `internal/core/format` so the
-  result matches the file's indentation conventions.
+  `edit`. The whole document is deliberately not passed through
+  `internal/core/format`: source-preserving edits keep every byte outside edited
+  spans identical, so the writer detects indentation only for its insertion.
 - `OpAddConnection{Owner, Kind, From, To, Name}` inserts a `connect a to b;`,
   `flow`, `interface`, `succession` or `transition` into the owner's body, with the
   endpoints written as the names that resolve from that scope.

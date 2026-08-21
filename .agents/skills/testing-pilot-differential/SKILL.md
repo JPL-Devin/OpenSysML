@@ -9,12 +9,12 @@ The harness compares OpenSysML diagnostics against the OMG SysML v2 Pilot Implem
 (via `DeciSym/sysmlv2-validator`) over four corpus roots and writes
 `build/pilot-diff/pilot-diff.{txt,json}`. `docs/project/pilot-differential-baseline.json` is the
 committed result of the *last refreshed* run, so **the harness is testable by reproduction** —
-but only while the baseline is current. Check that first: as of `ac4ac4fb` the committed baseline
-is **stale** (it records 276 files / 175 fully agreeing / 18 agreement / 457 ours / 188 pilot's,
-while a live run gives 277 / 186 / 20 / 395 / 152), and `docs/project/pilot-differential.md`'s
-"Results" table and "Unmapped messages" table match the stale baseline, not the harness. So a
-non-empty `jq -S` baseline diff is *not* by itself evidence of a regression — see "Isolating one
-change's effect" below.
+but only while the baseline is current. Check that first. As of `30449705` it **is** current:
+a live run gives `349 file(s), 254 fully agreeing; 20 agreed, 343 only ours, 459 only the
+pilot's`, byte-identical to the committed baseline, and `docs/project/pilot-differential.md`'s
+"Results" table matches. When it is stale (it was at `ac4ac4fb`, and again while the F60–F69 fix
+PRs were in flight), a non-empty `jq -S` baseline diff is *not* by itself evidence of a
+regression — see "Isolating one change's effect" below.
 
 ## Prerequisites
 
@@ -49,6 +49,18 @@ Observed at `90da2cad` (KerML root added): `338 file(s), 196 fully agreeing; 20 
 ours, 145 only the pilot's`, wall time ~70 s (the KerML batch costs ~50 s), byte-identical to the
 committed baseline and across runs.
 
+Observed at `82ff0fac` (F34, per-file language dispatch): `349 file(s), 222 fully agreeing; 20
+agreed diagnostic(s), 564 only ours, 459 only the pilot's`, wall time ~82 s, byte-identical across
+runs (both `.json` and `.txt`). The committed baseline is stale against this (338 / 221 / 20 / 560
+/ 145), so use the entry-keyed delta below rather than `jq -S`.
+
+When the baseline is stale, audit a change by comparing per-file *entries* keyed by
+`(root.name, file.path)` — the whole entry value, not the whole file — so that added roots/files
+and aggregate totals do not drown out the question you are asking (did any pre-existing verdict
+move?). A run at `82ff0fac` gives 0 changed, 0 removed, 10 added
+(`examples/parser_features_demo_*.kerml`). Files clean on both sides appear in no entry map at
+all, so a newly-compared clean file shows up only as `filesFullyAgreeing +1`.
+
 ## Auditing a docs-only PR's numeric claims against the report
 
 Adjudication PRs (e.g. #356, the S1–S10 / F60–F69 classes) assert per-root, per-category and
@@ -65,6 +77,12 @@ and category counts. Parsing rules that matter:
 - Shortcut when a root has `pilotDiagnostics: 0` and `agreement: 0` (true for `pilot-examples`
   and `pilot-validation`): every `        opensysml:` line in that root's section is an only-ours
   diagnostic, so `grep -c` over the sliced section is an independent cross-check of the parser.
+- **Agreement and severity-only must be counted by summing the `xK` multiplicities, not the
+  message lines.** An agreement entry lists K `opensysml:` *and* K `pilot:` lines, so counting
+  messages doubles it; the severity bucket's header is `same line and category, different
+  severity:`, which a parser keyed on `only ...` silently mis-buckets.
+- **Root file counts must come from `.roots[].totals`, not `len(.roots[].files)`** — the per-file
+  array omits files both tools are silent on.
 - Cross-check the doc's class table by summing its Files and Diags columns; they must equal the
   measured number of files carrying only-ours diagnostics (root `files` − `filesFullyAgreeing`)
   and the root only-ours totals.
@@ -76,6 +94,20 @@ unresolved-reference 82, kind-mismatch 14, unmapped 2, units 1; and the two gene
 messages measured **102** `expected a body member` + **73** `expected a namespace member` = 175
 (the doc claimed 74 + 64 = 138, so recovery-vs-finding splits in these docs are the claim most
 likely to be stale — always recount).
+
+## Single-file `-validate` is not the harness's loading model
+
+The harness opens each corpus root as **one workspace batch** (import-topologically sorted, see
+`order.go` / `openSysMLDiagnostics` in `opensysml.go`), so a corpus file that imports a sibling
+file — e.g. `Vehicle Example/VehicleIndividuals.sysml`, which does `private import
+VehicleUsages::*` from `VehicleUsages.sysml` in the same directory — reports unresolved-reference
+errors under a bare single-file `bin/sysml -validate <f>` even when the differential shows it
+fully agreeing. Before calling such a file a failure, either pass the sibling files on the same
+`-validate` command line or check the file's entry in `build/pilot-diff/pilot-diff.json`
+(`.roots[].files[]` omits only files both tools are silent on; a fully-agreeing file with shared
+diagnostics is still listed with empty `openSysMLOnly`/`pilotOnly`/`severityMismatch` buckets, so
+treat absence — or all-empty disagreement buckets — as full agreement, confirming by comparing
+against the same file's entry in `docs/project/pilot-differential-baseline.json`).
 
 ## Running a doc's inline reproducers through both tools
 
@@ -170,9 +202,15 @@ exercise a KerML-only run (e.g. a small `-timeout`), copy just
 non-silence proof: drop a malformed `.kerml` into that copied corpus and confirm the JSON gains
 pilot-side diagnostics for it (observed: 6 pilot-only + 1 agreed on that one file).
 
-Our own `.kerml` fixtures under `testdata/` and `examples/` are *not* in the comparison: a root
-carries one language, so they are collected as SysML and dropped (follow-up F34). Don't read a
-`testdata`/`examples` count as covering them.
+Since F34, language is a per-file property (`source.KindOf`), so a root collects both extensions
+and runs one reference invocation per language over all of that language's files. stderr prints one
+line per language per root (`testdata: 10 SysML file(s)` then `testdata: 1 KerML file(s)`), and our
+own `.kerml` fixtures under `testdata/` and `examples/` are compared.
+
+The control for a dispatch change: a synthetic repo with byte-identical `testdata/adv.sysml` and
+`testdata/adv.kerml`, run at HEAD and in a parent worktree (`-repo` plus absolute validator flags).
+The two files getting *different* pilot messages is the proof that two oracles ran; the parent
+run reporting only `adv.sysml` is the proof the delta belongs to the change.
 
 ## Testing language-scoped (`.sysml` vs `.kerml`) diagnostic behaviour
 

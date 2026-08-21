@@ -34,20 +34,35 @@ const (
 	// FailureResultInvalid is edited notation carrying errors the original had
 	// not.
 	FailureResultInvalid
+	// FailureOwnerUnknown is an add-member owner that is not declared.
+	FailureOwnerUnknown
+	// FailureOwnerNotNamespace is an element that cannot contain members.
+	FailureOwnerNotNamespace
+	// FailureIllegalKind is a declaration kind invalid for the document language.
+	FailureIllegalKind
+	// FailureMemberNameTaken is a member name already declared by the owner.
+	FailureMemberNameTaken
+	// FailureDeleteReferenced is a non-cascade delete with live references.
+	FailureDeleteReferenced
 )
 
 var failureNames = map[Failure]string{
-	FailureNone:             "none",
-	FailureNoOperations:     "no-operations",
-	FailureUnknownTarget:    "unknown-target",
-	FailureAmbiguousTarget:  "ambiguous-target",
-	FailureNotValued:        "not-valued",
-	FailureInvalidValue:     "invalid-value",
-	FailureInvalidName:      "invalid-name",
-	FailureNotNamed:         "not-named",
-	FailureRenameReferenced: "rename-referenced",
-	FailureOverlappingEdits: "overlapping-edits",
-	FailureResultInvalid:    "result-invalid",
+	FailureNone:              "none",
+	FailureNoOperations:      "no-operations",
+	FailureUnknownTarget:     "unknown-target",
+	FailureAmbiguousTarget:   "ambiguous-target",
+	FailureNotValued:         "not-valued",
+	FailureInvalidValue:      "invalid-value",
+	FailureInvalidName:       "invalid-name",
+	FailureNotNamed:          "not-named",
+	FailureRenameReferenced:  "rename-referenced",
+	FailureOverlappingEdits:  "overlapping-edits",
+	FailureResultInvalid:     "result-invalid",
+	FailureOwnerUnknown:      "owner-unknown",
+	FailureOwnerNotNamespace: "owner-not-namespace",
+	FailureIllegalKind:       "illegal-kind",
+	FailureMemberNameTaken:   "member-name-taken",
+	FailureDeleteReferenced:  "delete-referenced",
 }
 
 // String returns the lowercase name of the failure, or "unknown".
