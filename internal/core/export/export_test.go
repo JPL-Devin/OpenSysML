@@ -909,6 +909,15 @@ func TestFixtureElementIDsRoundTrip(t *testing.T) {
 			t.Fatalf("%s: %v", path, err)
 		}
 		for _, subject := range graph.Subjects() {
+			if strings.HasPrefix(subject.Value, rdf.Expression) {
+				// An expression node is named for the element and slot it
+				// belongs to, not by a qualified name of its own.
+				id, _, ok := strings.Cut(strings.TrimPrefix(subject.Value, rdf.Expression), ".")
+				if owner, decoded := rdf.DecodeElementID(id); !ok || !decoded || owner == "" {
+					t.Errorf("%s: expression %s is not named for an element", path, subject.Value)
+				}
+				continue
+			}
 			qname, ok := graph.Lexical(subject, rdf.SysML+"qualifiedName")
 			if !ok {
 				t.Errorf("%s: subject %s has no qualified name", path, subject.Value)

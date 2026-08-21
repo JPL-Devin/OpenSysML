@@ -41,6 +41,7 @@ The wording is one constant, `export.ExperimentalNotice`.
 | `sysml:` | `https://www.omg.org/spec/SysML#`             | Metaclasses and metamodel properties |
 | `elmt:`  | `urn:sysmlv2:element:`                        | The elements of the converted model |
 | `sysx:`  | `urn:opensysml:sysml:`                        | The few properties the metamodel does not define |
+| `expr:`  | `urn:opensysml:expr:`                         | The expressions an element's positions hold, see [Expressions](#expressions) |
 | `rdf:`, `xsd:` | the standard RDF and XML Schema namespaces | `rdf:type`, literal datatypes |
 
 The `sysml:` vocabulary and the `elmt:` element base match the ones the
@@ -112,8 +113,9 @@ takes it from.
   without the quotes an unrestricted name is written with; a target that is an
   expression rather than a name (a feature chain, say) is carried as the text it
   was written as, typed `sysx:Expression` to tell the two apart.
-- `sysml:lowerBound`, `sysml:upperBound` — multiplicity
-- `sysml:value` — a feature's value
+- `sysml:lowerBound`, `sysml:upperBound` — multiplicity, as expression nodes
+  ([Expressions](#expressions))
+- `sysml:value` — a feature's value, as an expression node
 - `sysml:importedNamespace`, `sysml:aliasedElement`, `sysml:client`,
   `sysml:supplier`, `sysml:body`, `sysml:language`, `sysml:locale`,
   `sysml:annotatedElement`
@@ -142,6 +144,73 @@ standard metaclasses: `sysx:Alias`, `sysx:FilterMember`,
 Comments, documentation and textual representations convert as their own
 elements (`sysml:Comment`, `sysml:Documentation`, `sysml:TextualRepresentation`)
 carrying `sysml:body`.
+
+## Expressions
+
+An expression-valued position — a feature value, a multiplicity bound, a guard,
+a filter, a condition, a send payload, a loop's collection — states the
+expression as a **tree of typed nodes** in the `expr:` namespace, so a consumer
+can query the model's semantics and not only its structure:
+
+```sysml
+package P { attribute a : Integer; attribute total : Integer = a * 2; }
+```
+
+```turtle
+elmt:P__total
+    a sysml:AttributeUsage ;
+    sysml:value expr:P__total.value .
+
+expr:P__total.value
+    a sysml:OperatorExpression ;
+    sysx:sourceText "a * 2" ;
+    sysx:operator "*" ;
+    sysml:argument expr:P__total.value.a0, expr:P__total.value.a1 .
+
+expr:P__total.value.a0
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "a" ;
+    sysml:referent elmt:P__a ;
+    sysx:argumentIndex "0"^^xsd:integer .
+```
+
+The rules the tree follows:
+
+- **A node's IRI is its owner and its position**: `expr:<owner id>.<slot>`, and a
+  nested operand appends its own index (`.a0`, `.a1`). Two expressions of one
+  element therefore never collide, and the IRIs are deterministic, like element
+  IRIs.
+- **Every node carries `sysx:sourceText`**, the notation it was written as. The
+  tree is *additive*: the text is what a conversion back to notation is written
+  from, so exactness does not depend on the tree being complete, and
+  `TestRoundTripIsLossless` covers the same round trip it did before.
+- **Operands are ordered** by `sysx:argumentIndex`, because an RDF graph is a set
+  and `a - b` is not `b - a`.
+- **Metaclasses are the standard ones** where the metamodel names them:
+  `LiteralBoolean`, `LiteralInteger`, `LiteralRational`, `LiteralString`,
+  `LiteralInfinity`, `NullExpression`, `FeatureReferenceExpression`,
+  `FeatureChainExpression`, `OperatorExpression`, `InvocationExpression`,
+  `CollectExpression`, `SelectExpression`, `ConstructorExpression`,
+  `MetadataAccessExpression`, `Expression` for a body. `sysx:operator`,
+  `sysx:argumentIndex` and `sysx:sourceText` are the properties the metamodel
+  does not define.
+- **A feature reference links to the element** it names (`sysml:referent`) when
+  that element is in the graph, and carries its name as a literal when it
+  resolves outside it — the same rule the declaration-head relationships follow.
+- **An expression node is not a model element.** It has no
+  `sysml:qualifiedName` and no `sysml:owningNamespace`, and reading a graph back
+  never turns one into a declaration.
+- **A graph from another tool is read from its structure** when it carries no
+  `sysx:sourceText`: the supported shapes above are written back as notation, and
+  a shape this mapping cannot write — a missing operator, an operand count an
+  operator does not take, a literal with no value — is reported as unsupported
+  naming the node, never guessed.
+- **Older graphs still read.** A position holding a plain literal
+  (`sysml:value "1200.0"`), which is what releases before this wrote, is read as
+  that notation.
+
+Tests: `w6g4_rdf_expr_test.go` (structure, ordering, per-position identity,
+legacy literals, foreign trees, unsupported shapes, round-trip exactness).
 
 ## Behavior
 
@@ -176,9 +245,9 @@ A state's members are held in the AST in one bucket per kind (entry, do, exit,
 defer, substates, regions); they are written back in the order they were
 declared, taken from their source spans, so `do` before `entry` stays that way.
 
-The conditions and expressions these nodes carry are notation, as everywhere
-else in this mapping, so they convert back exactly but SPARQL cannot see inside
-them.
+The conditions and expressions these nodes carry are expression trees, like
+every other expression-valued position ([Expressions](#expressions)): they
+convert back exactly *and* SPARQL can see inside them.
 
 What is still refused, with the node named:
 
@@ -203,11 +272,13 @@ documented limitation, not a silent one: converting an affected element from a
 graph that lacks the text reports an error naming the element rather than
 guessing.
 
-**Expressions are carried as source text.** Feature values, multiplicity
-bounds, filter conditions, constraint conditions and succession guards are
-stored as their notation (`sysml:value "1200.0"`) rather than decomposed into
-expression trees. They convert back exactly and a consumer reading model
-structure is unaffected, but SPARQL cannot see inside them.
+**An expression tree is not the metamodel's own expression model.** Feature
+values, multiplicity bounds, filter and constraint conditions and guards are
+expression trees ([Expressions](#expressions)), which is queryable, but the
+nodes are not `Feature`s owned through `FeatureMembership`s the way the abstract
+syntax models an expression; the notation each node was written as is what a
+conversion back is written from. A consumer wanting the metamodel's own shape
+does not get it from this mapping.
 
 **Lexical comments do not survive the RDF hop.** `//` and `/* */` trivia is
 attached to no element, so a `notation → RDF → notation` round trip drops it:
@@ -232,6 +303,30 @@ properties above, so the head is kept verbatim alongside its structural
 properties. These round-trip exactly through OpenSysML. A graph produced by
 *another* tool will not carry the text, and converting such an element to
 notation then reports it as unsupported.
+
+The features such a head relates are nonetheless stated as structure, so a
+consumer can read the ends without parsing notation: `sysx:relatedFeature`
+points at one expression node per end, each carrying `sysx:endIndex` and — for a
+flow — `sysx:endRole` (`source`, `target`, `payload`):
+
+```turtle
+elmt:P__Car___402
+    a sysml:ConnectionUsage ;
+    sysx:sourceText "connect left to right;" ;
+    sysx:relatedFeature expr:P__Car___402.end0, expr:P__Car___402.end1 .
+
+expr:P__Car___402.end0
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "left" ;
+    sysml:referent elmt:P__Car__left ;
+    sysx:endIndex "0"^^xsd:integer .
+```
+
+What is not reconstructible is the *head*, not the ends: the metamodel reaches a
+connector's ends through `EndFeatureMembership`s and `ConnectorEnd`s that the
+notation does not record, and which keyword and end form were written is not
+recoverable from the participants alone. Test:
+`TestBindingEndsAreStatedAsStructure`.
 
 **A `then` succession carries its two ends.** Every `then` is one node naming
 the members it sequences, whether it was written as its own member (`then a b;`)

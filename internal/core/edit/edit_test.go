@@ -341,31 +341,32 @@ func TestRenameRewritesTheNameTokenOnly(t *testing.T) {
 	requireClean(t, loadContent(t, "spacecraft.sysml", string(res.Content)))
 }
 
-func TestRenameRefusedWhenReferenced(t *testing.T) {
+// A referenced rename used to be refused; it now rewrites the references, so
+// this pins the rewriting instead of the old refusal.
+func TestRenameRewritesReferences(t *testing.T) {
 	m := load(t, "spacecraft.sysml")
 	requireClean(t, m)
 
-	_, err := Apply(m, []Operation{Rename("Demo::SC::unitMass", "dryMass")})
-	e := editError(t, err)
-	if e.Failure != FailureRenameReferenced {
-		t.Fatalf("failure is %s, want rename-referenced: %s", e.Failure, e.Message)
-	}
-	if len(e.Referring) == 0 {
-		t.Fatalf("refusal names no referring element: %s", e.Message)
-	}
-	// The refusal names the namespaces the references are made from: the value
-	// expression of SC::total, and sc's redefinition of the feature.
-	for _, want := range []string{"Demo::SC", "Demo::sc"} {
-		found := false
-		for _, got := range e.Referring {
-			if got == want {
-				found = true
-			}
-		}
-		if !found {
-			t.Fatalf("referring elements %v do not include %s", e.Referring, want)
+	res := applyOne(t, m, Rename("Demo::SC::unitMass", "dryMass"))
+
+	got := string(res.Content)
+	for _, want := range []string{
+		"attribute dryMass : ISQ::MassValue = 1000.0[SI::kg];",
+		"attribute total : ISQ::MassValue = dryMass;",
+		"attribute redefines dryMass = 1200.0[SI::kg];",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("rename did not produce %q:\n%s", want, got)
 		}
 	}
+	if strings.Contains(got, "unitMass") {
+		t.Fatalf("old name survives the rename:\n%s", got)
+	}
+	if len(res.Applied) != 3 {
+		t.Fatalf("applied %d edits, want 3 (declaration and two references)", len(res.Applied))
+	}
+	assertOnlySpanChanged(t, m, res)
+	requireClean(t, loadContent(t, "spacecraft.sysml", got))
 }
 
 func TestRefusals(t *testing.T) {
@@ -602,17 +603,16 @@ func TestRenameSeesInheritedMembers(t *testing.T) {
 		t.Fatalf("refusal does not name the inherited feature: %s", e.Message)
 	}
 
-	// The inherited feature is referenced by name from P, so renaming it there is
-	// the referenced-rename refusal, naming where the reference is made.
+	// The inherited feature is referenced by name from P, and the rename rewrites
+	// that reference too.
 	m = loadContent(t, "inherit.sysml", src)
-	_, err = Apply(m, []Operation{Rename("Demo::Base::mass", "weight")})
-	e = editError(t, err)
-	if e.Failure != FailureRenameReferenced {
-		t.Fatalf("failure is %s (%s), want rename-referenced", e.Failure, e.Message)
+	res := applyOne(t, m, Rename("Demo::Base::mass", "weight"))
+	got := string(res.Content)
+	if !strings.Contains(got, "attribute weight = 1.0;") ||
+		!strings.Contains(got, "attribute q = weight;") {
+		t.Fatalf("inherited reference not rewritten:\n%s", got)
 	}
-	if len(e.Referring) != 1 || e.Referring[0] != "Demo::P" {
-		t.Fatalf("referrers are %v, want [Demo::P]", e.Referring)
-	}
+	requireClean(t, loadContent(t, "inherit.sysml", got))
 }
 
 func TestSemanticValidationSkippedWithoutIndexSource(t *testing.T) {

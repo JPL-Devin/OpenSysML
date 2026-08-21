@@ -33,6 +33,9 @@ type element struct {
 	// in, which is what a reference written inside it is relative to.
 	scope    string
 	children []*element
+	// expressions holds the notation of each expression-valued property, keyed
+	// by predicate, resolved from the expression graph the property points at.
+	expressions map[string]string
 }
 
 // ToSysML converts an RDF graph back into SysML v2 source text. The result is
@@ -110,6 +113,11 @@ func (d *decoder) build() ([]*element, error) {
 		roots []*element
 	)
 	for _, subject := range d.graph.Subjects() {
+		if d.isExpressionNode(subject) {
+			// A node of an expression graph belongs to the declaration that holds
+			// the expression, not to an element of its own.
+			continue
+		}
 		metaclass := rdf.LocalName(d.graph.Type(subject))
 		if metaclass == "" {
 			return nil, &UnsupportedError{
@@ -143,6 +151,9 @@ func (d *decoder) build() ([]*element, error) {
 		parent.children = append(parent.children, el)
 	}
 	if err := d.checkReferences(); err != nil {
+		return nil, err
+	}
+	if err := d.resolveExpressions(); err != nil {
 		return nil, err
 	}
 	sortByIndex(roots)
@@ -955,6 +966,9 @@ func (d *decoder) referenceName(term rdf.Term, scope string) (string, error) {
 }
 
 func (d *decoder) stringOf(el *element, property string) (string, bool) {
+	if text, ok := el.expressions[property]; ok {
+		return text, text != ""
+	}
 	value, ok := d.graph.Lexical(rdf.IRI(el.iri), property)
 	if !ok || value == "" {
 		return "", false

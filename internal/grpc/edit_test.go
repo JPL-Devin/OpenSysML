@@ -175,9 +175,9 @@ func TestApplyEditsRefusalIsAResponse(t *testing.T) {
 	}
 }
 
-// TestApplyEditsRenameReferencedNamesReferrers verifies a refused rename says
-// where the references it would break are made.
-func TestApplyEditsRenameReferencedNamesReferrers(t *testing.T) {
+// TestApplyEditsRenameRewritesReferences verifies a rename over the wire
+// rewrites the references to the renamed element, not the declaration alone.
+func TestApplyEditsRenameRewritesReferences(t *testing.T) {
 	srv := mustNewService(t, 10)
 	hash := mustParsedModel(t, srv, `package Demo {
     part def SC {
@@ -196,11 +196,19 @@ func TestApplyEditsRenameReferencedNamesReferrers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ApplyEdits failed: %v", err)
 	}
-	if resp.Failure != pb.EditFailure_EDIT_FAILURE_RENAME_REFERENCED {
-		t.Fatalf("failure = %s, want rename-referenced: %s", resp.Failure, resp.Error)
+	if resp.Failure != pb.EditFailure_EDIT_FAILURE_UNSPECIFIED {
+		t.Fatalf("failure = %s: %s", resp.Failure, resp.Error)
 	}
-	if len(resp.ReferringElements) == 0 {
-		t.Error("refusal names no referring element")
+	for _, want := range []string{
+		"attribute unitWeight : ISQ::MassValue = 1000.0[SI::kg];",
+		"attribute total : ISQ::MassValue = unitWeight;",
+	} {
+		if !strings.Contains(resp.Content, want) {
+			t.Fatalf("edited content missing %q:\n%s", want, resp.Content)
+		}
+	}
+	if len(resp.Applied) != 2 {
+		t.Fatalf("applied %d edits, want 2 (declaration and reference)", len(resp.Applied))
 	}
 }
 

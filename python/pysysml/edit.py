@@ -223,10 +223,11 @@ class Editor:
     def rename(self, target, new_name):
         """Rename one of the model's declarations.
 
-        Rewrites the declaration's name token only. References to the element are
-        not updated, so a referenced element cannot be renamed this way: the
-        service refuses it with :class:`~pysysml.errors.RenameReferencedError`,
-        naming where the references are made.
+        Rewrites the declaration's name token and every reference to it in the
+        model's source, including qualified names, alias targets and imports. A
+        rename that would make another name mean the renamed element, or make
+        this one mean something else, is refused with
+        :class:`~pysysml.errors.InvalidEditError`.
 
         Args:
             target (str or Symbol): Declaration to rename, by FQN/id or symbol

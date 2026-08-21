@@ -23,7 +23,7 @@ type OpKind int
 const (
 	// OpSetValue sets the value of a feature that already exists.
 	OpSetValue OpKind = iota
-	// OpRename rewrites the name token of a declaration.
+	// OpRename rewrites the name token of a declaration and the references to it.
 	OpRename
 	// OpAddMember inserts a declaration into a namespace.
 	OpAddMember
@@ -124,19 +124,9 @@ func Apply(m Model, ops []Operation) (*Result, error) {
 	content := append([]byte(nil), m.Source.Bytes()...)
 	applied := make([]Applied, 0, len(ops))
 	for i, op := range ops {
-		var splices []splice
-		if op.Kind == OpDelete {
-			deletes, err := current.deleteSplices(i, op)
-			if err != nil {
-				return nil, err
-			}
-			splices = deletes
-		} else {
-			sp, err := current.spliceFor(i, op)
-			if err != nil {
-				return nil, err
-			}
-			splices = []splice{sp}
+		splices, err := current.splicesFor(i, op)
+		if err != nil {
+			return nil, err
 		}
 		if err := checkOverlap(splices); err != nil {
 			return nil, err
@@ -152,7 +142,6 @@ func Apply(m Model, ops []Operation) (*Result, error) {
 			})
 		}
 		content = next
-		var err error
 		current, err = reparseModel(m, content)
 		if err != nil {
 			return nil, err
@@ -201,19 +190,11 @@ func needsSequential(ops []Operation) bool {
 func applyBatch(m Model, ops []Operation) (*Result, error) {
 	splices := make([]splice, 0, len(ops))
 	for i, op := range ops {
-		if op.Kind == OpDelete {
-			deletes, err := m.deleteSplices(i, op)
-			if err != nil {
-				return nil, err
-			}
-			splices = append(splices, deletes...)
-			continue
-		}
-		sp, err := m.spliceFor(i, op)
+		next, err := m.splicesFor(i, op)
 		if err != nil {
 			return nil, err
 		}
-		splices = append(splices, sp)
+		splices = append(splices, next...)
 	}
 	if err := checkOverlap(splices); err != nil {
 		return nil, err
@@ -266,32 +247,42 @@ type splice struct {
 	target  string
 }
 
-// spliceFor turns one operation into the byte range it rewrites.
-func (m Model) spliceFor(i int, op Operation) (splice, error) {
+// splicesFor turns one operation into the byte ranges it rewrites. A rename and
+// a cascading delete reach more than one span; every other operation reaches one.
+func (m Model) splicesFor(i int, op Operation) ([]splice, error) {
 	if op.Kind == OpAddMember {
-		return m.addMemberSplice(i, op)
+		sp, err := m.addMemberSplice(i, op)
+		if err != nil {
+			return nil, err
+		}
+		return []splice{sp}, nil
+	}
+	if op.Kind == OpDelete {
+		deletes, err := m.deleteSplices(i, op)
+		if err != nil {
+			return nil, err
+		}
+		if len(deletes) == 0 {
+			return nil, &Error{Failure: FailureResultInvalid, OperationIndex: i,
+				Message: "delete selected no declaration"}
+		}
+		return deletes, nil
 	}
 	sym, err := m.target(i, op)
 	if err != nil {
-		return splice{}, err
+		return nil, err
 	}
 	switch op.Kind {
 	case OpSetValue:
-		return m.valueSplice(i, op, sym)
-	case OpRename:
-		return m.renameSplice(i, op, sym)
-	case OpDelete:
-		deletes, err := m.deleteSplices(i, op)
+		sp, err := m.valueSplice(i, op, sym)
 		if err != nil {
-			return splice{}, err
+			return nil, err
 		}
-		if len(deletes) == 0 {
-			return splice{}, &Error{Failure: FailureResultInvalid, OperationIndex: i,
-				Message: "delete selected no declaration"}
-		}
-		return deletes[0], nil
+		return []splice{sp}, nil
+	case OpRename:
+		return m.renameSplices(i, op, sym)
 	default:
-		return splice{}, &Error{
+		return nil, &Error{
 			Failure:        FailureResultInvalid,
 			OperationIndex: i,
 			Message:        fmt.Sprintf("unknown edit operation kind %d", op.Kind),
