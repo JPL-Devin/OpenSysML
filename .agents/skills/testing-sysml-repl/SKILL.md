@@ -4346,3 +4346,77 @@ inside an `occurrence` must still validate clean).
 buffering, so a following `%eval` is swallowed as model text. Press `ctrl+c` to flush the buffer —
 the diagnostics then print and the session stays usable. Budget for this when driving malformed
 input on camera, rather than reading it as a hang.
+
+## RDF expression trees, reference-rewriting rename, declaration-aware Query (PR #390)
+
+Three surfaces changed together here; each has a cheap, high-signal probe.
+
+**Expression trees in Turtle.** Every expression-valued position (feature value, multiplicity
+bound, condition, guard, payload, loop collection) emits a node in `urn:opensysml:expr:`
+(`@prefix expr:`). A one-file fixture that reaches value/bound/literal/boolean/condition at once:
+
+```
+package P {
+    part def Panel {
+        attribute width : ScalarValues::Real;
+        attribute height : ScalarValues::Real;
+        attribute total = width * height + 2;          // nested operator tree
+        attribute count : ScalarValues::Integer[1..width * 2];  // bound
+        attribute label = "panel";                     // literal
+        attribute ok = total > 10 and count < 5;
+    }
+    constraint def Fits { attribute w : ScalarValues::Real; assert constraint { w < 100 } }
+}
+```
+
+Assert structurally, not by grepping the source text: count `expr:` subjects and require the same
+number of `sysx:sourceText` triples on them (source text must be on *every* node), require
+`sysml:operator` + two `sysml:argument` nodes with distinct `sysx:argumentIndex` on the operator
+node, and require `sysml:lowerBound`/`sysml:upperBound`/`sysx:condition` to point at `expr:` IRIs
+rather than plain literals. A stale binary emits `sysml:value "width * height + 2"`, which that
+assertion rejects — this is the check that proves you rebuilt.
+
+Connector/binding heads (`connect`/`bind`/`flow`/`allocate`/`succession`) additionally emit
+`sysx:relatedFeature` end nodes carrying `sysx:endIndex` and, for directed heads, `sysx:endRole`
+`"source"`/`"target"`. Round-trip these too (`c.ttl -> c.sysml -> d.ttl`, `diff` empty).
+
+**Source text stays authoritative for ttl→sysml.** A malformed expression node that still has
+`sysx:sourceText` converts *successfully* — that is by design, not a bug. To reach the structural
+decoder in an adversarial fixture you must delete the parent node's `sysx:sourceText` as well as
+the triple you are breaking. Broken graphs then exit 2, write no output file, and the message
+names the exact node IRI, e.g.
+`cannot convert the expression <urn:opensysml:expr:P__Panel__total.value.a1>: a literal expression
+states the value it evaluates to`.
+
+**pysysml API details that cost time:**
+
+- `Model.edit()`, not `Model.editor()`.
+- `Model.hash`, not `Model.model_hash`.
+- `ApplyEditsResponse` has **no** `success`/`message` fields — read `resp.error` (empty string means
+  success), `resp.failure` (e.g. `EDIT_FAILURE_INVALID_NAME`), `resp.content`, `resp.referring_elements`.
+  Checking "empty content on refusal" on the wire means asserting `resp.content == ""` from a raw
+  stub call, not just catching `InvalidEditError`.
+- Never name a probe script `grpc.py` — it shadows the `grpc` package.
+
+**Rename fixture that covers all the rewrite/leave-alone rules in one file:** a declaration, an
+unqualified reference (`attribute doubled = mass * 2;`), a qualified reference
+(`R::Widget::mass`), an `alias m for R::Widget::mass;`, an explicit `import R::Widget::mass;`, a
+wildcard `import R::Widget::*;` (must not change), a same-named member in an unrelated package
+(must not change), a sibling `weight`, and comments. Assert the output re-validates
+(`bin/sysml -validate`) and that it is *not* byte-identical to the input (catches a silent no-op).
+
+**Query property names are JSON-LD-ish:** `@id` and `@type`, not `id`/`type`. Requesting an unknown
+property returns an error listing the valid set. `isIndividual` is **not** in `QueryPropertyNames()`
+— individual status is only observable through `@type` = `OccurrenceDefinition`/`OccurrenceUsage`.
+If a PR description claims `isIndividual`, verify whether it is a queryable property or only a
+type refinement, and report the difference.
+
+Values worth asserting after the declaration-aware change (contrast against a parent-commit service
+on another port to make the delta visible; the parent returned `Feature` or an absent `@type`):
+connector ends `ReferenceUsage`, `interface def` ends `PortUsage`, `class`→`Class`,
+`struct`→`Structure`, `assoc`→`Association`, `behavior`→`Behavior`, `predicate`→`Predicate`,
+`interaction`→`Interaction`, individual def/usage → `OccurrenceDefinition`/`OccurrenceUsage`,
+alias → `Membership`.
+
+**Konsole font size on camera:** use `ctrl+plus` / `ctrl+minus`. `ctrl+shift+plus` is not a Konsole
+binding and types literal `+` characters into the shell (`+++cd: command not found`).
