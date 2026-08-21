@@ -4444,3 +4444,43 @@ alias → `Membership`.
 
 **Konsole font size on camera:** use `ctrl+plus` / `ctrl+minus`. `ctrl+shift+plus` is not a Konsole
 binding and types literal `+` characters into the shell (`+++cd: command not found`).
+
+## Driving state self-transitions and budget failures from the REPL (PR #411)
+
+Self-transition semantics (`StateExecutor.encloses`: `source == target` is *external*, so exit →
+effect → entry run and the state is visited twice) are fully REPL-observable, but only if the
+fixture's trigger is one the REPL can produce:
+
+- **The shipped conformance fixtures mostly use `accept again` (a signal), which the REPL cannot
+  inject** — they park in their start state forever. Re-author the same model with
+  `transition first s accept after 5 do assign log := log * 10 + 9 then s;` and drive it with
+  `%state <Pkg>::<Machine>`, `%trace on`, `%advance 5`, `%current`. The `log` digits then read as a
+  transcript of the ordering, so one integer is a complete assertion — e.g. simple state
+  `log = 1291`, composite `1342913`, orthogonal `17342913`, matching the `.expected.json` values.
+- **Change triggers (`accept when <cond>`) *are* dispatched by `%advance`** despite the folklore
+  that only `RunToCompletion` polls them: the rising-edge model reaches `waiting` with `log = 1`
+  from the REPL and gRPC `execute_state` agrees (`states_visited ['start','waiting','waiting']`).
+  Always run both surfaces and diff them — that pair is what would expose a debugger-only gap.
+- **`./bin/sysml <model> -state <machine>` does NOT run to completion.** It only prints
+  `Started state machine executor …` / `Current state: <initial>` and exits 0, so it is useless as
+  an execution oracle; a model that "stays in `start`" there proves nothing. Use the REPL's
+  `%advance` or gRPC `execute_state`.
+- **A `region` needs its own `initial`**; `entry; then x;` inside a region fails lowering with
+  `region <r> in state <S> has no initial state`, which looks like a runtime bug but is fixture
+  shape.
+- **Untriggered (completion) self-transitions are the budget test.** They are *not* dispatched when
+  `%state` starts the machine — you must `%advance 1`, which then reports
+  `Stopped at the event budget (1000000 events; raise SYSML_MAX_EVENTS to allow more)` in ~2 s and
+  leaves the REPL usable (`%eval 1 + 1` → `= 2`). The object-exhibited path fails earlier and
+  louder: `%instantiate <Pkg>::<PartDef>` on a `part def` with `exhibit state …` returns
+  `instantiation failed: exhibited state machine <M> of object #1: state machine exceeded max
+  events (…), possible infinite loop` plus `(no instances created)` — there is no need for a
+  `%state <M> <obj>` step, and that object name never exists to be referenced.
+- A/B against the parent commit is cheap and decisive here: the pre-fix binary prints `log = 19`
+  for the simple fixture (internal transition, no exit/entry) while composite and orthogonal
+  fixtures are byte-identical across both binaries.
+- The blueprint's `maintenance` step already builds a pysysml venv at **`~/pv`** and copies
+  `bin/sysml-grpc` into `~/.pysysml/bin`; use `~/pv/bin/python` instead of building a new
+  `/tmp/pv` venv. Copies of hand-written fixtures must qualify stdlib types
+  (`ScalarValues::Integer`) or add `private import ScalarValues::*;` when moved out of the
+  conformance directory.
