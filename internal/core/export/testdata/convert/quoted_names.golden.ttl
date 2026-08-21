@@ -1,4 +1,5 @@
 @prefix elmt: <urn:sysmlv2:element:> .
+@prefix expr: <urn:opensysml:expr:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -51,7 +52,25 @@ elmt:Quoted_20Names__Rover_20Model__mass_20limit___400
     sysml:owningNamespace elmt:Quoted_20Names__Rover_20Model__mass_20limit ;
     sysx:memberIndex "0"^^xsd:integer ;
     sysx:declaredKeyword "assert" ;
-    sysx:condition "'dry mass' > 0" .
+    sysx:condition expr:Quoted_20Names__Rover_20Model__mass_20limit___400.condition .
+
+expr:Quoted_20Names__Rover_20Model__mass_20limit___400.condition
+    a sysml:OperatorExpression ;
+    sysx:sourceText "'dry mass' > 0" ;
+    sysml:operator ">" ;
+    sysml:argument expr:Quoted_20Names__Rover_20Model__mass_20limit___400.condition.a0, expr:Quoted_20Names__Rover_20Model__mass_20limit___400.condition.a1 .
+
+expr:Quoted_20Names__Rover_20Model__mass_20limit___400.condition.a0
+    a sysml:FeatureReferenceExpression ;
+    sysx:sourceText "'dry mass'" ;
+    sysml:referent elmt:Quoted_20Names__Rover_20Model__dry_20mass ;
+    sysx:argumentIndex "0"^^xsd:integer .
+
+expr:Quoted_20Names__Rover_20Model__mass_20limit___400.condition.a1
+    a sysml:LiteralInteger ;
+    sysx:sourceText "0" ;
+    sysml:value "0"^^xsd:integer ;
+    sysx:argumentIndex "1"^^xsd:integer .
 
 elmt:Quoted_20Names__Rover_20Model__is_20light
     a sysml:ConstraintUsage ;

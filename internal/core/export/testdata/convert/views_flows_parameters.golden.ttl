@@ -1,4 +1,5 @@
 @prefix elmt: <urn:sysmlv2:element:> .
+@prefix expr: <urn:opensysml:expr:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -87,8 +88,12 @@ elmt:FlowsAndViews__tanks
     sysml:declaredName "tanks" ;
     sysml:isNonunique "true"^^xsd:boolean ;
     sysml:type elmt:FlowsAndViews__Tank ;
-    sysml:upperBound "*" ;
+    sysml:upperBound expr:FlowsAndViews__tanks.upperBound ;
     sysx:hasBody "false"^^xsd:boolean .
+
+expr:FlowsAndViews__tanks.upperBound
+    a sysml:LiteralInfinity ;
+    sysx:sourceText "*" .
 
 elmt:FlowsAndViews__vehicle
     a sysml:PartUsage ;
@@ -116,9 +121,19 @@ elmt:FlowsAndViews__vehicle__spares
     sysml:isNonunique "true"^^xsd:boolean ;
     sysml:type elmt:FlowsAndViews__Tank ;
     sysml:subsets elmt:FlowsAndViews__tanks ;
-    sysml:lowerBound "0" ;
-    sysml:upperBound "2" ;
+    sysml:lowerBound expr:FlowsAndViews__vehicle__spares.lowerBound ;
+    sysml:upperBound expr:FlowsAndViews__vehicle__spares.upperBound ;
     sysx:hasBody "false"^^xsd:boolean .
+
+expr:FlowsAndViews__vehicle__spares.lowerBound
+    a sysml:LiteralInteger ;
+    sysx:sourceText "0" ;
+    sysml:value "0"^^xsd:integer .
+
+expr:FlowsAndViews__vehicle__spares.upperBound
+    a sysml:LiteralInteger ;
+    sysx:sourceText "2" ;
+    sysml:value "2"^^xsd:integer .
 
 elmt:FlowsAndViews__vehicle__firstSpare
     a sysml:PartUsage ;
@@ -187,7 +202,13 @@ elmt:FlowsAndViews__StructureView___400
     sysml:qualifiedName "FlowsAndViews::StructureView::@0" ;
     sysml:owningNamespace elmt:FlowsAndViews__StructureView ;
     sysx:memberIndex "0"^^xsd:integer ;
-    sysx:filter "@SysML::PartUsage" .
+    sysx:filter expr:FlowsAndViews__StructureView___400.filter .
+
+expr:FlowsAndViews__StructureView___400.filter
+    a sysml:OperatorExpression ;
+    sysx:sourceText "@SysML::PartUsage" ;
+    sysml:operator "@" ;
+    sysx:typeArgument "SysML::PartUsage" .
 
 elmt:FlowsAndViews__vehicleView
     a sysml:ViewUsage ;

@@ -85,7 +85,7 @@ var queryProperties = map[string]queryProperty{
 		return present(e.sc.Index.GetFQN(sym))
 	}},
 	QueryPropType: {read: func(e *queryEval, sym *symbols.Symbol) (string, bool) {
-		return present(MetamodelTypeName(sym.Kind))
+		return present(MetamodelTypeNameOf(sym))
 	}},
 	QueryPropName: {read: func(e *queryEval, sym *symbols.Symbol) (string, bool) {
 		return present(localName(e.sc.Index.GetFQN(sym)))
@@ -174,9 +174,8 @@ func QueryPropertyNames() []string {
 
 // metamodelTypeNames maps OpenSysML's symbol kinds onto the metamodel type names
 // the standard's clients write as `@type`, and is the single source of truth for
-// that mapping. Where the metamodel has no distinct type — an individual is an
-// occurrence with isIndividual set — the closest one it has is used; docs/reference/api.md
-// reproduces the table and records those choices.
+// that mapping. A kind that spans several metaclasses is refined from the
+// declaration by MetamodelTypeNameOf; docs/reference/api.md reproduces the table.
 var metamodelTypeNames = map[symbols.SymbolKind]string{
 	symbols.SymbolPackage:               "Package",
 	symbols.SymbolNamespace:             "Namespace",
@@ -236,7 +235,66 @@ var metamodelTypeNames = map[symbols.SymbolKind]string{
 	symbols.SymbolAnalysisCaseUsage:     "AnalysisCaseUsage",
 	symbols.SymbolVerificationCaseUsage: "VerificationCaseUsage",
 	symbols.SymbolUseCaseUsage:          "UseCaseUsage",
-	symbols.SymbolConnectorEnd:          "Feature",
+	// An end of a connect clause is a ReferenceUsage (SysML.xtext ConnectorEnd);
+	// an interface's is a PortUsage, which MetamodelTypeNameOf refines.
+	symbols.SymbolConnectorEnd:            "ReferenceUsage",
+	symbols.SymbolSatisfyRequirementUsage: "SatisfyRequirementUsage",
+}
+
+// kermlTypeNames maps a KerML type declaration's keyword onto its metaclass, the
+// distinction symbols.SymbolKerMLType does not carry (KerML.xtext § Types).
+var kermlTypeNames = map[ast.DefinitionKind]string{
+	ast.DefClass:     "Class",
+	ast.DefStruct:    "Structure",
+	ast.DefAssoc:     "Association",
+	ast.DefBehavior:  "Behavior",
+	ast.DefPredicate: "Predicate",
+}
+
+// kermlUsageTypeNames maps the same declarations where the parser records them as
+// usages, which is how a KerML type written without `def` is parsed.
+var kermlUsageTypeNames = map[ast.UsageKind]string{
+	ast.UsageClass:       "Class",
+	ast.UsageStruct:      "Structure",
+	ast.UsageAssoc:       "Association",
+	ast.UsageBehavior:    "Behavior",
+	ast.UsagePredicate:   "Predicate",
+	ast.UsageInteraction: "Interaction",
+}
+
+// MetamodelTypeNameOf returns the metamodel type name an element reports as
+// `@type`, refining the kinds one symbol kind spans several metaclasses for.
+func MetamodelTypeNameOf(sym *symbols.Symbol) string {
+	switch sym.Kind {
+	case symbols.SymbolConnectorEnd:
+		return connectorEndTypeName(sym)
+	case symbols.SymbolKerMLType:
+		return kermlTypeName(sym)
+	}
+	return metamodelTypeNames[sym.Kind]
+}
+
+// connectorEndTypeName names an end feature by the connector that declares it:
+// an interface's end is a PortUsage, every other connector's a ReferenceUsage.
+func connectorEndTypeName(sym *symbols.Symbol) string {
+	if sym.OwnerScope != nil {
+		if usage, ok := sym.OwnerScope.Node().(*ast.Usage); ok && usage.Kind == ast.UsageInterface {
+			return "PortUsage"
+		}
+	}
+	return metamodelTypeNames[symbols.SymbolConnectorEnd]
+}
+
+// kermlTypeName names a KerML type declaration by its keyword. A symbol with no
+// declaration — one restored from the library cache — reports none.
+func kermlTypeName(sym *symbols.Symbol) string {
+	switch decl := sym.Decl.(type) {
+	case *ast.Definition:
+		return kermlTypeNames[decl.Kind]
+	case *ast.Usage:
+		return kermlUsageTypeNames[decl.Kind]
+	}
+	return ""
 }
 
 // MetamodelTypeName returns the metamodel type name a symbol kind reports as
@@ -446,7 +504,7 @@ func unknownProperty(name string) *QueryError {
 func (e *queryEval) project(sym *symbols.Symbol, selected []string) *pb.QueryResultElement {
 	element := &pb.QueryResultElement{
 		Id:         e.sc.Index.GetFQN(sym),
-		Type:       MetamodelTypeName(sym.Kind),
+		Type:       MetamodelTypeNameOf(sym),
 		Properties: make(map[string]string, len(selected)),
 	}
 	for _, name := range selected {

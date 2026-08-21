@@ -1,4 +1,5 @@
 @prefix elmt: <urn:sysmlv2:element:> .
+@prefix expr: <urn:opensysml:expr:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -35,8 +36,13 @@ elmt:Vehicles__Vehicle__engine
     sysx:memberIndex "1"^^xsd:integer ;
     sysml:declaredName "engine" ;
     sysml:type elmt:Vehicles__Engine ;
-    sysml:upperBound "1" ;
+    sysml:upperBound expr:Vehicles__Vehicle__engine.upperBound ;
     sysx:hasBody "false"^^xsd:boolean .
+
+expr:Vehicles__Vehicle__engine.upperBound
+    a sysml:LiteralInteger ;
+    sysx:sourceText "1" ;
+    sysml:value "1"^^xsd:integer .
 
 elmt:Vehicles__Engine
     a sysml:PartDefinition ;

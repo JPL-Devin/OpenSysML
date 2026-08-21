@@ -30,8 +30,7 @@ literal-for-object-property AttributeUsage type                                 
 literal-for-object-property PartUsage type                                       # Feature_type: the type is written as its name, not as an element IRI
 literal-for-object-property SuccessionAsUsage sourceFeature                      # Connector_sourceFeature: a succession end is written as a name (D2)
 literal-for-object-property urn:opensysml:sysml:InitialNode sourceFeature        # Connector_sourceFeature: a succession end is written as a name (D2)
-literal-for-object-property urn:opensysml:sysml:MultiplicityDeclaration lowerBound # MultiplicityRange_lowerBound: the bound is written as a literal, not as an Expression element (D1)
-literal-for-object-property urn:opensysml:sysml:MultiplicityDeclaration upperBound # MultiplicityRange_upperBound: the bound is written as a literal, not as an Expression element (D1)
+literal-for-object-property FeatureReferenceExpression referent                   # FeatureReferenceExpression_referent: a name resolving outside the graph is written as a name, as every reference this tool cannot link is (D7)
 
 # 3. Metaclass names this tool writes into the SysML namespace that the 202407
 # rendering does not declare at all.

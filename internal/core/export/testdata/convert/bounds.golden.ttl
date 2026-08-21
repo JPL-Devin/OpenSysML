@@ -1,4 +1,5 @@
 @prefix elmt: <urn:sysmlv2:element:> .
+@prefix expr: <urn:opensysml:expr:> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix sysml: <https://www.omg.org/spec/SysML#> .
 @prefix sysx: <urn:opensysml:sysml:> .
@@ -34,8 +35,13 @@ elmt:Bounds__Fleet__exact
     sysx:memberIndex "0"^^xsd:integer ;
     sysml:declaredName "exact" ;
     sysml:type elmt:Bounds__Vehicle ;
-    sysml:upperBound "3" ;
+    sysml:upperBound expr:Bounds__Fleet__exact.upperBound ;
     sysx:hasBody "false"^^xsd:boolean .
+
+expr:Bounds__Fleet__exact.upperBound
+    a sysml:LiteralInteger ;
+    sysx:sourceText "3" ;
+    sysml:value "3"^^xsd:integer .
 
 elmt:Bounds__Fleet__range
     a sysml:PartUsage ;
@@ -44,9 +50,19 @@ elmt:Bounds__Fleet__range
     sysx:memberIndex "1"^^xsd:integer ;
     sysml:declaredName "range" ;
     sysml:type elmt:Bounds__Vehicle ;
-    sysml:lowerBound "1" ;
-    sysml:upperBound "4" ;
+    sysml:lowerBound expr:Bounds__Fleet__range.lowerBound ;
+    sysml:upperBound expr:Bounds__Fleet__range.upperBound ;
     sysx:hasBody "false"^^xsd:boolean .
+
+expr:Bounds__Fleet__range.lowerBound
+    a sysml:LiteralInteger ;
+    sysx:sourceText "1" ;
+    sysml:value "1"^^xsd:integer .
+
+expr:Bounds__Fleet__range.upperBound
+    a sysml:LiteralInteger ;
+    sysx:sourceText "4" ;
+    sysml:value "4"^^xsd:integer .
 
 elmt:Bounds__Fleet__many
     a sysml:PartUsage ;
@@ -55,9 +71,18 @@ elmt:Bounds__Fleet__many
     sysx:memberIndex "2"^^xsd:integer ;
     sysml:declaredName "many" ;
     sysml:type elmt:Bounds__Vehicle ;
-    sysml:lowerBound "0" ;
-    sysml:upperBound "*" ;
+    sysml:lowerBound expr:Bounds__Fleet__many.lowerBound ;
+    sysml:upperBound expr:Bounds__Fleet__many.upperBound ;
     sysx:hasBody "false"^^xsd:boolean .
+
+expr:Bounds__Fleet__many.lowerBound
+    a sysml:LiteralInteger ;
+    sysx:sourceText "0" ;
+    sysml:value "0"^^xsd:integer .
+
+expr:Bounds__Fleet__many.upperBound
+    a sysml:LiteralInfinity ;
+    sysx:sourceText "*" .
 
 elmt:Bounds__Fleet__loose
     a sysml:PartUsage ;
@@ -68,8 +93,12 @@ elmt:Bounds__Fleet__loose
     sysml:isOrdered "true"^^xsd:boolean ;
     sysml:isNonunique "true"^^xsd:boolean ;
     sysml:type elmt:Bounds__Vehicle ;
-    sysml:upperBound "*" ;
+    sysml:upperBound expr:Bounds__Fleet__loose.upperBound ;
     sysx:hasBody "false"^^xsd:boolean .
+
+expr:Bounds__Fleet__loose.upperBound
+    a sysml:LiteralInfinity ;
+    sysx:sourceText "*" .
 
 elmt:Bounds__Fleet__shared
     a sysml:PartUsage ;

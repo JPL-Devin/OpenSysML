@@ -21,6 +21,10 @@ const (
 	// expressions. They are namespaced separately so a consumer can tell our
 	// additions from the standard vocabulary and ignore them.
 	OpenSysML = "urn:opensysml:sysml:"
+	// Expression is the base IRI for the nodes of an expression graph: the
+	// subexpressions of a value, bound, guard or condition, which are elements
+	// of the abstract syntax without a qualified name of their own.
+	Expression = "urn:opensysml:expr:"
 	// LegacyExtension is the extension namespace this tool wrote before the
 	// project was renamed. It is recognized only so a graph carrying it can be
 	// refused rather than read as if its properties were absent.
@@ -45,6 +49,18 @@ var DefaultPrefixes = map[string]string{
 // restricts ids to [A-Za-z0-9_-]+.
 func ElementIRI(qualifiedName string) Term {
 	return IRI(Element + EncodeElementID(qualifiedName))
+}
+
+// ExpressionPrefix is the prefix label bound to the expression namespace. It is
+// written only on a graph that carries an expression graph.
+const ExpressionPrefix = "expr"
+
+// ExpressionIRI returns the IRI of one node of an expression graph: the local
+// id of the term it hangs off — an element or an outer subexpression — followed
+// by the path to this node, so every node's identity is derived from where it
+// sits in the model rather than minted.
+func ExpressionIRI(owner Term, path string) Term {
+	return IRI(Expression + LocalName(owner.Value) + "." + path)
 }
 
 // SysMLTerm returns the IRI of a name in the SysML vocabulary, used for both

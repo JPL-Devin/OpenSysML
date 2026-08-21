@@ -3,8 +3,8 @@ package export
 // The behavioral members an action or state body declares: control nodes,
 // statements, loops, conditionals, states, regions and transitions. Each one is
 // mapped to a metaclass and to the properties its notation is rebuilt from, so a
-// model that states behavior converts rather than being refused. Expressions are
-// carried as their source text, as everywhere else in this mapping.
+// model that states behavior converts rather than being refused. Guards and
+// conditions are expression graphs, as every expression-valued position is.
 
 import (
 	"fmt"
@@ -83,9 +83,7 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 			e.graph.Add(subject, e.sysml(pSourceFeature), e.reference(owner, n.Name))
 		}
 		e.writtenKeyword(subject, n, "first", "initial")
-		if n.Guard != nil {
-			e.graph.Add(subject, e.sysx(xGuard), rdf.String(e.text(n.Guard)))
-		}
+		e.expression(subject, e.sysx(xGuard), xGuard, owner, n.Guard)
 		if successor := qualifiedText(n.Successor); successor != "" {
 			e.graph.Add(subject, e.sysml(pTargetFeature), e.reference(owner, successor))
 		} else if n.Guard != nil {
@@ -130,7 +128,7 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 		e.name(subject, n.Name)
 		switch {
 		case n.Expression != nil:
-			e.graph.Add(subject, e.sysx(xExpression), rdf.String(e.text(n.Expression)))
+			e.expression(subject, e.sysx(xExpression), xExpression, owner, n.Expression)
 		case qualifiedText(n.ActionRef) != "":
 			e.graph.Add(subject, e.sysml(relationshipProperty[ast.RelReferences]),
 				e.reference(owner, qualifiedText(n.ActionRef)))
@@ -144,7 +142,7 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 
 	case *ast.PerformActionNode:
 		head(rdf.SysMLTerm(mPerform))
-		e.graph.Add(subject, e.sysx(xExpression), rdf.String(e.text(n.ActionRef)))
+		e.expression(subject, e.sysx(xExpression), xExpression, owner, n.ActionRef)
 		return true, nil
 
 	case *ast.AssignmentActionNode:
@@ -153,14 +151,14 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 		if operator := e.between(n.Target, n.Value); operator != "" && operator != ":=" {
 			e.graph.Add(subject, e.sysx(xAssignOperator), rdf.String(operator))
 		}
-		e.graph.Add(subject, e.sysx(xTarget), rdf.String(e.text(n.Target)))
-		e.graph.Add(subject, e.sysml(pValue), rdf.String(e.text(n.Value)))
+		e.expression(subject, e.sysx(xTarget), xTarget, owner, n.Target)
+		e.expression(subject, e.sysml(pValue), pValue, owner, n.Value)
 		return true, nil
 
 	case *ast.SendStatement:
 		head(rdf.SysMLTerm(mSend))
-		e.graph.Add(subject, e.sysx(xPayload), rdf.String(e.text(n.Message)))
-		e.graph.Add(subject, e.sysx(xReceiver), rdf.String(e.text(n.Target)))
+		e.expression(subject, e.sysx(xPayload), xPayload, owner, n.Message)
+		e.expression(subject, e.sysx(xReceiver), xReceiver, owner, n.Target)
 		if n.IsVia {
 			e.graph.Add(subject, e.sysx(xIsVia), rdf.Bool(true))
 		}
@@ -168,9 +166,7 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 
 	case *ast.TerminateStatement:
 		head(rdf.SysMLTerm(mTerminate))
-		if n.Target != nil {
-			e.graph.Add(subject, e.sysx(xExpression), rdf.String(e.text(n.Target)))
-		}
+		e.expression(subject, e.sysx(xExpression), xExpression, owner, n.Target)
 		return true, nil
 
 	case *ast.SuccessionEdge:
@@ -182,9 +178,7 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 		// guarded one is. Which keyword introduced it decides how it is written.
 		head(rdf.SysMLTerm(mSuccession))
 		e.graph.Add(subject, e.sysx(xDeclaredKeyword), rdf.String(firstWord(e.text(n))))
-		if n.Guard != nil {
-			e.graph.Add(subject, e.sysx(xGuard), rdf.String(e.text(n.Guard)))
-		}
+		e.expression(subject, e.sysx(xGuard), xGuard, owner, n.Guard)
 		if n.IsElse {
 			e.graph.Add(subject, e.sysx(xIsElse), rdf.Bool(true))
 		}
@@ -195,7 +189,7 @@ func (e *encoder) encodeBehavior(node ast.Node, head func(rdf.Term), subject rdf
 
 	case *ast.IfActionNode:
 		head(rdf.SysMLTerm(mIfAction))
-		e.graph.Add(subject, e.sysx(xCondition), rdf.String(e.text(n.Condition)))
+		e.expression(subject, e.sysx(xCondition), xCondition, owner, n.Condition)
 		branches := make([]ast.Node, 0, 2)
 		for _, branch := range n.Branches() {
 			branches = append(branches, branch)
@@ -277,21 +271,17 @@ func (e *encoder) encodeLoop(n *ast.WhileLoopActionNode, head func(rdf.Term), su
 			}
 		}
 		e.graph.Add(subject, e.sysx(xLoopVariable), rdf.String(n.Variable.Name))
-		e.graph.Add(subject, e.sysx(xCollection), rdf.String(e.text(n.Collection)))
+		e.expression(subject, e.sysx(xCollection), xCollection, owner, n.Collection)
 	} else {
 		head(rdf.SysMLTerm(mWhileLoop))
 		switch n.Kind {
 		case ast.LoopWhile:
-			e.graph.Add(subject, e.sysx(xWhileCondition), rdf.String(e.text(n.Condition)))
-			if n.Until != nil {
-				e.graph.Add(subject, e.sysx(xUntilCondition), rdf.String(e.text(n.Until)))
-			}
+			e.expression(subject, e.sysx(xWhileCondition), xWhileCondition, owner, n.Condition)
+			e.expression(subject, e.sysx(xUntilCondition), xUntilCondition, owner, n.Until)
 		default:
 			// A `loop` tests its condition after each iteration, which is what an
 			// `until` clause states; without one it has no condition at all.
-			if n.Condition != nil {
-				e.graph.Add(subject, e.sysx(xUntilCondition), rdf.String(e.text(n.Condition)))
-			}
+			e.expression(subject, e.sysx(xUntilCondition), xUntilCondition, owner, n.Condition)
 		}
 	}
 	e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(e.bracedBody(n, n.Body)))
@@ -338,9 +328,7 @@ func (e *encoder) encodeTransition(n *ast.TransitionMember, head func(rdf.Term),
 	if n.Via != nil {
 		e.graph.Add(subject, e.sysml(relationshipProperty[ast.RelVia]), e.reference(owner, qualifiedText(n.Via)))
 	}
-	if n.Guard != nil {
-		e.graph.Add(subject, e.sysx(xGuard), rdf.String(e.text(n.Guard)))
-	}
+	e.expression(subject, e.sysx(xGuard), xGuard, owner, n.Guard)
 	if len(n.Effect) > 0 {
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(e.bracedBody(n, n.Effect)))
 	}

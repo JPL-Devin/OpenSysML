@@ -96,9 +96,9 @@ func (e *UnsupportedError) Error() string {
 }
 
 // ToRDF converts a parsed document into an RDF graph. file must be the source
-// the tree was parsed from: expression-valued positions (feature values,
-// multiplicity bounds, filter conditions) are carried as their source text, so
-// the conversion needs the bytes as well as the tree.
+// the tree was parsed from: an expression-valued position carries the notation
+// it was written as alongside the graph of the expression, so the conversion
+// needs the bytes as well as the tree.
 func ToRDF(file *source.SourceFile, root *ast.RootNamespace) (*rdf.Graph, error) {
 	if file == nil || root == nil {
 		return nil, &UnsupportedError{What: "an empty document", Note: "nothing to convert"}
@@ -317,10 +317,8 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 			e.graph.Add(subject, e.sysml(pDirection), rdf.String(keyword))
 		}
 		e.relationships(subject, owner, n.Relationships)
-		e.multiplicity(subject, n.Multiplicity)
-		if n.Value != nil {
-			e.graph.Add(subject, e.sysml(pValue), rdf.String(e.text(n.Value)))
-		}
+		e.multiplicity(subject, owner, n.Multiplicity)
+		e.expression(subject, e.sysml(pValue), pValue, owner, n.Value)
 		// A declaration head that binds ends (connect/bind/flow/succession),
 		// a transition, an accept action or a satisfy usage is kept as source
 		// text: its head is not reconstructible from the properties above.
@@ -340,9 +338,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 			{xRecursive, n.IsRecursive},
 			{xExpose, n.IsExpose},
 		})
-		if n.FilterExpr != nil {
-			e.graph.Add(subject, e.sysx(xFilter), rdf.String(e.text(n.FilterExpr)))
-		}
+		e.expression(subject, e.sysx(xFilter), xFilter, owner, n.FilterExpr)
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
 		return e.encode(n.Body, fqn, subject)
 
@@ -399,7 +395,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 	case *ast.MultiplicityDecl:
 		head(rdf.OpenSysMLTerm(mMultiplicity))
 		e.ident(subject, n.Ident)
-		e.multiplicity(subject, n.Range)
+		e.multiplicity(subject, owner, n.Range)
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
 		return e.encode(n.Members, fqn, subject)
 
@@ -426,7 +422,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 
 	case *ast.ResultMember:
 		head(rdf.OpenSysMLTerm(mResult))
-		e.graph.Add(subject, e.sysml(pValue), rdf.String(e.text(n.Expression)))
+		e.expression(subject, e.sysml(pValue), pValue, owner, n.Expression)
 		return nil
 
 	case *ast.SubjectMember:
@@ -440,16 +436,14 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 			e.graph.Add(subject, e.sysml(relationshipProperty[ast.RelTyping]), e.reference(owner, qualifiedText(n.TypeRef)))
 		}
 		e.relationships(subject, owner, n.Relationships)
-		e.multiplicity(subject, n.Multiplicity)
-		if n.BindingExpr != nil {
-			e.graph.Add(subject, e.sysml(pValue), rdf.String(e.text(n.BindingExpr)))
-		}
+		e.multiplicity(subject, owner, n.Multiplicity)
+		e.expression(subject, e.sysml(pValue), pValue, owner, n.BindingExpr)
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
 		return e.encode(n.Body, fqn, subject)
 
 	case *ast.FilterMember:
 		head(rdf.OpenSysMLTerm(mFilter))
-		e.graph.Add(subject, e.sysx(xFilter), rdf.String(e.text(n.Condition)))
+		e.expression(subject, e.sysx(xFilter), xFilter, owner, n.Condition)
 		return nil
 
 	case *ast.ErrorNode:
@@ -471,11 +465,10 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 
 // condition emits the three forms a condition member is written in: an inline
 // expression, a reference to the constraint it states (`require R { … }`), or a
-// nested constraint stating its conditions in a body. The expression is carried
-// as its source text, as every expression-valued position in this mapping is.
+// nested constraint stating its conditions in a body.
 func (e *encoder) condition(subject rdf.Term, fqn, owner string, expr ast.Node, ref *ast.QualifiedName, body []ast.Node) error {
 	if expr != nil {
-		e.graph.Add(subject, e.sysx(xCondition), rdf.String(e.text(expr)))
+		e.expression(subject, e.sysx(xCondition), xCondition, owner, expr)
 		return nil
 	}
 	if ref != nil {
@@ -676,7 +669,7 @@ func (e *encoder) relationships(subject rdf.Term, owner string, rels []*ast.Rela
 	}
 }
 
-func (e *encoder) multiplicity(subject rdf.Term, mult *ast.Multiplicity) {
+func (e *encoder) multiplicity(subject rdf.Term, owner string, mult *ast.Multiplicity) {
 	if mult == nil {
 		return
 	}
@@ -684,17 +677,11 @@ func (e *encoder) multiplicity(subject rdf.Term, mult *ast.Multiplicity) {
 	// that as lower and upper both being n, so it is written as the upper bound
 	// alone and the printer renders it back as `[n]`.
 	if !mult.IsRange {
-		if mult.Lower != nil {
-			e.graph.Add(subject, e.sysml(pUpperBound), rdf.String(e.text(mult.Lower)))
-		}
+		e.expression(subject, e.sysml(pUpperBound), pUpperBound, owner, mult.Lower)
 		return
 	}
-	if mult.Lower != nil {
-		e.graph.Add(subject, e.sysml(pLowerBound), rdf.String(e.text(mult.Lower)))
-	}
-	if mult.Upper != nil {
-		e.graph.Add(subject, e.sysml(pUpperBound), rdf.String(e.text(mult.Upper)))
-	}
+	e.expression(subject, e.sysml(pLowerBound), pLowerBound, owner, mult.Lower)
+	e.expression(subject, e.sysml(pUpperBound), pUpperBound, owner, mult.Upper)
 }
 
 // reference renders a name reference as a link when it names an element this
