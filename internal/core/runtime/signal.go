@@ -203,7 +203,7 @@ func (ctx *Context) resolveRoutedReceiver(send lower.Send, self *Instance) (mess
 		separator = "."
 	}
 	segments := strings.Split(send.Target, separator)
-	if !ctx.routedReceiverExists(send.Scope, segments, send.TargetPath || strings.Contains(send.Target, "::"), self) {
+	if !ctx.routedReceiverExists(send.Scope, segments, len(segments) > 1, self) {
 		return messageAddress{}, fmt.Errorf("receiver %q is unresolved", send.Target)
 	}
 	addr, err := ctx.resolveAddress(send, self)
@@ -228,13 +228,10 @@ func (ctx *Context) routedReceiverExists(scope *symbols.Scope, segments []string
 	}
 	name := segments[0]
 	for current := scope; current != nil; {
-		for _, sym := range current.LookupLocalAll(name) {
-			if isRoutedReceiverSymbol(sym) && !sym.EffectiveName {
+		for _, sym := range symbols.PreferDeclared(current.LookupLocalAll(name)) {
+			if isRoutedReceiverSymbol(sym) {
 				return true
 			}
-		}
-		if current != scope {
-			break
 		}
 		parent := current.Parent()
 		if parent == nil || !isRoutedReceiverSymbol(parent.Owner()) {

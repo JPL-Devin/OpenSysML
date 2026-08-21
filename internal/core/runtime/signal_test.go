@@ -257,6 +257,72 @@ func TestSendViaPortToReceiverWithLibraries(t *testing.T) {
 	assertIntOutput(t, outputs, "got", 42)
 }
 
+// A receiving node remains reachable through nested behavior scopes.
+func TestSendViaPortToNestedReceiver(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `package P {
+		private import ScalarValues::*;
+		action pipeline {
+			attribute got : Integer = 0;
+			port senderPort;
+			port receiverPort;
+			connect senderPort to receiverPort;
+			first start;
+			action group {
+				first groupStart;
+				if true {
+					send 1 via senderPort to receiver;
+				}
+				done groupEnd;
+				then groupStart if;
+				then if groupEnd;
+			}
+			action receiver accept value : Integer via receiverPort {
+				assign got := value;
+			}
+			done end;
+			then start group;
+			then group receiver;
+			then receiver end;
+		}
+	}`))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "pipeline", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action pipeline not found")
+	}
+	outputs, err := ctx.ExecuteAction(sym)
+	if err != nil {
+		t.Fatalf("execute nested action with libraries: %v", err)
+	}
+	assertIntOutput(t, outputs, "got", 1)
+}
+
+// Library names must not turn an unknown routed receiver into a silent send.
+func TestSendViaPortToUnknownReceiverWithLibraries(t *testing.T) {
+	idx, _, ctx := buildRuntimeWithLibraries(t, "<test>", parseAndBuild(t, `package P {
+		private import ScalarValues::*;
+		action pipeline {
+			port senderPort;
+			port receiverPort;
+			connect senderPort to receiverPort;
+			first start;
+			action sender {
+				send 42 via senderPort to recevier;
+			}
+			done end;
+			then start sender;
+			then sender end;
+		}
+	}`))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "pipeline", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action pipeline not found")
+	}
+	_, err := ctx.ExecuteAction(sym)
+	if !errors.Is(err, ErrUnreachableSendReceiver) {
+		t.Fatalf("expected ErrUnreachableSendReceiver, got: %v", err)
+	}
+}
+
 // A port-routed message is only for the accept on the port it arrived at: an
 // accept listening on no port does not take it, however well its type matches.
 func TestPortRoutedMessageBypassesPortlessAccept(t *testing.T) {
