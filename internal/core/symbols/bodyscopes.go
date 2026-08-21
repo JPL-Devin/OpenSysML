@@ -35,7 +35,7 @@ func BodyExprScope(parent *Scope, body *ast.BodyExpr) *Scope {
 
 // newBodyExprScope creates and links the scope body's parameters declare into.
 func newBodyExprScope(parent *Scope, body *ast.BodyExpr) *Scope {
-	if len(body.Params) == 0 {
+	if len(body.Params) == 0 && len(body.Members) == 0 {
 		return parent
 	}
 	scope := NewScope(parent, body)
@@ -56,6 +56,7 @@ func newBodyExprScope(parent *Scope, body *ast.BodyExpr) *Scope {
 			OwnerScope: scope,
 		})
 	}
+	buildMembers(scope, body.Members)
 	parent.AddChild(scope)
 	return scope
 }
@@ -92,6 +93,19 @@ func bodyScopesInDecl(scope *Scope, decl ast.Node) {
 		bodyScopesInRelationships(scope, d.Relationships)
 		if child := bodyScopeChild(scope, d); child != nil {
 			buildBodyScopes(child, d.Members)
+			if d.Kind == ast.DefCalc {
+				for _, member := range d.Members {
+					decl := member
+					if membership, ok := member.(*ast.Membership); ok {
+						decl = membership.Member
+					}
+					if decl == nil {
+						continue
+					}
+					bodyScopesInDecl(child, decl)
+					bodyScopesInExpr(child, decl)
+				}
+			}
 		}
 	case *ast.Usage:
 		bodyScopesInRelationships(scope, d.Relationships)
@@ -400,7 +414,9 @@ func bodyScopesInExpr(scope *Scope, e ast.Node) {
 		for i := range v.Params {
 			bodyScopesInExpr(scope, v.Params[i].Value)
 		}
-		bodyScopesInExpr(newBodyExprScope(scope, v), v.Result)
+		body := newBodyExprScope(scope, v)
+		buildBodyScopes(body, v.Members)
+		bodyScopesInExpr(body, v.Result)
 	case *ast.SequenceExpr:
 		for _, el := range v.Elements {
 			bodyScopesInExpr(scope, el)

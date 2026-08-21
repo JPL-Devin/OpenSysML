@@ -1,0 +1,29 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="F99BodyDeclarations" library=false standard=false
+      (Import visibility="private" all=false kind=namespace recursive=false imported="ScalarValues" filtered=false)
+      (Import visibility="private" all=false kind=namespace recursive=false imported="ControlFunctions" filtered=false)
+      (Membership visibility="default"
+        (Definition kind="calc" abstract=false variation=false name="Evaluate"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="values" ref=false direction="in" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Integer
+                (*ast.QualifiedName))
+              (Multiplicity range=false
+                (LiteralInfinity))))
+          (InvocationExpr type="collect"
+            (FeatureReference name="values")
+            (BodyExpr params=[i:Integer]
+              (Membership visibility="private"
+                (Usage kind="attribute" name="computed" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                  (Relationship kind="typing" target=Integer
+                    (*ast.QualifiedName))
+                  (OperatorExpr operator="+"
+                    (FeatureReference name="laterValue")
+                    (LiteralInteger value="1"))))
+              (Membership visibility="private"
+                (Usage kind="attribute" name="laterValue" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                  (Relationship kind="typing" target=Integer
+                    (*ast.QualifiedName))
+                  (FeatureReference name="i")))
+              (FeatureReference name="computed"))))))))
