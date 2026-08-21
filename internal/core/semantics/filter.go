@@ -298,8 +298,44 @@ func (m *Model) compileFeatureChain(scope *symbols.Scope, e *ast.FeatureChainExp
 			}
 			return &symbols.FilterPredicate{Op: symbols.FilterFeature, TypeFQN: typeFQN, Feature: feature, Span: span}
 		}
+	case *ast.FeatureReference:
+		return m.compileFeatureChainRead(scope, operand, feature, span)
 	}
-	return unsupported(span, "a filter condition reads a feature through a chain of features, which OpenSysML does not evaluate (known limitation: the reference accepts chains rooted in a feature with no featuring type)")
+	return unsupported(span, chainLimitation)
+}
+
+// chainLimitation is the reason a chain outside the evaluable subset reports.
+const chainLimitation = "a filter condition reads a feature through a chain of features, which OpenSysML does not evaluate (known limitation: the reference accepts chains rooted in a feature with no featuring type)"
+
+// compileFeatureChainRead compiles `p.n`: a chain rooted in a feature with no
+// featuring type is model-level evaluable when the feature it reads has a
+// constant value ([KerML, 7.4.9] isModelLevelEvaluable).
+func (m *Model) compileFeatureChainRead(scope *symbols.Scope, operand *ast.FeatureReference, feature string, span source.Span) *symbols.FilterPredicate {
+	if operand.Name == nil {
+		return unsupported(span, chainLimitation)
+	}
+	root, ok := m.resolver.ResolveQualified(scope, operand.Name)
+	if !ok || root == nil {
+		return unsupported(span, fmt.Sprintf("%s does not resolve", qnText(operand.Name)))
+	}
+	if owner := m.ownerOf(root); isFeaturingType(owner) {
+		return unsupported(span, fmt.Sprintf(
+			"%s is featured within type %s and is not model-level evaluable",
+			qnText(operand.Name), m.fqnOf(owner)))
+	}
+	read, ok := m.LookupMember(root, feature)
+	if !ok || read == nil {
+		return unsupported(span, fmt.Sprintf("%s has no feature %s to read", qnText(operand.Name), feature))
+	}
+	usage, isUsage := read.Decl.(*ast.Usage)
+	if !isUsage || usage.Value == nil {
+		return unsupported(span, chainLimitation)
+	}
+	v, ok := evalConst(usage.Value)
+	if !ok {
+		return unsupported(span, chainLimitation)
+	}
+	return &symbols.FilterPredicate{Op: symbols.FilterConst, Value: constValue(v), Span: span}
 }
 
 // compileReference compiles a name a filter condition uses as a value: a feature
@@ -395,7 +431,7 @@ func (m *Model) evalPredicate(p *symbols.FilterPredicate, cand *symbols.Symbol) 
 		return boolValue(m.metaclassConforms(cand, p.TypeFQN)), nil
 
 	case symbols.FilterFeature:
-		return m.annotationFeatureValue(cand, p)
+		return m.featureValue(cand, p)
 
 	case symbols.FilterNot:
 		v, err := m.evalBool(p.Operands[0], cand)
@@ -541,6 +577,59 @@ func (m *Model) evalComparison(p *symbols.FilterPredicate, cand *symbols.Symbol)
 	default: // symbols.FilterGe
 		return boolValue(l >= r), nil
 	}
+}
+
+// featureValue reads a feature a filter condition asks of a candidate: from an
+// annotation binding it, else from the candidate itself when the predicate's type
+// is a reflective metaclass (KerML 1.1 §8.2.4).
+func (m *Model) featureValue(cand *symbols.Symbol, p *symbols.FilterPredicate) (symbols.FilterValue, error) {
+	v, err := m.annotationFeatureValue(cand, p)
+	if err != nil || v.Kind != symbols.FilterValueEmpty {
+		return v, err
+	}
+	return m.metaclassFeatureValue(cand, p)
+}
+
+// metaclassFeatureValue answers a metaclass feature from the candidate element.
+// A feature of a metaclass it is an instance of but whose value we cannot derive
+// is unevaluable, which is observably not false.
+func (m *Model) metaclassFeatureValue(cand *symbols.Symbol, p *symbols.FilterPredicate) (symbols.FilterValue, error) {
+	if !isReflectiveMetaclassFQN(p.TypeFQN) {
+		return emptyValue(), nil
+	}
+	meta := m.metaclassOf(cand)
+	if meta == nil {
+		return symbols.FilterValue{}, &FilterError{
+			Err:    ErrFilterUnevaluable,
+			Reason: fmt.Sprintf("what %s is an instance of is not known, so %s::%s cannot be read from it", candidateName(cand), p.TypeFQN, p.Feature),
+			Span:   p.Span,
+		}
+	}
+	if !m.metaclassConforms(cand, p.TypeFQN) {
+		return emptyValue(), nil // not an instance of that metaclass: nothing to read
+	}
+	if v, ok := m.reflectiveFeatureValue(cand, p.Feature); ok {
+		return v, nil
+	}
+	return symbols.FilterValue{}, &FilterError{
+		Err:    ErrFilterUnevaluable,
+		Reason: fmt.Sprintf("the metaclass feature %s::%s is not derived from a declaration", p.TypeFQN, p.Feature),
+		Span:   p.Span,
+	}
+}
+
+// isReflectiveMetaclassFQN reports whether a name is a metaclass of the abstract
+// syntax, which the standard library declares under KerML and SysML.
+func isReflectiveMetaclassFQN(fqn string) bool {
+	return strings.HasPrefix(fqn, "KerML::") || strings.HasPrefix(fqn, "SysML::")
+}
+
+// candidateName names a candidate for a diagnostic message.
+func candidateName(cand *symbols.Symbol) string {
+	if name := simpleSymbolName(cand); name != "" {
+		return name
+	}
+	return "the candidate element"
 }
 
 // annotationFeatureValue reads the value the candidate's annotation of the

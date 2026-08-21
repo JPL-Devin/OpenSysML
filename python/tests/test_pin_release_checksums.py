@@ -12,7 +12,7 @@ import re
 
 import pytest
 
-from pysysml.binary import PINNED_SHA256, pinned_digest
+from opensysml.binary import PINNED_SHA256, pinned_digest
 
 PYTHON_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PIN_SCRIPT = os.path.join(PYTHON_DIR, "scripts", "pin_release_checksums.py")

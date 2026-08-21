@@ -14,7 +14,7 @@ Enable programmatic access to OpenSysML's SysML v2 parser, semantic engine, and 
 
 **Goals:**
 - Pythonic API wrapping OpenSysML's full capabilities
-- Zero-friction installation and setup (`pip install pysysml`)
+- Zero-friction installation and setup (`pip install opensysml`)
 - Rich notebook experience with auto-formatting and DataFrame integration
 - Full runtime support (parse, evaluate, instantiate, execute, simulate)
 
@@ -22,10 +22,10 @@ Enable programmatic access to OpenSysML's SysML v2 parser, semantic engine, and 
 
 **Jupyter Notebook Exploration:**
 ```python
-import pysysml
+import opensysml
 
 # Load model
-model = pysysml.load("spacecraft.sysml")
+model = opensysml.load("spacecraft.sysml")
 
 # Navigate structure
 part = model.find("SPACECRAFT_WET")
@@ -35,7 +35,7 @@ children_df = part.children().to_dataframe()
 mass = part.get_attr("unitMass").value
 
 # Runtime execution
-instance = pysysml.instantiate("SPACECRAFT_WET")
+instance = opensysml.instantiate("SPACECRAFT_WET")
 print(instance.slots)
 ```
 
@@ -44,12 +44,12 @@ print(instance.slots)
 ```
 ┌─────────────────────────────────────────┐
 │ Python Notebook / Script                │
-│   import pysysml                        │
-│   model = pysysml.load("A1.sysml")     │
+│   import opensysml                        │
+│   model = opensysml.load("A1.sysml")     │
 └──────────────┬──────────────────────────┘
                │
 ┌──────────────▼──────────────────────────┐
-│ Python Client Library (pysysml)         │
+│ Python Client Library (opensysml)         │
 │  - Pythonic API                         │
 │  - Auto-manages service lifecycle       │
 │  - Converts protobuf ↔ Python objects   │
@@ -114,7 +114,7 @@ print(instance.slots)
 - Lazy loading minimizes data transfer
 
 **Usability:**
-- Single command installation (`pip install pysysml`)
+- Single command installation (`pip install opensysml`)
 - No manual service management required
 - Clear error messages with source locations
 - Familiar Pythonic patterns (properties, methods, exceptions)
@@ -145,7 +145,7 @@ print(instance.slots)
 - LRU cache for parsed models keyed by content hash
 
 **Tier 2: Python Client Library**
-- Package `pysysml` wrapping gRPC client
+- Package `opensysml` wrapping gRPC client
 - Manages service lifecycle transparently
 - Provides Pythonic API (not raw protobuf)
 - Handles conversions, error mapping, display integration
@@ -165,7 +165,7 @@ print(instance.slots)
 ### Communication Flow
 
 ```
-1. Python: model = pysysml.load("A1.sysml")
+1. Python: model = opensysml.load("A1.sysml")
    → Python library reads file, computes sha256
    
 2. gRPC: ParseFileRequest(content, hash)
@@ -460,7 +460,7 @@ message StateMachineResponse {
 ### Package Structure
 
 ```
-pysysml/
+opensysml/
   __init__.py         # Public API exports: load, connect, instantiate
   connection.py       # Connection class, lifecycle management
   client.py           # gRPC client wrapper
@@ -597,20 +597,20 @@ if model.diagnostics:
 ```python
 try:
     instance = conn.instantiate("MissingPart")
-except pysysml.RuntimeError as e:
+except opensysml.RuntimeError as e:
     print(f"Runtime error: {e.message}")
     print(f"Location: {e.span}")
 ```
 
 **Exception hierarchy:**
 ```python
-class PySysMLError(Exception):
+class OpenSysMLError(Exception):
     """Base exception."""
 
-class ConnectionError(PySysMLError):
+class ConnectionError(OpenSysMLError):
     """Service connection failed."""
 
-class RuntimeError(PySysMLError):
+class RuntimeError(OpenSysMLError):
     """Execution error (instantiate, eval, execute)."""
     def __init__(self, message, span=None):
         self.message = message
@@ -712,8 +712,8 @@ Model._repr_html_ = _model_repr_html
 - Supported platforms: linux-amd64, darwin-amd64, darwin-arm64, windows-amd64
 
 **Storage location:**
-- `~/.pysysml/bin/sysml-grpc-{version}-{platform}`
-- Version from `pysysml.__version__`
+- `~/.opensysml/bin/sysml-grpc-{version}-{platform}`
+- Version from `opensysml.__version__`
 
 **Download implementation:**
 ```python
@@ -742,7 +742,7 @@ def ensure_binary():
 - Prevents corrupted/tampered downloads
 
 **Offline fallback:**
-- User can manually place binary at `~/.pysysml/bin/sysml-grpc`
+- User can manually place binary at `~/.opensysml/bin/sysml-grpc`
 - Python skips download if binary exists
 
 ### Auto-Start and Health Checking
@@ -791,14 +791,14 @@ go func() {
 
 ### Multi-Process Coordination
 
-**Problem:** Multiple Python processes/notebooks may import pysysml simultaneously.
+**Problem:** Multiple Python processes/notebooks may import opensysml simultaneously.
 
 **Solution:** Lockfile with PID tracking.
 
 **Implementation:**
 ```python
 # In connection.py
-LOCK_FILE = os.path.expanduser("~/.pysysml/service.lock")
+LOCK_FILE = os.path.expanduser("~/.opensysml/service.lock")
 
 def _acquire_lock():
     """Acquire lock or detect existing service."""
@@ -876,7 +876,7 @@ $ sysml-grpc --port 50051 --log-level debug
 
 **Python connects without auto-start:**
 ```python
-conn = pysysml.connect(auto_start=False, port=50051)
+conn = opensysml.connect(auto_start=False, port=50051)
 # Python doesn't manage lifecycle
 # Service keeps running after Python exits
 ```
@@ -1036,7 +1036,7 @@ def test_eval_expression(conn):
 
 def test_error_handling(conn):
     """Verify exceptions raised for runtime errors."""
-    with pytest.raises(pysysml.RuntimeError):
+    with pytest.raises(opensysml.RuntimeError):
         conn.instantiate("NonExistentPart")
 ```
 
@@ -1060,17 +1060,17 @@ def test_service_startup():
     assert _probe_service(TEST_PORT)
 
 def test_multi_process_coordination():
-    """Simulate multiple processes importing pysysml."""
+    """Simulate multiple processes importing opensysml."""
     # Fork processes, verify only one starts service
     pass
 ```
 
-**Notebook smoke test - `examples/pysysml_demo.ipynb`:**
+**Notebook smoke test - `examples/opensysml_demo.ipynb`:**
 
 ```python
 # Cell 1: Import and load
-import pysysml
-model = pysysml.load("../testdata/A1.sysml")
+import opensysml
+model = opensysml.load("../testdata/A1.sysml")
 model  # Should display rich HTML
 
 # Cell 2: Navigate
@@ -1082,19 +1082,19 @@ children_df = part.children().to_dataframe()
 children_df.head()
 
 # Cell 4: Instantiate
-instance = pysysml.instantiate("SPACECRAFT_WET")
+instance = opensysml.instantiate("SPACECRAFT_WET")
 instance  # Display slots table
 
 # Cell 5: Evaluate
-result = pysysml.eval("915.37 * 2")
+result = opensysml.eval("915.37 * 2")
 print(f"Result: {result}")
 ```
 
 **Running notebook test:**
 ```bash
-pytest --nbval examples/pysysml_demo.ipynb
+pytest --nbval examples/opensysml_demo.ipynb
 # or
-jupyter nbconvert --execute --to notebook examples/pysysml_demo.ipynb
+jupyter nbconvert --execute --to notebook examples/opensysml_demo.ipynb
 ```
 
 ### CI Pipeline Updates
@@ -1134,14 +1134,14 @@ jupyter nbconvert --execute --to notebook examples/pysysml_demo.ipynb
     
 - name: Lint
   run: |
-    black --check pysysml/
-    mypy pysysml/
+    black --check opensysml/
+    mypy opensysml/
     
 - name: Test
   run: pytest tests/
   
 - name: Test notebook
-  run: pytest --nbval examples/pysysml_demo.ipynb
+  run: pytest --nbval examples/opensysml_demo.ipynb
 ```
 
 ---
@@ -1198,30 +1198,30 @@ jupyter nbconvert --execute --to notebook examples/pysysml_demo.ipynb
 
 **Tasks:**
 1. Generate Python stubs from protobuf
-   - `protoc --python_out=pysysml/proto sysml.proto`
-   - `protoc --grpc_python_out=pysysml/proto sysml.proto`
+   - `protoc --python_out=opensysml/proto sysml.proto`
+   - `protoc --grpc_python_out=opensysml/proto sysml.proto`
 
-2. Implement `pysysml/client.py`
+2. Implement `opensysml/client.py`
    - Wrap gRPC channel and stub
    - `parse_file(path)` → Model
    - `get_symbol(model_hash, symbol_id)` → SymbolInfo
 
-3. Implement `pysysml/model.py`
+3. Implement `opensysml/model.py`
    - Model class wrapping ParseFileResponse
    - Properties: `root`, `diagnostics`
    - `find(name)` method
 
-4. Implement `pysysml/symbol.py`
+4. Implement `opensysml/symbol.py`
    - Symbol proxy class
    - Properties: `name`, `kind`, `metadata`
    - `children()` lazy loading via `get_symbol` RPC
    - `attributes()` filtered children
 
-5. Implement `pysysml/diagnostics.py`
+5. Implement `opensysml/diagnostics.py`
    - Diagnostic class wrapping protobuf
    - Properties: `severity`, `message`, `span`
 
-6. Implement `pysysml/connection.py`
+6. Implement `opensysml/connection.py`
    - Connection class (manual service management only)
    - `__init__(port)` connects to existing service
    - `load(path)` → Model
@@ -1232,7 +1232,7 @@ jupyter nbconvert --execute --to notebook examples/pysysml_demo.ipynb
    - Test diagnostic parsing
 
 **Definition of done:**
-- `pip install -e .` installs pysysml package
+- `pip install -e .` installs opensysml package
 - Can connect to manually-started `sysml-grpc`
 - `model = conn.load("A1.sysml")` works
 - `part = model.find("SPACECRAFT_WET")` works
@@ -1245,19 +1245,19 @@ jupyter nbconvert --execute --to notebook examples/pysysml_demo.ipynb
 **Goal:** Seamless installation and auto-start.
 
 **Tasks:**
-1. Implement `pysysml/binary.py`
+1. Implement `opensysml/binary.py`
    - `ensure_binary()` downloads from GitHub releases
    - Platform detection (linux/darwin/windows, amd64/arm64)
    - Checksum verification
-   - Storage in `~/.pysysml/bin/`
+   - Storage in `~/.opensysml/bin/`
 
-2. Update `pysysml/connection.py`
+2. Update `opensysml/connection.py`
    - `_ensure_service()` auto-starts if not running
    - `_probe_service()` health check polling
    - `atexit` registration for cleanup
    - Lockfile-based multi-process coordination
 
-3. Update `pysysml/__init__.py`
+3. Update `opensysml/__init__.py`
    - Public API: `load(path)`, `connect()`, `instantiate()`
    - Auto-connect on first use
 
@@ -1268,8 +1268,8 @@ jupyter nbconvert --execute --to notebook examples/pysysml_demo.ipynb
    - Test multi-process scenarios
 
 **Definition of done:**
-- `import pysysml` auto-downloads binary on first use
-- `model = pysysml.load("A1.sysml")` works without manual service start
+- `import opensysml` auto-downloads binary on first use
+- `model = opensysml.load("A1.sysml")` works without manual service start
 - Multiple Python processes can import concurrently
 - Service shuts down when last process exits
 - Tests pass: `pytest tests/test_binary.py`
@@ -1293,18 +1293,18 @@ jupyter nbconvert --execute --to notebook examples/pysysml_demo.ipynb
    - `ExecuteAction` calls action executor
    - `RunStateMachine` calls state executor
 
-3. Implement `pysysml/instance.py`
+3. Implement `opensysml/instance.py`
    - Instance class wrapping protobuf
    - Properties: `symbol_id`, `slots`, `parts`
 
-4. Update `pysysml/connection.py`
+4. Update `opensysml/connection.py`
    - `eval(expr, context)` → value
    - `instantiate(symbol_id)` → Instance
    - `execute_action(action_id, inputs)` → outputs
    - `run_state_machine(sm_id, events)` → trace
 
 5. Add error handling
-   - Raise `pysysml.RuntimeError` for execution failures
+   - Raise `opensysml.RuntimeError` for execution failures
    - Collect diagnostics for warnings
 
 6. Add integration tests
@@ -1314,8 +1314,8 @@ jupyter nbconvert --execute --to notebook examples/pysysml_demo.ipynb
    - Test state machine simulation
 
 **Definition of done:**
-- `instance = pysysml.instantiate("SPACECRAFT_WET")` returns Instance
-- `result = pysysml.eval("2 + 2")` returns 4
+- `instance = opensysml.instantiate("SPACECRAFT_WET")` returns Instance
+- `result = opensysml.eval("2 + 2")` returns 4
 - Runtime errors raise typed exceptions with location info
 - Integration tests pass for all runtime features
 
@@ -1326,12 +1326,12 @@ jupyter nbconvert --execute --to notebook examples/pysysml_demo.ipynb
 **Goal:** Excellent notebook UX.
 
 **Tasks:**
-1. Implement `pysysml/dataframe.py`
+1. Implement `opensysml/dataframe.py`
    - `to_dataframe()` for Symbol collections
    - Columns: name, kind, multiplicity, type, value, etc.
    - Handle nested structures
 
-2. Implement `pysysml/display.py`
+2. Implement `opensysml/display.py`
    - `_repr_html_()` for Model (tree + diagnostics summary)
    - `_repr_html_()` for Symbol (formatted definition)
    - `_repr_html_()` for Instance (feature values table)
@@ -1342,7 +1342,7 @@ jupyter nbconvert --execute --to notebook examples/pysysml_demo.ipynb
    - Add `to_dataframe()` to Symbol
 
 4. Create demo notebook
-   - `examples/pysysml_demo.ipynb`
+   - `examples/opensysml_demo.ipynb`
    - Load A1.sysml
    - Navigate, query, display
    - DataFrame conversions
@@ -1395,7 +1395,7 @@ jupyter nbconvert --execute --to notebook examples/pysysml_demo.ipynb
    - Cross-platform validation
 
 **Definition of done:**
-- `pip install pysysml` works from PyPI
+- `pip install opensysml` works from PyPI
 - Binaries auto-download from GitHub releases
 - CI builds and tests both Go and Python
 - Documentation complete

@@ -1,9 +1,9 @@
-"""Tests that the pysysml version has exactly one source of truth.
+"""Tests that the opensysml version has exactly one source of truth.
 
 The version used to be written in three places (`pyproject.toml`, `setup.py`
-and `pysysml/__init__.py`) and drifted from the repository's own line. It is now
-declared once, in `pysysml/_version.py`: the packaging metadata reads it and
-`pysysml.__version__` reports it, which is the version of the code imported
+and `opensysml/__init__.py`) and drifted from the repository's own line. It is now
+declared once, in `opensysml/_version.py`: the packaging metadata reads it and
+`opensysml.__version__` reports it, which is the version of the code imported
 even from an editable install. These tests fail if a second declaration
 reappears or the two stop agreeing.
 """
@@ -20,9 +20,9 @@ from importlib.metadata import version as distribution_version
 import pytest
 from packaging.version import Version
 
-import pysysml
-from pysysml import _dist
-from pysysml._version import VERSION
+import opensysml
+from opensysml import _dist
+from opensysml._version import VERSION
 
 PYTHON_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CHECK_VERSION = os.path.join(PYTHON_DIR, "scripts", "check_version.py")
@@ -30,7 +30,7 @@ PYPROJECT = os.path.join(PYTHON_DIR, "pyproject.toml")
 
 
 def _installed_distribution():
-    """The installed pysysml distribution, or None when none is installed."""
+    """The installed opensysml distribution, or None when none is installed."""
     return _dist.installed_distribution()
 
 
@@ -49,12 +49,12 @@ def _skew(dist):
         str or None: What is wrong and how to fix it, or None when the
             distribution is the tree these tests import
     """
-    imported = os.path.realpath(pysysml.__file__)
+    imported = os.path.realpath(opensysml.__file__)
     installed = _dist.package_location(dist)
     if installed == imported and (dist.version == VERSION or _dist.editable_install(dist)):
         return None
     return (
-        f"pysysml {dist.version!r} is installed from {installed}, while the tests "
+        f"opensysml {dist.version!r} is installed from {installed}, while the tests "
         f"import {imported}, which declares {VERSION!r}. These tests require the "
         f"tree under test to be the installed distribution: run "
         f"`pip install -e python/` (an artifact of another version installed "
@@ -80,11 +80,11 @@ def test_declared_version_is_pep440():
 
 
 def test_dunder_version_matches_declaration():
-    """`pysysml.__version__` agrees with the single declaration."""
+    """`opensysml.__version__` agrees with the single declaration."""
     dist = _installed_distribution()
     if dist is not None:
         assert _skew(dist) is None, _skew(dist)
-    assert pysysml.__version__ == VERSION
+    assert opensysml.__version__ == VERSION
 
 
 def test_installed_metadata_matches_declaration():
@@ -97,13 +97,13 @@ def test_installed_metadata_matches_declaration():
     """
     dist = _installed_distribution()
     if dist is None:
-        pytest.skip("pysysml is not installed; nothing to compare metadata against")
+        pytest.skip("opensysml is not installed; nothing to compare metadata against")
     assert _skew(dist) is None, _skew(dist)
     if _dist.editable_install(dist):
         assert _dist.project_directory(dist) == os.path.realpath(PYTHON_DIR)
         assert str(Version(dist.version)) == dist.version
         return
-    assert distribution_version("pysysml") == VERSION
+    assert distribution_version("opensysml") == VERSION
 
 
 def test_the_build_takes_the_version_from_the_declaration():
@@ -116,7 +116,7 @@ def test_the_build_takes_the_version_from_the_declaration():
         pyproject = f.read()
     assert 'dynamic = ["version"]' in pyproject
     assert re.search(
-        r'version\s*=\s*\{\s*attr\s*=\s*"pysysml\._version\.VERSION"\s*\}', pyproject
+        r'version\s*=\s*\{\s*attr\s*=\s*"opensysml\._version\.VERSION"\s*\}', pyproject
     )
 
 
@@ -138,14 +138,14 @@ def test_no_second_version_declaration():
             if not name.endswith((".py", ".toml", ".cfg")):
                 continue
             path = os.path.join(root, name)
-            if os.path.samefile(path, os.path.join(PYTHON_DIR, "pysysml", "_version.py")):
+            if os.path.samefile(path, os.path.join(PYTHON_DIR, "opensysml", "_version.py")):
                 continue
             with open(path, encoding="utf-8") as f:
                 for lineno, line in enumerate(f, 1):
                     if pattern.match(line):
                         offenders.append(f"{os.path.relpath(path, PYTHON_DIR)}:{lineno}")
     assert offenders == [], (
-        "version literals outside pysysml/_version.py: " + ", ".join(offenders)
+        "version literals outside opensysml/_version.py: " + ", ".join(offenders)
     )
 
 
@@ -156,14 +156,14 @@ def test_setup_py_is_gone():
 
 def test_version_from_tag_accepts_the_matching_tag():
     """A tag naming the declared version yields that version."""
-    assert check_version.version_from_tag(f"pysysml-v{VERSION}") == VERSION
+    assert check_version.version_from_tag(f"opensysml-v{VERSION}") == VERSION
 
 
 @pytest.mark.parametrize("tag, expected", [
     ("", "reads CIRCLE_TAG"),
     ("v0.0.5", "does not start with"),
-    ("pysysml-0.1.0", "does not start with"),
-    ("pysysml-v9.9.9", "declares"),
+    ("opensysml-0.1.0", "does not start with"),
+    ("opensysml-v9.9.9", "declares"),
 ])
 def test_version_from_tag_rejects(tag, expected):
     """A tag that would publish the wrong version fails, with a reason."""
@@ -186,7 +186,7 @@ def test_pre_release_detection(version, pre):
 def test_check_version_cli_reports_the_version():
     """The job reads the version to publish off this script's stdout."""
     out = subprocess.run(
-        [sys.executable, CHECK_VERSION, "--tag", f"pysysml-v{VERSION}"],
+        [sys.executable, CHECK_VERSION, "--tag", f"opensysml-v{VERSION}"],
         capture_output=True, text=True, check=True,
     )
     assert out.stdout.strip() == VERSION
@@ -195,7 +195,7 @@ def test_check_version_cli_reports_the_version():
 def test_check_version_cli_fails_on_a_mismatched_tag():
     """A mismatch fails the job before anything is built or uploaded."""
     out = subprocess.run(
-        [sys.executable, CHECK_VERSION, "--tag", "pysysml-v9.9.9"],
+        [sys.executable, CHECK_VERSION, "--tag", "opensysml-v9.9.9"],
         capture_output=True, text=True,
     )
     assert out.returncode == 1
@@ -206,7 +206,7 @@ class TestEditableInstall:
     """Version resolution for an install whose modules are a checkout.
 
     A PEP 660 editable install puts its dist-info in site-packages and leaves the
-    modules in the checkout, so `locate_file` names a `pysysml/` that is not
+    modules in the checkout, so `locate_file` names a `opensysml/` that is not
     there and metadata written at install time cannot follow a later bump. Both
     used to make `test_version.py` fail for a developer working from a checkout.
     """
@@ -233,20 +233,20 @@ class TestEditableInstall:
     def editable(self, tmp_path, version=VERSION, layout=""):
         """An editable install of a checkout laid out under tmp_path."""
         site_packages = tmp_path / "site-packages"
-        (site_packages / f"pysysml-{version}.dist-info").mkdir(parents=True)
+        (site_packages / f"opensysml-{version}.dist-info").mkdir(parents=True)
         project = tmp_path / "checkout" / "python"
-        package = project.joinpath(*filter(None, [layout, "pysysml"]))
+        package = project.joinpath(*filter(None, [layout, "opensysml"]))
         package.mkdir(parents=True)
         (package / "__init__.py").write_text("")
         return self.FakeDistribution(
-            version, site_packages / f"pysysml-{version}.dist-info", project
+            version, site_packages / f"opensysml-{version}.dist-info", project
         ), package / "__init__.py"
 
     def test_the_package_is_found_in_the_checkout_not_in_site_packages(self, tmp_path):
         """locate_file answers from the dist-info's directory, which holds nothing."""
         dist, init = self.editable(tmp_path)
         assert _dist.editable_install(dist)
-        assert not os.path.exists(dist.locate_file("pysysml/__init__.py"))
+        assert not os.path.exists(dist.locate_file("opensysml/__init__.py"))
         assert _dist.package_location(dist) == os.path.realpath(str(init))
 
     def test_a_src_layout_checkout_is_found_too(self, tmp_path):
@@ -255,19 +255,19 @@ class TestEditableInstall:
 
     def test_a_non_editable_install_is_located_by_its_dist_info(self, tmp_path):
         """A wheel's modules sit beside its dist-info, and record no directory."""
-        dist_info = tmp_path / "site-packages" / f"pysysml-{VERSION}.dist-info"
+        dist_info = tmp_path / "site-packages" / f"opensysml-{VERSION}.dist-info"
         dist_info.mkdir(parents=True)
         dist = self.FakeDistribution(VERSION, dist_info)
         assert not _dist.editable_install(dist)
         assert _dist.project_directory(dist) is None
         assert _dist.package_location(dist) == os.path.realpath(
-            str(tmp_path / "site-packages" / "pysysml" / "__init__.py")
+            str(tmp_path / "site-packages" / "opensysml" / "__init__.py")
         )
 
     def test_a_checkout_ahead_of_its_metadata_is_not_skew(self, tmp_path, monkeypatch):
         """The bug: bumping VERSION after `pip install -e` failed the suite."""
         dist, init = self.editable(tmp_path, version="0.0.1")
-        monkeypatch.setattr(pysysml, "__file__", str(init))
+        monkeypatch.setattr(opensysml, "__file__", str(init))
         assert dist.version != VERSION
         assert _skew(dist) is None
 
@@ -279,8 +279,8 @@ class TestEditableInstall:
     def test_the_version_reported_is_the_declaration_not_the_metadata(self, monkeypatch):
         """__version__ is the code's own declaration, so a frozen dist-info cannot lie."""
         monkeypatch.setattr("importlib.metadata.version", lambda name: "0.0.1")
-        reloaded = importlib.reload(pysysml)
+        reloaded = importlib.reload(opensysml)
         try:
             assert reloaded.__version__ == VERSION
         finally:
-            importlib.reload(pysysml)
+            importlib.reload(opensysml)

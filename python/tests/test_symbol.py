@@ -2,13 +2,13 @@
 
 import pytest
 from unittest.mock import Mock
-from pysysml.capabilities import (
+from opensysml.capabilities import (
     CAPABILITY_SYMBOL_ATTRIBUTES,
     MissingCapabilityError,
     ServerInfo,
 )
-from pysysml.symbol import Symbol
-from pysysml.proto import sysml_pb2
+from opensysml.symbol import Symbol
+from opensysml.proto import sysml_pb2
 
 
 class TestSymbolBasicProperties:

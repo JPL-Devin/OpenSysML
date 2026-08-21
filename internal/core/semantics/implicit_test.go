@@ -220,3 +220,95 @@ func TestSysMLImplicitBaseOfExplicitSupertypeIsTransitive(t *testing.T) {
 		t.Fatalf("inherited endShot = %q, want Parts::Part::endShot", got)
 	}
 }
+
+// TestW7ATransitionMemberImplicitBase covers SysML v2 §7.19.2: a transition
+// written in a state body is a TransitionUsage, so it inherits TransitionAction's
+// accepter, effect, acceptedMessage and receiver.
+func TestW7ATransitionMemberImplicitBase(t *testing.T) {
+	m, root := buildModelNamed(t, "t.sysml", `package Actions {
+		action def Action;
+		action def TransitionAction :> Action {
+			ref acceptedMessage;
+			ref receiver;
+			action accepter;
+			action effect;
+		}
+	}
+	package States { action def StateAction; }
+	package P {
+		state machine {
+			state wait;
+			transition subscribing first wait then wait;
+		}
+	}`)
+	p := sym(t, root, "P")
+	machine := sym(t, p.Scope, "machine")
+	trans, ok := machine.Scope.LookupLocal("subscribing")
+	if !ok {
+		t.Fatal("the state body declares no subscribing transition")
+	}
+	for _, name := range []string{"accepter", "effect", "acceptedMessage", "receiver"} {
+		if _, ok := m.LookupMember(trans, name); !ok {
+			t.Errorf("transition does not inherit %s from Actions::TransitionAction", name)
+		}
+	}
+}
+
+// TestW7AKerMLFeatureBaseContributesMembers covers KerML §8.4.2: a feature of a
+// kind subsets that kind's base feature, which contributes members only.
+func TestW7AKerMLFeatureBaseContributesMembers(t *testing.T) {
+	m, root := buildModelNamed(t, "t.kerml", `package Base { abstract feature things; }
+	package Performances {
+		abstract step performances { feature enclosingPerformance; }
+		classifier Performance;
+	}
+	package P { step s; }`)
+	s := sym(t, sym(t, root, "P").Scope, "s")
+	if _, ok := m.LookupMember(s, "enclosingPerformance"); !ok {
+		t.Errorf("a KerML step does not inherit members of Performances::performances")
+	}
+	performances, _ := sym(t, root, "Performances").Scope.LookupLocal("performances")
+	if m.Conforms(s, performances) {
+		t.Errorf("a feature reported conforming to its base feature")
+	}
+}
+
+// TestW7AKerMLFeatureBaseSuppressedWhenDeclared covers the §8.4.2 suppression
+// rule: a declared subsetting that already reaches the base suppresses it.
+func TestW7AKerMLFeatureBaseSuppressedWhenDeclared(t *testing.T) {
+	m, root := buildModelNamed(t, "t.kerml", `package Performances {
+		abstract step performances;
+		step nested subsets performances;
+	}
+	package P {
+		step direct subsets Performances::performances;
+		step indirect subsets Performances::nested;
+		step plain;
+	}`)
+	p := sym(t, root, "P").Scope
+	for _, name := range []string{"direct", "indirect"} {
+		if base := m.implicitKerMLFeatureBase(sym(t, p, name)); base != nil {
+			t.Errorf("%s: declared subsetting did not suppress the implicit feature base", name)
+		}
+	}
+	if base := m.implicitKerMLFeatureBase(sym(t, p, "plain")); base == nil {
+		t.Errorf("plain step lost its implicit feature base")
+	}
+}
+
+// TestW7ASysMLSuppressionMatchesKerML covers the same rule in SysML: a declared
+// generalization that does not reach the kind's base does not suppress it.
+func TestW7ASysMLSuppressionMatchesKerML(t *testing.T) {
+	m, root := buildModelNamed(t, "t.sysml", `package Parts { part def Part { feature endShot; } }
+	package Frames { attribute def Frame; }
+	part p :> Frames::Frame;
+	part q :> Parts::Part;`)
+	part, _ := sym(t, root, "Parts").Scope.LookupLocal("Part")
+	if _, ok := m.LookupContributedMember(sym(t, root, "p"), "endShot"); !ok {
+		t.Errorf("a part usage specializing a non-part lost Parts::Part")
+	}
+	supers := m.DirectSupertypes(sym(t, root, "q"))
+	if len(supers) != 1 || supers[0] != part {
+		t.Errorf("DirectSupertypes(q) = %v, want the declared [Parts::Part] only", supers)
+	}
+}
