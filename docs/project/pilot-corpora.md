@@ -41,9 +41,10 @@ fail the test
   and `cmd/pilot-diff` both do.
 - Each root is loaded as one batch per language, mirroring `cmd/pilot-diff`, where a KerML file and
   a SysML file do not share a resource set.
-- Diagnostics of **every** severity are counted, not errors alone, so a warning that appears or a
-  severity that flips is a movement the gate reports. Paths are recorded relative to their root, so
-  the file is machine-independent.
+- Diagnostics of **every** severity are counted, not errors alone, so a warning that appears or
+  disappears is a movement the gate reports. Only the count is recorded, so a diagnostic that merely
+  changes severity leaves the count untouched and passes. Paths are recorded relative to their root,
+  so the file is machine-independent.
 - The run sets `XDG_CACHE_HOME` to a temporary directory, so it measures the implementation on an
   empty semantic cache — what a fresh checkout and CI do — rather than the developer's machine.
 - `TestPilotCorporaCacheStateIndependent` pins that a run restored from a populated library cache
