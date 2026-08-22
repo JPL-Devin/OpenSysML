@@ -80,7 +80,7 @@ func TestTypeCheckPortTypedByIndividualDefError(t *testing.T) {
 	if len(diags) != 1 {
 		t.Fatalf("expected exactly one type diagnostic, got %v", diags)
 	}
-	if !strings.Contains(diags[0].Message, "port cannot be typed by individualDef") {
+	if diags[0].Message != "A port must be typed by port definitions." {
 		t.Errorf("unexpected message %q", diags[0].Message)
 	}
 }

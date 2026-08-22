@@ -1,9 +1,6 @@
 package passes
 
-import (
-	"strings"
-	"testing"
-)
+import "testing"
 
 // F69: an occurrence, item or part may be typed by an occurrence definition of
 // any kind (SysML v2 §8.3.9.7), matching the pilot's
@@ -32,7 +29,7 @@ func TestF69PartTypedByAttributeDefRejected(t *testing.T) {
 	if len(diags) != 1 {
 		t.Fatalf("expected one type diagnostic, got %v", diags)
 	}
-	if !strings.Contains(diags[0].Message, "kind mismatch") {
+	if diags[0].Message != "An occurrence, item or part must be typed by occurrence definitions." {
 		t.Errorf("got %q", diags[0].Message)
 	}
 }
@@ -54,17 +51,17 @@ func TestF69CaseTypedByCaseDefKinds(t *testing.T) {
 // F69 negatives: the pilot keeps "A case must be typed by one case definition."
 // and "A use case must be typed by one use case definition."
 func TestF69CaseAndUseCaseRejections(t *testing.T) {
-	for _, src := range []string{
-		"part def P; case c : P;",
-		"case def C; use case u : C;",
-		"action def A; use case u : A;",
+	for _, tt := range []struct{ src, want string }{
+		{"part def P; case c : P;", "A case must be typed by one case definition."},
+		{"case def C; use case u : C;", "A use case must be typed by one use case definition."},
+		{"action def A; use case u : A;", "A use case must be typed by one use case definition."},
 	} {
-		diags := typeDiags(t, src)
+		diags := typeDiags(t, tt.src)
 		if len(diags) != 1 {
-			t.Fatalf("%s: expected one type diagnostic, got %v", src, diags)
+			t.Fatalf("%s: expected one type diagnostic, got %v", tt.src, diags)
 		}
-		if !strings.Contains(diags[0].Message, "kind mismatch") {
-			t.Errorf("%s: got %q", src, diags[0].Message)
+		if diags[0].Message != tt.want {
+			t.Errorf("%s: got %q", tt.src, diags[0].Message)
 		}
 	}
 }

@@ -47,7 +47,7 @@ func (tc *typeChecker) checkOneType(scope *symbols.Scope, u *ast.Usage) {
 	if !ok {
 		return
 	}
-	tc.diags = append(tc.diags, Diagnostic{
+	tc.appendUnique(Diagnostic{
 		Severity: SeverityError,
 		Span:     u.Span(),
 		Message:  msg,

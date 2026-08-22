@@ -55,7 +55,7 @@ func TestTypeCheckUnclassifiedTargetStillMismatches(t *testing.T) {
 	if len(diags) != 1 {
 		t.Fatalf("expected one type diagnostic, got %v", diags)
 	}
-	if !strings.Contains(diags[0].Message, "must be a definition") {
+	if diags[0].Message != "An occurrence, item or part must be typed by occurrence definitions." {
 		t.Errorf("got %q", diags[0].Message)
 	}
 }
