@@ -29,11 +29,12 @@ func TestUnsupportedConversionMessages(t *testing.T) {
 		src:  "package P {\n\tmetadata def M;\n\t@M;\n}",
 		want: []string{"cannot convert the prefix metadata at m.sysml:3:2", remedy},
 	}, {
-		// The entry member is unnamed, so the `then` beside it sequences an end
-		// no reference can name.
-		name: "succession_with_an_unnamed_end",
-		src:  "package P {\n\tstate def M {\n\t\tentry; then s1;\n\t\tstate s1;\n\t}\n}",
-		want: []string{"cannot convert the succession at m.sysml:3:10", "does not name both of the members it sequences"},
+		// A succession naming both ends is written back as the two-name form,
+		// which the parser reads only as basic names, so a quoted end is
+		// refused rather than written as notation it rejects.
+		name: "succession_naming_a_quoted_end",
+		src:  "package P {\n\taction Move {\n\t\taction a;\n\t\tthen 'a b';\n\t\taction 'a b';\n\t}\n}",
+		want: []string{"cannot convert the succession at m.sysml:4:3", "whose name is not a basic name"},
 	}}
 
 	for _, tc := range cases {

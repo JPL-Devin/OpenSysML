@@ -433,9 +433,10 @@ func w6fAssertXpectNothing(t *testing.T, row docTableRow, kind w6fXpectKind, nam
 	if err != nil {
 		docFailPathAt(t, w6fXpectDocPath, row.line, "per-kind table nothing: malformed integer %q", value)
 	}
-	want := kind.Rows - (kind.SameLocation + kind.SameLine + kind.SeverityDiffers + kind.Elsewhere)
+	// Tolerances classify disagreements only, so strict agreements are not silence either.
+	want := kind.Rows - (kind.Agree + kind.SameLocation + kind.SameLine + kind.SeverityDiffers + kind.Elsewhere)
 	if got != want {
-		docErrorPathAt(t, w6fXpectDocPath, row.line, "per-kind table %s nothing: want %d (baseline kinds[%s].rows - tolerance totals), got %d", name, want, name, got)
+		docErrorPathAt(t, w6fXpectDocPath, row.line, "per-kind table %s nothing: want %d (baseline kinds[%s].rows - agreements - tolerance totals), got %d", name, want, name, got)
 	}
 }
 

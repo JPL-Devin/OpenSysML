@@ -273,6 +273,15 @@ When a change needs documenting:
   [docs/project/roadmap.md](docs/project/roadmap.md) and
   [docs/project/training-examples.md](docs/project/training-examples.md). Recount all four
   together, in one commit.
+- **The compliance-row counts are generated, never typed.** After changing a `✅`/`⚠️`/`❌`/`⛔`
+  row in [docs/project/spec-compliance.md](docs/project/spec-compliance.md), run
+  `make docs-counts`: it restates that file's map header and the `**Row bookkeeping:**` lines in
+  `README.md` and [docs/internals/architecture.md](docs/internals/architecture.md) from the
+  markers themselves, touching nothing else. Do not edit those three lines by hand — two
+  branches that both add rows then produce identical bytes and cannot conflict on them. The
+  guard (`go test ./cmd/pilot-diff`) still fails on a stale line rather than fixing it, so run
+  the target before committing. It does not touch the externally refereed oracle numbers, which
+  come from the baseline JSONs.
 - **A new page goes in the `nav:` of [mkdocs.yml](mkdocs.yml)**, in the reading order of its
   area, or it is published but unreachable from the site's navigation. `make docs-install`
   once, then `make docs` builds the site the way CI does and `make docs-serve` previews it.
