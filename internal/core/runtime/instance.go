@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -272,6 +273,36 @@ func isOccurrenceUsage(sym *symbols.Symbol) bool {
 	default:
 		return false
 	}
+}
+
+// namesOneObject reports whether a usage denotes one object of its own — which
+// a name evaluates to and a feature chain reads members from — rather than a
+// value: an occurrence, or a structured value whose own features carry it.
+func (ctx *Context) namesOneObject(sym *symbols.Symbol) bool {
+	if sym == nil || !ctx.occursOnce(sym) {
+		return false
+	}
+	// A variation classifies its variants abstractly, so it is no object of
+	// itself: it holds nothing until it is bound to one.
+	if ctx.model.IsVariationFeature(sym) {
+		return false
+	}
+	return isOccurrenceUsage(sym) || ctx.namesStructuredValue(sym)
+}
+
+// namesStructuredValue reports whether a usage carrying no value of its own is
+// typed by a structured value — a non-scalar `attribute def` with features — so
+// it holds those features rather than one scalar value.
+func (ctx *Context) namesStructuredValue(sym *symbols.Symbol) bool {
+	usage, ok := sym.Decl.(*ast.Usage)
+	if !ok || usage.Value != nil || usage.Kind != ast.UsageAttribute {
+		return false
+	}
+	typ := ctx.extractType(sym)
+	if typ == nil || ctx.model.PrimTypeOf(typ) != semantics.PrimUnknown {
+		return false
+	}
+	return len(ctx.FeaturesOf(sym)) > 0
 }
 
 // occursOnce reports whether a usage names at most one occurrence; several

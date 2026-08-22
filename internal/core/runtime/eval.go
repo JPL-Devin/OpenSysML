@@ -347,6 +347,12 @@ func (ec *EvalContext) evalName(qn *ast.QualifiedName) (Value, error) {
 				if val, ok, err := ec.ctx.libraryFeatureValue(sym); ok {
 					return val, err
 				}
+				// A part, item or structured value names an object, so the name
+				// evaluates to that object rather than to a value the declaration
+				// would have to hold.
+				if val, ok, err := ec.occurrenceReference(sym); ok {
+					return val, err
+				}
 				if usage, ok := sym.Decl.(*ast.Usage); ok && usage.Value != nil {
 					if ec.resolving == nil {
 						ec.resolving = map[string]bool{}
@@ -456,6 +462,10 @@ func (ec *EvalContext) evalName(qn *ast.QualifiedName) (Value, error) {
 		if ec.ctx.model.IsVariationFeature(currentSym) {
 			return Value{}, fmt.Errorf("%w: %s", ErrVariationUnselected, qualifiedNameToString(qn))
 		}
+		// A part, item or structured value names an object, read as that object.
+		if val, ok, err := ec.occurrenceReference(currentSym); ok {
+			return val, err
+		}
 		// A calc usage is an evaluation, not a value: it is read through the output
 		// features it computes, since a name it does not designate a result for has
 		// no one value.
@@ -472,6 +482,20 @@ func (ec *EvalContext) evalName(qn *ast.QualifiedName) (Value, error) {
 	default:
 		return Value{}, fmt.Errorf("cannot evaluate element type %T", decl)
 	}
+}
+
+// occurrenceReference evaluates a name denoting one object — an occurrence or a
+// structured value — as that object, materialized once. Reports whether the
+// symbol denotes such an object.
+func (ec *EvalContext) occurrenceReference(sym *symbols.Symbol) (Value, bool, error) {
+	if !ec.ctx.namesOneObject(sym) {
+		return Value{}, false, nil
+	}
+	inst, err := ec.ctx.occurrenceOf(sym)
+	if err != nil {
+		return Value{}, true, fmt.Errorf("usage %s: %w", symbolText(sym), err)
+	}
+	return Value{Kind: ValInstance, Instance: inst.ID}, true, nil
 }
 
 // selfFeatureValue reads the named feature value of the bound instance. Reports whether the
@@ -559,6 +583,11 @@ func (ec *EvalContext) chainMemberValue(value Value, parts []ast.NameSegment, fr
 
 	switch value.Kind {
 	case ValSequence, ValSet:
+		// KerML holds a numerical vector in its `elements` feature, which the
+		// runtime represents as the collection itself.
+		if parts[0].Text == vectorElementsFeature && isNumericVector(value) {
+			return ec.chainMemberValue(value, parts[1:], from)
+		}
 		return ec.chainOverElements(value, parts, from)
 	case ValInstance, ValVariant:
 		// handled below

@@ -98,6 +98,9 @@ func TestRuntimeRobustness(t *testing.T) {
 	t.Run("range_spends_the_step_budget", testRangeSpendsTheStepBudget)
 	t.Run("collection_spends_the_element_budget", testCollectionSpendsTheElementBudget)
 	t.Run("usage_read_through_a_part_without_an_output", testUsageReadThroughAPartWithoutAnOutput)
+	t.Run("performed_action_binding_names_nothing", testPerformedActionBindingNamesNothing)
+	t.Run("structured_attribute_chain_of_an_unknown_feature", testStructuredAttributeChainOfAnUnknownFeature)
+	t.Run("elements_chain_of_a_non_numeric_collection", testElementsChainOfANonNumericCollection)
 	t.Run("constraint_missing_feature", testConstraintMissingFeature)
 	t.Run("nested_condition_subject_is_ambiguous", testNestedConditionSubjectIsAmbiguous)
 	t.Run("satisfaction_subject_is_ambiguous", testSatisfactionSubjectIsAmbiguous)
@@ -6505,6 +6508,79 @@ func testUsageReadThroughAPartWithoutAnOutput(t *testing.T) {
 	}
 	if err != nil && !strings.Contains(err.Error(), "a, b") {
 		t.Errorf("error should name the outputs to read, got: %v", err)
+	}
+}
+
+// testPerformedActionBindingNamesNothing: a performed action's binding names a
+// part that does not exist, reported as the unresolved reference it is rather
+// than materializing the performer without the action's input.
+func testPerformedActionBindingNamesNothing(t *testing.T) {
+	src := `
+		package test {
+			part def Counter { attribute count : Integer = 4; }
+			action def Bump {
+				in c : Counter;
+				out n : Integer = c.count + 1;
+			}
+			part machine {
+				perform action p : Bump { in c = nowhere; }
+			}
+			calc def Probe {
+				in n : Integer;
+				machine.p.n
+			}
+		}
+	`
+	err := calcErrorWithLibraries(t, src, "Probe", []Value{constInt(1)}, 10000)
+	if !errors.Is(err, ErrUnresolvedReference) {
+		t.Errorf("expected ErrUnresolvedReference, got: %v", err)
+	}
+	if err != nil && !strings.Contains(err.Error(), "nowhere") {
+		t.Errorf("error should name the binding that resolves to nothing, got: %v", err)
+	}
+}
+
+// testStructuredAttributeChainOfAnUnknownFeature: a structured attribute usage
+// holds the features of its type, so a chain into one it does not have is
+// reported rather than answered as an empty value.
+func testStructuredAttributeChainOfAnUnknownFeature(t *testing.T) {
+	src := `
+		package test {
+			attribute def Cost { attribute v : Real default 1.0; }
+			attribute template : Cost;
+			calc def Probe {
+				in n : Integer;
+				template.nope
+			}
+		}
+	`
+	err := calcErrorWithLibraries(t, src, "Probe", []Value{constInt(1)}, 10000)
+	if err == nil {
+		t.Fatal("expected chaining into an unknown feature to fail")
+	}
+	if !strings.Contains(err.Error(), "nope") {
+		t.Errorf("error should name the feature that does not exist, got: %v", err)
+	}
+}
+
+// testElementsChainOfANonNumericCollection: only a numerical vector is the
+// sequence of its own elements, so `elements` of another collection is a member
+// lookup on each of them, reported rather than answered with the collection.
+func testElementsChainOfANonNumericCollection(t *testing.T) {
+	src := `
+		package test {
+			calc def Probe {
+				in n : Integer;
+				return : String[*] = ("a", "b").elements;
+			}
+		}
+	`
+	err := calcErrorWithLibraries(t, src, "Probe", []Value{constInt(1)}, 10000)
+	if err == nil {
+		t.Fatal("expected chaining elements of a non-numeric collection to fail")
+	}
+	if !strings.Contains(err.Error(), "cannot chain through non-instance member") {
+		t.Errorf("error should report the member lookup, got: %v", err)
 	}
 }
 

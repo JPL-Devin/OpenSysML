@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-// F68's remaining residue: `Actions::TransitionAction::effect` comes back from
-// the library cache without a scope, so a chain through it cannot be looked up.
+// F101: a transition's effect action is the `effect` its own scope names, so a
+// chain through it reads that action rather than the scope-less library feature.
 func TestW8GEffectMemberOfACachedLibrarySymbol(t *testing.T) {
 	ws := NewWorkspace()
 	uri := "file:///w8g_f68.sysml"
@@ -25,13 +25,13 @@ func TestW8GEffectMemberOfACachedLibrarySymbol(t *testing.T) {
 }`), 1)
 	defer ws.Close(uri)
 
-	var noScope []string
+	var unresolved []string
 	for _, d := range ws.Diagnostics(uri) {
-		if strings.Contains(d.Message, "no scope for member lookup") {
-			noScope = append(noScope, d.Message)
+		if strings.Contains(d.Message, "no scope for member lookup") || strings.Contains(d.Message, "unresolved member") {
+			unresolved = append(unresolved, d.Message)
 		}
 	}
-	if len(noScope) != 1 || !strings.Contains(noScope[0], "Actions::TransitionAction::effect") {
-		t.Fatalf("expected the cached effect member to be the one gap, got %v", noScope)
+	if len(unresolved) != 0 {
+		t.Fatalf("expected the effect member chain to resolve, got %v", unresolved)
 	}
 }
