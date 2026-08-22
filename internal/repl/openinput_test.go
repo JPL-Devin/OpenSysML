@@ -127,6 +127,24 @@ func TestLoadFileSummaryDefersSyntaxWarnings(t *testing.T) {
 	}
 }
 
+// A bare import is an error about the notation, not a reason the file could not be
+// read, so the load defers it to the analysis rather than reporting it twice.
+func TestLoadFileSummaryDefersNotationErrors(t *testing.T) {
+	s := NewSession()
+	path := tempFile(t, "bare.sysml", "package Q { part def A; }\npackage P { import Q::*; }\n")
+
+	out, err := s.LoadFileSummary(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(out, "\n"); strings.Contains(got, "visibility indicator") {
+		t.Errorf("the summary load reported the notation error the analysis reports:\n%s", got)
+	}
+	if lines := strings.Join(s.DiagnosticLines(), "\n"); !strings.Contains(lines, "visibility indicator") {
+		t.Errorf("the analysis did not report the notation error:\n%s", lines)
+	}
+}
+
 // A file that parses but whose analysis fails is a different case: it is accepted
 // and reported by the deeper tiers, and the load still counts as an error.
 func TestLoadReportsUnresolvedReference(t *testing.T) {
