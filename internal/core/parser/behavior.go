@@ -1425,9 +1425,8 @@ func (p *Parser) atCalcStatement() bool {
 	return false
 }
 
-// atActionNodeMember reports whether the cursor begins an action node that a
-// calculation or case body carries as a member (SysML.xtext:1389
-// ActionNodeMember, reached from CalculationBodyItem and CaseBodyItem).
+// atActionNodeMember reports whether the cursor begins an action node a calculation or case
+// body carries (SysML.xtext:1389 ActionNodeMember, from Calculation/CaseBodyItem).
 func (p *Parser) atActionNodeMember() bool {
 	if _, ok := p.atActionNodeWord(); ok {
 		return true
@@ -2306,10 +2305,8 @@ func (p *Parser) parseStateBody() []ast.Node {
 	return body.finish()
 }
 
-// successionBodyAllowed reports whether a `then` after member may carry a body.
-// A body reaches a state body only as a TargetTransitionUsage after a behaviour
-// usage member (SysML.xtext:1762-1764); the entry transitions that follow a
-// state subaction end in ';' (EntryTransitionMember, SysML.xtext:1796-1801).
+// successionBodyAllowed reports whether a `then` after member may carry a body: only a
+// TargetTransitionUsage does (SysML.xtext:1764), not an EntryTransitionMember (:1796-1801).
 func successionBodyAllowed(member ast.Node, allowed bool) bool {
 	switch member.(type) {
 	case *ast.EntryMember, *ast.DoMember, *ast.ExitMember:

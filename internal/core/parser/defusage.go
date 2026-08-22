@@ -1678,9 +1678,8 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 			declRels := p.parseRelationships(true)
 			u.Relationships = append(u.Relationships, declRels...)
 		} else if reqName := p.parseChainedName(); reqName != nil {
-			// SysML.xtext:2119 owns a ReferenceSubsetting here, which reaches a
-			// nested feature through a '.' chain (KerML.xtext:699); recorded as a
-			// plain subsetting until its passes/runtime readers migrate.
+			// SysML.xtext:2119's ReferenceSubsetting reaches a nested feature through a '.'
+			// chain (KerML.xtext:699); kept a plain subsetting until its readers migrate.
 			u.Relationships = append(u.Relationships, &ast.Relationship{
 				Kind:   ast.RelSubsets,
 				Target: reqName,
@@ -2160,9 +2159,8 @@ func (p *Parser) parseCaseBody() []ast.Node {
 			body.add(p.parseSuccessionEdge(p.advance(), true))
 			continue
 		}
-		// A case body carries an action body's items (SysML.xtext:2191
-		// CaseBodyItem → CalculationBodyItem → ActionBodyItem): control nodes and
-		// behavioural statements among them.
+		// A case body carries an action body's items — control nodes and behavioural
+		// statements among them (SysML.xtext:2191 CaseBodyItem → … → ActionBodyItem).
 		if p.atActionNodeMember() || p.atCalcStatement() {
 			body.add(p.parseActionMember())
 			continue

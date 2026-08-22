@@ -59,10 +59,8 @@ func TestNegative(t *testing.T) {
 		// (SysML.xtext:1698 ActionTargetSuccession).
 		{"succession_body_unclosed", "package P { action def A { action a; first a; then a { doc /* x */ } }"},
 		{"succession_body_no_target", "package P { action def A { action a; first a; then { } } }"},
-		// A body on a `then` is an ActionTargetSuccession (SysML.xtext:1698), which
-		// only an action body item reaches: an entry transition ends in ';'
-		// (:1796-1801), a definition body has no succession member (:516-524), and a
-		// namespace body has none either.
+		// Only an action body item reaches ActionTargetSuccession (SysML.xtext:1698), so a
+		// bodied `then` is not a state, definition or namespace member (:1796-1801, :516-524).
 		{"entry_succession_body", "package P { state def S { state starting; entry; then starting { doc /* x */ } } }"},
 		{"definition_succession_body", "package P { part def D { part a; part b; then b { doc /* x */ } } }"},
 		{"namespace_succession_body", "package P { action a; action b; then b { doc /* x */ } }"},
