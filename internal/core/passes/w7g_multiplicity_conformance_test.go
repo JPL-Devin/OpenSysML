@@ -104,6 +104,7 @@ func TestW7GEndAndNonEndFeaturesAreNotCompared(t *testing.T) {
 			part parts[0..4];
 			connection c {
 				end p1[0..*] subsets parts;
+				end p2[0..*] subsets parts;
 			}
 		}
 	}`

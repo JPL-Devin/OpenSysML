@@ -667,8 +667,8 @@ func TestConstraintInterfaceEndConjugation(t *testing.T) {
 	}
 }
 
-// A `variant` whose owner is not a variation offers no choice, so it is reported
-// as a warning: the member is well-formed, only its `variant` keyword is idle.
+// A `variant` whose owner is not a variation offers no choice, so it is an error
+// as it is in the reference.
 func TestConstraintVariantOutsideVariation(t *testing.T) {
 	src := `
 		part def Widget {
@@ -685,11 +685,11 @@ func TestConstraintVariantOutsideVariation(t *testing.T) {
 	if got == nil {
 		t.Fatalf("expected variant-outside-variation diagnostic, got %v", diags)
 	}
-	if got.Severity != SeverityWarning {
-		t.Errorf("severity = %v, want warning", got.Severity)
+	if got.Severity != SeverityError {
+		t.Errorf("severity = %v, want error", got.Severity)
 	}
-	if !strings.Contains(got.Message, "variant misplaced is declared in Widget") {
-		t.Errorf("message %q does not name the variant and its owner", got.Message)
+	if got.Message != msgVariantOutsideVariation {
+		t.Errorf("message = %q, want %q", got.Message, msgVariantOutsideVariation)
 	}
 }
 

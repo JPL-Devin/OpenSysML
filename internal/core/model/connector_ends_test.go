@@ -134,7 +134,15 @@ func TestConnectorEndNamesResolve(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if found := allMessages(t, "ends", tc.src); len(found) != 0 {
+			// The end-less general of one case relates fewer than two elements,
+			// which the reference reports too, so that rule is not the subject here.
+			var found []string
+			for _, msg := range allMessages(t, "ends", tc.src) {
+				if msg != "Must have at least two related elements" {
+					found = append(found, msg)
+				}
+			}
+			if len(found) != 0 {
 				t.Fatalf("expected no findings in a well-formed model, got %d: %v", len(found), found)
 			}
 		})
@@ -154,7 +162,14 @@ func TestConnectorEndArityMismatch(t *testing.T) {
 				rim references w;
 		}
 	}`
-	found := allMessages(t, "arity", src)
+	// The one-ended definition also relates fewer than two elements, as it does
+	// in the reference; the arity of the usage's ends is what is under test.
+	var found []string
+	for _, msg := range allMessages(t, "arity", src) {
+		if msg != "Must have at least two related elements" {
+			found = append(found, msg)
+		}
+	}
 	if len(found) != 1 || !strings.Contains(found[0], "rim redefines no end of Seat") {
 		t.Fatalf("expected one arity finding for the extra end, got %v", found)
 	}

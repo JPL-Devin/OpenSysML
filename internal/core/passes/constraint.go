@@ -148,27 +148,19 @@ func (cc *constraintChecker) checkViewSatisfyTarget(sym *symbols.Symbol) {
 	})
 }
 
-// checkVariantOutsideVariation warns about a `variant` whose owner is not a
-// variation: it offers no choice to anything (SysML v2 §7.20 VariantMembership),
-// so it is an ordinary member spelled as if it were selectable.
+// checkVariantOutsideVariation reports a `variant` whose owner is not a
+// variation: it offers no choice to anything (SysML v2 §7.20 VariantMembership).
+// Pilot SysMLValidator (2026-05) validateVariantMembershipOwningNamespace.
 func (cc *constraintChecker) checkVariantOutsideVariation(sym *symbols.Symbol) {
 	if !semantics.DeclaresVariant(sym) || cc.model.VariationPointOwning(sym) != nil {
 		return
 	}
-	owner := "a namespace"
-	if sym.OwnerScope != nil {
-		if ownerSym := sym.OwnerScope.Owner(); ownerSym != nil && ownerSym.Name != "" {
-			owner = ownerSym.Name
-		}
-	}
 	cc.diags = append(cc.diags, Diagnostic{
-		Severity: SeverityWarning,
+		Severity: SeverityError,
 		Span:     sym.Decl.Span(),
-		Message: fmt.Sprintf(
-			"variant %s is declared in %s, which is not a variation, so it offers no choice; declare its owner `variation` or drop `variant`",
-			sym.Name, owner),
-		Code:   "variant-outside-variation",
-		Source: "constraint",
+		Message:  msgVariantOutsideVariation,
+		Code:     "variant-outside-variation",
+		Source:   "constraint",
 	})
 }
 

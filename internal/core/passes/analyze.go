@@ -33,6 +33,7 @@ func DefaultRegistry() *Registry {
 	reg.Register(W8DConnectorFeaturingPass{})
 	reg.Register(W8DFlowEndPass{})
 	reg.Register(W8DVariabilityPass{})
+	reg.Register(W10BRelatedElementsPass{})
 	reg.Register(W8DVerificationPass{})
 	reg.Register(W8DViewRenderingPass{})
 	reg.Register(W8DMetadataUsagePass{})
