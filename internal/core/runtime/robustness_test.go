@@ -21,6 +21,8 @@ import (
 
 func TestRuntimeRobustness(t *testing.T) {
 	t.Run("deadlock_join_starvation", testDeadlockJoinStarvation)
+	t.Run("fork_without_a_successor", testForkWithoutASuccessor)
+	t.Run("merge_without_a_successor", testMergeWithoutASuccessor)
 	t.Run("action_whose_last_node_has_no_succession", testActionWhoseLastNodeHasNoSuccession)
 	t.Run("first_node_with_a_second_succession", testFirstNodeWithASecondSuccession)
 	t.Run("first_beside_an_initial_node", testFirstBesideAnInitialNode)
@@ -3076,8 +3078,60 @@ func testDeadlockJoinStarvation(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected a deadlock error, the starved join completed")
 	}
-	if !strings.Contains(err.Error(), "deadlock") {
-		t.Errorf("expected a deadlock error, got: %v", err)
+	if !errors.Is(err, ErrActionDeadlock) {
+		t.Errorf("expected ErrActionDeadlock, got: %v", err)
+	}
+}
+
+func testForkWithoutASuccessor(t *testing.T) {
+	src := `
+		package test {
+			action broken {
+				first start;
+				fork split;
+				then start split;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "broken", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action broken not found")
+	}
+
+	exec, err := ctx.CreateActionExecutor(sym)
+	if err != nil {
+		t.Fatalf("create action executor: %v", err)
+	}
+	err = exec.RunToCompletion()
+	if !errors.Is(err, ErrInvalidActionFlow) {
+		t.Fatalf("error = %v, want ErrInvalidActionFlow", err)
+	}
+}
+
+func testMergeWithoutASuccessor(t *testing.T) {
+	src := `
+		package test {
+			action broken {
+				first start;
+				merge converge;
+				then start converge;
+			}
+		}
+	`
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "broken", ast.DefAction)
+	if sym == nil {
+		t.Fatal("action broken not found")
+	}
+
+	exec, err := ctx.CreateActionExecutor(sym)
+	if err != nil {
+		t.Fatalf("create action executor: %v", err)
+	}
+	err = exec.RunToCompletion()
+	if !errors.Is(err, ErrInvalidActionFlow) {
+		t.Fatalf("error = %v, want ErrInvalidActionFlow", err)
 	}
 }
 
@@ -3280,48 +3334,41 @@ func testForkBranchesAssigningTheSameFeature(t *testing.T) {
 	}
 }
 
-// testDecisionNoSatisfiedGuard: decision node with no guards satisfied
+// testDecisionNoSatisfiedGuard: a decision must select one outgoing succession.
 func testDecisionNoSatisfiedGuard(t *testing.T) {
 	src := `
 		package test {
-			calc noGuard {
-				in x: Integer;
-				if (false) return 1;
-				// No else branch, all guards false
+			private import ScalarValues::*;
+
+			action noGuard {
+				attribute enabled : Boolean = false;
+
+				first start;
+				action selected;
+				done end;
+
+				then start choose;
+				then selected end;
+
+				decide choose;
+				if enabled then selected;
 			}
 		}
 	`
-	file := parseAndBuild(t, src)
-	if file == nil {
-		t.Fatal("parse failed")
-	}
-
-	idx, model, ctx := buildRuntime(t, "<test>", file)
-
-	_ = model // silence unused
-
-	rootScope := idx.DocumentRoot("<test>")
-	sym := findSymbolByName(rootScope, "noGuard", ast.DefCalc)
+	idx, _, ctx := buildRuntime(t, "<test>", parseAndBuild(t, src))
+	sym := findSymbolByName(idx.DocumentRoot("<test>"), "noGuard", ast.DefAction)
 	if sym == nil {
-		t.Fatal("noGuard calc not found")
+		t.Fatal("action noGuard not found")
 	}
 
-	// Invoke with x=5
-	xVal := Value{Kind: ValConst, Const: semantics.Value{Kind: semantics.ValInt, Int: 5}}
-	result, err := ctx.InvokeCalc(sym, []Value{xVal}, rootScope)
-
-	// Expect error or null result (implementation-specific)
+	exec, err := ctx.CreateActionExecutor(sym)
 	if err != nil {
-		t.Logf("InvokeCalc returned error (acceptable): %v", err)
-		return
+		t.Fatalf("create action executor: %v", err)
 	}
-
-	if result.Kind == ValNull {
-		t.Log("InvokeCalc returned null (no branch taken)")
-		return
+	err = exec.RunToCompletion()
+	if !errors.Is(err, ErrNoEnabledSuccession) {
+		t.Fatalf("error = %v, want ErrNoEnabledSuccession", err)
 	}
-
-	t.Logf("InvokeCalc returned: %v (no error - implementation allows missing branch)", result)
 }
 
 // testStateDanglingTransition: state with transition to nonexistent state

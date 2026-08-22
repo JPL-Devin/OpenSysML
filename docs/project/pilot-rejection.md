@@ -146,6 +146,86 @@ fixing is later work.
 Each pilot message above is the first error the validator reports for the case; the full lists are
 in the baseline JSON's `pilot` arrays.
 
+## Adjudications (W9F)
+
+Every gap below is a **real permissiveness finding**: the pinned grammar admits none of these
+models, so a conforming SysML v2 tool rejects them and we do not. Adjudicating one says where the
+divergence is deliberate and who owns the fix — never that it is not a divergence.
+
+- **`grammar/g02-import-without-visibility.sysml` — divergence in severity, fix out of slice.**
+  The pinned `ImportPrefix` (`SysML.xtext:241`, `KerML.xtext:169`) makes `visibility =
+  VisibilityIndicator` **mandatory**, unlike the optional `MemberPrefix` visibility beside it
+  (`SysML.xtext:218`), so `import Q::*;` is not a well-formed import and the reference reports
+  `mismatched input 'import'`. We do report it — as a *warning*
+  (`internal/core/passes/import_visibility.go`, code `import-visibility`), and warnings do not
+  count as rejection here. Per the pinned grammar the severity should be an error in the default
+  mode; the diagnostic is a semantic pass, so W9F does not change it (`internal/core/passes` is
+  another wave-9 slice). Wave-10 item: raise `SeverityWarning` to an error, or make it
+  conformance-dependent as `nonstandard_notation.go` already does.
+- **`grammar/g15-keyword-as-name.sysml` — deliberate recovery policy, still a divergence.** The
+  pinned grammar's `Name` is the `ID` terminal, which excludes keywords, and `part def part;` is
+  `no viable alternative at input 'part'`. We read a keyword in name position as the name the
+  author meant and warn that an unrestricted name (`'part'`) is required to spell it
+  (`internal/core/parser/namespace.go`, code `reserved-keyword-name`, KerML §7.2.4) — a recovery
+  policy chosen so an editor keeps a usable tree, documented in
+  [conformance-audit.md](../reference/grammar/conformance-audit.md). It is a severity divergence,
+  not a reading divergence: we do not silently accept the model, we accept it with a warning where
+  the specification's grammar has no production for it. Since warnings are not rejection, the gap
+  stands. Wave-10 item: escalate this warning to an error under `-conformance strict`, which keeps
+  the recovery behaviour for editors while letting the strict question be answered correctly.
+- **`grammar/k02-sysml-keyword-in-kerml.kerml` — one grammar for both languages, fix out of
+  slice.** `part def` exists in no KerML production; the KerML validator reports `no viable
+  alternative at input 'def'`. We parse `.kerml` with the same grammar as `.sysml` and filter
+  afterwards: `internal/core/passes/nonstandard_notation.go` reports SysML-only notation in a
+  KerML file, at a severity that depends on the conformance mode. It does not cover the SysML
+  *definition and usage keywords* themselves, which is why `-conformance strict` does not close
+  this case either (measured: strict leaves the same four grammar gaps as auto). Extending that
+  walker is a `internal/core/passes` change, so it is written up rather than done here.
+- **`grammar/g31-allocate-without-to.sysml` — the `allocate` synonym, adjudicated, not fixed.**
+  In the pinned grammar `allocate` is only the `AllocateKeyword` (`SysML.xtext:1210`) and demands
+  a `ConnectorPart` (`:1219`), whose binary form requires `to` (`:1076`); the usage keyword is
+  `allocation` (`AllocationUsageKeyword`, `:1206`). OpenSysML additionally accepts `allocate` as a
+  synonym for the usage keyword (see [rdf-mapping.md](../reference/rdf-mapping.md), where
+  `sysx:declaredKeyword` keeps the two distinguishable), so `allocate a;` reads as an allocation
+  usage *named* `a` rather than a connector missing its target — the two forms are
+  indistinguishable at the token level. Measured with the pinned validator: `part def D { allocate
+  al; }` is rejected by the reference too, so the synonym itself is the divergence, not just this
+  case. Removing it is a language change locked by golden and RDF export expectations, so it is a
+  wave-10 decision rather than a small local fix.
+
+### Grammar mutation pass (W9F)
+
+The `grammar/` derivation was extended along the *unreached* axis rather than the interesting-case
+axis: [grammar-coverage.md](grammar-coverage.md) lists the forms no input of ours touches, and W9F
+mutated exactly those. Measured by running `cmd/grammar-coverage` over a tree with the negative
+corpus added as a scanned root, the five forms the committed coverage report calls unseen —
+`KerML.xtext:119` (`#`-prefixed `namespace`), `:408` `Conjugation`, `:426` `Disjoining`, `:712`
+`Redefinition`, and `KerMLExpressions.xtext:267`'s `%` operator — are all reached by the new cases
+(`k11`, `k07`/`k15`, `k06`, `k16`, `g40`). Every candidate was run through the pinned validators
+before being committed and only those the reference actually rejects were kept; the discarded
+candidates (objective, send, metadata, enum, snapshot and metaclass mutations the reference
+accepts) would have been corpus noise, not reach. Two of the new cases were closed by fixes in
+this same PR rather than left as gaps: `g20-include-without-target.sysml` (a bare `include ;`
+inside a body was read as a member *named* `include`) and
+`g36-direction-without-feature.sysml` (`in ;` declared nothing and was accepted).
+
+### Should the default mode reject the five `extensions/` cases?
+
+Per the specification, **yes**. `initial`, `region`, `defer`, `history` and `transition <src> to
+<tgt>` appear in no production of the pinned grammars — `StateBodyItem` has no initial, history or
+deferral member, concurrency is spelled `state ... parallel`, and `TransitionUsage` connects with
+`first ... then`. The SysML v2 textual notation is defined by that grammar, so a model using them
+is not a conforming SysML v2 model, and a tool asked whether it conforms must say no. Accepting
+them by default is therefore not "conformance we argued" but a **superset we chose**: OpenSysML's
+default mode implements a dialect, and the honest statement of `-conformance auto` agreement on
+`x01`, `x04`, `x05`, `x06`, `x07` is that the strict question has an answer we agree on while the
+default pipeline a user gets accepts notation the reference rejects as a syntax error. What makes
+the choice defensible is not the extensions' usefulness but that the conforming question remains
+askable: [strict mode](../guide/03-command-line.md#strict-conformance) reports every one of them as
+an error, each has dedicated parser and runtime tests, and each is documented as an extension. If
+strict mode ever stopped covering one of them, the default-mode acceptance would be an
+undocumented non-conformance and the case should be fixed instead of adjudicated.
+
 ## Guard
 
 `TestPilotRejectionDocumentCountsMatchBaseline` (in `cmd/pilot-reject`) re-derives every count in

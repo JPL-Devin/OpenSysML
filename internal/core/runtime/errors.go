@@ -112,6 +112,15 @@ var (
 	// reported instead of hanging.
 	ErrAcceptDeadlock = errors.New("accept deadlock")
 
+	// ErrActionDeadlock is returned when action tokens cannot make progress.
+	ErrActionDeadlock = errors.New("action deadlock")
+
+	// ErrInvalidActionFlow is returned for a structurally invalid action graph.
+	ErrInvalidActionFlow = errors.New("invalid action flow")
+
+	// ErrNoEnabledSuccession is returned when a decision can select no branch.
+	ErrNoEnabledSuccession = errors.New("no enabled succession")
+
 	// ErrNoClock is returned when a behavior waits for a time event where no
 	// clock advances: an action body has no time base of its own, so
 	// `accept at t` / `accept after d` written among an action's nodes is
