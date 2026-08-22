@@ -104,6 +104,28 @@ func TestVisibleNamesLibraryRootsGateImplicitMembers(t *testing.T) {
 
 }
 
+// A `class`'s implicit supertype is Occurrences::Occurrence, so nothing it
+// inherits is reachable while only Base is loaded (KerML §8.3.2).
+func TestVisibleNamesClassImplicitMembersNeedOccurrences(t *testing.T) {
+	src := "package P {\n\tclass A {\n\t\tclass a;\n\t}\n\tclassifier X;\n}\n"
+	base := namesAt(t, src, "classifier X", VisibleNamesOptions{LibraryRoots: []string{"Base"}})
+	has(t, base, []string{"A", "A.a", "P.A.a"}, []string{"A.self", "A.that", "A.a.self", "A.a.that"})
+
+	occ := namesAt(t, src, "classifier X", VisibleNamesOptions{LibraryRoots: []string{"Base", "Occurrences"}})
+	has(t, occ, []string{"A", "A.a", "A.self"}, nil)
+}
+
+// A path inherits through a type once: `self` comes from Base::Anything and
+// `that` from Base::things, so `self.that` ends there rather than re-expanding
+// through Anything again.
+func TestVisibleNamesImplicitMembersDoNotRechain(t *testing.T) {
+	src := "package P {\n\tclassifier A;\n\tclassifier X;\n}\n"
+	names := namesAt(t, src, "classifier X", VisibleNamesOptions{LibraryRoots: []string{"Base"}})
+	has(t, names, []string{"A", "A.self", "A.self.that"}, []string{
+		"A.self.self", "A.self.that.self", "A.self.that.that", "A.that.self",
+	})
+}
+
 func TestVisibleNamesCyclicImportTerminatesAndIsSorted(t *testing.T) {
 	src := "package P1 {\n\tpublic import P2::*;\n\tclassifier A;\n}\n" +
 		"package P2 {\n\tpublic import P1::*;\n\tclassifier B;\n}\n" +

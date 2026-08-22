@@ -129,6 +129,11 @@ type nameWalk struct {
 	// expanding are the elements whose members are being enumerated on the
 	// current path, so a namespace that contains itself ends the descent.
 	expanding map[*symbols.Symbol]bool
+	// traversed counts the types the current path's derivation went through, so
+	// a path never inherits through the same type twice.
+	traversed map[*symbols.Symbol]int
+	// chains memoizes the source steps from an owner to a member's declarer.
+	chains map[[2]*symbols.Symbol][]*symbols.Symbol
 	// pending maps a type to the declaration being written in it, whose
 	// redefinition masks nothing there (KerML 8.3.3.3.6).
 	pending map[*symbols.Symbol]pendingDecl
@@ -164,6 +169,8 @@ func (nw *nameWalk) membersOf(owner *symbols.Symbol) []*symbols.Symbol {
 func (nw *nameWalk) walk(anchor *symbols.Scope, redefinition bool) {
 	nw.expanding = map[*symbols.Symbol]bool{}
 	nw.pending = map[*symbols.Symbol]pendingDecl{}
+	nw.traversed = map[*symbols.Symbol]int{}
+	nw.chains = map[[2]*symbols.Symbol][]*symbols.Symbol{}
 	if redefinition && anchor != nil {
 		// The anchor is the namespace the redefinition is written in: one of
 		// its declarations is the redefining one, and which is not knowable
@@ -233,18 +240,28 @@ func (nw *nameWalk) inherited(owner *symbols.Symbol, prefix string, depth int, i
 		return
 	}
 	// One filter chain: the semantic member view drops what a redefinition
-	// masks, then membership visibility drops what cannot be named here.
+	// masks, then membership visibility drops what cannot be named here, then
+	// the path's own derivation drops what it would inherit twice over.
 	for _, sym := range nw.membersOf(owner) {
 		if !symbols.VisibleAs(sym.Visibility, false, inheriting) {
 			continue
 		}
+		chain, ok := nw.enter(nw.chainTo(owner, declarerOf(sym)))
+		if !ok {
+			continue
+		}
 		nw.add(prefix, leafName(sym.Name), sym, depth)
 		nw.add(prefix, sym.ShortName, sym, depth)
+		nw.leave(chain)
 	}
 	// MembersOf reads a source's scope, which a cached standard-library symbol
 	// does not carry, so its inherited members come from the index instead.
 	for _, src := range nw.sem.MemberSources(owner) {
 		if src == nil || src.Scope != nil {
+			continue
+		}
+		chain, ok := nw.enter(nw.chainTo(owner, src))
+		if !ok {
 			continue
 		}
 		for _, child := range nw.idx.LookupDirectChildrenFrom(nw.fqnOf(src), "") {
@@ -253,6 +270,78 @@ func (nw *nameWalk) inherited(owner *symbols.Symbol, prefix string, depth int, i
 			}
 			nw.add(prefix, leafName(child.Name), child, depth)
 		}
+		nw.leave(chain)
+	}
+}
+
+// declarerOf is the element whose scope declares sym, which is the type a path
+// inheriting sym went through.
+func declarerOf(sym *symbols.Symbol) *symbols.Symbol {
+	if sym == nil || sym.OwnerScope == nil {
+		return nil
+	}
+	return sym.OwnerScope.Owner()
+}
+
+// chainTo returns the source steps from owner to declarer, breadth-first over
+// the member-contributing edges: the types a path reaching declarer's members
+// through owner inherits through. It is empty when owner declares them itself
+// or when no chain of sources reaches declarer.
+func (nw *nameWalk) chainTo(owner, declarer *symbols.Symbol) []*symbols.Symbol {
+	if owner == nil || declarer == nil || declarer == owner {
+		return nil
+	}
+	key := [2]*symbols.Symbol{owner, declarer}
+	if chain, ok := nw.chains[key]; ok {
+		return chain
+	}
+	from := map[*symbols.Symbol]*symbols.Symbol{owner: nil}
+	queue := []*symbols.Symbol{owner}
+	var found bool
+	for len(queue) > 0 && !found {
+		cur := queue[0]
+		queue = queue[1:]
+		for _, src := range nw.sem.DirectMemberSources(cur) {
+			if _, seen := from[src]; seen {
+				continue
+			}
+			from[src] = cur
+			if src == declarer {
+				found = true
+				break
+			}
+			queue = append(queue, src)
+		}
+	}
+	var chain []*symbols.Symbol
+	if found {
+		for s := declarer; s != nil && s != owner; s = from[s] {
+			chain = append(chain, s)
+		}
+	}
+	nw.chains[key] = chain
+	return chain
+}
+
+// enter marks a derivation's source steps as traversed on the current path, or
+// reports false when one of them already is: the pilot's enumeration stops
+// there rather than inheriting through a type twice (KerML 8.2.3.5).
+func (nw *nameWalk) enter(chain []*symbols.Symbol) ([]*symbols.Symbol, bool) {
+	for _, src := range chain {
+		if nw.traversed[src] > 0 {
+			return nil, false
+		}
+	}
+	for _, src := range chain {
+		nw.traversed[src]++
+	}
+	return chain, true
+}
+
+// leave undoes enter.
+func (nw *nameWalk) leave(chain []*symbols.Symbol) {
+	for _, src := range chain {
+		nw.traversed[src]--
 	}
 }
 

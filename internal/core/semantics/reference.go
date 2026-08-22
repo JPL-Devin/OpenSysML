@@ -122,6 +122,26 @@ func (m *Model) MemberSources(sym *symbols.Symbol) []*symbols.Symbol {
 	return order
 }
 
+// DirectMemberSources returns the symbols that contribute members to sym in one
+// step, deduplicated: the edges MemberSources takes the closure of. A caller
+// enumerating names needs the steps, not the closure, to tell which types a
+// derivation traversed (KerML 8.2.3.5, inheritedMemberships' excluded types).
+func (m *Model) DirectMemberSources(sym *symbols.Symbol) []*symbols.Symbol {
+	if sym == nil {
+		return nil
+	}
+	seen := map[*symbols.Symbol]bool{sym: true}
+	var out []*symbols.Symbol
+	for _, src := range m.contributors(sym) {
+		if src == nil || seen[src] {
+			continue
+		}
+		seen[src] = true
+		out = append(out, src)
+	}
+	return out
+}
+
 // contributors returns the direct member-contributing neighbours of sym: its
 // supertypes, the base usage every usage element subsets, the base feature a
 // KerML feature keyword implies, then the feature it reference-subsets. The two

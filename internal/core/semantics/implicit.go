@@ -252,11 +252,22 @@ func (m *Model) declaredGeneralizationReaches(sym *symbols.Symbol, want string, 
 // makes an unqualified `that` resolve inside a usage body.
 const baseUsageFQN = "Base::things"
 
+// isKerMLTypeDecl reports whether sym declares a KerML type rather than a
+// feature — `class`, `struct`, `assoc`, `behavior`, `predicate`, `interaction` —
+// which the parser records as a usage node (KerML §8.3).
+func isKerMLTypeDecl(sym *symbols.Symbol) bool {
+	return sym != nil && sym.Kind == symbols.SymbolKerMLType
+}
+
 // implicitKerMLFeatureBase returns the base feature a KerML feature declaration
 // subsets (KerML §8.4.2); it contributes members only, like implicitBaseUsage.
 func (m *Model) implicitKerMLFeatureBase(sym *symbols.Symbol) *symbols.Symbol {
 	usage, ok := sym.Decl.(*ast.Usage)
 	if !ok || m.resolver == nil || m.resolver.Index() == nil || !m.isKerMLDoc(sym) {
+		return nil
+	}
+	// Only a feature subsets a base feature; a type specializes a base type.
+	if isKerMLTypeDecl(sym) {
 		return nil
 	}
 	fqn, ok := implicitKerMLFeatureBases[usage.Keyword]
@@ -276,6 +287,10 @@ func (m *Model) implicitKerMLFeatureBase(sym *symbols.Symbol) *symbols.Symbol {
 // not a usage, is that base usage, or is owned by it.
 func (m *Model) implicitBaseUsage(sym *symbols.Symbol) *symbols.Symbol {
 	if _, ok := sym.Decl.(*ast.Usage); !ok {
+		return nil
+	}
+	// A KerML type declaration is a classifier, not a usage of one.
+	if isKerMLTypeDecl(sym) {
 		return nil
 	}
 	if m.resolver == nil || m.resolver.Index() == nil {
