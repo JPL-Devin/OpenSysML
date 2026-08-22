@@ -207,17 +207,33 @@ No compliance row's status flag is changed on the strength of this work.
 
 Run it with `go run ./cmd/pilot-exec-diff` after `./scripts/download-pilot-evaluator.sh`; with the
 execution artifact absent it prints a provisioning instruction, exits 0 and writes nothing, so
-`cmd/pilot-diff` and its committed baseline are untouched. Current state of the 32 committed cases:
+`cmd/pilot-diff` and its committed baseline are untouched. Current state of the 94 committed cases,
+the original 32 plus the 62 the wave-6D expression round added:
 
 ```
-agree: 20 · kind-only: 1 · order-only: 0 · disagree: 0
-pilot-unevaluated: 2 · pilot-silent: 2 · pilot-error: 2 · ours-error: 2 · both-error: 3
+agree: 51 · kind-only: 1 · order-only: 0 · disagree: 1
+pilot-unevaluated: 21 · pilot-silent: 4 · pilot-error: 1 · ours-error: 6 · both-error: 9
 nondeterministic: 0
 ```
 
-No case disagrees on a value both tools evaluate. The one `kind-only` is `2 ** 40` (above); the
-`pilot-error`, `pilot-unevaluated` and `pilot-silent` cases are the pilot's limits, not
-disagreements; the two `ours-error` cases are finding 1 below.
+The one `kind-only` is `2 ** 40` (above). The `pilot-error`, `pilot-unevaluated` and `pilot-silent`
+buckets — 26 cases, more than a quarter of the corpus — are the pilot's limits rather than
+disagreements, which is the central finding of this page restated as a count.
+
+The single `disagree` is `w6d:complex-is-zero-qualified`: the pilot answers `false` for
+`ComplexFunctions::isZero(rect(0.0, 0.0))` where we answer `true`. It is not a value verdict against
+us — the pilot's `re`/`im` have no evaluable body, and the same run answers `false` for
+`isZero(rect(3.0, 4.0))` too, so its result folds against unevaluated operands rather than deciding
+zero. Read it as unrefereeable, and see the `ComplexFunctions` row of
+[spec-compliance.md](spec-compliance.md) for the adjudication.
+
+Of the 6 `ours-error` cases, 2 are finding 1 below and the other 4 came in with the wave-6D cases:
+
+| Case | Ours | Read |
+|---|---|---|
+| `w6d:held-undeclared-multi` | `multiplicity violation: 2 value(s) bound to a feature with multiplicity upper bound 1` | **Deliberately ours.** `attribute xs = (1.0, 2.0)` declares no multiplicity, so the assumed `1..1` makes the default a violation (KerML 1.0 §7.4.5, and the multiplicity row of [spec-compliance.md](spec-compliance.md)); the pilot returns both values. An adjudicated divergence, not a defect |
+| `w6d:inherited-value-no-body`, `w6d:inherited-value-template` | `unresolved reference: template`, `usage W6D::template has no value` | **Ours is wrong** — a feature value that names a part which itself carries an inherited value. The governing-declaration row of `spec-compliance.md` covers the redefining half; these two are the plain inherited half, and are unfixed |
+| `w6d:vector-elements` | `cannot chain through non-instance member` | **Ours is wrong** — chaining into the elements of a `VectorOf` result, where the pilot returns the sequence |
 
 ## Findings to carry forward
 

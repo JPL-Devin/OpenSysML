@@ -4,9 +4,9 @@
   "corpus": "cmd/pilot-reject/testdata/negative",
   "conformance": "auto",
   "totals": {
-    "cases": 34,
-    "bothReject": 31,
-    "pilotOnlyRejects": 3,
+    "cases": 79,
+    "bothReject": 75,
+    "pilotOnlyRejects": 4,
     "oursOnlyRejects": 0,
     "bothAccept": 0
   },
@@ -28,9 +28,9 @@
     },
     {
       "source": "grammar",
-      "cases": 20,
-      "bothReject": 17,
-      "pilotOnlyRejects": 3,
+      "cases": 65,
+      "bothReject": 61,
+      "pilotOnlyRejects": 4,
       "oursOnlyRejects": 0,
       "bothAccept": 0
     },
@@ -259,6 +259,316 @@
       ]
     },
     {
+      "path": "grammar/g16-expose-without-name.sysml",
+      "source": "grammar",
+      "rule": "NamespaceExpose requires an imported namespace or filter package after the expose prefix (SysML.xtext:2383 NamespaceExpose).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 3,
+      "pilotErrors": 2
+    },
+    {
+      "path": "grammar/g17-render-without-usage.sysml",
+      "source": "grammar",
+      "rule": "ViewRenderingMember requires a rendering usage after the render keyword (SysML.xtext:2335 ViewRenderingMember).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "grammar/g18-require-without-constraint.sysml",
+      "source": "grammar",
+      "rule": "RequirementConstraintMember requires a constraint usage after the require keyword (SysML.xtext:2057 RequirementConstraintMember).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 2
+    },
+    {
+      "path": "grammar/g19-frame-without-concern.sysml",
+      "source": "grammar",
+      "rule": "FramedConcernMember requires a concern usage after the frame keyword (SysML.xtext:2073 FramedConcernMember).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 2,
+      "pilotErrors": 2
+    },
+    {
+      "path": "grammar/g20-include-without-target.sysml",
+      "source": "grammar",
+      "rule": "IncludeUseCaseUsage requires a referenced use case or a use case declaration after include (SysML.xtext:2300 IncludeUseCaseUsage).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 2,
+      "pilotErrors": 2
+    },
+    {
+      "path": "grammar/g21-filter-without-expression.sysml",
+      "source": "grammar",
+      "rule": "ElementFilterMember requires an owned expression between filter and the semicolon (SysML.xtext:229 ElementFilterMember).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 2
+    },
+    {
+      "path": "grammar/g22-dependency-without-to.sysml",
+      "source": "grammar",
+      "rule": "Dependency requires a to clause naming its supplier (SysML.xtext:55 Dependency).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "grammar/g23-rep-without-language.sysml",
+      "source": "grammar",
+      "rule": "TextualRepresentation requires a language string before its comment body (SysML.xtext:103 TextualRepresentation).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "grammar/g24-alias-without-target.sysml",
+      "source": "grammar",
+      "rule": "AliasMember requires an element reference after for (SysML.xtext:234 AliasMember).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "grammar/g25-library-without-package.sysml",
+      "source": "grammar",
+      "rule": "LibraryPackage requires a package declaration after the library keyword (SysML.xtext:188 LibraryPackage).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "grammar/g26-multiplicity-open-range.sysml",
+      "source": "grammar",
+      "rule": "MultiplicityRange requires a bound expression after .. (SysML.xtext:478 MultiplicityRange).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 2,
+      "pilotErrors": 1
+    },
+    {
+      "path": "grammar/g27-bind-without-right-end.sysml",
+      "source": "grammar",
+      "rule": "BindingConnectorAsUsage requires a connector end after = (SysML.xtext:1020 BindingConnectorAsUsage).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
+      "path": "grammar/g28-succession-without-target.sysml",
+      "source": "grammar",
+      "rule": "SuccessionAsUsage requires a connector end after then (SysML.xtext:1033 SuccessionAsUsage).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 4
+    },
+    {
+      "path": "grammar/g29-flow-without-target.sysml",
+      "source": "grammar",
+      "rule": "FlowUsage requires a flow declaration with both ends (SysML.xtext:1269 FlowUsage, :1289 FlowDeclaration).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
+      "path": "grammar/g30-message-without-target.sysml",
+      "source": "grammar",
+      "rule": "Message requires a message declaration with both ends (SysML.xtext:1245 Message).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "grammar/g31-allocate-without-to.sysml",
+      "source": "grammar",
+      "rule": "AllocationUsage requires a to clause naming the allocation target (SysML.xtext:1214 AllocationUsage, :1218 AllocationUsageDeclaration).",
+      "mode": "default",
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 2,
+      "pilot": [
+        "line 6: mismatched input ';' expecting 'to'",
+        "line 6: Must have at least two related elements"
+      ]
+    },
+    {
+      "path": "grammar/g32-if-without-condition.sysml",
+      "source": "grammar",
+      "rule": "IfNode requires an expression parameter after if (SysML.xtext:1596 IfNode).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 2
+    },
+    {
+      "path": "grammar/g33-while-without-condition.sysml",
+      "source": "grammar",
+      "rule": "WhileLoopNode requires an expression parameter after while (SysML.xtext:1615 WhileLoopNode).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 2
+    },
+    {
+      "path": "grammar/g34-for-without-in.sysml",
+      "source": "grammar",
+      "rule": "ForLoopNode requires an in clause naming the sequence (SysML.xtext:1624 ForLoopNode).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 3,
+      "pilotErrors": 2
+    },
+    {
+      "path": "grammar/g35-accept-without-payload.sysml",
+      "source": "grammar",
+      "rule": "AcceptNode requires a payload parameter after accept (SysML.xtext:1442 AcceptNode, :1446 AcceptNodeDeclaration).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 2
+    },
+    {
+      "path": "grammar/g36-direction-without-feature.sysml",
+      "source": "grammar",
+      "rule": "A feature direction prefixes a feature, which must follow it (SysML.xtext:554 FeatureDirection).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 2
+    },
+    {
+      "path": "grammar/g37-redefines-without-target.sysml",
+      "source": "grammar",
+      "rule": "Redefines requires a redefined feature reference after the redefines keyword (SysML.xtext:429 Redefines).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "grammar/g38-references-without-target.sysml",
+      "source": "grammar",
+      "rule": "References requires a referenced feature after ::\u003e (SysML.xtext:413 References).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "grammar/g39-redefinition-symbol-without-target.sysml",
+      "source": "grammar",
+      "rule": "Redefinition requires a redefined feature after :\u003e\u003e (KerML.xtext:712 Redefinition).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "grammar/g40-modulo-without-operand.sysml",
+      "source": "grammar",
+      "rule": "A multiplicative operator requires a right operand (KerMLExpressions.xtext:267 MultiplicativeOperator).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "grammar/g41-exponent-without-operand.sysml",
+      "source": "grammar",
+      "rule": "An exponentiation operator requires a right operand (KerMLExpressions.xtext:276 ExponentiationOperator).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "grammar/g42-implies-without-operand.sysml",
+      "source": "grammar",
+      "rule": "An implies operator requires a right operand (KerMLExpressions.xtext:89 ImpliesOperator).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "grammar/g43-null-coalescing-without-operand.sysml",
+      "source": "grammar",
+      "rule": "A null-coalescing operator requires a right operand (KerMLExpressions.xtext:70 NullCoalescingOperator).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "grammar/g44-conditional-without-else.sysml",
+      "source": "grammar",
+      "rule": "A conditional expression requires an else branch (KerMLExpressions.xtext:59 ConditionalOperator).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 2,
+      "pilotErrors": 2
+    },
+    {
+      "path": "grammar/g45-classification-test-without-type.sysml",
+      "source": "grammar",
+      "rule": "A classification test requires a type after istype (KerMLExpressions.xtext:185 ClassificationTestOperator).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "grammar/g46-cast-without-type.sysml",
+      "source": "grammar",
+      "rule": "A cast requires a type after as (KerMLExpressions.xtext:193 CastOperator).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "grammar/g47-prefix-metadata-without-name.sysml",
+      "source": "grammar",
+      "rule": "PrefixMetadataAnnotation requires a metadata feature after # (SysML.xtext:129 PrefixMetadataAnnotation).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "grammar/g48-decision-without-body.sysml",
+      "source": "grammar",
+      "rule": "DecisionNode requires an action body after its declaration (SysML.xtext:1670 DecisionNode).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
+    },
+    {
+      "path": "grammar/g49-assign-without-value.sysml",
+      "source": "grammar",
+      "rule": "AssignmentNode requires an expression after := (SysML.xtext:1535 AssignmentNode, :1539 AssignmentNodeDeclaration).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 4
+    },
+    {
       "path": "grammar/k01-specializes-without-target.kerml",
       "source": "grammar",
       "rule": "OwnedSpecialization requires a general type after 'specializes' (KerML.xtext SpecializationPart).",
@@ -306,6 +616,105 @@
       "bucket": "both-reject",
       "oursErrors": 2,
       "pilotErrors": 1
+    },
+    {
+      "path": "grammar/k06-disjoining-without-target.kerml",
+      "source": "grammar",
+      "rule": "A disjoining declaration requires a type after from (KerML.xtext:426 Disjoining).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 2
+    },
+    {
+      "path": "grammar/k07-conjugation-without-target.kerml",
+      "source": "grammar",
+      "rule": "A conjugation declaration requires a conjugated type after ~ (KerML.xtext:408 Conjugation).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 2
+    },
+    {
+      "path": "grammar/k08-return-without-feature.kerml",
+      "source": "grammar",
+      "rule": "A return member requires a feature after the return keyword (KerML.xtext:943 ReturnFeatureMember).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 7
+    },
+    {
+      "path": "grammar/k09-inverting-without-target.kerml",
+      "source": "grammar",
+      "rule": "A feature inverting requires an inverse feature after of (KerML.xtext:634 FeatureInverting).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "grammar/k10-featuring-without-type.kerml",
+      "source": "grammar",
+      "rule": "A type featuring requires a featuring type after featured by (KerML.xtext:652 TypeFeaturing).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 2
+    },
+    {
+      "path": "grammar/k11-namespace-prefix-metadata-without-name.kerml",
+      "source": "grammar",
+      "rule": "A prefix metadata annotation requires a metadata feature after # (KerML.xtext:1069 PrefixMetadataAnnotation).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "grammar/k12-multiplicity-subset-without-target.kerml",
+      "source": "grammar",
+      "rule": "A multiplicity subset requires a subsetted multiplicity after subsets (KerML.xtext:758 MultiplicitySubset).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 2,
+      "pilotErrors": 1
+    },
+    {
+      "path": "grammar/k13-step-without-declaration.kerml",
+      "source": "grammar",
+      "rule": "A step is a feature and requires an identification or specialization (KerML.xtext:911 Step).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "grammar/k14-flow-without-payload-target.kerml",
+      "source": "grammar",
+      "rule": "A flow requires both of its ends (KerML.xtext:996 Flow).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 9
+    },
+    {
+      "path": "grammar/k15-conjugation-without-original.kerml",
+      "source": "grammar",
+      "rule": "Conjugation requires an original type after ~ (KerML.xtext:408 Conjugation).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 10
+    },
+    {
+      "path": "grammar/k16-redefinition-without-target.kerml",
+      "source": "grammar",
+      "rule": "Redefinition requires a redefined feature after :\u003e\u003e (KerML.xtext:712 Redefinition).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 10
     },
     {
       "path": "xpect/p01-public-root-import.kerml",

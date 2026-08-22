@@ -34,7 +34,8 @@ mandatory header — `// Invalid: <rule> (<citation>).` — naming the one rule 
 where that rule comes from; the harness refuses a corpus file without it. Cases were derived
 systematically from three sources, one subdirectory each:
 
-1. **`grammar/` — grammar mutation** (20 cases). For productions our corpus exercises in the
+1. **`grammar/` — grammar mutation** (65 cases; 20 in wave 8, the rest added by wave 9F along the
+   *unreached* axis described below). For productions our corpus exercises in the
    pinned Xtext grammars (`build/pilot-grammars/`, see the `testing-grammar-coverage` skill), the
    minimal violation: a required keyword removed (`g03` alias without `for`), a mandatory element
    omitted (`g04`, `g05`, `k01`, `k03`), a clause in a position the production forbids (`g06`
@@ -60,7 +61,7 @@ systematically from three sources, one subdirectory each:
    standard library loaded, `feature f;` gets an implicit type and is legal — so only
    library-independent expectations became cases.
 
-What this corpus cannot see: it tests the invalid models we thought to write. **We authored all 34
+What this corpus cannot see: it tests the invalid models we thought to write. **We authored all 79
 cases ourselves**, so the denominator measures our coverage of the rejection surface, not our
 conformance: it is a **sample, not a proof** — a clean bucket here does not mean OpenSysML rejects
 everything the reference rejects, and no official conformance suite exists to make that claim
@@ -102,27 +103,32 @@ carry no timestamps or absolute paths, so repeated runs are byte-identical
 Under the default `-conformance auto`:
 
 ```
-34 case(s): 31 both reject, 3 only the pilot rejects, 0 only we reject, 0 both accept
+79 case(s): 75 both reject, 4 only the pilot rejects, 0 only we reject, 0 both accept
   of which 5 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
 | Source | Cases | Both reject | Pilot only | Ours only | Both accept |
 | --- | --- | --- | --- | --- | --- |
 | extensions | 7 | 7 | 0 | 0 | 0 |
-| grammar | 20 | 17 | 3 | 0 | 0 |
+| grammar | 65 | 61 | 4 | 0 | 0 |
 | xpect | 7 | 7 | 0 | 0 | 0 |
+
+The corpus more than doubled in wave 9F, from 34 cases to 79, and the gap count went from 3 to 4:
+more reach found one further gap (`g31`) rather than a bucketful, and no case in the corpus is
+accepted by both implementations.
 
 The five strict-only agreements are `x01`, `x04`, `x05`, `x06` and `x07`: OpenSysML notation
 extensions that the default mode accepts on purpose and strict mode reports as errors. Judged in
-the default mode the same corpus gives 26 agreements and 8 gaps, which is what `-conformance
-default` prints. Of the 14 gaps this document carried before wave 8, six were closed by the
+the default mode the same corpus gives 70 agreements and 9 gaps, which is what `-conformance
+default` prints — the extra five are those same `extensions/` cases, which the default mode accepts
+on purpose. `-conformance strict` gives 75 and 4, the same four as `auto`. Of the 14 gaps this document carried before wave 8, six were closed by the
 validation waves themselves — `p01`, `p02`, `p03`, `p05` (wave 8C), `p06` (wave 8A) and `p04`
 (wave 8B) — and only the five `extensions/` cases belong to strict mode.
 
 Read those five as agreement *when asked strictly*, not as five gaps that disappeared. An opt-in
 check is weaker evidence than a default one: it says the strict question has an answer we agree on,
 not that the pipeline a user gets by default rejects the notation — by design it does not. And
-because we authored all 34 cases ourselves, a small gap count means we ran out of questions we
+because we authored all 79 cases ourselves, a small gap count means we ran out of questions we
 thought to ask, not that we stopped being permissive: the denominator measures our coverage of the
 rejection surface, not our conformance.
 
@@ -133,7 +139,7 @@ rejection, not agreement on the rule.
 
 ## Permissiveness gaps
 
-All 3 gaps, each with its reproducer (the corpus file is the minimal reproducer), both verdicts,
+All 4 gaps, each with its reproducer (the corpus file is the minimal reproducer), both verdicts,
 and the package the root cause is likely in. **None are fixed here** — this oracle measures;
 fixing is later work.
 
@@ -141,6 +147,7 @@ fixing is later work.
 | --- | --- | --- | --- |
 | `grammar/g02-import-without-visibility.sysml` | accepts | `mismatched input 'import'` | `internal/core/parser` — treats the import visibility keyword as optional; the pinned `ImportPrefix` requires it |
 | `grammar/g15-keyword-as-name.sysml` | accepts | `no viable alternative at input 'part'` | `internal/core/parser` — allows a reserved keyword as a declared name |
+| `grammar/g31-allocate-without-to.sysml` | accepts | `mismatched input ';' expecting 'to'` | `internal/core/parser` — accepts `allocate` as a synonym for the `allocation` usage keyword, so the connector's missing `to` is never reached |
 | `grammar/k02-sysml-keyword-in-kerml.kerml` | accepts | `no viable alternative at input 'def'` | `internal/core/parser` — `.kerml` files are parsed with the full SysML grammar; no per-language restriction |
 
 Each pilot message above is the first error the validator reports for the case; the full lists are

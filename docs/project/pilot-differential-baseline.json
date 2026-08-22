@@ -3,13 +3,13 @@
   "pilotRelease": "2026-05 (jupyter-sysml-kernel 0.60.1)",
   "totals": {
     "files": 353,
-    "filesFullyAgreeing": 308,
+    "filesFullyAgreeing": 309,
     "agreement": 23,
     "severityMismatch": 15,
     "openSysMLOnly": 119,
-    "pilotOnly": 137,
+    "pilotOnly": 85,
     "openSysMLDiagnostics": 157,
-    "pilotDiagnostics": 175
+    "pilotDiagnostics": 123
   },
   "roots": [
     {
@@ -1106,13 +1106,13 @@
       "dir": "examples",
       "totals": {
         "files": 22,
-        "filesFullyAgreeing": 14,
+        "filesFullyAgreeing": 15,
         "agreement": 0,
         "severityMismatch": 12,
         "openSysMLOnly": 28,
-        "pilotOnly": 104,
+        "pilotOnly": 52,
         "openSysMLDiagnostics": 40,
-        "pilotDiagnostics": 116
+        "pilotDiagnostics": 64
       },
       "files": [
         {
@@ -1125,6 +1125,18 @@
               "line": 9,
               "severity": "error",
               "category": "syntax",
+              "count": 1
+            },
+            {
+              "line": 9,
+              "severity": "error",
+              "category": "unresolved-reference",
+              "count": 1
+            },
+            {
+              "line": 9,
+              "severity": "warning",
+              "category": "kind-mismatch",
               "count": 1
             },
             {
@@ -1380,139 +1392,19 @@
           ],
           "pilotOnly": [
             {
-              "line": 60,
+              "line": 147,
               "severity": "error",
               "category": "syntax",
-              "count": 5
+              "count": 2
             },
             {
-              "line": 64,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 64,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 65,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 65,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 67,
+              "line": 148,
               "severity": "error",
               "category": "syntax",
-              "count": 7
+              "count": 2
             },
             {
-              "line": 67,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 4
-            },
-            {
-              "line": 71,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 71,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 72,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 72,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 73,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 73,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 75,
-              "severity": "error",
-              "category": "syntax",
-              "count": 7
-            },
-            {
-              "line": 83,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 83,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 84,
-              "severity": "error",
-              "category": "kind-mismatch",
-              "count": 1
-            },
-            {
-              "line": 84,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 86,
-              "severity": "error",
-              "category": "syntax",
-              "count": 3
-            },
-            {
-              "line": 86,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 87,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 87,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 89,
+              "line": 149,
               "severity": "error",
               "category": "syntax",
               "count": 1
@@ -1635,38 +1527,6 @@
             },
             {
               "line": 17,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            }
-          ]
-        },
-        {
-          "path": "repl-behavioral-demo.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [],
-          "pilotOnly": [
-            {
-              "line": 26,
-              "severity": "error",
-              "category": "syntax",
-              "count": 6
-            },
-            {
-              "line": 26,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 4
-            },
-            {
-              "line": 34,
-              "severity": "error",
-              "category": "syntax",
-              "count": 4
-            },
-            {
-              "line": 35,
               "severity": "error",
               "category": "syntax",
               "count": 1
@@ -1910,7 +1770,7 @@
     {
       "side": "pilot",
       "message": "Duplicate of other owned member name",
-      "count": 25
+      "count": 15
     },
     {
       "side": "pilot",
