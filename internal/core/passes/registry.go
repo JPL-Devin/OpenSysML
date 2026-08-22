@@ -53,12 +53,10 @@ func (r *Registry) Run(ctx *Context, name string, root *ast.RootNamespace) []Dia
 	return all
 }
 
-// hasError reports whether a level failed in a way the next one depends on: a
-// notation error says how the model is written, not what it means, so it never
-// gates a higher tier.
+// hasError reports whether a level failed in a way the next one depends on.
 func hasError(diags []Diagnostic) bool {
 	for _, d := range diags {
-		if d.Severity == SeverityError && !d.Notation {
+		if d.Blocking() {
 			return true
 		}
 	}

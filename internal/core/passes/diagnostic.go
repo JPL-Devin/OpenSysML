@@ -44,3 +44,10 @@ type Diagnostic struct {
 	// what it means: the document still reads, so it does not gate higher tiers.
 	Notation bool
 }
+
+// Blocking reports whether the finding stops what depends on the model being
+// readable — a higher validation tier, a summary of what a submission declared.
+// A notation error is about the writing, not the meaning, so it stops neither.
+func (d Diagnostic) Blocking() bool {
+	return d.Severity == SeverityError && !d.Notation
+}
