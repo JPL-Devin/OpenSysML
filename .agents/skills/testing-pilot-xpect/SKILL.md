@@ -303,6 +303,63 @@ round moves it. When the baseline is itself stale (it was at `19a3ce03`, holding
 failing `cmp` against it is *not* evidence of an Xpect regression — compare the summary line, and see
 `testing-pilot-differential`'s "Isolating one change's effect" for the entry-keyed delta.
 
+## Reviewing a wave that adds validation passes (not just the harness)
+
+A wave whose passes move the Xpect verdicts (e.g. wave 9C's `internal/core/passes/w9c_*.go`) is best
+judged by running the harness on **both revisions** rather than by trusting the committed baseline:
+
+```bash
+git worktree add /tmp/osml-main <base sha>
+mkdir -p /tmp/osml-main/build
+ln -s "$PWD/build/pilot-xpect-corpus"       /tmp/osml-main/build/pilot-xpect-corpus
+ln -s "$PWD/examples/pilot-corpora"         /tmp/osml-main/examples/pilot-corpora
+ln -s "$PWD/examples/sysml-v2-training"     /tmp/osml-main/examples/sysml-v2-training
+(cd /tmp/osml-main && go run ./cmd/pilot-xpect -out /tmp/xpect-main)
+```
+
+The corpora are gitignored, so a fresh worktree has none — symlinking them in is what makes the
+base-revision run comparable (and avoids a second ~10 s download). This is also the *only* honest
+negative control for a new rule: build the base revision's CLI
+(`go build -o /tmp/sysml-main ./cmd/sysml` inside the worktree) and show the same model draws no
+warning there.
+
+**Some waves are forbidden from rebaselining.** When a parent session does one central rebaseline at
+the end of a wave, `cmp build/pilot-xpect/pilot-xpect.json docs/project/pilot-xpect-baseline.json`
+*is expected to differ* on the branch and the headline tables in `pilot-xpect.md` are expected to be
+stale. Confirm the intent with the lead before filing it — measure and report the live numbers instead.
+
+**Do not forget `make docs-counts`.** Adding rows to `docs/project/spec-compliance.md` without
+regenerating the three derived count lines (`README.md`, `docs/internals/architecture.md`,
+`docs/project/spec-compliance.md:13`) fails `cmd/pilot-diff`'s
+`TestPilotDifferentialDocumentCountsMatchBaseline` (`coverage total: want 690 …, got 688 — run
+\`make docs-counts\``). This is only visible in a full `go test ./...`, so always run the whole gate,
+and confirm the same test passes on the base revision before calling it a branch regression.
+
+**Attributing an internal tolerance move.** `agree`/`disagree` can be unchanged while rows move
+between tolerance buckets (wave 9C: `errors` severityDiffers 16→24, elsewhereInFile 57→49). To name
+the exact rows, key the JSON rows on `(file path, line, index within the file's rows, tolerance)` and
+diff the two revisions' multisets — keying on `(path, line)` alone silently collapses several rows
+declared on the same line, and the plain row index shifts whenever a row is inserted above.
+
+## Cache independence of a library-reading rule
+
+`libs.NewCache()` resolves `$XDG_CACHE_HOME/sysml-ls/libs` (`internal/core/libs/cache.go`). A unit
+test that just passes a `*libs.Cache` to `libs.NewLoader` **does not exercise a warm cache**: records
+are only written by `Loader.Persist`, which the test helpers do not call, so the "warm" pass reads an
+empty directory. To prove a rule behaves identically cold and warm, drive `bin/sysml` twice under a
+fresh `XDG_CACHE_HOME` and diff the diagnostics:
+
+```bash
+CD=$(mktemp -d)
+XDG_CACHE_HOME=$CD ./bin/sysml model.sysml > /tmp/cold.txt 2>&1   # populates ~95 .idx records
+ls -1 "$CD/sysml-ls/libs" | wc -l
+XDG_CACHE_HOME=$CD ./bin/sysml model.sysml > /tmp/warm.txt 2>&1
+diff /tmp/cold.txt /tmp/warm.txt
+```
+
+Check the entry count between the runs — a still-empty `sysml-ls/libs` means the warm run was cold
+again and the check proved nothing.
+
 ## Recording
 
 Shell-only; no GUI is involved, so no recording is needed unless you deliberately drive a Konsole.
