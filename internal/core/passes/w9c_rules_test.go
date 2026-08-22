@@ -19,16 +19,36 @@ func w9cLibraryDiags(t *testing.T, src string, warm bool) []Diagnostic {
 	libSrc := libs.DefaultSource()
 	var cache *libs.Cache
 	if warm {
+		// Populate a cache of this test's own, so the library really is restored
+		// from records rather than parsed: Load only writes through Persist.
+		t.Setenv("XDG_CACHE_HOME", t.TempDir())
 		c, err := libs.NewCache()
 		if err != nil {
 			t.Fatalf("cache: %v", err)
 		}
 		cache = c
+		warmIdx := symbols.NewIndex()
+		warmLoader := libs.NewLoader(libSrc, cache)
+		for _, name := range libSrc.List() {
+			if err := warmLoader.Load(name, warmIdx); err != nil {
+				t.Fatalf("warm library %s: %v", name, err)
+			}
+		}
+		warmLoader.Persist(warmIdx)
 	}
 	loader := libs.NewLoader(libSrc, cache)
 	for _, name := range libSrc.List() {
 		if err := loader.Load(name, idx); err != nil {
 			t.Fatalf("load library %s: %v", name, err)
+		}
+	}
+	if warm {
+		// A restored symbol is AST-less, so a declaration here would mean the
+		// library was parsed again and the warm run proved nothing.
+		for _, sym := range idx.LookupQualified("Actions::Action") {
+			if sym.Decl != nil {
+				t.Fatal("warm run parsed the library instead of restoring records")
+			}
 		}
 	}
 	root := parser.New(source.New("<t>.sysml", []byte(src))).ParseFile()
