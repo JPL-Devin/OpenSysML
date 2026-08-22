@@ -48,6 +48,16 @@ row lands here only when it is established from the pilot's own artifacts — it
 grammar, its `.ecore`, or its loaded object graph probed through its own API —
 and not from a disagreement alone.
 
+**Filing protocol.** A row here is a *draft*, and writing it up is where an agent's work
+stops. Filing the issue upstream is a public, organization-attributed write to a repository
+we do not own, so it requires explicit human approval every time — a task description that
+says "file it upstream" does not grant it (`AGENTS.md` §1.7). Nothing in this repository
+authorizes an agent to open, comment on, or edit an issue on
+`Systems-Modeling/SysML-v2-Pilot-Implementation`, and the asymmetry is real rather than
+theoretical: the integration used here can open an issue on that repository but cannot close
+or comment on one, so a mistaken filing cannot be retracted by whoever made it. Record the
+issue number in the `Status` column once a human has filed it.
+
 | Component | Pinned version | Symptom | Adjudication | Status |
 |---|---|---|---|---|
 | `org.omg.sysml` — `Type::ownedDisjoining` setting delegate | `2026-05` (`jupyter-sysml-kernel` 0.60.1) | every `disjoint from` clause in a type declaration draws EMF's `The opposite features 'owningType' … and 'ownedDisjoining' … do not refer to each other` | [K6 / F33](pilot-differential.md#k6-diagnostic-by-diagnostic-f33) — one cause for all six corpus diagnostics, reproduced in three lines and probed through the pilot's API | issue body written below, **not yet filed** |

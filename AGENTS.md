@@ -17,6 +17,16 @@ It provides a hand-written lexer/parser, semantic engine, execution runtime, LSP
 4. **Respect the architecture invariants** (see §4). The AST is immutable; semantics live in side tables; execution consumes lowered IR — do not bypass these.
 5. **Tests are the contract.** Existing tests encode intended behavior (including *when* and *where* errors surface). Make code satisfy tests, not the reverse — unless the test is provably wrong, in which case explain before changing it.
 6. **Leave no dead code.** Remove superseded helpers/structs. Run `go vet ./...` to catch it.
+7. **Never write outside this repository without explicit human approval.** Reading upstream
+   sources — the pilot implementation, the OMG corpora, the pinned grammars — is expected and
+   unrestricted. *Writing* is not: no issues, comments, pull requests, or edits on any
+   repository other than this one, including `Systems-Modeling/SysML-v2-Pilot-Implementation`,
+   and no probing of whether a token is permitted to write somewhere by attempting a write.
+   A task description asking for an upstream filing is **not** the approval; draft the body in
+   `docs/project/omg-issues.md` and ask the human, who files it or authorizes the filing. This
+   rule exists because an upstream write is public, attributed to the organization, and — since
+   the integration can open an issue on a repository where it cannot close or comment on one —
+   frequently irreversible.
 
 ---
 
