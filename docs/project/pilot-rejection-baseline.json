@@ -5,8 +5,8 @@
   "conformance": "auto",
   "totals": {
     "cases": 119,
-    "bothReject": 101,
-    "pilotOnlyRejects": 18,
+    "bothReject": 103,
+    "pilotOnlyRejects": 16,
     "oursOnlyRejects": 0,
     "bothAccept": 0
   },
@@ -29,8 +29,8 @@
     {
       "source": "grammar",
       "cases": 78,
-      "bothReject": 74,
-      "pilotOnlyRejects": 4,
+      "bothReject": 76,
+      "pilotOnlyRejects": 2,
       "oursOnlyRejects": 0,
       "bothAccept": 0
     },
@@ -60,7 +60,7 @@
       "rule": "'choice' is an OpenSysML invention; the pinned StateBodyItem has no pseudostates (SysML.xtext StateBodyItem).",
       "mode": "strict",
       "bucket": "both-reject",
-      "oursErrors": 1,
+      "oursErrors": 2,
       "pilotErrors": 3,
       "defaultBucket": "both-reject",
       "defaultErrors": 1
@@ -71,7 +71,7 @@
       "rule": "'junction' is an OpenSysML invention; the pinned StateBodyItem has no pseudostates (SysML.xtext StateBodyItem).",
       "mode": "strict",
       "bucket": "both-reject",
-      "oursErrors": 1,
+      "oursErrors": 2,
       "pilotErrors": 3,
       "defaultBucket": "both-reject",
       "defaultErrors": 1
@@ -130,13 +130,9 @@
       "source": "grammar",
       "rule": "ImportPrefix requires an explicit visibility keyword before 'import' (SysML.xtext ImportPrefix).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 2,
-      "pilot": [
-        "line 6: mismatched input 'import' expecting '}'",
-        "line 6: no viable alternative at input '::'"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 2
     },
     {
       "path": "grammar/g03-alias-without-for.sysml",
@@ -398,13 +394,9 @@
       "source": "grammar",
       "rule": "AllocationUsage requires a to clause naming the allocation target (SysML.xtext:1214 AllocationUsage, :1218 AllocationUsageDeclaration).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 2,
-      "pilot": [
-        "line 6: mismatched input ';' expecting 'to'",
-        "line 6: Must have at least two related elements"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 2
     },
     {
       "path": "grammar/g32-if-without-condition.sysml",

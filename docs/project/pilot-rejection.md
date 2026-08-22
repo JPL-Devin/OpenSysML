@@ -104,27 +104,31 @@ carry no timestamps or absolute paths, so repeated runs are byte-identical
 Under the default `-conformance auto`:
 
 ```
-119 case(s): 101 both reject, 18 only the pilot rejects, 0 only we reject, 0 both accept
+119 case(s): 103 both reject, 16 only the pilot rejects, 0 only we reject, 0 both accept
   of which 5 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
 | Source | Cases | Both reject | Pilot only | Ours only | Both accept |
 | --- | --- | --- | --- | --- | --- |
 | extensions | 7 | 7 | 0 | 0 | 0 |
-| grammar | 78 | 74 | 4 | 0 | 0 |
+| grammar | 78 | 76 | 2 | 0 | 0 |
 | xpect | 34 | 20 | 14 | 0 | 0 |
 
 The corpus grew from 79 cases to 119 in wave 10G, and the default-mode gap count went from 9 of 79
-to 23 of 119. The ratio got worse because the corpus now reaches the pilot's own semantic
+to 21 of 119. The ratio got worse because the corpus now reaches the pilot's own semantic
 expectations (the `xpect/` derivation went from 7 cases to 34), not because anything regressed: all
-14 new gaps are `xpect/` cases whose rule the reference checks and we do not. No case in the corpus
-is accepted by both implementations.
+the new gaps are `xpect/` cases whose rule the reference checks and we do not. Wave 10C closed the
+two `grammar/` gaps left from wave 9F — `g02` (bare `import` is an error by default) and `g31`
+(`allocate` requires its `ConnectorPart`) — which is why `grammar/` now reads 2 rather than 4. No
+case in the corpus is accepted by both implementations.
 
 The five strict-only agreements are `x01`, `x04`, `x05`, `x06` and `x07`: OpenSysML notation
 extensions that the default mode accepts on purpose and strict mode reports as errors. Judged in
-the default mode the same corpus gives 96 agreements and 23 gaps, which is what `-conformance
+the default mode the same corpus gives 98 agreements and 21 gaps, which is what `-conformance
 default` prints — the extra five are those same `extensions/` cases, which the default mode accepts
-on purpose. Of the 14 gaps this document carried before wave 8, six were closed by the
+on purpose. `-conformance strict` gives 105 and 14: wave 10C gave `g15` and `k02` a strict
+escalation, so every `grammar/` case is rejected when asked strictly and only the `xpect/` semantic
+rules remain — agreement under an opt-in question, not default-mode conformance. Of the 14 gaps this document carried before wave 8, six were closed by the
 validation waves themselves — `p01`, `p02`, `p03`, `p05` (wave 8C), `p06` (wave 8A) and `p04`
 (wave 8B) — and only the five `extensions/` cases belong to strict mode.
 
@@ -142,7 +146,7 @@ rejection, not agreement on the rule.
 
 ## Permissiveness gaps
 
-All 18 gaps, each with its reproducer (the corpus file is the minimal reproducer), both verdicts,
+All 16 gaps, each with its reproducer (the corpus file is the minimal reproducer), both verdicts,
 and the package the root cause is likely in. **None are fixed here** — this oracle measures;
 fixing is later work.
 
