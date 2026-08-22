@@ -214,21 +214,8 @@ func (m *Model) declaredGeneralizationReaches(sym *symbols.Symbol, want string, 
 		if rel == nil || !GeneralizationKind(rel.Kind) {
 			continue
 		}
-		targetNode := rel.Target
-		if fr, ok := targetNode.(*ast.FeatureReference); ok {
-			targetNode = fr.Name
-		}
-		qn, ok := targetNode.(*ast.QualifiedName)
-		if !ok {
-			continue
-		}
-		target, ok := m.resolver.ResolveQualified(sym.OwnerScope, qn)
-		if !ok || target == nil {
-			continue
-		}
-		if resolved, aliasOK := m.resolver.ResolveAliasTarget(target); aliasOK {
-			target = resolved
-		} else {
+		target := m.relationshipTarget(sym, rel)
+		if target == nil {
 			continue
 		}
 		sameBase := m.resolver.Index() != nil && m.resolver.Index().GetFQN(target) == want
@@ -271,6 +258,11 @@ func (m *Model) implicitKerMLFeatureBase(sym *symbols.Symbol) *symbols.Symbol {
 		return nil
 	}
 	fqn, ok := implicitKerMLFeatureBases[usage.Keyword]
+	// A typed feature subsets the base feature of its type's kind, not of its own
+	// keyword: `feature f : C` with C a class subsets Occurrences::occurrences.
+	if typed, tok := m.declaredTypeFeatureBase(sym); tok {
+		fqn, ok = typed, true
+	}
 	if !ok || m.declaredGeneralizationReaches(sym, fqn, nil) {
 		return nil
 	}
@@ -281,6 +273,60 @@ func (m *Model) implicitKerMLFeatureBase(sym *symbols.Symbol) *symbols.Symbol {
 		return base
 	}
 	return nil
+}
+
+// relationshipTarget resolves the element rel names from sym's scope, following
+// an alias to what it names.
+func (m *Model) relationshipTarget(sym *symbols.Symbol, rel *ast.Relationship) *symbols.Symbol {
+	if m.resolver == nil {
+		return nil
+	}
+	node := rel.Target
+	if fr, ok := node.(*ast.FeatureReference); ok {
+		node = fr.Name
+	}
+	qn, ok := node.(*ast.QualifiedName)
+	if !ok {
+		return nil
+	}
+	target, ok := m.resolver.ResolveQualified(sym.OwnerScope, qn)
+	if !ok || target == nil {
+		return nil
+	}
+	resolved, ok := m.resolver.ResolveAliasTarget(target)
+	if !ok {
+		return nil
+	}
+	return resolved
+}
+
+// declaredTypeFeatureBase returns the base feature implied by the kind of the
+// type sym is declared to have, if it declares one that is a KerML type.
+func (m *Model) declaredTypeFeatureBase(sym *symbols.Symbol) (string, bool) {
+	for _, rel := range RelationshipsOf(sym) {
+		if rel == nil || rel.Kind != ast.RelTyping {
+			continue
+		}
+		target := m.relationshipTarget(sym, rel)
+		if target == nil || !isKerMLTypeDecl(target) {
+			continue
+		}
+		if fqn, ok := implicitKerMLFeatureBases[keywordOf(target)]; ok {
+			return fqn, true
+		}
+	}
+	return "", false
+}
+
+// keywordOf returns the declaration keyword sym was written with.
+func keywordOf(sym *symbols.Symbol) string {
+	switch d := sym.Decl.(type) {
+	case *ast.Usage:
+		return d.Keyword
+	case *ast.Definition:
+		return d.Keyword
+	}
+	return ""
 }
 
 // implicitBaseUsage returns Base::things for a usage element, or nil when sym is
@@ -294,6 +340,10 @@ func (m *Model) implicitBaseUsage(sym *symbols.Symbol) *symbols.Symbol {
 		return nil
 	}
 	if m.resolver == nil || m.resolver.Index() == nil {
+		return nil
+	}
+	// A KerML feature typed by a kind with its own base subsets that base instead.
+	if typed, ok := m.declaredTypeFeatureBase(sym); ok && typed != baseUsageFQN && m.isKerMLDoc(sym) {
 		return nil
 	}
 	for _, base := range m.resolver.Index().LookupQualified(baseUsageFQN) {

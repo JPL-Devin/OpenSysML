@@ -204,7 +204,10 @@ divergence is deliberate and who owns the fix — never that it is not a diverge
   indistinguishable at the token level. Measured with the pinned validator: `part def D { allocate
   al; }` is rejected by the reference too, so the synonym itself is the divergence, not just this
   case. Removing it is a language change locked by golden and RDF export expectations, so it is a
-  wave-10 decision rather than a small local fix.
+  wave-10 decision rather than a small local fix. **Adjudicated in
+  [wave10-decisions.md](wave10-decisions.md) (D1):** require the `ConnectorPart` after `allocate`
+  and drop the definition-side entry, which closes this case without dropping the legal
+  `allocate f to g;` form. `g02`'s severity is D2 in the same record.
   **Closed in wave 10C (D1):** `allocate` demands its `ConnectorPart`, and the case now rejects.
 
 ### Grammar mutation pass (W9F)

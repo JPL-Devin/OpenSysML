@@ -16,6 +16,8 @@ a release is cut.
   declared-intent oracle, advisory
 - **[Grammar coverage](grammar-coverage.md)** — which OMG grammar productions our inputs
   exercise, on input-presence evidence, advisory
+- **[Wave 10 decisions](wave10-decisions.md)** — the three adjudications the wave-10 slices depend
+  on, with the measurements behind them
 - **[Roadmap](roadmap.md)** — the known gaps, in the order they should be picked up
 - **[Releasing](releasing.md)** — the pre-tag gate, tagging, artifacts, Homebrew
 - **[macOS distribution](macos-distribution.md)** — Gatekeeper and the signing decision
