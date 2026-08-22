@@ -29,7 +29,8 @@ class TestModuleLevelAPI:
             MockConnection.assert_called_once_with('localhost', 50051, auto_start=True)
             
             # Should delegate to Connection.load(), not asking for strict loading
-            mock_conn.load.assert_called_once_with("test.sysml", strict=False)
+            mock_conn.load.assert_called_once_with(
+                "test.sysml", strict=False, strict_conformance=False)
             
             assert result == mock_model
     
@@ -51,7 +52,8 @@ class TestModuleLevelAPI:
             # Should create connection with custom params
             MockConnection.assert_called_once_with('example.com', 9999, auto_start=True)
             
-            mock_conn.load.assert_called_once_with("test.sysml", strict=False)
+            mock_conn.load.assert_called_once_with(
+                "test.sysml", strict=False, strict_conformance=False)
             assert result == mock_model
 
     def test_opensysml_loads_with_custom_host_port(self):
@@ -74,7 +76,8 @@ class TestModuleLevelAPI:
                 'example.com', 9999, auto_start=True
             )
             mock_conn.load_from_content.assert_called_once_with(
-                "package Demo;", strict=True, language="sysml"
+                "package Demo;", strict=True, language="sysml",
+                strict_conformance=False
             )
             assert result == mock_model
     
@@ -128,8 +131,10 @@ class TestModuleLevelAPI:
             MockConnection.assert_any_call('h2', 2222, auto_start=True)
             
             # Each load uses its own connection
-            mock_conn1.load.assert_called_once_with("test1.sysml", strict=False)
-            mock_conn2.load.assert_called_once_with("test2.sysml", strict=False)
+            mock_conn1.load.assert_called_once_with(
+                "test1.sysml", strict=False, strict_conformance=False)
+            mock_conn2.load.assert_called_once_with(
+                "test2.sysml", strict=False, strict_conformance=False)
             assert result1 == mock_model1
             assert result2 == mock_model2
     

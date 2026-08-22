@@ -15,6 +15,28 @@ Everything here is read-only: it renders what a document says, and never writes
 it. The renderings are the ones [`%view`](repl-commands.md) and `sysml -view`
 produce, from the same renderer.
 
+## Strict conformance (setting)
+
+Whether the server judges a document as conforming SysML v2 — reporting notation
+only OpenSysML accepts as an error instead of a warning — is a boolean setting,
+`strictConformance`. It is read from `initialize`'s `initializationOptions` and
+from `workspace/didChangeConfiguration`, in any of the three shapes clients nest
+settings in:
+
+```json
+{ "strictConformance": true }
+{ "sysml": { "strictConformance": true } }
+{ "sysml.strictConformance": true }
+```
+
+A payload that does not mention it leaves the mode alone, and a value that is not
+a boolean is ignored rather than read as either answer. Changing it republishes
+the diagnostics of every open document, so the editor never keeps the other
+mode's verdict. A client that cannot send settings can start the server with
+`-strict` instead; both are the CLI's `-strict` and the REPL's `%strict`, and
+[the guide](../guide/03-command-line.md#strict-conformance) says what the mode
+changes.
+
 ## `opensysml/render` (request)
 
 Renders one view of a document.

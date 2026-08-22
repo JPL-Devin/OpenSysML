@@ -9,6 +9,7 @@ import (
 
 	pb "github.com/Open-MBEE/OpenSysML/api/proto"
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/conformance"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/passes"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
@@ -68,6 +69,10 @@ const CapabilityAuthoring = "authoring"
 // CapabilityInlineLanguage names explicit language selection for inline content.
 const CapabilityInlineLanguage = "inline_language"
 
+// CapabilityStrictConformance names ParseFileRequest.strict_conformance, which
+// asks whether the source is conforming SysML v2.
+const CapabilityStrictConformance = "strict_conformance"
+
 // CapabilityFeatureValues names the capability of populating
 // Instance.feature_values, which replaced the pre-0.1.0 Instance.slots.
 const CapabilityFeatureValues = "feature_values"
@@ -79,7 +84,7 @@ var capabilities = []string{
 	CapabilityOSLCQuery,
 	CapabilityEnumValues, CapabilityEvaluateSubject, CapabilitySymbolAttributes,
 	CapabilityUnsetValue, CapabilityFeatureValues, CapabilityApplyEdits,
-	CapabilityAuthoring, CapabilityInlineLanguage,
+	CapabilityAuthoring, CapabilityInlineLanguage, CapabilityStrictConformance,
 }
 
 // Capabilities returns the capability names this build of the service reports.
@@ -201,7 +206,10 @@ func (s *Service) ParseFile(ctx context.Context, req *pb.ParseFileRequest) (*pb.
 	// Keyed by what was read, not by the hash the request carried: a hash
 	// disagreeing with its content would serve another model. The file name is
 	// part of the key, since a record's diagnostics name the file it came from.
-	modelHash := computeHash(filePath + "\x00" + req.Language + "\x00" + content)
+	// The conformance mode is part of the key: the same source asks a different
+	// question in each mode, so one mode's diagnostics may not serve the other.
+	mode := conformance.ModeOf(req.StrictConformance)
+	modelHash := computeHash(filePath + "\x00" + req.Language + "\x00" + mode.String() + "\x00" + content)
 	if cached, ok := s.cache.Get(modelHash); ok {
 		return s.buildParseResponse(modelHash, cached), nil
 	}
@@ -229,7 +237,8 @@ func (s *Service) ParseFile(ctx context.Context, req *pb.ParseFileRequest) (*pb.
 	if len(parseDiags) == 0 {
 		// passes.Analyze expects parser diagnostics converted to passes.Diagnostic
 		parseDiagsConverted := make([]passes.Diagnostic, 0) // No parse errors to convert
-		passesDiags = passes.AnalyzeWithKind(filePath, kind, root, parseDiagsConverted, idx)
+		passesDiags = passes.AnalyzeWithOptions(filePath, kind, root, parseDiagsConverted, idx,
+			passes.Options{Conformance: mode})
 	}
 
 	// Create cached model

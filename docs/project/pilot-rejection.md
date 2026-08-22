@@ -47,9 +47,10 @@ systematically from three sources, one subdirectory each:
    spells entry as `entry; then <state>`, concurrency as `state ... parallel`, and transitions as
    `first <src> then <tgt>`, and has no pseudostates or deferral at all. Adjudication: these are
    **intended OpenSysML extensions**, not accidents — each has dedicated parser tests
-   (`internal/core/parser/state_notation_test.go`) and runtime support. But they are not yet
-   documented as extensions nor gated behind anything a conformance-minded user can turn off;
-   that gating is an open finding for a later wave, recorded in the gap table below.
+   (`internal/core/parser/state_notation_test.go`) and runtime support. They are documented as
+   extensions and, since W8E, gated behind an opt-in
+   [strict conformance mode](../guide/03-command-line.md#strict-conformance) a conformance-minded
+   user can turn on; the default mode keeps accepting them on purpose.
 3. **`xpect/` — the pilot's own negative expectations** (7 cases). The Xpect suites declare 513
    `errors` expectations ([pilot-xpect.md](pilot-xpect.md)); where a suite declares an error we do
    not report anywhere in the file, that is a candidate rejection gap. Each case here re-derives
@@ -59,17 +60,28 @@ systematically from three sources, one subdirectory each:
    standard library loaded, `feature f;` gets an implicit type and is legal — so only
    library-independent expectations became cases.
 
-What this corpus cannot see: it tests the invalid models we thought to write. It is a **sample of
-the rejection surface, not a proof** — a clean bucket here does not mean OpenSysML rejects
+What this corpus cannot see: it tests the invalid models we thought to write. **We authored all 34
+cases ourselves**, so the denominator measures our coverage of the rejection surface, not our
+conformance: it is a **sample, not a proof** — a clean bucket here does not mean OpenSysML rejects
 everything the reference rejects, and no official conformance suite exists to make that claim
-testable.
+testable. The pilot's verdict on each case is externally refereed; the choice of cases is not.
 
 ## Running it
 
 ```bash
 ./scripts/download-pilot-reject-validators.sh   # once; needs Java 17+ and Maven
-go run ./cmd/pilot-reject
+go run ./cmd/pilot-reject                       # -conformance auto, the committed baseline
+go run ./cmd/pilot-reject -conformance default  # every case judged as the CLI judges by default
+go run ./cmd/pilot-reject -conformance strict   # every case judged as conforming SysML v2
 ```
+
+`-conformance` decides which question our side is asked. `auto` asks the `extensions/` cases —
+notation OpenSysML adds on purpose — the strict one, because the reference rejects that notation as
+a syntax error and only [strict mode](../guide/03-command-line.md#strict-conformance) makes the
+comparison fair; every other derivation is judged in the default mode. `default` and `strict` ask
+one question of the whole corpus. Every case's mode is recorded in the report, and a case that
+agrees only because it was asked strictly is listed separately, so a strict agreement never reads
+as a default one.
 
 The harness validates every corpus file with our workspace and with the pinned validator for its
 language, counts error-severity diagnostics on each side (warnings do not count as rejection), and
@@ -87,38 +99,46 @@ carry no timestamps or absolute paths, so repeated runs are byte-identical
 
 ## Totals
 
+Under the default `-conformance auto`:
+
 ```
-34 case(s): 26 both reject, 8 only the pilot rejects, 0 only we reject, 0 both accept
+34 case(s): 31 both reject, 3 only the pilot rejects, 0 only we reject, 0 both accept
+  of which 5 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
 | Source | Cases | Both reject | Pilot only | Ours only | Both accept |
 | --- | --- | --- | --- | --- | --- |
-| extensions | 7 | 2 | 5 | 0 | 0 |
+| extensions | 7 | 7 | 0 | 0 | 0 |
 | grammar | 20 | 17 | 3 | 0 | 0 |
 | xpect | 7 | 7 | 0 | 0 | 0 |
 
-Two `xpect/` cases moved into *both-reject* since the last baseline: `p04-nonunique-subsets-unique`
-by the redefinition uniqueness rule (wave 8B), and `p06-private-member-reference` by membership
-visibility in name resolution (wave 8A, closed but not re-baselined there).
+The five strict-only agreements are `x01`, `x04`, `x05`, `x06` and `x07`: OpenSysML notation
+extensions that the default mode accepts on purpose and strict mode reports as errors. Judged in
+the default mode the same corpus gives 26 agreements and 8 gaps, which is what `-conformance
+default` prints. Of the 14 gaps this document carried before wave 8, six were closed by the
+validation waves themselves — `p01`, `p02`, `p03`, `p05` (wave 8C), `p06` (wave 8A) and `p04`
+(wave 8B) — and only the five `extensions/` cases belong to strict mode.
 
-The two `extensions/` cases in *both-reject* (`x02` choice, `x03` junction) are rejected by us for
-a different reason than by the pilot: our own state-connectivity validation flags a pseudostate
+Read those five as agreement *when asked strictly*, not as five gaps that disappeared. An opt-in
+check is weaker evidence than a default one: it says the strict question has an answer we agree on,
+not that the pipeline a user gets by default rejects the notation — by design it does not. And
+because we authored all 34 cases ourselves, a small gap count means we ran out of questions we
+thought to ask, not that we stopped being permissive: the denominator measures our coverage of the
+rejection surface, not our conformance.
+
+The two `extensions/` cases that agree in either mode (`x02` choice, `x03` junction) are rejected
+by us for a different reason than by the pilot: our own state-connectivity validation flags a pseudostate
 with no outgoing transition, while the pilot rejects the notation itself. The bucket records
 rejection, not agreement on the rule.
 
 ## Permissiveness gaps
 
-All 8 gaps, each with its reproducer (the corpus file is the minimal reproducer), both verdicts,
+All 3 gaps, each with its reproducer (the corpus file is the minimal reproducer), both verdicts,
 and the package the root cause is likely in. **None are fixed here** — this oracle measures;
 fixing is later work.
 
 | Reproducer (`cmd/pilot-reject/testdata/negative/`) | Ours | Pilot | Likely root cause |
 | --- | --- | --- | --- |
-| `extensions/x01-initial-state-marker.sysml` | accepts | syntax error at `initial` | `internal/core/parser` — intended extension, ungated |
-| `extensions/x04-orthogonal-region.sysml` | accepts | syntax error at `region` | `internal/core/parser` — intended extension, ungated |
-| `extensions/x05-defer-member.sysml` | accepts | syntax error at `defer` | `internal/core/parser` — intended extension, ungated |
-| `extensions/x06-history-member.sysml` | accepts | syntax error at `history` | `internal/core/parser` — intended extension, ungated |
-| `extensions/x07-transition-to.sysml` | accepts | syntax error at `to` | `internal/core/parser` — intended extension, ungated |
 | `grammar/g02-import-without-visibility.sysml` | accepts | `mismatched input 'import'` | `internal/core/parser` — treats the import visibility keyword as optional; the pinned `ImportPrefix` requires it |
 | `grammar/g15-keyword-as-name.sysml` | accepts | `no viable alternative at input 'part'` | `internal/core/parser` — allows a reserved keyword as a declared name |
 | `grammar/k02-sysml-keyword-in-kerml.kerml` | accepts | `no viable alternative at input 'def'` | `internal/core/parser` — `.kerml` files are parsed with the full SysML grammar; no per-language restriction |

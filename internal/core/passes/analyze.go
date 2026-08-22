@@ -48,10 +48,17 @@ func Analyze(name string, root *ast.RootNamespace, parseDiags []Diagnostic, idx 
 	return AnalyzeWithKind(name, source.KindOf(name), root, parseDiags, idx)
 }
 
-// AnalyzeWithKind validates a document whose language is not encoded in name.
+// AnalyzeWithKind validates a document whose language is not encoded in name,
+// in the default conformance mode.
 func AnalyzeWithKind(name string, kind source.Kind, root *ast.RootNamespace,
 	parseDiags []Diagnostic, idx *symbols.Index) []Diagnostic {
-	ctx := NewContextWithKind(name, kind, idx, parseDiags)
+	return AnalyzeWithOptions(name, kind, root, parseDiags, idx, Options{})
+}
+
+// AnalyzeWithOptions validates a document under explicit analysis options.
+func AnalyzeWithOptions(name string, kind source.Kind, root *ast.RootNamespace,
+	parseDiags []Diagnostic, idx *symbols.Index, opts Options) []Diagnostic {
+	ctx := NewContextWithOptions(name, kind, idx, parseDiags, opts)
 	diags := DefaultRegistry().Run(ctx, name, root)
 	sort.SliceStable(diags, func(i, j int) bool {
 		a, b := diags[i], diags[j]

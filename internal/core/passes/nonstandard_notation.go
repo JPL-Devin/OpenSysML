@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/conformance"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
@@ -12,13 +13,16 @@ import (
 const CodeNonstandardNotation = "nonstandard-notation"
 
 // CodeKerMLNotation marks KerML notation used in a SysML file, where the SysML
-// grammar has no production for it.
+// grammar has no production for it. Strict mode rejects it too: the pinned
+// SysML grammar admits it nowhere.
 const CodeKerMLNotation = "kerml-notation"
 
 // NonstandardNotationPass reports the constructs OpenSysML accepts beyond the
 // pinned grammars, classified in docs/reference/grammar/conformance-audit.md.
-// They stay parsed — models already use them — so this is a warning at
-// LevelSyntax, never an error, and never gates a higher tier.
+// They stay parsed in either mode — models already use them — and the mode
+// decides what the finding weighs: a warning by default, an error under
+// conformance.ModeStrict, where a file that uses them is rejected and the
+// higher tiers are skipped as they are after any syntax error.
 type NonstandardNotationPass struct{}
 
 // Level reports the syntax level: the written notation is all it reads.
@@ -33,15 +37,29 @@ func (NonstandardNotationPass) Run(ctx *Context, name string, root *ast.RootName
 	// A document of no known kind — the REPL and CLI buffer — reads as SysML,
 	// the notation its prompt takes; the REPL drops the finding for a snippet it
 	// loaded from a .kerml file.
-	w := &notationWalker{sysml: ctx.Kind != source.KindKerML}
+	w := &notationWalker{
+		sysml:    ctx.Kind != source.KindKerML,
+		severity: notationSeverity(ctx.Options.Conformance),
+	}
 	w.walk(root.Members)
 	return w.diags
+}
+
+// notationSeverity maps the conformance mode onto what a non-conforming
+// construct weighs.
+func notationSeverity(mode conformance.Mode) Severity {
+	if mode.IsStrict() {
+		return SeverityError
+	}
+	return SeverityWarning
 }
 
 // notationWalker accumulates the diagnostics of one document.
 type notationWalker struct {
 	sysml bool
-	diags []Diagnostic
+	// severity is what every finding of this walk carries; see notationSeverity.
+	severity Severity
+	diags    []Diagnostic
 }
 
 // walk reports the extension notation in a member list and descends into the
@@ -148,7 +166,7 @@ func (w *notationWalker) kermlNamespace(n *ast.Namespace) {
 		return
 	}
 	w.diags = append(w.diags, Diagnostic{
-		Severity: SeverityWarning,
+		Severity: w.severity,
 		Span:     keywordSpan(n, "namespace"),
 		Message: "`namespace` is KerML notation: the SysML v2 grammar has no namespace declaration, " +
 			"so write `package` here or move the declaration to a .kerml file",
@@ -168,7 +186,7 @@ func (w *notationWalker) kermlRelationships(rels []*ast.Relationship) {
 			continue
 		}
 		w.diags = append(w.diags, Diagnostic{
-			Severity: SeverityWarning,
+			Severity: w.severity,
 			Span:     rel.Span(),
 			Message: "`featured by` is KerML notation: the SysML v2 grammar has no featuring clause, " +
 				"so move the declaration to a .kerml file",
@@ -181,7 +199,7 @@ func (w *notationWalker) kermlRelationships(rels []*ast.Relationship) {
 // extension reports one construct as an OpenSysML extension.
 func (w *notationWalker) extension(span source.Span, construct, standard string) {
 	w.diags = append(w.diags, Diagnostic{
-		Severity: SeverityWarning,
+		Severity: w.severity,
 		Span:     span,
 		Message: fmt.Sprintf("%s is an OpenSysML extension with no SysML v2 production: %s",
 			construct, standard),

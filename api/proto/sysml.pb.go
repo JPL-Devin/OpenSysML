@@ -1018,9 +1018,13 @@ type ParseFileRequest struct {
 	// Deprecated: Marked as deprecated in sysml.proto.
 	ContentHash string `protobuf:"bytes,3,opt,name=content_hash,json=contentHash,proto3" json:"content_hash,omitempty"`
 	// Language for inline content: "sysml" or "kerml". Empty defaults to SysML.
-	Language      string `protobuf:"bytes,4,opt,name=language,proto3" json:"language,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Language string `protobuf:"bytes,4,opt,name=language,proto3" json:"language,omitempty"`
+	// Judge the source as conforming SysML v2: notation no pinned production
+	// admits is an error rather than a warning. Part of the cache key, so the two
+	// modes never serve each other's diagnostics.
+	StrictConformance bool `protobuf:"varint,5,opt,name=strict_conformance,json=strictConformance,proto3" json:"strict_conformance,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *ParseFileRequest) Reset() {
@@ -1091,6 +1095,13 @@ func (x *ParseFileRequest) GetLanguage() string {
 		return x.Language
 	}
 	return ""
+}
+
+func (x *ParseFileRequest) GetStrictConformance() bool {
+	if x != nil {
+		return x.StrictConformance
+	}
+	return false
 }
 
 type isParseFileRequest_Source interface {
@@ -4618,12 +4629,13 @@ const file_sysml_proto_rawDesc = "" +
 	"\n" +
 	"CalcOutput\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\"\n" +
-	"\x05value\x18\x02 \x01(\v2\f.sysml.ValueR\x05value\"\x9a\x01\n" +
+	"\x05value\x18\x02 \x01(\v2\f.sysml.ValueR\x05value\"\xc9\x01\n" +
 	"\x10ParseFileRequest\x12\x1d\n" +
 	"\tfile_path\x18\x01 \x01(\tH\x00R\bfilePath\x12\x1a\n" +
 	"\acontent\x18\x02 \x01(\tH\x00R\acontent\x12%\n" +
 	"\fcontent_hash\x18\x03 \x01(\tB\x02\x18\x01R\vcontentHash\x12\x1a\n" +
-	"\blanguage\x18\x04 \x01(\tR\blanguageB\b\n" +
+	"\blanguage\x18\x04 \x01(\tR\blanguage\x12-\n" +
+	"\x12strict_conformance\x18\x05 \x01(\bR\x11strictConformanceB\b\n" +
 	"\x06source\"\xa4\x01\n" +
 	"\x11ParseFileResponse\x12\x1d\n" +
 	"\n" +

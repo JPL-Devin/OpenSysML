@@ -11,6 +11,9 @@ import (
 // the session's folders, scanned later so the handshake is not delayed.
 func (s *Server) Initialize(ctx context.Context, params *protocol.InitializeParams) (*protocol.InitializeResult, error) {
 	s.setFolders(initializeFolders(params))
+	if params != nil {
+		s.applyConformanceSettings(params.InitializationOptions)
+	}
 	return &protocol.InitializeResult{
 		Capabilities: protocol.ServerCapabilities{
 			TextDocumentSync: &protocol.TextDocumentSyncOptions{
