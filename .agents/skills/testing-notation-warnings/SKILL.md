@@ -142,6 +142,23 @@ diagnostics that were previously attributed elsewhere are now landing on the exp
 `docs/project/pilot-xpect.md` carries the same numbers in prose (`agree N | disagree N | ...`),
 so grep for the live figures there too. Report a mismatch as stale-baseline, not as a test failure.
 
+### Attribute the drift before blaming the branch
+
+A live-vs-committed mismatch does **not** by itself mean the branch under test moved the numbers —
+the baseline may already have been stale on `main`. Always re-run the same oracle in a `main`
+worktree before escalating, because "the branch broke the oracle" and "the baseline was already
+stale" need completely different responses:
+
+```bash
+cd /home/ubuntu/wt-main && git log --oneline -1 && go run ./cmd/pilot-xpect -jobs 8
+```
+
+A worked example: xpect measured 939/387/0 live against a committed 845/481/18, which looked like a
+branch regression — but `main` (`4b25f85b`) produced the *identical* 939/387/0 with the same
+`files`/`assertions`/`rows`, so the drift predated the branch entirely. Identical secondary totals
+alongside moved primary totals is the signature of a stale baseline rather than a provisioning or
+behavior difference on the branch.
+
 ## A new notation code can add strict-mode errors to OMG-published files
 
 A notation rule that re-derives its finding from the lexer's keyword set rather than from what the
@@ -160,6 +177,43 @@ sysml -validate -debug -strict "<file>"   # per file; gains under OMG/stdlib roo
 
 A gain under an OMG root or the stdlib is not automatically a bug, but it is never "expected" —
 adjudicate it against the source text before calling it correct.
+
+## A parser-gated escalation must be tested in BOTH directions
+
+Once `keywordAsName` was narrowed to escalate only spans the parser reported
+(`keywordNameSpans(ctx.ParseDiagnostics)` collecting `Code == CodeReservedKeywordName` offsets, then
+`if !w.keywordName[id.NameSpan.Offset] { return }`), the rule has two distinct failure modes and the
+obvious tests only catch one:
+
+- **Over-broad** — the false positive survives. Caught by validating the reproducers.
+- **Over-narrow / vacuous** — the span map is empty in the real pipeline, so *nothing* escalates.
+  This is the dangerous one, because every "clean" result gets *better* as the fix gets more broken:
+  the reproducers pass, the OMG files match `main`, and the corpus differential shows zero gains.
+
+So always pin the positive case on the **real binary**, not only in unit tests:
+
+```bash
+G=cmd/pilot-reject/testdata/negative/grammar/g15-keyword-as-name.sysml   # part def part;
+sysml -validate        $G   # expect: warning only at 3:14, exit 0
+sysml -validate -strict $G   # expect: error at 3:14 + "did not analyse cleanly", exit 2
+go run ./cmd/pilot-reject -conformance strict   # expect 116 both reject / 3 pilot-only
+```
+
+A strict run that produces no error, or a rejection count slipping to 115/4, means the escalation
+has gone vacuous. Keep `k02-sysml-keyword-in-kerml.kerml` as the neighbouring control — its strict
+error is `kerml-notation`, a *different* code, so it must stay byte-identical across the change.
+
+The escalation depends on parser **warnings** reaching `ctx.ParseDiagnostics` with their `Code`
+intact. Two forwarders do that, and if either dropped the code the rule would silently stop firing
+everywhere:
+
+```bash
+grep -n "Code:" internal/core/model/workspace.go   # ~244, CLI + LSP path
+grep -n "Code:" internal/repl/session.go           # ~555, REPL path
+```
+
+So a keyword-as-name check that passes only in `internal/core/passes` unit tests proves nothing about
+the CLI, REPL or LSP — exercise at least one real surface.
 
 ## Every diagnostic from the notation pass is Notation, whatever its code
 
