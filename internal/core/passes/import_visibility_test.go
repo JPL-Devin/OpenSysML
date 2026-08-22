@@ -57,17 +57,17 @@ func TestImportVisibilityIndicatorRequired(t *testing.T) {
 	}
 }
 
-// The finding is a warning spanning the `import` keyword, so an editor
-// underlines the keyword and never marks the document as failing.
-func TestImportVisibilityWarnsOnTheKeyword(t *testing.T) {
+// The finding is an error spanning the `import` keyword: ImportPrefix makes the
+// indicator mandatory, so the reference rejects the bare form too (D2).
+func TestImportVisibilityErrorsOnTheKeyword(t *testing.T) {
 	src := "package Q {\n\timport P::*;\n}"
 	diags := importVisibilityDiags(t, src)
 	if len(diags) != 1 {
 		t.Fatalf("got %d diagnostics, want 1: %v", len(diags), diags)
 	}
 	d := diags[0]
-	if d.Severity != SeverityWarning {
-		t.Errorf("severity = %v, want warning", d.Severity)
+	if d.Severity != SeverityError {
+		t.Errorf("severity = %v, want error", d.Severity)
 	}
 	if d.Source != "syntax" {
 		t.Errorf("source = %q, want syntax", d.Source)
@@ -77,23 +77,34 @@ func TestImportVisibilityWarnsOnTheKeyword(t *testing.T) {
 	}
 }
 
-// The warning does not gate the higher tiers: a bare import still resolves, so
-// what it brings in type-checks and an unresolved target is still reported.
-func TestImportVisibilityDoesNotGateHigherTiers(t *testing.T) {
+// D2 is a severity change only: a bare import still brings its names in, so
+// name resolution run over the document sees what it imported and still reports
+// an unresolved target.
+func TestImportVisibilityChangesSeverityOnly(t *testing.T) {
 	src := "package Lib { part def Widget; }\npackage App { import Lib::*; part w : Widget; import Nowhere::*; }"
-	var warned, unresolved bool
-	for _, d := range analyzeSrc(t, src) {
-		switch d.Code {
-		case "import-visibility":
-			warned = true
-		case "unresolved":
-			unresolved = true
+	root := parser.New(source.New("<t>", []byte(src))).ParseFile()
+	idx := symbols.NewIndex()
+	idx.AddDocument("<t>", root)
+
+	var errored bool
+	for _, d := range (ImportVisibilityPass{}).Run(NewContext("<t>", idx, nil), "<t>", root) {
+		if d.Code == "import-visibility" && d.Severity == SeverityError {
+			errored = true
 		}
 	}
-	if !warned {
-		t.Error("the bare imports produced no import-visibility warning")
+	if !errored {
+		t.Error("the bare imports produced no import-visibility error")
+	}
+
+	var unresolved bool
+	for _, d := range (NameResolutionPass{}).Run(NewContext("<t>", idx, nil), "<t>", root) {
+		if d.Code == "unresolved" {
+			unresolved = true
+		} else if d.Severity == SeverityError {
+			t.Errorf("unexpected name-resolution error, so the bare import changed model reading: %+v", d)
+		}
 	}
 	if !unresolved {
-		t.Error("the unresolved import target was not reported, so the warning gated name resolution")
+		t.Error("the unresolved import target was not reported")
 	}
 }

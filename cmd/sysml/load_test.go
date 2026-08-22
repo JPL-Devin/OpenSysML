@@ -26,7 +26,7 @@ func write(t *testing.T, path, content string) string {
 // under it rather than failing to read a directory.
 func TestLoadFilesAcceptsADirectory(t *testing.T) {
 	dir := t.TempDir()
-	write(t, filepath.Join(dir, "uses.sysml"), "package Uses { import Defs::*; part w : Wheel; }\n")
+	write(t, filepath.Join(dir, "uses.sysml"), "package Uses { private import Defs::*; part w : Wheel; }\n")
 	write(t, filepath.Join(dir, "defs", "defs.sysml"), "package Defs { part def Wheel; }\n")
 
 	sess := repl.NewSession()
@@ -82,7 +82,7 @@ func TestCheckDirectoryExitStatus(t *testing.T) {
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, "defs.sysml"), "package Defs { part def Wheel; }\n")
 	write(t, filepath.Join(dir, "checks.sysml"),
-		"package Checks {\n    import Defs::*;\n    part w : Wheel;\n    constraint Held { 1.0 <= 2.0 }\n    constraint Fails { 3.0 <= 2.0 }\n}\n")
+		"package Checks {\n    private import Defs::*;\n    part w : Wheel;\n    constraint Held { 1.0 <= 2.0 }\n    constraint Fails { 3.0 <= 2.0 }\n}\n")
 
 	wantReport(t, checkPaths(t, binary, "-constraint", "Checks::Held", dir), 0, "✓ Constraint Checks::Held passed")
 	wantReport(t, checkPaths(t, binary, "-constraint", "Checks::Fails", dir), 1, "✗ Constraint Checks::Fails failed")

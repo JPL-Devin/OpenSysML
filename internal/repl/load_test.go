@@ -41,7 +41,7 @@ func TestSubmitAllIsOrderIndependent(t *testing.T) {
 func TestLoadingADirectoryResolvesRegardlessOfFileName(t *testing.T) {
 	dir := t.TempDir()
 	// Sorted order puts the referencing file first.
-	writeFile(t, filepath.Join(dir, "a-uses.sysml"), "package Uses { import Defs::*; part w : Wheel; }\n")
+	writeFile(t, filepath.Join(dir, "a-uses.sysml"), "package Uses { private import Defs::*; part w : Wheel; }\n")
 	writeFile(t, filepath.Join(dir, "b-defs.sysml"), "package Defs { part def Wheel; }\n")
 
 	s := NewSession()

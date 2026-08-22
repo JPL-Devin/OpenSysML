@@ -6,7 +6,7 @@ package Synonyms {
     snapshot atStart;
     timeslice during;
     message note;
-    allocate budget;
+    allocate reading to base;
     use case def Drive;
     constraint def Safe;
     state def Idle;

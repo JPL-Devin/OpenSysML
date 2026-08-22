@@ -68,6 +68,11 @@ func TestNegative(t *testing.T) {
 		{"perform_no_reference", "action a { perform ; }"},
 		{"perform_dangling_chain", "action a { perform b.; }"},
 		{"allocate_missing_target", "package q { allocate a to ; }"},
+		// `allocate` is one keyword with one role, and it must be followed by a
+		// ConnectorPart (D1, SysML.xtext:1219-1222).
+		{"allocate_without_connector_part", "package q { allocate al; }"},
+		{"allocate_with_body_and_no_ends", "package q { allocate al { } }"},
+		{"allocate_def", "package q { allocate def D; }"},
 		{"message_payload_declaration_no_type", "message m of pay : from a to b;"},
 		{"message_payload_declaration_no_target", "message m of pay : T from a;"},
 		// `state s { defer ; }` and `state s { history ; }` are no longer malformed:

@@ -182,11 +182,24 @@ func TestW6CSuccessionRedefinitionTargetIsClean(t *testing.T) {
 	}
 }
 
+// Row ~960, the import case. D2 raised it from a warning to an error in the
+// default mode: ImportPrefix makes the indicator mandatory, so the reference
+// rejects it too (`mismatched input 'import' expecting '}'`).
+func TestW6CImportWithoutVisibilityIsAnError(t *testing.T) {
+	got := w6cDiags(t, "w6c_import.sysml", "package P { import Q::*; package Q { attribute def A; } }")
+	for _, d := range got {
+		if d.Code == "import-visibility" && d.Severity == SeverityError {
+			return
+		}
+	}
+	t.Fatalf("got %s, want an import-visibility error", w6cCodes(got))
+}
+
 // Row ~960, the negative row. Each notation below is an OpenSysML extension no
 // pinned production admits: the reference reports a syntax error
 // (`mismatched input 'of' expecting 'bind'`, `no viable alternative at input
-// 'N'`, `no viable alternative at input 'featured'`, `mismatched input 'import'
-// expecting '}'`), while we accept it with a warning naming the language.
+// 'N'`, `no viable alternative at input 'featured'`), while we accept it with a
+// warning naming the language.
 func TestW6CNotationNoPinnedProductionAdmitsIsWarned(t *testing.T) {
 	tests := []struct {
 		name string
@@ -222,12 +235,6 @@ func TestW6CNotationNoPinnedProductionAdmitsIsWarned(t *testing.T) {
 	}
 }`,
 			code: "kerml-notation",
-		},
-		{
-			name: "import without a visibility indicator",
-			file: "w6c_import.sysml",
-			src:  "package P { import Q::*; package Q { attribute def A; } }",
-			code: "import-visibility",
 		},
 	}
 	for _, tc := range tests {

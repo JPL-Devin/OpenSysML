@@ -112,3 +112,48 @@ func TestNotationSeverity(t *testing.T) {
 		t.Errorf("default severity = %v, want warning", got)
 	}
 }
+
+// The findings this slice adds follow the mode like every other one: warned by
+// default, error when conformance is asked for strictly.
+func TestSliceFindingsFollowTheMode(t *testing.T) {
+	for _, tc := range []struct {
+		name, file, src, code string
+	}{
+		{"binding", "a.sysml", "part def P { attribute a; attribute b; bind a = b * 2; }", CodeNonstandardNotation},
+		{"final_node", "a.sysml", "action def A { done end; }", CodeNonstandardNotation},
+		{"succession_edge", "a.sysml", "action def A { action a; action b; then a b; }", CodeNonstandardNotation},
+		{"one_ended_first", "a.sysml", "part def P { part a; first a; }", CodeNonstandardNotation},
+		{"requirement_constraint", "a.sysml", "analysis def An { attribute size; require constraint { size >= 1 } }", CodeNonstandardNotation},
+		{"sysml_in_kerml", "a.kerml", "package P { part def Wheel; }", CodeSysMLNotation},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			def := notationDiags(t, tc.file, tc.src, conformance.ModeDefault)
+			strict := notationDiags(t, tc.file, tc.src, conformance.ModeStrict)
+			if len(def) != 1 || len(strict) != 1 {
+				t.Fatalf("got %d default and %d strict findings, want 1 each: %+v / %+v", len(def), len(strict), def, strict)
+			}
+			if def[0].Code != tc.code || strict[0].Code != tc.code {
+				t.Errorf("codes = %q / %q, want %q", def[0].Code, strict[0].Code, tc.code)
+			}
+			if def[0].Severity != SeverityWarning || strict[0].Severity != SeverityError {
+				t.Errorf("severities = %v / %v, want warning then error", def[0].Severity, strict[0].Severity)
+			}
+			if def[0].Message != strict[0].Message || def[0].Span != strict[0].Span {
+				t.Errorf("strict mode must move only the severity: %+v vs %+v", def[0], strict[0])
+			}
+		})
+	}
+}
+
+// g15: the parser already warns on a keyword-as-name and keeps the recovery an
+// editor needs, so the pass only escalates it under strict mode.
+func TestKeywordAsNameIsEscalatedOnlyUnderStrictMode(t *testing.T) {
+	const src = "package P { part def part; }"
+	if got := notationDiags(t, "a.sysml", src, conformance.ModeDefault); len(got) != 0 {
+		t.Errorf("default: got %+v, want the parser warning alone", got)
+	}
+	got := notationDiags(t, "a.sysml", src, conformance.ModeStrict)
+	if len(got) != 1 || got[0].Code != CodeReservedKeywordName || got[0].Severity != SeverityError {
+		t.Fatalf("strict: got %+v, want one reserved-keyword-name error", got)
+	}
+}
