@@ -466,7 +466,7 @@ func (n *blockerNote) record(key string) {
 func (r Result) analysisBlocked() *blocker {
 	var first *blocker
 	for _, d := range r.Diagnostics {
-		if d.Severity != passes.SeverityError || r.mine(d.Span) || r.isMasked(d.Span) {
+		if !d.Blocking() || r.mine(d.Span) || r.isMasked(d.Span) {
 			continue
 		}
 		if first != nil {
@@ -491,9 +491,11 @@ func (r Result) isMasked(span source.Span) bool {
 	return false
 }
 
+// hasError reports whether the submission failed in a way that leaves it
+// nothing to summarize; a notation error still reads, so it is not one.
 func hasError(diags []passes.Diagnostic) bool {
 	for _, d := range diags {
-		if d.Severity == passes.SeverityError {
+		if d.Blocking() {
 			return true
 		}
 	}
