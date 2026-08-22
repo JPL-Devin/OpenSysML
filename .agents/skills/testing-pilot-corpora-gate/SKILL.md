@@ -131,6 +131,42 @@ For each of the four roots, in three shapes (moved aside / empty-but-present / o
   `fatal: Remote branch 9999-99 not found in upstream origin` (the `set -e` then produces a
   follow-on `cannot change to '<tmp>/pilot'` line — noisy but non-zero).
 
+## The gate runs cold: never compare it against an ad-hoc harness or the CLI
+
+`TestPilotCorporaDiagnostics` does `t.Setenv("XDG_CACHE_HOME", t.TempDir())` before counting, so it
+always indexes the standard library by parsing it. A hand-rolled harness (or `go run ./cmd/sysml
+-validate`, or the LSP) uses the persistent library index under `$XDG_CACHE_HOME/sysml-ls/libs`
+instead, and that index is keyed only by the library content hash plus a schema version (`-v22`) —
+**not** by the OpenSysML build. A change to symbol classification or anything else the index stores
+therefore leaves a stale cache in place, and the same tree can report different diagnostics through
+the two paths (observed: a corpus file clean under the gate but reporting three
+`Must be a valid feature` errors through a warm pre-change cache). When reproducing or refuting a
+gate verdict outside the gate, always `XDG_CACHE_HOME=$(mktemp -d)` first; if the two disagree,
+suspect a stale index before suspecting the gate.
+
+## Attributing a corpus movement to a commit
+
+Expectation lines move because of *some* commit, and the commit message's guess is not evidence.
+Bisect it mechanically in a throwaway worktree (`git worktree add -f /tmp/wt-main <base>`, then
+symlink the gitignored `examples/pilot-corpora` and `examples/sysml-v2-training` in from the main
+checkout so the gate does not skip):
+
+1. Confirm the gate is RED/GREEN there as claimed.
+2. `git revert --no-commit <suspect>` and re-run the gate — if the count does not come back, the
+   suspect is not the cause. Use `git reset --hard` between attempts: a failed multi-pathspec
+   `git checkout --` restores nothing, and `git checkout <sha> -- <files>` leaves the index staged.
+3. Walk the other candidates on the merged side (`git log --oneline <merge>^2 --not <merge>^1`) the
+   same way until the revert reproduces the old count exactly.
+4. Boil the finding down to a two-line model that reproduces the old diagnostic and is clean now
+   (e.g. a `:>>` binding to a stdlib `bool` such as `Occurrences::earlierFirstIncomingTransferSort`),
+   and keep a genuine violation of the same check nearby as the negative control, so "fixed" is
+   distinguished from "check dropped".
+
+Print spans for one corpus file by dropping a scratch `*_test.go` into `internal/core/model`: the
+gate's own helpers are package-private but reusable (`pilotCorporaGate.files(t)` /
+`.counts(t, files)`), diagnostics carry byte offsets only, so map them with
+`source.New(name, content).Lines().PosAt(d.Span.Offset)`.
+
 ## Tooling on this box
 
 `actionlint`, `shellcheck`, `python3 scripts/check-doc-links.py`, `gofmt`, `go vet`,
