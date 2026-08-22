@@ -185,7 +185,7 @@ sysml> %advance 30
 
 - **Corpus agreement:** 309 of 353 files agree diagnostic-by-diagnostic; 119 diagnostics are ours alone and 85 the reference's alone ([differential](docs/project/pilot-differential.md), `go run ./cmd/pilot-diff`).
 - **Declared-diagnostic silence:** of the 513 declared `errors` rows in the reference's own Xpect suites, we report nothing for 49. 95 we report word-for-word; 232 wording-only and 62 location-only differences are agreement in substance and are not counted as gaps; 24 more we report as a warning and 51 elsewhere in the file ([Xpect oracle](docs/project/pilot-xpect.md), `go run ./cmd/pilot-xpect`).
-- **Scope agreement:** 183 of 230 declared scope assertions match exactly (same source).
+- **Scope agreement:** 212 of 230 declared scope assertions match exactly (same source).
 - **Permissiveness gaps:** of 119 invalid models we wrote ourselves, the reference rejects 23 that we accept by default, and 96 both reject; 5 further cases agree only when we are asked strictly. We authored every one of these cases ourselves, so the denominator measures the reach of our own corpus and not our conformance; agreement reached only under an opt-in strict mode is weaker evidence than agreement by default ([rejection oracle](docs/project/pilot-rejection.md), `go run ./cmd/pilot-reject`).
 - **Self-assessed surface:** 125 of the tracked rules have no external referee at all — the action, state-machine and classifier-behavior rows, which the four numbers above cannot see, because the pinned artifact evaluates expressions but executes neither actions nor state machines.
 

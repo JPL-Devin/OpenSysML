@@ -312,3 +312,29 @@ func TestW7ASysMLSuppressionMatchesKerML(t *testing.T) {
 		t.Errorf("DirectSupertypes(q) = %v, want the declared [Parts::Part] only", supers)
 	}
 }
+
+// A KerML feature's implicit base follows the kind of its declared type, not its
+// own keyword: `feature b : A` with A a class subsets Occurrences::occurrences,
+// so it contributes nothing while Occurrences is absent, while an untyped
+// feature still subsets Base::things (KerML §8.4.2).
+func TestImplicitKerMLFeatureBaseFollowsTheDeclaredTypeKind(t *testing.T) {
+	m, root := buildModelNamed(t, "t.kerml", `package Base { abstract feature things { feature that; } }
+		package P { class A; feature b : A; feature c; }`)
+	p := sym(t, root, "P")
+	things, _ := sym(t, root, "Base").Scope.LookupLocal("things")
+
+	b, _ := p.Scope.LookupLocal("b")
+	for _, src := range m.DirectMemberSources(b) {
+		if src == things {
+			t.Errorf("b : A (a class) subsets %v, want no base while Occurrences is absent", src.Name)
+		}
+	}
+	c, _ := p.Scope.LookupLocal("c")
+	found := false
+	for _, src := range m.DirectMemberSources(c) {
+		found = found || src == things
+	}
+	if !found {
+		t.Errorf("untyped feature c does not subset Base::things; sources %v", m.DirectMemberSources(c))
+	}
+}
