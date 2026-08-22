@@ -304,3 +304,36 @@ func TestVisibleNamesDeterministicAcrossRuns(t *testing.T) {
 		}
 	}
 }
+
+// A specialization re-entry is its own path: `classifier A specializes A::B`
+// containing `B` offers A.B.B, which the shorter sibling path A.b.B once
+// displaced (reference fixture ShadowingTests_CircleProblem4).
+func TestVisibleNamesRecordsASpecializationReEntry(t *testing.T) {
+	src := "package test {\n\tclassifier A specializes A::B {\n\t\tclassifier B {\n\t\t\tpublic import A::*;\n\t\t\tfeature b : B;\n\t\t}\n\t}\n\tclassifier X;\n}\n"
+	names := namesAt(t, src, "classifier X", VisibleNamesOptions{})
+	has(t, names, []string{"A.B", "A.B.B", "A.B.b", "A.B.b.B"}, []string{"A.B.B.B", "A.B.b.B.b.B"})
+}
+
+// A name appears at most twice in a path, so a containment cycle is observable
+// once and enumeration terminates (reference fixture ShadowingTests_CircleProblem3).
+func TestVisibleNamesBoundsAPathToOneReEntryPerName(t *testing.T) {
+	src := "package test {\n\tclassifier A {\n\t\tpublic import test::B::*;\n\t\tclassifier aa;\n\t}\n" +
+		"\tclassifier B {\n\t\tpublic import test::A::*;\n\t\tclassifier bb;\n\t}\n\tclassifier X;\n}\n"
+	names := namesAt(t, src, "classifier X", VisibleNamesOptions{})
+	for _, n := range names {
+		for _, seg := range strings.Split(n, ".") {
+			if nameOccurrences(n, seg) > maxNameOccurrences {
+				t.Fatalf("name %q repeats %q more than %d times", n, seg, maxNameOccurrences)
+			}
+		}
+	}
+	has(t, names, []string{"A.aa", "A.bb", "B.aa", "B.bb"}, nil)
+}
+
+// A member imported into a namespace is re-offered through that namespace's own
+// inherited paths (reference fixture SimpleImportTests_ImportPackageAndInheritanceFromContainer).
+func TestVisibleNamesImportedMemberIsOfferedThroughInheritedPaths(t *testing.T) {
+	src := "package test {\n\tclassifier A {\n\t\tpublic import test::*;\n\t\tclassifier a specializes A;\n\t}\n\tclassifier X;\n}\n"
+	names := namesAt(t, src, "classifier X", VisibleNamesOptions{})
+	has(t, names, []string{"A", "A.A", "A.A.a", "A.a", "A.a.A"}, nil)
+}
