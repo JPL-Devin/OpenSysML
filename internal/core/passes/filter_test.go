@@ -37,6 +37,18 @@ func only(diags []Diagnostic, code string) []Diagnostic {
 	return out
 }
 
+// except returns the findings without one code, for tests whose subject is a
+// different rule.
+func except(diags []Diagnostic, code string) []Diagnostic {
+	var out []Diagnostic
+	for _, d := range diags {
+		if d.Code != code {
+			out = append(out, d)
+		}
+	}
+	return out
+}
+
 const filterMetadata = `metadata def Safety { attribute level; }
 part def Belt;
 `

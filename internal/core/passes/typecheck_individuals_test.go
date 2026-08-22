@@ -98,7 +98,9 @@ func TestTypeCheckOccurrenceModifierWidensTypingOK(t *testing.T) {
 		"port def Sensing; snapshot occurrence sensing : Sensing;",
 		"occurrence def Flight; action collect { in individual subject : Flight; }",
 	} {
-		if diags := typeDiags(t, src); len(diags) != 0 {
+		// The separate individual-definition requirement is checked by
+		// W10BIndividualTypingPass, as it is by a separate reference constraint.
+		if diags := except(typeDiags(t, src), "individual-typing"); len(diags) != 0 {
 			t.Errorf("%s: expected no type diagnostics, got %v", src, diags)
 		}
 	}
@@ -118,7 +120,7 @@ func TestTypeCheckOccurrenceModifierRejectsDataType(t *testing.T) {
 		{"attribute def Mass; snapshot occurrence m : Mass;", "snapshot usage cannot be typed by attributeDef"},
 		{"attribute def Mass; action collect { in individual m : Mass; }", "individual usage cannot be typed by attributeDef"},
 	} {
-		diags := typeDiags(t, tt.src)
+		diags := except(typeDiags(t, tt.src), "individual-typing")
 		if len(diags) != 1 {
 			t.Fatalf("%s: expected exactly one type diagnostic, got %v", tt.src, diags)
 		}

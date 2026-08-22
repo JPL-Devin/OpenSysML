@@ -437,6 +437,7 @@ type Definition struct {
 	IsAll         bool // 'all' multiplicity propagation modifier
 	IsConstant    bool // 'constant' feature modifier
 	IsEvent       bool // 'event' modifier for event-driven occurrences
+	IsIndividual  bool // 'individual' modifier: `individual part def` (SysML v2 8.3.9.11)
 	Visibility    Visibility
 	Ident         Identification
 	Multiplicity  *Multiplicity

@@ -16,7 +16,9 @@ func TestF69OccurrenceUsageTypedByOccurrenceDefKinds(t *testing.T) {
 		"port def Pt; part def Car { occurrence o : Pt; }",
 		"item def I; part def Car { individual x : I; }",
 	} {
-		if diags := typeDiags(t, src); len(diags) != 0 {
+		// An individual additionally needs an individual definition, which the
+		// reference reports separately; W10BIndividualTypingPass covers it.
+		if diags := except(typeDiags(t, src), "individual-typing"); len(diags) != 0 {
 			t.Errorf("%s: expected no type diagnostics, got %v", src, diags)
 		}
 	}

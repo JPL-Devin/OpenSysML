@@ -283,6 +283,11 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 	case *Definition:
 		fmt.Fprintf(b, `(Definition kind=%q abstract=%t variation=%t name=%q`,
 			v.Kind.String(), v.IsAbstract, v.IsVariation, identName(v.Ident))
+		// The modifier says something only where the kind does not: an
+		// `individual part def` is a part definition of an individual.
+		if v.IsIndividual && v.Kind != DefIndividual {
+			b.WriteString(` individual=true`)
+		}
 		writeChildren(b, depth, defusageChildren(v.Prefixes, v.Relationships, v.Multiplicity, nil, v.Members))
 		return
 	case *Usage:
