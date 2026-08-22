@@ -285,10 +285,15 @@ func (nw *nameWalk) inheritedImports(owner *symbols.Symbol, prefix string, depth
 			continue
 		}
 		seen[src] = true
+		chain, ok := nw.enterFor(depth, nw.chainTo(owner, src))
+		if !ok {
+			continue
+		}
 		if src.Scope != nil {
 			nw.imports(src.Scope, prefix, depth, false, true)
 		}
 		nw.inheritedImports(src, prefix, depth, seen)
+		nw.leave(chain)
 	}
 }
 
@@ -354,6 +359,16 @@ func (nw *nameWalk) enter(chain []*symbols.Symbol) ([]*symbols.Symbol, bool) {
 		nw.traversed[src]++
 	}
 	return chain, true
+}
+
+// enterFor marks an inherited import's steps once the path has left the
+// anchor's own scope: how a name reaches the anchor is not a step of the
+// paths under it.
+func (nw *nameWalk) enterFor(depth int, chain []*symbols.Symbol) ([]*symbols.Symbol, bool) {
+	if depth <= 2 {
+		return nil, true
+	}
+	return nw.enter(chain)
 }
 
 // leave undoes enter.

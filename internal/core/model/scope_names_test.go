@@ -314,6 +314,14 @@ func TestVisibleNamesRecordsASpecializationReEntry(t *testing.T) {
 	has(t, names, []string{"A.B", "A.B.B", "A.B.b", "A.B.b.B"}, []string{"A.B.B.B", "A.B.b.B.b.B"})
 }
 
+// An inherited import is a derivation step of the paths below it, so a path
+// cannot inherit the same type twice (SimpleImportTests_ImportPackageAndInheritanceFromContainer).
+func TestVisibleNamesCountsAnInheritedImportAsADerivationStep(t *testing.T) {
+	src := "package test {\n\tclassifier A {\n\t\tpublic import test::*;\n\t\tclassifier a specializes A;\n\t}\n\tclassifier X;\n}\n"
+	names := namesAt(t, src, "classifier X", VisibleNamesOptions{})
+	has(t, names, []string{"A.a", "A.a.A", "A.a.A.a"}, []string{"A.a.A.a.A"})
+}
+
 // A name appears at most twice in a path, so a containment cycle is observable
 // once and enumeration terminates (reference fixture ShadowingTests_CircleProblem3).
 func TestVisibleNamesBoundsAPathToOneReEntryPerName(t *testing.T) {
