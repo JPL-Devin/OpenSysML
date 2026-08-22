@@ -45,7 +45,7 @@ separately, so a strict agreement never reads as a default one.
 
 ```bash
 go run ./cmd/pilot-reject -conformance default -out build/pilot-reject-default
-# as of that same commit: 70 agreements, 9 gaps — the numbers strict mode leaves alone
+# as of that same commit: 72 agreements, 7 gaps — the numbers strict mode leaves alone
 go run ./cmd/pilot-reject -conformance lenient   # must fail: unknown conformance policy
 ```
 

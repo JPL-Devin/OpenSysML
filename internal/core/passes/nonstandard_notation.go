@@ -30,8 +30,8 @@ const CodeReservedKeywordName = "reserved-keyword-name"
 // pinned grammars, classified in docs/reference/grammar/conformance-audit.md.
 // They stay parsed in either mode — models already use them — and the mode
 // decides what the finding weighs: a warning by default, an error under
-// conformance.ModeStrict, where a file that uses them is rejected and the
-// higher tiers are skipped as they are after any syntax error.
+// conformance.ModeStrict, which rejects the file but, being notation, gates
+// no higher tier.
 type NonstandardNotationPass struct{}
 
 // Level reports the syntax level: the written notation is all it reads.
