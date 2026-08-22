@@ -45,7 +45,7 @@ elmt:ActionNodes__Drive
     sysx:hasBody "true"^^xsd:boolean .
 
 elmt:ActionNodes__Drive__speed
-    a sysml:AttributeUsage ;
+    a sysml:ReferenceUsage ;
     sysml:qualifiedName "ActionNodes::Drive::speed" ;
     sysml:owningNamespace elmt:ActionNodes__Drive ;
     sysx:memberIndex "0"^^xsd:integer ;
@@ -204,7 +204,7 @@ elmt:ActionNodes__Drive___4015
     sysx:hasBody "false"^^xsd:boolean .
 
 elmt:ActionNodes__Drive___4015___400
-    a sysml:AttributeUsage ;
+    a sysml:ReferenceUsage ;
     sysml:qualifiedName "ActionNodes::Drive::@15::@0" ;
     sysml:owningNamespace elmt:ActionNodes__Drive___4015 ;
     sysx:memberIndex "0"^^xsd:integer ;

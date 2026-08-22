@@ -287,7 +287,7 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		return e.encode(n.Members, fqn, subject)
 
 	case *ast.Usage:
-		metaclass, ok := usageMetaclass[n.Kind]
+		metaclass, ok := usageMetaclassOf(n)
 		if !ok {
 			return &UnsupportedError{What: fmt.Sprintf("usage kind %q at %s", n.Kind, e.where(n))}
 		}

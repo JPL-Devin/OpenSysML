@@ -65,7 +65,7 @@ var (
 	// The five headline numbers the README and the architecture guide lead with,
 	// each re-derived below from the baseline of the harness that measured it.
 	docCorpusAgreementPattern = regexp.MustCompile(`^- \*\*Corpus agreement:\*\* ([0-9]+) of ([0-9]+) files agree diagnostic-by-diagnostic; ([0-9]+) diagnostics are ours alone and ([0-9]+) the reference's alone`)
-	docDeclaredSilencePattern = regexp.MustCompile("^- \\*\\*Declared-diagnostic silence:\\*\\* of the ([0-9]+) declared `errors` rows in the reference's own Xpect suites, we report nothing for ([0-9]+)\\. ([0-9]+) wording-only and ([0-9]+) location-only differences are agreement in substance and are not counted as gaps; ([0-9]+) more we report as a warning and ([0-9]+) elsewhere in the file")
+	docDeclaredSilencePattern = regexp.MustCompile("^- \\*\\*Declared-diagnostic silence:\\*\\* of the ([0-9]+) declared `errors` rows in the reference's own Xpect suites, we report nothing for ([0-9]+)\\. ([0-9]+) we report word-for-word; ([0-9]+) wording-only and ([0-9]+) location-only differences are agreement in substance and are not counted as gaps; ([0-9]+) more we report as a warning and ([0-9]+) elsewhere in the file")
 	docScopeAgreementPattern  = regexp.MustCompile(`^- \*\*Scope agreement:\*\* ([0-9]+) of ([0-9]+) declared scope assertions match exactly`)
 	docPermissivenessPattern  = regexp.MustCompile(`^- \*\*Permissiveness gaps:\*\* of ([0-9]+) invalid models we wrote ourselves, the reference rejects ([0-9]+) that we accept by default, and ([0-9]+) both reject; ([0-9]+) further cases agree only when we are asked strictly`)
 	docSelfAssessedPattern    = regexp.MustCompile(`^- \*\*Self-assessed surface:\*\* ([0-9]+) of the tracked rules have no external referee at all`)
@@ -190,6 +190,7 @@ type docRejectionBaseline struct {
 type docRefereedCounts struct {
 	files, filesAgreeing, oursOnly, pilotOnly         int
 	declaredErrors, silent, wordingOnly, locationOnly int
+	declaredAgree                                     int
 	severityDiffers, elsewhere                        int
 	scopeExact, scopeTotal                            int
 	rejectCases, rejectPilotOnly, rejectBoth          int
@@ -227,14 +228,16 @@ func docReadRefereedCounts(t *testing.T, report Report) docRefereedCounts {
 		case "errors":
 			errors = true
 			counts.declaredErrors = kind.Rows
+			counts.declaredAgree = kind.Agree
 			counts.wordingOnly = kind.SameLocation
 			counts.locationOnly = kind.SameLine
 			counts.severityDiffers = kind.SeverityDiffers
 			counts.elsewhere = kind.Elsewhere
-			// Silence is what no tolerance accounts for: a declared error we report nothing of.
-			counts.silent = kind.Rows - kind.SameLocation - kind.SameLine - kind.SeverityDiffers - kind.Elsewhere
+			// Silence is what neither strict agreement nor any tolerance accounts for:
+			// a declared error we report nothing of.
+			counts.silent = kind.Rows - kind.Agree - kind.SameLocation - kind.SameLine - kind.SeverityDiffers - kind.Elsewhere
 			if counts.silent < 0 {
-				docFailPathAt(t, docCountXpectBaselinePath, 1, "errors tolerances exceed %d rows", kind.Rows)
+				docFailPathAt(t, docCountXpectBaselinePath, 1, "errors agreements and tolerances exceed %d rows", kind.Rows)
 			}
 		case "scope":
 			scope = true
@@ -299,8 +302,8 @@ func docAssertRefereedHeadline(t *testing.T, path string, lines []docLine, count
 		[]string{"files agreeing", "files compared", "diagnostics only ours", "diagnostics only the pilot's"},
 	}, {
 		docDeclaredSilencePattern, "**Declared-diagnostic silence:**",
-		[]int{counts.declaredErrors, counts.silent, counts.wordingOnly, counts.locationOnly, counts.severityDiffers, counts.elsewhere},
-		[]string{"declared error rows", "rows we are silent on", "wording-only rows", "location-only rows", "severity-differs rows", "elsewhere-in-file rows"},
+		[]int{counts.declaredErrors, counts.silent, counts.declaredAgree, counts.wordingOnly, counts.locationOnly, counts.severityDiffers, counts.elsewhere},
+		[]string{"declared error rows", "rows we are silent on", "rows agreeing word-for-word", "wording-only rows", "location-only rows", "severity-differs rows", "elsewhere-in-file rows"},
 	}, {
 		docScopeAgreementPattern, "**Scope agreement:**",
 		[]int{counts.scopeExact, counts.scopeTotal},

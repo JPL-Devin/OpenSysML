@@ -224,7 +224,7 @@ elmt:FlowsAndViews__Measure__measured
     sysx:hasBody "false"^^xsd:boolean .
 
 elmt:FlowsAndViews__Measure__mass
-    a sysml:AttributeUsage ;
+    a sysml:ReferenceUsage ;
     sysml:qualifiedName "FlowsAndViews::Measure::mass" ;
     sysml:owningNamespace elmt:FlowsAndViews__Measure ;
     sysx:memberIndex "1"^^xsd:integer ;

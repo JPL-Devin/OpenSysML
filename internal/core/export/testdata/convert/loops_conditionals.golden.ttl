@@ -29,7 +29,7 @@ elmt:LoopsAndConditionals__Control
     sysx:hasBody "true"^^xsd:boolean .
 
 elmt:LoopsAndConditionals__Control__count
-    a sysml:AttributeUsage ;
+    a sysml:ReferenceUsage ;
     sysml:qualifiedName "LoopsAndConditionals::Control::count" ;
     sysml:owningNamespace elmt:LoopsAndConditionals__Control ;
     sysx:memberIndex "0"^^xsd:integer ;

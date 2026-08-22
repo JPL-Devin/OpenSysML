@@ -41,6 +41,19 @@ func TestNegative(t *testing.T) {
 		{"constraint_params_assert_no_condition", "constraint c { in x : Real; assert; }"},
 		{"constraint_params_assume_no_condition", "constraint c { in x : Real; assume }"},
 		{"constraint_params_assert_not_no_condition", "constraint c { in x : Real; assert not; }"},
+		// A require member referencing a requirement takes specializations and a
+		// body, so neither may be left half written.
+		{"require_reference_no_specialization_type", "requirement r { require Q::x : ; }"},
+		{"require_reference_unclosed_body", "requirement r { require Q::x { require x > 0; }"},
+		// Prefix metadata needs a name, and the declaration after it a terminator.
+		{"require_prefix_metadata_no_type", "requirement r { require #; }"},
+		{"require_prefix_metadata_unterminated", "requirement r { require #goal c }"},
+		// `not` negates a satisfaction, and nothing else at member level.
+		{"not_without_satisfy", "package P { not r1 by p; }"},
+		{"not_satisfy_no_subject", "package P { not satisfy r1 by ; }"},
+		// A guarded succession needs a guard expression and a target after it.
+		{"guarded_succession_no_guard", "action def A { action a; action b; succession S first a if then b; }"},
+		{"guarded_succession_no_target", "action def A { action a; succession S first a if x == 0 then ; }"},
 		{"state_fork_no_name", "state s { fork ; }"},
 		{"state_join_no_semicolon", "state s { join sync state t; }"},
 		{"call_trigger_unclosed_params", "state s { accept op(a then t; }"},

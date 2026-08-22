@@ -1,0 +1,43 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="MetadataPrefixedConstraints" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="metadata" abstract=false variation=false name="goal"))
+      (Membership visibility="default"
+        (Definition kind="metadata" abstract=false variation=false name="stakeholderConcern"))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="massValue" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (LiteralReal value="1.0")))
+      (Membership visibility="default"
+        (Definition kind="constraint" abstract=false variation=false name="MassLimit"))
+      (Membership visibility="default"
+        (Usage kind="constraint" name="payloadMassLimit" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (ConstraintMember assert=true negated=false
+            (OperatorExpr operator="<"
+              (FeatureReference name="massValue")
+              (LiteralReal value="2.0")))))
+      (Membership visibility="default"
+        (Usage kind="requirement" name="vehicleMassRequirement" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (RequireMember
+            (ConstraintMember assert=true negated=false
+              (OperatorExpr operator="<"
+                (FeatureReference name="massValue")
+                (LiteralReal value="3.0"))))))
+      (Membership visibility="default"
+        (Usage kind="requirement" name="deliverPayload" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (PrefixMetadata type="goal")
+          (AssumeMember constraint="payloadMassLimit"
+            (PrefixMetadata type="goal"))
+          (RequireMember constraint="vehicleMassRequirement"
+            (PrefixMetadata type="goal"))
+          (RequireMember constraint="massMargin"
+            (PrefixMetadata type="goal")
+            (PrefixMetadata type="stakeholderConcern")
+            (Relationship kind="typing" target=MassLimit
+              (*ast.QualifiedName)))
+          (AssumeMember
+            (PrefixMetadata type="goal")
+            (ConstraintMember assert=true negated=false
+              (OperatorExpr operator=">"
+                (FeatureReference name="massValue")
+                (LiteralReal value="0.0")))))))))

@@ -138,8 +138,8 @@ Every difference from the published numbers is accounted for, and none of it is 
   `MemberNameTests_NamedMemberFromInheritance_Rdef.kerml.xt`:50. Both are ordinary executable notes;
   both were disagreements on the first run, so dropping them would have flattered us by two rows.
 - **`exportedObjects` (1).** One note in `indexing/NameEscape.kerml.xt` opens with a bare `//*` and
-  puts `XPECT exportedObjects` on the following line. The kind is unsupported here and reported as
-  not adjudicated rather than ignored.
+  puts `XPECT exportedObjects` on the following line. Wave 8F adjudicates it against our index, and
+  it agrees, so no kind is reported as not adjudicated any more.
 - **XPECT-shaped text that is not a note (10).** Eight `XPECT scope`/`XPECT errors` fragments sit
   inside `/* ... */` comments and two are disabled by their authors as `// (TBD) XPECT noErrors`.
   These open no `//` or `//*` note, so the harness does not run them; all ten are listed by file and
@@ -152,33 +152,31 @@ Every difference from the published numbers is accounted for, and none of it is 
 ```
 428 .xt file(s), 0 unparsed, 0 missing declared resource(s)
 1261 assertion(s) declaring 1326 expectation(s)
-agree 522 | disagree 803 | unlocated 0 | not adjudicated 1
+agree 630 | disagree 696 | unlocated 0 | not adjudicated 0
 ```
 
 | Kind | Expectations | Agree | Disagree | Not adjudicated | `same-location` | `same-line` | `severity-differs` | `elsewhere` | nothing |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| `errors` | 513 | 0 | 513 | 0 | 153 | 69 | 16 | 80 | 195 |
-| `noErrors` | 275 | 244 | 31 | 0 | — | — | — | — | — |
+| `errors` | 513 | 95 | 418 | 0 | 246 | 62 | 16 | 57 | 37 |
+| `noErrors` | 275 | 243 | 32 | 0 | — | — | — | — | — |
 | `linkedName` | 194 | 194 | 0 | 0 | — | — | — | — | — |
-| `warnings` | 113 | 11 | 102 | 0 | 0 | 0 | 61 | 7 | 45 |
-| `scope` | 230 | 73 | 157 | 0 | — | — | — | — | — |
-| `exportedObjects` | 1 | 0 | 0 | 1 | — | — | — | — | — |
+| `warnings` | 113 | 23 | 90 | 0 | 0 | 0 | 60 | 7 | 23 |
+| `scope` | 230 | 74 | 156 | 0 | — | — | — | — | — |
+| `exportedObjects` | 1 | 1 | 0 | 0 | — | — | — | — | — |
 
 Per suite:
 
 | Suite | Files | Expectations | Agree | Disagree | Not adjudicated |
 |---|---:|---:|---:|---:|---:|
-| `kerml` | 303 | 968 | 454 | 513 | 1 |
-| `sysml` | 125 | 358 | 68 | 290 | 0 |
+| `kerml` | 303 | 968 | 486 | 482 | 0 |
+| `sysml` | 125 | 358 | 144 | 214 | 0 |
 
-**Read the `errors` row carefully: its zero is a property of the strict rule, not a measurement of
-how wrong we are.** Strict agreement demands the pilot's message text, and our diagnostics are
-worded independently, so an `errors` row can only agree by coincidence of wording and the
-interesting number is the tolerance breakdown. `warnings` shows what that coincidence costs: 11 of
-113 now agree strictly, and all 11 are the duplicate-member-name rules implemented in the wave-6
-round against the pilot's declared text, so their wording matches by construction rather than by
-luck. `noErrors` and `linkedName` are wording-independent, and they are where this oracle adjudicates
-most directly.
+**Read the `errors` row carefully: strict agreement demands the pilot's message text, so its 95 is a
+coincidence of wording where a rule was implemented against the declared text, and the interesting
+number remains the tolerance breakdown.** `warnings` shows the same effect: 23 of 113 agree
+strictly, and they are the duplicate-member-name and visibility rules written against the pilot's
+declared wording, so they match by construction rather than by luck. `noErrors` and `linkedName` are
+wording-independent, and they are where this oracle adjudicates most directly.
 
 Movement since the first run of this harness (the harness itself is unchanged; every difference is a
 change in our behaviour):
@@ -186,18 +184,24 @@ change in our behaviour):
 | Kind | First run | Now | What moved |
 |---|---|---|---|
 | `linkedName` | 151 / 194 | **194 / 194** | alias-introduced names resolve to the aliased element, and the `~ B::f` conjugation form parses |
-| `noErrors` | 231 / 275 | **244 / 275** | 6 `ParsingTests_*` files, 4 inherited-name-conflict files and 3 others no longer draw an error |
-| `warnings` | 0 / 113 | **11 / 113** | the duplicate-inherited and duplicate-owned member-name warnings now exist, with the declared wording |
-| `errors` | 0 / 513 | 0 / 513 | strict agreement unchanged; the tolerance mix moved, and not only in our favour (see below) |
+| `noErrors` | 231 / 275 | **243 / 275** | 6 `ParsingTests_*` files, 4 inherited-name-conflict files and 2 others no longer draw an error; one file gained an error a wave-8 rule reports |
+| `warnings` | 0 / 113 | **23 / 113** | the duplicate-member-name warnings and the wave-8 rules written against the declared wording |
+| `errors` | 0 / 513 | **95 / 513** | wave-8 rules written against the declared text agree word-for-word; the tolerance mix moved with them |
+| `scope` | 73 / 230 | **74 / 230** | one enumeration that had an extra name is now exact |
 
-**Adjudicating the 230 `scope` assertions moved the aggregate line, not only the `not adjudicated`
-column:** every one of the 230 now carries a verdict, so `agree` rose by the 73 that agree exactly and
-`disagree` by the 157 that do not, and no other kind's counts moved. The tables and the baseline are a
-single fresh run on the merged tree.
+**These tables and the baseline are a single fresh run on the tree this branch lands on**, and that
+run is byte-identical to one taken on `main` at the same commit — the wave-8 validation, visibility,
+semantics, resource-set and parser rounds moved the verdicts, nothing in this branch does. The
+largest single movement is `errors`: 158 rows we were silent on now draw a diagnostic, so "nothing at
+all" falls from 195 to 37 while strict agreement rises from 0 to 95.
+
+The `nothing` column counts what neither strict agreement nor any tolerance accounts for. It was
+equal to `rows - tolerances` for as long as the strict column was 0, and both doc guards computed it
+that way; with `errors` and `warnings` now agreeing strictly, they subtract the agreements too.
 
 The **complete** per-row evidence — every disagreement with its file, line, declared expectation and
 our actual behaviour — is in [pilot-xpect-baseline.json](pilot-xpect-baseline.json). The sections
-below group the disagreements by cause and name the files; they do not repeat 803 rows.
+below group the disagreements by cause and name the files; they do not repeat 696 rows.
 
 ---
 
@@ -335,35 +339,35 @@ is the count of checks we do not implement.
 
 ---
 
-## errors — 0 of 513 strictly; where our diagnostics actually are
+## errors — 95 of 513 strictly; where our diagnostics actually are
 
-Strict agreement here requires our message to be the pilot's message, so **zero is the expected
-result and not a measurement.** What the tolerances say:
+Strict agreement here requires our message to be the pilot's message, so **the strict column measures
+how many rules were written against the declared text, not how correct we are.** What the tolerances
+say:
 
 | Tolerance | Rows | Meaning |
 |---|---:|---|
-| `same-location` | 153 | we flag the exact declared offset, in our own words — agreement in substance |
-| `same-line` | 69 | we flag the declared line at a different offset — almost certainly the same defect |
+| `same-location` | 246 | we flag the exact declared offset, in our own words — agreement in substance |
+| `same-line` | 62 | we flag the declared line at a different offset — almost certainly the same defect |
 | `severity-differs` | 16 | we report the declared defect as a *warning* |
-| `elsewhere-in-file` | 80 | we report errors, but not where the declaration points |
-| nothing | 195 | **we accept a file the pilot's implementers declared invalid** |
+| `elsewhere-in-file` | 57 | we report errors, but not where the declaration points |
+| nothing | 37 | **we accept a file the pilot's implementers declared invalid** |
 
-The split by suite is informative: KerML is 150 `same-location` / 10 `same-line` / 6 `severity-differs`,
-SysML is 3 / 59 / 10.
+The split by suite is informative: KerML is 34 strict / 239 `same-location` / 15 `same-line` /
+6 `severity-differs`, SysML is 61 / 7 / 47 / 10.
 The SysML suite's assertions anchor at a whole declaration (`at "part def P { ... }"`) while ours
 land on the offending token inside it, so `same-line` there means what `same-location` means in
-KerML. Together, **222 of 513 declared errors are ours at the declared location or line, in different
-words** — the largest block of substantive agreement this harness finds, and the one it cannot score.
+KerML. Together, **403 of 513 declared errors are ours at the declared location or line** — the
+largest block of substantive agreement this harness finds, and most of it is agreement it cannot
+score strictly because the wording is ours.
 
-**The wave-6 round moved this mix in both directions, and the adverse move is the interesting one.**
-Eight rows left `elsewhere-in-file` for `nothing` — 4 in `Redefinition_DirectionConformance_invalid.kerml.xt`
-and 4 in `ResultExpressionMembership_Invalid.kerml.xt` — because the only errors we raised in those
-files were duplicate-inherited-name errors, and demoting that rule to a warning left us silent on
-files the pilot declares invalid. That is the correct severity paying for a missing rule: two rows
-also gained `same-location` and one gained `severity-differs`, so the net is 187 → 195 on "nothing".
-Fixing the severity did not fix the rule those files are actually testing.
+**The wave-8 round moved this mix, and it moved it in our favour for a reason worth stating:** the
+validation, visibility and parser rounds added rules the pilot's suites declare, so 158 rows left
+"nothing" (195 → 37) and the strict column rose from 0 to 95 wherever the new rule was written
+against the pilot's own message text. Nothing here is a tolerance change: the harness is the one 8F
+landed, and a run on `main` at this commit is byte-identical.
 
-The 195 "nothing at all" rows are the actionable set: declared-invalid models we accept silently.
+The 37 "nothing at all" rows are the actionable set: declared-invalid models we accept silently.
 They are missing validation rules rather than parse failures, e.g. `Must be model-level evaluable`
 and `Must have a Boolean result` (constraint/expression checks we do not perform),
 `A variant must be an owned member of a variation.`, and the SysML `validation/invalid/*` family. The

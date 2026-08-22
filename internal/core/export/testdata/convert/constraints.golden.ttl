@@ -29,7 +29,7 @@ elmt:Constraints__MassLimit
     sysx:hasBody "true"^^xsd:boolean .
 
 elmt:Constraints__MassLimit__m
-    a sysml:AttributeUsage ;
+    a sysml:ReferenceUsage ;
     sysml:qualifiedName "Constraints::MassLimit::m" ;
     sysml:owningNamespace elmt:Constraints__MassLimit ;
     sysx:memberIndex "0"^^xsd:integer ;
@@ -40,7 +40,7 @@ elmt:Constraints__MassLimit__m
     sysx:hasBody "false"^^xsd:boolean .
 
 elmt:Constraints__MassLimit__limit
-    a sysml:AttributeUsage ;
+    a sysml:ReferenceUsage ;
     sysml:qualifiedName "Constraints::MassLimit::limit" ;
     sysml:owningNamespace elmt:Constraints__MassLimit ;
     sysx:memberIndex "1"^^xsd:integer ;
@@ -84,7 +84,7 @@ elmt:Constraints__Margin
     sysx:hasBody "true"^^xsd:boolean .
 
 elmt:Constraints__Margin__m
-    a sysml:AttributeUsage ;
+    a sysml:ReferenceUsage ;
     sysml:qualifiedName "Constraints::Margin::m" ;
     sysml:owningNamespace elmt:Constraints__Margin ;
     sysx:memberIndex "0"^^xsd:integer ;
@@ -95,7 +95,7 @@ elmt:Constraints__Margin__m
     sysx:hasBody "false"^^xsd:boolean .
 
 elmt:Constraints__Margin___401
-    a sysml:AttributeUsage ;
+    a sysml:ReferenceUsage ;
     sysml:qualifiedName "Constraints::Margin::@1" ;
     sysml:owningNamespace elmt:Constraints__Margin ;
     sysx:memberIndex "1"^^xsd:integer ;
@@ -157,7 +157,7 @@ elmt:Constraints__Rover__limit
     sysx:hasBody "true"^^xsd:boolean .
 
 elmt:Constraints__Rover__limit__m
-    a sysml:AttributeUsage ;
+    a sysml:ReferenceUsage ;
     sysml:qualifiedName "Constraints::Rover::limit::m" ;
     sysml:owningNamespace elmt:Constraints__Rover__limit ;
     sysx:memberIndex "0"^^xsd:integer ;
@@ -173,7 +173,7 @@ expr:Constraints__Rover__limit__m.value
     sysml:referent elmt:Constraints__Rover__mass .
 
 elmt:Constraints__Rover__limit__limit
-    a sysml:AttributeUsage ;
+    a sysml:ReferenceUsage ;
     sysml:qualifiedName "Constraints::Rover::limit::limit" ;
     sysml:owningNamespace elmt:Constraints__Rover__limit ;
     sysx:memberIndex "1"^^xsd:integer ;
@@ -504,7 +504,7 @@ elmt:Constraints__Rover__lightEnough___405
     sysx:hasBody "true"^^xsd:boolean .
 
 elmt:Constraints__Rover__lightEnough___405__m
-    a sysml:AttributeUsage ;
+    a sysml:ReferenceUsage ;
     sysml:qualifiedName "Constraints::Rover::lightEnough::@5::m" ;
     sysml:owningNamespace elmt:Constraints__Rover__lightEnough___405 ;
     sysx:memberIndex "0"^^xsd:integer ;
@@ -527,7 +527,7 @@ expr:Constraints__Rover__lightEnough___405__m.value.a0
     sysx:argumentIndex "0"^^xsd:integer .
 
 elmt:Constraints__Rover__lightEnough___405__limit
-    a sysml:AttributeUsage ;
+    a sysml:ReferenceUsage ;
     sysml:qualifiedName "Constraints::Rover::lightEnough::@5::limit" ;
     sysml:owningNamespace elmt:Constraints__Rover__lightEnough___405 ;
     sysx:memberIndex "1"^^xsd:integer ;
