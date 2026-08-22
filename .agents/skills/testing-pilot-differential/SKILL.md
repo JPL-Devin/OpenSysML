@@ -26,6 +26,25 @@ GNU-format diagnostics **relative to `--root`**. Consequences for testing:
   123 / severityMismatch 15`; ~70 s wall, byte-identical across runs *and* after a from-scratch
   rebuild of `build/pilot-validator`. `kerml-examples` carries no `syntax` diagnostic on either
   side. Refresh this paragraph with every rebaseline, and treat a stale one as a finding.
+- **A parser PR moves these numbers without rebaselining the committed JSON.** Wave 10D (#462)
+  measured a live `353 / 310 fully agreeing / 23 agreed / 106 only ours / 85 only the pilot's`
+  (`openSysMLDiagnostics 144`) while `docs/project/pilot-differential-baseline.json` still held the
+  wave-9 `309 / 119 / 157`. So `diff <(jq -S . docs/…baseline.json) <(jq -S . build/…json)`
+  being non-empty is the *expected* state on such a branch, and equality would be the finding.
+  Replace that check with (a) the numbers the PR author claims and (b) a parent-commit control
+  (`git worktree add /tmp/wt-base origin/main`, then run the parent's harness with
+  `-repo <real checkout>` and absolute `-validator`/`-kerml-validator`) — the parent must
+  reproduce the committed baseline exactly, which is what proves the delta belongs to the branch.
+- **A net improvement can hide a per-file increase, and that is where the review value is.**
+  Diff per-file entries keyed by `(root.name, file.path)` and print each file's summed only-ours
+  `count` before/after. At 10D the net was −13 over 3 files, but
+  `pilot-examples/Vehicle Example/Annex_A_VehicleViews.sysml` went 7 → 15: 5 recovery `syntax`
+  errors disappeared and, because the tiers no longer short-circuit, 6 `unresolved-reference`
+  errors + 1 `kind-mismatch` + 8 `unmapped` warnings appeared instead. Tier unblocking is the
+  normal consequence of accepting new syntax, so expect it — but each newly revealed only-ours
+  *error* is a fresh candidate false positive and should be named in the report even when the
+  committed per-file ratchet (`internal/core/model/testdata/pilot_corpora_expected.txt`) already
+  records the new number.
 - `TestPilotDifferentialDocumentCountsMatchBaseline` reads only the *committed* baseline JSON, so
   it proves doc ↔ baseline consistency and cannot detect a committed baseline that no longer
   reproduces. A live harness run is still mandatory; both checks are needed.
@@ -421,6 +440,49 @@ testing a PR that changes how a library element is classified *and* bumps `forma
   diff the JSON against the ambient-cache run (observed identical at `501d70fd`) — otherwise the
   differential numbers you reproduce may be a property of your cache.
 
+## Refereeing a parser PR's accept/reject claims (over-acceptance is the real risk)
+
+When a PR claims "form X now parses" *and* "neighbouring form Y stays rejected" (the shape
+`docs/project/pilot-rejection.md` documents), neither half is provable from HEAD alone. Run every
+scratch fixture through **three** surfaces and compare:
+
+```bash
+./bin/sysml -validate f.sysml; echo $?                  # HEAD
+git worktree add /tmp/wt-base origin/main && (cd /tmp/wt-base && go build -o /tmp/sysml-main ./cmd/sysml)
+/tmp/sysml-main -validate f.sysml; echo $?              # parent — proves acceptance is NEW
+d=/tmp/ref && mkdir -p $d && cp f.sysml $d/
+./build/pilot-sysml-validator/validate-sysml-batch --root $d $d/f.sysml; echo $?   # the oracle
+```
+
+- An accepted form is only *correctly* accepted when the pilot is also error-free on it. A form
+  that HEAD accepts and the pilot rejects with `no viable alternative at input '…'` /
+  `mismatched input '…'` is over-acceptance, regardless of what the PR's own docs assert.
+  This caught a real 10D defect: `entry; then starting { … }` inside a `state def` body — the
+  first row of the PR's own new "Forms kept rejected (W10D)" table — became **accepted** at HEAD
+  (exit 0, and it survives a `-convert sysml` round trip) while `main` rejected it with
+  `expected ';' after succession edge` and the pilot rejects it outright. Root cause shape: the
+  body was added inside the shared `parseSuccessionEdge`, which state bodies reach for entry
+  transitions too, so an `ActionTargetSuccession`-only body leaks into `EntryTransitionMember`
+  (fixed in #462 by making the body an explicit per-call-site policy).
+  **Always test every row of a "kept rejected" table**, not just the accepted forms — the negative
+  test suite may deliberately not cover them yet (10D deferred them to "10G").
+- **`exit 0` from `-validate` is "analyses clean", not "parses clean"**, and the two diverge on
+  purpose when a parser change lands ahead of its passes readers. Separate them: `-convert sysml`
+  (an AST round trip) is the parse-level surface and exits 0 while `-validate` exits 2. At 10D,
+  `verify a.b { … }` round-tripped fine but `-validate` reported
+  `Must be an accessible feature (use dot notation for nesting)` — a false positive, since the
+  pilot accepts the same file. Isolate such an error from pre-existing ones with a one-edit
+  control: `verify` outside an `objective { … }` errors with `A requirement verification must be
+  in the objective of a verification case.` on the *plain* form too, so wrap it in an `objective`
+  before blaming the chain.
+- `-convert sysml` is also the cheapest structural assertion for a new AST field: it prints
+  `@Meta about a, b;` and the bodied `then target { … }` verbatim, so a dropped `About`/`Members`
+  is visible without a golden. It cannot distinguish `first a.b then c.d` as SuccessionAsUsage
+  from InitialNode (both print identically) — for that read the committed `.golden`
+  (`Usage kind="succession"` with two `FeatureChainExpr` ends vs `(InitialNode …)`).
+- Golden fixtures under `internal/core/parser/testdata/parse/` are only non-vacuous if the parent
+  binary *rejects* the same input; confirm that with `/tmp/sysml-main` rather than assuming it.
+
 ## Running the pilot validator directly
 
 `build/pilot-validator/validate-sysml <file.sysml>` prints diagnostics on **stderr** in GNU
@@ -573,6 +635,24 @@ warnings of its own, which looks like the rule under test. Build the merge-base 
 (`git worktree add /tmp/wt-main <parent>; go build -o /tmp/sysml-main ./cmd/sysml`) and run every
 fixture through it too: a severity change (error → warning) and a *coverage* loss look identical
 from HEAD alone, and the second is the risk when a rule is rewritten to match a reference.
+
+## Proving a new negative test is load-bearing (mutation control)
+
+When a parser fix adds `TestNegative` rows for forms that must stay rejected, a passing row proves
+nothing on its own — the input may be rejected by an unrelated earlier error. Flip the guard the
+fix introduced (e.g. `if allowBody && p.accept2(lexer.LBrace)` → `if p.accept2(lexer.LBrace)`),
+rerun `go test ./internal/core/parser -run TestNegative`, and check *which* rows fail. Rows that
+still pass under the mutation are guarding a different code path (a package-level `then` is caught
+by `expected a namespace member` before it ever reaches `parseSuccessionEdge`), which is worth
+saying out loud rather than claiming all rows guard the new guard. Restore from a `cp` backup and
+re-run before reporting, and never let a long `go test ./...` overlap the mutation — if it does,
+the run is untrustworthy and must be repeated on the restored tree.
+
+Where a guard is scoped by parser *position* (a flag that flips after some member), also probe the
+over-rejection direction: build the file where the form appears *later* in the same body and see
+whether the pilot accepts it. If the pilot rejects the whole file for an unrelated reason (it
+rejects `entry;`/`entry action a;` inside `state def` bodies, for instance), say the case could not
+be discriminated instead of scoring it a pass.
 
 ## Recording
 
