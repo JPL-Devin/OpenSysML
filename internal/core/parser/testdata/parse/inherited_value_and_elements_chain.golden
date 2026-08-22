@@ -1,0 +1,81 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="W10F" library=false standard=false
+      (Import visibility="private" all=false kind=namespace recursive=false imported="ScalarValues" filtered=false)
+      (Import visibility="private" all=false kind=namespace recursive=false imported="VectorFunctions" filtered=false)
+      (Membership visibility="default"
+        (Definition kind="attribute" abstract=false variation=false name="Cost"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="v" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Real
+                (*ast.QualifiedName))
+              (LiteralReal value="5.0")))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="w" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Real
+                (*ast.QualifiedName))
+              (LiteralReal value="2.0")))))
+      (Membership visibility="default"
+        (Usage kind="attribute" name="template" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Cost
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Ring"
+          (Membership visibility="default"
+            (Usage kind="attribute" name="cost" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Cost
+                (*ast.QualifiedName))
+              (FeatureReference name="template")))))
+      (Membership visibility="default"
+        (Usage kind="part" name="plain" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Ring
+            (*ast.QualifiedName))))
+      (Membership visibility="default"
+        (Usage kind="part" name="r" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Relationship kind="typing" target=Ring
+            (*ast.QualifiedName))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="redefines" target=cost
+                (*ast.QualifiedName))
+              (Membership visibility="default"
+                (Usage kind="attribute" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+                  (Relationship kind="redefines" target=v
+                    (*ast.QualifiedName))
+                  (LiteralReal value="11.0")))))))
+      (Membership visibility="default"
+        (Definition kind="calc" abstract=false variation=false name="InheritedValues"
+          (Usage kind="attribute" name="" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+            (Relationship kind="typing" target=Real
+              (*ast.QualifiedName))
+            (Multiplicity range=false
+              (LiteralInfinity))
+            (SequenceExpr
+              (FeatureChainExpr member="v"
+                (FeatureChainExpr member="cost"
+                  (FeatureReference name="plain")))
+              (FeatureChainExpr member="w"
+                (FeatureChainExpr member="cost"
+                  (FeatureReference name="plain")))
+              (FeatureChainExpr member="v"
+                (FeatureChainExpr member="cost"
+                  (FeatureReference name="r")))))))
+      (Membership visibility="default"
+        (Definition kind="calc" abstract=false variation=false name="VectorElements"
+          (Usage kind="attribute" name="" ref=false direction="out" composite=false derived=false ordered=false nonunique=false
+            (Relationship kind="typing" target=Real
+              (*ast.QualifiedName))
+            (Multiplicity range=false
+              (LiteralInfinity))
+            (FeatureChainExpr member="elements"
+              (InvocationExpr type="cartesian+"
+                (InvocationExpr type="CartesianThreeVectorOf"
+                  (SequenceExpr
+                    (LiteralReal value="1.0")
+                    (LiteralReal value="2.0")
+                    (LiteralReal value="3.0")))
+                (InvocationExpr type="CartesianThreeVectorOf"
+                  (SequenceExpr
+                    (LiteralReal value="4.0")
+                    (LiteralReal value="5.0")
+                    (LiteralReal value="6.0")))))))))))

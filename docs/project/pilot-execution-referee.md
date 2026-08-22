@@ -211,10 +211,16 @@ execution artifact absent it prints a provisioning instruction, exits 0 and writ
 the original 32 plus the 62 the wave-6D expression round added:
 
 ```
-agree: 51 · kind-only: 1 · order-only: 0 · disagree: 1
-pilot-unevaluated: 21 · pilot-silent: 4 · pilot-error: 1 · ours-error: 6 · both-error: 9
+agree: 56 · kind-only: 1 · order-only: 0 · disagree: 1
+pilot-unevaluated: 21 · pilot-silent: 4 · pilot-error: 2 · ours-error: 1 · both-error: 8
 nondeterministic: 0
 ```
+
+The wave-10F runtime fixes moved five of the six `ours-error` cases to `agree`
+(`dot-perform-out`, `dot-machine-attr`, `w6d:inherited-value-no-body`,
+`w6d:inherited-value-template`, `w6d:vector-elements`) and `bump-out-target` from
+`both-error` to `pilot-error`: we now answer `n = 1` on `--target=Behave::Bump`, which the pilot
+refuses outright, so the remaining error is the pilot's alone.
 
 The one `kind-only` is `2 ** 40` (above). The `pilot-error`, `pilot-unevaluated` and `pilot-silent`
 buckets — 26 cases, more than a quarter of the corpus — are the pilot's limits rather than
@@ -227,30 +233,35 @@ us — the pilot's `re`/`im` have no evaluable body, and the same run answers `f
 zero. Read it as unrefereeable, and see the `ComplexFunctions` row of
 [spec-compliance.md](spec-compliance.md) for the adjudication.
 
-Of the 6 `ours-error` cases, 2 are finding 1 below and the other 4 came in with the wave-6D cases:
+The one remaining `ours-error` case is an adjudicated divergence:
 
 | Case | Ours | Read |
 |---|---|---|
 | `w6d:held-undeclared-multi` | `multiplicity violation: 2 value(s) bound to a feature with multiplicity upper bound 1` | **Deliberately ours.** `attribute xs = (1.0, 2.0)` declares no multiplicity, so the assumed `1..1` makes the default a violation (KerML 1.0 §7.4.5, and the multiplicity row of [spec-compliance.md](spec-compliance.md)); the pilot returns both values. An adjudicated divergence, not a defect |
-| `w6d:inherited-value-no-body`, `w6d:inherited-value-template` | `unresolved reference: template`, `usage W6D::template has no value` | **Ours is wrong** — a feature value that names a part which itself carries an inherited value. The governing-declaration row of `spec-compliance.md` covers the redefining half; these two are the plain inherited half, and are unfixed |
-| `w6d:vector-elements` | `cannot chain through non-instance member` | **Ours is wrong** — chaining into the elements of a `VectorOf` result, where the pilot returns the sequence |
+
+The cases that were `ours-error` before wave-10F, and what closed them:
+
+| Case | Was | Closed by |
+|---|---|---|
+| `dot-perform-out`, `dot-machine-attr` | `usage machine: performed action p of machine: bind c: unresolved reference: cc` | A name that denotes one object — an occurrence, or a structured attribute usage holding features rather than a value — evaluates to that object (`runtime.Context.namesOneObject`), so a binding in a performed action's body resolves the package-level sibling it names |
+| `w6d:inherited-value-no-body`, `w6d:inherited-value-template` | `unresolved reference: template`, `usage W6D::template has no value` | The same classification: `template` is a structured value, so `plain.cost` reads its features and `template.v` reads the redefined one, with the features it does not redefine keeping their inherited values |
+| `w6d:vector-elements` | `cannot chain through non-instance member` | A numerical vector is the sequence of its elements, so `elements` of one is that same sequence (`runtime.isNumericVector`) rather than an element-wise member lookup |
 
 ## Findings to carry forward
 
-1. **`Behave::machine.p.n` — a divergence in a `perform action` binding's scope.** Both tools
-   validate the model clean. The pilot evaluates the performed action's `out` parameter
-   default; our runtime fails to resolve the package-level part named in the binding:
+1. **`Behave::machine.p.n` — a `perform action` binding's scope, closed in wave-10F.** Both tools
+   validate the model clean and both now answer the same value:
 
    ```
-   $ ./bin/sysml -validate behavior.sysml
-   ✓ /tmp/ev/behavior.sysml: no errors
    $ ./bin/sysml -e "Behave::machine.p.n" behavior.sysml
-   sysml: evaluation failed: usage machine: performed action p of machine: bind c: unresolved reference: cc
+   ✓ Behave::machine.p.n
+     = 1
    ```
 
    against the pilot's `LiteralInteger 1`, on `perform action p : Bump { in c = cc; }` inside
-   `part machine`, where `cc` is a sibling member of the enclosing package. Reported here, not
-   fixed: the fix belongs in `internal/core/**` with the AGENTS §5.2 contract.
+   `part machine`, where `cc` is a sibling member of the enclosing package. The binding resolves
+   because a name denoting one object evaluates to that object; conformance case
+   `perform_action_binding_package_sibling`.
 2. **The pilot's evaluation context is narrower than ours, so the scope rows get no referee.**
    With `--target=Behave::Flow` the pilot cannot see the enclosing package's members
    (`cc.count` → `Couldn't resolve reference to Element 'cc'`) where we answer `0`; and
