@@ -1,6 +1,7 @@
 package passes
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -123,6 +124,103 @@ func TestTransitionToSpellingIsReported(t *testing.T) {
 	wantNotation(t, "a.sysml",
 		"state def S { state a; state b; transition a to b; }",
 		CodeNonstandardNotation, "`transition <source> to <target>;`")
+}
+
+func TestComputedReturnExpressionsAreReported(t *testing.T) {
+	for _, tc := range []struct {
+		name, src string
+	}{
+		{"literal", "calc c { in a : Real; return 42; }"},
+		{"arithmetic", "calc c { in basePrice : Real; return basePrice * 2.0; }"},
+		{"invocation", "calc c { in dx : Real; return sqrt(dx*dx); }"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			wantNotation(t, "a.sysml", tc.src, CodeNonstandardNotation,
+				"`return <expression>;`")
+		})
+	}
+}
+
+func TestReferenceReturnsStaySilent(t *testing.T) {
+	for _, tc := range []struct {
+		name, src string
+	}{
+		{"bare_name", "calc c { in a : Real; return a; }"},
+		{"qualified_name", "calc c { in a : Real; return P::a; }"},
+		{"dotted_feature_chain", "calc c { in a : Real; return a.b; }"},
+		{"named_result_parameter", "calc c { return result : Real = 1.0; }"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			wantSilent(t, "a.sysml", tc.src)
+		})
+	}
+}
+
+func TestKeywordedConstraintConditionsAreReported(t *testing.T) {
+	for _, tc := range []struct {
+		name, keyword string
+	}{
+		{"assert", "assert"},
+		{"assume", "assume"},
+		{"negated_assert", "assert"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			expr := "x >= 0"
+			if tc.name == "negated_assert" {
+				expr = "not x >= 0"
+			}
+			src := fmt.Sprintf("constraint validRange { in x : Real; %s %s; }", tc.keyword, expr)
+			wantNotation(t, "a.sysml", src, CodeNonstandardNotation,
+				fmt.Sprintf("`%s <expression>;`", tc.keyword))
+		})
+	}
+}
+
+func TestNotationWarningsPointAtTheirKeywords(t *testing.T) {
+	src := `calc c {
+		in x : Real;
+		return x * 2;
+	}
+	constraint validRange {
+		in x : Real;
+		assert x >= 0;
+	}`
+	root, pd, idx := analyzeInputs(t, "a.sysml", src)
+	if len(pd) != 0 {
+		t.Fatalf("%s: parse errors %+v", src, pd)
+	}
+	got := (NonstandardNotationPass{}).Run(NewContext("a.sysml", idx, pd), "a.sysml", root)
+	if len(got) != 2 {
+		t.Fatalf("%s: got %d diagnostics %+v, want 2", src, len(got), got)
+	}
+	for i, want := range []struct {
+		line, length int
+	}{
+		{3, len("return")},
+		{7, len("assert")},
+	} {
+		if line := strings.Count(src[:got[i].Span.Offset], "\n") + 1; line != want.line {
+			t.Errorf("diagnostic %d is on line %d, want %d", i, line, want.line)
+		}
+		if got[i].Span.Len != want.length {
+			t.Errorf("diagnostic %d spans %d bytes, want %d", i, got[i].Span.Len, want.length)
+		}
+	}
+}
+
+func TestStandardConstraintConditionsStaySilent(t *testing.T) {
+	for _, tc := range []struct {
+		name, src string
+	}{
+		{"bare_condition", "constraint validRange { in x : Real; x >= 0 }"},
+		{"named_constraint_assertion", "part def P { assert constraint c1 : C; }"},
+		{"satisfy_assertion", "requirement def R { assert satisfy r by q; }"},
+		{"metadata_constraint_assumption", "requirement def R { assume #goal constraint payloadMassLimit; }"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			wantSilent(t, "a.sysml", tc.src)
+		})
+	}
 }
 
 // Notation the pinned grammars do define stays silent: a false extension warning

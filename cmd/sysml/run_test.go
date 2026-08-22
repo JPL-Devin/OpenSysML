@@ -14,7 +14,7 @@ import (
 // does not analyse, so a check made on it would report success about a model the
 // tool could not read.
 const uncleanModel = `package Rover {
-    constraint MassBudget { assert 180.0 <= 200.0; }
+    constraint MassBudget { 180.0 <= 200.0 }
     part def Battery { attribute capacity = ; }
 }
 `

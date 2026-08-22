@@ -80,6 +80,18 @@ func (w *notationWalker) walk(members []ast.Node) {
 			w.walk(n.Members)
 		case *ast.Import:
 			w.walk(n.Body)
+		case *ast.ResultMember:
+			if n.Expression != nil && !isReferenceExpression(n.Expression) {
+				w.extension(keywordSpan(n, "return"), "`return <expression>;`",
+					"the standard spelling is a trailing expression without `return`")
+			}
+		case *ast.ConstraintMember:
+			if n.Keyword != "" && n.Expression != nil && n.Name == "" && len(n.Body) == 0 {
+				w.extension(keywordSpan(n, n.Keyword),
+					fmt.Sprintf("`%s <expression>;`", n.Keyword),
+					"the standard spelling is a keyword-less trailing condition")
+			}
+			w.walk(n.Body)
 		case *ast.StateNode:
 			w.stateNode(n)
 		case *ast.StateRegion:
@@ -125,6 +137,15 @@ func (w *notationWalker) walk(members []ast.Node) {
 		case *ast.WhileLoopActionNode:
 			w.walk(n.Body)
 		}
+	}
+}
+
+func isReferenceExpression(node ast.Node) bool {
+	switch node.(type) {
+	case *ast.QualifiedName, *ast.FeatureReference, *ast.FeatureChainExpr:
+		return true
+	default:
+		return false
 	}
 }
 

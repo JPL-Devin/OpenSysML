@@ -19,8 +19,8 @@ const checkFixture = `package Rover {
         constraint nearlyEmpty { charge <= 5.0 }
     }
 
-    constraint MassBudget { assert 180.0 <= 200.0; }
-    constraint TooHeavy { assert 210.0 <= 200.0; }
+    constraint MassBudget { 180.0 <= 200.0 }
+    constraint TooHeavy { 210.0 <= 200.0 }
 
     requirement PowerMargin {
         assume 600.0 > 0.0;
