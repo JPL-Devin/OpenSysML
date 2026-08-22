@@ -284,6 +284,21 @@ an error, each has dedicated parser and runtime tests, and each is documented as
 strict mode ever stopped covering one of them, the default-mode acceptance would be an
 undocumented non-conformance and the case should be fixed instead of adjudicated.
 
+### Forms kept rejected (W10D)
+
+Slice 10D probed the parser-debt follow-ups F60–F63, F102 and F103 against the pinned grammars and
+accepted every form they derive. Three neighbouring forms are **not** derivable, so the rejection
+stays. Each is guarded by a `TestNegative` case (`entry_succession_body`,
+`definition_succession_body`, `namespace_succession_body`) — the first two guard the succession
+parser's body policy, the third the namespace member dispatch that rejects a `then` before it;
+10G owns adding them to this oracle's negative corpus.
+
+| Form | Why it is not derivable |
+| --- | --- |
+| `entry; then starting { … }` in a state body | `EntryTransitionMember` (`SysML.xtext:1796-1801`) is `MemberPrefix ( GuardedTargetSuccession \| 'then' TransitionSuccession ) ';'` — it ends in `';'`, so an entry transition takes no body. A body on a `then` is derivable only as `ActionTargetSuccession` (`:1698`), which a state body reaches through `TargetTransitionUsageMember` (`:1764`) after a behaviour usage member, not after an entry action. |
+| `exhibit s1 then starting { … }` (no terminator on the `exhibit`) | `ExhibitStateUsage` (`:1840-1846`) ends in `StateUsageBody`, i.e. `';'` or a braced body, so the member must be terminated before a target transition follows it: `exhibit s1; then starting;`. |
+| `then <name> { … }` as a namespace or definition member | `ActionTargetSuccession` is reached only from `TargetSuccessionMember` (`:1393`) inside an action body item (`:1374-1381`); neither `NamespaceBodyItem` nor `DefinitionBodyItem` (`:516-524`) has a succession member, so a bodied `then` in a package or a `part`/`requirement` body stays a syntax error. |
+
 ## Guard
 
 `TestPilotRejectionDocumentCountsMatchBaseline` (in `cmd/pilot-reject`) re-derives every count in

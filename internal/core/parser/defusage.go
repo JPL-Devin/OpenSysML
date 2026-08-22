@@ -1677,9 +1677,9 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 			}
 			declRels := p.parseRelationships(true)
 			u.Relationships = append(u.Relationships, declRels...)
-		} else if reqName := p.parseQualifiedName(); reqName != nil {
-			// SysML.xtext:2119 owns a ReferenceSubsetting here; recorded as a
-			// plain subsetting until its passes/runtime readers migrate.
+		} else if reqName := p.parseChainedName(); reqName != nil {
+			// SysML.xtext:2119's ReferenceSubsetting reaches a nested feature through a '.'
+			// chain (KerML.xtext:699); kept a plain subsetting until its readers migrate.
 			u.Relationships = append(u.Relationships, &ast.Relationship{
 				Kind:   ast.RelSubsets,
 				Target: reqName,
@@ -2130,9 +2130,10 @@ func (p *Parser) parseDefUsageBodyMembers() []ast.Node {
 		}
 		// `then a b;` is a succession member naming two members of this body,
 		// which is the form a member-attached `then` desugars to and so the
-		// form a converted model is written back as.
+		// form a converted model is written back as. DefinitionBodyItem
+		// (SysML.xtext:516-524) has no TargetSuccessionMember, so it takes no body.
 		if p.atKeyword("then") {
-			body.add(p.parseSuccessionEdge(p.advance()))
+			body.add(p.parseSuccessionEdge(p.advance(), false))
 			continue
 		}
 		body.add(p.parseBodyMember())
@@ -2155,7 +2156,13 @@ func (p *Parser) parseCaseBody() []ast.Node {
 			continue
 		}
 		if p.atKeyword("then") {
-			body.add(p.parseSuccessionEdge(p.advance()))
+			body.add(p.parseSuccessionEdge(p.advance(), true))
+			continue
+		}
+		// A case body carries an action body's items — control nodes and behavioural
+		// statements among them (SysML.xtext:2191 CaseBodyItem → … → ActionBodyItem).
+		if p.atActionNodeMember() || p.atCalcStatement() {
+			body.add(p.parseActionMember())
 			continue
 		}
 		if p.atResultExpression() {
@@ -2404,6 +2411,9 @@ func (p *Parser) parseBodyMember() ast.Node {
 	// Check for behavioral statements in structural contexts (occurrence/part with temporal ordering)
 	// These include: first/then succession edges for snapshot ordering
 	if p.atKeyword("first") {
+		if p.atChainedFirstSuccession() {
+			return p.parseSuccessionAsUsage(start)
+		}
 		firstTok := p.advance()
 		return p.parseInitialNode(firstTok)
 	}
@@ -4063,6 +4073,14 @@ func (p *Parser) parseMetadataUsage(start int) *ast.PrefixMetadata {
 		return nil
 	}
 	pm := &ast.PrefixMetadata{Type: metaType}
+
+	// `about` names the elements the usage annotates (SysML.xtext:145-147).
+	if p.acceptKeyword("about") {
+		pm.About = p.parseQualifiedNameList()
+		if len(pm.About) == 0 {
+			p.error(p.peek().Span, "expected an annotated element after 'about'")
+		}
+	}
 
 	if p.at(lexer.LBrace) {
 		p.advance() // '{'
