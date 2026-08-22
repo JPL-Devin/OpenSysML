@@ -218,6 +218,11 @@ func runChecks(files []string, exprs []string, c checks) int {
 		switch {
 		case rep.clean() && bounded:
 			rep.info([]string{fmt.Sprintf("✓ %s: no errors in the feature values checked", namedModels(files))})
+		// An error the check ran through was reported above, so the model is not
+		// reported free of errors: what it is free of is one that stops a check.
+		case rep.clean() && reportedErrors(sess.LocatedDiagnostics()):
+			rep.info([]string{fmt.Sprintf("✓ %s: no error that stops a check; the notation reported above does not conform",
+				namedModels(files))})
 		case rep.clean():
 			rep.info([]string{fmt.Sprintf("✓ %s: no errors", namedModels(files))})
 		default:
@@ -262,6 +267,17 @@ func runChecks(files []string, exprs []string, c checks) int {
 	}
 
 	return rep.finish()
+}
+
+// reportedErrors reports whether analysis found an error, which a check runs
+// through only when it is about the notation (see passes.Diagnostic.Blocking).
+func reportedErrors(diags []repl.Diagnostic) bool {
+	for _, d := range diags {
+		if d.Severity == "error" {
+			return true
+		}
+	}
+	return false
 }
 
 // splitPerformer splits a `-action`/`-state` value into the behavior's name and
