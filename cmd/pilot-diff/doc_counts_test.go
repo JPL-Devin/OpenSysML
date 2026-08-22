@@ -67,7 +67,7 @@ var (
 	docCorpusAgreementPattern = regexp.MustCompile(`^- \*\*Corpus agreement:\*\* ([0-9]+) of ([0-9]+) files agree diagnostic-by-diagnostic; ([0-9]+) diagnostics are ours alone and ([0-9]+) the reference's alone`)
 	docDeclaredSilencePattern = regexp.MustCompile("^- \\*\\*Declared-diagnostic silence:\\*\\* of the ([0-9]+) declared `errors` rows in the reference's own Xpect suites, we report nothing for ([0-9]+)\\. ([0-9]+) wording-only and ([0-9]+) location-only differences are agreement in substance and are not counted as gaps; ([0-9]+) more we report as a warning and ([0-9]+) elsewhere in the file")
 	docScopeAgreementPattern  = regexp.MustCompile(`^- \*\*Scope agreement:\*\* ([0-9]+) of ([0-9]+) declared scope assertions match exactly`)
-	docPermissivenessPattern  = regexp.MustCompile(`^- \*\*Permissiveness gaps:\*\* of ([0-9]+) invalid models we wrote ourselves, the reference rejects ([0-9]+) that we accept, and ([0-9]+) both reject`)
+	docPermissivenessPattern  = regexp.MustCompile(`^- \*\*Permissiveness gaps:\*\* of ([0-9]+) invalid models we wrote ourselves, the reference rejects ([0-9]+) that we accept by default, and ([0-9]+) both reject; ([0-9]+) further cases agree only when we are asked strictly`)
 	docSelfAssessedPattern    = regexp.MustCompile(`^- \*\*Self-assessed surface:\*\* ([0-9]+) of the tracked rules have no external referee at all`)
 	docRejectionLinePattern   = regexp.MustCompile(`^\*\*Rejection oracle:\*\* the reverse direction — do we reject what the reference rejects\? ([0-9]+) hand-written invalid models validated by both implementations, ([0-9]+) rejected by both, ([0-9]+) the pinned pilot rejects and we accept;`)
 )
@@ -174,12 +174,15 @@ type docXpectBaseline struct {
 }
 
 // docRejectionBaseline is the part of the rejection oracle's baseline the headline reads.
+// The baseline is recorded in the auto conformance mode, so the cases it names as
+// strict-only agreements are subtracted to state the default pipeline's behaviour.
 type docRejectionBaseline struct {
 	Totals struct {
 		Cases            int `json:"cases"`
 		BothReject       int `json:"bothReject"`
 		PilotOnlyRejects int `json:"pilotOnlyRejects"`
 	} `json:"totals"`
+	StrictOnlyAgreements []string `json:"strictOnlyAgreements"`
 }
 
 // docRefereedCounts holds the five headline numbers, each derived from the baseline
@@ -190,6 +193,8 @@ type docRefereedCounts struct {
 	severityDiffers, elsewhere                        int
 	scopeExact, scopeTotal                            int
 	rejectCases, rejectPilotOnly, rejectBoth          int
+	rejectDefaultPilotOnly, rejectDefaultBoth         int
+	rejectStrictOnly                                  int
 	selfAssessed                                      int
 }
 
@@ -209,6 +214,12 @@ func docReadRefereedCounts(t *testing.T, report Report) docRefereedCounts {
 		rejectPilotOnly: rejection.Totals.PilotOnlyRejects,
 		rejectBoth:      rejection.Totals.BothReject,
 		selfAssessed:    docReadSelfAssessedRows(t),
+	}
+	counts.rejectStrictOnly = len(rejection.StrictOnlyAgreements)
+	counts.rejectDefaultBoth = counts.rejectBoth - counts.rejectStrictOnly
+	counts.rejectDefaultPilotOnly = counts.rejectPilotOnly + counts.rejectStrictOnly
+	if counts.rejectDefaultBoth < 0 {
+		docFailPathAt(t, docCountRejectionBaselinePath, 1, "more strict-only agreements than agreements")
 	}
 	errors, scope := false, false
 	for _, kind := range xpect.Kinds {
@@ -296,8 +307,8 @@ func docAssertRefereedHeadline(t *testing.T, path string, lines []docLine, count
 		[]string{"scope assertions agreeing", "scope assertions"},
 	}, {
 		docPermissivenessPattern, "**Permissiveness gaps:**",
-		[]int{counts.rejectCases, counts.rejectPilotOnly, counts.rejectBoth},
-		[]string{"authored cases", "cases only the pilot rejects", "cases both reject"},
+		[]int{counts.rejectCases, counts.rejectDefaultPilotOnly, counts.rejectDefaultBoth, counts.rejectStrictOnly},
+		[]string{"authored cases", "cases only the pilot rejects by default", "cases both reject by default", "strict-only agreements"},
 	}, {
 		docSelfAssessedPattern, "**Self-assessed surface:**",
 		[]int{counts.selfAssessed},
