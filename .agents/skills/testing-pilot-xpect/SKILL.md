@@ -53,7 +53,23 @@ in `scope_names.go`, `declaredTypeFeatureBase` in `semantics/implicit.go`): `845
 `scope` `212 / 230` with classes
 `other-paths 0 | extra-names 5 | missing-names 2 | missing-and-extra 3 | library-names 8`;
 the `errors`/`warnings`/`noErrors`/`linkedName` rows are unchanged from wave 9 (silence 49 / 4).
+After the wave-10 rebaseline (all slices merged, plus the central `wording-only` class):
+`1172 agree (of which wording-only 239), 154 disagree, 0 unlocated, 0 not adjudicated`, per-suite
+kerml 875/93 and sysml 297/61, `errors` kind
+`rows 513 | agree 418 | wordingOnly 239 | same-location 9 | same-line 25 | severity-differs 11 |
+elsewhere 42` (silence 8), `warnings` `rows 113 | agree 99 | same-line 7 | severity-differs 5`
+(silence 2), `noErrors` `248 / 275`, `scope` `212 / 230`.
+`noErrors` falling 254 → 248 is wave 10E's unavoidable cost, not a regression to chase: the six
+visibility fixtures declare file-wide silence and the protected-import errors at once, so no
+implementation satisfies both.
 Read the live totals from the baseline rather than this paragraph; it is an anchor, not the check.
+
+**`wording-only` is a verdict, not a tolerance.** `cmd/pilot-xpect/wording.go` admits a row into
+agreement only when the declared and our message state the same rule about the same element; the
+caller has already matched severity and offset, and those two alone are never enough. Rows that keep
+the offset but change the rule stay `same-location` disagreements, so a jump in `agree` after
+touching this file must be reconciled against the `wordingOnly` sub-count before it is reported as
+detection.
 
 **The scope narrative section of `docs/project/pilot-xpect.md` is a separate staleness risk from the
 headline tables.** A rebaseline that updates the summary block, the kind table and the per-suite
