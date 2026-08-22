@@ -58,9 +58,9 @@ func notationSeverity(mode conformance.Mode) Severity {
 type notationWalker struct {
 	sysml bool
 	// severity is what every finding of this walk carries; see notationSeverity.
-	severity        Severity
-	diags           []Diagnostic
-	requirementBody requirementBodyContext
+	severity          Severity
+	diags             []Diagnostic
+	inRequirementBody bool
 }
 
 // walk reports the extension notation in a member list and descends into the
@@ -75,10 +75,10 @@ func (w *notationWalker) walk(members []ast.Node) {
 			w.walk(n.Members)
 		case *ast.Definition:
 			w.kermlRelationships(n.Relationships)
-			w.walkDeclaration(n.Members, requirementBodyContextFor(n))
+			w.walkDeclaration(n.Members, isRequirementBodyDeclaration(n))
 		case *ast.Usage:
 			w.kermlRelationships(n.Relationships)
-			w.walkDeclaration(n.Members, requirementBodyContextFor(n))
+			w.walkDeclaration(n.Members, isRequirementBodyDeclaration(n))
 		case *ast.Import:
 			w.walk(n.Body)
 		case *ast.ResultMember:
@@ -94,16 +94,14 @@ func (w *notationWalker) walk(members []ast.Node) {
 			}
 			w.walk(n.Body)
 		case *ast.AssumeMember:
-			if w.requirementBody.enabled && n.Expression != nil &&
-				!isRequirementReferenceExpression(n.Expression, w.requirementBody.dottedReferences) &&
+			if w.inRequirementBody && n.Expression != nil && !isRequirementReferenceExpression(n.Expression) &&
 				n.Reference == nil && n.Name == "" && len(n.Body) == 0 && !n.HasBody {
 				w.extension(keywordSpan(n, "assume"), "`assume <expression>;`",
 					"the standard spelling is a keyword-less trailing condition")
 			}
 			w.walk(n.Body)
 		case *ast.RequireMember:
-			if w.requirementBody.enabled && n.Expression != nil &&
-				!isRequirementReferenceExpression(n.Expression, w.requirementBody.dottedReferences) &&
+			if w.inRequirementBody && n.Expression != nil && !isRequirementReferenceExpression(n.Expression) &&
 				n.Reference == nil && n.Name == "" && len(n.Body) == 0 && !n.HasBody {
 				w.extension(keywordSpan(n, "require"), "`require <expression>;`",
 					"the standard spelling is a keyword-less trailing condition")
@@ -157,36 +155,31 @@ func (w *notationWalker) walk(members []ast.Node) {
 	}
 }
 
-type requirementBodyContext struct {
-	enabled          bool
-	dottedReferences bool
-}
-
-func (w *notationWalker) walkDeclaration(members []ast.Node, context requirementBodyContext) {
-	previous := w.requirementBody
-	w.requirementBody = context
+func (w *notationWalker) walkDeclaration(members []ast.Node, requirementBody bool) {
+	previous := w.inRequirementBody
+	w.inRequirementBody = requirementBody
 	w.walk(members)
-	w.requirementBody = previous
+	w.inRequirementBody = previous
 }
 
-func requirementBodyContextFor(node ast.Node) requirementBodyContext {
+func isRequirementBodyDeclaration(node ast.Node) bool {
 	switch n := node.(type) {
 	case *ast.Definition:
 		switch n.Kind {
 		case ast.DefRequirement:
-			return requirementBodyContext{enabled: true}
+			return true
 		case ast.DefConcern, ast.DefViewpoint:
-			return requirementBodyContext{enabled: true, dottedReferences: true}
+			return true
 		}
 	case *ast.Usage:
 		switch n.Kind {
 		case ast.UsageRequirement, ast.UsageSatisfy:
-			return requirementBodyContext{enabled: true}
+			return true
 		case ast.UsageConcern, ast.UsageViewpoint, ast.UsageFramedConcern, ast.UsageObjective:
-			return requirementBodyContext{enabled: true, dottedReferences: true}
+			return true
 		}
 	}
-	return requirementBodyContext{}
+	return false
 }
 
 func isReferenceExpression(node ast.Node) bool {
@@ -198,12 +191,10 @@ func isReferenceExpression(node ast.Node) bool {
 	}
 }
 
-func isRequirementReferenceExpression(node ast.Node, dottedReferences bool) bool {
+func isRequirementReferenceExpression(node ast.Node) bool {
 	switch node.(type) {
-	case *ast.QualifiedName, *ast.FeatureReference:
+	case *ast.QualifiedName, *ast.FeatureReference, *ast.FeatureChainExpr:
 		return true
-	case *ast.FeatureChainExpr:
-		return dottedReferences
 	default:
 		return false
 	}

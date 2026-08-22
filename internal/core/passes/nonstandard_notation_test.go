@@ -196,9 +196,6 @@ func TestKeywordedRequirementConditionsAreReported(t *testing.T) {
 				fmt.Sprintf("`%s <expression>;`", keyword))
 		})
 	}
-	wantNotation(t, "a.sysml",
-		"requirement r { attribute x : Real; assume x.y; }",
-		CodeNonstandardNotation, "`assume <expression>;`")
 }
 
 func TestNotationWarningsPointAtTheirKeywords(t *testing.T) {
@@ -244,6 +241,7 @@ func TestStandardConstraintAndRequirementConditionsStaySilent(t *testing.T) {
 		{"named_requirement_constraint", "requirement def R { require constraint c; }"},
 		{"bare_requirement_reference", "requirement def R { require c; }"},
 		{"concern_bare_reference", "concern def C { require c; }"},
+		{"requirement_feature_reference", "requirement r { assume x.y; }"},
 		{"objective_feature_reference", "objective o { require x.y; }"},
 		{"named_assumption_with_body", "requirement def R { assume constraint c { 1 > 0 } }"},
 		{"named_requirement_with_body", "requirement def R { require constraint c { 1 > 0 } }"},
