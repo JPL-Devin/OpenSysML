@@ -760,8 +760,13 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 			if parent == nil || (parent.Name != first && parent.ShortName != first) {
 				continue
 			}
-			parent = r.resolvedPart(qn, 0, parent)
-			if result := r.walkQualifiedTail(scope, qn, parent, 1); result.ok {
+			p := parent
+			var result resolution
+			if r.probe(qn, func() bool {
+				p = r.resolvedPart(qn, 0, p)
+				result = r.walkQualifiedTail(scope, qn, p, 1)
+				return result.ok
+			}) {
 				r.memoize(qn, result)
 				return
 			}

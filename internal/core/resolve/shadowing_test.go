@@ -24,6 +24,31 @@ func TestGeneralizationHeaderResolvesOutsideTheDeclarationBody(t *testing.T) {
 	}
 }
 
+func TestQualifiedRedefinitionReportsOneUnresolvedDiagnostic(t *testing.T) {
+	r := resolveVisibilityDoc(t, `package P {
+		feature C { feature c1; }
+		feature D subsets C {
+			feature d redefines C::nope;
+		}
+	}`)
+	if len(r.Diagnostics) != 1 {
+		t.Fatalf("diagnostics = %v, want one unresolved target", r.Diagnostics)
+	}
+}
+
+func TestQualifiedRedefinitionFallbackDoesNotReportSpeculativeFailure(t *testing.T) {
+	r := resolveVisibilityDoc(t, `package P {
+		feature C { feature c1; }
+		feature D subsets C {
+			feature C { feature nope; }
+			feature d redefines C::nope;
+		}
+	}`)
+	if len(r.Diagnostics) != 0 {
+		t.Fatalf("fallback resolution reported speculative diagnostics: %v", r.Diagnostics)
+	}
+}
+
 func TestEnclosingDeclarationShadowsANestedImport(t *testing.T) {
 	idx := symbols.NewIndex()
 	idx.AddDocument("lib.kerml", parsedRoot(t, "lib.kerml", `package Lib {
