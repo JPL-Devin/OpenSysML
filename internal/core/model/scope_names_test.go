@@ -144,6 +144,18 @@ func TestVisibleNamesCyclicImportTerminatesAndIsSorted(t *testing.T) {
 	}
 }
 
+func TestVisibleNamesRecordsThePathClosingAContainmentCycle(t *testing.T) {
+	src := "package P {\n\tclassifier A {\n\t\tclassifier A {\n\t\t\tclassifier B specializes A;\n\t\t}\n\t}\n}\n"
+	names := namesAt(t, src, "specializes A", VisibleNamesOptions{})
+	has(t, names, []string{"A.B.B", "P.A.A.B.B"}, []string{"A.B.B.B", "B.B.B"})
+}
+
+func TestVisibleNamesDoesNotRecordASelfImportCycle(t *testing.T) {
+	src := "package P {\n\tclassifier A {\n\t\tpublic import P::*;\n\t\tclassifier a specializes A;\n\t}\n}\n"
+	names := namesAt(t, src, "specializes A", VisibleNamesOptions{})
+	has(t, names, []string{"A.a.a", "a.A", "P.A.a.A"}, []string{"A.A"})
+}
+
 func TestVisibleNamesRedefinitionSeesOnlyInherited(t *testing.T) {
 	src := "package P {\n\tclassifier A {\n\t\tfeature a;\n\t}\n\tclassifier B specializes A {\n\t\tfeature b redefines a;\n\t}\n}\n"
 	names := namesAt(t, src, "redefines a", VisibleNamesOptions{Redefinition: true})

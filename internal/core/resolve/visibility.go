@@ -32,12 +32,31 @@ func (r *Resolver) namedThroughNamespace(sym *symbols.Symbol) bool {
 	return r.allVisible > 0 || symbols.VisibleOutside(sym.Visibility)
 }
 
+// namedThroughNamespaceFrom also admits protected members from a specializing namespace.
+func (r *Resolver) namedThroughNamespaceFrom(target *symbols.Symbol, from *symbols.Scope, sym *symbols.Symbol) bool {
+	if r.namedThroughNamespace(sym) {
+		return true
+	}
+	return sym != nil && sym.Visibility == ast.VisibilityProtected &&
+		from != nil && r.specializes(from.Owner(), target)
+}
+
 // namedThroughNamespaces filters candidates to those a qualified segment or a
 // feature chain member may name.
 func (r *Resolver) namedThroughNamespaces(cands []*symbols.Symbol) []*symbols.Symbol {
 	kept := make([]*symbols.Symbol, 0, len(cands))
 	for _, sym := range cands {
 		if r.namedThroughNamespace(sym) {
+			kept = append(kept, sym)
+		}
+	}
+	return kept
+}
+
+func (r *Resolver) namedThroughNamespacesFrom(target *symbols.Symbol, from *symbols.Scope, cands []*symbols.Symbol) []*symbols.Symbol {
+	kept := make([]*symbols.Symbol, 0, len(cands))
+	for _, sym := range cands {
+		if r.namedThroughNamespaceFrom(target, from, sym) {
 			kept = append(kept, sym)
 		}
 	}

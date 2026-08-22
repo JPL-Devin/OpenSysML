@@ -496,6 +496,8 @@ func (r *Resolver) resolveHeaderRelationships(parent, header *symbols.Scope, dec
 		case *ast.QualifiedName:
 			if len(target.Parts) > 0 {
 				resolvesInHeader = rel.Kind != ast.RelTyping &&
+					rel.Kind != ast.RelSpecializes &&
+					rel.Kind != ast.RelSubsets &&
 					r.headerHasName(header, target.Parts[0].Text, rel.Kind)
 			}
 		case *ast.FeatureChainExpr:
@@ -696,54 +698,45 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 
 	hide := &refFilter{decl: decl}
 
-	// For single-name redefinitions (most common: :>> payload), look in inherited scope
 	if len(qn.Parts) == 1 {
 		featureName := qn.Parts[0].Text
-
-		// A require/assume body redefines the features of the requirement its
-		// member references, which the owner's own generals do not hold.
 		if sym, ok := r.lookupConstraintRefFeature(featureName, decl); ok {
 			r.recordRedefined(qn, sym)
 			return
 		}
+	}
 
-		// The scope passed here is the OWNER's scope (where the member with :>> lives)
-		// We need to find the owner's specialization relationships
-		ownerNode := scope.Node()
+	ownerNode := scope.Node()
+	var ownerRels []*ast.Relationship
+	switch owner := ownerNode.(type) {
+	case *ast.Definition:
+		ownerRels = owner.Relationships
+	case *ast.Usage:
+		ownerRels = owner.Relationships
+	case *ast.Package:
+		r.resolveQualified(scope, qn, hide)
+		return
+	default:
+		r.resolveQualified(scope, qn, hide)
+		return
+	}
 
-		// Get owner's relationships to find specialization targets
-		var ownerRels []*ast.Relationship
-		switch owner := ownerNode.(type) {
-		case *ast.Definition:
-			ownerRels = owner.Relationships
-		case *ast.Usage:
-			ownerRels = owner.Relationships
-		case *ast.Package:
-			// Package has no relationships, member must be at package level
-			r.resolveQualified(scope, qn, hide)
-			return
-		default:
-			// Not a definition/usage, fall back
-			r.resolveQualified(scope, qn, hide)
-			return
-		}
-
-		// Find parent definitions via specialization relationships
-		// Include both explicit and implicit specializations
-		parents := r.findSpecializationTargets(scope, ownerRels)
-
-		// A usage's type is a general of it (KerML feature typing is a
-		// specialization), so its members can be redefined too.
+	var parents []*symbols.Symbol
+	if model, ok := r.model.(supertypeLookup); ok {
+		parents = model.DirectSupertypes(scope.Owner())
+	} else {
+		parents = r.findSpecializationTargets(scope, ownerRels)
 		if _, ok := ownerNode.(*ast.Usage); ok {
 			parents = append(parents, r.findTypingTargets(scope, ownerRels)...)
 		}
 		parents = append(parents, r.findFeaturedByTargets(scope, ownerRels)...)
+	}
+	if def, ok := ownerNode.(*ast.Definition); ok {
+		parents = append(parents, r.findImplicitSpecializations(scope, def)...)
+	}
 
-		// For definitions with implicit base types (e.g., flow def → Flow), add them
-		if def, ok := ownerNode.(*ast.Definition); ok {
-			implicitParents := r.findImplicitSpecializations(scope, def)
-			parents = append(parents, implicitParents...)
-		}
+	if len(qn.Parts) == 1 {
+		featureName := qn.Parts[0].Text
 
 		// Search each parent's inheritance chain, cached and live alike.
 		seen := make(map[*symbols.Symbol]bool)
@@ -760,6 +753,18 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 		if sym, ok := r.lookupContributedMember(scope.Owner(), featureName); ok {
 			r.recordRedefined(qn, sym)
 			return
+		}
+	} else {
+		first := qn.Parts[0].Text
+		for _, parent := range parents {
+			if parent == nil || (parent.Name != first && parent.ShortName != first) {
+				continue
+			}
+			parent = r.resolvedPart(qn, 0, parent)
+			if result := r.walkQualifiedTail(scope, qn, parent, 1); result.ok {
+				r.memoize(qn, result)
+				return
+			}
 		}
 	}
 
