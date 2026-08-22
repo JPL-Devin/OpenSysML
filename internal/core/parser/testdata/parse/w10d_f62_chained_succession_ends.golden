@@ -1,0 +1,42 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="ChainedSuccessionEnds" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Vehicle"
+          (Membership visibility="default"
+            (Usage kind="action" name="doorClosed" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))))
+      (Membership visibility="default"
+        (Definition kind="part" abstract=false variation=false name="Driver"
+          (Membership visibility="default"
+            (Usage kind="action" name="driverReady" ref=false direction="none" composite=false derived=false ordered=false nonunique=false))))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="Startup"
+          (Membership visibility="default"
+            (Usage kind="part" name="vehicle" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Vehicle
+                (*ast.QualifiedName))))
+          (Membership visibility="default"
+            (Usage kind="part" name="driver" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Driver
+                (*ast.QualifiedName))))
+          (Usage kind="succession" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (ConnectorEnd target="*ast.FeatureChainExpr"
+              (FeatureChainExpr member="doorClosed"
+                (FeatureReference name="vehicle")))
+            (ConnectorEnd target="*ast.FeatureChainExpr"
+              (FeatureChainExpr member="driverReady"
+                (FeatureReference name="driver"))))))
+      (Membership visibility="default"
+        (Definition kind="state" abstract=false variation=false name="Cycle"
+          (Membership visibility="default"
+            (Usage kind="part" name="vehicle" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Relationship kind="typing" target=Vehicle
+                (*ast.QualifiedName))))
+          (SubstateMember name="off")
+          (SubstateMember name="on")
+          (InitialNode name="off" successor="on")))
+      (Membership visibility="default"
+        (Definition kind="action" abstract=false variation=false name="Plain"
+          (Usage kind="action" name="start" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)
+          (Usage kind="action" name="target" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)
+          (InitialNode name="start" successor="target"))))))

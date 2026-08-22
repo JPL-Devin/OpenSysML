@@ -18,6 +18,25 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
+// atChainedFirstSuccession reports whether the `first` at the cursor opens a
+// succession whose source end is a '.'-chained or '::'-qualified name. Only
+// SuccessionAsUsage's ConnectorEnd reaches a feature chain (KerML.xtext:699);
+// InitialNodeMember's memberElement is a plain QualifiedName (SysML.xtext:1385).
+func (p *Parser) atChainedFirstSuccession() bool {
+	if !p.atKeyword("first") || !p.peekIsName(1) {
+		return false
+	}
+	chained, i := false, 2
+	for k := p.peekN(i).Kind; k == lexer.Dot || k == lexer.ColonColon; k = p.peekN(i).Kind {
+		if !p.peekIsName(i + 1) {
+			return false
+		}
+		chained, i = true, i+2
+	}
+	t := p.peekN(i)
+	return chained && t.Kind == lexer.Keyword && t.KeywordID == "then"
+}
+
 // nonOccurrenceUsageKeywords are the usage keywords a `then` may not precede:
 // SysML.xtext lists them under NonOccurrenceUsageElement rather than under
 // StructureUsageElement or BehaviorUsageElement.

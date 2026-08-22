@@ -42,7 +42,7 @@ func (p *Parser) parseCalcBody() []ast.Node {
 		// Check for 'return' keyword → ResultMember
 		if p.isResultKeyword() {
 			body.add(p.parseResultMember())
-		} else if p.atCalcStatement() {
+		} else if p.atCalcStatement() || p.atActionNodeMember() {
 			// A behavioural item of a calculation body — a conditional, a loop, an
 			// assignment — is read the way an action body reads it
 			// (SysML.xtext CalculationBodyItem carries ActionBodyItem).
@@ -460,6 +460,12 @@ func (p *Parser) parseActionMember() ast.Node {
 		case "decision":
 			return p.parseDecisionNode(tok)
 		}
+	}
+
+	// A `first` end reached through a feature chain is a SuccessionAsUsage
+	// rather than an initial node, whose member element is a plain name.
+	if p.atChainedFirstSuccession() {
+		return p.parseSuccessionAsUsage(start)
 	}
 
 	// Try general declaration first (nested actions, features, etc.)
@@ -912,12 +918,19 @@ func (p *Parser) parseSuccessionEdge(tok lexer.Token) ast.Node {
 		return node
 	}
 
-	p.expect(lexer.Semicolon, "expected ';' after succession edge")
+	// An action target succession ends in a UsageBody (SysML.xtext:1698).
+	var members []ast.Node
+	if p.accept2(lexer.LBrace) {
+		members = p.parseActionBodyMixed()
+	} else {
+		p.expect(lexer.Semicolon, "expected ';' after succession edge")
+	}
 
 	node := &ast.SuccessionEdge{
 		NodeBase: ast.NodeBase{NodeSpan: p.spanFrom(start)},
 		Source:   source,
 		Target:   target,
+		Members:  members,
 	}
 	return node
 }
@@ -1407,6 +1420,23 @@ func (p *Parser) atCalcStatement() bool {
 		return true
 	case "if":
 		return !p.atConditionalExpression()
+	}
+	return false
+}
+
+// atActionNodeMember reports whether the cursor begins an action node that a
+// calculation or case body carries as a member (SysML.xtext:1389
+// ActionNodeMember, reached from CalculationBodyItem and CaseBodyItem).
+func (p *Parser) atActionNodeMember() bool {
+	if _, ok := p.atActionNodeWord(); ok {
+		return true
+	}
+	if !p.at(lexer.Keyword) {
+		return false
+	}
+	switch p.peek().KeywordID {
+	case "fork", "join", "merge", "decide":
+		return true
 	}
 	return false
 }
@@ -2369,7 +2399,11 @@ func (p *Parser) parseStateMember() ast.Node {
 			p.advance()
 			return p.parseTransitionMember(start)
 		case "first":
-			// Initial node: first <name> then <target>;
+			// Initial node: first <name> then <target>; a chained end makes it a
+			// SuccessionAsUsage instead.
+			if p.atChainedFirstSuccession() {
+				return p.parseSuccessionAsUsage(start)
+			}
 			return p.parseInitialNode(p.advance())
 		case "then":
 			// Standalone succession (`then <source> <target>;`, `then <target>;`):

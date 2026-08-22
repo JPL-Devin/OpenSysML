@@ -275,7 +275,11 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		}
 		b.WriteString(`)`)
 	case *PrefixMetadata:
-		fmt.Fprintf(b, `(PrefixMetadata type=%q)`, qnString(v.Type))
+		fmt.Fprintf(b, `(PrefixMetadata type=%q`, qnString(v.Type))
+		if len(v.About) > 0 {
+			fmt.Fprintf(b, ` about=%q`, qnList(v.About))
+		}
+		b.WriteString(`)`)
 	case *FilterMember:
 		b.WriteString(`(FilterMember`)
 		writeChildren(b, depth, []Node{v.Condition})
@@ -567,8 +571,13 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 	case *SuccessionEdge:
 		// The ends are what a `then` says, whether the author wrote the edge
 		// form or the parser desugared a member-attached keyword into it.
-		fmt.Fprintf(b, `(SuccessionEdge source=%q target=%q)`,
+		fmt.Fprintf(b, `(SuccessionEdge source=%q target=%q`,
 			successionEnd(v.Source, v.SourceMember), successionEnd(v.Target, v.TargetMember))
+		if len(v.Members) > 0 {
+			writeChildren(b, depth, v.Members)
+			return
+		}
+		b.WriteString(`)`)
 	case *ControlFlowEdge:
 		// The branches of one decision differ only in their guard and in which
 		// one is the default, so print both alongside the ends.

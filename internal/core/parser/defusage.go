@@ -1677,8 +1677,9 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 			}
 			declRels := p.parseRelationships(true)
 			u.Relationships = append(u.Relationships, declRels...)
-		} else if reqName := p.parseQualifiedName(); reqName != nil {
-			// SysML.xtext:2119 owns a ReferenceSubsetting here; recorded as a
+		} else if reqName := p.parseChainedName(); reqName != nil {
+			// SysML.xtext:2119 owns a ReferenceSubsetting here, which reaches a
+			// nested feature through a '.' chain (KerML.xtext:699); recorded as a
 			// plain subsetting until its passes/runtime readers migrate.
 			u.Relationships = append(u.Relationships, &ast.Relationship{
 				Kind:   ast.RelSubsets,
@@ -2158,6 +2159,13 @@ func (p *Parser) parseCaseBody() []ast.Node {
 			body.add(p.parseSuccessionEdge(p.advance()))
 			continue
 		}
+		// A case body carries an action body's items (SysML.xtext:2191
+		// CaseBodyItem → CalculationBodyItem → ActionBodyItem): control nodes and
+		// behavioural statements among them.
+		if p.atActionNodeMember() || p.atCalcStatement() {
+			body.add(p.parseActionMember())
+			continue
+		}
 		if p.atResultExpression() {
 			body.add(p.ParseExpression())
 			continue
@@ -2404,6 +2412,9 @@ func (p *Parser) parseBodyMember() ast.Node {
 	// Check for behavioral statements in structural contexts (occurrence/part with temporal ordering)
 	// These include: first/then succession edges for snapshot ordering
 	if p.atKeyword("first") {
+		if p.atChainedFirstSuccession() {
+			return p.parseSuccessionAsUsage(start)
+		}
 		firstTok := p.advance()
 		return p.parseInitialNode(firstTok)
 	}
@@ -4063,6 +4074,14 @@ func (p *Parser) parseMetadataUsage(start int) *ast.PrefixMetadata {
 		return nil
 	}
 	pm := &ast.PrefixMetadata{Type: metaType}
+
+	// `about` names the elements the usage annotates (SysML.xtext:145-147).
+	if p.acceptKeyword("about") {
+		pm.About = p.parseQualifiedNameList()
+		if len(pm.About) == 0 {
+			p.error(p.peek().Span, "expected an annotated element after 'about'")
+		}
+	}
 
 	if p.at(lexer.LBrace) {
 		p.advance() // '{'

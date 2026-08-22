@@ -304,6 +304,9 @@ type SuccessionEdge struct {
 	// beside the keyword as written, set once when the body is parsed.
 	SourceMember Node
 	TargetMember Node
+	// Members are the body an action target succession carries
+	// (SysML.xtext:1698 ActionTargetSuccession ends in a UsageBody).
+	Members []Node
 }
 
 // ControlFlowEdge is guarded control flow from decision nodes.

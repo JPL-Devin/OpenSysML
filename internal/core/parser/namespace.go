@@ -395,6 +395,9 @@ func (p *Parser) parseDeclaration(start int) ast.Node {
 		if p.leadingPrefixIsNamespace() {
 			return p.parseNamespace(start)
 		}
+		if p.leadingPrefixIsDependency() {
+			return p.parseDependency(start)
+		}
 		if p.leadingPrefixIsDefUsage() {
 			return p.parseDefUsage(start)
 		}
@@ -853,6 +856,12 @@ func (p *Parser) leadingPrefixIsPackage() bool {
 func (p *Parser) leadingPrefixIsNamespace() bool {
 	t := p.peekN(p.prefixLookahead())
 	return t.Kind == lexer.Keyword && t.KeywordID == "namespace"
+}
+
+// A dependency takes prefix metadata like any element (SysML.xtext:55-57).
+func (p *Parser) leadingPrefixIsDependency() bool {
+	t := p.peekN(p.prefixLookahead())
+	return t.Kind == lexer.Keyword && t.KeywordID == "dependency"
 }
 
 func (p *Parser) leadingPrefixIsDefUsage() bool {
