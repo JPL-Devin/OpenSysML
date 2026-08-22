@@ -67,8 +67,6 @@ func (cc *constraintChecker) walk(scope *symbols.Scope) {
 		if sym == nil || cc.seen[sym] {
 			continue
 		}
-		if sym.Name == "" {
-		}
 		// AllMembers includes named + anonymous, so dedup via seen map
 		cc.seen[sym] = true
 		cc.check(sym)
