@@ -37,8 +37,19 @@ Observed on `main` after the wave-6 round: `428 .xt file(s), 0 unparsed; 1261 as
 `19 diagnostic(s) another declared resource raised, not adjudicated against the file`; per-suite
 kerml 457/511/0, sysml 107/251/0. The scope row and its classes are unchanged by 8F
 (`73 agree / 157 disagree`, `other-paths 12 | extra-names 32 | missing-names 10 |
-missing-and-extra 7 | library-names 96`). Read the live totals from the baseline rather than this
-paragraph; it is an anchor, not the check.
+missing-and-extra 7 | library-names 96`). After the wave-8 rebaseline (#436/#445):
+`630 agree, 696 disagree, 0 unlocated, 0 not adjudicated`, `errors` kind
+`rows 513 | agree 95 | same-location 246 | same-line 62 | severity-differs 16 | elsewhere 57`,
+`warnings` `rows 113 | agree 23 | severity-differs 60 | elsewhere 7`, `scope` `74 / 230`.
+Read the live totals from the baseline rather than this paragraph; it is an anchor, not the check.
+
+**The "nothing / silence" column is `rows - agree - sameLocation - sameLine - severityDiffers -
+elsewhereInFile`.** Subtracting only the tolerance fields is a bug that stays invisible while a
+kind's strict `agree` is 0 — it was, for `errors`, until wave 8, and both doc guards
+(`doc_counts_test.go`, `w6f_skill_counts_test.go`) had to be corrected. When reviewing any change to
+the silence/nothing numbers, recompute the column yourself from the committed baseline JSON with
+`jq`/python rather than trusting the guard, because the guard and the doc can be wrong together in
+the same direction.
 
 **A wave that moves the verdicts must also rebaseline.** `cmp` against
 `docs/project/pilot-xpect-baseline.json` is the only thing that catches a missed rebaseline:

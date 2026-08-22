@@ -24,10 +24,11 @@ The encoder writes `sysx:sourceText "<the head as written>"` for most elements. 
 present the decoder can rebuild the notation from the text alone, so a plain
 `.sysml → .ttl → .sysml` round trip **passes even if every structural predicate is broken**.
 
-To make the test load-bearing, strip `sysx:sourceText` from the intermediate `.ttl` first (this is
-what the package's own `withoutTriples` helper does) and only then convert back. A small Python
-filter is enough — drop any line containing `sysx:sourceText `, and when the dropped line ended the
-triple block with ` .`, turn the previous line's trailing `;` into ` .`:
+To make the test load-bearing, strip `sysx:sourceText` from the intermediate `.ttl` first (the same
+thing the `withoutTriples` test helper in `internal/core/export/export_test.go` does in-process) and
+only then convert back. A small Python filter is enough — drop any line containing
+`sysx:sourceText `, and when the dropped line ended the triple block with ` .`, turn the previous
+line's trailing `;` into ` .`:
 
 ```python
 def strip(src, preds, dst):
@@ -49,7 +50,16 @@ one, and re-encoding it gives a `.ttl` byte-identical to `hop1.ttl`.
 
 ## Negative controls that prove each predicate is load-bearing
 
-Strip the structural predicates the same way and re-convert:
+Strip the structural predicates the same way and re-convert. The four notation predicates below are
+defined in `internal/core/export/rdf_out.go` (`xEndForm`, `xEndVerb`, `xSourceMember`,
+`xTargetMember`) and are *additional* to the older end triples `sysx:endIndex`, `sysx:endRole` and
+`sysx:relatedFeature`, which carry the participants rather than the notation — stripping the
+notation ones is what makes the participants insufficient. Confirm the vocabulary before trusting
+this table, since it is versioned with the mapping:
+
+```bash
+grep -o "sysx:[a-zA-Z]*" hop1.ttl | sort | uniq -c | sort -rn
+```
 
 | Stripped | Observed behaviour (working mapping) |
 |---|---|
