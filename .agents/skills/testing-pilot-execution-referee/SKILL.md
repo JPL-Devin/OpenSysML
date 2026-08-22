@@ -111,22 +111,57 @@ nondeterministic 0`.
 ## The doc-counts gate is the usual casualty of a compliance-row change
 
 Any wave that flips a status flag in `docs/project/spec-compliance.md` (for
-example a row moving ⚠️ → ✅ because the pilot can now referee it) must also
-update **two aggregate count lines**, or
+example a row moving ⚠️ → ✅ because the pilot can now referee it), or that adds
+or deletes a row, also moves **three derived documentation lines**, or
 `cmd/pilot-diff/doc_counts_test.go:TestPilotDifferentialDocumentCountsMatchBaseline`
-fails with `coverage ✅ faithful: want N (spec-compliance.md ✅ rows), got M`:
+fails with
+`coverage ✅ faithful: want N (docs/project/spec-compliance.md ✅ rows), got M — run make docs-counts`:
 
-- `README.md` — the `**Measured status:**` line
-- `docs/internals/architecture.md` — the `**Current coverage:**` line
+- `docs/project/spec-compliance.md` — the `The map below tracks N semantic rules: …` header
+- `README.md` — the `**Row bookkeeping:**` line
+- `docs/internals/architecture.md` — the `**Row bookkeeping:**` line
+
+**Do not retype these by hand — run `make docs-counts`** (`cmd/doc-counts`).
+`internal/doccounts` is the single census of the markers and the single
+declaration of which lines derive from it; the generator splices digits only
+into the regex capture spans, writes only files whose bytes changed, preserves
+file mode/trailing newline/trailing whitespace, and is idempotent (a second run
+prints `doc-counts: already current`). The guard reads the same census and only
+ever FAILs — it never rewrites. Useful properties when testing or debugging:
+
+- Because the lines are a pure function of the census, two branches that each
+  add a different row produce **byte-identical** derived lines, so they cannot
+  conflict as hand-typed text does. Merge both rows, run the generator once.
+- Flipping a status without changing the row count leaves `README.md` and
+  `architecture.md` untouched (their line states only the total) — the generator
+  reporting only `rewrote docs/project/spec-compliance.md` is correct, not a bug.
+- `🚧` rows are rejected outright (exit 1,
+  `N 🚧 rows have no place in the derived lines`) and nothing is written; the
+  guard also hard-fails with `coverage status omits N 🚧 rows`.
+- Prose the pattern no longer matches is an error with `file:line`, never a
+  silent rewrite — so **do not reword these three lines**.
+- `IsRuleRow` counts a table row only if it carries **exactly one** status
+  glyph. A row whose notes cell mentions a second glyph (e.g.
+  `✅ Faithful (was ⚠️ before)`) is silently invisible to the census, and the
+  guard agrees with the generator, so nothing fails. Avoid glyphs in notes.
+- The generator is all-or-nothing across the three files: every rewrite is
+  computed and every target checked writable before anything is written, so a
+  later error (bad prose, read-only file) leaves the tree untouched and exits 1.
+- Run it from anywhere with `-root <repo>`; an unexpected positional argument
+  exits 2.
+
+Adding/removing rows can also move the `**Self-assessed surface:**` headline
+(counted from rows under sections marked `**No external referee:**`), which is
+*not* generated — distinguish that guard failure from a generator bug.
 
 This is invisible to `go run ./cmd/pilot-exec-diff` and to the `jq -S`
 baseline comparison, and it is **not** in the blueprint's abbreviated
 `-run 'TestTrainingExamples|TestPilotCorpora|TestCorpusGates'` selector, so
-always run the unfiltered `go test ./...` too. Confirm any failure is
-attributable to the branch by building a `git worktree` at `HEAD~1` and running
-that one test there; count the flags per row with a script that reads the
-*last* table cell rather than `grep -c "✅"`, since the prose in other cells
-contains the same glyphs.
+always run the unfiltered `go test ./...` too. No CI workflow invokes
+`doc-counts`; the only wiring is the `make docs-counts` target and the
+`CONTRIBUTING.md` note, and that is deliberate (CI fails on a stale line rather
+than auto-fixing it). Confirm any failure is attributable to the branch by
+building a `git worktree` at `HEAD~1` and running that one test there.
 
 ## Interpret — and the empty-output trap
 
