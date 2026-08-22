@@ -1458,6 +1458,10 @@ that isolates it, run against the pinned single-file CLI
 (`build/pilot-validator/validate-sysml`, pilot `2026-05` / `0.60.1`) and, for the KerML rows,
 `build/pilot-kerml-validator/validate-kerml`. "Ours" is `bin/sysml -validate <file>`.
 
+The census is the column as it stood when it was swept, and its line references go with it: the two
+models behind W1, W2 and most of W10–W13 were rewritten to the spec spelling immediately afterwards,
+which retired those rows rather than reclassifying them. The paragraph under W2 measures that.
+
 | # | Family | Rows | Where | Outcome |
 |---|---|---|---|---|
 | W1 | a computed calculation result written `return <expression>;` | 5 | `examples/phase-c-behavioral-bodies.sysml:60,67,75`, `examples/repl-behavioral-demo.sysml:26,34` | **our defect** — fixed here, as a warning under the F3 precedent |
@@ -1558,6 +1562,23 @@ the line where the pilot stopped reading its file, so the reference says nothing
 Both files were already non-agreeing, no file changed agreement status, and the severity-only and
 agreed buckets are otherwise untouched. Counting only the column this sweep is about would report the
 gain and hide the 34; they are the same finding seen from the side the pilot cannot reach.
+
+Both files are ours, and every form the warning names has a spec spelling the pilot accepts, so the
+**models** were then rewritten rather than the warning suppressed: a computed result as the body's
+trailing expression, a constraint condition keyword-less, and `assume`/`require` as the anonymous
+`constraint { … }` body `RequirementConstraintMember` admits. Two constraints that mixed an
+assumption with an assertion became requirements, which is where the spec keeps assumptions.
+Re-measured with `rm -rf build/pilot-diff && go run ./cmd/pilot-diff`: only ours **153 → 119**, only
+the pilot's **130 → 85**, fully agreeing **308 → 309**, severity-only **22 → 15** — that is, the
+whole cost of W1/W2 is repaid and 52 of the pilot's rows go with it, because its parse of
+`examples/repl-behavioral-demo.sysml` now completes (the file draws nothing from either tool) and its
+parse of `examples/phase-c-behavioral-bodies.sysml` reaches line 147 — `then start greenLight;`, W4 /
+F105 — instead of stopping at line 60. That file keeps 16 rows, all of them the `transition … to …`
+of F3. The warning and its strict-mode test are unchanged: what was removed is our own non-conformant
+notation, not the rule, and the extension itself stays supported and tested
+(`internal/core/model/constraint_params_test.go`). Every documented demo outcome of the REPL file —
+five `%calc` results, five `%constraint` verdicts, four `%requirement` verdicts, including the two
+that must fail — is unchanged.
 
 #### W3–W7 — five more notation and structure gaps (11, our defect, not fixed here)
 

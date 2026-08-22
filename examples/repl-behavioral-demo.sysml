@@ -23,7 +23,7 @@
 calc distance {
     in x;
     in y;
-    return (x * x + y * y);  // simplified: should use sqrt
+    x * x + y * y  // simplified: should use sqrt
 }
 
 // Calculate volume of a box
@@ -31,26 +31,26 @@ calc volume {
     in length;
     in width;
     in height;
-    return length * width * height;
+    length * width * height
 }
 
 // Calculate factorial (iterative approximation using product)
 calc factorial {
     in n;
-    return n * (n - 1);  // simplified: just n * (n-1) for demo
+    n * (n - 1)  // simplified: just n * (n-1) for demo
 }
 
 // Convert temperature from Celsius to Fahrenheit
 calc celsiusToFahrenheit {
     in celsius;
-    return celsius * 9 / 5 + 32;
+    celsius * 9 / 5 + 32
 }
 
 // Calculate area of rectangle
 calc rectangleArea {
     in length;
     in width;
-    return length * width;
+    length * width
 }
 
 // ============================================================================
@@ -59,29 +59,27 @@ calc rectangleArea {
 
 // Constraint: area must be positive
 constraint PositiveArea {
-    assert 10 * 5 > 0;
+    10 * 5 > 0
 }
 
 // Constraint: speed must be within valid range
 constraint ValidSpeed {
-    assert 65 >= 0;
-    assert 65 <= 120;
+    65 >= 0 and 65 <= 120
 }
 
 // Constraint: this will fail - invalid speed
 constraint InvalidSpeed {
-    assert 150 <= 120;
+    150 <= 120
 }
 
-// Constraint: assuming positive dimensions
+// Constraint: both dimensions positive
 constraint AssumePositive {
-    assume 10 > 0;
-    assume 5 > 0;
+    10 > 0 and 5 > 0
 }
 
 // Constraint: negated assertion
 constraint NotNegative {
-    assert not (50 < 0);
+    not (50 < 0)
 }
 
 // ============================================================================
@@ -91,38 +89,38 @@ constraint NotNegative {
 // Safety requirement: braking distance must be adequate
 requirement SafetyReq {
     // Assume reasonable speed
-    assume 65 > 0;
-    assume 65 < 200;
-    
+    assume constraint { 65 > 0 }
+    assume constraint { 65 < 200 }
+
     // Require adequate braking distance
-    require 100 > 50;
+    require constraint { 100 > 50 }
 }
 
 // Performance requirement: acceleration must meet target
 requirement PerformanceReq {
     // Assume valid conditions
-    assume 100 > 0;
-    
+    assume constraint { 100 > 0 }
+
     // Require performance threshold
-    require 95 >= 90;
+    require constraint { 95 >= 90 }
 }
 
 // This requirement will fail
 requirement ViolatedReq {
     // Assumptions pass
-    assume 50 > 0;
-    
+    assume constraint { 50 > 0 }
+
     // But requirement fails
-    require 30 > 100;
+    require constraint { 30 > 100 }
 }
 
 // Complex requirement with multiple conditions
 requirement ComplexReq {
-    assume 100 >= 0;
-    assume 100 <= 200;
-    
-    require 150 > 100;
-    require 150 < 200;
+    assume constraint { 100 >= 0 }
+    assume constraint { 100 <= 200 }
+
+    require constraint { 150 > 100 }
+    require constraint { 150 < 200 }
 }
 
 // ============================================================================
@@ -148,7 +146,7 @@ requirement ComplexReq {
 //    %constraint PositiveArea        // ✓ passed
 //    %constraint ValidSpeed          // ✓ passed
 //    %constraint InvalidSpeed        // ✗ failed (expected)
-//    %constraint AssumePositive      // ✓ passed (assumptions always pass)
+//    %constraint AssumePositive      // ✓ passed
 //    %constraint NotNegative         // ✓ passed
 //
 // 5. Evaluate requirements:
