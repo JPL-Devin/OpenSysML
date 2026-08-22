@@ -37,7 +37,7 @@ var extensionInventory = []string{
 func notationDiags(t *testing.T, name, src string, mode conformance.Mode) []Diagnostic {
 	t.Helper()
 	root, pd, idx := analyzeInputs(t, name, src)
-	if len(pd) != 0 {
+	if hasParseError(pd) {
 		t.Fatalf("%s: the notation must stay parsed in either mode, got %+v", src, pd)
 	}
 	ctx := NewContextWithOptions(name, source.KindOf(name), idx, pd, Options{Conformance: mode})
@@ -155,5 +155,22 @@ func TestKeywordAsNameIsEscalatedOnlyUnderStrictMode(t *testing.T) {
 	got := notationDiags(t, "a.sysml", src, conformance.ModeStrict)
 	if len(got) != 1 || got[0].Code != CodeReservedKeywordName || got[0].Severity != SeverityError {
 		t.Fatalf("strict: got %+v, want one reserved-keyword-name error", got)
+	}
+}
+
+// Only what the parser recovered as a keyword-as-name is escalated: a name the
+// grammar admits is not, whatever the lexer of either language knows the word as.
+func TestKeywordAsNameLeavesTheNamesTheGrammarAdmits(t *testing.T) {
+	for _, tc := range []struct{ name, src string }{
+		// An unnamed enum usage with a value: the member the parser names `enum`
+		// is its reading of the text, not a name the author wrote.
+		{"a.sysml", "package T { enum def D { enum = 60; enum = 80; } }"},
+		// `type` is a keyword of the other language and a legal name here
+		// (stdlib Metadata/ImageMetadata.kerml).
+		{"a.sysml", "package U { attribute type : X; }"},
+	} {
+		if got := notationDiags(t, tc.name, tc.src, conformance.ModeStrict); len(got) != 0 {
+			t.Errorf("%s: got %+v, want no finding", tc.src, got)
+		}
 	}
 }

@@ -116,6 +116,107 @@ than only checking the lines the task named.
 Likewise `*ast.ResultMember` (`return <expr>;` in a calc body) is separate from any
 requirement/action result spelling.
 
+## Verify oracle baselines against a LIVE run, not just against the docs
+
+`cmd/pilot-diff/doc_counts_test.go` guards documentation prose against the **committed**
+`docs/project/pilot-xpect-baseline.json` / `pilot-rejection-baseline.json`. It therefore cannot
+notice that both the prose *and* the committed baseline have drifted away from what the code now
+does — they stay self-consistent while both go stale, and `go test ./...` stays green. A change
+that makes notation errors non-blocking moves the xpect numbers, because findings that used to be
+gated now surface.
+
+So always run the oracle and diff the totals yourself:
+
+```bash
+go run ./cmd/pilot-xpect -jobs 8
+cmp build/pilot-xpect/pilot-xpect.json docs/project/pilot-xpect-baseline.json   # may legitimately differ
+python3 -c "
+import json
+b=json.load(open('docs/project/pilot-xpect-baseline.json'))['totals']
+l=json.load(open('build/pilot-xpect/pilot-xpect.json'))['totals']
+[print(k,'baseline',b[k],'live',l.get(k),'<-- DIFFERS' if b[k]!=l.get(k) else '') for k in b]"
+```
+
+Watch `agree`, `disagree` and especially `foreignDiagnostics` — a drop of the last to 0 means
+diagnostics that were previously attributed elsewhere are now landing on the expected rows.
+`docs/project/pilot-xpect.md` carries the same numbers in prose (`agree N | disagree N | ...`),
+so grep for the live figures there too. Report a mismatch as stale-baseline, not as a test failure.
+
+## A new notation code can add strict-mode errors to OMG-published files
+
+A notation rule that re-derives its finding from the lexer's keyword set rather than from what the
+parser recovered fires on legal text: `enum = 60 [mm];` inside an `enum def`
+(`examples/pilot-corpora/sysml-examples/Vehicle Example/SysML v2 Spec Annex A SimpleVehicleModel.sysml`)
+and `attribute type : String[0..1];` in the bundled stdlib both became `-strict` errors that way,
+refusing files that validate clean. `enum = <value>;` is an unnamed usage the parser models as a
+member named `enum` (hence its `Duplicate of other owned member name` warning in every build), so a
+keyword-as-name rule that trusts the tree inherits the mis-parse; `keywordAsName` now escalates only
+the spans the parser itself reported as recovered. Treat any new notation code as suspect until you
+have run it over the stdlib and all pilot corpora **in strict mode** and inspected each hit by hand:
+
+```bash
+sysml -validate -debug -strict "<file>"   # per file; gains under OMG/stdlib roots are the red flag
+```
+
+A gain under an OMG root or the stdlib is not automatically a bug, but it is never "expected" —
+adjudicate it against the source text before calling it correct.
+
+## Every diagnostic from the notation pass is Notation, whatever its code
+
+Do not build a hardcoded list of "notation codes" for a differential harness. The pass marks its
+whole output in one loop (`for i := range w.diags { w.diags[i].Notation = true }`), so
+`nonstandard-notation`, `kerml-notation`, `sysml-notation` **and** `reserved-keyword-name` are all
+notation. A hand-maintained set will misclassify one of them and produce a false
+"NON-NOTATION ESCALATION" alarm. Grep the pass instead:
+
+```bash
+grep -rn "Notation:\s*true\|\.Notation = true" --include=*.go internal/ | grep -v _test
+grep -n "Code[A-Za-z]* =" internal/core/passes/nonstandard_notation.go
+```
+
+## Surface and flag names that waste time
+
+- The CLI strict flag is **`-strict`**, not `-conformance strict`. The latter is a flag-parse error:
+  it dumps usage and exits 2, which looks exactly like a legitimate refusal and will silently fake
+  a "strict refuses" pass. Confirm with `sysml -h | grep -i strict`. (`cmd/pilot-reject` *does*
+  take `-conformance default|strict` — the two binaries differ.)
+- There is no `-check` flag and no `%run` command. Use the check flags
+  (`-instantiate`, `-constraint`, `-satisfy`, `-query`, ...) and `%strict on|off`.
+- REPL `%load` goes through `Session.LoadFile`, **not** `LoadFileSummary`, so it does not exercise
+  `renderSyntax`. Only `sysml -validate <file>` (via `cmd/sysml/check.go`) does. If you are asked to
+  prove a load-time rendering fix, `%load` is a regression control, not the discriminator — say so
+  rather than reporting it as evidence of the fix.
+
+## Measure "exactly once" against a build that gets it wrong
+
+For a de-duplication fix, keep the pre-fix binary and count on all three builds
+(`main`, pre-fix, fixed). A bare "1 occurrence" on the fixed build is vacuous — 1 is also what you
+get if the diagnostic is emitted once for an unrelated reason, or if your grep pattern is too
+narrow. The useful shape is baseline **1**, pre-fix **2**, fixed **1**:
+
+```bash
+for b in main prefix fixed; do
+  echo "$b: $(/tmp/sysml-$b -validate /tmp/loadbare.sysml 2>&1 | grep -c 'visibility indicator')"
+done
+```
+
+Also check *position*, not just count: the pathology is the diagnostic printed **before** the
+`✓ package ...` summaries (i.e. as a reason the file could not be read) and then again after.
+
+## Recording CLI/REPL work on this box
+
+`DISPLAY=:0` (not `:1`; check `ls /tmp/.X11-unix`). Konsole's font shortcut `ctrl+shift+plus` types
+literal `+` characters through xdotool instead of resizing, so set the font at launch and maximize
+with wmctrl:
+
+```bash
+DISPLAY=:0 konsole --hide-menubar -p "Font=Monospace,15" --workdir /path/to/repo &
+DISPLAY=:0 wmctrl -r :ACTIVE: -b add,maximized_vert,maximized_horz
+```
+
+Under `-strict` a refused file prints no `✓ package ...` summary at all — that is the refusal path,
+not a regression of the declared-members summary. Compare summaries in **default** mode.
+
 ## Devin Secrets Needed
 
 None. Everything runs against the locally provisioned `build/pilot-validator` and the committed

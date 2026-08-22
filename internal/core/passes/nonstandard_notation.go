@@ -5,7 +5,6 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/conformance"
-	"github.com/Open-MBEE/OpenSysML/internal/core/lexer"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
@@ -48,9 +47,9 @@ func (NonstandardNotationPass) Run(ctx *Context, name string, root *ast.RootName
 	// loaded from a .kerml file.
 	w := &notationWalker{
 		sysml:       ctx.Kind != source.KindKerML,
-		kind:        ctx.Kind,
 		severity:    notationSeverity(ctx.Options.Conformance),
 		parsedClean: !hasParseError(ctx.ParseDiagnostics),
+		keywordName: keywordNameSpans(ctx.ParseDiagnostics),
 	}
 	w.walk(root.Members)
 	// Under strict conformance the findings are errors, but they say how the
@@ -73,8 +72,6 @@ func notationSeverity(mode conformance.Mode) Severity {
 // notationWalker accumulates the diagnostics of one document.
 type notationWalker struct {
 	sysml bool
-	// kind is the language the document is read as, which fixes its reserved words.
-	kind source.Kind
 	// severity is what every finding of this walk carries; see notationSeverity.
 	severity          Severity
 	diags             []Diagnostic
@@ -85,6 +82,21 @@ type notationWalker struct {
 	// parsedClean records that the document parsed without an error, which a
 	// finding needs when recovery can shape the tree it reads (see initialNode).
 	parsedClean bool
+	// keywordName holds the offsets where the parser recovered a keyword written as
+	// a name, the only spans keywordAsName escalates.
+	keywordName map[int]bool
+}
+
+// keywordNameSpans collects where the parser recovered a keyword written as a name,
+// which is the parser's own reading of the text rather than a re-derivation of it.
+func keywordNameSpans(diags []Diagnostic) map[int]bool {
+	spans := map[int]bool{}
+	for _, d := range diags {
+		if d.Code == CodeReservedKeywordName {
+			spans[d.Span.Offset] = true
+		}
+	}
+	return spans
 }
 
 // hasParseError reports whether the parser errored on the document.
@@ -452,11 +464,13 @@ func (w *notationWalker) sysmlDeclaration(n ast.Node, keyword string) {
 // keywordAsName rejects a declared name spelled as a reserved keyword, which the
 // ID terminal excludes. Only strict mode reports it: the parser already warns and
 // keeps the recovery an editor needs (g15, docs/project/pilot-rejection.md).
+// Only a span the parser recovered qualifies, so a legal name the lexer knows as a
+// keyword of the other language, or a member a mis-parse named, is left alone.
 func (w *notationWalker) keywordAsName(id ast.Identification) {
 	if w.severity != SeverityError || id.Name == "" || id.NameSpan.Len != len(id.Name) {
 		return
 	}
-	if !lexer.IsKeywordIn(id.Name, w.kind) {
+	if !w.keywordName[id.NameSpan.Offset] {
 		return
 	}
 	w.diags = append(w.diags, Diagnostic{
