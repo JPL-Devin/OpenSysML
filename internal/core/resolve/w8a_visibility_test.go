@@ -87,21 +87,24 @@ func TestProtectedMemberIsVisibleThroughSpecializationOnly(t *testing.T) {
 	wantUnresolved(t, r, "Base::Inner")
 }
 
-// A qualified namespace may name a protected member from within itself or a specialization.
-func TestProtectedMemberIsVisibleThroughAQualifiedSpecializingNamespace(t *testing.T) {
+// Qualified resolution uses public visibility; specialization does not admit protected tail segments.
+// Simple-name resolution still reaches inherited protected members through resolveLocal.
+func TestProtectedMemberRequiresSimpleNameFromSpecialization(t *testing.T) {
 	r := resolveVisibilityDoc(t, `package P {
 		class Base {
 			protected class Inner { public class Leaf; }
 			private class Hidden;
 		}
 		class Sub specializes Base {
+			class Use specializes Inner;
 			class A specializes Sub::Inner;
 			class B specializes P::Sub::Inner::Leaf;
 			class C specializes Base::Inner;
 			class D specializes Base::Inner::Leaf;
 		}
 	}`)
-	wantNoUnresolved(t, r, "Sub::Inner", "P::Sub::Inner::Leaf", "Base::Inner", "Base::Inner::Leaf")
+	wantNoUnresolved(t, r, "Inner")
+	wantUnresolved(t, r, "Sub::Inner", "P::Sub::Inner::Leaf", "Base::Inner", "Base::Inner::Leaf")
 
 	outside := resolveVisibilityDoc(t, `package P {
 		class Base {

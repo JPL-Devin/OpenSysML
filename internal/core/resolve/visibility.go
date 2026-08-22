@@ -23,8 +23,9 @@ func visibleThroughImport(imp *ast.Import, sym *symbols.Symbol) bool {
 }
 
 // namedThroughNamespace reports whether sym may be named as a member of the
-// namespace a qualified name or feature chain reached: only a visible one may,
-// except under an `import all` (KerML 8.2.3.5).
+// namespace a qualified name or feature chain reached: visible resolution reads
+// only that namespace's public memberships, whatever the referring namespace
+// specializes, except under an `import all` (KerML 8.2.3.5.3).
 func (r *Resolver) namedThroughNamespace(sym *symbols.Symbol) bool {
 	if sym == nil {
 		return false
@@ -32,19 +33,10 @@ func (r *Resolver) namedThroughNamespace(sym *symbols.Symbol) bool {
 	return r.allVisible > 0 || symbols.VisibleOutside(sym.Visibility)
 }
 
-// namedThroughNamespaceFrom also admits protected members from a specializing namespace.
-func (r *Resolver) namedThroughNamespaceFrom(target *symbols.Symbol, from *symbols.Scope, sym *symbols.Symbol) bool {
-	if r.namedThroughNamespace(sym) {
-		return true
-	}
-	return sym != nil && sym.Visibility == ast.VisibilityProtected &&
-		from != nil && r.specializes(from.Owner(), target)
-}
-
-func (r *Resolver) namedThroughNamespacesFrom(target *symbols.Symbol, from *symbols.Scope, cands []*symbols.Symbol) []*symbols.Symbol {
+func (r *Resolver) namedThroughNamespaces(cands []*symbols.Symbol) []*symbols.Symbol {
 	kept := make([]*symbols.Symbol, 0, len(cands))
 	for _, sym := range cands {
-		if r.namedThroughNamespaceFrom(target, from, sym) {
+		if r.namedThroughNamespace(sym) {
 			kept = append(kept, sym)
 		}
 	}
