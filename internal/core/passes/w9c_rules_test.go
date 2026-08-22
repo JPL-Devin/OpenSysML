@@ -1,0 +1,247 @@
+package passes
+
+import (
+	"fmt"
+	"strings"
+	"testing"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
+)
+
+// w9cLibraryDiags analyzes src as SysML against the standard library, which the
+// inherited-name rule needs to see the Action/Part diamond.
+func w9cLibraryDiags(t *testing.T, src string, warm bool) []Diagnostic {
+	t.Helper()
+	idx := symbols.NewIndex()
+	libSrc := libs.DefaultSource()
+	var cache *libs.Cache
+	if warm {
+		c, err := libs.NewCache()
+		if err != nil {
+			t.Fatalf("cache: %v", err)
+		}
+		cache = c
+	}
+	loader := libs.NewLoader(libSrc, cache)
+	for _, name := range libSrc.List() {
+		if err := loader.Load(name, idx); err != nil {
+			t.Fatalf("load library %s: %v", name, err)
+		}
+	}
+	root := parser.New(source.New("<t>.sysml", []byte(src))).ParseFile()
+	idx.AddDocument("<t>.sysml", root)
+	idx.ExpandWildcardImports()
+	return Analyze("<t>.sysml", root, nil, idx)
+}
+
+func w9cMessages(diags []Diagnostic, prefix string) []string {
+	var out []string
+	for _, d := range diags {
+		if strings.HasPrefix(d.Message, prefix) {
+			out = append(out, d.Message)
+		}
+	}
+	return out
+}
+
+// An action typed by a part definition inherits self/start/done from both
+// Action and Part (ActionUsage_invalid.sysml.xt:40), as a warning.
+func TestW9CActionPartDiamondWarns(t *testing.T) {
+	src := `package Test {
+	part def ABlock;
+	action def AnAction {
+		action a : ABlock;
+	}
+}`
+	for _, warm := range []bool{false, true} {
+		got := w9cMessages(w9cLibraryDiags(t, src, warm), msgW9CDuplicateInherited)
+		want := []string{
+			msgW9CDuplicateInherited + " 'done' from Action, Part",
+			msgW9CDuplicateInherited + " 'self' from Action, Part",
+			msgW9CDuplicateInherited + " 'start' from Action, Part",
+		}
+		if strings.Join(got, "\n") != strings.Join(want, "\n") {
+			t.Errorf("warm=%v: got %v, want %v", warm, got, want)
+		}
+	}
+}
+
+// A usage typed by a definition of its own kind inherits each name once.
+func TestW9CConformingTypingStaysSilent(t *testing.T) {
+	src := `package Test {
+	action def AnAction;
+	part def P {
+		action a : AnAction;
+	}
+}`
+	for _, warm := range []bool{false, true} {
+		if got := w9cMessages(w9cLibraryDiags(t, src, warm), msgW9CDuplicateInherited); len(got) != 0 {
+			t.Errorf("warm=%v: got %v, want none", warm, got)
+		}
+	}
+}
+
+// Short names are names for distinguishability: a repeated short name, and a
+// short name repeating another member's name, are both reported
+// (ShortNameTests_Distinguishibility1/2.kerml.xt:20,22).
+func TestW9CShortNameDistinguishability(t *testing.T) {
+	tests := []struct {
+		name  string
+		src   string
+		lines []int
+	}{
+		{
+			name: "repeated short name",
+			src: `package Test {
+	classifier <one> two;
+	classifier <one> three;
+}`,
+			lines: []int{2, 3},
+		},
+		{
+			name: "short name repeats a name",
+			src: `package Test {
+	classifier <one> two;
+	classifier <two> three;
+}`,
+			lines: []int{2, 3},
+		},
+		{
+			name: "distinct names and short names",
+			src: `package Test {
+	classifier <one> two;
+	classifier <three> four;
+}`,
+			lines: nil,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			w9cWantLines(t, tc.src, "name-conflict", tc.lines...)
+		})
+	}
+}
+
+// A standard library package outside the standard library is a warning
+// (LibraryPackage_invalid_notStandard.kerml.xt:15); a plain library package is not.
+func TestW9CUserStandardLibraryPackage(t *testing.T) {
+	w9cWantLines(t, "standard library package Outer {\n\tlibrary package Inner;\n}", "library-package", 1)
+	w9cWantLines(t, "library package Outer {\n\tlibrary package Inner;\n}", "library-package")
+}
+
+// Binding features of unrelated types is a warning; a specializing type conforms
+// (BindingConnector_Invalid3.sysml.xt:56).
+func TestW9CBoundFeatureTypes(t *testing.T) {
+	src := `package Test {
+	part def A;
+	part def B;
+	part def C specializes B;
+	part P {
+		part a : A;
+		part b : B;
+		part c : C;
+		bind a = b;
+		bind c = b;
+	}
+}`
+	w9cWantLines(t, src, "bound-feature-types", 9)
+}
+
+// Redefining an untyped library feature replaces its implicit value typing, so
+// no diamond is drawn through it (examples/pilot-corpora TradeStudyTest.sysml:18).
+func TestW9CRedefinedUntypedFeatureStaysSilent(t *testing.T) {
+	srcs := []string{
+		`package Test {
+	part def Engine;
+	analysis def A {
+		subject : Engine;
+		return part : Engine;
+	}
+}`,
+		`package Test {
+	private import Flows::*;
+	part def Fuel;
+	flow def FuelFlow {
+		ref :>> payload : Fuel;
+	}
+}`,
+	}
+	for _, src := range srcs {
+		for _, warm := range []bool{false, true} {
+			if got := w9cMessages(w9cLibraryDiags(t, src, warm), msgW9CDuplicateInherited); len(got) != 0 {
+				t.Errorf("warm=%v: got %v, want none", warm, got)
+			}
+		}
+	}
+}
+
+// A variant only references a member of its variation, so it draws no diamond
+// (examples/pilot-corpora VehicleVariabilityModel.sysml:128).
+func TestW9CVariantStaysSilent(t *testing.T) {
+	src := `package Test {
+	part def ABlock;
+	action def AnActivity;
+	part P {
+		action a4 : ABlock;
+		action a6 : ABlock;
+		variation action a : AnActivity {
+			variant a4;
+			variant a6;
+		}
+	}
+}`
+	got := w9cMessages(w9cLibraryDiags(t, src, false), msgW9CDuplicateInherited)
+	for _, msg := range got {
+		if !strings.Contains(msg, "from Action, Part") {
+			t.Errorf("unexpected %q", msg)
+		}
+	}
+	if len(got) != 6 { // a4 and a6 themselves, not the variants referencing them
+		t.Errorf("got %v, want the two typed actions only", got)
+	}
+}
+
+// The wave-9c rules are registered once each and level-scoped (AGENTS.md §4).
+func TestW9CPassesAreRegistered(t *testing.T) {
+	want := map[string]PassLevel{
+		"W9CShortNameDistinguishabilityPass": LevelNameResolution,
+		"W9CUserStandardLibraryPass":         LevelNameResolution,
+		"W9CInheritedNameConflictPass":       LevelType,
+		"W9CBoundFeatureTypesPass":           LevelType,
+	}
+	seen := map[string]int{}
+	for _, p := range DefaultRegistry().passes {
+		name := fmt.Sprintf("%T", p)
+		if i := strings.LastIndex(name, "."); i >= 0 {
+			name = name[i+1:]
+		}
+		if level, ok := want[name]; ok {
+			seen[name]++
+			if p.Level() != level {
+				t.Errorf("%s at level %v, want %v", name, p.Level(), level)
+			}
+		}
+	}
+	for name := range want {
+		if seen[name] != 1 {
+			t.Errorf("%s registered %d time(s), want 1", name, seen[name])
+		}
+	}
+}
+
+// w9cWantLines asserts the 1-based lines carrying a diagnostic with code.
+func w9cWantLines(t *testing.T, src, code string, want ...int) {
+	t.Helper()
+	got := w8dLines(t, src, code)
+	if len(got) != len(want) {
+		t.Fatalf("%s: got lines %v, want %v", code, got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("%s: got lines %v, want %v", code, got, want)
+		}
+	}
+}

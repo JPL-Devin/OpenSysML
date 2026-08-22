@@ -339,6 +339,37 @@ One reading trap in the per-kind table above: with strict agreements now non-zer
 column subtracts them as well as the tolerances, so it reads **23** — the rows where nothing of ours
 is there at all.
 
+### Wave 9C: the library diamond, as a warning
+
+The severity finding above is what wave 9C addressed, and the four rules it adds live in
+`internal/core/passes` (`w9c_inherited_name_conflict.go`, `w9c_owned_name_and_library.go`,
+`w9c_bound_feature_types.go`), registered in `analyze.go` and level-scoped: the distinguishability
+and library-package rules at `LevelNameResolution`, the diamond and bound-feature rules at
+`LevelType` (`w9c_rules_test.go:TestW9CPassesAreRegistered`).
+
+The diamond rule is the one that moved the family. The pilot keeps an ill-typed declaration and
+unions the implicit base of the declaration's kind with the base its *declared* type reaches, then
+names, per conflicting member, the types that declare it — which is why one declaration draws
+`'self' from AnalysisCase, Part` beside `'start' from Action, Part`
+(`CaseUsage_Invalid.sysml.xt:75-77`). The rule reproduces that union over library bases only, at
+warning severity, and stays silent where the diamond is not real: a variant references a member of
+its variation rather than specializing it, a redefinition of an untyped library feature replaces its
+implicit value typing, and a member another candidate redefines is not inherited twice. It reads
+library members through `symbols.Index.LookupDirectChildren`, so it behaves identically whether the
+standard library was parsed or restored from cache (each focused test runs both states).
+
+What is still open in the family, by reproducer:
+
+| Rows | Reproducer | Why it still disagrees |
+|---:|---|---|
+| 12 | `ActionUsage_invalid.sysml.xt:61`, `StateUsage_invalid.sysml.xt:87` | The pilot reports on the nested `perform b.a;` / `exhibit s.sa;` reference usage and on the `b.a` expression inside it; we report on the referenced declaration instead, so the rows land `elsewhere-in-file`. |
+| 3 | `CaseUsage_Invalid.sysml.xt:86` | We warn at the declared location, but name `Case, Part` / `Action, Part` where the pilot names `Part, UseCase`: `use case uc3: B;` **inside a definition body** is built as a *case* usage, not a use-case usage (the same declaration at package level is a `useCaseUsage`), so it takes `Cases::Case` as its implicit base. A parser/symbol-kind defect outside this slice — see the wave-10 worklist. |
+| 4 | `Specialization_invalid.kerml.xt:56,60`, `OccurrenceUsage_invalid.sysml.xt:59` | An error of another rule (specialization cycle; occurrence typing) is at the line, so the row reads `severity-differs` whatever this rule does. |
+| 2 | `AttributeUsage_invalid.sysml.xt:47,52` | `DataValue, Part` / `DataValue, Port`: the rule deliberately draws no diamond through an attribute's implicit `Base::DataValue` typing when the declaration also has a declared type, because doing so reported `'self' from DataValue, …` across otherwise-clean pilot-corpora roots. |
+| 1 | `InterfaceUsage_Invalid.sysml.xt:78` | `Part, Port` through an `end part ::> tankAssy.fuel;` subsetting chain, which the rule does not follow. |
+| 1 | `ShadowingTests_ImportAndInnerClassesNamesAreTheSameBadCase3_Rdef.kerml.xt:28` | `'B' from OuterPackage`: an inherited *package* member name, not a library diamond. |
+| 1 | `BindingConnector_Invalid2.sysml.xt:42` | `Bound features should have conforming types` on `rearWheel+1`: one endpoint is an expression, so the rule has no feature type to compare. |
+
 ---
 
 ## errors — 95 of 513 strictly; where our diagnostics actually are
