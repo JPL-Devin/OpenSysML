@@ -37,6 +37,18 @@ func only(diags []Diagnostic, code string) []Diagnostic {
 	return out
 }
 
+// except returns the findings without one code, for tests whose subject is a
+// different rule.
+func except(diags []Diagnostic, code string) []Diagnostic {
+	var out []Diagnostic
+	for _, d := range diags {
+		if d.Code != code {
+			out = append(out, d)
+		}
+	}
+	return out
+}
+
 const filterMetadata = `metadata def Safety { attribute level; }
 part def Belt;
 `
@@ -64,17 +76,16 @@ func TestFilterNotBooleanIsReported(t *testing.T) {
 			if diags[0].Span.Len == 0 {
 				t.Errorf("the diagnostic has no span: %v", diags[0])
 			}
-			if !strings.Contains(diags[0].Message, "boolean-valued") {
-				t.Errorf("message = %q, want it to say the condition must be boolean-valued", diags[0].Message)
+			if diags[0].Message != msgFilterNotBoolean {
+				t.Errorf("message = %q, want %q", diags[0].Message, msgFilterNotBoolean)
 			}
 		})
 	}
 }
 
-// A condition outside the subset the evaluator decides is reported and not
-// applied, which keeps every candidate: hiding model content on a verdict that
-// was never reached would be worse than surfacing an element a filter meant to
-// leave out. So it is a warning, not an error.
+// A condition outside the subset the evaluator decides is an error, as it is in
+// the reference: it selects nothing, so the filter the model asked for is not
+// the one it got.
 func TestFilterNotEvaluableIsReported(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -88,14 +99,14 @@ func TestFilterNotEvaluableIsReported(t *testing.T) {
 			if len(diags) == 0 {
 				t.Fatalf("the condition is not evaluable but nothing was reported")
 			}
-			if diags[0].Severity != SeverityWarning {
-				t.Errorf("severity = %v, want a warning", diags[0].Severity)
+			if diags[0].Severity != SeverityError {
+				t.Errorf("severity = %v, want an error", diags[0].Severity)
 			}
 			if diags[0].Span.Len == 0 {
 				t.Errorf("the diagnostic has no span: %v", diags[0])
 			}
-			if diags[0].Message == "" || !strings.Contains(diags[0].Message, "cannot be evaluated") {
-				t.Errorf("message = %q, want it to say the condition cannot be evaluated", diags[0].Message)
+			if diags[0].Message != msgFilterNotEvaluable {
+				t.Errorf("message = %q, want %q", diags[0].Message, msgFilterNotEvaluable)
 			}
 		})
 	}

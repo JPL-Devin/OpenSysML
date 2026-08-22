@@ -52,7 +52,7 @@ func (tc *typeChecker) walk(scope *symbols.Scope, members []ast.Node) {
 		switch d := unwrapType(m).(type) {
 		case *ast.Definition:
 			tc.checkRelationships(scope, d.Relationships, declKind{
-				lang: tc.lang, isDef: true, defKind: d.Kind, keyword: d.Keyword,
+				lang: tc.lang, isDef: true, defKind: d.Kind, keyword: d.Keyword, span: d.Span(),
 			})
 			if child := childScopeOf(scope, d); child != nil {
 				tc.walk(child, d.Members)
@@ -66,6 +66,7 @@ func (tc *typeChecker) walk(scope *symbols.Scope, members []ast.Node) {
 				isIndividual: d.IsIndividual,
 				portion:      d.Portion,
 				keyword:      d.Keyword,
+				span:         d.Span(),
 			})
 			tc.checkOneType(scope, d)
 			tc.expr.checkUsageValue(scope, d)
@@ -147,9 +148,9 @@ func (tc *typeChecker) checkBehaviorMember(scope *symbols.Scope, n ast.Node) {
 // escape the usage-kind rules.
 func (tc *typeChecker) checkSubjectMember(scope *symbols.Scope, m *ast.SubjectMember) {
 	if m.TypeRef != nil {
-		tc.checkTypeTarget(scope, m.TypeRef, ast.RelTyping, declKind{lang: tc.lang, useKind: ast.UsageSubject})
+		tc.checkTypeTarget(scope, m.TypeRef, ast.RelTyping, declKind{lang: tc.lang, useKind: ast.UsageSubject, span: m.Span()})
 	}
-	tc.checkRelationships(scope, m.Relationships, declKind{lang: tc.lang, useKind: ast.UsageSubject})
+	tc.checkRelationships(scope, m.Relationships, declKind{lang: tc.lang, useKind: ast.UsageSubject, span: m.Span()})
 	if m.BindingExpr != nil {
 		tc.expr.infer(scope, m.BindingExpr)
 	}
@@ -203,6 +204,11 @@ type declKind struct {
 	// keyword is the kind keyword as written, which tells apart the spellings a
 	// single DefinitionKind carries (`classifier` and `class` are both DefClass).
 	keyword string
+	// span is the declaration itself, where the reference reports a wrong typing
+	// (see pilotTypingMessage).
+	span source.Span
+	// conjugated marks a `~T` typing, which the conjugation rule owns.
+	conjugated bool
 }
 
 // isPlainClassifier reports whether the declaration is written with `classifier`
@@ -244,10 +250,13 @@ func (tc *typeChecker) checkRelationships(scope *symbols.Scope, rels []*ast.Rela
 		if rel == nil || rel.Target == nil {
 			continue
 		}
-		tc.checkTypeTarget(scope, rel.Target, rel.Kind, decl)
 		// Only a conjugated *typing* is a ConjugatedPortTyping (SysML.xtext:974); a
 		// KerML Conjugation relates any two Types (KerML §7.4) and demands no port.
-		if rel.Conjugated && rel.Kind == ast.RelTyping {
+		conjugatedTyping := rel.Conjugated && rel.Kind == ast.RelTyping
+		target := decl
+		target.conjugated = conjugatedTyping
+		tc.checkTypeTarget(scope, rel.Target, rel.Kind, target)
+		if conjugatedTyping {
 			tc.checkConjugatedTyping(scope, rel, decl)
 		}
 	}
@@ -281,15 +290,35 @@ func (tc *typeChecker) checkTypeTarget(scope *symbols.Scope, target ast.Node, re
 			targetSym = resolved
 		}
 	}
-	if msg := compatMessage(decl, relKind, targetSym.Kind); msg != "" {
-		tc.diags = append(tc.diags, Diagnostic{
-			Severity: SeverityError,
-			Span:     target.Span(),
-			Message:  msg,
-			Code:     "type",
-			Source:   "type",
-		})
+	msg := compatMessage(decl, relKind, targetSym.Kind)
+	if msg == "" {
+		return
 	}
+	span, code := target.Span(), "type"
+	// A wrong typing is the reference's per-kind message on the declaration.
+	if relKind == ast.RelTyping {
+		if pilot, pilotCode, ok := pilotTypingMessage(decl); ok {
+			msg, span, code = pilot, decl.span, pilotCode
+		}
+	}
+	tc.appendUnique(Diagnostic{
+		Severity: SeverityError,
+		Span:     span,
+		Message:  msg,
+		Code:     code,
+		Source:   "type",
+	})
+}
+
+// appendUnique records d unless the same message was already reported there: a
+// declaration with two wrong types states its one rule once.
+func (tc *typeChecker) appendUnique(d Diagnostic) {
+	for _, have := range tc.diags {
+		if have.Span.Offset == d.Span.Offset && have.Message == d.Message {
+			return
+		}
+	}
+	tc.diags = append(tc.diags, d)
 }
 
 // checkConjugatedTyping checks a `~T` typing: a ConjugatedPortTyping names the

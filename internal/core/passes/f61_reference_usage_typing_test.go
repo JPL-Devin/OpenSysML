@@ -35,7 +35,7 @@ func TestF61ExplicitAttributeTypingStillRejected(t *testing.T) {
 	if len(diags) != 1 {
 		t.Fatalf("expected one type diagnostic, got %v", diags)
 	}
-	if !strings.Contains(diags[0].Message, "attribute cannot be typed by portDef") {
+	if diags[0].Message != "An attribute must be typed by attribute definitions." {
 		t.Errorf("got %q", diags[0].Message)
 	}
 

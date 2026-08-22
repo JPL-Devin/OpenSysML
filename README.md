@@ -191,7 +191,7 @@ sysml> %advance 30
 
 What these numbers cannot show: the OMG corpora are demonstrations rather than an official conformance suite; the differential is one-directional, comparing the diagnostics the two implementations report on the same files; the Xpect suites are the pilot authors' test intent rather than a certification oracle; and none of these is a percentage of the specification — no global compliance figure is claimed anywhere.
 
-**Row bookkeeping:** the ✅/⚠️/❌/⛔ status of each of the 690 tracked rules stays in [spec compliance](docs/project/spec-compliance.md) as a census of our own row list. It moves when rows are rewritten and does not move when an oracle does, so it is not the progress measure.
+**Row bookkeeping:** the ✅/⚠️/❌/⛔ status of each of the 703 tracked rules stays in [spec compliance](docs/project/spec-compliance.md) as a census of our own row list. It moves when rows are rewritten and does not move when an oracle does, so it is not the progress measure.
 
 **Current commit:** All tests pass (`go test -race ./...`), builds clean (`go build ./...`).
 **Test coverage:** 5,884 tests and subtests (5,870 pass, 14 skip themselves; 3,095 top-level `Test` functions) covering parsers, semantics, runtime (actions, states, instances, operators, validation). Behavioral robustness: 107 golden ASTs, 167 negatives, 344 conformance cases, 109 golden traces, 195 runtime robustness cases, 15 gRPC conformance cases and 8 gRPC robustness cases.

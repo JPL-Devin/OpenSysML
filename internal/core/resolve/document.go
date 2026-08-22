@@ -12,6 +12,9 @@ func (r *Resolver) ResolveDocument(name string, root *ast.RootNamespace) {
 	if rootScope == nil {
 		return
 	}
+	saved := r.document
+	r.document = name
+	defer func() { r.document = saved }()
 	r.walkMembers(rootScope, membersOf(root))
 	r.checkDistinguishability(rootScope)
 }

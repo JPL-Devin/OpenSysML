@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -31,9 +32,10 @@ func (W9CInheritedNameConflictPass) Run(ctx *Context, name string, root *ast.Roo
 		return nil
 	}
 	c := &w9cConflictChecker{
-		model:   ctx.Model(),
-		idx:     ctx.Index,
-		members: map[*symbols.Symbol]map[string]w9cCandidate{},
+		model:    ctx.Model(),
+		idx:      ctx.Index,
+		resolver: ctx.Resolver(),
+		members:  map[*symbols.Symbol]map[string]w9cCandidate{},
 	}
 	if c.model == nil {
 		return nil
@@ -43,8 +45,9 @@ func (W9CInheritedNameConflictPass) Run(ctx *Context, name string, root *ast.Roo
 }
 
 type w9cConflictChecker struct {
-	model *semantics.Model
-	idx   *symbols.Index
+	model    *semantics.Model
+	idx      *symbols.Index
+	resolver *resolve.Resolver
 	// members memoizes the visible member of each library base, per name.
 	members map[*symbols.Symbol]map[string]w9cCandidate
 	diags   []Diagnostic
@@ -123,8 +126,37 @@ func (c *w9cConflictChecker) libraryBases(sym *symbols.Symbol) []*symbols.Symbol
 			}
 			walk(sup)
 		}
+		// A reference subsetting (`::>`, `perform b.a`) is a subsetting, so the
+		// referenced feature's type is a base of the referencing usage too.
+		for _, ref := range c.referenceSubsettings(cur) {
+			if seen[ref] {
+				continue
+			}
+			seen[ref] = true
+			walk(ref)
+		}
 	}
 	walk(sym)
+	return out
+}
+
+// referenceSubsettings are the features sym references (`::>` or the reference
+// form of `perform`/`exhibit`/`include`).
+func (c *w9cConflictChecker) referenceSubsettings(sym *symbols.Symbol) []*symbols.Symbol {
+	if c.resolver == nil || sym == nil {
+		return nil
+	}
+	var out []*symbols.Symbol
+	for _, rel := range semantics.RelationshipsOf(sym) {
+		if rel == nil || rel.Kind != ast.RelReferences || rel.Target == nil {
+			continue
+		}
+		target, ok := c.resolver.ResolveTarget(sym.OwnerScope, rel.Target)
+		if !ok || target == nil || target == sym {
+			continue
+		}
+		out = append(out, target)
+	}
 	return out
 }
 

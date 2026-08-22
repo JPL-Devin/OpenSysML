@@ -31,7 +31,10 @@ package Lander {
         port downlink : TelemetryPort;
     }
 
-    connection def FuelLine;
+    connection def FuelLine {
+        end supplier : FuelPort;
+        end consumer : FuelPort;
+    }
 
     part def Descender {
         attribute mass : Real = 890.0;
