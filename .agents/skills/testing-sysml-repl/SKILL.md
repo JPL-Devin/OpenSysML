@@ -155,6 +155,32 @@ parser's file-kind gates are testable through the binary:
 2. **Interactive in a GUI terminal (for the recording).** Because the app under test *is* a CLI,
    the recording should show a real terminal session. See the recording setup below.
 
+**At the `sysml>` prompt an expression must go through `%eval`.** Bare text — even a fully
+qualified `test::r.cost.v` — is submitted as *model source*, so it answers
+`1:1: error: expected a namespace member` and leaves an unresolved buffer error that taints the
+next submission with `note: deeper checks may not have run here…` (the same trap as typing
+`clear`). On camera this looks like the feature is broken. Type `%eval test::r.cost.v`; if you have
+already tainted the session, `%quit`/Ctrl-D and restart rather than continuing.
+
+### Driving a `type: "calc"` conformance fixture from the CLI
+
+Fixtures under `internal/core/runtime/testdata/conformance/` whose `.expected.json` says
+`{"type": "calc", "evaluate": "test::probe"}` are run non-interactively with `-calc` and an
+explicit argument list — the parentheses are required even when the calc takes none:
+
+```bash
+./bin/sysml -calc "test::probe()" internal/core/runtime/testdata/conformance/<name>.sysml
+./bin/sysml -validate internal/core/runtime/testdata/conformance/<name>.sysml   # cheap clean-model check
+```
+
+Reals print rounded to two places (`= [5.00, 2.00]` for an expected `[5.0, 2.0]`), so compare
+values, not literal text. A failing evaluation exits 2 with
+`sysml: calc invocation failed: calc test::probe: evaluating the returned expression: <error>`,
+while a *static* rejection exits 2 with `did not analyse cleanly; no check was made` — worth
+distinguishing in a report, since a negative case can be caught at either tier. Beware that a
+`… | grep …` pipeline in a recorded one-liner makes `$?` the grep's status; capture sysml's own
+exit code without a pipe when the exit code is part of the evidence.
+
 ## Saving and converting models (`%save`, `sysml -convert`)
 
 The CLI is `sysml <model> -convert <format>`: the model is a positional argument and `-convert`
