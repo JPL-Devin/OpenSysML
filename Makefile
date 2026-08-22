@@ -1,4 +1,4 @@
-.PHONY: all build build-sysml build-lsp build-grpc test lint clean install help python-test python-install python-proto vscode-grammar vscode-build vscode-package docs docs-install docs-serve
+.PHONY: all build build-sysml build-lsp build-grpc test lint clean install help python-test python-install python-proto vscode-grammar vscode-build vscode-package docs docs-install docs-serve docs-counts
 
 # Version information
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -120,6 +120,11 @@ vscode-package: ## Package the VS Code extension as a .vsix for side-loading
 	@echo "Packaging the VS Code extension..."
 	cd $(VSCODE_DIR) && npm ci && npm run package
 	@echo "✓ Packaged $(VSCODE_DIR)/opensysml-sysml.vsix"
+
+docs-counts: ## Restate the derived compliance-count lines from the compliance map's markers
+	@echo "Regenerating the documentation count lines..."
+	go run ./cmd/doc-counts
+	@echo "✓ Count lines state the compliance map"
 
 docs-install: ## Install the documentation site toolchain
 	$(PYTHON) -m pip install -r docs-requirements.txt
