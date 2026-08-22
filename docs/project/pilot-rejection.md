@@ -34,8 +34,8 @@ mandatory header — `// Invalid: <rule> (<citation>).` — naming the one rule 
 where that rule comes from; the harness refuses a corpus file without it. Cases were derived
 systematically from three sources, one subdirectory each:
 
-1. **`grammar/` — grammar mutation** (65 cases; 20 in wave 8, the rest added by wave 9F along the
-   *unreached* axis described below). For productions our corpus exercises in the
+1. **`grammar/` — grammar mutation** (78 cases; 20 in wave 8, 45 added by wave 9F along the
+   *unreached* axis described below, 13 by wave 10G's second pass). For productions our corpus exercises in the
    pinned Xtext grammars (`build/pilot-grammars/`, see the `testing-grammar-coverage` skill), the
    minimal violation: a required keyword removed (`g03` alias without `for`), a mandatory element
    omitted (`g04`, `g05`, `k01`, `k03`), a clause in a position the production forbids (`g06`
@@ -52,7 +52,8 @@ systematically from three sources, one subdirectory each:
    extensions and, since W8E, gated behind an opt-in
    [strict conformance mode](../guide/03-command-line.md#strict-conformance) a conformance-minded
    user can turn on; the default mode keeps accepting them on purpose.
-3. **`xpect/` — the pilot's own negative expectations** (7 cases). The Xpect suites declare 513
+3. **`xpect/` — the pilot's own negative expectations** (34 cases; 7 in wave 8, 27 added by wave
+   10G against the semantic rules wave 10 is implementing). The Xpect suites declare 513
    `errors` expectations ([pilot-xpect.md](pilot-xpect.md)); where a suite declares an error we do
    not report anywhere in the file, that is a candidate rejection gap. Each case here re-derives
    one such declared error as a standalone model, citing the KerML clause and the originating
@@ -61,7 +62,7 @@ systematically from three sources, one subdirectory each:
    standard library loaded, `feature f;` gets an implicit type and is legal — so only
    library-independent expectations became cases.
 
-What this corpus cannot see: it tests the invalid models we thought to write. **We authored all 79
+What this corpus cannot see: it tests the invalid models we thought to write. **We authored all 119
 cases ourselves**, so the denominator measures our coverage of the rejection surface, not our
 conformance: it is a **sample, not a proof** — a clean bucket here does not mean OpenSysML rejects
 everything the reference rejects, and no official conformance suite exists to make that claim
@@ -103,35 +104,38 @@ carry no timestamps or absolute paths, so repeated runs are byte-identical
 Under the default `-conformance auto`:
 
 ```
-79 case(s): 77 both reject, 2 only the pilot rejects, 0 only we reject, 0 both accept
+119 case(s): 103 both reject, 16 only the pilot rejects, 0 only we reject, 0 both accept
   of which 5 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
 | Source | Cases | Both reject | Pilot only | Ours only | Both accept |
 | --- | --- | --- | --- | --- | --- |
 | extensions | 7 | 7 | 0 | 0 | 0 |
-| grammar | 65 | 63 | 2 | 0 | 0 |
-| xpect | 7 | 7 | 0 | 0 | 0 |
+| grammar | 78 | 76 | 2 | 0 | 0 |
+| xpect | 34 | 20 | 14 | 0 | 0 |
 
-The corpus more than doubled in wave 9F, from 34 cases to 79, and the gap count went from 3 to 4:
-more reach found one further gap (`g31`) rather than a bucketful, and no case in the corpus is
-accepted by both implementations. Wave 10C closed two of those four, `g02` (bare `import` is now an
-error) and `g31` (`allocate` requires its `ConnectorPart`), leaving 2.
+The corpus grew from 79 cases to 119 in wave 10G, and the default-mode gap count went from 9 of 79
+to 23 of 119. The ratio got worse because the corpus now reaches the pilot's own semantic
+expectations (the `xpect/` derivation went from 7 cases to 34), not because anything regressed: all
+14 new gaps are `xpect/` cases whose rule the reference checks and we do not. No case in the corpus
+is accepted by both implementations. Wave 10C then closed two grammar gaps, `g02` (bare `import` is
+now an error) and `g31` (`allocate` requires its `ConnectorPart`), leaving 21 in the default mode.
 
 The five strict-only agreements are `x01`, `x04`, `x05`, `x06` and `x07`: OpenSysML notation
 extensions that the default mode accepts on purpose and strict mode reports as errors. Judged in
-the default mode the same corpus gives 72 agreements and 7 gaps, which is what `-conformance
+the default mode the same corpus gives 98 agreements and 21 gaps, which is what `-conformance
 default` prints — the extra five are those same `extensions/` cases, which the default mode accepts
-on purpose. `-conformance strict` gives 79 and 0: wave 10C gave `g15` and `k02` a strict
-escalation, so every case in the corpus is rejected when asked strictly — which is agreement under
-an opt-in question, not default-mode conformance. Of the 14 gaps this document carried before wave
+on purpose. `-conformance strict` gives 105 and 14: wave 10C gave `g15` and `k02` a strict
+escalation, so every *grammar* case is rejected when asked strictly and the remaining 14 gaps are
+the `xpect/` semantic rules, which no mode of ours checks — and strict agreement is an answer to an
+opt-in question, not default-mode conformance. Of the 14 gaps this document carried before wave
 8, six were closed by the validation waves themselves — `p01`, `p02`, `p03`, `p05` (wave 8C), `p06` (wave 8A) and `p04`
 (wave 8B) — and only the five `extensions/` cases belong to strict mode.
 
 Read those five as agreement *when asked strictly*, not as five gaps that disappeared. An opt-in
 check is weaker evidence than a default one: it says the strict question has an answer we agree on,
 not that the pipeline a user gets by default rejects the notation — by design it does not. And
-because we authored all 79 cases ourselves, a small gap count means we ran out of questions we
+because we authored all 119 cases ourselves, a small gap count means we ran out of questions we
 thought to ask, not that we stopped being permissive: the denominator measures our coverage of the
 rejection surface, not our conformance.
 
@@ -142,14 +146,28 @@ rejection, not agreement on the rule.
 
 ## Permissiveness gaps
 
-All 2 gaps, each with its reproducer (the corpus file is the minimal reproducer), both verdicts,
-and the package the root cause is likely in. Both are accepted by the default mode and rejected
-under `-conformance strict` (wave 10C).
+All 16 gaps, each with its reproducer (the corpus file is the minimal reproducer), both verdicts,
+and the package the root cause is likely in. The two grammar rows are accepted by the default mode
+and rejected under `-conformance strict` (wave 10C); the `xpect/` rows are rules no mode checks.
 
 | Reproducer (`cmd/pilot-reject/testdata/negative/`) | Ours | Pilot | Likely root cause |
 | --- | --- | --- | --- |
 | `grammar/g15-keyword-as-name.sysml` | accepts | `no viable alternative at input 'part'` | `internal/core/parser` — allows a reserved keyword as a declared name |
 | `grammar/k02-sysml-keyword-in-kerml.kerml` | accepts | `no viable alternative at input 'def'` | `internal/core/parser` — `.kerml` files are parsed with the full SysML grammar; no per-language restriction |
+| `xpect/p08-variant-outside-variation.sysml` | accepts | `A variant must be an owned member of a variation.` | `internal/core/passes` — the variant-membership rule is not checked for a variant declared outside a variation |
+| `xpect/p11-metadata-body-not-evaluable.sysml` | accepts | `Must be model-level evaluable` | `internal/core/passes` — metadata body feature values are not checked for model-level evaluability |
+| `xpect/p15-attribute-typed-by-part-def.sysml` | accepts | `An attribute must be typed by attribute definitions.` | `internal/core/passes` — attribute usage typing is not restricted to attribute definitions |
+| `xpect/p17-calc-two-return-parameters.sysml` | accepts | `Only one return parameter is allowed` | `internal/core/passes` — the return-parameter cardinality rule is unimplemented |
+| `xpect/p20-connection-with-one-end.sysml` | accepts | `Must have at least two related elements` | `internal/core/passes` — connector end cardinality is unchecked |
+| `xpect/p21-filter-constructor-condition.sysml` | accepts | `Must have a Boolean result` | `internal/core/passes` — a constructor-expression filter condition is not typed, so the Boolean-result rule never fires |
+| `xpect/p22-filter-not-model-level-evaluable.sysml` | accepts | `Must be model-level evaluable` | `internal/core/passes` — filter conditions are not checked for model-level evaluability |
+| `xpect/p24-metadata-abstract-type.sysml` | accepts | `Must have a concrete type` | `internal/core/passes` — metadata usages may be typed by an abstract metaclass |
+| `xpect/p25-two-individual-definitions.sysml` | accepts | `At most one individual definition is allowed.` | `internal/core/passes` — individual-definition cardinality is unchecked |
+| `xpect/p26-port-def-nonreferential-usage.sysml` | accepts | `Owned usages of a port definition (other than ports) must be referential.` | `internal/core/passes` — port definition body usages are not required to be referential |
+| `xpect/p27-interface-end-not-port.sysml` | accepts | `An interface end must be a port.` | `internal/core/passes` — interface end kinds are unchecked |
+| `xpect/p28-package-level-feature-redefined.sysml` | accepts | `A package-level feature cannot be redefined` | `internal/core/passes` — redefinition featuring types are unchecked at package level |
+| `xpect/p32-redefinition-same-featuring-type.sysml` | accepts | `Featuring types of redefining feature and redefined feature cannot be the same` | `internal/core/passes` — the featuring-type distinctness rule is unimplemented |
+| `xpect/p33-individual-typed-by-plain-def.sysml` | accepts | `An individual must be typed by one individual definition.` | `internal/core/passes` — individual usage typing is unchecked |
 
 Each pilot message above is the first error the validator reports for the case; the full lists are
 in the baseline JSON's `pilot` arrays.
@@ -226,6 +244,37 @@ this same PR rather than left as gaps: `g20-include-without-target.sysml` (a bar
 inside a body was read as a member *named* `include`) and
 `g36-direction-without-feature.sysml` (`in ;` declared nothing and was accepted).
 
+### Second pass (W10G)
+
+The second pass extended the corpus along two axes at once, so the two instruments cross-check.
+
+**Grammar axis (13 cases).** The five forms `grammar-coverage.md` calls unseen were already reached
+by W9F, so this pass mutated productions the coverage report cannot see as blind spots at all —
+`ConjugatedPortTyping`, `RealValue`, `StringValue`, `RangeExpression`, positional argument lists,
+`FeatureChainMember`, `QualifiedName`, unrestricted names, `SatisfyRequirementUsage`,
+`OwnedCrossSubsetting`, `Unioning`, `ConnectorEndMember` and `MetadataTyping` (`g50`–`g59`,
+`k17`–`k19`). The coverage instrument's own movement is unchanged by this pass and by design: with
+the negative corpus added as a scanned root the report still shows **0 unseen forms of 807** (it
+showed 5 before W9F's cases existed), and the committed baseline still shows **5 unseen forms**
+because the committed roots do not include the negative corpus. The 244 indistinguishable
+productions are an instrument limitation — every path through them matches without a literal — so
+no corpus case can move that number. All 13 grammar cases are agreements.
+
+**Semantic axis (27 cases).** Cases were derived from the pilot's own `validation/invalid/*` and
+`Variability_invalid` Xpect expectations, one declared rule each (`p08`–`p34`), covering the rules
+wave 10 is closing: `Must be model-level evaluable` (`p11`, `p22`), `Must have a Boolean result`
+(`p12`, `p21`), the variation rules (`p08`–`p10`), and the typing, cardinality, redefinition,
+port/interface, verification and view families. 13 are agreements and 14 are new permissiveness
+gaps, listed above. Candidates the pinned validator accepted were discarded rather than kept as
+reach: `(1, 2,)` (a trailing comma in a sequence expression) and a String transition guard, both of
+which we reject and the reference does not.
+
+Two agreements are agreements on the bucket, not on the rule: `p19` (a parallel state with a
+transition) is rejected by us with `expected '{' or ';'` — our parser does not accept the pinned
+`state def S parallel` form at all — and `p34` (an accepter whose source is not a state) is rejected
+by us as a transition endpoint that is not a vertex. The bucket records rejection, not agreement on
+the rule.
+
 ### Should the default mode reject the five `extensions/` cases?
 
 Per the specification, **yes**. `initial`, `region`, `defer`, `history` and `transition <src> to
@@ -242,6 +291,21 @@ askable: [strict mode](../guide/03-command-line.md#strict-conformance) reports e
 an error, each has dedicated parser and runtime tests, and each is documented as an extension. If
 strict mode ever stopped covering one of them, the default-mode acceptance would be an
 undocumented non-conformance and the case should be fixed instead of adjudicated.
+
+### Forms kept rejected (W10D)
+
+Slice 10D probed the parser-debt follow-ups F60–F63, F102 and F103 against the pinned grammars and
+accepted every form they derive. Three neighbouring forms are **not** derivable, so the rejection
+stays. Each is guarded by a `TestNegative` case (`entry_succession_body`,
+`definition_succession_body`, `namespace_succession_body`) — the first two guard the succession
+parser's body policy, the third the namespace member dispatch that rejects a `then` before it;
+10G owns adding them to this oracle's negative corpus.
+
+| Form | Why it is not derivable |
+| --- | --- |
+| `entry; then starting { … }` in a state body | `EntryTransitionMember` (`SysML.xtext:1796-1801`) is `MemberPrefix ( GuardedTargetSuccession \| 'then' TransitionSuccession ) ';'` — it ends in `';'`, so an entry transition takes no body. A body on a `then` is derivable only as `ActionTargetSuccession` (`:1698`), which a state body reaches through `TargetTransitionUsageMember` (`:1764`) after a behaviour usage member, not after an entry action. |
+| `exhibit s1 then starting { … }` (no terminator on the `exhibit`) | `ExhibitStateUsage` (`:1840-1846`) ends in `StateUsageBody`, i.e. `';'` or a braced body, so the member must be terminated before a target transition follows it: `exhibit s1; then starting;`. |
+| `then <name> { … }` as a namespace or definition member | `ActionTargetSuccession` is reached only from `TargetSuccessionMember` (`:1393`) inside an action body item (`:1374-1381`); neither `NamespaceBodyItem` nor `DefinitionBodyItem` (`:516-524`) has a succession member, so a bodied `then` in a package or a `part`/`requirement` body stays a syntax error. |
 
 ## Guard
 

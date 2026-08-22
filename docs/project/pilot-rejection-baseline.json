@@ -4,9 +4,9 @@
   "corpus": "cmd/pilot-reject/testdata/negative",
   "conformance": "auto",
   "totals": {
-    "cases": 79,
-    "bothReject": 77,
-    "pilotOnlyRejects": 2,
+    "cases": 119,
+    "bothReject": 103,
+    "pilotOnlyRejects": 16,
     "oursOnlyRejects": 0,
     "bothAccept": 0
   },
@@ -28,17 +28,17 @@
     },
     {
       "source": "grammar",
-      "cases": 65,
-      "bothReject": 63,
+      "cases": 78,
+      "bothReject": 76,
       "pilotOnlyRejects": 2,
       "oursOnlyRejects": 0,
       "bothAccept": 0
     },
     {
       "source": "xpect",
-      "cases": 7,
-      "bothReject": 7,
-      "pilotOnlyRejects": 0,
+      "cases": 34,
+      "bothReject": 20,
+      "pilotOnlyRejects": 14,
       "oursOnlyRejects": 0,
       "bothAccept": 0
     }
@@ -561,6 +561,96 @@
       "pilotErrors": 4
     },
     {
+      "path": "grammar/g50-conjugated-port-typing-without-name.sysml",
+      "source": "grammar",
+      "rule": "A conjugated port typing requires a qualified name after ~ (SysML.xtext:974 ConjugatedPortTyping).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 2,
+      "pilotErrors": 1
+    },
+    {
+      "path": "grammar/g51-real-without-fraction.sysml",
+      "source": "grammar",
+      "rule": "A real literal requires digits or an exponent after the point (KerMLExpressions.xtext:526 RealValue).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "grammar/g52-unterminated-string.sysml",
+      "source": "grammar",
+      "rule": "A string literal must be closed (KerMLExpressions.xtext:514 LiteralString).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 2,
+      "pilotErrors": 1
+    },
+    {
+      "path": "grammar/g53-range-without-upper-bound.sysml",
+      "source": "grammar",
+      "rule": "A range expression requires a right operand after .. (KerMLExpressions.xtext:246 RangeExpression).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "grammar/g54-argument-list-trailing-comma.sysml",
+      "source": "grammar",
+      "rule": "A positional argument must follow the comma (KerMLExpressions.xtext:456 PositionalArgumentList).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 4
+    },
+    {
+      "path": "grammar/g55-feature-chain-trailing-dot.sysml",
+      "source": "grammar",
+      "rule": "A feature chain requires a feature after the dot (KerMLExpressions.xtext:448 OwnedFeatureChaining).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "grammar/g56-qualified-name-trailing-separator.sysml",
+      "source": "grammar",
+      "rule": "A qualified name requires a name after :: (KerMLExpressions.xtext:548 QualifiedName).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "grammar/g57-unterminated-unrestricted-name.sysml",
+      "source": "grammar",
+      "rule": "An unrestricted name must be closed (KerMLExpressions.xtext:536 Name, UNRESTRICTED_NAME).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 2,
+      "pilotErrors": 1
+    },
+    {
+      "path": "grammar/g58-satisfy-without-reference.sysml",
+      "source": "grammar",
+      "rule": "A satisfaction subject requires a feature reference after by (SysML.xtext:2135 SatisfactionFeatureValue).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "grammar/g59-crosses-without-target.sysml",
+      "source": "grammar",
+      "rule": "A crossing feature requires a crossed feature after crosses (SysML.xtext:458 OwnedCrossSubsetting).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
       "path": "grammar/k01-specializes-without-target.kerml",
       "source": "grammar",
       "rule": "OwnedSpecialization requires a general type after 'specializes' (KerML.xtext SpecializationPart).",
@@ -709,6 +799,33 @@
       "pilotErrors": 10
     },
     {
+      "path": "grammar/k17-unions-without-target.kerml",
+      "source": "grammar",
+      "rule": "A unioning requires a type after unions (KerML.xtext:444 Unioning).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "grammar/k18-connector-end-without-reference.kerml",
+      "source": "grammar",
+      "rule": "A connector end requires a referenced feature (KerML.xtext:854 ConnectorEnd).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 2
+    },
+    {
+      "path": "grammar/k19-metadata-typing-without-name.kerml",
+      "source": "grammar",
+      "rule": "A metadata feature requires a type after @ (KerML.xtext:1094 MetadataTyping).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 3,
+      "pilotErrors": 4
+    },
+    {
       "path": "xpect/p01-public-root-import.kerml",
       "source": "xpect",
       "rule": "a root-namespace import must be private (KerML 8.2.3.5.2 validateImportTopLevelVisibility; pilot Import_RootNamspace_invalid.kerml.xt).",
@@ -766,6 +883,291 @@
       "path": "xpect/p07-extraneous-closing-brace.kerml",
       "source": "xpect",
       "rule": "a stray '}' after the root member is extraneous input (KerML.xtext RootNamespace; pilot ParsingTests_Import_Visibility.kerml.xt).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "xpect/p08-variant-outside-variation.sysml",
+      "source": "xpect",
+      "rule": "A variant must be an owned member of a variation (SysML 7.9 validateVariantMembershipOwningNamespace; pilot Variability_invalid.sysml.xt:55).",
+      "mode": "default",
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 1,
+      "pilot": [
+        "line 6: A variant must be an owned member of a variation."
+      ]
+    },
+    {
+      "path": "xpect/p09-variation-member-not-variant.sysml",
+      "source": "xpect",
+      "rule": "An owned usage of a variation must be a variant (SysML 7.9 validateVariationMembership; pilot Variability_invalid.sysml.xt:46).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "xpect/p10-variation-specializes-variation.sysml",
+      "source": "xpect",
+      "rule": "A variation must not specialize another variation (SysML 7.9 validateVariationSpecialization; pilot Variability_invalid.sysml.xt:50).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "xpect/p11-metadata-body-not-evaluable.sysml",
+      "source": "xpect",
+      "rule": "A metadata body feature value must be model-level evaluable (SysML 7.24 checkMetadataBodyFeature; pilot MetadataUsage_Invalid.sysml.xt:82).",
+      "mode": "default",
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 1,
+      "pilot": [
+        "line 8: Must be model-level evaluable"
+      ]
+    },
+    {
+      "path": "xpect/p12-filter-integer-condition.sysml",
+      "source": "xpect",
+      "rule": "An element filter condition must have a Boolean result (KerML 8.2.3.2 validateElementFilterMembershipIsBoolean; pilot expressions filter rows).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "xpect/p13-state-two-entry-actions.sysml",
+      "source": "xpect",
+      "rule": "A state may have at most one entry action (SysML 7.16 validateStateUsageStateDefinitionEntryAction; pilot StateSubactions_invalid.sysml.xt).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "xpect/p14-requirement-two-subjects.sysml",
+      "source": "xpect",
+      "rule": "Only one subject is allowed (SysML 7.20 validateSubjectMembership; pilot RequirementSubject_Invalid.sysml.xt).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "xpect/p15-attribute-typed-by-part-def.sysml",
+      "source": "xpect",
+      "rule": "An attribute must be typed by attribute definitions (SysML 7.6 validateAttributeUsageIsReferential; pilot AttributeUsage_invalid.sysml.xt).",
+      "mode": "default",
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 1,
+      "pilot": [
+        "line 4: An attribute must be typed by attribute definitions."
+      ]
+    },
+    {
+      "path": "xpect/p16-part-typed-by-attribute-def.sysml",
+      "source": "xpect",
+      "rule": "An occurrence, item or part must be typed by occurrence definitions (SysML 7.9 validatePartUsage; pilot PartUsage_invalid.sysml.xt).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "xpect/p17-calc-two-return-parameters.sysml",
+      "source": "xpect",
+      "rule": "Only one return parameter is allowed (SysML 7.15 validateReturnParameterMembership; pilot CalculationUsage_Invalid1.sysml.xt).",
+      "mode": "default",
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 1,
+      "pilot": [
+        "line 6: Only one return parameter is allowed"
+      ]
+    },
+    {
+      "path": "xpect/p18-enum-two-types.sysml",
+      "source": "xpect",
+      "rule": "An enumeration must be typed by one enumeration definition (SysML 7.7 validateEnumerationUsage; pilot EnumerationUsage_invalid.sysml.xt).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "xpect/p19-parallel-state-with-transition.sysml",
+      "source": "xpect",
+      "rule": "A parallel state cannot have successions or transitions (SysML 7.16 validateStateUsageParallel; pilot StateUsage_invalid.sysml.xt).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 3,
+      "pilotErrors": 1
+    },
+    {
+      "path": "xpect/p20-connection-with-one-end.sysml",
+      "source": "xpect",
+      "rule": "A connector must have at least two related elements (KerML 8.3.3.1 validateConnectorRelatedElements; pilot Connector_Invalid.sysml.xt).",
+      "mode": "default",
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 1,
+      "pilot": [
+        "line 6: Must have at least two related elements"
+      ]
+    },
+    {
+      "path": "xpect/p21-filter-constructor-condition.sysml",
+      "source": "xpect",
+      "rule": "A filter condition must have a Boolean result (SysML 7.24 checkPackageFilterCondition; pilot MetadataUsage_Invalid.sysml.xt:74).",
+      "mode": "default",
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 1,
+      "pilot": [
+        "line 6: Must have a Boolean result"
+      ]
+    },
+    {
+      "path": "xpect/p22-filter-not-model-level-evaluable.sysml",
+      "source": "xpect",
+      "rule": "A filter condition must be model-level evaluable (SysML 7.24 checkPackageFilterCondition; pilot MetadataUsage_Invalid.sysml.xt:68).",
+      "mode": "default",
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 1,
+      "pilot": [
+        "line 7: Must be model-level evaluable"
+      ]
+    },
+    {
+      "path": "xpect/p23-metadata-body-feature-not-redefining.sysml",
+      "source": "xpect",
+      "rule": "A metadata body feature must redefine an owning-type feature (SysML 7.24 checkMetadataFeatureRedefinition; pilot MetadataUsage_Invalid.sysml.xt:93).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "xpect/p24-metadata-abstract-type.sysml",
+      "source": "xpect",
+      "rule": "A metadata usage must have a concrete type (SysML 7.24 checkMetadataUsageConcreteType; pilot MetadataUsage_Invalid.sysml.xt:104).",
+      "mode": "default",
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 1,
+      "pilot": [
+        "line 4: Must have a concrete type"
+      ]
+    },
+    {
+      "path": "xpect/p25-two-individual-definitions.sysml",
+      "source": "xpect",
+      "rule": "At most one individual definition is allowed (SysML 7.9 validateOccurrenceUsageIndividualDefinition; pilot IndividualUsage_Invalid.sysml.xt:36).",
+      "mode": "default",
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 1,
+      "pilot": [
+        "line 7: At most one individual definition is allowed."
+      ]
+    },
+    {
+      "path": "xpect/p26-port-def-nonreferential-usage.sysml",
+      "source": "xpect",
+      "rule": "Owned usages of a port definition (other than ports) must be referential (SysML 7.13 validatePortDefinitionOwnedUsages; pilot PortUsage_Invalid.sysml.xt:33).",
+      "mode": "default",
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 1,
+      "pilot": [
+        "line 5: Owned usages of a port definition (other than ports) must be referential."
+      ]
+    },
+    {
+      "path": "xpect/p27-interface-end-not-port.sysml",
+      "source": "xpect",
+      "rule": "An interface end must be a port (SysML 7.13 validateInterfaceUsageEnds; pilot InterfaceUsage_Invalid.sysml.xt:63).",
+      "mode": "default",
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 1,
+      "pilot": [
+        "line 9: An interface end must be a port."
+      ]
+    },
+    {
+      "path": "xpect/p28-package-level-feature-redefined.sysml",
+      "source": "xpect",
+      "rule": "A package-level feature cannot be redefined (KerML 7.4.7 validateRedefinitionFeaturingTypes; pilot Redefinition_OwningType_Invalid.sysml.xt:28).",
+      "mode": "default",
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 1,
+      "pilot": [
+        "line 5: A package-level feature cannot be redefined"
+      ]
+    },
+    {
+      "path": "xpect/p29-verify-outside-objective.sysml",
+      "source": "xpect",
+      "rule": "A requirement verification must be in the objective of a verification case (SysML 7.21 validateRequirementVerificationMembership; pilot Verification_invalid.sysml.xt:30).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "xpect/p30-two-view-renderings.sysml",
+      "source": "xpect",
+      "rule": "A view may have at most one view rendering (SysML 7.23 validateViewUsageRendering; pilot ViewRendering_invalid.sysml.xt:31).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "xpect/p31-redefinition-incompatible-direction.sysml",
+      "source": "xpect",
+      "rule": "A redefining feature must have a compatible direction (KerML 7.4.7 validateRedefinitionDirection; pilot PortUsage_Invalid.sysml.xt:57).",
+      "mode": "default",
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
+    },
+    {
+      "path": "xpect/p32-redefinition-same-featuring-type.sysml",
+      "source": "xpect",
+      "rule": "Featuring types of redefining feature and redefined feature cannot be the same (KerML 7.4.7 validateRedefinitionFeaturingTypes; pilot Redefinition_OwningType_Invalid.sysml.xt:38).",
+      "mode": "default",
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 1,
+      "pilot": [
+        "line 9: Featuring types of redefining feature and redefined feature cannot be the same"
+      ]
+    },
+    {
+      "path": "xpect/p33-individual-typed-by-plain-def.sysml",
+      "source": "xpect",
+      "rule": "An individual must be typed by one individual definition (SysML 7.9 validateOccurrenceUsageIndividualDefinition; pilot IndividualUsage_Invalid.sysml.xt:39).",
+      "mode": "default",
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 1,
+      "pilot": [
+        "line 4: An individual must be typed by one individual definition."
+      ]
+    },
+    {
+      "path": "xpect/p34-accepter-source-not-state.sysml",
+      "source": "xpect",
+      "rule": "A transition with an accepter must have a state as its source (SysML 7.16 validateTransitionUsageAccepter; pilot TransitionUsage_invalid.sysml.xt:54).",
       "mode": "default",
       "bucket": "both-reject",
       "oursErrors": 1,

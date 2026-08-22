@@ -285,6 +285,19 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		}
 	}
 
+	// A send written as an action node is a SendActionUsage of its own, so it is
+	// typed by SendAction whether or not a usage declares it.
+	if _, ok := sym.Decl.(*ast.SendStatement); ok {
+		for _, sendDef := range m.resolver.Index().LookupQualified("Actions::SendAction") {
+			if sendDef == nil || sendDef == sym || seen[sendDef] {
+				continue
+			}
+			seen[sendDef] = true
+			out = append(out, sendDef)
+			break
+		}
+	}
+
 	// An action usage with an accept payload is an AcceptActionUsage, implicitly
 	// typed by AcceptAction, which supplies `receiver` and `acceptedMessage`
 	// (SysML v2 §7.16.5, §8.3.17).

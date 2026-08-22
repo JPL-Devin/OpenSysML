@@ -55,6 +55,33 @@ func TestNegative(t *testing.T) {
 		// Prefix metadata needs a name, and the declaration after it a terminator.
 		{"require_prefix_metadata_no_type", "requirement r { require #; }"},
 		{"require_prefix_metadata_unterminated", "requirement r { require #goal c }"},
+		// A target succession's body closes, and its ends are still required
+		// (SysML.xtext:1698 ActionTargetSuccession).
+		{"succession_body_unclosed", "package P { action def A { action a; first a; then a { doc /* x */ } }"},
+		{"succession_body_no_target", "package P { action def A { action a; first a; then { } } }"},
+		// Only an action body item reaches ActionTargetSuccession (SysML.xtext:1698), so a
+		// bodied `then` is not a state, definition or namespace member (:1796-1801, :516-524).
+		{"entry_succession_body", "package P { state def S { state starting; entry; then starting { doc /* x */ } } }"},
+		{"definition_succession_body", "package P { part def D { part a; part b; then b { doc /* x */ } } }"},
+		{"namespace_succession_body", "package P { action a; action b; then b { doc /* x */ } }"},
+		// A control node in a case body takes a declaration or nothing, and its
+		// body closes (SysML.xtext:1676 JoinNode, :1682 ForkNode).
+		{"case_body_fork_unclosed", "package P { use case def U { fork f { action a; } }"},
+		{"case_body_join_no_terminator", "package P { use case def U { join j } }"},
+		// A `for` in a case body states a variable and a sequence
+		// (SysML.xtext ForLoopNode).
+		{"case_body_for_no_variable", "package P { analysis def A { for in xs { } } }"},
+		{"case_body_for_no_sequence", "package P { analysis def A { for i in { } } }"},
+		// A metadata usage's `about` names at least one annotated element
+		// (SysML.xtext:145-147).
+		{"metadata_about_no_target", "package P { metadata def M; @M about ; }"},
+		{"metadata_about_trailing_comma", "package P { metadata def M; part a; @M about a, ; }"},
+		// A prefixed dependency still states both of its ends
+		// (SysML.xtext:55-58).
+		{"prefixed_dependency_no_supplier", "package P { metadata def M; part a; #M dependency d from a to ; }"},
+		// A verification's requirement reference is a name, chained or not
+		// (SysML.xtext:2119).
+		{"verify_chained_no_member", "package P { verification def V { verify a. ; } }"},
 		// `not` negates a satisfaction, and nothing else at member level.
 		{"not_without_satisfy", "package P { not r1 by p; }"},
 		{"not_satisfy_no_subject", "package P { not satisfy r1 by ; }"},

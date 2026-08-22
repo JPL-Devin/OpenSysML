@@ -183,6 +183,7 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 		defineIdent(scope, id, sym)
 		scope.AddChild(child)
 		buildMembers(child, d.Effect)
+		defineTransitionEffect(child, d)
 	case *ast.StateRegion:
 		// A region is a namespace of its own: sibling regions routinely reuse
 		// state names (each region declaring its own `initial start`), so their
@@ -323,6 +324,43 @@ func buildConnectorEnds(scope *Scope, u *ast.Usage) {
 		defineIdent(scope, id, sym)
 		scope.AddChild(child)
 	}
+}
+
+// transitionEffectName is the TransitionAction feature a transition's effect
+// action redefines.
+const transitionEffectName = "effect"
+
+// defineTransitionEffect names a transition's effect action `effect`, the
+// TransitionAction feature it redefines (SysML v2 §7.19.2), so `t.effect.x`
+// reads through the effect action rather than the abstract library feature.
+func defineTransitionEffect(scope *Scope, trans *ast.TransitionMember) {
+	if len(trans.Effect) != 1 {
+		return
+	}
+	if _, exists := scope.LookupLocal(transitionEffectName); exists {
+		return
+	}
+	effect, _ := unwrapMember(trans.Effect[0])
+	if effect == nil {
+		return
+	}
+	// A declared effect action is already a member of the transition's scope:
+	// name that symbol rather than building a second one for it.
+	for _, sym := range scope.AllMembers() {
+		if sym.Decl == effect {
+			scope.Define(transitionEffectName, sym)
+			return
+		}
+	}
+	// A statement (`do send x to y`) declares no member of its own, so the
+	// action it performs is named here, its members staying the transition's.
+	body := NewScope(scope, effect)
+	sym := newSymbol(
+		ast.Identification{Name: transitionEffectName, NameSpan: effect.Span()},
+		SymbolActionUsage, effect, ast.VisibilityDefault, body, scope, nil,
+	)
+	scope.Define(transitionEffectName, sym)
+	scope.AddChild(body)
 }
 
 // newSymbol builds a Symbol from an identification. scope is the child scope the

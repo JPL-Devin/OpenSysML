@@ -1,0 +1,6 @@
+{
+  "libraries": true,
+  "type": "calc",
+  "evaluate": "test::probe",
+  "result": {"type": "Integer", "value": 5}
+}
