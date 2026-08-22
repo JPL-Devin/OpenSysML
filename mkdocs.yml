@@ -146,6 +146,7 @@ nav:
       - Pilot Xpect expectations: project/pilot-xpect.md
       - Pilot rejection oracle: project/pilot-rejection.md
       - Grammar coverage: project/grammar-coverage.md
+      - Wave 10 decisions: project/wave10-decisions.md
       - Roadmap: project/roadmap.md
       - Releasing: project/releasing.md
       - macOS distribution: project/macos-distribution.md
