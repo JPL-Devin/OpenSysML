@@ -12,8 +12,6 @@
           (Membership visibility="default"
             (Usage kind="occurrence" name="" ref=false direction="in" composite=false derived=false ordered=false nonunique=false))
           (Membership visibility="default"
-            (Usage kind="attribute" name="" ref=false direction="in" composite=false derived=false ordered=false nonunique=false))
-          (Membership visibility="default"
             (Usage kind="attribute" name="x" ref=false direction="in" composite=false derived=false ordered=false nonunique=false))
           (Membership visibility="default"
             (Usage kind="individual" name="v" ref=false direction="in" composite=false derived=false ordered=false nonunique=false individual=true
