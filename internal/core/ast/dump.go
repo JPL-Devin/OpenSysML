@@ -427,7 +427,8 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 			if v.Name != "" {
 				fmt.Fprintf(b, ` constraint=%q`, v.Name)
 			}
-			writeChildren(b, depth, ownedConstraintChildren(v.Relationships, v.Multiplicity, v.Value, v.Body))
+			writeChildren(b, depth, prefixesAnd(v.Prefixes,
+				ownedConstraintChildren(v.Relationships, v.Multiplicity, v.Value, v.Body)))
 		} else {
 			// Expression form: require expr;
 			b.WriteString(`(RequireMember`)
@@ -445,7 +446,8 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 			if v.Name != "" {
 				fmt.Fprintf(b, ` constraint=%q`, v.Name)
 			}
-			writeChildren(b, depth, ownedConstraintChildren(v.Relationships, v.Multiplicity, v.Value, v.Body))
+			writeChildren(b, depth, prefixesAnd(v.Prefixes,
+				ownedConstraintChildren(v.Relationships, v.Multiplicity, v.Value, v.Body)))
 		} else {
 			writeChildren(b, depth, []Node{v.Expression})
 		}

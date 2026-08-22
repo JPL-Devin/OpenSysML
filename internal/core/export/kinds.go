@@ -94,6 +94,35 @@ var usageMetaclass = map[ast.UsageKind]string{
 	ast.UsageBool:             "BooleanUsage",
 }
 
+// keywordMetaclass names the metaclass a keyword builds where several spellings
+// share one AST kind (KerML.xtext:788, :924; SysML.xtext:632).
+var keywordMetaclass = map[string]string{
+	"datatype": "DataType",
+	"function": "Function",
+	"ref":      "ReferenceUsage",
+}
+
+// usageMetaclassOf gives the metaclass a usage builds, reading the keyword where
+// the kind does not decide it; a kindless one is a DefaultReferenceUsage.
+func usageMetaclassOf(n *ast.Usage) (string, bool) {
+	if m, ok := keywordMetaclass[n.Keyword]; ok {
+		return m, true
+	}
+	if n.Keyword == "" && n.Kind == ast.UsageAttribute {
+		return "ReferenceUsage", true
+	}
+	m, ok := usageMetaclass[n.Kind]
+	return m, ok
+}
+
+// metaclassKeywordUsage reads the keyword-decided metaclasses back to the kind
+// the parser records for them.
+var metaclassKeywordUsage = map[string]ast.UsageKind{
+	"DataType":       ast.UsageAttribute,
+	"Function":       ast.UsageCalc,
+	"ReferenceUsage": ast.UsageAttribute,
+}
+
 // definitionKeyword and usageKeyword give the source keyword for a kind. The
 // AST's own String() is the keyword for every kind, which is what makes the
 // printer able to reconstruct a declaration head from the metaclass alone.
@@ -209,6 +238,9 @@ func init() {
 		metaclassDefinition[name] = kind
 	}
 	for kind, name := range usageMetaclass {
+		metaclassUsage[name] = kind
+	}
+	for name, kind := range metaclassKeywordUsage {
 		metaclassUsage[name] = kind
 	}
 }

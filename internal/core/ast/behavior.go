@@ -444,6 +444,8 @@ type SubjectMember struct {
 // Syntax: assume <expression>; OR assume constraint { <expression>... } OR assume <Q::r> { body }
 type AssumeMember struct {
 	NodeBase
+	// Prefix metadata written before the declaration: `assume #goal constraint c;`.
+	Prefixes   []*PrefixMetadata
 	Expression Node           // assumption condition (for expression form)
 	Reference  *QualifiedName // referenced constraint/requirement (reference-subsetting form)
 	Body       []Node         // ConstraintMembers of the nested constraint (for the braced form)
@@ -463,6 +465,8 @@ type AssumeMember struct {
 // Syntax: require <expression>; OR require constraint { <expression>... } OR require <Q::r> { body }
 type RequireMember struct {
 	NodeBase
+	// Prefix metadata written before the declaration: `require #goal r;`.
+	Prefixes   []*PrefixMetadata
 	Expression Node           // requirement condition (for expression form)
 	Reference  *QualifiedName // referenced requirement (reference-subsetting form, SysML v2 §7.20)
 	Body       []Node         // nested members: ConstraintMembers for the braced form, requirement members for the reference form

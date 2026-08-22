@@ -191,7 +191,7 @@ func (ctx *Context) CheckSatisfactionOn(a *SatisfyAssertion, subject *Instance) 
 	if a.Requirement == nil && a.RequirementRef != "" {
 		return CheckResult{Subject: subject}, fmt.Errorf("%s: %w: %s", a.Text(), ErrNoRequirement, a.RequirementRef)
 	}
-	if a.Requirement == nil && !declaresConditions(a.Symbol) {
+	if a.Requirement == nil && !ctx.declaresConditions(a.Symbol) {
 		return CheckResult{Subject: subject}, fmt.Errorf("%s: %w", a.Text(), ErrNoRequirement)
 	}
 
@@ -231,7 +231,7 @@ func (ctx *Context) CheckSatisfactionOn(a *SatisfyAssertion, subject *Instance) 
 		return ctx.satisfactionResult(false, subject, reached), err
 	}
 
-	conds := conditionsOf(members)
+	conds := ctx.conditionsOf(members)
 	holds, err := ctx.evaluateConditions(conditionCheck{
 		sym:  target,
 		kind: "satisfaction",
@@ -277,9 +277,9 @@ func (ctx *Context) SatisfySubject(a *SatisfyAssertion) (*Instance, error) {
 // declaresConditions reports whether sym's own declaration states any condition,
 // which is how a `satisfy requirement r by p { require ... }` form carries one
 // without referencing another requirement.
-func declaresConditions(sym *symbols.Symbol) bool {
+func (ctx *Context) declaresConditions(sym *symbols.Symbol) bool {
 	for _, node := range declMembers(sym.Decl) {
-		if len(appendConditions(nil, node, nil, true, false)) > 0 {
+		if len(ctx.appendConditions(nil, node, nil, true, false, nil)) > 0 {
 			return true
 		}
 	}

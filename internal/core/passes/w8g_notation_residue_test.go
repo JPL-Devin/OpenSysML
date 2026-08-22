@@ -1,0 +1,129 @@
+package passes
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
+)
+
+// analyzeAll is diagnostics from every pass, since a residue is adjudicated by
+// what the whole analysis says about a file rather than by one pass.
+func analyzeAll(t *testing.T, name, src string) []Diagnostic {
+	t.Helper()
+	root := parser.New(source.New(name, []byte(src))).ParseFile()
+	idx := symbols.NewIndex()
+	idx.AddDocument(name, root)
+	return Analyze(name, root, nil, idx)
+}
+
+// TestW8GNodeBodiesAnalyseClean is F62's residue: a transition with an accept
+// trigger and a body, and a send with a body, analyse clean, as the pinned
+// validator also accepts them.
+func TestW8GNodeBodiesAnalyseClean(t *testing.T) {
+	diags := analyzeAll(t, "f62.sysml", `package F62 {
+	part def Vehicle;
+	port def P;
+	item def Msg;
+	action def SendM { in item m : Msg; }
+	state def VehicleStates {
+		entry; then off;
+		state off;
+		state on;
+		transition off_to_on first off accept Msg then on {
+			doc /* a transition body */
+		}
+	}
+	action def Send {
+		port p : P;
+		part receiver : Vehicle;
+		action a {
+			send SendM() via p to receiver {
+				doc /* a send body */
+			}
+		}
+	}
+}`)
+	for _, d := range diags {
+		if d.Severity == SeverityError {
+			t.Errorf("unexpected error: %s", d.Message)
+		}
+	}
+}
+
+// TestW8GGuardedSuccessionEndpointsAreActions pins F62's remaining gap: a
+// guarded succession in an action body now parses as the transition it is, but
+// its ends are action nodes, which `resolve.isVertex` (wave 8A) rejects.
+func TestW8GGuardedSuccessionEndpointsAreActions(t *testing.T) {
+	diags := analyzeAll(t, "guarded.sysml", `action def Decide {
+	attribute x = 1;
+	action A1;
+	action A2;
+	succession S first A1 if x == 0 then A2;
+}`)
+	var notVertex []string
+	for _, d := range diags {
+		if strings.Contains(d.Message, "is not a state or pseudostate") {
+			notVertex = append(notVertex, d.Message)
+		}
+	}
+	if len(notVertex) != 2 {
+		t.Fatalf("expected both ends reported as no vertex, got %v", notVertex)
+	}
+}
+
+// TestW8GInterfaceConjugationStaysAWarning is the interface row's residue: the
+// check is a one-sided warning, since the pinned validator reports nothing at
+// all on an interface whose ends carry the same direction.
+func TestW8GInterfaceConjugationStaysAWarning(t *testing.T) {
+	diags := analyzeAll(t, "iface.sysml", `package IF {
+	attribute def Level;
+	port def Sensor { out attribute reading : Level; }
+	port def Reader { out attribute reading : Level; }
+	interface def Link {
+		end supplier : Sensor;
+		end consumer : Reader;
+	}
+}`)
+	found := false
+	for _, d := range diags {
+		if !strings.Contains(d.Message, "not conjugate") {
+			continue
+		}
+		found = true
+		if d.Severity != SeverityWarning {
+			t.Errorf("conjugation mismatch is %v, want a warning", d.Severity)
+		}
+	}
+	if !found {
+		t.Error("no conjugation diagnostic")
+	}
+}
+
+// TestW8GVerifyRedefinesInheritedObjective is F66's residue, pinned as a gap:
+// the redefinition target is inherited through the objective the verification's
+// type declares, which `internal/core/symbols` does not compute, so the
+// reference resolves `massRequirement` where we report it unresolved.
+func TestW8GVerifyRedefinesInheritedObjective(t *testing.T) {
+	diags := analyzeAll(t, "f66.sysml", `package F66 {
+	requirement def MassReq;
+	verification def MassVerification {
+		objective { verify requirement massRequirement : MassReq; }
+	}
+	requirement vehicleMassRequirement : MassReq;
+	verification vehicleMassVerification : MassVerification {
+		objective { verify vehicleMassRequirement :>> massRequirement; }
+	}
+}`)
+	var unresolved []string
+	for _, d := range diags {
+		if strings.Contains(d.Message, "unresolved reference") {
+			unresolved = append(unresolved, d.Message)
+		}
+	}
+	if len(unresolved) != 1 || !strings.Contains(unresolved[0], "massRequirement") {
+		t.Fatalf("expected the inherited objective member to be the one unresolved reference, got %v", unresolved)
+	}
+}

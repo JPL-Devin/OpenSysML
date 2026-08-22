@@ -125,7 +125,7 @@ func (ctx *Context) evaluateConstraintInvocation(sym *symbols.Symbol, scope *sym
 		self:     subject.instance,
 		bindings: bindings,
 		negated:  NegatedDecl(sym),
-	}, conditionsOf(ctx.chainMembers(sym, scope)))
+	}, ctx.conditionsOf(ctx.chainMembers(sym, scope)))
 	if errors.Is(err, ErrViolated) {
 		return false, nil
 	}
