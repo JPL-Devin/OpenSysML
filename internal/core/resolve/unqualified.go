@@ -47,11 +47,15 @@ func (r *Resolver) walkUnqualifiedHiding(scope *symbols.Scope, name string, hide
 			return resolution{sym: sym, ok: true}
 		}
 
-		if sym, ok := r.lookupImports(s, name); ok && !hide.hides(sym) {
+		if sym, ok := r.lookupInheritedImports(s, name); ok && !hide.hides(sym) {
 			return resolution{sym: sym, ok: true}
 		}
 
-		if sym, ok := r.lookupInheritedImports(s, name); ok && !hide.hides(sym) {
+		if sym, ok := enclosingLocal(s.Parent(), name, hide); ok {
+			return resolution{sym: sym, ok: true}
+		}
+
+		if sym, ok := r.lookupImports(s, name); ok && !hide.hides(sym) {
 			return resolution{sym: sym, ok: true}
 		}
 	}
@@ -68,6 +72,15 @@ func (r *Resolver) walkUnqualifiedHiding(scope *symbols.Scope, name string, hide
 		return resolution{sym: sym, ok: true}
 	}
 	return resolution{}
+}
+
+func enclosingLocal(scope *symbols.Scope, name string, hide *refFilter) (*symbols.Symbol, bool) {
+	for ; scope != nil; scope = scope.Parent() {
+		if sym, ok := hide.lookupLocal(scope, name); ok {
+			return sym, true
+		}
+	}
+	return nil, false
 }
 
 // visibleMember resolves name as a member of sym, skipping what hide covers, so

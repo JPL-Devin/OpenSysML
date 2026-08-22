@@ -87,6 +87,34 @@ func TestProtectedMemberIsVisibleThroughSpecializationOnly(t *testing.T) {
 	wantUnresolved(t, r, "Base::Inner")
 }
 
+// A qualified namespace may name a protected member from within itself or a specialization.
+func TestProtectedMemberIsVisibleThroughAQualifiedSpecializingNamespace(t *testing.T) {
+	r := resolveVisibilityDoc(t, `package P {
+		class Base {
+			protected class Inner { public class Leaf; }
+			private class Hidden;
+		}
+		class Sub specializes Base {
+			class A specializes Sub::Inner;
+			class B specializes P::Sub::Inner::Leaf;
+			class C specializes Base::Inner;
+			class D specializes Base::Inner::Leaf;
+		}
+	}`)
+	wantNoUnresolved(t, r, "Sub::Inner", "P::Sub::Inner::Leaf", "Base::Inner", "Base::Inner::Leaf")
+
+	outside := resolveVisibilityDoc(t, `package P {
+		class Base {
+			protected class Inner;
+			private class Hidden;
+		}
+		class Sub specializes Base;
+		class Outside specializes Sub::Inner;
+		class PrivateOutside specializes Base::Hidden;
+	}`)
+	wantUnresolved(t, outside, "Sub::Inner", "Base::Hidden")
+}
+
 // Visibility applies to the members a feature chain walks: only the public link
 // of the chain is reachable from outside the owning feature.
 func TestFeatureChainAppliesVisibilityToEachLink(t *testing.T) {

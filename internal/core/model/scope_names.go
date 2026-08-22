@@ -191,7 +191,7 @@ func (nw *nameWalk) walk(anchor *symbols.Scope, redefinition bool) {
 		}
 		nw.locals(s, "", 1, true, true)
 		nw.inherited(s.Owner(), "", 1, true)
-		nw.imports(s, "", 1, true)
+		nw.imports(s, "", 1, true, false)
 	}
 	nw.roots()
 }
@@ -250,8 +250,8 @@ func (nw *nameWalk) inherited(owner *symbols.Symbol, prefix string, depth int, i
 		if !ok {
 			continue
 		}
-		nw.add(prefix, leafName(sym.Name), sym, depth)
-		nw.add(prefix, sym.ShortName, sym, depth)
+		nw.addInherited(prefix, leafName(sym.Name), sym, depth)
+		nw.addInherited(prefix, sym.ShortName, sym, depth)
 		nw.leave(chain)
 	}
 	// MembersOf reads a source's scope, which a cached standard-library symbol
@@ -268,9 +268,23 @@ func (nw *nameWalk) inherited(owner *symbols.Symbol, prefix string, depth int, i
 			if !symbols.VisibleAs(child.Visibility, false, inheriting) {
 				continue
 			}
-			nw.add(prefix, leafName(child.Name), child, depth)
+			nw.addInherited(prefix, leafName(child.Name), child, depth)
 		}
 		nw.leave(chain)
+	}
+	nw.inheritedImports(owner, prefix, depth, map[*symbols.Symbol]bool{})
+}
+
+func (nw *nameWalk) inheritedImports(owner *symbols.Symbol, prefix string, depth int, seen map[*symbols.Symbol]bool) {
+	for _, src := range nw.sem.DirectMemberSources(owner) {
+		if src == nil || seen[src] {
+			continue
+		}
+		seen[src] = true
+		if src.Scope != nil {
+			nw.imports(src.Scope, prefix, depth, false, true)
+		}
+		nw.inheritedImports(src, prefix, depth, seen)
 	}
 }
 
@@ -345,14 +359,13 @@ func (nw *nameWalk) leave(chain []*symbols.Symbol) {
 	}
 }
 
-// imports adds what the imports declared in a scope surface. A non-public
-// import is only surfaced inside the namespace declaring it.
-func (nw *nameWalk) imports(s *symbols.Scope, prefix string, depth int, inside bool) {
+// imports adds the imports visible inside a namespace or through inheritance.
+func (nw *nameWalk) imports(s *symbols.Scope, prefix string, depth int, inside, inheriting bool) {
 	if s == nil {
 		return
 	}
 	for _, imp := range importsIn(s.Node()) {
-		if !inside && imp.Visibility != ast.VisibilityPublic && imp.Visibility != ast.VisibilityDefault {
+		if !symbols.VisibleAs(imp.Visibility, inside, inheriting) {
 			continue
 		}
 		elements := nw.r.ImportedElements(s, imp)
@@ -362,23 +375,31 @@ func (nw *nameWalk) imports(s *symbols.Scope, prefix string, depth int, inside b
 			// its recursive form adds the subtree under their own names.
 			if imp.Kind == ast.ImportMembership && i == 0 {
 				written := importedName(imp)
-				nw.add(prefix, written, sym, depth)
+				nw.addPath(prefix, written, sym, depth, inheriting)
 				// An element imported by one of its own two names keeps both;
 				// an alias name belongs to the alias, not to its target.
 				if written == leafName(sym.Name) || written == sym.ShortName {
-					nw.add(prefix, leafName(sym.Name), sym, depth)
-					nw.add(prefix, sym.ShortName, sym, depth)
+					nw.addPath(prefix, leafName(sym.Name), sym, depth, inheriting)
+					nw.addPath(prefix, sym.ShortName, sym, depth, inheriting)
 				}
 				continue
 			}
-			nw.add(prefix, leafName(sym.Name), sym, depth)
-			nw.add(prefix, sym.ShortName, sym, depth)
+			nw.addPath(prefix, leafName(sym.Name), sym, depth, inheriting)
+			nw.addPath(prefix, sym.ShortName, sym, depth, inheriting)
 		}
 	}
 }
 
 // add records one path and then the paths that lead through it.
 func (nw *nameWalk) add(prefix, name string, sym *symbols.Symbol, depth int) {
+	nw.addPath(prefix, name, sym, depth, false)
+}
+
+func (nw *nameWalk) addInherited(prefix, name string, sym *symbols.Symbol, depth int) {
+	nw.addPath(prefix, name, sym, depth, true)
+}
+
+func (nw *nameWalk) addPath(prefix, name string, sym *symbols.Symbol, depth int, recordCycle bool) {
 	if name == "" || sym == nil || depth > nw.maxDepth {
 		return
 	}
@@ -394,9 +415,10 @@ func (nw *nameWalk) add(prefix, name string, sym *symbols.Symbol, depth int) {
 	if t, ok := nw.r.ResolveAliasTarget(sym); ok && t != nil {
 		target = t
 	}
-	// A path never names the same element twice: that is the circularity a
-	// reference cannot usefully write, and where the pilot truncates too.
-	if nw.expanding[target] || !nw.loaded(target) {
+	if !nw.loaded(target) {
+		return
+	}
+	if nw.expanding[target] && !recordCycle {
 		return
 	}
 	nw.out = append(nw.out, VisibleName{
@@ -405,6 +427,9 @@ func (nw *nameWalk) add(prefix, name string, sym *symbols.Symbol, depth int) {
 		Kind:  target.Kind,
 		Depth: depth,
 	})
+	if nw.expanding[target] {
+		return
+	}
 	nw.expand(qn, target, depth+1)
 }
 
@@ -420,7 +445,7 @@ func (nw *nameWalk) expand(prefix string, sym *symbols.Symbol, depth int) {
 	if sym.Scope != nil {
 		nw.locals(sym.Scope, prefix, depth, false, false)
 		nw.inherited(sym, prefix, depth, false)
-		nw.imports(sym.Scope, prefix, depth, false)
+		nw.imports(sym.Scope, prefix, depth, false, false)
 		return
 	}
 	// A cached library symbol carries no scope; its members are the children
