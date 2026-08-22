@@ -7,12 +7,12 @@
     "filesUnparsed": 0,
     "assertions": 1261,
     "rows": 1326,
-    "agree": 630,
-    "disagree": 696,
+    "agree": 816,
+    "disagree": 510,
     "unlocated": 0,
     "notAdjudicated": 0,
     "missingResources": 0,
-    "foreignDiagnostics": 19
+    "foreignDiagnostics": 18
   },
   "kinds": [
     {
@@ -24,18 +24,18 @@
       "disagree": 418,
       "unlocated": 0,
       "notAdjudicated": 0,
-      "sameLocation": 246,
+      "sameLocation": 232,
       "sameLine": 62,
-      "severityDiffers": 16,
-      "elsewhereInFile": 57
+      "severityDiffers": 24,
+      "elsewhereInFile": 51
     },
     {
       "kind": "noErrors",
       "assertions": 275,
       "blockAssertions": 0,
       "rows": 275,
-      "agree": 243,
-      "disagree": 32,
+      "agree": 254,
+      "disagree": 21,
       "unlocated": 0,
       "notAdjudicated": 0,
       "sameLocation": 0,
@@ -62,33 +62,32 @@
       "assertions": 75,
       "blockAssertions": 17,
       "rows": 113,
-      "agree": 23,
-      "disagree": 90,
+      "agree": 89,
+      "disagree": 24,
       "unlocated": 0,
       "notAdjudicated": 0,
-      "sameLocation": 0,
+      "sameLocation": 3,
       "sameLine": 0,
-      "severityDiffers": 60,
-      "elsewhereInFile": 7
+      "severityDiffers": 4,
+      "elsewhereInFile": 13
     },
     {
       "kind": "scope",
       "assertions": 230,
       "blockAssertions": 229,
       "rows": 230,
-      "agree": 74,
-      "disagree": 156,
+      "agree": 183,
+      "disagree": 47,
       "unlocated": 0,
       "notAdjudicated": 0,
       "sameLocation": 0,
       "sameLine": 0,
       "severityDiffers": 0,
       "elsewhereInFile": 0,
-      "otherPaths": 12,
       "extraNames": 3,
-      "missingNames": 10,
-      "missingAndExtra": 6,
-      "libraryNames": 125
+      "missingNames": 2,
+      "missingAndExtra": 14,
+      "libraryNames": 28
     },
     {
       "kind": "exportedObjects",
@@ -114,8 +113,8 @@
         "filesUnparsed": 0,
         "assertions": 952,
         "rows": 968,
-        "agree": 486,
-        "disagree": 482,
+        "agree": 613,
+        "disagree": 355,
         "unlocated": 0,
         "notAdjudicated": 0,
         "missingResources": 0,
@@ -131,18 +130,18 @@
           "disagree": 294,
           "unlocated": 0,
           "notAdjudicated": 0,
-          "sameLocation": 239,
+          "sameLocation": 225,
           "sameLine": 15,
-          "severityDiffers": 6,
-          "elsewhereInFile": 23
+          "severityDiffers": 10,
+          "elsewhereInFile": 21
         },
         {
           "kind": "noErrors",
           "assertions": 200,
           "blockAssertions": 0,
           "rows": 200,
-          "agree": 178,
-          "disagree": 22,
+          "agree": 189,
+          "disagree": 11,
           "unlocated": 0,
           "notAdjudicated": 0,
           "sameLocation": 0,
@@ -169,8 +168,8 @@
           "assertions": 18,
           "blockAssertions": 0,
           "rows": 18,
-          "agree": 8,
-          "disagree": 10,
+          "agree": 15,
+          "disagree": 3,
           "unlocated": 0,
           "notAdjudicated": 0,
           "sameLocation": 0,
@@ -183,19 +182,18 @@
           "assertions": 230,
           "blockAssertions": 229,
           "rows": 230,
-          "agree": 74,
-          "disagree": 156,
+          "agree": 183,
+          "disagree": 47,
           "unlocated": 0,
           "notAdjudicated": 0,
           "sameLocation": 0,
           "sameLine": 0,
           "severityDiffers": 0,
           "elsewhereInFile": 0,
-          "otherPaths": 12,
           "extraNames": 3,
-          "missingNames": 10,
-          "missingAndExtra": 6,
-          "libraryNames": 125
+          "missingNames": 2,
+          "missingAndExtra": 14,
+          "libraryNames": 28
         },
         {
           "kind": "exportedObjects",
@@ -259,47 +257,13 @@
           "path": "src/org/omg/kerml/xpect/tests/imports/global/DependencyPackageAlias0_AA_alias.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.imports.global.KerMLImportGlobalTest",
           "expectations": 2,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 22,
-              "at": "PackageAlias1::AA_alias",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "20 name(s) visible at \"PackageAlias1::AA_alias\"",
-              "ours": "92 name(s): missing 0 (none), extra 72 (AA_alias.aa.self, AA_alias.aa.self.that, AA_alias.aa.that, AA_alias.aa.that.self, AA_alias.aa_alias.self, …)",
-              "names": {
-                "declared": 20,
-                "ours": 92,
-                "extra": 72
-              }
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/imports/global/DependencyPackageAlias0_A_alias.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.imports.global.KerMLImportGlobalTest",
           "expectations": 2,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 22,
-              "at": "PackageAlias1::A_alias",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "20 name(s) visible at \"PackageAlias1::A_alias\"",
-              "ours": "92 name(s): missing 0 (none), extra 72 (A_alias.a.self, A_alias.a.self.that, A_alias.a.that, A_alias.a.that.self, A_alias.a_alias.self, …)",
-              "names": {
-                "declared": 20,
-                "ours": 92,
-                "extra": 72
-              }
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/imports/global/DependencyPackageAlias12.kerml.xt",
@@ -1032,23 +996,8 @@
           "path": "src/org/omg/kerml/xpect/tests/imports/local/Import_Private.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.imports.local.KerMLImportLocalTest",
           "expectations": 5,
-          "agree": 2,
+          "agree": 3,
           "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 26,
-              "at": "P1::A",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "67 name(s) visible at \"P1::A\"",
-              "ours": "71 name(s): missing 0 (none), extra 4 (Import_Private.y.self.that, Import_Private.y1.self.that, y.self.that, y1.self.that)",
-              "names": {
-                "declared": 67,
-                "ours": 71,
-                "extra": 4
-              }
-            },
             {
               "kind": "errors",
               "line": 46,
@@ -1172,11 +1121,11 @@
               "verdict": "disagree",
               "tolerance": "library-names",
               "declared": "27 name(s) visible at \"X\"",
-              "ours": "118 name(s): missing 0 (none), extra 94 (P.Q.R.Z.self, P.Q.R.Z.self.that, P.Q.R.Z.that, P.Q.R.Z.that.self, P.Q.Y.self, …)",
+              "ours": "42 name(s): missing 0 (none), extra 18 (RecursiveImport.x.self, RecursiveImport.x.that, RecursiveImport.x.that.self, RecursiveImport.y.self, RecursiveImport.y.that, …)",
               "names": {
                 "declared": 27,
-                "ours": 118,
-                "extra": 94
+                "ours": 42,
+                "extra": 18
               }
             }
           ]
@@ -1207,12 +1156,12 @@
               "verdict": "disagree",
               "tolerance": "library-names",
               "declared": "172 name(s) visible at \"S::S1::X2\"",
-              "ours": "248 name(s): missing 7 (P.S.T.U.U1.self.that, RecursiveImport.P.Q.R.Z.self.that, RecursiveImport.P.S.S1.X2.self.that, RecursiveImport.P.S.T.T1.self.that, RecursiveImport.P.S.T.U.U1.self, …), extra 83 (Q.R.Z.self, Q.R.Z.self.that, Q.Y.self, Q.Y.self.that, R.Z.self, …); 7 missing name(s) reachable by another path (P.S.T.U.U1.self.that, RecursiveImport.P.Q.R.Z.self.that, RecursiveImport.P.S.S1.X2.self.that, RecursiveImport.P.S.T.T1.self.that, RecursiveImport.P.S.T.U.U1.self, …)",
+              "ours": "246 name(s): missing 9 (P.S.T.U.U1.self.that, RecursiveImport.P.Q.R.Z.self.that, RecursiveImport.P.S.S1.X2.self.that, RecursiveImport.P.S.T.T1.self.that, RecursiveImport.P.S.T.U.U1.self, …), extra 83 (Q.R.Z.self, Q.R.Z.self.that, Q.Y.self, Q.Y.self.that, R.Z.self, …); 9 missing name(s) reachable by another path (P.S.T.U.U1.self.that, RecursiveImport.P.Q.R.Z.self.that, RecursiveImport.P.S.S1.X2.self.that, RecursiveImport.P.S.T.T1.self.that, RecursiveImport.P.S.T.U.U1.self, …)",
               "names": {
                 "declared": 172,
-                "ours": 248,
-                "missing": 7,
-                "otherPath": 7,
+                "ours": 246,
+                "missing": 9,
+                "otherPath": 9,
                 "extra": 83
               }
             }
@@ -1232,11 +1181,11 @@
               "verdict": "disagree",
               "tolerance": "library-names",
               "declared": "80 name(s) visible at \"X\"",
-              "ours": "346 name(s): missing 0 (none), extra 274 (P.Q.R.Z.self, P.Q.R.Z.self.that, P.Q.R.Z.that, P.Q.R.Z.that.self, P.Q.Y.self, …)",
+              "ours": "114 name(s): missing 0 (none), extra 42 (RecursiveImport.s.self, RecursiveImport.s.that, RecursiveImport.s.that.self, RecursiveImport.t.self, RecursiveImport.t.that, …)",
               "names": {
                 "declared": 80,
-                "ours": 346,
-                "extra": 274
+                "ours": 114,
+                "extra": 42
               }
             }
           ]
@@ -1704,16 +1653,7 @@
           "path": "src/org/omg/kerml/xpect/tests/parsing/ParsingTests_RedefinitionScoping.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 1,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "noErrors",
-              "line": 17,
-              "verdict": "disagree",
-              "declared": "no error anywhere in the file",
-              "ours": "1 error(s), first: line 29: y participates in a specialization cycle"
-            }
-          ]
+          "agree": 1
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/parsing/ParsingTests_ScopeWithFourDotAndDot.kerml.xt",
@@ -1755,11 +1695,11 @@
               "verdict": "disagree",
               "tolerance": "library-names",
               "declared": "28 name(s) visible at \"OuterPackage::B::b\"",
-              "ours": "63 name(s): missing 0 (none), extra 35 (C.c.a1.self, C.c.a1.self.that, C.c.a1.that, C.c.a1.that.self, C.c.self.that, …)",
+              "ours": "31 name(s): missing 0 (none), extra 3 (OuterPackage.B.b.self, OuterPackage.B.b.that, OuterPackage.B.b.that.self)",
               "names": {
                 "declared": 28,
-                "ours": 63,
-                "extra": 35
+                "ours": 31,
+                "extra": 3
               }
             }
           ]
@@ -1790,11 +1730,11 @@
               "verdict": "disagree",
               "tolerance": "library-names",
               "declared": "28 name(s) visible at \"OuterPackage::B::b\"",
-              "ours": "63 name(s): missing 0 (none), extra 35 (C.c.a1.self, C.c.a1.self.that, C.c.a1.that, C.c.a1.that.self, C.c.self.that, …)",
+              "ours": "31 name(s): missing 0 (none), extra 3 (OuterPackage.B.b.self, OuterPackage.B.b.that, OuterPackage.B.b.that.self)",
               "names": {
                 "declared": 28,
-                "ours": 63,
-                "extra": 35
+                "ours": 31,
+                "extra": 3
               }
             }
           ]
@@ -1874,62 +1814,13 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_FeatureRedefinition.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 25,
-              "at": "B::a",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "41 name(s) visible at \"B::a\"",
-              "ours": "51 name(s): missing 0 (none), extra 10 (A.a.self.that, A.self.that, B.a.self.that, B.self.that, C.self.that, …)",
-              "names": {
-                "declared": 41,
-                "ours": 51,
-                "extra": 10
-              }
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_FeatureSubset.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 3,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 25,
-              "at": "B::a",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "89 name(s) visible at \"B::a\"",
-              "ours": "111 name(s): missing 0 (none), extra 22 (A.a.self.that, A.a_Id.self.that, A.self.that, A_Id.a.self.that, A_Id.a_Id.self.that, …)",
-              "names": {
-                "declared": 89,
-                "ours": 111,
-                "extra": 22
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 44,
-              "at": "B.a_Id",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "88 name(s) visible at \"B.a_Id\"",
-              "ours": "110 name(s): missing 0 (none), extra 22 (A.a.self.that, A.a_Id.self.that, A.self.that, A_Id.a.self.that, A_Id.a_Id.self.that, …)",
-              "names": {
-                "declared": 88,
-                "ours": 110,
-                "extra": 22
-              }
-            }
-          ]
+          "agree": 5
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_LocalNamedMember.kerml.xt",
@@ -1959,107 +1850,13 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_MultipleInheritance2_FT.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 4,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 23,
-              "at": "A",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "80 name(s) visible at \"A\"",
-              "ours": "100 name(s): missing 0 (none), extra 20 (A.a.self.that, A.self.that, B.a.self.that, B.b.self.that, B.self.that, …)",
-              "names": {
-                "declared": 80,
-                "ours": 100,
-                "extra": 20
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 41,
-              "at": "B",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "80 name(s) visible at \"B\"",
-              "ours": "100 name(s): missing 0 (none), extra 20 (A.a.self.that, A.self.that, B.a.self.that, B.b.self.that, B.self.that, …)",
-              "names": {
-                "declared": 80,
-                "ours": 100,
-                "extra": 20
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 57,
-              "at": "C::a",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "80 name(s) visible at \"C::a\"",
-              "ours": "100 name(s): missing 0 (none), extra 20 (A.a.self.that, A.self.that, B.a.self.that, B.b.self.that, B.self.that, …)",
-              "names": {
-                "declared": 80,
-                "ours": 100,
-                "extra": 20
-              }
-            }
-          ]
+          "agree": 4
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_MultipleInheritance2_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 4,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 23,
-              "at": "A",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "56 name(s) visible at \"A\"",
-              "ours": "70 name(s): missing 0 (none), extra 14 (A.a.self.that, A.self.that, B.b.self.that, B.self.that, C.c.self.that, …)",
-              "names": {
-                "declared": 56,
-                "ours": 70,
-                "extra": 14
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 38,
-              "at": "B",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "56 name(s) visible at \"B\"",
-              "ours": "70 name(s): missing 0 (none), extra 14 (A.a.self.that, A.self.that, B.b.self.that, B.self.that, C.c.self.that, …)",
-              "names": {
-                "declared": 56,
-                "ours": 70,
-                "extra": 14
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 51,
-              "at": "C.c",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "56 name(s) visible at \"C.c\"",
-              "ours": "70 name(s): missing 0 (none), extra 14 (A.a.self.that, A.self.that, B.b.self.that, B.self.that, C.c.self.that, …)",
-              "names": {
-                "declared": 56,
-                "ours": 70,
-                "extra": 14
-              }
-            }
-          ]
+          "agree": 4
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_MultipleInheritance2x.kerml.xt",
@@ -2083,213 +1880,25 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_MultipleInheritance3_FT.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 3,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 31,
-              "at": "b",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "195 name(s) visible at \"b\"",
-              "ours": "244 name(s): missing 0 (none), extra 49 (A.a.aa.self.that, A.a.self.that, A.self.that, B.a.aa.self.that, B.a.self.that, …)",
-              "names": {
-                "declared": 195,
-                "ours": 244,
-                "extra": 49
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 65,
-              "at": "aa",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "171 name(s) visible at \"aa\"",
-              "ours": "214 name(s): missing 0 (none), extra 43 (A.a.aa.self.that, A.a.self.that, A.self.that, B.a.aa.self.that, B.a.self.that, …)",
-              "names": {
-                "declared": 171,
-                "ours": 214,
-                "extra": 43
-              }
-            }
-          ]
+          "agree": 5
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_MultipleInheritance3_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 3,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 29,
-              "at": "b",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "99 name(s) visible at \"b\"",
-              "ours": "124 name(s): missing 0 (none), extra 25 (A.a.aa.self.that, A.a.self.that, A.self.that, B.b.aa.self.that, B.b.self.that, …)",
-              "names": {
-                "declared": 99,
-                "ours": 124,
-                "extra": 25
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 49,
-              "at": "aa",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "95 name(s) visible at \"aa\"",
-              "ours": "119 name(s): missing 0 (none), extra 24 (A.a.aa.self.that, A.a.self.that, A.self.that, B.b.aa.self.that, B.b.self.that, …)",
-              "names": {
-                "declared": 95,
-                "ours": 119,
-                "extra": 24
-              }
-            }
-          ]
+          "agree": 5
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_MultipleInheritance_FT.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 6,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 22,
-              "at": "A",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "88 name(s) visible at \"A\"",
-              "ours": "110 name(s): missing 0 (none), extra 22 (A.a.self.that, A.self.that, B.a.self.that, B.b.self.that, B.self.that, …)",
-              "names": {
-                "declared": 88,
-                "ours": 110,
-                "extra": 22
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 42,
-              "at": "B",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "88 name(s) visible at \"B\"",
-              "ours": "110 name(s): missing 0 (none), extra 22 (A.a.self.that, A.self.that, B.a.self.that, B.b.self.that, B.self.that, …)",
-              "names": {
-                "declared": 88,
-                "ours": 110,
-                "extra": 22
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 58,
-              "at": "A::a",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "88 name(s) visible at \"A::a\"",
-              "ours": "110 name(s): missing 0 (none), extra 22 (A.a.self.that, A.self.that, B.a.self.that, B.b.self.that, B.self.that, …)",
-              "names": {
-                "declared": 88,
-                "ours": 110,
-                "extra": 22
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 74,
-              "at": "A::a",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "88 name(s) visible at \"A::a\"",
-              "ours": "110 name(s): missing 0 (none), extra 22 (A.a.self.that, A.self.that, B.a.self.that, B.b.self.that, B.self.that, …)",
-              "names": {
-                "declared": 88,
-                "ours": 110,
-                "extra": 22
-              }
-            }
-          ]
+          "agree": 6
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_MultipleInheritance_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 6,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 22,
-              "at": "A",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "56 name(s) visible at \"A\"",
-              "ours": "70 name(s): missing 0 (none), extra 14 (A.a.self.that, A.self.that, B.b.self.that, B.self.that, C.c.self.that, …)",
-              "names": {
-                "declared": 56,
-                "ours": 70,
-                "extra": 14
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 38,
-              "at": "B",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "56 name(s) visible at \"B\"",
-              "ours": "70 name(s): missing 0 (none), extra 14 (A.a.self.that, A.self.that, B.b.self.that, B.self.that, C.c.self.that, …)",
-              "names": {
-                "declared": 56,
-                "ours": 70,
-                "extra": 14
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 49,
-              "at": "b",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "63 name(s) visible at \"b\"",
-              "ours": "79 name(s): missing 0 (none), extra 16 (A.a.self.that, A.self.that, B.b.self.that, B.self.that, C.b.self.that, …)",
-              "names": {
-                "declared": 63,
-                "ours": 79,
-                "extra": 16
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 62,
-              "at": "A::a",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "57 name(s) visible at \"A::a\"",
-              "ours": "71 name(s): missing 0 (none), extra 14 (A.a.self.that, A.self.that, B.b.self.that, B.self.that, C.c.self.that, …)",
-              "names": {
-                "declared": 57,
-                "ours": 71,
-                "extra": 14
-              }
-            }
-          ]
+          "agree": 6
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_MultipleInheritance_nestedScopeLinkingTest.kerml.xt",
@@ -2307,70 +1916,19 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_NamedMemberForPrivate_FT.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 22,
-              "at": "k",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "23 name(s) visible at \"k\"",
-              "ours": "29 name(s): missing 0 (none), extra 6 (hello.self.that, hello.test.self.that, k.self.that, self.that, something.self.that, …)",
-              "names": {
-                "declared": 23,
-                "ours": 29,
-                "extra": 6
-              }
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_NamedMemberForPrivate_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 22,
-              "at": "k",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "19 name(s) visible at \"k\"",
-              "ours": "24 name(s): missing 0 (none), extra 5 (hello.self.that, k.self.that, self.that, something.self.that, test.hello.self.that)",
-              "names": {
-                "declared": 19,
-                "ours": 24,
-                "extra": 5
-              }
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_NamedMemberFromConjugation.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 4,
-          "agree": 3,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 24,
-              "at": "A",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "82 name(s) visible at \"A\"",
-              "ours": "98 name(s): missing 0 (none), extra 16 (A.f.self.that, A.f_Id.self.that, A_Id.f.self.that, A_Id.f_Id.self.that, B.f.self.that, …)",
-              "names": {
-                "declared": 82,
-                "ours": 98,
-                "extra": 16
-              }
-            }
-          ]
+          "agree": 4
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_NamedMemberFromInheritance.kerml.xt",
@@ -2388,61 +1946,14 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_NamedMemberFromInheritance2_FT.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 3,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 25,
-              "at": "AA",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "88 name(s) visible at \"AA\"",
-              "ours": "110 name(s): missing 0 (none), extra 22 (A.a.self.that, A.aa.self.that, A.self.that, AA.a.self.that, AA.aa.self.that, …)",
-              "names": {
-                "declared": 88,
-                "ours": 110,
-                "extra": 22
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 43,
-              "at": "aa",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "107 name(s) visible at \"aa\"",
-              "ours": "134 name(s): missing 0 (none), extra 27 (A.a.self.that, A.aa.self.that, A.self.that, AA.a.self.that, AA.aa.self.that, …)",
-              "names": {
-                "declared": 107,
-                "ours": 134,
-                "extra": 27
-              }
-            }
-          ]
+          "agree": 5
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_NamedMemberFromInheritance2_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 3,
+          "agree": 4,
           "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 25,
-              "at": "AA",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "72 name(s) visible at \"AA\"",
-              "ours": "90 name(s): missing 0 (none), extra 18 (A.a.self.that, A.aa.self.that, A.self.that, AA.a.self.that, AA.aa.self.that, …)",
-              "names": {
-                "declared": 72,
-                "ours": 90,
-                "extra": 18
-              }
-            },
             {
               "kind": "scope",
               "block": true,
@@ -2451,11 +1962,11 @@
               "verdict": "disagree",
               "tolerance": "extra-names",
               "declared": "91 name(s) visible at \"aa\"",
-              "ours": "119 name(s): missing 0 (none), extra 28 (A.a.self.that, A.aa.self.that, A.self.that, AA.a.self.that, AA.aa.self.that, …)",
+              "ours": "95 name(s): missing 0 (none), extra 4 (b_alias, b_alias.self, b_alias.that, b_alias.that.self)",
               "names": {
                 "declared": 91,
-                "ours": 119,
-                "extra": 28
+                "ours": 95,
+                "extra": 4
               }
             }
           ]
@@ -2470,62 +1981,13 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_NamedMemberFromInheritance_FT.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 2,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 23,
-              "at": "A",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "64 name(s) visible at \"A\"",
-              "ours": "80 name(s): missing 0 (none), extra 16 (A.a.self.that, A.aa.self.that, A.self.that, B.a.self.that, B.aa.self.that, …)",
-              "names": {
-                "declared": 64,
-                "ours": 80,
-                "extra": 16
-              }
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_NamedMemberFromInheritance_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 4,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 23,
-              "at": "A",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "64 name(s) visible at \"A\"",
-              "ours": "80 name(s): missing 0 (none), extra 16 (A.a.self.that, A.aa.self.that, A.self.that, B.a.self.that, B.aa.self.that, …)",
-              "names": {
-                "declared": 64,
-                "ours": 80,
-                "extra": 16
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 36,
-              "at": "aa",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "83 name(s) visible at \"aa\"",
-              "ours": "104 name(s): missing 0 (none), extra 21 (A.a.self.that, A.aa.self.that, A.self.that, B.a.self.that, B.aa.self.that, …)",
-              "names": {
-                "declared": 83,
-                "ours": 104,
-                "extra": 21
-              }
-            }
-          ]
+          "agree": 4
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_NamedMemberFromOtherPackage.kerml.xt",
@@ -2567,47 +2029,13 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_UseFQNInSamePackage_FT.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 2,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 21,
-              "at": "test::A",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "16 name(s) visible at \"test::A\"",
-              "ours": "20 name(s): missing 0 (none), extra 4 (A.self.that, B.self.that, test.A.self.that, test.B.self.that)",
-              "names": {
-                "declared": 16,
-                "ours": 20,
-                "extra": 4
-              }
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_UseFQNInSamePackage_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 2,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 21,
-              "at": "test::A",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "16 name(s) visible at \"test::A\"",
-              "ours": "20 name(s): missing 0 (none), extra 4 (A.self.that, B.self.that, test.A.self.that, test.B.self.that)",
-              "names": {
-                "declared": 16,
-                "ours": 20,
-                "extra": 4
-              }
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MultipleImportTests_ImportFeature.kerml.xt",
@@ -2623,11 +2051,11 @@
               "verdict": "disagree",
               "tolerance": "library-names",
               "declared": "38 name(s) visible at \"OuterPackage2::C::b\"",
-              "ours": "109 name(s): missing 0 (none), extra 71 (D.try.a1.self, D.try.a1.self.that, D.try.a1.that, D.try.a1.that.self, D.try.self.that, …)",
+              "ours": "53 name(s): missing 0 (none), extra 15 (OuterPackage.B.b.self, OuterPackage.B.b.that, OuterPackage.B.b.that.self, OuterPackage2.B.b.self, OuterPackage2.B.b.that, …)",
               "names": {
                 "declared": 38,
-                "ours": 109,
-                "extra": 71
+                "ours": 53,
+                "extra": 15
               }
             },
             {
@@ -2638,11 +2066,11 @@
               "verdict": "disagree",
               "tolerance": "library-names",
               "declared": "42 name(s) visible at \"b\"",
-              "ours": "118 name(s): missing 0 (none), extra 76 (D.try.a1.self, D.try.a1.self.that, D.try.a1.that, D.try.a1.that.self, D.try.self.that, …)",
+              "ours": "57 name(s): missing 0 (none), extra 15 (OuterPackage.B.b.self, OuterPackage.B.b.that, OuterPackage.B.b.that.self, OuterPackage2.B.b.self, OuterPackage2.B.b.that, …)",
               "names": {
                 "declared": 42,
-                "ours": 118,
-                "extra": 76
+                "ours": 57,
+                "extra": 15
               }
             }
           ]
@@ -2673,11 +2101,11 @@
               "verdict": "disagree",
               "tolerance": "library-names",
               "declared": "70 name(s) visible at \"b\"",
-              "ours": "189 name(s): missing 0 (none), extra 119 (C.b.a1.self, C.b.a1.self.that, C.b.a1.that, C.b.a1.that.self, C.b.self, …)",
+              "ours": "94 name(s): missing 0 (none), extra 24 (C.b.self, C.b.that, C.b.that.self, D.b.self, D.b.that, …)",
               "names": {
                 "declared": 70,
-                "ours": 189,
-                "extra": 119
+                "ours": 94,
+                "extra": 24
               }
             }
           ]
@@ -2696,11 +2124,11 @@
               "verdict": "disagree",
               "tolerance": "library-names",
               "declared": "114 name(s) visible at \"b\"",
-              "ours": "289 name(s): missing 0 (none), extra 175 (D.b.a1.self, D.b.a1.self.that, D.b.a1.that, D.b.a1.that.self, D.b.self, …)",
+              "ours": "144 name(s): missing 0 (none), extra 30 (D.b.self, D.b.that, D.b.that.self, EE.b.self, EE.b.that, …)",
               "names": {
                 "declared": 114,
-                "ours": 289,
-                "extra": 175
+                "ours": 144,
+                "extra": 30
               }
             }
           ]
@@ -2709,77 +2137,13 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MultipleImport_ImportClassMoreTimes_FT.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 4,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 27,
-              "at": "D",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "200 name(s) visible at \"D\"",
-              "ours": "250 name(s): missing 0 (none), extra 50 (D.b.a1.self.that, D.b.self.that, D.c.self.that, D.f.a1.self.that, D.f.self.that, …)",
-              "names": {
-                "declared": 200,
-                "ours": 250,
-                "extra": 50
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 72,
-              "at": "b",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "231 name(s) visible at \"b\"",
-              "ours": "289 name(s): missing 0 (none), extra 58 (D.b.a1.self.that, D.b.self.that, D.c.self.that, D.f.a1.self.that, D.f.self.that, …)",
-              "names": {
-                "declared": 231,
-                "ours": 289,
-                "extra": 58
-              }
-            }
-          ]
+          "agree": 4
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MultipleImport_ImportClassMoreTimes_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 4,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 27,
-              "at": "D",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "144 name(s) visible at \"D\"",
-              "ours": "180 name(s): missing 0 (none), extra 36 (D.c.self.that, D.f.a1.self.that, D.f.self.that, D.self.that, EE.c.self.that, …)",
-              "names": {
-                "declared": 144,
-                "ours": 180,
-                "extra": 36
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 62,
-              "at": "D::f",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "159 name(s) visible at \"D::f\"",
-              "ours": "199 name(s): missing 0 (none), extra 40 (D.c.self.that, D.f.a1.self.that, D.f.self.that, D.self.that, EE.c.self.that, …)",
-              "names": {
-                "declared": 159,
-                "ours": 199,
-                "extra": 40
-              }
-            }
-          ]
+          "agree": 4
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MultipleImport_ImportClassWithAlias.kerml.xt",
@@ -2795,11 +2159,11 @@
               "verdict": "disagree",
               "tolerance": "library-names",
               "declared": "23 name(s) visible at \"aliass\"",
-              "ours": "83 name(s): missing 0 (none), extra 60 (C.c.a1.self, C.c.a1.self.that, C.c.a1.that, C.c.a1.that.self, C.c.self, …)",
+              "ours": "35 name(s): missing 0 (none), extra 12 (C.c.self, C.c.that, C.c.that.self, OuterPackage.B.b.self, OuterPackage.B.b.that, …)",
               "names": {
                 "declared": 23,
-                "ours": 83,
-                "extra": 60
+                "ours": 35,
+                "extra": 12
               }
             }
           ]
@@ -2808,123 +2172,25 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MultipleImport_ImportClassWithAlias_FT.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 25,
-              "at": "aliass",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "71 name(s) visible at \"aliass\"",
-              "ours": "89 name(s): missing 0 (none), extra 18 (C.c.a1.self.that, C.c.self.that, C.self.that, OuterPackage.A.a1.self.that, OuterPackage.A.self.that, …)",
-              "names": {
-                "declared": 71,
-                "ours": 89,
-                "extra": 18
-              }
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MultipleImport_ImportClassWithAlias_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 25,
-              "at": "aliass",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "47 name(s) visible at \"aliass\"",
-              "ours": "59 name(s): missing 0 (none), extra 12 (C.self.that, OuterPackage.A.a1.self.that, OuterPackage.A.self.that, OuterPackage.B.b.a1.self.that, OuterPackage.B.b.self.that, …)",
-              "names": {
-                "declared": 47,
-                "ours": 59,
-                "extra": 12
-              }
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MultipleImport_ImportClass_FT.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 3,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 25,
-              "at": "C",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "128 name(s) visible at \"C\"",
-              "ours": "160 name(s): missing 0 (none), extra 32 (C.b.a1.self.that, C.b.self.that, C.c.self.that, C.self.that, D.b.a1.self.that, …)",
-              "names": {
-                "declared": 128,
-                "ours": 160,
-                "extra": 32
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 54,
-              "at": "b",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "151 name(s) visible at \"b\"",
-              "ours": "189 name(s): missing 0 (none), extra 38 (C.b.a1.self.that, C.b.self.that, C.c.self.that, C.self.that, D.b.a1.self.that, …)",
-              "names": {
-                "declared": 151,
-                "ours": 189,
-                "extra": 38
-              }
-            }
-          ]
+          "agree": 5
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MultipleImport_ImportClass_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 3,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 25,
-              "at": "C",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "112 name(s) visible at \"C\"",
-              "ours": "140 name(s): missing 0 (none), extra 28 (C.b.a1.self.that, C.b.self.that, C.c.self.that, C.self.that, D.c.self.that, …)",
-              "names": {
-                "declared": 112,
-                "ours": 140,
-                "extra": 28
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 51,
-              "at": "b",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "127 name(s) visible at \"b\"",
-              "ours": "159 name(s): missing 0 (none), extra 32 (C.b.a1.self.that, C.b.self.that, C.c.self.that, C.self.that, D.b.a1.self.that, …)",
-              "names": {
-                "declared": 127,
-                "ours": 159,
-                "extra": 32
-              }
-            }
-          ]
+          "agree": 5
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MultipleImport_ImportFeatureAlias.kerml.xt",
@@ -2940,11 +2206,11 @@
               "verdict": "disagree",
               "tolerance": "library-names",
               "declared": "32 name(s) visible at \"aliass\"",
-              "ours": "83 name(s): missing 0 (none), extra 51 (C.c.a1.self, C.c.a1.self.that, C.c.a1.that, C.c.a1.that.self, C.c.self.that, …)",
+              "ours": "41 name(s): missing 0 (none), extra 9 (OuterPackage.B.b.self, OuterPackage.B.b.that, OuterPackage.B.b.that.self, aliass.self, aliass.that, …)",
               "names": {
                 "declared": 32,
-                "ours": 83,
-                "extra": 51
+                "ours": 41,
+                "extra": 9
               }
             }
           ]
@@ -2963,11 +2229,11 @@
               "verdict": "disagree",
               "tolerance": "library-names",
               "declared": "82 name(s) visible at \"b\"",
-              "ours": "249 name(s): missing 0 (none), extra 167 (A.a1.self, A.a1.self.that, A.a1.that, A.a1.that.self, A.self, …)",
+              "ours": "112 name(s): missing 0 (none), extra 30 (B.b.self, B.b.that, B.b.that.self, C.b.self, C.b.that, …)",
               "names": {
                 "declared": 82,
-                "ours": 249,
-                "extra": 167
+                "ours": 112,
+                "extra": 30
               }
             }
           ]
@@ -2976,77 +2242,13 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MultipleImport_ImportImportImp_FT.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 3,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 26,
-              "at": "C",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "176 name(s) visible at \"C\"",
-              "ours": "220 name(s): missing 0 (none), extra 44 (A.a1.self.that, A.self.that, B.b.a1.self.that, B.b.self.that, B.self.that, …)",
-              "names": {
-                "declared": 176,
-                "ours": 220,
-                "extra": 44
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 64,
-              "at": "b",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "199 name(s) visible at \"b\"",
-              "ours": "249 name(s): missing 0 (none), extra 50 (A.a1.self.that, A.self.that, B.b.a1.self.that, B.b.self.that, B.self.that, …)",
-              "names": {
-                "declared": 199,
-                "ours": 249,
-                "extra": 50
-              }
-            }
-          ]
+          "agree": 5
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MultipleImport_ImportImportImp_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 3,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 26,
-              "at": "C",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "160 name(s) visible at \"C\"",
-              "ours": "200 name(s): missing 0 (none), extra 40 (A.a1.self.that, A.self.that, B.b.a1.self.that, B.b.self.that, B.self.that, …)",
-              "names": {
-                "declared": 160,
-                "ours": 200,
-                "extra": 40
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 61,
-              "at": "b",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "175 name(s) visible at \"b\"",
-              "ours": "219 name(s): missing 0 (none), extra 44 (A.a1.self.that, A.self.that, B.b.a1.self.that, B.b.self.that, B.self.that, …)",
-              "names": {
-                "declared": 175,
-                "ours": 219,
-                "extra": 44
-              }
-            }
-          ]
+          "agree": 5
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MultipleImport_ImportMembershipImp.kerml.xt",
@@ -3062,11 +2264,11 @@
               "verdict": "disagree",
               "tolerance": "library-names",
               "declared": "72 name(s) visible at \"b\"",
-              "ours": "199 name(s): missing 0 (none), extra 127 (C.b.a1.self, C.b.a1.self.that, C.b.a1.that, C.b.a1.that.self, C.b.self, …)",
+              "ours": "96 name(s): missing 0 (none), extra 24 (C.b.self, C.b.that, C.b.that.self, OuterPackage.B.b.self, OuterPackage.B.b.that, …)",
               "names": {
                 "declared": 72,
-                "ours": 199,
-                "extra": 127
+                "ours": 96,
+                "extra": 24
               }
             }
           ]
@@ -3075,77 +2277,13 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MultipleImport_ImportMembershipImp_FT.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 3,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 25,
-              "at": "C",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "136 name(s) visible at \"C\"",
-              "ours": "170 name(s): missing 0 (none), extra 34 (C.b.a1.self.that, C.b.self.that, C.c.self.that, C.self.that, OuterPackage.A.a1.self.that, …)",
-              "names": {
-                "declared": 136,
-                "ours": 170,
-                "extra": 34
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 57,
-              "at": "b",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "159 name(s) visible at \"b\"",
-              "ours": "199 name(s): missing 0 (none), extra 40 (C.b.a1.self.that, C.b.self.that, C.c.self.that, C.self.that, OuterPackage.A.a1.self.that, …)",
-              "names": {
-                "declared": 159,
-                "ours": 199,
-                "extra": 40
-              }
-            }
-          ]
+          "agree": 5
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MultipleImport_ImportMembershipImp_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 3,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 25,
-              "at": "C",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "120 name(s) visible at \"C\"",
-              "ours": "150 name(s): missing 0 (none), extra 30 (C.b.a1.self.that, C.b.self.that, C.c.self.that, C.self.that, OuterPackage.A.a1.self.that, …)",
-              "names": {
-                "declared": 120,
-                "ours": 150,
-                "extra": 30
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 54,
-              "at": "b",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "135 name(s) visible at \"b\"",
-              "ours": "169 name(s): missing 0 (none), extra 34 (C.b.a1.self.that, C.b.self.that, C.c.self.that, C.self.that, OuterPackage.A.a1.self.that, …)",
-              "names": {
-                "declared": 135,
-                "ours": 169,
-                "extra": 34
-              }
-            }
-          ]
+          "agree": 5
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MultipleImport_MembershipImportImp.kerml.xt",
@@ -3161,11 +2299,11 @@
               "verdict": "disagree",
               "tolerance": "library-names",
               "declared": "76 name(s) visible at \"b\"",
-              "ours": "219 name(s): missing 0 (none), extra 143 (B.b.a1.self, B.b.a1.self.that, B.b.a1.that, B.b.a1.that.self, B.b.self, …)",
+              "ours": "106 name(s): missing 0 (none), extra 30 (B.b.self, B.b.that, B.b.that.self, C.b.self, C.b.that, …)",
               "names": {
                 "declared": 76,
-                "ours": 219,
-                "extra": 143
+                "ours": 106,
+                "extra": 30
               }
             }
           ]
@@ -3174,148 +2312,31 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MultipleImport_MembershipImportImp_FT.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 3,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 26,
-              "at": "C",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "152 name(s) visible at \"C\"",
-              "ours": "190 name(s): missing 0 (none), extra 38 (B.b.a1.self.that, B.b.self.that, B.self.that, C.b.a1.self.that, C.b.self.that, …)",
-              "names": {
-                "declared": 152,
-                "ours": 190,
-                "extra": 38
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 60,
-              "at": "b",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "175 name(s) visible at \"b\"",
-              "ours": "219 name(s): missing 0 (none), extra 44 (B.b.a1.self.that, B.b.self.that, B.self.that, C.b.a1.self.that, C.b.self.that, …)",
-              "names": {
-                "declared": 175,
-                "ours": 219,
-                "extra": 44
-              }
-            }
-          ]
+          "agree": 5
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MultipleImport_MembershipImportImp_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 3,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 26,
-              "at": "C",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "136 name(s) visible at \"C\"",
-              "ours": "170 name(s): missing 0 (none), extra 34 (B.b.a1.self.that, B.b.self.that, B.self.that, C.b.a1.self.that, C.b.self.that, …)",
-              "names": {
-                "declared": 136,
-                "ours": 170,
-                "extra": 34
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 57,
-              "at": "b",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "151 name(s) visible at \"b\"",
-              "ours": "189 name(s): missing 0 (none), extra 38 (B.b.a1.self.that, B.b.self.that, B.self.that, C.b.a1.self.that, C.b.self.that, …)",
-              "names": {
-                "declared": 151,
-                "ours": 189,
-                "extra": 38
-              }
-            }
-          ]
+          "agree": 5
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_AliasImportInMembership.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 2,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 23,
-              "at": "PackageAlias1::A_alias",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "37 name(s) visible at \"PackageAlias1::A_alias\"",
-              "ours": "173 name(s): missing 0 (none), extra 136 (A_alias.a.self, A_alias.a.self.that, A_alias.a.that, A_alias.a.that.self, A_alias.a_alias.self, …)",
-              "names": {
-                "declared": 37,
-                "ours": 173,
-                "extra": 136
-              }
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_CircleInheritance.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 21,
-              "at": "A",
-              "verdict": "disagree",
-              "tolerance": "other-paths",
-              "declared": "34 name(s) visible at \"A\"",
-              "ours": "14 name(s): missing 20 (A.B.B, A.B.B_Id, A.B_Id.B, A.B_Id.B_Id, A_Id.B.B, …), extra 0 (none); 20 missing name(s) reachable by another path (A.B.B, A.B.B_Id, A.B_Id.B, A.B_Id.B_Id, A_Id.B.B, …)",
-              "names": {
-                "declared": 34,
-                "ours": 14,
-                "missing": 20,
-                "otherPath": 20
-              }
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_CircleProblem2.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 22,
-              "at": "A",
-              "verdict": "disagree",
-              "tolerance": "other-paths",
-              "declared": "8 name(s) visible at \"A\"",
-              "ours": "5 name(s): missing 3 (A.B.B, B.B, Test1.A.B.B), extra 0 (none); 3 missing name(s) reachable by another path (A.B.B, B.B, Test1.A.B.B)",
-              "names": {
-                "declared": 8,
-                "ours": 5,
-                "missing": 3,
-                "otherPath": 3
-              }
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_CircleProblem3.kerml.xt",
@@ -3331,13 +2352,13 @@
               "verdict": "disagree",
               "tolerance": "missing-and-extra",
               "declared": "829 name(s) visible at \"A\"",
-              "ours": "856 name(s): missing 434 (A.B.B, A.B.B.aa, A.B.B.aa.self, A.B.B.aa.that, A.B.B.aa.that.self, …), extra 461 (A.B.a.b, A.B.a.b.aa, A.B.a.b.aa.self, A.B.a.b.aa.that, A.B.a.b.bb, …); 201 missing name(s) reachable by another path (A.B.aa.B, A.B.aa.B.aa, A.B.aa.B.aa.self, A.B.aa.B.aa.that, A.B.aa.B.aa.that.self, …)",
+              "ours": "3362 name(s): missing 338 (A.B.B, A.B.B.aa, A.B.B.aa.self, A.B.B.aa.that, A.B.B.aa.that.self, …), extra 2871 (A.B.a.B, A.B.a.a, A.B.a.aa, A.B.a.aa.B, A.B.a.aa.a, …); 209 missing name(s) reachable by another path (A.B.aa.B.aa, A.B.aa.B.aa.self, A.B.aa.B.aa.that, A.B.aa.B.aa.that.self, A.B.aa.B.bb, …)",
               "names": {
                 "declared": 829,
-                "ours": 856,
-                "missing": 434,
-                "otherPath": 201,
-                "extra": 461
+                "ours": 3362,
+                "missing": 338,
+                "otherPath": 209,
+                "extra": 2871
               }
             },
             {
@@ -3348,13 +2369,13 @@
               "verdict": "disagree",
               "tolerance": "missing-and-extra",
               "declared": "696 name(s) visible at \"B\"",
-              "ours": "856 name(s): missing 360 (A.B.B, A.B.B.aa, A.B.B.aa.self, A.B.B.aa.that, A.B.B.aa.that.self, …), extra 520 (A.B.a.b, A.B.a.b.aa, A.B.a.b.aa.self, A.B.a.b.aa.that, A.B.a.b.bb, …); 174 missing name(s) reachable by another path (A.B.aa.B, A.B.aa.B.aa, A.B.aa.B.aa.self, A.B.aa.B.aa.that, A.B.aa.B.aa.that.self, …)",
+              "ours": "3362 name(s): missing 276 (A.B.B, A.B.B.aa, A.B.B.aa.self, A.B.B.aa.that, A.B.B.aa.that.self, …), extra 2942 (A.B.a.B, A.B.a.a, A.B.a.aa, A.B.a.aa.B, A.B.a.aa.a, …); 177 missing name(s) reachable by another path (A.B.aa.B.aa, A.B.aa.B.aa.self, A.B.aa.B.aa.that, A.B.aa.B.aa.that.self, A.B.aa.B.bb, …)",
               "names": {
                 "declared": 696,
-                "ours": 856,
-                "missing": 360,
-                "otherPath": 174,
-                "extra": 520
+                "ours": 3362,
+                "missing": 276,
+                "otherPath": 177,
+                "extra": 2942
               }
             }
           ]
@@ -3371,13 +2392,14 @@
               "line": 23,
               "at": "A::B",
               "verdict": "disagree",
-              "tolerance": "missing-names",
+              "tolerance": "missing-and-extra",
               "declared": "12 name(s) visible at \"A::B\"",
-              "ours": "8 name(s): missing 4 (A.B.B, A.B.b.B, Test1.A.B.B, Test1.A.B.b.B), extra 0 (none)",
+              "ours": "12 name(s): missing 2 (A.B.B, Test1.A.B.B), extra 2 (A.b.B, Test1.A.b.B)",
               "names": {
                 "declared": 12,
-                "ours": 8,
-                "missing": 4
+                "ours": 12,
+                "missing": 2,
+                "extra": 2
               }
             },
             {
@@ -3386,15 +2408,15 @@
               "line": 32,
               "at": "B",
               "verdict": "disagree",
-              "tolerance": "other-paths",
+              "tolerance": "missing-and-extra",
               "declared": "111 name(s) visible at \"B\"",
-              "ours": "72 name(s): missing 61 (A.B.B, A.B.B.b, A.B.B.b.b, A.B.B.b.b.self, A.B.B.b.b.that, …), extra 22 (A.b.self.that, OuterPackage.A.a1.self, OuterPackage.A.a1.self.that, OuterPackage.A.a1.that, OuterPackage.A.a1.that.self, …); 16 missing name(s) reachable by another path (A.B.b.b, A.B.b.b.self, A.B.b.b.that, A.B.b.b.that.self, B.b.b, …)",
+              "ours": "67 name(s): missing 54 (A.B.B, A.B.B.b, A.B.B.b.b, A.B.B.b.b.self, A.B.B.b.b.that, …), extra 10 (A.b.B, A.b.B.self, A.b.B.self.that, B.b.B, OuterPackage.B.b.self, …); 14 missing name(s) reachable by another path (A.B.b.b.self, A.B.b.b.that, A.B.b.b.that.self, A.b.self, B.b.b.self, …)",
               "names": {
                 "declared": 111,
-                "ours": 72,
-                "missing": 61,
-                "otherPath": 16,
-                "extra": 22
+                "ours": 67,
+                "missing": 54,
+                "otherPath": 14,
+                "extra": 10
               }
             }
           ]
@@ -3411,15 +2433,14 @@
               "line": 23,
               "at": "A::B",
               "verdict": "disagree",
-              "tolerance": "missing-names",
+              "tolerance": "missing-and-extra",
               "declared": "76 name(s) visible at \"A::B\"",
-              "ours": "65 name(s): missing 30 (A.B.B, A.B.B.b, A.B.B.b.b, A.B.B.b.self, A.B.B.b.that, …), extra 19 (A.B.b.self.that, A.B.self.that, A.b.self, A.b.self.that, A.b.that, …); 2 missing name(s) reachable by another path (A.B.b.b, Test1.A.B.b.b)",
+              "ours": "64 name(s): missing 26 (A.B.B, A.B.B.b, A.B.B.b.b, A.B.B.b.self, A.B.B.b.that, …), extra 14 (A.b.B, A.b.B.self, A.b.B.that, A.b.B.that.self, A.b.self, …)",
               "names": {
                 "declared": 76,
-                "ours": 65,
-                "missing": 30,
-                "otherPath": 2,
-                "extra": 19
+                "ours": 64,
+                "missing": 26,
+                "extra": 14
               }
             },
             {
@@ -3428,15 +2449,14 @@
               "line": 43,
               "at": "B",
               "verdict": "disagree",
-              "tolerance": "missing-names",
+              "tolerance": "missing-and-extra",
               "declared": "98 name(s) visible at \"B\"",
-              "ours": "84 name(s): missing 37 (A.B.B, A.B.B.b, A.B.B.b.b, A.B.B.b.self, A.B.B.b.that, …), extra 23 (A.B.b.self.that, A.B.self.that, A.b.self, A.b.self.that, A.b.that, …); 4 missing name(s) reachable by another path (A.B.b.b, B.b.b, Test1.A.B.b.b, b.b)",
+              "ours": "86 name(s): missing 27 (A.B.B, A.B.B.b, A.B.B.b.b, A.B.B.b.self, A.B.B.b.that, …), extra 15 (A.b.B, A.b.B.self, A.b.B.that, A.b.B.that.self, A.b.self, …)",
               "names": {
                 "declared": 98,
-                "ours": 84,
-                "missing": 37,
-                "otherPath": 4,
-                "extra": 23
+                "ours": 86,
+                "missing": 27,
+                "extra": 15
               }
             }
           ]
@@ -3453,15 +2473,14 @@
               "line": 23,
               "at": "A.B",
               "verdict": "disagree",
-              "tolerance": "missing-names",
+              "tolerance": "missing-and-extra",
               "declared": "76 name(s) visible at \"A.B\"",
-              "ours": "65 name(s): missing 30 (A.B.B, A.B.B.b, A.B.B.b.b, A.B.B.b.self, A.B.B.b.that, …), extra 19 (A.B.b.self.that, A.B.self.that, A.b.self, A.b.self.that, A.b.that, …); 2 missing name(s) reachable by another path (A.B.b.b, Test1.A.B.b.b)",
+              "ours": "64 name(s): missing 26 (A.B.B, A.B.B.b, A.B.B.b.b, A.B.B.b.self, A.B.B.b.that, …), extra 14 (A.b.B, A.b.B.self, A.b.B.that, A.b.B.that.self, A.b.self, …)",
               "names": {
                 "declared": 76,
-                "ours": 65,
-                "missing": 30,
-                "otherPath": 2,
-                "extra": 19
+                "ours": 64,
+                "missing": 26,
+                "extra": 14
               }
             },
             {
@@ -3470,15 +2489,14 @@
               "line": 43,
               "at": "B",
               "verdict": "disagree",
-              "tolerance": "missing-names",
+              "tolerance": "missing-and-extra",
               "declared": "98 name(s) visible at \"B\"",
-              "ours": "84 name(s): missing 37 (A.B.B, A.B.B.b, A.B.B.b.b, A.B.B.b.self, A.B.B.b.that, …), extra 23 (A.B.b.self.that, A.B.self.that, A.b.self, A.b.self.that, A.b.that, …); 4 missing name(s) reachable by another path (A.B.b.b, B.b.b, Test1.A.B.b.b, b.b)",
+              "ours": "86 name(s): missing 27 (A.B.B, A.B.B.b, A.B.B.b.b, A.B.B.b.self, A.B.B.b.that, …), extra 15 (A.b.B, A.b.B.self, A.b.B.that, A.b.B.that.self, A.b.self, …)",
               "names": {
                 "declared": 98,
-                "ours": 84,
-                "missing": 37,
-                "otherPath": 4,
-                "extra": 23
+                "ours": 86,
+                "missing": 27,
+                "extra": 15
               }
             }
           ]
@@ -3487,73 +2505,7 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_CircleProblem5.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 9,
-          "agree": 5,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 32,
-              "at": "D",
-              "verdict": "disagree",
-              "tolerance": "other-paths",
-              "declared": "14 name(s) visible at \"D\"",
-              "ours": "12 name(s): missing 2 (A.B.B, Test1.A.B.B), extra 0 (none); 2 missing name(s) reachable by another path (A.B.B, Test1.A.B.B)",
-              "names": {
-                "declared": 14,
-                "ours": 12,
-                "missing": 2,
-                "otherPath": 2
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 38,
-              "at": "C",
-              "verdict": "disagree",
-              "tolerance": "other-paths",
-              "declared": "16 name(s) visible at \"C\"",
-              "ours": "13 name(s): missing 3 (A.B.B, B.B, Test1.A.B.B), extra 0 (none); 3 missing name(s) reachable by another path (A.B.B, B.B, Test1.A.B.B)",
-              "names": {
-                "declared": 16,
-                "ours": 13,
-                "missing": 3,
-                "otherPath": 3
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 46,
-              "at": "A",
-              "verdict": "disagree",
-              "tolerance": "other-paths",
-              "declared": "14 name(s) visible at \"A\"",
-              "ours": "12 name(s): missing 2 (A.B.B, Test1.A.B.B), extra 0 (none); 2 missing name(s) reachable by another path (A.B.B, Test1.A.B.B)",
-              "names": {
-                "declared": 14,
-                "ours": 12,
-                "missing": 2,
-                "otherPath": 2
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 53,
-              "at": "A::B",
-              "verdict": "disagree",
-              "tolerance": "other-paths",
-              "declared": "14 name(s) visible at \"A::B\"",
-              "ours": "12 name(s): missing 2 (A.B.B, Test1.A.B.B), extra 0 (none); 2 missing name(s) reachable by another path (A.B.B, Test1.A.B.B)",
-              "names": {
-                "declared": 14,
-                "ours": 12,
-                "missing": 2,
-                "otherPath": 2
-              }
-            }
-          ]
+          "agree": 9
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_ImportAlias.kerml.xt",
@@ -3605,24 +2557,7 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_ImportAndInnerClassesNamesAreTheSameBadCase3_FT.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 29,
-              "at": "a1",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "107 name(s) visible at \"a1\"",
-              "ours": "134 name(s): missing 0 (none), extra 27 (A.a1.self.that, A.self.that, B.a1.self.that, B.b.self.that, B.self.that, …)",
-              "names": {
-                "declared": 107,
-                "ours": 134,
-                "extra": 27
-              }
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_ImportAndInnerClassesNamesAreTheSameBadCase3_Rdef.kerml.xt",
@@ -3644,15 +2579,13 @@
               "line": 31,
               "at": "a1",
               "verdict": "disagree",
-              "tolerance": "missing-and-extra",
+              "tolerance": "library-names",
               "declared": "139 name(s) visible at \"a1\"",
-              "ours": "152 name(s): missing 21 (A.a1, A.a1.self, A.a1.that, A.a1.that.self, inner1.A, …), extra 34 (A.a2, A.a2.self, A.a2.self.that, A.a2.that, A.a2.that.self, …); 4 missing name(s) reachable by another path (A.a1, A.a1.self, A.a1.that, A.a1.that.self)",
+              "ours": "138 name(s): missing 1 (test.inner.B.b.a1.that.self), extra 0 (none)",
               "names": {
                 "declared": 139,
-                "ours": 152,
-                "missing": 21,
-                "otherPath": 4,
-                "extra": 34
+                "ours": 138,
+                "missing": 1
               }
             }
           ]
@@ -3673,93 +2606,25 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_ImportAndInnerClassesNamesAreTheSameGoodCase1_2_FT.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 2,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 26,
-              "at": "OuterPackage::A::a1",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "44 name(s) visible at \"OuterPackage::A::a1\"",
-              "ours": "55 name(s): missing 0 (none), extra 11 (A.a2.self.that, A.self.that, B.self.that, OuterPackage.A.a1.self.that, OuterPackage.A.self.that, …)",
-              "names": {
-                "declared": 44,
-                "ours": 55,
-                "extra": 11
-              }
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_ImportAndInnerClassesNamesAreTheSameGoodCase1_2_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 2,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 26,
-              "at": "OuterPackage::A.a1",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "44 name(s) visible at \"OuterPackage::A.a1\"",
-              "ours": "55 name(s): missing 0 (none), extra 11 (A.a2.self.that, A.self.that, B.self.that, OuterPackage.A.a1.self.that, OuterPackage.A.self.that, …)",
-              "names": {
-                "declared": 44,
-                "ours": 55,
-                "extra": 11
-              }
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_ImportAndInnerClassesNamesAreTheSameGoodCase1_FT.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 27,
-              "at": "A::a2",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "44 name(s) visible at \"A::a2\"",
-              "ours": "55 name(s): missing 0 (none), extra 11 (A.a2.self.that, A.self.that, B.self.that, OuterPackage.A.a1.self.that, OuterPackage.A.self.that, …)",
-              "names": {
-                "declared": 44,
-                "ours": 55,
-                "extra": 11
-              }
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_ImportAndInnerClassesNamesAreTheSameGoodCase1_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 27,
-              "at": "A.a2",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "44 name(s) visible at \"A.a2\"",
-              "ours": "55 name(s): missing 0 (none), extra 11 (A.a2.self.that, A.self.that, B.self.that, OuterPackage.A.a1.self.that, OuterPackage.A.self.that, …)",
-              "names": {
-                "declared": 44,
-                "ours": 55,
-                "extra": 11
-              }
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_ImportAndInnerClassesNamesAreTheSameGoodCase2.kerml.xt",
@@ -3771,92 +2636,19 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_ImportAndInnerClassesNamesAreTheSameGoodCase2_FT.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 3,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 27,
-              "at": "A",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "60 name(s) visible at \"A\"",
-              "ours": "75 name(s): missing 0 (none), extra 15 (A.a2.self.that, A.self.that, B.a2.self.that, B.b.self.that, B.self.that, …)",
-              "names": {
-                "declared": 60,
-                "ours": 75,
-                "extra": 15
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 42,
-              "at": "a2",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "71 name(s) visible at \"a2\"",
-              "ours": "89 name(s): missing 0 (none), extra 18 (A.a2.self.that, A.self.that, B.a2.self.that, B.b.self.that, B.self.that, …)",
-              "names": {
-                "declared": 71,
-                "ours": 89,
-                "extra": 18
-              }
-            }
-          ]
+          "agree": 5
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_ImportAndInnerClassesNamesAreTheSameGoodCase2_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 3,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 27,
-              "at": "A",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "52 name(s) visible at \"A\"",
-              "ours": "65 name(s): missing 0 (none), extra 13 (A.a2.self.that, A.self.that, B.b.self.that, B.self.that, OuterPackage.A.a1.self.that, …)",
-              "names": {
-                "declared": 52,
-                "ours": 65,
-                "extra": 13
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 41,
-              "at": "a2",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "59 name(s) visible at \"a2\"",
-              "ours": "74 name(s): missing 0 (none), extra 15 (A.a2.self.that, A.self.that, B.a2.self.that, B.self.that, OuterPackage.A.a1.self.that, …)",
-              "names": {
-                "declared": 59,
-                "ours": 74,
-                "extra": 15
-              }
-            }
-          ]
+          "agree": 5
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_ImportAndInnerClassesNamesAreTheSameGoodCase3_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 1,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "noErrors",
-              "line": 19,
-              "verdict": "disagree",
-              "declared": "no error anywhere in the file",
-              "ours": "1 error(s), first: line 27: unresolved reference: a2 — did you mean test::A::a2?"
-            }
-          ]
+          "agree": 1
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_ImportPackageAlias1.kerml.xt",
@@ -3868,77 +2660,13 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_ImportPackageAlias1_FT.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 3,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 25,
-              "at": "A",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "160 name(s) visible at \"A\"",
-              "ours": "200 name(s): missing 0 (none), extra 40 (A.self.that, AA.aa.self.that, AA.aa_alias.self.that, AA.self.that, AA_alias.aa.self.that, …)",
-              "names": {
-                "declared": 160,
-                "ours": 200,
-                "extra": 40
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 69,
-              "at": "A_alias",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "160 name(s) visible at \"A_alias\"",
-              "ours": "200 name(s): missing 0 (none), extra 40 (A.self.that, AA.aa.self.that, AA.aa_alias.self.that, AA.self.that, AA_alias.aa.self.that, …)",
-              "names": {
-                "declared": 160,
-                "ours": 200,
-                "extra": 40
-              }
-            }
-          ]
+          "agree": 5
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_ImportPackageAlias1_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 3,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 25,
-              "at": "A",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "160 name(s) visible at \"A\"",
-              "ours": "200 name(s): missing 0 (none), extra 40 (A.self.that, AA.aa.self.that, AA.aa_alias.self.that, AA.self.that, AA_alias.aa.self.that, …)",
-              "names": {
-                "declared": 160,
-                "ours": 200,
-                "extra": 40
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 69,
-              "at": "A_alias",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "160 name(s) visible at \"A_alias\"",
-              "ours": "200 name(s): missing 0 (none), extra 40 (A.self.that, AA.aa.self.that, AA.aa_alias.self.that, AA.self.that, AA_alias.aa.self.that, …)",
-              "names": {
-                "declared": 160,
-                "ours": 200,
-                "extra": 40
-              }
-            }
-          ]
+          "agree": 5
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_ImportPackageAlias2.kerml.xt",
@@ -3950,137 +2678,38 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_ImportPackageAlias2_FT.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 28,
-              "at": "A_alias",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "184 name(s) visible at \"A_alias\"",
-              "ours": "230 name(s): missing 0 (none), extra 46 (A.self.that, AA.aa.self.that, AA.aa_alias.self.that, AA.self.that, AA_alias.aa.self.that, …)",
-              "names": {
-                "declared": 184,
-                "ours": 230,
-                "extra": 46
-              }
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_ImportPackageAlias2_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 28,
-              "at": "A_alias",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "184 name(s) visible at \"A_alias\"",
-              "ours": "230 name(s): missing 0 (none), extra 46 (A.self.that, AA.aa.self.that, AA.aa_alias.self.that, AA.self.that, AA_alias.aa.self.that, …)",
-              "names": {
-                "declared": 184,
-                "ours": 230,
-                "extra": 46
-              }
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_SameNamesGoodCase.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 4,
-          "rows": [
-            {
-              "kind": "noErrors",
-              "line": 18,
-              "verdict": "disagree",
-              "declared": "no error anywhere in the file",
-              "ours": "1 error(s), first: line 38: unresolved reference: a1 — did you mean test::A::a1?"
-            }
-          ]
+          "agree": 5
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_SameNamesGoodCaseWithAlias.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 4,
-          "rows": [
-            {
-              "kind": "noErrors",
-              "line": 18,
-              "verdict": "disagree",
-              "declared": "no error anywhere in the file",
-              "ours": "1 error(s), first: line 39: unresolved reference: a1 — did you mean test::A::a1 or A1?"
-            }
-          ]
+          "agree": 5
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_SameNamesGoodCaseWithAlias_FT.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 3,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 26,
-              "at": "A",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "72 name(s) visible at \"A\"",
-              "ours": "90 name(s): missing 0 (none), extra 18 (A.a1.self.that, A.self.that, A1.a1.self.that, A1.self.that, B.A.a2.self.that, …)",
-              "names": {
-                "declared": 72,
-                "ours": 90,
-                "extra": 18
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 44,
-              "at": "a1",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "83 name(s) visible at \"a1\"",
-              "ours": "104 name(s): missing 0 (none), extra 21 (A.a2.self.that, A.self.that, A1.a1.self.that, A1.self.that, B.A.a2.self.that, …)",
-              "names": {
-                "declared": 83,
-                "ours": 104,
-                "extra": 21
-              }
-            }
-          ]
+          "agree": 5
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_SameNamesGoodCaseWithAlias_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 3,
+          "agree": 4,
           "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 26,
-              "at": "A",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "64 name(s) visible at \"A\"",
-              "ours": "80 name(s): missing 0 (none), extra 16 (A.a1.self.that, A.self.that, A1.a1.self.that, A1.self.that, B.A.a2.self.that, …)",
-              "names": {
-                "declared": 64,
-                "ours": 80,
-                "extra": 16
-              }
-            },
             {
               "kind": "scope",
               "block": true,
@@ -4089,12 +2718,12 @@
               "verdict": "disagree",
               "tolerance": "missing-and-extra",
               "declared": "71 name(s) visible at \"a1\"",
-              "ours": "89 name(s): missing 4 (A.a1, A.a1.self, A.a1.that, A.a1.that.self), extra 22 (A.a2, A.a2.self, A.a2.self.that, A.a2.that, A.a2.that.self, …)",
+              "ours": "71 name(s): missing 4 (A.a1, A.a1.self, A.a1.that, A.a1.that.self), extra 4 (A.a2, A.a2.self, A.a2.that, A.a2.that.self)",
               "names": {
                 "declared": 71,
-                "ours": 89,
+                "ours": 71,
                 "missing": 4,
-                "extra": 22
+                "extra": 4
               }
             }
           ]
@@ -4103,61 +2732,14 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_SameNamesGoodCase_FT.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 3,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 24,
-              "at": "A",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "56 name(s) visible at \"A\"",
-              "ours": "70 name(s): missing 0 (none), extra 14 (A.a1.self.that, A.self.that, B.A.a2.self.that, B.A.self.that, B.a1.self.that, …)",
-              "names": {
-                "declared": 56,
-                "ours": 70,
-                "extra": 14
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 39,
-              "at": "a1",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "67 name(s) visible at \"a1\"",
-              "ours": "84 name(s): missing 0 (none), extra 17 (A.a2.self.that, A.self.that, B.A.a2.self.that, B.A.self.that, B.a1.self.that, …)",
-              "names": {
-                "declared": 67,
-                "ours": 84,
-                "extra": 17
-              }
-            }
-          ]
+          "agree": 5
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_SameNamesGoodCase_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 3,
+          "agree": 4,
           "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 24,
-              "at": "A",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "48 name(s) visible at \"A\"",
-              "ours": "60 name(s): missing 0 (none), extra 12 (A.a1.self.that, A.self.that, B.A.a2.self.that, B.A.self.that, B.b.self.that, …)",
-              "names": {
-                "declared": 48,
-                "ours": 60,
-                "extra": 12
-              }
-            },
             {
               "kind": "scope",
               "block": true,
@@ -4166,12 +2748,12 @@
               "verdict": "disagree",
               "tolerance": "missing-and-extra",
               "declared": "55 name(s) visible at \"a1\"",
-              "ours": "69 name(s): missing 4 (A.a1, A.a1.self, A.a1.that, A.a1.that.self), extra 18 (A.a2, A.a2.self, A.a2.self.that, A.a2.that, A.a2.that.self, …)",
+              "ours": "55 name(s): missing 4 (A.a1, A.a1.self, A.a1.that, A.a1.that.self), extra 4 (A.a2, A.a2.self, A.a2.that, A.a2.that.self)",
               "names": {
                 "declared": 55,
-                "ours": 69,
+                "ours": 55,
                 "missing": 4,
-                "extra": 18
+                "extra": 4
               }
             }
           ]
@@ -4180,16 +2762,7 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_SameNamesGoodCase_Redef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 1,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "noErrors",
-              "line": 18,
-              "verdict": "disagree",
-              "declared": "no error anywhere in the file",
-              "ours": "1 error(s), first: line 27: unresolved reference: A::a1"
-            }
-          ]
+          "agree": 1
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_SameNamesImport.kerml.xt",
@@ -4320,147 +2893,37 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_SameNamesInnerClassAndOuterClass.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 23,
-              "at": "A",
-              "verdict": "disagree",
-              "tolerance": "other-paths",
-              "declared": "9 name(s) visible at \"A\"",
-              "ours": "6 name(s): missing 3 (A.B.B, B.B, test.A.A.B.B), extra 0 (none); 3 missing name(s) reachable by another path (A.B.B, B.B, test.A.A.B.B)",
-              "names": {
-                "declared": 9,
-                "ours": 6,
-                "missing": 3,
-                "otherPath": 3
-              }
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_SameNamesInnerClassAndOuterClassWithAlias.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 24,
-              "at": "A",
-              "verdict": "disagree",
-              "tolerance": "other-paths",
-              "declared": "17 name(s) visible at \"A\"",
-              "ours": "12 name(s): missing 5 (A.B.B, A1.A.B.B, B.B, test.A.A.B.B, test.A1.A.B.B), extra 0 (none); 5 missing name(s) reachable by another path (A.B.B, A1.A.B.B, B.B, test.A.A.B.B, test.A1.A.B.B)",
-              "names": {
-                "declared": 17,
-                "ours": 12,
-                "missing": 5,
-                "otherPath": 5
-              }
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_SameNamesInnerClassAndOuterClassWithAlias_FT.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 24,
-              "at": "A",
-              "verdict": "disagree",
-              "tolerance": "other-paths",
-              "declared": "56 name(s) visible at \"A\"",
-              "ours": "64 name(s): missing 5 (A.B.B, A1.A.B.B, B.B, test.A.A.B.B, test.A1.A.B.B), extra 13 (A.B.self.that, A.self.that, A1.A.B.self.that, A1.A.self.that, A1.self.that, …); 5 missing name(s) reachable by another path (A.B.B, A1.A.B.B, B.B, test.A.A.B.B, test.A1.A.B.B)",
-              "names": {
-                "declared": 56,
-                "ours": 64,
-                "missing": 5,
-                "otherPath": 5,
-                "extra": 13
-              }
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_SameNamesInnerClassAndOuterClassWithAlias_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 24,
-              "at": "A",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "31 name(s) visible at \"A\"",
-              "ours": "39 name(s): missing 0 (none), extra 8 (A.self.that, A1.A.self.that, A1.self.that, self.that, test.A.A.self.that, …)",
-              "names": {
-                "declared": 31,
-                "ours": 39,
-                "extra": 8
-              }
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_SameNamesInnerClassAndOuterClass_FT.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 23,
-              "at": "A",
-              "verdict": "disagree",
-              "tolerance": "other-paths",
-              "declared": "30 name(s) visible at \"A\"",
-              "ours": "34 name(s): missing 3 (A.B.B, B.B, test.A.A.B.B), extra 7 (A.B.self.that, A.self.that, B.self.that, self.that, test.A.A.B.self.that, …); 3 missing name(s) reachable by another path (A.B.B, B.B, test.A.A.B.B)",
-              "names": {
-                "declared": 30,
-                "ours": 34,
-                "missing": 3,
-                "otherPath": 3,
-                "extra": 7
-              }
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_SameNamesInnerClassAndOuterClass_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 23,
-              "at": "A",
-              "verdict": "disagree",
-              "tolerance": "other-paths",
-              "declared": "30 name(s) visible at \"A\"",
-              "ours": "34 name(s): missing 3 (A.B.B, B.B, test.A.A.B.B), extra 7 (A.B.self.that, A.self.that, B.self.that, self.that, test.A.A.B.self.that, …); 3 missing name(s) reachable by another path (A.B.B, B.B, test.A.A.B.B)",
-              "names": {
-                "declared": 30,
-                "ours": 34,
-                "missing": 3,
-                "otherPath": 3,
-                "extra": 7
-              }
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/SimpleImportAsFeatureTests_ImportClass.kerml.xt",
@@ -4476,11 +2939,11 @@
               "verdict": "disagree",
               "tolerance": "library-names",
               "declared": "23 name(s) visible at \"A\"",
-              "ours": "83 name(s): missing 0 (none), extra 60 (A.a1.self, A.a1.self.that, A.a1.that, A.a1.that.self, A.self, …)",
+              "ours": "35 name(s): missing 0 (none), extra 12 (C.c.self, C.c.that, C.c.that.self, OuterPackage.B.b.self, OuterPackage.B.b.that, …)",
               "names": {
                 "declared": 23,
-                "ours": 83,
-                "extra": 60
+                "ours": 35,
+                "extra": 12
               }
             }
           ]
@@ -4499,11 +2962,11 @@
               "verdict": "disagree",
               "tolerance": "library-names",
               "declared": "23 name(s) visible at \"aliass\"",
-              "ours": "83 name(s): missing 0 (none), extra 60 (C.c.a1.self, C.c.a1.self.that, C.c.a1.that, C.c.a1.that.self, C.c.self, …)",
+              "ours": "35 name(s): missing 0 (none), extra 12 (C.c.self, C.c.that, C.c.that.self, OuterPackage.B.b.self, OuterPackage.B.b.that, …)",
               "names": {
                 "declared": 23,
-                "ours": 83,
-                "extra": 60
+                "ours": 35,
+                "extra": 12
               }
             }
           ]
@@ -4522,11 +2985,11 @@
               "verdict": "disagree",
               "tolerance": "library-names",
               "declared": "32 name(s) visible at \"b\"",
-              "ours": "83 name(s): missing 0 (none), extra 51 (C.c.a1.self, C.c.a1.self.that, C.c.a1.that, C.c.a1.that.self, C.c.self.that, …)",
+              "ours": "41 name(s): missing 0 (none), extra 9 (OuterPackage.B.b.self, OuterPackage.B.b.that, OuterPackage.B.b.that.self, b.self, b.that, …)",
               "names": {
                 "declared": 32,
-                "ours": 83,
-                "extra": 51
+                "ours": 41,
+                "extra": 9
               }
             }
           ]
@@ -4545,11 +3008,11 @@
               "verdict": "disagree",
               "tolerance": "library-names",
               "declared": "32 name(s) visible at \"aliass\"",
-              "ours": "83 name(s): missing 0 (none), extra 51 (C.c.a1.self, C.c.a1.self.that, C.c.a1.that, C.c.a1.that.self, C.c.self.that, …)",
+              "ours": "41 name(s): missing 0 (none), extra 9 (OuterPackage.B.b.self, OuterPackage.B.b.that, OuterPackage.B.b.that.self, aliass.self, aliass.that, …)",
               "names": {
                 "declared": 32,
-                "ours": 83,
-                "extra": 51
+                "ours": 41,
+                "extra": 9
               }
             }
           ]
@@ -4568,11 +3031,11 @@
               "verdict": "disagree",
               "tolerance": "library-names",
               "declared": "33 name(s) visible at \"B::b\"",
-              "ours": "115 name(s): missing 0 (none), extra 82 (A.a1.self, A.a1.self.that, A.a1.that, A.a1.that.self, A.self, …)",
+              "ours": "42 name(s): missing 0 (none), extra 9 (B.b.self, B.b.that, B.b.that.self, OuterPackage.B.b.self, OuterPackage.B.b.that, …)",
               "names": {
                 "declared": 33,
-                "ours": 115,
-                "extra": 82
+                "ours": 42,
+                "extra": 9
               }
             }
           ]
@@ -4581,77 +3044,13 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/SimpleImportTestsFromOtherFile_Import1_FT.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 3,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 24,
-              "at": "A",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "92 name(s) visible at \"A\"",
-              "ours": "115 name(s): missing 0 (none), extra 23 (A.a1.self.that, A.self.that, B.b.a1.self.that, B.b.self.that, B.self.that, …)",
-              "names": {
-                "declared": 92,
-                "ours": 115,
-                "extra": 23
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 45,
-              "at": "B::b",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "92 name(s) visible at \"B::b\"",
-              "ours": "115 name(s): missing 0 (none), extra 23 (A.a1.self.that, A.self.that, B.b.a1.self.that, B.b.self.that, B.self.that, …)",
-              "names": {
-                "declared": 92,
-                "ours": 115,
-                "extra": 23
-              }
-            }
-          ]
+          "agree": 5
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/SimpleImportTestsFromOtherFile_Import1_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 3,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 24,
-              "at": "A",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "92 name(s) visible at \"A\"",
-              "ours": "115 name(s): missing 0 (none), extra 23 (A.a1.self.that, A.self.that, B.b.a1.self.that, B.b.self.that, B.self.that, …)",
-              "names": {
-                "declared": 92,
-                "ours": 115,
-                "extra": 23
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 45,
-              "at": "B::b",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "94 name(s) visible at \"B::b\"",
-              "ours": "117 name(s): missing 0 (none), extra 23 (A.a1.self.that, A.self.that, B.b.a1.self.that, B.b.self.that, B.self.that, …)",
-              "names": {
-                "declared": 94,
-                "ours": 117,
-                "extra": 23
-              }
-            }
-          ]
+          "agree": 5
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/SimpleImportTestsFromOtherFile_Import2.kerml.xt",
@@ -4667,11 +3066,11 @@
               "verdict": "disagree",
               "tolerance": "library-names",
               "declared": "44 name(s) visible at \"b\"",
-              "ours": "149 name(s): missing 0 (none), extra 105 (A.a1.self, A.a1.self.that, A.a1.that, A.a1.that.self, A.self, …)",
+              "ours": "62 name(s): missing 0 (none), extra 18 (B.b.self, B.b.that, B.b.that.self, OuterPackage.B.b.self, OuterPackage.B.b.that, …)",
               "names": {
                 "declared": 44,
-                "ours": 149,
-                "extra": 105
+                "ours": 62,
+                "extra": 18
               }
             }
           ]
@@ -4680,77 +3079,13 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/SimpleImportTestsFromOtherFile_Import2_FT.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 3,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 24,
-              "at": "B",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "100 name(s) visible at \"B\"",
-              "ours": "125 name(s): missing 0 (none), extra 25 (A.a1.self.that, A.self.that, B.b.a1.self.that, B.b.self.that, B.self.that, …)",
-              "names": {
-                "declared": 100,
-                "ours": 125,
-                "extra": 25
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 47,
-              "at": "b",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "119 name(s) visible at \"b\"",
-              "ours": "149 name(s): missing 0 (none), extra 30 (A.a1.self.that, A.self.that, B.b.a1.self.that, B.b.self.that, B.self.that, …)",
-              "names": {
-                "declared": 119,
-                "ours": 149,
-                "extra": 30
-              }
-            }
-          ]
+          "agree": 5
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/SimpleImportTestsFromOtherFile_Import2_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 3,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 24,
-              "at": "B",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "84 name(s) visible at \"B\"",
-              "ours": "105 name(s): missing 0 (none), extra 21 (A.a1.self.that, A.self.that, B.b.a1.self.that, B.b.self.that, B.self.that, …)",
-              "names": {
-                "declared": 84,
-                "ours": 105,
-                "extra": 21
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 44,
-              "at": "b",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "95 name(s) visible at \"b\"",
-              "ours": "119 name(s): missing 0 (none), extra 24 (A.a1.self.that, A.self.that, B.b.a1.self.that, B.b.self.that, B.self.that, …)",
-              "names": {
-                "declared": 95,
-                "ours": 119,
-                "extra": 24
-              }
-            }
-          ]
+          "agree": 5
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/SimpleImportTests_CircleInheritanceInCircleImport.kerml.xt",
@@ -4779,14 +3114,14 @@
               "line": 23,
               "at": "A",
               "verdict": "disagree",
-              "tolerance": "missing-names",
+              "tolerance": "missing-and-extra",
               "declared": "15 name(s) visible at \"A\"",
-              "ours": "5 name(s): missing 10 (A.a.a, a.A, a.A.a, a.a, test.A.A, …), extra 0 (none); 3 missing name(s) reachable by another path (A.a.a, a.a, test.A.a.a)",
+              "ours": "11 name(s): missing 5 (a.A.a, test.A.A, test.A.A.a, test.A.A.a.a, test.A.a.A.a), extra 1 (A.a.A)",
               "names": {
                 "declared": 15,
-                "ours": 5,
-                "missing": 10,
-                "otherPath": 3
+                "ours": 11,
+                "missing": 5,
+                "extra": 1
               }
             }
           ]
@@ -4803,15 +3138,14 @@
               "line": 23,
               "at": "A",
               "verdict": "disagree",
-              "tolerance": "missing-names",
+              "tolerance": "missing-and-extra",
               "declared": "45 name(s) visible at \"A\"",
-              "ours": "29 name(s): missing 22 (A.a.a, a.A, a.A.a, a.A.self, a.A.that, …), extra 6 (A.a.self.that, A.self.that, a.self.that, self.that, test.A.a.self.that, …); 3 missing name(s) reachable by another path (A.a.a, a.a, test.A.a.a)",
+              "ours": "32 name(s): missing 14 (a.A.a, test.A.A, test.A.A.a, test.A.A.a.a, test.A.A.a.self, …), extra 1 (A.a.A)",
               "names": {
                 "declared": 45,
-                "ours": 29,
-                "missing": 22,
-                "otherPath": 3,
-                "extra": 6
+                "ours": 32,
+                "missing": 14,
+                "extra": 1
               }
             }
           ]
@@ -4828,15 +3162,14 @@
               "line": 23,
               "at": "A",
               "verdict": "disagree",
-              "tolerance": "missing-names",
+              "tolerance": "missing-and-extra",
               "declared": "45 name(s) visible at \"A\"",
-              "ours": "29 name(s): missing 22 (A.a.a, a.A, a.A.a, a.A.self, a.A.that, …), extra 6 (A.a.self.that, A.self.that, a.self.that, self.that, test.A.a.self.that, …); 3 missing name(s) reachable by another path (A.a.a, a.a, test.A.a.a)",
+              "ours": "32 name(s): missing 14 (a.A.a, test.A.A, test.A.A.a, test.A.A.a.a, test.A.A.a.self, …), extra 1 (A.a.A)",
               "names": {
                 "declared": 45,
-                "ours": 29,
-                "missing": 22,
-                "otherPath": 3,
-                "extra": 6
+                "ours": 32,
+                "missing": 14,
+                "extra": 1
               }
             }
           ]
@@ -4997,17 +3330,7 @@
           "path": "src/org/omg/kerml/xpect/tests/validation/LibraryPackage_invalid_notStandard.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.validation.KerMLValidationTest",
           "expectations": 1,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "warnings",
-              "line": 15,
-              "at": "standard",
-              "verdict": "disagree",
-              "declared": "warning: \"User library packages should not be marked as standard\"",
-              "ours": "no warning anywhere in the file"
-            }
-          ]
+          "agree": 1
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/validation/MemberNameTests_NamedMemberFromOtherPackageBadUseage.kerml.xt",
@@ -5465,49 +3788,13 @@
           "path": "src/org/omg/kerml/xpect/tests/validation/ShortNameTests_Distinguishibility1.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 2,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "warnings",
-              "line": 20,
-              "at": "one",
-              "verdict": "disagree",
-              "declared": "warning: \"Duplicate of other owned member name\"",
-              "ours": "no warning anywhere in the file"
-            },
-            {
-              "kind": "warnings",
-              "line": 22,
-              "at": "one",
-              "verdict": "disagree",
-              "declared": "warning: \"Duplicate of other owned member name\"",
-              "ours": "no warning anywhere in the file"
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/validation/ShortNameTests_Distinguishibility2.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 2,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "warnings",
-              "line": 20,
-              "at": "two",
-              "verdict": "disagree",
-              "declared": "warning: \"Duplicate of other owned member name\"",
-              "ours": "no warning anywhere in the file"
-            },
-            {
-              "kind": "warnings",
-              "line": 22,
-              "at": "two",
-              "verdict": "disagree",
-              "declared": "warning: \"Duplicate of other owned member name\"",
-              "ours": "no warning anywhere in the file"
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/validation/SimpleImportAsFeatureTests_BadImportClass.kerml.xt",
@@ -5629,7 +3916,7 @@
           "path": "src/org/omg/kerml/xpect/tests/validation/Specialization_invalid.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 11,
-          "agree": 0,
+          "agree": 2,
           "rows": [
             {
               "kind": "errors",
@@ -5646,9 +3933,9 @@
               "line": 34,
               "at": "C1",
               "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
+              "tolerance": "severity-differs",
               "declared": "error: \"Cannot specialize class or association\"",
-              "ours": "no error at line 40; nearest is line 57: S participates in a specialization cycle"
+              "ours": "no error at line 40, but a warning: line 40 offset 1089: Duplicate of inherited member name 'self' from DataValue, Occurrence"
             },
             {
               "kind": "errors",
@@ -5656,17 +3943,9 @@
               "line": 34,
               "at": "A1",
               "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
+              "tolerance": "severity-differs",
               "declared": "error: \"Cannot specialize class or association\"",
-              "ours": "no error at line 40; nearest is line 57: S participates in a specialization cycle"
-            },
-            {
-              "kind": "warnings",
-              "line": 39,
-              "at": "datatype D2 specializes D1, C1, A1;",
-              "verdict": "disagree",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from DataValue, Occurrence\"",
-              "ours": "no warning anywhere in the file"
+              "ours": "no error at line 40, but a warning: line 40 offset 1089: Duplicate of inherited member name 'self' from DataValue, Occurrence"
             },
             {
               "kind": "errors",
@@ -5674,9 +3953,9 @@
               "line": 43,
               "at": "D1",
               "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
+              "tolerance": "severity-differs",
               "declared": "error: \"Cannot specialize data type or association\"",
-              "ours": "no error at line 49; nearest is line 57: S participates in a specialization cycle"
+              "ours": "no error at line 49, but a warning: line 49 offset 1420: Duplicate of inherited member name 'self' from DataValue, Occurrence"
             },
             {
               "kind": "errors",
@@ -5684,17 +3963,9 @@
               "line": 43,
               "at": "A1",
               "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
+              "tolerance": "severity-differs",
               "declared": "error: \"Cannot specialize data type or association\"",
-              "ours": "no error at line 49; nearest is line 57: S participates in a specialization cycle"
-            },
-            {
-              "kind": "warnings",
-              "line": 48,
-              "at": "class C2 specializes C1, D1, A1;",
-              "verdict": "disagree",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from DataValue, Occurrence\"",
-              "ours": "no warning anywhere in the file"
+              "ours": "no error at line 49, but a warning: line 49 offset 1420: Duplicate of inherited member name 'self' from DataValue, Occurrence"
             },
             {
               "kind": "errors",
@@ -5906,126 +4177,51 @@
           "path": "src/org/omg/kerml/xpect/tests/visibility/VisibilityTests_ImportAsFeatureInheritanceAlias_FT.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.visibility.KerMLVisibilityTest",
           "expectations": 5,
-          "agree": 3,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 24,
-              "at": "aliass",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "68 name(s) visible at \"aliass\"",
-              "ours": "85 name(s): missing 0 (none), extra 17 (Classes.Try.c_public.self.that, Classes.Try.feature4.self.that, Classes.Try.self.that, Classes.aliass.c_public.self.that, Classes.aliass.self.that, …)",
-              "names": {
-                "declared": 68,
-                "ours": 85,
-                "extra": 17
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 49,
-              "at": "c_public",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "79 name(s) visible at \"c_public\"",
-              "ours": "99 name(s): missing 0 (none), extra 20 (Classes.Try.c_public.self.that, Classes.Try.feature4.self.that, Classes.Try.self.that, Classes.aliass.c_public.self.that, Classes.aliass.self.that, …)",
-              "names": {
-                "declared": 79,
-                "ours": 99,
-                "extra": 20
-              }
-            }
-          ]
+          "agree": 5
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/visibility/VisibilityTests_ImportAsFeatureInheritanceAlias_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.visibility.KerMLVisibilityTest",
           "expectations": 5,
-          "agree": 3,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 24,
-              "at": "aliass",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "68 name(s) visible at \"aliass\"",
-              "ours": "85 name(s): missing 0 (none), extra 17 (Classes.Try.c_public.self.that, Classes.Try.feature4.self.that, Classes.Try.self.that, Classes.aliass.c_public.self.that, Classes.aliass.self.that, …)",
-              "names": {
-                "declared": 68,
-                "ours": 85,
-                "extra": 17
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 49,
-              "at": "c_public",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "79 name(s) visible at \"c_public\"",
-              "ours": "99 name(s): missing 0 (none), extra 20 (Classes.Try.c_public.self.that, Classes.Try.feature4.self.that, Classes.Try.self.that, Classes.aliass.c_public.self.that, Classes.aliass.self.that, …)",
-              "names": {
-                "declared": 79,
-                "ours": 99,
-                "extra": 20
-              }
-            }
-          ]
+          "agree": 5
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/visibility/VisibilityTests_ImportAsFeatureInheritance_1.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.visibility.KerMLVisibilityTest",
           "expectations": 5,
-          "agree": 0,
+          "agree": 1,
           "rows": [
-            {
-              "kind": "noErrors",
-              "line": 20,
-              "verdict": "disagree",
-              "declared": "no error anywhere in the file",
-              "ours": "4 error(s), first: line 28: unresolved reference: Try::c_protected"
-            },
             {
               "kind": "errors",
               "line": 27,
               "at": "Try::c_protected",
               "verdict": "disagree",
-              "tolerance": "same-location",
               "declared": "error: \"Couldn't resolve reference to Type 'Try::c_protected'.\"",
-              "ours": "line 28 offset 755: unresolved reference: Try::c_protected"
+              "ours": "no error anywhere in the file"
             },
             {
               "kind": "errors",
               "line": 29,
               "at": "Classes::Try::c_protected",
               "verdict": "disagree",
-              "tolerance": "same-location",
               "declared": "error: \"Couldn't resolve reference to Type 'Classes::Try::c_protected'.\"",
-              "ours": "line 30 offset 910: unresolved reference: Classes::Try::c_protected"
+              "ours": "no error anywhere in the file"
             },
             {
               "kind": "errors",
               "line": 31,
               "at": "c_Public::c_protected",
               "verdict": "disagree",
-              "tolerance": "same-location",
               "declared": "error: \"Couldn't resolve reference to Type 'c_Public::c_protected'.\"",
-              "ours": "line 32 offset 1066: unresolved reference: c_Public::c_protected"
+              "ours": "no error anywhere in the file"
             },
             {
               "kind": "errors",
               "line": 33,
               "at": "Classes::c_Public::c_protected",
               "verdict": "disagree",
-              "tolerance": "same-location",
               "declared": "error: \"Couldn't resolve reference to Type 'Classes::c_Public::c_protected'.\"",
-              "ours": "line 34 offset 1236: unresolved reference: Classes::c_Public::c_protected"
+              "ours": "no error anywhere in the file"
             }
           ]
         },
@@ -6033,39 +4229,7 @@
           "path": "src/org/omg/kerml/xpect/tests/visibility/VisibilityTests_ImportAsFeatureInheritance_FT.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.visibility.KerMLVisibilityTest",
           "expectations": 5,
-          "agree": 3,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 24,
-              "at": "c_Public",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "68 name(s) visible at \"c_Public\"",
-              "ours": "85 name(s): missing 0 (none), extra 17 (Classes.Try.c_public.self.that, Classes.Try.feature4.self.that, Classes.Try.self.that, Classes.c_Public.c_public.self.that, Classes.c_Public.self.that, …)",
-              "names": {
-                "declared": 68,
-                "ours": 85,
-                "extra": 17
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 49,
-              "at": "c_public",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "79 name(s) visible at \"c_public\"",
-              "ours": "99 name(s): missing 0 (none), extra 20 (Classes.Try.c_public.self.that, Classes.Try.feature4.self.that, Classes.Try.self.that, Classes.c_Public.c_public.self.that, Classes.c_Public.self.that, …)",
-              "names": {
-                "declared": 79,
-                "ours": 99,
-                "extra": 20
-              }
-            }
-          ]
+          "agree": 5
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/visibility/VisibilityTests_ImportAsFeatureInheritance_Rdef.kerml.xt",
@@ -7107,32 +5271,23 @@
           "path": "src/org/omg/kerml/xpect/tests/visibility/VisibilityTests_ProtectedImport_0.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.visibility.KerMLVisibilityTest",
           "expectations": 3,
-          "agree": 0,
+          "agree": 1,
           "rows": [
-            {
-              "kind": "noErrors",
-              "line": 20,
-              "verdict": "disagree",
-              "declared": "no error anywhere in the file",
-              "ours": "2 error(s), first: line 28: unresolved reference: A::c_Protect::c_publicc"
-            },
             {
               "kind": "errors",
               "line": 27,
               "at": "A::c_Protect::c_publicc",
               "verdict": "disagree",
-              "tolerance": "same-location",
               "declared": "error: \"Couldn't resolve reference to Classifier 'A::c_Protect::c_publicc'.\"",
-              "ours": "line 28 offset 834: unresolved reference: A::c_Protect::c_publicc"
+              "ours": "no error anywhere in the file"
             },
             {
               "kind": "errors",
               "line": 29,
               "at": "Test3::A::c_Protect::c_publicc",
               "verdict": "disagree",
-              "tolerance": "same-location",
               "declared": "error: \"Couldn't resolve reference to Classifier 'Test3::A::c_Protect::c_publicc'.\"",
-              "ours": "line 30 offset 1031: unresolved reference: Test3::A::c_Protect::c_publicc"
+              "ours": "no error anywhere in the file"
             }
           ]
         },
@@ -7140,32 +5295,23 @@
           "path": "src/org/omg/kerml/xpect/tests/visibility/VisibilityTests_ProtectedImport_1.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.visibility.KerMLVisibilityTest",
           "expectations": 3,
-          "agree": 0,
+          "agree": 1,
           "rows": [
-            {
-              "kind": "noErrors",
-              "line": 20,
-              "verdict": "disagree",
-              "declared": "no error anywhere in the file",
-              "ours": "2 error(s), first: line 28: unresolved reference: A::c_Protect::c_publicc"
-            },
             {
               "kind": "errors",
               "line": 27,
               "at": "A::c_Protect::c_publicc",
               "verdict": "disagree",
-              "tolerance": "same-location",
               "declared": "error: \"Couldn't resolve reference to Classifier 'A::c_Protect::c_publicc'.\"",
-              "ours": "line 28 offset 809: unresolved reference: A::c_Protect::c_publicc"
+              "ours": "no error anywhere in the file"
             },
             {
               "kind": "errors",
               "line": 29,
               "at": "Test3::A::c_Protect::c_publicc",
               "verdict": "disagree",
-              "tolerance": "same-location",
               "declared": "error: \"Couldn't resolve reference to Classifier 'Test3::A::c_Protect::c_publicc'.\"",
-              "ours": "line 30 offset 1004: unresolved reference: Test3::A::c_Protect::c_publicc"
+              "ours": "no error anywhere in the file"
             }
           ]
         },
@@ -7179,23 +5325,15 @@
           "path": "src/org/omg/kerml/xpect/tests/visibility/VisibilityTests_ProtectedImport_3.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.visibility.KerMLVisibilityTest",
           "expectations": 2,
-          "agree": 0,
+          "agree": 1,
           "rows": [
-            {
-              "kind": "noErrors",
-              "line": 20,
-              "verdict": "disagree",
-              "declared": "no error anywhere in the file",
-              "ours": "1 error(s), first: line 26: unresolved reference: A::c_Protect"
-            },
             {
               "kind": "errors",
               "line": 25,
               "at": "A::c_Protect",
               "verdict": "disagree",
-              "tolerance": "same-location",
               "declared": "error: \"Couldn't resolve reference to Classifier 'A::c_Protect'.\"",
-              "ours": "line 26 offset 737: unresolved reference: A::c_Protect"
+              "ours": "no error anywhere in the file"
             }
           ]
         },
@@ -7203,23 +5341,15 @@
           "path": "src/org/omg/kerml/xpect/tests/visibility/VisibilityTests_ProtectedImport_4.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.visibility.KerMLVisibilityTest",
           "expectations": 2,
-          "agree": 0,
+          "agree": 1,
           "rows": [
-            {
-              "kind": "noErrors",
-              "line": 20,
-              "verdict": "disagree",
-              "declared": "no error anywhere in the file",
-              "ours": "1 error(s), first: line 26: unresolved reference: Test3::A::c_Protect"
-            },
             {
               "kind": "errors",
               "line": 25,
               "at": "Test3::A::c_Protect",
               "verdict": "disagree",
-              "tolerance": "same-location",
               "declared": "error: \"Couldn't resolve reference to Classifier 'Test3::A::c_Protect'.\"",
-              "ours": "line 26 offset 750: unresolved reference: Test3::A::c_Protect"
+              "ours": "no error anywhere in the file"
             }
           ]
         },
@@ -7227,32 +5357,23 @@
           "path": "src/org/omg/kerml/xpect/tests/visibility/VisibilityTests_ProtectedImport_5.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.visibility.KerMLVisibilityTest",
           "expectations": 3,
-          "agree": 0,
+          "agree": 1,
           "rows": [
-            {
-              "kind": "noErrors",
-              "line": 20,
-              "verdict": "disagree",
-              "declared": "no error anywhere in the file",
-              "ours": "2 error(s), first: line 28: unresolved reference: A::alias_protected"
-            },
             {
               "kind": "errors",
               "line": 27,
               "at": "A::alias_protected",
               "verdict": "disagree",
-              "tolerance": "same-location",
               "declared": "error: \"Couldn't resolve reference to Classifier 'A::alias_protected'.\"",
-              "ours": "line 28 offset 828: unresolved reference: A::alias_protected"
+              "ours": "no error anywhere in the file"
             },
             {
               "kind": "errors",
               "line": 29,
               "at": "Test3::A::alias_protected",
               "verdict": "disagree",
-              "tolerance": "same-location",
               "declared": "error: \"Couldn't resolve reference to Classifier 'Test3::A::alias_protected'.\"",
-              "ours": "line 30 offset 1009: unresolved reference: Test3::A::alias_protected"
+              "ours": "no error anywhere in the file"
             }
           ]
         },
@@ -7346,18 +5467,18 @@
               "line": 28,
               "at": "P::PP",
               "verdict": "disagree",
-              "tolerance": "same-location",
+              "tolerance": "elsewhere-in-file",
               "declared": "error: \"Couldn't resolve reference to Classifier 'P::PP'.\"",
-              "ours": "line 29 offset 745: unresolved reference: P::PP"
+              "ours": "no error at line 29; nearest is line 38: unresolved reference: P::PP"
             },
             {
               "kind": "errors",
               "line": 30,
               "at": "Test3::P::PP",
               "verdict": "disagree",
-              "tolerance": "same-location",
+              "tolerance": "elsewhere-in-file",
               "declared": "error: \"Couldn't resolve reference to Classifier 'Test3::P::PP'.\"",
-              "ours": "line 31 offset 885: unresolved reference: Test3::P::PP"
+              "ours": "no error at line 31; nearest is line 38: unresolved reference: P::PP"
             },
             {
               "kind": "errors",
@@ -7582,11 +5703,11 @@
               "verdict": "disagree",
               "tolerance": "library-names",
               "declared": "31 name(s) visible at \"c_public\"",
-              "ours": "123 name(s): missing 0 (none), extra 92 (Classes.Try.feature4.self, Classes.Try.feature4.self.that, Classes.Try.feature4.that, Classes.Try.feature4.that.self, Classes.Try.featurepublic.c_public.self, …)",
+              "ours": "49 name(s): missing 0 (none), extra 18 (Classes.Try.feature4.self, Classes.Try.feature4.that, Classes.Try.feature4.that.self, Classes.Try.featurepublic.self, Classes.Try.featurepublic.that, …)",
               "names": {
                 "declared": 31,
-                "ours": 123,
-                "extra": 92
+                "ours": 49,
+                "extra": 18
               }
             },
             {
@@ -7597,11 +5718,11 @@
               "verdict": "disagree",
               "tolerance": "library-names",
               "declared": "31 name(s) visible at \"c_Public\"",
-              "ours": "123 name(s): missing 0 (none), extra 92 (Classes.Try.feature4.self, Classes.Try.feature4.self.that, Classes.Try.feature4.that, Classes.Try.feature4.that.self, Classes.Try.featurepublic.c_public.self, …)",
+              "ours": "49 name(s): missing 0 (none), extra 18 (Classes.Try.feature4.self, Classes.Try.feature4.that, Classes.Try.feature4.that.self, Classes.Try.featurepublic.self, Classes.Try.featurepublic.that, …)",
               "names": {
                 "declared": 31,
-                "ours": 123,
-                "extra": 92
+                "ours": 49,
+                "extra": 18
               }
             }
           ]
@@ -7620,11 +5741,11 @@
               "verdict": "disagree",
               "tolerance": "library-names",
               "declared": "31 name(s) visible at \"aliass\"",
-              "ours": "123 name(s): missing 0 (none), extra 92 (Aliass.c_public.self, Aliass.c_public.self.that, Aliass.c_public.that, Aliass.c_public.that.self, Aliass.self, …)",
+              "ours": "49 name(s): missing 0 (none), extra 18 (Classes.Try.feature4.self, Classes.Try.feature4.that, Classes.Try.feature4.that.self, Classes.Try.featurepublic.self, Classes.Try.featurepublic.that, …)",
               "names": {
                 "declared": 31,
-                "ours": 123,
-                "extra": 92
+                "ours": 49,
+                "extra": 18
               }
             },
             {
@@ -7635,11 +5756,11 @@
               "verdict": "disagree",
               "tolerance": "library-names",
               "declared": "31 name(s) visible at \"Aliass\"",
-              "ours": "123 name(s): missing 0 (none), extra 92 (Aliass.c_public.self, Aliass.c_public.self.that, Aliass.c_public.that, Aliass.c_public.that.self, Aliass.self, …)",
+              "ours": "49 name(s): missing 0 (none), extra 18 (Classes.Try.feature4.self, Classes.Try.feature4.that, Classes.Try.feature4.that.self, Classes.Try.featurepublic.self, Classes.Try.featurepublic.that, …)",
               "names": {
                 "declared": 31,
-                "ours": 123,
-                "extra": 92
+                "ours": 49,
+                "extra": 18
               }
             }
           ]
@@ -7648,77 +5769,13 @@
           "path": "src/org/omg/kerml/xpect/tests/visibility/VisibilityTests_PublicImportAsFeatureAlias_FT.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.visibility.KerMLVisibilityTest",
           "expectations": 5,
-          "agree": 3,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 26,
-              "at": "aliass",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "99 name(s) visible at \"aliass\"",
-              "ours": "124 name(s): missing 0 (none), extra 25 (Aliass.c_public.self.that, Aliass.self.that, Classes.Aliass.c_public.self.that, Classes.Aliass.self.that, Classes.Try.feature4.self.that, …)",
-              "names": {
-                "declared": 99,
-                "ours": 124,
-                "extra": 25
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 60,
-              "at": "Aliass",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "99 name(s) visible at \"Aliass\"",
-              "ours": "124 name(s): missing 0 (none), extra 25 (Aliass.c_public.self.that, Aliass.self.that, Classes.Aliass.c_public.self.that, Classes.Aliass.self.that, Classes.Try.feature4.self.that, …)",
-              "names": {
-                "declared": 99,
-                "ours": 124,
-                "extra": 25
-              }
-            }
-          ]
+          "agree": 5
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/visibility/VisibilityTests_PublicImportAsFeatureAlias_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.visibility.KerMLVisibilityTest",
           "expectations": 5,
-          "agree": 3,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 26,
-              "at": "aliass",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "111 name(s) visible at \"aliass\"",
-              "ours": "139 name(s): missing 0 (none), extra 28 (Aliass.c_public.self.that, Aliass.self.that, Classes.Aliass.c_public.self.that, Classes.Aliass.self.that, Classes.Try.c_public.self.that, …)",
-              "names": {
-                "declared": 111,
-                "ours": 139,
-                "extra": 28
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 63,
-              "at": "Aliass",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "111 name(s) visible at \"Aliass\"",
-              "ours": "139 name(s): missing 0 (none), extra 28 (Aliass.c_public.self.that, Aliass.self.that, Classes.Aliass.c_public.self.that, Classes.Aliass.self.that, Classes.Try.c_public.self.that, …)",
-              "names": {
-                "declared": 111,
-                "ours": 139,
-                "extra": 28
-              }
-            }
-          ]
+          "agree": 5
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/visibility/VisibilityTests_PublicPackImport.kerml.xt",
@@ -7736,12 +5793,12 @@
         "filesUnparsed": 0,
         "assertions": 309,
         "rows": 358,
-        "agree": 144,
-        "disagree": 214,
+        "agree": 203,
+        "disagree": 155,
         "unlocated": 0,
         "notAdjudicated": 0,
         "missingResources": 0,
-        "foreignDiagnostics": 19
+        "foreignDiagnostics": 18
       },
       "kinds": [
         {
@@ -7755,8 +5812,8 @@
           "notAdjudicated": 0,
           "sameLocation": 7,
           "sameLine": 47,
-          "severityDiffers": 10,
-          "elsewhereInFile": 34
+          "severityDiffers": 14,
+          "elsewhereInFile": 30
         },
         {
           "kind": "noErrors",
@@ -7791,14 +5848,14 @@
           "assertions": 57,
           "blockAssertions": 17,
           "rows": 95,
-          "agree": 15,
-          "disagree": 80,
+          "agree": 74,
+          "disagree": 21,
           "unlocated": 0,
           "notAdjudicated": 0,
-          "sameLocation": 0,
+          "sameLocation": 3,
           "sameLine": 0,
-          "severityDiffers": 58,
-          "elsewhereInFile": 7
+          "severityDiffers": 2,
+          "elsewhereInFile": 13
         }
       ],
       "files": [
@@ -7825,7 +5882,7 @@
           "setupClass": "org.omg.sysml.xpect.tests.expression.SysMLTests",
           "expectations": 1,
           "agree": 1,
-          "foreignDiagnostics": 2
+          "foreignDiagnostics": 1
         },
         {
           "path": "src/org/omg/sysml/xpect/tests/linking/GlobalQualification.sysml.xt",
@@ -8148,7 +6205,7 @@
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/ActionUsage_invalid.sysml.xt",
           "setupClass": "org.omg.sysml.xpect.tests.validation.invalid.SysMLTests",
           "expectations": 16,
-          "agree": 0,
+          "agree": 6,
           "rows": [
             {
               "kind": "errors",
@@ -8160,36 +6217,6 @@
               "ours": "line 45 offset 1695: action cannot be typed by partDef (kind mismatch)"
             },
             {
-              "kind": "warnings",
-              "block": true,
-              "line": 40,
-              "at": "action a: ABlock;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from Action, Part\"",
-              "ours": "no warning at line 45, but a error: line 45 offset 1695: action cannot be typed by partDef (kind mismatch)"
-            },
-            {
-              "kind": "warnings",
-              "block": true,
-              "line": 40,
-              "at": "action a: ABlock;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'start' from Action, Part\"",
-              "ours": "no warning at line 45, but a error: line 45 offset 1695: action cannot be typed by partDef (kind mismatch)"
-            },
-            {
-              "kind": "warnings",
-              "block": true,
-              "line": 40,
-              "at": "action a: ABlock;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'done' from Action, Part\"",
-              "ours": "no warning at line 45, but a error: line 45 offset 1695: action cannot be typed by partDef (kind mismatch)"
-            },
-            {
               "kind": "errors",
               "line": 46,
               "at": "action b: ABlock, AnActivity;",
@@ -8197,36 +6224,6 @@
               "tolerance": "same-line",
               "declared": "error: \"An action must be typed by action definitions.\"",
               "ours": "line 52 offset 2162: action cannot be typed by partDef (kind mismatch)"
-            },
-            {
-              "kind": "warnings",
-              "block": true,
-              "line": 47,
-              "at": "action b: ABlock, AnActivity;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from Action, Part\"",
-              "ours": "no warning at line 52, but a error: line 52 offset 2162: action cannot be typed by partDef (kind mismatch)"
-            },
-            {
-              "kind": "warnings",
-              "block": true,
-              "line": 47,
-              "at": "action b: ABlock, AnActivity;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'start' from Action, Part\"",
-              "ours": "no warning at line 52, but a error: line 52 offset 2162: action cannot be typed by partDef (kind mismatch)"
-            },
-            {
-              "kind": "warnings",
-              "block": true,
-              "line": 47,
-              "at": "action b: ABlock, AnActivity;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'done' from Action, Part\"",
-              "ours": "no warning at line 52, but a error: line 52 offset 2162: action cannot be typed by partDef (kind mismatch)"
             },
             {
               "kind": "errors",
@@ -8252,8 +6249,9 @@
               "line": 61,
               "at": "perform b.a;",
               "verdict": "disagree",
+              "tolerance": "elsewhere-in-file",
               "declared": "warning: \"Duplicate of inherited member name 'self' from Action, Part\"",
-              "ours": "no warning anywhere in the file"
+              "ours": "no warning at line 69; nearest is line 45: Duplicate of inherited member name 'done' from Action, Part"
             },
             {
               "kind": "warnings",
@@ -8261,8 +6259,9 @@
               "line": 61,
               "at": "perform b.a;",
               "verdict": "disagree",
+              "tolerance": "elsewhere-in-file",
               "declared": "warning: \"Duplicate of inherited member name 'start' from Action, Part\"",
-              "ours": "no warning anywhere in the file"
+              "ours": "no warning at line 69; nearest is line 45: Duplicate of inherited member name 'done' from Action, Part"
             },
             {
               "kind": "warnings",
@@ -8270,8 +6269,9 @@
               "line": 61,
               "at": "perform b.a;",
               "verdict": "disagree",
+              "tolerance": "elsewhere-in-file",
               "declared": "warning: \"Duplicate of inherited member name 'done' from Action, Part\"",
-              "ours": "no warning anywhere in the file"
+              "ours": "no warning at line 69; nearest is line 45: Duplicate of inherited member name 'done' from Action, Part"
             },
             {
               "kind": "warnings",
@@ -8279,8 +6279,9 @@
               "line": 61,
               "at": "b.a",
               "verdict": "disagree",
+              "tolerance": "elsewhere-in-file",
               "declared": "warning: \"Duplicate of inherited member name 'self' from Action, Part\"",
-              "ours": "no warning anywhere in the file"
+              "ours": "no warning at line 69; nearest is line 45: Duplicate of inherited member name 'done' from Action, Part"
             },
             {
               "kind": "warnings",
@@ -8288,8 +6289,9 @@
               "line": 61,
               "at": "b.a",
               "verdict": "disagree",
+              "tolerance": "elsewhere-in-file",
               "declared": "warning: \"Duplicate of inherited member name 'start' from Action, Part\"",
-              "ours": "no warning anywhere in the file"
+              "ours": "no warning at line 69; nearest is line 45: Duplicate of inherited member name 'done' from Action, Part"
             },
             {
               "kind": "warnings",
@@ -8297,8 +6299,9 @@
               "line": 61,
               "at": "b.a",
               "verdict": "disagree",
+              "tolerance": "elsewhere-in-file",
               "declared": "warning: \"Duplicate of inherited member name 'done' from Action, Part\"",
-              "ours": "no warning anywhere in the file"
+              "ours": "no warning at line 69; nearest is line 45: Duplicate of inherited member name 'done' from Action, Part"
             }
           ]
         },
@@ -8455,33 +6458,13 @@
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/BindingConnector_Invalid3.sysml.xt",
           "setupClass": "org.omg.sysml.xpect.tests.validation.invalid.SysMLTests",
           "expectations": 1,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "warnings",
-              "line": 56,
-              "at": "bind a = b;",
-              "verdict": "disagree",
-              "declared": "warning: \"Bound features should have conforming types\"",
-              "ours": "no warning anywhere in the file"
-            }
-          ]
+          "agree": 1
         },
         {
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/BindingConnector_invalid0.sysml.xt",
           "setupClass": "org.omg.sysml.xpect.tests.validation.invalid.SysMLTests",
           "expectations": 1,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "warnings",
-              "line": 40,
-              "at": "bind b1.a = b2.a2;",
-              "verdict": "disagree",
-              "declared": "warning: \"Bound features should have conforming types\"",
-              "ours": "no warning anywhere in the file"
-            }
-          ]
+          "agree": 1
         },
         {
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/BindingConnector_invalid1.sysml.xt",
@@ -8503,38 +6486,8 @@
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/CalculationUsage_Invalid1.sysml.xt",
           "setupClass": "org.omg.sysml.xpect.tests.validation.invalid.SysMLTests",
           "expectations": 11,
-          "agree": 1,
+          "agree": 7,
           "rows": [
-            {
-              "kind": "warnings",
-              "block": true,
-              "line": 48,
-              "at": "calc f2 : A;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from Calculation, Part\"",
-              "ours": "no warning at line 53, but a error: line 53 offset 1964: calc cannot be typed by partDef (kind mismatch)"
-            },
-            {
-              "kind": "warnings",
-              "block": true,
-              "line": 48,
-              "at": "calc f2 : A;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'start' from Action, Part\"",
-              "ours": "no warning at line 53, but a error: line 53 offset 1964: calc cannot be typed by partDef (kind mismatch)"
-            },
-            {
-              "kind": "warnings",
-              "block": true,
-              "line": 48,
-              "at": "calc f2 : A;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'done' from Action, Part\"",
-              "ours": "no warning at line 53, but a error: line 53 offset 1964: calc cannot be typed by partDef (kind mismatch)"
-            },
             {
               "kind": "errors",
               "line": 54,
@@ -8543,36 +6496,6 @@
               "tolerance": "same-line",
               "declared": "error: \"A calculation must be typed by one calculation definition.\"",
               "ours": "line 60 offset 2385: type must be a definition, found calcUsage"
-            },
-            {
-              "kind": "warnings",
-              "block": true,
-              "line": 55,
-              "at": "calc f3 : f2;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from Calculation, Part\"",
-              "ours": "no warning at line 60, but a error: line 60 offset 2385: type must be a definition, found calcUsage"
-            },
-            {
-              "kind": "warnings",
-              "block": true,
-              "line": 55,
-              "at": "calc f3 : f2;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'start' from Action, Part\"",
-              "ours": "no warning at line 60, but a error: line 60 offset 2385: type must be a definition, found calcUsage"
-            },
-            {
-              "kind": "warnings",
-              "block": true,
-              "line": 55,
-              "at": "calc f3 : f2;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'done' from Action, Part\"",
-              "ours": "no warning at line 60, but a error: line 60 offset 2385: type must be a definition, found calcUsage"
             },
             {
               "kind": "errors",
@@ -8690,7 +6613,7 @@
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/CaseUsage_Invalid.sysml.xt",
           "setupClass": "org.omg.sysml.xpect.tests.validation.invalid.SysMLTests",
           "expectations": 19,
-          "agree": 2,
+          "agree": 8,
           "rows": [
             {
               "kind": "errors",
@@ -8700,36 +6623,6 @@
               "tolerance": "same-line",
               "declared": "error: \"A case must be typed by one case definition.\"",
               "ours": "line 67 offset 2487: case cannot be typed by partDef (kind mismatch)"
-            },
-            {
-              "kind": "warnings",
-              "block": true,
-              "line": 62,
-              "at": "case c2: A;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from Case, Part\"",
-              "ours": "no warning at line 67, but a error: line 67 offset 2487: case cannot be typed by partDef (kind mismatch)"
-            },
-            {
-              "kind": "warnings",
-              "block": true,
-              "line": 62,
-              "at": "case c2: A;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'start' from Action, Part\"",
-              "ours": "no warning at line 67, but a error: line 67 offset 2487: case cannot be typed by partDef (kind mismatch)"
-            },
-            {
-              "kind": "warnings",
-              "block": true,
-              "line": 62,
-              "at": "case c2: A;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'done' from Action, Part\"",
-              "ours": "no warning at line 67, but a error: line 67 offset 2487: case cannot be typed by partDef (kind mismatch)"
             },
             {
               "kind": "errors",
@@ -8748,36 +6641,6 @@
               "tolerance": "same-line",
               "declared": "error: \"An analysis case must be typed by one analysis case definition.\"",
               "ours": "line 79 offset 3222: analysis case cannot be typed by partDef (kind mismatch)"
-            },
-            {
-              "kind": "warnings",
-              "block": true,
-              "line": 74,
-              "at": "analysis ac3: B;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from AnalysisCase, Part\"",
-              "ours": "no warning at line 79, but a error: line 79 offset 3222: analysis case cannot be typed by partDef (kind mismatch)"
-            },
-            {
-              "kind": "warnings",
-              "block": true,
-              "line": 74,
-              "at": "analysis ac3: B;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'start' from Action, Part\"",
-              "ours": "no warning at line 79, but a error: line 79 offset 3222: analysis case cannot be typed by partDef (kind mismatch)"
-            },
-            {
-              "kind": "warnings",
-              "block": true,
-              "line": 74,
-              "at": "analysis ac3: B;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'done' from Action, Part\"",
-              "ours": "no warning at line 79, but a error: line 79 offset 3222: analysis case cannot be typed by partDef (kind mismatch)"
             },
             {
               "kind": "errors",
@@ -8812,9 +6675,9 @@
               "line": 86,
               "at": "use case uc3: B;",
               "verdict": "disagree",
-              "tolerance": "severity-differs",
+              "tolerance": "same-location",
               "declared": "warning: \"Duplicate of inherited member name 'self' from Part, UseCase\"",
-              "ours": "no warning at line 91, but a error: line 91 offset 3921: case cannot be typed by partDef (kind mismatch)"
+              "ours": "line 91 offset 3907: Duplicate of inherited member name 'done' from Action, Part"
             },
             {
               "kind": "warnings",
@@ -8822,9 +6685,9 @@
               "line": 86,
               "at": "use case uc3: B;",
               "verdict": "disagree",
-              "tolerance": "severity-differs",
+              "tolerance": "same-location",
               "declared": "warning: \"Duplicate of inherited member name 'start' from Part, UseCase\"",
-              "ours": "no warning at line 91, but a error: line 91 offset 3921: case cannot be typed by partDef (kind mismatch)"
+              "ours": "line 91 offset 3907: Duplicate of inherited member name 'done' from Action, Part"
             },
             {
               "kind": "warnings",
@@ -8832,9 +6695,9 @@
               "line": 86,
               "at": "use case uc3: B;",
               "verdict": "disagree",
-              "tolerance": "severity-differs",
+              "tolerance": "same-location",
               "declared": "warning: \"Duplicate of inherited member name 'done' from Part, UseCase\"",
-              "ours": "no warning at line 91, but a error: line 91 offset 3921: case cannot be typed by partDef (kind mismatch)"
+              "ours": "line 91 offset 3907: Duplicate of inherited member name 'done' from Action, Part"
             },
             {
               "kind": "errors",
@@ -8891,17 +6754,8 @@
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/ConstraintUsage_Invalid.sysml.xt",
           "setupClass": "org.omg.sysml.xpect.tests.validation.invalid.SysMLTests",
           "expectations": 5,
-          "agree": 2,
+          "agree": 4,
           "rows": [
-            {
-              "kind": "warnings",
-              "line": 38,
-              "at": "assert constraint two_types : AConstraint, ABlock;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from ConstraintCheck, Part\"",
-              "ours": "no warning at line 39, but a error: line 39 offset 1450: A constraint must be typed by one constraint definition."
-            },
             {
               "kind": "errors",
               "line": 40,
@@ -8910,15 +6764,6 @@
               "tolerance": "same-line",
               "declared": "error: \"A constraint must be typed by one constraint definition.\"",
               "ours": "line 42 offset 1804: constraint cannot be typed by partDef (kind mismatch)"
-            },
-            {
-              "kind": "warnings",
-              "line": 41,
-              "at": "assert constraint aConstraint0: ABlock;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from ConstraintCheck, Part\"",
-              "ours": "no warning at line 42, but a error: line 42 offset 1804: constraint cannot be typed by partDef (kind mismatch)"
             }
           ]
         },
@@ -8979,7 +6824,7 @@
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/FlowConnectionUsage_Invalid.sysml.xt",
           "setupClass": "org.omg.sysml.xpect.tests.validation.invalid.SysMLTests",
           "expectations": 10,
-          "agree": 0,
+          "agree": 6,
           "rows": [
             {
               "kind": "errors",
@@ -9009,36 +6854,6 @@
               "ours": "line 72 offset 2323: flow cannot be typed by partDef (kind mismatch)"
             },
             {
-              "kind": "warnings",
-              "block": true,
-              "line": 67,
-              "at": "message :A from b to c;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from Action, Part\"",
-              "ours": "no warning at line 72, but a error: line 72 offset 2323: flow cannot be typed by partDef (kind mismatch)"
-            },
-            {
-              "kind": "warnings",
-              "block": true,
-              "line": 67,
-              "at": "message :A from b to c;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'start' from Action, Part\"",
-              "ours": "no warning at line 72, but a error: line 72 offset 2323: flow cannot be typed by partDef (kind mismatch)"
-            },
-            {
-              "kind": "warnings",
-              "block": true,
-              "line": 67,
-              "at": "message :A from b to c;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'done' from Action, Part\"",
-              "ours": "no warning at line 72, but a error: line 72 offset 2323: flow cannot be typed by partDef (kind mismatch)"
-            },
-            {
               "kind": "errors",
               "line": 73,
               "at": "message :apart from b to c;",
@@ -9046,36 +6861,6 @@
               "tolerance": "same-line",
               "declared": "error: \"A flow connection must be typed by flow connection definitions.\"",
               "ours": "line 79 offset 2805: type must be a definition, found partUsage"
-            },
-            {
-              "kind": "warnings",
-              "block": true,
-              "line": 74,
-              "at": "message :apart from b to c;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from Action, Part\"",
-              "ours": "no warning at line 79, but a error: line 79 offset 2805: type must be a definition, found partUsage"
-            },
-            {
-              "kind": "warnings",
-              "block": true,
-              "line": 74,
-              "at": "message :apart from b to c;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'start' from Action, Part\"",
-              "ours": "no warning at line 79, but a error: line 79 offset 2805: type must be a definition, found partUsage"
-            },
-            {
-              "kind": "warnings",
-              "block": true,
-              "line": 74,
-              "at": "message :apart from b to c;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'done' from Action, Part\"",
-              "ours": "no warning at line 79, but a error: line 79 offset 2805: type must be a definition, found partUsage"
             }
           ]
         },
@@ -9192,24 +6977,16 @@
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/ItemUsage_invalid.sysml.xt",
           "setupClass": "org.omg.sysml.xpect.tests.validation.invalid.SysMLTests",
           "expectations": 15,
-          "agree": 0,
+          "agree": 8,
           "rows": [
             {
               "kind": "errors",
               "line": 40,
               "at": "item i1: Real;",
               "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
+              "tolerance": "severity-differs",
               "declared": "error: \"An occurrence, item or part must be typed by occurrence definitions.\"",
-              "ours": "no error at line 42; nearest is line 45: type must be a definition, found attributeUsage"
-            },
-            {
-              "kind": "warnings",
-              "line": 41,
-              "at": "item i1: Real;",
-              "verdict": "disagree",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from DataValue, Item\"",
-              "ours": "no warning anywhere in the file"
+              "ours": "no error at line 42, but a warning: line 42 offset 1644: Duplicate of inherited member name 'self' from DataValue, Item"
             },
             {
               "kind": "errors",
@@ -9221,15 +6998,6 @@
               "ours": "line 45 offset 1893: type must be a definition, found attributeUsage"
             },
             {
-              "kind": "warnings",
-              "line": 44,
-              "at": "item i2: att;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from DataValue, Item\"",
-              "ours": "no warning at line 45, but a error: line 45 offset 1893: type must be a definition, found attributeUsage"
-            },
-            {
               "kind": "errors",
               "line": 46,
               "at": "item i3: act;",
@@ -9239,51 +7007,13 @@
               "ours": "line 52 offset 2321: type must be a definition, found actionUsage"
             },
             {
-              "kind": "warnings",
-              "block": true,
-              "line": 47,
-              "at": "item i3: act;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from Action, Item\"",
-              "ours": "no warning at line 52, but a error: line 52 offset 2321: type must be a definition, found actionUsage"
-            },
-            {
-              "kind": "warnings",
-              "block": true,
-              "line": 47,
-              "at": "item i3: act;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'start' from Action, Item\"",
-              "ours": "no warning at line 52, but a error: line 52 offset 2321: type must be a definition, found actionUsage"
-            },
-            {
-              "kind": "warnings",
-              "block": true,
-              "line": 47,
-              "at": "item i3: act;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'done' from Action, Item\"",
-              "ours": "no warning at line 52, but a error: line 52 offset 2321: type must be a definition, found actionUsage"
-            },
-            {
               "kind": "errors",
               "line": 53,
               "at": "item i4: AttDef;",
               "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
+              "tolerance": "severity-differs",
               "declared": "error: \"An occurrence, item or part must be typed by occurrence definitions.\"",
-              "ours": "no error at line 55; nearest is line 45: type must be a definition, found attributeUsage"
-            },
-            {
-              "kind": "warnings",
-              "line": 54,
-              "at": "item i4: AttDef;",
-              "verdict": "disagree",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from DataValue, Item\"",
-              "ours": "no warning anywhere in the file"
+              "ours": "no error at line 55, but a warning: line 55 offset 2557: Duplicate of inherited member name 'self' from DataValue, Item"
             },
             {
               "kind": "errors",
@@ -9293,15 +7023,6 @@
               "tolerance": "same-line",
               "declared": "error: \"An occurrence, item or part must be typed by occurrence definitions.\"",
               "ours": "line 58 offset 2826: type must be a definition, found portUsage"
-            },
-            {
-              "kind": "warnings",
-              "line": 57,
-              "at": "item i5: PartDef::aPort;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from Item, Port\"",
-              "ours": "no warning at line 58, but a error: line 58 offset 2826: type must be a definition, found portUsage"
             },
             {
               "kind": "errors",
@@ -9317,17 +7038,9 @@
               "line": 61,
               "at": "item i7: PartDef, AttDef;",
               "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
+              "tolerance": "severity-differs",
               "declared": "error: \"An occurrence, item or part must be typed by occurrence definitions.\"",
-              "ours": "no error at line 63; nearest is line 45: type must be a definition, found attributeUsage"
-            },
-            {
-              "kind": "warnings",
-              "line": 62,
-              "at": "item i7: PartDef, AttDef;",
-              "verdict": "disagree",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from DataValue, Part\"",
-              "ours": "no warning anywhere in the file"
+              "ours": "no error at line 63, but a warning: line 63 offset 3244: Duplicate of inherited member name 'self' from DataValue, Part"
             }
           ]
         },
@@ -9429,35 +7142,8 @@
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/OccurrenceUsage_invalid.sysml.xt",
           "setupClass": "org.omg.sysml.xpect.tests.validation.invalid.SysMLTests",
           "expectations": 10,
-          "agree": 5,
+          "agree": 8,
           "rows": [
-            {
-              "kind": "warnings",
-              "line": 41,
-              "at": "occurrence areal: Real;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from DataValue, Occurrence\"",
-              "ours": "no warning at line 42, but a error: line 42 offset 1674: An occurrence, item or part must be typed by occurrence definitions."
-            },
-            {
-              "kind": "warnings",
-              "line": 44,
-              "at": "occurrence avalue :\u003e aValue;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from DataValue, Occurrence\"",
-              "ours": "no warning at line 45, but a error: line 45 offset 1959: An occurrence, item or part must be typed by occurrence definitions."
-            },
-            {
-              "kind": "warnings",
-              "line": 47,
-              "at": "occurrence twoTypes: PartDef, Real;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from DataValue, Part\"",
-              "ours": "no warning at line 48, but a error: line 48 offset 2256: An occurrence, item or part must be typed by occurrence definitions."
-            },
             {
               "kind": "warnings",
               "block": true,
@@ -9484,7 +7170,7 @@
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/PartUsage_invalid.sysml.xt",
           "setupClass": "org.omg.sysml.xpect.tests.validation.invalid.SysMLTests",
           "expectations": 15,
-          "agree": 0,
+          "agree": 8,
           "rows": [
             {
               "kind": "errors",
@@ -9496,15 +7182,6 @@
               "ours": "line 42 offset 1611: part cannot be typed by attributeDef (kind mismatch)"
             },
             {
-              "kind": "warnings",
-              "line": 41,
-              "at": "part p1: Real;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from DataValue, Part\"",
-              "ours": "no warning at line 42, but a error: line 42 offset 1611: part cannot be typed by attributeDef (kind mismatch)"
-            },
-            {
               "kind": "errors",
               "line": 43,
               "at": "part p2: att;",
@@ -9512,15 +7189,6 @@
               "tolerance": "same-line",
               "declared": "error: \"An occurrence, item or part must be typed by occurrence definitions.\"",
               "ours": "line 45 offset 1848: type must be a definition, found attributeUsage"
-            },
-            {
-              "kind": "warnings",
-              "line": 44,
-              "at": "part p2: att;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from DataValue, Part\"",
-              "ours": "no warning at line 45, but a error: line 45 offset 1848: type must be a definition, found attributeUsage"
             },
             {
               "kind": "errors",
@@ -9532,36 +7200,6 @@
               "ours": "line 52 offset 2263: type must be a definition, found actionUsage"
             },
             {
-              "kind": "warnings",
-              "block": true,
-              "line": 47,
-              "at": "part p3: act;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from Action, Part\"",
-              "ours": "no warning at line 52, but a error: line 52 offset 2263: type must be a definition, found actionUsage"
-            },
-            {
-              "kind": "warnings",
-              "block": true,
-              "line": 47,
-              "at": "part p3: act;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'start' from Action, Part\"",
-              "ours": "no warning at line 52, but a error: line 52 offset 2263: type must be a definition, found actionUsage"
-            },
-            {
-              "kind": "warnings",
-              "block": true,
-              "line": 47,
-              "at": "part p3: act;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'done' from Action, Part\"",
-              "ours": "no warning at line 52, but a error: line 52 offset 2263: type must be a definition, found actionUsage"
-            },
-            {
               "kind": "errors",
               "line": 53,
               "at": "part p4: AttDef;",
@@ -9571,15 +7209,6 @@
               "ours": "line 55 offset 2505: part cannot be typed by attributeDef (kind mismatch)"
             },
             {
-              "kind": "warnings",
-              "line": 54,
-              "at": "part p4: AttDef;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from DataValue, Part\"",
-              "ours": "no warning at line 55, but a error: line 55 offset 2505: part cannot be typed by attributeDef (kind mismatch)"
-            },
-            {
               "kind": "errors",
               "line": 56,
               "at": "part p5: PartDef::aPort;",
@@ -9587,15 +7216,6 @@
               "tolerance": "same-line",
               "declared": "error: \"An occurrence, item or part must be typed by occurrence definitions.\"",
               "ours": "line 58 offset 2761: type must be a definition, found portUsage"
-            },
-            {
-              "kind": "warnings",
-              "line": 57,
-              "at": "part p5: PartDef::aPort;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from Part, Port\"",
-              "ours": "no warning at line 58, but a error: line 58 offset 2761: type must be a definition, found portUsage"
             },
             {
               "kind": "errors",
@@ -9614,15 +7234,6 @@
               "tolerance": "same-line",
               "declared": "error: \"An occurrence, item or part must be typed by occurrence definitions.\"",
               "ours": "line 63 offset 3192: part cannot be typed by attributeDef (kind mismatch)"
-            },
-            {
-              "kind": "warnings",
-              "line": 62,
-              "at": "part p7: PartDef, AttDef;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from DataValue, Part\"",
-              "ours": "no warning at line 63, but a error: line 63 offset 3192: part cannot be typed by attributeDef (kind mismatch)"
             }
           ]
         },
@@ -9630,7 +7241,7 @@
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/PortUsage_Invalid.sysml.xt",
           "setupClass": "org.omg.sysml.xpect.tests.validation.invalid.SysMLTests",
           "expectations": 10,
-          "agree": 0,
+          "agree": 3,
           "rows": [
             {
               "kind": "errors",
@@ -9651,15 +7262,6 @@
               "ours": "line 42 offset 1338: port cannot be typed by partDef (kind mismatch)"
             },
             {
-              "kind": "warnings",
-              "line": 41,
-              "at": "port p1 : B;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from Part, Port\"",
-              "ours": "no warning at line 42, but a error: line 42 offset 1338: port cannot be typed by partDef (kind mismatch)"
-            },
-            {
               "kind": "errors",
               "line": 43,
               "at": "port p2 : Vt;",
@@ -9667,15 +7269,6 @@
               "tolerance": "same-line",
               "declared": "error: \"A port must be typed by port definitions.\"",
               "ours": "line 45 offset 1546: port cannot be typed by attributeDef (kind mismatch)"
-            },
-            {
-              "kind": "warnings",
-              "line": 44,
-              "at": "port p2 : Vt;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from DataValue, Port\"",
-              "ours": "no warning at line 45, but a error: line 45 offset 1546: port cannot be typed by attributeDef (kind mismatch)"
             },
             {
               "kind": "errors",
@@ -9691,17 +7284,9 @@
               "line": 55,
               "at": "port pp redefines p1;",
               "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
+              "tolerance": "severity-differs",
               "declared": "error: \"A port must be typed by port definitions.\"",
-              "ours": "no error at line 57; nearest is line 42: port cannot be typed by partDef (kind mismatch)"
-            },
-            {
-              "kind": "warnings",
-              "line": 56,
-              "at": "port pp redefines p1;",
-              "verdict": "disagree",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from Part, Port\"",
-              "ours": "no warning anywhere in the file"
+              "ours": "no error at line 57, but a warning: line 57 offset 1982: Duplicate of inherited member name 'self' from Part, Port"
             },
             {
               "kind": "errors",
@@ -9821,7 +7406,7 @@
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/RequirementUsage_Invalid.sysml.xt",
           "setupClass": "org.omg.sysml.xpect.tests.validation.invalid.SysMLTests",
           "expectations": 7,
-          "agree": 2,
+          "agree": 4,
           "rows": [
             {
               "kind": "errors",
@@ -9834,15 +7419,6 @@
               "ours": "line 76 offset 3135: requirement cannot be typed by partDef (kind mismatch)"
             },
             {
-              "kind": "warnings",
-              "line": 75,
-              "at": "requirement r13 : A;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from Part, RequirementCheck\"",
-              "ours": "no warning at line 76, but a error: line 76 offset 3135: requirement cannot be typed by partDef (kind mismatch)"
-            },
-            {
               "kind": "errors",
               "block": true,
               "line": 77,
@@ -9851,15 +7427,6 @@
               "tolerance": "same-line",
               "declared": "error: \"A requirement must be typed by one requirement definition.\"",
               "ours": "line 81 offset 3401: type must be a definition, found partUsage"
-            },
-            {
-              "kind": "warnings",
-              "line": 80,
-              "at": "requirement r14 : A::a;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from Part, RequirementCheck\"",
-              "ours": "no warning at line 81, but a error: line 81 offset 3401: type must be a definition, found partUsage"
             },
             {
               "kind": "errors",
@@ -9930,7 +7497,7 @@
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/StateUsage_invalid.sysml.xt",
           "setupClass": "org.omg.sysml.xpect.tests.validation.invalid.SysMLTests",
           "expectations": 22,
-          "agree": 0,
+          "agree": 7,
           "rows": [
             {
               "kind": "errors",
@@ -9942,36 +7509,6 @@
               "ours": "line 52 offset 2000: state cannot be typed by partDef (kind mismatch)"
             },
             {
-              "kind": "warnings",
-              "block": true,
-              "line": 47,
-              "at": "state s1 : A;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from Part, StateAction\"",
-              "ours": "no warning at line 52, but a error: line 52 offset 2000: state cannot be typed by partDef (kind mismatch)"
-            },
-            {
-              "kind": "warnings",
-              "block": true,
-              "line": 47,
-              "at": "state s1 : A;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'start' from Part, StateAction\"",
-              "ours": "no warning at line 52, but a error: line 52 offset 2000: state cannot be typed by partDef (kind mismatch)"
-            },
-            {
-              "kind": "warnings",
-              "block": true,
-              "line": 47,
-              "at": "state s1 : A;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'done' from Part, StateAction\"",
-              "ours": "no warning at line 52, but a error: line 52 offset 2000: state cannot be typed by partDef (kind mismatch)"
-            },
-            {
               "kind": "errors",
               "line": 53,
               "at": "state s2 : VT;",
@@ -9979,15 +7516,6 @@
               "tolerance": "same-line",
               "declared": "error: \"A state must be typed by state definitions.\"",
               "ours": "line 55 offset 2217: state cannot be typed by attributeDef (kind mismatch)"
-            },
-            {
-              "kind": "warnings",
-              "line": 54,
-              "at": "state s2 : VT;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from DataValue, StateAction\"",
-              "ours": "no warning at line 55, but a error: line 55 offset 2217: state cannot be typed by attributeDef (kind mismatch)"
             },
             {
               "kind": "errors",
@@ -10035,36 +7563,6 @@
               "ours": "line 78 offset 3126: state cannot be typed by partDef (kind mismatch)"
             },
             {
-              "kind": "warnings",
-              "block": true,
-              "line": 73,
-              "at": "state sa : A;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from Part, StateAction\"",
-              "ours": "no warning at line 78, but a error: line 78 offset 3126: state cannot be typed by partDef (kind mismatch)"
-            },
-            {
-              "kind": "warnings",
-              "block": true,
-              "line": 73,
-              "at": "state sa : A;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'start' from Part, StateAction\"",
-              "ours": "no warning at line 78, but a error: line 78 offset 3126: state cannot be typed by partDef (kind mismatch)"
-            },
-            {
-              "kind": "warnings",
-              "block": true,
-              "line": 73,
-              "at": "state sa : A;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'done' from Part, StateAction\"",
-              "ours": "no warning at line 78, but a error: line 78 offset 3126: state cannot be typed by partDef (kind mismatch)"
-            },
-            {
               "kind": "errors",
               "line": 83,
               "at": "s",
@@ -10090,7 +7588,7 @@
               "verdict": "disagree",
               "tolerance": "elsewhere-in-file",
               "declared": "warning: \"Duplicate of inherited member name 'self' from Part, StateAction\"",
-              "ours": "no warning at line 95; nearest is line 81: Duplicate of other owned member name"
+              "ours": "no warning at line 95; nearest is line 52: Duplicate of inherited member name 'done' from Part, StateAction"
             },
             {
               "kind": "warnings",
@@ -10100,7 +7598,7 @@
               "verdict": "disagree",
               "tolerance": "elsewhere-in-file",
               "declared": "warning: \"Duplicate of inherited member name 'start' from Part, StateAction\"",
-              "ours": "no warning at line 95; nearest is line 81: Duplicate of other owned member name"
+              "ours": "no warning at line 95; nearest is line 52: Duplicate of inherited member name 'done' from Part, StateAction"
             },
             {
               "kind": "warnings",
@@ -10110,7 +7608,7 @@
               "verdict": "disagree",
               "tolerance": "elsewhere-in-file",
               "declared": "warning: \"Duplicate of inherited member name 'done' from Part, StateAction\"",
-              "ours": "no warning at line 95; nearest is line 81: Duplicate of other owned member name"
+              "ours": "no warning at line 95; nearest is line 52: Duplicate of inherited member name 'done' from Part, StateAction"
             },
             {
               "kind": "warnings",
@@ -10120,7 +7618,7 @@
               "verdict": "disagree",
               "tolerance": "elsewhere-in-file",
               "declared": "warning: \"Duplicate of inherited member name 'self' from Part, StateAction\"",
-              "ours": "no warning at line 95; nearest is line 81: Duplicate of other owned member name"
+              "ours": "no warning at line 95; nearest is line 52: Duplicate of inherited member name 'done' from Part, StateAction"
             },
             {
               "kind": "warnings",
@@ -10130,7 +7628,7 @@
               "verdict": "disagree",
               "tolerance": "elsewhere-in-file",
               "declared": "warning: \"Duplicate of inherited member name 'start' from Part, StateAction\"",
-              "ours": "no warning at line 95; nearest is line 81: Duplicate of other owned member name"
+              "ours": "no warning at line 95; nearest is line 52: Duplicate of inherited member name 'done' from Part, StateAction"
             },
             {
               "kind": "warnings",
@@ -10140,7 +7638,7 @@
               "verdict": "disagree",
               "tolerance": "elsewhere-in-file",
               "declared": "warning: \"Duplicate of inherited member name 'done' from Part, StateAction\"",
-              "ours": "no warning at line 95; nearest is line 81: Duplicate of other owned member name"
+              "ours": "no warning at line 95; nearest is line 52: Duplicate of inherited member name 'done' from Part, StateAction"
             }
           ]
         },

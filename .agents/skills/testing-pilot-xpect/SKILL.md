@@ -41,6 +41,12 @@ missing-and-extra 7 | library-names 96`). After the wave-8 rebaseline (#436/#445
 `630 agree, 696 disagree, 0 unlocated, 0 not adjudicated`, `errors` kind
 `rows 513 | agree 95 | same-location 246 | same-line 62 | severity-differs 16 | elsewhere 57`,
 `warnings` `rows 113 | agree 23 | severity-differs 60 | elsewhere 7`, `scope` `74 / 230`.
+After the wave-9 rebaseline (merged `main` `8faed39a`):
+`816 agree, 510 disagree, 0 unlocated, 0 not adjudicated`, `errors` kind
+`rows 513 | agree 95 | same-location 232 | same-line 62 | severity-differs 24 | elsewhere 51`
+(silence 49), `warnings` `rows 113 | agree 89 | same-location 3 | severity-differs 4 | elsewhere 13`
+(silence 4), `noErrors` `254 / 275`, `scope` `183 / 230` with classes
+`other-paths 0 | extra-names 3 | missing-names 2 | missing-and-extra 14 | library-names 28`.
 Read the live totals from the baseline rather than this paragraph; it is an anchor, not the check.
 
 **The "nothing / silence" column is `rows - agree - sameLocation - sameLine - severityDiffers -
@@ -296,8 +302,8 @@ census in `w5c_census_test.go` is live two ways: perturb one pinned triple (e.g.
 ## Regression neighbour
 
 `go run ./cmd/pilot-diff` (~1m12s) must still print the headline the *committed* baseline holds —
-after the wave-8G rebaseline that is `353 file(s), 308 fully agreeing; 23 agreed diagnostic(s), 119
-only ours, 137 only the pilot's`. Read the number out of
+after the wave-9 rebaseline that is `353 file(s), 309 fully agreeing; 23 agreed diagnostic(s), 119
+only ours, 85 only the pilot's`. Read the number out of
 `docs/project/pilot-differential-baseline.json` rather than trusting this line, since a landing fix
 round moves it. When the baseline is itself stale (it was at `19a3ce03`, holding 273 / 281 / 317), a
 failing `cmp` against it is *not* evidence of an Xpect regression — compare the summary line, and see
