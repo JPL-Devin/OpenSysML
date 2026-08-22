@@ -158,15 +158,16 @@ func TestKeywordAsNameIsEscalatedOnlyUnderStrictMode(t *testing.T) {
 	}
 }
 
-// A keyword-as-name is reported once per span in either mode, and never lost:
-// strict drops the parser's warning only where a pass escalated that same span,
-// so an `alias`, which the walker does not visit, keeps its warning.
+// A keyword-as-name is reported once per span in either mode and never lost:
+// strict drops the parser's warning where a pass escalated that same span, and
+// every declaration that parses with a keyword for a name is escalated there.
 func TestKeywordAsNameIsReportedOnceInEitherMode(t *testing.T) {
 	for _, tc := range []struct{ name, file, src string }{
 		{"definition", "a.sysml", "package P { part def part; }"},
 		{"usage", "a.sysml", "package P { part def B; part part : B; }"},
 		{"alias", "a.sysml", "package P { part def B; alias part for P::B; }"},
 		{"kerml_alias", "a.kerml", "package P { class B; alias class for P::B; }"},
+		{"multiplicity", "a.sysml", "package P { multiplicity comment [1..1]; }"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, mode := range []conformance.Mode{conformance.ModeDefault, conformance.ModeStrict} {
@@ -180,6 +181,13 @@ func TestKeywordAsNameIsReportedOnceInEitherMode(t *testing.T) {
 				}
 				if len(got) != 1 {
 					t.Fatalf("%v: got %+v, want the keyword reported exactly once", mode, got)
+				}
+				want := SeverityWarning
+				if mode.IsStrict() {
+					want = SeverityError
+				}
+				if got[0].Severity != want {
+					t.Errorf("%v: severity = %v, want %v", mode, got[0].Severity, want)
 				}
 			}
 		})

@@ -135,6 +135,14 @@ func (w *notationWalker) walk(members []ast.Node) {
 			w.walkDeclaration(n.Members, n)
 		case *ast.Import:
 			w.walk(n.Body)
+		// An alias and a named multiplicity are the remaining members that parse
+		// with a keyword for a name; the rest do not parse at all, so no span reaches here.
+		case *ast.Alias:
+			w.keywordAsName(n.Ident)
+			w.walk(n.Body)
+		case *ast.MultiplicityDecl:
+			w.keywordAsName(n.Ident)
+			w.walk(n.Members)
 		case *ast.ResultMember:
 			if n.Expression != nil && !isReferenceExpression(n.Expression) {
 				w.extension(keywordSpan(n, "return"), "`return <expression>;`",

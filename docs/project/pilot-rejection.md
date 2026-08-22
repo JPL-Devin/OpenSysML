@@ -104,20 +104,21 @@ carry no timestamps or absolute paths, so repeated runs are byte-identical
 Under the default `-conformance auto`:
 
 ```
-119 case(s): 114 both reject, 5 only the pilot rejects, 0 only we reject, 0 both accept
+120 case(s): 114 both reject, 6 only the pilot rejects, 0 only we reject, 0 both accept
   of which 5 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
 | Source | Cases | Both reject | Pilot only | Ours only | Both accept |
 | --- | --- | --- | --- | --- | --- |
 | extensions | 7 | 7 | 0 | 0 | 0 |
-| grammar | 78 | 76 | 2 | 0 | 0 |
+| grammar | 79 | 76 | 3 | 0 | 0 |
 | xpect | 34 | 31 | 3 | 0 | 0 |
 
-The corpus grew from 79 cases to 119 in wave 10G, and the default-mode gap count is 10 of 119.
-Wave 10C closed the two `grammar/` gaps left from wave 9F — `g02` (bare `import` is an error by
-default) and `g31` (`allocate` requires its `ConnectorPart`) — which is why `grammar/` reads 2
-rather than 4, and wave 10B's validation rules closed eleven `xpect/` gaps (`p08`, `p17`, `p20`,
+The corpus grew from 79 cases to 119 in wave 10G and to 120 with `g60` (an `alias` named by a
+keyword), and the default-mode gap count is 11 of 120. Wave 10C closed the two `grammar/` gaps
+left from wave 9F — `g02` (bare `import` is an error by default) and `g31` (`allocate` requires
+its `ConnectorPart`) — which is why `grammar/` reads 3 rather than 5, and wave 10B's validation
+rules closed eleven `xpect/` gaps (`p08`, `p17`, `p20`,
 `p21`, `p22`, `p25`, `p26`, `p27`, `p28`, `p32`, `p33`), leaving 3. No case in the corpus is
 accepted by both implementations.
 
@@ -125,16 +126,16 @@ The five strict-only agreements are `x01`, `x04`, `x05`, `x06` and `x07`: OpenSy
 extensions that the default mode accepts on purpose and strict mode reports as errors. Judged in
 the default mode the same corpus gives 109 agreements and 10 gaps, which is what `-conformance
 default` prints — the extra five are those same `extensions/` cases, which the default mode accepts
-on purpose. `-conformance strict` gives 116 and 3: wave 10C gave `g15` and `k02` a strict
-escalation, so every `grammar/` case is rejected when asked strictly and only the `xpect/` semantic
-rules remain — agreement under an opt-in question, not default-mode conformance. Of the 14 gaps this document carried before wave 8, six were closed by the
+on purpose. `-conformance strict` gives 117 and 3: wave 10C gave `g15` and `k02` a strict
+escalation and `g60` follows the same rule, so every `grammar/` case is rejected when asked
+strictly and only the `xpect/` semantic rules remain — agreement under an opt-in question, not default-mode conformance. Of the 14 gaps this document carried before wave 8, six were closed by the
 validation waves themselves — `p01`, `p02`, `p03`, `p05` (wave 8C), `p06` (wave 8A) and `p04`
 (wave 8B) — and only the five `extensions/` cases belong to strict mode.
 
 Read those five as agreement *when asked strictly*, not as five gaps that disappeared. An opt-in
 check is weaker evidence than a default one: it says the strict question has an answer we agree on,
 not that the pipeline a user gets by default rejects the notation — by design it does not. And
-because we authored all 119 cases ourselves, a small gap count means we ran out of questions we
+because we authored all 120 cases ourselves, a small gap count means we ran out of questions we
 thought to ask, not that we stopped being permissive: the denominator measures our coverage of the
 rejection surface, not our conformance.
 
@@ -145,13 +146,14 @@ rejection, not agreement on the rule.
 
 ## Permissiveness gaps
 
-All 5 gaps, each with its reproducer (the corpus file is the minimal reproducer), both verdicts,
-and the package the root cause is likely in. The two `grammar/` rows are rejected under
-`-conformance strict` (wave 10C) and accepted by default; the `xpect/` rows no mode of ours checks.
+All 6 gaps, each with its reproducer (the corpus file is the minimal reproducer), both verdicts,
+and the package the root cause is likely in. The three `grammar/` rows are rejected under
+`-conformance strict` and accepted by default; the `xpect/` rows no mode of ours checks.
 
 | Reproducer (`cmd/pilot-reject/testdata/negative/`) | Ours | Pilot | Likely root cause |
 | --- | --- | --- | --- |
 | `grammar/g15-keyword-as-name.sysml` | accepts | `no viable alternative at input 'part'` | `internal/core/parser` — allows a reserved keyword as a declared name |
+| `grammar/g60-alias-keyword-as-name.sysml` | accepts | `extraneous input 'part' expecting 'for'` | `internal/core/parser` — an `alias` recovers a reserved keyword as its declared name |
 | `grammar/k02-sysml-keyword-in-kerml.kerml` | accepts | `no viable alternative at input 'def'` | `internal/core/parser` — `.kerml` files are parsed with the full SysML grammar; no per-language restriction |
 | `xpect/p11-metadata-body-not-evaluable.sysml` | accepts | `Must be model-level evaluable` | `internal/core/passes` — metadata body feature values are not checked for model-level evaluability |
 | `xpect/p15-attribute-typed-by-part-def.sysml` | accepts | `An attribute must be typed by attribute definitions.` | `internal/core/passes` — attribute usage typing is not restricted to attribute definitions |
