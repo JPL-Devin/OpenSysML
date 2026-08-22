@@ -188,10 +188,10 @@ divergence is deliberate and who owns the fix — never that it is not a diverge
   slice.** `part def` exists in no KerML production; the KerML validator reports `no viable
   alternative at input 'def'`. We parse `.kerml` with the same grammar as `.sysml` and filter
   afterwards: `internal/core/passes/nonstandard_notation.go` reports SysML-only notation in a
-  KerML file, at a severity that depends on the conformance mode. It does not cover the SysML
-  *definition and usage keywords* themselves, which is why `-conformance strict` does not close
-  this case either (measured: strict leaves the same four grammar gaps as auto). Extending that
-  walker is a `internal/core/passes` change, so it is written up rather than done here.
+  KerML file, at a severity that depends on the conformance mode. As W9F measured it, the walker
+  did not cover the SysML *definition and usage keywords* themselves, so `-conformance strict` left
+  this case open too. Extending that walker is a `internal/core/passes` change, so W9F wrote it up
+  rather than doing it.
   **Wave 10C:** the walker now reports SysML declaration keywords in a `.kerml` file, so strict
   mode rejects the case; the default mode warns, so it remains a default-mode gap.
 - **`grammar/g31-allocate-without-to.sysml` — the `allocate` synonym, adjudicated, not fixed.**
