@@ -434,41 +434,53 @@ inheritance through typing, library gating, circular imports, redefinition ancho
 
 | Class | Rows | Reading |
 |---|---:|---|
-| agree (exact) | 74 | the declared set, name for name |
-| `library-names` | 125 | differs **only** in path tails through `Base`'s implicit `self`/`that` |
-| `other-paths` | 12 | every name we miss is an element we offer under a different path |
-| `missing-names` | 10 | we miss declared names and offer no extra ones |
+| agree (exact) | 172 | the declared set, name for name |
+| `library-names` | 27 | differs **only** in path tails through `Base`'s implicit `self`/`that` |
+| `other-paths` | 11 | every name we miss is an element we offer under a different path |
+| `missing-names` | 11 | we miss declared names and offer no extra ones |
 | `missing-and-extra` | 6 | both |
 | `extra-names` | 3 | we offer names the pilot does not, and miss none |
 
-**This is a worklist, not a verdict, and it must not be averaged into a percentage.** 74 exact
-agreements on sets that routinely run past 50 entries is real evidence that our visible-name
-computation is broadly right, and the shape of the 156 disagreements changed completely in wave 8:
-the redefinition-masking class collapsed from 32 rows to 3, while the implicit-member class grew from
-96 to 125 and is now the whole remaining problem.
+**This is a worklist, not a verdict, and it must not be averaged into a percentage.** Exact agreement
+on sets that routinely run past 50 entries is real evidence that our visible-name computation is
+broadly right; the class that dominated it through wave 8 — implicit members, 96 rows then 125 — was
+two separate defects, both fixed in wave 9, leaving 27 rows of a third, narrower one.
 
-1. **`library-names` (125 rows) — we inherit `Base`'s implicit members even where the fixture's
-   resource set breaks the chain to them, and we chain the resulting path tails further than the
-   declaration does.** Reproducer: `imports/global/DependencyPackageAlias0_A_alias.kerml.xt`:22
-   declares 20 names for `class A { class a; }`; we offer 92, the extra 72 being `A_alias.a.self`,
-   `A_alias.a.self.that`, `A_alias.a.that.self` and friends. The fixture's resource set names
-   `/library/Base.kerml` and nothing else, so the pilot's `class` — whose implicit supertype is in
-   `Occurrences`, which is *not* loaded — inherits nothing, while its `classifier` and `feature`
-   fixtures do declare `self`/`that` (see `imports/Import_Circular.kerml.xt`:38).
-   **This was previously recorded here as a property of the harness substituting our whole embedded
-   library; that explanation is now falsified.** The harness loads exactly the declared resource set
-   (0 missing declared resources in the run above), and the class grew rather than shrank when it
-   started doing so, which makes this our behaviour and the largest single scope cluster left:
-   implicit specialization reaches `Base` regardless of whether the intermediate library file is in
-   the set, and each implicit member is re-expanded through the next one.
+1. **`library-names` (27 rows) — a typed feature is still offered the implicit members its type's
+   own supertype would contribute.** Two distinct defects were reproduced and fixed here first, each
+   measured on its own:
+   - A KerML `class`/`struct`/`assoc`/`behavior`/`predicate` declaration is parsed as a usage node,
+     and was therefore given a usage's implicit base (`Base::things`) and a feature's implicit base
+     feature on top of its classifier supertype. That reached `Base`'s `self`/`that` directly, so a
+     `class` inherited them even where the resource set omits `Occurrences`, which declares its real
+     supertype. Reproducer: `imports/global/DependencyPackageAlias0_A_alias.kerml.xt`:22, whose
+     resource set names `/library/Base.kerml` and `/src/DependencyPackageAlias1.kerml` only, declares
+     20 names and got 92 — the extra ones all tails of `.self`/`.that`. Fixed in
+     `internal/core/semantics/implicit.go`; locked by
+     `TestVisibleNamesClassImplicitMembersNeedOccurrences`.
+   - The enumeration re-derived through a type it had already inherited through on the same path, so
+     `self` (declared in `Base::Anything`) re-expanded through `Base::things` and back, emitting
+     `.self.that.self` and longer tails the declaration does not contain. The pilot's own notes fix
+     the depth: `visibility/VisibilityTests_PublicImportAsFeature.kerml.xt`:27 declares `Try.self`
+     and `Try.self.that` and stops. Fixed by tracking the derivation steps a path has taken in
+     `internal/core/model/scope_names.go`; locked by `TestVisibleNamesImplicitMembersDoNotRechain`.
+   **The earlier explanation — the harness substituting our whole embedded library — stays
+   falsified.** What remains is narrower and unfixed: where a fixture declares `feature f : C` with
+   `C` a `class` and does not load `Occurrences`, the pilot offers `f` no implicit members at all
+   while we still offer `f.self`, `f.that`, `f.that.self`
+   (`visibility/VisibilityTests_PublicImportAsFeature.kerml.xt`:27, 18 extra names). Suppressing the
+   implicit base for any feature with a declared generalization was measured and is wrong — it moves
+   this class from 27 rows back to 30 — so the rule is subtler and is wave 10's worklist.
 2. **`extra-names` (3 rows) — the residue of the redefinition-masking defect.** This class was 32
    rows, 28 of them `*_Rdef` fixtures, where a `redefines` did not mask the inherited name it
    redefines; the wave-8 masking round in **`internal/core/semantics`** closed all but three, and the
    three that remain (`Import_QualifiedName2`, `ShortName_Scoping_Valid1`,
    `MemberNameTests_NamedMemberFromInheritance2_Rdef`) differ in implicit-member tails of the same
    shape as item 1 rather than in a redefined name.
-3. **`other-paths` (12 rows) — circular containment truncates one step earlier for us.**
-   All 12 are `shadowing/ShadowingTests_Circle*`. Reproducer:
+3. **`other-paths` (11 rows) — circular containment truncates one step earlier for us.**
+   Six are `testsuite/ShadowingTests_Circle*`; the other five are the
+   `ShadowingTests_SameNamesInnerClassAndOuterClass*` family, which the implicit-member fixes moved
+   into this class out of `library-names`. Reproducer:
    `ShadowingTests_CircleProblem2.kerml.xt`:22 declares `A, A.B, A.B.B, B, B.B, Test1.A, Test1.A.B,
    Test1.A.B.B`; we offer every element it names but stop the path at the first repeat of an element,
    so `A.B.B` is missing while `A.B` and `B.B` are present. Emitting the re-entry was measured and
@@ -476,7 +488,7 @@ the redefinition-masking class collapsed from 32 rows to 3, while the implicit-m
    records it as a path-convention difference, not a missing name. All eight names that fixture
    declares do resolve when written as a reference — "missing" in a `scope` row always means missing
    from the *enumeration*, which is the conservative direction: it under-reports our agreement.
-4. **`missing-names` / `missing-and-extra` (16 rows) — import plus inheritance from the container.**
+4. **`missing-names` / `missing-and-extra` (17 rows) — import plus inheritance from the container.**
    Reproducer: `imports/SimpleImportTests_ImportPackageAndInheritanceFromContainer.kerml.xt`:23, where
    `classifier A { public import test::*; classifier a specializes A; }` declares `A.A`, `A.A.a` and
    `A.a.A` paths we do not offer — the fixture's own authors annotate the missing ones in a trailing
@@ -488,8 +500,8 @@ surface: `public import VP::VP2::A_Id` where the element is declared `classifier
 surfaces both of the element's names, as `imports/ShortName_Import_Valid4.kerml.xt` declares, while an
 alias membership import still surfaces the alias name only.
 
-The per-row evidence — declared count, our count, and the first missing/extra names for each of the
-156 disagreements — is in [pilot-xpect-baseline.json](pilot-xpect-baseline.json).
+The per-row evidence — declared count, our count, and the first missing/extra names for each
+disagreement — is in [pilot-xpect-baseline.json](pilot-xpect-baseline.json).
 
 ---
 
