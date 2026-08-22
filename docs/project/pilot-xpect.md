@@ -203,6 +203,32 @@ make protected members visible where the pilot makes them visible, and the cost 
 reject the protected imports it rejects. Under-rejection on protected import is the wave-10 item; the
 42 wave-8A private/protected rejections it was checked against are unchanged.
 
+**Wave 10E closes that under-rejection, and the rule it restores is the one wave 9D collapsed.**
+KerML resolves a qualified name by resolving its qualification and then asking that namespace for the
+last segment through *visible* resolution (8.2.3.5.3, 8.2.3.5.4): `resolveVisible` reads only the
+namespace's public memberships — public owned memberships and public imports — and does not consult
+what the *referring* namespace specializes. Only the first segment uses *local* resolution, which does
+include the protected memberships a specialization inherits. Wave 9D applied the local rule to every
+segment, so a protected member became nameable through any namespace path a specialization could
+write. Wave 10E takes the specialization relaxation out of the qualified tail (`namedThroughNamespace`
+in `resolve/visibility.go`, applied by `walkQualifiedTail`) and leaves local and inherited resolution,
+`import all`, and scope enumeration untouched. `VisibilityTests_ProtectedImport_0.kerml.xt` is the
+distinction in one file: `c_Protect` and `c_Protect::c_publicc` resolve inside `A` (local), while
+`A::c_Protect::c_publicc` and `Test3::A::c_Protect::c_publicc` do not (visible). No divergence from
+the specification had to be recorded for this slice.
+
+Measured on the wave-10E branch with a fresh `go run ./cmd/pilot-xpect` (against the same run on
+merged `main` at `e5aba9c4`, not against the stale committed baseline): all 12 silent `errors` rows
+now report at the pilot's own location (`errors` same-location 234 → 248), and the 2
+`VisibilityTests_Protected_0.kerml.xt` rows that reported elsewhere in the file now report at the
+declared references (`elsewhere-in-file` 44 → 42). Strict `errors` agreement is unchanged at 179 of
+513 — the wording is ours — and `scope` is unchanged at 212 of 230. `noErrors` falls 254 → 248: the
+six rows lost are the file-wide `XPECT noErrors` assertions in the six visibility fixtures that also
+declare the errors we now emit, so no implementation can satisfy both. The three
+`ShadowingTests_SameNamesImportAsFeature*` fixtures carry the same contradiction and already read that
+way on `main`. `go run ./cmd/pilot-reject` still shows no case we alone reject, and `go run
+./cmd/pilot-diff` is byte-identical to `main`, so ours-only library diagnostics did not grow.
+
 The `nothing` column counts what neither strict agreement nor any tolerance accounts for. It was
 equal to `rows - tolerances` for as long as the strict column was 0, and both doc guards computed it
 that way; with `errors` and `warnings` now agreeing strictly, they subtract the agreements too.

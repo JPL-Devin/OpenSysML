@@ -76,12 +76,12 @@ func (r *Resolver) walkQualifiedTail(scope *symbols.Scope, qn *ast.QualifiedName
 		// Try local scope lookup first if available. A segment names a member of
 		// the namespace the walk has reached, so it reaches only the visible ones.
 		if cur.Scope != nil {
-			all = r.namedThroughNamespacesFrom(cur, scope, symbols.PreferDeclared(cur.Scope.LookupLocalAll(seg.Text)))
+			all = r.namedThroughNamespaces(symbols.PreferDeclared(cur.Scope.LookupLocalAll(seg.Text)))
 		}
 
 		if len(all) == 0 && cur.Scope != nil {
 			if sym, ok := r.lookupImportedMember(cur, cur.Scope, scope, seg.Text); ok &&
-				r.namedThroughNamespaceFrom(cur, scope, sym) {
+				r.namedThroughNamespace(sym) {
 				all = []*symbols.Symbol{sym}
 			}
 		}
@@ -93,7 +93,7 @@ func (r *Resolver) walkQualifiedTail(scope *symbols.Scope, qn *ast.QualifiedName
 		memberFQN := curFQN + "::" + seg.Text
 		if len(all) == 0 && r.idx != nil {
 			found := r.idx.LookupQualifiedFrom(memberFQN, from)
-			candidates := r.namedThroughNamespacesFrom(cur, scope,
+			candidates := r.namedThroughNamespaces(
 				r.admittedUnder(r.documentOf(scope), from, memberFQN, found))
 			switch {
 			case len(candidates) == 1:
@@ -123,7 +123,7 @@ func (r *Resolver) walkQualifiedTail(scope *symbols.Scope, qn *ast.QualifiedName
 		// `engine` is typed by.
 		if len(all) == 0 {
 			if sym, ok := r.lookupMember(cur, seg.Text); ok &&
-				r.namedThroughNamespaceFrom(cur, scope, sym) {
+				r.namedThroughNamespace(sym) {
 				all = []*symbols.Symbol{sym}
 			}
 		}
