@@ -322,6 +322,30 @@ plus the construct sweep above are the only real coverage. The same reasoning ap
 corpus-gated `go test ./...`: it stayed fully green while strict silently dropped the `alias`
 diagnostic, because no test pins that construct.
 
+## Two corpus-wide invariants that CAN fail when the dedup is code-agnostic
+
+The row-count differential is vacuous for `reserved-keyword-name` (above), but once the dedup stops
+keying on a specific code — e.g. "drop a warning when some pass emitted an error with the same `Code`
+at the same `Span.Offset`" — its blast radius becomes *every* code, and two corpus-wide properties
+become both cheap and non-vacuous. Check them instead of, not in addition to, trusting row counts:
+
+1. **Strict monotonicity.** For every corpus file, strict must never report fewer rows than default,
+   and every span present in default must still be present in strict. This is the generalisation of
+   the construct sweep to codes no hand-written fixture covers. A code-agnostic dedup that swallows
+   a warning where no error replaces it shows up here as a vanished span.
+2. **No span carries both a warning and an error** in a single run, in either mode.
+
+Parse `^(.*?):(\d+):(\d+):\s+(warning|error):` from merged stdout+stderr, bucket by `(line, col)`,
+and compare the default and strict sets per file. Expect `0` violations of both properties.
+
+**Give property 2 a vacuity control, because "0 duplicates" is also what a broken detector prints.**
+Point the *same* parsing logic at `g15-keyword-as-name.sysml` on a build that predates the dedup
+(`85aa4140`): it must report exactly **1** duplicate span (`3:14` holding both `error` and
+`warning`), and the build under test must report **0** on that same file. Without that column, a
+regex that silently matches nothing looks identical to a clean result. Note g15 lives under
+`cmd/pilot-reject/testdata/`, which is *outside* the usual corpus roots, so the corpus scan alone
+never touches the one file that exercises the pair.
+
 ## Devin Secrets Needed
 
 None. Everything runs against the locally provisioned `build/pilot-validator` and the committed
