@@ -40,12 +40,12 @@ is not actually invalid under the loaded standard library) — fix the case, nev
 
 The baseline is the default `auto` policy: the `extensions/` cases are judged under strict
 conformance (OpenSysML notation the reference rejects as a syntax error), everything else in the
-default mode. The report names each case's mode and lists the five strict-only agreements
+default mode. The report names each case's mode and lists the seven strict-only agreements
 separately, so a strict agreement never reads as a default one.
 
 ```bash
 go run ./cmd/pilot-reject -conformance default -out build/pilot-reject-default
-# as of wave 10G+10C: 98 agreements, 21 gaps — the numbers strict mode leaves alone
+# as of wave 10G+10C: 109 agreements, 10 gaps — the numbers strict mode leaves alone
 go run ./cmd/pilot-reject -conformance lenient   # must fail: unknown conformance policy
 ```
 
