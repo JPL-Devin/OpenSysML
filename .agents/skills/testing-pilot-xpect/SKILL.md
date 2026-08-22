@@ -47,7 +47,21 @@ After the wave-9 rebaseline (merged `main` `8faed39a`):
 (silence 49), `warnings` `rows 113 | agree 89 | same-location 3 | severity-differs 4 | elsewhere 13`
 (silence 4), `noErrors` `254 / 275`, `scope` `183 / 230` with classes
 `other-paths 0 | extra-names 3 | missing-names 2 | missing-and-extra 14 | library-names 28`.
+After the wave-10A scope round (`maxNameOccurrences=2` + `enterFor` inherited-import step accounting
+in `scope_names.go`, `declaredTypeFeatureBase` in `semantics/implicit.go`): `845 agree, 481 disagree,
+0 unlocated, 0 not adjudicated`, `foreignDiagnostics 18`, per-suite kerml 642/326 and sysml 203/155,
+`scope` `212 / 230` with classes
+`other-paths 0 | extra-names 5 | missing-names 2 | missing-and-extra 3 | library-names 8`;
+the `errors`/`warnings`/`noErrors`/`linkedName` rows are unchanged from wave 9 (silence 49 / 4).
 Read the live totals from the baseline rather than this paragraph; it is an anchor, not the check.
+
+**The scope narrative section of `docs/project/pilot-xpect.md` is a separate staleness risk from the
+headline tables.** A rebaseline that updates the summary block, the kind table and the per-suite
+table can leave the `## scope — N of 230 agree exactly` heading, the ToC anchor, the "result, by
+class" table and the numbered worklist items (per-fixture name counts like "declares 829 and we offer
+3362") holding the previous wave's numbers, and **no test catches it** — `w6f_skill_counts_test.go`
+only guards the derived headline count lines. Always grep the doc for the old agree count and for the
+old class-table numbers after a scope-moving wave.
 
 **The "nothing / silence" column is `rows - agree - sameLocation - sameLine - severityDiffers -
 elsewhereInFile`.** Subtracting only the tolerance fields is a bug that stays invisible while a
@@ -346,6 +360,14 @@ between tolerance buckets (wave 9C: `errors` severityDiffers 16→24, elsewhereI
 the exact rows, key the JSON rows on `(file path, line, index within the file's rows, tolerance)` and
 diff the two revisions' multisets — keying on `(path, line)` alone silently collapses several rows
 declared on the same line, and the plain row index shifts whenever a row is inserted above.
+
+**Key the ratchet on the ordinal among rows sharing `(line, kind)`, never on the row's index within
+the file.** Because agreeing rows are pruned, removing one row renumbers everything below it, so an
+index-keyed diff reports phantom "added" rows: on the wave-10A branch it showed 3 added / 32 removed
+(`CircleProblem4{,_FT,_Rdef}` line 32/43 rows "appearing") where the correct keying shows **0 added /
+29 removed** plus 7 rows changing tolerance in place. Report the in-place tolerance changes too — a
+row that stays `disagree` but moves `missing-and-extra` → `library-names`/`extra-names` is neither an
+add nor a removal, and a *degradation* would hide there.
 
 ## Cache independence of a library-reading rule
 
