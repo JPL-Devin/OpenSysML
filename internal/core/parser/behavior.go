@@ -28,7 +28,7 @@ func (p *Parser) parseCalcBody() []ast.Node {
 		// `then a b;` is the edge member a member-attached `then` desugars to,
 		// and so the form a converted model is written back as.
 		if p.atKeyword("then") {
-			body.add(p.parseSuccessionEdge(p.advance()))
+			body.add(p.parseSuccessionEdge(p.advance(), true))
 			continue
 		}
 
@@ -495,7 +495,7 @@ func (p *Parser) parseActionMember() ast.Node {
 		case "action":
 			return p.parseActionExecutionNode(tok)
 		case "then":
-			return p.parseSuccessionEdge(tok)
+			return p.parseSuccessionEdge(tok, true)
 		case "assign":
 			return p.parseAssignmentAction(tok)
 		case "perform":
@@ -877,7 +877,8 @@ func startsInlineSuccessionStatement(tok lexer.Token) bool {
 // parseSuccessionEdge parses:
 // 1. then source target [if guard] ; (control flow edge between named nodes)
 // 2. then statement (inline statement succession)
-func (p *Parser) parseSuccessionEdge(tok lexer.Token) ast.Node {
+// allowBody admits the UsageBody of an ActionTargetSuccession (SysML.xtext:1698).
+func (p *Parser) parseSuccessionEdge(tok lexer.Token, allowBody bool) ast.Node {
 	start := tok.Span.Offset
 
 	// Check if this is inline statement succession (then followed by behavioral keyword)
@@ -920,7 +921,7 @@ func (p *Parser) parseSuccessionEdge(tok lexer.Token) ast.Node {
 
 	// An action target succession ends in a UsageBody (SysML.xtext:1698).
 	var members []ast.Node
-	if p.accept2(lexer.LBrace) {
+	if allowBody && p.accept2(lexer.LBrace) {
 		members = p.parseActionBodyMixed()
 	} else {
 		p.expect(lexer.Semicolon, "expected ';' after succession edge")
@@ -1871,7 +1872,8 @@ func (p *Parser) parseRequirementBody() []ast.Node {
 	for !p.at(lexer.RBrace) && !p.atEOF() {
 		before := p.peek().Span.Offset
 		// A requirement body carries the members of a definition body
-		// (SysML.xtext RequirementBodyItem), a member-attached `then` among them.
+		// (SysML.xtext RequirementBodyItem), a member-attached `then` among them,
+		// which takes no body there (DefinitionBodyItem, SysML.xtext:516-524).
 		if body.atSuccession() {
 			body.takeSuccession()
 			continue
@@ -1879,7 +1881,7 @@ func (p *Parser) parseRequirementBody() []ast.Node {
 		// `then a b;` is the edge member a member-attached `then` desugars to,
 		// and so the form a converted model is written back as.
 		if p.atKeyword("then") {
-			body.add(p.parseSuccessionEdge(p.advance()))
+			body.add(p.parseSuccessionEdge(p.advance(), false))
 			continue
 		}
 		body.add(p.parseRequirementMember())
@@ -2285,6 +2287,7 @@ func (p *Parser) parseNestedConstraintConditions() []ast.Node {
 // Expects '{' already consumed, returns list of state members.
 func (p *Parser) parseStateBody() []ast.Node {
 	body := p.newBodyBuilder()
+	allowBody := true
 
 	for !p.at(lexer.RBrace) && !p.atEOF() {
 		// A member-attached `then` sequences the members either side of it; a
@@ -2294,15 +2297,32 @@ func (p *Parser) parseStateBody() []ast.Node {
 			body.takeSuccession()
 			continue
 		}
-		body.add(p.parseStateMember())
+		member := p.parseStateMember(allowBody)
+		allowBody = successionBodyAllowed(member, allowBody)
+		body.add(member)
 	}
 
 	p.expect(lexer.RBrace, "expected '}' after state body")
 	return body.finish()
 }
 
+// successionBodyAllowed reports whether a `then` after member may carry a body.
+// A body reaches a state body only as a TargetTransitionUsage after a behaviour
+// usage member (SysML.xtext:1762-1764); the entry transitions that follow a
+// state subaction end in ';' (EntryTransitionMember, SysML.xtext:1796-1801).
+func successionBodyAllowed(member ast.Node, allowed bool) bool {
+	switch member.(type) {
+	case *ast.EntryMember, *ast.DoMember, *ast.ExitMember:
+		return false
+	case *ast.SuccessionEdge, *ast.ControlFlowEdge:
+		return allowed
+	}
+	return true
+}
+
 // parseStateMember parses one state member: entry/do/exit/state/transition, or general body member.
-func (p *Parser) parseStateMember() ast.Node {
+// allowBody admits a body on a `then`, which only a TargetTransitionUsage takes.
+func (p *Parser) parseStateMember(allowBody bool) ast.Node {
 	start := p.peek().Span.Offset
 
 	// Handle doc keyword specially (parseDocumentation consumes it)
@@ -2409,7 +2429,7 @@ func (p *Parser) parseStateMember() ast.Node {
 			// Standalone succession (`then <source> <target>;`, `then <target>;`):
 			// the same edge node a member-attached `then` desugars to, so a state
 			// body carries one representation of both spellings.
-			return p.parseSuccessionEdge(p.advance())
+			return p.parseSuccessionEdge(p.advance(), allowBody)
 		case "accept":
 			// Accept transition: accept <signal> then <state>;
 			return p.parseAcceptTransition(start)
@@ -2977,12 +2997,15 @@ func (p *Parser) parseRegionMember(start int) ast.Node {
 	// A region carries the members of a state body, a member-attached `then`
 	// among them (SysML.xtext StateBodyItem).
 	body := p.newBodyBuilder()
+	allowBody := true
 	for !p.at(lexer.RBrace) && !p.at(lexer.EOF) {
 		if body.atSuccession() {
 			body.takeSuccession()
 			continue
 		}
-		body.add(p.parseStateMember())
+		member := p.parseStateMember(allowBody)
+		allowBody = successionBodyAllowed(member, allowBody)
+		body.add(member)
 	}
 	states := body.finish()
 

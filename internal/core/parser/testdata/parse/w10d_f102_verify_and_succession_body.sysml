@@ -8,8 +8,10 @@ package VerifyAndSuccessionBody {
     }
     verification def MassTest {
         part vehicleSpecification : Specification;
-        verify vehicleSpecification.vehicleMassRequirement {
-            doc /* the verified requirement is reached through a chain */
+        objective massObjective {
+            verify vehicleSpecification.vehicleMassRequirement {
+                doc /* the verified requirement is reached through a chain */
+            }
         }
     }
     action def Sequence {

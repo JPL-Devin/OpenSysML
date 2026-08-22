@@ -2131,9 +2131,10 @@ func (p *Parser) parseDefUsageBodyMembers() []ast.Node {
 		}
 		// `then a b;` is a succession member naming two members of this body,
 		// which is the form a member-attached `then` desugars to and so the
-		// form a converted model is written back as.
+		// form a converted model is written back as. DefinitionBodyItem
+		// (SysML.xtext:516-524) has no TargetSuccessionMember, so it takes no body.
 		if p.atKeyword("then") {
-			body.add(p.parseSuccessionEdge(p.advance()))
+			body.add(p.parseSuccessionEdge(p.advance(), false))
 			continue
 		}
 		body.add(p.parseBodyMember())
@@ -2156,7 +2157,7 @@ func (p *Parser) parseCaseBody() []ast.Node {
 			continue
 		}
 		if p.atKeyword("then") {
-			body.add(p.parseSuccessionEdge(p.advance()))
+			body.add(p.parseSuccessionEdge(p.advance(), true))
 			continue
 		}
 		// A case body carries an action body's items (SysML.xtext:2191

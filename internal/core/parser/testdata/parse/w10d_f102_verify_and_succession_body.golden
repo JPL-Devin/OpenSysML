@@ -16,10 +16,11 @@
               (Relationship kind="typing" target=Specification
                 (*ast.QualifiedName))))
           (Membership visibility="default"
-            (Usage kind="satisfy" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="verify"
-              (Relationship kind="subsets" target=vehicleSpecification.vehicleMassRequirement
-                (*ast.QualifiedName))
-              (Documentation locale="")))))
+            (Usage kind="objective" name="massObjective" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+              (Usage kind="satisfy" name="" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="verify"
+                (Relationship kind="subsets" target=vehicleSpecification.vehicleMassRequirement
+                  (*ast.QualifiedName))
+                (Documentation locale=""))))))
       (Membership visibility="default"
         (Definition kind="action" abstract=false variation=false name="Sequence"
           (Usage kind="action" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false)
