@@ -542,6 +542,10 @@ func usageSymbolKind(k ast.UsageKind) SymbolKind {
 		// A KerML step is a feature typed by a behavior, which is what a SysML
 		// action usage is (SysML v2 §8.3.14).
 		return SymbolActionUsage
+	case ast.UsageExpr, ast.UsageBool:
+		// A KerML `expr`/`bool` declares an Expression: a feature typed by a
+		// function (KerML 1.0 §9.2.10), as a SysML calc usage is.
+		return SymbolCalcUsage
 	default:
 		return SymbolUnknown
 	}
