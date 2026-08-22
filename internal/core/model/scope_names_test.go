@@ -115,13 +115,20 @@ func TestVisibleNamesClassImplicitMembersNeedOccurrences(t *testing.T) {
 	has(t, occ, []string{"A", "A.a", "A.self"}, nil)
 }
 
-// A path inherits through a type once: `self` comes from Base::Anything and
-// `that` from Base::things, so `self.that` ends there rather than re-expanding
-// through Anything again.
+// A path inherits through a type once: a feature subsets Base::things for `that`
+// and reaches `self` through its type Anything, so `self` does not re-derive
+// through things for another `that`.
 func TestVisibleNamesImplicitMembersDoNotRechain(t *testing.T) {
-	src := "package P {\n\tclassifier A;\n\tclassifier X;\n}\n"
+	src := "package P {\n\tfeature f;\n\tclassifier X;\n}\n"
 	names := namesAt(t, src, "classifier X", VisibleNamesOptions{LibraryRoots: []string{"Base"}})
-	has(t, names, []string{"A", "A.self", "A.self.that"}, []string{
+	has(t, names, []string{"f", "f.self", "f.that", "f.that.self"}, []string{
+		"f.self.that", "f.self.self", "f.that.self.that", "f.that.that",
+	})
+
+	// A classifier reaches Anything's `self` and, through it, things' `that`.
+	cls := namesAt(t, "package P {\n\tclassifier A;\n\tclassifier X;\n}\n", "classifier X",
+		VisibleNamesOptions{LibraryRoots: []string{"Base"}})
+	has(t, cls, []string{"A", "A.self", "A.self.that"}, []string{
 		"A.self.self", "A.self.that.self", "A.self.that.that", "A.that.self",
 	})
 }
