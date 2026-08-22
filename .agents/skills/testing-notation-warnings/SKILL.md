@@ -271,6 +271,57 @@ DISPLAY=:0 wmctrl -r :ACTIVE: -b add,maximized_vert,maximized_horz
 Under `-strict` a refused file prints no `✓ package ...` summary at all — that is the refusal path,
 not a regression of the declared-members summary. Compare summaries in **default** mode.
 
+## De-duplicating a parser warning against a notation error: sweep every construct
+
+`dropEscalatedWarnings` (`internal/core/passes/analyze.go`) drops a parse **warning** only where a
+pass reported an **error** of the same code at the same span, after the whole registry ran. Filtering
+by code alone — as `SyntaxPass.Run` once did — is asymmetric and is the thing to attack:
+
+- the parser emits the warning from **one** general site, `parseIdentification()` in
+  `internal/core/parser/namespace.go` (~line 222), so *any* construct whose name flows through it
+  can produce the warning;
+- the notation walker calls `keywordAsName` from only a handful of cases in
+  `internal/core/passes/nonstandard_notation.go` — the `Ident` of `ast.Namespace`, `ast.Package`,
+  `ast.Definition` and `ast.Usage`.
+
+Any construct in the first set but not the second **loses its only diagnostic under strict**, making
+strict *more permissive than default* — an inversion of the point of strict conformance. Do not try
+to reason about this from the AST; sweep it. Generate one fixture per construct kind declaring a
+reserved keyword as its name and compare warning/error counts across modes:
+
+```python
+CASES = {"package": "package part { }", "part def": "part def part;",
+         "attribute": "attribute part : String;", "alias": "part def B; alias part for W::B;",
+         "state usage": "action def A { state part; }", ...}
+# for each: wrap in "package W { %s }", run `-validate` and `-validate -strict`,
+# count lines matching 'reserved keyword' split by 'warning:' / 'error:'.
+# Healthy dedup  => default 1w/0e, strict 0w/1e
+# LOST diagnostic => default 1w/0e, strict 0w/0e   <-- bug
+```
+
+A ~20-construct sweep runs in seconds and localises the gap precisely. `alias` is the known offender
+(both `.sysml` and `.kerml`); `doc`, `comment` and `dependency` never emit the warning at all, so a
+`0w/0e` in both modes there is expected, not a loss. Note the escalated error and the dropped warning
+may carry **different message text** for the same span, so match on a substring both share
+(`reserved keyword`) rather than the full sentence.
+
+## The corpora cannot test `reserved-keyword-name` at all — it is a vacuous gate
+
+Before trusting a corpus differential as evidence for a keyword-as-name change, count the rows the
+code actually produces across the corpora:
+
+```bash
+find examples/pilot-corpora internal/core/libs/stdlib -name '*.sysml' -o -name '*.kerml' \
+  | xargs -P8 -I{} sh -c '/tmp/sysml -validate -strict "{}" 2>&1' | grep -c 'reserved keyword'
+```
+
+This returns **0** — no OMG-published or bundled file writes a reserved keyword as a name. A
+"0 lost / 0 gained" corpus differential for such a change is therefore *structurally incapable* of
+failing and must never be reported as evidence that no diagnostic was lost. Hand-written fixtures
+plus the construct sweep above are the only real coverage. The same reasoning applies to the
+corpus-gated `go test ./...`: it stayed fully green while strict silently dropped the `alias`
+diagnostic, because no test pins that construct.
+
 ## Devin Secrets Needed
 
 None. Everything runs against the locally provisioned `build/pilot-validator` and the committed
