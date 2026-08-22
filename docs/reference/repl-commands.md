@@ -18,6 +18,7 @@ quoted segment holding a space and one in the middle of a chain: `%instantiate '
 | `%query <oslc-query>` | Identify model elements using OSLC Query text |
 | `%verbosity [level]` | Show or set output level: `quiet` (errors only), `normal`, `debug` (every diagnostic over the whole buffer) |
 | `%trace [on\|off]` | Show or set execution tracing: each evaluation, calc invocation, action step and state transition |
+| `%strict [on\|off]` | Show or set strict conformance: report notation no SysML v2 production admits as an error, and reprint the session's diagnostics under the new mode ([Strict conformance](../guide/03-command-line.md#strict-conformance)) |
 | `%budget` | Show the five bounds one run may spend, each with the variable that raises it |
 | **Library Discovery** | |
 | `%search <substring>` | List the declared and library symbols whose qualified name contains the substring, with the kind of each |

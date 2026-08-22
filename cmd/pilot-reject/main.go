@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/conformance"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
@@ -44,16 +45,21 @@ func main() {
 	corpus := flag.String("corpus", "", "negative corpus directory (default: <repo>/cmd/pilot-reject/testdata/negative)")
 	out := flag.String("out", "", "output directory for the reports (default: <repo>/build/pilot-reject)")
 	timeout := flag.Duration("timeout", 0, "per-batch timeout for the pilot validator (0: no limit)")
+	policy := flag.String("conformance", policyAuto,
+		"conformance mode our verdicts are taken under: auto (extensions/ strictly, the rest by default), default, or strict")
 	flag.Parse()
 
-	if err := run(*repo, *validator, *kermlValidator, *corpus, *out, *timeout); err != nil {
+	if err := run(*repo, *validator, *kermlValidator, *corpus, *out, *policy, *timeout); err != nil {
 		fmt.Fprintf(os.Stderr, "pilot-reject: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func run(repo, validator, kermlValidator, corpus, out string, timeout time.Duration) error {
-	var err error
+func run(repo, validator, kermlValidator, corpus, out, policy string, timeout time.Duration) error {
+	policy, err := parsePolicy(policy)
+	if err != nil {
+		return err
+	}
 	if repo == "" {
 		repo, err = moduleRoot()
 		if err != nil {
@@ -97,13 +103,26 @@ func run(repo, validator, kermlValidator, corpus, out string, timeout time.Durat
 		if err != nil {
 			return err
 		}
+		c.Mode = modeFor(policy, c.Source).String()
 		cases[rel] = c
+	}
+	modes := make(map[string]conformance.Mode, len(cases))
+	// The default mode is evaluated for every case as well, so a case asked
+	// strictly reports what the default mode says instead of implying it agreed.
+	defaults := make(map[string]conformance.Mode, len(cases))
+	for rel, c := range cases {
+		modes[rel] = modeFor(policy, c.Source)
+		defaults[rel] = conformance.ModeDefault
 	}
 
 	for _, batch := range batches {
 		fmt.Fprintf(os.Stderr, "negative corpus: %d %s case(s)\n", len(batch.Files), batch.Kind)
 		pilot := pilotFor(batch.Kind, validator, kermlValidator)
-		ours, err := openSysMLErrors(repo, corpusDir, batch.Files)
+		ours, err := openSysMLErrors(repo, corpusDir, batch.Files, modes)
+		if err != nil {
+			return err
+		}
+		oursDefault, err := openSysMLErrors(repo, corpusDir, batch.Files, defaults)
 		if err != nil {
 			return err
 		}
@@ -112,11 +131,11 @@ func run(repo, validator, kermlValidator, corpus, out string, timeout time.Durat
 			return err
 		}
 		for _, rel := range batch.Files {
-			classify(cases[rel], ours[rel], theirs[rel])
+			classify(cases[rel], ours[rel], oursDefault[rel], theirs[rel])
 		}
 	}
 
-	report := &Report{Validator: relativeTo(repo, validator), Corpus: corpusDir}
+	report := &Report{Validator: relativeTo(repo, validator), Corpus: corpusDir, Conformance: policy}
 	if report.Pilot, err = pilotVersion(validator); err != nil {
 		return err
 	}
@@ -136,21 +155,36 @@ func pilotFor(kind source.Kind, validator, kermlValidator string) string {
 }
 
 // classify fills the case's verdicts. A side rejects when it reports at least
-// one error-severity diagnostic; warnings do not count.
-func classify(c *Case, ours, theirs []string) {
+// one error-severity diagnostic; warnings do not count. oursDefault is what the
+// default mode said, recorded for a case asked strictly so that a strict
+// agreement does not read as a default one.
+func classify(c *Case, ours, oursDefault, theirs []string) {
 	c.OursErrors = len(ours)
 	c.PilotErrors = len(theirs)
-	switch {
-	case len(theirs) > 0 && len(ours) > 0:
-		c.Bucket = bucketBothReject
-	case len(theirs) > 0:
-		c.Bucket = bucketPilotOnly
+	c.Bucket = bucketOf(len(ours), len(theirs))
+	switch c.Bucket {
+	case bucketPilotOnly:
 		c.Pilot = theirs
-	case len(ours) > 0:
-		c.Bucket = bucketOursOnly
+	case bucketOursOnly:
 		c.Ours = ours
+	}
+	if c.Mode == conformance.ModeStrict.String() {
+		c.DefaultErrors = len(oursDefault)
+		c.DefaultBucket = bucketOf(len(oursDefault), len(theirs))
+	}
+}
+
+// bucketOf names the quadrant a pair of error counts falls in.
+func bucketOf(ours, theirs int) string {
+	switch {
+	case theirs > 0 && ours > 0:
+		return bucketBothReject
+	case theirs > 0:
+		return bucketPilotOnly
+	case ours > 0:
+		return bucketOursOnly
 	default:
-		c.Bucket = bucketBothAccept
+		return bucketBothAccept
 	}
 }
 

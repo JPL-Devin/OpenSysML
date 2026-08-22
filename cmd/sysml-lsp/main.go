@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 
+	"github.com/Open-MBEE/OpenSysML/internal/core/conformance"
 	"github.com/Open-MBEE/OpenSysML/internal/core/model"
 	"github.com/Open-MBEE/OpenSysML/internal/lsp"
 )
@@ -57,7 +58,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 	// -h/-help are defined here so that help asked for is a result on stdout.
 	// -stdio names the only transport this server has: the standard language
 	// clients pass it, so it is accepted and documented rather than rejected.
-	var showVersion, showHelp bool
+	var showVersion, showHelp, strict bool
+	fs.BoolVar(&strict, "strict", false,
+		"Serve strict conformance from the start: notation no pinned SysML v2 production admits is an error (a client may also set the strictConformance setting)")
 	fs.Bool("stdio", false, "Serve over stdin/stdout (the only transport; accepted for clients that name it)")
 	fs.BoolVar(&showVersion, "version", false, "Show version information")
 	fs.BoolVar(&showVersion, "v", false, "Show version (shorthand)")
@@ -85,7 +88,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return exitUnservable
 	}
 
-	return serve(stderr)
+	return serve(stderr, conformance.ModeOf(strict))
 }
 
 // printUsage writes the help to w, which the caller chooses: help asked for is
@@ -105,8 +108,8 @@ func printUsage(w io.Writer, fs *flag.FlagSet) {
 // serve speaks the protocol over stdin/stdout until the client ends it, and
 // reports the status the session earned: the one the client's exit notification
 // asks for, or 1 for a session that ended in a protocol error.
-func serve(stderr io.Writer) int {
-	ws := model.NewWorkspace()
+func serve(stderr io.Writer, mode conformance.Mode) int {
+	ws := model.NewWorkspace(model.WithConformanceMode(mode))
 	srv := lsp.NewServer(ws)
 	err := srv.Run(context.Background(), stdio{})
 	if err != nil && !endedWithTheStream(err) {

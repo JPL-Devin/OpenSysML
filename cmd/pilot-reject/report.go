@@ -12,14 +12,20 @@ import (
 // Case is one negative model's adjudication. The error messages are kept only
 // for the disagreeing buckets, where they are the evidence.
 type Case struct {
-	Path        string   `json:"path"`
-	Source      string   `json:"source"`
-	Rule        string   `json:"rule"`
-	Bucket      string   `json:"bucket"`
-	OursErrors  int      `json:"oursErrors"`
-	PilotErrors int      `json:"pilotErrors"`
-	Ours        []string `json:"ours,omitempty"`
-	Pilot       []string `json:"pilot,omitempty"`
+	Path   string `json:"path"`
+	Source string `json:"source"`
+	Rule   string `json:"rule"`
+	// Mode is the conformance mode our verdict was taken under.
+	Mode        string `json:"mode"`
+	Bucket      string `json:"bucket"`
+	OursErrors  int    `json:"oursErrors"`
+	PilotErrors int    `json:"pilotErrors"`
+	// DefaultBucket and DefaultErrors are what the default mode says, recorded
+	// only for a case asked strictly: agreement there is not agreement here.
+	DefaultBucket string   `json:"defaultBucket,omitempty"`
+	DefaultErrors int      `json:"defaultErrors,omitempty"`
+	Ours          []string `json:"ours,omitempty"`
+	Pilot         []string `json:"pilot,omitempty"`
 }
 
 // Totals is one scope's bucket counts. PilotOnlyRejects are the permissiveness
@@ -41,12 +47,17 @@ type SourceTotals struct {
 // Report is the whole run. It carries no timestamp and no absolute path, so
 // two runs over the same pin produce byte-identical output.
 type Report struct {
-	Pilot     string         `json:"pilot"`
-	Validator string         `json:"validator"`
-	Corpus    string         `json:"corpus"`
-	Totals    Totals         `json:"totals"`
-	Sources   []SourceTotals `json:"sources"`
-	Cases     []Case         `json:"cases"`
+	Pilot     string `json:"pilot"`
+	Validator string `json:"validator"`
+	Corpus    string `json:"corpus"`
+	// Conformance is the policy our verdicts were taken under.
+	Conformance string `json:"conformance"`
+	Totals      Totals `json:"totals"`
+	// StrictOnlyAgreements are the cases both sides reject only because ours was
+	// asked strictly: the default mode accepts them, by design.
+	StrictOnlyAgreements []string       `json:"strictOnlyAgreements,omitempty"`
+	Sources              []SourceTotals `json:"sources"`
+	Cases                []Case         `json:"cases"`
 }
 
 func (t *Totals) count(bucket string) {
@@ -69,6 +80,9 @@ func (r *Report) summarize() {
 	var names []string
 	for _, c := range r.Cases {
 		r.Totals.count(c.Bucket)
+		if c.Bucket == bucketBothReject && c.DefaultBucket == bucketPilotOnly {
+			r.StrictOnlyAgreements = append(r.StrictOnlyAgreements, c.Path)
+		}
 		st := bySource[c.Source]
 		if st == nil {
 			st = &SourceTotals{Source: c.Source}
@@ -113,8 +127,11 @@ func headline(t Totals) string {
 func renderText(report *Report) string {
 	var b strings.Builder
 	b.WriteString("OpenSysML vs the OMG pilot implementation over a hand-written negative corpus\n")
-	fmt.Fprintf(&b, "pilot pin: %s\nvalidator: %s\ncorpus:    %s\n\n", report.Pilot, report.Validator, report.Corpus)
+	fmt.Fprintf(&b, "pilot pin: %s\nvalidator: %s\ncorpus:    %s\nour mode:  %s\n\n",
+		report.Pilot, report.Validator, report.Corpus, report.Conformance)
 	fmt.Fprintf(&b, "TOTAL: %s\n", headline(report.Totals))
+	fmt.Fprintf(&b, "  of which %d agree only because we were asked strictly (the default mode accepts them, by design)\n",
+		len(report.StrictOnlyAgreements))
 	fmt.Fprintf(&b, "  %-12s %6s %11s %10s %9s %11s\n", "source", "cases", "both-reject", "pilot-only", "ours-only", "both-accept")
 	for _, st := range report.Sources {
 		fmt.Fprintf(&b, "  %-12s %6d %11d %10d %9d %11d\n",
@@ -124,7 +141,11 @@ func renderText(report *Report) string {
 	for _, c := range report.Cases {
 		fmt.Fprintf(&b, "\n%s\n", c.Path)
 		fmt.Fprintf(&b, "  rule:   %s\n", c.Rule)
-		fmt.Fprintf(&b, "  bucket: %s (ours %d error(s), pilot %d error(s))\n", c.Bucket, c.OursErrors, c.PilotErrors)
+		fmt.Fprintf(&b, "  bucket: %s (ours %d error(s) in %s mode, pilot %d error(s))\n",
+			c.Bucket, c.OursErrors, c.Mode, c.PilotErrors)
+		if c.DefaultBucket != "" {
+			fmt.Fprintf(&b, "  default mode: %s (ours %d error(s))\n", c.DefaultBucket, c.DefaultErrors)
+		}
 		for _, msg := range c.Pilot {
 			fmt.Fprintf(&b, "  pilot: %s\n", msg)
 		}

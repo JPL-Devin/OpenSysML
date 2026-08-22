@@ -16,6 +16,7 @@ from opensysml.binary import cached_release, ensure_binary, resolve_latest_versi
 from opensysml.capabilities import (
     CAPABILITY_APPLY_EDITS,
     CAPABILITY_AUTHORING, CAPABILITY_INLINE_LANGUAGE,
+    CAPABILITY_STRICT_CONFORMANCE,
     CAPABILITY_CONVERT,
     CAPABILITY_EVALUATE_SUBJECT,
     CAPABILITY_FEATURE_VALUES,
@@ -513,7 +514,7 @@ class Connection:
             self._check_release_on_handshake = False
         return self._server_info
 
-    def load(self, file_path, strict=False):
+    def load(self, file_path, strict=False, strict_conformance=False):
         """Load a SysML model from file.
         
         Args:
@@ -522,6 +523,9 @@ class Connection:
                 instead of returning one whose lookups fail later. The
                 :class:`~opensysml.errors.ModelError` raised carries the model, so
                 its diagnostics stay inspectable.
+            strict_conformance (bool): Ask whether the file is conforming SysML v2:
+                notation only OpenSysML accepts is reported as an error rather than
+                a warning.
         
         Returns:
             Model: Parsed model object
@@ -531,7 +535,9 @@ class Connection:
             ModelError: If strict and the model has error diagnostics
             ServiceError: If the service fails the call for any other reason
         """
-        request = sysml_pb2.ParseFileRequest(file_path=file_path)
+        self._require_strict_conformance(strict_conformance)
+        request = sysml_pb2.ParseFileRequest(
+            file_path=file_path, strict_conformance=strict_conformance)
         with translate_rpc_errors(not_found=ModelFileNotFoundError):
             response = self._stub.ParseFile(request)
         model = Model(response, self, source_path=file_path)
@@ -539,12 +545,28 @@ class Connection:
             model.raise_for_errors()
         return model
     
-    def load_from_content(self, content, strict=False, language=None):
+    def _require_strict_conformance(self, strict_conformance):
+        """Refuse a strict-conformance ask a service would silently ignore."""
+        if not strict_conformance:
+            return
+        require(
+            self.server_info(),
+            CAPABILITY_STRICT_CONFORMANCE,
+            upgrade_remedy(CAPABILITY_STRICT_CONFORMANCE),
+        )
+
+    def load_from_content(self, content, strict=False, language=None,
+                          strict_conformance=False):
         """Load a model from inline SysML content.
         
         Args:
             content (str): SysML source code
             strict (bool): Refuse a model the service reported errors for
+            language (str, optional): "sysml" or "kerml"; the language the
+                inline content is written in
+            strict_conformance (bool): Ask whether the content is conforming
+                SysML v2: notation only OpenSysML accepts is an error, not a
+                warning
             
         Returns:
             Model: Parsed model object
@@ -560,7 +582,9 @@ class Connection:
             )
             if language not in ("sysml", "kerml"):
                 raise ValueError("language must be 'sysml' or 'kerml'")
-        request = sysml_pb2.ParseFileRequest(content=content, language=language or "")
+        self._require_strict_conformance(strict_conformance)
+        request = sysml_pb2.ParseFileRequest(
+            content=content, language=language or "", strict_conformance=strict_conformance)
         with translate_rpc_errors():
             response = self._stub.ParseFile(request)
         model = Model(response, self)
