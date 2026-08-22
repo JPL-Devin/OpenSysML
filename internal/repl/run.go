@@ -125,10 +125,8 @@ func (s *Session) HasErrors() bool {
 	return s.hasAnalysisErrors() || len(s.MaterializationFailures()) > 0
 }
 
-// hasAnalysisErrors reports whether analysis found something that stops the model
-// from being run at all. A notation error stops it only when asked strictly, where
-// the file is rejected outright (cmd/sysml/strict_test.go); by default the writing
-// is reported and the model still runs.
+// hasAnalysisErrors reports whether analysis found something that stops the model from
+// running. Notation stops it only when asked strictly, which rejects the file outright.
 func (s *Session) hasAnalysisErrors() bool {
 	strict := s.ConformanceMode().IsStrict()
 	for _, d := range s.Diagnostics() {
