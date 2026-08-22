@@ -152,7 +152,7 @@ Every difference from the published numbers is accounted for, and none of it is 
 ```
 428 .xt file(s), 0 unparsed, 0 missing declared resource(s)
 1261 assertion(s) declaring 1326 expectation(s)
-agree 816 | disagree 510 | unlocated 0 | not adjudicated 0
+agree 845 | disagree 481 | unlocated 0 | not adjudicated 0
 ```
 
 | Kind | Expectations | Agree | Disagree | Not adjudicated | `same-location` | `same-line` | `severity-differs` | `elsewhere` | nothing |
@@ -161,14 +161,14 @@ agree 816 | disagree 510 | unlocated 0 | not adjudicated 0
 | `noErrors` | 275 | 254 | 21 | 0 | — | — | — | — | — |
 | `linkedName` | 194 | 194 | 0 | 0 | — | — | — | — | — |
 | `warnings` | 113 | 89 | 24 | 0 | 3 | 0 | 4 | 13 | 4 |
-| `scope` | 230 | 183 | 47 | 0 | — | — | — | — | — |
+| `scope` | 230 | 212 | 18 | 0 | — | — | — | — | — |
 | `exportedObjects` | 1 | 1 | 0 | 0 | — | — | — | — | — |
 
 Per suite:
 
 | Suite | Files | Expectations | Agree | Disagree | Not adjudicated |
 |---|---:|---:|---:|---:|---:|
-| `kerml` | 303 | 968 | 613 | 355 | 0 |
+| `kerml` | 303 | 968 | 642 | 326 | 0 |
 | `sysml` | 125 | 358 | 203 | 155 | 0 |
 
 **Read the `errors` row carefully: strict agreement demands the pilot's message text, so its 95 is a
@@ -525,12 +525,16 @@ item 3.
    `ShadowingTests_SameNames*` family agree exactly — which is most of its +11. But on the deeper
    circular fixtures the re-entry does not stop where the pilot stops: at
    `ShadowingTests_CircleProblem3.kerml.xt`:23 the note declares 829 names and we now offer **3362**,
-   2871 of them extra, and `CircleProblem4` and its `_FT`/`_Rdef` variants behave the same way. Those
-   five rows are why `missing-and-extra` rose 6 → 14, and an enumeration that overshoots by that much
+   2871 of them extra. `CircleProblem4` and its `_FT`/`_Rdef` variants were recorded here as behaving
+   the same way; re-measured for D3 they do not — on those six rows the pilot declares *more* names
+   than we offer (111 vs 67, 76 vs 64, 98 vs 86 twice over), and `A.B.B` is the first missing name in
+   each. Those eight rows are why `missing-and-extra` rose 6 → 14, and an enumeration that overshoots by that much
    is a worse answer than one that truncated, even though the class label improved. **Bounding the
    re-entry is a wave-10 item**, and it is the one place where this wave's scope movement is not a
-   straight gain.
-4. **`missing-names` / `missing-and-extra` (16 rows, 5 of them item 3's) — import plus inheritance
+   straight gain. **Adjudicated in [wave10-decisions.md](wave10-decisions.md) (D3):** the bound is
+   per name rather than per depth — no name appears more than twice in any declared path in the
+   corpus — and the eight rows are three defects, only two of which the bound reaches.
+4. **`missing-names` / `missing-and-extra` (16 rows, 8 of them item 3's) — import plus inheritance
    from the container.** Reproducer: `imports/SimpleImportTests_ImportPackageAndInheritanceFromContainer.kerml.xt`:23, where
    `classifier A { public import test::*; classifier a specializes A; }` declares `A.A`, `A.A.a` and
    `A.a.A` paths we do not offer — the fixture's own authors annotate the missing ones in a trailing

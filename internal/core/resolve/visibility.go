@@ -146,6 +146,12 @@ func (r *Resolver) lookupInheritedImports(scope *symbols.Scope, name string) (*s
 	return nil, false
 }
 
+// ImportTarget is the namespace or membership an import names, as the import
+// itself reaches it.
+func (r *Resolver) ImportTarget(scope *symbols.Scope, imp *ast.Import) (*symbols.Symbol, bool) {
+	return r.resolveImportTarget(scope, imp)
+}
+
 // resolveImportTarget resolves what an import names; an `import all` (an expose
 // is one) reaches a membership its target would otherwise hide.
 func (r *Resolver) resolveImportTarget(scope *symbols.Scope, imp *ast.Import) (*symbols.Symbol, bool) {
