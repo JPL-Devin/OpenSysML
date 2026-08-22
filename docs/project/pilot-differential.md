@@ -1532,29 +1532,32 @@ The named forms stay silent, and must: `assert constraint c1 : C;`, `assert sati
 (`examples/pilot-corpora/sysml-examples/Simple Tests/RequirementTest.sysml:6,22`,
 `examples/pilot-corpora/sysml-examples/Metadata Examples/RequirementMetadataExample.sysml:30`).
 
-The same construct in a **requirement** body — `assume <expression>;` and `require <expression>;` —
-has no row in this column at all, because in every file that writes it the pilot's parse has already
-ended earlier in the file. It is the same defect: `RequirementConstraintMember` (`SysML.xtext:2057`)
-admits a reference or an anonymous `require constraint { … }` body, never a bare expression, and the
-pinned single-file CLI rejects `requirement r { attribute x : Real; assume x > 0; }` with
-`no viable alternative at input 'assume'` and the `require` spelling with `no viable alternative at
-input 'require'`. It is warned here too rather than left inconsistent with `assert` one node type
-away, and the OMG-authored spelling `require constraint { massActual <= massReqd }`
-(`examples/sysml-v2-training/32. Requirements/Requirement Definitions.sysml:11,27`) stays silent.
+The same construct in a **requirement-style** body — `assume <expression>;` and `require <expression>;`
+in a requirement, concern, viewpoint, framed-concern, objective or satisfy body, every declaration
+whose body the parser reads with `parseRequirementBody` — has no row in this column at all, because in
+every file that writes it the pilot's parse has already ended earlier in the file. It is the same
+defect: `RequirementConstraintMember` (`SysML.xtext:2057`) admits a reference or an anonymous
+`require constraint { … }` body, never a bare expression, and the pinned single-file CLI rejects
+`requirement r { attribute x : Real; assume x > 0; }` with `no viable alternative at input 'assume'`,
+the `require` spelling with `no viable alternative at input 'require'`, and the same two inside a
+`concern def` and a `viewpoint` body. It is warned here too rather than left inconsistent with
+`assert` one node type away. A **dotted** condition is a reference, not an expression, and stays
+silent in all of them: `requirement r { attribute x; require x.y; }` draws only
+`Couldn't resolve reference to Feature 'y'` from the pilot, no syntax error — so does the concern-body
+form. The OMG-authored spelling `require constraint { massActual <= massReqd }`
+(`examples/sysml-v2-training/32. Requirements/Requirement Definitions.sysml:11,27`) stays silent too.
 
 What the three warned forms moved, measured with `rm -rf build/pilot-diff && go run ./cmd/pilot-diff`
 before and after: the seven W1/W2 rows leave this column for the severity-only bucket, the six pilot
-recovery cascades behind them shrink by one row each, and **39** rows appear in the only-ours column —
-21 in `examples/repl-behavioral-demo.sysml` and 18 in `examples/phase-c-behavioral-bodies.sysml`, of
-which 16 come from W1/W2 (`repl-behavioral-demo.sysml:40,46,53,62,67,68,73,78,79,84`,
-`phase-c-behavioral-bodies.sysml:88,94,101,102,103,262`) and 23 from the requirement-body form
+recovery cascades behind them shrink by one row each, and **34** rows appear in the only-ours column —
+of which 16 come from W1/W2 (`repl-behavioral-demo.sysml:40,46,53,62,67,68,73,78,79,84`,
+`phase-c-behavioral-bodies.sysml:88,94,101,102,103,262`) and 18 from the requirement-style body form
 (`repl-behavioral-demo.sysml:94,95,98,104,107,113,116,121,122,124,125`,
-`phase-c-behavioral-bodies.sysml:112,113,114,125,126,127,132,133,134,253,254,255`). Every one of them
-is a construct past the line where the pilot stopped reading its file, so the reference says nothing
-about them at all. Both files were already non-agreeing, no file changed agreement status, and the
-severity-only and agreed buckets are otherwise untouched. Counting only the column this sweep is about
-would report the gain and hide the 39; they are the same finding seen from the side the pilot cannot
-reach.
+`phase-c-behavioral-bodies.sysml:112,125,126,127,132,254,255`). Every one of them is a construct past
+the line where the pilot stopped reading its file, so the reference says nothing about them at all.
+Both files were already non-agreeing, no file changed agreement status, and the severity-only and
+agreed buckets are otherwise untouched. Counting only the column this sweep is about would report the
+gain and hide the 34; they are the same finding seen from the side the pilot cannot reach.
 
 #### W3–W7 — five more notation and structure gaps (11, our defect, not fixed here)
 
