@@ -31,7 +31,7 @@ cmp build/pilot-reject/pilot-reject.json docs/project/pilot-rejection-baseline.j
 
 `docs/project/pilot-rejection-baseline.json` is the only authority for the counts; the numbers
 quoted here are as-of values, and `cmd/pilot-reject/doc_counts_test.go` fails if they drift from it.
-As of wave 10C (`g02` and `g31` closed) over wave 10G's 119-case corpus:
+As of wave 10G with 10C merged:
 `119 case(s): 103 both reject, 16 only the pilot rejects, 0 only we reject, 0 both accept`,
 byte-identical to the committed baseline. Any `both accept` case is a bug in the corpus (the case
 is not actually invalid under the loaded standard library) — fix the case, never ignore it.
@@ -45,7 +45,7 @@ separately, so a strict agreement never reads as a default one.
 
 ```bash
 go run ./cmd/pilot-reject -conformance default -out build/pilot-reject-default
-# as of that same commit: 98 agreements, 21 gaps — the numbers strict mode leaves alone
+# as of wave 10G+10C: 98 agreements, 21 gaps — the numbers strict mode leaves alone
 go run ./cmd/pilot-reject -conformance lenient   # must fail: unknown conformance policy
 ```
 
