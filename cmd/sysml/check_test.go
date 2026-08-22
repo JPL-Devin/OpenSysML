@@ -28,7 +28,7 @@ const checkModel = `package Rover {
     constraint TooHeavy { 210.0 <= 200.0 }
 
     requirement PowerMargin {
-        require 600.0 >= 450.0;
+        require constraint { 600.0 >= 450.0 }
     }
 
     part def Lander {

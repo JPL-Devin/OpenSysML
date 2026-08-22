@@ -176,6 +176,24 @@ func TestKeywordedConstraintConditionsAreReported(t *testing.T) {
 	}
 }
 
+func TestKeywordedRequirementConditionsAreReported(t *testing.T) {
+	for _, tc := range []struct {
+		name, keyword string
+	}{
+		{"assume", "assume"},
+		{"require", "require"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src := fmt.Sprintf("requirement r { attribute x : Real; %s x > 0; }", tc.keyword)
+			wantNotation(t, "a.sysml", src, CodeNonstandardNotation,
+				fmt.Sprintf("`%s <expression>;`", tc.keyword))
+		})
+	}
+	wantNotation(t, "a.sysml",
+		"requirement r { attribute x : Real; assume x.y; }",
+		CodeNonstandardNotation, "`assume <expression>;`")
+}
+
 func TestNotationWarningsPointAtTheirKeywords(t *testing.T) {
 	src := `calc c {
 		in x : Real;
@@ -208,7 +226,7 @@ func TestNotationWarningsPointAtTheirKeywords(t *testing.T) {
 	}
 }
 
-func TestStandardConstraintConditionsStaySilent(t *testing.T) {
+func TestStandardConstraintAndRequirementConditionsStaySilent(t *testing.T) {
 	for _, tc := range []struct {
 		name, src string
 	}{
@@ -216,6 +234,12 @@ func TestStandardConstraintConditionsStaySilent(t *testing.T) {
 		{"named_constraint_assertion", "part def P { assert constraint c1 : C; }"},
 		{"satisfy_assertion", "requirement def R { assert satisfy r by q; }"},
 		{"metadata_constraint_assumption", "requirement def R { assume #goal constraint payloadMassLimit; }"},
+		{"named_requirement_constraint", "requirement def R { require constraint c; }"},
+		{"bare_requirement_reference", "requirement def R { require c; }"},
+		{"named_assumption_with_body", "requirement def R { assume constraint c { 1 > 0 } }"},
+		{"named_requirement_with_body", "requirement def R { require constraint c { 1 > 0 } }"},
+		{"anonymous_assumption_body", "requirement def R { assume constraint { 1 > 0 } }"},
+		{"anonymous_requirement_body", "requirement def R { require constraint { 1 > 0 } }"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			wantSilent(t, "a.sysml", tc.src)
