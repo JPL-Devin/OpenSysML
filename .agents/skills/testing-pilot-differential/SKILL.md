@@ -29,6 +29,13 @@ GNU-format diagnostics **relative to `--root`**. Consequences for testing:
 - `TestPilotDifferentialDocumentCountsMatchBaseline` reads only the *committed* baseline JSON, so
   it proves doc ↔ baseline consistency and cannot detect a committed baseline that no longer
   reproduces. A live harness run is still mandatory; both checks are needed.
+- **Symlinked corpus roots are silently skipped.** The corpus walker does not follow symlinks, so a
+  baseline worktree whose `examples/sysml-v2-training` or `examples/pilot-corpora` is a symlink into
+  the real checkout drops that whole root from the report without warning — the file count simply
+  comes out lower. Run the baseline as `go run ./cmd/pilot-diff -repo <real-checkout>` instead.
+- **Silence can be a tier artifact, not a missing rule.** A type-tier error suppresses every
+  constraint-tier pass for the whole file, so when a CLI run is silent, prove the rule is live with a
+  positive control in the same file shape before concluding anything.
 - **Guard scope:** mechanically guarded surfaces are:
   - every count in `docs/project/pilot-differential.md` and `README.md` against
     `pilot-differential-baseline.json` (the existing guard);
