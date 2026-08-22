@@ -104,7 +104,7 @@ carry no timestamps or absolute paths, so repeated runs are byte-identical
 Under the default `-conformance auto`:
 
 ```
-119 case(s): 103 both reject, 16 only the pilot rejects, 0 only we reject, 0 both accept
+119 case(s): 114 both reject, 5 only the pilot rejects, 0 only we reject, 0 both accept
   of which 5 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
@@ -112,21 +112,20 @@ Under the default `-conformance auto`:
 | --- | --- | --- | --- | --- | --- |
 | extensions | 7 | 7 | 0 | 0 | 0 |
 | grammar | 78 | 76 | 2 | 0 | 0 |
-| xpect | 34 | 20 | 14 | 0 | 0 |
+| xpect | 34 | 31 | 3 | 0 | 0 |
 
-The corpus grew from 79 cases to 119 in wave 10G, and the default-mode gap count went from 9 of 79
-to 21 of 119. The ratio got worse because the corpus now reaches the pilot's own semantic
-expectations (the `xpect/` derivation went from 7 cases to 34), not because anything regressed: all
-the new gaps are `xpect/` cases whose rule the reference checks and we do not. Wave 10C closed the
-two `grammar/` gaps left from wave 9F — `g02` (bare `import` is an error by default) and `g31`
-(`allocate` requires its `ConnectorPart`) — which is why `grammar/` now reads 2 rather than 4. No
-case in the corpus is accepted by both implementations.
+The corpus grew from 79 cases to 119 in wave 10G, and the default-mode gap count is 10 of 119.
+Wave 10C closed the two `grammar/` gaps left from wave 9F — `g02` (bare `import` is an error by
+default) and `g31` (`allocate` requires its `ConnectorPart`) — which is why `grammar/` reads 2
+rather than 4, and wave 10B's validation rules closed eleven `xpect/` gaps (`p08`, `p17`, `p20`,
+`p21`, `p22`, `p25`, `p26`, `p27`, `p28`, `p32`, `p33`), leaving 3. No case in the corpus is
+accepted by both implementations.
 
 The five strict-only agreements are `x01`, `x04`, `x05`, `x06` and `x07`: OpenSysML notation
 extensions that the default mode accepts on purpose and strict mode reports as errors. Judged in
-the default mode the same corpus gives 98 agreements and 21 gaps, which is what `-conformance
+the default mode the same corpus gives 109 agreements and 10 gaps, which is what `-conformance
 default` prints — the extra five are those same `extensions/` cases, which the default mode accepts
-on purpose. `-conformance strict` gives 105 and 14: wave 10C gave `g15` and `k02` a strict
+on purpose. `-conformance strict` gives 116 and 3: wave 10C gave `g15` and `k02` a strict
 escalation, so every `grammar/` case is rejected when asked strictly and only the `xpect/` semantic
 rules remain — agreement under an opt-in question, not default-mode conformance. Of the 14 gaps this document carried before wave 8, six were closed by the
 validation waves themselves — `p01`, `p02`, `p03`, `p05` (wave 8C), `p06` (wave 8A) and `p04`
@@ -146,7 +145,7 @@ rejection, not agreement on the rule.
 
 ## Permissiveness gaps
 
-All 16 gaps, each with its reproducer (the corpus file is the minimal reproducer), both verdicts,
+All 5 gaps, each with its reproducer (the corpus file is the minimal reproducer), both verdicts,
 and the package the root cause is likely in. The two `grammar/` rows are rejected under
 `-conformance strict` (wave 10C) and accepted by default; the `xpect/` rows no mode of ours checks.
 
@@ -154,20 +153,9 @@ and the package the root cause is likely in. The two `grammar/` rows are rejecte
 | --- | --- | --- | --- |
 | `grammar/g15-keyword-as-name.sysml` | accepts | `no viable alternative at input 'part'` | `internal/core/parser` — allows a reserved keyword as a declared name |
 | `grammar/k02-sysml-keyword-in-kerml.kerml` | accepts | `no viable alternative at input 'def'` | `internal/core/parser` — `.kerml` files are parsed with the full SysML grammar; no per-language restriction |
-| `xpect/p08-variant-outside-variation.sysml` | accepts | `A variant must be an owned member of a variation.` | `internal/core/passes` — the variant-membership rule is not checked for a variant declared outside a variation |
 | `xpect/p11-metadata-body-not-evaluable.sysml` | accepts | `Must be model-level evaluable` | `internal/core/passes` — metadata body feature values are not checked for model-level evaluability |
 | `xpect/p15-attribute-typed-by-part-def.sysml` | accepts | `An attribute must be typed by attribute definitions.` | `internal/core/passes` — attribute usage typing is not restricted to attribute definitions |
-| `xpect/p17-calc-two-return-parameters.sysml` | accepts | `Only one return parameter is allowed` | `internal/core/passes` — the return-parameter cardinality rule is unimplemented |
-| `xpect/p20-connection-with-one-end.sysml` | accepts | `Must have at least two related elements` | `internal/core/passes` — connector end cardinality is unchecked |
-| `xpect/p21-filter-constructor-condition.sysml` | accepts | `Must have a Boolean result` | `internal/core/passes` — a constructor-expression filter condition is not typed, so the Boolean-result rule never fires |
-| `xpect/p22-filter-not-model-level-evaluable.sysml` | accepts | `Must be model-level evaluable` | `internal/core/passes` — filter conditions are not checked for model-level evaluability |
 | `xpect/p24-metadata-abstract-type.sysml` | accepts | `Must have a concrete type` | `internal/core/passes` — metadata usages may be typed by an abstract metaclass |
-| `xpect/p25-two-individual-definitions.sysml` | accepts | `At most one individual definition is allowed.` | `internal/core/passes` — individual-definition cardinality is unchecked |
-| `xpect/p26-port-def-nonreferential-usage.sysml` | accepts | `Owned usages of a port definition (other than ports) must be referential.` | `internal/core/passes` — port definition body usages are not required to be referential |
-| `xpect/p27-interface-end-not-port.sysml` | accepts | `An interface end must be a port.` | `internal/core/passes` — interface end kinds are unchecked |
-| `xpect/p28-package-level-feature-redefined.sysml` | accepts | `A package-level feature cannot be redefined` | `internal/core/passes` — redefinition featuring types are unchecked at package level |
-| `xpect/p32-redefinition-same-featuring-type.sysml` | accepts | `Featuring types of redefining feature and redefined feature cannot be the same` | `internal/core/passes` — the featuring-type distinctness rule is unimplemented |
-| `xpect/p33-individual-typed-by-plain-def.sysml` | accepts | `An individual must be typed by one individual definition.` | `internal/core/passes` — individual usage typing is unchecked |
 
 Each pilot message above is the first error the validator reports for the case; the full lists are
 in the baseline JSON's `pilot` arrays.

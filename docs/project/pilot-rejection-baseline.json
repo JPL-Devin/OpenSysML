@@ -5,8 +5,8 @@
   "conformance": "auto",
   "totals": {
     "cases": 119,
-    "bothReject": 103,
-    "pilotOnlyRejects": 16,
+    "bothReject": 114,
+    "pilotOnlyRejects": 5,
     "oursOnlyRejects": 0,
     "bothAccept": 0
   },
@@ -37,8 +37,8 @@
     {
       "source": "xpect",
       "cases": 34,
-      "bothReject": 20,
-      "pilotOnlyRejects": 14,
+      "bothReject": 31,
+      "pilotOnlyRejects": 3,
       "oursOnlyRejects": 0,
       "bothAccept": 0
     }
@@ -893,12 +893,9 @@
       "source": "xpect",
       "rule": "A variant must be an owned member of a variation (SysML 7.9 validateVariantMembershipOwningNamespace; pilot Variability_invalid.sysml.xt:55).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 6: A variant must be an owned member of a variation."
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "xpect/p09-variation-member-not-variant.sysml",
@@ -983,12 +980,9 @@
       "source": "xpect",
       "rule": "Only one return parameter is allowed (SysML 7.15 validateReturnParameterMembership; pilot CalculationUsage_Invalid1.sysml.xt).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 6: Only one return parameter is allowed"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "xpect/p18-enum-two-types.sysml",
@@ -1013,36 +1007,27 @@
       "source": "xpect",
       "rule": "A connector must have at least two related elements (KerML 8.3.3.1 validateConnectorRelatedElements; pilot Connector_Invalid.sysml.xt).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 6: Must have at least two related elements"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "xpect/p21-filter-constructor-condition.sysml",
       "source": "xpect",
       "rule": "A filter condition must have a Boolean result (SysML 7.24 checkPackageFilterCondition; pilot MetadataUsage_Invalid.sysml.xt:74).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 6: Must have a Boolean result"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "xpect/p22-filter-not-model-level-evaluable.sysml",
       "source": "xpect",
       "rule": "A filter condition must be model-level evaluable (SysML 7.24 checkPackageFilterCondition; pilot MetadataUsage_Invalid.sysml.xt:68).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 7: Must be model-level evaluable"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "xpect/p23-metadata-body-feature-not-redefining.sysml",
@@ -1070,48 +1055,36 @@
       "source": "xpect",
       "rule": "At most one individual definition is allowed (SysML 7.9 validateOccurrenceUsageIndividualDefinition; pilot IndividualUsage_Invalid.sysml.xt:36).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 7: At most one individual definition is allowed."
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "xpect/p26-port-def-nonreferential-usage.sysml",
       "source": "xpect",
       "rule": "Owned usages of a port definition (other than ports) must be referential (SysML 7.13 validatePortDefinitionOwnedUsages; pilot PortUsage_Invalid.sysml.xt:33).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 5: Owned usages of a port definition (other than ports) must be referential."
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "xpect/p27-interface-end-not-port.sysml",
       "source": "xpect",
       "rule": "An interface end must be a port (SysML 7.13 validateInterfaceUsageEnds; pilot InterfaceUsage_Invalid.sysml.xt:63).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 9: An interface end must be a port."
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "xpect/p28-package-level-feature-redefined.sysml",
       "source": "xpect",
       "rule": "A package-level feature cannot be redefined (KerML 7.4.7 validateRedefinitionFeaturingTypes; pilot Redefinition_OwningType_Invalid.sysml.xt:28).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 5: A package-level feature cannot be redefined"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "xpect/p29-verify-outside-objective.sysml",
@@ -1145,24 +1118,18 @@
       "source": "xpect",
       "rule": "Featuring types of redefining feature and redefined feature cannot be the same (KerML 7.4.7 validateRedefinitionFeaturingTypes; pilot Redefinition_OwningType_Invalid.sysml.xt:38).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 9: Featuring types of redefining feature and redefined feature cannot be the same"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "xpect/p33-individual-typed-by-plain-def.sysml",
       "source": "xpect",
       "rule": "An individual must be typed by one individual definition (SysML 7.9 validateOccurrenceUsageIndividualDefinition; pilot IndividualUsage_Invalid.sysml.xt:39).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 4: An individual must be typed by one individual definition."
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "xpect/p34-accepter-source-not-state.sysml",
