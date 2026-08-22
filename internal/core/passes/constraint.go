@@ -86,6 +86,7 @@ func (cc *constraintChecker) check(sym *symbols.Symbol) {
 	cc.checkFlowEndSubsetting(sym)
 	cc.checkInterfaceEndConjugation(sym)
 	cc.checkRedefinition(sym)
+	cc.checkW10BRedefinition(sym)
 	cc.checkSubsettingFeaturingTypes(sym)
 	cc.checkUnnamedRedefinitionValue(sym)
 	cc.checkVariantOutsideVariation(sym)

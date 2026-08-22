@@ -134,11 +134,16 @@ func TestConnectorEndNamesResolve(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			// The end-less general of one case relates fewer than two elements,
-			// which the reference reports too, so that rule is not the subject here.
+			// Two cases carry findings the reference reports too — an end-less
+			// general relating fewer than two elements, and a non-end member
+			// redefining an end — so those rules are not the subject here.
+			confirmed := map[string]bool{
+				"Must have at least two related elements":   true,
+				"Redefining feature must be an end feature": true,
+			}
 			var found []string
 			for _, msg := range allMessages(t, "ends", tc.src) {
-				if msg != "Must have at least two related elements" {
+				if !confirmed[msg] {
 					found = append(found, msg)
 				}
 			}
