@@ -214,6 +214,52 @@ once the totals confirm it — always print `len(before)`/`len(after)` alongside
 A stacked branch's parent snapshot lives in gitignored `build/`, so it survives a `git status`
 cleanliness check.
 
+### `bin/sysml -validate` is the cheapest independent surface for the visibility fixtures
+
+Before reaching for the stdio LSP client, try the CLI: `-validate` honours the `.kerml` extension
+(see `testing-pilot-differential`) and accepts **several files on one command line**, so a fixture's
+whole declared resource set can be laid out flat and checked in one command:
+
+```bash
+C=build/pilot-xpect-corpus/kerml
+cp "$C/src/DependencyVisibilityPackage.kerml" "$C/library/Base.kerml" /tmp/probe/
+cp "$C/src/org/omg/kerml/xpect/tests/visibility/VisibilityTests_ProtectedImport_0.kerml.xt" /tmp/probe/Main.kerml
+/tmp/sysml-<sha> -validate /tmp/probe/Main.kerml /tmp/probe/DependencyVisibilityPackage.kerml /tmp/probe/Base.kerml
+```
+
+The `.xt` copies verbatim (the XPECT notes are comments). It reports `unresolved reference: <name>`
+with line/column and a caret, so the per-line verdicts the fixture declares are directly readable,
+and `exit 2` + `did not analyse cleanly` vs `exit 0` + `no errors` is the whole-file summary. Our
+embedded stdlib is also loaded (unlike the harness, which loads only the declared resources), so
+expect an extra `User library packages should not be marked as standard` warning on the copied
+`/library/Base.kerml`; it is noise, not a finding. Run the **same** command with a per-commit
+`go build -o /tmp/sysml-<sha> ./cmd/sysml` from a `git worktree` of the base — identical text with
+opposite verdicts on the two binaries is what proves a visibility change is live.
+
+### Probing `import all` widening: the obvious fixture does not exercise it
+
+`r.allVisible` (`resolve/resolver.go: inAllVisible`) is nonzero only *while the target path of an
+`import all`/`expose` is itself being resolved*. So a fixture that writes `import all P::*;` and then
+references `P::PP` in the body proves **nothing** about the widening — the body reference resolves
+outside `allVisible` and is unresolved on every revision. The widening is exercised by putting the
+non-public segment **inside the import path**:
+
+```kerml
+package Outer {
+	classifier P { protected classifier PP { public classifier Leaf; }
+	               private classifier Hid { public classifier HLeaf; } }
+	package WidenedProtected { private import all Outer::P::PP::*;  classifier w1 specializes Leaf {} }
+	package WidenedPrivate   { private import all Outer::P::Hid::*; classifier w2 specializes HLeaf {} }
+	package NotWidened       { private import Outer::P::PP::*;      classifier w3 specializes Leaf {} }
+}
+```
+
+`NotWidened` is the load-bearing negative control: it must report `unresolved reference:
+Outer::P::PP` while the two `all` packages stay clean, otherwise the "clean" lines are not evidence
+of widening. Also note OpenSysML requires a visibility keyword on imports in `.kerml` too — a bare
+`import all P::*;` errors with `import without a visibility indicator` and every following line
+"fails" for that reason instead of the one under test.
+
 ### The discriminating-pair LSP probe for visibility rules
 
 For a change that makes visibility *conditional on the referring namespace* (protected members
