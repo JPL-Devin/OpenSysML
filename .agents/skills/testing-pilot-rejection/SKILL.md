@@ -9,7 +9,7 @@ Sibling of `testing-pilot-differential` and `testing-pilot-xpect` (same pin
 `scripts/pilot-pin.sh`, same committed-baseline shape), but pointed the other way: the
 differential measures what the reference accepts and we reject; this oracle measures what the
 reference **rejects and we accept** — permissiveness gaps. Its corpus is committed under
-`cmd/pilot-reject/testdata/negative/` (119 hand-written invalid models, one violated rule + citation
+`cmd/pilot-reject/testdata/negative/` (120 hand-written invalid models, one violated rule + citation
 in each file's mandatory `// Invalid: ...` first line), so no corpus download exists. Method and
 findings: `docs/project/pilot-rejection.md`.
 
@@ -31,8 +31,8 @@ cmp build/pilot-reject/pilot-reject.json docs/project/pilot-rejection-baseline.j
 
 `docs/project/pilot-rejection-baseline.json` is the only authority for the counts; the numbers
 quoted here are as-of values, and `cmd/pilot-reject/doc_counts_test.go` fails if they drift from it.
-As of wave 10G with 10B and 10C merged:
-`119 case(s): 114 both reject, 5 only the pilot rejects, 0 only we reject, 0 both accept`,
+As of wave 10G with 10B and 10C merged, plus `g60`:
+`120 case(s): 114 both reject, 6 only the pilot rejects, 0 only we reject, 0 both accept`,
 byte-identical to the committed baseline. Any `both accept` case is a bug in the corpus (the case
 is not actually invalid under the loaded standard library) — fix the case, never ignore it.
 
@@ -45,7 +45,7 @@ separately, so a strict agreement never reads as a default one.
 
 ```bash
 go run ./cmd/pilot-reject -conformance default -out build/pilot-reject-default
-# as of wave 10G+10C: 109 agreements, 10 gaps — the numbers strict mode leaves alone
+# as of wave 10G+10C plus g60: 109 agreements, 11 gaps — the numbers strict mode leaves alone
 go run ./cmd/pilot-reject -conformance lenient   # must fail: unknown conformance policy
 ```
 

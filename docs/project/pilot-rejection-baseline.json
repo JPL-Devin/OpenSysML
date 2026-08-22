@@ -4,9 +4,9 @@
   "corpus": "cmd/pilot-reject/testdata/negative",
   "conformance": "auto",
   "totals": {
-    "cases": 119,
+    "cases": 120,
     "bothReject": 114,
-    "pilotOnlyRejects": 5,
+    "pilotOnlyRejects": 6,
     "oursOnlyRejects": 0,
     "bothAccept": 0
   },
@@ -28,9 +28,9 @@
     },
     {
       "source": "grammar",
-      "cases": 78,
+      "cases": 79,
       "bothReject": 76,
-      "pilotOnlyRejects": 2,
+      "pilotOnlyRejects": 3,
       "oursOnlyRejects": 0,
       "bothAccept": 0
     },
@@ -649,6 +649,18 @@
       "bucket": "both-reject",
       "oursErrors": 1,
       "pilotErrors": 1
+    },
+    {
+      "path": "grammar/g60-alias-keyword-as-name.sysml",
+      "source": "grammar",
+      "rule": "an alias name comes from the ID terminal, so 'part' cannot spell it",
+      "mode": "default",
+      "bucket": "pilot-only-rejects",
+      "oursErrors": 0,
+      "pilotErrors": 1,
+      "pilot": [
+        "line 5: extraneous input 'part' expecting 'for'"
+      ]
     },
     {
       "path": "grammar/k01-specializes-without-target.kerml",
