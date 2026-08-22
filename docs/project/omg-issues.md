@@ -50,12 +50,13 @@ and not from a disagreement alone.
 
 | Component | Pinned version | Symptom | Adjudication | Status |
 |---|---|---|---|---|
-| `org.omg.sysml` — `Type::ownedDisjoining` setting delegate | `2026-05` (`jupyter-sysml-kernel` 0.60.1) | every `disjoint from` clause in a type declaration draws EMF's `The opposite features 'owningType' … and 'ownedDisjoining' … do not refer to each other` | [K6 / F33](pilot-differential.md#k6-diagnostic-by-diagnostic-f33) — one cause for all six corpus diagnostics, reproduced in three lines and probed through the pilot's API | issue body written below, **not yet filed** |
+| `org.omg.sysml` — `Type::ownedDisjoining` setting delegate | `2026-05` (`jupyter-sysml-kernel` 0.60.1) | every `disjoint from` clause in a type declaration draws EMF's `The opposite features 'owningType' … and 'ownedDisjoining' … do not refer to each other` | [K6 / F33](pilot-differential.md#k6-diagnostic-by-diagnostic-f33) — one cause for all six corpus diagnostics, reproduced in three lines and probed through the pilot's API | filed upstream as [Systems-Modeling/SysML-v2-Pilot-Implementation#790](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/issues/790) (W10G), body below |
 
 ### F80 — `Type::ownedDisjoining` does not contain a `Disjoining` whose `owningType` is that `Type` (pilot `2026-05`)
 
-Ready to paste into `Systems-Modeling/SysML-v2-Pilot-Implementation`; the
-supporting analysis is
+Filed as
+[Systems-Modeling/SysML-v2-Pilot-Implementation#790](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/issues/790);
+the body below is what was submitted, and the supporting analysis is
 [K6, diagnostic by diagnostic](pilot-differential.md#k6-diagnostic-by-diagnostic-f33).
 
 ````markdown
