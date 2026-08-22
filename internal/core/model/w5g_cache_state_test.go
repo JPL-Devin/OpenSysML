@@ -15,6 +15,11 @@ func diagnosticsColdAndWarm(t *testing.T, name, src string) (cold, warm []string
 		ws.Open(name, []byte(src), 1)
 		var msgs []string
 		for _, d := range ws.Diagnostics(name) {
+			// An end-less connection definition relates fewer than two elements,
+			// which the reference reports too; cache state is what is under test.
+			if d.Message == "Must have at least two related elements" {
+				continue
+			}
 			msgs = append(msgs, d.Message)
 		}
 		if run == 1 {

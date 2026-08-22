@@ -14,7 +14,9 @@ func TestW7GStateReportsOnlyTheExtraSubactions(t *testing.T) {
 			exit action x2 : A;
 		}
 	}`
-	diags := constraintDiags(t, src)
+	// The subaction rules read the declaration only, so they report at the type
+	// tier rather than behind it.
+	diags := typeDiags(t, src)
 	for _, c := range []string{"state-entry-action", "state-do-action", "state-exit-action"} {
 		got := only(diags, c)
 		if len(got) != 1 {

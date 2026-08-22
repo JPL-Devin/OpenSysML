@@ -5,14 +5,10 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// Pilot SysMLValidator (2026-05) checkAtMostOneRelationship/checkAtMostOneFeature
-// and checkSubjectParameter: a state owns at most one entry, do and exit action;
-// a requirement or case at most one subject, and it is the first parameter.
+// Pilot SysMLValidator (2026-05) checkAtMostOneFeature and checkSubjectParameter:
+// a requirement or case owns at most one subject, and it is the first parameter.
 const (
-	msgOnlyOneEntryAction = "A state may have at most one entry action."
-	msgOnlyOneDoAction    = "A state may have at most one do action."
-	msgOnlyOneExitAction  = "A state may have at most one exit action."
-	msgOnlyOneSubject     = "Only one subject is allowed."
+	msgOnlyOneSubject = "Only one subject is allowed."
 
 	msgSubjectParameterPosition = "Subject must be first parameter."
 )
@@ -22,22 +18,6 @@ func (cc *constraintChecker) checkAtMostOneMember(sym *symbols.Symbol) {
 		return
 	}
 	members := declMembers(sym.Decl)
-	if stateLikeDecl(sym.Decl) {
-		var entry, do, exit []ast.Node
-		for _, m := range members {
-			switch m.(type) {
-			case *ast.EntryMember:
-				entry = append(entry, m)
-			case *ast.DoMember:
-				do = append(do, m)
-			case *ast.ExitMember:
-				exit = append(exit, m)
-			}
-		}
-		cc.reportExtraMembers(entry, msgOnlyOneEntryAction, "state-entry-action")
-		cc.reportExtraMembers(do, msgOnlyOneDoAction, "state-do-action")
-		cc.reportExtraMembers(exit, msgOnlyOneExitAction, "state-exit-action")
-	}
 	if subjectOwnerDecl(sym.Decl) {
 		var subjects []ast.Node
 		for _, m := range members {

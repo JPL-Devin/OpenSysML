@@ -78,7 +78,7 @@ func (oc *w8dOccurrenceChecker) check(sym *symbols.Symbol) {
 	if u.IsEvent {
 		oc.checkEventReference(sym, u)
 	}
-	for _, typ := range oc.typesOf(sym, true, make(map[*symbols.Symbol]bool)) {
+	for _, typ := range usageTypesOf(oc.resolver, sym, true, make(map[*symbols.Symbol]bool)) {
 		if !w8dDataTypeKinds[typ.sym.Kind] {
 			continue
 		}
@@ -120,10 +120,10 @@ func (oc *w8dOccurrenceChecker) checkEventReference(sym *symbols.Symbol, u *ast.
 	}
 }
 
-// typesOf returns the types of a usage: the definitions it declares with `:`,
-// plus the types of the features it subsets, redefines or references, which it
-// inherits (FeatureUtil.getAllTypesOf).
-func (oc *w8dOccurrenceChecker) typesOf(sym *symbols.Symbol, own bool, visited map[*symbols.Symbol]bool) []w8dUsageType {
+// usageTypesOf returns the types of a usage: the definitions it declares with
+// `:`, plus the types of the features it subsets, redefines or references, which
+// it inherits (FeatureUtil.getAllTypesOf).
+func usageTypesOf(resolver *resolve.Resolver, sym *symbols.Symbol, own bool, visited map[*symbols.Symbol]bool) []w8dUsageType {
 	if sym == nil || visited[sym] {
 		return nil
 	}
@@ -143,12 +143,12 @@ func (oc *w8dOccurrenceChecker) typesOf(sym *symbols.Symbol, own bool, visited m
 		default:
 			continue
 		}
-		target, ok := oc.resolver.ResolveTarget(scope, rel.Target)
+		target, ok := resolver.ResolveTarget(scope, rel.Target)
 		if !ok || target == nil {
 			continue
 		}
 		if target.Kind == symbols.SymbolAlias {
-			if resolved, ok := oc.resolver.ResolveAliasTarget(target); ok && resolved != nil {
+			if resolved, ok := resolver.ResolveAliasTarget(target); ok && resolved != nil {
 				target = resolved
 			}
 		}
@@ -156,7 +156,7 @@ func (oc *w8dOccurrenceChecker) typesOf(sym *symbols.Symbol, own bool, visited m
 			types = append(types, w8dUsageType{sym: target, declared: own})
 			continue
 		}
-		types = append(types, oc.typesOf(target, false, visited)...)
+		types = append(types, usageTypesOf(resolver, target, false, visited)...)
 	}
 	return types
 }

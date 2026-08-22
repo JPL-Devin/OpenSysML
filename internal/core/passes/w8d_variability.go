@@ -14,6 +14,7 @@ import (
 const (
 	msgVariationMemberNotVariant = "An owned usage of a variation must be a variant."
 	msgVariationSpecialization   = "A variation must not specialize another variation."
+	msgVariantOutsideVariation   = "A variant must be an owned member of a variation."
 )
 
 // W8DVariabilityPass checks that every usage a variation owns is a variant and

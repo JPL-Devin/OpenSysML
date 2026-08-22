@@ -375,6 +375,10 @@ func (p *Parser) atKindPrefix() bool {
 	if featureModifierKeywords[kw] {
 		return false
 	}
+	// `use case` is one kind spelled in two words, not a prefix and a kind.
+	if p.atUseCase() {
+		return false
+	}
 	if kw == varPrefixWord && p.peekN(1).Kind == lexer.Keyword &&
 		featureModifierKeywords[p.peekN(1).KeywordID] {
 		return true
@@ -1295,15 +1299,16 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 // KerML classifier declarations, which share DefinitionKind values.
 func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, keyword string, mods featureMods, isAll bool, defKeywordConsumed bool) *ast.Definition {
 	def := &ast.Definition{
-		Kind:        kind,
-		Keyword:     keyword,
-		IsAbstract:  mods.isAbstract,
-		IsVariation: mods.isVariation,
-		IsAll:       isAll,
-		IsConstant:  mods.isConstant,
-		IsEvent:     mods.isEvent,
-		Visibility:  mods.visibility,
-		Ident:       p.parseIdentification(),
+		Kind:         kind,
+		Keyword:      keyword,
+		IsAbstract:   mods.isAbstract,
+		IsVariation:  mods.isVariation,
+		IsAll:        isAll,
+		IsConstant:   mods.isConstant,
+		IsEvent:      mods.isEvent,
+		IsIndividual: mods.isIndividual,
+		Visibility:   mods.visibility,
+		Ident:        p.parseIdentification(),
 	}
 	if !defKeywordConsumed && isKerMLClassifierDefinitionKeyword(keyword) && p.at(lexer.LBracket) {
 		def.Multiplicity = p.parseMultiplicity()

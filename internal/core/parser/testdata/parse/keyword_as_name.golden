@@ -37,7 +37,7 @@
                 (LiteralInteger value="1"))
               (FeatureReference name="boundaryEdges")))))
       (Membership visibility="default"
-        (Definition kind="item" abstract=false variation=false name="Alice"))
+        (Definition kind="item" abstract=false variation=false name="Alice" individual=true))
       (Membership visibility="default"
         (Definition kind="part" abstract=false variation=false name="Constrained"
           (Membership visibility="default"

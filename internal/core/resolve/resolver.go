@@ -105,6 +105,9 @@ type Resolver struct {
 	suggestions map[suggestKey][]string
 	names       *suggest.Table
 	suggesting  map[suggestKey]bool
+	// document is the document ResolveDocument is resolving, so a reference
+	// reached in another one is not reported against it (see foreignScope).
+	document string
 }
 
 // New creates a resolver over the given index.
@@ -253,6 +256,12 @@ func (r *Resolver) resolveQualified(scope *symbols.Scope, qn *ast.QualifiedName,
 	if qn == nil {
 		return nil, false
 	}
+	if r.foreignScope(scope) {
+		var sym *symbols.Symbol
+		var ok bool
+		r.aside(func() { sym, ok = r.resolveQualified(scope, qn, hide) })
+		return sym, ok
+	}
 	if res, done := r.memo[qn]; done {
 		return res.sym, res.ok
 	}
@@ -276,6 +285,12 @@ func (r *Resolver) resolveQualified(scope *symbols.Scope, qn *ast.QualifiedName,
 // ResolveName resolves a single-segment (unqualified) reference from the given
 // scope. The at node keys the memo table.
 func (r *Resolver) ResolveName(scope *symbols.Scope, name string, at ast.Node) (*symbols.Symbol, bool) {
+	if r.foreignScope(scope) {
+		var sym *symbols.Symbol
+		var ok bool
+		r.aside(func() { sym, ok = r.ResolveName(scope, name, at) })
+		return sym, ok
+	}
 	if at != nil {
 		if res, done := r.memo[at]; done {
 			return res.sym, res.ok
@@ -306,6 +321,16 @@ func (r *Resolver) report(d Diagnostic) {
 		return
 	}
 	r.Diagnostics = append(r.Diagnostics, d)
+}
+
+// foreignScope reports whether scope belongs to a document other than the one
+// being resolved, so a reference read there is that document's to report.
+func (r *Resolver) foreignScope(scope *symbols.Scope) bool {
+	if r.document == "" || r.quiet > 0 || scope == nil {
+		return false
+	}
+	doc := r.documentOf(scope)
+	return doc != "" && doc != r.document
 }
 
 // aside runs a lookup made for a semantic query, whose diagnostics belong to
