@@ -374,6 +374,10 @@ func (p *Parser) atKindPrefix() bool {
 	if featureModifierKeywords[kw] {
 		return false
 	}
+	// `use case` is one kind spelled in two words, not a prefix and a kind.
+	if p.atUseCase() {
+		return false
+	}
 	if kw == varPrefixWord && p.peekN(1).Kind == lexer.Keyword &&
 		featureModifierKeywords[p.peekN(1).KeywordID] {
 		return true

@@ -12,7 +12,7 @@
       (Membership visibility="default"
         (Definition kind="part" abstract=false variation=false name="Vehicle"
           (Membership visibility="default"
-            (Usage kind="case" name="drive" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+            (Usage kind="use case" name="drive" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
               (Relationship kind="typing" target=Drive
                 (*ast.QualifiedName))))))
       (Membership visibility="default"
