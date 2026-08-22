@@ -29,8 +29,8 @@ rm -rf build/pilot-reject && go run ./cmd/pilot-reject
 cmp build/pilot-reject/pilot-reject.json docs/project/pilot-rejection-baseline.json   # must be silent
 ```
 
-Observed on the wave-8E branch (after 8A, 8C and 8F landed):
-`34 case(s): 30 both reject, 4 only the pilot rejects, 0 only we reject, 0 both accept`,
+Observed on the wave-8E branch (after 8A, 8B, 8C and 8F landed):
+`34 case(s): 31 both reject, 3 only the pilot rejects, 0 only we reject, 0 both accept`,
 byte-identical to the committed baseline. Any `both accept` case is a bug in the corpus (the case
 is not actually invalid under the loaded standard library) — fix the case, never ignore it.
 
@@ -43,7 +43,7 @@ separately, so a strict agreement never reads as a default one.
 
 ```bash
 go run ./cmd/pilot-reject -conformance default -out build/pilot-reject-default
-# 34 cases: 25 agreements, 9 gaps — the numbers strict mode leaves alone
+# 34 cases: 26 agreements, 8 gaps — the numbers strict mode leaves alone
 go run ./cmd/pilot-reject -conformance lenient   # must fail: unknown conformance policy
 ```
 

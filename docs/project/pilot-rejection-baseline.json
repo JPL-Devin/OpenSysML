@@ -5,8 +5,8 @@
   "conformance": "auto",
   "totals": {
     "cases": 34,
-    "bothReject": 30,
-    "pilotOnlyRejects": 4,
+    "bothReject": 31,
+    "pilotOnlyRejects": 3,
     "oursOnlyRejects": 0,
     "bothAccept": 0
   },
@@ -37,8 +37,8 @@
     {
       "source": "xpect",
       "cases": 7,
-      "bothReject": 6,
-      "pilotOnlyRejects": 1,
+      "bothReject": 7,
+      "pilotOnlyRejects": 0,
       "oursOnlyRejects": 0,
       "bothAccept": 0
     }
@@ -339,12 +339,9 @@
       "source": "xpect",
       "rule": "a nonunique feature cannot subset a unique one (KerML 8.3.3.3 validateSubsettingUniquenessConformance; pilot Feature_nonunique_invalid.kerml.xt).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 5: Subsetting/redefining feature cannot be nonunique if subsetted/redefined feature is unique"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "xpect/p05-single-chaining-feature.kerml",

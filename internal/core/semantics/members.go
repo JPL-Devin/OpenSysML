@@ -4,11 +4,48 @@ import "github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 
 // MembersOf returns the members visible on sym: those declared directly in its
 // owned scope plus members inherited from what it specializes and what it
-// reference-subsets, with name masking — a member declared closer to sym hides
-// an inherited member of the same name (approximating redefinition/masking).
+// reference-subsets. Two maskings apply: a member declared closer to sym hides
+// an inherited member of the same name, and a feature redefined by one of sym's
+// features is not inherited at all (see masking.go).
 // Results are deterministic: local members first (declaration order), then
 // contributed members in MemberSources order.
 func (m *Model) MembersOf(sym *symbols.Symbol) []*symbols.Symbol {
+	return m.membersOf(sym, memberViewEffective, nil)
+}
+
+// MembersOfIncludingRedefined is MembersOf without redefinition masking: the
+// members a type would have if none of its features redefined anything. A
+// redefinition shares its target's feature value, so the runtime shape needs
+// both.
+func (m *Model) MembersOfIncludingRedefined(sym *symbols.Symbol) []*symbols.Symbol {
+	return m.membersOf(sym, memberViewUnmasked, nil)
+}
+
+// MembersOfDeclaring returns the members of sym as a declaration being written
+// in it sees them: that declaration is not yet a member of its own owner and
+// the redefinition it carries masks nothing, so its target stays resolvable
+// (KerML 8.3.3.3.6). Sym's other declarations, and the masks they cause, are
+// present. A nil declaring — the caller cannot tell which declaration is being
+// written — stands for every redefinition sym declares.
+func (m *Model) MembersOfDeclaring(sym, declaring *symbols.Symbol) []*symbols.Symbol {
+	return m.membersOf(sym, memberViewDeclaring, declaring)
+}
+
+// memberView selects which of a type's members MembersOf reports.
+type memberView int
+
+const (
+	// memberViewEffective is what the type actually has: declarations plus
+	// unmasked inherited members.
+	memberViewEffective memberView = iota
+	// memberViewUnmasked applies no redefinition mask.
+	memberViewUnmasked
+	// memberViewDeclaring is the view a declaration being written in the type
+	// has: itself absent, and the mask it causes suspended.
+	memberViewDeclaring
+)
+
+func (m *Model) membersOf(sym *symbols.Symbol, view memberView, declaring *symbols.Symbol) []*symbols.Symbol {
 	if sym == nil {
 		return nil
 	}
@@ -18,8 +55,10 @@ func (m *Model) MembersOf(sym *symbols.Symbol) []*symbols.Symbol {
 	var out []*symbols.Symbol
 	seenName := make(map[string]bool)
 	seenSym := make(map[*symbols.Symbol]bool)
+	// One mask per enumeration: it depends only on sym and declaring.
+	mask := m.viewMask(sym, view, declaring)
 
-	collect := func(scope *symbols.Scope) {
+	collect := func(scope *symbols.Scope, inherited bool) {
 		if scope == nil {
 			return
 		}
@@ -28,6 +67,12 @@ func (m *Model) MembersOf(sym *symbols.Symbol) []*symbols.Symbol {
 				continue // masked by a closer declaration
 			}
 			for _, s := range scope.LookupLocalAll(key) {
+				if !inherited && view == memberViewDeclaring && NotYetMember(s, declaring) {
+					continue // a feature being declared is not yet a member
+				}
+				if inherited && m.maskedBy(mask, s) {
+					continue // redefined by a feature of sym
+				}
 				if !seenSym[s] {
 					seenSym[s] = true
 					out = append(out, s)
@@ -35,15 +80,21 @@ func (m *Model) MembersOf(sym *symbols.Symbol) []*symbols.Symbol {
 			}
 		}
 		// Mark this scope's names only after processing it, so a short+primary
-		// pair in the same scope does not mask its own second key.
+		// pair in the same scope does not mask its own second key. A name no
+		// kept member binds masks nothing.
 		for _, key := range scope.MemberNames() {
-			seenName[key] = true
+			for _, s := range scope.LookupLocalAll(key) {
+				if seenSym[s] {
+					seenName[key] = true
+					break
+				}
+			}
 		}
 	}
 
-	collect(sym.Scope)
+	collect(sym.Scope, false)
 	for _, src := range m.MemberSources(sym) {
-		collect(src.Scope)
+		collect(src.Scope, true)
 	}
 	return out
 }

@@ -77,10 +77,11 @@ go run ./cmd/pilot-reject -conformance strict   # every case judged as conformin
 
 `-conformance` decides which question our side is asked. `auto` asks the `extensions/` cases —
 notation OpenSysML adds on purpose — the strict one, because the reference rejects that notation as
-a syntax error and only [strict mode](../guide/03-command-line.md#strict-conformance) makes the comparison fair;
-every other derivation is judged in the default mode. `default` and `strict` ask one question of
-the whole corpus. Every case's mode is recorded in the report, and a case that agrees only because
-it was asked strictly is listed separately, so a strict agreement never reads as a default one.
+a syntax error and only [strict mode](../guide/03-command-line.md#strict-conformance) makes the
+comparison fair; every other derivation is judged in the default mode. `default` and `strict` ask
+one question of the whole corpus. Every case's mode is recorded in the report, and a case that
+agrees only because it was asked strictly is listed separately, so a strict agreement never reads
+as a default one.
 
 The harness validates every corpus file with our workspace and with the pinned validator for its
 language, counts error-severity diagnostics on each side (warnings do not count as rejection), and
@@ -101,7 +102,7 @@ carry no timestamps or absolute paths, so repeated runs are byte-identical
 Under the default `-conformance auto`:
 
 ```
-34 case(s): 30 both reject, 4 only the pilot rejects, 0 only we reject, 0 both accept
+34 case(s): 31 both reject, 3 only the pilot rejects, 0 only we reject, 0 both accept
   of which 5 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
@@ -109,14 +110,14 @@ Under the default `-conformance auto`:
 | --- | --- | --- | --- | --- | --- |
 | extensions | 7 | 7 | 0 | 0 | 0 |
 | grammar | 20 | 17 | 3 | 0 | 0 |
-| xpect | 7 | 6 | 1 | 0 | 0 |
+| xpect | 7 | 7 | 0 | 0 | 0 |
 
 The five strict-only agreements are `x01`, `x04`, `x05`, `x06` and `x07`: OpenSysML notation
 extensions that the default mode accepts on purpose and strict mode reports as errors. Judged in
-the default mode the same corpus gives 25 agreements and 9 gaps, which is what `-conformance
-default` prints. Of the 14 gaps this document carried before wave 8, five were closed by the
-validation waves themselves — `p01`, `p02`, `p03`, `p05` (wave 8C) and `p06` (wave 8A) — and only
-the five `extensions/` cases belong to strict mode.
+the default mode the same corpus gives 26 agreements and 8 gaps, which is what `-conformance
+default` prints. Of the 14 gaps this document carried before wave 8, six were closed by the
+validation waves themselves — `p01`, `p02`, `p03`, `p05` (wave 8C), `p06` (wave 8A) and `p04`
+(wave 8B) — and only the five `extensions/` cases belong to strict mode.
 
 Read those five as agreement *when asked strictly*, not as five gaps that disappeared. An opt-in
 check is weaker evidence than a default one: it says the strict question has an answer we agree on,
@@ -126,13 +127,13 @@ thought to ask, not that we stopped being permissive: the denominator measures o
 rejection surface, not our conformance.
 
 The two `extensions/` cases that agree in either mode (`x02` choice, `x03` junction) are rejected
-by us for a different reason than by the pilot: our own state-connectivity validation flags a
-pseudostate with no outgoing transition, while the pilot rejects the notation itself. The bucket
-records rejection, not agreement on the rule.
+by us for a different reason than by the pilot: our own state-connectivity validation flags a pseudostate
+with no outgoing transition, while the pilot rejects the notation itself. The bucket records
+rejection, not agreement on the rule.
 
 ## Permissiveness gaps
 
-All 4 gaps, each with its reproducer (the corpus file is the minimal reproducer), both verdicts,
+All 3 gaps, each with its reproducer (the corpus file is the minimal reproducer), both verdicts,
 and the package the root cause is likely in. **None are fixed here** — this oracle measures;
 fixing is later work.
 
@@ -141,7 +142,6 @@ fixing is later work.
 | `grammar/g02-import-without-visibility.sysml` | accepts | `mismatched input 'import'` | `internal/core/parser` — treats the import visibility keyword as optional; the pinned `ImportPrefix` requires it |
 | `grammar/g15-keyword-as-name.sysml` | accepts | `no viable alternative at input 'part'` | `internal/core/parser` — allows a reserved keyword as a declared name |
 | `grammar/k02-sysml-keyword-in-kerml.kerml` | accepts | `no viable alternative at input 'def'` | `internal/core/parser` — `.kerml` files are parsed with the full SysML grammar; no per-language restriction |
-| `xpect/p04-nonunique-subsets-unique.kerml` | accepts | `Subsetting/redefining feature cannot be nonunique...` | `internal/core/passes` — uniqueness conformance (KerML 8.3.3.3) not implemented |
 
 Each pilot message above is the first error the validator reports for the case; the full lists are
 in the baseline JSON's `pilot` arrays.

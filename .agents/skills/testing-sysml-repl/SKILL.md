@@ -4589,3 +4589,40 @@ Bounds are worth a sweep in the same session — each of `SYSML_MAX_STEPS`, `SYS
 `SYSML_MAX_EVENTS`, `SYSML_MAX_DO_STEPS`, `SYSML_MAX_ELEMENTS`, `SYSML_MAX_CALC_DEPTH` set to a tiny
 value must error naming that bound and return *no* result; a truncated-but-returned answer is the
 failure to look for.
+
+## Testing name-resolution / visibility changes at the CLI
+
+Resolution changes (visibility, imports, qualified names) are best proved with an **A/B contrast**
+against a build of the parent commit, because the interesting evidence is "this used to analyse
+cleanly and now reports an error":
+
+```bash
+git worktree add /tmp/wt-old <parent-sha>
+(cd /tmp/wt-old && go build -o /tmp/old-sysml ./cmd/sysml)
+./bin/sysml f.kerml </dev/null; /tmp/old-sysml f.kerml </dev/null   # compare output AND exit code
+```
+
+Pitfalls that cost time:
+
+- `bin/sysml <file>` **drops into the interactive REPL after analysing** when stdin is a TTY. In a
+  recorded Konsole always append `</dev/null` (or plan to type `%quit`), otherwise every subsequent
+  shell command is parsed as SysML.
+- Use `.kerml` fixtures for KerML shapes (`classifier X specializes Y`, `feature f references g`).
+  The same text in a `.sysml` file can fail earlier with `only a definition may specialize; found a
+  usage`, masking the behaviour under test.
+- A batch regression sweep is cheap and is the strongest "no false positives" evidence: run every
+  file in `examples/` and `testdata/{passes,resolve}` under both binaries and require byte-identical
+  output plus matching exit status.
+- Cold vs warm run under a scratch `XDG_CACHE_HOME` catches resolution that depends on the on-disk
+  symbol index; diagnostics must be byte-identical.
+
+### Which REPL surfaces are visibility-aware
+
+`%search` and readline name completion browse the **raw symbol index** (`internal/repl/discover.go`,
+`complete.go`) and are *not* filtered by member visibility, so a `private` member is still listed
+even when resolution rejects every reference to it. The visibility-filtered surface is
+`model.Workspace.VisibleNames/VisibleNamesAt`, which today is reached only from `cmd/pilot-xpect`
+scope checks and not from any REPL meta-command — do not report a `%search` listing of a private
+name as a regression without A/B-ing it against the parent build first. `%view <name>` *is* useful
+for `expose`: it lists what a view exposes, and an `expose`/`import all` is expected to reach its
+target's own private members.

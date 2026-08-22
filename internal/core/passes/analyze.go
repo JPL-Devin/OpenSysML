@@ -29,6 +29,7 @@ func DefaultRegistry() *Registry {
 	reg.Register(ResultExpressionPass{})
 	reg.Register(FeatureReferencePass{})
 	reg.Register(MetadataTypePass{})
+	reg.Register(RedefinitionConformancePass{})
 	return reg
 }
 
