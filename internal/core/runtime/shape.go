@@ -72,8 +72,9 @@ func (ctx *Context) FeaturesOf(typeSym *symbols.Symbol) []EffectiveFeature {
 
 // buildFeatures constructs the effective-feature list by walking the type hierarchy.
 func (ctx *Context) buildFeatures(typeSym *symbols.Symbol) []EffectiveFeature {
-	// Collect all members (local + inherited) using semantics.MembersOf
-	allMembers := ctx.model.MembersOf(typeSym)
+	// Redefined features stay in the shape: a redefinition shares its target's
+	// feature value, which both names read (see subsetting_test.go).
+	allMembers := ctx.model.MembersOfIncludingRedefined(typeSym)
 
 	// Track which features to keep (deduplication by name: last declarator wins per masking/redefinition)
 	featureMap := make(map[string]EffectiveFeature)

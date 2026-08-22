@@ -31,10 +31,22 @@ cmp build/pilot-xpect/pilot-xpect.json docs/project/pilot-xpect-baseline.json   
 Observed on `main` after the wave-6 round: `428 .xt file(s), 0 unparsed; 1261 assertion(s),
 1326 expectation(s): 449 agree, 646 disagree, 0 unlocated, 231 not adjudicated`. After wave 7F
 (scope adjudicated) plus the central #421 rebaseline: `522 agree, 803 disagree, 0 unlocated,
-1 not adjudicated`, scope row `230 asserts / 229 block / 230 expects / 73 agree / 157 disagree`,
-classes `other-paths 12 | extra-names 32 | missing-names 10 | missing-and-extra 7 |
-library-names 96`; per-suite kerml 303/968/454/513/1, sysml 125/358/68/290/0. Read the live totals
-from the baseline rather than this paragraph; it is an anchor, not the check.
+1 not adjudicated`; per-suite kerml 303/968/454/513/1, sysml 125/358/68/290/0. After wave 8F
+(per-fixture declared resource set, foreign-diagnostic filter, `exportedObjects` adjudicated):
+`564 agree, 762 disagree, 0 unlocated, 0 not adjudicated`, plus a new line
+`19 diagnostic(s) another declared resource raised, not adjudicated against the file`; per-suite
+kerml 457/511/0, sysml 107/251/0. The scope row and its classes are unchanged by 8F
+(`73 agree / 157 disagree`, `other-paths 12 | extra-names 32 | missing-names 10 |
+missing-and-extra 7 | library-names 96`). Read the live totals from the baseline rather than this
+paragraph; it is an anchor, not the check.
+
+**A wave that moves the verdicts must also rebaseline.** `cmp` against
+`docs/project/pilot-xpect-baseline.json` is the only thing that catches a missed rebaseline:
+`cmd/pilot-diff`'s `TestW6FXpectDocumentCountsMatchBaseline` only guards `pilot-xpect.md`
+*against the baseline JSON*, so a branch that leaves **both** stale still passes `go test ./...`.
+Always run the `cmp` explicitly and diff `jq .totals` of the two — this was a real finding on the
+wave-8F branch (harness emitted 564/762/0 while the committed baseline and doc still held
+522/803/1).
 
 Cross-check every numeric table in `docs/project/pilot-xpect.md` (kind table, tolerance tables,
 per-suite table, scope class table) against the fresh `.txt` — those tables are hand-maintained and
@@ -117,6 +129,31 @@ sibling files:
 - Each fixture loads exactly the resources its `XPECT_SETUP` `ResourceSet` names — its own body, the
   `/src/` files and the `/library*` copies — never our embedded stdlib in their place, so an
   independent LSP check must open the same set to be comparable.
+
+### Auditing the foreign-diagnostic filter (`compare.go: foreignDiagnostic`)
+
+A fixture's declared library set is usually incomplete, so unresolved references raised *for a
+library file* arrive attached to the file under test. The harness drops them **by byte offset**:
+`source.Span` carries no file identity, so "outside the fixture's model text" (past EOF, or inside a
+note per `xtFile.Noted`) is the only signal. That filter can only make the comparison weaker, so
+audit it rather than trusting the count. The cheap, decisive probe is a throwaway
+`cmd/pilot-xpect/zz_tmp_*_test.go` (package `main`, delete it afterwards) that walks the corpus,
+calls `loadResourceSet` + `ws.Diagnostics(main)` exactly as `compareFile` does, and for each
+diagnostic where `foreignDiagnostic(f, off)` is true prints the offset, the fixture's own text at
+that span, and the text at the *same span* in every declared resource. Provenance is proven when the
+text at that offset in some declared `/library*` file is literally the identifier the message names.
+At wave 8F the 19 drops split 14 past-EOF / 5 inside a note, and all 19 matched a library file
+exactly (`Objects.kerml` → `Link`/`BinaryLink`/`Occurrence`, `Connections.sysml` →
+`BinaryLinkObject::source`, `States.sysml` → `StatePerformance`, `Metadata.sysml` → `Metaobject`).
+Pair it with a negative control: inject a genuine `part zzzProbe : ZZZ_no_such_type;` into a
+fixture's *model body* — the new diagnostic must flip that fixture's `noErrors` row to `disagree`
+and must **not** raise `foreignDiagnostics`.
+
+`exportedObjects` (`exported.go`) is adjudicated as of 8F, so `notAdjudicated` is 0. Prove the
+adjudicator is live in both directions on the sole fixture,
+`indexing/NameEscape.kerml.xt`: adding a bogus `sysml::Package: ZZZ_bogus` line inside the note's
+`---` fence must give `disagree … missing 1`, and adding a real `class zzz_extra {}` to the body
+must give `disagree … extra 1 (sysml::Class: NameEscape::zzz_extra)`.
 
 ## Adversarial mutations (mutate a copy or restore from the `mv`d backup, then `diff -r`)
 
