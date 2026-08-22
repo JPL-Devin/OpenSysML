@@ -138,3 +138,20 @@ leaves `typeDisjoined` to be the owning type, which the standalone `Disjoining`
 production (`:426`) instead names explicitly — consistent with the standalone
 form being unaffected.
 ````
+
+#### Does a fix upstream clear the whole `kerml-examples` column?
+
+Yes, and it was checked file by file rather than by family, since the answer
+decides whether this root's pilot-only rows are ours to act on at all. Each of
+the six files contributes **exactly one** pilot-only row, each row is the EMF
+pair diagnostic above, and each line is a `disjoint from` clause written in a
+type declaration — the form the mechanism section pins to `OwnedDisjoining`. The
+per-clause table is in
+[the wave-9B sweep](pilot-differential.md#only-the-pilot--the-wave-9b-row-by-row-sweep-137)
+(W16). The clause appears on classifiers, plain types and features alike and the
+reported EMF class tracks the declaration, so the defect is in the pair rather
+than in one metaclass; the standalone form `disjoint b.f.a from b.a;`
+(`Simple Tests/FeatureChains.kerml:28`) sits in the same file as one of the six
+and reports nothing. No `kerml-examples` file carries a second pilot-only row of
+any kind, so a fix to the derived `ownedDisjoining` delegate clears this root's
+column entirely and silences nothing else it depends on.

@@ -1429,6 +1429,229 @@ What each rule requires, at the pin
 | `validateElementFilterMembershipIsModelLevelEvaluable` — `Must be model-level evaluable` | `condition.isModelLevelEvaluable` (plus `condition.result.specializesFromLibrary('ScalarValues::Boolean')`). Evaluability is **not** "is a constant": an invocation is evaluable when its function is a model-level-evaluable library function *and* every argument is; a feature reference is evaluable when its referent is a self-reference, or owned by a `Metaclass`/`MetadataFeature`, or has **no featuring type** and its value expression (if any) is evaluable — and inevaluable when the referent is featured within a type (an instance-level feature) or the reference is circular. So `filter p.n > 1` over a top-level `part p : P` is *accepted* by the pilot (no featuring type), while `filter P::n > 0` is not, and `filter Twice(2) > 3` over a user `calc` is not (a user function is not model-level evaluable). | Already ours: `passes/filter.go` `ElementFilterPass` (`filter-not-evaluable`, warning, `LevelType`) over `semantics.Model.CheckElementFilter`. The gap is **alignment**, not absence. | Both directions are live today: we warn on `filter 1 + 2 > 0;` (`the '+' operator is not supported in a filter condition`) where the pilot is silent, and we are silent on `filter P::n > 0;` where it errors. Widening our evaluator without the featuring-type half would trade one false positive for a false negative. |
 | `validateInvocationExpressionInstantiatedType` — `Must invoke a behavior or a behavioral feature` | `instantiatedType.oclIsKindOf(Behavior) or (instantiatedType.oclIsKindOf(Feature) and instantiatedType.type->exists(oclIsKindOf(Behavior)) and instantiatedType.type->size(1))` — what is invoked must be a behavior (`calc def`, `action def`, `function`), or a feature typed by exactly one behavior. | `LevelConstraint`, or the invocation checking already in `passes/typecheck_expr.go` (`inferInvocation`/`effectiveInParameters`), which today infers argument types and arity but never asks what kind of thing is being invoked. | An invocation of a library function reached through an alias or an index record with no parsed declaration, a feature typed by a behavior *through* a specialization chain, constructor-like invocations of a definition (which the notation does allow in other positions), and metadata-annotation invocations. Reporting only when the invoked symbol resolves to a declaration we can classify is the safe shape. |
 
+### Only the pilot — the wave-9B row-by-row sweep (137)
+
+P1–P7 above group this column by cause and adjudicate P6 diagnostic by diagnostic. This pass sweeps
+the whole column and gives **every** row exactly one of three outcomes: **our defect** — a rule the
+pinned reference enforces and we do not, named with the pilot rule that raises it and the package
+that would own ours; **an adjudicated divergence** — a difference we have decided to keep, with the
+reason; or **a defect of the pilot**, written up in [omg-issues.md](omg-issues.md). 137 rows in 19
+files across three roots, classified as:
+
+| Outcome | Rows |
+|---|---|
+| our defect | 19 |
+| adjudicated divergence | 112 |
+| defect of the pilot (F80) | 6 |
+
+Three mechanisms account for 100 of the 112 divergences and none of them is a rule difference. The
+first is **recovery surplus**: when the pilot's parse fails on notation of ours it keeps emitting per
+token and then abandons the file, so one construct of ours becomes five, seven or eleven rows — the
+primary row is classified on its own merits and the surplus is not a second finding. The second is
+**secondary diagnostics over an unresolved reference**: the pilot type-checks and kind-checks a graph
+in which a name did not resolve, where our tiers gate the higher checks behind the lower ones
+(`AGENTS.md` §4). The third is notation this page has already adjudicated — the bare `import` of F2
+and the state-machine words of F3 — where we warn and the pilot cannot parse at all.
+
+The `Where` column names one row of the family; the reproducer under each family is the minimal file
+that isolates it, run against the pinned single-file CLI
+(`build/pilot-validator/validate-sysml`, pilot `2026-05` / `0.60.1`) and, for the KerML rows,
+`build/pilot-kerml-validator/validate-kerml`. "Ours" is `bin/sysml -validate <file>`.
+
+| # | Family | Rows | Where | Outcome |
+|---|---|---|---|---|
+| W1 | a computed calculation result written `return <expression>;` | 5 | `examples/phase-c-behavioral-bodies.sysml:60,67,75`, `examples/repl-behavioral-demo.sysml:26,34` | **our defect** — fixed here, as a warning under the F3 precedent |
+| W2 | `assert <expression>;` / `assume <expression>;` inside a constraint body | 2 | `examples/phase-c-behavioral-bodies.sysml:86,87` | **our defect** — fixed here, same shape |
+| W3 | `bind <feature> = <expression>;` | 1 | `examples/action-executor-demo.sysml:9` | **our defect** — follow-up **F104** |
+| W4 | `done <name>;`, `then <source> <target>;`, `<source> then <target>;` | 5 | `examples/action-executor-demo.sysml:18,20`, `examples/views-demo.sysml:87`, `examples/orthogonal-regions-demo.sysml:16`, `examples/pseudostates-demo.sysml:16` | **our defect** — follow-up **F105** |
+| W5 | an action-body member in a definition body (`first <node>;`) | 1 | `examples/views-demo.sysml:83` | **our defect** — follow-up **F106** |
+| W6 | `require constraint { … }` in an analysis body | 3 | `examples/solver-demo.sysml:119,123,127` | **our defect** — follow-up **F107** |
+| W7 | a connection definition with fewer than two ends | 1 | `examples/views-demo.sysml:34` | **our defect** — follow-up **F108** |
+| W8 | an element-filter condition with a non-Boolean result | 1 | `testdata/parse/expressions.sysml:2` | **our defect** — follow-up **F109** |
+| W9 | notation already adjudicated: the bare `import` of F2, `region`/`initial`/`transition … to …` of F3 | 7 | `testdata/passes/import_no_visibility.sysml:8,12`, `examples/orthogonal-regions-demo.sysml:10,17,18`, `examples/pseudostates-demo.sysml:9,17` | **adjudicated divergence** — F2, F3 |
+| W10 | recovery surplus after a failed parse, including the one semantic row the pilot derives from a recovered succession | 30 | `examples/phase-c-behavioral-bodies.sysml:60` ×4, `:67` ×6, `:75` ×6; `examples/orthogonal-regions-demo.sysml:16` (`Must have at least two related elements`) | **adjudicated divergence** |
+| W11 | the file-level give-up row | 4 | `examples/phase-c-behavioral-bodies.sysml:89`, `examples/repl-behavioral-demo.sysml:35`, `examples/views-demo.sysml:90`, `testdata/passes/import_no_visibility.sysml:13` | **adjudicated divergence** |
+| W12 | `Duplicate of other owned member name` | 23 | `examples/phase-c-behavioral-bodies.sysml:67` ×4, `examples/repl-behavioral-demo.sysml:26` ×4 | **adjudicated divergence** — but see P4 and F110 |
+| W13 | a kind rule over an unresolved or absent type | 19 | `testdata/lex/basic.sysml:4`, `examples/phase-c-behavioral-bodies.sysml:64,65,71,72,73,83,84` | **adjudicated divergence** |
+| W14 | implicit binding connectors and filter rules over unresolved operands | 24 | `testdata/parse/expressions.sysml:3,4,5,6`, `examples/solver-demo.sysml:120,124` | **adjudicated divergence** |
+| W15 | `Must be an accessible feature` downstream of `namespace` | 5 | `examples/semantic-layer/demo.sysml:44,45,46,50,51` | **adjudicated divergence** — F5, F20 |
+| W16 | the `Type::ownedDisjoining` EMF pair | 6 | all six `kerml-examples` rows | **defect of the pilot** — F80 |
+
+#### W1 — `return <expression>;` (5, our defect, fixed)
+
+The pinned grammar's `ReturnParameterMember` is `MemberPrefix 'return' ownedRelatedElement +=
+UsageElement` (`SysML.xtext:1961`): `return` introduces a *result parameter declaration*. A computed
+result is the keyword-less `ResultExpressionMember` (`:1967`), which `CalculationBodyPart` (`:1951`)
+admits once, as the last member of the body. So `return <name>;` and `return result : Real = <expr>;`
+both have a production and `return <expression>;` has none — a distinction the corpus depends on,
+because the OMG-authored files we assert clean write the first form
+(`examples/pilot-corpora/sysml-examples/Simple Tests/CalculationTest.sysml:24`,
+`examples/sysml-v2-training/30. Calculations/Calculation Usages-1.sysml:23`).
+
+Matched reproducers, four files differing only in what follows `return`:
+
+```sysml
+package R { private import ScalarValues::*; calc c { in a : Real; return a; } }          // pilot: exit 0
+package R { private import ScalarValues::*; calc c { in a : Real; return 42; } }         // pilot: no viable alternative at input 'return'
+package R { private import ScalarValues::*; calc c { in a : Real; return (a); } }        // pilot: no viable alternative at input 'return'
+package R { private import ScalarValues::*; calc c { in a : Real; return a * 2.0; } }    // pilot: no viable alternative at input 'return'
+```
+
+We accepted all four in silence. Three of the four are now warned; `return (a);` stays silent, and
+deliberately: our parser collapses a single parenthesized expression to its inner node, so the pass
+cannot tell it from the legal `return a;` without carrying parenthesis syntax in the AST, which is
+not this slice's to change. No corpus row depends on it — `examples/repl-behavioral-demo.sysml:26` is
+`return (x * x + y * y);`, whose inner node is an operator expression and is warned.
+
+`passes/nonstandard_notation.go` now warns on the computed form — `LevelSyntax`, the existing
+`nonstandard-notation` code, spanned on the keyword — so each of the five rows pairs with a warning of
+ours at the same line and category instead of standing alone.
+
+#### W2 — `assert <expression>;` in a constraint body (2, our defect, fixed)
+
+`AssertConstraintUsage` (`SysML.xtext:2007`) takes a reference subsetting or a constraint
+declaration, never an expression, and a constraint body states its condition as the same
+keyword-less trailing expression W1 cites. Reproducer:
+
+```sysml
+package C { private import ScalarValues::*; constraint validRange { in x : Real; assert x >= 0; } }
+```
+
+The pilot reports `no viable alternative at input 'assert'` plus two recovery rows; we reported
+nothing. Only **two** rows in this column are the construct itself —
+`examples/phase-c-behavioral-bodies.sysml:86,87` — even though the file writes it three times, and
+the second of the two is already degraded: at `:87` the pilot has lost the enclosing body and reports
+`no viable alternative at input '<='` rather than naming `assert`, while the third occurrence
+(`assume initialized;`, `:88`) draws nothing at all, the pilot's parse of the file having ended. That
+asymmetry is also why fixing W1 and W2 *adds* rows in the only-OpenSysML column: our warnings land on
+constructs past the point where the pilot stopped reading. Both directions were measured with the
+oracle and are reported with the change rather than left for a later reader to discover.
+
+The named forms stay silent, and must: `assert constraint c1 : C;`, `assert satisfy r by q;` and
+`assume #goal constraint payloadMassLimit;` are all in the corpora we assert clean
+(`examples/pilot-corpora/sysml-examples/Simple Tests/RequirementTest.sysml:6,22`,
+`examples/pilot-corpora/sysml-examples/Metadata Examples/RequirementMetadataExample.sysml:30`).
+
+What the two warnings moved, measured with `rm -rf build/pilot-diff && go run ./cmd/pilot-diff`
+before and after: the seven W1/W2 rows leave this column for the severity-only bucket, the six pilot
+recovery cascades behind them shrink by one row each, and **sixteen** rows appear in the only-ours
+column — ten in `examples/repl-behavioral-demo.sysml` (`:40,46,53,62,67,68,73,78,79,84`) and six in
+`examples/phase-c-behavioral-bodies.sysml` (`:88,94,101,102,103,262`), every one of them a construct
+past the line where the pilot stopped reading the file, so the reference says nothing about them at
+all. Both files were already non-agreeing and no file changed agreement status. Counting only the
+column this sweep is about would report the gain and hide the sixteen; they are the same finding seen
+from the side the pilot cannot reach.
+
+#### W3–W7 — five more notation and structure gaps (11, our defect, not fixed here)
+
+Each is established the same way — a production in the pinned grammars that the construct does not
+match, and a minimal file the pilot rejects and we accept — and each needs context the notation pass
+does not track today, which is why they are follow-ups rather than part of this diff.
+
+| # | Reproducer (pilot verdict) | What the grammar says | Where ours would live |
+|---|---|---|---|
+| W3 | `part def P { in x : Real; out r : Real; bind r = x * 2.0; }` → `no viable alternative at input 'bind'` | `BindingConnectorAsUsage` (`SysML.xtext:1020`) binds two `ConnectorEndMember`s; an expression is not a connector end. `bind a = b;` is legal | `passes/nonstandard_notation.go`, on a binding whose right end is not a feature reference |
+| W4 | `action def A { first start; action compute; done finish; }` → `no viable alternative at input 'done'`; `then start compute;` in the same body → `no viable alternative at input 'then'`; `idle then next;` in a state body → `no viable alternative at input 'idle'`; the one-ended `then compute;` is accepted | a succession names its ends `'first' … 'then' …` (`SuccessionAsUsage`, `:1033`) or continues from the previous node with a *single* end (`TargetSuccessionMember`, reached from `ActionBodyItem`, `:1368`). Two names after `then`, and `done` as a keyword, have no production — `done` is a library name (F8) | `passes/nonstandard_notation.go`, on a succession member with two written ends and no `first` |
+| W5 | `part def P { first start; action a; }` → `mismatched input ';' expecting 'then'` and `Must have at least two related elements`, where the same body under `action def P` is accepted with no diagnostics | `DefinitionBodyItem` (`:516`) admits a `SuccessionAsUsage`, which must name both ends (`'first' … 'then' …`, `:1033`); the one-ended initial-node form is `ActionBodyItem`'s alone (`:1368`). The construct is legal, in another body kind | `passes/nonstandard_notation.go`, which would need the enclosing body kind |
+| W6 | `analysis def B { attribute p : Integer; require constraint { p <= 220 } }` → `no viable alternative at input 'require'`, where the same members under `requirement def B` are accepted | `RequirementConstraintMember` (`:2057`) is reachable only from `RequirementBodyItem` (`:2039`) | same as W5: the enclosing body kind |
+| W7 | `package W { connection def FuelLine; }` → `Must have at least two related elements` | `KerMLValidator.checkAssociation` / `validateAssociationRelatedTypes`; a connection definition is an `Association`, and an association relates at least two types. Adding two `end` members clears it | `LevelConstraint`, beside the `flow-end-subsetting` check F21 added — our own model is the invalid one, as it was for F21 |
+
+#### W8 — a non-Boolean filter condition (1, our defect, not fixed here)
+
+`testdata/parse/expressions.sysml:2` is `filter 1 + 2 * 3;`. The pilot reports `Must have a Boolean
+result` (`KerMLValidator.checkElementFilterMembership` /
+`validateElementFilterMembershipIsBoolean`); `filter 1 + 2 * 3 > 0;` is accepted. We report something
+at that line — `filter-not-evaluable` from `passes/filter.go` — but not this rule, so the pair is not
+agreement in substance and the row stays here. This is the *third* direction of F22's alignment, and
+the only W-family row in this column whose rule we partly implement already: follow-up **F109**.
+
+The other five `Must have a Boolean result` rows are W14, not this: at
+`testdata/parse/expressions.sysml:3,5,6`, `testdata/passes/errors.sysml:3` and
+`testdata/resolve/errors.sysml:3` the condition's own references are unresolved — an agreement row in
+each case — and the pilot's constraint reads `result.specializesFromLibrary('ScalarValues::Boolean')`,
+which is false for a condition it could not link. The distinction is measurable rather than argued:
+with the references declared, the pilot reports the rule only when the result is genuinely not
+Boolean.
+
+#### W10, W11 — recovery surplus and the give-up row (34, adjudicated divergence)
+
+`examples/phase-c-behavioral-bodies.sysml:67` is the clearest case: one construct of ours
+(`return sqrt(dx * dx + dy * dy);`) draws seven pilot rows — `no viable alternative at input
+'return'`, `missing '}' at 'sqrt'`, then one per operator and parenthesis — and four
+`Duplicate of other owned member name` warnings behind them. The construct is one finding (W1) and it
+is booked once. `:89`'s `missing EOF at '}'` is the same event seen from the end of the file: the
+pilot stops there, which is why every later line of that file draws nothing from it and why our
+notation warnings past that point have no pilot row to pair with. Counting a recovery cascade as
+separate gaps would make our notation debt look an order of magnitude larger than the number of
+constructs behind it — 34 rows for what is, in this column, 19 constructs.
+
+#### W12 — `Duplicate of other owned member name` (23, adjudicated divergence)
+
+The rule is real and unimplemented, which P4 established for the 25 of the previous baseline; what
+this sweep adds is that 18 of the current 23 sit on lines the pilot only reached through recovery —
+`examples/phase-c-behavioral-bodies.sysml:67` ×4, `:86`, `:87` and
+`examples/repl-behavioral-demo.sysml:26` ×4 are the recovered `return` and `assert` bodies of W1 and
+W2, and `examples/orthogonal-regions-demo.sysml:11,12,16` ×4 and
+`examples/pseudostates-demo.sysml:9,10,16` ×4 are the recovered state bodies of F3 — so they are not
+evidence about duplicate member names at all. The remaining 5
+(`testdata/passes/import_no_visibility.sysml:3,8,12` and
+`examples/semantic-layer/demo.sysml:35,105`) are in files whose parse the pilot lost earlier still, to
+the bare `import` of F2 and the `namespace` of F3. The rule itself we can reproduce cleanly, and both implementations agree on it
+where the model parses for both: `calc c { in a : Real; return a; }` draws
+`Duplicate of other owned member name` twice from the pilot — the return parameter named `a`
+duplicates the input `a` — and the same two warnings, same lines, from us. So our silence in this
+column is a recovery artifact, not a missing rule, and re-measuring P4 after the notation work is the
+honest next step: follow-up **F110**.
+
+#### W13, W14 — the tier boundary (43, adjudicated divergence)
+
+`testdata/lex/basic.sysml:4` is the whole argument in one line. `attribute mass : Real;` in a file
+with no `ScalarValues` import: both implementations report `Real` unresolved — that is an agreement
+row — and the pilot *additionally* reports `An attribute must be typed by attribute definitions.`
+(`SysMLValidator.checkAttributeUsage` / `validateAttributeUsageType_`), because its kind check runs
+over a graph where the type is `null`. Our tiers stop at the name-resolution error, which
+`AGENTS.md` §4 makes an invariant rather than an omission: the higher tiers do not run on a document
+whose lower tier failed. Every W13 row has this shape (`A usage must be typed by definitions.`,
+`An occurrence, item or part must be typed by occurrence definitions.`, and the unresolved
+`Real`/`Boolean`/`Integer` rows the pilot reports for a *second* time after recovery lost the file's
+imports), and every W14 row is the same thing one layer further out:
+`checkImplicitBindingConnectors` / `validateBindingConnectorTypeConformance` comparing the types of
+two ends of which at least one did not link, and the filter rules over the same conditions.
+`examples/solver-demo.sysml:120,124`'s `drivePower` and `sciencePower` resolve for us and are
+unresolved for the pilot only because W6 cost it the enclosing body.
+
+Two of these rows are a genuinely different reporting decision rather than a tier boundary, and are
+kept: at `testdata/parse/expressions.sysml:3` (`filter a.b.c;`) the pilot reports `b` and `c`
+unresolved in addition to `a`, where we stop at the first unresolved segment of the chain. Reporting
+each segment of a chain whose head is already unresolved adds no information about the model.
+
+#### W16 — the six `kerml-examples` rows, checked one by one (6, defect of the pilot)
+
+The wave brief asks whether all six really fall to F80 if upstream fixes it. They do, and each was
+checked on its own rather than by family: every one of the six files contributes **exactly one**
+pilot-only row, each row is EMF's unpaired-bidirectional-reference diagnostic over the
+`Disjoining::owningType` / `Type::ownedDisjoining` pair, and each line is a `disjoint from` clause
+written *in a type declaration* — the form F80's mechanism section pins to the `OwnedDisjoining`
+production:
+
+| File:line | The clause |
+|---|---|
+| `KerML Spec Annex A Examples/A-2-ModelingInstances.kerml:9` | `classifier YourBike [1] specializes Bicycle disjoint from MyBike;` |
+| `Simple Tests/Classifiers.kerml:13` | `classifier D disjoint from C differences A, B;` |
+| `Simple Tests/FeatureChains.kerml:31` | `feature h2 differences b.f, b.a intersects f.a, g disjoint from h1;` |
+| `Simple Tests/Features.kerml:20` | `feature z unions f, g disjoint from y;` |
+| `Simple Tests/Inverses.kerml:3` | `feature f : B inverse of B::g disjoint from h;` |
+| `Simple Tests/Types.kerml:31` | `type C :> B disjoint from A;` |
+
+Three details make the conclusion falsifiable rather than assumed. The clause appears on classifiers,
+plain types and features alike, and the reported EMF class tracks the declaration
+(`ClassifierImpl`, `TypeImpl`, `FeatureImpl`), so the defect is in the pair and not in one metaclass.
+The three-line reproducer of F80 still fires at this pin, with `ClassifierImpl` naming the owner. And
+the standalone form `disjoint b.f.a from b.a;` (`Simple Tests/FeatureChains.kerml:28`) is in the same
+file as one of the six and reports nothing — so a fix to the derived `ownedDisjoining` delegate would
+clear all six rows and would not silence anything else this root depends on. No `kerml-examples` file
+carries a second pilot-only row of any kind, so this root's whole column is F80.
+
 ### Unmapped messages, verbatim
 
 Recorded so the categorisation's debt is visible rather than hidden:
@@ -1584,6 +1807,13 @@ one.
 | F101 | Wave-4 handback from F68 (#391): **12** of its 39 diagnostics remain, all implicit `Actions::TransitionAction` members. 11 are in the two files #391 measured — `ServerSequenceOutsideRealization-2.sysml` 10 → 4 and `ServerSequenceRealization-2.sysml` 13 → 7 — and name `accepter` (6), `effect` (3) and `acceptedMessage` (2); the twelfth is `Simple Tests/PartTest.sysml:25`'s `unresolved member: receiver`, unchanged at 1. `semantics/implicit.go` `kindBaseFQN` must give `*ast.TransitionMember` the base its usage kind already has — a layer #391 did not own. |
 | F102 | Wave-4 handback from F66 (#375): `verify r :>> massRequirement;`, `variant use case uc11;` and `ref redefines cylinderBR[4];` stay rejected. All three are the generalized usage-declaration path in `parser/defusage.go` `parseUsage`, which #375 did not own; #383 owned that file but scoped itself to F65's three forms. |
 | F103 | Wave-4 handback from F64 (#375): `assert not c { … }` stays rejected. `parser/defusage.go` `parseDefUsage` treats `not` as a negation only when a *kind keyword* follows it, so a named constraint after `not` is still read as a declaration where the grammar makes the argument an `OperatorExpression`. |
+| F104 | Wave-9B, W3 (1 diagnostic): `bind <feature> = <expression>;` (`examples/action-executor-demo.sysml:9`) is accepted in silence. `BindingConnectorAsUsage` (`SysML.xtext:1020`) binds two connector ends, so an expression on the right has no production while `bind a = b;` does. `passes/nonstandard_notation.go`, keyed on a binding whose right end is not a feature reference. |
+| F105 | Wave-9B, W4 (5): `done <name>;`, `then <source> <target>;` and `<source> then <target>;` are accepted in silence (`examples/action-executor-demo.sysml:18,20`, `examples/views-demo.sysml:87`, `examples/orthogonal-regions-demo.sysml:16`, `examples/pseudostates-demo.sysml:16`). A succession names both ends after `first`/`then` (`SuccessionAsUsage`, `:1033`) or continues from the previous node with one end (`TargetSuccessionMember`, `ActionBodyItem`, `:1368`); the one-ended `then compute;` is accepted by the pilot and must stay silent. `passes/nonstandard_notation.go`. |
+| F106 | Wave-9B, W5 (1): a one-ended `first <node>;` in a *definition* body (`examples/views-demo.sysml:83`) is accepted in silence; the same body under `action def` is legal for both implementations. `DefinitionBodyItem` (`:516`) admits only the two-ended succession, and the initial-node member is `ActionBodyItem`'s (`:1368`). Needs the enclosing body kind in `passes/nonstandard_notation.go`, which the pass does not track today. |
+| F107 | Wave-9B, W6 (3): `require constraint { … }` in an analysis body (`examples/solver-demo.sysml:119,123,127`) is accepted in silence; `RequirementConstraintMember` (`:2057`) is reachable only from `RequirementBodyItem` (`:2039`), and the same members under `requirement def` are accepted by both. Same body-kind context as F106, and the two should land together. |
+| F108 | Wave-9B, W7 (1): a connection definition with fewer than two ends (`examples/views-demo.sysml:34`, `connection def FuelLine;`) draws `Must have at least two related elements` from `KerMLValidator.checkAssociation` / `validateAssociationRelatedTypes` and nothing from us. `LevelConstraint`, beside the `flow-end-subsetting` check F21 added; as with F21 our own model is the invalid one, and adding two `end` members clears the pilot's diagnostic. |
+| F109 | Wave-9B, W8 (1): `filter 1 + 2 * 3;` (`testdata/parse/expressions.sysml:2`) draws `Must have a Boolean result` (`validateElementFilterMembershipIsBoolean`) where we report `filter-not-evaluable` instead, so the pair is not agreement in substance. The third direction of F22's alignment in `passes/filter.go`: the Boolean-result half of the element-filter rule, separate from evaluability. |
+| F110 | Wave-9B, W12 (23): re-measure P4 after F105–F107. 18 of the 23 `Duplicate of other owned member name` rows sit on lines the pilot reached only through recovery from notation of ours, so they are not evidence about duplicate member names; where a file parses for both implementations the rule *agrees* (`calc c { in a : Real; return a; }` draws the warning twice from each). P4's "a reference rule we do not implement" needs re-deriving from files both implementations read the same way. |
 
 F6 is done, and it is the case for testing harness assumptions rather than reasoning about them:
 it changed nothing about what either implementation says, but it turned 25 diagnostics that this
