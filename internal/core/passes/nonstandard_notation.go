@@ -58,8 +58,9 @@ func notationSeverity(mode conformance.Mode) Severity {
 type notationWalker struct {
 	sysml bool
 	// severity is what every finding of this walk carries; see notationSeverity.
-	severity Severity
-	diags    []Diagnostic
+	severity          Severity
+	diags             []Diagnostic
+	inRequirementBody bool
 }
 
 // walk reports the extension notation in a member list and descends into the
@@ -74,11 +75,37 @@ func (w *notationWalker) walk(members []ast.Node) {
 			w.walk(n.Members)
 		case *ast.Definition:
 			w.kermlRelationships(n.Relationships)
-			w.walk(n.Members)
+			w.walkDeclaration(n.Members, isRequirementBodyDeclaration(n))
 		case *ast.Usage:
 			w.kermlRelationships(n.Relationships)
-			w.walk(n.Members)
+			w.walkDeclaration(n.Members, isRequirementBodyDeclaration(n))
 		case *ast.Import:
+			w.walk(n.Body)
+		case *ast.ResultMember:
+			if n.Expression != nil && !isReferenceExpression(n.Expression) {
+				w.extension(keywordSpan(n, "return"), "`return <expression>;`",
+					"the standard spelling is a trailing expression without `return`")
+			}
+		case *ast.ConstraintMember:
+			if n.Keyword != "" && n.Expression != nil && n.Name == "" && len(n.Body) == 0 {
+				w.extension(keywordSpan(n, n.Keyword),
+					fmt.Sprintf("`%s <expression>;`", n.Keyword),
+					"the standard spelling is a keyword-less trailing condition")
+			}
+			w.walk(n.Body)
+		case *ast.AssumeMember:
+			if w.inRequirementBody && n.Expression != nil && !isRequirementReferenceExpression(n.Expression) &&
+				n.Reference == nil && n.Name == "" && len(n.Body) == 0 && !n.HasBody {
+				w.extension(keywordSpan(n, "assume"), "`assume <expression>;`",
+					"the standard spelling is a keyword-less trailing condition")
+			}
+			w.walk(n.Body)
+		case *ast.RequireMember:
+			if w.inRequirementBody && n.Expression != nil && !isRequirementReferenceExpression(n.Expression) &&
+				n.Reference == nil && n.Name == "" && len(n.Body) == 0 && !n.HasBody {
+				w.extension(keywordSpan(n, "require"), "`require <expression>;`",
+					"the standard spelling is a keyword-less trailing condition")
+			}
 			w.walk(n.Body)
 		case *ast.StateNode:
 			w.stateNode(n)
@@ -125,6 +152,51 @@ func (w *notationWalker) walk(members []ast.Node) {
 		case *ast.WhileLoopActionNode:
 			w.walk(n.Body)
 		}
+	}
+}
+
+func (w *notationWalker) walkDeclaration(members []ast.Node, requirementBody bool) {
+	previous := w.inRequirementBody
+	w.inRequirementBody = requirementBody
+	w.walk(members)
+	w.inRequirementBody = previous
+}
+
+func isRequirementBodyDeclaration(node ast.Node) bool {
+	switch n := node.(type) {
+	case *ast.Definition:
+		switch n.Kind {
+		case ast.DefRequirement:
+			return true
+		case ast.DefConcern, ast.DefViewpoint:
+			return true
+		}
+	case *ast.Usage:
+		switch n.Kind {
+		case ast.UsageRequirement, ast.UsageSatisfy:
+			return true
+		case ast.UsageConcern, ast.UsageViewpoint, ast.UsageFramedConcern, ast.UsageObjective:
+			return true
+		}
+	}
+	return false
+}
+
+func isReferenceExpression(node ast.Node) bool {
+	switch node.(type) {
+	case *ast.QualifiedName, *ast.FeatureReference, *ast.FeatureChainExpr:
+		return true
+	default:
+		return false
+	}
+}
+
+func isRequirementReferenceExpression(node ast.Node) bool {
+	switch node.(type) {
+	case *ast.QualifiedName, *ast.FeatureReference, *ast.FeatureChainExpr:
+		return true
+	default:
+		return false
 	}
 }
 
