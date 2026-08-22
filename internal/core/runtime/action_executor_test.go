@@ -405,9 +405,8 @@ func TestActionExecutor_ForkNode_NoSuccessors(t *testing.T) {
 		t.Fatal("expected error for fork with no successors")
 	}
 
-	expectedMsg := "fork node split has no successors"
-	if err.Error() != expectedMsg {
-		t.Errorf("expected error %q, got %q", expectedMsg, err.Error())
+	if !errors.Is(err, ErrInvalidActionFlow) {
+		t.Errorf("expected ErrInvalidActionFlow, got %v", err)
 	}
 }
 
@@ -1147,8 +1146,8 @@ func TestActionExecutor_DecisionNode(t *testing.T) {
 			t.Fatal("expected error when no guard matches")
 		}
 
-		if err.Error() != "decision node check: no true guard" {
-			t.Errorf("unexpected error: %v", err)
+		if !errors.Is(err, ErrNoEnabledSuccession) {
+			t.Errorf("expected ErrNoEnabledSuccession, got %v", err)
 		}
 	})
 }

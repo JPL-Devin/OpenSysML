@@ -1,0 +1,8 @@
+{
+	"type": "action",
+	"trace": true,
+	"outputs": {
+		"battery": {"type": "Integer", "value": 10},
+		"selected": {"type": "Integer", "value": 1}
+	}
+}
