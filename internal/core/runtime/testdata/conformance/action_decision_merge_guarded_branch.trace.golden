@@ -1,0 +1,10 @@
+step 1: token 1@choose
+  eval feature battery -> 10
+  eval literal 20 -> 20
+eval operator < -> true
+step 2: token 1@low
+stmt assign selected
+  eval literal 1 -> 1
+step 3: token 1@converge
+step 4: token 1@end
+step 5: no active tokens

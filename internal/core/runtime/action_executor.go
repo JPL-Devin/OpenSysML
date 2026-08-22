@@ -180,7 +180,8 @@ func (e *ActionExecutor) Step() error {
 	// for a message, or it is stuck for a reason no message can resolve.
 	if !progressMade && len(e.tokens) > 0 {
 		if !e.anyTokenWaiting() {
-			return fmt.Errorf("deadlock detected: %d token(s) stuck, no progress made", len(e.tokens))
+			return fmt.Errorf("%w: %d token(s) stuck, no progress made",
+				ErrActionDeadlock, len(e.tokens))
 		}
 		e.state = StateWaiting
 	}
@@ -494,7 +495,8 @@ func (e *ActionExecutor) initialize() error {
 
 	// Use initial node from graph
 	if e.graph.Initial == nil {
-		return fmt.Errorf("no initial node found in action %s", e.action.Name)
+		return fmt.Errorf("%w: no initial node found in action %s",
+			ErrInvalidActionFlow, e.action.Name)
 	}
 
 	initialNode := e.graph.Initial
@@ -609,7 +611,7 @@ func (e *ActionExecutor) guardHolds(ec *EvalContext, node, guard ast.Node) (bool
 func (e *ActionExecutor) stepInitialNode(tokenIdx int) error {
 	token := &e.tokens[tokenIdx]
 	if len(e.graph.Edges[token.Location]) == 0 {
-		return fmt.Errorf("initial node has no successors")
+		return fmt.Errorf("%w: initial node has no successors", ErrInvalidActionFlow)
 	}
 	if err := e.runNodeBody(token.Location); err != nil {
 		return err
@@ -654,7 +656,8 @@ func (e *ActionExecutor) stepForkNode(tokenIdx int) error {
 	node := token.Location.(*ast.ForkNode)
 
 	if len(e.graph.Edges[node]) == 0 {
-		return fmt.Errorf("fork node %s has no successors", node.Name)
+		return fmt.Errorf("%w: fork node %s has no successors",
+			ErrInvalidActionFlow, node.Name)
 	}
 	if err := e.runNodeBody(node); err != nil {
 		return err
@@ -728,10 +731,12 @@ func (e *ActionExecutor) stepJoinNode(tokenIdx int) error {
 	// Get successor
 	declared := e.graph.Edges[node]
 	if len(declared) == 0 {
-		return fmt.Errorf("join node %s has no successors", node.Name)
+		return fmt.Errorf("%w: join node %s has no successors",
+			ErrInvalidActionFlow, node.Name)
 	}
 	if len(declared) > 1 {
-		return fmt.Errorf("join node %s has multiple successors", node.Name)
+		return fmt.Errorf("%w: join node %s has multiple successors",
+			ErrInvalidActionFlow, node.Name)
 	}
 	successors, err := e.enabledSuccessions(node)
 	if err != nil {
@@ -793,10 +798,12 @@ func (e *ActionExecutor) stepMergeNode(tokenIdx int) error {
 
 	declared := e.graph.Edges[mergeNode]
 	if len(declared) == 0 {
-		return fmt.Errorf("merge node %s has no successors", mergeNode.Name)
+		return fmt.Errorf("%w: merge node %s has no successors",
+			ErrInvalidActionFlow, mergeNode.Name)
 	}
 	if len(declared) > 1 {
-		return fmt.Errorf("merge node %s has multiple successors (not yet supported)", mergeNode.Name)
+		return fmt.Errorf("%w: merge node %s has multiple successors (not yet supported)",
+			ErrInvalidActionFlow, mergeNode.Name)
 	}
 	successors, err := e.enabledSuccessions(mergeNode)
 	if err != nil {
@@ -829,7 +836,8 @@ func (e *ActionExecutor) stepDecisionNode(tokenIdx int) error {
 	// Get successors (outgoing edges from decision)
 	successors := e.graph.Edges[decisionNode]
 	if len(successors) == 0 {
-		return fmt.Errorf("decision node %s has no successors", decisionNode.Name)
+		return fmt.Errorf("%w: decision node %s has no successors",
+			ErrInvalidActionFlow, decisionNode.Name)
 	}
 	if err := e.runNodeBody(decisionNode); err != nil {
 		return err
@@ -877,7 +885,8 @@ func (e *ActionExecutor) stepDecisionNode(tokenIdx int) error {
 		return nil
 	}
 
-	return fmt.Errorf("decision node %s: no true guard", decisionNode.Name)
+	return fmt.Errorf("%w: decision node %s has no true guard",
+		ErrNoEnabledSuccession, decisionNode.Name)
 }
 
 // stepActionExecutionNode evaluates inline expression or invokes nested action.
