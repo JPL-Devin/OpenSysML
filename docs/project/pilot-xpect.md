@@ -152,7 +152,7 @@ Every difference from the published numbers is accounted for, and none of it is 
 ```
 428 .xt file(s), 0 unparsed, 0 missing declared resource(s)
 1261 assertion(s) declaring 1326 expectation(s)
-agree 816 | disagree 510 | unlocated 0 | not adjudicated 0
+agree 845 | disagree 481 | unlocated 0 | not adjudicated 0
 ```
 
 | Kind | Expectations | Agree | Disagree | Not adjudicated | `same-location` | `same-line` | `severity-differs` | `elsewhere` | nothing |
@@ -161,14 +161,14 @@ agree 816 | disagree 510 | unlocated 0 | not adjudicated 0
 | `noErrors` | 275 | 254 | 21 | 0 | — | — | — | — | — |
 | `linkedName` | 194 | 194 | 0 | 0 | — | — | — | — | — |
 | `warnings` | 113 | 89 | 24 | 0 | 3 | 0 | 4 | 13 | 4 |
-| `scope` | 230 | 183 | 47 | 0 | — | — | — | — | — |
+| `scope` | 230 | 212 | 18 | 0 | — | — | — | — | — |
 | `exportedObjects` | 1 | 1 | 0 | 0 | — | — | — | — | — |
 
 Per suite:
 
 | Suite | Files | Expectations | Agree | Disagree | Not adjudicated |
 |---|---:|---:|---:|---:|---:|
-| `kerml` | 303 | 968 | 613 | 355 | 0 |
+| `kerml` | 303 | 968 | 642 | 326 | 0 |
 | `sysml` | 125 | 358 | 203 | 155 | 0 |
 
 **Read the `errors` row carefully: strict agreement demands the pilot's message text, so its 95 is a

@@ -7,8 +7,8 @@
     "filesUnparsed": 0,
     "assertions": 1261,
     "rows": 1326,
-    "agree": 816,
-    "disagree": 510,
+    "agree": 845,
+    "disagree": 481,
     "unlocated": 0,
     "notAdjudicated": 0,
     "missingResources": 0,
@@ -76,18 +76,18 @@
       "assertions": 230,
       "blockAssertions": 229,
       "rows": 230,
-      "agree": 183,
-      "disagree": 47,
+      "agree": 212,
+      "disagree": 18,
       "unlocated": 0,
       "notAdjudicated": 0,
       "sameLocation": 0,
       "sameLine": 0,
       "severityDiffers": 0,
       "elsewhereInFile": 0,
-      "extraNames": 3,
+      "extraNames": 5,
       "missingNames": 2,
-      "missingAndExtra": 14,
-      "libraryNames": 28
+      "missingAndExtra": 3,
+      "libraryNames": 8
     },
     {
       "kind": "exportedObjects",
@@ -113,8 +113,8 @@
         "filesUnparsed": 0,
         "assertions": 952,
         "rows": 968,
-        "agree": 613,
-        "disagree": 355,
+        "agree": 642,
+        "disagree": 326,
         "unlocated": 0,
         "notAdjudicated": 0,
         "missingResources": 0,
@@ -182,18 +182,18 @@
           "assertions": 230,
           "blockAssertions": 229,
           "rows": 230,
-          "agree": 183,
-          "disagree": 47,
+          "agree": 212,
+          "disagree": 18,
           "unlocated": 0,
           "notAdjudicated": 0,
           "sameLocation": 0,
           "sameLine": 0,
           "severityDiffers": 0,
           "elsewhereInFile": 0,
-          "extraNames": 3,
+          "extraNames": 5,
           "missingNames": 2,
-          "missingAndExtra": 14,
-          "libraryNames": 28
+          "missingAndExtra": 3,
+          "libraryNames": 8
         },
         {
           "kind": "exportedObjects",
@@ -1096,12 +1096,10 @@
               "verdict": "disagree",
               "tolerance": "library-names",
               "declared": "60 name(s) visible at \"X\"",
-              "ours": "83 name(s): missing 1 (RecursiveImport.P.Q.R.Z.self.that), extra 24 (Q.R.Z.self, Q.R.Z.self.that, Q.Y.self, Q.Y.self.that, R.Z.self, …); 1 missing name(s) reachable by another path (RecursiveImport.P.Q.R.Z.self.that)",
+              "ours": "84 name(s): missing 0 (none), extra 24 (Q.R.Z.self, Q.R.Z.self.that, Q.Y.self, Q.Y.self.that, R.Z.self, …)",
               "names": {
                 "declared": 60,
-                "ours": 83,
-                "missing": 1,
-                "otherPath": 1,
+                "ours": 84,
                 "extra": 24
               }
             }
@@ -1111,24 +1109,7 @@
           "path": "src/org/omg/kerml/xpect/tests/imports/recursive/Import_Recursive1_scope_otherfile.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.imports.recursive.KerMLImportRecursiveTest",
           "expectations": 1,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 26,
-              "at": "X",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "27 name(s) visible at \"X\"",
-              "ours": "42 name(s): missing 0 (none), extra 18 (RecursiveImport.x.self, RecursiveImport.x.that, RecursiveImport.x.that.self, RecursiveImport.y.self, RecursiveImport.y.that, …)",
-              "names": {
-                "declared": 27,
-                "ours": 42,
-                "extra": 18
-              }
-            }
-          ]
+          "agree": 1
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/imports/recursive/Import_Recursive2.kerml.xt",
@@ -1156,13 +1137,13 @@
               "verdict": "disagree",
               "tolerance": "library-names",
               "declared": "172 name(s) visible at \"S::S1::X2\"",
-              "ours": "246 name(s): missing 9 (P.S.T.U.U1.self.that, RecursiveImport.P.Q.R.Z.self.that, RecursiveImport.P.S.S1.X2.self.that, RecursiveImport.P.S.T.T1.self.that, RecursiveImport.P.S.T.U.U1.self, …), extra 83 (Q.R.Z.self, Q.R.Z.self.that, Q.Y.self, Q.Y.self.that, R.Z.self, …); 9 missing name(s) reachable by another path (P.S.T.U.U1.self.that, RecursiveImport.P.Q.R.Z.self.that, RecursiveImport.P.S.S1.X2.self.that, RecursiveImport.P.S.T.T1.self.that, RecursiveImport.P.S.T.U.U1.self, …)",
+              "ours": "254 name(s): missing 2 (RecursiveImport.s.self.that, s.self.that), extra 84 (Q.R.Z.self, Q.R.Z.self.that, Q.Y.self, Q.Y.self.that, R.Z.self, …); 2 missing name(s) reachable by another path (RecursiveImport.s.self.that, s.self.that)",
               "names": {
                 "declared": 172,
-                "ours": 246,
-                "missing": 9,
-                "otherPath": 9,
-                "extra": 83
+                "ours": 254,
+                "missing": 2,
+                "otherPath": 2,
+                "extra": 84
               }
             }
           ]
@@ -1171,24 +1152,7 @@
           "path": "src/org/omg/kerml/xpect/tests/imports/recursive/Import_Recursive3_scope_otherfile.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.imports.recursive.KerMLImportRecursiveTest",
           "expectations": 2,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 28,
-              "at": "X",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "80 name(s) visible at \"X\"",
-              "ours": "114 name(s): missing 0 (none), extra 42 (RecursiveImport.s.self, RecursiveImport.s.that, RecursiveImport.s.that.self, RecursiveImport.t.self, RecursiveImport.t.that, …)",
-              "names": {
-                "declared": 80,
-                "ours": 114,
-                "extra": 42
-              }
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/imports/recursive/Import_Recursive4.kerml.xt",
@@ -1204,12 +1168,10 @@
               "verdict": "disagree",
               "tolerance": "library-names",
               "declared": "86 name(s) visible at \"Z\"",
-              "ours": "92 name(s): missing 6 (P.S.T.U.U1.self.that, RecursiveImport.P.Q.R.Z.self.that, RecursiveImport.P.S.S1.X1.self.that, RecursiveImport.P.S.T.T1.self.that, RecursiveImport.P.S.T.U.U1.self, …), extra 12 (R.Z.self, R.Z.self.that, RecursiveImport.R.Z.self, RecursiveImport.R.Z.self.that, RecursiveImport.Y.self, …); 6 missing name(s) reachable by another path (P.S.T.U.U1.self.that, RecursiveImport.P.Q.R.Z.self.that, RecursiveImport.P.S.S1.X1.self.that, RecursiveImport.P.S.T.T1.self.that, RecursiveImport.P.S.T.U.U1.self, …)",
+              "ours": "98 name(s): missing 0 (none), extra 12 (R.Z.self, R.Z.self.that, RecursiveImport.R.Z.self, RecursiveImport.R.Z.self.that, RecursiveImport.Y.self, …)",
               "names": {
                 "declared": 86,
-                "ours": 92,
-                "missing": 6,
-                "otherPath": 6,
+                "ours": 98,
                 "extra": 12
               }
             }
@@ -1229,12 +1191,11 @@
               "verdict": "disagree",
               "tolerance": "missing-names",
               "declared": "100 name(s) visible at \"T1::X1\"",
-              "ours": "120 name(s): missing 12 (P.S.T.T1.X1.self.that, P.S.T.U.U1.self.that, RecursiveImport.P.Q.R.Z.self.that, RecursiveImport.P.S.T.T1.X1.self, RecursiveImport.P.S.T.T1.X1.self.that, …), extra 32 (RecursiveImport.S1.self, RecursiveImport.S1.self.that, RecursiveImport.T.T1.X1.self, RecursiveImport.T.T1.X1.self.that, RecursiveImport.T.T1.self, …); 8 missing name(s) reachable by another path (P.S.T.T1.X1.self.that, P.S.T.U.U1.self.that, RecursiveImport.P.Q.R.Z.self.that, RecursiveImport.P.S.T.T1.X1.self, RecursiveImport.P.S.T.T1.X1.self.that, …)",
+              "ours": "130 name(s): missing 2 (RecursiveImport.X1, X1), extra 32 (RecursiveImport.S1.self, RecursiveImport.S1.self.that, RecursiveImport.T.T1.X1.self, RecursiveImport.T.T1.X1.self.that, RecursiveImport.T.T1.self, …)",
               "names": {
                 "declared": 100,
-                "ours": 120,
-                "missing": 12,
-                "otherPath": 8,
+                "ours": 130,
+                "missing": 2,
                 "extra": 32
               }
             }
@@ -1277,12 +1238,12 @@
               "verdict": "disagree",
               "tolerance": "missing-and-extra",
               "declared": "75 name(s) visible at \"c_Public\"",
-              "ours": "204 name(s): missing 4 (A, A, A.c_public, A_Id), extra 141 (Test, Test.Test1, Test.Test1.A.c_public.self, Test.Test1.A.c_public.self.that, Test.Test1.A.self, …)",
+              "ours": "218 name(s): missing 4 (A, A, A.c_public, A_Id), extra 155 (Test, Test.Test1, Test.Test1.A.c_public.self, Test.Test1.A.c_public.self.that, Test.Test1.A.self, …)",
               "names": {
                 "declared": 75,
-                "ours": 204,
+                "ours": 218,
                 "missing": 4,
-                "extra": 141
+                "extra": 155
               }
             }
           ]
@@ -1685,24 +1646,7 @@
           "path": "src/org/omg/kerml/xpect/tests/parsing/ParsingTests_ScopeWithOnlyDot.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 2,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 23,
-              "at": "OuterPackage::B::b",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "28 name(s) visible at \"OuterPackage::B::b\"",
-              "ours": "31 name(s): missing 0 (none), extra 3 (OuterPackage.B.b.self, OuterPackage.B.b.that, OuterPackage.B.b.that.self)",
-              "names": {
-                "declared": 28,
-                "ours": 31,
-                "extra": 3
-              }
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/parsing/ParsingTests_Scoping.kerml.xt",
@@ -1720,24 +1664,7 @@
           "path": "src/org/omg/kerml/xpect/tests/parsing/ParsingTests_UseFQNFourDot.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 2,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 23,
-              "at": "OuterPackage::B::b",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "28 name(s) visible at \"OuterPackage::B::b\"",
-              "ours": "31 name(s): missing 0 (none), extra 3 (OuterPackage.B.b.self, OuterPackage.B.b.that, OuterPackage.B.b.that.self)",
-              "names": {
-                "declared": 28,
-                "ours": 31,
-                "extra": 3
-              }
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/scoping/Classes.kerml.xt",
@@ -1999,25 +1926,7 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_NamedMemberFromOtherPackage2.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 31,
-              "at": "P1::A_alias",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "94 name(s) visible at \"P1::A_alias\"",
-              "ours": "90 name(s): missing 4 (test.P.A.AA.AAA.self.that, test.P.A_alias.AA.AAA.self.that, test.P1.A.AA.AAA.self.that, test.P1.A_alias.AA.AAA.self.that), extra 0 (none); 4 missing name(s) reachable by another path (test.P.A.AA.AAA.self.that, test.P.A_alias.AA.AAA.self.that, test.P1.A.AA.AAA.self.that, test.P1.A_alias.AA.AAA.self.that)",
-              "names": {
-                "declared": 94,
-                "ours": 90,
-                "missing": 4,
-                "otherPath": 4
-              }
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_UseFQNInSamePackage.kerml.xt",
@@ -2041,39 +1950,7 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MultipleImportTests_ImportFeature.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 4,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 23,
-              "at": "OuterPackage2::C::b",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "38 name(s) visible at \"OuterPackage2::C::b\"",
-              "ours": "53 name(s): missing 0 (none), extra 15 (OuterPackage.B.b.self, OuterPackage.B.b.that, OuterPackage.B.b.that.self, OuterPackage2.B.b.self, OuterPackage2.B.b.that, …)",
-              "names": {
-                "declared": 38,
-                "ours": 53,
-                "extra": 15
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 35,
-              "at": "b",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "42 name(s) visible at \"b\"",
-              "ours": "57 name(s): missing 0 (none), extra 15 (OuterPackage.B.b.self, OuterPackage.B.b.that, OuterPackage.B.b.that.self, OuterPackage2.B.b.self, OuterPackage2.B.b.that, …)",
-              "names": {
-                "declared": 42,
-                "ours": 57,
-                "extra": 15
-              }
-            }
-          ]
+          "agree": 4
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MultipleImportTests_ImportFeatureWithAlias.kerml.xt",
@@ -2091,47 +1968,13 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MultipleImport_ImportClass.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 4,
-          "agree": 3,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 36,
-              "at": "b",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "70 name(s) visible at \"b\"",
-              "ours": "94 name(s): missing 0 (none), extra 24 (C.b.self, C.b.that, C.b.that.self, D.b.self, D.b.that, …)",
-              "names": {
-                "declared": 70,
-                "ours": 94,
-                "extra": 24
-              }
-            }
-          ]
+          "agree": 4
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MultipleImport_ImportClassMoreTimes.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 4,
-          "agree": 3,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 39,
-              "at": "b",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "114 name(s) visible at \"b\"",
-              "ours": "144 name(s): missing 0 (none), extra 30 (D.b.self, D.b.that, D.b.that.self, EE.b.self, EE.b.that, …)",
-              "names": {
-                "declared": 114,
-                "ours": 144,
-                "extra": 30
-              }
-            }
-          ]
+          "agree": 4
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MultipleImport_ImportClassMoreTimes_FT.kerml.xt",
@@ -2149,24 +1992,7 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MultipleImport_ImportClassWithAlias.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 25,
-              "at": "aliass",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "23 name(s) visible at \"aliass\"",
-              "ours": "35 name(s): missing 0 (none), extra 12 (C.c.self, C.c.that, C.c.that.self, OuterPackage.B.b.self, OuterPackage.B.b.that, …)",
-              "names": {
-                "declared": 23,
-                "ours": 35,
-                "extra": 12
-              }
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MultipleImport_ImportClassWithAlias_FT.kerml.xt",
@@ -2196,47 +2022,13 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MultipleImport_ImportFeatureAlias.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 25,
-              "at": "aliass",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "32 name(s) visible at \"aliass\"",
-              "ours": "41 name(s): missing 0 (none), extra 9 (OuterPackage.B.b.self, OuterPackage.B.b.that, OuterPackage.B.b.that.self, aliass.self, aliass.that, …)",
-              "names": {
-                "declared": 32,
-                "ours": 41,
-                "extra": 9
-              }
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MultipleImport_ImportImportImp.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 4,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 39,
-              "at": "b",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "82 name(s) visible at \"b\"",
-              "ours": "112 name(s): missing 0 (none), extra 30 (B.b.self, B.b.that, B.b.that.self, C.b.self, C.b.that, …)",
-              "names": {
-                "declared": 82,
-                "ours": 112,
-                "extra": 30
-              }
-            }
-          ]
+          "agree": 5
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MultipleImport_ImportImportImp_FT.kerml.xt",
@@ -2254,24 +2046,7 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MultipleImport_ImportMembershipImp.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 4,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 34,
-              "at": "b",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "72 name(s) visible at \"b\"",
-              "ours": "96 name(s): missing 0 (none), extra 24 (C.b.self, C.b.that, C.b.that.self, OuterPackage.B.b.self, OuterPackage.B.b.that, …)",
-              "names": {
-                "declared": 72,
-                "ours": 96,
-                "extra": 24
-              }
-            }
-          ]
+          "agree": 5
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MultipleImport_ImportMembershipImp_FT.kerml.xt",
@@ -2289,24 +2064,7 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MultipleImport_MembershipImportImp.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 4,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 35,
-              "at": "b",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "76 name(s) visible at \"b\"",
-              "ours": "106 name(s): missing 0 (none), extra 30 (B.b.self, B.b.that, B.b.that.self, C.b.self, C.b.that, …)",
-              "names": {
-                "declared": 76,
-                "ours": 106,
-                "extra": 30
-              }
-            }
-          ]
+          "agree": 5
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MultipleImport_MembershipImportImp_FT.kerml.xt",
@@ -2350,15 +2108,15 @@
               "line": 23,
               "at": "A",
               "verdict": "disagree",
-              "tolerance": "missing-and-extra",
+              "tolerance": "extra-names",
               "declared": "829 name(s) visible at \"A\"",
-              "ours": "3362 name(s): missing 338 (A.B.B, A.B.B.aa, A.B.B.aa.self, A.B.B.aa.that, A.B.B.aa.that.self, …), extra 2871 (A.B.a.B, A.B.a.a, A.B.a.aa, A.B.a.aa.B, A.B.a.aa.a, …); 209 missing name(s) reachable by another path (A.B.aa.B.aa, A.B.aa.B.aa.self, A.B.aa.B.aa.that, A.B.aa.B.aa.that.self, A.B.aa.B.bb, …)",
+              "ours": "456 name(s): missing 394 (A.B.B.aa.self, A.B.B.aa.that, A.B.B.aa.that.self, A.B.B.bb.aa.self, A.B.B.bb.aa.that, …), extra 21 (a.aa.B, a.aa.B.aa, a.aa.B.bb, a.aa.B.self, a.aa.B.self.that, …); 211 missing name(s) reachable by another path (A.B.aa.B.aa.self, A.B.aa.B.aa.that, A.B.aa.B.aa.that.self, A.B.aa.B.bb.aa.self, A.B.aa.B.bb.aa.that, …)",
               "names": {
                 "declared": 829,
-                "ours": 3362,
-                "missing": 338,
-                "otherPath": 209,
-                "extra": 2871
+                "ours": 456,
+                "missing": 394,
+                "otherPath": 211,
+                "extra": 21
               }
             },
             {
@@ -2367,15 +2125,15 @@
               "line": 183,
               "at": "B",
               "verdict": "disagree",
-              "tolerance": "missing-and-extra",
+              "tolerance": "extra-names",
               "declared": "696 name(s) visible at \"B\"",
-              "ours": "3362 name(s): missing 276 (A.B.B, A.B.B.aa, A.B.B.aa.self, A.B.B.aa.that, A.B.B.aa.that.self, …), extra 2942 (A.B.a.B, A.B.a.a, A.B.a.aa, A.B.a.aa.B, A.B.a.aa.a, …); 177 missing name(s) reachable by another path (A.B.aa.B.aa, A.B.aa.B.aa.self, A.B.aa.B.aa.that, A.B.aa.B.aa.that.self, A.B.aa.B.bb, …)",
+              "ours": "382 name(s): missing 328 (A.B.B.aa.self, A.B.B.aa.that, A.B.B.aa.that.self, A.B.B.bb.aa.self, A.B.B.bb.aa.that, …), extra 14 (a.aa, a.bb, aa.aa.B, aa.aa.B.bb, aa.aa.B.self, …); 181 missing name(s) reachable by another path (A.B.aa.B.aa.self, A.B.aa.B.aa.that, A.B.aa.B.aa.that.self, A.B.aa.B.bb.aa.self, A.B.aa.B.bb.aa.that, …)",
               "names": {
                 "declared": 696,
-                "ours": 3362,
-                "missing": 276,
-                "otherPath": 177,
-                "extra": 2942
+                "ours": 382,
+                "missing": 328,
+                "otherPath": 181,
+                "extra": 14
               }
             }
           ]
@@ -2384,39 +2142,23 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_CircleProblem4.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 4,
-          "agree": 2,
+          "agree": 3,
           "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 23,
-              "at": "A::B",
-              "verdict": "disagree",
-              "tolerance": "missing-and-extra",
-              "declared": "12 name(s) visible at \"A::B\"",
-              "ours": "12 name(s): missing 2 (A.B.B, Test1.A.B.B), extra 2 (A.b.B, Test1.A.b.B)",
-              "names": {
-                "declared": 12,
-                "ours": 12,
-                "missing": 2,
-                "extra": 2
-              }
-            },
             {
               "kind": "scope",
               "block": true,
               "line": 32,
               "at": "B",
               "verdict": "disagree",
-              "tolerance": "missing-and-extra",
+              "tolerance": "library-names",
               "declared": "111 name(s) visible at \"B\"",
-              "ours": "67 name(s): missing 54 (A.B.B, A.B.B.b, A.B.B.b.b, A.B.B.b.b.self, A.B.B.b.b.that, …), extra 10 (A.b.B, A.b.B.self, A.b.B.self.that, B.b.B, OuterPackage.B.b.self, …); 14 missing name(s) reachable by another path (A.B.b.b.self, A.B.b.b.that, A.B.b.b.that.self, A.b.self, B.b.b.self, …)",
+              "ours": "82 name(s): missing 30 (A.B.B.b.b.self, A.B.B.b.b.that, A.B.B.b.b.that.self, A.B.b.B.b.self, A.B.b.B.b.that, …), extra 1 (b.B.b.self.that); 18 missing name(s) reachable by another path (A.B.b.b.self, A.B.b.b.that, A.B.b.b.that.self, A.b.self, A.b.that, …)",
               "names": {
                 "declared": 111,
-                "ours": 67,
-                "missing": 54,
-                "otherPath": 14,
-                "extra": 10
+                "ours": 82,
+                "missing": 30,
+                "otherPath": 18,
+                "extra": 1
               }
             }
           ]
@@ -2425,38 +2167,21 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_CircleProblem4_FT.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 4,
-          "agree": 2,
+          "agree": 3,
           "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 23,
-              "at": "A::B",
-              "verdict": "disagree",
-              "tolerance": "missing-and-extra",
-              "declared": "76 name(s) visible at \"A::B\"",
-              "ours": "64 name(s): missing 26 (A.B.B, A.B.B.b, A.B.B.b.b, A.B.B.b.self, A.B.B.b.that, …), extra 14 (A.b.B, A.b.B.self, A.b.B.that, A.b.B.that.self, A.b.self, …)",
-              "names": {
-                "declared": 76,
-                "ours": 64,
-                "missing": 26,
-                "extra": 14
-              }
-            },
             {
               "kind": "scope",
               "block": true,
               "line": 43,
               "at": "B",
               "verdict": "disagree",
-              "tolerance": "missing-and-extra",
+              "tolerance": "library-names",
               "declared": "98 name(s) visible at \"B\"",
-              "ours": "86 name(s): missing 27 (A.B.B, A.B.B.b, A.B.B.b.b, A.B.B.b.self, A.B.B.b.that, …), extra 15 (A.b.B, A.b.B.self, A.b.B.that, A.b.B.that.self, A.b.self, …)",
+              "ours": "101 name(s): missing 0 (none), extra 3 (b.B.b.self, b.B.b.that, b.B.b.that.self)",
               "names": {
                 "declared": 98,
-                "ours": 86,
-                "missing": 27,
-                "extra": 15
+                "ours": 101,
+                "extra": 3
               }
             }
           ]
@@ -2465,38 +2190,21 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_CircleProblem4_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 4,
-          "agree": 2,
+          "agree": 3,
           "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 23,
-              "at": "A.B",
-              "verdict": "disagree",
-              "tolerance": "missing-and-extra",
-              "declared": "76 name(s) visible at \"A.B\"",
-              "ours": "64 name(s): missing 26 (A.B.B, A.B.B.b, A.B.B.b.b, A.B.B.b.self, A.B.B.b.that, …), extra 14 (A.b.B, A.b.B.self, A.b.B.that, A.b.B.that.self, A.b.self, …)",
-              "names": {
-                "declared": 76,
-                "ours": 64,
-                "missing": 26,
-                "extra": 14
-              }
-            },
             {
               "kind": "scope",
               "block": true,
               "line": 43,
               "at": "B",
               "verdict": "disagree",
-              "tolerance": "missing-and-extra",
+              "tolerance": "library-names",
               "declared": "98 name(s) visible at \"B\"",
-              "ours": "86 name(s): missing 27 (A.B.B, A.B.B.b, A.B.B.b.b, A.B.B.b.self, A.B.B.b.that, …), extra 15 (A.b.B, A.b.B.self, A.b.B.that, A.b.B.that.self, A.b.self, …)",
+              "ours": "101 name(s): missing 0 (none), extra 3 (b.B.b.self, b.B.b.that, b.B.b.that.self)",
               "names": {
                 "declared": 98,
-                "ours": 86,
-                "missing": 27,
-                "extra": 15
+                "ours": 101,
+                "extra": 3
               }
             }
           ]
@@ -2563,7 +2271,7 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_ImportAndInnerClassesNamesAreTheSameBadCase3_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 1,
+          "agree": 2,
           "rows": [
             {
               "kind": "warnings",
@@ -2572,21 +2280,6 @@
               "verdict": "disagree",
               "declared": "warning: \"Duplicate of inherited member name 'B' from OuterPackage\"",
               "ours": "no warning anywhere in the file"
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 31,
-              "at": "a1",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "139 name(s) visible at \"a1\"",
-              "ours": "138 name(s): missing 1 (test.inner.B.b.a1.that.self), extra 0 (none)",
-              "names": {
-                "declared": 139,
-                "ours": 138,
-                "missing": 1
-              }
             }
           ]
         },
@@ -2929,116 +2622,31 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/SimpleImportAsFeatureTests_ImportClass.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 25,
-              "at": "A",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "23 name(s) visible at \"A\"",
-              "ours": "35 name(s): missing 0 (none), extra 12 (C.c.self, C.c.that, C.c.that.self, OuterPackage.B.b.self, OuterPackage.B.b.that, …)",
-              "names": {
-                "declared": 23,
-                "ours": 35,
-                "extra": 12
-              }
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/SimpleImportAsFeatureTests_ImportClassAlias.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 25,
-              "at": "aliass",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "23 name(s) visible at \"aliass\"",
-              "ours": "35 name(s): missing 0 (none), extra 12 (C.c.self, C.c.that, C.c.that.self, OuterPackage.B.b.self, OuterPackage.B.b.that, …)",
-              "names": {
-                "declared": 23,
-                "ours": 35,
-                "extra": 12
-              }
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/SimpleImportAsFeatureTests_ImportFeature.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 26,
-              "at": "b",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "32 name(s) visible at \"b\"",
-              "ours": "41 name(s): missing 0 (none), extra 9 (OuterPackage.B.b.self, OuterPackage.B.b.that, OuterPackage.B.b.that.self, b.self, b.that, …)",
-              "names": {
-                "declared": 32,
-                "ours": 41,
-                "extra": 9
-              }
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/SimpleImportAsFeatureTests_ImportFeatureAlias.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 25,
-              "at": "aliass",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "32 name(s) visible at \"aliass\"",
-              "ours": "41 name(s): missing 0 (none), extra 9 (OuterPackage.B.b.self, OuterPackage.B.b.that, OuterPackage.B.b.that.self, aliass.self, aliass.that, …)",
-              "names": {
-                "declared": 32,
-                "ours": 41,
-                "extra": 9
-              }
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/SimpleImportTestsFromOtherFile_Import1.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 4,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 32,
-              "at": "B::b",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "33 name(s) visible at \"B::b\"",
-              "ours": "42 name(s): missing 0 (none), extra 9 (B.b.self, B.b.that, B.b.that.self, OuterPackage.B.b.self, OuterPackage.B.b.that, …)",
-              "names": {
-                "declared": 33,
-                "ours": 42,
-                "extra": 9
-              }
-            }
-          ]
+          "agree": 5
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/SimpleImportTestsFromOtherFile_Import1_FT.kerml.xt",
@@ -3056,24 +2664,7 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/SimpleImportTestsFromOtherFile_Import2.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 4,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 32,
-              "at": "b",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "44 name(s) visible at \"b\"",
-              "ours": "62 name(s): missing 0 (none), extra 18 (B.b.self, B.b.that, B.b.that.self, OuterPackage.B.b.self, OuterPackage.B.b.that, …)",
-              "names": {
-                "declared": 44,
-                "ours": 62,
-                "extra": 18
-              }
-            }
-          ]
+          "agree": 5
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/SimpleImportTestsFromOtherFile_Import2_FT.kerml.xt",
@@ -3106,25 +2697,7 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/SimpleImportTests_ImportPackageAndInheritanceFromContainer.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 23,
-              "at": "A",
-              "verdict": "disagree",
-              "tolerance": "missing-and-extra",
-              "declared": "15 name(s) visible at \"A\"",
-              "ours": "11 name(s): missing 5 (a.A.a, test.A.A, test.A.A.a, test.A.A.a.a, test.A.a.A.a), extra 1 (A.a.A)",
-              "names": {
-                "declared": 15,
-                "ours": 11,
-                "missing": 5,
-                "extra": 1
-              }
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/SimpleImportTests_ImportPackageAndInheritanceFromContainer_FT.kerml.xt",
@@ -3138,14 +2711,13 @@
               "line": 23,
               "at": "A",
               "verdict": "disagree",
-              "tolerance": "missing-and-extra",
+              "tolerance": "library-names",
               "declared": "45 name(s) visible at \"A\"",
-              "ours": "32 name(s): missing 14 (a.A.a, test.A.A, test.A.A.a, test.A.A.a.a, test.A.A.a.self, …), extra 1 (A.a.A)",
+              "ours": "48 name(s): missing 0 (none), extra 3 (a.A.a.self, a.A.a.that, a.A.a.that.self)",
               "names": {
                 "declared": 45,
-                "ours": 32,
-                "missing": 14,
-                "extra": 1
+                "ours": 48,
+                "extra": 3
               }
             }
           ]
@@ -3162,14 +2734,13 @@
               "line": 23,
               "at": "A",
               "verdict": "disagree",
-              "tolerance": "missing-and-extra",
+              "tolerance": "library-names",
               "declared": "45 name(s) visible at \"A\"",
-              "ours": "32 name(s): missing 14 (a.A.a, test.A.A, test.A.A.a, test.A.A.a.a, test.A.A.a.self, …), extra 1 (A.a.A)",
+              "ours": "48 name(s): missing 0 (none), extra 3 (a.A.a.self, a.A.a.that, a.A.a.that.self)",
               "names": {
                 "declared": 45,
-                "ours": 32,
-                "missing": 14,
-                "extra": 1
+                "ours": 48,
+                "extra": 3
               }
             }
           ]
@@ -5693,77 +5264,13 @@
           "path": "src/org/omg/kerml/xpect/tests/visibility/VisibilityTests_PublicImportAsFeature.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.visibility.KerMLVisibilityTest",
           "expectations": 5,
-          "agree": 3,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 27,
-              "at": "c_public",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "31 name(s) visible at \"c_public\"",
-              "ours": "49 name(s): missing 0 (none), extra 18 (Classes.Try.feature4.self, Classes.Try.feature4.that, Classes.Try.feature4.that.self, Classes.Try.featurepublic.self, Classes.Try.featurepublic.that, …)",
-              "names": {
-                "declared": 31,
-                "ours": 49,
-                "extra": 18
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 39,
-              "at": "c_Public",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "31 name(s) visible at \"c_Public\"",
-              "ours": "49 name(s): missing 0 (none), extra 18 (Classes.Try.feature4.self, Classes.Try.feature4.that, Classes.Try.feature4.that.self, Classes.Try.featurepublic.self, Classes.Try.featurepublic.that, …)",
-              "names": {
-                "declared": 31,
-                "ours": 49,
-                "extra": 18
-              }
-            }
-          ]
+          "agree": 5
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/visibility/VisibilityTests_PublicImportAsFeatureAlias.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.visibility.KerMLVisibilityTest",
           "expectations": 5,
-          "agree": 3,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 26,
-              "at": "aliass",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "31 name(s) visible at \"aliass\"",
-              "ours": "49 name(s): missing 0 (none), extra 18 (Classes.Try.feature4.self, Classes.Try.feature4.that, Classes.Try.feature4.that.self, Classes.Try.featurepublic.self, Classes.Try.featurepublic.that, …)",
-              "names": {
-                "declared": 31,
-                "ours": 49,
-                "extra": 18
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 39,
-              "at": "Aliass",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "31 name(s) visible at \"Aliass\"",
-              "ours": "49 name(s): missing 0 (none), extra 18 (Classes.Try.feature4.self, Classes.Try.feature4.that, Classes.Try.feature4.that.self, Classes.Try.featurepublic.self, Classes.Try.featurepublic.that, …)",
-              "names": {
-                "declared": 31,
-                "ours": 49,
-                "extra": 18
-              }
-            }
-          ]
+          "agree": 5
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/visibility/VisibilityTests_PublicImportAsFeatureAlias_FT.kerml.xt",
