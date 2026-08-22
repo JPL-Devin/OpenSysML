@@ -50,7 +50,7 @@ func TestRenameRewritesQualifiedReferences(t *testing.T) {
 }
 
 func TestRenameRewritesImportedReferences(t *testing.T) {
-	const src = "package P {\n\tpart def Old;\n}\npackage Q {\n\timport P::Old;\n" +
+	const src = "package P {\n\tpart def Old;\n}\npackage Q {\n\tprivate import P::Old;\n" +
 		"\tpart a : Old;\n\tpart b : P::Old;\n}\n"
 	got := renamed(t, "imported.sysml", src, "P::Old", "Fresh")
 
@@ -69,7 +69,7 @@ func TestRenameRewritesImportedReferences(t *testing.T) {
 // A wildcard import names the namespace, not the member, so renaming a member
 // leaves the import alone.
 func TestRenameLeavesWildcardImportAlone(t *testing.T) {
-	const src = "package P {\n\tpart def Old;\n}\npackage Q {\n\timport P::*;\n" +
+	const src = "package P {\n\tpart def Old;\n}\npackage Q {\n\tprivate import P::*;\n" +
 		"\tpart a : Old;\n}\n"
 	got := renamed(t, "wildcard.sysml", src, "P::Old", "Fresh")
 
@@ -124,7 +124,7 @@ func TestRenameLeavesShortNameReferencesAlone(t *testing.T) {
 // reference site: rewriting there would silently rebind that reference, which
 // re-analysis cannot catch because the name still resolves.
 func TestRenameCapturingANameAtAReferenceIsRefused(t *testing.T) {
-	const src = "package P {\n\tpart def Old;\n}\npackage Q {\n\timport P::*;\n" +
+	const src = "package P {\n\tpart def Old;\n}\npackage Q {\n\tprivate import P::*;\n" +
 		"\tpart def New;\n\tpart a : Old;\n}\n"
 	e := refusedRename(t, "capture.sysml", src, "P::Old", "New")
 
@@ -157,7 +157,7 @@ func TestRenameCapturingAQualifiedSegmentIsRefused(t *testing.T) {
 // Renaming onto a name declared in a scope the element's references are written
 // in is refused even when nothing at the declaration shadows it.
 func TestRenameShadowingAtAReferenceIsRefused(t *testing.T) {
-	const src = "package P {\n\tpart def Old;\n}\npackage Q {\n\timport P::Old;\n" +
+	const src = "package P {\n\tpart def Old;\n}\npackage Q {\n\tprivate import P::Old;\n" +
 		"\tpart def Inner {\n\t\tattribute New;\n\t\tattribute q : Old;\n\t}\n}\n"
 	e := refusedRename(t, "shadow-ref.sysml", src, "P::Old", "New")
 

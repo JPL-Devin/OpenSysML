@@ -107,9 +107,9 @@ func TestPublishDiagnosticsReportsSyntaxError(t *testing.T) {
 	}
 }
 
-// A bare import reaches the editor as a warning on the `import` keyword, never
-// as an error.
-func TestPublishDiagnosticsReportsBareImportAsWarning(t *testing.T) {
+// A bare import reaches the editor as an error on the `import` keyword: the
+// visibility indicator is mandatory in ImportPrefix (D2).
+func TestPublishDiagnosticsReportsBareImportAsError(t *testing.T) {
 	ws := model.NewWorkspace()
 	s := NewServer(ws)
 	fc := &fakeClient{}
@@ -124,8 +124,8 @@ func TestPublishDiagnosticsReportsBareImportAsWarning(t *testing.T) {
 		t.Fatalf("published = %v, want one diagnostic", published)
 	}
 	d := published[0].Diagnostics[0]
-	if d.Severity != protocol.DiagnosticSeverityWarning {
-		t.Errorf("severity = %v, want %v", d.Severity, protocol.DiagnosticSeverityWarning)
+	if d.Severity != protocol.DiagnosticSeverityError {
+		t.Errorf("severity = %v, want %v", d.Severity, protocol.DiagnosticSeverityError)
 	}
 	if d.Code != "import-visibility" {
 		t.Errorf("code = %v, want %q", d.Code, "import-visibility")

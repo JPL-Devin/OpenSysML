@@ -68,8 +68,8 @@ func TestPassesGoldenClean(t *testing.T)       { runPassesGolden(t, "clean") }
 func TestPassesGoldenErrors(t *testing.T)      { runPassesGolden(t, "errors") }
 func TestPassesGoldenConstraints(t *testing.T) { runPassesGolden(t, "constraints") }
 
-// A bare `import` is non-conforming notation: it warns, at every nesting depth,
-// and still resolves and type-checks (no other diagnostic follows).
+// A bare `import` is non-conforming notation the reference rejects: it errors at
+// every nesting depth (D2).
 func TestPassesGoldenImportNoVisibility(t *testing.T) {
 	runPassesGolden(t, "import_no_visibility")
 }

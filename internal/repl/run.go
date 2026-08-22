@@ -126,7 +126,8 @@ func (s *Session) HasErrors() bool {
 }
 
 // hasAnalysisErrors reports whether analysis found something that stops the model
-// from being run at all.
+// from being run at all. A notation error counts: strict conformance rejects the
+// file, and a non-interactive run exits on that (cmd/sysml/strict_test.go).
 func (s *Session) hasAnalysisErrors() bool {
 	for _, d := range s.Diagnostics() {
 		if d.Severity == passes.SeverityError {

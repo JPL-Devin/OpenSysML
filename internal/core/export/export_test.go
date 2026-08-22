@@ -193,7 +193,7 @@ func TestKindKeywordSynonymsSurviveRDF(t *testing.T) {
 		"feature f;",
 		"function def F;",
 		"message m;",
-		"allocate al;",
+		"allocate a to b;",
 		"timeslice ts;",
 		"snapshot sn;",
 	} {
