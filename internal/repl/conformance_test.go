@@ -68,6 +68,26 @@ func TestStrictMetaCommandRepeatsTheDiagnostics(t *testing.T) {
 	}
 }
 
+// A bare import is an error about the writing, so the model it names still runs
+// by default; asked strictly, the file is rejected and nothing runs.
+func TestNotationErrorStopsTheRunOnlyWhenAskedStrictly(t *testing.T) {
+	const bareImport = "package Q { part def A; }\npackage P { import Q::*; part def X; }\n"
+	s := NewSession()
+	s.Submit(bareImport)
+	if !hasImportError(s.Diagnostics()) {
+		t.Fatalf("the bare import reported no error: %v", s.Diagnostics())
+	}
+	if s.HasErrors() {
+		t.Errorf("default mode refused to run a model whose only error is notation: %v", s.Diagnostics())
+	}
+	strict := NewSession()
+	meta(t, strict, "%strict on")
+	strict.Submit(bareImport)
+	if !strict.HasErrors() {
+		t.Errorf("strict mode ran a file it rejects: %v", strict.Diagnostics())
+	}
+}
+
 func meta(t *testing.T, s *Session, line string) []string {
 	t.Helper()
 	out, quit, err := s.runMeta(line)
@@ -75,6 +95,15 @@ func meta(t *testing.T, s *Session, line string) []string {
 		t.Fatalf("%s: err=%v quit=%v", line, err, quit)
 	}
 	return out
+}
+
+func hasImportError(diags []passes.Diagnostic) bool {
+	for _, d := range diags {
+		if d.Severity == passes.SeverityError && d.Code == "import-visibility" {
+			return true
+		}
+	}
+	return false
 }
 
 func notationErrors(diags []passes.Diagnostic) int {

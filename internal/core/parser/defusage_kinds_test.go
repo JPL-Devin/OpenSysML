@@ -131,6 +131,19 @@ func TestParseAllocationEnds(t *testing.T) {
 	}
 }
 
+// `allocation al;` names an allocation usage and `allocate f to g;` states its
+// ends without naming it; both are legal (D1, SysML.xtext:1219-1222).
+func TestParseAllocationSpellings(t *testing.T) {
+	named := parseOneMember(t, "allocation al;").(*ast.Usage)
+	if named.Kind != ast.UsageAllocation || named.Ident.Name != "al" || len(named.ConnectorEnds) != 0 {
+		t.Fatalf("named allocation wrong: kind=%v name=%q ends=%d", named.Kind, named.Ident.Name, len(named.ConnectorEnds))
+	}
+	ends := parseOneMember(t, "allocate f to g;").(*ast.Usage)
+	if ends.Kind != ast.UsageAllocation || len(ends.ConnectorEnds) != 2 {
+		t.Fatalf("allocate ends wrong: kind=%v ends=%d", ends.Kind, len(ends.ConnectorEnds))
+	}
+}
+
 func TestParseInterfaceEnds(t *testing.T) {
 	u := parseOneMember(t, "interface i connect p to q;").(*ast.Usage)
 	if u.Kind != ast.UsageInterface || len(u.ConnectorEnds) != 2 {

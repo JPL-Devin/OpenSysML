@@ -71,13 +71,12 @@ part def Holder {
 part holder : Holder;
 action tally {
     attribute got = 0;
-    first start;
     action read {
         assign got := holder.d;
     }
-    done end;
-    then start read;
-    then read end;
+    first start;
+    then read;
+    then done;
 }
 `)
 	wants(t, run(t, s, "%action tally"), "Started action executor")

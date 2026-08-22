@@ -33,7 +33,6 @@ var definitionKindKeywords = map[string]ast.DefinitionKind{
 	"port":       ast.DefPort,
 	"interface":  ast.DefInterface,
 	"allocation": ast.DefAllocation,
-	"allocate":   ast.DefAllocation, // Short form for allocation def
 	"binding":    ast.DefBinding,
 	// Tier C.
 	"action":       ast.DefAction,
@@ -126,11 +125,13 @@ var usageKindKeywords = map[string]ast.UsageKind{
 	"interface":   ast.UsageInterface,
 	"interaction": ast.UsageInteraction,
 	"allocation":  ast.UsageAllocation,
-	"allocate":    ast.UsageAllocation, // Short form for allocation usage
-	"binding":     ast.UsageBinding,
-	"actor":       ast.UsageActor,         // actor of a requirement, use case or viewpoint
-	"render":      ast.UsageViewRendering, // rendering a view body names
-	"bind":        ast.UsageBinding,       // shorthand for binding
+	// `allocate` introduces a ConnectorPart, never a definition
+	// (AllocationUsageDeclaration, SysML.xtext:1219-1222).
+	"allocate": ast.UsageAllocation,
+	"binding":  ast.UsageBinding,
+	"actor":    ast.UsageActor,         // actor of a requirement, use case or viewpoint
+	"render":   ast.UsageViewRendering, // rendering a view body names
+	"bind":     ast.UsageBinding,       // shorthand for binding
 	// Tier C.
 	"action":       ast.UsageAction,
 	"perform":      ast.UsageAction, // perform keyword creates action usage
@@ -951,7 +952,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		mods.prefixKeyword = "perform"
 		kw = "action" // treat as regular action keyword
 		// Continue to dual-keyword path (don't enter usage-only block)
-	} else if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connect" || kw == "connector" || kw == "bind" || kw == "satisfy" || kw == "verify" || kw == "include" || kw == "step" || kw == "expr" || kw == "interaction" || kw == "require" || kw == "transition" || kw == "perform" || kw == "exhibit" || kw == "variant" || kw == "assert" || kw == "assume" || kw == "event" || kw == "stakeholder" || kw == "frame" || kw == "actor" || kw == "expose" || kw == "render" {
+	} else if kw == "subject" || kw == "objective" || kw == "succession" || kw == "inv" || kw == "connect" || kw == "connector" || kw == "bind" || kw == "satisfy" || kw == "verify" || kw == "include" || kw == "step" || kw == "expr" || kw == "interaction" || kw == "require" || kw == "transition" || kw == "perform" || kw == "exhibit" || kw == "variant" || kw == "assert" || kw == "assume" || kw == "event" || kw == "stakeholder" || kw == "frame" || kw == "actor" || kw == "expose" || kw == "render" || kw == "allocate" {
 		// Check for usage-only keywords that never have def forms
 
 		// Special case: perform <ref>; (shorthand without action keyword)
@@ -3516,13 +3517,12 @@ func (p *Parser) parseTierBEnds(u *ast.Usage, kind ast.UsageKind) {
 			p.parseConnectorEnds(u, "") // succession has no intermediate keyword
 		}
 	case ast.UsageAllocation:
-		// Allocation usage syntax: allocate X to Y (no intermediate keyword, like succession)
-		// Can be:
-		// 1. `allocate X to Y` - 'allocate' is kind keyword
-		// 2. `allocation name : Type allocate X to Y` - 'allocation' is kind keyword, 'allocate' is intermediate
-		// 3. `allocation name : Type { body }` - simple allocation with body, no connector ends
-		// Check for optional 'allocate' keyword (when kind keyword was 'allocation' not 'allocate')
-		p.acceptKeyword("allocate")
+		// `allocate` states a ConnectorPart, either as the kind keyword —
+		// `allocate X to Y` — or after an `allocation` declaration —
+		// `allocation al allocate X to Y`. Without it, `allocation al;` declares
+		// a plain allocation usage (AllocationUsageDeclaration,
+		// SysML.xtext:1219-1222).
+		allocateStatesEnds := u.Keyword == "allocate" || p.acceptKeyword("allocate")
 
 		if p.atKeyword("to") {
 			// Single-end form: allocate to target
@@ -3536,7 +3536,9 @@ func (p *Parser) parseTierBEnds(u *ast.Usage, kind ast.UsageKind) {
 			// Only parse connector ends if NOT at body start
 			p.parseConnectorEnds(u, "") // no intermediate keyword
 		}
-		// If at LBrace or Semicolon, skip connector ends (simple allocation with body)
+		if allocateStatesEnds && len(u.ConnectorEnds) == 0 {
+			p.error(p.peek().Span, "expected connector end after 'allocate'")
+		}
 	case ast.UsageFlow:
 		p.parseFlowEnds(u)
 	case ast.UsageMetadata:

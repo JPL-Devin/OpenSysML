@@ -278,3 +278,51 @@ func TestStandardNotationIsSilent(t *testing.T) {
 		wantSilent(t, "a.sysml", src)
 	}
 }
+
+// F104: `bind` relates two features, so a binding whose right side is an
+// expression is ours, while a feature-valued one is standard.
+func TestExpressionValuedBindingIsAnExtension(t *testing.T) {
+	wantNotation(t, "a.sysml", "part def P { attribute a; attribute b; bind a = b * 2; }",
+		CodeNonstandardNotation, "`bind <feature> = <expression>;`")
+	wantSilent(t, "a.sysml", "part def P { attribute a; attribute b; bind a = b; }")
+	wantSilent(t, "a.sysml", "part def P { part a { attribute x; } attribute b; bind b = a.x; }")
+}
+
+// F105: `done` is a library feature a succession names, and a succession states
+// its ends with `first` and `then`.
+func TestNamedFinalNodeAndTwoEndedThenAreExtensions(t *testing.T) {
+	wantNotation(t, "a.sysml", "action def A { done end; }", CodeNonstandardNotation, "`done <name>;`")
+	wantNotation(t, "a.sysml", "action def A { action a; action b; then a b; }",
+		CodeNonstandardNotation, "`then <source> <target>;`")
+	wantSilent(t, "a.sysml", "action def A { action a; action b; first a then b; }")
+	wantSilent(t, "a.sysml", "action def A { action a; first a; then done; }")
+}
+
+// F106: an InitialNodeMember is reachable from ActionBodyItem alone, so a
+// one-ended `first` is standard in an action body and ours in a part body.
+func TestOneEndedFirstOutsideAnActionBodyIsAnExtension(t *testing.T) {
+	wantNotation(t, "a.sysml", "part def P { part a; first a; }",
+		CodeNonstandardNotation, "one-ended `first <node>;` outside an action body")
+	wantSilent(t, "a.sysml", "action def A { action a; first a; }")
+	wantSilent(t, "a.sysml", "action def A { action outer { action a; first a; } }")
+	wantSilent(t, "a.sysml", "part def P { action a { action b; first b; } }")
+}
+
+// F107: RequirementConstraintMember belongs to a RequirementBody, which an
+// analysis case body is not.
+func TestRequirementConstraintOutsideARequirementBodyIsAnExtension(t *testing.T) {
+	wantNotation(t, "a.sysml", "analysis def An { attribute size; require constraint { size >= 1 } }",
+		CodeNonstandardNotation, "`require` outside a requirement body")
+	wantNotation(t, "a.sysml", "part def P { attribute size; assume constraint { size >= 1 } }",
+		CodeNonstandardNotation, "`assume` outside a requirement body")
+	wantSilent(t, "a.sysml", "requirement def R { attribute size; require constraint { size >= 1 } }")
+	wantSilent(t, "a.sysml", "analysis def An { attribute size; assert constraint { size >= 1 } }")
+}
+
+// k02: the KerML grammar has no `part` declaration, so a SysML declaration
+// keyword in a .kerml file is reported, and the KerML spelling is silent.
+func TestSysMLDeclarationInKerMLIsReported(t *testing.T) {
+	wantNotation(t, "a.kerml", "package P { part def Wheel; }", CodeSysMLNotation, "`part` is SysML notation")
+	wantSilent(t, "a.kerml", "package P { struct Wheel; }")
+	wantSilent(t, "a.sysml", "package P { part def Wheel; }")
+}

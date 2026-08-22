@@ -104,27 +104,30 @@ carry no timestamps or absolute paths, so repeated runs are byte-identical
 Under the default `-conformance auto`:
 
 ```
-119 case(s): 101 both reject, 18 only the pilot rejects, 0 only we reject, 0 both accept
+119 case(s): 114 both reject, 5 only the pilot rejects, 0 only we reject, 0 both accept
   of which 5 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
 | Source | Cases | Both reject | Pilot only | Ours only | Both accept |
 | --- | --- | --- | --- | --- | --- |
 | extensions | 7 | 7 | 0 | 0 | 0 |
-| grammar | 78 | 74 | 4 | 0 | 0 |
-| xpect | 34 | 20 | 14 | 0 | 0 |
+| grammar | 78 | 76 | 2 | 0 | 0 |
+| xpect | 34 | 31 | 3 | 0 | 0 |
 
-The corpus grew from 79 cases to 119 in wave 10G, and the default-mode gap count went from 9 of 79
-to 23 of 119. The ratio got worse because the corpus now reaches the pilot's own semantic
-expectations (the `xpect/` derivation went from 7 cases to 34), not because anything regressed: all
-14 new gaps are `xpect/` cases whose rule the reference checks and we do not. No case in the corpus
-is accepted by both implementations.
+The corpus grew from 79 cases to 119 in wave 10G, and the default-mode gap count is 10 of 119.
+Wave 10C closed the two `grammar/` gaps left from wave 9F — `g02` (bare `import` is an error by
+default) and `g31` (`allocate` requires its `ConnectorPart`) — which is why `grammar/` reads 2
+rather than 4, and wave 10B's validation rules closed eleven `xpect/` gaps (`p08`, `p17`, `p20`,
+`p21`, `p22`, `p25`, `p26`, `p27`, `p28`, `p32`, `p33`), leaving 3. No case in the corpus is
+accepted by both implementations.
 
 The five strict-only agreements are `x01`, `x04`, `x05`, `x06` and `x07`: OpenSysML notation
 extensions that the default mode accepts on purpose and strict mode reports as errors. Judged in
-the default mode the same corpus gives 96 agreements and 23 gaps, which is what `-conformance
+the default mode the same corpus gives 109 agreements and 10 gaps, which is what `-conformance
 default` prints — the extra five are those same `extensions/` cases, which the default mode accepts
-on purpose. Of the 14 gaps this document carried before wave 8, six were closed by the
+on purpose. `-conformance strict` gives 116 and 3: wave 10C gave `g15` and `k02` a strict
+escalation, so every `grammar/` case is rejected when asked strictly and only the `xpect/` semantic
+rules remain — agreement under an opt-in question, not default-mode conformance. Of the 14 gaps this document carried before wave 8, six were closed by the
 validation waves themselves — `p01`, `p02`, `p03`, `p05` (wave 8C), `p06` (wave 8A) and `p04`
 (wave 8B) — and only the five `extensions/` cases belong to strict mode.
 
@@ -142,30 +145,17 @@ rejection, not agreement on the rule.
 
 ## Permissiveness gaps
 
-All 18 gaps, each with its reproducer (the corpus file is the minimal reproducer), both verdicts,
-and the package the root cause is likely in. **None are fixed here** — this oracle measures;
-fixing is later work.
+All 5 gaps, each with its reproducer (the corpus file is the minimal reproducer), both verdicts,
+and the package the root cause is likely in. The two `grammar/` rows are rejected under
+`-conformance strict` (wave 10C) and accepted by default; the `xpect/` rows no mode of ours checks.
 
 | Reproducer (`cmd/pilot-reject/testdata/negative/`) | Ours | Pilot | Likely root cause |
 | --- | --- | --- | --- |
-| `grammar/g02-import-without-visibility.sysml` | accepts | `mismatched input 'import'` | `internal/core/parser` — treats the import visibility keyword as optional; the pinned `ImportPrefix` requires it |
 | `grammar/g15-keyword-as-name.sysml` | accepts | `no viable alternative at input 'part'` | `internal/core/parser` — allows a reserved keyword as a declared name |
-| `grammar/g31-allocate-without-to.sysml` | accepts | `mismatched input ';' expecting 'to'` | `internal/core/parser` — accepts `allocate` as a synonym for the `allocation` usage keyword, so the connector's missing `to` is never reached |
 | `grammar/k02-sysml-keyword-in-kerml.kerml` | accepts | `no viable alternative at input 'def'` | `internal/core/parser` — `.kerml` files are parsed with the full SysML grammar; no per-language restriction |
-| `xpect/p08-variant-outside-variation.sysml` | accepts | `A variant must be an owned member of a variation.` | `internal/core/passes` — the variant-membership rule is not checked for a variant declared outside a variation |
 | `xpect/p11-metadata-body-not-evaluable.sysml` | accepts | `Must be model-level evaluable` | `internal/core/passes` — metadata body feature values are not checked for model-level evaluability |
 | `xpect/p15-attribute-typed-by-part-def.sysml` | accepts | `An attribute must be typed by attribute definitions.` | `internal/core/passes` — attribute usage typing is not restricted to attribute definitions |
-| `xpect/p17-calc-two-return-parameters.sysml` | accepts | `Only one return parameter is allowed` | `internal/core/passes` — the return-parameter cardinality rule is unimplemented |
-| `xpect/p20-connection-with-one-end.sysml` | accepts | `Must have at least two related elements` | `internal/core/passes` — connector end cardinality is unchecked |
-| `xpect/p21-filter-constructor-condition.sysml` | accepts | `Must have a Boolean result` | `internal/core/passes` — a constructor-expression filter condition is not typed, so the Boolean-result rule never fires |
-| `xpect/p22-filter-not-model-level-evaluable.sysml` | accepts | `Must be model-level evaluable` | `internal/core/passes` — filter conditions are not checked for model-level evaluability |
 | `xpect/p24-metadata-abstract-type.sysml` | accepts | `Must have a concrete type` | `internal/core/passes` — metadata usages may be typed by an abstract metaclass |
-| `xpect/p25-two-individual-definitions.sysml` | accepts | `At most one individual definition is allowed.` | `internal/core/passes` — individual-definition cardinality is unchecked |
-| `xpect/p26-port-def-nonreferential-usage.sysml` | accepts | `Owned usages of a port definition (other than ports) must be referential.` | `internal/core/passes` — port definition body usages are not required to be referential |
-| `xpect/p27-interface-end-not-port.sysml` | accepts | `An interface end must be a port.` | `internal/core/passes` — interface end kinds are unchecked |
-| `xpect/p28-package-level-feature-redefined.sysml` | accepts | `A package-level feature cannot be redefined` | `internal/core/passes` — redefinition featuring types are unchecked at package level |
-| `xpect/p32-redefinition-same-featuring-type.sysml` | accepts | `Featuring types of redefining feature and redefined feature cannot be the same` | `internal/core/passes` — the featuring-type distinctness rule is unimplemented |
-| `xpect/p33-individual-typed-by-plain-def.sysml` | accepts | `An individual must be typed by one individual definition.` | `internal/core/passes` — individual usage typing is unchecked |
 
 Each pilot message above is the first error the validator reports for the case; the full lists are
 in the baseline JSON's `pilot` arrays.
@@ -186,6 +176,7 @@ divergence is deliberate and who owns the fix — never that it is not a diverge
   mode; the diagnostic is a semantic pass, so W9F does not change it (`internal/core/passes` is
   another wave-9 slice). Wave-10 item: raise `SeverityWarning` to an error, or make it
   conformance-dependent as `nonstandard_notation.go` already does.
+  **Closed in wave 10C (D2):** the finding is an error in every mode, and the case now rejects.
 - **`grammar/g15-keyword-as-name.sysml` — deliberate recovery policy, still a divergence.** The
   pinned grammar's `Name` is the `ID` terminal, which excludes keywords, and `part def part;` is
   `no viable alternative at input 'part'`. We read a keyword in name position as the name the
@@ -197,14 +188,18 @@ divergence is deliberate and who owns the fix — never that it is not a diverge
   the specification's grammar has no production for it. Since warnings are not rejection, the gap
   stands. Wave-10 item: escalate this warning to an error under `-conformance strict`, which keeps
   the recovery behaviour for editors while letting the strict question be answered correctly.
+  **Wave 10C:** `reserved-keyword-name` is an error under `-conformance strict`; the default mode
+  still warns and recovers, so the case remains a default-mode gap.
 - **`grammar/k02-sysml-keyword-in-kerml.kerml` — one grammar for both languages, fix out of
   slice.** `part def` exists in no KerML production; the KerML validator reports `no viable
   alternative at input 'def'`. We parse `.kerml` with the same grammar as `.sysml` and filter
   afterwards: `internal/core/passes/nonstandard_notation.go` reports SysML-only notation in a
-  KerML file, at a severity that depends on the conformance mode. It does not cover the SysML
-  *definition and usage keywords* themselves, which is why `-conformance strict` does not close
-  this case either (measured: strict leaves the same four grammar gaps as auto). Extending that
-  walker is a `internal/core/passes` change, so it is written up rather than done here.
+  KerML file, at a severity that depends on the conformance mode. As W9F measured it, the walker
+  did not cover the SysML *definition and usage keywords* themselves, so `-conformance strict` left
+  this case open too. Extending that walker is a `internal/core/passes` change, so W9F wrote it up
+  rather than doing it.
+  **Wave 10C:** the walker now reports SysML declaration keywords in a `.kerml` file, so strict
+  mode rejects the case; the default mode warns, so it remains a default-mode gap.
 - **`grammar/g31-allocate-without-to.sysml` — the `allocate` synonym, adjudicated, not fixed.**
   In the pinned grammar `allocate` is only the `AllocateKeyword` (`SysML.xtext:1210`) and demands
   a `ConnectorPart` (`:1219`), whose binary form requires `to` (`:1076`); the usage keyword is
@@ -219,6 +214,7 @@ divergence is deliberate and who owns the fix — never that it is not a diverge
   [wave10-decisions.md](wave10-decisions.md) (D1):** require the `ConnectorPart` after `allocate`
   and drop the definition-side entry, which closes this case without dropping the legal
   `allocate f to g;` form. `g02`'s severity is D2 in the same record.
+  **Closed in wave 10C (D1):** `allocate` demands its `ConnectorPart`, and the case now rejects.
 
 ### Grammar mutation pass (W9F)
 

@@ -46,3 +46,29 @@ func TestStrictConformanceLeavesStandardNotationAlone(t *testing.T) {
 		wantReport(t, check(t, binary, standard, args...), 0, "no errors")
 	}
 }
+
+// A notation error does not stop a check, so the run succeeds — but a run that
+// reported an error must not also report that the model has none.
+func TestValidateDoesNotCallAReportedErrorNone(t *testing.T) {
+	binary := buildCLI(t)
+	const bare = "package Q {\n    part def A;\n}\npackage P {\n    import Q::*;\n}\n"
+
+	got := check(t, binary, bare, "-validate")
+	wantReport(t, got, 0, "error: import without a visibility indicator",
+		"no error that stops a check")
+	rejectReport(t, got, ": no errors")
+}
+
+// The parser's keyword-as-name warning and the strict escalation of it are one
+// finding, so a strict run reports the span once.
+func TestStrictReportsAKeywordAsNameOnce(t *testing.T) {
+	binary := buildCLI(t)
+	const keywordName = "package P {\n    part def part;\n}\n"
+
+	wantReport(t, check(t, binary, keywordName, "-validate"), 0,
+		"warning: \"part\" is a reserved keyword; write 'part' to use it as a name")
+
+	strict := check(t, binary, keywordName, "-validate", "-strict")
+	wantReport(t, strict, 2, "error: \"part\" is a reserved keyword, not a name the ID terminal admits")
+	rejectReport(t, strict, "warning:")
+}

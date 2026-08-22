@@ -8,7 +8,7 @@ func TestPrivateWildcardImportIsNotReExportedAcrossDocuments(t *testing.T) {
 	docs := map[string]string{
 		"lower.sysml": `package Lower { part def Hidden; }`,
 		"mid.sysml":   `package Mid { private import Lower::*; }`,
-		"app.sysml":   `package App { import Mid::*; part def Thing { part p : Hidden; } }`,
+		"app.sysml":   `package App { private import Mid::*; part def Thing { part p : Hidden; } }`,
 	}
 	if found := openAll(t, "app.sysml", docs); len(found) != 1 {
 		t.Fatalf("expected one unresolved finding for the privately imported Hidden, got %d: %v",

@@ -78,3 +78,18 @@ func TestImportSummaryKeepsWildcards(t *testing.T) {
 		}
 	}
 }
+
+// D2 changed the severity of a bare import, not what the model means, so a
+// submission whose only error is notation still confirms what it declared.
+func TestNotationErrorKeepsTheDeclaredSummary(t *testing.T) {
+	s := NewSession()
+	s.Submit("package Q { part def A; }")
+	r := s.Submit("package P { import Q::*; part def X; }")
+	found, declared := renderSplit(r, s.verbosity)
+	if !strings.Contains(strings.Join(found, "\n"), "error:") {
+		t.Fatalf("the bare import produced no error to report: %q", found)
+	}
+	if !strings.Contains(strings.Join(declared, "\n"), "package P") {
+		t.Errorf("the submission declared package P but summarized nothing: %q", declared)
+	}
+}

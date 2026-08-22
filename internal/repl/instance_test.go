@@ -130,7 +130,7 @@ func TestRedeclarationEndsDebuggerWithNotice(t *testing.T) {
 	s := loadFixture(t, "testdata/action_debug.sysml")
 	run(t, s, "%action tally")
 
-	res := s.Submit("package Debug {\n\taction tally {\n\t\tfirst start;\n\t\tdone end;\n\t\tthen start end;\n\t}\n}")
+	res := s.Submit("package Debug {\n\taction tally {\n\t\tfirst start;\n\t\tthen done;\n\t}\n}")
 	if !hasNotice(res, `action debugging session for "tally" ended`) {
 		t.Fatalf("notices = %v, want an ended-session note", res.Notices)
 	}
@@ -143,7 +143,7 @@ func TestRedeclarationEndsDebuggerWithNotice(t *testing.T) {
 // A behavior typed straight at the prompt owns itself, so redeclaring it ends
 // the session the same way redeclaring its package does.
 func TestTopLevelRedeclarationEndsDebugger(t *testing.T) {
-	const tally = "action tally {\n\tattribute total = 0;\n\tfirst start;\n\taction accumulate {\n\t\tassign total := total + 5;\n\t}\n\tdone end;\n\tthen start accumulate;\n\tthen accumulate end;\n}"
+	const tally = "action tally {\n\tattribute total = 0;\n\taction accumulate {\n\t\tassign total := total + 5;\n\t}\n\tfirst start;\n\tthen accumulate;\n\tthen done;\n}"
 	s := NewSession()
 	if res := s.Submit(tally); len(res.Diagnostics) > 0 {
 		t.Fatalf("fixture has diagnostics: %v", res.Diagnostics)
@@ -163,7 +163,7 @@ func TestTopLevelRedeclarationEndsDebugger(t *testing.T) {
 func TestDebuggerEndsWhenADeclarationItDependsOnChanges(t *testing.T) {
 	s := NewSession()
 	s.Submit("part def Kind { attribute size = 1.0; }")
-	res := s.Submit("action tally {\n\tpart k : Kind;\n\tfirst start;\n\tdone end;\n\tthen start end;\n}")
+	res := s.Submit("action tally {\n\tpart k : Kind;\n\tfirst start;\n\tthen done;\n}")
 	if len(res.Diagnostics) > 0 {
 		t.Fatalf("fixture has diagnostics: %v", res.Diagnostics)
 	}
@@ -182,7 +182,7 @@ func TestDebuggerEndsWhenADeclarationItDependsOnChanges(t *testing.T) {
 func TestDebuggerEndsWhenItsPerformingObjectIsDropped(t *testing.T) {
 	s := NewSession()
 	s.Submit("part def Holder { attribute size = 1.0; }")
-	res := s.Submit("action tally {\n\tattribute total = 0;\n\tfirst start;\n\tdone end;\n\tthen start end;\n}")
+	res := s.Submit("action tally {\n\tattribute total = 0;\n\tfirst start;\n\tthen done;\n}")
 	if len(res.Diagnostics) > 0 {
 		t.Fatalf("fixture has diagnostics: %v", res.Diagnostics)
 	}
@@ -452,7 +452,7 @@ func TestInstancesReportsASurvivorAlongsideALoss(t *testing.T) {
 func TestSubmissionKeepsTheIdentitiesADebuggedContextHandedOut(t *testing.T) {
 	s := NewSession()
 	s.Submit("part def Holder { attribute size = 1.0; }")
-	res := s.Submit("action tally {\n\tattribute total = 0;\n\tfirst start;\n\tdone end;\n\tthen start end;\n}")
+	res := s.Submit("action tally {\n\tattribute total = 0;\n\tfirst start;\n\tthen done;\n}")
 	if len(res.Diagnostics) > 0 {
 		t.Fatalf("fixture has diagnostics: %v", res.Diagnostics)
 	}
@@ -514,7 +514,7 @@ func TestSubmissionReportsTheInstancesItDropped(t *testing.T) {
 func TestEndedActionSessionExplainsItselfToEveryCommand(t *testing.T) {
 	s := loadFixture(t, "testdata/action_debug.sysml")
 	run(t, s, "%action tally")
-	s.Submit("package Debug {\n\taction tally {\n\t\tfirst start;\n\t\tdone end;\n\t\tthen start end;\n\t}\n}")
+	s.Submit("package Debug {\n\taction tally {\n\t\tfirst start;\n\t\tthen done;\n\t}\n}")
 
 	const why = `the action session for "tally" ended when Debug::tally was redeclared at submission 2`
 	wants(t, run(t, s, "%step"), why)

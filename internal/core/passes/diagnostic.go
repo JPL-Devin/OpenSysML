@@ -40,4 +40,14 @@ type Diagnostic struct {
 	// Fixes are the unambiguous edits resolving the diagnostic, offered by an
 	// editor as quick fixes.
 	Fixes []quickfix.Fix
+	// Notation marks a finding about how the model is written rather than about
+	// what it means: the document still reads, so it does not gate higher tiers.
+	Notation bool
+}
+
+// Blocking reports whether the finding stops what depends on the model being
+// readable — a higher validation tier, a summary of what a submission declared.
+// A notation error is about the writing, not the meaning, so it stops neither.
+func (d Diagnostic) Blocking() bool {
+	return d.Severity == SeverityError && !d.Notation
 }
