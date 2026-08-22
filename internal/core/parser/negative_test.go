@@ -15,6 +15,13 @@ func TestNegative(t *testing.T) {
 		input string
 	}{
 		{"unclosed_brace", "part {"},
+		// The reference form of `include` subsets an existing use case, so it names
+		// one (SysML.xtext:2300 IncludeUseCaseUsage).
+		{"include_without_target", "package P { use case def U { include ; } }"},
+		// A direction prefixes the feature it applies to (SysML.xtext:554
+		// FeatureDirection).
+		{"direction_without_feature_action", "package P { action def A { in ; } }"},
+		{"direction_without_feature_part", "package P { part def D { out ; } }"},
 		{"empty_requirement", "requirement r { require ; }"},
 		{"empty_expression", "attribute x = ;"},
 		{"numeric_name", "part def 123;"},

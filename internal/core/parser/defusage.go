@@ -655,6 +655,18 @@ func (p *Parser) isModifierOrKindKeyword(kw string) bool {
 	return isMod || isDef || isUsage
 }
 
+// atDirectionKeyword reports whether the cursor is at a feature direction.
+func (p *Parser) atDirectionKeyword() bool {
+	if !p.at(lexer.Keyword) {
+		return false
+	}
+	switch p.peek().KeywordID {
+	case "in", "out", "inout":
+		return true
+	}
+	return false
+}
+
 func (p *Parser) parseFeatureModifiers() featureMods {
 	var m featureMods
 	for {
@@ -1087,6 +1099,10 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 					Kind:   ast.RelIncludes,
 					Target: target,
 				})
+			} else {
+				// The reference form of `include` subsets an existing use case, so it
+				// names one (SysML.xtext:2300 IncludeUseCaseUsage).
+				p.error(p.peek().Span, "expected a use case reference after 'include'")
 			}
 
 			// Optional multiplicity after reference
@@ -2325,6 +2341,15 @@ func (p *Parser) parseBodyMember() ast.Node {
 		return m
 	}
 
+	// A direction prefixes the feature it applies to, so a member that is only a
+	// direction is that feature missing (SysML.xtext FeatureDirection).
+	if dir := p.peek(); p.atDirectionKeyword() && p.peekN(1).Kind == lexer.Semicolon {
+		p.advance() // consume the direction
+		p.error(p.peek().Span, "expected a feature after '"+dir.KeywordID+"': write `"+dir.KeywordID+" <name> : <Type>`")
+		p.advance() // consume ';'
+		return nil
+	}
+
 	if p.atKeyword("import") {
 		imp := p.parseImport(start, vis)
 		imp.SetLeadingTrivia(trivia)
@@ -2967,6 +2992,9 @@ func (p *Parser) parseBodyMember() ast.Node {
 		// and `frame;` are members missing the reference they are written with
 		// (ViewRenderingUsage, FramedConcernUsage), diagnosed as such.
 		p.peek().KeywordID == "render" || p.peek().KeywordID == "frame" ||
+		// `include` states the use case it includes, so `include;` is that
+		// member missing its reference (SysML.xtext IncludeUseCaseUsage).
+		p.peek().KeywordID == "include" ||
 		p.peek().KeywordID == "stakeholder" || p.peek().KeywordID == "actor")
 	// A relationship keyword is not a literal's name either: `redefines;` and
 	// `redefines = 5;` are specializations missing their target, diagnosed as

@@ -298,6 +298,12 @@ func (p *Parser) parseDirectionParameter() ast.Node {
 		direction = ast.DirNone
 	}
 
+	// A direction prefixes the feature it applies to, so a parameter declaring
+	// nothing at all is that feature missing (SysML.xtext FeatureDirection).
+	if p.at(lexer.Semicolon) || p.at(lexer.RBrace) {
+		p.error(p.peek().Span, "expected a feature after '"+dirTok.KeywordID+"': write `"+dirTok.KeywordID+" <name> : <Type>`")
+	}
+
 	// Check for optional 'ref' modifier
 	isRef := false
 	if p.atKeyword("ref") {
