@@ -241,8 +241,9 @@ undocumented non-conformance and the case should be fixed instead of adjudicated
 Slice 10D probed the parser-debt follow-ups F60–F63, F102 and F103 against the pinned grammars and
 accepted every form they derive. Three neighbouring forms are **not** derivable, so the rejection
 stays. Each is guarded by a `TestNegative` case (`entry_succession_body`,
-`definition_succession_body`, `namespace_succession_body`); 10G owns adding them to this oracle's
-negative corpus.
+`definition_succession_body`, `namespace_succession_body`) — the first two guard the succession
+parser's body policy, the third the namespace member dispatch that rejects a `then` before it;
+10G owns adding them to this oracle's negative corpus.
 
 | Form | Why it is not derivable |
 | --- | --- |
