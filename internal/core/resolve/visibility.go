@@ -41,18 +41,6 @@ func (r *Resolver) namedThroughNamespaceFrom(target *symbols.Symbol, from *symbo
 		from != nil && r.specializes(from.Owner(), target)
 }
 
-// namedThroughNamespaces filters candidates to those a qualified segment or a
-// feature chain member may name.
-func (r *Resolver) namedThroughNamespaces(cands []*symbols.Symbol) []*symbols.Symbol {
-	kept := make([]*symbols.Symbol, 0, len(cands))
-	for _, sym := range cands {
-		if r.namedThroughNamespace(sym) {
-			kept = append(kept, sym)
-		}
-	}
-	return kept
-}
-
 func (r *Resolver) namedThroughNamespacesFrom(target *symbols.Symbol, from *symbols.Scope, cands []*symbols.Symbol) []*symbols.Symbol {
 	kept := make([]*symbols.Symbol, 0, len(cands))
 	for _, sym := range cands {
