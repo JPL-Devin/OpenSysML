@@ -33,7 +33,7 @@ Can:
 - **Name *visibility*.** `scope` declares the complete set of names visible at a point, so it catches
   both halves of a scoping defect — a name that should be visible and is not, and a name that is
   visible and should not be. `linkedName` can only see the first half. See
-  [scope](#scope--73-of-230-agree-exactly).
+  [scope](#scope--74-of-230-agree-exactly).
 - **Diagnostic presence and placement.** `errors`/`warnings` declare a severity and a message at a
   source location; `noErrors` declares silence over a whole resource set.
 - **The pilot's *intent*.** When we disagree with a declared expectation, the pilot's behaviour on
@@ -266,46 +266,47 @@ only external, per-reference verdict on our name resolution that exists at the p
 also the narrowest: it says which element a written reference reaches, never which names *were*
 visible. That second question is the 230 `scope` assertions below.
 
-## noErrors — 244 of 275 agree
+## noErrors — 243 of 275 agree
 
-31 disagreements: we report an error where the pilot's implementers declared the file clean. Grouped
+32 disagreements: we report an error where the pilot's implementers declared the file clean. Grouped
 by our first diagnostic:
 
 | Cause | Rows | Read |
 |---|---:|---|
-| **Parse recovery** — `expected a namespace member`, `expected '{' or ';' after declaration`, `expected ')'`, `expected 'then' between connector ends` | 10 | **Ours is wrong.** Notation the reference accepts and we do not parse; each one also cascades, so the count overstates the number of defects. 10 of the original 20 closed in the wave-6 round, all six `ParsingTests_*` files among them. |
-| **Unresolved / ambiguous reference** — e.g. `unresolved reference: a1 — did you mean test::A::a1?`, `ambiguous reference: SamePackage::container (2 candidates)` | 11 | **Ours is wrong**, and unmoved: this is the shadowing/import family, and it is the one `linkedName`'s 194 agreements do *not* reach, because these files' references resolve to nothing at all rather than to the wrong element. |
+| **Unresolved / ambiguous reference** — e.g. `unresolved reference: a1 — did you mean test::A::a1?`, `ambiguous reference: SamePackage::container (2 candidates)`, `unresolved reference: A::c_Protect` | 18 | **Ours is wrong**, and this family *grew* in wave 8. 12 are the shadowing/import shapes, which `linkedName`'s 194 agreements do not reach because these references resolve to nothing at all rather than to the wrong element. **6 are new, and they are wave 8's own doing:** the visibility round now refuses `A::c_Protect`-style paths in six `VisibilityTests_*` fixtures the pilot declares clean, so enforcement overshot. |
+| **Parse recovery** — `expected a namespace member`, `expected '{' or ';' after declaration`, `expected ')'` | 6 | **Ours is wrong.** Notation the reference accepts and we do not parse; each one cascades, so the count overstates the number of defects. Down from 10: the three `QPE-*` query-path-expression files and `SemanticMetadata_valid.sysml.xt` are what remain, plus two `ParsingTests_*`. |
 | **Specialization cycle** — `x participates in a specialization cycle` | 4 | **Ours is wrong.** Files the pilot declares clean (`PartTest.sysml.xt`, `Redefinition_OwningType_Cyclic_Gen.sysml.xt`) — our cycle detection is counting a legitimate redefinition chain as a cycle. |
-| **Conformance / multiplicity** — `y1 [0..*] redefines y [1..*]: multiplicity bounds incompatible`, `types do not conform` | 4 | The declared expectation says clean, so ours is the suspect. One of the four surfaced *because* a parse-recovery row above it closed: the count rose from 3 while the underlying behaviour did not change. |
-| **State/transition** — `transition endpoint done is not a state or pseudostate` | 1 | `simpletests/StateTest.sysml.xt`:73. Ours is wrong; `done` is a legal endpoint. |
-| **Library lookup** — `unresolved reference: Real — did you mean ScalarValues::Real?` | 1 | `validation/valid/KernelLibraryTest.sysml.xt`:80 — an unqualified library name we do not bring into scope. |
+| **Conformance** — `try (typed by a1) redefines b (typed by A): types do not conform` | 2 | The declared expectation says clean, so ours is the suspect. Both are `SimpleImportTestsFromOtherFile_Import3*`. |
+| **State/transition** — `transition endpoint done names a state that is not a vertex of this state machine`, `transition endpoint A1 is not a state or pseudostate` | 2 | `simpletests/StateTest.sysml.xt`:73 and `DecisionTest.sysml.xt`:69. Ours is wrong; both endpoints are legal. |
 
 The **inherited-name-conflict** family that cost 4 rows on the first run is gone: those files are the
 same defect as the `warnings` severity finding below, and making a duplicate inherited name a warning
 rather than an error made all four files clean.
 
-By suite: 18 KerML, 13 SysML. In every one of the 31 the declared expectation is *silence*, so every
+By suite: 22 KerML, 10 SysML. In every one of the 32 the declared expectation is *silence*, so every
 one is a place where we reject something the reference accepts — the same class of finding as the
 "only ours" column in [pilot-differential.md](pilot-differential.md), but here backed by a declared
-intent rather than an observed verdict.
+intent rather than an observed verdict. The net movement across wave 8 is one row worse (244 → 243)
+and that flat number hides the real trade: four parse-recovery rows closed while six visibility rows
+opened, so this kind is the one place the wave cost us something.
 
 ---
 
-## warnings — 11 of 113 strictly, and the severity finding is narrowed, not closed
+## warnings — 23 of 113 strictly, and the severity finding is narrowed, not closed
 
-11 rows now agree strictly, which is the first strict agreement any `errors`/`warnings` row in this
-harness has produced. All 11 are duplicate-member-name warnings implemented in the wave-6 round from
-the pilot's declared text — 6 in `MembershipTests_Distinguishability.kerml.xt`, and 5 across the
-`Redefinition_Diamond*_invalid` / `RedefinitionDiamond*_invalid` pairs. Their wording matches by
-construction, not by luck.
+23 rows agree strictly. The first 11 were duplicate-member-name warnings implemented in the wave-6
+round from the pilot's declared text — 6 in `MembershipTests_Distinguishability.kerml.xt`, and 5
+across the `Redefinition_Diamond*_invalid` / `RedefinitionDiamond*_invalid` pairs; wave 8 added 12
+more, the multiplicity-upper-bound rule among them. All of them match by construction rather than by
+luck, because each was written against the declared text.
 
-The remaining 102:
+The remaining 90:
 
 | Outcome | Rows | Read |
 |---|---:|---|
-| `severity-differs` — a diagnostic of ours **is** there, as an **error** | 61 | **Ours is still wrong.** 57 of the 61 are `Duplicate of inherited member name`. |
+| `severity-differs` — a diagnostic of ours **is** there, as an **error** | 60 | **Ours is still wrong.** Every one of the 60 is `Duplicate of inherited member name`. |
 | `elsewhere-in-file` | 7 | All `Duplicate of inherited member name`: we warn, but not where the declaration points. |
-| nothing of ours there at all | 34 | We do not implement these checks. |
+| nothing of ours there at all | 23 | We do not implement these checks. |
 
 **The severity defect the first run found is narrowed by roughly a sixth, not fixed.** The pilot
 declares:
@@ -316,26 +317,27 @@ declares:
 --- */
 ```
 
-and on 57 rows we still produce an error at that line. The shapes that closed are the ones the
-wave-6 rule covers; the 23-row `Action, Part` diamond and 34 further supertype pairs are not among
-them, so this stays the largest open severity finding in the report. Counting the family end to end:
-of the 82 `Duplicate of inherited member name` rows, 11 agree, 57 are ours as an error, 7 are ours in
-the wrong place and 18 draw nothing at all.
+and on 60 rows we still produce an error at that line. The shapes that closed are the ones the
+wave-6 and wave-8 rules cover; the `Action, Part` diamond and the further supertype pairs are not
+among them, so this stays the largest open severity finding in the report. The whole family accounts
+for 82 of the 90 disagreements: 60 ours as an error, 7 ours in the wrong place, 15 drawing nothing at
+all.
 
-The 34 unimplemented warnings are, by declared message:
+The 23 unimplemented warnings are, by declared message:
 
 | Declared warning | Rows |
 |---|---:|
-| `Duplicate of inherited member name '...' from ...` (shapes where we emit nothing at all) | 18 |
-| `Subsetting/redefining feature should not have larger multiplicity upper bound` | 8 |
+| `Duplicate of inherited member name '...' from ...` (shapes where we emit nothing at all) | 15 |
 | `Duplicate of other owned member name` | 4 |
 | `Bound features should have conforming types` | 3 |
 | `User library packages should not be marked as standard` | 1 |
 
-One reading trap in the per-kind table above: its `nothing` column is computed as expectations minus
-the tolerance columns, so for `warnings` it reads **45** — the 34 rows where nothing of ours is there
-plus the 11 that agree strictly, which have no tolerance recorded because they need none. The 34 here
-is the count of checks we do not implement.
+The `Subsetting/redefining feature should not have larger multiplicity upper bound` rule, 8 rows of
+nothing on the first run, is implemented and agreeing.
+
+One reading trap in the per-kind table above: with strict agreements now non-zero, the `nothing`
+column subtracts them as well as the tolerances, so it reads **23** — the rows where nothing of ours
+is there at all.
 
 ---
 
@@ -380,7 +382,7 @@ Every one of the 513 rows, with the declared message and ours, is in
 
 ---
 
-## scope — 73 of 230 agree exactly
+## scope — 74 of 230 agree exactly
 
 `scope` is a different oracle from everything else here. `linkedName` asks what one reference
 resolves to; a `scope` assertion declares **the complete set of names visible at a point**, so it
@@ -432,34 +434,39 @@ inheritance through typing, library gating, circular imports, redefinition ancho
 
 | Class | Rows | Reading |
 |---|---:|---|
-| agree (exact) | 73 | the declared set, name for name |
-| `library-names` | 96 | differs **only** in path tails through `Base`'s implicit `self`/`that` |
-| `extra-names` | 32 | we offer names the pilot does not, and miss none |
+| agree (exact) | 74 | the declared set, name for name |
+| `library-names` | 125 | differs **only** in path tails through `Base`'s implicit `self`/`that` |
 | `other-paths` | 12 | every name we miss is an element we offer under a different path |
 | `missing-names` | 10 | we miss declared names and offer no extra ones |
-| `missing-and-extra` | 7 | both |
+| `missing-and-extra` | 6 | both |
+| `extra-names` | 3 | we offer names the pilot does not, and miss none |
 
-**This is a worklist, not a verdict, and it must not be averaged into a percentage.** 73 exact
+**This is a worklist, not a verdict, and it must not be averaged into a percentage.** 74 exact
 agreements on sets that routinely run past 50 entries is real evidence that our visible-name
-computation is broadly right; the 157 disagreements are four concrete defects, three of them ours to
-report rather than to fix:
+computation is broadly right, and the shape of the 156 disagreements changed completely in wave 8:
+the redefinition-masking class collapsed from 32 rows to 3, while the implicit-member class grew from
+96 to 125 and is now the whole remaining problem.
 
-1. **`library-names` (96 rows) — implicit supertypes are resolved against our whole embedded library,
-   not against the fixture's declared resource set.** Reproducer:
-   `imports/global/DependencyPackageAlias0_A_alias.kerml.xt`:22 declares 20 names for
-   `class A { class a; }`; we offer 56, the extra 36 being `A_alias.a.that`, `A_alias.that` and
-   friends. The fixture loads `/library/Base.kerml` only, so the pilot's `class` — whose implicit
-   supertype is in `Occurrences`, which is *not* loaded — inherits nothing, while its `classifier` and
-   `feature` fixtures do declare `self`/`that` (see `imports/Import_Circular.kerml.xt`:38). We always
-   have the whole library, so we always contribute the implicit members. This is a property of the
-   harness's library substitution, documented at the top of this file, not a visibility defect — which
-   is why it is its own class and not counted as `extra-names`.
-2. **`extra-names` (32 rows) — a redefinition does not mask the inherited name it redefines.**
-   28 of the 32 are `*_Rdef` fixtures. Reproducer:
-   `name/MemberNameTests_MultipleInheritance2_Rdef.kerml.xt` — where a feature `redefines` an
-   inherited member under a new name, the pilot stops offering the old name and we still offer it.
-   Root cause in **`internal/core/semantics`** (inherited-member computation does not remove a
-   redefined name); reported, not fixed here — `semantics/**` is outside this slice's ownership.
+1. **`library-names` (125 rows) — we inherit `Base`'s implicit members even where the fixture's
+   resource set breaks the chain to them, and we chain the resulting path tails further than the
+   declaration does.** Reproducer: `imports/global/DependencyPackageAlias0_A_alias.kerml.xt`:22
+   declares 20 names for `class A { class a; }`; we offer 92, the extra 72 being `A_alias.a.self`,
+   `A_alias.a.self.that`, `A_alias.a.that.self` and friends. The fixture's resource set names
+   `/library/Base.kerml` and nothing else, so the pilot's `class` — whose implicit supertype is in
+   `Occurrences`, which is *not* loaded — inherits nothing, while its `classifier` and `feature`
+   fixtures do declare `self`/`that` (see `imports/Import_Circular.kerml.xt`:38).
+   **This was previously recorded here as a property of the harness substituting our whole embedded
+   library; that explanation is now falsified.** The harness loads exactly the declared resource set
+   (0 missing declared resources in the run above), and the class grew rather than shrank when it
+   started doing so, which makes this our behaviour and the largest single scope cluster left:
+   implicit specialization reaches `Base` regardless of whether the intermediate library file is in
+   the set, and each implicit member is re-expanded through the next one.
+2. **`extra-names` (3 rows) — the residue of the redefinition-masking defect.** This class was 32
+   rows, 28 of them `*_Rdef` fixtures, where a `redefines` did not mask the inherited name it
+   redefines; the wave-8 masking round in **`internal/core/semantics`** closed all but three, and the
+   three that remain (`Import_QualifiedName2`, `ShortName_Scoping_Valid1`,
+   `MemberNameTests_NamedMemberFromInheritance2_Rdef`) differ in implicit-member tails of the same
+   shape as item 1 rather than in a redefined name.
 3. **`other-paths` (12 rows) — circular containment truncates one step earlier for us.**
    All 12 are `shadowing/ShadowingTests_Circle*`. Reproducer:
    `ShadowingTests_CircleProblem2.kerml.xt`:22 declares `A, A.B, A.B.B, B, B.B, Test1.A, Test1.A.B,
@@ -469,7 +476,7 @@ report rather than to fix:
    records it as a path-convention difference, not a missing name. All eight names that fixture
    declares do resolve when written as a reference — "missing" in a `scope` row always means missing
    from the *enumeration*, which is the conservative direction: it under-reports our agreement.
-4. **`missing-names` / `missing-and-extra` (17 rows) — import plus inheritance from the container.**
+4. **`missing-names` / `missing-and-extra` (16 rows) — import plus inheritance from the container.**
    Reproducer: `imports/SimpleImportTests_ImportPackageAndInheritanceFromContainer.kerml.xt`:23, where
    `classifier A { public import test::*; classifier a specializes A; }` declares `A.A`, `A.A.a` and
    `A.a.A` paths we do not offer — the fixture's own authors annotate the missing ones in a trailing
@@ -482,7 +489,7 @@ surfaces both of the element's names, as `imports/ShortName_Import_Valid4.kerml.
 alias membership import still surfaces the alias name only.
 
 The per-row evidence — declared count, our count, and the first missing/extra names for each of the
-157 disagreements — is in [pilot-xpect-baseline.json](pilot-xpect-baseline.json).
+156 disagreements — is in [pilot-xpect-baseline.json](pilot-xpect-baseline.json).
 
 ---
 
@@ -505,17 +512,19 @@ fixes are scoped from it in later rounds. The first two items of the original li
 (alias identity, and the duplicate-member-name warnings existing at all); what is open, in the order
 this report reads it:
 
-1. **`Duplicate of inherited member name` severity and coverage** — 57 `warnings` rows still ours as
-   an error, 18 drawing nothing, 7 in the wrong place. The wave-6 rule covers some shapes and not the
-   `Action, Part` diamond; this is now the largest open severity finding.
-2. **The 195 declared errors we do not report** — missing validation rules, not parse defects, and 8
-   of them are files where demoting the name-conflict error left us silent on a declared-invalid
-   model.
-3. **The 10 remaining parse-recovery `noErrors` rows** — notation the reference accepts and we
-   reject.
-4. **The 11 unresolved/ambiguous-reference `noErrors` rows** — the shadowing/import family, which
-   `linkedName`'s 194 agreements do not reach.
-5. **The 157 `scope` disagreements**, with the class breakdown and root-cause packages in
-   [scope](#scope--73-of-230-agree-exactly): redefinition masking in `semantics`, import-plus-
-   inheritance paths in `resolve`, and the library-substitution class that is a property of the
-   harness rather than a defect.
+1. **`Duplicate of inherited member name` severity and coverage** — 60 `warnings` rows still ours as
+   an error, 15 drawing nothing, 7 in the wrong place. The wave-6 and wave-8 rules cover some shapes
+   and not the `Action, Part` diamond; this is still the largest open severity finding.
+2. **The 37 declared errors we do not report** — missing validation rules rather than parse defects,
+   down from 195 on the first run.
+3. **The 6 remaining parse-recovery `noErrors` rows** — notation the reference accepts and we reject,
+   the three `QPE-*` query-path-expression fixtures among them.
+4. **The 18 unresolved/ambiguous-reference `noErrors` rows** — 12 are the shadowing/import family,
+   which `linkedName`'s 194 agreements do not reach; **6 are wave 8's visibility round refusing paths
+   in `VisibilityTests_*` fixtures the pilot declares clean**, and they are the one place this wave
+   made a kind worse.
+5. **The 156 `scope` disagreements**, with the class breakdown and root-cause packages in
+   [scope](#scope--74-of-230-agree-exactly): 125 of them are now the single implicit-member class —
+   `Base`'s `self`/`that` inherited where the declared resource set breaks the chain, and re-expanded
+   through each other — plus import-plus-inheritance paths in `resolve` and the deliberate
+   circular-containment truncation.
