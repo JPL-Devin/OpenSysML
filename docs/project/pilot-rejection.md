@@ -103,26 +103,29 @@ carry no timestamps or absolute paths, so repeated runs are byte-identical
 Under the default `-conformance auto`:
 
 ```
-79 case(s): 75 both reject, 4 only the pilot rejects, 0 only we reject, 0 both accept
+79 case(s): 77 both reject, 2 only the pilot rejects, 0 only we reject, 0 both accept
   of which 5 agree only because we were asked strictly (the default mode accepts them, by design)
 ```
 
 | Source | Cases | Both reject | Pilot only | Ours only | Both accept |
 | --- | --- | --- | --- | --- | --- |
 | extensions | 7 | 7 | 0 | 0 | 0 |
-| grammar | 65 | 61 | 4 | 0 | 0 |
+| grammar | 65 | 63 | 2 | 0 | 0 |
 | xpect | 7 | 7 | 0 | 0 | 0 |
 
 The corpus more than doubled in wave 9F, from 34 cases to 79, and the gap count went from 3 to 4:
 more reach found one further gap (`g31`) rather than a bucketful, and no case in the corpus is
-accepted by both implementations.
+accepted by both implementations. Wave 10C closed two of those four, `g02` (bare `import` is now an
+error) and `g31` (`allocate` requires its `ConnectorPart`), leaving 2.
 
 The five strict-only agreements are `x01`, `x04`, `x05`, `x06` and `x07`: OpenSysML notation
 extensions that the default mode accepts on purpose and strict mode reports as errors. Judged in
-the default mode the same corpus gives 70 agreements and 9 gaps, which is what `-conformance
+the default mode the same corpus gives 72 agreements and 7 gaps, which is what `-conformance
 default` prints — the extra five are those same `extensions/` cases, which the default mode accepts
-on purpose. `-conformance strict` gives 75 and 4, the same four as `auto`. Of the 14 gaps this document carried before wave 8, six were closed by the
-validation waves themselves — `p01`, `p02`, `p03`, `p05` (wave 8C), `p06` (wave 8A) and `p04`
+on purpose. `-conformance strict` gives 79 and 0: wave 10C gave `g15` and `k02` a strict
+escalation, so every case in the corpus is rejected when asked strictly — which is agreement under
+an opt-in question, not default-mode conformance. Of the 14 gaps this document carried before wave
+8, six were closed by the validation waves themselves — `p01`, `p02`, `p03`, `p05` (wave 8C), `p06` (wave 8A) and `p04`
 (wave 8B) — and only the five `extensions/` cases belong to strict mode.
 
 Read those five as agreement *when asked strictly*, not as five gaps that disappeared. An opt-in
@@ -139,15 +142,13 @@ rejection, not agreement on the rule.
 
 ## Permissiveness gaps
 
-All 4 gaps, each with its reproducer (the corpus file is the minimal reproducer), both verdicts,
-and the package the root cause is likely in. **None are fixed here** — this oracle measures;
-fixing is later work.
+All 2 gaps, each with its reproducer (the corpus file is the minimal reproducer), both verdicts,
+and the package the root cause is likely in. Both are accepted by the default mode and rejected
+under `-conformance strict` (wave 10C).
 
 | Reproducer (`cmd/pilot-reject/testdata/negative/`) | Ours | Pilot | Likely root cause |
 | --- | --- | --- | --- |
-| `grammar/g02-import-without-visibility.sysml` | accepts | `mismatched input 'import'` | `internal/core/parser` — treats the import visibility keyword as optional; the pinned `ImportPrefix` requires it |
 | `grammar/g15-keyword-as-name.sysml` | accepts | `no viable alternative at input 'part'` | `internal/core/parser` — allows a reserved keyword as a declared name |
-| `grammar/g31-allocate-without-to.sysml` | accepts | `mismatched input ';' expecting 'to'` | `internal/core/parser` — accepts `allocate` as a synonym for the `allocation` usage keyword, so the connector's missing `to` is never reached |
 | `grammar/k02-sysml-keyword-in-kerml.kerml` | accepts | `no viable alternative at input 'def'` | `internal/core/parser` — `.kerml` files are parsed with the full SysML grammar; no per-language restriction |
 
 Each pilot message above is the first error the validator reports for the case; the full lists are
@@ -169,6 +170,7 @@ divergence is deliberate and who owns the fix — never that it is not a diverge
   mode; the diagnostic is a semantic pass, so W9F does not change it (`internal/core/passes` is
   another wave-9 slice). Wave-10 item: raise `SeverityWarning` to an error, or make it
   conformance-dependent as `nonstandard_notation.go` already does.
+  **Closed in wave 10C (D2):** the finding is an error in every mode, and the case now rejects.
 - **`grammar/g15-keyword-as-name.sysml` — deliberate recovery policy, still a divergence.** The
   pinned grammar's `Name` is the `ID` terminal, which excludes keywords, and `part def part;` is
   `no viable alternative at input 'part'`. We read a keyword in name position as the name the
@@ -180,6 +182,8 @@ divergence is deliberate and who owns the fix — never that it is not a diverge
   the specification's grammar has no production for it. Since warnings are not rejection, the gap
   stands. Wave-10 item: escalate this warning to an error under `-conformance strict`, which keeps
   the recovery behaviour for editors while letting the strict question be answered correctly.
+  **Wave 10C:** `reserved-keyword-name` is an error under `-conformance strict`; the default mode
+  still warns and recovers, so the case remains a default-mode gap.
 - **`grammar/k02-sysml-keyword-in-kerml.kerml` — one grammar for both languages, fix out of
   slice.** `part def` exists in no KerML production; the KerML validator reports `no viable
   alternative at input 'def'`. We parse `.kerml` with the same grammar as `.sysml` and filter
@@ -188,6 +192,8 @@ divergence is deliberate and who owns the fix — never that it is not a diverge
   *definition and usage keywords* themselves, which is why `-conformance strict` does not close
   this case either (measured: strict leaves the same four grammar gaps as auto). Extending that
   walker is a `internal/core/passes` change, so it is written up rather than done here.
+  **Wave 10C:** the walker now reports SysML declaration keywords in a `.kerml` file, so strict
+  mode rejects the case; the default mode warns, so it remains a default-mode gap.
 - **`grammar/g31-allocate-without-to.sysml` — the `allocate` synonym, adjudicated, not fixed.**
   In the pinned grammar `allocate` is only the `AllocateKeyword` (`SysML.xtext:1210`) and demands
   a `ConnectorPart` (`:1219`), whose binary form requires `to` (`:1076`); the usage keyword is
@@ -199,6 +205,7 @@ divergence is deliberate and who owns the fix — never that it is not a diverge
   al; }` is rejected by the reference too, so the synonym itself is the divergence, not just this
   case. Removing it is a language change locked by golden and RDF export expectations, so it is a
   wave-10 decision rather than a small local fix.
+  **Closed in wave 10C (D1):** `allocate` demands its `ConnectorPart`, and the case now rejects.
 
 ### Grammar mutation pass (W9F)
 

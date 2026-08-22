@@ -11,7 +11,8 @@ const importKeyword = "import"
 // ImportVisibilityPass reports an `import` written without the visibility
 // indicator ImportPrefix makes mandatory (KerML.xtext:169-172, SysML.xtext:241-244).
 // The reference rejects the bare form, so it is an error in every mode (D2,
-// docs/project/wave10-decisions.md); the form still parses, so only severity moves.
+// docs/project/wave10-decisions.md); the form still parses and reads, so the
+// finding is notation and gates no higher tier.
 type ImportVisibilityPass struct{}
 
 func (ImportVisibilityPass) Level() PassLevel { return LevelSyntax }
@@ -55,6 +56,7 @@ func importVisibilityDiagnostic(imp *ast.Import) (Diagnostic, bool) {
 	}
 	return Diagnostic{
 		Severity: SeverityError,
+		Notation: true,
 		Span:     importKeywordSpan(imp),
 		Message:  "import without a visibility indicator: SysML v2 requires public, private or protected before 'import'",
 		Code:     "import-visibility",

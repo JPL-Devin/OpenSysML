@@ -108,3 +108,24 @@ func TestImportVisibilityChangesSeverityOnly(t *testing.T) {
 		t.Error("the unresolved import target was not reported")
 	}
 }
+
+// The finding is notation, so a whole run still reaches the tiers above syntax:
+// a bare import must not delete the unresolved-reference diagnostic beside it.
+func TestImportVisibilityDoesNotGateHigherTiers(t *testing.T) {
+	src := "package Q { part def A; }\npackage R { import Q::*; part x : NoSuchType; }"
+	var importError, unresolved bool
+	for _, d := range analyzeSrc(t, src) {
+		switch d.Code {
+		case "import-visibility":
+			importError = d.Severity == SeverityError
+		case "unresolved":
+			unresolved = true
+		}
+	}
+	if !importError {
+		t.Error("the bare import produced no import-visibility error")
+	}
+	if !unresolved {
+		t.Error("the unresolved reference was suppressed, so D2 is not severity-only")
+	}
+}

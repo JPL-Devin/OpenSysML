@@ -53,6 +53,11 @@ func (NonstandardNotationPass) Run(ctx *Context, name string, root *ast.RootName
 		parsedClean: !hasParseError(ctx.ParseDiagnostics),
 	}
 	w.walk(root.Members)
+	// Under strict conformance the findings are errors, but they say how the
+	// model is written, not what it means, so they gate no higher tier.
+	for i := range w.diags {
+		w.diags[i].Notation = true
+	}
 	return w.diags
 }
 

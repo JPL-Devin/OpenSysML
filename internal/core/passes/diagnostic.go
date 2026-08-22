@@ -40,4 +40,7 @@ type Diagnostic struct {
 	// Fixes are the unambiguous edits resolving the diagnostic, offered by an
 	// editor as quick fixes.
 	Fixes []quickfix.Fix
+	// Notation marks a finding about how the model is written rather than about
+	// what it means: the document still reads, so it does not gate higher tiers.
+	Notation bool
 }
