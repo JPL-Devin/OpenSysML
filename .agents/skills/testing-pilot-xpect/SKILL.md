@@ -166,6 +166,102 @@ adjudicator is live in both directions on the sole fixture,
 `---` fence must give `disagree … missing 1`, and adding a real `class zzz_extra {}` to the body
 must give `disagree … extra 1 (sysml::Class: NameEscape::zzz_extra)`.
 
+### Proving a fix wave's trade in both directions (recoveries *and* regressions)
+
+A wave that claims "N rows recovered" must also be shown to have given nothing back — a net total
+can hide an equal-sized swap, and on a stacked branch the committed baseline is often deliberately
+stale, so `cmp` against `docs/project/pilot-xpect-baseline.json` cannot serve as the check. Capture
+the pre-change run as a snapshot (`go run ./cmd/pilot-xpect -out build/pilot-xpect-before` on the
+parent commit, or `git show <parent>:docs/project/pilot-xpect-baseline.json`) and diff the *keys* of
+the non-`agree` rows, keyed on `suite name + file path + row line + row kind`:
+
+```python
+def keys(p):
+    d = json.load(open(p)); out = {}
+    for s in d.get("suites", []):
+        for f in s.get("files", []):
+            for r in f.get("rows", []):
+                if r.get("verdict") != "agree":
+                    out[(s.get("name"), f["path"], r.get("line"), r.get("kind"))] = r
+    return out
+# before - after = recoveries; after - before = regressions (must be empty)
+```
+
+Key on `suites[].name`, **not** `suites[].dir` (which is the absolute corpus path and so is
+machine-specific). Because agreeing rows are pruned, "absent from the after-file" means agree only
+once the totals confirm it — always print `len(before)`/`len(after)` alongside, and check that
+`before_disagreements - after_disagreements` equals the recovery count with zero regressions.
+A stacked branch's parent snapshot lives in gitignored `build/`, so it survives a `git status`
+cleanliness check.
+
+### The discriminating-pair LSP probe for visibility rules
+
+For a change that makes visibility *conditional on the referring namespace* (protected members
+admitted from the owning/specializing namespace only), a one-directional probe proves nothing:
+"it resolves" is also what a blanket "protected is public now" regression looks like. Build the
+**same qualified text in two namespaces in one file** and read one `publishDiagnostics`:
+
+```kerml
+package Unrelated {
+	public import VisibilityPackage::*;
+	classifier P1 specializes c_Public::c_private{}     // private        -> must be unresolved
+	classifier P2 specializes c_clazz::c_Protect{}      // protected, unrelated -> unresolved
+	classifier Spec specializes c_clazz {
+		classifier P3 specializes c_clazz::c_Protect{}  // same text, specializing -> clean
+	}
+	classifier Bogus specializes ZZZ_no_such_type{}     // liveness control -> unresolved
+}
+```
+
+Identical spelling on the `P2` and `P3` lines with opposite verdicts is the only cheap evidence that
+the admission is conditioned on the referrer. Always include the `ZZZ_no_such_type` line: it proves
+the diagnostics channel is live, so a clean `P3` is a real resolution and not a silent LSP failure
+to load the declared resources.
+
+A ~50-line python stdio client is enough (`Content-Length` framing, `initialize` with `rootUri` and
+`workspaceFolders` → sleep → `initialized` → `didOpen` → collect `textDocument/publishDiagnostics`,
+filtering on the target's basename). Lay the fixture out exactly as its `XPECT_SETUP` `ResourceSet`
+declares — copy the `.xt` verbatim to `Main.kerml` and put the declared `/src/...` and `/library/...`
+files at those same relative paths under `rootUri` — or the protected owner will simply be missing
+and every line will "fail" for the wrong reason. Give `initialize` ~2.5 s and `didOpen` ~4 s; a
+shorter sleep silently yields "NO publishDiagnostics RECEIVED".
+
+**Gotcha:** `go test … 2>&1 | tail` reports the *pipe's* exit status, so `echo exit=$?` prints 0 even
+for a failing `OPENSYSML_REQUIRE_PILOT_XPECT=1` run. Assert on the `FAIL` / message text, not `$?`.
+
+### `bin/` binaries go stale — rebuild per commit, or your before/after diff is a no-op
+
+`bin/sysml-lsp` is a committed-path build artifact, not a per-commit one: `make build` at commit A
+leaves it in place across a later checkout of commit B. Comparing "before" (`/tmp/lsp-A`) against
+"after" (`bin/sysml-lsp`) then silently compares A against A and shows *identical* output, which
+reads as "this commit changed nothing" — a false negative that looks exactly like a passing test.
+Always `go build -o /tmp/lsp-<sha> ./cmd/sysml-lsp` **per commit under test** and diff two explicitly
+named binaries, and re-run `make build` before trusting anything in `bin/`.
+
+For a per-commit before/after on a clean tree, `git worktree add /tmp/wt-<sha> <sha>` is better than
+`git stash`/checkout: it leaves the primary checkout and its gitignored `build/` corpus untouched, so
+the oracle run and the LSP probe can proceed in parallel. Test-only files can be copied into the
+worktree to check that a new regression test is load-bearing (fails at the parent, passes at HEAD);
+`git worktree remove --force` afterwards, and confirm `git worktree list` shows only the primary.
+
+### Diagnostic counts move between tiers — count per tier, not just per line
+
+`internal/core/resolve` is not the only diagnostic producer, so "the resolver no longer complains"
+and "the line is clean" are different claims. `resolve` emits `unresolved reference: …` (sole emitter:
+`qualified.go`'s `unresolved`/`unresolvedNamespace`), while the tier-4 constraint pass in
+`internal/core/passes/constraint.go` emits its own, e.g. `"%s redefines %s, but %s is not an inherited
+member of %s"` (code `redefinition-no-inherited`). A fix that makes a reference *resolve* can hand the
+line straight to a later tier, so an end-to-end `publishDiagnostics` count stays 1 while the message
+changes completely. A unit test asserting `len(r.Diagnostics) == 0` on a bare `Resolver` is therefore
+consistent with the LSP still showing one diagnostic — neither is wrong; they measure different tiers.
+Report the message text, not just the count, and confirm which package emits it (`grep` the literal)
+before calling a leftover diagnostic a regression.
+
+To attribute a diagnostic definitively, temporarily instrument `Resolver.report` in
+`internal/core/resolve/resolver.go` with an env-gated `debug.Stack()` dump and rebuild the LSP; if the
+stack never fires for a message you can see in the editor, that message is coming from another package
+entirely. Restore the file and `git update-index --refresh` before checking `git status --porcelain`.
+
 ## Adversarial mutations (mutate a copy or restore from the `mv`d backup, then `diff -r`)
 
 | Mutation | Expected |
