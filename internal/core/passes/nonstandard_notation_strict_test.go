@@ -158,6 +158,34 @@ func TestKeywordAsNameIsEscalatedOnlyUnderStrictMode(t *testing.T) {
 	}
 }
 
+// A keyword-as-name is reported once per span in either mode, and never lost:
+// strict drops the parser's warning only where a pass escalated that same span,
+// so an `alias`, which the walker does not visit, keeps its warning.
+func TestKeywordAsNameIsReportedOnceInEitherMode(t *testing.T) {
+	for _, tc := range []struct{ name, file, src string }{
+		{"definition", "a.sysml", "package P { part def part; }"},
+		{"usage", "a.sysml", "package P { part def B; part part : B; }"},
+		{"alias", "a.sysml", "package P { part def B; alias part for P::B; }"},
+		{"kerml_alias", "a.kerml", "package P { class B; alias class for P::B; }"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, mode := range []conformance.Mode{conformance.ModeDefault, conformance.ModeStrict} {
+				root, pd, idx := analyzeInputs(t, tc.file, tc.src)
+				got := []Diagnostic{}
+				for _, d := range AnalyzeWithOptions(tc.file, source.KindOf(tc.file), root, pd, idx,
+					Options{Conformance: mode}) {
+					if d.Code == CodeReservedKeywordName {
+						got = append(got, d)
+					}
+				}
+				if len(got) != 1 {
+					t.Fatalf("%v: got %+v, want the keyword reported exactly once", mode, got)
+				}
+			}
+		})
+	}
+}
+
 // Only what the parser recovered as a keyword-as-name is escalated: a name the
 // grammar admits is not, whatever the lexer of either language knows the word as.
 func TestKeywordAsNameLeavesTheNamesTheGrammarAdmits(t *testing.T) {

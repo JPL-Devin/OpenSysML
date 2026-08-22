@@ -10,19 +10,12 @@ type SyntaxPass struct{}
 // Level reports that syntax is the lowest dependency level.
 func (SyntaxPass) Level() PassLevel { return LevelSyntax }
 
-// Run returns the parse diagnostics carried on the context, less the
-// keyword-as-name warning strict mode reports as an error at the same span.
+// Run returns the parse diagnostics carried on the context.
 func (SyntaxPass) Run(ctx *Context, name string, root *ast.RootNamespace) []Diagnostic {
 	if ctx == nil || len(ctx.ParseDiagnostics) == 0 {
 		return nil
 	}
-	escalated := notationSeverity(ctx.Options.Conformance) == SeverityError
-	out := make([]Diagnostic, 0, len(ctx.ParseDiagnostics))
-	for _, d := range ctx.ParseDiagnostics {
-		if escalated && d.Severity == SeverityWarning && d.Code == CodeReservedKeywordName {
-			continue
-		}
-		out = append(out, d)
-	}
+	out := make([]Diagnostic, len(ctx.ParseDiagnostics))
+	copy(out, ctx.ParseDiagnostics)
 	return out
 }

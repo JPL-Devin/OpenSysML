@@ -64,11 +64,34 @@ func AnalyzeWithKind(name string, kind source.Kind, root *ast.RootNamespace,
 	return AnalyzeWithOptions(name, kind, root, parseDiags, idx, Options{})
 }
 
+// dropEscalatedWarnings removes a parser warning a pass reports again as an
+// error of the same code at the same span, so a finding is reported once.
+func dropEscalatedWarnings(diags []Diagnostic) []Diagnostic {
+	type finding struct {
+		code   string
+		offset int
+	}
+	escalated := map[finding]bool{}
+	for _, d := range diags {
+		if d.Severity == SeverityError {
+			escalated[finding{d.Code, d.Span.Offset}] = true
+		}
+	}
+	out := make([]Diagnostic, 0, len(diags))
+	for _, d := range diags {
+		if d.Severity == SeverityWarning && escalated[finding{d.Code, d.Span.Offset}] {
+			continue
+		}
+		out = append(out, d)
+	}
+	return out
+}
+
 // AnalyzeWithOptions validates a document under explicit analysis options.
 func AnalyzeWithOptions(name string, kind source.Kind, root *ast.RootNamespace,
 	parseDiags []Diagnostic, idx *symbols.Index, opts Options) []Diagnostic {
 	ctx := NewContextWithOptions(name, kind, idx, parseDiags, opts)
-	diags := DefaultRegistry().Run(ctx, name, root)
+	diags := dropEscalatedWarnings(DefaultRegistry().Run(ctx, name, root))
 	sort.SliceStable(diags, func(i, j int) bool {
 		a, b := diags[i], diags[j]
 		if a.Span.Offset != b.Span.Offset {
