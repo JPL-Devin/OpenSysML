@@ -4,8 +4,8 @@
   "corpus": "cmd/pilot-reject/testdata/negative",
   "totals": {
     "cases": 34,
-    "bothReject": 24,
-    "pilotOnlyRejects": 10,
+    "bothReject": 26,
+    "pilotOnlyRejects": 8,
     "oursOnlyRejects": 0,
     "bothAccept": 0
   },
@@ -29,8 +29,8 @@
     {
       "source": "xpect",
       "cases": 7,
-      "bothReject": 5,
-      "pilotOnlyRejects": 2,
+      "bothReject": 7,
+      "pilotOnlyRejects": 0,
       "oursOnlyRejects": 0,
       "bothAccept": 0
     }
@@ -321,12 +321,9 @@
       "path": "xpect/p04-nonunique-subsets-unique.kerml",
       "source": "xpect",
       "rule": "a nonunique feature cannot subset a unique one (KerML 8.3.3.3 validateSubsettingUniquenessConformance; pilot Feature_nonunique_invalid.kerml.xt).",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 5: Subsetting/redefining feature cannot be nonunique if subsetted/redefined feature is unique"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "xpect/p05-single-chaining-feature.kerml",
@@ -340,14 +337,9 @@
       "path": "xpect/p06-private-member-reference.kerml",
       "source": "xpect",
       "rule": "a private member is not visible outside its namespace (KerML 8.2.3.5 name resolution; pilot Import_All.kerml.xt).",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 3,
-      "pilot": [
-        "line 6: Couldn't resolve reference to Classifier 'A::X'.",
-        "line 6: The feature 'relatedElement' of 'org.omg.sysml.lang.sysml.impl.SubclassificationImpl{xpect/p06-private-member-reference.kerml#//@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.ClassifierImpl{xpect/p06-private-member-reference.kerml#|0}'",
-        "line 6: The feature 'superclassifier' of 'org.omg.sysml.lang.sysml.impl.SubclassificationImpl{xpect/p06-private-member-reference.kerml#//@ownedRelationship.0/@ownedRelatedElement.0/@ownedRelationship.1/@ownedRelatedElement.0/@ownedRelationship.0}' contains an unresolved proxy 'org.omg.sysml.lang.sysml.impl.ClassifierImpl{xpect/p06-private-member-reference.kerml#|0}'"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 3
     },
     {
       "path": "xpect/p07-extraneous-closing-brace.kerml",

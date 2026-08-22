@@ -36,6 +36,7 @@ func DefaultRegistry() *Registry {
 	reg.Register(W8DVerificationPass{})
 	reg.Register(W8DViewRenderingPass{})
 	reg.Register(W8DMetadataUsagePass{})
+	reg.Register(RedefinitionConformancePass{})
 	return reg
 }
 

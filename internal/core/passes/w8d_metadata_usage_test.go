@@ -3,7 +3,9 @@ package passes
 import "testing"
 
 // MetadataUsage_Invalid.sysml.xt: a metadata body feature that redefines no
-// feature of the metadata definition is an error at the feature.
+// feature of the metadata definition is an error at the feature. Prefix
+// annotations are RedefinitionConformancePass's; the `metadata … : A` form is
+// this pass's.
 func TestW8DMetadataBodyFeatureMustRedefineOwningTypeFeature(t *testing.T) {
 	src := `package Test {
 	metadata def A {
@@ -12,20 +14,18 @@ func TestW8DMetadataBodyFeatureMustRedefineOwningTypeFeature(t *testing.T) {
 			attribute v;
 		}
 	}
-	attribute bad;
-	attribute a {
-		@A {
-			x = 1;
-			u {
-				v = 1;
-				bad;
-			}
-			other;
+	item p;
+	metadata m : A about p {
+		x = 1;
+		u {
+			v = 1;
+			bad;
 		}
+		other;
 	}
 }
 `
-	w8dWantLines(t, src, "metadata-body-feature", 14, 16)
+	w8dWantLines(t, src, "metadata-body-feature", 13, 15)
 }
 
 // The reference's INVALID_METADATA_FEATURE_METACLASS_NOT_ABSTRACT on the

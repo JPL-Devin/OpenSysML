@@ -12,10 +12,11 @@ import (
 // INVALID_METADATA_FEATURE_BODY.
 const msgMetadataBodyFeature = "Must redefine an owning-type feature"
 
-// W8DMetadataUsagePass checks an annotation against the metadata definition it
-// names: every feature its body writes must be one of the definition's own
-// (KerML §7.5 metadata features). MetadataTypePass owns the concrete-type rule
-// for prefix annotations; only the `metadata … : A` form is checked here.
+// W8DMetadataUsagePass checks a `metadata m : A { … }` usage against the
+// metadata definition it is typed by: every feature its body writes must be one
+// of the definition's own (KerML §7.5), and the definition must be concrete.
+// Prefix annotations are RedefinitionConformancePass's (body features) and
+// MetadataTypePass's (concrete type).
 type W8DMetadataUsagePass struct{}
 
 func (W8DMetadataUsagePass) Level() PassLevel { return LevelConstraint }
@@ -43,35 +44,8 @@ type w8dMetadataChecker struct {
 }
 
 func (mc *w8dMetadataChecker) check(sym *symbols.Symbol) {
-	var prefixes []*ast.PrefixMetadata
-	var members []ast.Node
-	switch d := sym.Decl.(type) {
-	case *ast.Definition:
-		prefixes, members = d.Prefixes, d.Members
-	case *ast.Usage:
-		prefixes, members = d.Prefixes, d.Members
-		if d.Kind == ast.UsageMetadata {
-			mc.checkMetadataUsage(sym, d)
-			return
-		}
-	case *ast.Package:
-		prefixes, members = d.Prefixes, d.Members
-	case *ast.Namespace:
-		prefixes, members = d.Prefixes, d.Members
-	default:
-		return
-	}
-	for _, p := range prefixes {
-		mc.checkAnnotation(sym.OwnerScope, p.Type, p.Body, p.Span(), false)
-	}
-	for _, member := range members {
-		if mem, ok := member.(*ast.Membership); ok {
-			member = mem.Member
-		}
-		// Prefix metadata written as a member annotates the element owning the body.
-		if p, ok := member.(*ast.PrefixMetadata); ok {
-			mc.checkAnnotation(w8dScopeOf(sym), p.Type, p.Body, p.Span(), false)
-		}
+	if u, ok := sym.Decl.(*ast.Usage); ok && u.Kind == ast.UsageMetadata {
+		mc.checkMetadataUsage(sym, u)
 	}
 }
 
@@ -86,12 +60,12 @@ func (mc *w8dMetadataChecker) checkMetadataUsage(sym *symbols.Symbol, u *ast.Usa
 		if !ok {
 			continue
 		}
-		mc.checkAnnotation(sym.OwnerScope, qn, u.Members, u.Span(), true)
+		mc.checkAnnotation(sym.OwnerScope, qn, u.Members, u.Span())
 		return
 	}
 }
 
-func (mc *w8dMetadataChecker) checkAnnotation(scope *symbols.Scope, typeRef *ast.QualifiedName, body []ast.Node, span source.Span, reportAbstract bool) {
+func (mc *w8dMetadataChecker) checkAnnotation(scope *symbols.Scope, typeRef *ast.QualifiedName, body []ast.Node, span source.Span) {
 	if scope == nil || typeRef == nil {
 		return
 	}
@@ -106,15 +80,13 @@ func (mc *w8dMetadataChecker) checkAnnotation(scope *symbols.Scope, typeRef *ast
 	}
 	// A library symbol carries no declaration, so its abstractness is unknown here.
 	if def, isDef := typ.Decl.(*ast.Definition); isDef && def.IsAbstract {
-		if reportAbstract {
-			mc.diags = append(mc.diags, Diagnostic{
-				Severity: SeverityError,
-				Span:     span,
-				Message:  msgMetadataConcreteType,
-				Code:     "metadata-concrete-type",
-				Source:   "constraint",
-			})
-		}
+		mc.diags = append(mc.diags, Diagnostic{
+			Severity: SeverityError,
+			Span:     span,
+			Message:  msgMetadataConcreteType,
+			Code:     "metadata-concrete-type",
+			Source:   "constraint",
+		})
 		return
 	}
 	mc.checkBody(typ, body)

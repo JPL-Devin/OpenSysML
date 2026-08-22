@@ -129,11 +129,54 @@ type nameWalk struct {
 	// expanding are the elements whose members are being enumerated on the
 	// current path, so a namespace that contains itself ends the descent.
 	expanding map[*symbols.Symbol]bool
+	// pending maps a type to the declaration being written in it, whose
+	// redefinition masks nothing there (KerML 8.3.3.3.6).
+	pending map[*symbols.Symbol]pendingDecl
+}
+
+// pendingDecl is the declaration being written in a type. sym is nil when the
+// walk cannot tell which of the type's declarations it is; hide reports whether
+// that declaration is not yet a member of the type.
+type pendingDecl struct {
+	sym  *symbols.Symbol
+	hide bool
+}
+
+// markPending records the declaration being written in a type. A package
+// declares no features, so nothing is pending in it.
+func (nw *nameWalk) markPending(owner *symbols.Symbol, decl pendingDecl) {
+	if owner == nil || owner.Kind == symbols.SymbolPackage || owner.Kind == symbols.SymbolNamespace {
+		return
+	}
+	nw.pending[owner] = decl
+}
+
+// membersOf reports the members of owner as the walk sees them: the declaration
+// being written in it is absent, and the redefinitions it declares mask nothing.
+func (nw *nameWalk) membersOf(owner *symbols.Symbol) []*symbols.Symbol {
+	if decl, ok := nw.pending[owner]; ok {
+		return nw.sem.MembersOfDeclaring(owner, decl.sym)
+	}
+	return nw.sem.MembersOf(owner)
 }
 
 // walk enumerates the anchor scope and its ancestors, then the index roots.
 func (nw *nameWalk) walk(anchor *symbols.Scope, redefinition bool) {
 	nw.expanding = map[*symbols.Symbol]bool{}
+	nw.pending = map[*symbols.Symbol]pendingDecl{}
+	if redefinition && anchor != nil {
+		// The anchor is the namespace the redefinition is written in: one of
+		// its declarations is the redefining one, and which is not knowable
+		// from a scope alone.
+		owner := anchor.Owner()
+		nw.markPending(owner, pendingDecl{hide: true})
+		// It may instead be the redefining declaration's own scope — a cursor
+		// in its head — in which case the namespace is its owner, and there the
+		// declaration is known and stays visible under its own name.
+		if semantics.DeclaresRedefinition(owner) && owner.OwnerScope != nil {
+			nw.markPending(owner.OwnerScope.Owner(), pendingDecl{sym: owner})
+		}
+	}
 	for s := anchor; s != nil; s = s.Parent() {
 		if s == anchor && redefinition {
 			nw.inherited(s.Owner(), "", 1, true)
@@ -164,12 +207,16 @@ func (nw *nameWalk) locals(s *symbols.Scope, prefix string, depth int, inside, i
 	if s == nil {
 		return
 	}
+	decl := nw.pending[s.Owner()]
 	// The binding name is the key, not the symbol's own name: an alias member
 	// binds a name to another element (KerML 7.3.4.4).
 	for _, name := range s.MemberNames() {
 		for _, sym := range s.LookupLocalAll(name) {
 			if !symbols.VisibleAs(sym.Visibility, inside, inheriting) {
 				continue
+			}
+			if decl.hide && semantics.NotYetMember(sym, decl.sym) {
+				continue // not yet a member of the namespace it is written in
 			}
 			nw.add(prefix, leafName(name), sym, depth)
 			nw.add(prefix, sym.ShortName, sym, depth)
@@ -185,7 +232,9 @@ func (nw *nameWalk) inherited(owner *symbols.Symbol, prefix string, depth int, i
 	if owner == nil || owner.Kind == symbols.SymbolPackage || owner.Kind == symbols.SymbolNamespace {
 		return
 	}
-	for _, sym := range nw.sem.MembersOf(owner) {
+	// One filter chain: the semantic member view drops what a redefinition
+	// masks, then membership visibility drops what cannot be named here.
+	for _, sym := range nw.membersOf(owner) {
 		if !symbols.VisibleAs(sym.Visibility, false, inheriting) {
 			continue
 		}

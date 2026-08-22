@@ -280,6 +280,23 @@ func memberSymbol(scope *symbols.Scope, node ast.Node) *symbols.Symbol {
 // result parameters. It returns nothing for a feature that is not a parameter,
 // or whose declaration redefines something explicitly.
 func (m *Model) implicitParameterRedefinitions(sym *symbols.Symbol) []*symbols.Symbol {
+	return m.implicitParameterTargets(sym, true)
+}
+
+// implicitParameterCounterparts returns the parameters at sym's position in the
+// general behaviors whatever their direction, which is what a direction
+// conformance check needs: a disagreeing direction is a violation there rather
+// than an absent redefinition.
+func (m *Model) implicitParameterCounterparts(sym *symbols.Symbol) []*symbols.Symbol {
+	return m.implicitParameterTargets(sym, false)
+}
+
+// implicitParameterTargets is the shared walk: matchDirection keeps only the
+// positions whose direction agrees with sym's.
+func (m *Model) implicitParameterTargets(sym *symbols.Symbol, matchDirection bool) []*symbols.Symbol {
+	if sym == nil {
+		return nil
+	}
 	usage, ok := sym.Decl.(*ast.Usage)
 	if !ok || usage.Direction == ast.DirNone {
 		return nil
@@ -327,7 +344,7 @@ func (m *Model) implicitParameterRedefinitions(sym *symbols.Symbol) []*symbols.S
 		}
 		// A redefining parameter has the same direction as the parameter it
 		// redefines; a position whose directions disagree is not a redefinition.
-		if target.direction != usage.Direction {
+		if matchDirection && target.direction != usage.Direction {
 			continue
 		}
 		out = append(out, target.sym)

@@ -50,6 +50,13 @@ type Model struct {
 	filterTypes    map[string]*symbols.Symbol
 	annotations    map[*symbols.Symbol][]annotation
 	aboutAnnots    map[*symbols.Symbol][]annotation
+
+	// Redefinition masking (see masking.go): the features each declaration
+	// redefines, and the elements each type does not inherit because of them.
+	redefined map[*symbols.Symbol][]*symbols.Symbol
+	redefMask map[*symbols.Symbol]map[*symbols.Symbol]bool
+	// redefMaskInherited is the same mask counting inherited redefinitions only.
+	redefMaskInherited map[*symbols.Symbol]map[*symbols.Symbol]bool
 }
 
 // NewModel creates a semantic model backed by the given name resolver. The
@@ -82,6 +89,10 @@ func NewModel(resolver *resolve.Resolver) *Model {
 		filterVerdicts: make(map[filterKey]filterVerdict),
 		filterTypes:    make(map[string]*symbols.Symbol),
 		annotations:    make(map[*symbols.Symbol][]annotation),
+
+		redefined:          make(map[*symbols.Symbol][]*symbols.Symbol),
+		redefMask:          make(map[*symbols.Symbol]map[*symbols.Symbol]bool),
+		redefMaskInherited: make(map[*symbols.Symbol]map[*symbols.Symbol]bool),
 	}
 	if resolver != nil {
 		resolver.SetModel(m)
