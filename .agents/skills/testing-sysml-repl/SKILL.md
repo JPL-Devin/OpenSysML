@@ -3620,6 +3620,44 @@ Traps and recipes:
   `error: execution failed: execution exceeded max steps (1000000 steps; ...)` — so "hangs to the
   step budget", not just a wrong value, is the pre-fix signature here.
 
+### Typed failure classes for fork/join/merge/decision control nodes (PR #449 class)
+
+Any PR that claims "typed user-facing errors" for the control nodes is really claiming a *prefix*
+per failure class, so the discriminating evidence is A/B against the parent commit: the values and
+the fact that an error appears are usually unchanged, only the wording gains its class. Observed at
+6b1c1f76 (new) vs its parent (old):
+
+| failure | new wording | parent wording |
+|---|---|---|
+| fork with no outgoing succession | `invalid action flow: fork node split has no successors` | same text, **no** `invalid action flow:` prefix |
+| merge with no outgoing succession | `invalid action flow: merge node converge has no successors` | same, unprefixed |
+| join that can never be satisfied | `action deadlock: 1 token(s) stuck, no progress made` | `deadlock detected: 1 token(s) stuck, …` |
+| decision whose every guard is false | `no enabled succession: decision node choose has no true guard` | `decision node choose: no true guard` |
+
+All four arrive as `error: execution failed: <typed message>` on `%continue`. Minimal probe shapes
+(each its own file, since they all declare `package test` — see the restart trap above):
+
+- **fork/merge with no successors:** declare the node and route a token into it but give it no
+  outgoing `then`: `first start; fork split; then start split;` (same with `merge converge;`).
+  Parse succeeds, so the failure is genuinely a runtime one.
+- **join starvation:** `first start; action stranded; join sync; done end; then start sync; then
+  stranded sync; then sync end;` — `sync` has two incoming edges but `stranded` is unreachable, so
+  one token waits forever. This is the case worth wrapping in `time timeout 20` on camera: a correct
+  build fails in ~0.1s, whereas the pre-fix signature for join/merge bugs is spinning to the step
+  budget (see the merge note above), which a bare interactive run makes look like a hang.
+- **decision with no true guard:** `attribute enabled : Boolean = false;` plus `decide choose; if
+  enabled then selected;` — one guarded branch that is false, and no `else`.
+
+Also worth asserting: **the REPL survives each of these**. Follow the error with `%eval 1 + 1` and
+check `= 2`; an executor that leaves the session wedged is a separate defect from the wording.
+
+Fixture noise to expect, not report: `internal/core/runtime/testdata/conformance/
+action_fork_branches_share_features.sysml` omits `import ScalarValues::*;`, so `%load` prints two
+`unresolved reference: Integer — did you mean ScalarValues::Integer?` errors before running to
+`x = 1, y = 2` correctly. It is pre-existing (identical on the parent binary); the sibling
+`action_decision_merge_guarded_branch.sysml` loads clean, so a reviewer seeing one noisy and one
+quiet load is looking at fixture hygiene, not a regression.
+
 ## Verifying the RDF "experimental" marking, `%print`, `%view`, guards and addressed sends
 
 The wave-1/0.1.0 surfaces below were verified end to end at `870da1fd`. Each entry is the
