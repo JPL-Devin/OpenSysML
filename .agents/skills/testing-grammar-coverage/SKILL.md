@@ -92,6 +92,15 @@ are each rejected with `expected a namespace member`.
 the file it drops into the REPL and blocks, so the next typed command is swallowed as SysML. Use
 `go run ./cmd/sysml file </dev/null`.
 
+## Measuring an extra corpus root
+
+There is no flag for extra scanned roots (`cmd/grammar-coverage` takes only `-repo`, `-grammars`,
+`-out`, `-baseline`), so claims of the form "corpus X closes the unseen-form gap" need a temporary
+`corpusRoot` appended to `evidenceRoots` in `cmd/grammar-coverage/corpus.go`, then reverted. Example
+at `PILOT_TAG=2026-05`: adding `cmd/pilot-reject/testdata/negative` contributes 119 files / 842
+lines and takes unseen forms 5 → 0 with `indistinguishable` unchanged at 244. Such a configuration
+is not reproduced by CI, so report it as a local measurement, not a baseline movement.
+
 ## Recording
 
 CLI work: maximized Konsole on `DISPLAY=:0`, `ctrl+plus` a few times for font size. Put each phase
