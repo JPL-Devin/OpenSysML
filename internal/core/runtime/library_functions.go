@@ -837,6 +837,25 @@ func vectorElements(name, param string, val Value) ([]semantics.Value, error) {
 	return out, nil
 }
 
+// vectorElementsFeature is the KerML feature holding a NumericalVectorValue's
+// components, which the runtime represents as the collection of them.
+const vectorElementsFeature = "elements"
+
+// isNumericVector reports whether a value is a numerical vector: a non-empty
+// collection of numeric elements.
+func isNumericVector(val Value) bool {
+	elements := elementsOf(val)
+	if len(elements) == 0 {
+		return false
+	}
+	for _, elem := range elements {
+		if elem.Kind != ValConst || !elem.Const.IsNumeric() {
+			return false
+		}
+	}
+	return true
+}
+
 // realElements is vectorElements widened to Real, for the CartesianVectorValue
 // operations, whose elements the library declares Real.
 func realElements(name, param string, val Value) ([]float64, error) {

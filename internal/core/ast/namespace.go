@@ -152,6 +152,8 @@ type PrefixMetadata struct {
 	NodeBase
 	Type *QualifiedName
 	Body []Node // optional body with property initializers: @Meta{prop = value;}
+	// Elements the usage annotates: `@Meta about a, b;` (SysML.xtext:145-147).
+	About []*QualifiedName
 }
 
 // Namespace is `namespace <id> { ... }`.
