@@ -1,6 +1,14 @@
 package resolve_test
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
+	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
+	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
+)
 
 // f67Clean resolves src and requires it to produce no diagnostics.
 func f67Clean(t *testing.T, name, src string) {
@@ -67,6 +75,62 @@ func TestF67PrivateImportDoesNotReexport(t *testing.T) {
 	}`)
 	if len(r.Diagnostics) == 0 {
 		t.Fatal("expected an unresolved-reference diagnostic through the private import chain")
+	}
+}
+
+// A recursive membership import follows public imports of the namespace it
+// enters, including when the re-exported member is nested below it.
+func TestF67RecursiveMembershipReexportChain(t *testing.T) {
+	f67Clean(t, "recursive-chain", `package M {
+		package A { attribute def MassValue; }
+		package B { public import A::*; }
+		package T2 { public import B::**; attribute m2 : MassValue; }
+		package T1 { public import B::*; attribute m1 : MassValue; }
+	}`)
+}
+
+// A private import in the intermediate namespace is not part of its visible
+// memberships, so a recursive import does not leak it onward.
+func TestF67RecursivePrivateImportDoesNotReexport(t *testing.T) {
+	r, _, _ := resolvedDoc(t, `package M {
+		package A { attribute def MassValue; }
+		package B { private import A::*; }
+		package T { public import B::**; attribute m : MassValue; }
+	}`)
+	if len(r.Diagnostics) == 0 {
+		t.Fatal("expected private recursive import chain to leave MassValue unresolved")
+	}
+}
+
+func TestF67ISQRecursiveMembershipReexport(t *testing.T) {
+	cache, err := libs.NewCache()
+	if err != nil {
+		t.Fatalf("create library cache: %v", err)
+	}
+	idx := symbols.NewIndex()
+	if err := libs.NewLoader(libs.DefaultSource(), cache).LoadAll(idx); err != nil {
+		t.Fatalf("load standard library: %v", err)
+	}
+	const src = `package K {
+		public import ISQ::**;
+		part v { attribute totalMass : MassValue; }
+	}
+	package KStar {
+		public import ISQ::*;
+		attribute mass : MassValue;
+	}`
+	p := parser.New(source.New("isq.sysml", []byte(src)))
+	root := p.ParseFile()
+	if len(p.Diagnostics) != 0 {
+		t.Fatalf("parse test document: %v", p.Diagnostics)
+	}
+	idx.AddDocument("isq.sysml", root)
+	idx.ExpandWildcardImports()
+
+	r := resolve.New(idx)
+	r.ResolveDocument("isq.sysml", root)
+	if len(r.Diagnostics) != 0 {
+		t.Fatalf("expected ISQ recursive and namespace imports to resolve, got %v", r.Diagnostics)
 	}
 }
 

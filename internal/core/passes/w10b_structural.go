@@ -105,9 +105,10 @@ func (c *w10bStructuralChecker) report(node ast.Node, msg, code string) {
 }
 
 // w10bIsComposite reports whether a usage owns its occurrences: `ref`, a
-// direction, an end and a reference subsetting make it referential instead.
+// direction, an end, an event occurrence, and reference subsetting are
+// referential instead.
 func w10bIsComposite(u *ast.Usage) bool {
-	if u.IsReference || u.Direction != ast.DirNone || u.IsEnd || w10bReferences(u) {
+	if u.IsReference || u.Direction != ast.DirNone || u.IsEnd || u.IsEvent || w10bReferences(u) {
 		return false
 	}
 	if u.IsComposite {

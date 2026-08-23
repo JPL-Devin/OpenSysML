@@ -169,13 +169,13 @@ Every difference from the published numbers is accounted for, and none of it is 
 ```
 428 .xt file(s), 0 unparsed, 0 missing declared resource(s)
 1261 assertion(s) declaring 1323 expectation(s)
-agree 1287 (of which wording-only 248) | disagree 36 | unlocated 0 | not adjudicated 0
+agree 1293 (of which wording-only 248) | disagree 30 | unlocated 0 | not adjudicated 0
 ```
 
 | Kind | Expectations | Agree | of which wording-only | Disagree | Not adjudicated | `same-location` | `same-line` | `severity-differs` | `elsewhere` | nothing |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| `errors` | 510 | 486 | 248 | 24 | 0 | 7 | 10 | 0 | 7 | 0 |
-| `noErrors` | 275 | 265 | — | 10 | 0 | — | — | — | — | — |
+| `errors` | 510 | 490 | 248 | 20 | 0 | 7 | 6 | 0 | 7 | 0 |
+| `noErrors` | 275 | 267 | — | 8 | 0 | — | — | — | — | — |
 | `linkedName` | 194 | 194 | — | 0 | 0 | — | — | — | — | — |
 | `warnings` | 113 | 111 | — | 2 | 0 | 0 | 0 | 1 | 0 | 1 |
 | `scope` | 230 | 230 | — | 0 | 0 | — | — | — | — | — |
@@ -185,10 +185,10 @@ Per suite:
 
 | Suite | Files | Expectations | Agree | Disagree | Not adjudicated |
 |---|---:|---:|---:|---:|---:|
-| `kerml` | 303 | 966 | 946 | 20 | 0 |
-| `sysml` | 125 | 357 | 341 | 16 | 0 |
+| `kerml` | 303 | 966 | 948 | 18 | 0 |
+| `sysml` | 125 | 357 | 345 | 12 | 0 |
 
-**Read the `errors` row carefully: 248 of its 486 agreements are wording-only, so more than half of
+**Read the `errors` row carefully: 248 of its 490 agreements are wording-only, so more than half of
 that column is us stating the pilot's rule in our own words rather than a rule written against its
 text.** The 238 word-for-word rows are the ones where a rule was implemented against the declared
 message. `warnings` shows the same effect from the other side: its 111 agreements are the
@@ -202,9 +202,9 @@ change in our behaviour):
 | Kind | First run | Now | What moved |
 |---|---|---|---|
 | `linkedName` | 151 / 194 | **194 / 194** | alias-introduced names resolve to the aliased element, and the `~ B::f` conjugation form parses |
-| `noErrors` | 231 / 275 | **265 / 275** | 6 `ParsingTests_*` files, 4 inherited-name-conflict files and 2 others no longer draw an error, wave 9D's protected/shadowed path reconciliation cleared 11 more, wave 11C closed the 6 protected-import rows wave 10E had made unsatisfiable by modelling `noErrors` as Xpect's residue rather than as file-wide silence, and wave 12D's parser work cleared `ParsingTests_Indexing` and `SemanticMetadata_valid` |
+| `noErrors` | 231 / 275 | **267 / 275** | 6 `ParsingTests_*` files, 4 inherited-name-conflict files and 2 others no longer draw an error, wave 9D's protected/shadowed path reconciliation cleared 11 more, wave 11C closed the 6 protected-import rows wave 10E had made unsatisfiable by modelling `noErrors` as Xpect's residue rather than as file-wide silence, wave 12D's parser work cleared `ParsingTests_Indexing` and `SemanticMetadata_valid`, and wave 12F closed two more rows |
 | `warnings` | 0 / 113 | **111 / 113** | the duplicate-member-name warnings, the wave-8 rules written against the declared wording, wave 9C's library rules, wave 10's warnings residue, and wave 11A/11F's usage-typing rules, which stopped another rule's error from standing where a warning is declared |
-| `errors` | 0 / 510 | **486 / 510** | 238 rows are ours word-for-word; the other 248 are wording-only, admitted centrally in wave 10 after the rule and element were checked, not by adopting the pilot's phrasing |
+| `errors` | 0 / 510 | **490 / 510** | 242 rows are ours word-for-word; the other 248 are wording-only, admitted centrally in wave 10 after the rule and element were checked, not by adopting the pilot's phrasing |
 | `scope` | 73 / 230 | **230 / 230** | wave 9A resolves implicit and inherited members through the library (`library-names` 125 → 27), wave 9D reconciles the protected and shadowed paths, wave 10A bounds re-entry to one per name, wave 11C fixes the quoted anchor and stops a recursive import's descent carrying implicit generals, and wave 12E bounds derived `self`/`that` paths and anchors a scope assertion on the reference its text names |
 
 **These tables and the baseline are a single fresh run on wave 12D rebased onto `main` with waves 11,
@@ -212,7 +212,7 @@ change in our behaviour):
 `severity-differs` `errors` rows are **0**, because wave 11A implemented the usage-typing and
 specialization rules the pilot declares there instead of adjusting a severity, and 11F canonicalized
 the resolver's inherited-name warning that had been standing in their place. `errors` silence falls
-8 → **0**, `elsewhere-in-file` 42 → **7**, `same-line` 25 → **10**, and `noErrors` rises 248 → **265**.
+8 → **0**, `elsewhere-in-file` 42 → **7**, `same-line` 25 → **6**, and `noErrors` rises 248 → **267**.
 
 **The `nothing` column is empty for the first time**: wave 12D's parser productions let
 `Type_Multiplicity_invalid` reach its validation rule and gave `ScopeWithFourDotAndDot` a real
@@ -320,7 +320,7 @@ only external, per-reference verdict on our name resolution that exists at the p
 also the narrowest: it says which element a written reference reaches, never which names *were*
 visible. That second question is the 230 `scope` assertions below.
 
-## noErrors — 265 of 275 agree
+## noErrors — 267 of 275 agree
 
 10 disagreements: we report an error where the pilot's implementers declared the file clean. Grouped
 by our first diagnostic:
@@ -347,7 +347,8 @@ moved in both directions: 244 → 243 across wave 8 (four parse rows closed, six
 opened), 243 → 254 in wave 9, 254 → 248 when wave 10E restored the protected-import rejections, and
 248 → 263 in wave 11 once 11C modelled `noErrors` as Xpect's residue and closed those six
 without giving the rejections back, and 263 → **265** in wave 12D on the indexing and
-semantic-metadata parse rows. No row here is unsatisfiable any more.
+semantic-metadata parse rows, then 265 → **267** in wave 12F on the allocation and recursive-import
+rows. No row here is unsatisfiable any more.
 
 ---
 
@@ -436,9 +437,9 @@ redefinition removed was silent too.
 
 ---
 
-## errors — 486 of 510, of which 248 wording-only
+## errors — 490 of 510, of which 248 wording-only
 
-Agreement here is 238 rows word-for-word plus 248 wording-only: the same rule about the same element
+Agreement here is 242 rows word-for-word plus 248 wording-only: the same rule about the same element
 at the same offset and severity, in our phrasing. Almost all of the wording-only rows are one family,
 `Couldn't resolve reference to <kind> 'X'.` against `unresolved reference: X — did you mean …?`, and
 the harness admits them only after matching the rule and the element named, never on span and
@@ -447,7 +448,7 @@ severity alone. What is left:
 | Tolerance | Rows | Meaning |
 |---|---:|---|
 | `same-location` | 7 | we flag the exact declared offset for a **different rule** |
-| `same-line` | 10 | we flag the declared line at a different offset — almost certainly the same defect |
+| `same-line` | 6 | we flag the declared line at a different offset — almost certainly the same defect |
 | `severity-differs` | 0 | **empty:** wave 11A implemented the declared rules instead |
 | `elsewhere-in-file` | 7 | we report errors, but not where the declaration points |
 | nothing | 0 | **empty since wave 12D:** no declared-error file is accepted in silence |

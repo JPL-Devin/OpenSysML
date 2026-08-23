@@ -291,7 +291,7 @@ func (cc *constraintChecker) checkConnectorEnds(sym *symbols.Symbol) {
 				cc.addConnectorEndsDiag(sym, u, "a connection must have at least two ends")
 			}
 		case ast.UsageInterface:
-			if n != 2 {
+			if n != 2 && cc.interfaceIsBinary(sym) {
 				cc.addConnectorEndsDiag(sym, u, "an interface connection must be binary (exactly two ends)")
 			}
 		case ast.UsageAllocation:
@@ -300,6 +300,10 @@ func (cc *constraintChecker) checkConnectorEnds(sym *symbols.Symbol) {
 			}
 		}
 	}
+}
+
+func (cc *constraintChecker) interfaceIsBinary(sym *symbols.Symbol) bool {
+	return cc.model != nil && cc.model.IsBinaryConnector(sym)
 }
 
 // checkConnectorEndRedefinition flags an end a connector declares that redefines

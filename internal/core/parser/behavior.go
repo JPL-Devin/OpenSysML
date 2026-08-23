@@ -380,7 +380,7 @@ func (p *Parser) parseDirectionParameter() ast.Node {
 
 	// Optional value (= expr, := expr, or default [=] expr)
 	var value ast.Node
-	if p.acceptValueOperator() {
+	if _, ok := p.acceptValueOperatorSpan(); ok {
 		value = p.ParseExpression()
 	}
 
@@ -1638,9 +1638,7 @@ func (p *Parser) parseResultMemberIn(inStatement bool) ast.Node {
 		u.Relationships = append(u.Relationships, postModRels...)
 
 		// Parse optional value 'default [=] expr', '= expr' or ':= expr'
-		if p.acceptValueOperator() {
-			u.Value = p.ParseExpression()
-		}
+		p.parseUsageValue(u)
 
 		// Check for body or semicolon
 		if p.at(lexer.LBrace) || p.at(lexer.Semicolon) {
@@ -1683,9 +1681,7 @@ func (p *Parser) parseResultMemberIn(inStatement bool) ast.Node {
 		}
 
 		// A value operator here makes this Pattern 4 (value), not Pattern 5 (no value)
-		if p.acceptValueOperator() {
-			u.Value = p.ParseExpression()
-		}
+		p.parseUsageValue(u)
 
 		// Check for body or semicolon
 		if p.at(lexer.LBrace) {
@@ -1720,8 +1716,7 @@ func (p *Parser) parseResultMemberIn(inStatement bool) ast.Node {
 			IsNonunique: mods.isNonunique,
 		}
 		u.Ident = p.parseIdentification()
-		p.acceptValueOperator()
-		u.Value = p.ParseExpression()
+		p.parseUsageValue(u)
 
 		// Check for optional body or semicolon
 		if p.at(lexer.LBrace) {
@@ -2048,7 +2043,7 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 
 	// Value part: `= expr`, `:= expr` or `default [=] expr`.
 	var value ast.Node
-	if p.acceptValueOperator() {
+	if _, ok := p.acceptValueOperatorSpan(); ok {
 		value = p.ParseExpression()
 	}
 
@@ -2193,7 +2188,7 @@ func (p *Parser) parseOwnedConstraintDecl(what string) ownedConstraintDecl {
 	if p.at(lexer.LBracket) {
 		d.multiplicity = p.parseMultiplicity()
 	}
-	if p.acceptValueOperator() {
+	if _, ok := p.acceptValueOperatorSpan(); ok {
 		d.value = p.ParseExpression()
 	}
 	if p.at(lexer.LBrace) {

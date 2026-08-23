@@ -53,3 +53,18 @@ func TestW10BTwoEndsAreClean(t *testing.T) {
 		t.Fatalf("two-ended connectors are well-formed, got %v", diags)
 	}
 }
+
+func TestW10BAllocationDefinitionsInheritTwoEnds(t *testing.T) {
+	const src = `package P {
+		part def X;
+		allocation def Empty;
+		allocation def One {
+			end item : X;
+		}
+	}`
+	for _, d := range constraintDiags(t, src) {
+		if d.Message == msgRelatedElements {
+			t.Fatalf("allocation definitions inherit two related ends, got %v", d)
+		}
+	}
+}

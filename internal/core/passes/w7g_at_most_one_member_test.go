@@ -139,6 +139,35 @@ func TestW7GSubjectAsTheFirstParameterIsSilent(t *testing.T) {
 	}
 }
 
+func TestW7GExpressionSubjectBeforeLaterInputIsSilent(t *testing.T) {
+	const src = `package R {
+		part vehicle;
+		analysis a {
+			subject = vehicle;
+			in attribute scenario;
+		}
+	}`
+	if diags := only(constraintDiags(t, src), "subject-parameter-position"); len(diags) != 0 {
+		t.Fatalf("an expression subject before a later input is first, got %v", diags)
+	}
+}
+
+func TestW7GLocalResultSuppressesInheritedParameterFallback(t *testing.T) {
+	const src = `package R {
+		part def V;
+		requirement def Base {
+			in attribute inherited;
+			subject baseSubject : V;
+		}
+		requirement def Child :> Base {
+			return attribute result;
+		}
+	}`
+	if diags := only(constraintDiags(t, src), "subject-parameter-position"); len(diags) != 1 {
+		t.Fatalf("a locally declared result must prevent inherited-parameter fallback, got %v", diags)
+	}
+}
+
 // The reference reports the position rule on a requirement whose first parameter
 // is not a subject even when it declares no subject at all (matched run).
 func TestW7GParameterBeforeAnAbsentSubjectIsReported(t *testing.T) {

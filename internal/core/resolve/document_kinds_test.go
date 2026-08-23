@@ -25,3 +25,29 @@ func TestResolveUnresolvedConnectorEnd(t *testing.T) {
 		t.Fatalf("expected an unresolved-name diagnostic for the 'missing' end")
 	}
 }
+
+func TestResolveNamedNaryConnectorEnds(t *testing.T) {
+	r := resolveDoc(t, "d.sysml", `package T {
+		part def L;
+		part def P;
+		allocation def LtoP { end logical : L; end physical : P; }
+		part l : L;
+		part p : P;
+		allocation a2 : LtoP allocate (logical ::> l, physical ::> p);
+	}`)
+	if len(r.Diagnostics) != 0 {
+		t.Fatalf("expected named n-ary allocation ends to resolve, got %v", r.Diagnostics)
+	}
+}
+
+func TestResolveNamedConnectorEndReferenceStillReportsMissingTarget(t *testing.T) {
+	r := resolveDoc(t, "d.sysml", `package T {
+		part def L;
+		allocation def LtoP { end logical : L; }
+		part l : L;
+		allocation a : LtoP allocate (logical ::> missing, l);
+	}`)
+	if len(r.Diagnostics) == 0 {
+		t.Fatal("expected an unresolved-name diagnostic for the named end reference")
+	}
+}
