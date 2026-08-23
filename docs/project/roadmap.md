@@ -185,7 +185,7 @@ Cascade noise is the reason the coarse gate existed, so the measure of success w
 moving *without* a rise in only-ours rows — met, and the control with the gate removed entirely
 (only-ours 119 → 166) is why the marker stayed opt-in.
 
-## L3 — a library contributes names but no bodies (scheduled, wave 12)
+## L3 — a library contributes names but no bodies (partly done, wave 12C)
 
 A standard library is **index-only**: `libs.Loader.LoadAll` reduces every file it parses to the
 same record a cache hit restores, so a library type contributes its name, kind, specializations,
@@ -217,6 +217,17 @@ free of semantic effect, so anything replacing it needs the same proof
 the measurements behind them are designed in
 [wave 12C](wave12c-lossless-library-records.md), which recommends caching only the derived facts and
 parsing the library on every path — parsing all 95 bundled files costs 41 ms of the 1.90 s cold load.
+
+**Slice A landed** ([#504](https://github.com/JPL-Devin/OpenSysML/pull/504)) ahead of the record
+format, because measuring L3's cost exposed a larger defect it would have multiplied: every model
+was handed a library index of its own, so a full gRPC model cache held ~100 copies of the same
+library — heap 1595 MiB, 15.95 MiB each. The library is now built once, frozen, and read through a
+per-model overlay (`libs.SharedBase`, `symbols.NewOverlay`), which measures 17.2 MiB for the base
+plus 1.5 MiB for 100 models. That reprices the record format rather than delivering it: keeping the
+parsed trees is now a once-per-process ~17 MiB, not per model.
+
+**Still open:** the record format itself, and the consumers listed as slice B in the design page —
+including `ApplyEdits`, which still reindexes per edit *operation* (row L3-9).
 
 ---
 
@@ -540,7 +551,9 @@ Tracks A, B, C, P and T1 are closed and their entries are removed; what is left 
    **D8** (the OWL-ontology output profile) is optional and additive: its domain/range gate is
    worth having as soon as the profile's term table exists, but the profile only becomes fully
    conformant behind D3.3, D2 and D1, so it does not belong ahead of them.
-3. **L2** after wave 11 as a whole, since slices' rows sit behind the gate it narrows. **L3**
-   last of the two and only if its reach is wanted: it buys no conformance row, and it replaces
-   a contract the cache's correctness currently rests on. L1, the annotation-body editor
-   surface, closed in wave 12. Both are independent of the release section and of Track D.
+3. **L2** after wave 11 as a whole, since slices' rows sit behind the gate it narrows — closed in
+   wave 12A. **L3**'s record format last of the two and only if its reach is wanted: it buys no
+   conformance row, and it replaces a contract the cache's correctness currently rests on. L1, the
+   annotation-body editor surface, closed in wave 12; L3's slice A (the shared library index)
+   closed with it, being a memory defect on its own rather than part of that trade. Both are
+   independent of the release section and of Track D.
