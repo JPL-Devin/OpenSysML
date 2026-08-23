@@ -417,6 +417,40 @@ func TestLibraryBaseBuildsOnceUnderConcurrentDemand(t *testing.T) {
 	}
 }
 
+// TestLibraryBasePrewarmsOnce pins that repeated or concurrent prewarming builds
+// one library rather than one per call, and that close waits for the build it
+// started rather than leaving it running.
+func TestLibraryBasePrewarmsOnce(t *testing.T) {
+	var mu sync.Mutex
+	built := 0
+	base := newLibraryBase(func() *symbols.Index {
+		mu.Lock()
+		built++
+		mu.Unlock()
+		time.Sleep(5 * time.Millisecond)
+		idx := symbols.NewIndex()
+		idx.Freeze()
+		return idx
+	})
+
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			base.prewarm()
+		}()
+	}
+	wg.Wait()
+	base.close()
+
+	mu.Lock()
+	defer mu.Unlock()
+	if built != 1 {
+		t.Errorf("8 prewarms built %d libraries, want 1", built)
+	}
+}
+
 // BenchmarkParseFileColdShared measures a first-time model over a prewarmed
 // shared library; BenchmarkParseFileColdInline measures the same work with
 // prewarming off, where the first request builds the library.

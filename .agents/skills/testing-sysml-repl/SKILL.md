@@ -1683,21 +1683,24 @@ verify_requirement / verify_satisfaction / satisfied / calc`. Testing them from 
   `ExecutionError`/`RuntimeError`) and that `__cause__` is the original `grpc.RpcError`. A dead
   service is reproducible with `opensysml.connect(port=50123, auto_start=False)`.
 
-### The prewarmed library-index pool, `SYSML_GRPC_INDEX_POOL` (PR #252)
+### The shared library index, `SYSML_GRPC_INDEX_POOL` (PR #252; shared base since slice A of L3)
 
-`internal/grpc/libindex.go` keeps N standard library indexes built ahead of the requests that need
-them (default 4; `0` restores the old per-cache-miss build). How to observe it end to end, and what
-generalizes to any service-side perf change:
+`internal/grpc/libindex.go` builds **one** frozen standard library index and gives each model an
+overlay over it (any positive `SYSML_GRPC_INDEX_POOL` prewarms that build; `0` restores the
+per-cache-miss build). It was a pool of N per-model indexes until slice A, so the drain-and-refill
+behaviour below no longer applies: there is nothing to drain, and a tight sweep of distinct models
+stays fast after the first build. How to observe it end to end, and what generalizes to any
+service-side perf change:
 
 - **Measure with DISTINCT model texts.** The service caches models by content, so a repeated model
   is a cache hit and shows nothing. Append a unique trailing comment (`// distinct model %d`) per
   iteration and time `conn.load_from_content(src)` client-side; a library-backed model (imports
   `ScalarValues`/`ISQ`, a derived attribute) is required, otherwise no library index is needed.
 - Numbers observed at 607b0eb8 on a ~85-line model, 12 distinct models: **pool default (4) median
-  4.4 ms**, `SYSML_GRPC_INDEX_POOL=0` **median 112.5 ms**. Expect 1–2 spikes of ~140–155 ms in the
-  pooled run: a tight client loop drains the 4 warm indexes faster than the background refill
-  (~100 ms per index), and the drained request builds inline by design. Report the median plus the
-  spikes rather than the mean, which the spikes dominate.
+  4.4 ms**, `SYSML_GRPC_INDEX_POOL=0` **median 112.5 ms**. The 1–2 spikes of ~140–155 ms that a
+  pooled run showed were the drained pool rebuilding; with a shared base only the very first
+  request can pay a build, so a spike after the first is now a regression rather than by design.
+  Report the median plus any spike rather than the mean.
 - **The env var reaches the service through the opensysml auto-start path** (the client spawns the
   child, so it inherits the env), so `SYSML_GRPC_INDEX_POOL=0 python sweep.py` is enough — but
   `pkill -x sysml-grpc; rm -f ~/.opensysml/sysml-grpc-50051.pid ~/.opensysml/sysml-grpc-50051.lock`
@@ -1705,7 +1708,8 @@ generalizes to any service-side perf change:
 - **Equivalence is the assertion that catches a wrong index.** Have one script print a sorted JSON
   blob (diagnostics, `find()` id/kind, `eval`, instantiate slot kind+value, `execute_action`,
   `execute_state`) and `diff` the pool=4 and pool=0 runs: only the line naming the configuration may
-  differ. A pool that shared an index between models would show up here, not in the timings.
+  differ. A model writing into the shared base, or seeing another model's document, would show up
+  here, not in the timings.
 - Bad values are rejected in `NewService`, so `sysml-grpc` **exits 1 before listening**:
   `-1` → `library index pool size must not be negative, got -1 (SYSML_GRPC_INDEX_POOL)`,
   `many`/`1.5`/`"4 4"` → `library index pool size must be an integer, got "many" (…)`. Assert the exit
@@ -1724,8 +1728,8 @@ generalizes to any service-side perf change:
 - Prewarming must not block startup: the port accepts in ~30 ms with pool=4, and SIGTERM after
   prewarming exits **0** in ~13 ms (`Close()` waits for in-flight builds, so a hang here is the
   regression to watch). Time both with `date +%s.%N` around the launch/`kill -TERM`.
-- Two cheap adversarial shapes worth keeping: `SYSML_GRPC_INDEX_POOL=1` with 8 threads loading
-  distinct models at once (pool permanently drained → mostly inline builds; all 8 must still answer
+- Two cheap adversarial shapes worth keeping: `SYSML_GRPC_INDEX_POOL=0` with 8 threads loading
+  distinct models at once (all 8 must still answer
   `Perf::Engine`, `1+1 == 2` and the full `execute_action` dict), and `-cache-size 5` with 8 distinct
   models loaded (the 3 oldest hashes raise `ModelNotFoundError`, the 5 newest still evaluate) — an
   index handed to a model that is later evicted must not disturb the models still cached.

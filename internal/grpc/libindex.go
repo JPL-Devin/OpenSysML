@@ -47,11 +47,10 @@ func buildLibraryIndex() *symbols.Index {
 type libraryBase struct {
 	build libraryBuilder
 
-	mu    sync.Mutex
-	base  *symbols.Index
-	stats baseStats
-
-	wg sync.WaitGroup // a prewarm build in flight, awaited by close
+	mu       sync.Mutex
+	base     *symbols.Index
+	stats    baseStats
+	building chan struct{} // closed when the prewarm build in flight finishes
 }
 
 // baseStats counts what the base did, which is how a test tells a model served
@@ -90,15 +89,16 @@ func indexPrewarmFromEnv() (int, error) {
 // arrive is not the one that pays for it. It returns immediately.
 func (b *libraryBase) prewarm() {
 	b.mu.Lock()
-	if b.base != nil {
+	if b.base != nil || b.building != nil {
 		b.mu.Unlock()
 		return
 	}
+	done := make(chan struct{})
+	b.building = done
 	b.mu.Unlock()
 
-	b.wg.Add(1)
 	go func() {
-		defer b.wg.Done()
+		defer close(done)
 		b.ensure()
 	}()
 }
@@ -153,9 +153,15 @@ func (b *libraryBase) snapshot() baseStats {
 // the shared index; the models still holding it keep resolving, and a later
 // request builds a base again.
 func (b *libraryBase) close() {
-	b.wg.Wait()
+	b.mu.Lock()
+	done := b.building
+	b.mu.Unlock()
+	if done != nil {
+		<-done
+	}
 
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.base = nil
+	b.building = nil
 }
