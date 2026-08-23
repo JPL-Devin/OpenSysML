@@ -1147,11 +1147,12 @@ func (d *decoder) bodyText(el *element, depth int) (string, error) {
 }
 
 // referenceMemberKeyword reports whether a keyword introduces a member that
-// names an existing feature rather than declaring one — `perform doIt;` and a
-// state's `entry warmUp;` — so the reference is its notation.
+// names an existing feature rather than declaring one — `perform doIt;`,
+// `exhibit modes;` and a state's `entry warmUp;` — so the reference is its
+// notation.
 func referenceMemberKeyword(keyword string) bool {
 	switch keyword {
-	case "perform", "entry", "do", "exit":
+	case "perform", "exhibit", "entry", "do", "exit":
 		return true
 	}
 	return false

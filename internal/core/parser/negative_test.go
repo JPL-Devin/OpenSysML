@@ -362,6 +362,19 @@ func TestNegativeKerML(t *testing.T) {
 		{"succession_declaration_no_target", "package P { behavior B { step a; succession s : L [1] first a then ; } }"},
 		{"succession_declaration_no_ends", "package P { behavior B { succession s : L [1] first then; } }"},
 
+		// A named multiplicity states bounds or a subsetting, and the
+		// subsetting names one multiplicity (KerML.xtext:754).
+		{"multiplicity_subsets_no_target", "package P { multiplicity m subsets ; }"},
+		{"multiplicity_subsets_no_terminator", "package P { multiplicity zeroOrMore [0..*]; multiplicity m subsets zeroOrMore }"},
+		{"multiplicity_bounds_and_subsets", "package P { multiplicity zeroOrMore [0..*]; multiplicity m [0..*] subsets zeroOrMore; }"},
+
+		// An index states a sequence of at least one expression and closes
+		// (KerMLExpressions.xtext PrimaryExpression).
+		{"index_sequence_unclosed", "package P { feature a; feature b = a#(1, 2; }"},
+		{"index_sequence_empty", "package P { feature a; feature b = a#(); }"},
+		{"index_sequence_trailing_comma", "package P { feature a; feature b = a#(1,); }"},
+		{"index_bracket_unclosed", "package P { feature a; feature b = a[1, 2; }"},
+
 		// A word the KerML grammar does not reserve names a feature, so a
 		// declaration so named that is malformed is still reported.
 		{"feature_named_merge_no_type", "package P { feature merge : ; }"},

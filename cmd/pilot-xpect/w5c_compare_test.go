@@ -99,15 +99,44 @@ func TestW5CCompareDisagreements(t *testing.T) {
 			errors = r
 		}
 	}
-	// We do report an error here, so the file's noErrors assertion disagrees.
-	if noErrors.Verdict != verdictDisagree {
-		t.Errorf("noErrors = %s", noErrors.Verdict)
+	// Xpect matches the error against the errors expectation's line, so it is
+	// not residue and the file's noErrors assertion still holds.
+	if noErrors.Verdict != verdictAgree {
+		t.Errorf("noErrors = %s (%s)", noErrors.Verdict, noErrors.Actual)
 	}
 	// We do report an error on that line, but our span is the reference rather
 	// than the whole member the pilot attaches it to, so the strict verdict is
 	// a disagreement with a same-line tolerance.
 	if errors.Verdict != verdictDisagree || errors.Tolerance != toleranceLine {
 		t.Errorf("errors = %s (%s): %s", errors.Verdict, errors.Tolerance, errors.Actual)
+	}
+}
+
+// undeclared holds an error no expectation in the file declares, which is the
+// residue Xpect fails a file on.
+const undeclared = `//*
+XPECT_SETUP a.B
+	ResourceSet {
+		ThisFile {}
+	}
+END_SETUP
+*/
+// XPECT noErrors --> ""
+package test {
+	class B specializes Absent;
+}
+`
+
+func TestW5CCompareUndeclaredErrorDisagrees(t *testing.T) {
+	dir := writeSuite(t, map[string]string{"a/undeclared.kerml.xt": undeclared})
+	res := compareOne(dir, "a/undeclared.kerml.xt", newLibraryCache())
+	if len(res.Problems) != 0 {
+		t.Fatalf("problems = %v", res.Problems)
+	}
+	for _, r := range res.Rows {
+		if r.Kind == kindNoErrors && r.Verdict != verdictDisagree {
+			t.Errorf("noErrors = %s (%s)", r.Verdict, r.Actual)
+		}
 	}
 }
 

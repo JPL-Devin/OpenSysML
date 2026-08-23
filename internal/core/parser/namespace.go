@@ -899,18 +899,25 @@ func (p *Parser) parseFilter(start int) ast.Node {
 	return f
 }
 
-// parseMultiplicityDecl parses `multiplicity <id> [range] ;|{ members }`.
-// Declares a named multiplicity range (e.g., exactlyOne [1..1]).
+// parseMultiplicityDecl parses the two Multiplicity forms of KerML.xtext:754 —
+// `multiplicity <id> [range] ;|{ members }` (a MultiplicityRange, e.g.
+// exactlyOne [1..1]) and `multiplicity <id> subsets f ;|{ members }` (a
+// MultiplicitySubset, which states its bounds by subsetting another
+// multiplicity instead of writing them).
 func (p *Parser) parseMultiplicityDecl(start int) ast.Node {
 	p.advance() // multiplicity
 
 	// Parse identification (name)
 	ident := p.parseIdentification()
 
-	// Parse optional multiplicity range [lower..upper]
 	var mult *ast.Multiplicity
-	if p.at(lexer.LBracket) {
+	var subsets *ast.QualifiedName
+	switch {
+	case p.at(lexer.LBracket):
 		mult = p.parseMultiplicity()
+	case p.at(lexer.ColonGt) || p.atKeyword("subsets"):
+		p.advance() // ':>' or 'subsets'
+		subsets = p.parseQualifiedName()
 	}
 
 	// Parse body or semicolon
@@ -919,6 +926,7 @@ func (p *Parser) parseMultiplicityDecl(start int) ast.Node {
 	md := &ast.MultiplicityDecl{
 		Ident:   ident,
 		Range:   mult,
+		Subsets: subsets,
 		Members: members,
 		HasBody: hasBody,
 	}
