@@ -151,6 +151,7 @@ nav:
       - Wave 11D metadata and evaluability: project/wave11d-metadata-evaluability.md
       - Wave 11E decisions: project/wave11e-decisions.md
       - Wave 12A element-scoped tier gating: project/wave12a-element-gating.md
+      - Wave 12C lossless library records: project/wave12c-lossless-library-records.md
       - Wave 12D decisions: project/wave12d-decisions.md
       - Wave 12E decisions: project/wave12e-decisions.md
       - Wave 12F false positives: project/wave12f-false-positives.md
