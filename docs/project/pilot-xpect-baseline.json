@@ -7,9 +7,9 @@
     "filesUnparsed": 0,
     "assertions": 1261,
     "rows": 1323,
-    "agree": 1280,
+    "agree": 1287,
     "wordingOnly": 248,
-    "disagree": 43,
+    "disagree": 36,
     "unlocated": 0,
     "notAdjudicated": 0,
     "missingResources": 0,
@@ -21,24 +21,24 @@
       "assertions": 486,
       "blockAssertions": 27,
       "rows": 510,
-      "agree": 481,
+      "agree": 486,
       "wordingOnly": 248,
-      "disagree": 29,
+      "disagree": 24,
       "unlocated": 0,
       "notAdjudicated": 0,
-      "sameLocation": 6,
-      "sameLine": 9,
+      "sameLocation": 7,
+      "sameLine": 10,
       "severityDiffers": 0,
-      "elsewhereInFile": 11
+      "elsewhereInFile": 7
     },
     {
       "kind": "noErrors",
       "assertions": 275,
       "blockAssertions": 0,
       "rows": 275,
-      "agree": 263,
+      "agree": 265,
       "wordingOnly": 0,
-      "disagree": 12,
+      "disagree": 10,
       "unlocated": 0,
       "notAdjudicated": 0,
       "sameLocation": 0,
@@ -116,9 +116,9 @@
         "filesUnparsed": 0,
         "assertions": 952,
         "rows": 966,
-        "agree": 943,
+        "agree": 946,
         "wordingOnly": 243,
-        "disagree": 23,
+        "disagree": 20,
         "unlocated": 0,
         "notAdjudicated": 0,
         "missingResources": 0,
@@ -130,24 +130,24 @@
           "assertions": 312,
           "blockAssertions": 17,
           "rows": 326,
-          "agree": 307,
+          "agree": 309,
           "wordingOnly": 243,
-          "disagree": 19,
+          "disagree": 17,
           "unlocated": 0,
           "notAdjudicated": 0,
-          "sameLocation": 3,
-          "sameLine": 7,
+          "sameLocation": 5,
+          "sameLine": 8,
           "severityDiffers": 0,
-          "elsewhereInFile": 6
+          "elsewhereInFile": 4
         },
         {
           "kind": "noErrors",
           "assertions": 200,
           "blockAssertions": 0,
           "rows": 200,
-          "agree": 196,
+          "agree": 197,
           "wordingOnly": 0,
-          "disagree": 4,
+          "disagree": 3,
           "unlocated": 0,
           "notAdjudicated": 0,
           "sameLocation": 0,
@@ -1189,9 +1189,9 @@
               "line": 21,
               "at": "non",
               "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
+              "tolerance": "same-location",
               "declared": "error: \"Couldn't resolve reference to Feature 'non'.\"",
-              "ours": "no error at line 22; nearest is line 29: type must be a type, found package"
+              "ours": "line 22 offset 409: subsets target must be a feature, found kermlType"
             },
             {
               "kind": "errors",
@@ -1408,16 +1408,7 @@
           "path": "src/org/omg/kerml/xpect/tests/parsing/ParsingTests_Indexing.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 1,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "noErrors",
-              "line": 32,
-              "verdict": "disagree",
-              "declared": "no error the file does not declare",
-              "ours": "1 error(s), first: line 42: unresolved member: c"
-            }
-          ]
+          "agree": 1
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/parsing/ParsingTests_LibraryPackage_Metadata.kerml.xt",
@@ -1467,8 +1458,9 @@
               "line": 22,
               "at": "OuterPackage::B",
               "verdict": "disagree",
+              "tolerance": "same-location",
               "declared": "error: \"Couldn't resolve reference to Feature 'OuterPackage::B'.\"",
-              "ours": "no error anywhere in the file"
+              "ours": "line 27 offset 580: feature chain segment must be a feature, found kermlType"
             },
             {
               "kind": "errors",
@@ -1476,8 +1468,9 @@
               "line": 22,
               "at": "b",
               "verdict": "disagree",
+              "tolerance": "same-line",
               "declared": "error: \"Couldn't resolve reference to Feature 'b'.\"",
-              "ours": "no error anywhere in the file"
+              "ours": "line 27 offset 580: feature chain segment must be a feature, found kermlType"
             }
           ]
         },
@@ -2364,18 +2357,7 @@
           "path": "src/org/omg/kerml/xpect/tests/validation/AssociationTest_CrossFeatures_invalid.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 4,
-          "agree": 3,
-          "rows": [
-            {
-              "kind": "errors",
-              "line": 52,
-              "at": "x1 [0..1]",
-              "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
-              "declared": "error: \"Must be the cross feature\"",
-              "ours": "no error at line 53; nearest is line 42: Cross feature must have same type as feature"
-            }
-          ]
+          "agree": 4
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/validation/AssociationTest_EndRedefinitionGoodCase.kerml.xt",
@@ -2933,17 +2915,7 @@
           "path": "src/org/omg/kerml/xpect/tests/validation/Type_Multiplicity_invalid.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.validation.KerMLValidationTest",
           "expectations": 1,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "errors",
-              "line": 20,
-              "at": "multiplicity subsets Base::zeroToMany;",
-              "verdict": "disagree",
-              "declared": "error: \"Only one multiplicity is allowed\"",
-              "ours": "no error anywhere in the file"
-            }
-          ]
+          "agree": 1
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/validation/Type_Relationships_invalid.kerml.xt",
@@ -4617,9 +4589,9 @@
         "filesUnparsed": 0,
         "assertions": 309,
         "rows": 357,
-        "agree": 337,
+        "agree": 341,
         "wordingOnly": 5,
-        "disagree": 20,
+        "disagree": 16,
         "unlocated": 0,
         "notAdjudicated": 0,
         "missingResources": 0,
@@ -4631,24 +4603,24 @@
           "assertions": 174,
           "blockAssertions": 10,
           "rows": 184,
-          "agree": 174,
+          "agree": 177,
           "wordingOnly": 5,
-          "disagree": 10,
+          "disagree": 7,
           "unlocated": 0,
           "notAdjudicated": 0,
-          "sameLocation": 3,
+          "sameLocation": 2,
           "sameLine": 2,
           "severityDiffers": 0,
-          "elsewhereInFile": 5
+          "elsewhereInFile": 3
         },
         {
           "kind": "noErrors",
           "assertions": 75,
           "blockAssertions": 0,
           "rows": 75,
-          "agree": 67,
+          "agree": 68,
           "wordingOnly": 0,
-          "disagree": 8,
+          "disagree": 7,
           "unlocated": 0,
           "notAdjudicated": 0,
           "sameLocation": 0,
@@ -5394,26 +5366,8 @@
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/TransitionUsage_invalid.sysml.xt",
           "setupClass": "org.omg.sysml.xpect.tests.validation.invalid.SysMLTests",
           "expectations": 4,
-          "agree": 0,
+          "agree": 3,
           "rows": [
-            {
-              "kind": "errors",
-              "line": 45,
-              "at": "then S1_2;",
-              "verdict": "disagree",
-              "tolerance": "same-location",
-              "declared": "error: \"A parallel state cannot have successions or transitions.\"",
-              "ours": "line 46 offset 1699: expected a namespace member"
-            },
-            {
-              "kind": "errors",
-              "line": 54,
-              "at": "accept A",
-              "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
-              "declared": "error: \"A transition with an accepter must have a state as its source.\"",
-              "ours": "no error at line 55; nearest is line 43: expected '{' or ';'"
-            },
             {
               "kind": "errors",
               "line": 60,
@@ -5421,16 +5375,7 @@
               "verdict": "disagree",
               "tolerance": "elsewhere-in-file",
               "declared": "error: \"Must be a Boolean expression.\"",
-              "ours": "no error at line 61; nearest is line 43: expected '{' or ';'"
-            },
-            {
-              "kind": "errors",
-              "line": 68,
-              "at": "then s1_2;",
-              "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
-              "declared": "error: \"A parallel state cannot have successions or transitions.\"",
-              "ours": "no error at line 69; nearest is line 43: expected '{' or ';'"
+              "ours": "no error at line 61; nearest is line 46: A parallel state cannot have successions or transitions."
             }
           ]
         },
@@ -5648,16 +5593,7 @@
           "path": "src/org/omg/sysml/xpect/tests/validation/valid/SemanticMetadata_valid.sysml.xt",
           "setupClass": "org.omg.sysml.xpect.tests.validation.valid.SysMLTests",
           "expectations": 1,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "noErrors",
-              "line": 53,
-              "verdict": "disagree",
-              "declared": "no error the file does not declare",
-              "ours": "1 error(s), first: line 90: expected '{' or ';' after declaration"
-            }
-          ]
+          "agree": 1
         },
         {
           "path": "src/org/omg/sysml/xpect/tests/validation/valid/StateUsage.sysml.xt",

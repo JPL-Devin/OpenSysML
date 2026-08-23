@@ -19,17 +19,23 @@ Categories, one per open row — an unlabelled open row reads as a defect:
 
 Taken with `rm -rf /tmp/c-$$ && XDG_CACHE_HOME=/tmp/c-$$ go run ./cmd/pilot-{xpect,diff,reject}`.
 
-Re-measured after rebasing onto `7504ff09` (wave 12A's per-element tier gating merged); the three
-baseline JSONs are regenerated from these runs rather than carried across the rebase.
+Re-measured after rebasing onto `53ddee40` (waves 12A, 12B and 12E merged). Both columns are fresh
+cold-cache runs on that base and on this branch — no figure is carried from the earlier bases
+`0d4eb14f` or `7504ff09` — and the three baseline JSONs are regenerated from the branch runs rather
+than merged across the rebase.
 
-| Oracle | Base `7504ff09` | This branch |
+| Oracle | Base `53ddee40` | This branch |
 |---|---|---|
-| Xpect | 428 files, 0 unparsed; 1269 agree (246 wording-only) / **54 disagree** | 1276 agree (246 wording-only) / **47 disagree** |
+| Xpect | 428 files, 0 unparsed; 1280 agree (248 wording-only) / **43 disagree** | 1287 agree (248 wording-only) / **36 disagree** |
 | Differential | 353 files, 317 fully agreeing; 32 agreed, **119 only ours**, 66 pilot-only | 317 fully agreeing; 32 agreed, **119 only ours**, 66 pilot-only |
 | Rejection | 120 cases: 116 both reject, 4 pilot-only, 0 ours-only | unchanged: 116 both reject, 4 pilot-only, 0 ours-only |
 
-Wave 12A moved the differential's agreed/pilot-only split (25/73 → 32/66) and left the Xpect totals
-where they were, so this slice's movement is the same on the rebased base as on `0d4eb14f`.
+The base moved under this slice twice: wave 12A moved the differential's agreed/pilot-only split
+(25/73 → 32/66) and wave 12E closed 11 Xpect rows (54 → 43), including E3/E5. The seven rows this
+slice retires are the same seven on `53ddee40` as on `0d4eb14f` — 12E's name-resolution and
+visible-name changes and 12A's per-element gating did not overlap them — and **no row that agreed on
+`53ddee40` disagrees on this branch**: the two runs' rows were compared as a keyed multiset
+(file, kind, line, anchor), not by totals.
 
 **Xpect rows retired — 7, and none surfaced.** Compared as a multiset of (file, line, kind, declared):
 
