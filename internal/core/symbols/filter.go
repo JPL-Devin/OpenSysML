@@ -122,6 +122,9 @@ const (
 	// bound to nothing has. It is a result, unlike FilterValueUnknown, which
 	// says a value could not be determined.
 	FilterValueEmpty
+	// FilterValueInstance is an instance a condition constructs (`new A(…)`).
+	// It is a value, and never a truth value.
+	FilterValueInstance
 )
 
 // FilterValue is a constant a filter predicate yields or compares: a literal, or
