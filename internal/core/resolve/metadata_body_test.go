@@ -58,7 +58,7 @@ func TestMetadataBodyDeclarationImplicitlyRedefinesMetadataFeature(t *testing.T)
 	if !ok {
 		t.Fatal("body declaration x not indexed")
 	}
-	targets := r.redefined[x]
+	targets := r.redefinedFeatures(x)
 	if len(targets) != 1 || targets[0].Name != "x" {
 		t.Fatalf("body declaration redefinition = %v, want metadata feature x", targets)
 	}
@@ -77,5 +77,59 @@ func TestMetadataBodyDeclarationImplicitlyRedefinesMetadataFeature(t *testing.T)
 	resolved, ok := r.ResolveQualified(body, ref.Name)
 	if !ok || resolved.Name != "outer" {
 		t.Fatalf("body value resolved to %v, %v; want enclosing feature outer", resolved, ok)
+	}
+}
+
+func TestMetadataBodyExplicitRedefinitionSurvivesImplicitTarget(t *testing.T) {
+	r := resolveDocWithModel(t, "metadata.sysml", `metadata def A {
+		attribute x;
+		attribute y;
+	}
+	item p {
+		@A {
+			x :>> A::y = 1;
+		}
+	}
+	`)
+	if len(r.Diagnostics) != 0 {
+		t.Fatalf("metadata body resolution diagnostics: %v", r.Diagnostics)
+	}
+	p, ok := r.idx.DocumentRoot("metadata.sysml").LookupLocal("p")
+	if !ok {
+		t.Fatal("item p not indexed")
+	}
+	usage, ok := p.Decl.(*ast.Usage)
+	if !ok {
+		t.Fatal("item p declaration not found")
+	}
+	var annotation *ast.PrefixMetadata
+	for _, member := range usage.Members {
+		if membership, ok := member.(*ast.Membership); ok {
+			annotation, _ = membership.Member.(*ast.PrefixMetadata)
+		}
+	}
+	if annotation == nil {
+		t.Fatal("annotation prefix not found")
+	}
+	body := p.Scope.ChildFor(annotation)
+	if body == nil {
+		t.Fatal("annotation body scope not found")
+	}
+	x, ok := body.LookupLocal("x")
+	if !ok {
+		t.Fatal("body declaration x not indexed")
+	}
+	targets := r.redefinedFeatures(x)
+	var hasExplicit, hasImplicit bool
+	for _, target := range targets {
+		switch target.Name {
+		case "y":
+			hasExplicit = true
+		case "x":
+			hasImplicit = true
+		}
+	}
+	if !hasExplicit || !hasImplicit {
+		t.Fatalf("body declaration redefinition = %v, want explicit y and implicit x targets", targets)
 	}
 }

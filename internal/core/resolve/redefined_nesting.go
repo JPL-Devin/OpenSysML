@@ -33,8 +33,8 @@ func (r *Resolver) nestedInRedefined(scope *symbols.Scope, name string, hide *re
 	return nil, false
 }
 
-// redefinedFeatures returns the features sym redefines, explicitly or as an
-// association or connector end.
+// redefinedFeatures returns the features sym redefines, explicitly, implicitly
+// in a metadata body, or as an association or connector end.
 func (r *Resolver) redefinedFeatures(sym *symbols.Symbol) []*symbols.Symbol {
 	if cached, done := r.redefined[sym]; done {
 		return cached
@@ -50,6 +50,15 @@ func (r *Resolver) redefinedFeatures(sym *symbols.Symbol) []*symbols.Symbol {
 		for _, end := range model.ImplicitEndRedefinitions(sym) {
 			if end != nil && end != sym {
 				out = append(out, end)
+			}
+		}
+	}
+	if usage, ok := sym.Decl.(*ast.Usage); ok && sym.OwnerScope != nil &&
+		sym.OwnerScope.BodyLocal() {
+		if owner := sym.OwnerScope.Owner(); owner != nil {
+			if target := symbols.MetadataBodyTarget(r.model, owner, usage.Ident); target != nil &&
+				target != sym {
+				out = append(out, target)
 			}
 		}
 	}

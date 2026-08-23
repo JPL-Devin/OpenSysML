@@ -430,26 +430,16 @@ func (r *Resolver) resolveMetadataPrefix(scope *symbols.Scope, prefix *ast.Prefi
 	if body == nil {
 		return
 	}
+	// Body values resolve against the metadata definition, not the annotated element.
 	body.SetOwner(owner)
-	r.resolveMetadataBody(body, owner, prefix.Body)
+	r.resolveMetadataBody(body, prefix.Body)
 }
 
-func (r *Resolver) resolveMetadataBody(scope *symbols.Scope, owner *symbols.Symbol,
-	members []ast.Node) {
+func (r *Resolver) resolveMetadataBody(scope *symbols.Scope, members []ast.Node) {
 	for _, member := range members {
 		decl, _ := unwrapForResolve(member)
 		if decl == nil {
 			continue
-		}
-		if usage, ok := decl.(*ast.Usage); ok {
-			if target := symbols.MetadataBodyTarget(r.model, owner, usage.Ident); target != nil {
-				for _, sym := range scope.AllMembers() {
-					if sym != nil && sym.Decl == usage {
-						r.redefined[sym] = []*symbols.Symbol{target}
-						break
-					}
-				}
-			}
 		}
 		r.resolveDecl(scope, decl)
 	}
