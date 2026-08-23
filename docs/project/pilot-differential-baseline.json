@@ -3,13 +3,13 @@
   "pilotRelease": "2026-05 (jupyter-sysml-kernel 0.60.1)",
   "totals": {
     "files": 353,
-    "filesFullyAgreeing": 309,
-    "agreement": 23,
-    "severityMismatch": 15,
-    "openSysMLOnly": 119,
-    "pilotOnly": 85,
-    "openSysMLDiagnostics": 157,
-    "pilotDiagnostics": 123
+    "filesFullyAgreeing": 311,
+    "agreement": 25,
+    "severityMismatch": 24,
+    "openSysMLOnly": 142,
+    "pilotOnly": 73,
+    "openSysMLDiagnostics": 191,
+    "pilotDiagnostics": 122
   },
   "roots": [
     {
@@ -32,12 +32,12 @@
       "dir": "examples/pilot-corpora/sysml-examples",
       "totals": {
         "files": 98,
-        "filesFullyAgreeing": 83,
+        "filesFullyAgreeing": 84,
         "agreement": 0,
         "severityMismatch": 0,
-        "openSysMLOnly": 68,
+        "openSysMLOnly": 63,
         "pilotOnly": 0,
-        "openSysMLDiagnostics": 68,
+        "openSysMLDiagnostics": 63,
         "pilotDiagnostics": 0
       },
       "files": [
@@ -195,23 +195,21 @@
           "severityMismatch": [],
           "openSysMLOnly": [
             {
-              "line": 91,
+              "line": 18,
               "severity": "error",
-              "category": "unresolved-reference",
+              "category": "kind-mismatch",
               "count": 1
-            }
-          ],
-          "pilotOnly": []
-        },
-        {
-          "path": "Interaction Sequencing Examples/ServerSequenceRealization-2.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [
+            },
             {
-              "line": 96,
+              "line": 32,
               "severity": "error",
-              "category": "unresolved-reference",
+              "category": "kind-mismatch",
+              "count": 1
+            },
+            {
+              "line": 57,
+              "severity": "error",
+              "category": "kind-mismatch",
               "count": 1
             }
           ],
@@ -323,33 +321,57 @@
           "severityMismatch": [],
           "openSysMLOnly": [
             {
-              "line": 543,
+              "line": 472,
               "severity": "error",
-              "category": "syntax",
-              "count": 2
-            },
-            {
-              "line": 689,
-              "severity": "error",
-              "category": "syntax",
-              "count": 2
-            },
-            {
-              "line": 701,
-              "severity": "error",
-              "category": "syntax",
+              "category": "kind-mismatch",
               "count": 1
             },
             {
-              "line": 706,
+              "line": 686,
+              "severity": "warning",
+              "category": "unmapped",
+              "count": 4
+            },
+            {
+              "line": 712,
+              "severity": "warning",
+              "category": "unmapped",
+              "count": 4
+            },
+            {
+              "line": 753,
               "severity": "error",
-              "category": "syntax",
+              "category": "unresolved-reference",
               "count": 1
             },
             {
-              "line": 901,
+              "line": 754,
               "severity": "error",
-              "category": "syntax",
+              "category": "unresolved-reference",
+              "count": 1
+            },
+            {
+              "line": 757,
+              "severity": "error",
+              "category": "unresolved-reference",
+              "count": 1
+            },
+            {
+              "line": 758,
+              "severity": "error",
+              "category": "unresolved-reference",
+              "count": 1
+            },
+            {
+              "line": 760,
+              "severity": "error",
+              "category": "unresolved-reference",
+              "count": 1
+            },
+            {
+              "line": 789,
+              "severity": "error",
+              "category": "unresolved-reference",
               "count": 1
             }
           ],
@@ -361,117 +383,63 @@
           "severityMismatch": [],
           "openSysMLOnly": [
             {
-              "line": 780,
+              "line": 85,
               "severity": "error",
-              "category": "syntax",
-              "count": 2
+              "category": "kind-mismatch",
+              "count": 1
             },
             {
-              "line": 937,
+              "line": 416,
+              "severity": "warning",
+              "category": "unmapped",
+              "count": 1
+            },
+            {
+              "line": 417,
+              "severity": "warning",
+              "category": "unmapped",
+              "count": 1
+            },
+            {
+              "line": 418,
+              "severity": "warning",
+              "category": "unmapped",
+              "count": 1
+            },
+            {
+              "line": 420,
+              "severity": "warning",
+              "category": "unmapped",
+              "count": 1
+            },
+            {
+              "line": 600,
               "severity": "error",
-              "category": "syntax",
+              "category": "unresolved-reference",
+              "count": 1
+            },
+            {
+              "line": 647,
+              "severity": "error",
+              "category": "unresolved-reference",
+              "count": 1
+            },
+            {
+              "line": 664,
+              "severity": "error",
+              "category": "unresolved-reference",
+              "count": 1
+            },
+            {
+              "line": 670,
+              "severity": "error",
+              "category": "unresolved-reference",
               "count": 1
             },
             {
               "line": 1121,
               "severity": "error",
-              "category": "syntax",
-              "count": 2
-            },
-            {
-              "line": 1128,
-              "severity": "error",
-              "category": "syntax",
-              "count": 2
-            },
-            {
-              "line": 1134,
-              "severity": "error",
-              "category": "syntax",
-              "count": 2
-            },
-            {
-              "line": 1139,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 1200,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 1201,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 1219,
-              "severity": "error",
-              "category": "syntax",
-              "count": 2
-            },
-            {
-              "line": 1230,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 1235,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 1252,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 1413,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 1414,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 1415,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 1420,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 1429,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 1436,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 1580,
-              "severity": "error",
-              "category": "syntax",
+              "category": "unresolved-reference",
               "count": 1
             }
           ],
@@ -498,12 +466,12 @@
       "dir": "examples/pilot-corpora/sysml-validation",
       "totals": {
         "files": 56,
-        "filesFullyAgreeing": 52,
+        "filesFullyAgreeing": 53,
         "agreement": 0,
         "severityMismatch": 0,
-        "openSysMLOnly": 10,
+        "openSysMLOnly": 3,
         "pilotOnly": 0,
-        "openSysMLDiagnostics": 10,
+        "openSysMLDiagnostics": 3,
         "pilotDiagnostics": 0
       },
       "files": [
@@ -544,44 +512,6 @@
               "line": 55,
               "severity": "error",
               "category": "unresolved-reference",
-              "count": 1
-            }
-          ],
-          "pilotOnly": []
-        },
-        {
-          "path": "10-Analysis and Trades/10d-Dynamics Analysis.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [
-            {
-              "line": 65,
-              "severity": "error",
-              "category": "syntax",
-              "count": 3
-            },
-            {
-              "line": 73,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 74,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 75,
-              "severity": "error",
-              "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 80,
-              "severity": "error",
-              "category": "syntax",
               "count": 1
             }
           ],
@@ -735,8 +665,8 @@
       "totals": {
         "files": 15,
         "filesFullyAgreeing": 8,
-        "agreement": 23,
-        "severityMismatch": 3,
+        "agreement": 25,
+        "severityMismatch": 1,
         "openSysMLOnly": 3,
         "pilotOnly": 27,
         "openSysMLDiagnostics": 29,
@@ -997,23 +927,21 @@
         },
         {
           "path": "passes/import_no_visibility.sysml",
-          "agreement": [],
-          "severityMismatch": [
+          "agreement": [
             {
               "line": 8,
+              "severity": "error",
               "category": "syntax",
-              "openSysMLSeverity": "warning",
-              "pilotSeverity": "error",
               "count": 1
             },
             {
               "line": 12,
+              "severity": "error",
               "category": "syntax",
-              "openSysMLSeverity": "warning",
-              "pilotSeverity": "error",
               "count": 1
             }
           ],
+          "severityMismatch": [],
           "openSysMLOnly": [],
           "pilotOnly": [
             {
@@ -1108,25 +1036,126 @@
         "files": 22,
         "filesFullyAgreeing": 15,
         "agreement": 0,
-        "severityMismatch": 12,
-        "openSysMLOnly": 28,
-        "pilotOnly": 52,
-        "openSysMLDiagnostics": 40,
-        "pilotDiagnostics": 64
+        "severityMismatch": 23,
+        "openSysMLOnly": 63,
+        "pilotOnly": 40,
+        "openSysMLDiagnostics": 86,
+        "pilotDiagnostics": 63
       },
       "files": [
         {
           "path": "action-executor-demo.sysml",
           "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [],
-          "pilotOnly": [
+          "severityMismatch": [
             {
               "line": 9,
-              "severity": "error",
+              "category": "syntax",
+              "openSysMLSeverity": "warning",
+              "pilotSeverity": "error",
+              "count": 1
+            },
+            {
+              "line": 18,
+              "category": "syntax",
+              "openSysMLSeverity": "warning",
+              "pilotSeverity": "error",
+              "count": 1
+            },
+            {
+              "line": 20,
+              "category": "syntax",
+              "openSysMLSeverity": "warning",
+              "pilotSeverity": "error",
+              "count": 1
+            }
+          ],
+          "openSysMLOnly": [
+            {
+              "line": 21,
+              "severity": "warning",
               "category": "syntax",
               "count": 1
             },
+            {
+              "line": 37,
+              "severity": "warning",
+              "category": "syntax",
+              "count": 1
+            },
+            {
+              "line": 39,
+              "severity": "warning",
+              "category": "syntax",
+              "count": 1
+            },
+            {
+              "line": 40,
+              "severity": "warning",
+              "category": "syntax",
+              "count": 1
+            },
+            {
+              "line": 41,
+              "severity": "warning",
+              "category": "syntax",
+              "count": 1
+            },
+            {
+              "line": 42,
+              "severity": "warning",
+              "category": "syntax",
+              "count": 1
+            },
+            {
+              "line": 43,
+              "severity": "warning",
+              "category": "syntax",
+              "count": 1
+            },
+            {
+              "line": 44,
+              "severity": "warning",
+              "category": "syntax",
+              "count": 1
+            },
+            {
+              "line": 45,
+              "severity": "warning",
+              "category": "syntax",
+              "count": 1
+            },
+            {
+              "line": 46,
+              "severity": "warning",
+              "category": "syntax",
+              "count": 1
+            },
+            {
+              "line": 57,
+              "severity": "warning",
+              "category": "syntax",
+              "count": 1
+            },
+            {
+              "line": 59,
+              "severity": "warning",
+              "category": "syntax",
+              "count": 1
+            },
+            {
+              "line": 60,
+              "severity": "warning",
+              "category": "syntax",
+              "count": 1
+            },
+            {
+              "line": 61,
+              "severity": "warning",
+              "category": "syntax",
+              "count": 1
+            }
+          ],
+          "pilotOnly": [
             {
               "line": 9,
               "severity": "error",
@@ -1161,12 +1190,6 @@
               "line": 18,
               "severity": "error",
               "category": "syntax",
-              "count": 2
-            },
-            {
-              "line": 20,
-              "severity": "error",
-              "category": "syntax",
               "count": 1
             }
           ]
@@ -1184,6 +1207,13 @@
             },
             {
               "line": 11,
+              "category": "syntax",
+              "openSysMLSeverity": "warning",
+              "pilotSeverity": "error",
+              "count": 1
+            },
+            {
+              "line": 16,
               "category": "syntax",
               "openSysMLSeverity": "warning",
               "pilotSeverity": "error",
@@ -1220,6 +1250,12 @@
             },
             {
               "line": 24,
+              "severity": "warning",
+              "category": "syntax",
+              "count": 1
+            },
+            {
+              "line": 28,
               "severity": "warning",
               "category": "syntax",
               "count": 1
@@ -1266,7 +1302,7 @@
               "line": 16,
               "severity": "error",
               "category": "syntax",
-              "count": 2
+              "count": 1
             },
             {
               "line": 16,
@@ -1291,8 +1327,66 @@
         {
           "path": "phase-c-behavioral-bodies.sysml",
           "agreement": [],
-          "severityMismatch": [],
+          "severityMismatch": [
+            {
+              "line": 147,
+              "category": "syntax",
+              "openSysMLSeverity": "warning",
+              "pilotSeverity": "error",
+              "count": 1
+            },
+            {
+              "line": 148,
+              "category": "syntax",
+              "openSysMLSeverity": "warning",
+              "pilotSeverity": "error",
+              "count": 1
+            },
+            {
+              "line": 149,
+              "category": "syntax",
+              "openSysMLSeverity": "warning",
+              "pilotSeverity": "error",
+              "count": 1
+            }
+          ],
           "openSysMLOnly": [
+            {
+              "line": 150,
+              "severity": "warning",
+              "category": "syntax",
+              "count": 1
+            },
+            {
+              "line": 161,
+              "severity": "warning",
+              "category": "syntax",
+              "count": 1
+            },
+            {
+              "line": 162,
+              "severity": "warning",
+              "category": "syntax",
+              "count": 1
+            },
+            {
+              "line": 163,
+              "severity": "warning",
+              "category": "syntax",
+              "count": 1
+            },
+            {
+              "line": 164,
+              "severity": "warning",
+              "category": "syntax",
+              "count": 1
+            },
+            {
+              "line": 165,
+              "severity": "warning",
+              "category": "syntax",
+              "count": 1
+            },
             {
               "line": 183,
               "severity": "warning",
@@ -1395,16 +1489,10 @@
               "line": 147,
               "severity": "error",
               "category": "syntax",
-              "count": 2
+              "count": 1
             },
             {
               "line": 148,
-              "severity": "error",
-              "category": "syntax",
-              "count": 2
-            },
-            {
-              "line": 149,
               "severity": "error",
               "category": "syntax",
               "count": 1
@@ -1608,49 +1696,90 @@
         {
           "path": "solver-demo.sysml",
           "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [],
-          "pilotOnly": [
+          "severityMismatch": [
             {
               "line": 119,
-              "severity": "error",
               "category": "syntax",
+              "openSysMLSeverity": "warning",
+              "pilotSeverity": "error",
               "count": 1
-            },
-            {
-              "line": 120,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 2
-            },
-            {
-              "line": 120,
-              "severity": "warning",
-              "category": "kind-mismatch",
-              "count": 2
             },
             {
               "line": 123,
-              "severity": "error",
               "category": "syntax",
-              "count": 1
-            },
-            {
-              "line": 124,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 124,
-              "severity": "warning",
-              "category": "kind-mismatch",
+              "openSysMLSeverity": "warning",
+              "pilotSeverity": "error",
               "count": 1
             },
             {
               "line": 127,
-              "severity": "error",
               "category": "syntax",
+              "openSysMLSeverity": "warning",
+              "pilotSeverity": "error",
+              "count": 1
+            }
+          ],
+          "openSysMLOnly": [
+            {
+              "line": 141,
+              "severity": "warning",
+              "category": "syntax",
+              "count": 1
+            },
+            {
+              "line": 145,
+              "severity": "warning",
+              "category": "syntax",
+              "count": 1
+            },
+            {
+              "line": 160,
+              "severity": "warning",
+              "category": "syntax",
+              "count": 1
+            },
+            {
+              "line": 164,
+              "severity": "warning",
+              "category": "syntax",
+              "count": 1
+            },
+            {
+              "line": 168,
+              "severity": "warning",
+              "category": "syntax",
+              "count": 1
+            },
+            {
+              "line": 172,
+              "severity": "warning",
+              "category": "syntax",
+              "count": 1
+            }
+          ],
+          "pilotOnly": [
+            {
+              "line": 120,
+              "severity": "error",
+              "category": "unresolved-reference",
+              "count": 2
+            },
+            {
+              "line": 120,
+              "severity": "warning",
+              "category": "kind-mismatch",
+              "count": 2
+            },
+            {
+              "line": 124,
+              "severity": "error",
+              "category": "unresolved-reference",
+              "count": 1
+            },
+            {
+              "line": 124,
+              "severity": "warning",
+              "category": "kind-mismatch",
               "count": 1
             }
           ]
@@ -1658,29 +1787,80 @@
         {
           "path": "views-demo.sysml",
           "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [],
+          "severityMismatch": [
+            {
+              "line": 90,
+              "category": "syntax",
+              "openSysMLSeverity": "warning",
+              "pilotSeverity": "error",
+              "count": 1
+            }
+          ],
+          "openSysMLOnly": [
+            {
+              "line": 96,
+              "severity": "warning",
+              "category": "syntax",
+              "count": 1
+            },
+            {
+              "line": 98,
+              "severity": "warning",
+              "category": "syntax",
+              "count": 1
+            },
+            {
+              "line": 99,
+              "severity": "warning",
+              "category": "syntax",
+              "count": 1
+            },
+            {
+              "line": 100,
+              "severity": "warning",
+              "category": "syntax",
+              "count": 1
+            },
+            {
+              "line": 101,
+              "severity": "warning",
+              "category": "syntax",
+              "count": 1
+            },
+            {
+              "line": 102,
+              "severity": "warning",
+              "category": "syntax",
+              "count": 1
+            },
+            {
+              "line": 105,
+              "severity": "warning",
+              "category": "syntax",
+              "count": 1
+            },
+            {
+              "line": 108,
+              "severity": "warning",
+              "category": "syntax",
+              "count": 1
+            }
+          ],
           "pilotOnly": [
             {
-              "line": 34,
-              "severity": "error",
-              "category": "multiplicity",
-              "count": 1
-            },
-            {
-              "line": 83,
+              "line": 86,
               "severity": "error",
               "category": "syntax",
               "count": 1
-            },
-            {
-              "line": 87,
-              "severity": "error",
-              "category": "syntax",
-              "count": 2
             },
             {
               "line": 90,
+              "severity": "error",
+              "category": "syntax",
+              "count": 1
+            },
+            {
+              "line": 93,
               "severity": "error",
               "category": "syntax",
               "count": 1
@@ -1773,6 +1953,11 @@
       "count": 15
     },
     {
+      "side": "opensysml",
+      "message": "Duplicate of other owned member name",
+      "count": 5
+    },
+    {
       "side": "pilot",
       "message": "Must be an accessible feature (use dot notation for nesting)",
       "count": 5
@@ -1784,7 +1969,22 @@
     },
     {
       "side": "opensysml",
-      "message": "Duplicate of other owned member name",
+      "message": "Duplicate of inherited member name 'dryMass' from Vehicle, vehicle_b",
+      "count": 2
+    },
+    {
+      "side": "opensysml",
+      "message": "Duplicate of inherited member name 'mass' from Vehicle, vehicle_b",
+      "count": 2
+    },
+    {
+      "side": "opensysml",
+      "message": "Duplicate of inherited member name 'vehicleStates' from Vehicle, vehicle_b",
+      "count": 2
+    },
+    {
+      "side": "opensysml",
+      "message": "Duplicate of inherited member name 'vehicleToRoadPort' from Vehicle, vehicle_b",
       "count": 2
     },
     {
@@ -1815,6 +2015,11 @@
     {
       "side": "opensysml",
       "message": "C3 participates in a specialization cycle",
+      "count": 1
+    },
+    {
+      "side": "opensysml",
+      "message": "Duplicate of inherited member name 'enum' from DiameterChoices",
       "count": 1
     },
     {
