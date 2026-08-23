@@ -20,16 +20,19 @@ import (
 type Model struct {
 	resolver *resolve.Resolver
 
-	directSupers  map[*symbols.Symbol][]*symbols.Symbol
-	allSupers     map[*symbols.Symbol][]*symbols.Symbol
-	referenced    map[*symbols.Symbol]*symbols.Symbol
-	resolvingRef  map[*symbols.Symbol]bool
-	memberSources map[*symbols.Symbol][]*symbols.Symbol
-	primTypes     map[*symbols.Symbol]PrimType
-	scalars       map[*symbols.Symbol]PrimType // stdlib scalar symbols, resolved once
-	params        map[*symbols.Symbol]behaviorParameters
-	unioning      map[*symbols.Symbol][]*symbols.Symbol
-	ends          map[*symbols.Symbol][]*symbols.Symbol
+	directSupers map[*symbols.Symbol][]*symbols.Symbol
+	allSupers    map[*symbols.Symbol][]*symbols.Symbol
+	// provisionalSupers holds the symbols whose last DirectSupertypes answer was
+	// incomplete, so neither it nor a closure over it may be memoized.
+	provisionalSupers map[*symbols.Symbol]bool
+	referenced        map[*symbols.Symbol]*symbols.Symbol
+	resolvingRef      map[*symbols.Symbol]bool
+	memberSources     map[*symbols.Symbol][]*symbols.Symbol
+	primTypes         map[*symbols.Symbol]PrimType
+	scalars           map[*symbols.Symbol]PrimType // stdlib scalar symbols, resolved once
+	params            map[*symbols.Symbol]behaviorParameters
+	unioning          map[*symbols.Symbol][]*symbols.Symbol
+	ends              map[*symbols.Symbol][]*symbols.Symbol
 
 	superEdgeCache map[*symbols.Symbol][]superEdge      // generalization edges with conjugation
 	conjSupers     map[*symbols.Symbol][]conjugatedType // supertypes with conjugation parity
@@ -65,16 +68,18 @@ type Model struct {
 // inherited members, which a redefinition target may only be reachable through.
 func NewModel(resolver *resolve.Resolver) *Model {
 	m := &Model{
-		resolver:      resolver,
-		directSupers:  make(map[*symbols.Symbol][]*symbols.Symbol),
-		allSupers:     make(map[*symbols.Symbol][]*symbols.Symbol),
-		referenced:    make(map[*symbols.Symbol]*symbols.Symbol),
-		resolvingRef:  make(map[*symbols.Symbol]bool),
-		memberSources: make(map[*symbols.Symbol][]*symbols.Symbol),
-		primTypes:     make(map[*symbols.Symbol]PrimType),
-		params:        make(map[*symbols.Symbol]behaviorParameters),
-		unioning:      make(map[*symbols.Symbol][]*symbols.Symbol),
-		ends:          make(map[*symbols.Symbol][]*symbols.Symbol),
+		resolver:     resolver,
+		directSupers: make(map[*symbols.Symbol][]*symbols.Symbol),
+		allSupers:    make(map[*symbols.Symbol][]*symbols.Symbol),
+
+		provisionalSupers: make(map[*symbols.Symbol]bool),
+		referenced:        make(map[*symbols.Symbol]*symbols.Symbol),
+		resolvingRef:      make(map[*symbols.Symbol]bool),
+		memberSources:     make(map[*symbols.Symbol][]*symbols.Symbol),
+		primTypes:         make(map[*symbols.Symbol]PrimType),
+		params:            make(map[*symbols.Symbol]behaviorParameters),
+		unioning:          make(map[*symbols.Symbol][]*symbols.Symbol),
+		ends:              make(map[*symbols.Symbol][]*symbols.Symbol),
 
 		superEdgeCache: make(map[*symbols.Symbol][]superEdge),
 		conjSupers:     make(map[*symbols.Symbol][]conjugatedType),
@@ -368,9 +373,11 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 	// recomputed on the next query instead of being memoized.
 	if !metadataComplete {
 		delete(m.directSupers, sym)
+		m.provisionalSupers[sym] = true
 		return out
 	}
 
+	delete(m.provisionalSupers, sym)
 	m.directSupers[sym] = out
 	return out
 }
@@ -438,6 +445,7 @@ func (m *Model) AllSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 	var order []*symbols.Symbol
 	visited := make(map[*symbols.Symbol]bool)
 	queue := append([]*symbols.Symbol(nil), m.DirectSupertypes(sym)...)
+	provisional := m.provisionalSupers[sym]
 	for len(queue) > 0 {
 		cur := queue[0]
 		queue = queue[1:]
@@ -447,6 +455,12 @@ func (m *Model) AllSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 		visited[cur] = true
 		order = append(order, cur)
 		queue = append(queue, m.DirectSupertypes(cur)...)
+		provisional = provisional || m.provisionalSupers[cur]
+	}
+	// A closure over a provisional answer is provisional too.
+	if provisional {
+		delete(m.allSupers, sym)
+		return order
 	}
 	m.allSupers[sym] = order
 	return order
