@@ -10,7 +10,7 @@ Measured on `main` at `07dc713c` and on the branch, with `go run ./cmd/pilot-xpe
 
 | Oracle | `main` | Branch |
 |---|---|---|
-| Xpect | 1326 expectations: 1172 agree (239 wording-only), 154 disagree | 1323 expectations: 1216 agree (239 wording-only), 107 disagree |
+| Xpect | 1326 expectations: 1172 agree (239 wording-only), 154 disagree | 1323 expectations: 1240 agree (241 wording-only), 83 disagree |
 | Differential | 353 files, 312 fully agreeing; 25 agreed, 139 only ours, 73 only the pilot's | 353 files, 313 fully agreeing; 25 agreed, 138 only ours, 73 only the pilot's |
 | Rejection | 120 cases: 114 both reject, 6 only the pilot rejects, 0 only we reject | 120 cases: 116 both reject, 4 only the pilot rejects, 0 only we reject |
 
