@@ -12,7 +12,7 @@ corpora, on `main` and on the branch, on one machine:
 | oracle | `main` | branch |
 | --- | --- | --- |
 | xpect | 1197 agree (239 wording-only), 129 disagree | **1199 agree** (239 wording-only), **127 disagree** |
-| differential | 25 agreed, 139 only ours, 73 only the pilot's | identical |
+| differential | 312 fully agreeing; 25 agreed, 139 only ours, 73 only the pilot's | identical |
 | rejection | 115 both reject, 5 only the pilot, 0 only we | identical |
 
 `main` here is post-wave-11A `main` (the branch is merged with it), so these are not the wave-10
@@ -174,6 +174,10 @@ now reports `expected a name after '.'` once and reads the rest of the chain.
 the `..` (offset 642 in `…TwoSingleDot`, 647 in `…AtTheEnd`, unchanged after), the tolerance classes
 are the same rows they were, and both binaries keep the declarations after the malformed one. So this
 is a message-and-count improvement, not a locality one, and it moves no number.
+
+**Known limitation.** Only the two-dot shape recovers. `:> a...b` and `:> ..a` still cascade — a
+following declaration is dropped and a body member is hoisted to the enclosing scope — exactly as
+before this change; measured on both binaries.
 
 **The rows remain disagreements and cannot be closed here.** The declared text is a parser-internal
 ANTLR message; the harness admits a wording difference only for the unresolved-reference rule
