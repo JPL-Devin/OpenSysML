@@ -35,7 +35,7 @@ func TestLoaderCacheMissThenHit(t *testing.T) {
 	ld := NewLoader(cs, cache)
 
 	idx1 := symbols.NewIndex()
-	if err := ld.Load("Kernel Libraries/Kernel Data Type Library/ScalarValues.kerml", idx1); err != nil {
+	if err := ld.load("Kernel Libraries/Kernel Data Type Library/ScalarValues.kerml", idx1); err != nil {
 		t.Fatalf("first Load: %v", err)
 	}
 	if len(ld.parsed) != 1 {
@@ -48,7 +48,7 @@ func TestLoaderCacheMissThenHit(t *testing.T) {
 	if len(idx1.LookupQualified("ScalarValues::Boolean")) != 1 {
 		t.Fatal("first load did not index ScalarValues::Boolean")
 	}
-	ld.Persist(idx1)
+	ld.reduce(idx1, true)
 	entries, _ := os.ReadDir(cacheDir)
 	found := false
 	for _, e := range entries {
@@ -61,7 +61,7 @@ func TestLoaderCacheMissThenHit(t *testing.T) {
 	}
 
 	idx2 := symbols.NewIndex()
-	if err := ld.Load("Kernel Libraries/Kernel Data Type Library/ScalarValues.kerml", idx2); err != nil {
+	if err := ld.load("Kernel Libraries/Kernel Data Type Library/ScalarValues.kerml", idx2); err != nil {
 		t.Fatalf("second Load: %v", err)
 	}
 	if len(ld.parsed) != 0 {
@@ -91,13 +91,13 @@ func TestLoaderCacheKeepsTypingEdge(t *testing.T) {
 	ld := NewLoader(NewDirSource(dir), &Cache{dir: t.TempDir()})
 
 	idx1 := symbols.NewIndex()
-	if err := ld.Load("lib.sysml", idx1); err != nil {
+	if err := ld.load("lib.sysml", idx1); err != nil {
 		t.Fatalf("first Load: %v", err)
 	}
-	ld.Persist(idx1)
+	ld.reduce(idx1, true)
 
 	idx2 := symbols.NewIndex()
-	if err := ld.Load("lib.sysml", idx2); err != nil {
+	if err := ld.load("lib.sysml", idx2); err != nil {
 		t.Fatalf("second Load: %v", err)
 	}
 	e := idx2.LookupQualified("Lib::e")
@@ -151,10 +151,10 @@ func TestLoaderRequireResolvedSkipsUnresolvedRecord(t *testing.T) {
 	ld.RequireResolved = true
 
 	idx := symbols.NewIndex()
-	if err := ld.Load("lib.sysml", idx); err != nil {
+	if err := ld.load("lib.sysml", idx); err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	ld.Persist(idx)
+	ld.reduce(idx, true)
 
 	entries, err := os.ReadDir(cacheDir)
 	if err != nil {
@@ -316,16 +316,11 @@ func admittedNames(t *testing.T, idx *symbols.Index) map[string]bool {
 // model.loadStdlib does.
 func loadWholeLibrary(t *testing.T, dir, cacheDir string) *symbols.Index {
 	t.Helper()
-	src := NewDirSource(dir)
-	ld := NewLoader(src, &Cache{dir: cacheDir})
+	ld := NewLoader(NewDirSource(dir), &Cache{dir: cacheDir})
 	idx := symbols.NewIndex()
-	for _, name := range src.List() {
-		if err := ld.Load(name, idx); err != nil {
-			t.Fatalf("load %s: %v", name, err)
-		}
+	if err := ld.LoadAll(idx); err != nil {
+		t.Fatalf("load the library: %v", err)
 	}
-	idx.ExpandWildcardImports()
-	ld.Persist(idx)
 	return idx
 }
 
@@ -431,7 +426,7 @@ func loadLibraryParseCount(t *testing.T, dir, cacheDir string) int {
 	ld := NewLoader(src, &Cache{dir: cacheDir})
 	idx := symbols.NewIndex()
 	for _, name := range src.List() {
-		if err := ld.Load(name, idx); err != nil {
+		if err := ld.load(name, idx); err != nil {
 			t.Fatalf("load %s: %v", name, err)
 		}
 	}

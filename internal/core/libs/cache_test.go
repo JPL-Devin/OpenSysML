@@ -73,6 +73,27 @@ func TestCacheKeyDependsOnContentSetAndVersion(t *testing.T) {
 	}
 }
 
+// A record holds values the code computes rather than reads — a symbol kind, a
+// unit reduction — so a record written by another build must miss, not be served
+// with the answer that build gave.
+func TestCacheKeyDependsOnBuildID(t *testing.T) {
+	c := &Cache{dir: t.TempDir()}
+	key := c.keyFor([]byte("alpha"), "set")
+	if err := c.Store(key, sampleRecord("x")); err != nil {
+		t.Fatalf("store: %v", err)
+	}
+	restore := buildID
+	buildID = func() string { return "other-build" }
+	defer func() { buildID = restore }()
+	other := c.keyFor([]byte("alpha"), "set")
+	if other == key {
+		t.Fatal("distinct builds produced identical cache keys")
+	}
+	if _, ok := c.Load(other); ok {
+		t.Fatal("a record written by another build produced a cache hit")
+	}
+}
+
 func TestCachePruneRemovesOnlyIdleRecords(t *testing.T) {
 	c := &Cache{dir: t.TempDir()}
 	idle, live := c.keyFor([]byte("idle"), "set"), c.keyFor([]byte("live"), "set")

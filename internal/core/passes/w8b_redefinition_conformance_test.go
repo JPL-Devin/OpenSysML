@@ -5,6 +5,7 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // conformanceDiags returns the feature-conformance findings of a KerML source.

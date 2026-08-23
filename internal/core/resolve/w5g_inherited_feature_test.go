@@ -54,39 +54,38 @@ func resolveW5GUser(t *testing.T, idx *symbols.Index, src string) []string {
 }
 
 // w5gLibraryIndexes loads w5gLibrary twice against one cache: the first load
-// parses it, the second restores the persisted record.
-func w5gLibraryIndexes(t *testing.T) (parsed, restored *symbols.Index) {
+// parses and reduces it, the second restores the persisted record.
+func w5gLibraryIndexes(t *testing.T) (cold, warm *symbols.Index) {
 	t.Helper()
 	dir, cacheDir := t.TempDir(), t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "rigs.kerml"), []byte(w5gLibrary), 0o600); err != nil {
 		t.Fatalf("write library: %v", err)
 	}
-	parsed = loadLibrary(t, dir, cacheDir)
-	restored = loadLibrary(t, dir, cacheDir)
-	if sym := libSymbol(t, parsed, "Rigs::Rig"); sym.Decl == nil {
-		t.Fatal("the first load must parse the library")
+	cold = loadLibrary(t, dir, cacheDir)
+	warm = loadLibrary(t, dir, cacheDir)
+	for path, idx := range map[string]*symbols.Index{"cold": cold, "warm": warm} {
+		if sym := libSymbol(t, idx, "Rigs::Rig"); sym.Decl != nil {
+			t.Fatalf("the %s load leaves the library its declarations", path)
+		}
 	}
-	if sym := libSymbol(t, restored, "Rigs::Rig"); sym.Decl != nil {
-		t.Fatal("the second load must restore the library from cache")
-	}
-	return parsed, restored
+	return cold, warm
 }
 
-// A redefinition whose target sits several specialization hops up a restored
-// chain resolves exactly as it does over the parsed library.
-func TestW5GRedefinitionThroughRestoredChain(t *testing.T) {
+// A redefinition whose target sits several specialization hops up a recorded
+// chain resolves the same cold and warm.
+func TestW5GRedefinitionThroughRecordedChain(t *testing.T) {
 	const user = `package App {
 	private import Rigs::*;
 	classifier Custom specializes Rig {
 		feature redefines anchor;
 	}
 }`
-	parsed, restored := w5gLibraryIndexes(t)
-	if msgs := resolveW5GUser(t, parsed, user); len(msgs) != 0 {
-		t.Fatalf("parsed library reports %v, want clean", msgs)
+	cold, warm := w5gLibraryIndexes(t)
+	if msgs := resolveW5GUser(t, cold, user); len(msgs) != 0 {
+		t.Fatalf("a cold library reports %v, want clean", msgs)
 	}
-	if msgs := resolveW5GUser(t, restored, user); len(msgs) != 0 {
-		t.Fatalf("restored library reports %v, parsed was clean", msgs)
+	if msgs := resolveW5GUser(t, warm, user); len(msgs) != 0 {
+		t.Fatalf("a warm library reports %v, cold was clean", msgs)
 	}
 }
 
@@ -105,8 +104,8 @@ func TestW5GWalkIsCycleSafe(t *testing.T) {
 		feature redefines notThere;
 	}
 }`
-	parsed, restored := w5gLibraryIndexes(t)
-	for _, idx := range []*symbols.Index{parsed, restored} {
+	cold, warm := w5gLibraryIndexes(t)
+	for _, idx := range []*symbols.Index{cold, warm} {
 		if msgs := resolveW5GUser(t, idx, resolves); len(msgs) != 0 {
 			t.Errorf("a feature on the cycle reports %v, want clean", msgs)
 		}
@@ -116,8 +115,7 @@ func TestW5GWalkIsCycleSafe(t *testing.T) {
 	}
 }
 
-// A `featured by` edge contributes inherited features identically whether the
-// library was parsed or restored.
+// A `featured by` edge contributes inherited features identically cold and warm.
 func TestW5GFeaturedByEdgeSurvivesRestore(t *testing.T) {
 	const user = `package App {
 	private import Rigs::*;
@@ -125,11 +123,11 @@ func TestW5GFeaturedByEdgeSurvivesRestore(t *testing.T) {
 		feature redefines slot;
 	}
 }`
-	parsed, restored := w5gLibraryIndexes(t)
-	if msgs := resolveW5GUser(t, parsed, user); len(msgs) != 0 {
-		t.Fatalf("parsed library reports %v, want clean", msgs)
+	cold, warm := w5gLibraryIndexes(t)
+	if msgs := resolveW5GUser(t, cold, user); len(msgs) != 0 {
+		t.Fatalf("a cold library reports %v, want clean", msgs)
 	}
-	if msgs := resolveW5GUser(t, restored, user); len(msgs) != 0 {
-		t.Fatalf("restored library reports %v, parsed was clean", msgs)
+	if msgs := resolveW5GUser(t, warm, user); len(msgs) != 0 {
+		t.Fatalf("a warm library reports %v, cold was clean", msgs)
 	}
 }

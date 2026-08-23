@@ -25,26 +25,13 @@ const DefaultIndexPoolSize = 4
 // builds, and stand in a library of its own.
 type libraryBuilder func() *symbols.Index
 
-// buildLibraryIndex loads every standard library file into a fresh index,
-// expands the library's wildcard imports and caches the records of whatever had
-// to be parsed. An incomplete library is not persisted: a record is keyed by
-// content alone, so it would be reused without the supertypes the missing file
-// declared.
+// buildLibraryIndex loads every standard library file into a fresh index and
+// caches the records of whatever had to be parsed.
 func buildLibraryIndex() *symbols.Index {
 	idx := symbols.NewIndex()
 	src := libs.DefaultSource()
-	cache, _ := libs.NewCache() // a cache failure only costs speed
-	loader := libs.NewLoader(src, cache)
-	complete := true
-	for _, name := range src.List() {
-		if err := loader.Load(name, idx); err != nil {
-			complete = false
-		}
-	}
-	idx.ExpandWildcardImports()
-	if complete {
-		loader.Persist(idx)
-	}
+	cache, _ := libs.NewCache()                 // a cache failure only costs speed
+	_ = libs.NewLoader(src, cache).LoadAll(idx) // an unreadable library file only costs its names
 	return idx
 }
 

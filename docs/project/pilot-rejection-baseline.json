@@ -5,8 +5,8 @@
   "conformance": "auto",
   "totals": {
     "cases": 120,
-    "bothReject": 114,
-    "pilotOnlyRejects": 6,
+    "bothReject": 116,
+    "pilotOnlyRejects": 4,
     "oursOnlyRejects": 0,
     "bothAccept": 0
   },
@@ -37,8 +37,8 @@
     {
       "source": "xpect",
       "cases": 34,
-      "bothReject": 31,
-      "pilotOnlyRejects": 3,
+      "bothReject": 33,
+      "pilotOnlyRejects": 1,
       "oursOnlyRejects": 0,
       "bothAccept": 0
     }
@@ -771,7 +771,7 @@
       "rule": "A multiplicity subset requires a subsetted multiplicity after subsets (KerML.xtext:758 MultiplicitySubset).",
       "mode": "default",
       "bucket": "both-reject",
-      "oursErrors": 2,
+      "oursErrors": 1,
       "pilotErrors": 1
     },
     {
@@ -932,12 +932,9 @@
       "source": "xpect",
       "rule": "A metadata body feature value must be model-level evaluable (SysML 7.24 checkMetadataBodyFeature; pilot MetadataUsage_Invalid.sysml.xt:82).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 8: Must be model-level evaluable"
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "xpect/p12-filter-integer-condition.sysml",
@@ -971,12 +968,9 @@
       "source": "xpect",
       "rule": "An attribute must be typed by attribute definitions (SysML 7.6 validateAttributeUsageIsReferential; pilot AttributeUsage_invalid.sysml.xt).",
       "mode": "default",
-      "bucket": "pilot-only-rejects",
-      "oursErrors": 0,
-      "pilotErrors": 1,
-      "pilot": [
-        "line 4: An attribute must be typed by attribute definitions."
-      ]
+      "bucket": "both-reject",
+      "oursErrors": 1,
+      "pilotErrors": 1
     },
     {
       "path": "xpect/p16-part-typed-by-attribute-def.sysml",

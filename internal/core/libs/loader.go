@@ -3,6 +3,7 @@ package libs
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"sort"
 
@@ -13,17 +14,18 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// Loader lazily loads library files from a Source and registers their symbols
-// into a target index, using a Cache to skip parsing on repeat loads (Task 6).
+// Loader loads library files from a Source and registers their symbols into a
+// target index, using a Cache to skip parsing on repeat loads (Task 6).
+// A library is index-only: it contributes the names, kinds and specializations a
+// record holds, never declarations, whether it was parsed or restored.
 type Loader struct {
 	src   Source
 	cache *Cache
-	// RequireResolved makes Persist skip a document with an unresolved
-	// specialization target: a key does not describe the index a record was built
-	// in, so one built in a partially populated index must not be reused where
-	// the target exists.
+	// RequireResolved makes LoadAll cache no document with an unresolved
+	// specialization target, since a key does not describe the index a record was
+	// built in.
 	RequireResolved bool
-	parsed          []pending // documents parsed this session, awaiting Persist
+	parsed          []pending // documents parsed this session, awaiting reduce
 	digest          string    // memoized digest of the library set (see setDigest)
 }
 
@@ -38,35 +40,47 @@ func NewLoader(src Source, cache *Cache) *Loader {
 	return &Loader{src: src, cache: cache}
 }
 
-// Load reads the named library file and registers its symbols into idx, marked
-// as library content. On a cache hit the reduced record is restored directly,
-// skipping lexing/parsing; on a miss the file is parsed and registered, and its
-// record is written by a later call to Persist.
-func (l *Loader) Load(name string, idx *symbols.Index) error {
+// LoadAll registers every file of the source into idx as library content and
+// leaves it in record form. It loads the whole set at once because a record
+// holds supertype names a sibling file may declare; an incomplete library is
+// reported and not cached.
+func (l *Loader) LoadAll(idx *symbols.Index) error {
+	var errs []error
+	for _, name := range l.src.List() {
+		if err := l.load(name, idx); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", name, err))
+		}
+	}
+
+	// A facade package re-exports what another library package declares.
+	idx.ExpandWildcardImports()
+
+	l.reduce(idx, len(errs) == 0)
+	return errors.Join(errs...)
+}
+
+// load registers the named library file into idx: a cache hit restores its
+// record, a miss parses it for reduce to replace with one. Loading without a
+// cache still reduces.
+func (l *Loader) load(name string, idx *symbols.Index) error {
 	content, err := l.src.Read(name)
 	if err != nil {
 		return err
 	}
 
-	// No cache: parse and register directly, skipping persistence.
-	if l.cache == nil {
-		p := parser.New(source.New(name, content))
-		idx.AddDocument(name, p.ParseFile())
-		idx.MarkLibrary(name)
-		return nil
+	var key string
+	if l.cache != nil {
+		key = l.cache.keyFor(content, l.setDigest())
+		// Cache hit: restore reduced records, skip lexing/parsing entirely.
+		if rec, ok := l.cache.Load(key); ok {
+			idx.AddRecords(name, recordEntries(rec))
+			idx.MarkLibrary(name)
+			return nil
+		}
 	}
 
-	key := l.cache.keyFor(content, l.setDigest())
-
-	// Cache hit: restore reduced records, skip lexing/parsing entirely.
-	if rec, ok := l.cache.Load(key); ok {
-		idx.AddRecords(name, recordEntries(rec))
-		idx.MarkLibrary(name)
-		return nil
-	}
-
-	// Miss: parse and register now; the record is written by Persist, once the
-	// whole library is indexed and cross-file supertypes resolve.
+	// Miss: parse and register now; reduce records it once the whole library is
+	// indexed and cross-file supertypes resolve.
 	p := parser.New(source.New(name, content))
 	root := p.ParseFile()
 	idx.AddDocument(name, root)
@@ -75,35 +89,57 @@ func (l *Loader) Load(name string, idx *symbols.Index) error {
 	return nil
 }
 
-// Persist caches a reduced record of every document this loader parsed. It is
-// separate from Load because a record holds resolved supertype names: a
-// specialization target in one library file may be declared in another, so
-// records can only be built once every file has been indexed. Records the
-// library has stopped asking for are pruned here, where a write already happened.
-func (l *Loader) Persist(idx *symbols.Index) {
-	if l.cache == nil {
-		l.parsed = nil
+// reduce replaces every document this loader parsed with the record a cache hit
+// would have restored, caching those records when store is set. This is what
+// makes a parsed and a restored library leave the same index.
+func (l *Loader) reduce(idx *symbols.Index, store bool) {
+	parsed := l.parsed
+	l.parsed = nil
+	if len(parsed) == 0 {
 		return
 	}
-	defer l.cache.Prune()
+
 	r := resolve.New(idx)
 	model := semantics.NewModel(r) // shared: its whole-index memoization is per-model
-	for _, p := range l.parsed {
+	type built struct {
+		doc      pending
+		rec      *IndexRecord
+		resolved bool
+	}
+	records := make([]built, 0, len(parsed))
+	for _, p := range parsed {
 		rec, resolved := recordFromIndex(p.name, idx, r, model)
-		if rec == nil || (l.RequireResolved && !resolved) {
+		if rec == nil {
 			continue
 		}
-		_ = l.cache.Store(p.key, rec) // cache write failure is non-fatal
+		records = append(records, built{doc: p, rec: rec, resolved: resolved})
 	}
-	l.parsed = nil
+
+	// Every record is built before any document is replaced, since a record reads
+	// the index the not-yet-replaced documents are in.
+	for _, b := range records {
+		idx.AddRecords(b.doc.name, recordEntries(b.rec))
+		idx.MarkLibrary(b.doc.name)
+	}
+	idx.ExpandWildcardImports() // the records replacing the documents state imports of their own
+
+	if !store || l.cache == nil {
+		return
+	}
+	// Records the library stopped asking for are pruned here, where a write happened.
+	defer l.cache.Prune()
+	for _, b := range records {
+		if l.RequireResolved && !b.resolved {
+			continue
+		}
+		_ = l.cache.Store(b.doc.key, b.rec) // cache write failure is non-fatal
+	}
 }
 
 // setDigest hashes the name and content of every file in the source, memoized.
-// It goes into the cache key so a record cannot outlive an edit to a sibling
-// file it drew a value from: a unit reduction follows a reference unit or a
-// prefix declared in another file, and keying on this file alone kept the
-// reduction computed against the old definition. An unreadable file digests as
-// its read error, which still changes the key once it becomes readable.
+// It goes into the cache key so a record cannot outlive an edit to a sibling file
+// it drew a value from, such as a unit reduction following a reference unit
+// declared elsewhere. An unreadable file digests as its read error.
 func (l *Loader) setDigest() string {
 	if l.digest != "" {
 		return l.digest

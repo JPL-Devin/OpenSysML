@@ -113,8 +113,10 @@ jobs:
       - name: Run static analysis (staticcheck + gosec)
         run: make lint
 
+      # Per-package timeout: under -race, passes and model run within 1% of go's 10m
+      # default. Matches `make test`.
       - name: Run tests
-        run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+        run: go test -v -race -timeout 30m -coverprofile=coverage.txt -covermode=atomic ./...
 
       # Re-run the corpus gate on its own so its verdict is legible in the log
       # and a skip is impossible to miss. TestCorpusGates is the shared

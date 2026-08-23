@@ -41,11 +41,8 @@ func w11aKerMLLibraryMessages(t *testing.T, src string) []string {
 	name := "<t>.kerml"
 	idx := symbols.NewIndex()
 	libSrc := libs.DefaultSource()
-	loader := libs.NewLoader(libSrc, nil)
-	for _, lib := range libSrc.List() {
-		if err := loader.Load(lib, idx); err != nil {
-			t.Fatalf("load library %s: %v", lib, err)
-		}
+	if err := libs.NewLoader(libSrc, nil).LoadAll(idx); err != nil {
+		t.Fatalf("load the library: %v", err)
 	}
 	root := parser.New(source.New(name, []byte(src))).ParseFile()
 	idx.AddDocument(name, root)

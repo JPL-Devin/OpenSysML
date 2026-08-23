@@ -18,7 +18,7 @@ func TestEmbedLoadEndToEnd(t *testing.T) {
 	}
 	ld := NewLoader(DefaultSource(), cache)
 	idx := symbols.NewIndex()
-	if err := ld.Load("Kernel Libraries/Kernel Data Type Library/ScalarValues.kerml", idx); err != nil {
+	if err := ld.load("Kernel Libraries/Kernel Data Type Library/ScalarValues.kerml", idx); err != nil {
 		t.Fatalf("Load: %v", err)
 	}
 	if len(idx.LookupQualified("ScalarValues::Real")) != 1 {
@@ -37,7 +37,7 @@ func TestSysmlLibraryPathOverride(t *testing.T) {
 	cache := &Cache{dir: t.TempDir()}
 	ld := NewLoader(DefaultSource(), cache)
 	idx := symbols.NewIndex()
-	if err := ld.Load("Custom.kerml", idx); err != nil {
+	if err := ld.load("Custom.kerml", idx); err != nil {
 		t.Fatalf("Load custom: %v", err)
 	}
 	if len(idx.LookupQualified("Custom::Widget")) != 1 {
@@ -63,7 +63,7 @@ func TestCacheStaleContentReparsedNotServed(t *testing.T) {
 	ld := NewLoader(DefaultSource(), cache)
 
 	idx1 := symbols.NewIndex()
-	if err := ld.Load("Evolving.kerml", idx1); err != nil {
+	if err := ld.load("Evolving.kerml", idx1); err != nil {
 		t.Fatalf("first Load: %v", err)
 	}
 	if len(idx1.LookupQualified("Evolving::First")) != 1 {
@@ -76,7 +76,7 @@ func TestCacheStaleContentReparsedNotServed(t *testing.T) {
 		t.Fatal(err)
 	}
 	idx2 := symbols.NewIndex()
-	if err := ld.Load("Evolving.kerml", idx2); err != nil {
+	if err := ld.load("Evolving.kerml", idx2); err != nil {
 		t.Fatalf("second Load: %v", err)
 	}
 	if len(idx2.LookupQualified("Evolving::Second")) != 1 {
