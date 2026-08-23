@@ -5,25 +5,29 @@ the model alone can evaluate: `MetadataTests_MetadataFeature_invalid.kerml.xt`,
 `MetadataUsage_Invalid.sysml.xt`, the `SemanticMetadata` files, and the `Must be model-level
 evaluable`, `Must have a concrete type` and `Must have a Boolean result` families.
 
-Measured on `main` at `07dc713c` and on the branch, with `go run ./cmd/pilot-xpect`,
-`go run ./cmd/pilot-diff` and `go run ./cmd/pilot-reject`.
+The branch is `ae4fdf9e` plus this slice's commit. Both columns are fresh runs of
+`go run ./cmd/pilot-xpect`, `go run ./cmd/pilot-diff` and `go run ./cmd/pilot-reject` after
+`make build`, never the committed baselines, which the wave owner rebaselines.
 
-| Oracle | `main` | Branch |
+| Oracle | `main` at `ae4fdf9e` | Branch |
 |---|---|---|
-| Xpect | 1326 expectations: 1172 agree (239 wording-only), 154 disagree | 1323 expectations: 1240 agree (241 wording-only), 83 disagree |
+| Xpect | 1326 expectations: 1221 agree (241 wording-only), 105 disagree | 1323 expectations: 1240 agree (241 wording-only), 83 disagree |
 | Differential | 353 files, 312 fully agreeing; 25 agreed, 139 only ours, 73 only the pilot's | 353 files, 313 fully agreeing; 25 agreed, 138 only ours, 73 only the pilot's |
-| Rejection | 120 cases: 114 both reject, 6 only the pilot rejects, 0 only we reject | 120 cases: 116 both reject, 4 only the pilot rejects, 0 only we reject |
+| Rejection | 120 cases: 115 both reject, 5 only the pilot rejects, 0 only we reject | 120 cases: 116 both reject, 4 only the pilot rejects, 0 only we reject |
 
-The branch column is measured after merging `main`, so it also carries the other wave-11 slices'
-movement; the rows attributable to this slice are named below.
+The differential control needs a note. The committed baseline and the wave-11 control both read
+353 / 311 / 142, but a fresh run on `ae4fdf9e` itself reads 353 / **312** / **139**: the three
+`kind-mismatch` rows on `Interaction Sequencing Examples/ServerSequenceOutsideRealization-2.sysml`
+(lines 18, 32 and 57) are gone on `main` and that file is fully agreeing, which no wave-11D change
+touches. So this slice's own differential movement is the one file named below, not the three-row
+difference between the control and a fresh run of it.
 
-Row keys were compared, not totals, and against a fresh run of each oracle rather than the committed
-baselines, which the wave owner rebaselines: 22 Xpect rows became agreements — 18 measured against
-`main` at `07dc713c` before this branch merged current `main`, and the four concrete-type rows
-measured on the merged tree — and **no row became a disagreement**, in any of the three. Three of the 18 are not a behaviour change and are
-reported as such in [the expectation-count correction](#the-expectation-count-correction) below. The
-differential moved by exactly one row (`Simple Tests/MetadataTest.kerml`:53) and the rejection corpus
-by exactly one case (`xpect/p11-metadata-body-not-evaluable.sysml`, now rejected by both).
+Row keys were compared, not totals: 22 Xpect rows became agreements and **no row became a
+disagreement**, in any of the three. Three of the 22 are not a behaviour change and are reported as
+such in [the expectation-count correction](#the-expectation-count-correction) below. The differential
+moved by exactly one file (`Simple Tests/MetadataTest.kerml`, its one only-ours row at line 53) and
+the rejection corpus by exactly one case (`xpect/p11-metadata-body-not-evaluable.sysml`, now rejected
+by both).
 
 Of the 23 rows the slice owns, **18 closed** and 5 stand: the four span rows below and
 `SemanticMetadata_valid.sysml.xt`:53, which is a grammar gap.
