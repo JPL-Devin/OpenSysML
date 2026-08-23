@@ -122,10 +122,12 @@ vscode-package: ## Package the VS Code extension as a .vsix for side-loading
 	cd $(VSCODE_DIR) && npm ci && npm run package
 	@echo "✓ Packaged $(VSCODE_DIR)/opensysml-sysml.vsix"
 
-docs-counts: ## Restate the derived compliance-count lines from the compliance map's markers
-	@echo "Regenerating the documentation count lines..."
+docs-counts: ## Regenerate and verify all derived documentation counts
+	@echo "Regenerating the documentation count lines and refereed figures..."
 	go run ./cmd/doc-counts
-	@echo "✓ Count lines state the compliance map"
+	go run ./cmd/doc-counts -check
+	go test -count=1 ./cmd/pilot-diff ./cmd/pilot-reject ./cmd/doc-counts
+	@echo "✓ Documentation counts and refereed figures are current"
 
 docs-install: ## Install the documentation site toolchain
 	$(PYTHON) -m pip install -r docs-requirements.txt

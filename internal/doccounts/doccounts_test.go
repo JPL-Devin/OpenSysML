@@ -1,6 +1,8 @@
 package doccounts
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -67,6 +69,128 @@ func TestRewriteReportsProseItDoesNotRecognise(t *testing.T) {
 	}
 	if _, err := Rewrite("no marker here\n", Lines()[0], RuleCounts{Total: 1}); err == nil {
 		t.Fatal("want an error when no line carries the marker")
+	}
+}
+
+func TestReadRefereedCountsDerivesAllBaselineFigures(t *testing.T) {
+	root := t.TempDir()
+	writeDoccountsFixture(t, root)
+	counts, err := ReadRefereedCounts(root)
+	if err != nil {
+		t.Fatalf("read baselines: %v", err)
+	}
+	if counts.Files != 2 || counts.FilesAgreeing != 1 || counts.OursOnly != 3 || counts.PilotOnly != 4 {
+		t.Fatalf("differential counts: %+v", counts)
+	}
+	if counts.DeclaredErrors != 11 || counts.Silent != 1 || counts.DeclaredAgree != 6 ||
+		counts.WordingOnly != 2 || counts.LocationOnly != 1 || counts.SeverityDiffers != 0 ||
+		counts.Elsewhere != 0 || counts.ScopeExact != 7 || counts.ScopeTotal != 8 {
+		t.Fatalf("Xpect counts: %+v", counts)
+	}
+	if counts.RejectCases != 12 || counts.RejectBoth != 11 || counts.RejectPilotOnly != 1 ||
+		counts.RejectDefaultBoth != 9 || counts.RejectDefaultPilotOnly != 3 || counts.RejectStrictOnly != 2 {
+		t.Fatalf("rejection counts: %+v", counts)
+	}
+	if counts.SelfAssessed != 1 || counts.PilotTag != "2026-05" || counts.PilotArtifact != "0.60.1" {
+		t.Fatalf("derived metadata: %+v", counts)
+	}
+}
+
+func TestRewriteBlockUsesConsumerRelativeLinksAndIsIdempotent(t *testing.T) {
+	root := t.TempDir()
+	writeDoccountsFixture(t, root)
+	counts, err := ReadRefereedCounts(root)
+	if err != nil {
+		t.Fatalf("read baselines: %v", err)
+	}
+	spec := Block{Path: "README.md", Name: "refereed-figures", LinkPrefix: "docs/project/"}
+	content := "before\n<!-- doc-counts:begin refereed-figures -->\nstale\n<!-- doc-counts:end refereed-figures -->\nafter\n"
+	got, err := RewriteBlock(content, spec, counts)
+	if err != nil {
+		t.Fatalf("rewrite block: %v", err)
+	}
+	for _, want := range []string{
+		"`PILOT_TAG=2026-05`", "artifact `0.60.1`", "1 of 2 files",
+		"6 we report word-for-word", "9 both reject",
+		"[differential](docs/project/pilot-differential.md)",
+		"[spec compliance](docs/project/spec-compliance.md)",
+		"must be read by root",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("generated block lacks %q:\n%s", want, got)
+		}
+	}
+	again, err := RewriteBlock(got, spec, counts)
+	if err != nil {
+		t.Fatalf("second block rewrite: %v", err)
+	}
+	if again != got {
+		t.Fatal("block rewrite is not idempotent")
+	}
+}
+
+func TestRewriteBlockRejectsMalformedMarkers(t *testing.T) {
+	spec := Block{Path: "README.md", Name: "refereed-figures"}
+	counts := RefereedCounts{}
+	for name, content := range map[string]string{
+		"missing begin": "<!-- doc-counts:end refereed-figures -->\n",
+		"missing end":   "<!-- doc-counts:begin refereed-figures -->\n",
+		"reversed":      "<!-- doc-counts:end refereed-figures -->\n<!-- doc-counts:begin refereed-figures -->\n",
+		"duplicate":     "<!-- doc-counts:begin refereed-figures -->\n<!-- doc-counts:begin refereed-figures -->\n<!-- doc-counts:end refereed-figures -->\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := RewriteBlock(content, spec, counts); err == nil {
+				t.Fatal("want malformed marker error")
+			}
+		})
+	}
+}
+
+func TestRewriteBaselineLineRestatesOnlyCapturedValues(t *testing.T) {
+	spec := BaselineLines()[0]
+	content := "before\n**Reference differential:** 99 files compared diagnostic-by-diagnostic against the pinned OMG pilot implementation (`old`), 99 in full agreement;\nafter\n"
+	counts := RefereedCounts{Files: 2, PilotTag: "2026-05", FilesAgreeing: 1}
+	got, err := RewriteBaselineLine(content, spec, counts)
+	if err != nil {
+		t.Fatalf("rewrite baseline line: %v", err)
+	}
+	want := "before\n**Reference differential:** 2 files compared diagnostic-by-diagnostic against the pinned OMG pilot implementation (`2026-05`), 1 in full agreement;\nafter\n"
+	if got != want {
+		t.Fatalf("rewritten baseline line:\n%s", got)
+	}
+}
+
+func TestReadSelfAssessedRowsRequiresASection(t *testing.T) {
+	root := t.TempDir()
+	writeAt(t, root, SpecCompliancePath, "# Compliance\n\n| Rule | Status |\n|---|---|\n| a | ✅ |\n")
+	if _, err := ReadSelfAssessedRows(root); err == nil {
+		t.Fatal("want an error when no section declares no external referee")
+	}
+}
+
+func writeDoccountsFixture(t *testing.T, root string) {
+	t.Helper()
+	writeAt(t, root, SpecCompliancePath, `# Compliance
+
+**No external referee:** self-assessed.
+
+| Rule | Status |
+|---|---|
+| a | ✅ Faithful |
+`)
+	writeAt(t, root, "docs/project/pilot-differential-baseline.json", `{"pilotRelease":"2026-05 (jupyter-sysml-kernel 0.60.1)","totals":{"files":2,"filesFullyAgreeing":1,"openSysMLOnly":3,"pilotOnly":4}}`)
+	writeAt(t, root, "docs/project/pilot-xpect-baseline.json", `{"kinds":[{"kind":"errors","rows":11,"agree":8,"wordingOnly":2,"sameLocation":1,"sameLine":1,"severityDiffers":0,"elsewhereInFile":0},{"kind":"scope","assertions":8,"agree":7}]}`)
+	writeAt(t, root, "docs/project/pilot-rejection-baseline.json", `{"totals":{"cases":12,"bothReject":11,"pilotOnlyRejects":1},"strictOnlyAgreements":["a","b"]}`)
+}
+
+func writeAt(t *testing.T, root, path, content string) {
+	t.Helper()
+	full := filepath.Join(root, filepath.FromSlash(path))
+	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
+		t.Fatalf("write %s: %v", path, err)
 	}
 }
 
