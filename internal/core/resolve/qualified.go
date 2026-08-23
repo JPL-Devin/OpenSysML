@@ -44,6 +44,7 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 	if qn.Global {
 		cur = r.lookupInRoot(scope, first)
 	} else {
+		// Use import-aware lookup for first segment of multi-part names
 		res := r.walkUnqualifiedHiding(scope, first, hide)
 		cur = res.sym
 	}
