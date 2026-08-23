@@ -202,7 +202,7 @@ Dropped relative to `symRecord`: `ShortName`, `Kind`, `Span`, `AliasTarget`, and
 cost, because the document is now always there.
 
 **Version compatibility.** The rule is unchanged and it is the strong one: *a stale record is a miss,
-never a wrong answer.* Three independent components of the cache key enforce it, and all three stay:
+never a wrong answer.* Four independent components of the cache key enforce it, and all four stay:
 
 | Key component | What it invalidates | Why it is needed |
 |---|---|---|
