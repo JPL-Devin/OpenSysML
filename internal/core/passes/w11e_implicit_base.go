@@ -9,7 +9,7 @@ import (
 
 const msgFeatureNoType = "Features must have at least one type"
 
-// ImplicitBasePass checks that a KerML classifier reaches the standard-library
+// ImplicitBasePass checks that a classifier reaches the standard-library
 // supertype implied by its kind and that a feature has at least one type
 // (KerML 1.0 validateClassifierDefaultSupertype, validateFeatureHasType). Both
 // hold implicitly once the library is in the resource set, so they report a
@@ -19,22 +19,23 @@ type ImplicitBasePass struct{}
 func (ImplicitBasePass) Level() PassLevel { return LevelConstraint }
 
 func (ImplicitBasePass) Run(ctx *Context, name string, root *ast.RootNamespace) []Diagnostic {
-	if ctx == nil || ctx.Index == nil || root == nil || ctx.Kind != source.KindKerML {
+	if ctx == nil || ctx.Index == nil || root == nil {
 		return nil
 	}
 	rootScope := ctx.Index.DocumentRoot(name)
 	if rootScope == nil {
 		return nil
 	}
-	c := &implicitBaseChecker{model: ctx.Model(), index: ctx.Index}
+	c := &implicitBaseChecker{model: ctx.Model(), index: ctx.Index, isKerML: ctx.Kind == source.KindKerML}
 	(&w8cWalker{seen: make(map[*symbols.Symbol]bool)}).walk(rootScope, c.check)
 	return c.diags
 }
 
 type implicitBaseChecker struct {
-	model *semantics.Model
-	index *symbols.Index
-	diags []Diagnostic
+	model   *semantics.Model
+	index   *symbols.Index
+	isKerML bool
+	diags   []Diagnostic
 }
 
 func (c *implicitBaseChecker) check(sym *symbols.Symbol) {
@@ -43,7 +44,7 @@ func (c *implicitBaseChecker) check(sym *symbols.Symbol) {
 			return
 		}
 	}
-	if sym.Kind == symbols.SymbolKerMLType {
+	if _, isDef := sym.Decl.(*ast.Definition); isDef || sym.Kind == symbols.SymbolKerMLType {
 		c.checkDefaultSupertype(sym)
 		return
 	}
@@ -55,7 +56,7 @@ func (c *implicitBaseChecker) check(sym *symbols.Symbol) {
 // itself, so neither the conjugated type nor the implicit specialization it
 // replaces supplies one.
 func (c *implicitBaseChecker) checkDefaultSupertype(sym *symbols.Symbol) {
-	fqn, ok := semantics.KindBaseFQN(sym, true)
+	fqn, ok := semantics.KindBaseFQN(sym, c.isKerML)
 	if !ok {
 		return
 	}

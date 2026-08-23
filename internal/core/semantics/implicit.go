@@ -133,14 +133,27 @@ func KindBaseFQN(sym *symbols.Symbol, isKerML bool) (string, bool) {
 	return kindBaseFQN(sym, isKerML)
 }
 
-// FeatureBaseFQN returns the standard-library base feature a KerML feature
-// declaration subsets, which supplies its type when it declares none.
+// FeatureBaseFQN returns the standard-library element a feature declaration
+// takes its type from when it declares none: the base feature its kind implies,
+// or the base definition a SysML usage of that kind is typed by.
 func (m *Model) FeatureBaseFQN(sym *symbols.Symbol) (string, bool) {
 	if sym == nil {
 		return "", false
 	}
 	if typed, ok := m.declaredTypeFeatureBase(sym); ok {
 		return typed, true
+	}
+	if !m.isKerMLDoc(sym) {
+		usage, ok := sym.Decl.(*ast.Usage)
+		if !ok {
+			return "", false
+		}
+		if fqn, ok := implicitUsageBases[usage.Kind]; ok {
+			return fqn, true
+		}
+		// A usage of no particular kind still subsets the base feature every
+		// usage does, which is what types it (SysML v2 §7.3.2).
+		return baseUsageFQN, true
 	}
 	fqn, ok := implicitKerMLFeatureBases[keywordOf(sym)]
 	return fqn, ok
