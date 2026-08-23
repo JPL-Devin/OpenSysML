@@ -850,14 +850,11 @@ func compatibleTyping(useKind ast.UsageKind, direction ast.FeatureDirection, def
 		defKind = symbols.SymbolItemDef
 	}
 
-	// Attributes can be typed by any structural def (for parameters, properties)
-	// Also allow enumDef for typed enumerations
-	// This allows: in scene : Scene (attribute : itemDef), verdict : VerdictKind (attribute : enumDef)
-	if useKind == ast.UsageAttribute {
-		return defKind == symbols.SymbolPartDef ||
-			defKind == symbols.SymbolAttributeDef ||
-			defKind == symbols.SymbolItemDef ||
-			defKind == symbols.SymbolOccurrenceDef ||
+	// An attribute is typed by data types: an attribute or enumeration
+	// definition (SysML v2 §8.3.9.4 validateAttributeUsageType). A directed one
+	// is a parameter and crosses to structural definitions below.
+	if useKind == ast.UsageAttribute && direction == ast.DirNone {
+		return defKind == symbols.SymbolAttributeDef ||
 			defKind == symbols.SymbolEnumerationDef
 	}
 
@@ -873,13 +870,15 @@ func compatibleTyping(useKind ast.UsageKind, direction ast.FeatureDirection, def
 			defKind == symbols.SymbolEnumerationDef
 	}
 
-	// An occurrence, item or part may be typed by an occurrence definition of
-	// any kind (SysML v2 §8.3.9.7 validateOccurrenceUsageType).
-	if useKind == ast.UsagePart {
+	// An occurrence, item or part is typed by occurrence definitions only: its
+	// types are Classes, and a data type is not one (SysML v2 §8.3.9.7
+	// validateOccurrenceUsageType).
+	if useKind == ast.UsagePart || useKind == ast.UsageItem {
 		return isOccurrenceDefKind(defKind)
 	}
-	// Items and occurrences keep the table's attribute-def leniency for values.
-	if useKind == ast.UsageItem || useKind == ast.UsageOccurrence || useKind == ast.UsageIndividual {
+	// An `occurrence`/`individual` usage's data typing is W8D's, which reports
+	// it whether declared or inherited.
+	if useKind == ast.UsageOccurrence || useKind == ast.UsageIndividual {
 		return isOccurrenceDefKind(defKind) || defKind == symbols.SymbolAttributeDef
 	}
 

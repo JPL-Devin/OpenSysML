@@ -20,17 +20,20 @@ func TestW10BReferenceSubsettingContributesABase(t *testing.T) {
 			at = append(at, source0{d.Span.Offset, d.Severity})
 		}
 	}
-	if len(at) != 2 {
-		t.Fatalf("want the warning on both `action a` and `perform b.a`, got %v", at)
+	// The chain `b.a` is a feature of its own, specialized as the perform is,
+	// so it carries the conflict too.
+	if len(at) != 3 {
+		t.Fatalf("want the warning on `action a`, `perform b.a` and its chain, got %v", at)
 	}
 	for _, a := range at {
 		if a.severity != SeverityWarning {
 			t.Errorf("want a warning, got %v", a.severity)
 		}
 	}
-	perform := offsetOfW10B(src, "perform b.a;")
-	if at[1].offset != perform {
-		t.Errorf("want the second warning at offset %d, got %d", perform, at[1].offset)
+	for i, want := range []string{"perform b.a;", "b.a;"} {
+		if got, off := at[i+1].offset, offsetOfW10B(src, want); got != off {
+			t.Errorf("want warning %d at offset %d, got %d", i+1, off, got)
+		}
 	}
 }
 

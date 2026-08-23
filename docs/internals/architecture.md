@@ -653,7 +653,7 @@ Every behavioral feature must have:
 
 **Measured against the pinned reference** (`PILOT_TAG=2026-05`, artifact `0.60.1`). Every number below is re-derived from a committed baseline by the doc-count guard in `cmd/pilot-diff`; none of them is typed in by hand.
 
-- **Corpus agreement:** 309 of 353 files agree diagnostic-by-diagnostic; 119 diagnostics are ours alone and 85 the reference's alone ([differential](../project/pilot-differential.md), `go run ./cmd/pilot-diff`).
+- **Corpus agreement:** 311 of 353 files agree diagnostic-by-diagnostic; 142 diagnostics are ours alone and 73 the reference's alone, and the first number must be read by root: our diagnostics against the reference's own corpora fell while our non-standard-notation warnings on our own example models rose ([differential](../project/pilot-differential.md), `go run ./cmd/pilot-diff`).
 - **Declared-diagnostic silence:** of the 513 declared `errors` rows in the reference's own Xpect suites, we report nothing for 8. 179 we report word-for-word; 239 wording-only and 25 location-only differences are agreement in substance and are not counted as gaps; 11 more we report as a warning and 42 elsewhere in the file ([Xpect oracle](../project/pilot-xpect.md), `go run ./cmd/pilot-xpect`).
 - **Scope agreement:** 212 of 230 declared scope assertions match exactly (same source).
 - **Permissiveness gaps:** of 120 invalid models we wrote ourselves, the reference rejects 11 that we accept by default, and 109 both reject; 5 further cases agree only when we are asked strictly. We authored every one of these cases ourselves, so the denominator measures the reach of our own corpus and not our conformance; agreement reached only under an opt-in strict mode is weaker evidence than agreement by default ([rejection oracle](../project/pilot-rejection.md), `go run ./cmd/pilot-reject`).
@@ -661,7 +661,7 @@ Every behavioral feature must have:
 
 What these numbers cannot show: the OMG corpora are demonstrations rather than an official conformance suite; the differential is one-directional, comparing the diagnostics the two implementations report on the same files; the Xpect suites are the pilot authors' test intent rather than a certification oracle; and none of these is a percentage of the specification — no global compliance figure is claimed anywhere.
 
-**Row bookkeeping:** the ✅/⚠️/❌/⛔ status of each of the 703 tracked rules stays in [spec compliance](../project/spec-compliance.md) as a census of our own row list. It moves when rows are rewritten and does not move when an oracle does, so it is not the progress measure.
+**Row bookkeeping:** the ✅/⚠️/❌/⛔ status of each of the 714 tracked rules stays in [spec compliance](../project/spec-compliance.md) as a census of our own row list. It moves when rows are rewritten and does not move when an oracle does, so it is not the progress measure.
 
 Calc/constraint/requirement functional. Action/state executor infrastructure complete (fork/join/decision, TimeEvent/ChangeEvent, guards, hierarchy, orthogonal regions all tested); every conformance case passes. Fork/join, shallow/deep history, entry/exit points and deferred events are implemented and reachable from source text — see docs/project/spec-compliance.md and docs/reference/grammar/README.md.
 
