@@ -37,10 +37,34 @@ func (RedefinitionConformancePass) Run(ctx *Context, name string, root *ast.Root
 	return rc.diags
 }
 
+// RedefinitionDirectionPass reports direction conformance before constraint
+// passes may be skipped by unrelated type errors in the same document.
+type RedefinitionDirectionPass struct{}
+
+func (RedefinitionDirectionPass) Level() PassLevel { return LevelType }
+
+func (RedefinitionDirectionPass) Run(ctx *Context, name string, root *ast.RootNamespace) []Diagnostic {
+	if ctx == nil || ctx.Index == nil || root == nil {
+		return nil
+	}
+	rootScope := ctx.Index.DocumentRoot(name)
+	if rootScope == nil {
+		return nil
+	}
+	rc := &redefinitionConformanceChecker{
+		model:         ctx.Model(),
+		seen:          make(map[*symbols.Symbol]bool),
+		directionOnly: true,
+	}
+	rc.walk(rootScope)
+	return rc.diags
+}
+
 type redefinitionConformanceChecker struct {
-	model *semantics.Model
-	seen  map[*symbols.Symbol]bool
-	diags []Diagnostic
+	model         *semantics.Model
+	seen          map[*symbols.Symbol]bool
+	diags         []Diagnostic
+	directionOnly bool
 }
 
 // walk visits every symbol of the subtree once, including anonymous members.
@@ -119,8 +143,14 @@ func declBodyMembers(decl ast.Node) []ast.Node {
 }
 
 func (rc *redefinitionConformanceChecker) check(sym *symbols.Symbol) {
-	rc.checkMetadataBodies(sym)
-	for _, v := range rc.model.ConformanceViolations(sym) {
+	if !rc.directionOnly {
+		rc.checkMetadataBodies(sym)
+	}
+	violations := rc.model.ConformanceViolations(sym)
+	for _, v := range violations {
+		if rc.directionOnly != (v.Kind == semantics.ViolationDirection) {
+			continue
+		}
 		msg, code := conformanceMessage(v.Kind)
 		if msg == "" || v.Ref == nil {
 			continue

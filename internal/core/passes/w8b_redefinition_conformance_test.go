@@ -78,6 +78,37 @@ func TestW8BDirectionConformanceAdmitsInoutAndUndeclared(t *testing.T) {
 	}
 }
 
+func TestW8BDirectionConformanceRunsAlongsideTypeErrors(t *testing.T) {
+	root := parser.New(source.New("<t>.sysml", []byte(`
+		package P {
+			port def OutPort {
+				out ref anout;
+				in ref anin;
+			}
+			part p {
+				port aport : OutPort {
+					in ref redefines anout;
+					out ref redefines anin;
+				}
+			}
+			port def Bad {
+				part nested;
+			}
+		}
+	`))).ParseFile()
+	idx := symbols.NewIndex()
+	idx.AddDocument("<t>.sysml", root)
+	var directions []Diagnostic
+	for _, d := range Analyze("<t>.sysml", root, nil, idx) {
+		if d.Code == "redefinition-direction-conformance" {
+			directions = append(directions, d)
+		}
+	}
+	if len(directions) != 2 {
+		t.Fatalf("got %d direction diagnostics, want 2: %v", len(directions), directions)
+	}
+}
+
 // Feature_nonunique_invalid.kerml.xt: a nonunique feature may not subset or
 // redefine a unique one.
 func TestW8BUniquenessConformance(t *testing.T) {
