@@ -50,10 +50,12 @@ Fixture shapes that matter (copy them; the alternatives produce misleading resul
   for `@`, `@@`, `istype`, `hastype`, recursed through boolean composition. To assert the
   `filter-not-evaluable` warning, use a condition that resolves but is outside the supported subset
   (`filter @Meta::Safety + 1;`).
-- **Boolean composition gates on any unresolved operand,** not just classification `TypeRef`s:
-  `filter @Safe and Undefined;` and `filter Undefined1 and Undefined2;` yield only the
+- **An operator that is Boolean whatever its operands are gates on any unresolved operand,** not just
+  classification `TypeRef`s — the logical set (`not`, `and`, `or`, `xor`, `implies`) *and* the
+  comparisons (`==`, `!=`, `===`, `!==`, `<`, `<=`, `>`, `>=`). So `filter @Safe and Undefined;`,
+  `filter Undefined1 and Undefined2;` and `filter Undefined == 1;` yield only the
   unresolved-reference error, matching the pinned pilot, which reports nothing at that line (its
-  `Must have a Boolean result` is satisfied because the top-level operator is `and`). A *bare*
+  `Must have a Boolean result` is satisfied by the top-level operator). A *bare*
   `filter Undefined;` still reports — the pilot reports there too. These shapes are absent from the
   four OMG corpora, so the differential's only-ours count will not catch a regression here; probe
   them with hand-written fixtures plus

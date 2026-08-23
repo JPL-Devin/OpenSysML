@@ -683,19 +683,21 @@ func TestAnUnresolvedNameInAnImportFilterIsReported(t *testing.T) {
 	}
 }
 
-// A boolean composition yields a truth value whatever its operands are, so an
-// operand a lower tier could not resolve is the whole fault — the reference the
-// pinned pilot reports nothing else about either.
+// An operator whose result is Boolean whatever its operands are draws no
+// evaluability fault from an operand a lower tier could not resolve.
 func TestAnUnresolvedOperandOfABooleanFilterYieldsOnlyTheUnresolvedReference(t *testing.T) {
-	src := "package P { metadata def Safe; filter @Safe and Undefined; }"
-	ws := NewWorkspace()
-	ws.Open("file:///a.sysml", []byte(src), 1)
-	var msgs []string
-	for _, d := range ws.Diagnostics("file:///a.sysml") {
-		msgs = append(msgs, d.Message)
-	}
-	if len(msgs) != 1 || !strings.Contains(msgs[0], "unresolved reference: Undefined") {
-		t.Fatalf("an unresolved operand of a boolean filter should be the only fault, got %v", msgs)
+	for _, cond := range []string{
+		"@Safe and Undefined", "Undefined1 and Undefined2", "not Undefined",
+		"Undefined == 1", "Undefined < 1", "Undefined != Undefined2",
+	} {
+		src := "package P { metadata def Safe; filter " + cond + "; }"
+		ws := NewWorkspace()
+		ws.Open("file:///a.sysml", []byte(src), 1)
+		for _, d := range ws.Diagnostics("file:///a.sysml") {
+			if !strings.Contains(d.Message, "unresolved reference") {
+				t.Errorf("filter %s: an unresolved operand is the whole fault, also got %q", cond, d.Message)
+			}
+		}
 	}
 }
 
