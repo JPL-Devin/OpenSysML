@@ -127,8 +127,30 @@ var implicitKerMLFeatureBases = map[string]string{
 	"metaclass":   "Metaobjects::metaobjects",
 }
 
-// kindBaseFQN returns the standard-library base every declaration of sym's
+// KindBaseFQN returns the standard-library base every declaration of sym's
 // kind conforms to, implicitly or through its declared chain.
+func KindBaseFQN(sym *symbols.Symbol, isKerML bool) (string, bool) {
+	return kindBaseFQN(sym, isKerML)
+}
+
+// FeatureBaseFQN returns the standard-library base feature a KerML feature
+// declaration subsets, which supplies its type when it declares none.
+func (m *Model) FeatureBaseFQN(sym *symbols.Symbol) (string, bool) {
+	if sym == nil {
+		return "", false
+	}
+	if typed, ok := m.declaredTypeFeatureBase(sym); ok {
+		return typed, true
+	}
+	fqn, ok := implicitKerMLFeatureBases[keywordOf(sym)]
+	return fqn, ok
+}
+
+// RelationshipTarget resolves the element rel names from sym's scope.
+func (m *Model) RelationshipTarget(sym *symbols.Symbol, rel *ast.Relationship) *symbols.Symbol {
+	return m.relationshipTarget(sym, rel)
+}
+
 func kindBaseFQN(sym *symbols.Symbol, isKerML bool) (string, bool) {
 	if sym == nil {
 		return "", false
@@ -189,12 +211,27 @@ func (m *Model) implicitBase(sym *symbols.Symbol) *symbols.Symbol {
 	if m.declaredGeneralizationReaches(sym, fqn, nil) {
 		return nil
 	}
+	// A conjugated type takes its supertypes from what it conjugates rather than
+	// from an implicit specialization of its kind's base (KerML §8.3.3.1.1).
+	if declaresConjugation(sym) {
+		return nil
+	}
 	for _, base := range m.resolver.Index().LookupQualified(fqn) {
 		if base != nil && base != sym {
 			return base
 		}
 	}
 	return nil
+}
+
+// declaresConjugation reports whether sym conjugates a type.
+func declaresConjugation(sym *symbols.Symbol) bool {
+	for _, rel := range RelationshipsOf(sym) {
+		if rel != nil && rel.Conjugated {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *Model) declaredGeneralizationReaches(sym *symbols.Symbol, want string, visiting map[*symbols.Symbol]bool) bool {
@@ -219,9 +256,10 @@ func (m *Model) declaredGeneralizationReaches(sym *symbols.Symbol, want string, 
 			continue
 		}
 		sameBase := m.resolver.Index() != nil && m.resolver.Index().GetFQN(target) == want
-		if !sameBase {
+		if !sameBase && !visiting[target] {
 			// A declaration conforms to its kind's base whether the edge is
-			// declared or implicit, so reaching one of the same kind suffices.
+			// declared or implicit, so reaching one of the same kind suffices —
+			// except back through a cycle, which reaches nothing new.
 			if base, ok := kindBaseFQN(target, m.isKerMLDoc(target)); ok && base == want {
 				sameBase = true
 			}

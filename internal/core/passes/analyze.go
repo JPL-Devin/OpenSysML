@@ -21,6 +21,8 @@ func DefaultRegistry() *Registry {
 	reg.Register(ElementFilterPass{})
 	reg.Register(ConstraintPass{})
 	reg.Register(TypeRelationshipsPass{})
+	reg.Register(SpecializationKindsPass{})
+	reg.Register(ImplicitBasePass{})
 	reg.Register(MultiplicityBoundsPass{})
 	reg.Register(ReferenceSubsettingPass{})
 	reg.Register(TopLevelImportPass{})
