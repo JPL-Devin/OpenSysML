@@ -301,8 +301,9 @@ Only-pilot: `testdata` 18 `kind-mismatch`, 4 `unmapped`, 3 syntax, 2 `unresolved
 resembles the old one.** All 31 syntax rows are gone, and `pilot-validation`'s 7 with them — wave 10D
 parses notation we used to reject. But `unresolved-reference` rises 27 → 36, `unmapped` 5 → 17 and
 `kind-mismatch` 4 → 9 in the same root, because a file we now parse runs the later tiers for the
-first time. **Parsing more exposes more, and the net −5 hides 38 rows retired against 26 newly
-surfaced**; a reader who takes the total as "five defects fixed" has the wave backwards.
+first time. **Parsing more exposes more, and the net −5 in this root hides 31 syntax rows retired
+against 26 newly surfaced** (`pilot-validation`'s 7 are its own row); a reader who takes the total as
+"five defects fixed" has the wave backwards.
 
 Batch loading is why `pilot-examples` has no pilot-only diagnostic at all: the reference reads
 `SysML v2 Spec Annex A SimpleVehicleModel.sysml` and its importer, `Annex_A_VehicleViews.sysml`,
