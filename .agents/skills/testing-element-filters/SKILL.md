@@ -62,7 +62,30 @@ Fixture shapes that matter (copy them; the alternatives produce misleading resul
   four OMG corpora, so the differential's only-ours count will not catch a regression here; probe
   them with hand-written fixtures plus
   `build/pilot-sysml-validator/validate-sysml-batch --root <dir> <file>` as the referee.
-- Metadata annotations gate the same per-annotation way (`MetadataTypePass`), but note our
+- **Syntactically malformed conditions are a distinct risk class, and the cheapest bug to reintroduce.**
+  A classification test with no type (`filter x istype ;`, `x hastype ;`, `@;`, `@@;`) parses to an
+  `*ast.OperatorExpr` whose `TypeRef` is a **typed nil** `*ast.QualifiedName`. `DownstreamOfFailure`
+  only guards `ref == nil`, which a typed nil passes, so it reaches `ref.Span()` and panics — the
+  `op.TypeRef == nil` arm of `gated()` (which treats the missing type as its own resolution failure,
+  so the syntax error stands alone as the pilot has it) is the only thing preventing it. To prove
+  that arm is load-bearing rather than decorative, delete it, rebuild, and check all four shapes
+  panic; a plain `go test` alone will not tell you it matters. Note `gated()` also hands raw `ast.Node`
+  interface values from `op.Operands` (and `f.Expr`) to `DownstreamOfFailure`/`gated` *without* that
+  guard, so if the parser ever starts emitting typed-nil operands instead of `ErrorNode`s the same
+  panic returns by a different door — sweep `filter x == ;`, `filter and x;`, `filter not ;`,
+  `filter ((@)) ;` and friends after any parser change.
+- Malformed shapes whose *operand* the parser recovered as an `ErrorNode` (`filter x == ;`,
+  `filter and x;`) are still judged, so they can emit `Must be model-level evaluable` on a document
+  whose only other fault is a parse error, where the pilot reports just the syntax error. The pilot
+  does corroborate the well-formed-but-non-Boolean cases (`filter ;`, `filter not ;`,
+  `filter x + ;`). Treat the rest as a known divergence confined to already-invalid documents, and
+  referee any new one with the pilot rather than assuming it is fine.
+- The gate's `default: return false` arm means operators whose result is **not** Boolean regardless
+  (notably arithmetic `+`) do *not* gate on unresolved operands, so `filter Undefined + 1;` still
+  reports — and the pilot reports there too, so that is correct, not noise. Don't "fix" it.
+- Metadata annotations gate the same per-annotation way (`MetadataTypePass`), and unlike the filter
+  pass its `pm.Type` is a concrete `*ast.QualifiedName` guarded by `pm.Type == nil`, so it has no
+  typed-nil exposure; malformed annotations (`#;`, `# part p;`, `#(;`) are safe. Note our
   `Must have a concrete type` is emitted at the **file start (`1:1`)** rather than at the annotation
   line, where the pilot puts it. That mis-attribution predates wave 12A — don't score it as a
   regression, but don't key an assertion on the line number either; assert presence/absence by
