@@ -184,6 +184,13 @@ func (r *Resolver) machineStateVertex(scope *symbols.Scope, qn *ast.QualifiedNam
 	return member == sym || r.idx.GetFQN(member) == r.idx.GetFQN(sym)
 }
 
+// MachineStateVertex reports whether sym is a vertex of the state machine
+// enclosing scope, using the same inherited-member predicate as endpoint
+// resolution.
+func (r *Resolver) MachineStateVertex(scope *symbols.Scope, qn *ast.QualifiedName, sym *symbols.Symbol) bool {
+	return r.machineStateVertex(scope, qn, sym)
+}
+
 func stateMachineEndpoint(scope *symbols.Scope) bool {
 	for s := scope; s != nil; s = s.Parent() {
 		switch n := s.Node().(type) {

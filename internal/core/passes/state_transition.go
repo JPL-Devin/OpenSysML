@@ -220,7 +220,8 @@ func (c *transitionChecker) checkEndpoint(
 		return nil
 	}
 	decl := sym.Decl
-	if m.vertices[decl] || resolve.IsInheritedStateVertex(sym) {
+	if m.vertices[decl] || resolve.IsInheritedStateVertex(sym) ||
+		c.resolver.MachineStateVertex(scope, qn, sym) {
 		return decl
 	}
 	// A `first m then x` marker gets no incoming transition (UML 15.7.18), so a

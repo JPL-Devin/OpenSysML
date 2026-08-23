@@ -15,6 +15,7 @@ func TestInheritedStateActionEndpointsAreVertices(t *testing.T) {
 			entry;
 			then S1;
 			transition aTransition first start accept Exit then done;
+			accept Exit then done;
 			transition toStart first S1 then start;
 			transition fromDone first done then S1;
 		}
