@@ -68,6 +68,7 @@ unknown-property urn:opensysml:sysml:MultiplicityDeclaration subsets # a Multipl
 unknown-property PartUsage redefines                         # redefinition is a Redefinition element, not a property
 unknown-property SubjectMembership redefines                 # redefinition is a Redefinition element, not a property
 unknown-property ActionUsage references                      # a referenced element is a ReferenceUsage or Membership, not a property
+unknown-property StateUsage references                       # the state an `exhibit` names, referenced the same way
 unknown-property ViewRenderingMembership references          # a referenced element is a ReferenceUsage or Membership, not a property
 unknown-property urn:opensysml:sysml:AssumeMember references # a referenced element is a ReferenceUsage or Membership, not a property
 unknown-property urn:opensysml:sysml:Alias aliasedElement    # an alias target is a Membership's memberElement, not a property

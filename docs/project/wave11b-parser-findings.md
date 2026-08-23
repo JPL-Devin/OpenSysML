@@ -1,23 +1,49 @@
 # Wave 11B — the parsing rows, and the ones that are not parser rows
 
 Wave 11B owns the 20 Xpect disagreements in the pilot's parsing suites that were attributed to the
-lexer and the parser. Two of them were parser defects and are fixed; the rest are not parser
-defects, and this page records what each one actually needs, so that a later reader does not look
-for the fix in `internal/core/parser`.
+lexer and the parser, plus one row 11A escalated as parser-owned (`StateUsage_invalid.sysml.xt`:83).
+Three of them were parser defects and two of those close; the rest are not parser defects, and this
+page records what each one actually needs, so that a later reader does not look for the fix in
+`internal/core/parser`.
 
 Every number here is a fresh run of the three oracles against the pinned `PILOT_TAG=2026-05`
 corpora, on `main` and on the branch, on one machine:
 
 | oracle | `main` | branch |
 | --- | --- | --- |
-| xpect | 1172 agree (239 wording-only), 154 disagree | **1173 agree** (239 wording-only), **153 disagree** |
-| differential | 312 fully agreeing; 25 agreed, 139 only ours, 73 only the pilot's | identical |
-| rejection | 114 both reject, 6 only the pilot, 0 only we | identical |
+| xpect | 1197 agree (239 wording-only), 129 disagree | **1199 agree** (239 wording-only), **127 disagree** |
+| differential | 25 agreed, 139 only ours, 73 only the pilot's | identical |
+| rejection | 115 both reject, 5 only the pilot, 0 only we | identical |
 
-**One row closes** — `ParsingTests_MultiplicityDeclaration.kerml.xt` — and nothing else in any
-oracle moves. Note that the differential's `main` figures here are not the 311/142 the wave-10
-report quotes; 312/25/139/73 is what two consecutive runs on `main` give, so the difference is in the
-committed baseline's provenance, not in this branch.
+`main` here is post-wave-11A `main` (the branch is merged with it), so these are not the wave-10
+figures the task paste quotes. **Two rows close** — `ParsingTests_MultiplicityDeclaration.kerml.xt`
+and `StateUsage_invalid.sysml.xt`:83 — and nothing else in any oracle moves. The differential's
+`main` figures are also not the 311/142 the wave-10 report quotes; 25/139/73 is what consecutive runs
+on `main` give, so that difference is in the committed baseline's provenance, not in this branch.
+
+---
+
+## Fixed — the plain-name `exhibit` is a reference, not a declaration
+
+`StateUsage_invalid.sysml.xt`:83 declares `Must reference a state.` for `exhibit s;` where `s` is a
+part usage. 11A's rule keys on an `ast.RelReferences` target and could not see this row, because we
+parsed the plain-name form as a state usage *named* `s`:
+
+```
+ExhibitStateUsage : ExhibitStateUsageDeclaration ... // SysML.xtext
+ExhibitStateUsageDeclaration : 'exhibit' ('state' StateUsageDeclaration | OwnedReferenceSubsetting ...)
+```
+
+Only `state` introduces a declaration; every other `exhibit` carries an `OwnedReferenceSubsetting`,
+i.e. it names an existing state. The parser routed just the feature-chain form (`exhibit s.sa;`)
+through `parseReferenceMemberUsage`; it now routes every non-`state` form there, so `exhibit s;` is
+an unnamed state usage with a `references` relationship, and `exhibit state s { … }` still declares.
+`perform`'s plain-name form was already correct (`parsePerformedActionReference`) and is unchanged;
+`behavior_exhibit_reference.sysml` locks all four shapes side by side.
+
+RDF conversion follows the representation: `referenceMemberKeyword` now lists `exhibit`, so the
+keyword survives a round trip instead of being refused as unrebuildable, and `StateUsage references`
+joins the known-violation list as the structural predicate carrying the named state.
 
 ---
 

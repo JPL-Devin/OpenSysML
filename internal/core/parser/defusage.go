@@ -984,10 +984,6 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 			mods.isVariant = true
 		}
 		isAll := p.acceptSufficientAll()
-		if kw == "exhibit" && !p.atKeyword("state") && p.atFeatureChainTarget() {
-			return applyPrefixes(p.parseReferenceMemberUsage(
-				start, ast.UsageState, kw, "state", mods, p.parseStateBody, false))
-		}
 		if kw == "bind" {
 			u := p.parseUsage(start, p.usageKindOf(kw), kw, mods, isAll)
 			return applyPrefixes(normalizeAnonymousBindingEnd(u))
@@ -1012,14 +1008,15 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 			return applyPrefixes(p.parseReferenceMemberUsage(start, p.usageKindOf(kw), kw, noun, mods, body, false))
 		}
 
-		// `exhibit state modes { … }` and `exhibit state modes : Modes;` state
-		// the exhibited state after the state keyword, where the reference form
-		// `exhibit modes;` names an existing one (SysML.xtext ExhibitStateUsage:
-		// `'exhibit' ( OwnedReferenceSubsetting … | StateUsageKeyword
-		// UsageDeclaration? ) ValuePart? StateUsageBody`; SysML v2 §8.3.17).
-		if kw == "exhibit" && p.atKeyword("state") {
-			p.advance() // consume 'state'
-			return applyPrefixes(p.parseUsage(start, ast.UsageState, "exhibit state", mods, isAll))
+		// Only `exhibit state` declares a state; every other exhibit names an
+		// existing one through an OwnedReferenceSubsetting (SysML.xtext
+		// ExhibitStateUsage; SysML v2 §8.3.17).
+		if kw == "exhibit" {
+			if p.acceptKeyword("state") {
+				return applyPrefixes(p.parseUsage(start, ast.UsageState, "exhibit state", mods, isAll))
+			}
+			return applyPrefixes(p.parseReferenceMemberUsage(
+				start, ast.UsageState, kw, "state", mods, p.parseStateBody, true))
 		}
 
 		// Special case: include use case <name> (full form)
@@ -3331,26 +3328,6 @@ func (p *Parser) parseRelationshipTarget() ast.Node {
 	}
 
 	return operand
-}
-
-// atFeatureChainTarget reports whether an exhibit target contains a dot
-// chaining part, including qualified prefixes such as `P::states.on`.
-func (p *Parser) atFeatureChainTarget() bool {
-	if !p.atNameOrKeyword() {
-		return false
-	}
-	for i := 1; ; i += 2 {
-		separator := p.peekN(i).Kind
-		if separator == lexer.Dot {
-			return true
-		}
-		next := p.peekN(i + 1)
-		if separator != lexer.ColonColon ||
-			(next.Kind != lexer.Identifier && next.Kind != lexer.UnrestrictedName &&
-				next.Kind != lexer.Keyword) {
-			return false
-		}
-	}
 }
 
 // parsePreNameRelationships parses the specializations a declaration may state
