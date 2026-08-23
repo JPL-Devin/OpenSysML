@@ -24,6 +24,8 @@ a release is cut.
   annotation and model-level evaluability rules now do, and the two divergences left standing
 - **[Wave 11E decisions](wave11e-decisions.md)** — the KerML validation and visibility rows wave 11E
   leaves open, and why
+- **[Wave 12E decisions](wave12e-decisions.md)** — the visible-name enumeration rule, the two
+  resolver defects it closes, and the import-visibility divergence it keeps
 - **[Roadmap](roadmap.md)** — the known gaps, in the order they should be picked up
 - **[Releasing](releasing.md)** — the pre-tag gate, tagging, artifacts, Homebrew
 - **[macOS distribution](macos-distribution.md)** — Gatekeeper and the signing decision

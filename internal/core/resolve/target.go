@@ -58,8 +58,8 @@ type refFilter struct {
 	decl         ast.Node
 	namingTarget ast.Node
 	targetName   string
-	// featuredBy hides what one type features: a feature may not redefine a
-	// feature of its own featuring type (KerML 7.4.10).
+	// featuredBy hides the members a scope features: a connector end's
+	// participant is not a feature of the connector (KerML 8.3.4.5).
 	featuredBy       *symbols.Scope
 	hideBorrowedName bool
 	skipNamingTarget bool
