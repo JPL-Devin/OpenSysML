@@ -316,7 +316,7 @@ by our first diagnostic:
 |---|---:|---|
 | **Unresolved / ambiguous reference** — e.g. `ambiguous reference: SamePackage::container (2 candidates)`, `unresolved reference: MassValue — did you mean ISQBase::MassValue?` | 14 | **Split, and the split is the point.** 8 are ours to fix — the shadowing/import shapes, which `linkedName`'s 194 agreements do not reach because these references resolve to nothing rather than to the wrong element. The other 6 are the visibility fixtures wave 10E restored: `VisibilityTests_ImportAsFeatureInheritance_1` and `VisibilityTests_ProtectedImport_0`, `_1`, `_3`, `_4`, `_5` each declare file-wide silence **and** the protected-import errors the pilot's own `errors` assertions declare, so agreeing here would mean disagreeing there. **No implementation can satisfy both, and this report counts the row against us rather than exempting it.** |
 | **Parse recovery** — `expected a namespace member`, `expected '{' or ';' after declaration`, `expected ')'` | 6 | **Ours is wrong.** Notation the reference accepts and we do not parse; each one cascades, so the count overstates the number of defects. Down from 10: the three `QPE-*` query-path-expression files and `SemanticMetadata_valid.sysml.xt` are what remain, plus two `ParsingTests_*`. |
-| **Specialization cycle** — `x participates in a specialization cycle` | 3 | **Ours is wrong.** Files the pilot declares clean (`PartTest.sysml.xt`, `Redefinition_OwningType_Cyclic_Gen.sysml.xt`) — our cycle detection is counting a legitimate redefinition chain as a cycle. |
+| **Specialization cycle** — `x participates in a specialization cycle` | 3 | **One-sided, not a defect of ours — re-read in wave 11C.** All three fixtures declare a real cycle: `part p1 :> p2; part p2 :> p3; part p3 :> p1;` and `part p4 :> p4;` (`simpletests/PartTest.sysml.xt`:67-71), `part def A :> C` with `part def C :> A, B` (`Redefinition_OwningType_Cyclic_Gen.sysml.xt`:28-34), and `classifier a specializes b` / `classifier b specializes a` (`SimpleImportTests_CircleInheritanceInCircleImport.kerml.xt`:29,37). None is a redefinition or import circle misread as a specialization one, so the earlier reading was wrong. The pilot has no such check at all — the finding F4/K5 settled in [pilot-differential.md](pilot-differential.md#specialization-cycles-f4) — so these are our extension of the reference, and closing them would mean deleting a correct rule. |
 | **Conformance** — `try (typed by a1) redefines b (typed by A): types do not conform` | 2 | The declared expectation says clean, so ours is the suspect. Both are `SimpleImportTestsFromOtherFile_Import3*`. |
 | **State/transition** — `transition endpoint done names a state that is not a vertex of this state machine`, `transition endpoint A1 is not a state or pseudostate` | 2 | `simpletests/StateTest.sysml.xt`:73 and `DecisionTest.sysml.xt`:69. Ours is wrong; both endpoints are legal. |
 
@@ -604,6 +604,67 @@ alias membership import still surfaces the alias name only.
 
 The per-row evidence — declared count, our count, and the first missing/extra names for each
 disagreement — is in [pilot-xpect-baseline.json](pilot-xpect-baseline.json).
+
+---
+
+## Wave 11C — the global namespace, and what the self/that residue really is
+
+Four adjudications and one open question came out of the 34 rows wave 11C owned (all 18 `scope` rows
+and the 16 `noErrors` rows). They are recorded here because each one decides what an answer *means*,
+not merely how it is computed.
+
+**1. Two root namespaces of the same name are not an ambiguity.**
+`imports/global/DependencySamePackageName.kerml.xt` loads two files that each declare
+`package SamePackage`, declares the file clean, and declares both subtrees visible under one name
+(`SamePackage.container.A` *and* `SamePackage.container.B`, with `SamePackage` itself listed twice).
+Its own authors left the comment `//What global scope should be?????`. Resolution in the global
+namespace is single-valued in KerML 8.2.3.5 — a qualified name resolves to one membership or to
+none — and distinguishable naming constrains a *Namespace's* own members, which the global namespace
+is not. So the repeat is not ill-formed and the first root is the answer:
+`Resolver.lookupGlobalTop` returns `syms[0]` instead of reporting `ambiguous`, and a qualified tail
+walked from one namespace no longer picks up the same-named other one's members
+(`notConflatedWith`, `internal/core/resolve/qualified.go`). That closes the four
+`ambiguous reference: SamePackage::container (2 candidates)` `noErrors` rows and the
+`DependencySamePackageName` `scope` row, which was missing exactly the second root's paths.
+`TestNameResolutionPassResolvesARepeatedTopLevelNameToTheFirst` replaces the ambiguity test that
+asserted the opposite; a `$::`-rooted name is exempt from the filter, since it names a path in the
+global namespace where every root's members are reachable.
+
+**2. `noErrors` is Xpect's residue, not "no error anywhere".** Xpect matches each issue against the
+expectations' regions and fails a file on what is left over, so an error a sibling `errors`
+expectation declares is not the file's residue. The harness now models that
+(`consumedLine`, `cmd/pilot-xpect/compare.go`) — which is what the six protected-import
+contradictions above were really about, and it closes them without exempting a fixture or extending
+the wording-only class.
+
+**3. A `scope` anchor may be spelled with quotes.** `scoping/ShortName_Scoping_Valid1.kerml.xt`
+anchors `at 1` on the reference `specializes '1'`; the declared text omits the quotes our span
+carries, so the harness indexed no reference there and adjudicated the *unfiltered* scope. Accepting
+a segment that starts one byte before the located text fixes the anchor, not the enumeration.
+
+**4. A recursive import's descent carries no implicit generals.** A membership named directly by an
+import keeps its implicit members; a name the recursive descent *finds* is entered through the
+import, and the path does not then traverse the general types the element has by its kind rather
+than by declaration (`Model.ImplicitGenerals`, `internal/core/semantics/implicit.go`, applied by
+`declaredSources` in `scope_names.go`). That is what closes `Import_Recursive1`, `_4` and `_5`.
+
+**The open question — the pilot's expansion bound is not the one wave 10 recorded.** Six rows remain
+whose extras or omissions are all `self`/`that` tails, and the pair
+`ShadowingTests_CircleProblem4.kerml.xt` / `_FT` shows the bound is not a name-occurrence count:
+the two fixtures differ only in `classifier A specializes A::B` versus `feature A : A::B`, and the
+plain form declares `b.B.b.self` while the `_FT` form declares `b.B.b` and stops. Every `_FT` path
+that stops one step early ends where a *feature* is re-entered, and the plain form's do not, so the
+bound looks like a budget on the derivation steps a path takes through a type rather than on repeated
+names. We have no specification statement that fixes either bound, and adopting the pilot's stopping
+points without one would be fitting output. **This is an adjudication question, not a defect**, and
+with it stand the two `ShadowingTests_CircleProblem3.kerml.xt` rows: 456 names at `A` against 829
+declared and 382 at `B` against 696, where per-anchor filtering between two mutually
+wildcard-importing scopes and the `A.B.B` re-entry both hang off the same bound.
+`imports/recursive/ShortName_Import_Valid1.kerml.xt` is a seventh, and a harness question rather
+than ours: its `at c_Public` matches inside `c_Public_Id` in the pilot, which anchors it on a
+classifier reference in `Test1`, while our identifier-boundary rule walks past it to a declaration in
+`VP::VP1`. Relaxing the rule globally costs ten other rows, so the anchor needs Xpect's own matching,
+not a looser one.
 
 ---
 

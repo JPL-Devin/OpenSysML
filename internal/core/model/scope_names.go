@@ -72,6 +72,7 @@ func (w *Workspace) VisibleNames(scope *symbols.Scope, opts VisibleNamesOptions)
 		maxDepth: opts.MaxDepth,
 		library:  map[string]bool{},
 		seen:     map[string]bool{},
+		at:       map[string]*symbols.Symbol{},
 	}
 	for _, root := range opts.LibraryRoots {
 		nw.library[root] = true
@@ -129,6 +130,12 @@ type nameWalk struct {
 	// library are the standard-library root packages counted as loaded.
 	library map[string]bool
 	seen    map[string]bool
+	// at is the element each recorded path was recorded for.
+	at map[string]*symbols.Symbol
+	// reentry is set while walking a same-named element under a path already
+	// recorded for another one: the path is not offered twice, but what it
+	// reaches through this element is.
+	reentry int
 	out     []VisibleName
 	// expanding counts how often the current path is enumerating an element's
 	// members, so a containment cycle is re-entered once and no more.
@@ -136,6 +143,12 @@ type nameWalk struct {
 	// traversed counts the types the current path's derivation went through, so
 	// a path never inherits through the same type twice.
 	traversed map[*symbols.Symbol]int
+	// noImplicit is set while the path may not continue through an implicit
+	// general, which a recursive import suppresses.
+	noImplicit int
+	// redefAnchor is the namespace a redefinition is written in, whose own
+	// declarations it cannot name.
+	redefAnchor *symbols.Symbol
 	// chains memoizes the source steps from an owner to a member's declarer.
 	chains map[[2]*symbols.Symbol][]*symbols.Symbol
 	// pending maps a type to the declaration being written in it, whose
@@ -190,7 +203,11 @@ func (nw *nameWalk) walk(anchor *symbols.Scope, redefinition bool) {
 	}
 	for s := anchor; s != nil; s = s.Parent() {
 		if s == anchor && redefinition {
+			// A redefinition names a feature its owner inherits, never one the
+			// owner declares itself.
+			nw.redefAnchor = s.Owner()
 			nw.inherited(s.Owner(), "", 1, true)
+			nw.redefAnchor = nil
 			continue
 		}
 		nw.locals(s, "", 1, true, true)
@@ -203,12 +220,36 @@ func (nw *nameWalk) walk(anchor *symbols.Scope, redefinition bool) {
 // roots adds the names the index registers at its root: every non-library
 // document's top-level declarations.
 func (nw *nameWalk) roots() {
+	rooted := map[string]*symbols.Symbol{}
 	for _, b := range nw.idx.TopLevelBindings(nw.doc) {
 		if nw.idx.Library(b.Sym) {
 			continue
 		}
+		if prev, ok := rooted[b.Name]; ok {
+			// Two documents declare the same top-level name and neither shadows
+			// the other, so both subtrees are reachable under it even though the
+			// name itself resolves to the first.
+			if t := nw.targetOf(b.Sym); t != prev && nw.loaded(t) {
+				nw.reentry++
+				nw.expand(b.Name, t, 2)
+				nw.reentry--
+			}
+			continue
+		}
+		before := len(nw.out)
 		nw.add("", b.Name, b.Sym, 1)
+		if len(nw.out) > before {
+			rooted[b.Name] = nw.at[b.Name]
+		}
 	}
+}
+
+// targetOf is the element a name reaches, an alias replaced by its target.
+func (nw *nameWalk) targetOf(sym *symbols.Symbol) *symbols.Symbol {
+	if t, ok := nw.r.ResolveAliasTarget(sym); ok && t != nil {
+		return t
+	}
+	return sym
 }
 
 // locals adds what a scope declares directly. inside admits its private
@@ -246,8 +287,18 @@ func (nw *nameWalk) inherited(owner *symbols.Symbol, prefix string, depth int, i
 	// One filter chain: the semantic member view drops what a redefinition
 	// masks, then membership visibility drops what cannot be named here, then
 	// the path's own derivation drops what it would inherit twice over.
+	var declared map[*symbols.Symbol]bool
+	if nw.noImplicit > 0 {
+		declared = nw.declaredSources(owner)
+	}
 	for _, sym := range nw.membersOf(owner) {
 		if !symbols.VisibleAs(sym.Visibility, false, inheriting) {
+			continue
+		}
+		if declared != nil && !declared[declarerOf(sym)] {
+			continue
+		}
+		if owner == nw.redefAnchor && declarerOf(sym) == owner {
 			continue
 		}
 		chain, ok := nw.enter(nw.chainTo(owner, declarerOf(sym)))
@@ -264,6 +315,9 @@ func (nw *nameWalk) inherited(owner *symbols.Symbol, prefix string, depth int, i
 		if src == nil || src.Scope != nil {
 			continue
 		}
+		if declared != nil && !declared[src] {
+			continue
+		}
 		chain, ok := nw.enter(nw.chainTo(owner, src))
 		if !ok {
 			continue
@@ -277,6 +331,33 @@ func (nw *nameWalk) inherited(owner *symbols.Symbol, prefix string, depth int, i
 		nw.leave(chain)
 	}
 	nw.inheritedImports(owner, prefix, depth, map[*symbols.Symbol]bool{})
+}
+
+// declaredSources returns owner and what it reaches through declared
+// specializations, leaving out the implicit generals.
+func (nw *nameWalk) declaredSources(owner *symbols.Symbol) map[*symbols.Symbol]bool {
+	out := map[*symbols.Symbol]bool{owner: true}
+	queue := []*symbols.Symbol{owner}
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+		implicit := map[*symbols.Symbol]bool{}
+		for _, imp := range nw.sem.ImplicitGenerals(cur) {
+			implicit[imp] = true
+		}
+		next := append([]*symbols.Symbol{}, nw.sem.DirectSupertypes(cur)...)
+		if ref := nw.sem.ReferencedFeature(cur); ref != nil {
+			next = append(next, ref)
+		}
+		for _, src := range next {
+			if src == nil || out[src] || implicit[src] {
+				continue
+			}
+			out[src] = true
+			queue = append(queue, src)
+		}
+	}
+	return out
 }
 
 func (nw *nameWalk) inheritedImports(owner *symbols.Symbol, prefix string, depth int, seen map[*symbols.Symbol]bool) {
@@ -408,7 +489,13 @@ func (nw *nameWalk) importOne(s *symbols.Scope, imp *ast.Import, prefix string, 
 		// A membership import surfaces only the name written last in it,
 		// which for an alias membership is the alias name, not the target's;
 		// its recursive form adds the subtree under their own names.
-		if imp.Kind == ast.ImportMembership && i == 0 {
+		direct := imp.Kind == ast.ImportMembership && i == 0
+		// A name found by a recursive import's descent carries no implicitly
+		// inherited members; the membership named directly still does.
+		if imp.IsRecursive && !direct {
+			nw.noImplicit++
+		}
+		if direct {
 			written := importedName(imp)
 			nw.add(prefix, written, sym, depth)
 			// An element imported by one of its own two names keeps both;
@@ -417,10 +504,18 @@ func (nw *nameWalk) importOne(s *symbols.Scope, imp *ast.Import, prefix string, 
 				nw.add(prefix, leafName(sym.Name), sym, depth)
 				nw.add(prefix, sym.ShortName, sym, depth)
 			}
-			continue
+		} else {
+			nw.add(prefix, leafName(sym.Name), sym, depth)
+			nw.add(prefix, sym.ShortName, sym, depth)
+			// The descent resolves in each namespace it reaches, so what a
+			// type there declares as a supertype's member is named there too.
+			if imp.IsRecursive {
+				nw.inherited(sym, prefix, depth, false)
+			}
 		}
-		nw.add(prefix, leafName(sym.Name), sym, depth)
-		nw.add(prefix, sym.ShortName, sym, depth)
+		if imp.IsRecursive && !direct {
+			nw.noImplicit--
+		}
 	}
 }
 
@@ -447,17 +542,18 @@ func (nw *nameWalk) add(prefix, name string, sym *symbols.Symbol, depth int) {
 	if nameOccurrences(qn, name) > maxNameOccurrences {
 		return
 	}
+	target := nw.targetOf(sym)
 	if nw.seen[qn] {
+		if nw.reentry > 0 && nw.at[qn] != nil && nw.at[qn] != target && nw.loaded(target) {
+			nw.expand(qn, target, depth+1)
+		}
 		return
 	}
 	nw.seen[qn] = true
-	target := sym
-	if t, ok := nw.r.ResolveAliasTarget(sym); ok && t != nil {
-		target = t
-	}
 	if !nw.loaded(target) {
 		return
 	}
+	nw.at[qn] = target
 	nw.out = append(nw.out, VisibleName{
 		Name:  qn,
 		FQN:   nw.fqnOf(target),

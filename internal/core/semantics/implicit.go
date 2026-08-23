@@ -367,3 +367,19 @@ func enclosedBy(sym, owner *symbols.Symbol) bool {
 	}
 	return false
 }
+
+// ImplicitGenerals returns the general types sym has by its kind rather than by
+// declaration. A scope reached through a recursive import does not traverse them
+// (KerML 8.2.3.5).
+func (m *Model) ImplicitGenerals(sym *symbols.Symbol) []*symbols.Symbol {
+	if sym == nil {
+		return nil
+	}
+	var out []*symbols.Symbol
+	for _, base := range []*symbols.Symbol{m.implicitBase(sym), m.implicitBaseUsage(sym), m.implicitKerMLFeatureBase(sym)} {
+		if base != nil && base != sym {
+			out = append(out, base)
+		}
+	}
+	return out
+}

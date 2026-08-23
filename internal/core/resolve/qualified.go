@@ -49,12 +49,7 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 		cur = res.sym
 	}
 	if cur == nil {
-		sym, n := r.lookupGlobalTop(scope, first)
-		if n > 1 {
-			r.ambiguous(qn, n)
-			return resolution{nil, false}
-		}
-		cur = sym
+		cur = r.lookupGlobalTop(scope, first)
 	}
 	if cur == nil {
 		r.unresolvedNamespace(qn, first)
@@ -93,6 +88,9 @@ func (r *Resolver) walkQualifiedTail(scope *symbols.Scope, qn *ast.QualifiedName
 		memberFQN := curFQN + "::" + seg.Text
 		if len(all) == 0 && r.idx != nil {
 			found := r.idx.LookupQualifiedFrom(memberFQN, from)
+			if !qn.Global {
+				found = notConflatedWith(cur, found)
+			}
 			candidates := r.namedThroughNamespaces(
 				r.admittedUnder(r.documentOf(scope), from, memberFQN, found))
 			switch {
@@ -140,6 +138,25 @@ func (r *Resolver) walkQualifiedTail(scope *symbols.Scope, qn *ast.QualifiedName
 		curFQN = r.registeredFQN(cur)
 	}
 	return resolution{cur, true}
+}
+
+// notConflatedWith drops candidates owned by another namespace that merely
+// shares cur's name: the walk resolved the qualification to one namespace, and
+// only its members continue it (KerML 8.2.3.5). A `$::`-rooted name is exempt.
+func notConflatedWith(cur *symbols.Symbol, cands []*symbols.Symbol) []*symbols.Symbol {
+	if cur == nil || cur.Scope == nil {
+		return cands
+	}
+	kept := make([]*symbols.Symbol, 0, len(cands))
+	for _, sym := range cands {
+		if sym != nil && sym.OwnerScope != nil {
+			if owner := sym.OwnerScope.Owner(); owner != nil && owner != cur && owner.Name == cur.Name {
+				continue
+			}
+		}
+		kept = append(kept, sym)
+	}
+	return kept
 }
 
 // registeredFQN is the name a symbol's own members are indexed under: the path
@@ -197,20 +214,21 @@ func (r *Resolver) lookupInRoot(scope *symbols.Scope, name string) *symbols.Symb
 }
 
 // lookupGlobalTop finds a top-level (single-segment FQN) symbol in the global
-// index. Returns the unique match and the total number of matches, so the
-// caller can report ambiguity (n > 1) rather than silently degrading to
-// "unresolved". A unique symbol is returned only when n == 1.
-func (r *Resolver) lookupGlobalTop(scope *symbols.Scope, name string) (*symbols.Symbol, int) {
+// index. Resolution there is single-valued (KerML 8.2.3.5), so two root
+// namespaces of one name make the first the answer, not an error: only a
+// Namespace's own members must be distinguishable, and the global namespace is
+// not one.
+func (r *Resolver) lookupGlobalTop(scope *symbols.Scope, name string) *symbols.Symbol {
 	if r.idx == nil {
-		return nil, 0
+		return nil
 	}
 	// A name reached here may be one a filtered import surfaced at a document's
 	// root, so the conditions of the routes registering it decide it here too.
 	syms := r.admittedUnder(r.documentOf(scope), r.ReferringNamespaceFQN(scope), name, r.idx.LookupQualified(name))
-	if len(syms) == 1 {
-		return syms[0], 1
+	if len(syms) == 0 {
+		return nil
 	}
-	return nil, len(syms)
+	return syms[0]
 }
 
 // rootOf returns the topmost ancestor of scope (the document root), or nil.
