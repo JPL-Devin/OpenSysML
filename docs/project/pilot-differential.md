@@ -1942,7 +1942,8 @@ severity and category:
 | Only the pilot | 73 | **73** |
 
 The branch retires 13 only-ours table entries representing 19 diagnostics; no
-new differential rows are introduced:
+new differential rows are introduced. Two entries account for four diagnostics
+each, so the table-entry count and diagnostic count are intentionally different:
 
 | File and line | Cause |
 |---|---|

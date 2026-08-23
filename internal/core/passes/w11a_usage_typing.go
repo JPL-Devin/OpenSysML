@@ -137,6 +137,10 @@ func (c *w11aUsageChecker) checkReference(sym *symbols.Symbol, u *ast.Usage) {
 
 func (c *w11aUsageChecker) checkIncludedUseCase(usage, target *symbols.Symbol) {
 	for _, typ := range usageTypesOf(c.resolver, target, true, make(map[*symbols.Symbol]bool)) {
+		if typ.sym.Kind == symbols.SymbolUnknown ||
+			typ.sym.Kind == symbols.SymbolKerMLType || !isDefKind(typ.sym.Kind) {
+			continue
+		}
 		if compatibleTyping(ast.UsageUseCase, ast.DirNone, typ.sym.Kind) {
 			continue
 		}

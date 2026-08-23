@@ -81,6 +81,21 @@ func TestIncludedUseCaseDeclarationIsNotAReference(t *testing.T) {
 	}
 }
 
+func TestIncludedUseCaseWithUnresolvedTypeIsNotClassified(t *testing.T) {
+	src := `
+		package P {
+			use case enclosing {
+				include use case declared : MissingUseCaseType;
+			}
+		}
+	`
+	for _, message := range w11aMessages(t, src, true) {
+		if message == "A use case must be typed by one use case definition." {
+			t.Fatalf("unexpected use-case typing diagnostic for unresolved type")
+		}
+	}
+}
+
 func TestPerformedFlowReferentIsPerformable(t *testing.T) {
 	src := `
 		package P {
