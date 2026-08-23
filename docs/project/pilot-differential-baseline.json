@@ -3,12 +3,12 @@
   "pilotRelease": "2026-05 (jupyter-sysml-kernel 0.60.1)",
   "totals": {
     "files": 353,
-    "filesFullyAgreeing": 317,
+    "filesFullyAgreeing": 321,
     "agreement": 32,
     "severityMismatch": 24,
-    "openSysMLOnly": 119,
+    "openSysMLOnly": 92,
     "pilotOnly": 66,
-    "openSysMLDiagnostics": 175,
+    "openSysMLDiagnostics": 148,
     "pilotDiagnostics": 122
   },
   "roots": [
@@ -32,12 +32,12 @@
       "dir": "examples/pilot-corpora/sysml-examples",
       "totals": {
         "files": 98,
-        "filesFullyAgreeing": 87,
+        "filesFullyAgreeing": 91,
         "agreement": 0,
         "severityMismatch": 0,
-        "openSysMLOnly": 43,
+        "openSysMLOnly": 16,
         "pilotOnly": 0,
-        "openSysMLDiagnostics": 43,
+        "openSysMLDiagnostics": 16,
         "pilotDiagnostics": 0
       },
       "files": [
@@ -51,112 +51,6 @@
               "severity": "warning",
               "category": "units",
               "count": 1
-            }
-          ],
-          "pilotOnly": []
-        },
-        {
-          "path": "Arrowhead Framework Example/AHFSequences.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [
-            {
-              "line": 79,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 80,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 81,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 82,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 83,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 86,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 2
-            },
-            {
-              "line": 88,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 2
-            },
-            {
-              "line": 90,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 92,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 2
-            },
-            {
-              "line": 94,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 2
-            },
-            {
-              "line": 96,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            }
-          ],
-          "pilotOnly": []
-        },
-        {
-          "path": "Cause and Effect Examples/CauseAndEffectExample.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [
-            {
-              "line": 22,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 23,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 2
-            },
-            {
-              "line": 26,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            },
-            {
-              "line": 27,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 2
             }
           ],
           "pilotOnly": []
@@ -184,20 +78,6 @@
               "line": 86,
               "severity": "error",
               "category": "kind-mismatch",
-              "count": 1
-            }
-          ],
-          "pilotOnly": []
-        },
-        {
-          "path": "Simple Tests/AllocationTest.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [
-            {
-              "line": 32,
-              "severity": "error",
-              "category": "unresolved-reference",
               "count": 1
             }
           ],
@@ -292,44 +172,6 @@
             },
             {
               "line": 789,
-              "severity": "error",
-              "category": "unresolved-reference",
-              "count": 1
-            }
-          ],
-          "pilotOnly": []
-        },
-        {
-          "path": "Vehicle Example/SysML v2 Spec Annex A SimpleVehicleModel.sysml",
-          "agreement": [],
-          "severityMismatch": [],
-          "openSysMLOnly": [
-            {
-              "line": 416,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 417,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 418,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 420,
-              "severity": "warning",
-              "category": "unmapped",
-              "count": 1
-            },
-            {
-              "line": 1121,
               "severity": "error",
               "category": "unresolved-reference",
               "count": 1
@@ -1803,11 +1645,6 @@
       "count": 15
     },
     {
-      "side": "opensysml",
-      "message": "Duplicate of other owned member name",
-      "count": 5
-    },
-    {
       "side": "pilot",
       "message": "Must be an accessible feature (use dot notation for nesting)",
       "count": 5
@@ -1815,6 +1652,11 @@
     {
       "side": "opensysml",
       "message": "A participates in a specialization cycle",
+      "count": 2
+    },
+    {
+      "side": "opensysml",
+      "message": "Duplicate of other owned member name",
       "count": 2
     },
     {
@@ -1845,11 +1687,6 @@
     {
       "side": "opensysml",
       "message": "C3 participates in a specialization cycle",
-      "count": 1
-    },
-    {
-      "side": "opensysml",
-      "message": "Duplicate of inherited member name 'enum' from DiameterChoices",
       "count": 1
     },
     {

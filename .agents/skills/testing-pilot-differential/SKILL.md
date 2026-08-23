@@ -21,8 +21,8 @@ GNU-format diagnostics **relative to `--root`**. Consequences for testing:
 - The pin `cmd/pilot-diff` reports comes from `build/pilot-sysml-validator/pilot-pin.txt`
   (written by the new script), not from the DeciSym `pom.xml`.
 - `-validator /nonexistent` now says `run ./scripts/download-pilot-sysml-validator.sh`.
-- Measured after wave 11, with a fresh library cache: `353 file(s), 317 fully agreeing; 32 agreed,
-  119 only ours, 66 only the pilot's`, JSON totals `openSysMLDiagnostics 175 / pilotDiagnostics
+- Measured after wave 12F, with a fresh library cache: `353 file(s), 321 fully agreeing; 32 agreed,
+  92 only ours, 66 only the pilot's`, JSON totals `openSysMLDiagnostics 148 / pilotDiagnostics
   122 / severityMismatch 24`; ~70 s wall, byte-identical across runs *and* after a from-scratch
   rebuild of `build/pilot-validator`. `kerml-examples` carries no `syntax` diagnostic on either
   side. Refresh this paragraph with every rebaseline, and treat a stale one as a finding.
@@ -106,8 +106,8 @@ The harness compares OpenSysML diagnostics against the OMG SysML v2 Pilot Implem
 (via two pinned plain-Java bridges over the pilot's own validators) over four corpus roots and writes
 `build/pilot-diff/pilot-diff.{txt,json}`. `docs/project/pilot-differential-baseline.json` is the
 committed result of the *last refreshed* run, so **the harness is testable by reproduction** —
-but only while the baseline is current. Check that first. As of the wave-11 rebaseline it **is**
-current: a live run gives `353 file(s), 317 fully agreeing; 32 agreed, 119 only ours, 66 only the
+but only while the baseline is current. Check that first. As of the wave-12F rebaseline it **is**
+current: a live run gives `353 file(s), 321 fully agreeing; 32 agreed, 92 only ours, 66 only the
 pilot's`, byte-identical to the committed baseline, and `docs/project/pilot-differential.md`'s
 "Results" table matches. When it is stale (it was at `ac4ac4fb`, and again while the F60–F69 fix
 PRs were in flight), a non-empty `jq -S` baseline diff is *not* by itself evidence of a
