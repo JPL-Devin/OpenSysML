@@ -12,6 +12,9 @@ import (
 // end at (SysML 7.19.2).
 const CodeNotAVertex = "not-a-vertex"
 
+// StateActionFQN is the normative library type for state usages.
+const StateActionFQN = "States::StateAction"
+
 // ResolveEndpoint resolves the vertex a transition endpoint names, reporting one
 // that names nothing or no vertex. A nil name is the sourceless form: legal.
 func (r *Resolver) ResolveEndpoint(scope *symbols.Scope, qn *ast.QualifiedName) (*symbols.Symbol, bool) {
@@ -34,7 +37,7 @@ func (r *Resolver) ResolveEndpoint(scope *symbols.Scope, qn *ast.QualifiedName) 
 			// leaving the qualifiers saying which state or region it lives in.
 			Fixes: endpointFixes(last.Text, last.Span, r.vertexSuggestions(scope, qn)),
 		})
-	case stateMachineEndpoint(scope) && !endpointIsVertex(r, scope, qn, sym):
+	case stateMachineEndpoint(scope) && !r.endpointIsVertex(scope, qn, sym):
 		r.report(Diagnostic{
 			Span:    qn.Span(),
 			Message: "transition endpoint " + qnText(qn) + " is not a state or pseudostate",
@@ -98,7 +101,7 @@ func (r *Resolver) lookupEndpoint(scope *symbols.Scope, qn *ast.QualifiedName) (
 	var sym *symbols.Symbol
 	var ok bool
 	r.aside(func() { sym, ok = r.resolveQualified(scope, qn, nil) })
-	if ok && endpointIsVertex(r, scope, qn, sym) {
+	if ok && r.endpointIsVertex(scope, qn, sym) {
 		return sym, true
 	}
 	if vertex, found := firstVertex(machineScope(scope), qualifiedParts(qn)); found {
@@ -107,7 +110,7 @@ func (r *Resolver) lookupEndpoint(scope *symbols.Scope, qn *ast.QualifiedName) (
 	return sym, ok
 }
 
-func endpointIsVertex(r *Resolver, scope *symbols.Scope, qn *ast.QualifiedName, sym *symbols.Symbol) bool {
+func (r *Resolver) endpointIsVertex(scope *symbols.Scope, qn *ast.QualifiedName, sym *symbols.Symbol) bool {
 	if sym == nil {
 		return false
 	}
@@ -130,11 +133,20 @@ func isVertexSymbol(sym *symbols.Symbol) bool {
 	if isVertex(sym.Decl) {
 		return true
 	}
+	return IsInheritedStateVertex(sym)
+}
+
+// IsInheritedStateVertex reports whether sym is the synthetic state usage
+// inherited from the normative States::StateAction library type.
+func IsInheritedStateVertex(sym *symbols.Symbol) bool {
+	if sym == nil {
+		return false
+	}
 	if sym.Decl != nil || sym.Kind != symbols.SymbolStateUsage {
 		return false
 	}
 	for _, fqn := range sym.SuperFQNs {
-		if fqn == "States::StateAction" {
+		if fqn == StateActionFQN {
 			return true
 		}
 	}
@@ -142,7 +154,7 @@ func isVertexSymbol(sym *symbols.Symbol) bool {
 }
 
 func (r *Resolver) machineStateVertex(scope *symbols.Scope, qn *ast.QualifiedName, sym *symbols.Symbol) bool {
-	if !isVertexSymbol(sym) || r.model == nil || qn == nil || len(qn.Parts) == 0 {
+	if !isVertexSymbol(sym) || r.model == nil || r.idx == nil || qn == nil || len(qn.Parts) == 0 {
 		return false
 	}
 	var machine *symbols.Symbol
