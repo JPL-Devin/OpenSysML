@@ -345,3 +345,30 @@ func TestVisibleNamesImportedMemberIsOfferedThroughInheritedPaths(t *testing.T) 
 	names := namesAt(t, src, "classifier X", VisibleNamesOptions{})
 	has(t, names, []string{"A", "A.A", "A.A.a", "A.a", "A.a.A"}, nil)
 }
+
+// Two documents declaring the same top-level name each contribute their subtree
+// under it, even though the name itself resolves to the first
+// (reference fixture DependencySamePackageName).
+func TestVisibleNamesOffersBothRootsOfARepeatedTopLevelName(t *testing.T) {
+	ws := NewWorkspace()
+	ws.Open("a.kerml", []byte("package P {\n\tclassifier container {\n\t\tclassifier A;\n\t}\n}\n"), 1)
+	ws.Open("b.kerml", []byte("package P {\n\tclassifier container {\n\t\tclassifier B;\n\t}\n}\n"), 1)
+	src := "package test {\n\tclassifier X;\n}\n"
+	ws.Open("c.kerml", []byte(src), 1)
+
+	var names []string
+	for _, n := range ws.VisibleNamesAt("c.kerml", strings.Index(src, "classifier X"), VisibleNamesOptions{}) {
+		names = append(names, n.Name)
+	}
+	has(t, names, []string{"P", "P.container", "P.container.A", "P.container.B"}, nil)
+}
+
+// A name a recursive import's descent finds is entered through the import, so
+// the path does not go on through the general types its kind supplies
+// (reference fixture Import_Recursive1).
+func TestVisibleNamesRecursiveImportDescentOmitsImplicitMembers(t *testing.T) {
+	src := "package Lib {\n\tclassifier A {\n\t\tclassifier a;\n\t}\n}\n" +
+		"package P {\n\tpublic import Lib::**;\n\tclassifier X;\n}\n"
+	names := namesAt(t, src, "classifier X", VisibleNamesOptions{LibraryRoots: []string{"Base"}})
+	has(t, names, []string{"A", "A.a", "Lib.A.self"}, []string{"A.self"})
+}

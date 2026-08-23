@@ -73,3 +73,26 @@ func TestEnclosingDeclarationShadowsANestedImport(t *testing.T) {
 		t.Fatalf("nested import shadowed the enclosing declaration: %v", r.Diagnostics)
 	}
 }
+
+// Two roots of the same name are one global name, and the tail of a qualified
+// reference continues in the root it resolved to (reference fixture
+// DependencySamePackageName).
+func TestRepeatedRootNameResolvesToOneRootWithoutAmbiguity(t *testing.T) {
+	idx := symbols.NewIndex()
+	idx.AddDocument("a.kerml", parsedRoot(t, "a.kerml", `package Same {
+		feature container { feature a; }
+	}`))
+	idx.AddDocument("b.kerml", parsedRoot(t, "b.kerml", `package Same {
+		feature container { feature b; }
+	}`))
+	root := parsedRoot(t, "app.kerml", `package P {
+		feature x : Same::container::a;
+	}`)
+	idx.AddDocument("app.kerml", root)
+	idx.ExpandWildcardImports()
+	r := resolverWithSpecializations(idx)
+	r.ResolveDocument("app.kerml", root)
+	if len(r.Diagnostics) != 0 {
+		t.Fatalf("repeated root name reported: %v", r.Diagnostics)
+	}
+}
