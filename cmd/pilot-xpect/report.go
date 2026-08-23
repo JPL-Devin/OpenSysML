@@ -13,11 +13,14 @@ import (
 // comments, rows are the expectations they declare (an errors note declares one
 // per line).
 type Totals struct {
-	Files          int `json:"files"`
-	FilesUnparsed  int `json:"filesUnparsed"`
-	Assertions     int `json:"assertions"`
-	Rows           int `json:"rows"`
+	Files         int `json:"files"`
+	FilesUnparsed int `json:"filesUnparsed"`
+	Assertions    int `json:"assertions"`
+	Rows          int `json:"rows"`
+	// Agree includes WordingOnly: the same rule about the same element in our
+	// own words is agreement, and the sub-count says how much of it that is.
 	Agree          int `json:"agree"`
+	WordingOnly    int `json:"wordingOnly"`
 	Disagree       int `json:"disagree"`
 	Unlocated      int `json:"unlocated"`
 	NotAdjudicated int `json:"notAdjudicated"`
@@ -36,6 +39,7 @@ type KindTotals struct {
 	BlockAssertions int `json:"blockAssertions"`
 	Rows            int `json:"rows"`
 	Agree           int `json:"agree"`
+	WordingOnly     int `json:"wordingOnly"`
 	Disagree        int `json:"disagree"`
 	Unlocated       int `json:"unlocated"`
 	NotAdjudicated  int `json:"notAdjudicated"`
@@ -129,6 +133,11 @@ func (r *Report) summarize() {
 				case verdictAgree:
 					kt.Agree++
 					suite.Totals.Agree++
+				case verdictWordingOnly:
+					kt.Agree++
+					kt.WordingOnly++
+					suite.Totals.Agree++
+					suite.Totals.WordingOnly++
 				case verdictDisagree:
 					kt.Disagree++
 					suite.Totals.Disagree++
@@ -162,7 +171,7 @@ func (r *Report) summarize() {
 			}
 			file.Expectations = len(file.Rows)
 			for _, row := range file.Rows {
-				if row.Verdict == verdictAgree {
+				if row.Verdict == verdictAgree || row.Verdict == verdictWordingOnly {
 					file.Agree++
 				}
 			}
@@ -186,6 +195,7 @@ func (r *Report) summarize() {
 			m.BlockAssertions += kt.BlockAssertions
 			m.Rows += kt.Rows
 			m.Agree += kt.Agree
+			m.WordingOnly += kt.WordingOnly
 			m.Disagree += kt.Disagree
 			m.Unlocated += kt.Unlocated
 			m.NotAdjudicated += kt.NotAdjudicated
@@ -224,6 +234,7 @@ func (t *Totals) add(other Totals) {
 	t.Assertions += other.Assertions
 	t.Rows += other.Rows
 	t.Agree += other.Agree
+	t.WordingOnly += other.WordingOnly
 	t.Disagree += other.Disagree
 	t.Unlocated += other.Unlocated
 	t.NotAdjudicated += other.NotAdjudicated
@@ -249,9 +260,10 @@ func writeReports(dir string, report *Report) error {
 	}
 
 	fmt.Fprintf(os.Stderr, "wrote %s and %s\n", textPath, jsonPath)
-	fmt.Fprintf(os.Stderr, "%d .xt file(s), %d unparsed; %d assertion(s), %d expectation(s): %d agree, %d disagree, %d unlocated, %d not adjudicated\n",
+	fmt.Fprintf(os.Stderr, "%d .xt file(s), %d unparsed; %d assertion(s), %d expectation(s): %d agree (of which %d wording-only), %d disagree, %d unlocated, %d not adjudicated\n",
 		report.Totals.Files, report.Totals.FilesUnparsed, report.Totals.Assertions, report.Totals.Rows,
-		report.Totals.Agree, report.Totals.Disagree, report.Totals.Unlocated, report.Totals.NotAdjudicated)
+		report.Totals.Agree, report.Totals.WordingOnly, report.Totals.Disagree,
+		report.Totals.Unlocated, report.Totals.NotAdjudicated)
 	return nil
 }
 
@@ -326,7 +338,8 @@ func renderText(report *Report) string {
 	return b.String()
 }
 
-// interesting keeps the rows a reader has to see: everything but an agreement.
+// interesting keeps the rows a reader has to see: everything but a strict
+// agreement. A wording-only row is listed, so the class stays auditable.
 func interesting(rows []row) []row {
 	var out []row
 	for _, r := range rows {
@@ -366,8 +379,8 @@ func writeTotals(b *strings.Builder, label string, t Totals) {
 	fmt.Fprintf(b, "%s: %d .xt file(s), %d unparsed, %d missing declared resource(s)\n",
 		label, t.Files, t.FilesUnparsed, t.MissingFiles)
 	fmt.Fprintf(b, "  %d assertion(s) declaring %d expectation(s)\n", t.Assertions, t.Rows)
-	fmt.Fprintf(b, "  agree %d | disagree %d | unlocated %d | not adjudicated %d\n",
-		t.Agree, t.Disagree, t.Unlocated, t.NotAdjudicated)
+	fmt.Fprintf(b, "  agree %d (of which wording-only %d) | disagree %d | unlocated %d | not adjudicated %d\n",
+		t.Agree, t.WordingOnly, t.Disagree, t.Unlocated, t.NotAdjudicated)
 	if t.ForeignDiags > 0 {
 		fmt.Fprintf(b, "  %d diagnostic(s) another declared resource raised, not adjudicated against the file\n", t.ForeignDiags)
 	}
@@ -377,13 +390,13 @@ func writeKinds(b *strings.Builder, kinds []KindTotals) {
 	if len(kinds) == 0 {
 		return
 	}
-	fmt.Fprintf(b, "  %-16s %9s %7s %9s %7s %9s %10s %14s %10s %10s %8s %10s\n",
-		"kind", "asserts", "block", "expects", "agree", "disagree", "unlocated", "notAdjudicated",
-		"sameLoc", "sameLine", "sevDiff", "elsewhere")
+	fmt.Fprintf(b, "  %-16s %9s %7s %9s %7s %11s %9s %10s %14s %10s %10s %8s %10s\n",
+		"kind", "asserts", "block", "expects", "agree", "wordingOnly", "disagree", "unlocated",
+		"notAdjudicated", "sameLoc", "sameLine", "sevDiff", "elsewhere")
 	for _, kt := range kinds {
-		fmt.Fprintf(b, "  %-16s %9d %7d %9d %7d %9d %10d %14d %10d %10d %8d %10d\n",
-			kt.Kind, kt.Assertions, kt.BlockAssertions, kt.Rows, kt.Agree, kt.Disagree, kt.Unlocated,
-			kt.NotAdjudicated, kt.SameLocation, kt.SameLine, kt.OtherSeverity, kt.Elsewhere)
+		fmt.Fprintf(b, "  %-16s %9d %7d %9d %7d %11d %9d %10d %14d %10d %10d %8d %10d\n",
+			kt.Kind, kt.Assertions, kt.BlockAssertions, kt.Rows, kt.Agree, kt.WordingOnly, kt.Disagree,
+			kt.Unlocated, kt.NotAdjudicated, kt.SameLocation, kt.SameLine, kt.OtherSeverity, kt.Elsewhere)
 	}
 	writeScopeClasses(b, kinds)
 }

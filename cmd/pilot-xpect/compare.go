@@ -17,7 +17,10 @@ import (
 // with the declared message. Tolerance records what a weaker rule would have
 // accepted, and never turns a disagreement into an agreement.
 const (
-	verdictAgree          = "agree"
+	verdictAgree = "agree"
+	// verdictWordingOnly is the same rule about the same element in our own
+	// words; it is counted inside agreement, with its own sub-count.
+	verdictWordingOnly    = "wording-only"
 	verdictDisagree       = "disagree"
 	verdictUnlocated      = "unlocated"
 	verdictNotAdjudicated = "not-adjudicated"
@@ -55,8 +58,10 @@ type row struct {
 	At        string `json:"at,omitempty"`
 	Verdict   string `json:"verdict"`
 	Tolerance string `json:"tolerance,omitempty"`
-	Declared  string `json:"declared,omitempty"`
-	Actual    string `json:"ours,omitempty"`
+	// Rule names the rule a wording-only row shows both sides stating.
+	Rule     string `json:"rule,omitempty"`
+	Declared string `json:"declared,omitempty"`
+	Actual   string `json:"ours,omitempty"`
 	// Names counts a scope assertion's set differences.
 	Names *scopeCounts `json:"names,omitempty"`
 }
@@ -207,6 +212,14 @@ func diagnosticRow(a assertion, item expectation, want string, diags []diag, lin
 	for _, d := range atOffset {
 		if sameMessage(d.Message, item.Message) {
 			r.Verdict = verdictAgree
+			r.Actual = fmt.Sprintf("line %d offset %d: %s", d.Line, d.Offset, d.Message)
+			return r
+		}
+	}
+	for _, d := range atOffset {
+		if class, ok := wordingOnly(item.Message, d.Message); ok {
+			r.Verdict = verdictWordingOnly
+			r.Rule = class
 			r.Actual = fmt.Sprintf("line %d offset %d: %s", d.Line, d.Offset, d.Message)
 			return r
 		}

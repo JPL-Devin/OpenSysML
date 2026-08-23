@@ -25,7 +25,7 @@ var (
 	w6fHistoricalPattern    = regexp.MustCompile(`<!-- doc-count:historical(?:: [^>]+)? -->`)
 	w6fXpectTotalsFiles     = regexp.MustCompile(`^(\d+) \.xt file\(s\), (\d+) unparsed, (\d+) missing declared resource\(s\)$`)
 	w6fXpectTotalsRows      = regexp.MustCompile(`^(\d+) assertion\(s\) declaring (\d+) expectation\(s\)$`)
-	w6fXpectTotalsVerdicts  = regexp.MustCompile(`^agree (\d+) \| disagree (\d+) \| unlocated (\d+) \| not adjudicated (\d+)$`)
+	w6fXpectTotalsVerdicts  = regexp.MustCompile(`^agree (\d+) \(of which wording-only (\d+)\) \| disagree (\d+) \| unlocated (\d+) \| not adjudicated (\d+)$`)
 	w6fXpectCensusFiles     = regexp.MustCompile(`fetches \*\*(\d+) KerML \+ (\d+) SysML = (\d+)\*\*`)
 	w6fXpectCensusRows      = regexp.MustCompile(`recovers \*\*(\d+) assertions\*\*, declaring \*\*(\d+) individual expectations\*\*`)
 )
@@ -60,6 +60,7 @@ type w6fXpectTotals struct {
 	Rows           int `json:"rows"`
 	Agree          int `json:"agree"`
 	Disagree       int `json:"disagree"`
+	WordingOnly    int `json:"wordingOnly"`
 	Unlocated      int `json:"unlocated"`
 	NotAdjudicated int `json:"notAdjudicated"`
 	Missing        int `json:"missingResources"`
@@ -69,6 +70,7 @@ type w6fXpectKind struct {
 	Kind            string `json:"kind"`
 	Rows            int    `json:"rows"`
 	Agree           int    `json:"agree"`
+	WordingOnly     int    `json:"wordingOnly"`
 	Disagree        int    `json:"disagree"`
 	NotAdjudicated  int    `json:"notAdjudicated"`
 	SameLocation    int    `json:"sameLocation"`
@@ -332,7 +334,7 @@ func w6fAssertXpectTotals(t *testing.T, lines []docLine, report w6fXpectReport) 
 			w6fAssertXpectLine(t, lines[i], w6fXpectTotalsRows, []int{report.Totals.Assertions, report.Totals.Rows}, []w6fSkillField{{label: "assertions", path: "totals.assertions"}, {label: "expectations", path: "totals.rows"}}, "Totals")
 			found[1] = true
 		case w6fXpectTotalsVerdicts.MatchString(lines[i].text):
-			w6fAssertXpectLine(t, lines[i], w6fXpectTotalsVerdicts, []int{report.Totals.Agree, report.Totals.Disagree, report.Totals.Unlocated, report.Totals.NotAdjudicated}, []w6fSkillField{{label: "agree", path: "totals.agree"}, {label: "disagree", path: "totals.disagree"}, {label: "unlocated", path: "totals.unlocated"}, {label: "not adjudicated", path: "totals.notAdjudicated"}}, "Totals")
+			w6fAssertXpectLine(t, lines[i], w6fXpectTotalsVerdicts, []int{report.Totals.Agree, report.Totals.WordingOnly, report.Totals.Disagree, report.Totals.Unlocated, report.Totals.NotAdjudicated}, []w6fSkillField{{label: "agree", path: "totals.agree"}, {label: "wording-only", path: "totals.wordingOnly"}, {label: "disagree", path: "totals.disagree"}, {label: "unlocated", path: "totals.unlocated"}, {label: "not adjudicated", path: "totals.notAdjudicated"}}, "Totals")
 			found[2] = true
 		}
 	}
@@ -363,7 +365,7 @@ func w6fAssertXpectLine(t *testing.T, line docLine, pattern *regexp.Regexp, want
 
 func w6fAssertXpectKinds(t *testing.T, lines []docLine, report w6fXpectReport) {
 	t.Helper()
-	header := []string{"Kind", "Expectations", "Agree", "Disagree", "Not adjudicated", "`same-location`", "`same-line`", "`severity-differs`", "`elsewhere`", "nothing"}
+	header := []string{"Kind", "Expectations", "Agree", "of which wording-only", "Disagree", "Not adjudicated", "`same-location`", "`same-line`", "`severity-differs`", "`elsewhere`", "nothing"}
 	table := w6fFindXpectTable(t, lines, header)
 	baseline := make(map[string]w6fXpectKind, len(report.Kinds))
 	for _, kind := range report.Kinds {
@@ -391,12 +393,13 @@ func w6fAssertXpectKinds(t *testing.T, lines []docLine, report w6fXpectReport) {
 		}
 		w6fAssertXpectCell(t, row, 1, kind.Rows, "Expectations", "kinds["+kindName+"].rows", false)
 		w6fAssertXpectCell(t, row, 2, kind.Agree, "Agree", "kinds["+kindName+"].agree", false)
-		w6fAssertXpectCell(t, row, 3, kind.Disagree, "Disagree", "kinds["+kindName+"].disagree", false)
-		w6fAssertXpectCell(t, row, 4, kind.NotAdjudicated, "Not adjudicated", "kinds["+kindName+"].notAdjudicated", false)
-		w6fAssertXpectCell(t, row, 5, kind.SameLocation, "same-location", "kinds["+kindName+"].sameLocation", true)
-		w6fAssertXpectCell(t, row, 6, kind.SameLine, "same-line", "kinds["+kindName+"].sameLine", true)
-		w6fAssertXpectCell(t, row, 7, kind.SeverityDiffers, "severity-differs", "kinds["+kindName+"].severityDiffers", true)
-		w6fAssertXpectCell(t, row, 8, kind.Elsewhere, "elsewhere", "kinds["+kindName+"].elsewhereInFile", true)
+		w6fAssertXpectCell(t, row, 3, kind.WordingOnly, "of which wording-only", "kinds["+kindName+"].wordingOnly", true)
+		w6fAssertXpectCell(t, row, 4, kind.Disagree, "Disagree", "kinds["+kindName+"].disagree", false)
+		w6fAssertXpectCell(t, row, 5, kind.NotAdjudicated, "Not adjudicated", "kinds["+kindName+"].notAdjudicated", false)
+		w6fAssertXpectCell(t, row, 6, kind.SameLocation, "same-location", "kinds["+kindName+"].sameLocation", true)
+		w6fAssertXpectCell(t, row, 7, kind.SameLine, "same-line", "kinds["+kindName+"].sameLine", true)
+		w6fAssertXpectCell(t, row, 8, kind.SeverityDiffers, "severity-differs", "kinds["+kindName+"].severityDiffers", true)
+		w6fAssertXpectCell(t, row, 9, kind.Elsewhere, "elsewhere", "kinds["+kindName+"].elsewhereInFile", true)
 		w6fAssertXpectNothing(t, row, kind, kindName)
 	}
 	w6fAssertXpectSet(t, table.headerLine, "per-kind table kind", w6fXpectKindNames(baseline), seen)
@@ -422,7 +425,7 @@ func w6fAssertXpectCell(t *testing.T, row docTableRow, index, want int, label, p
 
 func w6fAssertXpectNothing(t *testing.T, row docTableRow, kind w6fXpectKind, name string) {
 	t.Helper()
-	value := strings.TrimSpace(row.cells[9])
+	value := strings.TrimSpace(row.cells[10])
 	if value == "—" {
 		return
 	}

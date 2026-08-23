@@ -166,6 +166,7 @@ type docXpectBaseline struct {
 		Assertions      int    `json:"assertions"`
 		Rows            int    `json:"rows"`
 		Agree           int    `json:"agree"`
+		WordingOnly     int    `json:"wordingOnly"`
 		SameLocation    int    `json:"sameLocation"`
 		SameLine        int    `json:"sameLine"`
 		SeverityDiffers int    `json:"severityDiffers"`
@@ -228,8 +229,10 @@ func docReadRefereedCounts(t *testing.T, report Report) docRefereedCounts {
 		case "errors":
 			errors = true
 			counts.declaredErrors = kind.Rows
-			counts.declaredAgree = kind.Agree
-			counts.wordingOnly = kind.SameLocation
+			// Agree holds the wording-only rows, so the word-for-word count is
+			// what is left of it once they are named separately.
+			counts.declaredAgree = kind.Agree - kind.WordingOnly
+			counts.wordingOnly = kind.WordingOnly
 			counts.locationOnly = kind.SameLine
 			counts.severityDiffers = kind.SeverityDiffers
 			counts.elsewhere = kind.Elsewhere
