@@ -43,7 +43,7 @@ func (r *Resolver) walkUnqualifiedHiding(scope *symbols.Scope, name string, hide
 			return resolution{sym: sym, ok: true}
 		}
 
-		if sym, ok := r.visibleMember(s.Owner(), name, hide); ok {
+		if sym, ok := r.visibleMember(r.scopeOwner(s), name, hide); ok {
 			return resolution{sym: sym, ok: true}
 		}
 

@@ -101,8 +101,11 @@ type Resolver struct {
 	// redefined memoizes the features a declaration redefines, explicitly or as
 	// an end: see (*Resolver).redefinedFeatures.
 	redefined map[*symbols.Symbol][]*symbols.Symbol
-	model     MemberLookup             // Optional *semantics.Model for inheritance-aware member lookup
-	naming    map[*symbols.Symbol]bool // effective names being computed, for cycle detection
+	// bodyOwners memoizes the metadata definition owning an annotation body
+	// scope the document pass has not stamped: see (*Resolver).scopeOwner.
+	bodyOwners map[*symbols.Scope]*symbols.Symbol
+	model      MemberLookup             // Optional *semantics.Model for inheritance-aware member lookup
+	naming     map[*symbols.Symbol]bool // effective names being computed, for cycle detection
 	// inheritedImports are the declarations whose supertypes' imports are being
 	// searched, so a specialization cycle ends the walk.
 	inheritedImports map[*symbols.Symbol]bool
@@ -145,6 +148,7 @@ func New(idx *symbols.Index) *Resolver {
 		nsFilters:        map[*symbols.Scope][]symbols.ElementFilter{},
 		payloads:         map[*symbols.Scope]map[string]*symbols.Symbol{},
 		redefined:        map[*symbols.Symbol][]*symbols.Symbol{},
+		bodyOwners:       map[*symbols.Scope]*symbols.Symbol{},
 
 		suggestions: map[suggestKey][]string{},
 		suggesting:  map[suggestKey]bool{},

@@ -30,6 +30,18 @@ func (s *Server) Hover(ctx context.Context, params *protocol.HoverParams) (*prot
 		b.WriteString(" ")
 		b.WriteString(sym.Name)
 	}
+	// A metadata body declaration implicitly redefines a feature of the
+	// annotation's metadata definition (KerML 7.4.7); name it and its type.
+	if isMetadataBodyScope(sym.OwnerScope) {
+		if target, fqn, ok := s.ws.MetadataBodyRedefines(sym); ok {
+			b.WriteString(" redefines ")
+			b.WriteString(fqn)
+			if t := declaredTypeText(target); t != "" {
+				b.WriteString(" : ")
+				b.WriteString(t)
+			}
+		}
+	}
 	if note := leadingDocText(content, sym.LeadingTrivia); note != "" {
 		b.WriteString("\n\n")
 		b.WriteString(note)

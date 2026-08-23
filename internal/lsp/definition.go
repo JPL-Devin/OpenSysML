@@ -21,6 +21,13 @@ func (s *Server) Definition(ctx context.Context, params *protocol.DefinitionPara
 	refs := collectRefs(doc.AST, doc.Scope)
 	ref := refAtOffset(refs, offset)
 	if ref == nil {
+		// A metadata body declaration's name is not a reference, but it
+		// implicitly redefines a metadata-definition feature; jump to that.
+		if sym := metadataBodyDeclAt(doc.Scope, offset); sym != nil {
+			if target, _, ok := s.ws.MetadataBodyRedefines(sym); ok {
+				return []protocol.Location{s.symbolLocation(name, target)}, nil
+			}
+		}
 		return nil, nil
 	}
 	sym, ok := s.ws.ResolveReferenceInDoc(name, *ref)

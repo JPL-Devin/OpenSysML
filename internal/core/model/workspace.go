@@ -304,7 +304,13 @@ func (w *Workspace) MembersOnPath(scope *symbols.Scope, path []string) []*symbol
 	if target, ok := resolver.ResolveAliasTarget(sym); ok {
 		sym = target
 	}
+	return w.memberSymbolsLocked(resolver, sem, scope, sym)
+}
 
+// memberSymbolsLocked returns the members visible on sym as seen from scope.
+// Callers hold the read lock.
+func (w *Workspace) memberSymbolsLocked(resolver *resolve.Resolver, sem *semantics.Model,
+	scope *symbols.Scope, sym *symbols.Symbol) []*symbols.Symbol {
 	members := sem.MembersOf(sym)
 	// A cached library symbol has no scope, and a package's own scope does not
 	// hold what its imports brought in; both are reachable through the index,
