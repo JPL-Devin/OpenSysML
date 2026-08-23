@@ -3,6 +3,7 @@ package passes
 import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -81,10 +82,43 @@ func (c *metadataAnnotationChecker) check(sym *symbols.Symbol, scope *symbols.Sc
 	for _, value := range c.model.MetadataBodyInevaluableValues(scope, prefix) {
 		c.diags = append(c.diags, Diagnostic{
 			Severity: SeverityError,
-			Span:     value.Span(),
+			Span:     c.metadataValueSpan(prefix, value),
 			Message:  msgFilterNotEvaluable,
 			Code:     "metadata-value-not-evaluable",
 			Source:   "constraint",
 		})
 	}
+}
+
+func (c *metadataAnnotationChecker) metadataValueSpan(prefix *ast.PrefixMetadata, value ast.Node) source.Span {
+	var found source.Span
+	var walk func([]ast.Node)
+	walk = func(body []ast.Node) {
+		for _, node := range body {
+			if mem, ok := node.(*ast.Membership); ok {
+				node = mem.Member
+			}
+			usage, ok := node.(*ast.Usage)
+			if !ok {
+				continue
+			}
+			if usage.Value == value && usage.ValueOperatorSpan.Len > 0 {
+				end := value.Span().End()
+				found = source.Span{
+					Offset: usage.ValueOperatorSpan.Offset,
+					Len:    end - usage.ValueOperatorSpan.Offset,
+				}
+				return
+			}
+			walk(usage.Members)
+			if found.Len > 0 {
+				return
+			}
+		}
+	}
+	walk(prefix.Body)
+	if found.Len > 0 {
+		return found
+	}
+	return value.Span()
 }

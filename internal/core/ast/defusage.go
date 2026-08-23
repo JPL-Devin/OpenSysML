@@ -1,5 +1,7 @@
 package ast
 
+import "github.com/Open-MBEE/OpenSysML/internal/core/source"
+
 // DefinitionKind discriminates the concrete definition taxonomy element.
 type DefinitionKind int
 
@@ -502,9 +504,10 @@ type Usage struct {
 	// CrossFeature is the cross feature an end declares inline ahead of its own
 	// declaration (KerML.xtext OwnedCrossFeatureMember).
 	CrossFeature *CrossFeatureMember
-	Value        Node
-	Members      []Node
-	HasBody      bool
+	Value             Node
+	ValueOperatorSpan source.Span
+	Members           []Node
+	HasBody           bool
 
 	// Tier B connection/flow/port grammar. These are nil/zero for kinds
 	// that do not use them.

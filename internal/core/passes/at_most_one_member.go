@@ -85,6 +85,25 @@ func (cc *constraintChecker) checkAtMostOneObjective(sym *symbols.Symbol, member
 // owned subject when there is one, otherwise on the declaration; a declaration
 // with no parameter at all is left to the reference's implicit subject.
 func (cc *constraintChecker) checkSubjectParameterPosition(sym *symbols.Symbol, members []ast.Node) {
+	localParameter := false
+	for _, member := range members {
+		if isSubjectMemberNode(member) {
+			return
+		}
+		if u, ok := unwrapUsageMember(member); ok {
+			if isInputParameterDecl(u) {
+				cc.reportSubjectParameterPosition(sym, members)
+				return
+			}
+			if isParameterDecl(u) {
+				localParameter = true
+			}
+		}
+	}
+	if localParameter {
+		return
+	}
+
 	var firstInput *symbols.Symbol
 	for _, member := range cc.model.MembersOf(sym) {
 		if member == nil {
@@ -98,6 +117,14 @@ func (cc *constraintChecker) checkSubjectParameterPosition(sym *symbols.Symbol, 
 	if firstInput == nil || isSubjectDecl(firstInput.Decl) {
 		return
 	}
+	cc.reportSubjectParameterPosition(sym, members)
+}
+
+func isParameterDecl(u *ast.Usage) bool {
+	return u != nil && (u.Direction != ast.DirNone || u.IsResult)
+}
+
+func (cc *constraintChecker) reportSubjectParameterPosition(sym *symbols.Symbol, members []ast.Node) {
 	span := sym.Decl.Span()
 	for _, member := range members {
 		if isSubjectMemberNode(member) {

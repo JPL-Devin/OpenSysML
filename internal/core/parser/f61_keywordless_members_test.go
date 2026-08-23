@@ -86,6 +86,28 @@ func TestF61KeywordlessMembers(t *testing.T) {
 		}
 	})
 
+	t.Run("keyworded_anonymous_enum_value", func(t *testing.T) {
+		pkg := parsePkg(t, "package B { enum def S { enum = 60.0; enum := 70.0; } }")
+		def := pkg.Members[0].(*ast.Membership).Member.(*ast.Definition)
+		for i := range def.Members {
+			u := usageAt(t, def.Members, i)
+			if u.Ident.Name != "" || u.Kind != ast.UsageEnumeration || u.Value == nil {
+				t.Errorf("member %d = %#v, want anonymous enum with a value", i, u)
+			}
+		}
+	})
+
+	t.Run("named_enum_values", func(t *testing.T) {
+		pkg := parsePkg(t, "package B { enum def S { enum red; enum x = 60.0; } }")
+		def := pkg.Members[0].(*ast.Membership).Member.(*ast.Definition)
+		for i, want := range []string{"red", "x"} {
+			u := usageAt(t, def.Members, i)
+			if u.Ident.Name != want {
+				t.Errorf("member %d name = %q, want %q", i, u.Ident.Name, want)
+			}
+		}
+	})
+
 	t.Run("result_expression_in_case_body", func(t *testing.T) {
 		pkg := parsePkg(t, "package B { attribute def V { attribute m; } analysis def A { subject v : V; v.m } }")
 		def := pkg.Members[1].(*ast.Membership).Member.(*ast.Definition)

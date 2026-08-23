@@ -77,11 +77,32 @@ func TestMetadataBodyValueMustBeModelLevelEvaluable(t *testing.T) {
 	if len(found) != 1 {
 		t.Fatalf("want one inevaluable value, got %v", found)
 	}
-	if found[0].Text != "~3" {
-		t.Errorf("reported %q, want the value expression `~3`", found[0].Text)
+	if found[0].Text != "= ~3" {
+		t.Errorf("reported %q, want the binding and value `= ~3`", found[0].Text)
 	}
 	if found[0].Msg != msgFilterNotEvaluable {
 		t.Errorf("message %q, want %q", found[0].Msg, msgFilterNotEvaluable)
+	}
+}
+
+func TestNestedMetadataBodyValueUsesBindingSpan(t *testing.T) {
+	src := `package P {
+		metadata def A {
+			feature x { feature y; feature z; }
+		}
+		feature f { in p; }
+		feature a {
+			@A {
+				x {
+					y = ~3;
+					z = 1 + 2;
+				}
+			}
+		}
+	}`
+	found := findingsWithCode(metadataDiags(t, src), "metadata-value-not-evaluable")
+	if len(found) != 1 || found[0].Text != "= ~3" {
+		t.Fatalf("want one nested finding on `= ~3`, got %v", found)
 	}
 }
 

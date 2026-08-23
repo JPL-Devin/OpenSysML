@@ -77,6 +77,27 @@ func TestConstraintMultiplicityRangeValidOK(t *testing.T) {
 	}
 }
 
+func TestEnumNamedValuesStillReportDuplicateNames(t *testing.T) {
+	const src = `enum def Colors {
+		enum red;
+		enum red;
+		enum x = 60.0;
+		enum x = 80.0;
+	}`
+	root := parser.New(source.New("<t>", []byte(src))).ParseFile()
+	idx := newTestIndex()
+	idx.AddDocument("<t>", root)
+	var duplicates []Diagnostic
+	for _, d := range Analyze("<t>", root, nil, idx) {
+		if d.Message == "Duplicate of other owned member name" {
+			duplicates = append(duplicates, d)
+		}
+	}
+	if len(duplicates) != 4 {
+		t.Fatalf("got %d duplicate-name diagnostics, want 4: %v", len(duplicates), duplicates)
+	}
+}
+
 func TestConstraintSubsettingMultiplicityExceeds(t *testing.T) {
 	diags := constraintDiags(t,
 		"part def C { part cap [0..3]; part many subsets cap [0..10]; }")
@@ -177,11 +198,27 @@ func TestConstraintInterfaceBinaryOK(t *testing.T) {
 	}
 }
 
-func TestConstraintInterfaceNaryFails(t *testing.T) {
+func TestConstraintUntypedInterfaceNaryIsClean(t *testing.T) {
 	diags := constraintDiags(t,
 		"part def C { port p; port q; port r; interface i connect (p, q, r); }")
+	if hasCode(diags, "connector-ends") {
+		t.Fatalf("untyped interfaces are n-ary, got %v", diags)
+	}
+}
+
+func TestConstraintBinaryInterfaceNaryFails(t *testing.T) {
+	diags := constraintDiags(t,
+		"part def C { port p; port q; port r; interface i : Interfaces::BinaryInterface connect (a ::> p, b ::> q, c ::> r); }")
 	if !hasCode(diags, "connector-ends") {
-		t.Fatalf("expected connector-ends diagnostic for n-ary interface, got %v", diags)
+		t.Fatalf("expected connector-ends diagnostic for n-ary binary interface, got %v", diags)
+	}
+}
+
+func TestConstraintNamedNaryInterfaceIsAccepted(t *testing.T) {
+	diags := constraintDiags(t,
+		"part def C { port p; port q; port r; interface i connect (a ::> p, b ::> q, c ::> r); }")
+	if hasCode(diags, "connector-ends") {
+		t.Fatalf("unexpected connector-ends diagnostic for named n-ary interface, got %v", diags)
 	}
 }
 

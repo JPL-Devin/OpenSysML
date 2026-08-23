@@ -93,6 +93,43 @@ func TestW10BStructuralClean(t *testing.T) {
 	}
 }
 
+func TestW10BPortEventOccurrenceIsReferential(t *testing.T) {
+	const src = `package P {
+		part holder {
+			port base;
+			port p {
+				event occurrence changed;
+			}
+		}
+	}`
+	for _, d := range typeDiags(t, src) {
+		if d.Message == msgPortUsageComposite {
+			t.Fatalf("unexpected composite port-usage diagnostic at offset %d", d.Span.Offset)
+		}
+	}
+}
+
+func TestW10BRedefinedPortMayNotOwnCompositeUsages(t *testing.T) {
+	const src = `package P {
+		part holder {
+			port base;
+			port redefines base {
+				part child;
+			}
+		}
+	}`
+	found := false
+	for _, d := range typeDiags(t, src) {
+		if d.Message == msgPortUsageComposite {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("a redefined port with a composite nested part must be reported")
+	}
+}
+
 // Malformed input must not panic the pass.
 func TestW10BStructuralMalformed(t *testing.T) {
 	for _, src := range []string{

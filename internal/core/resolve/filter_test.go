@@ -71,6 +71,22 @@ func TestFilteredImportHidesARejectedElement(t *testing.T) {
 	}
 }
 
+func TestFilteredRecursiveReexportHidesRejectedElement(t *testing.T) {
+	idx := expandedIndexOf(t, map[string]string{
+		"lib.sysml": filterLib,
+		"mid.sysml": "package Mid { public import Lib::*; }",
+		"app.sysml": "package App { public import Mid::**[@Safety]; }",
+	})
+	app := scopeOf(t, idx.DocumentRoot("app.sysml"), "App")
+	r := judgingResolver(idx)
+	if _, ok := r.ResolveName(app, "SafeBelt", ident("SafeBelt")); !ok {
+		t.Error("the recursive filter admits SafeBelt, which must resolve through the re-export")
+	}
+	if _, ok := r.ResolveName(app, "Radio", ident("Radio")); ok {
+		t.Error("the recursive filter rejects Radio, which must not resolve through the re-export")
+	}
+}
+
 // A private import surfaces a name only within the importing namespace (KerML
 // 8.2.3.3), so its unfiltered route must not make a name a public filtered
 // import rejects reachable from outside.

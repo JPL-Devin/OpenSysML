@@ -52,3 +52,31 @@ func TestW7GSubclassificationIsNotASubsetting(t *testing.T) {
 		t.Fatalf("`:>` between classifiers is a subclassification, got %v", diags)
 	}
 }
+
+func TestW7GVerificationReferenceChainIsAccessible(t *testing.T) {
+	const src = `package E {
+		requirement def R { requirement nested; }
+		verification def V {
+			objective {
+				verify r.nested;
+			}
+		}
+		requirement r : R;
+	}`
+	if diags := only(constraintDiags(t, src), "subsetting-featuring-types"); len(diags) != 0 {
+		t.Fatalf("a dotted verification feature chain is accessible, got %v", diags)
+	}
+}
+
+func TestW7GQualifiedSatisfyTargetMustBeAccessible(t *testing.T) {
+	const src = `package E {
+		requirement def R { requirement nested; }
+		requirement r : R;
+		part p;
+		satisfy R::nested by p;
+	}`
+	diags := only(constraintDiags(t, src), "subsetting-featuring-types")
+	if len(diags) != 1 || diags[0].Message != msgSubsettingFeaturingTypes {
+		t.Fatalf("a qualified nested satisfy target is inaccessible, got %v", diags)
+	}
+}

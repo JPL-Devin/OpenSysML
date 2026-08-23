@@ -32,6 +32,10 @@ by both).
 Of the 23 rows the slice owns, **18 closed** and 5 stand: the four span rows below and
 `SemanticMetadata_valid.sysml.xt`:53, which is a grammar gap.
 
+> Wave 12F closed the four span rows: the parser now records the `=`/`:=` token of a feature value,
+> and the metadata pass reports from that operator through the value. See
+> [wave12f-false-positives.md](wave12f-false-positives.md); the grammar gap still stands.
+
 ---
 
 ## What moved

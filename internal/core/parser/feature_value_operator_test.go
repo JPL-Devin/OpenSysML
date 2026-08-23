@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
@@ -9,18 +10,22 @@ import (
 // A feature value is written `= expr`, `:= expr` or `default` followed by either
 // of them (KerML `FeatureValue`), wherever a feature can carry a value.
 func TestFeatureValueOperators(t *testing.T) {
-	bodies := []string{
-		"attribute m = 10;",
-		"attribute m := 10;",
-		"attribute m default 10;",
-		"attribute m default = 10;",
-		"attribute m default := 10;",
-		"attribute m : Real default = 10;",
-		"attribute m :> base default = 10;",
+	cases := []struct {
+		body string
+		op   string
+	}{
+		{"attribute m = 10;", "="},
+		{"attribute m := 10;", ":="},
+		{"attribute m default 10;", "default"},
+		{"attribute m default = 10;", "default ="},
+		{"attribute m default := 10;", "default :="},
+		{"attribute m default   = 10;", "default   ="},
+		{"attribute m : Real default = 10;", "default ="},
+		{"attribute m :> base default = 10;", "default ="},
 	}
-	for _, body := range bodies {
-		t.Run(body, func(t *testing.T) {
-			src := "package P { attribute def Real; attribute base; part def D { " + body + " } }"
+	for _, tc := range cases {
+		t.Run(tc.body, func(t *testing.T) {
+			src := "package P { attribute def Real; attribute base; part def D { " + tc.body + " } }"
 			p := New(source.New("t.sysml", []byte(src)))
 			root := p.ParseFile()
 			if len(p.Diagnostics) != 0 {
@@ -32,6 +37,12 @@ func TestFeatureValueOperators(t *testing.T) {
 			}
 			if usage.Value == nil {
 				t.Error("the feature value was not read")
+			}
+			if got := src[usage.ValueOperatorSpan.Offset:usage.ValueOperatorSpan.End()]; got != tc.op {
+				t.Errorf("value operator span %q, want %q", got, tc.op)
+			}
+			if !strings.HasPrefix(src[usage.ValueOperatorSpan.Offset:], tc.op) {
+				t.Errorf("value operator span starts at %d, not at %q", usage.ValueOperatorSpan.Offset, tc.op)
 			}
 		})
 	}

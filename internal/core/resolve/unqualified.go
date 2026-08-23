@@ -379,8 +379,8 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 		if (targetName == name || (target.ShortName != "" && target.ShortName == name)) && admit(target) {
 			return target, true
 		}
-		if imp.IsRecursive && target.Scope != nil {
-			if sym, ok := lookupInSubtree(target.Scope, name, imp, admit, map[*symbols.Scope]bool{}); ok {
+		if imp.IsRecursive {
+			if sym, ok := r.lookupInSubtree(scope, target, name, imp, admit); ok {
 				return sym, true
 			}
 		}
@@ -433,7 +433,7 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 		}
 	}
 	if imp.IsRecursive {
-		if sym, ok := lookupInSubtree(target.Scope, name, imp, admit, map[*symbols.Scope]bool{}); ok {
+		if sym, ok := r.lookupInSubtree(scope, target, name, imp, admit); ok {
 			return sym, true
 		}
 	}
@@ -460,25 +460,13 @@ func (r *Resolver) importPrefixAvailable(scope *symbols.Scope, imp *ast.Import, 
 	return false
 }
 
-// lookupInSubtree searches a scope and all descendant scopes for a match on
-// name that imp may surface. A match the import cannot surface does not end the
-// walk: another scope in the subtree may hold a visible one.
-func lookupInSubtree(scope *symbols.Scope, name string, imp *ast.Import, admit func(*symbols.Symbol) bool, seen map[*symbols.Scope]bool) (*symbols.Symbol, bool) {
-	// A body-local name is not a member of the namespace being imported.
-	if scope == nil || seen[scope] || scope.BodyLocal() {
-		return nil, false
-	}
-	seen[scope] = true
-	if sym, ok := scope.LookupLocal(name); ok && visibleThroughImport(imp, sym) && admit(sym) {
-		return sym, true
-	}
-	for _, child := range scope.Children() {
-		// A recursive import descends through the memberships it can see, so a
-		// namespace it cannot surface hides its own contents too.
-		if owner := child.Owner(); owner != nil && !visibleThroughImport(imp, owner) {
-			continue
-		}
-		if sym, ok := lookupInSubtree(child, name, imp, admit, seen); ok {
+// lookupInSubtree searches the target namespace and its visible descendants for
+// a name, including memberships re-exported through nested imports.
+func (r *Resolver) lookupInSubtree(scope *symbols.Scope, target *symbols.Symbol, name string, imp *ast.Import, admit func(*symbols.Symbol) bool) (*symbols.Symbol, bool) {
+	out := newElementList()
+	r.appendSubtree(out, scope, target, imp, admit, map[symbols.ElementKey]bool{})
+	for _, sym := range out.elems {
+		if localNameOf(sym) == name || sym.ShortName == name {
 			return sym, true
 		}
 	}

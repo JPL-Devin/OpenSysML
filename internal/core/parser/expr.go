@@ -651,8 +651,7 @@ func (p *Parser) parseBodyExpr(start int) ast.Node {
 			// (`in p :> ISQ::mass`), which is how a filter names the feature its
 			// elements redefine.
 			paramRels := p.parseRelationships(true)
-			if p.at(lexer.Eq) {
-				p.advance() // =
+			if _, ok := p.accept(lexer.Eq); ok {
 				paramValue = p.ParseExpression()
 			}
 			// Parse optional body members: in ref a { doc ... }

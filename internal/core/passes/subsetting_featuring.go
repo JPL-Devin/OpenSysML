@@ -22,6 +22,9 @@ func (cc *constraintChecker) checkSubsettingFeaturingTypes(sym *symbols.Symbol) 
 		if rel == nil || rel.Kind != ast.RelSubsets || rel.Target == nil {
 			continue
 		}
+		if isDottedFeatureChain(rel.Target) {
+			continue
+		}
 		targetNode := rel.Target
 		if fr, ok := targetNode.(*ast.FeatureReference); ok {
 			targetNode = fr.Name
@@ -54,4 +57,20 @@ func (cc *constraintChecker) checkSubsettingFeaturingTypes(sym *symbols.Symbol) 
 			Source:   "constraint",
 		})
 	}
+}
+
+func isDottedFeatureChain(node ast.Node) bool {
+	switch n := node.(type) {
+	case *ast.FeatureChainExpr:
+		return true
+	case *ast.FeatureReference:
+		return isDottedFeatureChain(n.Name)
+	case *ast.QualifiedName:
+		for _, part := range n.Parts {
+			if part.Chained {
+				return true
+			}
+		}
+	}
+	return false
 }

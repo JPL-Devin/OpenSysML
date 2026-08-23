@@ -1726,9 +1726,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		}
 
 		// ValuePart? — a satisfy usage may bind a value like any usage.
-		if p.acceptValueOperator() {
-			u.Value = p.ParseExpression()
-		}
+		p.parseUsageValue(u)
 
 		// Check for optional "by" clause. Per SatisfyRequirementUsage the `by`
 		// operand names the subject of the satisfaction, never the usage itself,
@@ -1861,7 +1859,8 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		}
 
 		// Parse value: = [mult] expr
-		if p.accept2(lexer.Eq) {
+		if op, ok := p.accept(lexer.Eq); ok {
+			u.ValueOperatorSpan = op.Span
 			// Optional multiplicity before value expression
 			if p.at(lexer.LBracket) {
 				p.parseMultiplicity() // consume multiplicity prefix in value
@@ -1957,9 +1956,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 	u.Relationships = append(u.Relationships, postRels...)
 	p.checkTypeDeclarationSpecialization(u, keyword)
 
-	if p.acceptValueOperator() {
-		u.Value = p.ParseExpression()
-	}
+	p.parseUsageValue(u)
 	p.parseTierBEnds(u, kind)
 
 	// Dispatch to specialized body parsers based on kind
@@ -2264,12 +2261,19 @@ func (p *Parser) parseEnumBody() []ast.Node {
 	body := p.newBodyBuilder()
 	for !p.at(lexer.RBrace) && !p.atEOF() {
 		before := p.peek().Span.Offset
-		if p.at(lexer.Eq) || p.at(lexer.ColonEq) {
+		anonymousValue := p.at(lexer.Eq) || p.at(lexer.ColonEq)
+		if p.atKeyword("enum") &&
+			(p.peekN(1).Kind == lexer.Eq || p.peekN(1).Kind == lexer.ColonEq) {
+			anonymousValue = true
+		}
+		if anonymousValue {
 			start := p.peek().Span.Offset
 			trivia := p.takeTrivia()
+			if p.atKeyword("enum") {
+				p.advance()
+			}
 			u := &ast.Usage{Kind: ast.UsageEnumeration}
-			p.acceptValueOperator()
-			u.Value = p.ParseExpression()
+			p.parseUsageValue(u)
 			p.expect(lexer.Semicolon, "expected ';' after enumerated value")
 			u.NodeSpan = p.spanFrom(start)
 			m := &ast.Membership{Member: u}
@@ -2958,9 +2962,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 			}
 
 			// Parse optional value (= expr or default expr)
-			if p.acceptValueOperator() {
-				u.Value = p.ParseExpression()
-			}
+			p.parseUsageValue(u)
 
 			// Parse body or semicolon
 			members, hasBody := p.parseDefUsageBody()
@@ -3013,9 +3015,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 		u.Relationships = append(u.Relationships, p.parseRelationships(true)...)
 
 		// Parse optional value (= expr or default expr)
-		if p.acceptValueOperator() {
-			u.Value = p.ParseExpression()
-		}
+		p.parseUsageValue(u)
 
 		// Parse body or semicolon
 		members, hasBody := p.parseDefUsageBody()
@@ -3061,8 +3061,9 @@ func (p *Parser) parseBodyMember() ast.Node {
 		id := ast.Identification{Name: seg.Text, NameSpan: seg.Span}
 
 		var value ast.Node
-		if p.at(lexer.Eq) {
-			p.advance() // consume '='
+		var valueOperatorSpan source.Span
+		if op, ok := p.accept(lexer.Eq); ok {
+			valueOperatorSpan = op.Span
 			value = p.ParseExpression()
 		}
 
@@ -3070,11 +3071,12 @@ func (p *Parser) parseBodyMember() ast.Node {
 		members, hasBody := p.parseDefUsageBody()
 
 		u := &ast.Usage{
-			Kind:    ast.UsageEnumeration,
-			Ident:   id,
-			Value:   value,
-			Members: members,
-			HasBody: hasBody,
+			Kind:              ast.UsageEnumeration,
+			Ident:             id,
+			Value:             value,
+			ValueOperatorSpan: valueOperatorSpan,
+			Members:           members,
+			HasBody:           hasBody,
 		}
 		u.NodeSpan = p.spanFrom(start)
 
@@ -3261,8 +3263,8 @@ func (p *Parser) parseReferenceMemberUsage(start int, kind ast.UsageKind, kw, no
 	}
 	specRels := p.parseRelationships(true)
 	u.Relationships = append(u.Relationships, specRels...)
-	if allowValue && p.acceptValueOperator() {
-		u.Value = p.ParseExpression()
+	if allowValue {
+		p.parseUsageValue(u)
 	}
 
 	switch {
@@ -3670,7 +3672,7 @@ func (p *Parser) parseConnectorEnds(u *ast.Usage, kw string) {
 	}
 }
 
-// parseConnectorEnd parses a single connector end: optional multiplicity followed by qualified name.
+// parseConnectorEnd parses one connector end and its optional reference subsetting.
 func (p *Parser) parseConnectorEnd() *ast.ConnectorEnd {
 	start := p.peek().Span.Offset
 	ce := &ast.ConnectorEnd{}
@@ -3680,20 +3682,34 @@ func (p *Parser) parseConnectorEnd() *ast.ConnectorEnd {
 		ce.Multiplicity = p.parseMultiplicity()
 	}
 
-	// Target expression (qualified name or feature chain)
-	// Use parseRelationshipTarget to avoid consuming connector keywords (from/to)
+	// A connector end has one target, unlike a general relationship clause.
 	ce.Target = p.parseRelationshipTarget()
 	if ce.Target == nil {
 		return nil
 	}
 
-	// Optional relationships (e.g., ::> for interface binding)
-	// Parse relationships until we hit a stopping keyword (to/from/then/references) or terminator
-	rels := p.parseRelationships(true)
-	ce.Relationships = rels
+	// A named end uses ReferencesKeyword to state the feature it attaches to.
+	// Keep explicit end redefinitions, but never consume comma-separated targets.
+	for {
+		var kind ast.RelationshipKind
+		switch {
+		case p.accept2(lexer.ColonColonGt):
+			kind = ast.RelReferences
+		case p.acceptKeyword("references"):
+			kind = ast.RelReferences
+		case p.accept2(lexer.ColonGtGt):
+			kind = ast.RelRedefines
+		default:
+			ce.NodeSpan = p.spanFrom(start)
+			return ce
+		}
+		rel := p.parseRelationshipClauseTarget(kind)
+		if rel.Target == nil {
+			p.error(p.peek().Span, "expected a relationship target for connector end")
+		}
+		ce.Relationships = append(ce.Relationships, rel)
+	}
 
-	ce.NodeSpan = p.spanFrom(start)
-	return ce
 }
 
 // parseNaryConnectorEnds parses the parenthesized end list a KerML connector
@@ -3888,7 +3904,8 @@ func (p *Parser) parseFlowEnds(u *ast.Usage) {
 			}
 
 			// Parse optional value assignment: = expr
-			if p.accept2(lexer.Eq) {
+			if op, ok := p.accept(lexer.Eq); ok {
+				payloadUsage.ValueOperatorSpan = op.Span
 				payloadUsage.Value = p.ParseExpression()
 			}
 

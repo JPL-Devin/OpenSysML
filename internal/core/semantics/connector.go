@@ -248,7 +248,12 @@ func (m *Model) UnmatchedConnectorEnds(sym *symbols.Symbol) (*symbols.Symbol, []
 
 // ConnectorEndCount returns the number of effective ends of the connector sym.
 func (m *Model) ConnectorEndCount(sym *symbols.Symbol) int {
-	return len(m.endsOf(sym))
+	count := len(m.endsOf(sym))
+	if count == 0 && sym != nil && sym.Decl == nil &&
+		m.fqnOf(sym) == binaryConnectorBaseFQN {
+		return len(binaryConnectorEndNames)
+	}
+	return count
 }
 
 // IsConnectorUsage reports whether sym declares a connector usage that joins
@@ -302,7 +307,16 @@ type ConnectorEndAttachment struct {
 // and each of the usage's ends implicitly redefines the one at its position. A
 // binary `interface`, `allocation` or `flow` reaches the same pair through
 // `BinaryInterface`, `Allocation` and `Flow`, which redefine them again.
+// An indexed base retains these two effective ends even without its body.
 var binaryConnectorEndNames = [2]string{"source", "target"}
+
+const binaryConnectorBaseFQN = "Links::BinaryLink"
+
+// IsBinaryConnector reports whether sym conforms to the library's binary-link
+// base, including through cached/index-only specialization edges.
+func (m *Model) IsBinaryConnector(sym *symbols.Symbol) bool {
+	return m != nil && m.conformsByName(sym, binaryConnectorBaseFQN)
+}
 
 // ConnectorEndAttachments returns the ends of the connector usage sym in
 // declaration order, one entry per end of its `connect` clause. It returns
