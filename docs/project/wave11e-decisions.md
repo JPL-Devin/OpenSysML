@@ -1,8 +1,9 @@
 # Wave 11E — the KerML validation and visibility rows that stay open
 
 Wave 11E owns 25 Xpect disagreements in the KerML validation and visibility suites. Nineteen closed
-by implementing or re-attaching a rule; the six below do not close inside this slice. Each entry
-states the fixture, what the pilot declares, what we do, the specification reading, its **category**,
+by implementing or re-attaching a rule; the six expectations below, in five fixtures, do not close
+inside this slice. Each entry states the fixture, what the pilot declares, what we do, the
+specification reading, its **category**,
 and who owns the remaining work. Every number is from a fresh run of
 `go run ./cmd/pilot-xpect -out build/xpect-fresh` on the branch, not quoted from a report.
 
@@ -22,7 +23,6 @@ Four categories, and every open row carries one — an unlabelled open row reads
 | E3 `ConnectorTest_ConnectorEndSubsettingBadCase` | our defect | 11C (resolver) |
 | E4 `SimpleImportTestsFromOtherFile_Import3{,_FT}` | adjudicated divergence | 11E (this doc) |
 | E5 `VisibilityTests_Protected_FeatureChaining` | our defect | 11C (resolver) |
-| E6 `ShadowingTests_SameNamesImportAsFeature_Rdef` | our defect | 11C (resolver) |
 
 ---
 
@@ -128,21 +128,15 @@ qualified tail. The missing row is a resolution verdict on one chain segment, no
 
 ---
 
-## E6 — `ShadowingTests_SameNamesImportAsFeature_Rdef`: an ambiguity we raise
+## Closed by another slice — `ShadowingTests_SameNamesImportAsFeature_Rdef`
 
-**Declared.** File-wide silence, plus `Couldn't resolve reference to Feature 'B'.`
+The row was open as an ambiguity we raised over an imported name shadowed by an inner declaration
+(KerML 8.2.3.5). Wave 11C's shadowing work closed it: the fixture's remaining row now agrees as
+wording-only.
 
-**Ours.** `ambiguous reference: SamePackage::container (2 candidates)`, and our unresolved reference
-lands on `container` rather than on `B`.
+## Rule ownership after wave 11A
 
-**Reading.** Both rows follow from how an imported name and an inner declaration of the same name
-combine (KerML 8.2.3.5): shadowing should leave one candidate, and the residual unresolved reference
-should then be the chain's last segment. This is import and shadowing resolution.
-
-**Category — our defect** for the ambiguity and the misplaced unresolved reference. The fixture's
-file-wide silence expectation is separately unsatisfiable, since the same fixture declares an error
-within the file.
-
-**Owner.** Resolver (slice 11C). The two sibling `SameNames*` fixtures behave the same way and are
-already recorded in [pilot-xpect.md](pilot-xpect.md) as fixtures that declare both file-wide silence
-and the errors within them.
+11A landed the KerML specialization metaclass rules (`W11AKerMLSpecializationPass`, type tier), so
+11E keeps only `validateSpecializationSpecificNotConjugated` and runs it at the same tier — at a
+higher tier a metaclass error in the same file suppresses it, which is what hid the
+`Specialization_invalid` conjugation row.
