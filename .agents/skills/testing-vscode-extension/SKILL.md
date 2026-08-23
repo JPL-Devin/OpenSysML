@@ -344,6 +344,31 @@ Confirm the whole expected list cheaply first with a stdio JSON-RPC completion p
   `length/width/height` with `attributeUsage` details) even though the file is momentarily a syntax
   error; keep the fixture otherwise valid and `Escape` + revert the line afterwards.
 
+## Metadata annotation body testing (`internal/lsp/metadata.go`, `internal/core/model/metadata.go`)
+
+For `@Anno { x = ...; }` bodies (KerML 7.4.7 implicit redefinition), a compact fixture is
+`metadata def Base { attribute inherited; }` / `metadata def Anno :> Base { attribute own : ScalarValues::Integer; }`
+annotated on an `item p { attribute outer; }`, plus `item q { @Missing { ghost = 1; } }` as the
+degradation case.
+
+- Hover on a body declaration name reads `enumUsage own redefines Anno::own : ScalarValues::Integer` —
+  the kind text is `enumUsage` (not `attributeUsage`); don't report that as a bug, it is what the
+  server has always shown for these declarations. The `redefines <FQN> : <type>` clause is the new part.
+- `unresolved reference: Missing` on the `@Missing` metaclass name is a **pre-existing diagnostic**
+  (identical on a main-built server) and does not contradict "quiet degradation" — degradation means
+  no diagnostics on the *body declarations* (`ghost`), plain hover without a `redefines` clause, and
+  F12 answering "No definition found" without crashing the server. Prove pre-existence with the
+  `origin/main` worktree build (see the negative-control recipe above) before flagging any diagnostic.
+- Completion inside the body is position-sensitive: at a declaration position the list is *exactly*
+  the metadata definition's features (2 items, `attributeUsage` details); after `=` on the same line
+  it is the enclosing scope chain (sibling attributes, items, all library packages — hundreds).
+  Trigger the declaration-position case on a *fresh empty line* inside the body (End, Enter,
+  Ctrl+Space); typing `own = ` first flips it to the value case.
+- Confirm every expected string first with a stdio JSON-RPC probe (hover/definition/completion/
+  documentSymbol/semanticTokens) against `bin/sysml-lsp` so GUI deviations are real findings.
+- Body names carry semantic token type `enumMember` with modifiers `declaration readonly`
+  (Inspect Editor Tokens and Colors).
+
 ## Recording tips
 
 Record the VS Code window maximized (wmctrl above). Verify visual claims by `zoom`ing the status bar
