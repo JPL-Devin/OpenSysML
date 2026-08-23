@@ -211,3 +211,31 @@ scored as `disagree(same-line)`. We now parse the fixture, so the row is a plain
 declared rule — a type owns at most one multiplicity — is a validation rule we do not implement. The
 verdict and the totals are unchanged; only the tolerance class is. It belongs to whoever owns the
 validation suites, not to the parser.
+
+---
+
+## Wave 11F adjudications — parser-blocked rows
+
+The following Xpect rows remain open because the required syntax is not
+represented by the current AST. They are parser work in wave 11B, not missing
+passes-layer rules.
+
+### Query path expressions
+
+`queryx/failing/QPE-Qualifier`, `QPE-Traversal`, and `QPE-Wildcard` are clean in
+the pinned pilot. OpenSysML reports `expected a namespace member` while parsing
+each file because query path expression syntax is not parsed. No semantic pass
+can evaluate a construct that never reaches the AST; these three rows therefore
+remain parser-blocked. The current Xpect adjudication is also recorded in
+[pilot-differential.md](pilot-differential.md).
+
+### Parallel and exclusive state syntax
+
+`TransitionUsage_invalid.sysml` lines 45, 54, 60, and 68 remain parser-blocked.
+The diagnostics OpenSysML emits at lines 43 and 46 are parse errors caused by
+the `parallel` state syntax, and the later diagnostics are cascades. The parser
+consumes `parallel` and `exclusive` but does not retain either modifier in the
+AST, so the rule “A parallel state cannot have successions or transitions”
+cannot currently be evaluated. The rule itself is derivable from the SysML v2
+state semantics; only the representation needed by the validator is missing.
+This is wave-11B parser work, not a passes-layer omission.
