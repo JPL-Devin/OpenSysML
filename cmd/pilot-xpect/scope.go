@@ -44,12 +44,6 @@ func scopeRow(ws *model.Workspace, main string, a assertion, src squeezed, libra
 	r := row{Kind: a.Kind, Block: a.Block, Line: a.Line, At: a.At,
 		Declared: fmt.Sprintf("%d name(s) visible at %q", len(a.Names), a.At)}
 
-	offset, end, ok := src.locate(a.Region, a.At)
-	if !ok {
-		r.Verdict = verdictUnlocated
-		r.Actual = fmt.Sprintf("the declared text %q does not occur after the assertion", a.At)
-		return r
-	}
 	doc := ws.Document(main)
 	if doc == nil {
 		r.Verdict = verdictUnlocated
@@ -59,7 +53,12 @@ func scopeRow(ws *model.Workspace, main string, a assertion, src squeezed, libra
 	// The anchor is normally a name reference, whose cross-reference type also
 	// filters the scope; where it is a declaration's own name instead, the
 	// scope is the namespace that position sits in and nothing filters it.
-	ref, _, ok := referenceAt(resolve.References(doc.AST, doc.Scope), offset, end)
+	offset, ref, ok, found := scopeAnchor(doc, a, src)
+	if !found {
+		r.Verdict = verdictUnlocated
+		r.Actual = fmt.Sprintf("the declared text %q does not occur after the assertion", a.At)
+		return r
+	}
 	want, scope := mtAny, ws.ScopeAt(main, offset)
 	if ok {
 		want = anchorMetatype(src.Original, offset, ref)
@@ -108,6 +107,30 @@ func scopeRow(ws *model.Workspace, main string, a assertion, src squeezed, libra
 			len(d.otherPath), sample(d.otherPath))
 	}
 	return r
+}
+
+// scopeAnchor locates the position a scope assertion is taken at. The `at` text
+// names the reference the question is about, so an occurrence that starts a
+// longer name — `c_Public` in `specializes c_Public_Id` — is the anchor when it
+// carries one; otherwise the first whole identifier is, and nothing filters it.
+func scopeAnchor(doc *model.Document, a assertion, src squeezed) (int, resolve.Reference, bool, bool) {
+	refs := resolve.References(doc.AST, doc.Scope)
+	var first match
+	for i, m := range src.locateAll(a.Region, a.At) {
+		if i == 0 {
+			first = m
+		}
+		if ref, _, ok := referenceAt(refs, m.begin, m.end); ok {
+			return m.begin, ref, true, true
+		}
+		if m.whole {
+			return m.begin, resolve.Reference{}, false, true
+		}
+	}
+	if first.end == 0 {
+		return 0, resolve.Reference{}, false, false
+	}
+	return first.begin, resolve.Reference{}, false, true
 }
 
 // scopeDiff is one enumeration set measured against the declared one. The

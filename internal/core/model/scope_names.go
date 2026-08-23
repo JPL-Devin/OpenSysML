@@ -394,10 +394,12 @@ func declarerOf(sym *symbols.Symbol) *symbols.Symbol {
 	return sym.OwnerScope.Owner()
 }
 
-// chainTo returns the source steps from owner to declarer, breadth-first over
-// the member-contributing edges: the types a path reaching declarer's members
-// through owner inherits through. It is empty when owner declares them itself
-// or when no chain of sources reaches declarer.
+// chainTo returns the source steps from owner to declarer over the
+// member-contributing edges: the types a path reaching declarer's members
+// through owner inherits through. A declared generalization is preferred to an
+// implicit base — a member of a feature's type is inherited through that type,
+// not through Base::things — and a shorter chain to a longer one. It is empty
+// when owner declares them itself or when no chain of sources reaches declarer.
 func (nw *nameWalk) chainTo(owner, declarer *symbols.Symbol) []*symbols.Symbol {
 	if owner == nil || declarer == nil || declarer == owner {
 		return nil
@@ -406,24 +408,7 @@ func (nw *nameWalk) chainTo(owner, declarer *symbols.Symbol) []*symbols.Symbol {
 	if chain, ok := nw.chains[key]; ok {
 		return chain
 	}
-	from := map[*symbols.Symbol]*symbols.Symbol{owner: nil}
-	queue := []*symbols.Symbol{owner}
-	var found bool
-	for len(queue) > 0 && !found {
-		cur := queue[0]
-		queue = queue[1:]
-		for _, src := range nw.sem.DirectMemberSources(cur) {
-			if _, seen := from[src]; seen {
-				continue
-			}
-			from[src] = cur
-			if src == declarer {
-				found = true
-				break
-			}
-			queue = append(queue, src)
-		}
-	}
+	from, found := nw.searchChain(owner, declarer, nil)
 	var chain []*symbols.Symbol
 	if found {
 		for s := declarer; s != nil && s != owner; s = from[s] {
@@ -432,6 +417,48 @@ func (nw *nameWalk) chainTo(owner, declarer *symbols.Symbol) []*symbols.Symbol {
 	}
 	nw.chains[key] = chain
 	return chain
+}
+
+// searchChain walks the member-contributing edges out of owner towards
+// declarer, taking every declared generalization before any implicit base, and
+// skipping the sources skip reports. It reports the step each source was
+// reached from, and whether declarer was reached at all.
+func (nw *nameWalk) searchChain(
+	owner, declarer *symbols.Symbol,
+	skip func(from, src *symbols.Symbol) bool,
+) (map[*symbols.Symbol]*symbols.Symbol, bool) {
+	from := map[*symbols.Symbol]*symbols.Symbol{owner: nil}
+	declared, implicit := []*symbols.Symbol{owner}, []*symbols.Symbol(nil)
+	for len(declared) > 0 || len(implicit) > 0 {
+		var cur *symbols.Symbol
+		if len(declared) > 0 {
+			cur, declared = declared[0], declared[1:]
+		} else {
+			cur, implicit = implicit[0], implicit[1:]
+		}
+		general := map[*symbols.Symbol]bool{}
+		for _, g := range nw.sem.DirectSupertypes(cur) {
+			general[g] = true
+		}
+		for _, src := range nw.sem.DirectMemberSources(cur) {
+			if src == nil || (skip != nil && skip(cur, src)) {
+				continue
+			}
+			if _, seen := from[src]; seen {
+				continue
+			}
+			from[src] = cur
+			if src == declarer {
+				return from, true
+			}
+			if general[src] {
+				declared = append(declared, src)
+			} else {
+				implicit = append(implicit, src)
+			}
+		}
+	}
+	return from, false
 }
 
 // enter marks a derivation's source steps as traversed on the current path, or
@@ -650,33 +677,17 @@ func (nw *nameWalk) chainAvoiding(owner, declarer *symbols.Symbol) ([]*symbols.S
 			above[g] = true
 		}
 	}
-	from := map[*symbols.Symbol]*symbols.Symbol{owner: nil}
-	queue := []*symbols.Symbol{owner}
-	for len(queue) > 0 {
-		cur := queue[0]
-		queue = queue[1:]
-		for _, src := range nw.sem.DirectMemberSources(cur) {
-			if src == nil || nw.traversed[src] > 0 {
-				continue
-			}
-			if cur == owner && above[src] {
-				continue
-			}
-			if _, seen := from[src]; seen {
-				continue
-			}
-			from[src] = cur
-			if src == declarer {
-				var chain []*symbols.Symbol
-				for s := declarer; s != nil && s != owner; s = from[s] {
-					chain = append(chain, s)
-				}
-				return chain, true
-			}
-			queue = append(queue, src)
-		}
+	from, found := nw.searchChain(owner, declarer, func(cur, src *symbols.Symbol) bool {
+		return nw.traversed[src] > 0 || (cur == owner && above[src])
+	})
+	if !found {
+		return nil, false
 	}
-	return nil, false
+	var chain []*symbols.Symbol
+	for s := declarer; s != nil && s != owner; s = from[s] {
+		chain = append(chain, s)
+	}
+	return chain, true
 }
 
 // loaded reports whether the caller's resource set holds an element: a library

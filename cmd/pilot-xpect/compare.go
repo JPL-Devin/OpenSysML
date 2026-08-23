@@ -400,20 +400,39 @@ func squeeze(content []byte) squeezed {
 // locate returns the original span of the first occurrence of text at or after
 // from. An occurrence inside a longer identifier does not count.
 func (s squeezed) locate(from int, text string) (int, int, bool) {
+	for _, span := range s.locateAll(from, text) {
+		if span.whole {
+			return span.begin, span.end, true
+		}
+	}
+	return 0, 0, false
+}
+
+// match is one occurrence of an `at` text, whole recording whether it is the
+// entire identifier rather than the start of a longer one.
+type match struct {
+	begin, end int
+	whole      bool
+}
+
+// locateAll returns every occurrence of text that starts an identifier at or
+// after from, in source order.
+func (s squeezed) locateAll(from int, text string) []match {
 	start := sort.SearchInts(s.Offsets, from)
 	if text == "" {
 		// No `at` clause: the assertion targets the source it precedes.
 		if start >= len(s.Offsets) {
-			return 0, 0, false
+			return nil
 		}
-		return s.Offsets[start], s.Offsets[start] + 1, true
+		return []match{{s.Offsets[start], s.Offsets[start] + 1, true}}
 	}
 	want := strings.Join(strings.FieldsFunc(text, func(r rune) bool {
 		return r == ' ' || r == '\t' || r == '\n' || r == '\r'
 	}), "")
 	if want == "" {
-		return 0, 0, false
+		return nil
 	}
+	var out []match
 	for i := start; i+len(want) <= len(s.Text); i++ {
 		if s.Text[i:i+len(want)] != want {
 			continue
@@ -422,12 +441,10 @@ func (s squeezed) locate(from int, text string) (int, int, bool) {
 		if identChar(want[0]) && begin > 0 && identChar(s.Original[begin-1]) {
 			continue
 		}
-		if identChar(want[len(want)-1]) && end < len(s.Original) && identChar(s.Original[end]) {
-			continue
-		}
-		return begin, end, true
+		whole := !identChar(want[len(want)-1]) || end >= len(s.Original) || !identChar(s.Original[end])
+		out = append(out, match{begin, end, whole})
 	}
-	return 0, 0, false
+	return out
 }
 
 func isSpace(c byte) bool {
