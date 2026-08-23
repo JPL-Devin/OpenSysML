@@ -195,9 +195,9 @@ func subjectOwnerDecl(decl ast.Node) bool {
 func objectiveOwnerDecl(decl ast.Node) bool {
 	switch d := decl.(type) {
 	case *ast.Definition:
-		return isCaseDefKind(d.Kind)
+		return d.Kind == ast.DefCase
 	case *ast.Usage:
-		return isCaseUsageKind(d.Kind)
+		return d.Kind == ast.UsageCase
 	}
 	return false
 }
