@@ -1929,16 +1929,17 @@ moved count is a claim about one of the two implementations, and it needs a reas
 
 ## Wave 11F — current branch movement and adjudications
 
-The settled control is a clean run of `ae4fdf9e6a87e1382f3be6c9b5a71341eb694a7e`,
-before the wave-11F changes. The branch movement is measured from
+The settled control is a clean run of `466de743cbd46eaa6983fd8cf0cffc4097a2137f`,
+after the merged wave-11 changes and before the remaining wave-11F changes. The
+branch movement is measured from
 `build/pilot-diff/pilot-diff.json`, keyed by corpus root, file, diagnostic line,
 severity and category:
 
 | Measurement | Control | Branch |
 |---|---:|---:|
-| Fully agreeing files | 312 | **316** |
+| Fully agreeing files | 313 | **317** |
 | Agreed diagnostics | 25 | **25** |
-| Only ours | 139 | **120** |
+| Only ours | 138 | **119** |
 | Only the pilot | 73 | **73** |
 
 The branch retires 13 only-ours table entries representing 19 diagnostics; no
