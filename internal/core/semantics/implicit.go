@@ -215,7 +215,9 @@ func (m *Model) declaredGeneralizationReaches(sym *symbols.Symbol, want string, 
 			continue
 		}
 		target := m.relationshipTarget(sym, rel)
-		if target == nil {
+		// A declaration on the path back to itself is a cycle, not a path to
+		// the base, so it does not displace the implicit one.
+		if target == nil || visiting[target] {
 			continue
 		}
 		sameBase := m.resolver.Index() != nil && m.resolver.Index().GetFQN(target) == want
