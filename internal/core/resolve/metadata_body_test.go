@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 func TestMetadataBodyMissingFeatureDoesNotBecomeUnresolved(t *testing.T) {
@@ -131,5 +132,69 @@ func TestMetadataBodyExplicitRedefinitionSurvivesImplicitTarget(t *testing.T) {
 	}
 	if !hasExplicit || !hasImplicit {
 		t.Fatalf("body declaration redefinition = %v, want explicit y and implicit x targets", targets)
+	}
+}
+
+func TestMetadataBodyOnAssumeResolvesValue(t *testing.T) {
+	qn := func(name string) *ast.QualifiedName {
+		return &ast.QualifiedName{Parts: []ast.NameSegment{{Text: name}}}
+	}
+	metadataFeature := &ast.Usage{
+		Kind:  ast.UsageAttribute,
+		Ident: ast.Identification{Name: "y"},
+	}
+	bodyValue := &ast.Usage{
+		Kind:  ast.UsageAttribute,
+		Ident: ast.Identification{Name: "x"},
+		Value: &ast.FeatureReference{Name: qn("y")},
+	}
+	prefix := &ast.PrefixMetadata{
+		Type: qn("A"),
+		Body: []ast.Node{
+			&ast.Membership{Member: bodyValue},
+		},
+	}
+	assume := &ast.AssumeMember{Prefixes: []*ast.PrefixMetadata{prefix}}
+	root := &ast.RootNamespace{
+		Members: []ast.Node{
+			&ast.Membership{
+				Member: &ast.Definition{
+					Kind:  ast.DefMetadata,
+					Ident: ast.Identification{Name: "A"},
+					Members: []ast.Node{
+						&ast.Membership{Member: metadataFeature},
+					},
+				},
+			},
+			&ast.Membership{
+				Member: &ast.Definition{
+					Kind:  ast.DefRequirement,
+					Ident: ast.Identification{Name: "R"},
+					Members: []ast.Node{
+						&ast.Membership{Member: assume},
+					},
+				},
+			},
+		},
+	}
+	idx := symbols.NewIndexFromDoc("metadata.sysml", root)
+	r := New(idx)
+	r.SetModel(localMemberModel{})
+	r.ResolveDocument("metadata.sysml", root)
+	if len(r.Diagnostics) != 0 {
+		t.Fatalf("assume metadata body resolution diagnostics: %v", r.Diagnostics)
+	}
+	requirement, ok := idx.DocumentRoot("metadata.sysml").LookupLocal("R")
+	if !ok || requirement.Scope == nil {
+		t.Fatal("requirement scope not found")
+	}
+	body := requirement.Scope.ChildFor(prefix)
+	if body == nil || body.Owner() == nil {
+		t.Fatal("assume metadata body scope was not owned by its metadata definition")
+	}
+	resolved, ok := r.ResolveQualified(body, bodyValue.Value.(*ast.FeatureReference).Name)
+	if !ok || resolved == nil || resolved.Decl != metadataFeature {
+		t.Fatalf("assume metadata body value resolved to %v, %v; want metadata feature y %v",
+			resolved, ok, metadataFeature)
 	}
 }

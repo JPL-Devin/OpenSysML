@@ -207,12 +207,14 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		r.resolveExpr(scope, d.Expression)
 		r.walkMembers(scope, d.Body)
 	case *ast.AssumeMember:
+		r.resolvePrefixes(scope, d.Prefixes)
 		r.resolveExpr(scope, d.Expression)
 		r.resolveRelationships(scope, d, d.Relationships)
 		r.resolveMultiplicity(scope, d.Multiplicity)
 		r.resolveExpr(scope, d.Value)
 		r.walkConstraintBody(scope, d, r.resolveConstraintReference(scope, d.Reference), d.Body)
 	case *ast.RequireMember:
+		r.resolvePrefixes(scope, d.Prefixes)
 		r.resolveExpr(scope, d.Expression)
 		r.resolveRelationships(scope, d, d.Relationships)
 		r.resolveMultiplicity(scope, d.Multiplicity)
