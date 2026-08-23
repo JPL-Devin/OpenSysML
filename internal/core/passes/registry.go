@@ -21,10 +21,15 @@ func (r *Registry) Register(p Pass) {
 	r.passes = append(r.passes, p)
 }
 
+// SelfGated marks a pass that decides per element whether the model is resolved
+// enough to judge it, so a failure elsewhere in the document does not skip it.
+type SelfGated interface{ SelfGated() }
+
 // Run executes all registered passes in ascending PassLevel order and returns
 // their accumulated diagnostics. If a pass at some level emits an
 // Error-severity diagnostic, passes at strictly higher levels are skipped to
-// avoid cascade noise. Passes at the same level always run.
+// avoid cascade noise, unless they are SelfGated. Passes at the same level
+// always run.
 func (r *Registry) Run(ctx *Context, name string, root *ast.RootNamespace) []Diagnostic {
 	ordered := make([]Pass, len(r.passes))
 	copy(ordered, r.passes)
@@ -39,7 +44,9 @@ func (r *Registry) Run(ctx *Context, name string, root *ast.RootNamespace) []Dia
 	var failedLevel PassLevel
 	for _, p := range ordered {
 		if failed && p.Level() > failedLevel {
-			continue
+			if _, selfGated := p.(SelfGated); !selfGated {
+				continue
+			}
 		}
 		diags := p.Run(ctx, name, root)
 		all = append(all, diags...)

@@ -48,6 +48,9 @@ func TestW8BDirectionConformanceOpposingDirection(t *testing.T) {
 	if !hasCode(diags, "redefinition-direction-conformance") {
 		t.Fatalf("expected a direction violation, got %v", codes(diags))
 	}
+	if len(diags) != 1 {
+		t.Fatalf("got %d conformance diagnostics, want one: %v", len(diags), codes(diags))
+	}
 }
 
 func TestW8BDirectionConformanceThroughConjugation(t *testing.T) {

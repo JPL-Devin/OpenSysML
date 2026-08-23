@@ -20,6 +20,8 @@ a release is cut.
   on, with the measurements behind them
 - **[Wave 11B parser findings](wave11b-parser-findings.md)** — the two parsing rows that were parser
   defects, and what each of the other 18 actually needs
+- **[Wave 11D — metadata and evaluability](wave11d-metadata-evaluability.md)** — what the metadata
+  annotation and model-level evaluability rules now do, and the two divergences left standing
 - **[Roadmap](roadmap.md)** — the known gaps, in the order they should be picked up
 - **[Releasing](releasing.md)** — the pre-tag gate, tagging, artifacts, Homebrew
 - **[macOS distribution](macos-distribution.md)** — Gatekeeper and the signing decision

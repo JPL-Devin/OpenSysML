@@ -7,7 +7,6 @@
 # files: sysml-examples 98
 # files: sysml-validation 56
 3	kerml-examples/Simple Tests/Circular.kerml
-1	kerml-examples/Simple Tests/MetadataTest.kerml
 1	sysml-examples/Analysis Examples/Turbojet Stage Analysis.sysml
 15	sysml-examples/Arrowhead Framework Example/AHFSequences.sysml
 6	sysml-examples/Cause and Effect Examples/CauseAndEffectExample.sysml

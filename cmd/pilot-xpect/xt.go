@@ -79,7 +79,9 @@ var (
 	xpectLineRe = regexp.MustCompile(`^[ \t]*//(\*?)[ \t]*XPECT[ \t]+([A-Za-z][A-Za-z0-9_]*)(.*)$`)
 	// Resource entries: `ThisFile {}`, `File {from ="/p"}` and `File "p" {}`.
 	fileFromRe = regexp.MustCompile(`\b(ThisFile\b|File\s*\{\s*from\s*=\s*"([^"]*)"|File\s*"([^"]*)"\s*\{)`)
-	quotedRe   = regexp.MustCompile(`"((?:[^"\\]|\\.)*)"(?:[ \t]*at[ \t]*"((?:[^"\\]|\\.)*)")?`)
+	// The `at` text runs to the last quote of its line: Xpect does not escape
+	// the quotes inside it, so `at "f(null, "", 1)"` is one text.
+	quotedRe = regexp.MustCompile(`"((?:[^"\\]|\\.)*)"(?:[ \t]*at[ \t]*"(.*)")?`)
 	// The arrow is written `-->` or `--->`, with or without space around it.
 	linkedNameRe = regexp.MustCompile(`^[ \t]*at[ \t]+(\S+?)[ \t]*-{2,}>[ \t]*(\S+)`)
 	scopeAtRe    = regexp.MustCompile(`^[ \t]*at[ \t]+(\S+)`)
