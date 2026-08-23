@@ -10,7 +10,7 @@
 
 ### ✅ Fully Implemented & Tested
 
-The map below tracks 714 semantic rules: **626 ✅ faithful, 75 ⚠️ approximate, 7 ❌ not implemented, 6 ⛔ deliberate divergence.**
+The map below tracks 719 semantic rules: **631 ✅ faithful, 75 ⚠️ approximate, 7 ❌ not implemented, 6 ⛔ deliberate divergence.**
 Read that as progress, not as a compliance percentage — the denominator is the list of rules *we*
 chose to track, so it moves when we add a row, and a specification-derived denominator does not
 exist. What is externally checked is enumerated in [the pilot differential](pilot-differential.md);
@@ -1165,6 +1165,22 @@ that the corpus family closed.
 | KerML specialization by metaclass family: a data type specializes neither a class nor an association, a class neither a data type nor an association, and a structure and a behavior do not specialize each other (KerML 8.3.3.1 with the classifier families of 8.3.2) | `passes/w11a_kerml_specialization.go` `W11AKerMLSpecializationPass` (type tier, KerML documents only), mapping each declaration keyword to its families | `passes/w11a_rules_test.go` `TestW11AKerMLSpecializationFamilies`. Closes the 4 `Cannot specialize class or association` / `... data type or association` rows | ✅ Faithful |
 | `Duplicate of inherited member name 'self' from Part, Port` on an interface end (`end part ::> tankAssy.fuel;`) | **not implemented**: the diamond needs an interface end's implicit `Ports::Port` base — an interface usage's ends redefine `Interfaces::Interface`'s port-typed ends — which our implicit-base table keys on the declaration's own keyword only | `InterfaceUsage_Invalid.sysml.xt:78`; the file's `An interface end must be a port.` error is reported (wave 10B) | ❌ Not implemented (adding an implicit base per *position* rather than per keyword changes what resolves inside every connector end, so it wants its own slice) |
 | `Duplicate of inherited member name 'B' from OuterPackage` where a feature declares a name its *subsetted* feature imports (`feature inner1 subsets inner { feature B redefines A }`) | **not implemented**: the conflict is between a declaration and a name imported into a supertype's scope, which is the resolver's own scope enumeration | `ShadowingTests_ImportAndInnerClassesNamesAreTheSameBadCase3_Rdef.kerml.xt:28` | ❌ Not implemented (resolver scope enumeration is wave 11C's; escalated) |
+
+---
+
+### Wave 11F — case, include, direction, qualification and state endpoints
+
+These rules were implemented and tested in the current wave. Their citations
+are the SysML v2 case, include, port, name-resolution and state semantics; the
+bundled library supplies the specialized metaclasses and multiplicities.
+
+| Semantic Rule | Implementation | Test Case | Status |
+|--------------|----------------|-----------|--------|
+| A case definition or usage owns at most one objective requirement; inherited objectives participate in the same cardinality rule, and an inherited conflict is reported on the owner when no local objective is at fault (SysML v2 §8.3.22, especially `ObjectiveMembership`; `Systems Library/Cases.sysml` `Case`) | `passes/at_most_one_member.go` `objectiveOwnerDecl`, `checkAtMostOneMember` for ordinary case definitions and usages | `passes/w7g_at_most_one_member_test.go` `TestW7GCaseObjectiveCompetesWithInheritedObjective`, pilot Xpect `CaseSubjectObjective_Invalid.sysml.xt` | ✅ Faithful for `case`; analysis, verification and use-case families intentionally permit multiple objectives in the bundled normative examples |
+| An `include` reference must identify a use-case usage or use-case definition, not an arbitrary feature (SysML v2 include relationship and `IncludeUseCaseUsage`) | `passes/w11a_usage_typing.go` include referent-kind validation in the consolidated 11A producer | `passes/w10b_performed_action_test.go`, `passes/pilot_p6_gaps_test.go`, pilot Xpect `CaseUsage_Invalid.sysml.xt` | ✅ Faithful |
+| An included use-case usage must be typed by exactly one use-case definition (SysML v2 case/include semantics; use-case typing multiplicity in the normative library) | `passes/w11a_usage_typing.go` one-definition validation and usage-declaration diagnostic placement | `passes/w10b_performed_action_test.go`, pilot Xpect `CaseUsage_Invalid.sysml.xt:101` | ✅ Faithful |
+| A redefining port feature has a direction compatible with its redefined feature; `in`, `out`, `inout`, absent direction and conjugation follow the general KerML redefinition relation (KerML §8.3.3.1 specialization/redefinition and SysML v2 port direction semantics) | `semantics/redefinition_conformance.go` direction relation; `passes/w8b_redefinition_conformance.go` `RedefinitionDirectionPass` at `LevelType` | `passes/w8b_redefinition_conformance_test.go`, pilot Xpect `PortUsage_Invalid.sysml.xt:65,67` | ✅ Faithful |
+| Inherited state-action `start` and `done` vertices are valid transition endpoints, including the bare `accept … then …` succession form (SysML v2 state-machine and transition semantics, §8.3.17) | `resolve/transition.go` endpoint vertex predicate shared by explicit transitions and accept-then successions | `passes/state_transition_test.go`, `resolve/transition_test.go`, pilot Xpect `StateTest.sysml.xt:49` | ✅ Faithful |
 
 ---
 

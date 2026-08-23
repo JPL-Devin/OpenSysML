@@ -102,6 +102,30 @@ func TestResolveQualifiedGlobal(t *testing.T) {
 	}
 }
 
+func TestResolveQualifiedLeadingLocalShadowsImportedNamespace(t *testing.T) {
+	idx := indexOf(t, map[string]string{
+		"app.sysml": "package Parts { part def parts; } package App { package Parts; }",
+	})
+	parts := scopeOf(t, scopeOf(t, idx.DocumentRoot("app.sysml"), "App"), "Parts")
+
+	r := New(idx)
+	if _, ok := r.ResolveQualified(parts, qn(false, "Parts", "parts")); ok {
+		t.Fatal("the innermost local Parts namespace must shadow the library Parts")
+	}
+}
+
+func TestResolveQualifiedExplicitGlobalReachesLibraryNamespace(t *testing.T) {
+	idx := indexOf(t, map[string]string{
+		"app.sysml": "package Parts { part def parts; } package App { package Parts; }",
+	})
+	parts := scopeOf(t, scopeOf(t, idx.DocumentRoot("app.sysml"), "App"), "Parts")
+
+	r := New(idx)
+	if _, ok := r.ResolveQualified(parts, qn(true, "Parts", "parts")); !ok {
+		t.Fatalf("$::Parts::parts should reach the library namespace; diagnostics: %v", r.Diagnostics)
+	}
+}
+
 // A name a namespace holds only through a private wildcard import is not a
 // visible member of it, so a qualified reference from another package does not
 // reach it — while the same reference made inside that namespace does

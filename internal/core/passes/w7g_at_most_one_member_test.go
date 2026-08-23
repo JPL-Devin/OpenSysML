@@ -69,6 +69,49 @@ func TestW7GCaseReportsOnlyTheExtraSubject(t *testing.T) {
 	}
 }
 
+func TestW7GCaseReportsOnlyTheExtraObjective(t *testing.T) {
+	const src = `package C {
+		case def Cs {
+			objective o1;
+			objective o2;
+		}
+	}`
+	if got := len(only(constraintDiags(t, src), "only-one-objective")); got != 1 {
+		t.Fatalf("expected one objective diagnostic, got %d", got)
+	}
+}
+
+func TestW7GCaseObjectiveCompetesWithInheritedObjective(t *testing.T) {
+	const src = `package C {
+		case def Base { objective inherited; }
+		case c : Base {
+			objective first;
+			objective second;
+		}
+	}`
+	if got := len(only(constraintDiags(t, src), "only-one-objective")); got != 2 {
+		t.Fatalf("expected both owned objectives to be diagnosed, got %d", got)
+	}
+}
+
+func TestW7GCaseReportsInheritedObjectiveConflictOnOwner(t *testing.T) {
+	const src = `package P {
+		case def C {
+			objective o1;
+			objective o2;
+		}
+	case c1 : C;
+	}`
+	diags := only(constraintDiags(t, src), "only-one-objective")
+	if len(diags) != 2 {
+		t.Fatalf("expected the inherited conflict and its source declaration, got %v", diags)
+	}
+	if got := src[diags[1].Span.Offset:]; len(got) < len("case c1 : C;") ||
+		got[:len("case c1 : C;")] != "case c1 : C;" {
+		t.Fatalf("inherited objective diagnostic is not on the usage: %q", got)
+	}
+}
+
 func TestW7GSubjectAfterAnotherParameterIsReported(t *testing.T) {
 	const src = `package R {
 		part def V;

@@ -478,10 +478,10 @@ them would have hidden five distinct divergences:
 protected-import restoration. What we still accept silently is now small enough to enumerate
 completely:
 
-- **4 unresolved-reference rows** — `ParsingTests_ScopeWithFourDotAndDot.kerml.xt`:22 (two),
-  `ConnectorTest_ConnectorEndSubsettingBadCase.kerml.xt`:31 and `GlobalQualification.sysml.xt`:48. In
-  each we resolve a name the pilot does not, so these are visibility or path-shape questions, not
-  missing rules.
+- **3 unresolved-reference rows** — `ParsingTests_ScopeWithFourDotAndDot.kerml.xt`:22 (two) and
+  `ConnectorTest_ConnectorEndSubsettingBadCase.kerml.xt`:31. In each we resolve a name the pilot
+  does not, so these are visibility or path-shape questions, not missing rules. The
+  `GlobalQualification.sysml.xt:48` row is wording-only agreement, not a remaining disagreement.
 - **4 rows in the two `Feature_invalid_noType` files** — `Features must have at least one type` and
   its implicit-base half (`Must directly or indirectly specialize Base::Anything` in KerML,
   `Parts::Part` in SysML). These are the only genuinely missing *validation rules* left in this

@@ -253,7 +253,7 @@ func (r *Resolver) unresolved(scope *symbols.Scope, qn *ast.QualifiedName) {
 		msg = r.unresolvedMessage(scope, name)
 		fixes = r.unresolvedFixes(scope, name, qn.Span())
 	}
-	r.report(Diagnostic{
+	r.reportQualified(qn, Diagnostic{
 		Span:    qn.Span(),
 		Message: msg,
 		Fixes:   fixes,
@@ -273,13 +273,23 @@ func (r *Resolver) unresolvedNamespace(qn *ast.QualifiedName, ns string) {
 				ns, last, strings.Join(cands, ", "))
 		}
 	}
-	r.report(Diagnostic{Span: qn.Span(), Message: msg})
+	r.reportQualified(qn, Diagnostic{Span: qn.Span(), Message: msg})
 }
 
 // ambiguous records an ambiguity diagnostic reporting the number of matches.
 func (r *Resolver) ambiguous(qn *ast.QualifiedName, n int) {
-	r.report(Diagnostic{
+	r.reportQualified(qn, Diagnostic{
 		Span:    qn.Span(),
 		Message: fmt.Sprintf("ambiguous reference: %s (%d candidates)", qnText(qn), n),
 	})
+}
+
+func (r *Resolver) reportQualified(qn *ast.QualifiedName, d Diagnostic) {
+	if r.quiet == 0 {
+		if r.reportedQualified[qn] {
+			return
+		}
+		r.reportedQualified[qn] = true
+	}
+	r.report(d)
 }

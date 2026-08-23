@@ -487,7 +487,17 @@ func (r *Resolver) resolveRelationships(scope *symbols.Scope, decl ast.Node, rel
 			// name decl borrows from it; memoizing that result makes the
 			// chain walk below see the referenced feature, not decl.
 			if rel.Kind == ast.RelReferences {
-				r.resolveTarget(scope, leadingName(target), &refFilter{decl: decl})
+				hide := &refFilter{
+					decl: decl,
+				}
+				if _, ok := target.(*ast.FeatureChainExpr); ok {
+					hide = hide.forPrefix()
+				}
+				if _, ok := target.(*ast.QualifiedName); ok {
+					r.resolveTarget(scope, target, hide)
+					continue
+				}
+				r.resolveTarget(scope, leadingName(target), hide)
 			}
 
 			// Standard resolution in current scope
@@ -731,7 +741,10 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 		return
 	}
 
-	hide := &refFilter{decl: decl}
+	hide := &refFilter{
+		decl:             decl,
+		skipBorrowedName: true,
+	}
 
 	if len(qn.Parts) == 1 {
 		featureName := qn.Parts[0].Text
@@ -1132,7 +1145,16 @@ func (r *Resolver) getOperandSymbol(scope *symbols.Scope, e ast.Node) *symbols.S
 		if v.Name == nil {
 			return nil
 		}
-		sym, ok := r.ResolveQualified(scope, v.Name)
+		var sym *symbols.Symbol
+		var ok bool
+		if len(v.Name.Parts) == 1 && !v.Name.Global {
+			sym, ok = r.LookupName(scope, v.Name.Parts[0].Text)
+			if !ok {
+				sym, ok = r.ResolveQualified(scope, v.Name)
+			}
+		} else {
+			sym, ok = r.ResolveQualified(scope, v.Name)
+		}
 		if !ok {
 			return nil
 		}

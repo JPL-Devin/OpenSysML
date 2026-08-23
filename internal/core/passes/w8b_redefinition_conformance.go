@@ -29,17 +29,41 @@ func (RedefinitionConformancePass) Run(ctx *Context, name string, root *ast.Root
 		return nil
 	}
 	rc := &redefinitionConformanceChecker{
-		model: ctx.Model(),
-		seen:  make(map[*symbols.Symbol]bool),
+		model:         ctx.Model(),
+		seen:          make(map[*symbols.Symbol]bool),
+		directionOnly: false,
+	}
+	rc.walk(rootScope)
+	return rc.diags
+}
+
+// RedefinitionDirectionPass reports direction conformance as a typing property.
+type RedefinitionDirectionPass struct{}
+
+func (RedefinitionDirectionPass) Level() PassLevel { return LevelType }
+
+func (RedefinitionDirectionPass) Run(ctx *Context, name string, root *ast.RootNamespace) []Diagnostic {
+	if ctx == nil || ctx.Index == nil || root == nil {
+		return nil
+	}
+	rootScope := ctx.Index.DocumentRoot(name)
+	if rootScope == nil {
+		return nil
+	}
+	rc := &redefinitionConformanceChecker{
+		model:         ctx.Model(),
+		seen:          make(map[*symbols.Symbol]bool),
+		directionOnly: true,
 	}
 	rc.walk(rootScope)
 	return rc.diags
 }
 
 type redefinitionConformanceChecker struct {
-	model *semantics.Model
-	seen  map[*symbols.Symbol]bool
-	diags []Diagnostic
+	model         *semantics.Model
+	seen          map[*symbols.Symbol]bool
+	diags         []Diagnostic
+	directionOnly bool
 }
 
 // walk visits every symbol of the subtree once, including anonymous members.
@@ -59,6 +83,9 @@ func (rc *redefinitionConformanceChecker) walk(scope *symbols.Scope) {
 
 func (rc *redefinitionConformanceChecker) check(sym *symbols.Symbol) {
 	for _, v := range rc.model.ConformanceViolations(sym) {
+		if !rc.ownsViolation(v.Kind) {
+			continue
+		}
 		msg, code := conformanceMessage(v.Kind)
 		if msg == "" || v.Ref == nil {
 			continue
@@ -71,6 +98,15 @@ func (rc *redefinitionConformanceChecker) check(sym *symbols.Symbol) {
 			Source:   "constraint",
 		})
 	}
+}
+
+func (rc *redefinitionConformanceChecker) ownsViolation(
+	kind semantics.ConformanceViolationKind,
+) bool {
+	if rc.directionOnly {
+		return kind == semantics.ViolationDirection
+	}
+	return kind != semantics.ViolationDirection
 }
 
 func conformanceMessage(kind semantics.ConformanceViolationKind) (msg, code string) {

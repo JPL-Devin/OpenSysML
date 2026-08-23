@@ -1924,3 +1924,100 @@ The JSON carries tuples and counts but no message text, so it diffs cleanly; the
 carries the messages for adjudication. When the baseline is refreshed, the verdicts above must
 be re-adjudicated the same way [training-examples.md](training-examples.md) requires — a
 moved count is a claim about one of the two implementations, and it needs a reason.
+
+---
+
+## Wave 11F — current branch movement and adjudications
+
+The settled control is a clean run of `466de743cbd46eaa6983fd8cf0cffc4097a2137f`,
+after the merged wave-11 changes and before the remaining wave-11F changes. The
+branch movement is measured from
+`build/pilot-diff/pilot-diff.json`, keyed by corpus root, file, diagnostic line,
+severity and category:
+
+| Measurement | Control | Branch |
+|---|---:|---:|
+| Fully agreeing files | 313 | **317** |
+| Agreed diagnostics | 25 | **25** |
+| Only ours | 138 | **119** |
+| Only the pilot | 73 | **73** |
+
+The branch retires 13 only-ours table entries representing 19 diagnostics; no
+new differential rows are introduced. Two entries account for four diagnostics
+each, so the table-entry count and diagnostic count are intentionally different:
+
+| File and line | Cause |
+|---|---|
+| `pilot-examples/Simple Tests/DecisionTest.sysml:17,18` | Objective cardinality and state/transition endpoint handling now match the normative case and state rules. |
+| `pilot-examples/Simple Tests/StateTest.sysml:24` | Inherited state-action endpoint resolution now recognizes the legal vertex. |
+| `pilot-examples/Vehicle Example/Annex_A_VehicleViews.sysml:472` | Same-feature inherited resolution now reaches the intended inherited declaration. |
+| `pilot-examples/Vehicle Example/Annex_A_VehicleViews.sysml:686` (4 diagnostics) | Same-feature inherited-member canonicalization removes the false duplicate family. |
+| `pilot-examples/Vehicle Example/Annex_A_VehicleViews.sysml:712` (4 diagnostics) | Same-feature inherited-member canonicalization removes the second false duplicate family. |
+| `pilot-examples/Vehicle Example/SysML v2 Spec Annex A SimpleVehicleModel.sysml:85,600,647,664,670` | Inherited and redefined-name resolution now reaches the intended declarations. |
+| `pilot-validation/05-State-based Behavior/5-State-based Behavior-1.sysml:136` | Legal inherited state endpoint handling. |
+| `pilot-validation/05-State-based Behavior/5-State-based Behavior-1a.sysml:137` | Legal inherited state endpoint handling. |
+
+The verified Xpect set also includes
+`simpletests/DecisionTest.sysml.xt:52` among the recovered rows checked on the
+branch.
+
+The three rows at
+`pilot-examples/Interaction Sequencing Examples/ServerSequenceOutsideRealization-2.sysml:18,32,57`
+are explicitly excluded from this branch's claim. The merged wave-11 PRs
+closed those `kind-mismatch` rows before `ae4fdf9e`; they explain the stale
+`311 / 142 / 73` documentation-era comparison and are not movement produced by
+wave 11F.
+
+### Remaining Xpect adjudications
+
+The following fourteen rows are settled adjudications rather than unclassified
+disagreements.
+
+* **Parser-blocked query syntax:** `queryx/failing/QPE-Qualifier`,
+  `QPE-Traversal`, and `QPE-Wildcard` are clean in the pilot, while OpenSysML
+  reports `expected a namespace member`. Query path expressions are not parsed,
+  so these are wave-11B parser work. See
+  [wave11b-parser-findings.md](wave11b-parser-findings.md).
+* **Parser-blocked parallel state syntax:** `TransitionUsage_invalid.sysml:45,
+  54, 60, 68` follows parse errors at lines 43 and 46 from `parallel` state
+  syntax. `parallel` and `exclusive` are consumed but not retained in the AST,
+  so “A parallel state cannot have successions or transitions” cannot yet be
+  evaluated. The rule is spec-derivable; the missing piece is its parser
+  representation. See [wave11b-parser-findings.md](wave11b-parser-findings.md).
+* **Fixture environment:** `Feature_invalid_noType.sysml:18,20` has no library
+  resource in `XPECT_SETUP`. The pilot consequently lacks `Parts::Part`, so the
+  implicit specialization has nothing to specialize and the feature has no
+  implicit type. OpenSysML always bundles the standard library, making this
+  fixture unsatisfiable for OpenSysML by construction. This is an environment
+  difference, not a specification divergence.
+* **Import recovery:** `Import_Visibility_Invalid.sysml:23,25` contains the
+  pilot's ANTLR recovery texts `mismatched input 'import' expecting '}'` and
+  `extraneous input '}' expecting EOF`. OpenSysML reports the
+  specification-grounded error at the same location: SysML v2 requires a
+  visibility indicator before `import`; the pilot's second error is a cascade
+  of its first. This is a justified divergence, deliberately not a
+  `wording-only` pair: that class is reserved for registered equivalent
+  phrasing, and adding this recovery pair would move the metric cosmetically.
+* **General interface end count:** `InterfaceUsage_Invalid.sysml:49` expects
+  `Cannot have more than two ends` from the pilot. The normative library's
+  `Interfaces::Interface::participant` has multiplicity `[2..*]`; exactly two
+  ends is a property of `BinaryInterface`, not `Interface`. OpenSysML therefore
+  reports the port-typed-end violation at the same location. This is a
+  justified divergence under the library being validated and remains an
+  adjudication question for the parent rather than a categorical claim that
+  the pilot is wrong.
+* **Interface implicit Port base:** `InterfaceUsage_Invalid.sysml:78` expects
+  `Duplicate of inherited member name 'self' from Part, Port`. This remains
+  intentionally unimplemented. The diamond would require an interface end to
+  carry an implicit `Ports::Port` base in addition to the declaration keyword's
+  own base, while `internal/core/semantics/implicit.go` keys implicit bases on
+  the declaration keyword. Scoping the extra base to ends owned by interface
+  usages or definitions increased only-ours diagnostics from 128 to 153 across
+  training, pilot examples, pilot validation and testdata, introducing false
+  positives. The row stays open because closing it costs correctness elsewhere.
+* **Assignment action time variance:** `AssignmentActionUsage_invalid.sysml:44`
+  expects `Referent must be time varying`. This is not implemented: the
+  semantic model does not yet determine time variance on the referent's type.
+  Implementing it requires a type-level time-varying determination propagated
+  through the assignment referent and checked by the assignment-action
+  validation rule.

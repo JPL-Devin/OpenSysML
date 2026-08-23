@@ -7,8 +7,10 @@ import (
 
 // Pilot SysMLValidator (2026-05) checkAtMostOneFeature and checkSubjectParameter:
 // a requirement or case owns at most one subject, and it is the first parameter.
+// Cases also own at most one objective.
 const (
-	msgOnlyOneSubject = "Only one subject is allowed."
+	msgOnlyOneSubject   = "Only one subject is allowed."
+	msgOnlyOneObjective = "Only one objective is allowed."
 
 	msgSubjectParameterPosition = "Subject must be first parameter."
 )
@@ -29,6 +31,47 @@ func (cc *constraintChecker) checkAtMostOneMember(sym *symbols.Symbol) {
 		// accumulate.
 		cc.reportExtraMembers(subjects, msgOnlyOneSubject, "only-one-subject")
 		cc.checkSubjectParameterPosition(sym, members)
+		if objectiveOwnerDecl(sym.Decl) {
+			cc.checkAtMostOneObjective(sym, members)
+		}
+	}
+}
+
+// checkAtMostOneObjective applies the case objective cardinality rule across
+// owned and inherited members. Local objectives compete with an inherited
+// objective, while multiple inherited objectives are reported on the owner.
+func (cc *constraintChecker) checkAtMostOneObjective(sym *symbols.Symbol, members []ast.Node) {
+	var local []ast.Node
+	for _, member := range members {
+		if isObjectiveMemberNode(member) {
+			local = append(local, member)
+		}
+	}
+	inherited := 0
+	for _, member := range cc.model.MembersOf(sym) {
+		if member == nil || member.OwnerScope == sym.Scope {
+			continue
+		}
+		if isObjectiveDecl(member.Decl) {
+			inherited++
+		}
+	}
+	if inherited == 0 {
+		cc.reportExtraMembers(local, msgOnlyOneObjective, "only-one-objective")
+		return
+	}
+	if len(local) > 0 {
+		cc.reportEachMember(local, msgOnlyOneObjective, "only-one-objective")
+		return
+	}
+	if inherited > 1 {
+		cc.diags = append(cc.diags, Diagnostic{
+			Severity: SeverityError,
+			Span:     sym.Decl.Span(),
+			Message:  msgOnlyOneObjective,
+			Code:     "only-one-objective",
+			Source:   "constraint",
+		})
 	}
 }
 
@@ -76,6 +119,11 @@ func isSubjectDecl(decl ast.Node) bool {
 	return false
 }
 
+func isObjectiveDecl(decl ast.Node) bool {
+	u, ok := decl.(*ast.Usage)
+	return ok && u.Kind == ast.UsageObjective
+}
+
 func isInputParameterDecl(decl ast.Node) bool {
 	u, ok := decl.(*ast.Usage)
 	return ok && (u.Direction == ast.DirIn || u.Direction == ast.DirInOut)
@@ -119,6 +167,11 @@ func isSubjectMemberNode(n ast.Node) bool {
 	return ok && u.Kind == ast.UsageSubject
 }
 
+func isObjectiveMemberNode(n ast.Node) bool {
+	u, ok := unwrapUsageMember(n)
+	return ok && u.Kind == ast.UsageObjective
+}
+
 func stateLikeDecl(decl ast.Node) bool {
 	switch d := decl.(type) {
 	case *ast.Definition:
@@ -135,6 +188,16 @@ func subjectOwnerDecl(decl ast.Node) bool {
 		return d.Kind == ast.DefRequirement || isCaseDefKind(d.Kind)
 	case *ast.Usage:
 		return d.Kind == ast.UsageRequirement || isCaseUsageKind(d.Kind)
+	}
+	return false
+}
+
+func objectiveOwnerDecl(decl ast.Node) bool {
+	switch d := decl.(type) {
+	case *ast.Definition:
+		return d.Kind == ast.DefCase
+	case *ast.Usage:
+		return d.Kind == ast.UsageCase
 	}
 	return false
 }

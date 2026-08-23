@@ -62,10 +62,12 @@ func (tc *typeChecker) walk(scope *symbols.Scope, members []ast.Node) {
 				lang:         tc.lang,
 				useKind:      d.Kind,
 				direction:    d.Direction,
+				isReference:  d.IsReference,
 				isEnd:        d.IsEnd,
 				isIndividual: d.IsIndividual,
 				portion:      d.Portion,
 				keyword:      d.Keyword,
+				hasType:      hasTypingRelationship(d.Relationships),
 				span:         d.Span(),
 			})
 			tc.checkOneType(scope, d)
@@ -186,11 +188,13 @@ func (tc *typeChecker) checkTrigger(scope *symbols.Scope, trigger ast.Node) {
 type declKind struct {
 	// lang is the language of the document the declaration is written in: the
 	// KerML type layer has no definition/usage split to check against.
-	lang      source.Kind
-	isDef     bool
-	defKind   ast.DefinitionKind
-	useKind   ast.UsageKind
-	direction ast.FeatureDirection
+	lang        source.Kind
+	isDef       bool
+	defKind     ast.DefinitionKind
+	useKind     ast.UsageKind
+	direction   ast.FeatureDirection
+	isReference bool
+	hasType     bool
 	// isEnd marks a feature declared with the `end` modifier, whose type is that
 	// of the feature it connects and so escapes the usage-kind taxonomy.
 	isEnd bool
@@ -290,6 +294,11 @@ func (tc *typeChecker) checkTypeTarget(scope *symbols.Scope, target ast.Node, re
 			targetSym = resolved
 		}
 	}
+	if relKind == ast.RelRedefines || relKind == ast.RelSubsets {
+		if tc.checkNearestDeclaredUsageTyping(targetSym, decl) {
+			return
+		}
+	}
 	msg := compatMessage(decl, relKind, targetSym.Kind)
 	if msg == "" {
 		return
@@ -308,6 +317,115 @@ func (tc *typeChecker) checkTypeTarget(scope *symbols.Scope, target ast.Node, re
 		Code:     code,
 		Source:   "type",
 	})
+}
+
+func (tc *typeChecker) checkNearestDeclaredUsageTyping(target *symbols.Symbol, decl declKind) bool {
+	if _, ok := target.Decl.(*ast.Usage); !ok ||
+		decl.isDef || decl.isReference || decl.keyword == "" ||
+		decl.keyword == "feature" || decl.hasType ||
+		w11aInheritedTypingKinds[decl.useKind] {
+		return false
+	}
+	msg, code, ok := pilotTypingMessage(decl)
+	if !ok {
+		return false
+	}
+	for _, typ := range nearestDeclaredUsageTypesOf(tc.resolver, target, make(map[*symbols.Symbol]bool)) {
+		if !isDefKind(typ.sym.Kind) {
+			continue
+		}
+		if compatibleTyping(decl.useKind, decl.direction, typ.sym.Kind) {
+			continue
+		}
+		tc.appendUnique(Diagnostic{
+			Severity: SeverityError,
+			Span:     decl.span,
+			Message:  msg,
+			Code:     code,
+			Source:   "type",
+		})
+		return true
+	}
+	return false
+}
+
+func nearestDeclaredUsageTypesOf(resolver *resolve.Resolver, sym *symbols.Symbol, visited map[*symbols.Symbol]bool) []w8dUsageType {
+	if sym == nil || visited[sym] {
+		return nil
+	}
+	visited[sym] = true
+	decl, ok := sym.Decl.(*ast.Usage)
+	if !ok {
+		return nil
+	}
+	scope := w8dScopeOf(sym)
+	var inherited []*symbols.Symbol
+	for _, rel := range decl.Relationships {
+		if rel == nil || rel.Target == nil {
+			continue
+		}
+		target, ok := resolver.ResolveTarget(scope, rel.Target)
+		if !ok || target == nil {
+			continue
+		}
+		if rel.Kind == ast.RelTyping {
+			inherited = append(inherited, target)
+		}
+	}
+	if len(inherited) > 0 {
+		if !usageDeclCanBeTypedByDefinition(decl) {
+			return nil
+		}
+		types := make([]w8dUsageType, 0, len(inherited))
+		for _, target := range inherited {
+			types = append(types, w8dUsageType{sym: target, declared: true})
+		}
+		return types
+	}
+	var types []w8dUsageType
+	for _, rel := range decl.Relationships {
+		if rel == nil || rel.Target == nil ||
+			(rel.Kind != ast.RelSubsets && rel.Kind != ast.RelRedefines && rel.Kind != ast.RelReferences) {
+			continue
+		}
+		target, ok := resolver.ResolveTarget(scope, rel.Target)
+		if !ok || target == nil {
+			continue
+		}
+		types = append(types, nearestDeclaredUsageTypesOf(resolver, target, visited)...)
+	}
+	return types
+}
+
+func usageDeclCanBeTypedByDefinition(decl *ast.Usage) bool {
+	if decl == nil || decl.IsReference || decl.Direction != ast.DirNone ||
+		decl.Keyword == "" || decl.Keyword == "feature" {
+		return false
+	}
+	return usageKindCanBeTypedByDefinition(decl.Kind)
+}
+
+func usageKindCanBeTypedByDefinition(kind ast.UsageKind) bool {
+	switch kind {
+	case ast.UsageAttribute, ast.UsagePart, ast.UsageItem, ast.UsageOccurrence,
+		ast.UsagePort, ast.UsageAction, ast.UsageState, ast.UsageConnection,
+		ast.UsageInterface, ast.UsageAllocation, ast.UsageFlow, ast.UsageCalc,
+		ast.UsageConstraint, ast.UsageRequirement, ast.UsageCase,
+		ast.UsageAnalysisCase, ast.UsageVerificationCase, ast.UsageUseCase,
+		ast.UsageEnumeration, ast.UsageRendering, ast.UsageViewpoint, ast.UsageView,
+		ast.UsageMetadata:
+		return true
+	}
+	return false
+}
+
+func hasTypingRelationship(rels []*ast.Relationship) bool {
+	for _, rel := range rels {
+		if rel != nil && rel.Kind == ast.RelTyping {
+			return true
+		}
+	}
+	return false
 }
 
 // appendUnique records d unless the same message was already reported there: a
