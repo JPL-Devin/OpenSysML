@@ -13,18 +13,24 @@ rm -rf /tmp/c-$$ && XDG_CACHE_HOME=/tmp/c-$$ go run ./cmd/pilot-diff
 rm -rf /tmp/c-$$ && XDG_CACHE_HOME=/tmp/c-$$ go run ./cmd/pilot-reject
 ```
 
-| Oracle | base `b21a30eb` | this branch |
+| Oracle | base `7504ff09` | this branch |
 |---|---|---|
 | xpect | 428 `.xt` files, 0 unparsed; 1269 agree (246 wording-only) / 54 disagree | 1280 agree (248 wording-only) / **43** disagree |
 | xpect `scope` | 230 rows: 221 agree / 9 disagree | 230 rows: **230 agree** / 0 disagree |
-| differential | 353 files, 317 fully agreeing; 25 agreed, **119 only ours**, 73 only the pilot's | **byte-identical** |
+| differential | 353 files, 317 fully agreeing; 32 agreed, **119 only ours**, 66 only the pilot's | **byte-identical** |
 | rejection | 120 cases: 116 both reject, 4 only the pilot, 0 only us | **byte-identical** |
 
 The differential and rejection reports are identical file-for-file to the base run, so the
 only-ours multiset did not move: no row we report is new, and none was traded away.
 
-The branch was rebased onto `b21a30eb` (wave 12B's #499) and every figure above was re-measured
-there: all four oracles read the same on the new base as on `0d4eb14f`, so the deltas are unchanged.
+The branch was rebased twice, onto wave 12B's #499 (`b21a30eb`) and then onto wave 12A's #500
+(`7504ff09`), and every figure above was re-measured on each new base rather than carried over.
+#500 moved the differential base itself (agreed 25 &rarr; 32, only-the-pilot's 73 &rarr; 66, only-ours
+unmoved at 119); our deltas are unchanged, and the branch still reads byte-identical to its base.
+Per-element tier gating lets `MetadataTypePass` and `ElementFilterPass` run on files that used to be
+gated, so a resolution change here could newly surface a diagnostic there: comparing the two runs row
+by row, **no row that agreed on `7504ff09` disagrees on this branch** (9 `scope` rows and 2 `errors`
+rows move the other way), and the differential's only-ours set is identical file-for-file.
 #499's annotation-body `bodyOwners` memo and this slice's `effNames` memo are independent fields of
 the same resolver, and both are kept.
 
