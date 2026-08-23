@@ -38,6 +38,30 @@ func TestW12DParallelStateUsageTransition(t *testing.T) {
 	}
 }
 
+// Orthogonality is a property of each state, so the rule reaches a parallel
+// state nested in a machine and leaves its non-parallel siblings alone.
+func TestW12DNestedParallelState(t *testing.T) {
+	got := transitionDiags(t, `package test {
+	state def M {
+		state outer {
+			state s parallel {
+				state a;
+				state b;
+				transition first a then b;
+			}
+			state ordered {
+				state c;
+				state d;
+				transition first c then d;
+			}
+		}
+	}
+}`)
+	if len(got) != 1 || got[0].Code != CodeParallelStateTransition {
+		t.Fatalf("got %+v, want one %s", got, CodeParallelStateTransition)
+	}
+}
+
 // An accepter waits while its source is performed, so a triggered transition
 // out of an action names the accepter rule at the trigger.
 func TestW12DAccepterSourceMustBeAState(t *testing.T) {

@@ -83,18 +83,14 @@ func (c *transitionChecker) findMachines(scope *symbols.Scope, members []ast.Nod
 			c.findMachines(child, n.Members)
 		case *ast.Definition:
 			if n.Kind == ast.DefState {
-				if n.IsParallel {
-					c.checkParallel(n.Members)
-				}
+				c.checkParallelStates(n.Members, n.IsParallel)
 				c.checkMachine(n, child)
 				continue
 			}
 			c.findMachines(child, n.Members)
 		case *ast.Usage:
 			if n.Kind == ast.UsageState {
-				if n.IsParallel {
-					c.checkParallel(n.Members)
-				}
+				c.checkParallelStates(n.Members, n.IsParallel)
 				c.checkMachine(n, child)
 				continue
 			}
@@ -129,15 +125,30 @@ func (c *transitionChecker) checkMachine(decl ast.Node, scope *symbols.Scope) {
 	}
 }
 
-// checkParallel reports the successions and transitions a parallel state owns:
-// its substates are performed concurrently, so no order among them is stated
-// (SysML v2 §7.16, StateDefinition/StateUsage::isParallel). Nested states carry
-// their own orthogonality, so only the body's own members are checked.
-func (c *transitionChecker) checkParallel(members []ast.Node) {
+// checkParallelStates reports the successions and transitions a parallel state
+// owns, orthogonality being each state's own (SysML v2 §7.16, isParallel).
+func (c *transitionChecker) checkParallelStates(members []ast.Node, parallel bool) {
 	for _, member := range members {
 		decl := unwrapMembership(member)
-		if parallelStateOrdering(decl) {
+		if parallel && parallelStateOrdering(decl) {
 			c.report(decl.Span(), CodeParallelStateTransition, msgParallelStateTransition)
+		}
+		switch n := decl.(type) {
+		case *ast.Definition:
+			if n.Kind == ast.DefState {
+				c.checkParallelStates(n.Members, n.IsParallel)
+			}
+		case *ast.Usage:
+			if n.Kind == ast.UsageState {
+				c.checkParallelStates(n.Members, n.IsParallel)
+			}
+		case *ast.StateNode:
+			c.checkParallelStates(n.Substates, false)
+			for _, region := range n.Regions {
+				c.checkParallelStates(region.States, false)
+			}
+		case *ast.StateRegion:
+			c.checkParallelStates(n.States, false)
 		}
 	}
 }
