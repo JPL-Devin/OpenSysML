@@ -2,9 +2,27 @@
 
 Wave 11E owns 25 Xpect disagreements in the KerML validation and visibility suites. Nineteen closed
 by implementing or re-attaching a rule; the six below do not close inside this slice. Each entry
-states the fixture, what the pilot declares, what we do, the specification reading, and who owns the
-remaining work. Every number is from a fresh run of `go run ./cmd/pilot-xpect -out build/xpect-fresh`
-on the branch, not quoted from a report.
+states the fixture, what the pilot declares, what we do, the specification reading, its **category**,
+and who owns the remaining work. Every number is from a fresh run of
+`go run ./cmd/pilot-xpect -out build/xpect-fresh` on the branch, not quoted from a report.
+
+Four categories, and every open row carries one — an unlabelled open row reads as a defect:
+
+| Category | Meaning |
+|---|---|
+| **our defect** | we are wrong and the pilot is right |
+| **unimplemented obligation** | the specification states the rule; we do not implement it yet |
+| **pilot limitation** | the pilot's declared expectation does not follow from the specification |
+| **adjudicated divergence** | we deliberately differ, with the reading recorded |
+
+| Row | Category | Owner |
+|---|---|---|
+| E1 `Type_Multiplicity_invalid` | unimplemented obligation | 11B (parser) |
+| E2 `AssociationTest_CrossFeatures_invalid` | unimplemented obligation | 11B (parser/AST), then a KerML rule slice |
+| E3 `ConnectorTest_ConnectorEndSubsettingBadCase` | our defect | 11C (resolver) |
+| E4 `SimpleImportTestsFromOtherFile_Import3{,_FT}` | adjudicated divergence | 11E (this doc) |
+| E5 `VisibilityTests_Protected_FeatureChaining` | our defect | 11C (resolver) |
+| E6 `ShadowingTests_SameNamesImportAsFeature_Rdef` | our defect | 11C (resolver) |
 
 ---
 
@@ -20,7 +38,10 @@ on the branch, not quoted from a report.
 admits the surplus member so that its validator can name it. Reporting it as a validation error
 requires the parser to accept the form first.
 
-**Owner.** Parser (slice 11B). Not a divergence — a rule blocked behind a missing production.
+**Category — unimplemented obligation.** The rule follows from the specification; it is blocked
+behind a missing production, not disputed.
+
+**Owner.** Parser (slice 11B).
 
 ---
 
@@ -41,6 +62,9 @@ one when they differ. We have no AST for that inline declaration: `internal/core
 `RelCrosses` but no owned cross feature, so there is nothing to compare. The rule itself is
 KerML-side, and this slice would implement it once the declaration exists.
 
+**Category — unimplemented obligation.** The cross feature of an end is specified (KerML 8.3.4.5);
+we implement neither the declaration form nor the rule over it.
+
 **Owner.** Parser and AST (slice 11B) for the `end <crossFeature> [mult] feature <name>` form; the
 rule then belongs to a KerML validation slice.
 
@@ -55,6 +79,8 @@ rule then belongs to a KerML validation slice.
 **Reading.** The declared error is a *resolution* verdict about which features a connector end may
 name, not a constraint on a resolved model, so no `internal/core/passes` rule can produce it without
 duplicating name resolution.
+
+**Category — our defect.** We resolve a feature that should not be nameable here.
 
 **Owner.** Resolver (slice 11C).
 
@@ -81,7 +107,7 @@ not validate subsetting type conformance at all; it has no constraint for it, le
 to a reasoner. So the fixture's silence records the absence of a check rather than the legality of the
 model.
 
-**Decision — keep the check, record the divergence.** Dropping it would remove a sound rule to move
+**Category — adjudicated divergence, decided here: keep the check.** Dropping it would remove a sound rule to move
 two rows, and re-labelling it wording-only would be false: the pilot emits nothing here. These two
 rows stay open as a deliberate divergence, and `noErrors` carries them.
 
@@ -95,6 +121,8 @@ Feature 'c'.` at line 34, we do not report — our nearest error is at line 39.
 **Reading.** Which segment of a feature chain a protected member is visible through is decided in
 visible/local resolution (KerML 8.2.3.5.3-8.2.3.5.4), the same mechanism wave 10E corrected for the
 qualified tail. The missing row is a resolution verdict on one chain segment, not a constraint.
+
+**Category — our defect.** The reference should not resolve at line 34.
 
 **Owner.** Resolver (slice 11C).
 
@@ -110,6 +138,10 @@ lands on `container` rather than on `B`.
 **Reading.** Both rows follow from how an imported name and an inner declaration of the same name
 combine (KerML 8.2.3.5): shadowing should leave one candidate, and the residual unresolved reference
 should then be the chain's last segment. This is import and shadowing resolution.
+
+**Category — our defect** for the ambiguity and the misplaced unresolved reference. The fixture's
+file-wide silence expectation is separately unsatisfiable, since the same fixture declares an error
+within the file.
 
 **Owner.** Resolver (slice 11C). The two sibling `SameNames*` fixtures behave the same way and are
 already recorded in [pilot-xpect.md](pilot-xpect.md) as fixtures that declare both file-wide silence
