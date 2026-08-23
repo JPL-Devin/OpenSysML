@@ -59,7 +59,12 @@ rule at that line too.
 
 ## Measurements (fresh cache, pinned pilot `2026-05` / `0.60.1`)
 
-| Oracle | Base `0d4eb14f` | Wave 12A |
+Re-measured after merging `main` at `b21a30eb` (wave 12B's annotation-body LSP work, PR #499): every
+figure below is from a fresh-cache run of that merged tree, with the base column re-run on
+`b21a30eb` itself. #499 moves none of the three oracles, so the controls are the same as those first
+measured on `0d4eb14f`.
+
+| Oracle | Base `b21a30eb` | Wave 12A |
 |---|---|---|
 | Xpect | 428 files, 0 unparsed; 1269 agree (246 wording-only) / 54 disagree | **identical** |
 | Differential | 353 files, 317 fully agreeing; 25 agreed, 119 only ours, 73 only the pilot's | 353 files, 317 fully agreeing; **32 agreed**, **119 only ours**, **66 only the pilot's** |
@@ -130,4 +135,11 @@ was added, so that fix moves no oracle count. The ratchets pass with
 `OPENSYSML_REQUIRE_PILOT_CORPORA=1 OPENSYSML_REQUIRE_TRAINING_CORPUS=1` (no skips), the differential
 is byte-identical across two runs under different fresh caches, and the only-ours multiset was
 compared against the base commit row by row (keyed by root, file, line, severity and category with
-multiplicity): **no row present on this branch is absent on base**.
+multiplicity): **no row present on this branch is absent on base**. Repeated against `b21a30eb`
+after the merge, the row-level diff is exactly the seven rows above moving from pilot-only to
+agreement — no only-ours row added, and no row that agreed on base disagrees on the branch.
+
+A malformed classification test (`filter x istype ;`) parses to an operator with no type reference,
+and handing that typed nil to `DownstreamOfFailure` panicked; the gate now checks for it and
+`TestAClassificationFilterMissingItsTypeIsDiagnosedNotFatal` locks the four shapes. No corpus
+contains one, so no oracle count moves.
