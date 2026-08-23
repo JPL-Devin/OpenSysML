@@ -79,9 +79,9 @@ var (
 	xpectLineRe = regexp.MustCompile(`^[ \t]*//(\*?)[ \t]*XPECT[ \t]+([A-Za-z][A-Za-z0-9_]*)(.*)$`)
 	// Resource entries: `ThisFile {}`, `File {from ="/p"}` and `File "p" {}`.
 	fileFromRe = regexp.MustCompile(`\b(ThisFile\b|File\s*\{\s*from\s*=\s*"([^"]*)"|File\s*"([^"]*)"\s*\{)`)
-	// The anchor text is quoted, and may itself be a quoted string literal:
-	// `"Must have a Natural value" at ""x""` points at the source `"x"`.
-	quotedRe = regexp.MustCompile(`"((?:[^"\\]|\\.)*)"(?:[ \t]*at[ \t]*(?:"("(?:[^"\\]|\\.)*")"|"((?:[^"\\]|\\.)*)"))?`)
+	// The `at` text runs to the last quote of its line: Xpect does not escape
+	// the quotes inside it, so `at "f(null, "", 1)"` is one text.
+	quotedRe = regexp.MustCompile(`"((?:[^"\\]|\\.)*)"(?:[ \t]*at[ \t]*"(.*)")?`)
 	// The arrow is written `-->` or `--->`, with or without space around it.
 	linkedNameRe = regexp.MustCompile(`^[ \t]*at[ \t]+(\S+?)[ \t]*-{2,}>[ \t]*(\S+)`)
 	scopeAtRe    = regexp.MustCompile(`^[ \t]*at[ \t]+(\S+)`)
@@ -261,7 +261,7 @@ func (a *assertion) parseBody(rest string) error {
 		body := strings.TrimSpace(rest)
 		body = strings.TrimSuffix(strings.TrimPrefix(body, "---"), "---")
 		for _, item := range quotedRe.FindAllStringSubmatch(body, -1) {
-			a.Expect = append(a.Expect, expectation{Message: unescape(item[1]), At: unescape(item[2] + item[3])})
+			a.Expect = append(a.Expect, expectation{Message: unescape(item[1]), At: unescape(item[2])})
 		}
 		if len(a.Expect) == 0 {
 			return fmt.Errorf("XPECT %s declares no expectation", a.Kind)

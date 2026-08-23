@@ -23,26 +23,27 @@ const baseTypeFeature = "baseType"
 //   - a definition annotated with a usage baseType subclassifies the types of
 //     that baseType.
 //
-// Any other combination contributes nothing.
-func (m *Model) semanticMetadataBases(sym *symbols.Symbol) []*symbols.Symbol {
-	var prefixes []*ast.PrefixMetadata
-	isDef := false
-	switch d := sym.Decl.(type) {
-	case *ast.Definition:
-		prefixes, isDef = d.Prefixes, true
-	case *ast.Usage:
-		prefixes = d.Prefixes
+// Any other combination contributes nothing. The second result is false when an
+// annotation named a type that could not be resolved yet, so the answer is
+// provisional and must not be memoized.
+func (m *Model) semanticMetadataBases(sym *symbols.Symbol) ([]*symbols.Symbol, bool) {
+	switch sym.Decl.(type) {
+	case *ast.Definition, *ast.Usage:
 	default:
-		return nil
+		return nil, true
 	}
+	isDef := !isFeature(sym)
 
 	var out []*symbols.Symbol
-	for _, p := range prefixes {
-		if p == nil || p.Type == nil {
+	complete := true
+	for _, a := range MetadataAnnotationsOf(sym.Decl) {
+		p := a.Node
+		if p.Type == nil {
 			continue
 		}
-		def, ok := m.resolver.ResolveQualified(sym.OwnerScope, p.Type)
+		def, ok := m.resolveAnnotationType(sym, a)
 		if !ok || def == nil {
+			complete = false
 			continue
 		}
 		if resolved, aliasOK := m.resolver.ResolveAliasTarget(def); aliasOK {
@@ -53,7 +54,7 @@ func (m *Model) semanticMetadataBases(sym *symbols.Symbol) []*symbols.Symbol {
 		if !m.isSemanticMetadata(def) {
 			continue
 		}
-		base := m.baseTypeOf(def)
+		base := m.baseTypeOf(def, sym)
 		if base == nil {
 			continue
 		}
@@ -66,6 +67,63 @@ func (m *Model) semanticMetadataBases(sym *symbols.Symbol) []*symbols.Symbol {
 			// Definition with a definition baseType, or usage with a usage
 			// baseType. A usage with a definition baseType adds nothing.
 			out = append(out, base)
+		}
+	}
+	return out, complete
+}
+
+// MetadataAnnotation is a metadata feature annotating an element, written either
+// as a prefix (`#A part p`) or as a member of the element's body (`@A;`).
+type MetadataAnnotation struct {
+	Node   *ast.PrefixMetadata
+	Prefix bool
+}
+
+// resolveAnnotationType resolves the metadata type an annotation names. An
+// annotation written as a member is inside the annotated element's body, so it
+// is looked up there first and in the owning namespace after.
+func (m *Model) resolveAnnotationType(sym *symbols.Symbol, a MetadataAnnotation) (*symbols.Symbol, bool) {
+	scopes := []*symbols.Scope{sym.OwnerScope}
+	if !a.Prefix && sym.Scope != nil {
+		scopes = []*symbols.Scope{sym.Scope, sym.OwnerScope}
+	}
+	for _, scope := range scopes {
+		if def, ok := m.resolver.ResolveQualified(scope, a.Node.Type); ok && def != nil {
+			return def, true
+		}
+	}
+	return nil, false
+}
+
+// MetadataAnnotationsOf returns the metadata features annotating a declaration,
+// in declaration order. `@A about x` annotates other elements, so it is not one.
+func MetadataAnnotationsOf(decl ast.Node) []MetadataAnnotation {
+	var prefixes []*ast.PrefixMetadata
+	var members []ast.Node
+	switch d := decl.(type) {
+	case *ast.Definition:
+		prefixes, members = d.Prefixes, d.Members
+	case *ast.Usage:
+		prefixes, members = d.Prefixes, d.Members
+	case *ast.Package:
+		prefixes, members = d.Prefixes, d.Members
+	case *ast.Namespace:
+		prefixes, members = d.Prefixes, d.Members
+	default:
+		return nil
+	}
+	var out []MetadataAnnotation
+	for _, p := range prefixes {
+		if p != nil && len(p.About) == 0 {
+			out = append(out, MetadataAnnotation{Node: p, Prefix: true})
+		}
+	}
+	for _, member := range members {
+		if mem, ok := member.(*ast.Membership); ok {
+			member = mem.Member
+		}
+		if p, ok := member.(*ast.PrefixMetadata); ok && len(p.About) == 0 {
+			out = append(out, MetadataAnnotation{Node: p})
 		}
 	}
 	return out
@@ -93,10 +151,12 @@ func (m *Model) isSemanticMetadata(def *symbols.Symbol) bool {
 	return false
 }
 
-// baseTypeOf returns the type bound to def's baseType feature, resolving the
-// meta-cast operand of `:>> baseType = causes meta SysML::Usage` (§7.27.3).
-// Returns nil when def binds no baseType or the binding does not name a type.
-func (m *Model) baseTypeOf(def *symbols.Symbol) *symbols.Symbol {
+// baseTypeOf returns the type bound to def's baseType feature for annotated,
+// resolving the meta-cast operand of `:>> baseType = causes meta SysML::Usage`
+// (§7.27.3). The binding is model-level evaluated, so a conditional binding is
+// decided against the element being annotated. Returns nil when def binds no
+// baseType or the binding does not name a type.
+func (m *Model) baseTypeOf(def, annotated *symbols.Symbol) *symbols.Symbol {
 	decl, ok := def.Decl.(*ast.Definition)
 	if !ok || def.Scope == nil {
 		return nil
@@ -111,7 +171,7 @@ func (m *Model) baseTypeOf(def *symbols.Symbol) *symbols.Symbol {
 		if !ok || !redefinesBaseType(usage) || usage.Value == nil {
 			continue
 		}
-		name := metaCastOperand(usage.Value)
+		name := metaCastOperand(m.baseTypeBinding(def, annotated, usage.Value))
 		if name == nil {
 			continue
 		}
@@ -122,6 +182,65 @@ func (m *Model) baseTypeOf(def *symbols.Symbol) *symbols.Symbol {
 		}
 	}
 	return nil
+}
+
+// baseTypeBinding reduces a baseType binding to the branch that applies to the
+// annotated element: the binding is model-level evaluated (KerML §7.4.9), so
+// `if annotatedElement istype S ? SS meta KerML::Type else CC meta KerML::Class`
+// names one type per annotation. Returns nil when no branch can be decided.
+func (m *Model) baseTypeBinding(def, annotated *symbols.Symbol, value ast.Node) ast.Node {
+	op, ok := value.(*ast.OperatorExpr)
+	if !ok || op.Operator != ast.OpConditional || len(op.Operands) != 3 {
+		return value
+	}
+	cond, decided := m.evalAnnotatedElementTest(def, annotated, op.Operands[0])
+	if !decided {
+		return nil
+	}
+	if cond {
+		return m.baseTypeBinding(def, annotated, op.Operands[1])
+	}
+	return m.baseTypeBinding(def, annotated, op.Operands[2])
+}
+
+// evalAnnotatedElementTest evaluates `annotatedElement istype T` (or `hastype`)
+// against the metaclass of the annotated element, the value annotatedElement
+// holds for this annotation ([KerML, 8.3.4.9]).
+func (m *Model) evalAnnotatedElementTest(def, annotated *symbols.Symbol, cond ast.Node) (bool, bool) {
+	op, ok := cond.(*ast.OperatorExpr)
+	if !ok || len(op.Operands) == 0 {
+		return false, false
+	}
+	if op.Operator != ast.OpIsType && op.Operator != ast.OpHasType {
+		return false, false
+	}
+	if !readsAnnotatedElement(op.Operands[0]) {
+		return false, false
+	}
+	qn := op.TypeRef
+	if qn == nil && len(op.Operands) > 1 {
+		if fr, isRef := op.Operands[1].(*ast.FeatureReference); isRef {
+			qn = fr.Name
+		}
+	}
+	target, resolved := m.resolveExprTarget(def.Scope, qn)
+	meta := m.metaclassOf(annotated)
+	if !resolved || meta == nil {
+		return false, false
+	}
+	if op.Operator == ast.OpHasType {
+		return meta == target, true
+	}
+	return m.Conforms(meta, target), true
+}
+
+// readsAnnotatedElement reports whether expr reads the annotatedElement feature.
+func readsAnnotatedElement(expr ast.Node) bool {
+	fr, ok := expr.(*ast.FeatureReference)
+	if !ok || fr.Name == nil || len(fr.Name.Parts) == 0 {
+		return false
+	}
+	return fr.Name.Parts[len(fr.Name.Parts)-1].Text == annotatedElementName
 }
 
 // redefinesBaseType reports whether usage redefines SemanticMetadata::baseType.
@@ -160,9 +279,11 @@ func metaCastOperand(value ast.Node) *ast.QualifiedName {
 	return nil
 }
 
-// isFeature reports whether sym declares a usage (a KerML feature) rather than
-// a definition (a classifier).
+// isFeature reports whether sym declares a feature rather than a type. A KerML
+// type is recorded as a usage node, so the symbol kind decides (KerML §8.3).
 func isFeature(sym *symbols.Symbol) bool {
-	_, ok := sym.Decl.(*ast.Usage)
-	return ok
+	if _, ok := sym.Decl.(*ast.Usage); !ok {
+		return false
+	}
+	return !isKerMLTypeDecl(sym)
 }

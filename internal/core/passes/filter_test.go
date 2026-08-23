@@ -127,3 +127,29 @@ func TestFilterConditionsInTheSupportedSubsetAreClean(t *testing.T) {
 		t.Fatalf("supported filter conditions were reported: %v", diags)
 	}
 }
+
+// A constructor is model-level evaluable, so a filter built from one is reported
+// for yielding an instance rather than a truth value (KerML 7.4.9, 8.2.4).
+func TestFilterConstructorIsNotBooleanRatherThanInevaluable(t *testing.T) {
+	src := filterMetadata + `package P { part def A { attribute n; }
+		filter new A(null, 1, "", false); }`
+	diags := filterDiags(t, src)
+	if len(only(diags, "filter-not-boolean")) != 1 || len(only(diags, "filter-not-evaluable")) != 0 {
+		t.Fatalf("want one filter-not-boolean and no filter-not-evaluable, got %v", diags)
+	}
+}
+
+// The two faults are stated on the membership carrying the condition, once each,
+// however many operands share the fault.
+func TestFilterReportsEachFaultOnceOnTheMembership(t *testing.T) {
+	src := filterMetadata + "package P { filter (3 + @Safety) and (4 + @Safety); }"
+	diags := filterDiags(t, src)
+	if len(only(diags, "filter-not-evaluable")) != 1 {
+		t.Fatalf("want one filter-not-evaluable, got %v", diags)
+	}
+	for _, d := range diags {
+		if d.Span.Len == 0 {
+			t.Errorf("the diagnostic has no span: %v", d)
+		}
+	}
+}

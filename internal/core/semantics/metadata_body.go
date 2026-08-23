@@ -29,6 +29,37 @@ func (m *Model) MetadataBodyViolations(scope *symbols.Scope, prefix *ast.PrefixM
 	return out
 }
 
+// MetadataBodyInevaluableValues returns the values written in the body of the
+// annotation that are not model-level evaluable, at any nesting depth. A
+// metadata feature is a model-level element, so its value must be one the model
+// alone decides (KerML 7.4.7, Expression::isModelLevelEvaluable).
+func (m *Model) MetadataBodyInevaluableValues(scope *symbols.Scope, prefix *ast.PrefixMetadata) []ast.Node {
+	if m == nil || prefix == nil || len(prefix.Body) == 0 {
+		return nil
+	}
+	var out []ast.Node
+	m.collectInevaluableValues(scope, prefix.Body, &out)
+	return out
+}
+
+// collectInevaluableValues walks a metadata annotation body, collecting the
+// values of its declarations that the model cannot evaluate.
+func (m *Model) collectInevaluableValues(scope *symbols.Scope, body []ast.Node, out *[]ast.Node) {
+	for _, node := range body {
+		if mem, ok := node.(*ast.Membership); ok {
+			node = mem.Member
+		}
+		usage, ok := node.(*ast.Usage)
+		if !ok {
+			continue
+		}
+		if usage.Value != nil && !m.ModelLevelEvaluable(scope, usage.Value) {
+			*out = append(*out, usage.Value)
+		}
+		m.collectInevaluableValues(scope, usage.Members, out)
+	}
+}
+
 // collectMetadataBodyViolations walks one body level against the features owner
 // offers, descending into the body of each declaration that does name one.
 func (m *Model) collectMetadataBodyViolations(owner *symbols.Symbol, body []ast.Node, out *[]ast.Node) {

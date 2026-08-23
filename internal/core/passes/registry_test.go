@@ -43,6 +43,21 @@ func TestRegistrySkipsHigherLevelAfterError(t *testing.T) {
 	}
 }
 
+type selfGatedStub struct{ stubPass }
+
+func (selfGatedStub) SelfGated() {}
+
+func TestRegistryRunsSelfGatedPassAfterError(t *testing.T) {
+	reg := NewRegistry()
+	reg.Register(stubPass{level: LevelSyntax, diags: []Diagnostic{{Severity: SeverityError, Source: "syntax"}}})
+	reg.Register(stubPass{level: LevelType, diags: []Diagnostic{{Source: "type"}}})
+	reg.Register(selfGatedStub{stubPass{level: LevelType, diags: []Diagnostic{{Source: "self-gated"}}}})
+	got := reg.Run(NewContext("t", nil, nil), "t", nil)
+	if len(got) != 2 || got[1].Source != "self-gated" {
+		t.Fatalf("want syntax plus self-gated only, got %v", got)
+	}
+}
+
 func TestRegistrySameLevelNeverSkips(t *testing.T) {
 	reg := NewRegistry()
 	reg.Register(stubPass{level: LevelNameResolution, diags: []Diagnostic{{Severity: SeverityError, Source: "a"}}})

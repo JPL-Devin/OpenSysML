@@ -333,7 +333,8 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 	// Semantic metadata annotating this element — a `#keyword` prefix — adds the
 	// implicit specialization of its baseType (SysML v2 §7.27.3, §7.27.4).
 	fromMetadata := false
-	for _, base := range m.semanticMetadataBases(sym) {
+	metadataBases, metadataComplete := m.semanticMetadataBases(sym)
+	for _, base := range metadataBases {
 		if base == nil || base == sym || seen[base] {
 			continue
 		}
@@ -370,6 +371,14 @@ func (m *Model) DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol {
 	if base := m.implicitBase(sym); !fromMetadata && base != nil && !seen[base] {
 		seen[base] = true
 		out = append(out, base)
+	}
+
+	// A metadata annotation whose type did not resolve yet — a name still being
+	// resolved when this query ran — leaves the answer provisional, so it is
+	// recomputed on the next query instead of being memoized.
+	if !metadataComplete {
+		delete(m.directSupers, sym)
+		return out
 	}
 
 	m.directSupers[sym] = out

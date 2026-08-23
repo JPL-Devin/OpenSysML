@@ -15,9 +15,7 @@ var census = map[string]struct {
 	"kerml": {
 		Files: 303,
 		Assertions: map[string][3]int{
-			// 327, not 328: one anchor is a quoted string literal (`at ""x""`),
-			// which is one expectation and was read as two.
-			kindErrors:        {295, 17, 327},
+			kindErrors:        {295, 17, 326},
 			kindNoErrors:      {200, 0, 200},
 			kindLinkedName:    {191, 0, 191},
 			kindWarnings:      {18, 0, 18},
@@ -28,7 +26,7 @@ var census = map[string]struct {
 	"sysml": {
 		Files: 125,
 		Assertions: map[string][3]int{
-			kindErrors:     {164, 10, 185},
+			kindErrors:     {164, 10, 184},
 			kindNoErrors:   {75, 0, 75},
 			kindLinkedName: {3, 0, 3},
 			kindWarnings:   {40, 17, 95},
