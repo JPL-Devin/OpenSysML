@@ -303,6 +303,13 @@ func (nw *nameWalk) inherited(owner *symbols.Symbol, prefix string, depth int, i
 		}
 		chain, ok := nw.enter(nw.chainTo(owner, declarerOf(sym)))
 		if !ok {
+			// The shortest chain is spent; the member is still inherited if
+			// another chain of sources reaches its declarer.
+			if detour, found := nw.chainAvoiding(owner, declarerOf(sym)); found {
+				chain, ok = nw.enter(detour)
+			}
+		}
+		if !ok {
 			continue
 		}
 		nw.add(prefix, leafName(sym.Name), sym, depth)
@@ -446,7 +453,7 @@ func (nw *nameWalk) enter(chain []*symbols.Symbol) ([]*symbols.Symbol, bool) {
 // anchor's own scope: how a name reaches the anchor is not a step of the
 // paths under it.
 func (nw *nameWalk) enterFor(depth int, chain []*symbols.Symbol) ([]*symbols.Symbol, bool) {
-	if depth <= 2 {
+	if depth <= 1 {
 		return nil, true
 	}
 	return nw.enter(chain)
@@ -570,10 +577,8 @@ func (nw *nameWalk) expand(prefix string, sym *symbols.Symbol, depth int) {
 		return
 	}
 	// A path through an element ends where every type it would inherit from is
-	// already on the path: nothing under it is reachable, not even the implicit
-	// members its own kind supplies. The anchor's own inheritance is how a name
-	// gets into scope, not a step of the paths under it, so a name in scope is
-	// expanded whatever the anchor inherited through.
+	// already on the path: what it declares there is not reachable again, but
+	// the implicit members its own kind supplies still are.
 	if sup := nw.sem.DirectSupertypes(sym); depth > 2 && len(sup) > 0 {
 		blocked := 0
 		for _, s := range sup {
@@ -582,6 +587,7 @@ func (nw *nameWalk) expand(prefix string, sym *symbols.Symbol, depth int) {
 			}
 		}
 		if blocked == len(sup) {
+			nw.implicitMembers(prefix, sym, depth)
 			return
 		}
 	}
@@ -602,6 +608,75 @@ func (nw *nameWalk) expand(prefix string, sym *symbols.Symbol, depth int) {
 		}
 	}
 	nw.inherited(sym, prefix, depth, false)
+}
+
+// implicitMembers adds the members a blocked path still reaches: those whose
+// declarer some chain of sources reaches without repeating a traversed type.
+func (nw *nameWalk) implicitMembers(prefix string, sym *symbols.Symbol, depth int) {
+	nw.expanding[sym]++
+	defer func() { nw.expanding[sym]-- }()
+	for _, m := range nw.membersOf(sym) {
+		if !symbols.VisibleAs(m.Visibility, false, false) {
+			continue
+		}
+		detour, ok := nw.chainAvoiding(sym, declarerOf(m))
+		if !ok {
+			continue
+		}
+		chain, ok := nw.enter(detour)
+		if !ok {
+			continue
+		}
+		nw.add(prefix, leafName(m.Name), m, depth)
+		nw.add(prefix, m.ShortName, m, depth)
+		nw.leave(chain)
+	}
+}
+
+// chainAvoiding is chainTo restricted to sources the path has not gone through,
+// reporting whether such a detour to declarer exists at all. Its first step
+// also leaves out what a traversed general itself inherits from: the path has
+// already inherited through that general, so it does not re-enter above it.
+func (nw *nameWalk) chainAvoiding(owner, declarer *symbols.Symbol) ([]*symbols.Symbol, bool) {
+	if owner == nil || declarer == nil || declarer == owner {
+		return nil, declarer != nil
+	}
+	above := map[*symbols.Symbol]bool{}
+	for t, n := range nw.traversed {
+		if n <= 0 {
+			continue
+		}
+		for _, g := range nw.sem.DirectMemberSources(t) {
+			above[g] = true
+		}
+	}
+	from := map[*symbols.Symbol]*symbols.Symbol{owner: nil}
+	queue := []*symbols.Symbol{owner}
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+		for _, src := range nw.sem.DirectMemberSources(cur) {
+			if src == nil || nw.traversed[src] > 0 {
+				continue
+			}
+			if cur == owner && above[src] {
+				continue
+			}
+			if _, seen := from[src]; seen {
+				continue
+			}
+			from[src] = cur
+			if src == declarer {
+				var chain []*symbols.Symbol
+				for s := declarer; s != nil && s != owner; s = from[s] {
+					chain = append(chain, s)
+				}
+				return chain, true
+			}
+			queue = append(queue, src)
+		}
+	}
+	return nil, false
 }
 
 // loaded reports whether the caller's resource set holds an element: a library

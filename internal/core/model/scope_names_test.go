@@ -133,6 +133,26 @@ func TestVisibleNamesImplicitMembersDoNotRechain(t *testing.T) {
 	})
 }
 
+// An inherited or imported feature is named through the type the path already
+// went through, so what it declares there is not reachable a second time —
+// while the implicit members its own kind supplies still are.
+func TestVisibleNamesInheritedFeatureEndsThePath(t *testing.T) {
+	src := "package test{\n\tfeature A {\n\t\tpublic import test::*;\n\t\tfeature a : A;\n\t}\n}\n"
+	names := namesAt(t, src, "public import", VisibleNamesOptions{LibraryRoots: []string{"Base"}})
+	has(t, names, []string{"a.A", "a.A.a", "a.A.self", "a.A.that.self"},
+		[]string{"a.A.a.self", "a.A.a.that", "a.A.a.a"})
+}
+
+// Two types importing each other bound the paths through their features, but a
+// feature typed by either still reaches the members its type implies.
+func TestVisibleNamesMutualImportBoundsPathsNotImplicitMembers(t *testing.T) {
+	src := "package T {\n\tclassifier A {\n\t\tpublic import B::*;\n\t\tfeature a: A;\n\t\tfeature b: B;\n" +
+		"\t\tclassifier B {\n\t\t\tpublic import A::*;\n\t\t\tfeature aa: A;\n\t\t\tfeature bb: B;\n\t\t}\n\t}\n}\n"
+	names := namesAt(t, src, "public import B", VisibleNamesOptions{LibraryRoots: []string{"Base"}})
+	has(t, names, []string{"a.self", "aa.self", "b.self", "bb.that"},
+		[]string{"a.aa.self", "b.b.self", "bb.B.self"})
+}
+
 func TestVisibleNamesCyclicImportTerminatesAndIsSorted(t *testing.T) {
 	src := "package P1 {\n\tpublic import P2::*;\n\tclassifier A;\n}\n" +
 		"package P2 {\n\tpublic import P1::*;\n\tclassifier B;\n}\n" +
@@ -152,7 +172,9 @@ func TestVisibleNamesRecordsThePathClosingAContainmentCycle(t *testing.T) {
 
 func TestVisibleNamesDoesNotRecordASelfImportCycle(t *testing.T) {
 	src := "package P {\n\tclassifier A {\n\t\tpublic import P::*;\n\t\tclassifier a specializes A;\n\t}\n}\n"
-	names := namesAt(t, src, "specializes A", VisibleNamesOptions{})
+	// Anchored where a name in the declaration's own head resolves — the
+	// enclosing namespace — as the reference's fixture asks it.
+	names := namesAt(t, src, "public import", VisibleNamesOptions{})
 	has(t, names, []string{"A.a.a", "a.A", "P.A.a.A"}, []string{"A.A"})
 }
 
