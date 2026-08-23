@@ -157,22 +157,11 @@ func (r *Resolver) machineStateVertex(scope *symbols.Scope, qn *ast.QualifiedNam
 	if !isVertexSymbol(sym) || r.model == nil || r.idx == nil || qn == nil || len(qn.Parts) == 0 {
 		return false
 	}
-	var machine *symbols.Symbol
-	for s := scope; s != nil; s = s.Parent() {
-		switch n := s.Node().(type) {
-		case *ast.Definition:
-			if n.Kind == ast.DefState {
-				machine = s.Owner()
-			}
-		case *ast.Usage:
-			if n.Kind == ast.UsageState {
-				machine = s.Owner()
-			}
-		}
-		if machine != nil {
-			break
-		}
+	machineScope := machineScope(scope)
+	if machineScope == nil {
+		return false
 	}
+	machine := machineScope.Owner()
 	if machine == nil {
 		return false
 	}
