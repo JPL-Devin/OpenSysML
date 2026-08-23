@@ -124,7 +124,7 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 			c.add(scope, a)
 		}
 	case *ast.PrefixMetadata:
-		c.add(scope, d.Type)
+		c.metadataPrefix(scope, d)
 	case *ast.FilterMember:
 		c.conditionExpr(scope, d.Condition)
 	case *ast.Definition:
@@ -197,6 +197,7 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		c.expr(scope, d.Expression)
 		c.walkMembers(scope, d.Body)
 	case *ast.AssumeMember:
+		c.prefixes(scope, d.Prefixes)
 		c.expr(scope, d.Expression)
 		c.add(scope, d.Reference)
 		c.relationships(scope, d, d.Relationships)
@@ -204,6 +205,7 @@ func (c *refCollector) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		c.expr(scope, d.Value)
 		c.walkMembers(symbols.ConstraintBodyScope(scope, d), d.Body)
 	case *ast.RequireMember:
+		c.prefixes(scope, d.Prefixes)
 		c.expr(scope, d.Expression)
 		c.add(scope, d.Reference)
 		c.relationships(scope, d, d.Relationships)
@@ -370,8 +372,21 @@ func (c *refCollector) multiplicity(scope *symbols.Scope, m *ast.Multiplicity) {
 func (c *refCollector) prefixes(scope *symbols.Scope, prefixes []*ast.PrefixMetadata) {
 	for _, p := range prefixes {
 		if p != nil {
-			c.add(scope, p.Type)
+			c.metadataPrefix(scope, p)
 		}
+	}
+}
+
+// metadataPrefix collects an annotation's metaclass name and the references its
+// body carries, in the body's own scope — the same scope the resolver resolves
+// them in (see resolveMetadataPrefix).
+func (c *refCollector) metadataPrefix(scope *symbols.Scope, p *ast.PrefixMetadata) {
+	c.add(scope, p.Type)
+	if len(p.Body) == 0 {
+		return
+	}
+	if body := c.childScope(scope, p); body != nil {
+		c.walkMembers(body, p.Body)
 	}
 }
 

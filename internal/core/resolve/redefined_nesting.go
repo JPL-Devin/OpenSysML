@@ -58,7 +58,7 @@ func (r *Resolver) redefinedFeatures(sym *symbols.Symbol) []*symbols.Symbol {
 	}
 	if usage, ok := sym.Decl.(*ast.Usage); ok && sym.OwnerScope != nil &&
 		sym.OwnerScope.BodyLocal() {
-		if owner := sym.OwnerScope.Owner(); owner != nil {
+		if owner := r.scopeOwner(sym.OwnerScope); owner != nil {
 			if target := symbols.MetadataBodyTarget(r.model, owner, usage.Ident); target != nil &&
 				target != sym {
 				out = append(out, target)

@@ -152,28 +152,6 @@ process. What remains is packaging and publishing: `vsce package` in the release
 `.vsix` on the release, and (for the marketplace) a publisher account and a PAT in CI — the same
 class of account gate as R2/R4.
 
-## L1 — the editor is blind inside a metadata annotation body (scheduled, wave 12)
-
-Hover, go-to-definition and completion do not work inside `@A { x = ~3; }`, because until wave
-11G nothing resolved in there: `Resolver.resolvePrefixes` walked only the annotation's type, and
-`symbols/builder.go` built no scope for an `ast.PrefixMetadata` body at all. A body declaration
-implicitly redefines a feature of the metadata definition the annotation names (KerML 7.4.7,
-8.3.3.3), so `x` above is `A::x` — a fact the editor cannot state today, and neither could the
-validator, which is why the pilot reports an unresolved invocation target in
-`MetadataUsage_Invalid.sysml.xt:85` (`z = f((as A).z);`) where we were silent.
-
-Wave 11G builds that scope and resolves the body, for the validator. It is deliberately barred
-from touching `internal/lsp`, so the editor surface is this item: once the scope exists, hover
-should name `A::x` and its type, go-to-definition should jump to the feature in the metadata
-definition (including an inherited one), and completion inside a body should offer that
-definition's features rather than the enclosing namespace's. Nothing here needs new semantics —
-it is wiring the LSP handlers to the scope 11G creates. `internal/lsp` does not mention
-`PrefixMetadata` anywhere today, so check the document-symbol and semantic-token paths for the
-same blindness while you are there.
-
-Do it after 11G lands, not beside it: the two would edit the same resolution entry points, and
-the editor behaviour is only testable once the scope is real.
-
 ## L2 — tier gating is per document, and the reference's is per element (scheduled, wave 12)
 
 `Registry.Run` (`internal/core/passes/registry.go`) skips every pass at a strictly higher level
@@ -213,8 +191,9 @@ The contract is honest but lossy, and this item is the other way out (option B w
 adjudicated): make records **lossless** — serialize enough member, value and condition structure
 that a restored library equals a parsed one — and then let libraries keep their bodies on both
 paths. What it buys is not conformance: it is reach. Hover and go-to-definition into a library
-body (L1's analogue for the stdlib), library-declared conditions in the solver's translatable
-subset, and library feature multiplicity, which a record does not persist today
+body (the stdlib analogue of the annotation-body editor surface wave 12 closed as L1),
+library-declared conditions in the solver's translatable subset, and library feature
+multiplicity, which a record does not persist today
 (`TestMultiplicityOfALibraryFeatureIsTheSameColdAndWarm` skips on it).
 
 What it costs, as measured while adopting the index-only contract instead: the on-disk format
@@ -548,7 +527,7 @@ Tracks A, B, C, P and T1 are closed and their entries are removed; what is left 
    **D8** (the OWL-ontology output profile) is optional and additive: its domain/range gate is
    worth having as soon as the profile's term table exists, but the profile only becomes fully
    conformant behind D3.3, D2 and D1, so it does not belong ahead of them.
-3. **L1** in wave 12, after wave 11G's annotation-body scope lands, and **L2** after wave 11 as a
-   whole, since slices' rows sit behind the gate it narrows. **L3** last of the three and only if
-   its reach is wanted: it buys no conformance row, and it replaces a contract the cache's
-   correctness currently rests on. All three are independent of the release section and of Track D.
+3. **L2** after wave 11 as a whole, since slices' rows sit behind the gate it narrows. **L3**
+   last of the two and only if its reach is wanted: it buys no conformance row, and it replaces
+   a contract the cache's correctness currently rests on. L1, the annotation-body editor
+   surface, closed in wave 12. Both are independent of the release section and of Track D.

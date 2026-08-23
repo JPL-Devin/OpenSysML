@@ -26,7 +26,8 @@ func (s *Server) DocumentSymbol(ctx context.Context, params *protocol.DocumentSy
 }
 
 // walkDocumentSymbols converts a scope's members (and their child scopes) into
-// a DocumentSymbol tree.
+// a DocumentSymbol tree. A metadata annotation body's declarations live in an
+// anonymous child scope no member owns, so those scopes are walked too.
 func walkDocumentSymbols(content []byte, scope *symbols.Scope) []protocol.DocumentSymbol {
 	var out []protocol.DocumentSymbol
 	for _, sym := range scope.Members() {
@@ -43,6 +44,11 @@ func walkDocumentSymbols(content []byte, scope *symbols.Scope) []protocol.Docume
 			ds.Children = walkDocumentSymbols(content, sym.Scope)
 		}
 		out = append(out, ds)
+	}
+	for _, child := range scope.Children() {
+		if isMetadataBodyScope(child) {
+			out = append(out, walkDocumentSymbols(content, child)...)
+		}
 	}
 	return out
 }
@@ -102,6 +108,11 @@ func collectWorkspaceSymbols(scope *symbols.Scope, container, query string, cont
 		}
 		if sym.Scope != nil {
 			collectWorkspaceSymbols(sym.Scope, sym.Name, query, content, docURI, out)
+		}
+	}
+	for _, child := range scope.Children() {
+		if isMetadataBodyScope(child) {
+			collectWorkspaceSymbols(child, container, query, content, docURI, out)
 		}
 	}
 }
