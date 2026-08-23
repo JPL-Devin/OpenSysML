@@ -683,6 +683,50 @@ classifier reference in `Test1`, while our identifier-boundary rule walks past i
 `VP::VP1`. Relaxing the rule globally costs ten other rows, so the anchor needs Xpect's own matching,
 not a looser one.
 
+### The rows wave 11C leaves open, each labelled
+
+An open row with no label reads as a defect, so every one of the twelve is classified here. The
+categories are: **our defect** (the specification says one thing and we do another), **spec-derived
+obligation not implemented** (we agree what is required and have not built it), **pilot limitation**
+(the reference is the one departing from the specification, or the harness cannot express the
+question), and **adjudicated divergence** (a difference we keep deliberately, with the reasoning
+recorded).
+
+| Row | Shape | Category |
+|---|---|---|
+| `ShadowingTests_CircleProblem4.kerml.xt`:32 | 30 missing / 1 extra, all `self`/`that` tails | **Open adjudication — not yet classifiable.** The expansion bound is underdetermined by the specification (the question above); the mismatch is real but no reading makes it our defect or the pilot's until the bound is settled. |
+| `ShadowingTests_CircleProblem4_FT.kerml.xt`:43 | 3 extra: `b.B.b.self`, `.that`, `.that.self` | same |
+| `ShadowingTests_CircleProblem4_Rdef.kerml.xt`:43 | 3 extra, identically | same |
+| `SimpleImportTests_ImportPackageAndInheritanceFromContainer_FT.kerml.xt`:23 | 3 extra: `a.A.a.self`, `.that`, `.that.self` | same |
+| `SimpleImportTests_ImportPackageAndInheritanceFromContainer_Rdef.kerml.xt`:23 | 3 extra, identically | same |
+| `Import_Recursive3.kerml.xt`:55 | 2 missing (`s.self.that`), both reachable by another path | same |
+| `ShadowingTests_CircleProblem3.kerml.xt`:23 | 456 of 829, 21 extra | same, plus the per-anchor filtering carry-over from wave 10A, which hangs off the same bound |
+| `ShadowingTests_CircleProblem3.kerml.xt`:183 | 382 of 696, 14 extra | same |
+| `ShortName_Import_Valid1.kerml.xt`:25 | declared 75, ours 170 at a different anchor | **Pilot limitation (harness).** The pilot's `at c_Public` matches inside `c_Public_Id`; reproducing that needs Xpect's own substring matching, and loosening our identifier-boundary rule costs ten other rows. |
+| `SimpleImportTests_CircleInheritanceInCircleImport.kerml.xt`:18 | `a participates in a specialization cycle` | **Adjudicated divergence.** The fixture declares `classifier a specializes b` / `b specializes a`; the pilot has no cycle check (finding F4/K5 in [pilot-differential.md](pilot-differential.md#specialization-cycles-f4)). Closing the row would mean deleting a correct rule. |
+| `simpletests/PartTest.sysml.xt`:29 | `p1 participates in a specialization cycle` | same — `p1 :> p2 :> p3 :> p1` and `p4 :> p4` |
+| `Redefinition_OwningType_Cyclic_Gen.sysml.xt`:25 | `A participates in a specialization cycle` | same — `A :> C` with `C :> A, B` |
+
+None of the twelve is a *spec-derived obligation we have not implemented*: the eight scope rows are
+enumeration-bound questions, the ninth is a harness one, and the three `noErrors` rows are a rule we
+do implement and the reference does not.
+
+### Oracle movement, measured on both trees
+
+Control `main` at `b86aeb18` against `main` at `ae4fdf9e` (both wave-11C PRs merged, and the 11A/11B
+and wave-12 commits between them):
+
+| Oracle | `b86aeb18` | `ae4fdf9e` |
+|---|---|---|
+| xpect | 1197 agree (239 wording-only) / 129 disagree | 1221 agree (241 wording-only) / 105 disagree |
+| differential | 353 files, **312** fully agreeing; 25 agreed, **139** only ours, 73 only the pilot's | identical |
+| rejection | 120 cases: 115 both reject, 5 only the pilot, 0 only us | identical |
+
+One number disagrees with the wave-11 handoff, which quoted the differential at `b86aeb18` as
+`311` fully agreeing with `142` only ours. A fresh run of `cmd/pilot-diff` at that commit reports
+`312` and `139` on this machine, twice; the 3-diagnostic difference is recorded here rather than
+averaged, and the reconciliation belongs with whoever holds the differential baseline.
+
 ---
 
 ## Not adjudicated
