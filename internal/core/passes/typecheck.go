@@ -62,10 +62,12 @@ func (tc *typeChecker) walk(scope *symbols.Scope, members []ast.Node) {
 				lang:         tc.lang,
 				useKind:      d.Kind,
 				direction:    d.Direction,
+				isReference:  d.IsReference,
 				isEnd:        d.IsEnd,
 				isIndividual: d.IsIndividual,
 				portion:      d.Portion,
 				keyword:      d.Keyword,
+				hasType:      hasTypingRelationship(d.Relationships),
 				span:         d.Span(),
 			})
 			tc.checkOneType(scope, d)
@@ -191,6 +193,8 @@ type declKind struct {
 	defKind   ast.DefinitionKind
 	useKind   ast.UsageKind
 	direction ast.FeatureDirection
+	isReference bool
+	hasType     bool
 	// isEnd marks a feature declared with the `end` modifier, whose type is that
 	// of the feature it connects and so escapes the usage-kind taxonomy.
 	isEnd bool
@@ -290,6 +294,11 @@ func (tc *typeChecker) checkTypeTarget(scope *symbols.Scope, target ast.Node, re
 			targetSym = resolved
 		}
 	}
+	if relKind == ast.RelRedefines || relKind == ast.RelSubsets {
+		if tc.checkInheritedUsageTyping(targetSym, decl) {
+			return
+		}
+	}
 	msg := compatMessage(decl, relKind, targetSym.Kind)
 	if msg == "" {
 		return
@@ -308,6 +317,106 @@ func (tc *typeChecker) checkTypeTarget(scope *symbols.Scope, target ast.Node, re
 		Code:     code,
 		Source:   "type",
 	})
+}
+
+func (tc *typeChecker) checkInheritedUsageTyping(target *symbols.Symbol, decl declKind) bool {
+	if _, ok := target.Decl.(*ast.Usage); !ok ||
+		decl.isDef || decl.isReference || decl.keyword == "" ||
+		decl.keyword == "feature" || decl.hasType ||
+		w11aInheritedTypingKinds[decl.useKind] {
+		return false
+	}
+	msg, code, ok := pilotTypingMessage(decl)
+	if !ok {
+		return false
+	}
+	for _, typ := range declaredUsageTypesOf(tc.resolver, target, make(map[*symbols.Symbol]bool)) {
+		if !isDefKind(typ.sym.Kind) {
+			continue
+		}
+		if compatibleTyping(decl.useKind, decl.direction, typ.sym.Kind) {
+			continue
+		}
+		tc.appendUnique(Diagnostic{
+			Severity: SeverityError,
+			Span:     decl.span,
+			Message:  msg,
+			Code:     code,
+			Source:   "type",
+		})
+		return true
+	}
+	return false
+}
+
+func declaredUsageTypesOf(resolver *resolve.Resolver, sym *symbols.Symbol, visited map[*symbols.Symbol]bool) []w8dUsageType {
+	if sym == nil || visited[sym] {
+		return nil
+	}
+	visited[sym] = true
+	decl, ok := sym.Decl.(*ast.Usage)
+	if !ok {
+		return nil
+	}
+	scope := w8dScopeOf(sym)
+	var inherited []*symbols.Symbol
+	for _, rel := range decl.Relationships {
+		if rel == nil || rel.Target == nil {
+			continue
+		}
+		target, ok := resolver.ResolveTarget(scope, rel.Target)
+		if !ok || target == nil {
+			continue
+		}
+		if rel.Kind == ast.RelTyping {
+			inherited = append(inherited, target)
+		}
+	}
+	if len(inherited) > 0 {
+		if !usageDeclHasDefinitionKind(decl) {
+			return nil
+		}
+		types := make([]w8dUsageType, 0, len(inherited))
+		for _, target := range inherited {
+			types = append(types, w8dUsageType{sym: target, declared: true})
+		}
+		return types
+	}
+	var types []w8dUsageType
+	for _, rel := range decl.Relationships {
+		if rel == nil || rel.Target == nil ||
+			(rel.Kind != ast.RelSubsets && rel.Kind != ast.RelRedefines && rel.Kind != ast.RelReferences) {
+			continue
+		}
+		target, ok := resolver.ResolveTarget(scope, rel.Target)
+		if !ok || target == nil {
+			continue
+		}
+		types = append(types, declaredUsageTypesOf(resolver, target, visited)...)
+	}
+	return types
+}
+
+func usageDeclHasDefinitionKind(decl *ast.Usage) bool {
+	if decl == nil || decl.IsReference || decl.Direction != ast.DirNone ||
+		decl.Keyword == "" || decl.Keyword == "feature" {
+		return false
+	}
+	_, _, ok := pilotTypingMessage(declKind{
+		useKind: decl.Kind,
+		keyword: decl.Keyword,
+		span:     decl.Span(),
+	})
+	return ok
+}
+
+func hasTypingRelationship(rels []*ast.Relationship) bool {
+	for _, rel := range rels {
+		if rel != nil && rel.Kind == ast.RelTyping {
+			return true
+		}
+	}
+	return false
 }
 
 // appendUnique records d unless the same message was already reported there: a
