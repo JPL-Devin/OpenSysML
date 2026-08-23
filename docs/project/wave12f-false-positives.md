@@ -16,10 +16,10 @@ rm -rf /tmp/c-$$ && XDG_CACHE_HOME=/tmp/c-$$ go run ./cmd/pilot-reject
 
 ## What moved
 
-| Harness | Base `0d4eb14f` | This branch |
+| Harness | Base `7504ff09` | This branch |
 |---|---|---|
 | Xpect | 428 files, 0 unparsed; 1269 agree (246 wording-only) / **54 disagree** | 1275 agree (246 wording-only) / **48 disagree**, 0 unlocated, 0 not adjudicated |
-| Differential | 353 files, **317 fully agreeing**; 25 agreed, **119 only ours**, 73 only pilot, 168 ours / 122 pilot | **321 fully agreeing**; 25 agreed, **92 only ours**, 73 only pilot, 141 ours / 122 pilot |
+| Differential | 353 files, **317 fully agreeing**; 32 agreed, **119 only ours**, 66 only pilot, 175 ours / 122 pilot | **321 fully agreeing**; 32 agreed, **92 only ours**, 66 only pilot, 148 ours / 122 pilot |
 | Rejection | 120 cases: 116 both reject, 4 pilot-only, 0 ours-only | unchanged: 116 / 4 / 0, 0 both accept |
 
 **The only-ours multiset moves in exactly two buckets and no bucket rises**, which is the test that
@@ -38,8 +38,8 @@ matters here — a total that falls while some family grows is a trade, not prog
 Four files become fully agreeing, all on the reference's own corpora: `Arrowhead Framework
 Example/AHFSequences.sysml` 15 → 0, `Cause and Effect Examples/CauseAndEffectExample.sysml` 6 → 0,
 `Simple Tests/AllocationTest.sysml` 1 → 0, and `Vehicle Example/SysML v2 Spec Annex A
-SimpleVehicleModel.sysml` 5 → 0. The pilot's own columns (122 diagnostics, 73 only-pilot rows), the
-25 agreements and the 24 severity-only pairs are unmoved: nothing we did changed what the pilot
+SimpleVehicleModel.sysml` 5 → 0. The pilot's own columns (122 diagnostics, 66 only-pilot rows), the
+32 agreements and the 24 severity-only pairs are unmoved: nothing we did changed what the pilot
 detects or moved a row of ours out of agreement.
 
 On the Xpect side all six moved rows go from disagreement to agreement: `errors` 479 → **483** with
