@@ -7,9 +7,9 @@
     "filesUnparsed": 0,
     "assertions": 1261,
     "rows": 1323,
-    "agree": 1287,
+    "agree": 1293,
     "wordingOnly": 248,
-    "disagree": 36,
+    "disagree": 30,
     "unlocated": 0,
     "notAdjudicated": 0,
     "missingResources": 0,
@@ -21,13 +21,13 @@
       "assertions": 486,
       "blockAssertions": 27,
       "rows": 510,
-      "agree": 486,
+      "agree": 490,
       "wordingOnly": 248,
-      "disagree": 24,
+      "disagree": 20,
       "unlocated": 0,
       "notAdjudicated": 0,
       "sameLocation": 7,
-      "sameLine": 10,
+      "sameLine": 6,
       "severityDiffers": 0,
       "elsewhereInFile": 7
     },
@@ -36,9 +36,9 @@
       "assertions": 275,
       "blockAssertions": 0,
       "rows": 275,
-      "agree": 265,
+      "agree": 267,
       "wordingOnly": 0,
-      "disagree": 10,
+      "disagree": 8,
       "unlocated": 0,
       "notAdjudicated": 0,
       "sameLocation": 0,
@@ -116,9 +116,9 @@
         "filesUnparsed": 0,
         "assertions": 952,
         "rows": 966,
-        "agree": 946,
+        "agree": 948,
         "wordingOnly": 243,
-        "disagree": 20,
+        "disagree": 18,
         "unlocated": 0,
         "notAdjudicated": 0,
         "missingResources": 0,
@@ -130,13 +130,13 @@
           "assertions": 312,
           "blockAssertions": 17,
           "rows": 326,
-          "agree": 309,
+          "agree": 311,
           "wordingOnly": 243,
-          "disagree": 17,
+          "disagree": 15,
           "unlocated": 0,
           "notAdjudicated": 0,
           "sameLocation": 5,
-          "sameLine": 8,
+          "sameLine": 6,
           "severityDiffers": 0,
           "elsewhereInFile": 4
         },
@@ -2463,27 +2463,7 @@
           "path": "src/org/omg/kerml/xpect/tests/validation/MetadataTests_MetadataFeature_invalid.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 9,
-          "agree": 7,
-          "rows": [
-            {
-              "kind": "errors",
-              "line": 66,
-              "at": "= ~3",
-              "verdict": "disagree",
-              "tolerance": "same-line",
-              "declared": "error: \"Must be model-level evaluable\"",
-              "ours": "line 67 offset 2287: Must be model-level evaluable"
-            },
-            {
-              "kind": "errors",
-              "line": 69,
-              "at": "= f((as A).y)",
-              "verdict": "disagree",
-              "tolerance": "same-line",
-              "declared": "error: \"Must be model-level evaluable\"",
-              "ours": "line 70 offset 2384: Must be model-level evaluable"
-            }
-          ]
+          "agree": 9
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/validation/MetadataTests_SemanticMetadata_invalid.kerml.xt",
@@ -4589,9 +4569,9 @@
         "filesUnparsed": 0,
         "assertions": 309,
         "rows": 357,
-        "agree": 341,
+        "agree": 345,
         "wordingOnly": 5,
-        "disagree": 16,
+        "disagree": 12,
         "unlocated": 0,
         "notAdjudicated": 0,
         "missingResources": 0,
@@ -4603,13 +4583,13 @@
           "assertions": 174,
           "blockAssertions": 10,
           "rows": 184,
-          "agree": 177,
+          "agree": 179,
           "wordingOnly": 5,
-          "disagree": 7,
+          "disagree": 5,
           "unlocated": 0,
           "notAdjudicated": 0,
           "sameLocation": 2,
-          "sameLine": 2,
+          "sameLine": 0,
           "severityDiffers": 0,
           "elsewhereInFile": 3
         },
@@ -4618,9 +4598,9 @@
           "assertions": 75,
           "blockAssertions": 0,
           "rows": 75,
-          "agree": 68,
+          "agree": 70,
           "wordingOnly": 0,
-          "disagree": 7,
+          "disagree": 5,
           "unlocated": 0,
           "notAdjudicated": 0,
           "sameLocation": 0,
@@ -4762,16 +4742,7 @@
           "path": "src/org/omg/sysml/xpect/tests/simpletests/AllocationTest.sysml.xt",
           "setupClass": "org.omg.sysml.xpect.tests.validation.valid.SysMLTests",
           "expectations": 1,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "noErrors",
-              "line": 31,
-              "verdict": "disagree",
-              "declared": "no error the file does not declare",
-              "ours": "1 error(s), first: line 62: unresolved reference: physical — did you mean AllocationTest::Logical_to_Physical::physical or Physical?"
-            }
-          ]
+          "agree": 1
         },
         {
           "path": "src/org/omg/sysml/xpect/tests/simpletests/AnalysisTest.sysml.xt",
@@ -5227,27 +5198,7 @@
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/MetadataUsage_Invalid.sysml.xt",
           "setupClass": "org.omg.sysml.xpect.tests.validation.invalid.SysMLTests",
           "expectations": 9,
-          "agree": 7,
-          "rows": [
-            {
-              "kind": "errors",
-              "line": 82,
-              "at": "= ~3",
-              "verdict": "disagree",
-              "tolerance": "same-line",
-              "declared": "error: \"Must be model-level evaluable\"",
-              "ours": "line 83 offset 3195: Must be model-level evaluable"
-            },
-            {
-              "kind": "errors",
-              "line": 85,
-              "at": "= f((as A).z)",
-              "verdict": "disagree",
-              "tolerance": "same-line",
-              "declared": "error: \"Must be model-level evaluable\"",
-              "ours": "line 86 offset 3293: Must be model-level evaluable"
-            }
-          ]
+          "agree": 9
         },
         {
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/OccurrenceUsage_invalid.sysml.xt",
@@ -5509,16 +5460,7 @@
           "path": "src/org/omg/sysml/xpect/tests/validation/valid/KernelLibraryTest.sysml.xt",
           "setupClass": "org.omg.sysml.xpect.tests.validation.valid.SysMLTests",
           "expectations": 1,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "noErrors",
-              "line": 72,
-              "verdict": "disagree",
-              "declared": "no error the file does not declare",
-              "ours": "1 error(s), first: line 81: unresolved reference: MassValue — did you mean ISQBase::MassValue?"
-            }
-          ]
+          "agree": 1
         },
         {
           "path": "src/org/omg/sysml/xpect/tests/validation/valid/Metadata_valid.sysml.xt",

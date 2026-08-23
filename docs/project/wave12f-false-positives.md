@@ -18,7 +18,7 @@ rm -rf /tmp/c-$$ && XDG_CACHE_HOME=/tmp/c-$$ go run ./cmd/pilot-reject
 
 | Harness | Base `7504ff09` | This branch |
 |---|---|---|
-| Xpect | 428 files, 0 unparsed; 1269 agree (246 wording-only) / **54 disagree** | 1275 agree (246 wording-only) / **48 disagree**, 0 unlocated, 0 not adjudicated |
+| Xpect | 428 files, 0 unparsed; 1287 agree (248 wording-only) / **36 disagree** | 1293 agree (248 wording-only) / **30 disagree**, 0 unlocated, 0 not adjudicated |
 | Differential | 353 files, **317 fully agreeing**; 32 agreed, **119 only ours**, 66 only pilot, 175 ours / 122 pilot | **321 fully agreeing**; 32 agreed, **92 only ours**, 66 only pilot, 148 ours / 122 pilot |
 | Rejection | 120 cases: 116 both reject, 4 pilot-only, 0 ours-only | unchanged: 116 / 4 / 0, 0 both accept |
 
@@ -27,10 +27,10 @@ matters here — a total that falls while some family grows is a trade, not prog
 
 | Only-ours bucket | Base | Now |
 |---|---:|---:|
-| `error` / `unresolved-reference` | 33 | **10** |
+| `error` / `unresolved-reference` | 33 | **9** |
 | `warning` / `unmapped` | 20 | **16** |
 | `warning` / `syntax` | 63 | 63 |
-| `warning` / `units` | 1 | 1 |
+| `warning` / `units` | 2 | 2 |
 | `error` / `kind-mismatch` | 1 | 1 |
 | `error` / `multiplicity` | 1 | 1 |
 | **total** | **119** | **92** |
@@ -42,8 +42,8 @@ SimpleVehicleModel.sysml` 5 → 0. The pilot's own columns (122 diagnostics, 66 
 32 agreements and the 24 severity-only pairs are unmoved: nothing we did changed what the pilot
 detects or moved a row of ours out of agreement.
 
-On the Xpect side all six moved rows go from disagreement to agreement: `errors` 479 → **483** with
-`same-line` 9 → **5**, and `noErrors` 263 → **265**.
+On the Xpect side all six moved rows go from disagreement to agreement: `errors` 486 → **490** with
+`same-line` 10 → **6**, and `noErrors` 265 → **267**.
 
 ## What we implemented, and the specification it comes from
 
@@ -199,7 +199,7 @@ other roots are the reference's.
 | 15 | `pilot-examples`: `Simple Tests/PartTest.sysml` (4); `kerml-examples`: `Simple Tests/Circular.kerml` (3); `testdata`: `passes/constraints.sysml` (2); `probes` (6) | `<x> participates in a specialization cycle` | adjudicated divergence — the same F4/K5 reading as the three Xpect rows below; every fixture declares a real cycle and the pilot has no such check | 12F (this doc) |
 | 6 | `pilot-examples`: `Vehicle Example/Annex_A_VehicleViews.sysml`:753–789 | `unresolved reference: Safety` / `Security — did you mean SimpleVehicleModel::Definitions::MetadataDefinitions::Safety?` | our defect | resolver — an `@Safety` / `@Security` prefix annotation inside a nested part body, whose metadata definition the file reaches through imports; the mechanism is not derived in this slice |
 | 2 | `pilot-examples`: `State Space Representation Examples/EVSample1.sysml`:351,354 | `unresolved reference: sourceOutput` / `targetInput — did you mean Transfers::Transfer::source::sourceOutput?` | our defect | resolver — `attribute :>> sourceOutput :>> output.voltage;` inside a `flow`'s `end ::> battery`, so the redefined name is inherited through the end's implicit `Transfer` typing |
-| 1 | `pilot-examples`: `Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml`:62 | `unresolved member: transformation` (from `lbcf.transformation == trs`) | our defect | resolver — a feature-chain member on a locally declared coordinate frame |
+| 1 | `pilot-examples`: `Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml`:38 | `unit 'mm' is not applicable to value` | our defect | units — the fresh base retains this warning at the `60 [mm]` value; it is not a row closed by wave 12F |
 | 1 | `pilot-validation`: `09-Verification/9-Verification-simplified.sysml`:55 | `unresolved reference: massRequirement — did you mean MassRequirement?` | our defect | resolver — `verify vehicleMassRequirement :>> massRequirement;`, the same shape as the `EVSample1` rows: a `:>>` target inherited from the enclosing verification's type |
 | 1 | `pilot-examples`: `Vehicle Example/VehicleDefinitions.sysml`:47 | `interface Mounting connects ports … whose directed features are not conjugate` | adjudicated divergence — a warning of ours where the pilot has no check | 11A (usage typing), kept |
 | 1 | `pilot-examples`: `Analysis Examples/Turbojet Stage Analysis.sysml`:25 | `operator '+' combines incommensurable quantities` | unexamined — no category yet | units/quantity slice |
@@ -214,8 +214,8 @@ without an adjudicated category, and each has an owner.
 Read the totals by root, never as one number: **63 of the 92 are true positives on our own
 `examples` corpus** — our extension warnings, firing where the pilot's grammar has no production —
 and the honest count of suspect diagnostics of ours against the reference's corpora is **20**, of
-which 10 are unresolved-reference defects of ours, 7 are adjudicated specialization cycles, 1 is the
-adjudicated conjugation warning, and 2 are the unexamined single rows.
+which 9 are unresolved-reference defects of ours, 1 is the geometry units defect, 7 are adjudicated
+specialization cycles, 1 is the adjudicated conjugation warning, and 2 are the unexamined single rows.
 
 ### Xpect rows this slice looked at and left open
 

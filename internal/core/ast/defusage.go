@@ -503,7 +503,7 @@ type Usage struct {
 	Multiplicity  *Multiplicity
 	// CrossFeature is the cross feature an end declares inline ahead of its own
 	// declaration (KerML.xtext OwnedCrossFeatureMember).
-	CrossFeature *CrossFeatureMember
+	CrossFeature      *CrossFeatureMember
 	Value             Node
 	ValueOperatorSpan source.Span
 	Members           []Node
