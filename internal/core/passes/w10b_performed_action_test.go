@@ -19,10 +19,7 @@ func TestPerformedActionReferentKindAndTyping(t *testing.T) {
 			perform actions.bad;
 		}
 	`
-	var messages []string
-	for _, message := range w11aMessages(t, src, true) {
-		messages = append(messages, message)
-	}
+	messages := w11aMessages(t, src, true)
 	if !containsMessage(messages, "Must reference an action.") {
 		t.Fatalf("expected performed action kind diagnostic, got %v", messages)
 	}
