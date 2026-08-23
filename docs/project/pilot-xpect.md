@@ -514,6 +514,36 @@ Every row that is not word-for-word — all 248 wording-only and all 24 disagree
 individually with the declared message and ours in
 [pilot-xpect-baseline.json](pilot-xpect-baseline.json).
 
+### Attribution of the `same-line` and `elsewhere-in-file` rows
+
+The 13 rows in these two tolerance classes are attributed below. The Xpect row is the line containing
+the assertion; its declared diagnostic generally anchors in the following model line. The citations
+are to the published KerML 1.0 and SysML v2.0 specifications that govern the pinned 2026-05
+implementation. There is no published KerML 1.1 specification to cite; where parser behavior matters,
+the pinned `2026-05` grammar was checked as well. No category below is inferred from diagnostic
+wording alone.
+
+| Xpect row | Declared | OpenSysML | Specification reading | Category | Owner |
+|---|---|---|---|---|---|
+| `ParsingTests_BadScopeWithOnlyTwoDotAtTheEnd.kerml.xt`:21 | `Couldn't resolve reference to Feature 'non'.` | No diagnostic at the declared row; the nearest is `unresolved reference: Test3::A` at model line 30. | Subsetting relates two Features (KerML 7.3.4.4 and 8.3.3.3.10), so `feature aa subsets non;` is invalid when `non` is a classifier. OpenSysML has that metaclass check, but the unrelated malformed chain later in the file prevents the type tier from running. KerML specifies neither document-level diagnostic scheduling nor recovery completeness. | **adjudicated divergence** | validation-registry tier gating (waves 12A/12D) |
+| `ParsingTests_BadScopeWithOnlyTwoSingleDot.kerml.xt`:21 | `Couldn't resolve reference to Feature 'non'.` | No diagnostic at the declared row; the nearest is `expected a name after '.'` at model line 31. | The same KerML 7.3.4.4/8.3.3.3.10 rule is implemented but gated by the later syntax error. The specification does not require a type-tier diagnostic to survive malformed input elsewhere in the document. | **adjudicated divergence** | validation-registry tier gating (waves 12A/12D) |
+| `ParsingTests_BadScopeWithOnlyTwoSingleDot.kerml.xt`:26 (`..`) | `no viable alternative at input '..'` | One `expected a name after '.'` at model line 31. | A qualified name uses `::` (KerML 8.2.3.4.1), while a feature chain is qualified names separated by one or more single `.` tokens (KerML 7.3.4.6 and 8.2.4.3.5). `test..A::a` is malformed; the specification does not prescribe ANTLR alternatives, recovery offsets, diagnostic wording, or one diagnostic per recovered token. | **adjudicated divergence** | parser recovery (wave 12D) |
+| `ParsingTests_BadScopeWithOnlyTwoSingleDot.kerml.xt`:26 (`::`) | `no viable alternative at input '::'` | The same single `expected a name after '.'` at model line 31. | Same malformed `test..A::a` and the same KerML 8.2.3.4.1/8.2.4.3.5 reading; this is a second pilot recovery trace for one malformed chain, not a second semantic obligation. | **adjudicated divergence** | parser recovery (wave 12D) |
+| `ParsingTests_BadScopeWithOnlyTwoSingleDot.kerml.xt`:26 (`A`) | `no viable alternative at input 'A'` | The same single `expected a name after '.'` at model line 31. | Same malformed `test..A::a` and parser-recovery reading. | **adjudicated divergence** | parser recovery (wave 12D) |
+| `ParsingTests_BadScopeWithOnlyTwoSingleDotAtTheEnd.kerml.xt`:21 | `Couldn't resolve reference to Feature 'non'.` | No diagnostic at the declared row; the nearest is `expected a name after '.'` at model line 32. | The KerML 7.3.4.4/8.3.3.3.10 subsetting rule is implemented but gated by the later syntax error, as above. | **adjudicated divergence** | validation-registry tier gating (waves 12A/12D) |
+| `ParsingTests_BadScopeWithOnlyTwoSingleDotAtTheEnd.kerml.xt`:26 (`..`) | `no viable alternative at input '..'` | One `expected a name after '.'` at model line 32. | `test::A..a` violates the same qualified-name and feature-chain productions (KerML 8.2.3.4.1, 7.3.4.6 and 8.2.4.3.5). Exact recovery traces are not specified. | **adjudicated divergence** | parser recovery (wave 12D) |
+| `ParsingTests_BadScopeWithOnlyTwoSingleDotAtTheEnd.kerml.xt`:26 (`A`) | `no viable alternative at input 'A'` | The same single `expected a name after '.'` at model line 32. | Same malformed `test::A..a` and parser-recovery reading. | **adjudicated divergence** | parser recovery (wave 12D) |
+| `ParsingTests_Import_Visibility.kerml.xt`:25 | `extraneous input '}' expecting EOF` | No diagnostic at the brace; the nearest is the direct bare-import error at model line 24. | Import visibility is mandatory (KerML 7.2.5.4 and 8.2.3.4.2). OpenSysML reports that violated rule once; the brace message is the pilot parser's cascade, and the specification does not require it. | **adjudicated divergence** | parser recovery (wave 12E) |
+| `ParsingTests_ScopeWithFourDotAndDot.kerml.xt`:22 | `Couldn't resolve reference to Feature 'b'.` | `feature chain segment must be a feature, found kermlType` on model line 27. | Every chaining element is a Feature (KerML 7.3.4.6, 8.2.4.3.5 and 8.3.3.3.5). OpenSysML resolves `OuterPackage::B` and reports its wrong metaclass; the pilot filters/fails the lookup. Both reject the same chain, and KerML does not require failed resolution rather than a direct metaclass diagnostic. | **adjudicated divergence** | feature-chain type validation (wave 12D) |
+| `AssignmentActionUsage_invalid.sysml.xt`:44 | `Referent must be time varying.` | No diagnostic there; the nearest is `unresolved member: b` at model line 41. | SysML v2 8.3.17.5 `validateAssignmentActionUsage` requires `referent.featureTarget.mayTimeVary`. OpenSysML has no assignment-referent time-variance validation; disabling tier gating does not produce this diagnostic. | **unimplemented obligation** | constraint tier: assignment-action validation (Step 3) |
+| `Import_Visibility_Invalid.sysml.xt`:25 | `extraneous input '}' expecting EOF` | No diagnostic at the brace; the nearest is the direct bare-import error at model line 24. | Import visibility is mandatory in the SysML package-import production (SysML v2 7.5.3 and 8.2.2.5.1). The pilot's brace error is an unspecified recovery cascade after the same bare import OpenSysML rejects directly. | **adjudicated divergence** | parser recovery (wave 12E) |
+| `TransitionUsage_invalid.sysml.xt`:60 | `Must be a Boolean expression.` | No diagnostic there; the nearest is `A parallel state cannot have successions or transitions.` at model line 46. | A transition guard must be a Boolean-valued expression of multiplicity 1 (SysML v2 7.18.1, 7.18.3 and 8.3.18.8 `validateTransitionFeatureMembershipGuardExpression`). OpenSysML implements the rule and emits it in isolation, but the earlier name-resolution-tier error prevents the document-scoped type pass from running. | **adjudicated divergence** | validation-registry tier gating (waves 12A/12D) |
+
+This corrects one detail in the wave 12D narrative without changing its adjudication: the three
+`non` rows are suppressed by document-level tier gating, not by the parser's local recovery. Their
+underlying subsetting rule is present. The five malformed-chain rows remain parser-recovery
+divergences, and the assignment-referent row is the only newly identified implementation obligation.
+
 ---
 
 ## scope — 230 of 230 agree exactly

@@ -209,20 +209,30 @@ other roots are the reference's.
 | 1 | `pilot-examples`: `Geometry Examples/VehicleGeometryAndCoordinateFrames.sysml`:38 | `unit 'mm' is not applicable to value` | our defect | units — the fresh base retains this warning at the `60 [mm]` value; it is not a row closed by wave 12F |
 | 1 | `pilot-validation`: `09-Verification/9-Verification-simplified.sysml`:55 | `unresolved reference: massRequirement — did you mean MassRequirement?` | our defect | resolver — `verify vehicleMassRequirement :>> massRequirement;`, the same shape as the `EVSample1` rows: a `:>>` target inherited from the enclosing verification's type |
 | 1 | `pilot-examples`: `Vehicle Example/VehicleDefinitions.sysml`:47 | `interface Mounting connects ports … whose directed features are not conjugate` | adjudicated divergence — a warning of ours where the pilot has no check | 11A (usage typing), kept |
-| 1 | `pilot-examples`: `Analysis Examples/Turbojet Stage Analysis.sysml`:25 | `operator '+' combines incommensurable quantities` | unexamined — no category yet | units/quantity slice |
-| 1 | `pilot-examples`: `Individuals Examples/AnalysisIndividualExample.sysml`:86 | `fuelConsumption (typed by FuelEconomyAnalysis_1) redefines fuelConsumption (typed by FuelConsumption): types do not conform` | unexamined — no category yet | conformance slice |
+| 1 | `pilot-examples`: `Analysis Examples/Turbojet Stage Analysis.sysml`:25 | `operator '+' combines incommensurable quantities` | adjudicated divergence — a specification-grounded warning deliberately retained where the pilot is silent; attribution below | quantity/dimension analysis |
+| 1 | `pilot-examples`: `Individuals Examples/AnalysisIndividualExample.sysml`:86 | `fuelConsumption (typed by FuelEconomyAnalysis_1) redefines fuelConsumption (typed by FuelConsumption): types do not conform` | adjudicated divergence — the same conservative direct-type policy as wave 11E E4; attribution below | conformance/constraint tier (wave 11E E4) |
 | 1 | `testdata`: `passes/constraints.sysml` | `multiplicity lower bound exceeds upper bound on lo` | adjudicated divergence — our own fixture, declared behaviour | 12F (this doc) |
 
-Two rows carry **unexamined** rather than one of the four categories, and that is deliberate: this
-slice did not derive their rules, and guessing `our defect` or `pilot limitation` without the
-derivation would be the reclassification the effort forbids. They are the only two rows in the census
-without an adjudicated category, and each has an owner.
+Every row now carries one of the four categories. The two rows this slice left `unexamined` were
+derived in the Step 1 attribution that follows; neither creates a repair obligation.
 
 Read the totals by root, never as one number: **63 of the 92 are true positives on our own
 `examples` corpus** — our extension warnings, firing where the pilot's grammar has no production —
 and the honest count of suspect diagnostics of ours against the reference's corpora is **20**, of
 which 9 are unresolved-reference defects of ours, 1 is the geometry units defect, 7 are adjudicated
-specialization cycles, 1 is the adjudicated conjugation warning, and 2 are the unexamined single rows.
+specialization cycles, 1 is the adjudicated conjugation warning, 1 is the adjudicated quantity
+warning, and 1 is the adjudicated direct-type conformance error.
+
+### Attribution of the two formerly unexamined rows
+
+The citations are to the published KerML 1.0 and SysML v2.0 specifications governing the pinned
+2026-05 artifacts. No published KerML 1.1 specification exists from which to quote different clause
+numbers.
+
+| Row | Pilot / OpenSysML | Specification derivation | Category | Owner |
+|---|---|---|---|---|
+| `Analysis Examples/Turbojet Stage Analysis.sysml`:25 | The pilot is silent. OpenSysML warns that `+` combines dimensions L^6 and Θ in `1/(2 * Cp) * V^2 + T_static`. | `V : VolumeValue` has dimension L^3, so `V^2` is L^6; `Cp : DimensionOneValue` is dimensionless; and `T_static : TemperatureValue` has thermodynamic-temperature dimension Θ. SysML v2 9.8.9.1 requires addition operands and result to have the same quantity dimension and top-level quantity type, and says an implementation should warn or error for an invalid operation. The warning follows that rule; the pilot implements no corresponding static check. | **adjudicated divergence** — keep the specification-grounded warning rather than deleting it to match pilot silence | quantity/dimension analysis |
+| `Individuals Examples/AnalysisIndividualExample.sysml`:86 | The pilot is silent. OpenSysML reports that an individual action typed by `FuelEconomyAnalysis_1` redefines `fuelConsumption`, typed by `FuelConsumption`, but the two declared types do not conform. | Redefinition is subsetting and therefore constrains the redefining feature's values to values of the redefined feature (KerML 7.3.4.4–7.3.4.5 and 8.3.3.3.8/8.3.3.3.10). KerML states the effective co-domain relation but has no general validator constraint requiring each explicitly named redefining type to conform directly to each explicitly named redefined type. OpenSysML deliberately applies that conservative static policy, as already adjudicated for wave 11E E4. The corpus also declares otherwise-unused `FuelConsumption_1 :> FuelConsumption`, which appears to be the intended type, but that likely typo is not the basis for the category. | **adjudicated divergence** — the established wave 11E E4 policy, not a newly inferred obligation | conformance/constraint tier (wave 11E E4) |
 
 ### Xpect rows this slice looked at and left open
 
