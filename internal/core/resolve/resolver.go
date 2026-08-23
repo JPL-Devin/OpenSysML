@@ -25,14 +25,6 @@ type supertypeLookup interface {
 	DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol
 }
 
-// maskLookup is the part of the semantic model that reports redefinition
-// masking: which of a type's inheritable members it does not inherit because
-// one of its features redefines them. *semantics.Model implements it.
-type maskLookup interface {
-	InheritanceMasked(sym, candidate *symbols.Symbol) bool
-	InheritanceMaskedDeclaring(sym, candidate *symbols.Symbol, declName string) bool
-}
-
 // elementFilterJudge is the part of the semantic model that decides an element
 // filter: whether the element an import would surface is selected by the
 // condition restricting it (KerML 8.2.4). A condition classifies a candidate by

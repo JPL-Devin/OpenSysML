@@ -86,14 +86,6 @@ func namedByReference(sym *symbols.Symbol) bool {
 	return rel == nil || rel.Kind != ast.RelRedefines
 }
 
-// declNode returns the declaration f hides the bindings of, if any.
-func (f *refFilter) declNode() ast.Node {
-	if f == nil {
-		return nil
-	}
-	return f.decl
-}
-
 // contributedOnly reports whether a scope owner's own declarations are hidden,
 // leaving only what it inherits or reference-subsets.
 func (f *refFilter) contributedOnly() bool {

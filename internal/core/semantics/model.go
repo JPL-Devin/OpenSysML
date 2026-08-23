@@ -57,15 +57,6 @@ type Model struct {
 	redefMask map[*symbols.Symbol]map[*symbols.Symbol]bool
 	// redefMaskInherited is the same mask counting inherited redefinitions only.
 	redefMaskInherited map[*symbols.Symbol]map[*symbols.Symbol]bool
-	// declMask is redefMaskInherited as a declaration of a given name sees it.
-	declMask map[declMaskKey]map[*symbols.Symbol]bool
-}
-
-// declMaskKey keys the mask a declaration written in a type sees, by the type
-// and the declaration's name.
-type declMaskKey struct {
-	owner *symbols.Symbol
-	name  string
 }
 
 // NewModel creates a semantic model backed by the given name resolver. The
@@ -102,7 +93,6 @@ func NewModel(resolver *resolve.Resolver) *Model {
 		redefined:          make(map[*symbols.Symbol][]*symbols.Symbol),
 		redefMask:          make(map[*symbols.Symbol]map[*symbols.Symbol]bool),
 		redefMaskInherited: make(map[*symbols.Symbol]map[*symbols.Symbol]bool),
-		declMask:           make(map[declMaskKey]map[*symbols.Symbol]bool),
 	}
 	if resolver != nil {
 		resolver.SetModel(m)

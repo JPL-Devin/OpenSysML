@@ -219,40 +219,6 @@ func (m *Model) InheritanceMasked(sym, candidate *symbols.Symbol) bool {
 	return m.maskedBy(m.redefinitionMask(sym, true), candidate)
 }
 
-// InheritanceMaskedDeclaring is InheritanceMasked as the declaration named
-// declName, being written in sym, sees it: sym's own redefinitions mask nothing,
-// so the target such a declaration names stays resolvable (KerML 8.3.3.3.6).
-func (m *Model) InheritanceMaskedDeclaring(sym, candidate *symbols.Symbol, declName string) bool {
-	if declName == "" {
-		return m.maskedBy(m.redefinitionMask(sym, false), candidate)
-	}
-	return m.maskedBy(m.declaringMask(sym, declName), candidate)
-}
-
-// declaringMask is the inherited mask on sym leaving out the redefinitions of
-// features named declName: a declaration of that name redefines them, so its
-// own redefinition governs what it can name (KerML 7.3.4.5). Memoized.
-func (m *Model) declaringMask(sym *symbols.Symbol, declName string) map[*symbols.Symbol]bool {
-	if m == nil || sym == nil {
-		return nil
-	}
-	key := declMaskKey{owner: sym, name: declName}
-	if cached, ok := m.declMask[key]; ok {
-		return cached
-	}
-	m.declMask[key] = nil // re-entrancy guard: a nested query sees no mask
-	candidates := make([]*symbols.Symbol, 0, 8)
-	for _, candidate := range m.maskCandidates(sym, false) {
-		if candidate == nil || maskLeafName(candidate.Name) == declName || candidate.ShortName == declName {
-			continue
-		}
-		candidates = append(candidates, candidate)
-	}
-	mask := m.buildMask(sym, candidates)
-	m.declMask[key] = mask
-	return mask
-}
-
 // viewMask returns the elements sym does not inherit under the given view.
 func (m *Model) viewMask(sym *symbols.Symbol, view memberView, declaring *symbols.Symbol) map[*symbols.Symbol]bool {
 	switch {
