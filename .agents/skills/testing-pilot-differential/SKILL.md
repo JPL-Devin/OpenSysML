@@ -26,6 +26,34 @@ GNU-format diagnostics **relative to `--root`**. Consequences for testing:
   122 / severityMismatch 24`; ~70 s wall, byte-identical across runs *and* after a from-scratch
   rebuild of `build/pilot-validator`. `kerml-examples` carries no `syntax` diagnostic on either
   side. Refresh this paragraph with every rebaseline, and treat a stale one as a finding.
+- **`cmd/pilot-diff` has no `-jobs` flag.** Its full flag set is
+  `-repo -validator -kerml-validator -syside -out -timeout`; passing `-jobs` exits **2** with
+  `flag provided but not defined: -jobs`. Only `cmd/pilot-xpect` is job-parallel. So a PR that
+  claims the differential is "deterministic across `-jobs` settings" is claiming something
+  untestable — prove differential determinism instead with two or three *independent* fresh-cache
+  runs (`rm -rf /tmp/cN && XDG_CACHE_HOME=/tmp/cN go run ./cmd/pilot-diff -out /tmp/pd-runN`) and
+  compare each `pilot-diff.json` to the committed baseline with `cmp`, or hash all of them and
+  assert a single distinct sha256.
+- **Assert the pilot column is non-empty before believing any census (the silent-zero trap).** If
+  the pilot launcher cannot find its ~133 MB shaded jar — the common case when you copy only
+  `build/pilot-sysml-validator/` into a control worktree, since the wrapper resolves the jar at
+  `$SCRIPT_DIR/../pilot-validator/target/sysml-download/sysml/...` — the run prints
+  `pilot ... jar not found` per root but still **exits 0** and reports a plausible census with an
+  empty pilot side — reported fully-agreeing 322 / agreed 0 / only-ours 175 / only-pilot 0, where the
+  truth is 321 / 32 / 92 / 66. The bogus only-ours can coincidentally equal the true
+  `openSysMLDiagnostics`, which is
+  exactly how such a run gets mistaken for valid. Gate every census on
+  `grep -c "jar not found" == 0`, `pilotOnly > 0` and `agreement > 0`. The cheapest fix when
+  measuring a base column is to leave the launchers out of the control worktree entirely and pass
+  the *main* checkout's absolute `-validator` / `-kerml-validator` paths while running `go run` from
+  the control worktree.
+- **Regenerating the baseline JSON does not update the narrative docs, and `make docs-counts`
+  cannot catch it.** Pages without `<!-- doc-count -->` markers (e.g. a wave's own
+  `docs/project/waveNNx-*.md` "What moved" table and its surrounding prose) keep whatever census
+  they were written with, so a rebase that restates `pilot-differential.md` plus the JSON can leave
+  them contradicting the tree while every gate stays green. Cross-check each such page by hand, and
+  use the identities `ourDiagnostics = onlyOurs + agreed + severityMismatch` and
+  `pilotDiagnostics = onlyPilot + agreed + severityMismatch` to spot half-updated tables.
 - **A parser PR moves these numbers without rebaselining the committed JSON.** Wave 10D (#462)
   measured a live `353 / 310 fully agreeing / 23 agreed / 106 only ours / 85 only the pilot's`
   (`openSysMLDiagnostics 144`) while `docs/project/pilot-differential-baseline.json` still held the
