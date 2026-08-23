@@ -151,6 +151,12 @@ Every difference from the published numbers is accounted for, and none of it is 
 - **`exportedObjects` (1).** One note in `indexing/NameEscape.kerml.xt` opens with a bare `//*` and
   puts `XPECT exportedObjects` on the following line. Wave 8F adjudicates it against our index, and
   it agrees, so no kind is reported as not adjudicated any more.
+- **The `at` clause and unescaped quotes (−3 expectations).** Wave 11D corrected the reader: an
+  `at "…"` clause runs to the last quote on its line, because Xpect does not escape the quotes
+  inside it (`at "filter new A(null, 1, "", false);"`). Four assertions were previously read as two
+  expectations each, a truncated one and a junk one, so the declared population is **1323**, not the
+  1326 the totals below were measured with. See
+  [wave11d-metadata-evaluability.md](wave11d-metadata-evaluability.md).
 - **XPECT-shaped text that is not a note (10).** Eight `XPECT scope`/`XPECT errors` fragments sit
   inside `/* ... */` comments and two are disabled by their authors as `// (TBD) XPECT noErrors`.
   These open no `//` or `//*` note, so the harness does not run them; all ten are listed by file and

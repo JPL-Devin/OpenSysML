@@ -164,8 +164,36 @@ func (m *Model) compileCondition(scope *symbols.Scope, n ast.Node) *symbols.Filt
 			Value: symbols.FilterValue{Kind: symbols.FilterValueString, Str: unquote(e.Value)},
 			Span:  spanOf(e),
 		}
+	case *ast.NullExpr:
+		// `null` is the empty sequence, and model-level evaluable (KerML 7.4.9).
+		return &symbols.FilterPredicate{Op: symbols.FilterConst, Value: emptyValue(), Span: spanOf(e)}
+	case *ast.ConstructorExpr:
+		return m.compileConstructor(scope, e)
 	}
 	return unsupported(spanOf(n), fmt.Sprintf("%s is not a supported filter condition", describeNode(n)))
+}
+
+// compileConstructor compiles `new T(…)`: model-level evaluable when its
+// arguments are (KerML 7.4.9), and yielding an instance, never a truth value.
+func (m *Model) compileConstructor(scope *symbols.Scope, e *ast.ConstructorExpr) *symbols.FilterPredicate {
+	span := spanOf(e)
+	if e.Type == nil {
+		return unsupported(span, "the constructor names no type")
+	}
+	typeFQN, ok := m.resolveFQN(scope, e.Type)
+	if !ok {
+		return unsupported(span, fmt.Sprintf("the constructed type %s does not resolve", qnText(e.Type)))
+	}
+	for _, arg := range e.Args {
+		if p := m.compileCondition(scope, arg); p.Op == symbols.FilterUnsupported {
+			return p
+		}
+	}
+	return &symbols.FilterPredicate{
+		Op:    symbols.FilterConst,
+		Value: symbols.FilterValue{Kind: symbols.FilterValueInstance, RefFQN: typeFQN},
+		Span:  span,
+	}
 }
 
 // compileOperator compiles the operators a filter condition is written with:
@@ -791,7 +819,19 @@ func (m *Model) CheckElementFilter(f symbols.ElementFilter) []FilterProblem {
 	if pred == nil {
 		return []FilterProblem{{Reason: "the condition is empty", Span: f.Span}}
 	}
-	return appendFilterProblems(nil, pred, true)
+	// The constraints are on the membership stating the condition (KerML 8.2.4),
+	// so each fault is reported there, once.
+	var out []FilterProblem
+	seen := map[bool]bool{}
+	for _, p := range appendFilterProblems(nil, pred, true) {
+		if seen[p.NotBoolean] {
+			continue
+		}
+		seen[p.NotBoolean] = true
+		p.Span = f.Span
+		out = append(out, p)
+	}
+	return out
 }
 
 // appendFilterProblems collects the faults of a compiled condition. wantBool
@@ -943,6 +983,8 @@ func describeValueKind(k symbols.FilterValueKind) string {
 		return "an element reference"
 	case symbols.FilterValueEmpty:
 		return "nothing"
+	case symbols.FilterValueInstance:
+		return "a constructed instance"
 	default:
 		return "no value"
 	}
