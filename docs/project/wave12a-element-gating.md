@@ -139,7 +139,17 @@ multiplicity): **no row present on this branch is absent on base**. Repeated aga
 after the merge, the row-level diff is exactly the seven rows above moving from pilot-only to
 agreement — no only-ours row added, and no row that agreed on base disagrees on the branch.
 
-A malformed classification test (`filter x istype ;`) parses to an operator with no type reference,
-and handing that typed nil to `DownstreamOfFailure` panicked; the gate now checks for it and
-`TestAClassificationFilterMissingItsTypeIsDiagnosedNotFatal` locks the four shapes. No corpus
-contains one, so no oracle count moves.
+A malformed classification test (`filter x istype ;`, `filter @;`) parses to an operator with no type
+reference, and handing that typed nil to `DownstreamOfFailure` panicked. Merely skipping the nil
+traded the panic for a false positive — a `Must be model-level evaluable` of ours where the pinned
+pilot reports only the syntax error — so a type the parser never produced now counts as its own
+resolution failure and gates the condition, the same reading the mechanism takes elsewhere.
+`TestAClassificationFilterMissingItsTypeIsDiagnosedNotFatal` locks all four shapes to reporting the
+syntax fault alone. No corpus contains one, so no oracle count moves: all three oracles re-measured
+identically after the fix (1269/54 Xpect, 32/119/66 differential, 116/4/0 rejection).
+
+Other malformed conditions whose operand the parser recovered as an error node (`filter x == ;`,
+`filter and x;`) can still draw an evaluability diagnostic of ours in a document that already has a
+parse error, which the pilot does not report. This is confined to already-invalid documents, appears
+in no corpus, and is the residual of the wider question of whether an unparseable subtree should be
+judged at all — left as an open item rather than widened here.

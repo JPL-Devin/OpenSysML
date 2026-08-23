@@ -703,14 +703,20 @@ func TestAnUnresolvedOperandOfABooleanFilterYieldsOnlyTheUnresolvedReference(t *
 }
 
 // A classification test written without its type parses to an operator with no
-// type reference, and analysis must report the syntax error rather than crash.
+// type reference: the syntax error is the whole fault, as the pilot has it.
 func TestAClassificationFilterMissingItsTypeIsDiagnosedNotFatal(t *testing.T) {
 	for _, cond := range []string{"x istype ", "x hastype ", "@", "@@"} {
 		src := "package P { filter " + cond + "; }"
 		ws := NewWorkspace()
 		ws.Open("file:///a.sysml", []byte(src), 1)
-		if len(ws.Diagnostics("file:///a.sysml")) == 0 {
+		diags := ws.Diagnostics("file:///a.sysml")
+		if len(diags) == 0 {
 			t.Errorf("filter %s: malformed condition reported nothing", cond)
+		}
+		for _, d := range diags {
+			if strings.Contains(d.Message, "model-level evaluable") || strings.Contains(d.Message, "Boolean result") {
+				t.Errorf("filter %s: a missing type is a syntax fault, also got %q", cond, d.Message)
+			}
 		}
 	}
 }

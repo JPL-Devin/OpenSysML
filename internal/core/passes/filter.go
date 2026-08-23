@@ -86,7 +86,8 @@ func (fc *filterChecker) gated(expr ast.Node) bool {
 	}
 	switch op.Operator {
 	case ast.OpAt, ast.OpMetaAt, ast.OpIsType, ast.OpHasType:
-		if op.TypeRef != nil && fc.ctx.DownstreamOfFailure(op.TypeRef) {
+		// A type the parser never produced is a resolution failure of its own.
+		if op.TypeRef == nil || fc.ctx.DownstreamOfFailure(op.TypeRef) {
 			return true
 		}
 	case ast.OpNot, ast.OpAnd, ast.OpConditionalAnd, ast.OpOr, ast.OpConditionalOr,
