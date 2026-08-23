@@ -1143,14 +1143,20 @@ differential does **not** move, and re-measured on the merged tree it measures 3
 briefing's `311 / 142` stands and the `312 / 139` this section first recorded was a
 mis-measurement.
 
-**The differential's `Vehicle` duplicate-inherited family is therefore still open.**
-`sysml-examples/Vehicle Example/Annex_A_VehicleViews.sysml` still carries eight of these
-warnings on the merged tree (four names at each of lines 686 and 712, both `:> vehicle_b`
-where `vehicle_b : Vehicle` redeclares those four names). They come from the resolver's
-`checkInheritedAmbiguity` in `resolve/distinguishability.go`, a second producer of this
-wording that 11A did not touch, so the canonicalization below fixes the pass-tier producer
-only. `TestW11ADiamondRedefinitionIsNotDuplicate` is a guard on that producer, not evidence
-that the corpus family closed.
+**Both of those differential figures were measured with a stale library index cache and are
+superseded.** A fresh-cache run of the same tree measures 138 only-ours, and the current control
+after wave 11 is 317 fully agreeing / 119 only ours; see
+[pilot-differential.md](pilot-differential.md). The cache defect is fixed in `internal/core/libs`,
+which keys records by build identity and makes a library index-only on every load path.
+
+**The differential's `Vehicle` duplicate-inherited family was therefore still open here; 11F
+closed it** by canonicalizing redefinition in the resolver's `checkInheritedAmbiguity`
+(`Annex_A_VehicleViews.sysml` 14 → 6 diagnostics, all 8 rows retired).
+After 11A the file still carried eight of these warnings (four names at each of lines 686 and
+712, both `:> vehicle_b` where `vehicle_b : Vehicle` redeclares those four names), because this
+wording has two producers and 11A canonicalized only the pass-tier one:
+`TestW11ADiamondRedefinitionIsNotDuplicate` guards that producer rather than measuring the corpus
+family closed.
 
 | Semantic Rule | Implementation | Test Case | Status |
 |--------------|----------------|-----------|--------|

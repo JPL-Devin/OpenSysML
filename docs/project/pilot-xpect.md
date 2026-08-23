@@ -33,7 +33,7 @@ Can:
 - **Name *visibility*.** `scope` declares the complete set of names visible at a point, so it catches
   both halves of a scoping defect — a name that should be visible and is not, and a name that is
   visible and should not be. `linkedName` can only see the first half. See
-  [scope](#scope--212-of-230-agree-exactly).
+  [scope](#scope--221-of-230-agree-exactly).
 - **Diagnostic presence and placement.** `errors`/`warnings` declare a severity and a message at a
   source location; `noErrors` declares silence over a whole resource set.
 - **The pilot's *intent*.** When we disagree with a declared expectation, the pilot's behaviour on
@@ -123,7 +123,7 @@ Two further honest limits of the mapping:
 expected count. **0 files are unparsed** and **0 declared resources are missing**, so no assertion is
 silently dropped.
 
-The reader recovers **1261 assertions**, declaring **1326 individual expectations** (a single
+The reader recovers **1261 assertions**, declaring **1323 individual expectations** (a single
 `errors`/`warnings` note may list several diagnostics; each is one adjudicated row). Reconciled
 against the published per-kind census:
 
@@ -154,8 +154,8 @@ Every difference from the published numbers is accounted for, and none of it is 
 - **The `at` clause and unescaped quotes (−3 expectations).** Wave 11D corrected the reader: an
   `at "…"` clause runs to the last quote on its line, because Xpect does not escape the quotes
   inside it (`at "filter new A(null, 1, "", false);"`). Four assertions were previously read as two
-  expectations each, a truncated one and a junk one, so the declared population is **1323**, not the
-  1326 the totals below were measured with. See
+  expectations each, a truncated one and a junk one, so the declared population is **1323**, which is
+  what the totals below are measured over. See
   [wave11d-metadata-evaluability.md](wave11d-metadata-evaluability.md).
 - **XPECT-shaped text that is not a note (10).** Eight `XPECT scope`/`XPECT errors` fragments sit
   inside `/* ... */` comments and two are disabled by their authors as `// (TBD) XPECT noErrors`.
@@ -168,30 +168,30 @@ Every difference from the published numbers is accounted for, and none of it is 
 
 ```
 428 .xt file(s), 0 unparsed, 0 missing declared resource(s)
-1261 assertion(s) declaring 1326 expectation(s)
-agree 1172 (of which wording-only 239) | disagree 154 | unlocated 0 | not adjudicated 0
+1261 assertion(s) declaring 1323 expectation(s)
+agree 1269 (of which wording-only 246) | disagree 54 | unlocated 0 | not adjudicated 0
 ```
 
 | Kind | Expectations | Agree | of which wording-only | Disagree | Not adjudicated | `same-location` | `same-line` | `severity-differs` | `elsewhere` | nothing |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| `errors` | 513 | 418 | 239 | 95 | 0 | 9 | 25 | 11 | 42 | 8 |
-| `noErrors` | 275 | 248 | — | 27 | 0 | — | — | — | — | — |
+| `errors` | 510 | 479 | 246 | 31 | 0 | 6 | 9 | 0 | 12 | 4 |
+| `noErrors` | 275 | 263 | — | 12 | 0 | — | — | — | — | — |
 | `linkedName` | 194 | 194 | — | 0 | 0 | — | — | — | — | — |
-| `warnings` | 113 | 99 | — | 14 | 0 | 0 | 7 | 5 | 0 | 2 |
-| `scope` | 230 | 212 | — | 18 | 0 | — | — | — | — | — |
+| `warnings` | 113 | 111 | — | 2 | 0 | 0 | 0 | 1 | 0 | 1 |
+| `scope` | 230 | 221 | — | 9 | 0 | — | — | — | — | — |
 | `exportedObjects` | 1 | 1 | — | 0 | 0 | — | — | — | — | — |
 
 Per suite:
 
 | Suite | Files | Expectations | Agree | Disagree | Not adjudicated |
 |---|---:|---:|---:|---:|---:|
-| `kerml` | 303 | 968 | 875 | 93 | 0 |
-| `sysml` | 125 | 358 | 297 | 61 | 0 |
+| `kerml` | 303 | 966 | 932 | 34 | 0 |
+| `sysml` | 125 | 357 | 337 | 20 | 0 |
 
-**Read the `errors` row carefully: 239 of its 418 agreements are wording-only, so more than half of
+**Read the `errors` row carefully: 246 of its 479 agreements are wording-only, so more than half of
 that column is us stating the pilot's rule in our own words rather than a rule written against its
-text.** The 179 word-for-word rows are the ones where a rule was implemented against the declared
-message. `warnings` shows the same effect from the other side: its 99 agreements are the
+text.** The 233 word-for-word rows are the ones where a rule was implemented against the declared
+message. `warnings` shows the same effect from the other side: its 111 agreements are the
 duplicate-member-name, visibility and wave-9C library rules written against the pilot's declared
 wording, so they match by construction rather than by luck. `noErrors` and `linkedName` are
 wording-independent, and they are where this oracle adjudicates most directly.
@@ -202,21 +202,23 @@ change in our behaviour):
 | Kind | First run | Now | What moved |
 |---|---|---|---|
 | `linkedName` | 151 / 194 | **194 / 194** | alias-introduced names resolve to the aliased element, and the `~ B::f` conjugation form parses |
-| `noErrors` | 231 / 275 | **248 / 275** | 6 `ParsingTests_*` files, 4 inherited-name-conflict files and 2 others no longer draw an error, and wave 9D's protected/shadowed path reconciliation cleared 11 more — 6 of which wave 10E gives back, because those fixtures declare both file-wide silence and the errors it restores |
-| `warnings` | 0 / 113 | **99 / 113** | the duplicate-member-name warnings, the wave-8 rules written against the declared wording, wave 9C's library rules, and wave 10's warnings residue |
-| `errors` | 0 / 513 | **418 / 513** | 179 rows are ours word-for-word; the other 239 are wording-only, admitted centrally in wave 10 after the rule and element were checked, not by adopting the pilot's phrasing |
-| `scope` | 73 / 230 | **212 / 230** | wave 9A resolves implicit and inherited members through the library (`library-names` 125 → 27), wave 9D reconciles the protected and shadowed paths, and wave 10A bounds re-entry to one per name and repairs the specialization re-entry shape |
+| `noErrors` | 231 / 275 | **263 / 275** | 6 `ParsingTests_*` files, 4 inherited-name-conflict files and 2 others no longer draw an error, wave 9D's protected/shadowed path reconciliation cleared 11 more, and wave 11C closed the 6 protected-import rows wave 10E had made unsatisfiable by modelling `noErrors` as Xpect's residue rather than as file-wide silence |
+| `warnings` | 0 / 113 | **111 / 113** | the duplicate-member-name warnings, the wave-8 rules written against the declared wording, wave 9C's library rules, wave 10's warnings residue, and wave 11A/11F's usage-typing rules, which stopped another rule's error from standing where a warning is declared |
+| `errors` | 0 / 510 | **479 / 510** | 233 rows are ours word-for-word; the other 246 are wording-only, admitted centrally in wave 10 after the rule and element were checked, not by adopting the pilot's phrasing |
+| `scope` | 73 / 230 | **221 / 230** | wave 9A resolves implicit and inherited members through the library (`library-names` 125 → 27), wave 9D reconciles the protected and shadowed paths, wave 10A bounds re-entry to one per name, and wave 11C fixes the quoted anchor and stops a recursive import's descent carrying implicit generals |
 
-**These tables and the baseline are a single fresh run on `main` with wave 10 merged.** The largest
-movement in the wave is not the wording-only class: `errors` silence falls 49 → **8** and `same-line`,
-`severity-differs` and `elsewhere-in-file` all fall with it, because wave 10B implemented declared
-rules and wave 10E restored 12 rejections rather than relabelling anything.
+**These tables and the baseline are a single fresh run on `main` with wave 11 merged** (all seven
+slices: 11A–11G). The largest movement in the wave is detection, not classification: the 11
+`severity-differs` `errors` rows are **0**, because wave 11A implemented the usage-typing and
+specialization rules the pilot declares there instead of adjusting a severity, and 11F canonicalized
+the resolver's inherited-name warning that had been standing in their place. `errors` silence falls
+8 → **4**, `elsewhere-in-file` 42 → **12**, `same-line` 25 → **9**, and `noErrors` rises 248 → **263**.
 
-**What the wording-only class did and did not buy.** It moved 239 rows from `same-location` into
+**What the wording-only class did and did not buy.** It moved 246 rows from `same-location` into
 agreement without changing what we detect — the same severity, the same offset, the same rule, the
 same element, our phrasing (`unresolved reference: A::a1 — did you mean …` against `Couldn't resolve
 reference to Classifier 'A::a1'.`). **Nothing was newly detected by it, and the sub-count exists so
-that a future reader cannot book the jump as detection.** The 9 rows left in `same-location` are the
+that a future reader cannot book the jump as detection.** The 6 rows left in `same-location` are the
 interesting residue: there we flag the declared offset for a *different* reason than the pilot does,
 such as `ParsingTests_BadScopeWithOnlyTwoDot.kerml.xt`:26, where it cannot resolve `test` and we say
 the reference resolves to a package where a type is required.
@@ -234,13 +236,14 @@ untouched — no divergence from the specification had to be recorded for it.
 
 All 12 rows we had gone silent on are back at the pilot's own location, and the 2
 `VisibilityTests_Protected_0.kerml.xt` rows that landed elsewhere in the file now land on the declared
-references (`elsewhere-in-file` 44 → 42); all 14 are admitted as wording-only, so `errors` agreement
-rises 404 → 418 and silence falls 20 → 8. **The trade is visible in the other direction and is not
-recoverable:** `noErrors` falls 254 → 248, because the six visibility fixtures that declare file-wide
-silence *also* declare the errors wave 10E restores, so no implementation can satisfy both
-expectations at once — the three `ShadowingTests_SameNamesImportAsFeature*` fixtures already read that
-way before the wave. `scope` is unchanged at 212 of 230 and the 42 wave-8A private/protected
-rejections are unchanged.
+references; all 14 are admitted as wording-only. **The trade wave 10E appeared to force is gone, and
+it was the harness's reading rather than a contradiction in the corpus:** wave 10E cost `noErrors`
+six rows because those fixtures declare file-wide silence *and* the protected-import errors it
+restores, and wave 11C showed that Xpect scores a `noErrors` note against what its sibling
+expectations leave over, not against total silence (`consumedLine`, `cmd/pilot-xpect/compare.go`).
+With that modelled, the six rows close without exempting a fixture or widening the wording-only class,
+and **no expectation in this suite is now recorded as unsatisfiable.** The 42 wave-8A
+private/protected rejections are unchanged.
 
 The `nothing` column counts what neither agreement nor any tolerance accounts for, so it subtracts
 the agreements — including the wording-only ones, which are no longer counted under `same-location`.
@@ -248,7 +251,7 @@ the agreements — including the wording-only ones, which are no longer counted 
 The **complete** per-row evidence — every disagreement and every wording-only row with its file,
 line, declared expectation and our actual behaviour — is in
 [pilot-xpect-baseline.json](pilot-xpect-baseline.json). The sections below group the disagreements by
-cause and name the files; they do not repeat 393 rows.
+cause and name the files; they do not repeat 300 rows.
 
 ---
 
@@ -313,53 +316,53 @@ only external, per-reference verdict on our name resolution that exists at the p
 also the narrowest: it says which element a written reference reaches, never which names *were*
 visible. That second question is the 230 `scope` assertions below.
 
-## noErrors — 248 of 275 agree
+## noErrors — 263 of 275 agree
 
-27 disagreements: we report an error where the pilot's implementers declared the file clean. Grouped
+12 disagreements: we report an error where the pilot's implementers declared the file clean. Grouped
 by our first diagnostic:
 
 | Cause | Rows | Read |
 |---|---:|---|
-| **Unresolved / ambiguous reference** — e.g. `ambiguous reference: SamePackage::container (2 candidates)`, `unresolved reference: MassValue — did you mean ISQBase::MassValue?` | 14 | **Split, and the split is the point.** 8 are ours to fix — the shadowing/import shapes, which `linkedName`'s 194 agreements do not reach because these references resolve to nothing rather than to the wrong element. The other 6 are the visibility fixtures wave 10E restored: `VisibilityTests_ImportAsFeatureInheritance_1` and `VisibilityTests_ProtectedImport_0`, `_1`, `_3`, `_4`, `_5` each declare file-wide silence **and** the protected-import errors the pilot's own `errors` assertions declare, so agreeing here would mean disagreeing there. **No implementation can satisfy both, and this report counts the row against us rather than exempting it.** |
-| **Parse recovery** — `expected a namespace member`, `expected '{' or ';' after declaration`, `expected ')'` | 6 | **Ours is wrong.** Notation the reference accepts and we do not parse; each one cascades, so the count overstates the number of defects. Down from 10: the three `QPE-*` query-path-expression files and `SemanticMetadata_valid.sysml.xt` are what remain, plus two `ParsingTests_*`. |
-| **Specialization cycle** — `x participates in a specialization cycle` | 3 | **One-sided, not a defect of ours — re-read in wave 11C.** All three fixtures declare a real cycle: `part p1 :> p2; part p2 :> p3; part p3 :> p1;` and `part p4 :> p4;` (`simpletests/PartTest.sysml.xt`:67-71), `part def A :> C` with `part def C :> A, B` (`Redefinition_OwningType_Cyclic_Gen.sysml.xt`:28-34), and `classifier a specializes b` / `classifier b specializes a` (`SimpleImportTests_CircleInheritanceInCircleImport.kerml.xt`:29,37). None is a redefinition or import circle misread as a specialization one, so the earlier reading was wrong. The pilot has no such check at all — the finding F4/K5 settled in [pilot-differential.md](pilot-differential.md#specialization-cycles-f4) — so these are our extension of the reference, and closing them would mean deleting a correct rule. |
-| **Conformance** — `try (typed by a1) redefines b (typed by A): types do not conform` | 2 | The declared expectation says clean, so ours is the suspect. Both are `SimpleImportTestsFromOtherFile_Import3*`. |
-| **State/transition** — `transition endpoint done names a state that is not a vertex of this state machine`, `transition endpoint A1 is not a state or pseudostate` | 2 | `simpletests/StateTest.sysml.xt`:73 and `DecisionTest.sysml.xt`:69. Ours is wrong; both endpoints are legal. |
+| **Unresolved reference** — `unresolved member: c` (`ParsingTests_Indexing.kerml.xt`:32), `unresolved reference: physical` (`AllocationTest.sysml.xt`:31), `unresolved reference: MassValue — did you mean ISQBase::MassValue?` (`KernelLibraryTest.sysml.xt`:72) | 3 | **Ours to fix.** Import and indexing shapes where the reference resolves to nothing for us and to an element for the pilot; `linkedName`'s 194 agreements do not reach them, because those rows only ask about references that *do* resolve. |
+| **Parse recovery** — `expected a namespace member`, `expected '{' or ';' after declaration` | 4 | **Ours is wrong.** Notation the reference accepts and we do not parse; each one cascades, so the count overstates the number of defects. The three `QPE-*` query-path-expression files and `SemanticMetadata_valid.sysml.xt`. |
+| **Specialization cycle** — `x participates in a specialization cycle` | 3 | **Adjudicated divergence, not a defect of ours.** All three fixtures declare a real cycle: `part p1 :> p2; part p2 :> p3; part p3 :> p1;` and `part p4 :> p4;` (`simpletests/PartTest.sysml.xt`:67-71), `part def A :> C` with `part def C :> A, B` (`Redefinition_OwningType_Cyclic_Gen.sysml.xt`:28-34), and `classifier a specializes b` / `classifier b specializes a` (`SimpleImportTests_CircleInheritanceInCircleImport.kerml.xt`:29,37). The pilot has no such check at all — the finding F4/K5 settled in [pilot-differential.md](pilot-differential.md#specialization-cycles-f4) — so closing them would mean deleting a correct rule. |
+| **Conformance** — `try (typed by a1) redefines b (typed by A): types do not conform` | 2 | **Adjudicated divergence**, decided in [wave11e-decisions.md](wave11e-decisions.md) (E4): a redefinition is a subsetting (KerML 7.4.9, 8.3.4.2), so a non-conforming type describes an unsatisfiable model; the pilot validates subsetting conformance nowhere, so its silence records an absent check. Both rows are `SimpleImportTestsFromOtherFile_Import3{,_FT}`. |
 
 The **inherited-name-conflict** family that cost 4 rows on the first run is gone: those files are the
 same defect as the `warnings` severity finding below, and making a duplicate inherited name a warning
-rather than an error made all four files clean.
+rather than an error made all four files clean. The two state/transition rows
+(`simpletests/StateTest.sysml.xt`:73, `DecisionTest.sysml.xt`:69) closed in wave 11 with the
+transition-endpoint reading, not by relaxing the rule.
 
-By suite: 17 KerML, 10 SysML. In every one of the 27 the declared expectation is *silence*, so every
+By suite: 4 KerML, 8 SysML. In every one of the 12 the declared expectation is *silence*, so every
 one is a place where we reject something the reference accepts — the same class of finding as the
 "only ours" column in [pilot-differential.md](pilot-differential.md), but here backed by a declared
-intent rather than an observed verdict. The net movement across wave 8 was one row worse (244 → 243),
-and a flat number hid the real trade: four parse-recovery rows closed while six visibility rows
-opened. Wave 9 repaid that and more, 243 → 254, by closing the six visibility rows it had opened plus
-five others — and wave 10E hands those six straight back, 254 → **248**, because they were only ever
-closed by not rejecting what the pilot rejects. **Six of the 27 rows here are therefore
-unsatisfiable, not unfixed**; the honest reading of this kind is 21 rows of our own defects plus 6
-contradictory fixtures, and the same six are why declared-`errors` silence fell 20 → 8. Read the two
-kinds together, never one alone.
+intent rather than an observed verdict. **7 of the 12 are ours; the other 5 are adjudicated
+divergences where the pilot has no check.** The kind's history is worth keeping in view, because it
+moved in both directions: 244 → 243 across wave 8 (four parse rows closed, six visibility rows
+opened), 243 → 254 in wave 9, 254 → 248 when wave 10E restored the protected-import rejections, and
+248 → **263** in wave 11 once 11C modelled `noErrors` as Xpect's residue and closed those six
+without giving the rejections back. No row here is unsatisfiable any more.
 
 ---
 
-## warnings — 99 of 113, and the severity finding is closed
+## warnings — 111 of 113, and the severity finding is closed
 
-99 rows agree, all of them word-for-word: no `warnings` row is wording-only. The first 11 were duplicate-member-name warnings implemented in the wave-6
+111 rows agree, all of them word-for-word: no `warnings` row is wording-only. The first 11 were duplicate-member-name warnings implemented in the wave-6
 round from the pilot's declared text — 6 in `MembershipTests_Distinguishability.kerml.xt`, and 5
 across the `Redefinition_Diamond*_invalid` / `RedefinitionDiamond*_invalid` pairs; wave 8 added 12
 more, the multiplicity-upper-bound rule among them; **wave 9C added 66**, the library inherited-name
-diamond chief among them, and wave 10 closed 10 more. All of them match by construction rather than
-by luck, because each was written against the declared text.
+diamond chief among them, wave 10 closed 10 more, and wave 11 closed 12 — the nested
+`perform b.a;` / `exhibit s.sa;` offsets and four of the five rows that sat behind another rule's
+error. All of them match by construction rather than by luck, because each was written against the
+declared text.
 
-The remaining 14:
+The remaining 2:
 
 | Outcome | Rows | Read |
 |---|---:|---|
-| `same-line` — we warn on the declared line, at another offset | 7 | The nested `perform b.a;` / `exhibit s.sa;` shape below; the `Part, UseCase` naming defect closed in wave 10. |
-| `severity-differs` — a diagnostic of ours **is** there, as an **error** | 5 | Another rule's error is at the line, whatever this rule does. |
-| nothing of ours there at all | 1 | `BindingConnector_Invalid2.sysml.xt`:42 — a shape the rule does not reach. Wave 11C closed the `BadCase3_Rdef` row (below). |
+| `severity-differs` — a diagnostic of ours **is** there, as an **error** | 1 | `InterfaceUsage_Invalid.sysml.xt`:78, where `Duplicate of inherited member name 'self' from Part, Port` is declared and our `An interface end must be a port.` error stands at the line. The declared warning needs the `end part ::> tankAssy.fuel;` subsetting chain the diamond rule does not follow. |
+| nothing of ours there at all | 1 | `BindingConnector_Invalid2.sysml.xt`:42 — a shape the rule does not reach. |
 
 **The severity defect the first run found is closed: it was 60 rows before wave 9C and is 0 now.**
 The pilot declares:
@@ -371,9 +374,8 @@ The pilot declares:
 ```
 
 and on 60 rows we produced an error at that line until wave 9C made the rule a warning over library
-bases. What remains of the family is 12 of the 14 disagreements, and none of them is a severity
-disagreement of this rule's own making: 7 land at another offset on the declared line and 5 sit
-behind another rule's error. The `Subsetting/redefining feature should not have
+bases. What remains of the family is 1 of the 2 disagreements, and it is not a severity disagreement
+of this rule's own making: another rule's error stands at the line. The `Subsetting/redefining feature should not have
 larger multiplicity upper bound` rule, 8 rows of nothing on the first run, and
 `User library packages should not be marked as standard`, 1 row, are both implemented and agreeing.
 
@@ -403,13 +405,12 @@ What is still open in the family, by reproducer:
 
 | Rows | Reproducer | Why it still disagrees |
 |---:|---|---|
-| 6 | `ActionUsage_invalid.sysml.xt:61`, `StateUsage_invalid.sysml.xt:87` | The pilot reports on the nested `perform b.a;` / `exhibit s.sa;` reference usage and on the `b.a` expression inside it; we report on the referenced declaration instead, so the rows land at another offset on the declared line. |
-| 1 | `OccurrenceUsage_invalid.sysml.xt:59` | Same shape: our `'self' from DataValue, Occurrence` warning is on the declared line, four lines down from the declared offset. |
-| 2 | `Specialization_invalid.kerml.xt:56,60` | A specialization-cycle error of another rule is at the line, so the row reads `severity-differs` whatever this rule does. |
-| 2 | `AttributeUsage_invalid.sysml.xt:47,52` | `DataValue, Part` / `DataValue, Port`: the rule deliberately draws no diamond through an attribute's implicit `Base::DataValue` typing when the declaration also has a declared type, because doing so reported `'self' from DataValue, …` across otherwise-clean pilot-corpora roots. |
 | 1 | `InterfaceUsage_Invalid.sysml.xt:78` | `Part, Port` through an `end part ::> tankAssy.fuel;` subsetting chain, which the rule does not follow; an interface-end error of another rule is at the line. |
-| 0 | `ShadowingTests_ImportAndInnerClassesNamesAreTheSameBadCase3_Rdef.kerml.xt:28` | Closed in wave 11C — see below. Not a library diamond, so the resolver's own rule owns it. |
 | 1 | `BindingConnector_Invalid2.sysml.xt:42` | `Bound features should have conforming types` on `rearWheel+1`: one endpoint is an expression, so the rule has no feature type to compare. |
+| 0 | `ActionUsage_invalid.sysml.xt:61`, `StateUsage_invalid.sysml.xt:87`, `OccurrenceUsage_invalid.sysml.xt:59` | Closed in wave 11: the warning now lands on the nested `perform b.a;` / `exhibit s.sa;` reference usage and the `b.a` expression inside it, where the pilot reports it, rather than on the referenced declaration. |
+| 0 | `Specialization_invalid.kerml.xt:56,60` | Closed in wave 11E, which runs `validateSpecializationSpecificNotConjugated` at the type tier so a metaclass error in the same file no longer hides it. |
+| 0 | `AttributeUsage_invalid.sysml.xt:47,52` | Closed in wave 11 with the declared-type reading, without reintroducing the `'self' from DataValue, …` false positives across the pilot-corpora roots. |
+| 0 | `ShadowingTests_ImportAndInnerClassesNamesAreTheSameBadCase3_Rdef.kerml.xt:28` | Closed in wave 11C — see below. Not a library diamond, so the resolver's own rule owns it. |
 
 ### Wave 11C: a supertype's imports are memberships it has
 
@@ -430,9 +431,9 @@ redefinition removed was silent too.
 
 ---
 
-## errors — 418 of 513, of which 239 wording-only
+## errors — 479 of 510, of which 246 wording-only
 
-Agreement here is 179 rows word-for-word plus 239 wording-only: the same rule about the same element
+Agreement here is 233 rows word-for-word plus 246 wording-only: the same rule about the same element
 at the same offset and severity, in our phrasing. Almost all of the wording-only rows are one family,
 `Couldn't resolve reference to <kind> 'X'.` against `unresolved reference: X — did you mean …?`, and
 the harness admits them only after matching the rule and the element named, never on span and
@@ -440,65 +441,70 @@ severity alone. What is left:
 
 | Tolerance | Rows | Meaning |
 |---|---:|---|
-| `same-location` | 9 | we flag the exact declared offset for a **different rule** |
-| `same-line` | 25 | we flag the declared line at a different offset — almost certainly the same defect |
-| `severity-differs` | 11 | we report the declared defect as a *warning* |
-| `elsewhere-in-file` | 42 | we report errors, but not where the declaration points |
-| nothing | 8 | **we accept a file the pilot's implementers declared invalid** |
+| `same-location` | 6 | we flag the exact declared offset for a **different rule** |
+| `same-line` | 9 | we flag the declared line at a different offset — almost certainly the same defect |
+| `severity-differs` | 0 | **empty:** wave 11A implemented the declared rules instead |
+| `elsewhere-in-file` | 12 | we report errors, but not where the declaration points |
+| nothing | 4 | **we accept a file the pilot's implementers declared invalid** |
 
-The split by suite: KerML is 235 wording-only / 5 `same-location` / 20 `same-line` /
-4 `severity-differs` / 21 `elsewhere` / 5 nothing, SysML is 4 / 4 / 5 / 7 / 21 / 3. The SysML suite's
-assertions anchor at a whole declaration (`at "part def P { ... }"`) while ours land on the offending
-token inside it, so `same-line` there often means what `same-location` means in KerML. Together,
-**452 of 513 declared errors are ours at the declared location or line.**
+The disagreements split 21 KerML / 10 SysML. The SysML suite's assertions anchor at a whole
+declaration (`at "part def P { ... }"`) while ours land on the offending token inside it, so
+`same-line` there often means what `same-location` means in KerML. Together, **494 of 510 declared
+errors are ours at the declared location or line.**
 
-**The 9 remaining `same-location` rows are the ones the wording-only class deliberately refuses.**
+**The 6 remaining `same-location` rows are the ones the wording-only class deliberately refuses.**
 They sit at the declared offset with the declared severity and state a *different rule*, so admitting
-them would have hidden five distinct divergences:
+them would have hidden four distinct divergences:
 
-- **2 parse-shape rows** where the pilot reports the ANTLR failure (`no viable alternative at input
-  '..'`, `A parallel state cannot have successions or transitions`) and we report what our recovery
-  expected (`expected '{' or ';' after declaration`, `expected a namespace member`) — same defect,
-  differently attributed, and the declared text is a parser-internal message we would not adopt.
+- **2 parse-shape rows** (`ParsingTests_BadScopeWithOnlyTwoDot.kerml.xt`:26,
+  `ParsingTests_BadScopeWithOnlyTwoSingleDotAtTheEnd.kerml.xt`:26) where the pilot cannot resolve
+  `test` at all and we resolve it and reject the *kind* (`type must be a type, found package`) — the
+  rows here where our answer is arguably the more precise one.
 - **2 bare-import rows** (`ParsingTests_Import_Visibility.kerml.xt`:23,
   `Import_Visibility_Invalid.sysml.xt`:23), which wave 10C's D2 moved *into* this class: our
   `import without a visibility indicator: S` is now an error by default rather than a warning, so
   these left `severity-differs`. The pilot rejects the same line as a syntax error instead.
-- **2 specialization rows** at `Specialization_invalid.kerml.xt`:55 and :59, where it says
-  `Cannot specialize behavior` / `Cannot specialize structure` and we say the type participates in a
-  specialization cycle — we detect the cycle and not the kind mismatch.
-- **`ParsingTests_BadScopeWithOnlyTwoDot.kerml.xt`:26**, where the pilot cannot resolve `test` at all
-  and we resolve it and reject the *kind* (`type must be a type, found package`) — the one row here
-  where our answer is arguably the more precise one.
-- **2 SysML rule rows** — `CaseSubjectObjective_Invalid.sysml.xt`:80 counts objectives where we order
-  parameters, and `InterfaceUsage_Invalid.sysml.xt`:49 counts connector ends where we require an
+- **`InterfaceUsage_Invalid.sysml.xt`:49**, where the pilot counts connector ends and we require an
   interface end to be a port.
+- **`TransitionUsage_invalid.sysml.xt`:45**, where the pilot reports the ANTLR failure
+  (`A parallel state cannot have successions or transitions`) and we report what our recovery expected
+  — same defect, differently attributed, and the declared text is a parser-internal message we would
+  not adopt.
 
-**The `nothing` row is where the wave's real movement is: 49 → 8**, the last 12 of it wave 10E's
-protected-import restoration. What we still accept silently is now small enough to enumerate
-completely:
+The two `Specialization_invalid.kerml.xt` specialization rows and
+`CaseSubjectObjective_Invalid.sysml.xt`:80 left this class in wave 11: 11A implemented the
+specialization metaclass rules and 11E re-attached the conjugation rule at the type tier, and the
+objective count is now ours.
 
-- **3 unresolved-reference rows** — `ParsingTests_ScopeWithFourDotAndDot.kerml.xt`:22 (two) and
-  `ConnectorTest_ConnectorEndSubsettingBadCase.kerml.xt`:31. In each we resolve a name the pilot
-  does not, so these are visibility or path-shape questions, not missing rules. The
-  `GlobalQualification.sysml.xt:48` row is wording-only agreement, not a remaining disagreement.
-- **4 rows in the two `Feature_invalid_noType` files** — `Features must have at least one type` and
-  its implicit-base half (`Must directly or indirectly specialize Base::Anything` in KerML,
-  `Parts::Part` in SysML). These are the only genuinely missing *validation rules* left in this
-  column, and both suites declare them identically.
+**The `nothing` column continues to fall: 49 → 8 in wave 10, 8 → 4 in wave 11**, and the four rows
+left are each classified in [wave11e-decisions.md](wave11e-decisions.md):
 
-The 11 `severity-differs` rows are the mirror image of the warnings finding: in every one of them the
-declared error is a typing or specialization rule (`An action must be typed by action definitions.`,
-`Cannot specialize class or association`) and what we put on that line is the inherited-name warning
-instead, so closing them is a matter of implementing the declared rule rather than of severity.
+- **`ParsingTests_ScopeWithFourDotAndDot.kerml.xt`:22 (two rows)** — we resolve a name the pilot does
+  not, a visibility/path-shape question rather than a missing rule.
+- **`ConnectorTest_ConnectorEndSubsettingBadCase.kerml.xt`:31** — **our defect** (E3): the declared
+  `Couldn't resolve reference to Feature 'f'.` is a resolution verdict about which features a
+  connector end may name, owned by the resolver rather than by any `passes` rule.
+- **`Type_Multiplicity_invalid.kerml.xt`:20** — **unimplemented obligation** (E1): `Only one
+  multiplicity is allowed` is a validation error on a form our parser has no production for, so the
+  rule cannot be reached until the parser accepts the surplus member.
 
-Every row that is not word-for-word — all 239 wording-only and all 95 disagreements — is recorded
+The four `Feature_invalid_noType` rows — `Features must have at least one type` and its implicit-base
+half — closed in wave 11E, which implemented both halves in both suites.
+
+**`severity-differs` is empty, and that is this wave's clearest result.** Every one of its 11 rows
+declared a typing or specialization rule (`An action must be typed by action definitions.`,
+`Cannot specialize class or association`) while what we put on the line was the inherited-name
+warning. They were missing detection wearing a cosmetic label: wave 11A implemented the six rules,
+11F added the use-case analogues and canonicalized the resolver's inherited-name warning so it stops
+standing in for them, and the column closed by implementation rather than by relabelling.
+
+Every row that is not word-for-word — all 246 wording-only and all 31 disagreements — is recorded
 individually with the declared message and ours in
 [pilot-xpect-baseline.json](pilot-xpect-baseline.json).
 
 ---
 
-## scope — 212 of 230 agree exactly
+## scope — 221 of 230 agree exactly
 
 `scope` is a different oracle from everything else here. `linkedName` asks what one reference
 resolves to; a `scope` assertion declares **the complete set of names visible at a point**, so it
@@ -550,11 +556,11 @@ inheritance through typing, library gating, circular imports, redefinition ancho
 
 | Class | Rows | Reading |
 |---|---:|---|
-| agree (exact) | 212 | the declared set, name for name |
-| `library-names` | 8 | differs **only** in path tails through `Base`'s implicit `self`/`that` |
-| `missing-and-extra` | 3 | both |
-| `extra-names` | 5 | we offer names the pilot does not, and miss none |
-| `missing-names` | 2 | we miss declared names and offer no extra ones |
+| agree (exact) | 221 | the declared set, name for name |
+| `library-names` | 6 | differs **only** in path tails through `Base`'s implicit `self`/`that` |
+| `extra-names` | 2 | we offer names the pilot does not, and miss none |
+| `missing-and-extra` | 1 | both |
+| `missing-names` | 0 | — |
 | `other-paths` | 0 | — |
 
 **This is a worklist, not a verdict, and it must not be averaged into a percentage.** Exact agreement
@@ -562,10 +568,12 @@ on sets that routinely run past 50 entries is real evidence that our visible-nam
 broadly right; the class that dominated it through wave 8 — implicit members, 96 rows then 125 — was
 two separate defects, both fixed in wave 9A, leaving 28 rows of a third, narrower one. Wave 9D then
 emptied `other-paths` and took agreement to 183; wave 10A's one-re-entry bound and per-anchor
-accounting took it to **212**, cutting `library-names` 28 → 8 and `missing-and-extra` 14 → 3 — see
-item 3.
+accounting took it to 212, cutting `library-names` 28 → 8 and `missing-and-extra` 14 → 3 — see item
+3. Wave 11C took it to **221** by fixing the quoted `scope` anchor and stopping a recursive import's
+descent from carrying implicit generals; the nine rows left are the expansion-bound question below,
+which is an adjudication rather than a defect list.
 
-1. **`library-names` (8 rows) — a typed feature is still offered the implicit members its type's
+1. **`library-names` (6 rows) — a typed feature is still offered the implicit members its type's
    own supertype would contribute.** Two distinct defects were reproduced and fixed here first, each
    measured on its own:
    - A KerML `class`/`struct`/`assoc`/`behavior`/`predicate` declaration is parsed as a usage node,
@@ -589,14 +597,16 @@ item 3.
    while we still offer `f.self`, `f.that`, `f.that.self`
    (`visibility/VisibilityTests_PublicImportAsFeature.kerml.xt`:27, 18 extra names). Suppressing the
    implicit base for any feature with a declared generalization was measured and is wrong — it moves
-   this class from 27 rows back to 30 — so the rule is subtler and is wave 10's worklist. Wave 9D's
-   protected-path reconciliation added one row here (27 → 28).
-2. **`extra-names` (3 rows) — the residue of the redefinition-masking defect.** This class was 32
-   rows, 28 of them `*_Rdef` fixtures, where a `redefines` did not mask the inherited name it
-   redefines; the wave-8 masking round in **`internal/core/semantics`** closed all but three, and the
-   three that remain (`Import_QualifiedName2`, `ShortName_Scoping_Valid1`,
-   `MemberNameTests_NamedMemberFromInheritance2_Rdef`) differ in implicit-member tails of the same
-   shape as item 1 rather than in a redefined name.
+   this class from 27 rows back to 30 — so the rule is subtler. The six rows that remain are the
+   `CircleProblem4` family, the two `ImportPackageAndInheritanceFromContainer` variants and
+   `Import_Recursive3`, all of them `self`/`that` tails and all of them hanging off the expansion
+   bound the wave-11C section below leaves open.
+2. **`extra-names` (2 rows) — the two `ShadowingTests_CircleProblem3.kerml.xt` anchors.** The
+   redefinition-masking defect that filled this class is gone: it was 32 rows, 28 of them `*_Rdef`
+   fixtures where a `redefines` did not mask the inherited name it redefines, the wave-8 masking round
+   in **`internal/core/semantics`** closed all but three, and wave 11C's recursive-import descent
+   closed those. What is left is the deepest pair of circular fixtures, where our enumeration offers
+   names the pilot's expansion bound stops before — the same open question as item 1.
 3. **`other-paths` (0 rows) — emptied in wave 9D, and five of its rows overshoot now.** This class
    held 11 rows: circular containment truncated one step earlier for us, so
    `ShadowingTests_CircleProblem2.kerml.xt`:22 was missing `A.B.B` while offering `A.B` and `B.B`.
@@ -613,12 +623,14 @@ item 3.
    straight gain. **Adjudicated in [wave10-decisions.md](wave10-decisions.md) (D3):** the bound is
    per name rather than per depth — no name appears more than twice in any declared path in the
    corpus — and the eight rows are three defects, only two of which the bound reaches.
-4. **`missing-names` / `missing-and-extra` (16 rows, 8 of them item 3's) — import plus inheritance
-   from the container.** Reproducer: `imports/SimpleImportTests_ImportPackageAndInheritanceFromContainer.kerml.xt`:23, where
+4. **`missing-names` (0 rows) and `missing-and-extra` (1 row) — the import-plus-inheritance family is
+   closed, and the one row left is a harness question.** The reproducer
+   `imports/SimpleImportTests_ImportPackageAndInheritanceFromContainer.kerml.xt`:23, where
    `classifier A { public import test::*; classifier a specializes A; }` declares `A.A`, `A.A.a` and
-   `A.a.A` paths we do not offer — the fixture's own authors annotate the missing ones in a trailing
-   comment. Root cause in **`internal/core/resolve`** (a member imported into a namespace is not
-   re-offered through the namespace's own inherited paths); reported, not fixed here.
+   `A.a.A` paths we did not offer, agrees exactly since wave 11C made an imported member re-offered
+   through the namespace's own inherited paths in **`internal/core/resolve`**. The remaining row is
+   `imports/recursive/ShortName_Import_Valid1.kerml.xt`:25, where the pilot's `at c_Public` matches
+   inside `c_Public_Id` and ours does not — a **pilot limitation (harness)**, classified below.
 
 Short-name membership imports were the one defect inside this slice's ownership and are fixed in the
 surface: `public import VP::VP2::A_Id` where the element is declared `classifier <'A_Id'> B` now
@@ -728,10 +740,19 @@ and wave-12 commits between them):
 | differential | 353 files, **312** fully agreeing; 25 agreed, **139** only ours, 73 only the pilot's | identical |
 | rejection | 120 cases: 115 both reject, 5 only the pilot, 0 only us | identical |
 
-One number disagrees with the wave-11 handoff, which quoted the differential at `b86aeb18` as
-`311` fully agreeing with `142` only ours. A fresh run of `cmd/pilot-diff` at that commit reports
-`312` and `139` on this machine, twice; the 3-diagnostic difference is recorded here rather than
-averaged, and the reconciliation belongs with whoever holds the differential baseline.
+**Both columns are now known to be understated, and the reconciliation the note below asked for is
+done: the discrepancy was a stale on-disk library index cache, not a measurement dispute.** Records
+in `~/.cache/sysml-ls/libs` were keyed on content, library-set digest and record format but not on
+the binary, so records written by a pre-wave-11 build stayed "valid" across every merge and changed
+what later builds saw. Re-running the same commits with a fresh `XDG_CACHE_HOME` gives higher
+agreement in every oracle, identically cold and warm. The cache key now includes a build identity and
+a library is index-only on both load paths, so a hit and a miss expose the same state
+(`internal/core/libs`). Every figure in this document is a fresh-cache run on `main` with all of wave
+11 merged; the two columns above are kept as recorded history rather than corrected in place.
+
+The wave-11 handoff quoted the differential at `b86aeb18` as `311` fully agreeing with `142` only
+ours, against the `312`/`139` above: the same cache effect, and the difference is not averaged
+anywhere.
 
 ---
 
@@ -755,20 +776,31 @@ fixes are scoped from it in later rounds. The first two items of the original li
 this report reads it:
 
 1. **`Duplicate of inherited member name` location and coverage** — the severity half is closed by
-   wave 9C (60 rows ours as an error → 0); 7 `warnings` rows are still in the wrong place, 5 sit
-   behind another rule's error and 2 draw nothing.
-2. **The 8 declared errors we do not report** — down from 195 on the first run, 49 after wave 9D and
-   20 before wave 10E restored the protected-import rejections. Half are the two
-   `Feature_invalid_noType` files' missing validation rules; half are references we resolve and the
-   pilot does not.
-3. **The 6 remaining parse-recovery `noErrors` rows** — notation the reference accepts and we reject,
-   the three `QPE-*` query-path-expression fixtures among them.
-4. **The 8 unresolved/ambiguous-reference `noErrors` rows** — the shadowing/import family, which
-   `linkedName`'s 194 agreements do not reach. The 6 protected-import rows beside them are **not** on
-   this list: those fixtures declare silence and the errors of item 2 at once, so they are a
-   contradiction in the corpus rather than work (see noErrors).
-5. **The 18 `scope` disagreements**, with the class breakdown and root-cause packages in
-   [scope](#scope--212-of-230-agree-exactly): 8 of them are the residual implicit-member class —
-   `Base`'s `self`/`that` offered to a feature whose declared resource set breaks the chain — plus
-   import-plus-inheritance paths in `resolve` and the circular fixtures where our enumeration and the
-   pilot's still differ in shape after wave 10A's one-re-entry bound.
+   wave 9C (60 rows ours as an error → 0) and wave 11 closed the offsets; 1 `warnings` row sits behind
+   another rule's error and 1 draws nothing.
+2. **The 4 declared errors we do not report** — down from 195 on the first run, 49 after wave 9D, 20
+   before wave 10E restored the protected-import rejections and 8 after it. Each is classified in
+   [wave11e-decisions.md](wave11e-decisions.md): two are references we resolve and the pilot does not,
+   one is a resolver defect (E3) and one an unimplemented obligation blocked behind a missing parser
+   production (E1).
+3. **The 4 remaining parse-recovery `noErrors` rows** — notation the reference accepts and we reject,
+   the three `QPE-*` query-path-expression fixtures and `SemanticMetadata_valid.sysml.xt`.
+4. **The 3 unresolved-reference `noErrors` rows** — the import/indexing family, which `linkedName`'s
+   194 agreements do not reach. The protected-import rows are **not** on this list and are no longer a
+   contradiction either: wave 11C closed them by scoring a `noErrors` note against Xpect's residue
+   rather than against file-wide silence.
+5. **The 9 `scope` disagreements**, with the class breakdown and root-cause packages in
+   [scope](#scope--221-of-230-agree-exactly): 8 of them hang off the expansion bound the
+   specification does not fix — `Base`'s `self`/`that` tails on the circular and
+   import-plus-inheritance fixtures — and the ninth is the pilot's own substring anchoring.
+6. **The 5 rows we keep deliberately** — 3 specialization-cycle `noErrors` rows, where the reference
+   has no cycle check at all, and the 2 `SimpleImportTestsFromOtherFile_Import3{,_FT}` rows, where it
+   validates subsetting type conformance nowhere (E4). Both are adjudicated divergences, not backlog.
+
+The KerML validation and visibility residue wave 11E left open is enumerated with a category and an
+owner per row in [wave11e-decisions.md](wave11e-decisions.md): **E1** `Type_Multiplicity_invalid` and
+**E2** `AssociationTest_CrossFeatures_invalid` are unimplemented obligations owned by the parser,
+**E3** `ConnectorTest_ConnectorEndSubsettingBadCase` and **E5**
+`VisibilityTests_Protected_FeatureChaining` are our defects owned by the resolver, and **E4** is the
+adjudicated divergence above. Read that page beside this one: an open row with no category reads as a
+defect, and two of these six are not.

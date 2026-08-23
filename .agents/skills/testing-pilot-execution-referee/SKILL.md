@@ -106,8 +106,8 @@ rather than a verdict against us — the pilot answers `false` for
   `pilot-exec-diff: <file>:<line>: model no/such/model.sysml: stat <abs>: no
   such file or directory`.
 - **Additivity.** `go run ./cmd/pilot-diff` must still print the headline the
-  committed baseline holds (`353 file(s), 311 fully agreeing; 25 agreed
-  diagnostic(s), 142 only ours, 73 only the pilot's` after the wave-10
+  committed baseline holds (`353 file(s), 317 fully agreeing; 25 agreed
+  diagnostic(s), 119 only ours, 73 only the pilot's` after the wave-11
   rebaseline — read it from the baseline JSON, not from this line, since each
   fix round moves it) and `jq -S` diff clean against
   `docs/project/pilot-differential-baseline.json`; `git status --porcelain`

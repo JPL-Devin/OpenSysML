@@ -6,10 +6,10 @@
     "files": 428,
     "filesUnparsed": 0,
     "assertions": 1261,
-    "rows": 1326,
-    "agree": 1172,
-    "wordingOnly": 239,
-    "disagree": 154,
+    "rows": 1323,
+    "agree": 1269,
+    "wordingOnly": 246,
+    "disagree": 54,
     "unlocated": 0,
     "notAdjudicated": 0,
     "missingResources": 0,
@@ -20,25 +20,25 @@
       "kind": "errors",
       "assertions": 486,
       "blockAssertions": 27,
-      "rows": 513,
-      "agree": 418,
-      "wordingOnly": 239,
-      "disagree": 95,
+      "rows": 510,
+      "agree": 479,
+      "wordingOnly": 246,
+      "disagree": 31,
       "unlocated": 0,
       "notAdjudicated": 0,
-      "sameLocation": 9,
-      "sameLine": 25,
-      "severityDiffers": 11,
-      "elsewhereInFile": 42
+      "sameLocation": 6,
+      "sameLine": 9,
+      "severityDiffers": 0,
+      "elsewhereInFile": 12
     },
     {
       "kind": "noErrors",
       "assertions": 275,
       "blockAssertions": 0,
       "rows": 275,
-      "agree": 248,
+      "agree": 263,
       "wordingOnly": 0,
-      "disagree": 27,
+      "disagree": 12,
       "unlocated": 0,
       "notAdjudicated": 0,
       "sameLocation": 0,
@@ -66,14 +66,14 @@
       "assertions": 75,
       "blockAssertions": 17,
       "rows": 113,
-      "agree": 99,
+      "agree": 111,
       "wordingOnly": 0,
-      "disagree": 14,
+      "disagree": 2,
       "unlocated": 0,
       "notAdjudicated": 0,
       "sameLocation": 0,
-      "sameLine": 7,
-      "severityDiffers": 5,
+      "sameLine": 0,
+      "severityDiffers": 1,
       "elsewhereInFile": 0
     },
     {
@@ -81,19 +81,18 @@
       "assertions": 230,
       "blockAssertions": 229,
       "rows": 230,
-      "agree": 212,
+      "agree": 221,
       "wordingOnly": 0,
-      "disagree": 18,
+      "disagree": 9,
       "unlocated": 0,
       "notAdjudicated": 0,
       "sameLocation": 0,
       "sameLine": 0,
       "severityDiffers": 0,
       "elsewhereInFile": 0,
-      "extraNames": 5,
-      "missingNames": 2,
-      "missingAndExtra": 3,
-      "libraryNames": 8
+      "extraNames": 2,
+      "missingAndExtra": 1,
+      "libraryNames": 6
     },
     {
       "kind": "exportedObjects",
@@ -119,10 +118,10 @@
         "files": 303,
         "filesUnparsed": 0,
         "assertions": 952,
-        "rows": 968,
-        "agree": 875,
-        "wordingOnly": 235,
-        "disagree": 93,
+        "rows": 966,
+        "agree": 932,
+        "wordingOnly": 241,
+        "disagree": 34,
         "unlocated": 0,
         "notAdjudicated": 0,
         "missingResources": 0,
@@ -133,25 +132,25 @@
           "kind": "errors",
           "assertions": 312,
           "blockAssertions": 17,
-          "rows": 328,
-          "agree": 273,
-          "wordingOnly": 235,
-          "disagree": 55,
+          "rows": 326,
+          "agree": 305,
+          "wordingOnly": 241,
+          "disagree": 21,
           "unlocated": 0,
           "notAdjudicated": 0,
-          "sameLocation": 5,
-          "sameLine": 20,
-          "severityDiffers": 4,
-          "elsewhereInFile": 21
+          "sameLocation": 3,
+          "sameLine": 7,
+          "severityDiffers": 0,
+          "elsewhereInFile": 7
         },
         {
           "kind": "noErrors",
           "assertions": 200,
           "blockAssertions": 0,
           "rows": 200,
-          "agree": 183,
+          "agree": 196,
           "wordingOnly": 0,
-          "disagree": 17,
+          "disagree": 4,
           "unlocated": 0,
           "notAdjudicated": 0,
           "sameLocation": 0,
@@ -179,14 +178,14 @@
           "assertions": 18,
           "blockAssertions": 0,
           "rows": 18,
-          "agree": 15,
+          "agree": 18,
           "wordingOnly": 0,
-          "disagree": 3,
+          "disagree": 0,
           "unlocated": 0,
           "notAdjudicated": 0,
           "sameLocation": 0,
           "sameLine": 0,
-          "severityDiffers": 2,
+          "severityDiffers": 0,
           "elsewhereInFile": 0
         },
         {
@@ -194,19 +193,18 @@
           "assertions": 230,
           "blockAssertions": 229,
           "rows": 230,
-          "agree": 212,
+          "agree": 221,
           "wordingOnly": 0,
-          "disagree": 18,
+          "disagree": 9,
           "unlocated": 0,
           "notAdjudicated": 0,
           "sameLocation": 0,
           "sameLine": 0,
           "severityDiffers": 0,
           "elsewhereInFile": 0,
-          "extraNames": 5,
-          "missingNames": 2,
-          "missingAndExtra": 3,
-          "libraryNames": 8
+          "extraNames": 2,
+          "missingAndExtra": 1,
+          "libraryNames": 6
         },
         {
           "kind": "exportedObjects",
@@ -289,31 +287,7 @@
           "path": "src/org/omg/kerml/xpect/tests/imports/global/DependencySamePackageName.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.imports.global.KerMLImportGlobalTest",
           "expectations": 2,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "noErrors",
-              "line": 21,
-              "verdict": "disagree",
-              "declared": "no error anywhere in the file",
-              "ours": "1 error(s), first: line 29: ambiguous reference: SamePackage::container (2 candidates)"
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 23,
-              "at": "SamePackage::container",
-              "verdict": "disagree",
-              "tolerance": "missing-names",
-              "declared": "11 name(s) visible at \"SamePackage::container\"",
-              "ours": "4 name(s): missing 5 (SamePackage.container.B, container, container.A, test.container, test.container.A), extra 0 (none)",
-              "names": {
-                "declared": 11,
-                "ours": 4,
-                "missing": 5
-              }
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/imports/global/DependencyVisibilityPackage.kerml.xt",
@@ -1042,24 +1016,7 @@
           "path": "src/org/omg/kerml/xpect/tests/imports/local/Import_QualifiedName2.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.imports.local.KerMLImportLocalTest",
           "expectations": 4,
-          "agree": 3,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 60,
-              "at": "P2a::A",
-              "verdict": "disagree",
-              "tolerance": "extra-names",
-              "declared": "47 name(s) visible at \"P2a::A\"",
-              "ours": "60 name(s): missing 0 (none), extra 13 (Import_QualifiedName, Import_QualifiedName.P1, Import_QualifiedName.P2, Import_QualifiedName.P2.P2a, Import_QualifiedName.P3, …)",
-              "names": {
-                "declared": 47,
-                "ours": 60,
-                "extra": 13
-              }
-            }
-          ]
+          "agree": 4
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/imports/local/Import_Recursive.kerml.xt",
@@ -1100,24 +1057,7 @@
           "path": "src/org/omg/kerml/xpect/tests/imports/recursive/Import_Recursive1.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.imports.recursive.KerMLImportRecursiveTest",
           "expectations": 1,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 33,
-              "at": "X",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "60 name(s) visible at \"X\"",
-              "ours": "84 name(s): missing 0 (none), extra 24 (Q.R.Z.self, Q.R.Z.self.that, Q.Y.self, Q.Y.self.that, R.Z.self, …)",
-              "names": {
-                "declared": 60,
-                "ours": 84,
-                "extra": 24
-              }
-            }
-          ]
+          "agree": 1
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/imports/recursive/Import_Recursive1_scope_otherfile.kerml.xt",
@@ -1151,13 +1091,12 @@
               "verdict": "disagree",
               "tolerance": "library-names",
               "declared": "172 name(s) visible at \"S::S1::X2\"",
-              "ours": "254 name(s): missing 2 (RecursiveImport.s.self.that, s.self.that), extra 84 (Q.R.Z.self, Q.R.Z.self.that, Q.Y.self, Q.Y.self.that, R.Z.self, …); 2 missing name(s) reachable by another path (RecursiveImport.s.self.that, s.self.that)",
+              "ours": "170 name(s): missing 2 (RecursiveImport.s.self.that, s.self.that), extra 0 (none); 2 missing name(s) reachable by another path (RecursiveImport.s.self.that, s.self.that)",
               "names": {
                 "declared": 172,
-                "ours": 254,
+                "ours": 170,
                 "missing": 2,
-                "otherPath": 2,
-                "extra": 84
+                "otherPath": 2
               }
             }
           ]
@@ -1172,48 +1111,13 @@
           "path": "src/org/omg/kerml/xpect/tests/imports/recursive/Import_Recursive4.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.imports.recursive.KerMLImportRecursiveTest",
           "expectations": 2,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 46,
-              "at": "Z",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "86 name(s) visible at \"Z\"",
-              "ours": "98 name(s): missing 0 (none), extra 12 (R.Z.self, R.Z.self.that, RecursiveImport.R.Z.self, RecursiveImport.R.Z.self.that, RecursiveImport.Y.self, …)",
-              "names": {
-                "declared": 86,
-                "ours": 98,
-                "extra": 12
-              }
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/imports/recursive/Import_Recursive5.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.imports.recursive.KerMLImportRecursiveTest",
           "expectations": 2,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 44,
-              "at": "T1::X1",
-              "verdict": "disagree",
-              "tolerance": "missing-names",
-              "declared": "100 name(s) visible at \"T1::X1\"",
-              "ours": "130 name(s): missing 2 (RecursiveImport.X1, X1), extra 32 (RecursiveImport.S1.self, RecursiveImport.S1.self.that, RecursiveImport.T.T1.X1.self, RecursiveImport.T.T1.X1.self.that, RecursiveImport.T.T1.self, …)",
-              "names": {
-                "declared": 100,
-                "ours": 130,
-                "missing": 2,
-                "extra": 32
-              }
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/imports/recursive/Import_Recursive6.kerml.xt",
@@ -1252,12 +1156,12 @@
               "verdict": "disagree",
               "tolerance": "missing-and-extra",
               "declared": "75 name(s) visible at \"c_Public\"",
-              "ours": "218 name(s): missing 4 (A, A, A.c_public, A_Id), extra 155 (Test, Test.Test1, Test.Test1.A.c_public.self, Test.Test1.A.c_public.self.that, Test.Test1.A.self, …)",
+              "ours": "170 name(s): missing 4 (A, A, A.c_public, A_Id), extra 107 (Test, Test.Test1, Test.Test1.A.c_public.self, Test.Test1.A.c_public.self.that, Test.Test1.A.self, …)",
               "names": {
                 "declared": 75,
-                "ours": 218,
+                "ours": 170,
                 "missing": 4,
-                "extra": 155
+                "extra": 107
               }
             }
           ]
@@ -1393,7 +1297,7 @@
               "verdict": "disagree",
               "tolerance": "elsewhere-in-file",
               "declared": "error: \"Couldn't resolve reference to Feature 'non'.\"",
-              "ours": "no error at line 22; nearest is line 31: expected '{' or ';' after declaration"
+              "ours": "no error at line 22; nearest is line 31: expected a name after '.'"
             },
             {
               "kind": "errors",
@@ -1403,7 +1307,7 @@
               "verdict": "disagree",
               "tolerance": "same-line",
               "declared": "error: \"no viable alternative at input '..'\"",
-              "ours": "line 31 offset 642: expected '{' or ';' after declaration"
+              "ours": "line 31 offset 642: expected a name after '.'"
             },
             {
               "kind": "errors",
@@ -1413,7 +1317,7 @@
               "verdict": "disagree",
               "tolerance": "same-line",
               "declared": "error: \"no viable alternative at input '::'\"",
-              "ours": "line 31 offset 642: expected '{' or ';' after declaration"
+              "ours": "line 31 offset 642: expected a name after '.'"
             },
             {
               "kind": "errors",
@@ -1423,7 +1327,7 @@
               "verdict": "disagree",
               "tolerance": "same-line",
               "declared": "error: \"no viable alternative at input 'A'\"",
-              "ours": "line 31 offset 642: expected '{' or ';' after declaration"
+              "ours": "line 31 offset 642: expected a name after '.'"
             }
           ]
         },
@@ -1440,7 +1344,7 @@
               "verdict": "disagree",
               "tolerance": "elsewhere-in-file",
               "declared": "error: \"Couldn't resolve reference to Feature 'non'.\"",
-              "ours": "no error at line 22; nearest is line 32: expected '{' or ';' after declaration"
+              "ours": "no error at line 22; nearest is line 32: expected a name after '.'"
             },
             {
               "kind": "errors",
@@ -1450,7 +1354,7 @@
               "verdict": "disagree",
               "tolerance": "same-location",
               "declared": "error: \"no viable alternative at input '..'\"",
-              "ours": "line 32 offset 647: expected '{' or ';' after declaration"
+              "ours": "line 32 offset 647: expected a name after '.'"
             },
             {
               "kind": "errors",
@@ -1460,7 +1364,7 @@
               "verdict": "disagree",
               "tolerance": "same-line",
               "declared": "error: \"no viable alternative at input '..'\"",
-              "ours": "line 32 offset 647: expected '{' or ';' after declaration"
+              "ours": "line 32 offset 647: expected a name after '.'"
             },
             {
               "kind": "errors",
@@ -1470,7 +1374,7 @@
               "verdict": "disagree",
               "tolerance": "same-line",
               "declared": "error: \"no viable alternative at input 'A'\"",
-              "ours": "line 32 offset 647: expected '{' or ';' after declaration"
+              "ours": "line 32 offset 647: expected a name after '.'"
             }
           ]
         },
@@ -1484,27 +1388,7 @@
           "path": "src/org/omg/kerml/xpect/tests/parsing/ParsingTests_CircularReferences.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 2,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "errors",
-              "line": 32,
-              "at": "classifier C ~ C;",
-              "verdict": "disagree",
-              "tolerance": "same-line",
-              "declared": "error: \"Must directly or indirectly specialize Base::Anything\"",
-              "ours": "line 33 offset 601: C participates in a specialization cycle"
-            },
-            {
-              "kind": "errors",
-              "line": 35,
-              "at": "feature c ~ c;",
-              "verdict": "disagree",
-              "tolerance": "same-line",
-              "declared": "error: \"Features must have at least one type\"",
-              "ours": "line 36 offset 703: c participates in a specialization cycle"
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/parsing/ParsingTests_Classifiers.kerml.xt",
@@ -1572,8 +1456,8 @@
               "kind": "noErrors",
               "line": 32,
               "verdict": "disagree",
-              "declared": "no error anywhere in the file",
-              "ours": "6 error(s), first: line 49: expected ')'"
+              "declared": "no error the file does not declare",
+              "ours": "1 error(s), first: line 42: unresolved member: c"
             }
           ]
         },
@@ -1593,31 +1477,13 @@
           "path": "src/org/omg/kerml/xpect/tests/parsing/ParsingTests_Metadata.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 1,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "noErrors",
-              "line": 33,
-              "verdict": "disagree",
-              "declared": "no error anywhere in the file",
-              "ours": "1 error(s), first: line 74: unresolved reference: cc — did you mean Metadata::T::cc or Metadata::SS::cc?"
-            }
-          ]
+          "agree": 1
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/parsing/ParsingTests_MultiplicityDeclaration.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 1,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "noErrors",
-              "line": 21,
-              "verdict": "disagree",
-              "declared": "no error anywhere in the file",
-              "ours": "1 error(s), first: line 24: expected '{' or ';'"
-            }
-          ]
+          "agree": 1
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/parsing/ParsingTests_Redefinition.kerml.xt",
@@ -1727,24 +1593,7 @@
           "path": "src/org/omg/kerml/xpect/tests/scoping/ShortName_Scoping_Valid1.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.scoping.KerMLScopingTest",
           "expectations": 2,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 24,
-              "at": "1",
-              "verdict": "disagree",
-              "tolerance": "extra-names",
-              "declared": "44 name(s) visible at \"1\"",
-              "ours": "141 name(s): missing 0 (none), extra 97 (1.11A.self, 1.11A.self.that, 1.AA.self, 1.AA.self.that, 1.self, …)",
-              "names": {
-                "declared": 44,
-                "ours": 141,
-                "extra": 97
-              }
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/scoping/ShortName_Scoping_Valid2.kerml.xt",
@@ -1894,24 +1743,7 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_NamedMemberFromInheritance2_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 4,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 40,
-              "at": "aa",
-              "verdict": "disagree",
-              "tolerance": "extra-names",
-              "declared": "91 name(s) visible at \"aa\"",
-              "ours": "95 name(s): missing 0 (none), extra 4 (b_alias, b_alias.self, b_alias.that, b_alias.that.self)",
-              "names": {
-                "declared": 91,
-                "ours": 95,
-                "extra": 4
-              }
-            }
-          ]
+          "agree": 5
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/MemberNameTests_NamedMemberFromInheritance_2.kerml.xt",
@@ -2286,17 +2118,7 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_ImportAndInnerClassesNamesAreTheSameBadCase3_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "warnings",
-              "line": 28,
-              "at": "B",
-              "verdict": "disagree",
-              "declared": "warning: \"Duplicate of inherited member name 'B' from OuterPackage\"",
-              "ours": "no warning anywhere in the file"
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_ImportAndInnerClassesNamesAreTheSameGoodCase1.kerml.xt",
@@ -2416,25 +2238,7 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_SameNamesGoodCaseWithAlias_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 4,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 43,
-              "at": "a1",
-              "verdict": "disagree",
-              "tolerance": "missing-and-extra",
-              "declared": "71 name(s) visible at \"a1\"",
-              "ours": "71 name(s): missing 4 (A.a1, A.a1.self, A.a1.that, A.a1.that.self), extra 4 (A.a2, A.a2.self, A.a2.that, A.a2.that.self)",
-              "names": {
-                "declared": 71,
-                "ours": 71,
-                "missing": 4,
-                "extra": 4
-              }
-            }
-          ]
+          "agree": 5
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_SameNamesGoodCase_FT.kerml.xt",
@@ -2446,25 +2250,7 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_SameNamesGoodCase_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 5,
-          "agree": 4,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 38,
-              "at": "a1",
-              "verdict": "disagree",
-              "tolerance": "missing-and-extra",
-              "declared": "55 name(s) visible at \"a1\"",
-              "ours": "55 name(s): missing 4 (A.a1, A.a1.self, A.a1.that, A.a1.that.self), extra 4 (A.a2, A.a2.self, A.a2.that, A.a2.that.self)",
-              "names": {
-                "declared": 55,
-                "ours": 55,
-                "missing": 4,
-                "extra": 4
-              }
-            }
-          ]
+          "agree": 5
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_SameNamesGoodCase_Redef.kerml.xt",
@@ -2493,15 +2279,8 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_SameNamesImportAsFeature.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 2,
-          "agree": 1,
+          "agree": 2,
           "rows": [
-            {
-              "kind": "noErrors",
-              "line": 23,
-              "verdict": "disagree",
-              "declared": "no error anywhere in the file",
-              "ours": "3 error(s), first: line 25: ambiguous reference: SamePackage::container (2 candidates)"
-            },
             {
               "kind": "errors",
               "line": 27,
@@ -2509,7 +2288,7 @@
               "verdict": "wording-only",
               "rule": "unresolved-reference",
               "declared": "error: \"Couldn't resolve reference to Classifier 'container::B'.\"",
-              "ours": "line 28 offset 924: unresolved reference: container::B (no namespace \"container\" is loaded; \"B\" is declared as SamePackage::container::B)"
+              "ours": "line 28 offset 924: unresolved reference: container::B"
             }
           ]
         },
@@ -2517,15 +2296,8 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_SameNamesImportAsFeature_FT.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 2,
-          "agree": 1,
+          "agree": 2,
           "rows": [
-            {
-              "kind": "noErrors",
-              "line": 23,
-              "verdict": "disagree",
-              "declared": "no error anywhere in the file",
-              "ours": "3 error(s), first: line 25: ambiguous reference: SamePackage::container (2 candidates)"
-            },
             {
               "kind": "errors",
               "block": true,
@@ -2534,7 +2306,7 @@
               "verdict": "wording-only",
               "rule": "unresolved-reference",
               "declared": "error: \"Couldn't resolve reference to Type 'container::B'.\"",
-              "ours": "line 30 offset 936: unresolved reference: container::B (no namespace \"container\" is loaded; \"B\" is declared as SamePackage::container::B)"
+              "ours": "line 30 offset 936: unresolved reference: container::B"
             }
           ]
         },
@@ -2542,23 +2314,16 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_SameNamesImportAsFeature_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 2,
-          "agree": 0,
+          "agree": 2,
           "rows": [
-            {
-              "kind": "noErrors",
-              "line": 23,
-              "verdict": "disagree",
-              "declared": "no error anywhere in the file",
-              "ours": "3 error(s), first: line 25: ambiguous reference: SamePackage::container (2 candidates)"
-            },
             {
               "kind": "errors",
               "line": 27,
               "at": "B",
-              "verdict": "disagree",
-              "tolerance": "same-line",
+              "verdict": "wording-only",
+              "rule": "unresolved-reference",
               "declared": "error: \"Couldn't resolve reference to Feature 'B'.\"",
-              "ours": "line 28 offset 918: unresolved reference: container — did you mean SamePackage::container?"
+              "ours": "line 28 offset 928: unresolved member: B"
             }
           ]
         },
@@ -2703,7 +2468,7 @@
               "kind": "noErrors",
               "line": 18,
               "verdict": "disagree",
-              "declared": "no error anywhere in the file",
+              "declared": "no error the file does not declare",
               "ours": "2 error(s), first: line 29: a participates in a specialization cycle"
             }
           ]
@@ -2815,18 +2580,7 @@
           "path": "src/org/omg/kerml/xpect/tests/validation/FeatureChain_invalid.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.validation.KerMLValidationTest",
           "expectations": 7,
-          "agree": 6,
-          "rows": [
-            {
-              "kind": "errors",
-              "line": 58,
-              "at": "m::mm",
-              "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
-              "declared": "error: \"Must be a valid feature\"",
-              "ours": "no error at line 59; nearest is line 52: Must be an accessible feature (use dot notation for nesting)"
-            }
-          ]
+          "agree": 7
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/validation/FeatureInvertingTest_valid.kerml.xt",
@@ -2838,25 +2592,7 @@
           "path": "src/org/omg/kerml/xpect/tests/validation/Feature_invalid_noType.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 2,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "errors",
-              "line": 18,
-              "at": "classifier A;",
-              "verdict": "disagree",
-              "declared": "error: \"Must directly or indirectly specialize Base::Anything\"",
-              "ours": "no error anywhere in the file"
-            },
-            {
-              "kind": "errors",
-              "line": 20,
-              "at": "feature f;",
-              "verdict": "disagree",
-              "declared": "error: \"Features must have at least one type\"",
-              "ours": "no error anywhere in the file"
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/validation/Feature_nonunique_invalid.kerml.xt",
@@ -2868,18 +2604,7 @@
           "path": "src/org/omg/kerml/xpect/tests/validation/Feature_variable_invalid.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 2,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "errors",
-              "line": 30,
-              "at": "portion var feature y;",
-              "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
-              "declared": "error: \"A portion cannot be variable\"",
-              "ours": "no error at line 31; nearest is line 36: Must be owned by an occurrence type"
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/validation/Import_RootNamspace_invalid.kerml.xt",
@@ -2919,88 +2644,26 @@
         {
           "path": "src/org/omg/kerml/xpect/tests/validation/MetadataTests_MetadataFeature_invalid.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
-          "expectations": 10,
-          "agree": 1,
+          "expectations": 9,
+          "agree": 7,
           "rows": [
-            {
-              "kind": "errors",
-              "line": 53,
-              "at": "filter f((as A).y);",
-              "verdict": "disagree",
-              "tolerance": "same-line",
-              "declared": "error: \"Must be model-level evaluable\"",
-              "ours": "line 54 offset 1778: Must be model-level evaluable"
-            },
-            {
-              "kind": "errors",
-              "line": 55,
-              "at": "filter ~(as A).z;",
-              "verdict": "disagree",
-              "tolerance": "same-line",
-              "declared": "error: \"Must be model-level evaluable\"",
-              "ours": "line 56 offset 1875: Must be model-level evaluable"
-            },
-            {
-              "kind": "errors",
-              "line": 57,
-              "at": "filter (as A).y-\u003eControlFunctions::collect {in x; x};",
-              "verdict": "disagree",
-              "tolerance": "same-line",
-              "declared": "error: \"Must be model-level evaluable\"",
-              "ours": "line 58 offset 2006: Must be model-level evaluable"
-            },
-            {
-              "kind": "errors",
-              "line": 59,
-              "at": "filter new A(null, 1, ",
-              "verdict": "disagree",
-              "tolerance": "same-line",
-              "declared": "error: \"Must have a Boolean result\"",
-              "ours": "line 60 offset 2150: Must be model-level evaluable"
-            },
-            {
-              "kind": "errors",
-              "line": 59,
-              "verdict": "disagree",
-              "tolerance": "same-line",
-              "declared": "error: \", false);\"",
-              "ours": "line 60 offset 2150: Must be model-level evaluable"
-            },
             {
               "kind": "errors",
               "line": 66,
               "at": "= ~3",
               "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
+              "tolerance": "same-line",
               "declared": "error: \"Must be model-level evaluable\"",
-              "ours": "no error at line 67; nearest is line 54: Must be model-level evaluable"
+              "ours": "line 67 offset 2287: Must be model-level evaluable"
             },
             {
               "kind": "errors",
               "line": 69,
               "at": "= f((as A).y)",
               "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
+              "tolerance": "same-line",
               "declared": "error: \"Must be model-level evaluable\"",
-              "ours": "no error at line 70; nearest is line 54: Must be model-level evaluable"
-            },
-            {
-              "kind": "errors",
-              "line": 73,
-              "at": "bad;",
-              "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
-              "declared": "error: \"Must redefine an owning-type feature\"",
-              "ours": "no error at line 74; nearest is line 54: Must be model-level evaluable"
-            },
-            {
-              "kind": "errors",
-              "line": 80,
-              "at": "@A;",
-              "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
-              "declared": "error: \"Cannot annotate Classifier\"",
-              "ours": "no error at line 81; nearest is line 54: Must be model-level evaluable"
+              "ours": "line 70 offset 2384: Must be model-level evaluable"
             }
           ]
         },
@@ -3008,17 +2671,8 @@
           "path": "src/org/omg/kerml/xpect/tests/validation/MetadataTests_SemanticMetadata_invalid.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 4,
-          "agree": 2,
+          "agree": 4,
           "rows": [
-            {
-              "kind": "errors",
-              "line": 49,
-              "at": "@A;",
-              "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
-              "declared": "error: \"Must have a concrete type\"",
-              "ours": "no error at line 50; nearest is line 52: unresolved reference: x — did you mean SemanticMetadata_invalid::C::x or SemanticMetadata_invalid::C1::x?"
-            },
             {
               "kind": "errors",
               "line": 51,
@@ -3036,15 +2690,6 @@
               "rule": "unresolved-reference",
               "declared": "error: \"Couldn't resolve reference to Feature 'y'.\"",
               "ours": "line 59 offset 1541: unresolved reference: y — did you mean SemanticMetadata_invalid::f::y or SemanticMetadata_invalid::C2::y?"
-            },
-            {
-              "kind": "errors",
-              "line": 63,
-              "at": "@A;",
-              "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
-              "declared": "error: \"Must have a concrete type\"",
-              "ours": "no error at line 64; nearest is line 52: unresolved reference: x — did you mean SemanticMetadata_invalid::C::x or SemanticMetadata_invalid::C1::x?"
             }
           ]
         },
@@ -3052,16 +2697,7 @@
           "path": "src/org/omg/kerml/xpect/tests/validation/MetadataTests_SemanticMetadata_valid.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.validation.KerMLValidationTest",
           "expectations": 1,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "noErrors",
-              "line": 31,
-              "verdict": "disagree",
-              "declared": "no error anywhere in the file",
-              "ours": "3 error(s), first: line 51: unresolved reference: x — did you mean SemanticMetadata_valid::C::x or SemanticMetadata_valid::C1::x?"
-            }
-          ]
+          "agree": 1
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/validation/MultipleImportTests_ImportFeatureMoreTimes.kerml.xt",
@@ -3092,26 +2728,8 @@
         {
           "path": "src/org/omg/kerml/xpect/tests/validation/MultiplicityRange_invalid.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.validation.KerMLValidationTest",
-          "expectations": 6,
-          "agree": 4,
-          "rows": [
-            {
-              "kind": "errors",
-              "line": 51,
-              "verdict": "disagree",
-              "tolerance": "same-line",
-              "declared": "error: \"Must have a Natural value\"",
-              "ours": "line 52 offset 1747: Must have a Natural value"
-            },
-            {
-              "kind": "errors",
-              "line": 51,
-              "verdict": "disagree",
-              "tolerance": "same-line",
-              "declared": "error: \"\"",
-              "ours": "line 52 offset 1747: Must have a Natural value"
-            }
-          ]
+          "expectations": 5,
+          "agree": 5
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/validation/Redefinition_Diamond0_valid.kerml.xt",
@@ -3425,7 +3043,7 @@
               "kind": "noErrors",
               "line": 20,
               "verdict": "disagree",
-              "declared": "no error anywhere in the file",
+              "declared": "no error the file does not declare",
               "ours": "1 error(s), first: line 25: try (typed by a1) redefines b (typed by A): types do not conform"
             }
           ]
@@ -3440,7 +3058,7 @@
               "kind": "noErrors",
               "line": 20,
               "verdict": "disagree",
-              "declared": "no error anywhere in the file",
+              "declared": "no error the file does not declare",
               "ours": "1 error(s), first: line 25: try (typed by a1) redefines b (typed by A): types do not conform"
             }
           ]
@@ -3467,94 +3085,7 @@
           "path": "src/org/omg/kerml/xpect/tests/validation/Specialization_invalid.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 11,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "errors",
-              "line": 30,
-              "at": "C",
-              "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
-              "declared": "error: \"Conjugated type cannot be a specialized type\"",
-              "ours": "no error at line 31; nearest is line 57: S participates in a specialization cycle"
-            },
-            {
-              "kind": "errors",
-              "block": true,
-              "line": 34,
-              "at": "C1",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "error: \"Cannot specialize class or association\"",
-              "ours": "no error at line 40, but a warning: line 40 offset 1089: Duplicate of inherited member name 'self' from DataValue, Occurrence"
-            },
-            {
-              "kind": "errors",
-              "block": true,
-              "line": 34,
-              "at": "A1",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "error: \"Cannot specialize class or association\"",
-              "ours": "no error at line 40, but a warning: line 40 offset 1089: Duplicate of inherited member name 'self' from DataValue, Occurrence"
-            },
-            {
-              "kind": "errors",
-              "block": true,
-              "line": 43,
-              "at": "D1",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "error: \"Cannot specialize data type or association\"",
-              "ours": "no error at line 49, but a warning: line 49 offset 1420: Duplicate of inherited member name 'self' from DataValue, Occurrence"
-            },
-            {
-              "kind": "errors",
-              "block": true,
-              "line": 43,
-              "at": "A1",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "error: \"Cannot specialize data type or association\"",
-              "ours": "no error at line 49, but a warning: line 49 offset 1420: Duplicate of inherited member name 'self' from DataValue, Occurrence"
-            },
-            {
-              "kind": "errors",
-              "line": 55,
-              "at": "B1",
-              "verdict": "disagree",
-              "tolerance": "same-location",
-              "declared": "error: \"Cannot specialize behavior\"",
-              "ours": "line 57 offset 1768: S participates in a specialization cycle"
-            },
-            {
-              "kind": "warnings",
-              "line": 56,
-              "at": "struct S specializes B1;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from Object, Performance\"",
-              "ours": "no warning at line 57, but a error: line 57 offset 1768: S participates in a specialization cycle"
-            },
-            {
-              "kind": "errors",
-              "line": 59,
-              "at": "S",
-              "verdict": "disagree",
-              "tolerance": "same-location",
-              "declared": "error: \"Cannot specialize structure\"",
-              "ours": "line 61 offset 1980: B1 participates in a specialization cycle"
-            },
-            {
-              "kind": "warnings",
-              "line": 60,
-              "at": "behavior B1 specializes S;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from Object, Performance\"",
-              "ours": "no warning at line 61, but a error: line 61 offset 1980: B1 participates in a specialization cycle"
-            }
-          ]
+          "agree": 11
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/validation/Subsetting_constant_invalid.kerml.xt",
@@ -3573,9 +3104,8 @@
               "line": 20,
               "at": "multiplicity subsets Base::zeroToMany;",
               "verdict": "disagree",
-              "tolerance": "same-line",
               "declared": "error: \"Only one multiplicity is allowed\"",
-              "ours": "line 21 offset 650: expected '{' or ';'"
+              "ours": "no error anywhere in the file"
             }
           ]
         },
@@ -3583,54 +3113,13 @@
           "path": "src/org/omg/kerml/xpect/tests/validation/Type_Relationships_invalid.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.validation.KerMLValidationTest",
           "expectations": 8,
-          "agree": 4,
-          "rows": [
-            {
-              "kind": "errors",
-              "block": true,
-              "line": 29,
-              "at": "Y",
-              "verdict": "disagree",
-              "tolerance": "same-line",
-              "declared": "error: \"Type cannot union with itself\"",
-              "ours": "line 35 offset 943: Type cannot union with itself"
-            },
-            {
-              "kind": "errors",
-              "block": true,
-              "line": 29,
-              "at": "Y",
-              "verdict": "disagree",
-              "tolerance": "same-line",
-              "declared": "error: \"Type cannot intersect with itself\"",
-              "ours": "line 35 offset 943: Type cannot union with itself"
-            },
-            {
-              "kind": "errors",
-              "block": true,
-              "line": 29,
-              "at": "Y",
-              "verdict": "disagree",
-              "tolerance": "same-line",
-              "declared": "error: \"Type cannot difference with itself\"",
-              "ours": "line 35 offset 943: Type cannot union with itself"
-            },
-            {
-              "kind": "errors",
-              "line": 38,
-              "at": "h",
-              "verdict": "disagree",
-              "tolerance": "same-line",
-              "declared": "error: \"Feature cannot have itself in a feature chain\"",
-              "ours": "line 39 offset 1096: Feature cannot have itself in a feature chain"
-            }
-          ]
+          "agree": 8
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/visibility/VisibilityTests_ImportAsAlias_Invalid_0.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.visibility.KerMLVisibilityTest",
           "expectations": 2,
-          "agree": 1,
+          "agree": 2,
           "rows": [
             {
               "kind": "errors",
@@ -3645,10 +3134,10 @@
               "kind": "errors",
               "line": 24,
               "at": "aliass",
-              "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
+              "verdict": "wording-only",
+              "rule": "unresolved-reference",
               "declared": "error: \"Couldn't resolve reference to Type 'aliass'.\"",
-              "ours": "no error at line 25; nearest is line 22: unresolved reference: VisibilityPackage::c_Private::c_private"
+              "ours": "line 25 offset 730: unresolved reference: aliass"
             }
           ]
         },
@@ -3656,7 +3145,7 @@
           "path": "src/org/omg/kerml/xpect/tests/visibility/VisibilityTests_ImportAsAlias_Invalid_1.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.visibility.KerMLVisibilityTest",
           "expectations": 2,
-          "agree": 1,
+          "agree": 2,
           "rows": [
             {
               "kind": "errors",
@@ -3671,10 +3160,10 @@
               "kind": "errors",
               "line": 24,
               "at": "aliass",
-              "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
+              "verdict": "wording-only",
+              "rule": "unresolved-reference",
               "declared": "error: \"Couldn't resolve reference to Type 'aliass'.\"",
-              "ours": "no error at line 25; nearest is line 22: unresolved reference: VisibilityPackage::c_Public::c_private"
+              "ours": "line 25 offset 727: unresolved reference: aliass"
             }
           ]
         },
@@ -3682,7 +3171,7 @@
           "path": "src/org/omg/kerml/xpect/tests/visibility/VisibilityTests_ImportAsAlias_Invalid_2.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.visibility.KerMLVisibilityTest",
           "expectations": 2,
-          "agree": 1,
+          "agree": 2,
           "rows": [
             {
               "kind": "errors",
@@ -3697,10 +3186,10 @@
               "kind": "errors",
               "line": 24,
               "at": "aliass",
-              "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
+              "verdict": "wording-only",
+              "rule": "unresolved-reference",
               "declared": "error: \"Couldn't resolve reference to Type 'aliass'.\"",
-              "ours": "no error at line 25; nearest is line 22: unresolved reference: VisibilityPackage::c_Private::c_public"
+              "ours": "line 25 offset 727: unresolved reference: aliass"
             }
           ]
         },
@@ -3740,15 +3229,8 @@
           "path": "src/org/omg/kerml/xpect/tests/visibility/VisibilityTests_ImportAsFeatureInheritance_1.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.visibility.KerMLVisibilityTest",
           "expectations": 5,
-          "agree": 4,
+          "agree": 5,
           "rows": [
-            {
-              "kind": "noErrors",
-              "line": 20,
-              "verdict": "disagree",
-              "declared": "no error anywhere in the file",
-              "ours": "4 error(s), first: line 28: unresolved reference: Try::c_protected"
-            },
             {
               "kind": "errors",
               "line": 27,
@@ -4833,15 +4315,8 @@
           "path": "src/org/omg/kerml/xpect/tests/visibility/VisibilityTests_ProtectedImport_0.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.visibility.KerMLVisibilityTest",
           "expectations": 3,
-          "agree": 2,
+          "agree": 3,
           "rows": [
-            {
-              "kind": "noErrors",
-              "line": 20,
-              "verdict": "disagree",
-              "declared": "no error anywhere in the file",
-              "ours": "2 error(s), first: line 28: unresolved reference: A::c_Protect::c_publicc"
-            },
             {
               "kind": "errors",
               "line": 27,
@@ -4866,15 +4341,8 @@
           "path": "src/org/omg/kerml/xpect/tests/visibility/VisibilityTests_ProtectedImport_1.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.visibility.KerMLVisibilityTest",
           "expectations": 3,
-          "agree": 2,
+          "agree": 3,
           "rows": [
-            {
-              "kind": "noErrors",
-              "line": 20,
-              "verdict": "disagree",
-              "declared": "no error anywhere in the file",
-              "ours": "2 error(s), first: line 28: unresolved reference: A::c_Protect::c_publicc"
-            },
             {
               "kind": "errors",
               "line": 27,
@@ -4905,15 +4373,8 @@
           "path": "src/org/omg/kerml/xpect/tests/visibility/VisibilityTests_ProtectedImport_3.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.visibility.KerMLVisibilityTest",
           "expectations": 2,
-          "agree": 1,
+          "agree": 2,
           "rows": [
-            {
-              "kind": "noErrors",
-              "line": 20,
-              "verdict": "disagree",
-              "declared": "no error anywhere in the file",
-              "ours": "1 error(s), first: line 26: unresolved reference: A::c_Protect"
-            },
             {
               "kind": "errors",
               "line": 25,
@@ -4929,15 +4390,8 @@
           "path": "src/org/omg/kerml/xpect/tests/visibility/VisibilityTests_ProtectedImport_4.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.visibility.KerMLVisibilityTest",
           "expectations": 2,
-          "agree": 1,
+          "agree": 2,
           "rows": [
-            {
-              "kind": "noErrors",
-              "line": 20,
-              "verdict": "disagree",
-              "declared": "no error anywhere in the file",
-              "ours": "1 error(s), first: line 26: unresolved reference: Test3::A::c_Protect"
-            },
             {
               "kind": "errors",
               "line": 25,
@@ -4953,15 +4407,8 @@
           "path": "src/org/omg/kerml/xpect/tests/visibility/VisibilityTests_ProtectedImport_5.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.visibility.KerMLVisibilityTest",
           "expectations": 3,
-          "agree": 2,
+          "agree": 3,
           "rows": [
-            {
-              "kind": "noErrors",
-              "line": 20,
-              "verdict": "disagree",
-              "declared": "no error anywhere in the file",
-              "ours": "2 error(s), first: line 28: unresolved reference: A::alias_protected"
-            },
             {
               "kind": "errors",
               "line": 27,
@@ -5263,25 +4710,25 @@
           "path": "src/org/omg/kerml/xpect/tests/visibility/VisibilityTests_Protected_Redefine_0.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.visibility.KerMLVisibilityTest",
           "expectations": 3,
-          "agree": 1,
+          "agree": 3,
           "rows": [
             {
               "kind": "errors",
               "line": 32,
               "at": "PPP2",
-              "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
+              "verdict": "wording-only",
+              "rule": "unresolved-reference",
               "declared": "error: \"Couldn't resolve reference to Feature 'PPP2'.\"",
-              "ours": "no error at line 33; nearest is line 45: unresolved reference: PPP2 — did you mean testt::P::PP::PPP2, PPP or PPP1?"
+              "ours": "line 33 offset 636: unresolved reference: PPP2 — did you mean testt::P::PP::PPP2, PPP or PPP1?"
             },
             {
               "kind": "errors",
               "line": 42,
               "at": "PPP1",
-              "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
+              "verdict": "wording-only",
+              "rule": "unresolved-reference",
               "declared": "error: \"Couldn't resolve reference to Feature 'PPP1'.\"",
-              "ours": "no error at line 43; nearest is line 45: unresolved reference: PPP2 — did you mean testt::P::PP::PPP2, PPP or PPP1?"
+              "ours": "line 43 offset 904: unresolved reference: PPP1 — did you mean testt::P::PP::PPP1 or PPP?"
             },
             {
               "kind": "errors",
@@ -5290,7 +4737,7 @@
               "verdict": "wording-only",
               "rule": "unresolved-reference",
               "declared": "error: \"Couldn't resolve reference to Feature 'PPP2'.\"",
-              "ours": "line 45 offset 1015: unresolved reference: PPP2 — did you mean testt::P::PP::PPP2, PPP or PPP1?"
+              "ours": "line 45 offset 1015: unresolved reference: PPP2 — did you mean testt::P::PP::PPP2 or PPP?"
             }
           ]
         },
@@ -5333,10 +4780,10 @@
         "files": 125,
         "filesUnparsed": 0,
         "assertions": 309,
-        "rows": 358,
-        "agree": 297,
-        "wordingOnly": 4,
-        "disagree": 61,
+        "rows": 357,
+        "agree": 337,
+        "wordingOnly": 5,
+        "disagree": 20,
         "unlocated": 0,
         "notAdjudicated": 0,
         "missingResources": 0,
@@ -5347,25 +4794,25 @@
           "kind": "errors",
           "assertions": 174,
           "blockAssertions": 10,
-          "rows": 185,
-          "agree": 145,
-          "wordingOnly": 4,
-          "disagree": 40,
+          "rows": 184,
+          "agree": 174,
+          "wordingOnly": 5,
+          "disagree": 10,
           "unlocated": 0,
           "notAdjudicated": 0,
-          "sameLocation": 4,
-          "sameLine": 5,
-          "severityDiffers": 7,
-          "elsewhereInFile": 21
+          "sameLocation": 3,
+          "sameLine": 2,
+          "severityDiffers": 0,
+          "elsewhereInFile": 5
         },
         {
           "kind": "noErrors",
           "assertions": 75,
           "blockAssertions": 0,
           "rows": 75,
-          "agree": 65,
+          "agree": 67,
           "wordingOnly": 0,
-          "disagree": 10,
+          "disagree": 8,
           "unlocated": 0,
           "notAdjudicated": 0,
           "sameLocation": 0,
@@ -5393,14 +4840,14 @@
           "assertions": 57,
           "blockAssertions": 17,
           "rows": 95,
-          "agree": 84,
+          "agree": 93,
           "wordingOnly": 0,
-          "disagree": 11,
+          "disagree": 2,
           "unlocated": 0,
           "notAdjudicated": 0,
           "sameLocation": 0,
-          "sameLine": 7,
-          "severityDiffers": 3,
+          "sameLine": 0,
+          "severityDiffers": 1,
           "elsewhereInFile": 0
         }
       ],
@@ -5433,15 +4880,16 @@
           "path": "src/org/omg/sysml/xpect/tests/linking/GlobalQualification.sysml.xt",
           "setupClass": "org.omg.sysml.xpect.tests.validation.valid.SysMLTests",
           "expectations": 4,
-          "agree": 3,
+          "agree": 4,
           "rows": [
             {
               "kind": "errors",
               "line": 48,
               "at": "Parts::parts",
-              "verdict": "disagree",
+              "verdict": "wording-only",
+              "rule": "unresolved-reference",
               "declared": "error: \"Couldn't resolve reference to Feature 'Parts::parts'.\"",
-              "ours": "no error anywhere in the file"
+              "ours": "line 49 offset 1592: unresolved reference: Parts::parts"
             }
           ]
         },
@@ -5455,7 +4903,7 @@
               "kind": "noErrors",
               "line": 29,
               "verdict": "disagree",
-              "declared": "no error anywhere in the file",
+              "declared": "no error the file does not declare",
               "ours": "4 error(s), first: line 34: expected a namespace member"
             }
           ]
@@ -5470,7 +4918,7 @@
               "kind": "noErrors",
               "line": 27,
               "verdict": "disagree",
-              "declared": "no error anywhere in the file",
+              "declared": "no error the file does not declare",
               "ours": "2 error(s), first: line 32: expected a namespace member"
             }
           ]
@@ -5485,7 +4933,7 @@
               "kind": "noErrors",
               "line": 27,
               "verdict": "disagree",
-              "declared": "no error anywhere in the file",
+              "declared": "no error the file does not declare",
               "ours": "2 error(s), first: line 34: expected a namespace member"
             }
           ]
@@ -5512,7 +4960,7 @@
               "kind": "noErrors",
               "line": 31,
               "verdict": "disagree",
-              "declared": "no error anywhere in the file",
+              "declared": "no error the file does not declare",
               "ours": "1 error(s), first: line 62: unresolved reference: physical — did you mean AllocationTest::Logical_to_Physical::physical or Physical?"
             }
           ]
@@ -5581,16 +5029,7 @@
           "path": "src/org/omg/sysml/xpect/tests/simpletests/DecisionTest.sysml.xt",
           "setupClass": "org.omg.sysml.xpect.tests.simpletests.SysMLTests",
           "expectations": 1,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "noErrors",
-              "line": 52,
-              "verdict": "disagree",
-              "declared": "no error anywhere in the file",
-              "ours": "2 error(s), first: line 69: transition endpoint A1 is not a state or pseudostate"
-            }
-          ]
+          "agree": 1
         },
         {
           "path": "src/org/omg/sysml/xpect/tests/simpletests/DefaultValueUsage.sysml.xt",
@@ -5668,7 +5107,7 @@
               "kind": "noErrors",
               "line": 29,
               "verdict": "disagree",
-              "declared": "no error anywhere in the file",
+              "declared": "no error the file does not declare",
               "ours": "4 error(s), first: line 67: p1 participates in a specialization cycle"
             }
           ]
@@ -5689,16 +5128,7 @@
           "path": "src/org/omg/sysml/xpect/tests/simpletests/StateTest.sysml.xt",
           "setupClass": "org.omg.sysml.xpect.tests.simpletests.SysMLTests",
           "expectations": 1,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "noErrors",
-              "line": 49,
-              "verdict": "disagree",
-              "declared": "no error anywhere in the file",
-              "ours": "1 error(s), first: line 73: transition endpoint done names a state that is not a vertex of this state machine"
-            }
-          ]
+          "agree": 1
         },
         {
           "path": "src/org/omg/sysml/xpect/tests/simpletests/StructuredControlTest.sysml.xt",
@@ -5746,57 +5176,7 @@
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/ActionUsage_invalid.sysml.xt",
           "setupClass": "org.omg.sysml.xpect.tests.validation.invalid.SysMLTests",
           "expectations": 16,
-          "agree": 11,
-          "rows": [
-            {
-              "kind": "errors",
-              "line": 57,
-              "at": "b",
-              "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
-              "declared": "error: \"Must reference an action.\"",
-              "ours": "no error at line 58; nearest is line 45: An action must be typed by action definitions."
-            },
-            {
-              "kind": "errors",
-              "line": 60,
-              "at": "perform b.a;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "error: \"An action must be typed by action definitions.\"",
-              "ours": "no error at line 69, but a warning: line 69 offset 2879: Duplicate of inherited member name 'done' from Action, Part"
-            },
-            {
-              "kind": "warnings",
-              "block": true,
-              "line": 61,
-              "at": "b.a",
-              "verdict": "disagree",
-              "tolerance": "same-line",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from Action, Part\"",
-              "ours": "line 69 offset 2879: Duplicate of inherited member name 'done' from Action, Part"
-            },
-            {
-              "kind": "warnings",
-              "block": true,
-              "line": 61,
-              "at": "b.a",
-              "verdict": "disagree",
-              "tolerance": "same-line",
-              "declared": "warning: \"Duplicate of inherited member name 'start' from Action, Part\"",
-              "ours": "line 69 offset 2879: Duplicate of inherited member name 'done' from Action, Part"
-            },
-            {
-              "kind": "warnings",
-              "block": true,
-              "line": 61,
-              "at": "b.a",
-              "verdict": "disagree",
-              "tolerance": "same-line",
-              "declared": "warning: \"Duplicate of inherited member name 'done' from Action, Part\"",
-              "ours": "line 69 offset 2879: Duplicate of inherited member name 'done' from Action, Part"
-            }
-          ]
+          "agree": 16
         },
         {
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/AllocationUsage_Invalid.sysml.xt",
@@ -5843,36 +5223,7 @@
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/AttributeUsage_invalid.sysml.xt",
           "setupClass": "org.omg.sysml.xpect.tests.validation.invalid.SysMLTests",
           "expectations": 7,
-          "agree": 4,
-          "rows": [
-            {
-              "kind": "errors",
-              "line": 44,
-              "at": "attribute a : A;",
-              "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
-              "declared": "error: \"An attribute must be typed by attribute definitions.\"",
-              "ours": "no error at line 45; nearest is line 48: An attribute must be typed by attribute definitions."
-            },
-            {
-              "kind": "warnings",
-              "line": 47,
-              "at": "attribute b : A::a;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from DataValue, Part\"",
-              "ours": "no warning at line 48, but a error: line 48 offset 1745: An attribute must be typed by attribute definitions."
-            },
-            {
-              "kind": "warnings",
-              "line": 52,
-              "at": "attribute un : A::p;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from DataValue, Port\"",
-              "ours": "no warning at line 53, but a error: line 53 offset 2104: An attribute must be typed by attribute definitions."
-            }
-          ]
+          "agree": 7
         },
         {
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/BindingConnector_Invalid2.sysml.xt",
@@ -5937,81 +5288,13 @@
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/CaseSubjectObjective_Invalid.sysml.xt",
           "setupClass": "org.omg.sysml.xpect.tests.validation.invalid.SysMLTests",
           "expectations": 10,
-          "agree": 5,
-          "rows": [
-            {
-              "kind": "errors",
-              "line": 53,
-              "at": "objective o2;",
-              "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
-              "declared": "error: \"Only one objective is allowed.\"",
-              "ours": "no error at line 54; nearest is line 49: Only one subject is allowed."
-            },
-            {
-              "kind": "errors",
-              "line": 63,
-              "at": "objective o3;",
-              "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
-              "declared": "error: \"Only one objective is allowed.\"",
-              "ours": "no error at line 64; nearest is line 49: Only one subject is allowed."
-            },
-            {
-              "kind": "errors",
-              "line": 66,
-              "at": "objective o4;",
-              "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
-              "declared": "error: \"Only one objective is allowed.\"",
-              "ours": "no error at line 67; nearest is line 49: Only one subject is allowed."
-            },
-            {
-              "kind": "errors",
-              "line": 76,
-              "at": "objective o5;",
-              "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
-              "declared": "error: \"Only one objective is allowed.\"",
-              "ours": "no error at line 77; nearest is line 49: Only one subject is allowed."
-            },
-            {
-              "kind": "errors",
-              "block": true,
-              "line": 80,
-              "at": "case c1 : C1;",
-              "verdict": "disagree",
-              "tolerance": "same-location",
-              "declared": "error: \"Only one objective is allowed.\"",
-              "ours": "line 85 offset 2565: Subject must be first parameter."
-            }
-          ]
+          "agree": 10
         },
         {
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/CaseUsage_Invalid.sysml.xt",
           "setupClass": "org.omg.sysml.xpect.tests.validation.invalid.SysMLTests",
           "expectations": 19,
-          "agree": 17,
-          "rows": [
-            {
-              "kind": "errors",
-              "line": 98,
-              "at": "u",
-              "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
-              "declared": "error: \"Must reference a use case.\"",
-              "ours": "no error at line 99; nearest is line 60: A case must be typed by one case definition."
-            },
-            {
-              "kind": "errors",
-              "line": 101,
-              "at": "include b.uc1;",
-              "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
-              "declared": "error: \"A use case must be typed by one use case definition.\"",
-              "ours": "no error at line 102; nearest is line 60: A case must be typed by one case definition."
-            }
-          ]
+          "agree": 19
         },
         {
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/ConnectionUsage_Invalid.sysml.xt",
@@ -6053,25 +5336,7 @@
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/Feature_invalid_noType.sysml.xt",
           "setupClass": "org.omg.sysml.xpect.tests.validation.invalid.SysMLTests",
           "expectations": 2,
-          "agree": 0,
-          "rows": [
-            {
-              "kind": "errors",
-              "line": 18,
-              "at": "part def B;",
-              "verdict": "disagree",
-              "declared": "error: \"Must directly or indirectly specialize Parts::Part\"",
-              "ours": "no error anywhere in the file"
-            },
-            {
-              "kind": "errors",
-              "line": 20,
-              "at": "ref f;",
-              "verdict": "disagree",
-              "declared": "error: \"Features must have at least one type\"",
-              "ours": "no error anywhere in the file"
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/FlowConnectionUsage_Invalid.sysml.xt",
@@ -6142,36 +5407,7 @@
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/ItemUsage_invalid.sysml.xt",
           "setupClass": "org.omg.sysml.xpect.tests.validation.invalid.SysMLTests",
           "expectations": 15,
-          "agree": 12,
-          "rows": [
-            {
-              "kind": "errors",
-              "line": 40,
-              "at": "item i1: Real;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "error: \"An occurrence, item or part must be typed by occurrence definitions.\"",
-              "ours": "no error at line 42, but a warning: line 42 offset 1644: Duplicate of inherited member name 'self' from DataValue, Item"
-            },
-            {
-              "kind": "errors",
-              "line": 53,
-              "at": "item i4: AttDef;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "error: \"An occurrence, item or part must be typed by occurrence definitions.\"",
-              "ours": "no error at line 55, but a warning: line 55 offset 2557: Duplicate of inherited member name 'self' from DataValue, Item"
-            },
-            {
-              "kind": "errors",
-              "line": 61,
-              "at": "item i7: PartDef, AttDef;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "error: \"An occurrence, item or part must be typed by occurrence definitions.\"",
-              "ours": "no error at line 63, but a warning: line 63 offset 3244: Duplicate of inherited member name 'self' from DataValue, Part"
-            }
-          ]
+          "agree": 15
         },
         {
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/Membership_distingushability_invalid.sysml.xt",
@@ -6182,88 +5418,26 @@
         {
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/MetadataUsage_Invalid.sysml.xt",
           "setupClass": "org.omg.sysml.xpect.tests.validation.invalid.SysMLTests",
-          "expectations": 10,
-          "agree": 1,
+          "expectations": 9,
+          "agree": 7,
           "rows": [
-            {
-              "kind": "errors",
-              "line": 65,
-              "at": "filter f((as A).z);",
-              "verdict": "disagree",
-              "tolerance": "same-line",
-              "declared": "error: \"Must be model-level evaluable\"",
-              "ours": "line 66 offset 2615: Must be model-level evaluable"
-            },
-            {
-              "kind": "errors",
-              "line": 67,
-              "at": "filter ~(as A).z;",
-              "verdict": "disagree",
-              "tolerance": "same-line",
-              "declared": "error: \"Must be model-level evaluable\"",
-              "ours": "line 68 offset 2712: Must be model-level evaluable"
-            },
-            {
-              "kind": "errors",
-              "line": 69,
-              "at": "filter (as A).y-\u003eControlFunctions::collect {in ref x; x};",
-              "verdict": "disagree",
-              "tolerance": "same-line",
-              "declared": "error: \"Must be model-level evaluable\"",
-              "ours": "line 70 offset 2847: Must be model-level evaluable"
-            },
-            {
-              "kind": "errors",
-              "line": 71,
-              "at": "filter new A(null, 1, ",
-              "verdict": "disagree",
-              "tolerance": "same-line",
-              "declared": "error: \"Must have a Boolean result\"",
-              "ours": "line 72 offset 2995: Must be model-level evaluable"
-            },
-            {
-              "kind": "errors",
-              "line": 71,
-              "verdict": "disagree",
-              "tolerance": "same-line",
-              "declared": "error: \", false);\"",
-              "ours": "line 72 offset 2995: Must be model-level evaluable"
-            },
             {
               "kind": "errors",
               "line": 82,
               "at": "= ~3",
               "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
+              "tolerance": "same-line",
               "declared": "error: \"Must be model-level evaluable\"",
-              "ours": "no error at line 83; nearest is line 66: Must be model-level evaluable"
+              "ours": "line 83 offset 3195: Must be model-level evaluable"
             },
             {
               "kind": "errors",
               "line": 85,
               "at": "= f((as A).z)",
               "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
+              "tolerance": "same-line",
               "declared": "error: \"Must be model-level evaluable\"",
-              "ours": "no error at line 86; nearest is line 66: Must be model-level evaluable"
-            },
-            {
-              "kind": "errors",
-              "line": 89,
-              "at": "bad;",
-              "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
-              "declared": "error: \"Must redefine an owning-type feature\"",
-              "ours": "no error at line 90; nearest is line 66: Must be model-level evaluable"
-            },
-            {
-              "kind": "errors",
-              "line": 96,
-              "at": "@A;",
-              "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
-              "declared": "error: \"Cannot annotate ItemUsage\"",
-              "ours": "no error at line 97; nearest is line 66: Must be model-level evaluable"
+              "ours": "line 86 offset 3293: Must be model-level evaluable"
             }
           ]
         },
@@ -6271,19 +5445,7 @@
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/OccurrenceUsage_invalid.sysml.xt",
           "setupClass": "org.omg.sysml.xpect.tests.validation.invalid.SysMLTests",
           "expectations": 10,
-          "agree": 9,
-          "rows": [
-            {
-              "kind": "warnings",
-              "block": true,
-              "line": 59,
-              "at": "a.areal",
-              "verdict": "disagree",
-              "tolerance": "same-line",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from DataValue, Occurrence\"",
-              "ours": "line 63 offset 2789: Duplicate of inherited member name 'self' from DataValue, Occurrence"
-            }
-          ]
+          "agree": 10
         },
         {
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/PartUsage_invalid.sysml.xt",
@@ -6295,36 +5457,7 @@
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/PortUsage_Invalid.sysml.xt",
           "setupClass": "org.omg.sysml.xpect.tests.validation.invalid.SysMLTests",
           "expectations": 10,
-          "agree": 7,
-          "rows": [
-            {
-              "kind": "errors",
-              "line": 55,
-              "at": "port pp redefines p1;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "error: \"A port must be typed by port definitions.\"",
-              "ours": "no error at line 57, but a warning: line 57 offset 1982: Duplicate of inherited member name 'self' from Part, Port"
-            },
-            {
-              "kind": "errors",
-              "line": 65,
-              "at": "anout",
-              "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
-              "declared": "error: \"Redefining feature must have a compatible direction\"",
-              "ours": "no error at line 66; nearest is line 36: Owned usages of a port definition (other than ports) must be referential."
-            },
-            {
-              "kind": "errors",
-              "line": 67,
-              "at": "anin",
-              "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
-              "declared": "error: \"Redefining feature must have a compatible direction\"",
-              "ours": "no error at line 68; nearest is line 36: Owned usages of a port definition (other than ports) must be referential."
-            }
-          ]
+          "agree": 10
         },
         {
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/PortionUsage_Invalid.sysml.xt",
@@ -6387,17 +5520,8 @@
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/SemanticMetadata_invalid.sysml.xt",
           "setupClass": "org.omg.sysml.xpect.tests.validation.invalid.SysMLTests",
           "expectations": 4,
-          "agree": 2,
+          "agree": 4,
           "rows": [
-            {
-              "kind": "errors",
-              "line": 65,
-              "at": "@A;",
-              "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
-              "declared": "error: \"Must have a concrete type\"",
-              "ours": "no error at line 66; nearest is line 68: unresolved reference: x — did you mean DataFunctions::max::x, DataFunctions::min::x or DataFunctions::not::x?"
-            },
             {
               "kind": "errors",
               "line": 67,
@@ -6415,15 +5539,6 @@
               "rule": "unresolved-reference",
               "declared": "error: \"Couldn't resolve reference to Feature 'y'.\"",
               "ours": "line 75 offset 2572: unresolved reference: y — did you mean DataFunctions::max::y, DataFunctions::min::y or DataFunctions::xor::y?"
-            },
-            {
-              "kind": "errors",
-              "line": 79,
-              "at": "@A;",
-              "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
-              "declared": "error: \"Must have a concrete type\"",
-              "ours": "no error at line 80; nearest is line 68: unresolved reference: x — did you mean DataFunctions::max::x, DataFunctions::min::x or DataFunctions::not::x?"
             }
           ]
         },
@@ -6437,57 +5552,7 @@
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/StateUsage_invalid.sysml.xt",
           "setupClass": "org.omg.sysml.xpect.tests.validation.invalid.SysMLTests",
           "expectations": 22,
-          "agree": 17,
-          "rows": [
-            {
-              "kind": "errors",
-              "line": 83,
-              "at": "s",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "error: \"Must reference a state.\"",
-              "ours": "no error at line 84, but a warning: line 84 offset 3212: Duplicate of other owned member name"
-            },
-            {
-              "kind": "errors",
-              "line": 86,
-              "at": "exhibit s.sa;",
-              "verdict": "disagree",
-              "tolerance": "severity-differs",
-              "declared": "error: \"A state must be typed by state definitions.\"",
-              "ours": "no error at line 95, but a warning: line 95 offset 3850: Duplicate of inherited member name 'done' from Part, StateAction"
-            },
-            {
-              "kind": "warnings",
-              "block": true,
-              "line": 87,
-              "at": "s.sa",
-              "verdict": "disagree",
-              "tolerance": "same-line",
-              "declared": "warning: \"Duplicate of inherited member name 'self' from Part, StateAction\"",
-              "ours": "line 95 offset 3850: Duplicate of inherited member name 'done' from Part, StateAction"
-            },
-            {
-              "kind": "warnings",
-              "block": true,
-              "line": 87,
-              "at": "s.sa",
-              "verdict": "disagree",
-              "tolerance": "same-line",
-              "declared": "warning: \"Duplicate of inherited member name 'start' from Part, StateAction\"",
-              "ours": "line 95 offset 3850: Duplicate of inherited member name 'done' from Part, StateAction"
-            },
-            {
-              "kind": "warnings",
-              "block": true,
-              "line": 87,
-              "at": "s.sa",
-              "verdict": "disagree",
-              "tolerance": "same-line",
-              "declared": "warning: \"Duplicate of inherited member name 'done' from Part, StateAction\"",
-              "ours": "line 95 offset 3850: Duplicate of inherited member name 'done' from Part, StateAction"
-            }
-          ]
+          "agree": 22
         },
         {
           "path": "src/org/omg/sysml/xpect/tests/validation/invalid/TransitionUsage_invalid.sysml.xt",
@@ -6669,7 +5734,7 @@
               "kind": "noErrors",
               "line": 72,
               "verdict": "disagree",
-              "declared": "no error anywhere in the file",
+              "declared": "no error the file does not declare",
               "ours": "1 error(s), first: line 81: unresolved reference: MassValue — did you mean ISQBase::MassValue?"
             }
           ]
@@ -6732,7 +5797,7 @@
               "kind": "noErrors",
               "line": 25,
               "verdict": "disagree",
-              "declared": "no error anywhere in the file",
+              "declared": "no error the file does not declare",
               "ours": "2 error(s), first: line 28: A participates in a specialization cycle"
             }
           ]
@@ -6753,7 +5818,7 @@
               "kind": "noErrors",
               "line": 53,
               "verdict": "disagree",
-              "declared": "no error anywhere in the file",
+              "declared": "no error the file does not declare",
               "ours": "1 error(s), first: line 90: expected '{' or ';' after declaration"
             }
           ]

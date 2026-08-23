@@ -47,7 +47,8 @@ build-grpc: ## Build sysml-grpc binary
 
 test: ## Run all tests
 	@echo "Running tests..."
-	go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+	@# Per-package timeout: under -race, passes and model run within 1% of go's 10m default.
+	go test -v -race -timeout 30m -coverprofile=coverage.txt -covermode=atomic ./...
 
 lint: ## Run static analysis (staticcheck + gosec), as CI does
 	@echo "Running staticcheck..."
