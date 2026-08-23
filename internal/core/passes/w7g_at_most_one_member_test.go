@@ -81,6 +81,56 @@ func TestW7GCaseReportsOnlyTheExtraObjective(t *testing.T) {
 	}
 }
 
+func TestW7GCaseFamilyReportsOnlyTheExtraObjective(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		src  string
+	}{
+		{"analysis definition", `package C {
+			analysis def A {
+				objective o1;
+				objective o2;
+			}
+		}`},
+		{"verification definition", `package C {
+			verification def V {
+				objective o1;
+				objective o2;
+			}
+		}`},
+		{"use case definition", `package C {
+			use case def U {
+				objective o1;
+				objective o2;
+			}
+		}`},
+		{"analysis usage", `package C {
+			analysis a {
+				objective o1;
+				objective o2;
+			}
+		}`},
+		{"verification usage", `package C {
+			verification v {
+				objective o1;
+				objective o2;
+			}
+		}`},
+		{"use case usage", `package C {
+			use case u {
+				objective o1;
+				objective o2;
+			}
+		}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := len(only(constraintDiags(t, tc.src), "only-one-objective")); got != 1 {
+				t.Fatalf("expected one objective diagnostic, got %d", got)
+			}
+		})
+	}
+}
+
 func TestW7GCaseObjectiveCompetesWithInheritedObjective(t *testing.T) {
 	const src = `package C {
 		case def Base { objective inherited; }

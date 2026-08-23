@@ -37,8 +37,9 @@ func (RedefinitionConformancePass) Run(ctx *Context, name string, root *ast.Root
 	return rc.diags
 }
 
-// RedefinitionDirectionPass reports direction conformance before constraint
-// passes may be skipped by unrelated type errors in the same document.
+// RedefinitionDirectionPass reports direction conformance as a typing property,
+// before constraint passes may be skipped by unrelated type errors in the same
+// document.
 type RedefinitionDirectionPass struct{}
 
 func (RedefinitionDirectionPass) Level() PassLevel { return LevelType }
@@ -148,7 +149,7 @@ func (rc *redefinitionConformanceChecker) check(sym *symbols.Symbol) {
 	}
 	violations := rc.model.ConformanceViolations(sym)
 	for _, v := range violations {
-		if rc.directionOnly != (v.Kind == semantics.ViolationDirection) {
+		if !rc.ownsViolation(v.Kind) {
 			continue
 		}
 		msg, code := conformanceMessage(v.Kind)
@@ -163,6 +164,13 @@ func (rc *redefinitionConformanceChecker) check(sym *symbols.Symbol) {
 			Source:   "constraint",
 		})
 	}
+}
+
+func (rc *redefinitionConformanceChecker) ownsViolation(kind semantics.ConformanceViolationKind) bool {
+	if rc.directionOnly {
+		return kind == semantics.ViolationDirection
+	}
+	return kind != semantics.ViolationDirection
 }
 
 func conformanceMessage(kind semantics.ConformanceViolationKind) (msg, code string) {

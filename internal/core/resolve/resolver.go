@@ -115,7 +115,8 @@ type Resolver struct {
 	suggesting  map[suggestKey]bool
 	// document is the document ResolveDocument is resolving, so a reference
 	// reached in another one is not reported against it (see foreignScope).
-	document string
+	document          string
+	reportedQualified map[*ast.QualifiedName]bool
 }
 
 // New creates a resolver over the given index.
@@ -140,9 +141,10 @@ func New(idx *symbols.Index) *Resolver {
 		suggestions: map[suggestKey][]string{},
 		suggesting:  map[suggestKey]bool{},
 
-		inheritedImports: map[*symbols.Symbol]bool{},
-		aliasTargets:     map[*symbols.Symbol]resolution{},
-		resolvingAlias:   map[*symbols.Symbol]bool{},
+		inheritedImports:  map[*symbols.Symbol]bool{},
+		aliasTargets:      map[*symbols.Symbol]resolution{},
+		resolvingAlias:    map[*symbols.Symbol]bool{},
+		reportedQualified: map[*ast.QualifiedName]bool{},
 	}
 }
 
@@ -295,15 +297,14 @@ func (r *Resolver) resolveQualified(scope *symbols.Scope, qn *ast.QualifiedName,
 	// belongs to must still report when its own document is resolved.
 	if (res.ok || r.quiet == 0) && r.allVisible == 0 {
 		if cacheMain {
-			r.memoize(qn, res)
+			if res.ok || hide == nil {
+				r.memoize(qn, res)
+			}
 		} else if res.ok || r.quiet == 0 {
 			r.filtered[filteredMemoKey{
 				qn: qn, decl: hide.decl, prefix: hide.skipNamingTarget,
 				skipBorrowedName: hide.skipBorrowedName,
 			}] = res
-			if !res.ok && r.quiet == 0 {
-				r.memoize(qn, res)
-			}
 		}
 	}
 	return res.sym, res.ok

@@ -207,6 +207,26 @@ func TestALookupMadeWhileAConditionIsResolvedIsNotRemembered(t *testing.T) {
 	}
 }
 
+func TestFilteredFailureDoesNotPoisonUnfilteredQualifiedLookup(t *testing.T) {
+	idx := indexOf(t, map[string]string{
+		"app.sysml": "package App { part x; }",
+	})
+	app := scopeOf(t, idx.DocumentRoot("app.sysml"), "App")
+	sym, ok := app.LookupLocal("x")
+	if !ok {
+		t.Fatal("failed to find the declaration used as the hiding filter")
+	}
+	target := qn(false, "x")
+	r := New(idx)
+
+	if _, ok := r.resolveQualified(app, target, &refFilter{decl: sym.Decl}); ok {
+		t.Fatal("the filtered lookup must hide the only candidate")
+	}
+	if got, ok := r.ResolveQualified(app, target); !ok || got != sym {
+		t.Fatalf("unfiltered lookup = %v, %v; want %v after filtered failure", got, ok, sym)
+	}
+}
+
 // Without a semantic model there is nothing to judge a condition with, and an
 // unevaluable filter keeps the element rather than silently hiding it.
 func TestFilterWithoutAModelKeepsEveryElement(t *testing.T) {

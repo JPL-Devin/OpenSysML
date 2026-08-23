@@ -295,7 +295,7 @@ func (tc *typeChecker) checkTypeTarget(scope *symbols.Scope, target ast.Node, re
 		}
 	}
 	if relKind == ast.RelRedefines || relKind == ast.RelSubsets {
-		if tc.checkInheritedUsageTyping(targetSym, decl) {
+		if tc.checkNearestDeclaredUsageTyping(targetSym, decl) {
 			return
 		}
 	}
@@ -319,7 +319,7 @@ func (tc *typeChecker) checkTypeTarget(scope *symbols.Scope, target ast.Node, re
 	})
 }
 
-func (tc *typeChecker) checkInheritedUsageTyping(target *symbols.Symbol, decl declKind) bool {
+func (tc *typeChecker) checkNearestDeclaredUsageTyping(target *symbols.Symbol, decl declKind) bool {
 	if _, ok := target.Decl.(*ast.Usage); !ok ||
 		decl.isDef || decl.isReference || decl.keyword == "" ||
 		decl.keyword == "feature" || decl.hasType ||
@@ -330,7 +330,7 @@ func (tc *typeChecker) checkInheritedUsageTyping(target *symbols.Symbol, decl de
 	if !ok {
 		return false
 	}
-	for _, typ := range declaredUsageTypesOf(tc.resolver, target, make(map[*symbols.Symbol]bool)) {
+	for _, typ := range nearestDeclaredUsageTypesOf(tc.resolver, target, make(map[*symbols.Symbol]bool)) {
 		if !isDefKind(typ.sym.Kind) {
 			continue
 		}
@@ -349,7 +349,7 @@ func (tc *typeChecker) checkInheritedUsageTyping(target *symbols.Symbol, decl de
 	return false
 }
 
-func declaredUsageTypesOf(resolver *resolve.Resolver, sym *symbols.Symbol, visited map[*symbols.Symbol]bool) []w8dUsageType {
+func nearestDeclaredUsageTypesOf(resolver *resolve.Resolver, sym *symbols.Symbol, visited map[*symbols.Symbol]bool) []w8dUsageType {
 	if sym == nil || visited[sym] {
 		return nil
 	}
@@ -373,7 +373,7 @@ func declaredUsageTypesOf(resolver *resolve.Resolver, sym *symbols.Symbol, visit
 		}
 	}
 	if len(inherited) > 0 {
-		if !usageDeclHasDefinitionKind(decl) {
+		if !usageDeclCanBeTypedByDefinition(decl) {
 			return nil
 		}
 		types := make([]w8dUsageType, 0, len(inherited))
@@ -392,22 +392,31 @@ func declaredUsageTypesOf(resolver *resolve.Resolver, sym *symbols.Symbol, visit
 		if !ok || target == nil {
 			continue
 		}
-		types = append(types, declaredUsageTypesOf(resolver, target, visited)...)
+		types = append(types, nearestDeclaredUsageTypesOf(resolver, target, visited)...)
 	}
 	return types
 }
 
-func usageDeclHasDefinitionKind(decl *ast.Usage) bool {
+func usageDeclCanBeTypedByDefinition(decl *ast.Usage) bool {
 	if decl == nil || decl.IsReference || decl.Direction != ast.DirNone ||
 		decl.Keyword == "" || decl.Keyword == "feature" {
 		return false
 	}
-	_, _, ok := pilotTypingMessage(declKind{
-		useKind: decl.Kind,
-		keyword: decl.Keyword,
-		span:    decl.Span(),
-	})
-	return ok
+	return usageKindCanBeTypedByDefinition(decl.Kind)
+}
+
+func usageKindCanBeTypedByDefinition(kind ast.UsageKind) bool {
+	switch kind {
+	case ast.UsageAttribute, ast.UsagePart, ast.UsageItem, ast.UsageOccurrence,
+		ast.UsagePort, ast.UsageAction, ast.UsageState, ast.UsageConnection,
+		ast.UsageInterface, ast.UsageAllocation, ast.UsageFlow, ast.UsageCalc,
+		ast.UsageConstraint, ast.UsageRequirement, ast.UsageCase,
+		ast.UsageAnalysisCase, ast.UsageVerificationCase, ast.UsageUseCase,
+		ast.UsageEnumeration, ast.UsageRendering, ast.UsageViewpoint, ast.UsageView,
+		ast.UsageMetadata:
+		return true
+	}
+	return false
 }
 
 func hasTypingRelationship(rels []*ast.Relationship) bool {
