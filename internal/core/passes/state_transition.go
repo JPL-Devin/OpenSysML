@@ -19,6 +19,20 @@ const CodeEndpointNotOfMachine = "endpoint-not-of-machine"
 // which a transition reaching it terminates nowhere at (UML 2.5.1 §15.7.18).
 const CodeNoOutgoingTransition = "no-outgoing-transition"
 
+// CodeParallelStateTransition marks a succession or transition owned by a
+// parallel state, whose substates are concurrent (SysML v2 §7.16).
+const CodeParallelStateTransition = "parallel-state-transition"
+
+// msgParallelStateTransition is the pilot's wording of the same rule.
+const msgParallelStateTransition = "A parallel state cannot have successions or transitions."
+
+// CodeAccepterSourceNotState marks a transition whose accepter waits in
+// something other than a state (SysML v2 §7.16 TransitionUsage).
+const CodeAccepterSourceNotState = "accepter-source-not-state"
+
+// msgAccepterSourceNotState is the pilot's wording of the same rule.
+const msgAccepterSourceNotState = "A transition with an accepter must have a state as its source."
+
 // StateTransitionPass checks that every transition names one source and one
 // target vertex of its own machine (UML 2.5.1 §14.2.3.9), and that a routing
 // pseudostate is left by one (§15.7.18).
@@ -69,12 +83,14 @@ func (c *transitionChecker) findMachines(scope *symbols.Scope, members []ast.Nod
 			c.findMachines(child, n.Members)
 		case *ast.Definition:
 			if n.Kind == ast.DefState {
+				c.checkParallelStates(n.Members, n.IsParallel)
 				c.checkMachine(n, child)
 				continue
 			}
 			c.findMachines(child, n.Members)
 		case *ast.Usage:
 			if n.Kind == ast.UsageState {
+				c.checkParallelStates(n.Members, n.IsParallel)
 				c.checkMachine(n, child)
 				continue
 			}
@@ -109,6 +125,84 @@ func (c *transitionChecker) checkMachine(decl ast.Node, scope *symbols.Scope) {
 	}
 }
 
+// checkParallelStates reports the successions and transitions a parallel state
+// owns, orthogonality being each state's own (SysML v2 §7.16, isParallel).
+func (c *transitionChecker) checkParallelStates(members []ast.Node, parallel bool) {
+	for _, member := range members {
+		decl := unwrapMembership(member)
+		if parallel && parallelStateOrdering(decl) {
+			c.report(decl.Span(), CodeParallelStateTransition, msgParallelStateTransition)
+		}
+		switch n := decl.(type) {
+		case *ast.Definition:
+			if n.Kind == ast.DefState {
+				c.checkParallelStates(n.Members, n.IsParallel)
+			}
+		case *ast.Usage:
+			if n.Kind == ast.UsageState {
+				c.checkParallelStates(n.Members, n.IsParallel)
+			}
+		case *ast.StateNode:
+			c.checkParallelStates(n.Substates, false)
+			for _, region := range n.Regions {
+				c.checkParallelStates(region.States, false)
+			}
+		case *ast.StateRegion:
+			c.checkParallelStates(n.States, false)
+		}
+	}
+}
+
+// checkAccepterSource reports a transition whose accepter names a source that is
+// not a state, and says whether it did. An accepter waits while its source is
+// performed, and only a state is performed until something leaves it, so a
+// transition with a trigger leaves a state (SysML v2 §7.16 TransitionUsage).
+func (c *transitionChecker) checkAccepterSource(
+	scope *symbols.Scope,
+	n *ast.TransitionMember,
+) bool {
+	if n.Trigger == nil {
+		return false
+	}
+	sym, ok := c.resolver.EndpointSymbol(scope, n.Source)
+	if !ok || !isPerformedAction(sym.Decl) {
+		return false
+	}
+	at := n.TriggerSpan
+	if at.Len == 0 {
+		at = n.Trigger.Span()
+	}
+	c.report(at, CodeAccepterSourceNotState, msgAccepterSourceNotState)
+	return true
+}
+
+// isPerformedAction reports whether a declaration a transition endpoint reached
+// is an action, which completes on its own rather than waiting in a state.
+func isPerformedAction(decl ast.Node) bool {
+	switch n := decl.(type) {
+	case *ast.Usage:
+		return n.Kind == ast.UsageAction
+	case *ast.Definition:
+		return n.Kind == ast.DefAction
+	}
+	return false
+}
+
+// parallelStateOrdering reports whether a state body member orders the states
+// around it, in any of the notations a succession or transition is written in.
+func parallelStateOrdering(decl ast.Node) bool {
+	switch n := decl.(type) {
+	case *ast.SuccessionEdge, *ast.TransitionMember, *ast.TransitionEdge:
+		return true
+	case *ast.InitialNode:
+		// `first s1 then s2;` is a succession whose source the marker names.
+		return n.Successor != nil
+	case *ast.Usage:
+		return n.Kind == ast.UsageSuccession || n.Kind == ast.UsageTransition
+	}
+	return false
+}
+
 // walkBody collects the transitions and routing pseudostates of a machine body,
 // descending into its states and regions with the scope each was declared in.
 // owner is the declaration whose body this is, whose entry actions a transition
@@ -128,6 +222,10 @@ func (c *transitionChecker) walkBody(m *machine, scope *symbols.Scope, members [
 			// A sourceless `accept … then` takes the state it is written in as its
 			// source (SysML 7.19.3), which names a vertex by construction.
 			if n.Source != nil {
+				if c.checkAccepterSource(scope, n) {
+					c.checkEndpoint(m, scope, n.Target, true, nil)
+					continue
+				}
 				bare := n.Trigger == nil && n.Guard == nil && len(n.Effect) == 0
 				m.markLeft(c.checkEndpoint(m, scope, n.Source, false, c.startsOf(m, scope, n.Target, bare, starts)), n.Source)
 			}

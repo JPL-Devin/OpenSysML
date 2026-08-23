@@ -432,6 +432,9 @@ type ConstraintMember struct {
 // Syntax: subject <name> : <Type>; OR subject = <expr>;
 type SubjectMember struct {
 	NodeBase
+	// Prefixes are the metadata written after the keyword: the `#B` of
+	// `subject #B s` (SysML.xtext SubjectUsage UsageExtensionKeyword).
+	Prefixes      []*PrefixMetadata
 	Name          string
 	TypeRef       *QualifiedName  // subject type (for declaration form)
 	Multiplicity  *Multiplicity   // optional multiplicity
@@ -535,8 +538,11 @@ type TransitionMember struct {
 	Source  *QualifiedName // source state
 	Target  *QualifiedName // target state
 	Trigger Node           // optional trigger event (TimeEvent/ChangeEvent/etc)
-	Guard   Node           // optional guard expression
-	Effect  []Node         // optional effect actions
+	// TriggerSpan spans the accepter the trigger keyword introduces
+	// (`accept A`), which is the element the accepter rules are about.
+	TriggerSpan source.Span
+	Guard       Node   // optional guard expression
+	Effect      []Node // optional effect actions
 	// Via is the port the trigger's message must arrive at
 	// (`accept :> ping via commPort`), nil when the trigger named none.
 	Via *QualifiedName

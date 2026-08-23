@@ -333,7 +333,8 @@ func TestTransitionOutOfEntryActionIsLegal(t *testing.T) {
 
 // An entry action stands in for a start pseudostate only in the bare completion
 // shape: a triggered or guarded transition is an edge between two vertices, and
-// an entry action is neither.
+// an entry action is neither. A trigger names the accepter rule, which is the
+// specific reading of the same rejection.
 func TestTriggeredTransitionOutOfEntryActionIsNotAVertex(t *testing.T) {
 	wantOneError(t, `package test {
 	state def M {
@@ -341,7 +342,7 @@ func TestTriggeredTransitionOutOfEntryActionIsNotAVertex(t *testing.T) {
 		transition begin accept Warning then busy;
 		state busy;
 	}
-}`, CodeEndpointNotOfMachine, "begin")
+}`, CodeAccepterSourceNotState, "must have a state as its source")
 	wantOneError(t, `package test {
 	state def M {
 		entry action begin { }

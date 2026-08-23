@@ -276,6 +276,7 @@ func (tc *typeChecker) checkTypeTarget(scope *symbols.Scope, target ast.Node, re
 	}
 	qn, isQN := targetNode.(*ast.QualifiedName)
 	if !isQN {
+		tc.checkChainSegments(scope, targetNode)
 		return
 	}
 	sym, ok := tc.resolver.ResolveQualified(scope, qn)
@@ -315,6 +316,36 @@ func (tc *typeChecker) checkTypeTarget(scope *symbols.Scope, target ast.Node, re
 		Span:     span,
 		Message:  msg,
 		Code:     code,
+		Source:   "type",
+	})
+}
+
+// checkChainSegments reports a feature chain whose leading segments do not name
+// features: a FeatureChaining chains Features (KerML 1.0 §8.3.4.7), so a chain
+// cannot continue from a type declaration.
+func (tc *typeChecker) checkChainSegments(scope *symbols.Scope, target ast.Node) {
+	chain, ok := target.(*ast.FeatureChainExpr)
+	if !ok {
+		return
+	}
+	tc.checkChainSegments(scope, chain.Operand)
+	sym, ok := tc.resolver.ResolveTarget(scope, chain.Operand)
+	if !ok || sym == nil {
+		return // unresolved: name-resolution tier owns this
+	}
+	if sym.Kind == symbols.SymbolAlias {
+		if resolved, ok := tc.resolver.ResolveAliasTarget(sym); ok && resolved != nil {
+			sym = resolved
+		}
+	}
+	if sym.Kind == symbols.SymbolUnknown || isUsageKind(sym.Kind) {
+		return
+	}
+	tc.appendUnique(Diagnostic{
+		Severity: SeverityError,
+		Span:     chain.Operand.Span(),
+		Message:  fmt.Sprintf("feature chain segment must be a feature, found %s", sym.Kind),
+		Code:     "type",
 		Source:   "type",
 	})
 }
@@ -542,6 +573,12 @@ func compatMessage(decl declKind, rel ast.RelationshipKind, target symbols.Symbo
 		// The check for isUsageKind OR isDefKind allows both patterns
 		if !isUsageKind(target) && !isDefKind(target) {
 			return fmt.Sprintf("%s target must be a usage or definition, found %s", rel, target)
+		}
+		// A KerML Subsetting relates two Features (KerML 1.0 §8.3.4.9), so a feature
+		// cannot subset a bare type declaration (`classifier`, `class`, `struct`, …).
+		if decl.isKerML() && decl.keyword == "feature" && rel == ast.RelSubsets &&
+			target == symbols.SymbolKerMLType {
+			return fmt.Sprintf("%s target must be a feature, found %s", rel, target)
 		}
 		// `satisfy`/`verify <name>` is a reference subsetting of an existing
 		// requirement usage; viewpoint and concern usages are requirement usages.

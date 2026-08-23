@@ -10,6 +10,9 @@ const (
 	msgCrossFeatureType     = "Cross feature must have same type as feature"
 	msgCrossSubsettingChain = "Cross subsetting must chain through an opposite end feature"
 	msgCrossSpecialization  = "Cross feature must specialized redefined-end cross features"
+	// Feature::crossFeature is single-valued (KerML 8.3.4.5), so an end that
+	// declares its cross feature inline states no other one with `crosses`.
+	msgMustBeCrossFeature = "Must be the cross feature"
 )
 
 // checkW10BCrossFeatures implements the KerML crossing constraints on an
@@ -27,6 +30,7 @@ func (cc *constraintChecker) checkW10BCrossFeatures(sym *symbols.Symbol) {
 		if rel == nil {
 			continue
 		}
+		cc.checkDeclaredCrossFeature(end)
 		base, ok := cc.w10bEndNamed(ends, chain.base)
 		if !ok || base == end {
 			cc.addRedefineDiag(rel.Target, msgCrossSubsettingChain, "cross-subsetting-chain")
@@ -42,6 +46,24 @@ func (cc *constraintChecker) checkW10BCrossFeatures(sym *symbols.Symbol) {
 			cc.addRedefineDiag(rel.Target, msgCrossSpecialization, "cross-feature-specialization")
 		}
 	}
+}
+
+// checkDeclaredCrossFeature reports an end that declares its cross feature
+// inline and also crosses another one: an end's crossFeature is single-valued
+// (KerML 8.3.4.5), and a `crosses` chain names a feature of the opposite end's
+// type, never the feature the end owns.
+func (cc *constraintChecker) checkDeclaredCrossFeature(end *symbols.Symbol) {
+	u, ok := end.Decl.(*ast.Usage)
+	if !ok || u.CrossFeature == nil {
+		return
+	}
+	cc.diags = append(cc.diags, Diagnostic{
+		Severity: SeverityError,
+		Span:     u.CrossFeature.Span(),
+		Message:  msgMustBeCrossFeature,
+		Code:     "declared-cross-feature",
+		Source:   "constraint",
+	})
 }
 
 type w10bCrossRef struct {

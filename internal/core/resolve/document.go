@@ -1308,5 +1308,32 @@ func (r *Resolver) getUsageType(scope *symbols.Scope, usage *ast.Usage) *symbols
 			}
 		}
 	}
-	return nil
+	// A feature with no declared type takes the type of the value bound to it
+	// (KerML 1.0 §7.4.9 FeatureValue), so its members are the value's members.
+	return r.valueType(scope, usage)
+}
+
+// valueType returns what a usage's value expression names, for the member
+// lookups a chain through the usage makes. Only the forms that denote a feature
+// are followed; anything else has no members to reach.
+func (r *Resolver) valueType(scope *symbols.Scope, usage *ast.Usage) *symbols.Symbol {
+	if usage.Value == nil || r.valuesInProgress[usage] {
+		return nil
+	}
+	r.valuesInProgress[usage] = true
+	defer delete(r.valuesInProgress, usage)
+
+	expr := usage.Value
+	var sym *symbols.Symbol
+	// The value is read on behalf of a member lookup, so its own diagnostics
+	// belong to the reference that wrote it, not to this one.
+	r.aside(func() {
+		if found, ok := r.ResolveTarget(scope, expr); ok {
+			sym = found
+		}
+	})
+	if sym == nil {
+		return nil
+	}
+	return r.followChainMemberType(sym)
 }

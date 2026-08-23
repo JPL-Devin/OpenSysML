@@ -431,13 +431,16 @@ type Definition struct {
 	Kind     DefinitionKind
 	// Keyword is the kind keyword as written, kept for the same reason as
 	// Usage.Keyword.
-	Keyword       string
-	IsAbstract    bool
-	IsVariation   bool
-	IsAll         bool // 'all' multiplicity propagation modifier
-	IsConstant    bool // 'constant' feature modifier
-	IsEvent       bool // 'event' modifier for event-driven occurrences
-	IsIndividual  bool // 'individual' modifier: `individual part def` (SysML v2 8.3.9.11)
+	Keyword      string
+	IsAbstract   bool
+	IsVariation  bool
+	IsAll        bool // 'all' multiplicity propagation modifier
+	IsConstant   bool // 'constant' feature modifier
+	IsEvent      bool // 'event' modifier for event-driven occurrences
+	IsIndividual bool // 'individual' modifier: `individual part def` (SysML v2 8.3.9.11)
+	// IsParallel is the `parallel` before a state body: the state's substates
+	// are orthogonal (SysML v2 StateDefinition::isParallel).
+	IsParallel    bool
 	Visibility    Visibility
 	Ident         Identification
 	Multiplicity  *Multiplicity
@@ -487,16 +490,21 @@ type Usage struct {
 	IsComposite bool
 	// IsPortion is the `portion` of `portion feature p`: the feature's values
 	// are portions of its featuring instances (KerML Feature::isPortion).
-	IsPortion     bool
+	IsPortion bool
+	// IsParallel is the `parallel` before a state body (StateUsage::isParallel).
+	IsParallel    bool
 	IsDerived     bool
 	IsOrdered     bool
 	IsNonunique   bool
 	Ident         Identification
 	Relationships []*Relationship
 	Multiplicity  *Multiplicity
-	Value         Node
-	Members       []Node
-	HasBody       bool
+	// CrossFeature is the cross feature an end declares inline ahead of its own
+	// declaration (KerML.xtext OwnedCrossFeatureMember).
+	CrossFeature *CrossFeatureMember
+	Value        Node
+	Members      []Node
+	HasBody      bool
 
 	// Tier B connection/flow/port grammar. These are nil/zero for kinds
 	// that do not use them.
@@ -536,6 +544,15 @@ type FlowEnds struct {
 	// declares no feature of its own (`of Publish[1]`, `of [1] Publish`). Where
 	// the payload is a declaration the multiplicity is that usage's own.
 	PayloadMultiplicity *Multiplicity
+}
+
+// CrossFeatureMember is the cross feature declared inline by an end feature,
+// the `x1 [0..1]` of `end x1 [0..1] feature x : C1` (KerML 8.3.4.5).
+type CrossFeatureMember struct {
+	NodeBase
+	Ident         Identification
+	Multiplicity  *Multiplicity
+	Relationships []*Relationship
 }
 
 // ConnectorEnd represents a single connector end with optional multiplicity.

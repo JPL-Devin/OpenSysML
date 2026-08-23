@@ -32,6 +32,12 @@ func (r *Resolver) resolveTarget(scope *symbols.Scope, target ast.Node, hide *re
 			return nil, false
 		}
 		return r.resolveQualified(scope, t.Name, hide)
+	case *ast.IndexExpr:
+		// `a#(1)` names one element of the sequence a, of a's own type.
+		if t.Bracket {
+			return nil, false
+		}
+		return r.resolveTarget(scope, t.Operand, hide)
 	case *ast.FeatureChainExpr:
 		owner, ok := r.resolveTarget(scope, t.Operand, hide.forPrefix())
 		if !ok || t.Member == nil {

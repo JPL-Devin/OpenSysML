@@ -1,0 +1,13 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="W12DParallelState" library=false standard=false
+      (Membership visibility="default"
+        (Definition kind="state" abstract=false variation=false name="S1" parallel=true
+          (SubstateMember name="s11")
+          (SubstateMember name="s12")))
+      (Membership visibility="default"
+        (Usage kind="part" name="p" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="state" name="s" ref=false direction="none" composite=false derived=false ordered=false nonunique=false parallel=true
+              (SubstateMember name="a")
+              (SubstateMember name="b"))))))))

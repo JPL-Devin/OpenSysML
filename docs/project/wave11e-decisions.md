@@ -18,8 +18,8 @@ Four categories, and every open row carries one — an unlabelled open row reads
 
 | Row | Category | Owner |
 |---|---|---|
-| E1 `Type_Multiplicity_invalid` | unimplemented obligation | 11B (parser) |
-| E2 `AssociationTest_CrossFeatures_invalid` | unimplemented obligation | 11B (parser/AST), then a KerML rule slice |
+| E1 `Type_Multiplicity_invalid` | unimplemented obligation | 11B (parser) — **closed in [wave 12D](wave12d-decisions.md)** |
+| E2 `AssociationTest_CrossFeatures_invalid` | unimplemented obligation | 11B (parser/AST), then a KerML rule slice — **closed in [wave 12D](wave12d-decisions.md)** |
 | E3 `ConnectorTest_ConnectorEndSubsettingBadCase` | our defect | 11C (resolver) — **closed in [wave 12E](wave12e-decisions.md)** |
 | E4 `SimpleImportTestsFromOtherFile_Import3{,_FT}` | adjudicated divergence | 11E (this doc) |
 | E5 `VisibilityTests_Protected_FeatureChaining` | our defect | 11C (resolver) — **closed in [wave 12E](wave12e-decisions.md)** |
@@ -41,7 +41,8 @@ requires the parser to accept the form first.
 **Category — unimplemented obligation.** The rule follows from the specification; it is blocked
 behind a missing production, not disputed.
 
-**Owner.** Parser (slice 11B).
+**Owner.** Parser (slice 11B). **Closed in wave 12D:** the parser accepts repeated `multiplicity`
+members and `passes/at_most_one_member.go` reports every one after the first.
 
 ---
 
@@ -66,7 +67,9 @@ KerML-side, and this slice would implement it once the declaration exists.
 we implement neither the declaration form nor the rule over it.
 
 **Owner.** Parser and AST (slice 11B) for the `end <crossFeature> [mult] feature <name>` form; the
-rule then belongs to a KerML validation slice.
+rule then belongs to a KerML validation slice. **Closed in wave 12D:** `ast.CrossFeatureMember`
+records the inline declaration and `passes/w10b_cross_features.go` compares it with the `crosses`
+target.
 
 ---
 
