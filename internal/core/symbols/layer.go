@@ -67,17 +67,6 @@ func (l *layer[K, V]) owns(k K) bool {
 	return ok
 }
 
-// len returns how many keys the table holds across both layers.
-func (l *layer[K, V]) len() int {
-	n := len(l.own)
-	for k := range l.base {
-		if _, shadowed := l.own[k]; !shadowed && !l.dead[k] {
-			n++
-		}
-	}
-	return n
-}
-
 // keys returns a snapshot of every key the table holds, so a caller may write to
 // the table while iterating it.
 func (l *layer[K, V]) keys() []K {
