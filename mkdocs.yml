@@ -147,6 +147,7 @@ nav:
       - Pilot rejection oracle: project/pilot-rejection.md
       - Grammar coverage: project/grammar-coverage.md
       - Wave 10 decisions: project/wave10-decisions.md
+      - Wave 11B parser findings: project/wave11b-parser-findings.md
       - Roadmap: project/roadmap.md
       - Releasing: project/releasing.md
       - macOS distribution: project/macos-distribution.md

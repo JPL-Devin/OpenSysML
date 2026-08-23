@@ -253,10 +253,11 @@ func (p *Parser) parsePostfixes(start int, expr ast.Node) ast.Node {
 			expr = s
 
 		case p.at(lexer.Hash):
-			// `#( index )` sequence index.
+			// `#( index )` sequence index. The index is a SequenceExpression,
+			// so a multi-dimensional index `arr#(1,3)` is one operand.
 			p.advance() // #
 			p.expect(lexer.LParen, "expected '(' after '#'")
-			idx := p.ParseExpression()
+			idx := p.parseSequenceExpr()
 			p.expect(lexer.RParen, "expected ')'")
 			ix := &ast.IndexExpr{Operand: expr, Index: idx}
 			ix.NodeSpan = p.spanFrom(start)
@@ -265,7 +266,7 @@ func (p *Parser) parsePostfixes(start int, expr ast.Node) ast.Node {
 		case p.at(lexer.LBracket):
 			// `[ index ]` operator index.
 			p.advance() // [
-			idx := p.ParseExpression()
+			idx := p.parseSequenceExpr()
 			p.expect(lexer.RBracket, "expected ']'")
 			ix := &ast.IndexExpr{Operand: expr, Index: idx, Bracket: true}
 			ix.NodeSpan = p.spanFrom(start)
@@ -442,6 +443,23 @@ func (p *Parser) parseParenOrSequence(start int) ast.Node {
 		}
 	}
 	p.expect(lexer.RParen, "expected ')'")
+	if len(elems) == 1 {
+		return elems[0]
+	}
+	seq := &ast.SequenceExpr{Elements: elems}
+	seq.NodeSpan = p.spanFrom(start)
+	return seq
+}
+
+// parseSequenceExpr parses a KerMLExpressions SequenceExpression: one
+// expression, or a comma-separated sequence of them (`1, 3`), as one node.
+func (p *Parser) parseSequenceExpr() ast.Node {
+	start := p.peek().Span.Offset
+	elems := []ast.Node{p.ParseExpression()}
+	for p.at(lexer.Comma) {
+		p.advance() // ,
+		elems = append(elems, p.ParseExpression())
+	}
 	if len(elems) == 1 {
 		return elems[0]
 	}

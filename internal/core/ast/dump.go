@@ -255,6 +255,14 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 			visibilityString(v.Visibility), identName(v.Ident), qnString(v.For))
 		writeChildren(b, depth, v.Body)
 		return
+	case *MultiplicityDecl:
+		fmt.Fprintf(b, `(MultiplicityDecl name=%q subsets=%q`, identName(v.Ident), qnString(v.Subsets))
+		kids := make([]Node, 0, len(v.Members)+1)
+		if v.Range != nil {
+			kids = append(kids, v.Range)
+		}
+		writeChildren(b, depth, append(kids, v.Members...))
+		return
 	case *Dependency:
 		fmt.Fprintf(b, `(Dependency clients=%q suppliers=%q`, qnList(v.Clients), qnList(v.Suppliers))
 		writeChildren(b, depth, prefixesAnd(v.Prefixes, v.Body))

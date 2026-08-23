@@ -3296,7 +3296,7 @@ func (p *Parser) parseRelationshipTarget() ast.Node {
 	}
 
 	// Check for dot extensions (feature chain)
-	if !p.at(lexer.Dot) {
+	if !p.at(lexer.Dot) && !p.at(lexer.DotDot) {
 		return base // Just a qualified name
 	}
 
@@ -3304,8 +3304,13 @@ func (p *Parser) parseRelationshipTarget() ast.Node {
 	var operand ast.Node = &ast.FeatureReference{Name: base}
 	operand.(*ast.FeatureReference).NodeSpan = base.NodeSpan
 
-	for p.at(lexer.Dot) {
-		p.advance() // consume '.'
+	for p.at(lexer.Dot) || p.at(lexer.DotDot) {
+		// `a..b` chains over an empty segment; report it where it is written and
+		// read the rest of the chain, so recovery stays inside this reference.
+		if p.at(lexer.DotDot) {
+			p.error(p.peek().Span, "expected a name after '.'")
+		}
+		p.advance() // consume '.' or '..'
 		// Each chaining feature of a chain is itself a qualified name
 		// (KerML OwnedFeatureChaining: chainingFeature = [Feature|QualifiedName]).
 		if !p.atNameOrKeyword() && !(p.at(lexer.Dollar) && p.peekN(1).Kind == lexer.ColonColon) {
