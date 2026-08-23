@@ -202,16 +202,21 @@ paths. What it buys is not conformance: it is reach. Hover and go-to-definition 
 body (the stdlib analogue of the annotation-body editor surface wave 12 closed as L1),
 library-declared conditions in the solver's translatable subset, and library feature
 multiplicity, which a record does not persist today
-(`TestMultiplicityOfALibraryFeatureIsTheSameColdAndWarm` skips on it).
+(`TestMultiplicityOfALibraryFeatureIsTheSameColdAndWarm` asserts the assumed `1..1` on both paths
+rather than the declared `0..1`).
 
 What it costs, as measured while adopting the index-only contract instead: the on-disk format
 grows substantially and gains a version-compatibility surface; library value expressions have to
-actually resolve, which they do not today (`isSolid = isEmpty(voids)`, `Systems Library/Items.sysml:105`); and
+actually evaluate, which they do not today (`isSolid = isEmpty(voids)`,
+`Systems Library/Items.sysml:105`, whose callee resolves while `Model.Eval` declines to fold it); and
 every consumer that currently sees no library body starts seeing one, which is a diagnostics
 change to adjudicate per oracle rather than a plumbing change. Several sessions, and it must not
 be taken as a cosmetic metric move — the index-only contract is what makes the cache provably
 free of semantic effect, so anything replacing it needs the same proof
-(`internal/core/libs/index_only_test.go`).
+(`internal/core/libs/index_only_test.go`). The record format, the version-compatibility surface and
+the measurements behind them are designed in
+[wave 12C](wave12c-lossless-library-records.md), which recommends caching only the derived facts and
+parsing the library on every path — parsing all 95 bundled files costs 41 ms of the 1.90 s cold load.
 
 ---
 
