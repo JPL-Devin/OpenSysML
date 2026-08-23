@@ -305,7 +305,7 @@
       "rule": "ElementFilterMember requires an owned expression between filter and the semicolon (SysML.xtext:229 ElementFilterMember).",
       "mode": "default",
       "bucket": "both-reject",
-      "oursErrors": 1,
+      "oursErrors": 2,
       "pilotErrors": 2
     },
     {

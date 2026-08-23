@@ -150,6 +150,7 @@ nav:
       - Wave 11B parser findings: project/wave11b-parser-findings.md
       - Wave 11D metadata and evaluability: project/wave11d-metadata-evaluability.md
       - Wave 11E decisions: project/wave11e-decisions.md
+      - Wave 12A element-scoped tier gating: project/wave12a-element-gating.md
       - Roadmap: project/roadmap.md
       - Releasing: project/releasing.md
       - macOS distribution: project/macos-distribution.md

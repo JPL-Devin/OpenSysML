@@ -174,7 +174,16 @@ same blindness while you are there.
 Do it after 11G lands, not beside it: the two would edit the same resolution entry points, and
 the editor behaviour is only testable once the scope is real.
 
-## L2 — tier gating is per document, and the reference's is per element (scheduled, wave 12)
+## L2 — tier gating is per document, and the reference's is per element (done, wave 12A)
+
+**Landed.** `passes.ElementScoped` generalizes 11D's `SelfGated` marker: a pass that names its
+subject in code runs despite a lower-tier failure and gates itself per element through
+`Context.DownstreamOfFailure`; a pass whose subject is the file stays document-scoped. Differential
+agreement 25 → 32 and only-pilot 73 → 66 with only-ours unmoved at 119; the Xpect and rejection
+oracles do not move. The four rows this item was expected to close are **not** behind the gate —
+removing the gate entirely leaves the Xpect oracle byte-identical — each is an unimplemented rule
+owned elsewhere. See [wave 12A](wave12a-element-gating.md) for the measurements and the row table.
+
 
 `Registry.Run` (`internal/core/passes/registry.go`) skips every pass at a strictly higher level
 once any pass emits a blocking error, for the **whole document**. The reference is EMF/Xtext,
