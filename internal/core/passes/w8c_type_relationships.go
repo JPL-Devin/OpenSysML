@@ -71,7 +71,9 @@ func (c *typeRelationshipsChecker) checkNotOneAndSelf(sym *symbols.Symbol, kind 
 	for _, rel := range rels {
 		target, ok := c.resolver.ResolveTarget(w8cScopeOf(sym), rel.Target)
 		if ok && target == sym {
-			c.report(rel.Target.Span(), self, code+"-self")
+			// The rule is about the type, so it is reported on the type, not on
+			// the operand naming it.
+			c.report(w8cNameSpan(sym), self, code+"-self")
 		}
 	}
 }
@@ -94,7 +96,7 @@ func (c *typeRelationshipsChecker) checkChaining(sym *symbols.Symbol) {
 	for _, step := range steps {
 		target, ok := c.resolver.ResolveTarget(w8cScopeOf(sym), step.Node)
 		if ok && target == sym {
-			c.report(step.Span, msgChainingFeaturesSelf, "chaining-features-not-self")
+			c.report(w8cNameSpan(sym), msgChainingFeaturesSelf, "chaining-features-not-self")
 		}
 	}
 }
@@ -107,4 +109,13 @@ func (c *typeRelationshipsChecker) report(span source.Span, msg, code string) {
 		Code:     code,
 		Source:   "constraint",
 	})
+}
+
+// w8cNameSpan is the span of a declaration's identifier, falling back to the
+// whole declaration when the identifier is not recorded.
+func w8cNameSpan(sym *symbols.Symbol) source.Span {
+	if sym.NameSpan != (source.Span{}) {
+		return sym.NameSpan
+	}
+	return sym.DeclSpan
 }

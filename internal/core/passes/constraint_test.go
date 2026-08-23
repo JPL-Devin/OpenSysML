@@ -7,7 +7,6 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
-	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // constraintDiags parses src, indexes it, runs the full default registry, and
@@ -15,7 +14,7 @@ import (
 func constraintDiags(t *testing.T, src string) []Diagnostic {
 	t.Helper()
 	root := parser.New(source.New("<t>", []byte(src))).ParseFile()
-	idx := symbols.NewIndex()
+	idx := newTestIndex()
 	idx.AddDocument("<t>", root)
 	all := Analyze("<t>", root, nil, idx)
 	var out []Diagnostic
@@ -133,7 +132,7 @@ func TestConstraintConnectionNaryOK(t *testing.T) {
 func TestConstraintConnectionNaryEndCountReachesTheChecker(t *testing.T) {
 	src := "part def C { part a; part b; part c; part d; connection conn connect (a, b, c, d); }"
 	root := parser.New(source.New("<t>", []byte(src))).ParseFile()
-	idx := symbols.NewIndex()
+	idx := newTestIndex()
 	idx.AddDocument("<t>", root)
 	syms := idx.LookupQualified("C::conn")
 	if len(syms) != 1 {

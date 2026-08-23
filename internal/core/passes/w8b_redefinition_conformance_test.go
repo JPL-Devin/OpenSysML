@@ -5,14 +5,13 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
-	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // conformanceDiags returns the feature-conformance findings of a KerML source.
 func conformanceDiags(t *testing.T, src string) []Diagnostic {
 	t.Helper()
 	root := parser.New(source.New("<t>.kerml", []byte(src))).ParseFile()
-	idx := symbols.NewIndex()
+	idx := newTestIndex()
 	idx.AddDocument("<t>.kerml", root)
 	var out []Diagnostic
 	for _, d := range Analyze("<t>.kerml", root, nil, idx) {
@@ -213,7 +212,7 @@ func TestW8BMetadataBodyMustRedefineOwningTypeFeature(t *testing.T) {
 		}
 	}`
 	root := parser.New(source.New("<t>.kerml", []byte(src))).ParseFile()
-	idx := symbols.NewIndex()
+	idx := newTestIndex()
 	idx.AddDocument("<t>.kerml", root)
 	var got []Diagnostic
 	for _, d := range Analyze("<t>.kerml", root, nil, idx) {

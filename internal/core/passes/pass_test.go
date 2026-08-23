@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
-	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 func TestPassLevelString(t *testing.T) {
@@ -30,7 +29,7 @@ func TestPassLevelOrdering(t *testing.T) {
 
 func TestNewContext(t *testing.T) {
 	root := &ast.RootNamespace{}
-	idx := symbols.NewIndexFromDoc("d.sysml", root)
+	idx := newTestIndexFromDoc("d.sysml", root)
 	ctx := NewContext("d.sysml", idx, []Diagnostic{{Source: "syntax"}})
 	if ctx.Name != "d.sysml" {
 		t.Fatalf("Name = %q", ctx.Name)

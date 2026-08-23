@@ -25,8 +25,10 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 		res := r.walkUnqualifiedHiding(scope, qn.Parts[0].Text, hide)
 		if res.ok {
 			res.sym = r.resolvedPart(qn, 0, res.sym)
-		} else {
+		}
+		if !res.ok || r.AliasNamesNothing(res.sym) {
 			r.unresolved(scope, qn)
+			return resolution{nil, false}
 		}
 		return res
 	}
@@ -135,6 +137,10 @@ func (r *Resolver) walkQualifiedTail(scope *symbols.Scope, qn *ast.QualifiedName
 			return resolution{nil, false}
 		}
 		cur = r.resolvedPart(qn, i, all[0])
+		if r.AliasNamesNothing(cur) {
+			r.unresolved(scope, qn)
+			return resolution{nil, false}
+		}
 		curFQN = r.registeredFQN(cur)
 	}
 	return resolution{cur, true}

@@ -29,7 +29,7 @@ func analyzeInputs(t *testing.T, name, src string) (*ast.RootNamespace, []Diagno
 			Code: w.Code, Source: "syntax",
 		})
 	}
-	idx := symbols.NewIndexFromDoc(name, root)
+	idx := newTestIndexFromDoc(name, root)
 	return root, parseDiags, idx
 }
 

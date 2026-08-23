@@ -37,6 +37,10 @@ func (r *Resolver) suggestFor(scope *symbols.Scope, name string) []string {
 	table := r.suggestTable()
 	var cands []suggest.Candidate
 	for _, fqn := range table.Qualified(name) {
+		// An alias that names nothing is no spelling of anything.
+		if r.AliasNamesNothing(r.idx.Declaring(fqn)) {
+			continue
+		}
 		cands = append(cands, suggest.Candidate{Spelling: fqn, Library: r.libraryFQN(fqn)})
 	}
 	for _, near := range table.Neighbours(name) {

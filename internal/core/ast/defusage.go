@@ -481,10 +481,13 @@ type Usage struct {
 	// IsNegated is the `not` of `assert not constraint { … }` and
 	// `assert not satisfy … by …`: the conditions are asserted to be false
 	// (Invariant::isNegated, SysML v2 §8.3.21.10).
-	IsNegated     bool
-	Visibility    Visibility
-	Direction     FeatureDirection
-	IsComposite   bool
+	IsNegated   bool
+	Visibility  Visibility
+	Direction   FeatureDirection
+	IsComposite bool
+	// IsPortion is the `portion` of `portion feature p`: the feature's values
+	// are portions of its featuring instances (KerML Feature::isPortion).
+	IsPortion     bool
 	IsDerived     bool
 	IsOrdered     bool
 	IsNonunique   bool

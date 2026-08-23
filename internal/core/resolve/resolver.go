@@ -25,6 +25,14 @@ type supertypeLookup interface {
 	DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol
 }
 
+// maskLookup is the part of the semantic model that reports redefinition
+// masking: which of a type's inheritable members it does not inherit because
+// one of its features redefines them. *semantics.Model implements it.
+type maskLookup interface {
+	InheritanceMasked(sym, candidate *symbols.Symbol) bool
+	InheritanceMaskedDeclaring(sym, candidate *symbols.Symbol, declName string) bool
+}
+
 // elementFilterJudge is the part of the semantic model that decides an element
 // filter: whether the element an import would surface is selected by the
 // condition restricting it (KerML 8.2.4). A condition classifies a candidate by
@@ -326,6 +334,9 @@ func (r *Resolver) ResolveName(scope *symbols.Scope, name string, at ast.Node) (
 	}
 	res := r.walkUnqualified(scope, name)
 	res.sym = r.AliasedElement(res.sym)
+	if r.AliasNamesNothing(res.sym) {
+		res = resolution{nil, false}
+	}
 	// A result found with the boundary lifted for an enclosing `import all` is
 	// not what this reference resolves to in general, so it is not memoized.
 	if (res.ok || r.quiet == 0) && r.allVisible == 0 {
