@@ -306,6 +306,9 @@ func (r *Resolver) ResolveName(scope *symbols.Scope, name string, at ast.Node) (
 	}
 	res := r.walkUnqualified(scope, name)
 	res.sym = r.AliasedElement(res.sym)
+	if r.AliasNamesNothing(res.sym) {
+		res = resolution{nil, false}
+	}
 	// A result found with the boundary lifted for an enclosing `import all` is
 	// not what this reference resolves to in general, so it is not memoized.
 	if (res.ok || r.quiet == 0) && r.allVisible == 0 {

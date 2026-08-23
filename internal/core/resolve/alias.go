@@ -18,6 +18,21 @@ func (r *Resolver) AliasedElement(sym *symbols.Symbol) *symbols.Symbol {
 	return sym
 }
 
+// AliasNamesNothing reports whether the name an alias binds reaches no element,
+// because the alias's own target reference is unresolved (KerML 8.2.3.2). A
+// cyclic alias is excluded: its target reference does name an element.
+func (r *Resolver) AliasNamesNothing(sym *symbols.Symbol) bool {
+	if sym == nil || sym.Kind != symbols.SymbolAlias {
+		return false
+	}
+	al, ok := sym.Decl.(*ast.Alias)
+	if !ok || al.For == nil {
+		return false
+	}
+	res, done := r.memo[al.For]
+	return done && !res.ok
+}
+
 // ResolveAliasTarget follows an alias symbol to its ultimate non-alias target.
 // Non-alias symbols resolve to themselves. Cycles yield (nil, false).
 func (r *Resolver) ResolveAliasTarget(sym *symbols.Symbol) (*symbols.Symbol, bool) {
@@ -50,32 +65,27 @@ func (r *Resolver) resolveAliasTarget(sym *symbols.Symbol) (*symbols.Symbol, boo
 		}
 		seen[cur] = true
 
-		// Fast path: cached alias with target FQN (stdlib symbols loaded via AddRecords)
-		if cur.AliasTargetFQN != "" {
-			// Resolve target as qualified name from alias's scope
-			// For cached symbols, we don't have OwnerScope, so resolve from root
-			next := r.resolveCachedAliasTarget(cur.AliasTargetFQN, cur)
-			if next == nil {
-				return nil, false
-			}
-			cur = next
-			continue
-		}
-
-		// Slow path: live-parsed alias with Decl (user code)
-		al, ok := cur.Decl.(*ast.Alias)
-		if !ok || al.For == nil {
-			return nil, false
-		}
-		// Resolve the alias target qualified name from the alias's own
-		// enclosing scope.
-		next, ok := r.ResolveQualified(aliasScope(cur), al.For)
+		next, ok := r.aliasStep(cur)
 		if !ok {
 			return nil, false
 		}
 		cur = next
 	}
 	return nil, false
+}
+
+// aliasStep resolves one alias's target: a cached symbol carries its target as
+// text, a live-parsed one as a qualified name resolved from its own scope.
+func (r *Resolver) aliasStep(sym *symbols.Symbol) (*symbols.Symbol, bool) {
+	if sym.AliasTargetFQN != "" {
+		next := r.resolveCachedAliasTarget(sym.AliasTargetFQN, sym)
+		return next, next != nil
+	}
+	al, ok := sym.Decl.(*ast.Alias)
+	if !ok || al.For == nil {
+		return nil, false
+	}
+	return r.ResolveQualified(aliasScope(sym), al.For)
 }
 
 // aliasScope returns the scope in which an alias's target should be resolved:

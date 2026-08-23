@@ -51,17 +51,16 @@ func (c *implicitBaseChecker) check(sym *symbols.Symbol) {
 	c.checkFeatureHasType(sym)
 }
 
-// checkDefaultSupertype reports a type whose kind's library supertype cannot be
-// reached: the library element is absent from the model, or the type conjugates
-// itself, so neither the conjugated type nor the implicit specialization it
-// replaces supplies one.
+// checkDefaultSupertype reports a type that conjugates itself: neither the
+// conjugated type nor the implicit specialization conjugation replaces then
+// supplies the supertype its kind implies.
 func (c *implicitBaseChecker) checkDefaultSupertype(sym *symbols.Symbol) {
 	fqn, ok := semantics.KindBaseFQN(sym, c.isKerML)
 	if !ok {
 		return
 	}
 	base := c.libraryType(fqn)
-	if base != nil && (!c.selfConjugating(sym) || c.reaches(sym, base)) {
+	if base == nil || !c.selfConjugating(sym) || c.reaches(sym, base) {
 		return
 	}
 	c.report(sym.Decl.Span(), "Must directly or indirectly specialize "+fqn, "classifier-default-supertype")
@@ -79,13 +78,13 @@ func (c *implicitBaseChecker) checkFeatureHasType(sym *symbols.Symbol) {
 		}
 	}
 	// A feature with no declared type takes the one its implicit base feature
-	// carries, so it lacks a type only when that base is absent from the model or
-	// conjugation stands in for the implicit subsetting that would supply it.
+	// carries, so it lacks a type only when conjugation stands in for the
+	// implicit subsetting that would supply it.
 	fqn, ok := c.model.FeatureBaseFQN(sym)
 	if !ok {
 		return
 	}
-	if c.libraryType(fqn) != nil && !c.selfConjugating(sym) {
+	if c.libraryType(fqn) == nil || !c.selfConjugating(sym) {
 		return
 	}
 	c.report(sym.Decl.Span(), msgFeatureNoType, "feature-has-type")
