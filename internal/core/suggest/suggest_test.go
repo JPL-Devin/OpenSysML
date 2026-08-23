@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Open-MBEE/OpenSysML/internal/core/model"
+	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
 	"github.com/Open-MBEE/OpenSysML/internal/core/suggest"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -131,6 +131,6 @@ func TestWithAndOrList(t *testing.T) {
 func libraryIndex(t *testing.T) *symbols.Index {
 	t.Helper()
 	idx := symbols.NewIndex()
-	model.LoadStdlibInto(idx)
+	libs.LoadInto(idx)
 	return idx
 }

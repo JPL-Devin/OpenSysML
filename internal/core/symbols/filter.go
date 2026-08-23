@@ -187,11 +187,11 @@ func (idx *Index) namespaceFiltersGating(fqn, doc string) []ElementFilter {
 // namespace registered under fqn. A library restored from an index cache states
 // them this way, having no declaration left to read them from.
 func (idx *Index) SetNamespaceFilters(fqn, doc string, filters []ElementFilter) {
+	idx.mustBeWritable("SetNamespaceFilters")
 	if len(filters) == 0 {
 		idx.forgetNamespaceFilters(fqn, doc)
 		return
 	}
-	idx.mustBeWritable("SetNamespaceFilters")
 	writableMap(idx.nsFilters, fqn)[doc] = filters
 	idx.refilter(fqn)
 }

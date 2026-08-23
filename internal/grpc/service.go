@@ -96,10 +96,12 @@ func Capabilities() []string {
 type Service struct {
 	pb.UnimplementedSysMLServiceServer
 	cache *Cache
-	// libIndexes hands out indexes carrying the standard library, built ahead of
-	// the requests that need them: the library does not depend on the model, so a
-	// cache miss should not pay for loading it.
-	libIndexes *indexPool
+	// libIndexes hands each model an overlay over the one standard library index
+	// the service holds: the library does not depend on the model, so no model
+	// pays for loading it, and no model keeps a copy of it.
+	libIndexes *libraryBase
+	// prewarm is whether Prewarm builds the library ahead of the first request.
+	prewarm bool
 	// budgets bounds every runtime context the service creates, read once from
 	// the environment at construction.
 	budgets runtime.Budgets
@@ -110,7 +112,7 @@ type Service struct {
 // NewService creates a gRPC service with specified cache size, reporting
 // version as its build version. It returns an error if cacheSize is not
 // positive, if a budget variable holds anything but a positive integer, or if
-// the index pool size is not a non-negative integer. It does not load the
+// the prewarm setting is not a non-negative integer. It does not load the
 // standard library: call Prewarm to have that happen in the background, ahead of
 // the requests that need it.
 func NewService(cacheSize int, version string) (*Service, error) {
@@ -122,28 +124,32 @@ func NewService(cacheSize int, version string) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	poolSize, err := indexPoolSizeFromEnv()
+	prewarm, err := indexPrewarmFromEnv()
 	if err != nil {
 		return nil, err
 	}
 	return &Service{
 		cache:      cache,
-		libIndexes: newIndexPool(poolSize, buildLibraryIndex),
+		libIndexes: newLibraryBase(buildLibraryIndex),
+		prewarm:    prewarm > 0,
 		budgets:    budgets,
 		version:    version,
 	}, nil
 }
 
-// Prewarm starts building the service's pool of standard library indexes in the
+// Prewarm starts building the service's standard library index in the
 // background, so the first model to arrive is not the one that pays for the
 // library. It returns immediately and is safe to call more than once.
 func (s *Service) Prewarm() {
+	if !s.prewarm {
+		return
+	}
 	s.libIndexes.prewarm()
 }
 
-// Close releases the prewarmed indexes nobody took and waits for the background
-// builds in flight. The service still answers afterwards, building each index on
-// the request that needs it.
+// Close waits for a background library build in flight and releases the
+// service's reference to the shared index. The service still answers
+// afterwards, building the library on the request that needs it.
 func (s *Service) Close() {
 	s.libIndexes.close()
 }
@@ -222,10 +228,10 @@ func (s *Service) ParseFile(ctx context.Context, req *pb.ParseFileRequest) (*pb.
 	// Get parser diagnostics
 	parseDiags := p.Diagnostics
 
-	// Take an index carrying the standard library, which type resolution needs.
-	// It is prewarmed when the pool has one, and built here when it does not; the
-	// two are the same index, so what a model resolves against does not depend on
-	// prewarming. This model owns it from here on.
+	// Take an index carrying the standard library, which type resolution needs:
+	// an overlay over the one library index the service holds. The model's own
+	// document goes into the overlay alone, so what it resolves against does not
+	// depend on prewarming or on any other model.
 	idx := s.libIndexes.get()
 
 	// Add user document

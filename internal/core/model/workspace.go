@@ -41,12 +41,7 @@ func WithConformanceMode(mode conformance.Mode) Option {
 // Stdlib files are loaded from embedded sources (or SYSML_LIBRARY_PATH if set).
 // Without options it analyzes in the default conformance mode.
 func NewWorkspace(opts ...Option) *Workspace {
-	idx := symbols.NewIndex()
-
-	// Load stdlib into global index
-	libs.LoadInto(idx)
-
-	return NewWorkspaceWithIndex(idx, opts...)
+	return NewWorkspaceWithIndex(libs.NewModelIndex(), opts...)
 }
 
 // NewWorkspaceWithIndex returns a workspace over a caller-built index, for a
@@ -86,11 +81,12 @@ func (w *Workspace) SetConformanceMode(mode conformance.Mode) {
 	w.invalidateLocked()
 }
 
-// LoadStdlibInto loads the standard library into idx, for a consumer that
-// resolves library names through an index of its own — the REPL's runtime,
-// which has to resolve the measurement unit a quantity expression names.
-func LoadStdlibInto(idx *symbols.Index) {
-	libs.LoadInto(idx)
+// NewIndexWithStdlib returns an index carrying the standard library for a
+// consumer that resolves library names outside a workspace — the REPL's
+// runtime, which has to resolve the measurement unit a quantity expression
+// names. It shares the one library index every model reads.
+func NewIndexWithStdlib() *symbols.Index {
+	return libs.NewModelIndex()
 }
 
 // Open registers an authoritative open buffer for name and reindexes.

@@ -2,7 +2,6 @@ package symbols
 
 import (
 	"sort"
-	"strings"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
@@ -80,6 +79,11 @@ type Index struct {
 	// so enumerating a wildcard import's members costs its members rather than a
 	// scan of every name in the workspace.
 	children *layer[string, map[string]bool]
+
+	// bySegment maps a last name segment to the qualified names ending in it, so
+	// suggesting a candidate for an unresolved reference costs its matches rather
+	// than a scan of every name the library declares.
+	bySegment *layer[string, map[string]bool]
 
 	// dirtyNS records how each namespace's direct members changed since the last
 	// expansion, and lastTargets what each importer's imports resolved to when it
@@ -166,6 +170,7 @@ func NewIndex() *Index {
 		docReexports:  newLayer[string, map[reexportKey]bool](),
 		declaredAt:    newLayer[*Symbol, string](),
 		children:      newLayer[string, map[string]bool](),
+		bySegment:     newLayer[string, map[string]bool](),
 		dirtyNS:       make(map[string]nsChange),
 		lastTargets:   newLayer[string, []resolvedImport](),
 		libraryDocs:   newLayer[string, bool](),
@@ -214,6 +219,7 @@ func NewOverlay(base *Index) *Index {
 		docReexports:  overLayer(base.docReexports),
 		declaredAt:    overLayer(base.declaredAt),
 		children:      overLayer(base.children),
+		bySegment:     overLayer(base.bySegment),
 		dirtyNS:       make(map[string]nsChange),
 		lastTargets:   overLayer(base.lastTargets),
 		libraryDocs:   overLayer(base.libraryDocs),
@@ -564,9 +570,12 @@ func (idx *Index) wildcardTargetAt(key string) (string, bool) {
 // document root "" included, so a file-level import's re-exports can be dropped.
 func (idx *Index) register(fqn string, sym *Symbol) {
 	idx.fqn.set(fqn, append(writableSlice(idx.fqn, fqn), sym))
-	parent, _ := splitFQN(fqn)
+	parent, last := splitFQN(fqn)
 	idx.markGained(parent)
 	writableMap(idx.children, parent)[fqn] = true
+	if parent != "" {
+		writableMap(idx.bySegment, last)[fqn] = true
+	}
 }
 
 // unregister drops fqn once no symbol is registered under it.
@@ -579,6 +588,23 @@ func (idx *Index) unregister(fqn string) {
 	delete(kids, fqn)
 	if len(kids) == 0 {
 		idx.children.del(parent)
+	}
+}
+
+// unregisterSegment forgets fqn under its last name segment, once nothing is
+// registered under it.
+func (idx *Index) unregisterSegment(fqn string) {
+	parent, last := splitFQN(fqn)
+	if parent == "" {
+		return
+	}
+	if _, ok := idx.bySegment.get(last); !ok {
+		return
+	}
+	names := writableMap(idx.bySegment, last)
+	delete(names, fqn)
+	if len(names) == 0 {
+		idx.bySegment.del(last)
 	}
 }
 
@@ -598,6 +624,7 @@ func (idx *Index) deregister(fqn string, sym *Symbol) {
 		idx.reexported.del(fqn)
 		idx.hidden.del(fqn)
 		idx.unregister(fqn)
+		idx.unregisterSegment(fqn)
 	} else {
 		idx.fqn.set(fqn, syms)
 		clearMark(idx.reexported, fqn, sym)
@@ -1325,12 +1352,9 @@ func (idx *Index) FQNsEndingIn(name string, limit int) []string {
 	if name == "" || limit <= 0 {
 		return nil
 	}
-	suffix := "::" + name
 	var out []string
-	for _, fqn := range idx.fqn.keys() {
-		if strings.HasSuffix(fqn, suffix) {
-			out = append(out, fqn)
-		}
+	for fqn := range idx.bySegment.at(name) {
+		out = append(out, fqn)
 	}
 	sort.Strings(out)
 	if len(out) > limit {

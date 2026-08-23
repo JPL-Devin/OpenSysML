@@ -168,7 +168,11 @@ func TestGRPCRobustness(t *testing.T) {
 		// must still answer, reporting unresolved names as diagnostics.
 		svc := mustNewService(t, 10)
 		defer svc.Close()
-		svc.libIndexes = newIndexPool(0, symbols.NewIndex)
+		svc.libIndexes = newLibraryBase(func() *symbols.Index {
+			idx := symbols.NewIndex()
+			idx.Freeze()
+			return idx
+		})
 
 		resp, err := svc.ParseFile(context.Background(), &pb.ParseFileRequest{
 			Source: &pb.ParseFileRequest_Content{
