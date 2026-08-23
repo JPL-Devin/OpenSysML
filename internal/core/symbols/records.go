@@ -35,6 +35,7 @@ type RecordEntry struct {
 // by FQN, which is sufficient for qualified-name resolution against library
 // content restored from cache.
 func (idx *Index) AddRecords(name string, entries []RecordEntry) {
+	idx.mustBeWritable("AddRecords")
 	idx.RemoveDocument(name)
 	for _, e := range entries {
 		sym := &Symbol{
@@ -51,14 +52,14 @@ func (idx *Index) AddRecords(name string, entries []RecordEntry) {
 			Annotations:    e.Annotations,
 		}
 		idx.register(e.FQN, sym)
-		idx.declaredAt[sym] = e.FQN
-		idx.contributions[name] = append(idx.contributions[name], fqnEntry{fqn: e.FQN, sym: sym})
+		idx.declaredAt.set(sym, e.FQN)
+		idx.addContribution(name, fqnEntry{fqn: e.FQN, sym: sym})
 
 		// Also index under short name FQN if different
 		if e.ShortName != "" && e.ShortName != shortLeafName(e.FQN) {
 			shortFQN := replaceLeafName(e.FQN, e.ShortName)
 			idx.register(shortFQN, sym)
-			idx.contributions[name] = append(idx.contributions[name], fqnEntry{fqn: shortFQN, sym: sym})
+			idx.addContribution(name, fqnEntry{fqn: shortFQN, sym: sym})
 		}
 
 		// Store wildcard import metadata

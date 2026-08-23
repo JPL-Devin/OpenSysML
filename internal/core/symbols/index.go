@@ -27,25 +27,36 @@ type reexportKey struct {
 // tracked so a document can be removed or re-added without leaving stale
 // entries — the names it declared and the ones its wildcard imports surfaced
 // alike.
+//
+// Each table is a layer (see layer.go): an index built with NewOverlay reads
+// through to a frozen index's tables and writes only its own entries, so the
+// standard library is indexed once and shared by every model rather than
+// re-indexed per model.
 type Index struct {
-	docRoots      map[string]*Scope      // document name -> root scope
-	docOfRoot     map[*Scope]string      // root scope -> document name
-	docKinds      map[string]source.Kind // document name -> explicit language
-	fqn           map[string][]*Symbol   // fully-qualified name -> symbols
-	contributions map[string][]fqnEntry  // document name -> entries it added
+	// base is the frozen index this one reads through to, and frozen bars this
+	// one from being written: a shared base must not change under the indexes
+	// built over it.
+	base   *Index
+	frozen bool
+
+	docRoots      *layer[string, *Scope]      // document name -> root scope
+	docOfRoot     *layer[*Scope, string]      // root scope -> document name
+	docKinds      *layer[string, source.Kind] // document name -> explicit language
+	fqn           *layer[string, []*Symbol]   // fully-qualified name -> symbols
+	contributions *layer[string, []fqnEntry]  // document name -> entries it added
 
 	// wildcardMeta holds the wildcard imports of a namespace per document that
 	// declares it, so removing a document stops its imports from being expanded
 	// while the ones another document states through the same namespace survive.
-	wildcardMeta map[string]map[string][]WildcardImport // package FQN -> doc -> its wildcard imports
+	wildcardMeta *layer[string, map[string][]WildcardImport] // package FQN -> doc -> its wildcard imports
 
 	// reexported marks the (FQN, symbol) pairs that a wildcard import made
 	// visible rather than the namespace declaring them, so a lookup can prefer
 	// the declared member. hidden is the subset a *private* import surfaced,
 	// which a further wildcard import must not carry on. Both are derived from
 	// reexportDocs and kept alongside it for the lookup path.
-	reexported map[string]map[*Symbol]bool
-	hidden     map[string]map[*Symbol]bool
+	reexported *layer[string, map[*Symbol]bool]
+	hidden     *layer[string, map[*Symbol]bool]
 
 	// reexportDocs attributes each re-export to every document whose wildcard
 	// imports surface it, recording whether that document surfaces it publicly and
@@ -57,38 +68,41 @@ type Index struct {
 	// This is deliberately not folded into contributions: that is an append-only
 	// slice per document, and a re-export has to be found by (FQN, symbol) to
 	// drop one document's claim, or purged across all documents at once.
-	reexportDocs map[reexportKey]map[string]*reexportClaim
-	docReexports map[string]map[reexportKey]bool
+	reexportDocs *layer[reexportKey, map[string]*reexportClaim]
+	docReexports *layer[string, map[reexportKey]bool]
 
 	// declaredAt maps a symbol to the FQN its declaration gives it, which is the
 	// only key its own members are registered under: a re-export registers the
 	// symbol elsewhere but never copies its subtree.
-	declaredAt map[*Symbol]string
+	declaredAt *layer[*Symbol, string]
 
 	// children maps a namespace's FQN to the keys registered directly under it,
 	// so enumerating a wildcard import's members costs its members rather than a
 	// scan of every name in the workspace.
-	children map[string]map[string]bool
+	children *layer[string, map[string]bool]
 
 	// dirtyNS records how each namespace's direct members changed since the last
 	// expansion, and lastTargets what each importer's imports resolved to when it
 	// was last expanded — the routes its re-exports came by. Together they bound an
 	// expansion to the importers a change can reach instead of the whole workspace.
+	//
+	// dirtyNS is not layered: a frozen base has settled, so an index over it
+	// starts with nothing dirty and records only what its own documents changed.
 	dirtyNS     map[string]nsChange
-	lastTargets map[string][]resolvedImport
+	lastTargets *layer[string, []resolvedImport]
 
 	// libraryDocs names the documents that hold bundled library content rather
 	// than the workspace's own, and librarySyms the symbols they declare, so a
 	// consumer can tell a library name from one the user wrote. Both are dropped
 	// with the document.
-	libraryDocs map[string]bool
-	librarySyms map[*Symbol]bool
+	libraryDocs *layer[string, bool]
+	librarySyms *layer[*Symbol, bool]
 
 	// nsFilters holds the element-filter conditions a namespace declares per
 	// document that declares it, alongside wildcardMeta and for the same reason:
 	// they restrict the memberships that namespace's imports bring in, so they are
 	// read on every expansion of it.
-	nsFilters map[string]map[string][]ElementFilter
+	nsFilters *layer[string, map[string][]ElementFilter]
 }
 
 // reexportClaim is one document's claim on a re-export: whether its imports
@@ -140,23 +154,79 @@ type WildcardImport struct {
 // NewIndex creates an empty index.
 func NewIndex() *Index {
 	return &Index{
-		docRoots:      make(map[string]*Scope),
-		docOfRoot:     make(map[*Scope]string),
-		docKinds:      make(map[string]source.Kind),
-		fqn:           make(map[string][]*Symbol),
-		contributions: make(map[string][]fqnEntry),
-		wildcardMeta:  make(map[string]map[string][]WildcardImport),
-		reexported:    make(map[string]map[*Symbol]bool),
-		hidden:        make(map[string]map[*Symbol]bool),
-		reexportDocs:  make(map[reexportKey]map[string]*reexportClaim),
-		docReexports:  make(map[string]map[reexportKey]bool),
-		declaredAt:    make(map[*Symbol]string),
-		children:      make(map[string]map[string]bool),
+		docRoots:      newLayer[string, *Scope](),
+		docOfRoot:     newLayer[*Scope, string](),
+		docKinds:      newLayer[string, source.Kind](),
+		fqn:           newLayer[string, []*Symbol](),
+		contributions: newLayer[string, []fqnEntry](),
+		wildcardMeta:  newLayer[string, map[string][]WildcardImport](),
+		reexported:    newLayer[string, map[*Symbol]bool](),
+		hidden:        newLayer[string, map[*Symbol]bool](),
+		reexportDocs:  newLayer[reexportKey, map[string]*reexportClaim](),
+		docReexports:  newLayer[string, map[reexportKey]bool](),
+		declaredAt:    newLayer[*Symbol, string](),
+		children:      newLayer[string, map[string]bool](),
 		dirtyNS:       make(map[string]nsChange),
-		lastTargets:   make(map[string][]resolvedImport),
-		libraryDocs:   make(map[string]bool),
-		librarySyms:   make(map[*Symbol]bool),
-		nsFilters:     make(map[string]map[string][]ElementFilter),
+		lastTargets:   newLayer[string, []resolvedImport](),
+		libraryDocs:   newLayer[string, bool](),
+		librarySyms:   newLayer[*Symbol, bool](),
+		nsFilters:     newLayer[string, map[string][]ElementFilter](),
+	}
+}
+
+// Freeze settles the index's wildcard imports and bars it from further writes,
+// after which NewOverlay may build indexes over it. Freezing what holds the
+// standard library is what lets every model share one copy of it.
+func (idx *Index) Freeze() {
+	if idx.frozen {
+		return
+	}
+	idx.ExpandWildcardImports()
+	idx.frozen = true
+}
+
+// Frozen reports whether the index has been frozen.
+func (idx *Index) Frozen() bool { return idx.frozen }
+
+// NewOverlay returns an index holding everything base holds, whose own writes
+// are its own: documents it adds, the re-exports their imports surface and the
+// ones they invalidate are visible in it alone, and base is left untouched. It
+// panics if base is not frozen, since an index cannot read through to a table
+// still being written.
+func NewOverlay(base *Index) *Index {
+	if base == nil || !base.frozen {
+		panic("symbols: NewOverlay needs a frozen base index")
+	}
+	if base.base != nil {
+		panic("symbols: NewOverlay cannot stack over an overlay")
+	}
+	return &Index{
+		base:          base,
+		docRoots:      overLayer(base.docRoots),
+		docOfRoot:     overLayer(base.docOfRoot),
+		docKinds:      overLayer(base.docKinds),
+		fqn:           overLayer(base.fqn),
+		contributions: overLayer(base.contributions),
+		wildcardMeta:  overLayer(base.wildcardMeta),
+		reexported:    overLayer(base.reexported),
+		hidden:        overLayer(base.hidden),
+		reexportDocs:  overLayer(base.reexportDocs),
+		docReexports:  overLayer(base.docReexports),
+		declaredAt:    overLayer(base.declaredAt),
+		children:      overLayer(base.children),
+		dirtyNS:       make(map[string]nsChange),
+		lastTargets:   overLayer(base.lastTargets),
+		libraryDocs:   overLayer(base.libraryDocs),
+		librarySyms:   overLayer(base.librarySyms),
+		nsFilters:     overLayer(base.nsFilters),
+	}
+}
+
+// mustBeWritable stops a write to a frozen index: the indexes built over it read
+// its tables, so a change to one of them would be a change to all of them.
+func (idx *Index) mustBeWritable(op string) {
+	if idx.frozen {
+		panic("symbols: " + op + " on a frozen index")
 	}
 }
 
@@ -179,14 +249,15 @@ func (idx *Index) AddDocumentWithKind(name string, root *ast.RootNamespace, kind
 }
 
 func (idx *Index) addDocument(name string, root *ast.RootNamespace, kind source.Kind, explicitKind bool) {
+	idx.mustBeWritable("AddDocument")
 	idx.RemoveDocument(name)
 	rs := Build(root)
 	SetDocName(rs, name)
-	idx.docRoots[name] = rs
+	idx.docRoots.set(name, rs)
 	if explicitKind {
-		idx.docKinds[name] = kind
+		idx.docKinds.set(name, kind)
 	}
-	idx.docOfRoot[rs] = name
+	idx.docOfRoot.set(rs, name)
 	idx.indexScope(name, rs, "")
 
 	// Extract wildcard imports and filters from the root namespace itself
@@ -200,11 +271,8 @@ func (idx *Index) addDocument(name string, root *ast.RootNamespace, kind source.
 // setWildcardImports records the wildcard imports doc states through the
 // namespace registered under pkgFQN, and marks that namespace for expansion.
 func (idx *Index) setWildcardImports(pkgFQN, doc string, imports []WildcardImport) {
-	if idx.wildcardMeta[pkgFQN] == nil {
-		idx.wildcardMeta[pkgFQN] = make(map[string][]WildcardImport)
-	}
-	idx.wildcardMeta[pkgFQN][doc] = imports
-	delete(idx.lastTargets, pkgFQN) // its import set changed: expand it again
+	writableMap(idx.wildcardMeta, pkgFQN)[doc] = imports
+	idx.lastTargets.del(pkgFQN) // its import set changed: expand it again
 }
 
 // ExpandWildcardImports adds re-exported symbols for every package with a
@@ -234,6 +302,7 @@ func (idx *Index) setWildcardImports(pkgFQN, doc string, imports []WildcardImpor
 // support itself. Dropping propagates: it takes members from a namespace, which
 // is a change the importers of *that* namespace see on the next pass.
 func (idx *Index) ExpandWildcardImports() {
+	idx.mustBeWritable("ExpandWildcardImports")
 	for round := 0; round < expansionRounds; round++ {
 		if !idx.expandRound(false) {
 			return
@@ -266,7 +335,7 @@ func (idx *Index) expandRound(deriveOnly bool) bool {
 	// another cannot copy re-exports that are about to be dropped.
 	for _, pkgFQN := range purge {
 		idx.purgeReexportsUnder(pkgFQN)
-		delete(idx.lastTargets, pkgFQN)
+		idx.lastTargets.del(pkgFQN)
 	}
 	for _, pkgFQN := range derive {
 		idx.expandImporter(pkgFQN)
@@ -279,15 +348,12 @@ func (idx *Index) expandRound(deriveOnly bool) bool {
 // derive — the former plus those importing a namespace that gained members. Both
 // are in name order, so the outcome does not depend on map iteration order.
 func (idx *Index) importersToRefresh(changed map[string]nsChange, deriveOnly bool) (purge, derive []string) {
-	pkgFQNs := make([]string, 0, len(idx.wildcardMeta))
-	for pkgFQN := range idx.wildcardMeta {
-		pkgFQNs = append(pkgFQNs, pkgFQN)
-	}
+	pkgFQNs := idx.wildcardMeta.keys()
 	sort.Strings(pkgFQNs)
 
 	for _, pkgFQN := range pkgFQNs {
 		now := idx.resolveImports(pkgFQN)
-		last, expanded := idx.lastTargets[pkgFQN]
+		last, expanded := idx.lastTargets.get(pkgFQN)
 		if !expanded {
 			derive = append(derive, pkgFQN)
 			continue
@@ -333,7 +399,7 @@ type resolvedImport struct {
 // imports returns every wildcard import stated through pkgFQN, over the
 // documents in name order so the result does not depend on map iteration order.
 func (idx *Index) imports(pkgFQN string) []statedImport {
-	byDoc := idx.wildcardMeta[pkgFQN]
+	byDoc := idx.wildcardMeta.at(pkgFQN)
 	docs := make([]string, 0, len(byDoc))
 	for doc := range byDoc {
 		docs = append(docs, doc)
@@ -423,7 +489,7 @@ func (idx *Index) expandImporter(pkgFQN string) {
 			}
 		}
 	}
-	idx.lastTargets[pkgFQN] = idx.resolveImports(pkgFQN)
+	idx.lastTargets.set(pkgFQN, idx.resolveImports(pkgFQN))
 }
 
 // resolveWildcardTarget resolves a wildcard import target name to the
@@ -468,10 +534,10 @@ func (idx *Index) resolveWildcardTarget(pkgFQN, targetText string) string {
 // its members are registered under: neither a re-export nor the short-name entry
 // of `package <USCU> USCustomaryUnits` copies its subtree.
 func (idx *Index) wildcardTargetAt(key string) (string, bool) {
-	imported := idx.reexported[key]
+	imported := idx.reexported.at(key)
 	owned, reexports := 0, 0
 	var soleOwned, soleImported *Symbol
-	for _, sym := range idx.fqn[key] {
+	for _, sym := range idx.fqn.at(key) {
 		if imported[sym] {
 			reexports++
 			soleImported = sym
@@ -482,12 +548,12 @@ func (idx *Index) wildcardTargetAt(key string) (string, bool) {
 	}
 	switch {
 	case owned == 1:
-		if declared, ok := idx.declaredAt[soleOwned]; ok {
+		if declared, ok := idx.declaredAt.get(soleOwned); ok {
 			return declared, true
 		}
 		return key, true
 	case owned == 0 && reexports == 1:
-		declared, ok := idx.declaredAt[soleImported]
+		declared, ok := idx.declaredAt.get(soleImported)
 		return declared, ok
 	default:
 		return "", false // unknown, or ambiguous between namespaces
@@ -497,23 +563,22 @@ func (idx *Index) wildcardTargetAt(key string) (string, bool) {
 // register records sym under fqn, linking fqn to its parent namespace — the
 // document root "" included, so a file-level import's re-exports can be dropped.
 func (idx *Index) register(fqn string, sym *Symbol) {
-	idx.fqn[fqn] = append(idx.fqn[fqn], sym)
+	idx.fqn.set(fqn, append(writableSlice(idx.fqn, fqn), sym))
 	parent, _ := splitFQN(fqn)
 	idx.markGained(parent)
-	if idx.children[parent] == nil {
-		idx.children[parent] = make(map[string]bool)
-	}
-	idx.children[parent][fqn] = true
+	writableMap(idx.children, parent)[fqn] = true
 }
 
 // unregister drops fqn once no symbol is registered under it.
 func (idx *Index) unregister(fqn string) {
 	parent, _ := splitFQN(fqn)
-	if kids := idx.children[parent]; kids != nil {
-		delete(kids, fqn)
-		if len(kids) == 0 {
-			delete(idx.children, parent)
-		}
+	if _, ok := idx.children.get(parent); !ok {
+		return
+	}
+	kids := writableMap(idx.children, parent)
+	delete(kids, fqn)
+	if len(kids) == 0 {
+		idx.children.del(parent)
 	}
 }
 
@@ -521,7 +586,7 @@ func (idx *Index) unregister(fqn string) {
 // entirely once it names nothing. It leaves declaredAt alone: only the symbol's
 // own declaration owns that entry.
 func (idx *Index) deregister(fqn string, sym *Symbol) {
-	syms := idx.fqn[fqn]
+	syms := writableSlice(idx.fqn, fqn)
 	for i, s := range syms {
 		if s == sym {
 			syms = append(syms[:i], syms[i+1:]...)
@@ -529,12 +594,12 @@ func (idx *Index) deregister(fqn string, sym *Symbol) {
 		}
 	}
 	if len(syms) == 0 {
-		delete(idx.fqn, fqn)
-		delete(idx.reexported, fqn)
-		delete(idx.hidden, fqn)
+		idx.fqn.del(fqn)
+		idx.reexported.del(fqn)
+		idx.hidden.del(fqn)
 		idx.unregister(fqn)
 	} else {
-		idx.fqn[fqn] = syms
+		idx.fqn.set(fqn, syms)
 		clearMark(idx.reexported, fqn, sym)
 		clearMark(idx.hidden, fqn, sym)
 	}
@@ -566,7 +631,7 @@ func splitFQN(fqn string) (parent, name string) {
 }
 
 func (idx *Index) hasFQN(fqn string, sym *Symbol) bool {
-	for _, s := range idx.fqn[fqn] {
+	for _, s := range idx.fqn.at(fqn) {
 		if s == sym {
 			return true
 		}
@@ -595,42 +660,50 @@ func lastIndex(s, substr string) int {
 // caller does not have to know that removing a document can break a chain of
 // imports (A imports B imports C) or make an ambiguous import target resolvable.
 // Unknown names are a no-op.
+//
+// An index built over a frozen base may remove one of the base's documents too:
+// the removal is recorded in the overlay, which stops answering for what the
+// document contributed while the base keeps it for every other index over it.
 func (idx *Index) RemoveDocument(name string) {
+	idx.mustBeWritable("RemoveDocument")
 	if !idx.knows(name) {
 		return
 	}
 
-	library := idx.libraryDocs[name]
-	for _, e := range idx.contributions[name] {
-		if idx.declaredAt[e.sym] == e.fqn {
-			delete(idx.declaredAt, e.sym)
+	library := idx.libraryDocs.at(name)
+	for _, e := range idx.contributions.at(name) {
+		if idx.declaredAt.at(e.sym) == e.fqn {
+			idx.declaredAt.del(e.sym)
 			if library {
-				delete(idx.librarySyms, e.sym)
+				idx.librarySyms.del(e.sym)
 			}
 		}
 		idx.deregister(e.fqn, e.sym)
 	}
-	delete(idx.libraryDocs, name)
-	delete(idx.docKinds, name)
-	delete(idx.contributions, name)
-	delete(idx.docOfRoot, idx.docRoots[name])
-	delete(idx.docRoots, name)
+	idx.libraryDocs.del(name)
+	idx.docKinds.del(name)
+	idx.contributions.del(name)
+	if root, ok := idx.docRoots.get(name); ok {
+		idx.docOfRoot.del(root)
+	}
+	idx.docRoots.del(name)
 
-	for pkgFQN, byDoc := range idx.wildcardMeta {
-		if _, ok := byDoc[name]; !ok {
+	for _, pkgFQN := range idx.wildcardMeta.keys() {
+		if _, ok := idx.wildcardMeta.at(pkgFQN)[name]; !ok {
 			continue
 		}
+		byDoc := writableMap(idx.wildcardMeta, pkgFQN)
 		delete(byDoc, name)
 		if len(byDoc) == 0 {
-			delete(idx.wildcardMeta, pkgFQN)
+			idx.wildcardMeta.del(pkgFQN)
 		}
-		delete(idx.lastTargets, pkgFQN) // its import set changed: expand it again
+		idx.lastTargets.del(pkgFQN) // its import set changed: expand it again
 	}
 
-	for key := range idx.docReexports[name] {
+	for key := range idx.docReexports.at(name) {
 		idx.dropClaim(key, name)
 	}
-	delete(idx.docReexports, name)
+	idx.docReexports.del(name)
 	idx.dropNamespaceFilters(name)
 
 	idx.ExpandWildcardImports()
@@ -641,32 +714,33 @@ func (idx *Index) RemoveDocument(name string) {
 // document removes its previous contributions, and the mark with them. Only
 // what the document declares is marked, not the names it re-exports.
 func (idx *Index) MarkLibrary(name string) {
-	idx.libraryDocs[name] = true
-	for _, e := range idx.contributions[name] {
-		if idx.declaredAt[e.sym] == e.fqn {
-			idx.librarySyms[e.sym] = true
+	idx.mustBeWritable("MarkLibrary")
+	idx.libraryDocs.set(name, true)
+	for _, e := range idx.contributions.at(name) {
+		if idx.declaredAt.at(e.sym) == e.fqn {
+			idx.librarySyms.set(e.sym, true)
 		}
 	}
 }
 
 // Library reports whether sym is declared by bundled library content.
 func (idx *Index) Library(sym *Symbol) bool {
-	return sym != nil && idx.librarySyms[sym]
+	return sym != nil && idx.librarySyms.at(sym)
 }
 
 // knows reports whether the index holds anything for the named document.
 func (idx *Index) knows(name string) bool {
-	if _, ok := idx.contributions[name]; ok {
+	if _, ok := idx.contributions.get(name); ok {
 		return true
 	}
-	if _, ok := idx.docRoots[name]; ok {
+	if _, ok := idx.docRoots.get(name); ok {
 		return true
 	}
-	if _, ok := idx.docReexports[name]; ok {
+	if _, ok := idx.docReexports.get(name); ok {
 		return true
 	}
-	for _, byDoc := range idx.wildcardMeta {
-		if _, ok := byDoc[name]; ok {
+	for _, pkgFQN := range idx.wildcardMeta.keys() {
+		if _, ok := idx.wildcardMeta.at(pkgFQN)[name]; ok {
 			return true
 		}
 	}
@@ -676,10 +750,10 @@ func (idx *Index) knows(name string) bool {
 // purgeAllReexports drops every re-export in the index, leaving the names the
 // documents declare.
 func (idx *Index) purgeAllReexports() {
-	for key := range idx.reexportDocs {
+	for _, key := range idx.reexportDocs.keys() {
 		idx.purgeReexport(key)
 	}
-	idx.lastTargets = make(map[string][]resolvedImport)
+	idx.lastTargets.clear()
 }
 
 // purgeReexportsUnder drops every re-export registered directly under pkgFQN,
@@ -695,7 +769,7 @@ func (idx *Index) purgeReexportsUnder(pkgFQN string) {
 
 // reexportedAt returns the symbols a wildcard import surfaced under fqn.
 func (idx *Index) reexportedAt(fqn string) []*Symbol {
-	marks := idx.reexported[fqn]
+	marks := idx.reexported.at(fqn)
 	if len(marks) == 0 {
 		return nil
 	}
@@ -769,10 +843,10 @@ func filtersSubsume(a, b []ElementFilter) bool {
 // so an unfiltered import re-exports it whatever another route filters out.
 func (idx *Index) reexportGated(fqn string, sym *Symbol, doc string, private bool, gates [][]ElementFilter) {
 	idx.reexport(fqn, sym, doc, private)
-	if !idx.reexported[fqn][sym] {
+	if !idx.reexported.at(fqn)[sym] {
 		return // the namespace declares it; nothing was borrowed
 	}
-	claim := idx.reexportDocs[reexportKey{fqn: fqn, sym: sym}][doc]
+	claim := idx.writableClaim(reexportKey{fqn: fqn, sym: sym}, doc)
 	if claim == nil {
 		return
 	}
@@ -822,7 +896,7 @@ func (c *reexportClaim) record(route gateRoute) bool {
 // A private import's route only answers a lookup made from within the importing
 // namespace, which from names ("" for one made from anywhere else).
 func (idx *Index) ReexportGates(doc, fqn string, sym *Symbol, from string) [][]ElementFilter {
-	claims := idx.reexportDocs[reexportKey{fqn: fqn, sym: sym}]
+	claims := idx.reexportDocs.at(reexportKey{fqn: fqn, sym: sym})
 	parent, _ := splitFQN(fqn)
 	if parent == "" {
 		// Each document owns its root namespace alone, so only the routes of the
@@ -846,10 +920,10 @@ func (idx *Index) ReexportVisible(doc, fqn string, sym *Symbol) bool {
 	if parent, _ := splitFQN(fqn); parent != "" {
 		return true
 	}
-	if !idx.reexported[fqn][sym] {
+	if !idx.reexported.at(fqn)[sym] {
 		return true // declared under this name rather than borrowed
 	}
-	return idx.reexportDocs[reexportKey{fqn: fqn, sym: sym}][doc] != nil
+	return idx.reexportDocs.at(reexportKey{fqn: fqn, sym: sym})[doc] != nil
 }
 
 // gateRoutes returns the conditions of the routes a claim recorded that a lookup
@@ -881,7 +955,7 @@ func nonZeroFilters(filters []ElementFilter) []ElementFilter {
 
 func (idx *Index) reexport(fqn string, sym *Symbol, doc string, private bool) {
 	registered := idx.hasFQN(fqn, sym)
-	if registered && !idx.reexported[fqn][sym] {
+	if registered && !idx.reexported.at(fqn)[sym] {
 		return // declared here, not borrowed
 	}
 	if !registered {
@@ -895,24 +969,17 @@ func (idx *Index) reexport(fqn string, sym *Symbol, doc string, private bool) {
 // any import that surfaced it was public, so a public claim clears the hidden
 // mark a private one left.
 func (idx *Index) claimReexport(key reexportKey, doc string, public bool) {
-	docs := idx.reexportDocs[key]
-	if docs == nil {
-		docs = make(map[string]*reexportClaim)
-		idx.reexportDocs[key] = docs
-	}
-	claim, claimed := docs[doc]
-	if claimed && (claim.public || !public) {
+	if claim := idx.reexportDocs.at(key)[doc]; claim != nil && (claim.public || !public) {
 		return // nothing new
 	}
+	docs := idx.writableClaims(key)
+	claim, claimed := docs[doc]
 	if !claimed {
 		claim = &reexportClaim{}
 		docs[doc] = claim
 	}
 	claim.public = claim.public || public
-	if idx.docReexports[doc] == nil {
-		idx.docReexports[doc] = make(map[reexportKey]bool)
-	}
-	idx.docReexports[doc][key] = true
+	writableMap(idx.docReexports, doc)[key] = true
 	idx.applyReexportMarks(key)
 	parent, _ := splitFQN(key.fqn)
 	idx.markGained(parent) // a public claim can un-hide it, which exports it onward
@@ -922,13 +989,13 @@ func (idx *Index) claimReexport(key reexportKey, doc string, public bool) {
 // document surfaces it any more and re-hiding it when only private imports
 // remain.
 func (idx *Index) dropClaim(key reexportKey, doc string) {
-	docs := idx.reexportDocs[key]
-	if _, claimed := docs[doc]; !claimed {
+	if _, claimed := idx.reexportDocs.at(key)[doc]; !claimed {
 		return
 	}
+	docs := idx.writableClaims(key)
 	delete(docs, doc) // the routes this document recorded go with its claim
 	if len(docs) == 0 {
-		delete(idx.reexportDocs, key)
+		idx.reexportDocs.del(key)
 		idx.deregister(key.fqn, key.sym)
 		return
 	}
@@ -940,21 +1007,47 @@ func (idx *Index) dropClaim(key reexportKey, doc string) {
 // purgeReexport drops a re-export outright, along with every document's claim
 // on it.
 func (idx *Index) purgeReexport(key reexportKey) {
-	for doc := range idx.reexportDocs[key] {
-		delete(idx.docReexports[doc], key)
-		if len(idx.docReexports[doc]) == 0 {
-			delete(idx.docReexports, doc)
+	for doc := range idx.reexportDocs.at(key) {
+		claimed := writableMap(idx.docReexports, doc)
+		delete(claimed, key)
+		if len(claimed) == 0 {
+			idx.docReexports.del(doc)
 		}
 	}
-	delete(idx.reexportDocs, key)
+	idx.reexportDocs.del(key)
 	idx.deregister(key.fqn, key.sym)
+}
+
+// writableClaims returns the claims on key that this index may write to. A claim
+// the frozen base recorded is copied with them: recording a route on it would
+// otherwise change what every index over that base re-exports.
+func (idx *Index) writableClaims(key reexportKey) map[string]*reexportClaim {
+	owned := idx.reexportDocs.owns(key)
+	docs := writableMap(idx.reexportDocs, key)
+	if owned {
+		return docs
+	}
+	for doc, claim := range docs {
+		copied := *claim
+		copied.routes = append([]gateRoute(nil), claim.routes...)
+		docs[doc] = &copied
+	}
+	return docs
+}
+
+// writableClaim returns doc's claim on key, writable, or nil when it has none.
+func (idx *Index) writableClaim(key reexportKey, doc string) *reexportClaim {
+	if idx.reexportDocs.at(key)[doc] == nil {
+		return nil
+	}
+	return idx.writableClaims(key)[doc]
 }
 
 // applyReexportMarks brings the reexported and hidden marks in line with the
 // claims on key: a claimed name is re-exported, and hidden while every document
 // that surfaced it did so with a private import (KerML 8.2.3.3).
 func (idx *Index) applyReexportMarks(key reexportKey) {
-	docs := idx.reexportDocs[key]
+	docs := idx.reexportDocs.at(key)
 	if len(docs) == 0 {
 		clearMark(idx.reexported, key.fqn, key.sym)
 		clearMark(idx.hidden, key.fqn, key.sym)
@@ -970,17 +1063,18 @@ func (idx *Index) applyReexportMarks(key reexportKey) {
 	setMark(idx.hidden, key.fqn, key.sym)
 }
 
-func setMark(marks map[string]map[*Symbol]bool, fqn string, sym *Symbol) {
-	if marks[fqn] == nil {
-		marks[fqn] = make(map[*Symbol]bool)
-	}
-	marks[fqn][sym] = true
+func setMark(marks *layer[string, map[*Symbol]bool], fqn string, sym *Symbol) {
+	writableMap(marks, fqn)[sym] = true
 }
 
-func clearMark(marks map[string]map[*Symbol]bool, fqn string, sym *Symbol) {
-	delete(marks[fqn], sym)
-	if len(marks[fqn]) == 0 {
-		delete(marks, fqn)
+func clearMark(marks *layer[string, map[*Symbol]bool], fqn string, sym *Symbol) {
+	if _, ok := marks.get(fqn); !ok {
+		return
+	}
+	at := writableMap(marks, fqn)
+	delete(at, sym)
+	if len(at) == 0 {
+		marks.del(fqn)
 	}
 }
 
@@ -1000,8 +1094,8 @@ func (idx *Index) indexScope(doc string, scope *Scope, prefix string) {
 			// Index under primary FQN
 			fqn := joinFQN(prefix, sym.Name)
 			idx.register(fqn, sym)
-			idx.declaredAt[sym] = fqn
-			idx.contributions[doc] = append(idx.contributions[doc], fqnEntry{fqn: fqn, sym: sym})
+			idx.declaredAt.set(sym, fqn)
+			idx.addContribution(doc, fqnEntry{fqn: fqn, sym: sym})
 
 			// Also index under short name FQN if different
 			// Try cached shortName first (for stdlib), fallback to extracting from Decl
@@ -1012,7 +1106,7 @@ func (idx *Index) indexScope(doc string, scope *Scope, prefix string) {
 			if shortName != "" && shortName != sym.Name {
 				shortFQN := joinFQN(prefix, shortName)
 				idx.register(shortFQN, sym)
-				idx.contributions[doc] = append(idx.contributions[doc], fqnEntry{fqn: shortFQN, sym: sym})
+				idx.addContribution(doc, fqnEntry{fqn: shortFQN, sym: sym})
 			}
 
 			// Extract wildcard imports and filters from packages/namespaces
@@ -1028,6 +1122,11 @@ func (idx *Index) indexScope(doc string, scope *Scope, prefix string) {
 			}
 		}
 	}
+}
+
+// addContribution records that doc registered a symbol under a name.
+func (idx *Index) addContribution(doc string, e fqnEntry) {
+	idx.contributions.set(doc, append(writableSlice(idx.contributions, doc), e))
 }
 
 // joinFQN joins a prefix and a name with "::".
@@ -1124,12 +1223,12 @@ func (idx *Index) LookupQualified(fqn string) []*Symbol {
 // fromFQN is the FQN of the referring namespace; "" means "from outside", which
 // is what an ordinary qualified reference elsewhere in the workspace gets.
 func (idx *Index) LookupQualifiedFrom(fqn, fromFQN string) []*Symbol {
-	syms := idx.fqn[fqn]
-	imported := idx.reexported[fqn]
+	syms := idx.fqn.at(fqn)
+	imported := idx.reexported.at(fqn)
 	if len(imported) == 0 {
 		return syms
 	}
-	hidden := idx.hidden[fqn]
+	hidden := idx.hidden.at(fqn)
 	// A root-level name belongs to the importing document's own root namespace, so
 	// a private import of it is answered per document by ReexportVisible, not here.
 	if len(hidden) > 0 && namespaceOf(fqn) != "" && !withinNamespace(fromFQN, namespaceOf(fqn)) {
@@ -1172,11 +1271,11 @@ func (idx *Index) Declaring(fqn string) *Symbol {
 // which reaches cached symbols through LookupDirectChildren — asks here first
 // and stops, rather than resurfacing a name KerML 8.2.3.3 hides.
 func (idx *Index) HiddenFrom(fqn, fromFQN string) bool {
-	hidden := idx.hidden[fqn]
+	hidden := idx.hidden.at(fqn)
 	if len(hidden) == 0 || withinNamespace(fromFQN, namespaceOf(fqn)) {
 		return false
 	}
-	for _, sym := range idx.fqn[fqn] {
+	for _, sym := range idx.fqn.at(fqn) {
 		if !hidden[sym] {
 			return false
 		}
@@ -1214,10 +1313,7 @@ func withinNamespace(fromFQN, ns string) bool {
 
 // FQNs returns every fully-qualified name registered in the index, sorted.
 func (idx *Index) FQNs() []string {
-	out := make([]string, 0, len(idx.fqn))
-	for fqn := range idx.fqn {
-		out = append(out, fqn)
-	}
+	out := idx.fqn.keys()
 	sort.Strings(out)
 	return out
 }
@@ -1231,7 +1327,7 @@ func (idx *Index) FQNsEndingIn(name string, limit int) []string {
 	}
 	suffix := "::" + name
 	var out []string
-	for fqn := range idx.fqn {
+	for _, fqn := range idx.fqn.keys() {
 		if strings.HasSuffix(fqn, suffix) {
 			out = append(out, fqn)
 		}
@@ -1247,7 +1343,7 @@ func (idx *Index) FQNsEndingIn(name string, limit int) []string {
 // namespace registered under fqn ("" for a document root), over the documents
 // declaring it in name order.
 func (idx *Index) WildcardImportsOf(fqn string) []WildcardImport {
-	byDoc := idx.wildcardMeta[fqn]
+	byDoc := idx.wildcardMeta.at(fqn)
 	if len(byDoc) == 0 {
 		return nil
 	}
@@ -1273,7 +1369,7 @@ func (idx *Index) exportedChildren(prefix string) []*Symbol {
 // childKeys returns the keys registered directly under prefix, in name order so
 // that enumeration does not depend on map iteration order.
 func (idx *Index) childKeys(prefix string) []string {
-	kids := idx.children[prefix]
+	kids := idx.children.at(prefix)
 	if len(kids) == 0 {
 		return nil
 	}
@@ -1295,7 +1391,7 @@ func (idx *Index) LookupDirectChildren(prefix string) []*Symbol {
 	var out []*Symbol
 	seen := make(map[*Symbol]bool)
 	for _, fqn := range idx.childKeys(prefix) {
-		for _, sym := range idx.fqn[fqn] {
+		for _, sym := range idx.fqn.at(fqn) {
 			if !seen[sym] {
 				seen[sym] = true
 				out = append(out, sym)
@@ -1318,12 +1414,12 @@ type RootBinding struct {
 // 8.2.3.3). A caller gating those names by their element filters needs the name,
 // since a borrowed symbol's own name is not the root name it appears under.
 func (idx *Index) TopLevelBindings(doc string) []RootBinding {
-	claimed := idx.docReexports[doc]
+	claimed := idx.docReexports.at(doc)
 	var out []RootBinding
 	seen := make(map[*Symbol]bool)
 	for _, fqn := range idx.childKeys("") {
-		hidden := idx.hidden[fqn]
-		for _, sym := range idx.fqn[fqn] {
+		hidden := idx.hidden.at(fqn)
+		for _, sym := range idx.fqn.at(fqn) {
 			if seen[sym] {
 				continue
 			}
@@ -1350,8 +1446,8 @@ func (idx *Index) LookupDirectChildrenFrom(prefix, fromFQN string) []*Symbol {
 	var out []*Symbol
 	seen := make(map[*Symbol]bool)
 	for _, fqn := range idx.childKeys(prefix) {
-		hidden := idx.hidden[fqn]
-		for _, sym := range idx.fqn[fqn] {
+		hidden := idx.hidden.at(fqn)
+		for _, sym := range idx.fqn.at(fqn) {
 			if seen[sym] || hidden[sym] {
 				continue
 			}
@@ -1406,18 +1502,18 @@ func FQNOf(sym *Symbol) string {
 // DocumentOfRoot returns the name of the document whose root scope this is, or
 // "" for any other scope.
 func (idx *Index) DocumentOfRoot(scope *Scope) string {
-	return idx.docOfRoot[scope]
+	return idx.docOfRoot.at(scope)
 }
 
 // DocumentRoot returns the root scope for the named document, or nil.
 func (idx *Index) DocumentRoot(name string) *Scope {
-	return idx.docRoots[name]
+	return idx.docRoots.at(name)
 }
 
 // DocumentKind returns a document's recorded language, or infers it from its
 // name when the document was added without an explicit language.
 func (idx *Index) DocumentKind(name string) source.Kind {
-	if kind, ok := idx.docKinds[name]; ok {
+	if kind, ok := idx.docKinds.get(name); ok {
 		return kind
 	}
 	return source.KindOf(name)

@@ -179,7 +179,7 @@ func TestExpandWildcardImportsKeepsAnOwnedNameOwnedAcrossACycle(t *testing.T) {
 	idx.ExpandWildcardImports()
 
 	got := idx.LookupQualified("A::Widget")
-	if len(got) != 1 || idx.declaredAt[got[0]] != "A::Widget" {
+	if len(got) != 1 || idx.declaredAt.at(got[0]) != "A::Widget" {
 		t.Errorf("LookupQualified(A::Widget) = %d symbol(s), want A's own: "+
 			"`import B::*` re-exporting it back does not make it borrowed", len(got))
 	}
@@ -214,7 +214,7 @@ func TestExpandWildcardImportsIgnoresAnAmbiguousTarget(t *testing.T) {
 		"package P { public import A::*; public import B::*; public import Shared::*; }")
 	idx.ExpandWildcardImports()
 
-	if got := len(idx.fqn["P::Shared"]); got != 2 {
+	if got := len(idx.fqn.at("P::Shared")); got != 2 {
 		t.Fatalf("P::Shared names %d symbols, want the 2 re-exports this case needs", got)
 	}
 	for _, fqn := range []string{"P::FromA", "P::FromB"} {
