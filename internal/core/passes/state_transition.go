@@ -187,8 +187,12 @@ func (c *transitionChecker) startsOf(
 	if !bare || target == nil {
 		return nil
 	}
-	decl, ok := c.resolver.Endpoint(scope, target)
-	if !ok || !m.vertices[decl] {
+	sym, ok := c.resolver.EndpointSymbol(scope, target)
+	if !ok {
+		return nil
+	}
+	decl := sym.Decl
+	if !m.vertices[decl] && !inheritedStateVertex(sym) {
 		return nil
 	}
 	if _, pseudostate := decl.(*ast.PseudostateNode); pseudostate {
@@ -211,8 +215,12 @@ func (c *transitionChecker) checkEndpoint(
 	if qn == nil {
 		return nil
 	}
-	decl, ok := c.resolver.Endpoint(scope, qn)
-	if !ok || m.vertices[decl] {
+	sym, ok := c.resolver.EndpointSymbol(scope, qn)
+	if !ok {
+		return nil
+	}
+	decl := sym.Decl
+	if m.vertices[decl] || inheritedStateVertex(sym) {
 		return decl
 	}
 	// A `first m then x` marker gets no incoming transition (UML 15.7.18), so a
@@ -228,6 +236,18 @@ func (c *transitionChecker) checkEndpoint(
 	c.report(qn.Span(), CodeEndpointNotOfMachine, fmt.Sprintf(
 		lower.NotAVertexFormat, endpointText(qn), lower.VertexKind(decl)))
 	return decl
+}
+
+func inheritedStateVertex(sym *symbols.Symbol) bool {
+	if sym == nil || sym.Decl != nil || sym.Kind != symbols.SymbolStateUsage {
+		return false
+	}
+	for _, fqn := range sym.SuperFQNs {
+		if fqn == "States::StateAction" {
+			return true
+		}
+	}
+	return false
 }
 
 // report records one diagnostic of this pass.

@@ -218,6 +218,45 @@ func TestResolveEndpointEntryActionIsAVertex(t *testing.T) {
 	}
 }
 
+func TestResolveEndpointEntryActionUsesNearestRegionBinding(t *testing.T) {
+	r := resolveDoc(t, "d.sysml", `
+		state def M {
+			state left {
+				entry action initial { }
+				state ready;
+				transition initial then ready;
+			}
+			state right {
+				entry action initial { }
+				state ready;
+				transition initial then ready;
+			}
+		}
+	`)
+	if len(r.Diagnostics) != 0 {
+		t.Fatalf("expected each region's entry action to resolve locally, got %v", r.Diagnostics)
+	}
+}
+
+func TestResolveEndpointActionBodyWinsOverEnclosingState(t *testing.T) {
+	r := resolveDoc(t, "d.sysml", `
+		state def M {
+			state outer {
+				action inner {
+					action first;
+					action second;
+					succession path first first then second;
+				}
+			}
+		}
+	`)
+	for _, diagnostic := range r.Diagnostics {
+		if strings.Contains(diagnostic.Message, "is not a state or pseudostate") {
+			t.Errorf("nested action endpoint reported as state vertex: %s", diagnostic.Message)
+		}
+	}
+}
+
 func TestResolveEndpointOrdinaryActionIsNotAVertex(t *testing.T) {
 	r := resolveDoc(t, "d.sysml", `
 		state def M {

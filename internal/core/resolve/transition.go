@@ -34,7 +34,7 @@ func (r *Resolver) ResolveEndpoint(scope *symbols.Scope, qn *ast.QualifiedName) 
 			// leaving the qualifiers saying which state or region it lives in.
 			Fixes: endpointFixes(last.Text, last.Span, r.vertexSuggestions(scope, qn)),
 		})
-	case !isVertex(sym.Decl) && !startAction(sym):
+	case stateMachineEndpoint(scope) && !endpointIsVertex(r, scope, qn, sym):
 		r.report(Diagnostic{
 			Span:    qn.Span(),
 			Message: "transition endpoint " + qnText(qn) + " is not a state or pseudostate",
@@ -46,6 +46,14 @@ func (r *Resolver) ResolveEndpoint(scope *symbols.Scope, qn *ast.QualifiedName) 
 		r.endpoints[qn] = res
 	}
 	return res.sym, res.ok
+}
+
+// EndpointSymbol returns the resolved symbol for a transition endpoint.
+func (r *Resolver) EndpointSymbol(scope *symbols.Scope, qn *ast.QualifiedName) (*symbols.Symbol, bool) {
+	var sym *symbols.Symbol
+	var ok bool
+	r.aside(func() { sym, ok = r.ResolveEndpoint(scope, qn) })
+	return sym, ok
 }
 
 // Endpoint returns the declaration an endpoint names, which lowering builds its
@@ -90,13 +98,100 @@ func (r *Resolver) lookupEndpoint(scope *symbols.Scope, qn *ast.QualifiedName) (
 	var sym *symbols.Symbol
 	var ok bool
 	r.aside(func() { sym, ok = r.resolveQualified(scope, qn, nil) })
-	if ok && isVertex(sym.Decl) {
+	if ok && endpointIsVertex(r, scope, qn, sym) {
 		return sym, true
 	}
 	if vertex, found := firstVertex(machineScope(scope), qualifiedParts(qn)); found {
 		return vertex, true
 	}
 	return sym, ok
+}
+
+func endpointIsVertex(r *Resolver, scope *symbols.Scope, qn *ast.QualifiedName, sym *symbols.Symbol) bool {
+	if sym == nil {
+		return false
+	}
+	if isVertex(sym.Decl) {
+		return true
+	}
+	if startAction(sym) {
+		return true
+	}
+	if !stateMachineEndpoint(scope) {
+		return false
+	}
+	return r.machineStateVertex(scope, qn, sym)
+}
+
+func isVertexSymbol(sym *symbols.Symbol) bool {
+	if sym == nil {
+		return false
+	}
+	if isVertex(sym.Decl) {
+		return true
+	}
+	if sym.Decl != nil || sym.Kind != symbols.SymbolStateUsage {
+		return false
+	}
+	for _, fqn := range sym.SuperFQNs {
+		if fqn == "States::StateAction" {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *Resolver) machineStateVertex(scope *symbols.Scope, qn *ast.QualifiedName, sym *symbols.Symbol) bool {
+	if !isVertexSymbol(sym) || r.model == nil || qn == nil || len(qn.Parts) == 0 {
+		return false
+	}
+	var machine *symbols.Symbol
+	for s := scope; s != nil; s = s.Parent() {
+		switch n := s.Node().(type) {
+		case *ast.Definition:
+			if n.Kind == ast.DefState {
+				machine = s.Owner()
+			}
+		case *ast.Usage:
+			if n.Kind == ast.UsageState {
+				machine = s.Owner()
+			}
+		}
+		if machine != nil {
+			break
+		}
+	}
+	if machine == nil {
+		return false
+	}
+	name := qn.Parts[len(qn.Parts)-1].Text
+	member, ok := r.model.LookupMember(machine, name)
+	if !ok || member == nil {
+		return false
+	}
+	return member == sym || r.idx.GetFQN(member) == r.idx.GetFQN(sym)
+}
+
+func stateMachineEndpoint(scope *symbols.Scope) bool {
+	for s := scope; s != nil; s = s.Parent() {
+		switch n := s.Node().(type) {
+		case *ast.Definition:
+			switch n.Kind {
+			case ast.DefState:
+				return true
+			case ast.DefAction:
+				return false
+			}
+		case *ast.Usage:
+			switch n.Kind {
+			case ast.UsageState:
+				return true
+			case ast.UsageAction:
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // endpointMessage is what an endpoint resolving to nothing reports: the ordinary
