@@ -14,6 +14,10 @@ type MetadataTypePass struct{}
 
 func (MetadataTypePass) Level() PassLevel { return LevelType }
 
+// The rule judges one annotation at a time and reports nothing about an
+// annotation whose own metaclass does not resolve, so it needs no clean file.
+func (MetadataTypePass) SelfGated() {}
+
 func (MetadataTypePass) Run(ctx *Context, name string, root *ast.RootNamespace) []Diagnostic {
 	rootScope := ctx.Index.DocumentRoot(name)
 	if rootScope == nil {

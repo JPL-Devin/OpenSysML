@@ -10,19 +10,23 @@ Measured on `main` at `07dc713c` and on the branch, with `go run ./cmd/pilot-xpe
 
 | Oracle | `main` | Branch |
 |---|---|---|
-| Xpect | 1326 expectations: 1172 agree (239 wording-only), 154 disagree | 1323 expectations: 1187 agree (239 wording-only), 136 disagree |
+| Xpect | 1326 expectations: 1172 agree (239 wording-only), 154 disagree | 1323 expectations: 1216 agree (239 wording-only), 107 disagree |
 | Differential | 353 files, 312 fully agreeing; 25 agreed, 139 only ours, 73 only the pilot's | 353 files, 313 fully agreeing; 25 agreed, 138 only ours, 73 only the pilot's |
-| Rejection | 120 cases: 114 both reject, 6 only the pilot rejects, 0 only we reject | 120 cases: 115 both reject, 5 only the pilot rejects, 0 only we reject |
+| Rejection | 120 cases: 114 both reject, 6 only the pilot rejects, 0 only we reject | 120 cases: 116 both reject, 4 only the pilot rejects, 0 only we reject |
 
-Row keys were compared, not totals, and against a fresh run of each oracle on `main` rather than the
-committed baselines, which the wave owner rebaselines: 18 Xpect rows became agreements and **no row
-became a disagreement**, in any of the three. Three of the 18 are not a behaviour change and are
+The branch column is measured after merging `main`, so it also carries the other wave-11 slices'
+movement; the rows attributable to this slice are named below.
+
+Row keys were compared, not totals, and against a fresh run of each oracle rather than the committed
+baselines, which the wave owner rebaselines: 22 Xpect rows became agreements — 18 measured against
+`main` at `07dc713c` before this branch merged current `main`, and the four concrete-type rows
+measured on the merged tree — and **no row became a disagreement**, in any of the three. Three of the 18 are not a behaviour change and are
 reported as such in [the expectation-count correction](#the-expectation-count-correction) below. The
 differential moved by exactly one row (`Simple Tests/MetadataTest.kerml`:53) and the rejection corpus
 by exactly one case (`xpect/p11-metadata-body-not-evaluable.sysml`, now rejected by both).
 
-Of the 23 rows the slice owns, **14 closed** and 9 stand: the four span rows and the four
-concrete-type rows below, and `SemanticMetadata_valid.sysml.xt`:53, which is a grammar gap.
+Of the 23 rows the slice owns, **18 closed** and 5 stand: the four span rows below and
+`SemanticMetadata_valid.sysml.xt`:53, which is a grammar gap.
 
 ---
 
@@ -69,6 +73,29 @@ One ratchet line moved with it: `kerml-examples/Simple Tests/MetadataTest.kerml`
 records it as `openSysMLOnly` and the pinned validator is silent — and `feature :>> cc;` resolves now
 that the annotated element's `baseType` is the branch its metaclass selects.
 
+### The four `Must have a concrete type` rows on `@A;` — gating granularity, not tier
+
+`MetadataTests_SemanticMetadata_invalid.kerml.xt`:49 and :63 and `SemanticMetadata_invalid.sysml.xt`
+:65 and :79 declare `Must have a concrete type` on an `@A;` annotation whose metaclass is abstract.
+The rule (`passes/w8c_metadata_type.go`) was correct in isolation but never ran on these files: both
+declare, a few lines later, a `feature :>> x;` whose redefinition target does not resolve, and a
+name-resolution error used to skip every higher-level pass for the whole document
+(`passes/registry.go`). The reference is EMF/Xtext, where a linking failure on one element does not
+stop validation of the others, which is why it reports both diagnostics — so our divergence was a
+gating-granularity artefact, not a spec position.
+
+Moving the rule to a lower tier was measured and rejected (a concrete-type error at the
+name-resolution tier then blocks the constraint tier and suppresses filter diagnostics elsewhere),
+and making name-resolution errors non-blocking wholesale would uncap cascade noise. Instead the pass
+now declares `passes.SelfGated`: it judges one annotation at a time and asks whether *its own*
+metaclass resolved, so it is exempt from document-level skipping while an unresolved metaclass still
+yields nothing. This is the same reasoning `Diagnostic.Blocking()` already applies to `Notation`
+errors. Only this pass opts in; general element-scoped gating across the registry remains a
+wave-12 decision. `TestW8CMetadataAbstractTypeIsElementScoped` locks both directions — reported
+despite an unresolved feature elsewhere, silent when the annotation's own metaclass is unresolved —
+and `TestRegistryRunsSelfGatedPassAfterError` locks that non-opted passes are still skipped.
+All four rows now agree, with no other Xpect row moving in either direction.
+
 ## What did not move, and why
 
 ### The four `Must be model-level evaluable` rows in a metadata body — a span divergence
@@ -83,21 +110,6 @@ The pilot attaches the constraint to the `FeatureValue` relationship, whose text
 parser to record the binding token, which is wave 11B's package, so the divergence is left standing
 rather than approximated. It is a real divergence, not a wording difference: the rule and the element
 agree, the span does not.
-
-### The four `Must have a concrete type` rows on `@A;` — tier gating
-
-`MetadataTests_SemanticMetadata_invalid.kerml.xt`:49 and :63 and `SemanticMetadata_invalid.sysml.xt`
-:65 and :79 declare `Must have a concrete type` on an `@A;` annotation whose metaclass is abstract.
-We implement that rule (`passes/w8c_metadata_type.go`) and it is correct in isolation, but it never
-runs on these files: both declare, a few lines later, a `feature :>> x;` whose redefinition target
-does not resolve — an error both implementations report and whose row agrees — and a name-resolution
-error skips every higher tier (`passes/registry.go`, and AGENTS.md's tiered-passes invariant).
-
-The reference has no tiers, so it reports both. Closing these rows means either running the type tier
-after name-resolution errors, or moving this one rule down a tier; the second was measured and
-rejected — a concrete-type error at the name-resolution tier then blocks the constraint tier and
-suppresses filter diagnostics elsewhere. The first is an architecture-wide decision affecting every
-slice, so it is an **adjudication question for the wave owner**, not a change made here.
 
 ### An unresolved invocation target draws one diagnostic, not two
 
