@@ -188,11 +188,11 @@ func (tc *typeChecker) checkTrigger(scope *symbols.Scope, trigger ast.Node) {
 type declKind struct {
 	// lang is the language of the document the declaration is written in: the
 	// KerML type layer has no definition/usage split to check against.
-	lang      source.Kind
-	isDef     bool
-	defKind   ast.DefinitionKind
-	useKind   ast.UsageKind
-	direction ast.FeatureDirection
+	lang        source.Kind
+	isDef       bool
+	defKind     ast.DefinitionKind
+	useKind     ast.UsageKind
+	direction   ast.FeatureDirection
 	isReference bool
 	hasType     bool
 	// isEnd marks a feature declared with the `end` modifier, whose type is that
@@ -405,7 +405,7 @@ func usageDeclHasDefinitionKind(decl *ast.Usage) bool {
 	_, _, ok := pilotTypingMessage(declKind{
 		useKind: decl.Kind,
 		keyword: decl.Keyword,
-		span:     decl.Span(),
+		span:    decl.Span(),
 	})
 	return ok
 }
