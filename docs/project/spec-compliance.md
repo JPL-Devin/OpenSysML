@@ -1138,13 +1138,23 @@ duplicate-inherited-member warning masking a set of unimplemented usage-typing a
 specialization constraints. Oracles, measured on this tree against a control
 build of `main` (07dc713c): Xpect 1172 → 1197 agreeing (154 → 129 disagreeing, 25 rows
 removed and none added), rejection 114 → 115 both rejecting (6 → 5 only the pilot). The
-differential does **not** move: `main` and this branch both measure 353 files, 312 fully
-agreeing, 139 only ours — the `311 / 142` figure in the wave-11 briefing predates the
-merge of #477 and does not reproduce.
+differential does **not** move, and re-measured on the merged tree it measures 353 files,
+311 fully agreeing, 142 only ours — byte-identical to the pre-11A baseline, so the wave-11
+briefing's `311 / 142` stands and the `312 / 139` this section first recorded was a
+mis-measurement.
+
+**The differential's `Vehicle` duplicate-inherited family is therefore still open.**
+`sysml-examples/Vehicle Example/Annex_A_VehicleViews.sysml` still carries eight of these
+warnings on the merged tree (four names at each of lines 686 and 712, both `:> vehicle_b`
+where `vehicle_b : Vehicle` redeclares those four names). They come from the resolver's
+`checkInheritedAmbiguity` in `resolve/distinguishability.go`, a second producer of this
+wording that 11A did not touch, so the canonicalization below fixes the pass-tier producer
+only. `TestW11ADiamondRedefinitionIsNotDuplicate` is a guard on that producer, not evidence
+that the corpus family closed.
 
 | Semantic Rule | Implementation | Test Case | Status |
 |--------------|----------------|-----------|--------|
-| A name reached through two supertypes is a duplicate only where two *distinct* features survive: one feature reached over two paths is one member, a redefinition hides what it redefines, and a nearer subtype's declaration supersedes its supertype's (KerML 8.3.3.1 Specialization, 8.4.3.2 Redefinition; `checkTypeDistinguishability`) | `passes/w9c_inherited_name_conflict.go`: candidates carry both the declaring type and the member, and `conflictingBases` drops a member another candidate redefines, a duplicate of the same member, and a candidate whose declaring type another candidate specializes | `passes/w11a_rules_test.go` `TestW11ADiamondRedefinitionIsNotDuplicate` (the `Vehicle`/`vehicle_b` diamond of `sysml-examples/Vehicle Example/Annex_A_VehicleViews.sysml`, the differential's false-positive family — which no longer reproduces on `main` either, so this is a guard against reintroducing it rather than a measured fix), `TestW11AImplicitValueTypingDiamond`, `passes/w9c_rules_test.go` | ✅ Faithful |
+| A name reached through two supertypes is a duplicate only where two *distinct* features survive: one feature reached over two paths is one member, a redefinition hides what it redefines, and a nearer subtype's declaration supersedes its supertype's (KerML 8.3.3.1 Specialization, 8.4.3.2 Redefinition; `checkTypeDistinguishability`) | `passes/w9c_inherited_name_conflict.go`: candidates carry both the declaring type and the member, and `conflictingBases` drops a member another candidate redefines, a duplicate of the same member, and a candidate whose declaring type another candidate specializes | `passes/w11a_rules_test.go` `TestW11ADiamondRedefinitionIsNotDuplicate` (the `Vehicle`/`vehicle_b` diamond of `sysml-examples/Vehicle Example/Annex_A_VehicleViews.sysml`; the corpus family itself still reproduces from the resolver-tier producer, as noted above, so this guards the pass tier rather than measuring that family closed), `TestW11AImplicitValueTypingDiamond`, `passes/w9c_rules_test.go` | ✅ Faithful |
 | One warning per duplicated name, at the declaration; a referenced feature chain (`perform b.a;`, `exhibit s.sa;`, `event a.areal;`) is an owned feature of its own and repeats them at the chain (KerML 8.3.3.2 feature chaining) | `passes/w9c_inherited_name_conflict.go` `check`/`chainSpans`: names are reported individually and each conflict is reported at the declaration span and at every referenced chain | `passes/w11a_rules_test.go`, `passes/w10b_reference_bases_test.go` (now asserting the chain's own warning). Closes `ActionUsage_invalid.sysml.xt:61`, `StateUsage_invalid.sysml.xt:87`, `OccurrenceUsage_invalid.sysml.xt:59` | ✅ Faithful |
 | A feature's implicit `Base::DataValue` typing applies only where nothing else classifies it: a definition typing it, a subsetting or a redefinition supplies its type, but a *feature* typing it does not (KerML 8.4.2) | `passes/w9c_inherited_name_conflict.go` `libraryBases`/`typedByFeatureOnly` | `passes/w11a_rules_test.go` `TestW11AImplicitValueTypingDiamond`. Closes `AttributeUsage_invalid.sysml.xt:47,52` | ✅ Faithful |
 | A specialization cycle leaves both ends their kind's implicit base: an edge on the path back to the declaration itself reaches no base (KerML 8.4.2 with 8.3.3.1) | `semantics/implicit.go` `declaredGeneralizationReaches` skips a target already being visited | `passes/w11a_rules_test.go` `TestW11ASpecializationCycleKeepsImplicitBase`. Closes the `Specialization_invalid.kerml.xt` cycle row | ✅ Faithful |
