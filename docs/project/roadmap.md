@@ -174,6 +174,31 @@ same blindness while you are there.
 Do it after 11G lands, not beside it: the two would edit the same resolution entry points, and
 the editor behaviour is only testable once the scope is real.
 
+## L2 — tier gating is per document, and the reference's is per element (scheduled, wave 12)
+
+`Registry.Run` (`internal/core/passes/registry.go`) skips every pass at a strictly higher level
+once any pass emits a blocking error, for the **whole document**. The reference is EMF/Xtext,
+where a linking failure on one element does not stop validating the others — which is why it
+reports an unresolved reference *and* `Must have a concrete type` in one file where we report
+only the first. The divergence is a policy of ours, not a position the specification takes.
+
+Wave 11D raised this as an adjudication question and offered two ways out; both were refused.
+Moving a rule down a tier buys one row by suppressing filter diagnostics elsewhere (11D measured
+that), and making name-resolution errors non-blocking wholesale uncaps cascade noise across every
+corpus. The remaining answer is to narrow the gate: a higher-tier pass skips the elements whose
+own resolution failed, not the file.
+
+`Diagnostic.Blocking()` is the precedent for how a non-gating error is already expressed — a
+`Notation` error concerns the writing rather than the meaning, so it gates nothing. This item
+generalizes that from a per-diagnostic flag to a per-element question, which means `Context`
+gaining a way for a pass to ask whether the element it is about to check is downstream of a
+resolution failure.
+
+Adjudicate before implementing: cascade noise is the reason the coarse gate exists, so the
+measure of success is the Xpect and differential oracles moving *without* a rise in only-ours
+rows. Take it after wave 11 lands, since several slices' rows sit behind this gate and would
+otherwise be re-measured twice.
+
 ---
 
 # Track D — model persistence and RDF interchange
@@ -496,5 +521,6 @@ Tracks A, B, C, P and T1 are closed and their entries are removed; what is left 
    **D8** (the OWL-ontology output profile) is optional and additive: its domain/range gate is
    worth having as soon as the profile's term table exists, but the profile only becomes fully
    conformant behind D3.3, D2 and D1, so it does not belong ahead of them.
-3. **L1** in wave 12, after wave 11G's annotation-body scope lands. It is independent of the
-   release section and of Track D.
+3. **L1** in wave 12, after wave 11G's annotation-body scope lands, and **L2** after wave 11 as a
+   whole, since slices' rows sit behind the gate it narrows. Both are independent of the release
+   section and of Track D.
