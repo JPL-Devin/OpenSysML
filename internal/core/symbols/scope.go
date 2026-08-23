@@ -39,11 +39,7 @@ func (s *Scope) Parent() *Scope { return s.parent }
 func (s *Scope) Owner() *Symbol { return s.owner }
 
 // SetOwner sets the symbol that owns this scope (for inheritance lookup).
-func (s *Scope) SetOwner(sym *Symbol) {
-	if s != nil && s.owner == nil {
-		s.owner = sym
-	}
-}
+func (s *Scope) SetOwner(sym *Symbol) { s.owner = sym }
 
 // Node returns the AST node that owns this scope, or nil for synthetic scopes.
 func (s *Scope) Node() ast.Node { return s.node }

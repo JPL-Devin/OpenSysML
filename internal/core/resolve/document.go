@@ -431,7 +431,9 @@ func (r *Resolver) resolveMetadataPrefix(scope *symbols.Scope, prefix *ast.Prefi
 		return
 	}
 	// Body values resolve against the metadata definition, not the annotated element.
-	body.SetOwner(owner)
+	if body.Owner() == nil {
+		body.SetOwner(owner)
+	}
 	r.resolveMetadataBody(body, prefix.Body)
 }
 
