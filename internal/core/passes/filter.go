@@ -76,9 +76,9 @@ func (fc *filterChecker) check(f symbols.ElementFilter) {
 	}
 }
 
-// gated reports whether the condition rests on a type reference a lower tier
-// could not resolve: the type a classification test names, also under boolean
-// composition, where the unresolved reference is the whole fault.
+// gated reports whether the condition rests on something a lower tier could not
+// resolve: the type a classification test names, or any operand of a boolean
+// composition, whose own result is Boolean whatever its operands turn out to be.
 func (fc *filterChecker) gated(expr ast.Node) bool {
 	op, ok := expr.(*ast.OperatorExpr)
 	if !ok {
@@ -90,7 +90,7 @@ func (fc *filterChecker) gated(expr ast.Node) bool {
 	case ast.OpNot, ast.OpAnd, ast.OpConditionalAnd, ast.OpOr, ast.OpConditionalOr,
 		ast.OpXor, ast.OpImplies:
 		for _, o := range op.Operands {
-			if fc.gated(o) {
+			if fc.gated(o) || fc.ctx.DownstreamOfFailure(o) {
 				return true
 			}
 		}

@@ -33,11 +33,21 @@ Two passes opt in, and each names its subject:
 | Pass | Subject | Reference it rests on |
 |---|---|---|
 | `MetadataTypePass` (`w8c_metadata_type.go`) | one annotation | the metaclass the annotation names (this is 11D's rule, now expressed through the general mechanism) |
-| `ElementFilterPass` (`filter.go`) | one filter condition | the type named by a classification operator (`@`, `@@`, `istype`, `hastype`), recursively through the boolean operators |
+| `ElementFilterPass` (`filter.go`) | one filter condition | the type named by a classification operator (`@`, `@@`, `istype`, `hastype`), and any operand of a boolean operator |
 
-`ElementFilterPass` gates only the checks that need the named type to have resolved. An unresolved
-*name* in a filter is still reported — `TestAnUnresolvedNameInAnImportFilterIsReported` is the test
-that keeps that honest.
+`ElementFilterPass` gates only the checks that need something unresolved to have resolved. An
+unresolved *name* standing alone as the condition is still reported — there the unresolved reference
+is the verdict, and the pilot reports its own rule at the same place, so
+`TestAnUnresolvedNameInAnImportFilterIsReported` keeps that honest.
+
+A boolean composition is the one place where an unresolved *ordinary* name gates too. `A and B`
+yields a truth value whatever `A` and `B` turn out to be, so a fault it draws can only come from an
+operand — and an operand that did not resolve already has its verdict. Adversarial fixtures found
+this the hard way: gating classification types alone made `filter @Safe and Undefined;` and
+`filter Undefined1 and Undefined2;` draw a `Must be model-level evaluable` of ours where the pilot
+reports nothing, a false positive on shapes that appear in no corpus (so no oracle count would have
+caught it). `TestAnUnresolvedOperandOfABooleanFilterYieldsOnlyTheUnresolvedReference` locks it, and
+the three oracles are byte-identical with and without the extra gating.
 
 ## Measurements (fresh cache, pinned pilot `2026-05` / `0.60.1`)
 
@@ -95,8 +105,21 @@ behind the gate. Each is a rule we do not implement.
 None of these needs both this gate and another slice: **each needs only the other slice.** The gate
 is not on their path, measured rather than argued.
 
+One pre-existing defect surfaced while checking the concrete-type family and is **not** caused by
+this change — it reproduces identically on the base commit. Our `Must have a concrete type` is
+reported at `1:1`, the start of the file, where the pilot reports it at the annotation's own line;
+toggling the annotation confirms the annotation is what causes it. Category: **our defect**, owner
+`w8c_metadata_type.go` (the diagnostic's span). While the span is wrong the row can never register
+as agreement in the differential no matter how the gate is scoped, so ungating it here would not
+have helped.
+
 ## Verification
 
 `go build ./...`, `go vet ./...`, `gofmt -l .`, `go test ./...`, `make docs-counts` and
 `python3 scripts/check-doc-links.py` are clean. All three committed baselines are byte-identical to
-a final fresh-cache run of the shipped tree.
+a final fresh-cache run of the shipped tree — confirmed again after the boolean-composition gating
+was added, so that fix moves no oracle count. The ratchets pass with
+`OPENSYSML_REQUIRE_PILOT_CORPORA=1 OPENSYSML_REQUIRE_TRAINING_CORPUS=1` (no skips), the differential
+is byte-identical across two runs under different fresh caches, and the only-ours multiset was
+compared against the base commit row by row (keyed by root, file, line, severity and category with
+multiplicity): **no row present on this branch is absent on base**.

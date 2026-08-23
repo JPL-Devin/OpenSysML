@@ -683,6 +683,22 @@ func TestAnUnresolvedNameInAnImportFilterIsReported(t *testing.T) {
 	}
 }
 
+// A boolean composition yields a truth value whatever its operands are, so an
+// operand a lower tier could not resolve is the whole fault — the reference the
+// pinned pilot reports nothing else about either.
+func TestAnUnresolvedOperandOfABooleanFilterYieldsOnlyTheUnresolvedReference(t *testing.T) {
+	src := "package P { metadata def Safe; filter @Safe and Undefined; }"
+	ws := NewWorkspace()
+	ws.Open("file:///a.sysml", []byte(src), 1)
+	var msgs []string
+	for _, d := range ws.Diagnostics("file:///a.sysml") {
+		msgs = append(msgs, d.Message)
+	}
+	if len(msgs) != 1 || !strings.Contains(msgs[0], "unresolved reference: Undefined") {
+		t.Fatalf("an unresolved operand of a boolean filter should be the only fault, got %v", msgs)
+	}
+}
+
 // TestEditorResolutionMatchesDiagnosticsForARootImport locks the editor read
 // path (go-to-definition, hover, rename) to the same verdict the diagnostics
 // give: a document builds its own scope tree, whose document the index does not
