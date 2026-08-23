@@ -447,30 +447,11 @@ func RewriteBlock(content string, spec Block, counts RefereedCounts) (string, er
 	return strings.Join(updated, "\n"), nil
 }
 
+// blockTemplateData is the baseline census plus the consumer's own link prefix.
 type blockTemplateData struct {
-	Name                   string
-	LinkPrefix             string
-	PilotTag               string
-	PilotArtifact          string
-	FilesAgreeing          int
-	Files                  int
-	OursOnly               int
-	PilotOnly              int
-	DeclaredErrors         int
-	Silent                 int
-	DeclaredAgree          int
-	WordingOnly            int
-	LocationOnly           int
-	SeverityDiffers        int
-	Elsewhere              int
-	ScopeExact             int
-	ScopeTotal             int
-	RejectCases            int
-	RejectDefaultPilotOnly int
-	RejectDefaultBoth      int
-	RejectStrictOnly       int
-	SelfAssessed           int
-	RuleTotal              int
+	RefereedCounts
+	Name       string
+	LinkPrefix string
 }
 
 const refereedBlockTemplateText = "<!-- doc-counts:begin {{.Name}} -->\n" +
@@ -481,37 +462,13 @@ const refereedBlockTemplateText = "<!-- doc-counts:begin {{.Name}} -->\n" +
 	"- **Permissiveness gaps:** of {{.RejectCases}} invalid models we wrote ourselves, the reference rejects {{.RejectDefaultPilotOnly}} that we accept by default, and {{.RejectDefaultBoth}} both reject; {{.RejectStrictOnly}} further cases agree only when we are asked strictly. We authored every one of these cases ourselves, so the denominator measures the reach of our own corpus and not our conformance; agreement reached only under an opt-in strict mode is weaker evidence than agreement by default ([rejection oracle]({{.LinkPrefix}}pilot-rejection.md), `go run ./cmd/pilot-reject`).\n" +
 	"- **Self-assessed surface:** {{.SelfAssessed}} of the tracked rules have no external referee at all — the action, state-machine and classifier-behavior rows, which the four numbers above cannot see, because the pinned artifact evaluates expressions but executes neither actions nor state machines.\n\n" +
 	"What these numbers cannot show: the OMG corpora are demonstrations rather than an official conformance suite; the differential is one-directional, comparing the diagnostics the two implementations report on the same files; the Xpect suites are the pilot authors' test intent rather than a certification oracle; and none of these is a percentage of the specification — no global compliance figure is claimed anywhere.\n\n" +
-	"**Row bookkeeping:** the ✅/⚠️/❌/⛔ status of each of the {{.RuleTotal}} tracked rules stays in [spec compliance]({{.LinkPrefix}}spec-compliance.md) as a census of our own row list. It moves when rows are rewritten and does not move when an oracle does, so it is not the progress measure.\n" +
+	"**Row bookkeeping:** the ✅/⚠️/❌/⛔ status of each of the {{.RuleCounts.Total}} tracked rules stays in [spec compliance]({{.LinkPrefix}}spec-compliance.md) as a census of our own row list. It moves when rows are rewritten and does not move when an oracle does, so it is not the progress measure.\n" +
 	"<!-- doc-counts:end {{.Name}} -->"
 
 var refereedBlockTemplate = template.Must(template.New("refereed-figures").Parse(refereedBlockTemplateText))
 
 func renderBlock(spec Block, counts RefereedCounts) (string, error) {
-	data := blockTemplateData{
-		Name:                   spec.Name,
-		LinkPrefix:             spec.LinkPrefix,
-		PilotTag:               counts.PilotTag,
-		PilotArtifact:          counts.PilotArtifact,
-		FilesAgreeing:          counts.FilesAgreeing,
-		Files:                  counts.Files,
-		OursOnly:               counts.OursOnly,
-		PilotOnly:              counts.PilotOnly,
-		DeclaredErrors:         counts.DeclaredErrors,
-		Silent:                 counts.Silent,
-		DeclaredAgree:          counts.DeclaredAgree,
-		WordingOnly:            counts.WordingOnly,
-		LocationOnly:           counts.LocationOnly,
-		SeverityDiffers:        counts.SeverityDiffers,
-		Elsewhere:              counts.Elsewhere,
-		ScopeExact:             counts.ScopeExact,
-		ScopeTotal:             counts.ScopeTotal,
-		RejectCases:            counts.RejectCases,
-		RejectDefaultPilotOnly: counts.RejectDefaultPilotOnly,
-		RejectDefaultBoth:      counts.RejectDefaultBoth,
-		RejectStrictOnly:       counts.RejectStrictOnly,
-		SelfAssessed:           counts.SelfAssessed,
-		RuleTotal:              counts.RuleCounts.Total,
-	}
+	data := blockTemplateData{RefereedCounts: counts, Name: spec.Name, LinkPrefix: spec.LinkPrefix}
 	var rendered strings.Builder
 	if err := refereedBlockTemplate.Execute(&rendered, data); err != nil {
 		return "", fmt.Errorf("render refereed figures: %w", err)
