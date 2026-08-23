@@ -33,7 +33,7 @@ func (r *Resolver) resolveTarget(scope *symbols.Scope, target ast.Node, hide *re
 		}
 		return r.resolveQualified(scope, t.Name, hide)
 	case *ast.FeatureChainExpr:
-		owner, ok := r.resolveTarget(scope, t.Operand, hide)
+		owner, ok := r.resolveTarget(scope, t.Operand, hide.forPrefix())
 		if !ok || t.Member == nil {
 			return nil, false
 		}
@@ -55,8 +55,12 @@ func (r *Resolver) resolveTarget(scope *symbols.Scope, target ast.Node, hide *re
 // it: the semantic model reads a redefinition without knowing it is a naming
 // feature, and must still reach the redefined feature.
 type refFilter struct {
-	decl         ast.Node
-	namingTarget ast.Node
+	decl             ast.Node
+	namingTarget     ast.Node
+	targetName       string
+	hideBorrowedName bool
+	skipNamingTarget bool
+	skipBorrowedName bool
 }
 
 // hides reports whether sym is a binding a reference target must not see.
@@ -64,10 +68,19 @@ func (f *refFilter) hides(sym *symbols.Symbol) bool {
 	if f == nil || sym == nil {
 		return false
 	}
-	if f.decl != nil && (sym.Decl == f.decl || namedByReference(sym)) {
+	if f.decl != nil && sym.Decl == f.decl {
 		return true
 	}
-	return f.namingTarget != nil && sym.NamingTarget == f.namingTarget
+	if f.namingTarget == nil {
+		return false
+	}
+	if sym.NamingTarget == f.namingTarget {
+		return true
+	}
+	if f.hideBorrowedName && namedByReference(sym) && sym.Name == f.targetName {
+		return true
+	}
+	return false
 }
 
 // namedByReference reports whether sym borrowed its name from a reference
@@ -101,7 +114,31 @@ func (f *refFilter) hiding(target ast.Node) *refFilter {
 	out := refFilter{namingTarget: target}
 	if f != nil {
 		out.decl = f.decl
+		out.skipNamingTarget = f.skipNamingTarget
+		out.skipBorrowedName = f.skipBorrowedName
 	}
+	if out.skipNamingTarget {
+		out.namingTarget = nil
+		out.targetName = ""
+		out.hideBorrowedName = false
+	} else if !out.skipBorrowedName {
+		if qn := ast.AsQualifiedName(target); qn != nil && len(qn.Parts) > 0 {
+			out.targetName = qn.Parts[len(qn.Parts)-1].Text
+			out.hideBorrowedName = true
+		}
+	}
+	return &out
+}
+
+func (f *refFilter) forPrefix() *refFilter {
+	if f == nil {
+		return nil
+	}
+	out := *f
+	out.skipNamingTarget = true
+	out.namingTarget = nil
+	out.targetName = ""
+	out.hideBorrowedName = false
 	return &out
 }
 

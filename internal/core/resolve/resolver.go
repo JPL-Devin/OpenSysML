@@ -45,11 +45,19 @@ type featureChainKey struct {
 	node  *ast.FeatureChainExpr
 }
 
+type filteredMemoKey struct {
+	qn               *ast.QualifiedName
+	decl             ast.Node
+	prefix           bool
+	skipBorrowedName bool
+}
+
 // Resolver performs lazy name resolution over a symbol index, memoizing results
 // keyed by the reference AST node and collecting diagnostics.
 type Resolver struct {
 	idx       *symbols.Index
 	memo      map[ast.Node]resolution
+	filtered  map[filteredMemoKey]resolution
 	resolving map[ast.Node]bool // cycle detection
 	// featureChains are resolved per scope because a chain's leading operand
 	// can resolve differently in different document scopes.
@@ -115,6 +123,7 @@ func New(idx *symbols.Index) *Resolver {
 	return &Resolver{
 		idx:              idx,
 		memo:             map[ast.Node]resolution{},
+		filtered:         map[filteredMemoKey]resolution{},
 		resolving:        map[ast.Node]bool{},
 		featureChains:    map[featureChainKey]resolution{},
 		parts:            map[*ast.QualifiedName][]*symbols.Symbol{},
@@ -262,7 +271,15 @@ func (r *Resolver) resolveQualified(scope *symbols.Scope, qn *ast.QualifiedName,
 		r.aside(func() { sym, ok = r.resolveQualified(scope, qn, hide) })
 		return sym, ok
 	}
-	if res, done := r.memo[qn]; done {
+	cacheMain := hide == nil || hide.skipNamingTarget || hide.skipBorrowedName
+	if cacheMain {
+		if res, done := r.memo[qn]; done {
+			return res.sym, res.ok
+		}
+	} else if res, done := r.filtered[filteredMemoKey{
+		qn: qn, decl: hide.decl, prefix: hide.skipNamingTarget,
+		skipBorrowedName: hide.skipBorrowedName,
+	}]; done {
 		return res.sym, res.ok
 	}
 	// Detect resolution cycles
@@ -277,7 +294,17 @@ func (r *Resolver) resolveQualified(scope *symbols.Scope, qn *ast.QualifiedName,
 	// A failure met during a semantic query is not memoized: the reference it
 	// belongs to must still report when its own document is resolved.
 	if (res.ok || r.quiet == 0) && r.allVisible == 0 {
-		r.memoize(qn, res)
+		if cacheMain {
+			r.memoize(qn, res)
+		} else if res.ok || r.quiet == 0 {
+			r.filtered[filteredMemoKey{
+				qn: qn, decl: hide.decl, prefix: hide.skipNamingTarget,
+				skipBorrowedName: hide.skipBorrowedName,
+			}] = res
+			if !res.ok && r.quiet == 0 {
+				r.memoize(qn, res)
+			}
+		}
 	}
 	return res.sym, res.ok
 }
