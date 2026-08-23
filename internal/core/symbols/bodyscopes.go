@@ -78,6 +78,16 @@ func nodeBodyScope(scope *Scope, node ast.Node) *Scope {
 // bodyScopesInDecl walks the expressions a declaration carries, descending into
 // the child scopes its body resolves against.
 func bodyScopesInDecl(scope *Scope, decl ast.Node) {
+	if prefixes := prefixMetadataOf(decl); len(prefixes) > 0 {
+		for _, prefix := range prefixes {
+			if prefix == nil || len(prefix.Body) == 0 {
+				continue
+			}
+			if child := bodyScopeChild(scope, prefix); child != nil {
+				buildBodyScopes(child, prefix.Body)
+			}
+		}
+	}
 	switch d := decl.(type) {
 	case *ast.Package:
 		if child := bodyScopeChild(scope, d); child != nil {
@@ -89,6 +99,10 @@ func bodyScopesInDecl(scope *Scope, decl ast.Node) {
 		}
 	case *ast.FilterMember:
 		bodyScopesInExpr(scope, d.Condition)
+	case *ast.PrefixMetadata:
+		if child := bodyScopeChild(scope, d); child != nil {
+			buildBodyScopes(child, d.Body)
+		}
 	case *ast.Definition:
 		bodyScopesInRelationships(scope, d.Relationships)
 		if child := bodyScopeChild(scope, d); child != nil {

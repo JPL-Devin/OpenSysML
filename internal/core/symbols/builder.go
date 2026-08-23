@@ -53,6 +53,9 @@ func unwrapMember(m ast.Node) (ast.Node, ast.Visibility) {
 // declaration node. trivia is the leading trivia captured from the member
 // wrapper before unwrap.
 func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Trivia) {
+	if prefixes := prefixMetadataOf(decl); len(prefixes) > 0 {
+		buildMetadataBodyScopes(scope, prefixes)
+	}
 	switch d := decl.(type) {
 	case *ast.Package:
 		child := NewScope(scope, d)
@@ -130,6 +133,10 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 	case *ast.Import, *ast.FilterMember, *ast.ErrorNode:
 		// Imports are processed during resolution; filters hold expressions;
 		// error nodes have no declaration. Nothing to register here.
+	case *ast.PrefixMetadata:
+		if len(d.Body) > 0 {
+			buildMetadataBodyScope(scope, d)
+		}
 	case *ast.InitialNode:
 		// Register initial node by name so transitions can reference it
 		if d.Name != "" {
@@ -262,6 +269,45 @@ func buildDecl(scope *Scope, decl ast.Node, vis ast.Visibility, trivia []ast.Tri
 	case *ast.DecisionNode:
 		buildControlNode(scope, d, d.Name, d.NameSpan, vis, trivia)
 	}
+}
+
+func prefixMetadataOf(decl ast.Node) []*ast.PrefixMetadata {
+	switch d := decl.(type) {
+	case *ast.Package:
+		return d.Prefixes
+	case *ast.Namespace:
+		return d.Prefixes
+	case *ast.Dependency:
+		return d.Prefixes
+	case *ast.Definition:
+		return d.Prefixes
+	case *ast.Usage:
+		return d.Prefixes
+	case *ast.AssumeMember:
+		return d.Prefixes
+	case *ast.RequireMember:
+		return d.Prefixes
+	default:
+		return nil
+	}
+}
+
+func buildMetadataBodyScopes(scope *Scope, prefixes []*ast.PrefixMetadata) {
+	for _, prefix := range prefixes {
+		if prefix != nil && len(prefix.Body) > 0 {
+			buildMetadataBodyScope(scope, prefix)
+		}
+	}
+}
+
+func buildMetadataBodyScope(parent *Scope, prefix *ast.PrefixMetadata) {
+	if parent == nil || prefix == nil || len(prefix.Body) == 0 {
+		return
+	}
+	child := NewScope(parent, prefix)
+	child.markBodyLocal()
+	parent.AddChild(child)
+	buildMembers(child, prefix.Body)
 }
 
 // buildControlNode registers a named fork/join/merge/decision node the way a

@@ -96,7 +96,7 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 	case *ast.PrefixMetadata:
 		// A metadata usage written as a member of its own names its type the same
 		// way a prefix does.
-		r.ResolveQualified(scope, d.Type)
+		r.resolveMetadataPrefix(scope, d)
 	case *ast.FilterMember:
 		r.InCondition(func() { r.resolveExpr(scope, d.Condition) })
 	case *ast.Definition:
@@ -411,9 +411,47 @@ func (r *Resolver) childScope(scope *symbols.Scope, decl ast.Node) *symbols.Scop
 
 func (r *Resolver) resolvePrefixes(scope *symbols.Scope, prefixes []*ast.PrefixMetadata) {
 	for _, p := range prefixes {
-		if p != nil {
-			r.ResolveQualified(scope, p.Type)
+		r.resolveMetadataPrefix(scope, p)
+	}
+}
+
+func (r *Resolver) resolveMetadataPrefix(scope *symbols.Scope, prefix *ast.PrefixMetadata) {
+	if prefix == nil {
+		return
+	}
+	owner, ok := r.ResolveQualified(scope, prefix.Type)
+	if !ok || owner == nil || len(prefix.Body) == 0 {
+		return
+	}
+	if target, aliasOK := r.ResolveAliasTarget(owner); aliasOK {
+		owner = target
+	}
+	body := scope.ChildFor(prefix)
+	if body == nil {
+		return
+	}
+	body.SetOwner(owner)
+	r.resolveMetadataBody(body, owner, prefix.Body)
+}
+
+func (r *Resolver) resolveMetadataBody(scope *symbols.Scope, owner *symbols.Symbol,
+	members []ast.Node) {
+	for _, member := range members {
+		decl, _ := unwrapForResolve(member)
+		if decl == nil {
+			continue
 		}
+		if usage, ok := decl.(*ast.Usage); ok {
+			if target := symbols.MetadataBodyTarget(r.model, owner, usage.Ident); target != nil {
+				for _, sym := range scope.AllMembers() {
+					if sym != nil && sym.Decl == usage {
+						r.redefined[sym] = []*symbols.Symbol{target}
+						break
+					}
+				}
+			}
+		}
+		r.resolveDecl(scope, decl)
 	}
 }
 

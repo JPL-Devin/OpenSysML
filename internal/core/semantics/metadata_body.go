@@ -46,29 +46,13 @@ func (m *Model) collectMetadataBodyViolations(owner *symbols.Symbol, body []ast.
 		if declaresRedefinitionAST(usage) {
 			continue // an explicit redefinition states its own target
 		}
-		target := m.metadataBodyTarget(owner, usage.Ident)
+		target := symbols.MetadataBodyTarget(m, owner, usage.Ident)
 		if target == nil {
 			*out = append(*out, usage)
 			continue
 		}
 		m.collectMetadataBodyViolations(target, usage.Members, out)
 	}
-}
-
-// metadataBodyTarget returns the feature of owner a body declaration restates,
-// matched by either of the names it may be declared under.
-func (m *Model) metadataBodyTarget(owner *symbols.Symbol, ident ast.Identification) *symbols.Symbol {
-	for _, name := range []string{ident.Name, ident.ShortName} {
-		if name == "" {
-			continue
-		}
-		// LookupMember, not the member list: a cached library symbol carries no
-		// scope and answers only through the index.
-		if member, ok := m.LookupMember(owner, name); ok {
-			return member
-		}
-	}
-	return nil
 }
 
 // declaresRedefinitionAST reports whether the declaration carries a
