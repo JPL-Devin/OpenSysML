@@ -90,13 +90,19 @@ func (r *Resolver) visibleMember(sym *symbols.Symbol, name string, hide *refFilt
 		// The owner's own declarations are the local bindings already filtered
 		// by the caller, so only contributed ones remain.
 		found, ok := r.lookupContributedMember(sym, name)
-		if !ok || !visibleAsInheritedMember(sym, found) {
+		if !ok || !visibleAsInheritedMember(sym, found) ||
+			r.inheritanceMaskedDeclaring(sym, found, declaredNameIn(sym, hide.decl)) {
 			return nil, false
 		}
 		return found, true
 	}
 	found, ok := r.lookupMember(sym, name)
 	if !ok || !visibleAsInheritedMember(sym, found) {
+		return nil, false
+	}
+	// What a feature of sym redefines, sym does not inherit, so no name of it
+	// resolves here (KerML 8.3.3.3); a redefinition being written is exempt.
+	if r.inheritanceMaskedDeclaring(sym, found, declaredNameIn(sym, hide.declNode())) {
 		return nil, false
 	}
 	if !hide.hides(found) {
