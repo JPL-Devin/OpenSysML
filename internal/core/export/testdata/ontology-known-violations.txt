@@ -64,6 +64,7 @@ unknown-class urn:opensysml:sysml:StateRegion -              # a state's region,
 # the elements are materialized (D3.3).
 unknown-property PartDefinition specializes                  # specialization is a Specialization element, not a property
 unknown-property PartUsage subsets                           # subsetting is a Subsetting element, not a property
+unknown-property urn:opensysml:sysml:MultiplicityDeclaration subsets # a MultiplicitySubset's bounds, written the same way as any other subsetting
 unknown-property PartUsage redefines                         # redefinition is a Redefinition element, not a property
 unknown-property SubjectMembership redefines                 # redefinition is a Redefinition element, not a property
 unknown-property ActionUsage references                      # a referenced element is a ReferenceUsage or Membership, not a property

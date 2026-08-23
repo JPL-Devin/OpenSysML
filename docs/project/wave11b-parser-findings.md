@@ -1,12 +1,23 @@
-# Wave 11B — the parsing rows, and the four that are not parser rows
+# Wave 11B — the parsing rows, and the ones that are not parser rows
 
 Wave 11B owns the 20 Xpect disagreements in the pilot's parsing suites that were attributed to the
 lexer and the parser. Two of them were parser defects and are fixed; the rest are not parser
 defects, and this page records what each one actually needs, so that a later reader does not look
 for the fix in `internal/core/parser`.
 
-Measured on a fresh run of `go run ./cmd/pilot-xpect` before and after the change, with the pinned
-`PILOT_TAG=2026-05` corpus.
+Every number here is a fresh run of the three oracles against the pinned `PILOT_TAG=2026-05`
+corpora, on `main` and on the branch, on one machine:
+
+| oracle | `main` | branch |
+| --- | --- | --- |
+| xpect | 1172 agree (239 wording-only), 154 disagree | **1173 agree** (239 wording-only), **153 disagree** |
+| differential | 312 fully agreeing; 25 agreed, 139 only ours, 73 only the pilot's | identical |
+| rejection | 114 both reject, 6 only the pilot, 0 only we | identical |
+
+**One row closes** — `ParsingTests_MultiplicityDeclaration.kerml.xt` — and nothing else in any
+oracle moves. Note that the differential's `main` figures here are not the 311/142 the wave-10
+report quotes; 312/25/139/73 is what two consecutive runs on `main` give, so the difference is in the
+committed baseline's provenance, not in this branch.
 
 ---
 
@@ -32,7 +43,9 @@ MultiplicityRange returns SysML::MultiplicityRange :
 subsetting another multiplicity instead of writing them: `multiplicity m subsets zeroOrMore;`. We
 parsed the bounds form only and rejected the subsetting form with `expected '{' or ';'`.
 `ast.MultiplicityDecl` now carries the subsetted name alongside the optional range, the two being
-the exclusive alternatives of the production. The row closes (`noErrors`).
+the exclusive alternatives of the production. The row closes (`noErrors`). The RDF mapping carries
+the new field too (`sysml:subsets`), since a form that now parses and did not before would otherwise
+convert to Turtle as a bare `multiplicity m;`.
 
 ### `ParsingTests_Indexing.kerml.xt` — an index is a `SequenceExpression`
 
@@ -119,7 +132,7 @@ Two of the four `non` rows (in the two `..` fixtures) additionally sit behind a 
 same file, so the name-resolution tier does not run there at all; they cannot be closed before the
 metaclass check exists either way.
 
-### The six `..` rows — recovery improved, the rows stay open
+### The six `..` rows — the message names the defect, the rows stay open
 
 `ParsingTests_BadScopeWithOnlyTwoSingleDot.kerml.xt` and `…AtTheEnd` write `test..A::a` and
 `test::A..a`. A qualified name separates its segments with `::` and a feature chain with `.`
@@ -127,20 +140,22 @@ metaclass check exists either way.
 written — there is no derivation, and the pilot emits three ANTLR failures per file
 (`no viable alternative at input '..'`, one per token around the defect).
 
-Before, our recovery abandoned the enclosing body and reported `expected '{' or ';' after
-declaration` **and** `expected a body member` at the end of the file — nine lines away from the
-defect in one fixture, and the members after it were dropped. Now `parseRelationshipTarget` reports
-`expected a name after '.'` on the `..` itself and reads the rest of the chain, so the declaration
-still ends at its `;` and the following members parse. `…TwoSingleDotAtTheEnd`:26 is
-`disagree(same-location)` as a result, having been `disagree(same-line)` before.
+Before, we reported two diagnostics of our recovery's own expectations — `expected '{' or ';' after
+declaration` **and** `expected a body member` — where the defect is one. `parseRelationshipTarget`
+now reports `expected a name after '.'` once and reads the rest of the chain.
 
-**These rows remain disagreements and cannot be closed here.** The declared text is a parser-internal
+**What did not change, measured rather than assumed: the offset.** Our old diagnostics already sat on
+the `..` (offset 642 in `…TwoSingleDot`, 647 in `…AtTheEnd`, unchanged after), the tolerance classes
+are the same rows they were, and both binaries keep the declarations after the malformed one. So this
+is a message-and-count improvement, not a locality one, and it moves no number.
+
+**The rows remain disagreements and cannot be closed here.** The declared text is a parser-internal
 ANTLR message; the harness admits a wording difference only for the unresolved-reference rule
-(`cmd/pilot-xpect/wording.go`), and it is admitted on rule and element identity, which a parse
-failure has neither of. Emitting three diagnostics where the defect is one, or adopting the pilot's
-phrasing, would move the number without changing what we detect. The improvement that is real is
-locality and recovery, which is what the fixture-level test
-(`internal/core/parser/chain_double_dot_test.go`) locks.
+(`cmd/pilot-xpect/wording.go`), on rule and element identity, which a parse failure has neither of.
+Emitting three diagnostics where the defect is one, or adopting the pilot's phrasing, would move the
+number without changing what we detect. What is real is locked by
+`internal/core/parser/chain_double_dot_test.go`: one diagnostic, at the dots' own offset, with the
+following declaration still in the tree.
 
 ### `ParsingTests_BadScopeWithOnlyTwoDot.kerml.xt`:26 — unchanged, and already documented
 
