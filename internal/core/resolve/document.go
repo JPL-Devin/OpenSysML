@@ -96,7 +96,7 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 	case *ast.PrefixMetadata:
 		// A metadata usage written as a member of its own names its type the same
 		// way a prefix does.
-		r.ResolveQualified(scope, d.Type)
+		r.resolveMetadataPrefix(scope, d)
 	case *ast.FilterMember:
 		r.InCondition(func() { r.resolveExpr(scope, d.Condition) })
 	case *ast.Definition:
@@ -207,12 +207,14 @@ func (r *Resolver) resolveDecl(scope *symbols.Scope, decl ast.Node) {
 		r.resolveExpr(scope, d.Expression)
 		r.walkMembers(scope, d.Body)
 	case *ast.AssumeMember:
+		r.resolvePrefixes(scope, d.Prefixes)
 		r.resolveExpr(scope, d.Expression)
 		r.resolveRelationships(scope, d, d.Relationships)
 		r.resolveMultiplicity(scope, d.Multiplicity)
 		r.resolveExpr(scope, d.Value)
 		r.walkConstraintBody(scope, d, r.resolveConstraintReference(scope, d.Reference), d.Body)
 	case *ast.RequireMember:
+		r.resolvePrefixes(scope, d.Prefixes)
 		r.resolveExpr(scope, d.Expression)
 		r.resolveRelationships(scope, d, d.Relationships)
 		r.resolveMultiplicity(scope, d.Multiplicity)
@@ -411,9 +413,39 @@ func (r *Resolver) childScope(scope *symbols.Scope, decl ast.Node) *symbols.Scop
 
 func (r *Resolver) resolvePrefixes(scope *symbols.Scope, prefixes []*ast.PrefixMetadata) {
 	for _, p := range prefixes {
-		if p != nil {
-			r.ResolveQualified(scope, p.Type)
+		r.resolveMetadataPrefix(scope, p)
+	}
+}
+
+func (r *Resolver) resolveMetadataPrefix(scope *symbols.Scope, prefix *ast.PrefixMetadata) {
+	if prefix == nil {
+		return
+	}
+	owner, ok := r.ResolveQualified(scope, prefix.Type)
+	if !ok || owner == nil || len(prefix.Body) == 0 {
+		return
+	}
+	if target, aliasOK := r.ResolveAliasTarget(owner); aliasOK {
+		owner = target
+	}
+	body := scope.ChildFor(prefix)
+	if body == nil {
+		return
+	}
+	// Body values resolve against the metadata definition, not the annotated element.
+	if body.Owner() == nil {
+		body.SetOwner(owner)
+	}
+	r.resolveMetadataBody(body, prefix.Body)
+}
+
+func (r *Resolver) resolveMetadataBody(scope *symbols.Scope, members []ast.Node) {
+	for _, member := range members {
+		decl, _ := unwrapForResolve(member)
+		if decl == nil {
+			continue
 		}
+		r.resolveDecl(scope, decl)
 	}
 }
 
