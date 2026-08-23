@@ -6,14 +6,13 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
-	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // filterDiags returns the element-filter findings of src.
 func filterDiags(t *testing.T, src string) []Diagnostic {
 	t.Helper()
 	root := parser.New(source.New("<t>", []byte(src))).ParseFile()
-	idx := symbols.NewIndex()
+	idx := newTestIndex()
 	idx.AddDocument("<t>", root)
 	idx.ExpandWildcardImports()
 

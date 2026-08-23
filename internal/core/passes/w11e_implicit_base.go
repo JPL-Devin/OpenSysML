@@ -13,7 +13,7 @@ const msgFeatureNoType = "Features must have at least one type"
 // supertype implied by its kind and that a feature has at least one type
 // (KerML 1.0 validateClassifierDefaultSupertype, validateFeatureHasType). Both
 // hold implicitly once the library is in the resource set, so they report a
-// model whose declared resources do not supply it.
+// model whose resources do not supply it, or whose conjugation replaces it.
 type ImplicitBasePass struct{}
 
 func (ImplicitBasePass) Level() PassLevel { return LevelConstraint }
@@ -51,16 +51,19 @@ func (c *implicitBaseChecker) check(sym *symbols.Symbol) {
 	c.checkFeatureHasType(sym)
 }
 
-// checkDefaultSupertype reports a type that conjugates itself: neither the
-// conjugated type nor the implicit specialization conjugation replaces then
-// supplies the supertype its kind implies.
+// checkDefaultSupertype reports a type whose supertypes do not reach the base
+// its kind implies, whether because the library declaring it is absent or
+// because conjugation replaces the implicit specialization that supplies it.
 func (c *implicitBaseChecker) checkDefaultSupertype(sym *symbols.Symbol) {
+	if c.index.Library(sym) {
+		return
+	}
 	fqn, ok := semantics.KindBaseFQN(sym, c.isKerML)
 	if !ok {
 		return
 	}
 	base := c.libraryType(fqn)
-	if base == nil || !c.selfConjugating(sym) || c.reaches(sym, base) {
+	if base != nil && (base == sym || c.reaches(sym, base)) {
 		return
 	}
 	c.report(sym.Decl.Span(), "Must directly or indirectly specialize "+fqn, "classifier-default-supertype")
@@ -69,6 +72,9 @@ func (c *implicitBaseChecker) checkDefaultSupertype(sym *symbols.Symbol) {
 // checkFeatureHasType reports a feature no type reaches, directly or through
 // what it specializes or the base feature its kind implies.
 func (c *implicitBaseChecker) checkFeatureHasType(sym *symbols.Symbol) {
+	if c.index.Library(sym) {
+		return
+	}
 	if c.hasType(sym) {
 		return
 	}
@@ -84,7 +90,7 @@ func (c *implicitBaseChecker) checkFeatureHasType(sym *symbols.Symbol) {
 	if !ok {
 		return
 	}
-	if c.libraryType(fqn) == nil || !c.selfConjugating(sym) {
+	if base := c.libraryType(fqn); base != nil && !c.selfConjugating(sym) {
 		return
 	}
 	c.report(sym.Decl.Span(), msgFeatureNoType, "feature-has-type")

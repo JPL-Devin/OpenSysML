@@ -17,7 +17,7 @@ func nameresCtx(t *testing.T, name, src string) (*Context, *ast.RootNamespace) {
 	if len(p.Diagnostics) != 0 {
 		t.Fatalf("unexpected parse diagnostics: %+v", p.Diagnostics)
 	}
-	idx := symbols.NewIndexFromDoc(name, root)
+	idx := newTestIndexFromDoc(name, root)
 	return NewContext(name, idx, nil), root
 }
 
@@ -66,7 +66,7 @@ func TestNameResolutionPassReportsAmbiguous(t *testing.T) {
 	rootB := parseDoc(t, "b.sysml", "package P { namespace Y; }")
 	rootC := parseDoc(t, "c.sysml", "package Q { alias A for P::X; }")
 
-	idx := symbols.NewIndex()
+	idx := newTestIndex()
 	idx.AddDocument("a.sysml", rootA)
 	idx.AddDocument("b.sysml", rootB)
 	idx.AddDocument("c.sysml", rootC)

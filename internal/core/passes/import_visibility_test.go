@@ -5,14 +5,13 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
-	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // analyzeSrc returns every diagnostic src produces.
 func analyzeSrc(t *testing.T, src string) []Diagnostic {
 	t.Helper()
 	root := parser.New(source.New("<t>", []byte(src))).ParseFile()
-	idx := symbols.NewIndex()
+	idx := newTestIndex()
 	idx.AddDocument("<t>", root)
 	return Analyze("<t>", root, nil, idx)
 }
@@ -83,7 +82,7 @@ func TestImportVisibilityErrorsOnTheKeyword(t *testing.T) {
 func TestImportVisibilityChangesSeverityOnly(t *testing.T) {
 	src := "package Lib { part def Widget; }\npackage App { import Lib::*; part w : Widget; import Nowhere::*; }"
 	root := parser.New(source.New("<t>", []byte(src))).ParseFile()
-	idx := symbols.NewIndex()
+	idx := newTestIndex()
 	idx.AddDocument("<t>", root)
 
 	var errored bool

@@ -6,7 +6,6 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
-	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // analyzeAll is diagnostics from every pass, since a residue is adjudicated by
@@ -14,7 +13,7 @@ import (
 func analyzeAll(t *testing.T, name, src string) []Diagnostic {
 	t.Helper()
 	root := parser.New(source.New(name, []byte(src))).ParseFile()
-	idx := symbols.NewIndex()
+	idx := newTestIndex()
 	idx.AddDocument(name, root)
 	return Analyze(name, root, nil, idx)
 }

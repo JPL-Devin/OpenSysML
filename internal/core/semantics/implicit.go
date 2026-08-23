@@ -273,11 +273,37 @@ func (m *Model) declaredGeneralizationReaches(sym *symbols.Symbol, want string, 
 			// A declaration conforms to its kind's base whether the edge is
 			// declared or implicit, so reaching one of the same kind suffices —
 			// except back through a cycle, which reaches nothing new.
-			if base, ok := kindBaseFQN(target, m.isKerMLDoc(target)); ok && base == want {
+			if base, ok := kindBaseFQN(target, m.isKerMLDoc(target)); ok && base == want && !m.declaredReaches(target, sym, nil) {
 				sameBase = true
 			}
 		}
 		if sameBase || m.declaredGeneralizationReaches(target, want, visiting) {
+			return true
+		}
+	}
+	return false
+}
+
+// declaredReaches reports whether want is on from's declared generalization
+// chain: a cycle, when asked of a type's own supertype.
+func (m *Model) declaredReaches(from, want *symbols.Symbol, visiting map[*symbols.Symbol]bool) bool {
+	if from == nil || want == nil {
+		return false
+	}
+	if visiting == nil {
+		visiting = make(map[*symbols.Symbol]bool)
+	}
+	if visiting[from] {
+		return false
+	}
+	visiting[from] = true
+
+	for _, rel := range RelationshipsOf(from) {
+		if rel == nil || !GeneralizationKind(rel.Kind) {
+			continue
+		}
+		target := m.relationshipTarget(from, rel)
+		if target == want || m.declaredReaches(target, want, visiting) {
 			return true
 		}
 	}

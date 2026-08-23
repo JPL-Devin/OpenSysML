@@ -28,6 +28,7 @@ XPECT_SETUP a.B
 	ResourceSet {
 		ThisFile {}
 		File {from ="/library/Base.kerml"}
+		File {from ="/library/Occurrences.kerml"}
 	}
 END_SETUP
 */
@@ -49,6 +50,13 @@ const baseLib = `standard library package Base {
 }
 `
 
+// occurrencesLib is the base a `class` specializes implicitly, which a clean
+// file's resource set has to supply as the download does.
+const occurrencesLib = `standard library package Occurrences {
+	abstract class Occurrence;
+}
+`
+
 const broken = `//*
 XPECT_SETUP a.B
 	ResourceSet {
@@ -64,7 +72,8 @@ package test {
 `
 
 func TestW5CCompareCleanFile(t *testing.T) {
-	dir := writeSuite(t, map[string]string{"a/clean.kerml.xt": clean, "library/Base.kerml": baseLib})
+	dir := writeSuite(t, map[string]string{"a/clean.kerml.xt": clean,
+		"library/Base.kerml": baseLib, "library/Occurrences.kerml": occurrencesLib})
 	res := compareOne(dir, "a/clean.kerml.xt", newLibraryCache())
 	if len(res.Problems) != 0 || len(res.Missing) != 0 {
 		t.Fatalf("problems = %v, missing = %v", res.Problems, res.Missing)

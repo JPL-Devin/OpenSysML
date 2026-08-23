@@ -8,7 +8,6 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
-	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // libraryFixtureDiags analyzes a fixture under testdata/passes as the document it
@@ -22,7 +21,7 @@ func libraryFixtureDiags(t *testing.T, file string) []Diagnostic {
 	if err != nil {
 		t.Fatalf("read fixture: %v", err)
 	}
-	idx := symbols.NewIndex()
+	idx := newTestIndex()
 	libSrc := libs.DefaultSource()
 	cache, err := libs.NewCache()
 	if err != nil {

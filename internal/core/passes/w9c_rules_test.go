@@ -8,14 +8,13 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
-	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // w9cLibraryDiags analyzes src as SysML against the standard library, which the
 // inherited-name rule needs to see the Action/Part diamond.
 func w9cLibraryDiags(t *testing.T, src string, warm bool) []Diagnostic {
 	t.Helper()
-	idx := symbols.NewIndex()
+	idx := newTestIndex()
 	libSrc := libs.DefaultSource()
 	var cache *libs.Cache
 	if warm {
@@ -27,7 +26,7 @@ func w9cLibraryDiags(t *testing.T, src string, warm bool) []Diagnostic {
 			t.Fatalf("cache: %v", err)
 		}
 		cache = c
-		warmIdx := symbols.NewIndex()
+		warmIdx := newTestIndex()
 		warmLoader := libs.NewLoader(libSrc, cache)
 		for _, name := range libSrc.List() {
 			if err := warmLoader.Load(name, warmIdx); err != nil {
