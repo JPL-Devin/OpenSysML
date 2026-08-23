@@ -31,7 +31,9 @@ func (cc *constraintChecker) checkAtMostOneMember(sym *symbols.Symbol) {
 		// accumulate.
 		cc.reportExtraMembers(subjects, msgOnlyOneSubject, "only-one-subject")
 		cc.checkSubjectParameterPosition(sym, members)
-		cc.checkAtMostOneObjective(sym, members)
+		if objectiveOwnerDecl(sym.Decl) {
+			cc.checkAtMostOneObjective(sym, members)
+		}
 	}
 }
 
@@ -186,6 +188,16 @@ func subjectOwnerDecl(decl ast.Node) bool {
 		return d.Kind == ast.DefRequirement || isCaseDefKind(d.Kind)
 	case *ast.Usage:
 		return d.Kind == ast.UsageRequirement || isCaseUsageKind(d.Kind)
+	}
+	return false
+}
+
+func objectiveOwnerDecl(decl ast.Node) bool {
+	switch d := decl.(type) {
+	case *ast.Definition:
+		return d.Kind == ast.DefCase
+	case *ast.Usage:
+		return d.Kind == ast.UsageCase
 	}
 	return false
 }
