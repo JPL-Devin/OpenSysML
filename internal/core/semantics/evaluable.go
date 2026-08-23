@@ -1,6 +1,8 @@
 package semantics
 
 import (
+	"strings"
+
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -103,7 +105,7 @@ func (m *Model) evaluableInvocation(scope *symbols.Scope, e *ast.InvocationExpr,
 		}
 	}
 	fn, ok := m.resolveExprTarget(scope, e.Type)
-	return ok && m.libraryElement(fn)
+	return ok && m.modelLevelFunction(fn)
 }
 
 // evaluableRead decides a feature read: naming a type or an enumeration literal
@@ -138,12 +140,35 @@ func (m *Model) resolveExprTarget(scope *symbols.Scope, qn *ast.QualifiedName) (
 	return sym, true
 }
 
-// libraryElement reports whether sym is declared by the bundled normative
-// library, whose functions are the ones a model-level evaluation may call.
-func (m *Model) libraryElement(sym *symbols.Symbol) bool {
-	if sym == nil || m.resolver == nil {
+// modelLevelFunctions are the Kernel Function Library functions a model-level
+// evaluation may call; any other function, library or not, needs an execution.
+var modelLevelFunctions = map[string]bool{
+	"BaseFunctions::==": true, "BaseFunctions::!=": true,
+	"BaseFunctions::===": true, "BaseFunctions::!==": true,
+	"BaseFunctions::istype": true, "BaseFunctions::hastype": true,
+	"BaseFunctions::@": true, "BaseFunctions::@@": true,
+	"BaseFunctions::as": true, "BaseFunctions::meta": true,
+	"BaseFunctions::,": true, "BaseFunctions::#": true,
+
+	"DataFunctions::+": true, "DataFunctions::-": true,
+	"DataFunctions::*": true, "DataFunctions::/": true,
+	"DataFunctions::**": true, "DataFunctions::^": true,
+	"DataFunctions::%": true, "DataFunctions::..": true,
+	"DataFunctions::<": true, "DataFunctions::<=": true,
+	"DataFunctions::>": true, "DataFunctions::>=": true,
+	"DataFunctions::&": true, "DataFunctions::|": true,
+	"DataFunctions::not": true, "DataFunctions::xor": true,
+
+	"ControlFunctions::.": true, "ControlFunctions::if": true,
+	"ControlFunctions::and": true, "ControlFunctions::or": true,
+	"ControlFunctions::implies": true, "ControlFunctions::??": true,
+	"ControlFunctions::collect": true, "ControlFunctions::select": true,
+}
+
+// modelLevelFunction reports whether sym is one of those functions.
+func (m *Model) modelLevelFunction(sym *symbols.Symbol) bool {
+	if sym == nil {
 		return false
 	}
-	idx := m.resolver.Index()
-	return idx != nil && idx.Library(sym)
+	return modelLevelFunctions[strings.ReplaceAll(m.fqnOf(sym), "'", "")]
 }

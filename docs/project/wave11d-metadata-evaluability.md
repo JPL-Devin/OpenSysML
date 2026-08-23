@@ -38,10 +38,15 @@ concrete-type rows below, and `SemanticMetadata_valid.sysml.xt`:53, which is a g
   faulty operands draws each fault once, at the membership, rather than once per operand.
 - **Model-level evaluability as a walk over the expression** (`semantics/evaluable.go`,
   `Model.ModelLevelEvaluable`), replacing the approximation that reused filter compilation. Literals,
-  `null`, metadata access, sequences, constructors, library-function invocations and reads of
-  features that reach an evaluable value are evaluable; a user-declared function, an operation no
-  library function implements (`~3`), a cast of the instance under evaluation (`(as A).y`) and an
-  unresolved name are not. This is what closed the `filter f((as A).y);`, `filter ~(as A).z;` and
+  `null`, metadata access, sequences, constructors, invocations of the Kernel Function Library
+  functions the model evaluates and reads of features that reach an evaluable value are evaluable; any
+  other function — including a library one the model cannot evaluate, such as `RealFunctions::sqrt` or
+  `StringFunctions::'+'` — an operation no library function implements (`~3`), a cast of the instance
+  under evaluation (`(as A).y`) and an unresolved name are not. The evaluable set is the one KerML
+  gives model-level evaluation (§7.4.9 with the Kernel Function Library, §9.2): equality, identity,
+  type tests, casts, metadata access, sequence and indexing operations, the arithmetic, comparison,
+  range and Boolean data functions, and the control functions `.`, `if`, `and`, `or`, `implies`, `??`,
+  `collect` and `select`. This is what closed the `filter f((as A).y);`, `filter ~(as A).z;` and
   `filter (as A).y->ControlFunctions::collect { … };` rows.
 - **Metadata annotation bodies are checked wherever they are written**
   (`passes/w8c_metadata_annotation.go`). The body-feature rule (`Must redefine an owning-type
@@ -94,6 +99,14 @@ rejected — a concrete-type error at the name-resolution tier then blocks the c
 suppresses filter diagnostics elsewhere. The first is an architecture-wide decision affecting every
 slice, so it is an **adjudication question for the wave owner**, not a change made here.
 
+### An unresolved invocation target draws one diagnostic, not two
+
+For `y = ScalarFunctions::sqrt(4.0)` in a metadata body — a name that does not resolve — the
+reference reports both `Must be model-level evaluable` and an unresolved reference; we report only the
+first, because metadata-body expressions are not visited by the name-resolution pass. No Xpect row
+declares it, and the visiting is the resolver's, so it is left for wave 11C rather than worked around
+in the metadata pass.
+
 ### `SemanticMetadata_valid.sysml.xt`:53 — a parser row
 
 The file's file-wide silence fails on `actor #B a;` (line 90): we report `expected '{' or ';' after
@@ -104,7 +117,7 @@ declaration`. A prefix annotation on an `actor` usage is a grammar gap, owned by
 ## The expectation-count correction
 
 The `.xt` reader took the text of an `at "…"` clause up to the first quote inside it. Xpect does not
-escape those quotes, so four assertions were read as two expectations each — a truncated one and a
+escape those quotes, so three assertions were read as two expectations each — a truncated one and a
 junk one:
 
 ```

@@ -64,11 +64,12 @@ func TestModelLevelEvaluable(t *testing.T) {
 	}
 }
 
-// A library function is one a model-level evaluation may call; a function the
-// model under validation declares is not.
-func TestModelLevelEvaluableCallsOnlyLibraryFunctions(t *testing.T) {
-	const lib = `standard library package Kit { calc def twice { in x; return : ScalarValues::Integer = 2; } }`
-	p := parser.New(source.New("kit.sysml", []byte(lib)))
+// Only the Kernel Function Library functions the model itself evaluates may be
+// called: being a library function is not enough, and a local one never is.
+func TestModelLevelEvaluableCallsOnlyModelLevelFunctions(t *testing.T) {
+	const lib = `standard library package ControlFunctions { abstract function 'if' { in c; in t; in f; } }
+standard library package RealFunctions { function sqrt { in x; } }`
+	p := parser.New(source.New("kfl.sysml", []byte(lib)))
 	libRoot := p.ParseFile()
 	if len(p.Diagnostics) != 0 {
 		t.Fatalf("library parse diagnostics: %v", p.Diagnostics)
@@ -80,19 +81,20 @@ func TestModelLevelEvaluableCallsOnlyLibraryFunctions(t *testing.T) {
 	}
 
 	idx := symbols.NewIndex()
-	idx.AddDocument("kit.sysml", libRoot)
+	idx.AddDocument("kfl.sysml", libRoot)
 	idx.AddDocument("t.sysml", root)
-	idx.MarkLibrary("kit.sysml")
+	idx.MarkLibrary("kfl.sysml")
 	r := resolve.New(idx)
 	m := NewModel(r)
 	r.SetModel(m)
-	r.ResolveDocument("kit.sysml", libRoot)
+	r.ResolveDocument("kfl.sysml", libRoot)
 	r.ResolveDocument("t.sysml", root)
 	scope := idx.DocumentRoot("t.sysml")
 
 	for expr, want := range map[string]bool{
-		"Kit::twice(2)": true,
-		"once(2)":       false,
+		"ControlFunctions::'if'(true, 1, 2)": true,
+		"RealFunctions::sqrt(4.0)":           false,
+		"once(2)":                            false,
 	} {
 		e := parser.New(source.New("<expr>", []byte(expr))).ParseExpression()
 		if e == nil {
