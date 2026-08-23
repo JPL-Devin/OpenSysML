@@ -162,7 +162,7 @@ func filtersFromPredicates(preds []*FilterPredicate) []ElementFilter {
 // NamespaceFiltersOf returns the filter conditions declared by the namespace
 // registered under fqn, over the documents declaring it in name order.
 func (idx *Index) NamespaceFiltersOf(fqn string) []ElementFilter {
-	byDoc := idx.nsFilters[fqn]
+	byDoc := idx.nsFilters.at(fqn)
 	if len(byDoc) == 0 {
 		return nil
 	}
@@ -180,27 +180,25 @@ func (idx *Index) namespaceFiltersGating(fqn, doc string) []ElementFilter {
 	if fqn != "" {
 		return idx.NamespaceFiltersOf(fqn)
 	}
-	return idx.nsFilters[fqn][doc]
+	return idx.nsFilters.at(fqn)[doc]
 }
 
 // SetNamespaceFilters records the filter conditions doc declares for the
 // namespace registered under fqn. A library restored from an index cache states
 // them this way, having no declaration left to read them from.
 func (idx *Index) SetNamespaceFilters(fqn, doc string, filters []ElementFilter) {
+	idx.mustBeWritable("SetNamespaceFilters")
 	if len(filters) == 0 {
 		idx.forgetNamespaceFilters(fqn, doc)
 		return
 	}
-	if idx.nsFilters[fqn] == nil {
-		idx.nsFilters[fqn] = make(map[string][]ElementFilter)
-	}
-	idx.nsFilters[fqn][doc] = filters
+	writableMap(idx.nsFilters, fqn)[doc] = filters
 	idx.refilter(fqn)
 }
 
 // dropNamespaceFilters forgets the filters doc declared, for every namespace.
 func (idx *Index) dropNamespaceFilters(doc string) {
-	for fqn := range idx.nsFilters {
+	for _, fqn := range idx.nsFilters.keys() {
 		idx.forgetNamespaceFilters(fqn, doc)
 	}
 }
@@ -208,13 +206,13 @@ func (idx *Index) dropNamespaceFilters(doc string) {
 // forgetNamespaceFilters drops the filters doc declared for the namespace
 // registered under fqn, if it declared any.
 func (idx *Index) forgetNamespaceFilters(fqn, doc string) {
-	byDoc := idx.nsFilters[fqn]
-	if _, had := byDoc[doc]; !had {
+	if _, had := idx.nsFilters.at(fqn)[doc]; !had {
 		return
 	}
+	byDoc := writableMap(idx.nsFilters, fqn)
 	delete(byDoc, doc)
 	if len(byDoc) == 0 {
-		delete(idx.nsFilters, fqn)
+		idx.nsFilters.del(fqn)
 	}
 	idx.refilter(fqn)
 }
@@ -224,7 +222,7 @@ func (idx *Index) forgetNamespaceFilters(fqn, doc string) {
 // under the filters the namespace now declares, and the members it takes back
 // meanwhile mark the namespaces importing it onward for expansion too.
 func (idx *Index) refilter(fqn string) {
-	delete(idx.lastTargets, fqn)
+	idx.lastTargets.del(fqn)
 	idx.purgeReexportsUnder(fqn)
 }
 

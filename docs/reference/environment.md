@@ -16,7 +16,7 @@ into a reported error instead of a hang.
 | `OPENSYSML_SMT_TIMEOUT` | `10s` | How long one solver query may take, as a Go duration (`5s`, `500ms`), after which the verdict is `unknown` |
 | `OPENSYSML_SMT_CORE_BUDGET` | `30s` | How long `%explain` may spend reducing an unsat core to a minimal one, as a Go duration; past it the solver's own core is reported, said not to be necessarily minimal |
 | `OPENSYSML_SMT_MAX_CONFIGURATIONS` | `32` | How many variant selections `%configure … all` may report before saying the enumeration was cut short at the bound |
-| `SYSML_GRPC_INDEX_POOL` | `4` | How many standard library indexes `sysml-grpc` keeps prewarmed for the models it has not seen yet; `0` loads the library on each request instead |
+| `SYSML_GRPC_INDEX_POOL` | `4` | Whether `sysml-grpc` builds the one shared standard library index ahead of the requests needing it; any positive value prewarms, `0` builds it on the first request instead |
 
 The three `OPENSYSML_SMT*` variables belong to the experimental solving extension
 (`%check`/`%explain`), which needs an external z3 or cvc5 — installing one, per platform, is
@@ -116,26 +116,26 @@ evaluation one:
 SYSML_MAX_EVENTS=20000000 SYSML_MAX_DO_STEPS=100000000 sysml descent.sysml
 ```
 
-## The gRPC service's library index pool
+## The gRPC service's shared library index
 
-`SYSML_GRPC_INDEX_POOL` is not a budget: it is how many standard library indexes
-`sysml-grpc` builds ahead of the requests that need them. The library does not
-depend on the model, so a model the service has not seen adds its document to a
-prewarmed index instead of loading and expanding the library again — measured on
-a 163-line model, ~0.5–0.9 ms rather than ~100–128 ms.
+`SYSML_GRPC_INDEX_POOL` is no longer a count: any positive value asks
+`sysml-grpc` to build the standard library index before the requests that need
+it, and `0` disables prewarming. The library does not depend on the model and is
+immutable once loaded, so the service builds and freezes **one** index and gives
+each model a thin overlay over it holding that model's own document — a cache
+miss adds its document to that overlay instead of loading and expanding the
+library again (measured on a 163-line model, ~0.5–0.9 ms rather than
+~100–128 ms), and 100 cached models cost ~1 MiB in total rather than ~1.6 GiB.
 
-An index is handed out once and then belongs to the model that took it, so cached
-models stay independent; the pool refills in the background, and a request
-arriving when it is empty builds its own index, so an answer never depends on how
-far prewarming got. The refill builds one index at a time and takes about as long
-as a library load, so a client sweeping distinct models faster than that drains
-the pool and pays the load on the requests that find it empty. Raise it for such
-a client, at roughly the memory of one library index each:
+A model writes only into its own overlay, so cached models stay independent and
+none can see another's document. A request arriving before prewarming finished
+builds the shared index itself, so an answer never depends on how far prewarming
+got, and concurrent requests wait for one build rather than starting several.
 
 ```bash
-SYSML_GRPC_INDEX_POOL=8 sysml-grpc
+SYSML_GRPC_INDEX_POOL=0 sysml-grpc   # load the library on the first request instead
 ```
 
-`0` disables prewarming, which is the behaviour of a service before the pool
-existed: every cache miss loads the library itself. Anything but a non-negative
-integer is reported at service construction rather than silently ignored.
+Anything but a non-negative integer is reported at service construction rather
+than silently ignored. The variable keeps its name for compatibility with
+deployments that set it.

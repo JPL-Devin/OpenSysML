@@ -995,8 +995,7 @@ func (s *Session) symbolIndex() *symbols.Index {
 		return nil
 	}
 	if s.idx == nil {
-		s.idx = symbols.NewIndex()
-		model.LoadStdlibInto(s.idx)
+		s.idx = model.NewIndexWithStdlib()
 	} else if s.idxVersion == doc.Version {
 		return s.idx
 	}

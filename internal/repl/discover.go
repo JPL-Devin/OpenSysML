@@ -22,8 +22,7 @@ func (s *Session) browseIndex() *symbols.Index {
 		return idx
 	}
 	if s.idx == nil {
-		s.idx = symbols.NewIndex()
-		model.LoadStdlibInto(s.idx)
+		s.idx = model.NewIndexWithStdlib()
 	}
 	return s.idx
 }
