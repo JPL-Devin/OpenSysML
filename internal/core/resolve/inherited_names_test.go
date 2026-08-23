@@ -90,6 +90,24 @@ func TestRedeclaringAnInheritedNameConflictsUnlessItRedefines(t *testing.T) {
 	}
 }
 
+// A same-named explicit redefinition resolves against the inherited feature,
+// not the member that borrows its name (KerML 8.3.3.1, 8.4.3.2).
+func TestSameNamedRedefinitionReachesInheritedFeature(t *testing.T) {
+	r, _, _ := resolvedDoc(t, `package P {
+		part def Vehicle {
+			attribute mass;
+			attribute dryMass;
+		}
+		part vehicle_b : Vehicle {
+			attribute mass redefines mass;
+			attribute dryMass redefines dryMass;
+		}
+	}`)
+	if conflicts := diagnosticsWithCode(r, resolve.CodeNameConflict); len(conflicts) != 0 {
+		t.Fatalf("conflicts = %v, want same-named redefinitions to remove their inherited features", conflicts)
+	}
+}
+
 // A same-named subsetting target is the inherited feature: a feature cannot
 // specialize itself. The fix belongs in resolveSpecialization ("Found, not fixed").
 func TestSubsettingTargetIsTheInheritedFeature(t *testing.T) {
