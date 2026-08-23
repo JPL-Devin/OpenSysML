@@ -1961,6 +1961,16 @@ func usageIsSubstantive(u *ast.Usage) bool {
 func (p *Parser) parseSubjectMember(start int) ast.Node {
 	// 'subject' already consumed
 
+	// A subject takes prefix metadata after its keyword: `subject #B s;`
+	// (SysML.xtext SubjectUsage, `'subject' UsageExtensionKeyword* Usage`).
+	var prefixes []*ast.PrefixMetadata
+	for p.at(lexer.Hash) {
+		p.advance()
+		if metaName := p.parseQualifiedNameRelaxed(); metaName != nil {
+			prefixes = append(prefixes, &ast.PrefixMetadata{Type: metaName})
+		}
+	}
+
 	// Check for binding pattern: subject = <expr>; OR subject <name> = <expr>;
 	if p.at(lexer.Eq) {
 		// Anonymous binding: subject = <expr>;
@@ -1973,6 +1983,7 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 		p.expect(lexer.Semicolon, "expected ';' after subject binding")
 
 		node := &ast.SubjectMember{
+			Prefixes:    prefixes,
 			Name:        "", // Empty name means binding inherited subject
 			BindingExpr: value,
 		}
@@ -1984,7 +1995,7 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 	// it, as the OMG viewpoint examples write it.
 	if p.at(lexer.Semicolon) {
 		p.advance()
-		node := &ast.SubjectMember{}
+		node := &ast.SubjectMember{Prefixes: prefixes}
 		node.NodeSpan = p.spanFrom(start)
 		return node
 	}
@@ -2002,6 +2013,7 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 			p.expect(lexer.Semicolon, "expected ';' after subject binding")
 
 			node := &ast.SubjectMember{
+				Prefixes:    prefixes,
 				Name:        name,
 				BindingExpr: value,
 			}
@@ -2041,6 +2053,7 @@ func (p *Parser) parseSubjectMember(start int) ast.Node {
 	}
 
 	node := &ast.SubjectMember{
+		Prefixes:      prefixes,
 		Name:          name,
 		TypeRef:       typeRef,
 		Multiplicity:  mult,
@@ -3177,6 +3190,7 @@ func (p *Parser) parseTransitionTail(start int, name string, source, target *ast
 			if node.Trigger != nil {
 				p.error(p.peek().Span, "a transition accepts one trigger: write a second transition for the other event")
 			}
+			acceptStart := p.peek().Span.Offset
 			p.advance() // consume 'accept'
 			node.Trigger = p.parseTriggerEvent()
 			// `via <port>` belongs to the accept, naming the port the accepted
@@ -3184,6 +3198,7 @@ func (p *Parser) parseTransitionTail(start int, name string, source, target *ast
 			if p.acceptKeyword("via") {
 				node.Via = p.parseChainedName()
 			}
+			node.TriggerSpan = p.spanFrom(acceptStart)
 			continue
 		case p.atKeyword("when"):
 			// `when <event>`: the trigger spelling OpenSysML accepts alongside the
@@ -3193,8 +3208,10 @@ func (p *Parser) parseTransitionTail(start int, name string, source, target *ast
 			if node.Trigger != nil {
 				p.error(p.peek().Span, "a transition accepts one trigger: write a second transition for the other event")
 			}
+			whenStart := p.peek().Span.Offset
 			p.advance() // consume 'when'
 			node.Trigger = p.ParseExpression()
+			node.TriggerSpan = p.spanFrom(whenStart)
 			continue
 		case p.atKeyword("if"):
 			p.advance() // consume 'if'

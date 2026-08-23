@@ -986,6 +986,17 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 		}
 
 		p.advance() // consume the kind keyword
+		// A subject, actor or stakeholder takes prefix metadata after its
+		// keyword: `actor #B a;` (SysML.xtext SubjectUsage, ActorUsage,
+		// StakeholderUsage, each `'keyword' UsageExtensionKeyword* Usage`).
+		if kw == "subject" || kw == "actor" || kw == "stakeholder" {
+			for p.at(lexer.Hash) {
+				p.advance()
+				if metaName := p.parseQualifiedNameRelaxed(); metaName != nil {
+					prefixes = append(prefixes, &ast.PrefixMetadata{Type: metaName})
+				}
+			}
+		}
 		// `variant x` declares a variant of the variation that owns it
 		// (VariantMembership, SysML v2 §7.20).
 		if kw == "variant" {
@@ -1367,6 +1378,17 @@ func (p *Parser) parseDefinition(start int, kind ast.DefinitionKind, keyword str
 		// State def bodies are state bodies, like state usage bodies: what the
 		// first member happens to be does not change what the rest may be, and
 		// the generic body member parser knows nothing of regions or transitions.
+		// `parallel` marks the substates orthogonal, and only a body may follow it
+		// (SysML.xtext StateDefBody).
+		if p.atKeyword("parallel") {
+			def.IsParallel = true
+			p.advance()
+			if _, ok := p.expect(lexer.LBrace, "expected '{' after 'parallel'"); ok {
+				members = p.parseStateBody()
+				hasBody = true
+			}
+			break
+		}
 		if p.accept2(lexer.Semicolon) {
 			hasBody = false
 		} else if _, ok := p.expect(lexer.LBrace, "expected '{' or ';'"); ok {
@@ -2082,10 +2104,16 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		}
 	case ast.UsageState:
 		// State usage bodies: always use parseStateBody (it handles both state-specific and generic members)
-		// Optional: parallel or exclusive keyword before body
-		if p.atKeyword("parallel") || p.atKeyword("exclusive") {
-			// Consume keyword (could store in AST if needed)
+		// `parallel` marks the substates orthogonal, and only a body may follow it
+		// (SysML.xtext StateUsageBody).
+		if p.atKeyword("parallel") {
+			u.IsParallel = true
 			p.advance()
+			if _, ok := p.expect(lexer.LBrace, "expected '{' after 'parallel'"); ok {
+				members = p.parseStateBody()
+				hasBody = true
+			}
+			break
 		}
 		if p.accept2(lexer.Semicolon) {
 			hasBody = false
@@ -2589,8 +2617,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 		}
 
 		if mods.isEnd && (p.atNameOrKeyword() || p.at(lexer.LBracket)) {
-			var shortName string
-			var shortNameSpan source.Span
+			var cross *ast.CrossFeatureMember
 			var mult *ast.Multiplicity
 			var hasDefKeyword bool
 			var endRels []*ast.Relationship // relationships parsed before definition keyword
@@ -2680,23 +2707,28 @@ func (p *Parser) parseBodyMember() ast.Node {
 				}
 
 				if isDefKeyword {
+					// `end x1 [0..1] feature x : C1` declares the end's cross
+					// feature ahead of the end itself (KerML.xtext
+					// OwnedCrossFeatureMember).
+					crossStart := p.peek().Span.Offset
+					cross = &ast.CrossFeatureMember{}
 					tok := p.advance()
 					if tok.Kind == lexer.Identifier || tok.Kind == lexer.UnrestrictedName || tok.Kind == lexer.Keyword {
-						shortName = p.src.Text(tok.Span)
-						shortNameSpan = tok.Span
+						cross.Ident.Name = p.src.Text(tok.Span)
+						cross.Ident.NameSpan = tok.Span
 					}
-
-					// Parse optional multiplicity before the definition keyword
 					if p.at(lexer.LBracket) {
-						mult = p.parseMultiplicity()
+						cross.Multiplicity = p.parseMultiplicity()
+						// The bounds are also kept on the end, which is where the
+						// semantics reads an association end's multiplicity from.
+						mult = cross.Multiplicity
 					}
-
-					// Parse optional relationship clauses before definition keyword
-					// Pattern: end shortname[mult] subsets X feature Y
 					for p.atRelationshipKeyword() {
-						rel := p.parseRelationships(true)
-						endRels = append(endRels, rel...)
+						rels := p.parseRelationships(true)
+						cross.Relationships = append(cross.Relationships, rels...)
+						endRels = append(endRels, rels...)
 					}
+					cross.NodeSpan = p.spanFrom(crossStart)
 
 					hasDefKeyword = true
 				}
@@ -2788,11 +2820,8 @@ func (p *Parser) parseBodyMember() ast.Node {
 
 				// If it's a usage, apply the short name, multiplicity, relationships, and end modifier
 				if u, ok := decl.(*ast.Usage); ok {
-					// `end part <b> bead : T` declares its short name after the
-					// kind keyword, so parseDeclaration already took it.
-					if shortName != "" {
-						u.Ident.ShortName = shortName
-						u.Ident.ShortNameSpan = shortNameSpan
+					if cross != nil {
+						u.CrossFeature = cross
 					}
 					if mult != nil && u.Multiplicity == nil {
 						u.Multiplicity = mult

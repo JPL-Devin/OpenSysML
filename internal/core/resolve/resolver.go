@@ -131,6 +131,9 @@ type Resolver struct {
 	// reached in another one is not reported against it (see foreignScope).
 	document          string
 	reportedQualified map[*ast.QualifiedName]bool
+	// valuesInProgress are the usages whose value expression is being read for
+	// the type it names, so a value naming its own feature ends the walk.
+	valuesInProgress map[*ast.Usage]bool
 }
 
 // New creates a resolver over the given index.
@@ -148,6 +151,7 @@ func New(idx *symbols.Index) *Resolver {
 		importStack:      map[*ast.Import]bool{},
 		resolvingImports: map[*ast.Import]bool{},
 		naming:           map[*symbols.Symbol]bool{},
+		valuesInProgress: map[*ast.Usage]bool{},
 		nsFilters:        map[*symbols.Scope][]symbols.ElementFilter{},
 		payloads:         map[*symbols.Scope]map[string]*symbols.Symbol{},
 		redefined:        map[*symbols.Symbol][]*symbols.Symbol{},

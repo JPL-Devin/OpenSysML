@@ -167,9 +167,9 @@
           "severityMismatch": [],
           "openSysMLOnly": [
             {
-              "line": 62,
-              "severity": "error",
-              "category": "unresolved-reference",
+              "line": 38,
+              "severity": "warning",
+              "category": "units",
               "count": 1
             }
           ],

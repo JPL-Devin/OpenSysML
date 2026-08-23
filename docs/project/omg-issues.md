@@ -51,6 +51,7 @@ and not from a disagreement alone.
 | Component | Pinned version | Symptom | Adjudication | Status |
 |---|---|---|---|---|
 | `org.omg.sysml` — `Type::ownedDisjoining` setting delegate | `2026-05` (`jupyter-sysml-kernel` 0.60.1) | every `disjoint from` clause in a type declaration draws EMF's `The opposite features 'owningType' … and 'ownedDisjoining' … do not refer to each other` | [K6 / F33](pilot-differential.md#k6-diagnostic-by-diagnostic-f33) — one cause for all six corpus diagnostics, reproduced in three lines and probed through the pilot's API | filed upstream as [Systems-Modeling/SysML-v2-Pilot-Implementation#790](https://github.com/Systems-Modeling/SysML-v2-Pilot-Implementation/issues/790) (W10G), **pending adjudication**, body below |
+| `org.omg.sysml` — the `queryx/failing` Xpect fixtures | `2026-05` (`jupyter-sysml-kernel` 0.60.1) | `QPE-Qualifier`, `QPE-Traversal` and `QPE-Wildcard` declare `XPECT noErrors`, yet the pinned validator rejects all three with `no viable alternative at input '/'`, `For input string: "."` and `no viable alternative at input '@'` | [wave12d-decisions.md](wave12d-decisions.md) — established by running the pinned pilot's own SysML validator on the three fixtures, not from a disagreement | **not filed** — question drafted below, awaiting maintainer authorisation |
 
 ### F80 — `Type::ownedDisjoining` does not contain a `Disjoining` whose `owningType` is that `Type` (pilot `2026-05`)
 
@@ -156,3 +157,45 @@ than in one metaclass; the standalone form `disjoint b.f.a from b.a;`
 and reports nothing. No `kerml-examples` file carries a second pilot-only row of
 any kind, so a fix to the derived `ownedDisjoining` delegate clears this root's
 column entirely and silences nothing else it depends on.
+
+---
+
+### F81 — are the `queryx/failing` query path expressions intended notation? (pilot `2026-05`)
+
+**Not filed.** Drafted here for a maintainer to authorise; nothing has been
+posted upstream. The finding is wave 12D's, and the adjudication is in
+[wave12d-decisions.md](wave12d-decisions.md).
+
+````markdown
+**Question, not a bug report:** three Xpect fixtures under
+`sysml/src/org/omg/sysml/xpect/tests/queryx/failing/` declare file-wide silence
+(`// XPECT noErrors ---> ""`) while the pinned release's own validator rejects
+them. Is the notation planned for a later version, or are the fixtures kept as a
+record of a proposal that the grammar deliberately does not admit?
+
+The forms are
+
+```sysml
+value v1_i: Integer[0..*] = .*/.*[Integer];       // QPE-Qualifier
+value v_redefining: Integer = ./vehicle_1/cylinders/@redefining;  // QPE-Traversal
+value vw_recursive: Integer[0..*] = .**/cylinders;  // QPE-Wildcard
+```
+
+Running the release's SysML validator (`jupyter-sysml-kernel-0.60.1-all.jar`,
+tag `2026-05`) over the three model bodies reports, among others:
+
+```
+QPE-Wildcard.sysml:9:38: error: For input string: "."
+QPE-Wildcard.sysml:9:40: error: no viable alternative at input '/'
+QPE-Traversal.sysml:7:57: error: no viable alternative at input '@'
+QPE-Qualifier.sysml:9:40: error: no viable alternative at input '/'
+```
+
+Their `XPECT_SETUP` names `org.omg.sysml.xpect.tests.query.failing.SysMLQueryFailingTest`
+while the runner in the directory is `org.omg.sysml.xpect.tests.queryx.failing.SysMLQueryFailingTest`
+and extends `KerMLXtextTests`.
+
+A second implementation reading the corpus cannot tell from the fixtures alone
+whether the declared silence is an obligation or an aspiration, which is the
+reason for asking rather than implementing.
+````

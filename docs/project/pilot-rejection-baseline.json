@@ -1005,7 +1005,7 @@
       "rule": "A parallel state cannot have successions or transitions (SysML 7.16 validateStateUsageParallel; pilot StateUsage_invalid.sysml.xt).",
       "mode": "default",
       "bucket": "both-reject",
-      "oursErrors": 3,
+      "oursErrors": 1,
       "pilotErrors": 1
     },
     {

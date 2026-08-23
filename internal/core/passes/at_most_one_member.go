@@ -13,13 +13,18 @@ const (
 	msgOnlyOneObjective = "Only one objective is allowed."
 
 	msgSubjectParameterPosition = "Subject must be first parameter."
+
+	// KerML 8.3.3.1.1: Type::multiplicity is single-valued, so a type states at
+	// most one multiplicity (pilot KerMLValidator checkTypeMultiplicity).
+	msgOnlyOneMultiplicity = "Only one multiplicity is allowed"
 )
 
 func (cc *constraintChecker) checkAtMostOneMember(sym *symbols.Symbol) {
 	if sym == nil {
 		return
 	}
-	members := declMembers(sym.Decl)
+	members := typeMembers(sym.Decl)
+	cc.checkAtMostOneMultiplicity(sym.Decl, members)
 	if subjectOwnerDecl(sym.Decl) {
 		var subjects []ast.Node
 		for _, m := range members {
@@ -107,6 +112,44 @@ func (cc *constraintChecker) checkSubjectParameterPosition(sym *symbols.Symbol, 
 		Code:     "subject-parameter-position",
 		Source:   "constraint",
 	})
+}
+
+// checkAtMostOneMultiplicity reports every multiplicity member of a type after
+// the first, the one a multiplicity written in the declaration itself already is
+// (KerML 8.3.3.1.1, Type::multiplicity).
+func (cc *constraintChecker) checkAtMostOneMultiplicity(decl ast.Node, members []ast.Node) {
+	var mults []ast.Node
+	if declMultiplicity(decl) != nil {
+		mults = append(mults, decl)
+	}
+	for _, m := range members {
+		if _, ok := unwrapMembership(m).(*ast.MultiplicityDecl); ok {
+			mults = append(mults, unwrapMembership(m))
+		}
+	}
+	cc.reportExtraMembers(mults, msgOnlyOneMultiplicity, "only-one-multiplicity")
+}
+
+// declMultiplicity is the multiplicity stated in a declaration itself.
+func declMultiplicity(decl ast.Node) *ast.Multiplicity {
+	switch d := decl.(type) {
+	case *ast.Definition:
+		return d.Multiplicity
+	case *ast.Usage:
+		return d.Multiplicity
+	}
+	return nil
+}
+
+// typeMembers is the body of a type declaration, in either language.
+func typeMembers(decl ast.Node) []ast.Node {
+	if members := declMembers(decl); members != nil {
+		return members
+	}
+	if ns, ok := decl.(*ast.Namespace); ok {
+		return ns.Members
+	}
+	return nil
 }
 
 func isSubjectDecl(decl ast.Node) bool {

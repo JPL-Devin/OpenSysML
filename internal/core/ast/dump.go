@@ -300,6 +300,9 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		if v.IsIndividual && v.Kind != DefIndividual {
 			b.WriteString(` individual=true`)
 		}
+		if v.IsParallel {
+			b.WriteString(` parallel=true`)
+		}
 		writeChildren(b, depth, defusageChildren(v.Prefixes, v.Relationships, v.Multiplicity, nil, v.Members))
 		return
 	case *Usage:
@@ -334,6 +337,9 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 		if v.IsIndividual {
 			b.WriteString(` individual=true`)
 		}
+		if v.IsParallel {
+			b.WriteString(` parallel=true`)
+		}
 		if kw := v.Portion.Keyword(); kw != "" {
 			fmt.Fprintf(b, ` %s=true`, kw)
 		}
@@ -366,6 +372,17 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 			kids = append(kids, v.Receiver)
 		}
 		kids = append(kids, v.Members...)
+		writeChildren(b, depth, kids)
+		return
+	case *CrossFeatureMember:
+		fmt.Fprintf(b, `(CrossFeatureMember name=%q`, identName(v.Ident))
+		var kids []Node
+		if v.Multiplicity != nil {
+			kids = append(kids, v.Multiplicity)
+		}
+		for _, r := range v.Relationships {
+			kids = append(kids, r)
+		}
 		writeChildren(b, depth, kids)
 		return
 	case *ConnectorEnd:
@@ -424,6 +441,9 @@ func dumpNode(b *strings.Builder, n Node, depth int) {
 	case *SubjectMember:
 		fmt.Fprintf(b, `(SubjectMember name=%q type=%q`, v.Name, qnString(v.TypeRef))
 		kids := make([]Node, 0)
+		for _, pm := range v.Prefixes {
+			kids = append(kids, pm)
+		}
 		if v.Multiplicity != nil {
 			kids = append(kids, v.Multiplicity)
 		}
@@ -769,6 +789,9 @@ func usageChildren(v *Usage) []Node {
 	}
 	if v.Multiplicity != nil {
 		kids = append(kids, v.Multiplicity)
+	}
+	if v.CrossFeature != nil {
+		kids = append(kids, v.CrossFeature)
 	}
 	if v.Value != nil {
 		kids = append(kids, v.Value)

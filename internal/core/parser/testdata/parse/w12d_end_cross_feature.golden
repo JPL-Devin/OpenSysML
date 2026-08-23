@@ -1,0 +1,61 @@
+(RootNamespace
+  (Membership visibility="default"
+    (Package name="W12DEndCrossFeature" library=false standard=false
+      (Membership visibility="default"
+        (Usage kind="class" name="C1" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="a" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+              (Relationship kind="typing" target=C2
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Usage kind="class" name="C2" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="b" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+              (Relationship kind="typing" target=C1
+                (*ast.QualifiedName))))))
+      (Membership visibility="default"
+        (Usage kind="assoc" name="A1" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="x" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" end=true
+              (Relationship kind="typing" target=C1
+                (*ast.QualifiedName))
+              (Relationship kind="crosses" target=(expr)
+                (FeatureChainExpr member="b"
+                  (FeatureReference name="y")))
+              (Multiplicity range=true
+                (LiteralInteger value="0")
+                (LiteralInteger value="1"))
+              (CrossFeatureMember name="x1"
+                (Multiplicity range=true
+                  (LiteralInteger value="0")
+                  (LiteralInteger value="1")))
+              (Import visibility="public" all=false kind=membership recursive=false imported="y::y1" filtered=false)))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="y" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" end=true
+              (Relationship kind="typing" target=C2
+                (*ast.QualifiedName))
+              (Relationship kind="crosses" target=(expr)
+                (FeatureChainExpr member="y1"
+                  (FeatureReference name="x")))
+              (Membership visibility="default" typeFeature=true
+                (Usage kind="attribute" name="y1" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature"
+                  (Relationship kind="featured by" target=C1
+                    (*ast.QualifiedName))
+                  (Multiplicity range=true
+                    (LiteralInteger value="0")
+                    (LiteralInteger value="1"))))))))
+      (Membership visibility="default"
+        (Usage kind="assoc" name="A2" ref=false direction="none" composite=false derived=false ordered=false nonunique=false
+          (Membership visibility="default"
+            (Usage kind="attribute" name="x" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" end=true
+              (Relationship kind="subsets" target=C1::a
+                (*ast.QualifiedName))
+              (Relationship kind="typing" target=C1
+                (*ast.QualifiedName))
+              (CrossFeatureMember name="xa"
+                (Relationship kind="subsets" target=C1::a
+                  (*ast.QualifiedName)))))
+          (Membership visibility="default"
+            (Usage kind="attribute" name="y" ref=false direction="none" composite=false derived=false ordered=false nonunique=false keyword="feature" end=true
+              (Relationship kind="typing" target=C2
+                (*ast.QualifiedName)))))))))

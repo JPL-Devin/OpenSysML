@@ -309,8 +309,8 @@ Two things did move here, and one is a first:
   them until F93 is fixed in `semantics/`. A ratchet reading of "only-ours went up on `testdata`"
   is correct and expected here.
 
-Per category, the only-ours totals are: `pilot-examples` 32 `unresolved-reference`, 9 `unmapped`,
-1 `kind-mismatch`, 1 `units`; `pilot-validation` 1 `unresolved-reference`;
+Per category, the only-ours totals are: `pilot-examples` 31 `unresolved-reference`, 9 `unmapped`,
+1 `kind-mismatch`, 2 `units`; `pilot-validation` 1 `unresolved-reference`;
 `kerml-examples` 3 `unmapped`; `examples` 63 syntax; `testdata` 2
 `unmapped`, 1 `multiplicity`; `probes` 6 `unmapped`.
 Only-pilot: `testdata` 11 `kind-mismatch`, 4 `unmapped`, 3 syntax, 2 `unresolved-reference`;
@@ -1994,17 +1994,17 @@ wave 11F.
 The following fourteen rows are settled adjudications rather than unclassified
 disagreements.
 
-* **Parser-blocked query syntax:** `queryx/failing/QPE-Qualifier`,
-  `QPE-Traversal`, and `QPE-Wildcard` are clean in the pilot, while OpenSysML
-  reports `expected a namespace member`. Query path expressions are not parsed,
-  so these are wave-11B parser work. See
-  [wave11b-parser-findings.md](wave11b-parser-findings.md).
-* **Parser-blocked parallel state syntax:** `TransitionUsage_invalid.sysml:45,
-  54, 60, 68` follows parse errors at lines 43 and 46 from `parallel` state
-  syntax. `parallel` and `exclusive` are consumed but not retained in the AST,
-  so “A parallel state cannot have successions or transitions” cannot yet be
-  evaluated. The rule is spec-derivable; the missing piece is its parser
-  representation. See [wave11b-parser-findings.md](wave11b-parser-findings.md).
+* **Query syntax the pinned pilot does not parse:** `queryx/failing/QPE-Qualifier`,
+  `QPE-Traversal`, and `QPE-Wildcard` declare file-wide silence, but the pinned
+  pilot's own validator rejects them too (`no viable alternative at input '/'`),
+  which is what `queryx/failing/` records. Wave 12D reclassifies these as a
+  **pilot limitation**. See [wave12d-decisions.md](wave12d-decisions.md).
+* **Parallel state syntax:** `TransitionUsage_invalid.sysml:45, 54, 68` closed in
+  wave 12D, which parses `state … parallel { … }` and retains it in the AST so
+  “A parallel state cannot have successions or transitions” and the
+  accepter-source rule can be evaluated. Line 60 (`Must be a Boolean
+  expression.`) remains open behind tier gating. See
+  [wave12d-decisions.md](wave12d-decisions.md).
 * **Fixture environment:** `Feature_invalid_noType.sysml:18,20` has no library
   resource in `XPECT_SETUP`. The pilot consequently lacks `Parts::Part`, so the
   implicit specialization has nothing to specialize and the feature has no
