@@ -353,7 +353,7 @@ The remaining 14:
 |---|---:|---|
 | `same-line` — we warn on the declared line, at another offset | 7 | The nested `perform b.a;` / `exhibit s.sa;` shape below; the `Part, UseCase` naming defect closed in wave 10. |
 | `severity-differs` — a diagnostic of ours **is** there, as an **error** | 5 | Another rule's error is at the line, whatever this rule does. |
-| nothing of ours there at all | 2 | `BindingConnector_Invalid2.sysml.xt`:42 and `ShadowingTests_ImportAndInnerClassesNamesAreTheSameBadCase3_Rdef.kerml.xt`:28 — shapes the rule does not reach. |
+| nothing of ours there at all | 1 | `BindingConnector_Invalid2.sysml.xt`:42 — a shape the rule does not reach. Wave 11C closed the `BadCase3_Rdef` row (below). |
 
 **The severity defect the first run found is closed: it was 60 rows before wave 9C and is 0 now.**
 The pilot declares:
@@ -372,7 +372,7 @@ larger multiplicity upper bound` rule, 8 rows of nothing on the first run, and
 `User library packages should not be marked as standard`, 1 row, are both implemented and agreeing.
 
 One reading trap in the per-kind table above: the `nothing` column subtracts the agreements as well
-as the tolerances, so it reads **2** — the rows where nothing of ours is there at all.
+as the tolerances, so it reads **1** — the row where nothing of ours is there at all.
 
 ### Wave 9C: the library diamond, as a warning
 
@@ -402,8 +402,25 @@ What is still open in the family, by reproducer:
 | 2 | `Specialization_invalid.kerml.xt:56,60` | A specialization-cycle error of another rule is at the line, so the row reads `severity-differs` whatever this rule does. |
 | 2 | `AttributeUsage_invalid.sysml.xt:47,52` | `DataValue, Part` / `DataValue, Port`: the rule deliberately draws no diamond through an attribute's implicit `Base::DataValue` typing when the declaration also has a declared type, because doing so reported `'self' from DataValue, …` across otherwise-clean pilot-corpora roots. |
 | 1 | `InterfaceUsage_Invalid.sysml.xt:78` | `Part, Port` through an `end part ::> tankAssy.fuel;` subsetting chain, which the rule does not follow; an interface-end error of another rule is at the line. |
-| 1 | `ShadowingTests_ImportAndInnerClassesNamesAreTheSameBadCase3_Rdef.kerml.xt:28` | `'B' from OuterPackage`: an inherited *package* member name, not a library diamond. |
+| 0 | `ShadowingTests_ImportAndInnerClassesNamesAreTheSameBadCase3_Rdef.kerml.xt:28` | Closed in wave 11C — see below. Not a library diamond, so the resolver's own rule owns it. |
 | 1 | `BindingConnector_Invalid2.sysml.xt:42` | `Bound features should have conforming types` on `rearWheel+1`: one endpoint is an expression, so the rule has no feature type to compare. |
+
+### Wave 11C: a supertype's imports are memberships it has
+
+`ShadowingTests_ImportAndInnerClassesNamesAreTheSameBadCase3_Rdef.kerml.xt:28` declares
+`Duplicate of inherited member name 'B' from OuterPackage` where `inner1 subsets inner` and `inner`
+publicly imports `OuterPackage::*`. We were silent because `Resolver.inheritableMembers` collected
+only a supertype's *owned* members. KerML 8.4.3.2 derives inherited memberships from the
+supertypes' non-private memberships, and 8.3.3.1 makes a namespace's memberships its owned ones
+*plus* its imported ones, so a name a supertype imported is inherited exactly as an owned one is —
+and redeclaring it in the subtype is the distinguishability violation the fixture declares.
+
+`Resolver.importedMembers` now contributes those, subject to the same two limits the owned side
+already has: a private import contributes nothing, and library elements are excluded because library
+supertypes are not walked (that family is `passes/w9c_inherited_name_conflict.go`, deliberately left
+as the only producer over library bases). The redefinition in the fixture was a red herring: the
+`hasUnresolvedRedefinition` suppression was not what swallowed the warning — the same file with the
+redefinition removed was silent too.
 
 ---
 
