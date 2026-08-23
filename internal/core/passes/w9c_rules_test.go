@@ -28,19 +28,12 @@ func w9cLibraryDiags(t *testing.T, src string, warm bool) []Diagnostic {
 		}
 		cache = c
 		warmIdx := symbols.NewIndex()
-		warmLoader := libs.NewLoader(libSrc, cache)
-		for _, name := range libSrc.List() {
-			if err := warmLoader.Load(name, warmIdx); err != nil {
-				t.Fatalf("warm library %s: %v", name, err)
-			}
+		if err := libs.NewLoader(libSrc, cache).LoadAll(warmIdx); err != nil {
+			t.Fatalf("warm library: %v", err)
 		}
-		warmLoader.Persist(warmIdx)
 	}
-	loader := libs.NewLoader(libSrc, cache)
-	for _, name := range libSrc.List() {
-		if err := loader.Load(name, idx); err != nil {
-			t.Fatalf("load library %s: %v", name, err)
-		}
+	if err := libs.NewLoader(libSrc, cache).LoadAll(idx); err != nil {
+		t.Fatalf("load the library: %v", err)
 	}
 	if warm {
 		// A restored symbol is AST-less, so a declaration here would mean the

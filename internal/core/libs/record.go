@@ -10,9 +10,9 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// formatVersion is the on-disk index record format version. Bump it whenever
-// the persisted shape changes, or the resolution a record captures changes; a
-// mismatch invalidates all cached records.
+// formatVersion is the on-disk index record format version. Bump it whenever the
+// persisted shape changes; a change to what a record captures needs no bump,
+// since the build ID in the cache key already invalidates records (see buildid.go).
 const formatVersion = 23
 
 // symRecord is the reduced, gob-encodable projection of a symbols.Symbol.

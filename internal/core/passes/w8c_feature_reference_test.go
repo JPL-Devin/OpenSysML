@@ -21,11 +21,8 @@ func w8cLibraryDiagnostics(t *testing.T, name, src string) []Diagnostic {
 	if err != nil {
 		cache = nil
 	}
-	loader := libs.NewLoader(libSrc, cache)
-	for _, lib := range libSrc.List() {
-		if err := loader.Load(lib, idx); err != nil {
-			t.Fatalf("load library %s: %v", lib, err)
-		}
+	if err := libs.NewLoader(libSrc, cache).LoadAll(idx); err != nil {
+		t.Fatalf("load the library: %v", err)
 	}
 	root := parser.New(source.New(name, []byte(src))).ParseFile()
 	idx.AddDocument(name, root)

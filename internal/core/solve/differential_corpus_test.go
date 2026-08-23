@@ -317,17 +317,18 @@ func TestDifferentialStandardLibrary(t *testing.T) {
 	gate.summary.report(t)
 }
 
-// parseLibraries indexes the standard library from source, bypassing the index
-// cache: a cached record carries no declaration, and a condition cannot be read
-// from one, so a warm cache would leave this gate covering nothing.
+// parseLibraries indexes the standard library as ordinary documents, bypassing
+// the loader: a library it registers is index-only and holds no condition to
+// read, so this gate has to parse the files itself.
 func parseLibraries(t *testing.T, idx *symbols.Index) {
 	t.Helper()
 	src := libs.DefaultSource()
-	loader := libs.NewLoader(src, nil)
 	for _, name := range src.List() {
-		if err := loader.Load(name, idx); err != nil {
-			t.Fatalf("parse library %s: %v", name, err)
+		content, err := src.Read(name)
+		if err != nil {
+			t.Fatalf("read library %s: %v", name, err)
 		}
+		idx.AddDocument(name, parser.New(source.New(name, content)).ParseFile())
 	}
 }
 

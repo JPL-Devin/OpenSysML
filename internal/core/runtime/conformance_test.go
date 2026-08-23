@@ -339,15 +339,9 @@ func primeLibraryCache() error {
 	if err != nil {
 		return err
 	}
-	loader := libs.NewLoader(src, cache)
-	idx := symbols.NewIndex()
-	for _, name := range src.List() {
-		if err := loader.Load(name, idx); err != nil {
-			return fmt.Errorf("load library %s: %w", name, err)
-		}
+	if err := libs.NewLoader(src, cache).LoadAll(symbols.NewIndex()); err != nil {
+		return fmt.Errorf("load the library: %w", err)
 	}
-	idx.ExpandWildcardImports()
-	loader.Persist(idx)
 	return nil
 }
 
@@ -361,11 +355,8 @@ func loadLibraries(t *testing.T, idx *symbols.Index) {
 	if err != nil {
 		t.Fatalf("library cache: %v", err)
 	}
-	loader := libs.NewLoader(src, cache)
-	for _, name := range src.List() {
-		if err := loader.Load(name, idx); err != nil {
-			t.Fatalf("load library %s: %v", name, err)
-		}
+	if err := libs.NewLoader(src, cache).LoadAll(idx); err != nil {
+		t.Fatalf("load the library: %v", err)
 	}
 }
 

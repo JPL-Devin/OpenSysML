@@ -199,6 +199,33 @@ measure of success is the Xpect and differential oracles moving *without* a rise
 rows. Take it after wave 11 lands, since several slices' rows sit behind this gate and would
 otherwise be re-measured twice.
 
+## L3 — a library contributes names but no bodies (scheduled, wave 12)
+
+A standard library is **index-only**: `libs.Loader.LoadAll` reduces every file it parses to the
+same record a cache hit restores, so a library type contributes its name, kind, specializations,
+alias target, unit and annotation facts — and no members, declared values or condition bodies —
+whether the cache was cold or warm. That contract was adopted deliberately, as the fix for a
+cache that was not a cache: a hit produced a *poorer* state than a miss, so `solve` evaluated
+library-inherited invariants and gRPC reported dozens of inherited library attributes only until
+the cache warmed, and the conformance oracles gave two answers for one tree.
+
+The contract is honest but lossy, and this item is the other way out (option B when it was
+adjudicated): make records **lossless** — serialize enough member, value and condition structure
+that a restored library equals a parsed one — and then let libraries keep their bodies on both
+paths. What it buys is not conformance: it is reach. Hover and go-to-definition into a library
+body (L1's analogue for the stdlib), library-declared conditions in the solver's translatable
+subset, and library feature multiplicity, which a record does not persist today
+(`TestMultiplicityOfALibraryFeatureIsTheSameColdAndWarm` skips on it).
+
+What it costs, as measured while adopting the index-only contract instead: the on-disk format
+grows substantially and gains a version-compatibility surface; library value expressions have to
+actually resolve, which they do not today (`isSolid = isEmpty(voids)`, `Systems Library/Items.sysml:105`); and
+every consumer that currently sees no library body starts seeing one, which is a diagnostics
+change to adjudicate per oracle rather than a plumbing change. Several sessions, and it must not
+be taken as a cosmetic metric move — the index-only contract is what makes the cache provably
+free of semantic effect, so anything replacing it needs the same proof
+(`internal/core/libs/index_only_test.go`).
+
 ---
 
 # Track D — model persistence and RDF interchange
@@ -522,5 +549,6 @@ Tracks A, B, C, P and T1 are closed and their entries are removed; what is left 
    worth having as soon as the profile's term table exists, but the profile only becomes fully
    conformant behind D3.3, D2 and D1, so it does not belong ahead of them.
 3. **L1** in wave 12, after wave 11G's annotation-body scope lands, and **L2** after wave 11 as a
-   whole, since slices' rows sit behind the gate it narrows. Both are independent of the release
-   section and of Track D.
+   whole, since slices' rows sit behind the gate it narrows. **L3** last of the three and only if
+   its reach is wanted: it buys no conformance row, and it replaces a contract the cache's
+   correctness currently rests on. All three are independent of the release section and of Track D.

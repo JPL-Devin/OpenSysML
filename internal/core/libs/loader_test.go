@@ -11,7 +11,7 @@ func TestLoaderLoadsBundledLibraryIntoIndex(t *testing.T) {
 	ld := NewLoader(DefaultSource(), c)
 	idx := symbols.NewIndex()
 
-	if err := ld.Load("Kernel Libraries/Kernel Data Type Library/ScalarValues.kerml", idx); err != nil {
+	if err := ld.load("Kernel Libraries/Kernel Data Type Library/ScalarValues.kerml", idx); err != nil {
 		t.Fatalf("Load: %v", err)
 	}
 	if got := idx.LookupQualified("ScalarValues"); len(got) != 1 {
@@ -26,7 +26,7 @@ func TestLoaderReadErrorPropagates(t *testing.T) {
 	c := &Cache{dir: t.TempDir()}
 	ld := NewLoader(DefaultSource(), c)
 	idx := symbols.NewIndex()
-	if err := ld.Load("NoSuchLibrary.kerml", idx); err == nil {
+	if err := ld.load("NoSuchLibrary.kerml", idx); err == nil {
 		t.Fatal("Load of missing library returned nil error")
 	}
 }

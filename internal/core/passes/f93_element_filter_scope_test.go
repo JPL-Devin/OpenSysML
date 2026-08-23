@@ -28,11 +28,8 @@ func libraryFixtureDiags(t *testing.T, file string) []Diagnostic {
 	if err != nil {
 		cache = nil
 	}
-	loader := libs.NewLoader(libSrc, cache)
-	for _, name := range libSrc.List() {
-		if err := loader.Load(name, idx); err != nil {
-			t.Fatalf("load library %s: %v", name, err)
-		}
+	if err := libs.NewLoader(libSrc, cache).LoadAll(idx); err != nil {
+		t.Fatalf("load the library: %v", err)
 	}
 	root := parser.New(source.New(file, data)).ParseFile()
 	idx.AddDocument(file, root)

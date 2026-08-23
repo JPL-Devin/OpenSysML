@@ -22,11 +22,8 @@ func libraryIndex(t *testing.T) *symbols.Index {
 	idx := symbols.NewIndex()
 	src := libs.DefaultSource()
 	cache, _ := libs.NewCache()
-	loader := libs.NewLoader(src, cache)
-	for _, name := range src.List() {
-		if err := loader.Load(name, idx); err != nil {
-			t.Fatalf("load standard library %s: %v", name, err)
-		}
+	if err := libs.NewLoader(src, cache).LoadAll(idx); err != nil {
+		t.Fatalf("load the standard library: %v", err)
 	}
 	idx.ExpandWildcardImports()
 	return idx

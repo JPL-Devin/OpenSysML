@@ -1,4 +1,4 @@
-// Exercised from outside the package: building a restored index needs the loader,
+// Exercised from outside the package: building an index of records needs the loader,
 // which imports semantics.
 package semantics_test
 
@@ -13,8 +13,8 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
-// A restored library symbol has no declaration, so each rule it takes part in has
-// two implementations and a rule pinned only on the parsed path is half-tested.
+// A library symbol has no declaration on either load path, so every rule it takes
+// part in must answer from its record alone.
 const semanticsLibrary = `standard library package Kit {
 	attribute def Mass;
 	metadata def Safety;
@@ -45,10 +45,10 @@ struct MyWheel specializes Wheel {
 }
 struct EndShot;`
 
-// Conformance follows the specialization graph, which a restored library holds as
-// recorded supertype names: it must answer the same either way and transitively.
-func TestConformanceOverALibraryIsTheSameParsedAndRestored(t *testing.T) {
-	parsed, restored := bothPaths(t)
+// Conformance follows the specialization graph, which a library holds as recorded
+// supertype names: it must answer the same cold and warm, and transitively.
+func TestConformanceOverALibraryIsTheSameColdAndWarm(t *testing.T) {
+	cold, warm := bothPaths(t)
 	for _, tc := range []struct {
 		sub, super string
 		want       bool
@@ -58,7 +58,7 @@ func TestConformanceOverALibraryIsTheSameParsedAndRestored(t *testing.T) {
 		{"Kit::Fastener", "Kit::Bolt", false},   // conformance is not symmetric
 		{"Kit::Nut", "Kit::Bolt", false},        // siblings do not conform
 	} {
-		for path, lib := range map[string]library{"parsed": parsed, "restored": restored} {
+		for path, lib := range map[string]library{"cold": cold, "warm": warm} {
 			got := lib.model.Conforms(lib.symbol(t, tc.sub), lib.symbol(t, tc.super))
 			if got != tc.want {
 				t.Errorf("%s: Conforms(%s, %s) = %v, want %v", path, tc.sub, tc.super, got, tc.want)
@@ -67,21 +67,18 @@ func TestConformanceOverALibraryIsTheSameParsedAndRestored(t *testing.T) {
 	}
 }
 
-func TestInheritedImplicitBaseIsTheSameParsedAndRestored(t *testing.T) {
+func TestInheritedImplicitBaseIsTheSameColdAndWarm(t *testing.T) {
 	dir, cacheDir := t.TempDir(), t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "wheel.kerml"), []byte(inheritedImplicitLibrary), 0o600); err != nil {
 		t.Fatalf("write library: %v", err)
 	}
-	parsed := modelOver(t, loadLibrary(t, dir, cacheDir))
-	restored := modelOver(t, loadLibrary(t, dir, cacheDir))
+	cold := modelOver(t, loadLibrary(t, dir, cacheDir))
+	warm := modelOver(t, loadLibrary(t, dir, cacheDir))
 
-	for path, lib := range map[string]library{"parsed": parsed, "restored": restored} {
+	for path, lib := range map[string]library{"cold": cold, "warm": warm} {
 		myWheel := lib.symbol(t, "MyWheel")
-		if path == "parsed" && myWheel.Decl == nil {
-			t.Fatal("the first load must parse MyWheel")
-		}
-		if path == "restored" && myWheel.Decl != nil {
-			t.Fatal("the second load must restore MyWheel")
+		if myWheel.Decl != nil {
+			t.Fatalf("the %s load leaves MyWheel a declaration", path)
 		}
 		inherited, ok := lib.model.LookupContributedMember(myWheel, "endShot")
 		if !ok {
@@ -94,10 +91,10 @@ func TestInheritedImplicitBaseIsTheSameParsedAndRestored(t *testing.T) {
 	}
 }
 
-// The members of a restored type come from the index rather than from a scope,
+// The members of a library type come from the index rather than from a scope,
 // including the inherited ones and the masking a closer declaration applies.
-func TestMembersOfALibraryTypeAreTheSameParsedAndRestored(t *testing.T) {
-	parsed, restored := bothPaths(t)
+func TestMembersOfALibraryTypeAreTheSameColdAndWarm(t *testing.T) {
+	cold, warm := bothPaths(t)
 	for _, tc := range []struct{ owner, member, want string }{
 		// Declared, inherited, and inherited-but-masked by a redeclaration.
 		{"Kit::Fastener", "mass", "Kit::Fastener::mass"},
@@ -105,7 +102,7 @@ func TestMembersOfALibraryTypeAreTheSameParsedAndRestored(t *testing.T) {
 		{"Kit::HexBolt", "mass", "Kit::Fastener::mass"},
 		{"Kit::Nut", "mass", "Kit::Nut::mass"},
 	} {
-		for path, lib := range map[string]library{"parsed": parsed, "restored": restored} {
+		for path, lib := range map[string]library{"cold": cold, "warm": warm} {
 			member, ok := lib.model.LookupMember(lib.symbol(t, tc.owner), tc.member)
 			if !ok {
 				t.Errorf("%s: %s has no member %s", path, tc.owner, tc.member)
@@ -120,9 +117,9 @@ func TestMembersOfALibraryTypeAreTheSameParsedAndRestored(t *testing.T) {
 
 // A member reached only through what a type specializes must not be reported as
 // one of its own, whichever path the library came from.
-func TestContributedMembersOfALibraryTypeAreTheSameParsedAndRestored(t *testing.T) {
-	parsed, restored := bothPaths(t)
-	for path, lib := range map[string]library{"parsed": parsed, "restored": restored} {
+func TestContributedMembersOfALibraryTypeAreTheSameColdAndWarm(t *testing.T) {
+	cold, warm := bothPaths(t)
+	for path, lib := range map[string]library{"cold": cold, "warm": warm} {
 		nut := lib.symbol(t, "Kit::Nut")
 		contributed, ok := lib.model.LookupContributedMember(nut, "mass")
 		if !ok {
@@ -135,15 +132,14 @@ func TestContributedMembersOfALibraryTypeAreTheSameParsedAndRestored(t *testing.
 	}
 }
 
-// A `filter` reaches the evaluator as a parsed condition from a live document and
-// as a compiled predicate from a restored one; both must classify alike.
-func TestNamespaceFilterOverALibraryIsTheSameParsedAndRestored(t *testing.T) {
-	parsed, restored := bothPaths(t)
-	if f := filterOn(t, parsed, "Kit::Critical"); f.Expr == nil {
-		t.Error("the parsed path must carry the condition as an expression")
-	}
-	if f := filterOn(t, restored, "Kit::Critical"); f.Pred == nil {
-		t.Error("the restored path must carry the condition compiled")
+// A library `filter` reaches the evaluator as a compiled predicate on both paths,
+// never as a parsed condition, and must classify the same either way.
+func TestNamespaceFilterOverALibraryIsTheSameColdAndWarm(t *testing.T) {
+	cold, warm := bothPaths(t)
+	for path, lib := range map[string]library{"cold": cold, "warm": warm} {
+		if f := filterOn(t, lib, "Kit::Critical"); f.Pred == nil {
+			t.Errorf("the %s load does not carry the condition compiled", path)
+		}
 	}
 	for _, tc := range []struct {
 		cand string
@@ -153,7 +149,7 @@ func TestNamespaceFilterOverALibraryIsTheSameParsedAndRestored(t *testing.T) {
 		{"Kit::Critical::Plain", false},
 		{"Kit::Bolt", false},
 	} {
-		for path, lib := range map[string]library{"parsed": parsed, "restored": restored} {
+		for path, lib := range map[string]library{"cold": cold, "warm": warm} {
 			got := lib.model.SatisfiesElementFilter(filterOn(t, lib, "Kit::Critical"), lib.symbol(t, tc.cand))
 			if got != tc.want {
 				t.Errorf("%s: @Safety admits %s = %v, want %v", path, tc.cand, got, tc.want)
@@ -162,11 +158,11 @@ func TestNamespaceFilterOverALibraryIsTheSameParsedAndRestored(t *testing.T) {
 	}
 }
 
-// The metadata annotating an element is read from its declaration when parsed and
-// from its record when restored, so a filter classifies both the same way.
+// The metadata annotating a library element is read from its record on both
+// paths, so a filter classifies it the same way.
 func TestAnnotationFactsOfALibraryElementSurviveTheCache(t *testing.T) {
-	parsed, restored := bothPaths(t)
-	for path, lib := range map[string]library{"parsed": parsed, "restored": restored} {
+	cold, warm := bothPaths(t)
+	for path, lib := range map[string]library{"cold": cold, "warm": warm} {
 		facts := lib.model.AnnotationFactsOf(lib.symbol(t, "Kit::Critical::Guard"))
 		if len(facts) != 1 || facts[0].TypeFQN != "Kit::Safety" {
 			t.Errorf("%s: Guard is annotated %+v, want one Kit::Safety", path, facts)
@@ -204,21 +200,23 @@ func (l library) symbol(t *testing.T, fqn string) *symbols.Symbol {
 
 // bothPaths loads semanticsLibrary twice through one cache directory: the first
 // load parses it, the second restores its record.
-func bothPaths(t *testing.T) (parsed, restored library) {
+func bothPaths(t *testing.T) (cold, warm library) {
 	t.Helper()
 	dir, cacheDir := t.TempDir(), t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "kit.sysml"), []byte(semanticsLibrary), 0o600); err != nil {
 		t.Fatalf("write library: %v", err)
 	}
-	parsed = modelOver(t, loadLibrary(t, dir, cacheDir))
-	restored = modelOver(t, loadLibrary(t, dir, cacheDir))
-	if parsed.symbol(t, "Kit::Fastener").Decl == nil {
-		t.Fatal("the first load must parse the library, leaving its symbols a declaration")
+	cold = modelOver(t, loadLibrary(t, dir, cacheDir))
+	warm = modelOver(t, loadLibrary(t, dir, cacheDir))
+	// Both loads are index-only, which is what makes the comparisons below a test
+	// of the record path rather than of two different states.
+	if cold.symbol(t, "Kit::Fastener").Decl != nil {
+		t.Fatal("the cold load leaves the library its declarations")
 	}
-	if restored.symbol(t, "Kit::Fastener").Decl != nil {
-		t.Fatal("the second load must restore the record, whose symbols carry no declaration")
+	if warm.symbol(t, "Kit::Fastener").Decl != nil {
+		t.Fatal("the warm load leaves the library its declarations")
 	}
-	return parsed, restored
+	return cold, warm
 }
 
 // modelOver is a semantic model over idx, wired as the workspace wires it.
@@ -240,29 +238,26 @@ func loadLibrary(t *testing.T, dir, cacheDir string) *symbols.Index {
 		t.Fatalf("cache: %v", err)
 	}
 	src := libs.NewDirSource(dir)
-	ld := libs.NewLoader(src, cache)
 	idx := symbols.NewIndex()
-	for _, name := range src.List() {
-		if err := ld.Load(name, idx); err != nil {
-			t.Fatalf("load %s: %v", name, err)
-		}
+	if err := libs.NewLoader(src, cache).LoadAll(idx); err != nil {
+		t.Fatalf("load the library: %v", err)
 	}
-	idx.ExpandWildcardImports()
-	ld.Persist(idx)
 	if len(idx.FQNs()) == 0 {
 		t.Fatal("the load registered nothing")
 	}
 	return idx
 }
 
-// A restored library feature loses its declared multiplicity: symRecord persists
-// none, so it takes the assumed 1..1. Fix belongs in libs ("Found, not fixed").
-func TestMultiplicityOfALibraryFeatureIsTheSameParsedAndRestored(t *testing.T) {
-	t.Skip("known gap: a restored library feature loses its declared multiplicity")
-	parsed, restored := bothPaths(t)
-	want := parsed.model.EffectiveMultiplicityOf(parsed.symbol(t, "Kit::Nut::mass"))
-	got := restored.model.EffectiveMultiplicityOf(restored.symbol(t, "Kit::Nut::mass"))
-	if got != want {
-		t.Errorf("Kit::Nut::mass multiplicity = %+v restored, %+v parsed", got, want)
+// A record persists no multiplicity, so a library feature takes the assumed 1..1
+// on both paths rather than its declared 0..1 (roadmap L3).
+func TestMultiplicityOfALibraryFeatureIsTheSameColdAndWarm(t *testing.T) {
+	cold, warm := bothPaths(t)
+	got := cold.model.EffectiveMultiplicityOf(cold.symbol(t, "Kit::Nut::mass"))
+	if want := warm.model.EffectiveMultiplicityOf(warm.symbol(t, "Kit::Nut::mass")); got != want {
+		t.Errorf("Kit::Nut::mass multiplicity = %+v cold, %+v warm", got, want)
+	}
+	if got != semantics.AssumedRange() {
+		t.Errorf("Kit::Nut::mass multiplicity = %+v, want the assumed %+v: a record now "+
+			"carries multiplicity, so assert the declared 0..1 instead", got, semantics.AssumedRange())
 	}
 }

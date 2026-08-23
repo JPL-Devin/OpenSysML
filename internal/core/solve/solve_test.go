@@ -50,11 +50,8 @@ func loadLibraries(t *testing.T, idx *symbols.Index) {
 		t.Fatalf("library cache: %v", err)
 	}
 	src := libs.DefaultSource()
-	loader := libs.NewLoader(src, cache)
-	for _, name := range src.List() {
-		if err := loader.Load(name, idx); err != nil {
-			t.Fatalf("load library %s: %v", name, err)
-		}
+	if err := libs.NewLoader(src, cache).LoadAll(idx); err != nil {
+		t.Fatalf("load the library: %v", err)
 	}
 }
 
