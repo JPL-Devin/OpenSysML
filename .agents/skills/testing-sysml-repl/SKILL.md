@@ -1735,6 +1735,35 @@ service-side perf change:
   index handed to a model that is later evicted must not disturb the models still cached.
 - Interpreter trap: see [the venv trap](#venv-trap) above before blaming `import grpc`/`import
   opensysml` on the change under test.
+- **`Model.find()` does not answer library names.** `find("ScalarValues::Real")` and
+  `find("ISQBase::MassValue")` are `None` even when the model resolves those types fine (the RPC
+  searches the model's own document symbols). So a `find`-based "the library still resolves"
+  assertion is **vacuous** — it is `None` on a working build and on a broken one alike. Prove library
+  resolution with a value instead: a derived attribute over a library type
+  (`attribute doubled : Real = power * 2.0` → `eval("Pkg::Vehicle::engine.doubled") == 300.0`) plus
+  an empty `diagnostics` list. Keep the `find` entries in the sweep blob anyway — they are still a
+  good *isolation* probe, since `find("OtherPkg::Engine")` must be `None`.
+- `Model.execute_state(...)` returns a **plain dict**: subscript `r["states_visited"]` /
+  `r["final_context"]`; `r.states_visited` raises `AttributeError: 'dict' object has no attribute`.
+  `execute_action` is a dict too.
+- `%search` matches the **qualified name as written in the library**, so `%search ISQ::MassValue`
+  answers `no symbol matches` (the symbol is `ISQBase::MassValue`) while `%search MassValue` lists
+  it. Use the bare name for a lookup assertion, or you record a false negative on camera.
+- The strongest "nothing a user sees changed" evidence for this refactor is a **byte diff against
+  the parent commit on both surfaces**: `/tmp/old-sysml` vs `./bin/sysml` over scripted REPL
+  transcripts (`%search`/`%load`/`%eval`/`%instantiate`/`%features`/`%action`+`%continue`/`%state`+
+  `%step`) and `-validate` over `examples/*.sysml`, plus the same sweep JSON against a hand-started
+  parent-commit `sysml-grpc` (`/tmp/old-sysml-grpc -port 50123 -health-port 50124`, client
+  `auto_start=False`). At 5a50e806 all of those are identical. Note a multi-model REPL session
+  legitimately prints `note: deeper checks may not have run here: the error on buffer line NN is
+  unresolved …` once the conformance fixtures are in the buffer — it reproduces on the parent binary,
+  so do not report it as a regression.
+- Post-first-load timings observed at 5a50e806 over 12 distinct library-backed models:
+  `SYSML_GRPC_INDEX_POOL=4` first 55 ms then median 4.2 ms (max 5.1 ms); `=0` first 77 ms then
+  median 5.0 ms (max 5.6 ms) — i.e. with a shared base even `=0` is fast after the first request,
+  and any post-first load above ~60 ms is a regression. Port accepts in ~10–12 ms and SIGTERM
+  (including one sent immediately after the port opens, while the prewarm build is still in flight)
+  exits 0 in a few ms.
 
 #### The shared on-disk library index cache (`internal/core/libs/cache.go`)
 
