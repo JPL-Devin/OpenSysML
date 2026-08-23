@@ -33,7 +33,7 @@ Two passes opt in, and each names its subject:
 | Pass | Subject | Reference it rests on |
 |---|---|---|
 | `MetadataTypePass` (`w8c_metadata_type.go`) | one annotation | the metaclass the annotation names (this is 11D's rule, now expressed through the general mechanism) |
-| `ElementFilterPass` (`filter.go`) | one filter condition | the type named by a classification operator (`@`, `@@`, `istype`, `hastype`), and any operand of an operator whose result is Boolean regardless — `not`/`and`/`or`/`xor`/`implies` and the comparisons `==`, `!=`, `===`, `!==`, `<`, `<=`, `>`, `>=` |
+| `ElementFilterPass` (`filter.go`) | one filter condition | the type named by a classification operator (`@`, `@@`, `istype`, `hastype`) **and** every operand of any operator whose result is Boolean regardless — the classification set, `not`/`and`/`or`/`xor`/`implies`, and the comparisons `==`, `!=`, `===`, `!==`, `<`, `<=`, `>`, `>=` |
 
 `ElementFilterPass` gates only the checks that need something unresolved to have resolved. An
 unresolved *name* standing alone as the condition is still reported — there the unresolved reference
@@ -46,9 +46,11 @@ so a fault they draw can only come from an operand — and an operand that did n
 its verdict. Adversarial fixtures found this the hard way, twice: gating classification types alone
 made `filter @Safe and Undefined;` and `filter Undefined1 and Undefined2;` draw a `Must be
 model-level evaluable` of ours where the pilot reports nothing, and the same held for
-`filter Undefined == 1;` (pilot: only `Couldn't resolve reference to Element 'Undefined'`), which
-review caught after the logical operators were fixed. These are false positives on shapes that
-appear in no corpus, so no oracle count would have caught them.
+`filter Undefined == 1;` and for the *tested operand* of `filter Undefined istype Safe;` (pilot in
+both: only `Couldn't resolve reference to Element 'Undefined'`), which review caught in two further
+rounds. These are false positives on shapes that appear in no corpus, so no oracle count would have
+caught them; the gate therefore checks the type reference **and** the operands of every such
+operator.
 `TestAnUnresolvedOperandOfABooleanFilterYieldsOnlyTheUnresolvedReference` locks all of them, and the
 three oracles are byte-identical with and without the extra gating.
 

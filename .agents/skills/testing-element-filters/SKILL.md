@@ -52,8 +52,10 @@ Fixture shapes that matter (copy them; the alternatives produce misleading resul
   (`filter @Meta::Safety + 1;`).
 - **An operator that is Boolean whatever its operands are gates on any unresolved operand,** not just
   classification `TypeRef`s — the logical set (`not`, `and`, `or`, `xor`, `implies`) *and* the
-  comparisons (`==`, `!=`, `===`, `!==`, `<`, `<=`, `>`, `>=`). So `filter @Safe and Undefined;`,
-  `filter Undefined1 and Undefined2;` and `filter Undefined == 1;` yield only the
+  comparisons (`==`, `!=`, `===`, `!==`, `<`, `<=`, `>`, `>=`), and for `istype`/`hastype` the tested
+  operand as well as the named type. So `filter @Safe and Undefined;`,
+  `filter Undefined1 and Undefined2;`, `filter Undefined == 1;` and
+  `filter Undefined istype Safe;` yield only the
   unresolved-reference error, matching the pinned pilot, which reports nothing at that line (its
   `Must have a Boolean result` is satisfied by the top-level operator). A *bare*
   `filter Undefined;` still reports — the pilot reports there too. These shapes are absent from the

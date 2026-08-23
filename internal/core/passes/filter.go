@@ -86,15 +86,19 @@ func (fc *filterChecker) gated(expr ast.Node) bool {
 	}
 	switch op.Operator {
 	case ast.OpAt, ast.OpMetaAt, ast.OpIsType, ast.OpHasType:
-		return fc.ctx.DownstreamOfFailure(op.TypeRef)
+		if fc.ctx.DownstreamOfFailure(op.TypeRef) {
+			return true
+		}
 	case ast.OpNot, ast.OpAnd, ast.OpConditionalAnd, ast.OpOr, ast.OpConditionalOr,
 		ast.OpXor, ast.OpImplies,
 		ast.OpEq, ast.OpNeq, ast.OpEqEqEq, ast.OpNeqEqEq,
 		ast.OpLt, ast.OpGt, ast.OpLe, ast.OpGe:
-		for _, o := range op.Operands {
-			if fc.gated(o) || fc.ctx.DownstreamOfFailure(o) {
-				return true
-			}
+	default:
+		return false
+	}
+	for _, o := range op.Operands {
+		if fc.gated(o) || fc.ctx.DownstreamOfFailure(o) {
+			return true
 		}
 	}
 	return false

@@ -689,6 +689,7 @@ func TestAnUnresolvedOperandOfABooleanFilterYieldsOnlyTheUnresolvedReference(t *
 	for _, cond := range []string{
 		"@Safe and Undefined", "Undefined1 and Undefined2", "not Undefined",
 		"Undefined == 1", "Undefined < 1", "Undefined != Undefined2",
+		"Undefined istype Safe", "Undefined hastype Safe",
 	} {
 		src := "package P { metadata def Safe; filter " + cond + "; }"
 		ws := NewWorkspace()
