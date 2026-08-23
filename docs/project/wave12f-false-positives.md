@@ -16,7 +16,7 @@ rm -rf /tmp/c-$$ && XDG_CACHE_HOME=/tmp/c-$$ go run ./cmd/pilot-reject
 
 ## What moved
 
-| Harness | Base `7504ff09` | This branch |
+| Harness | Base `1af78d94` | This branch |
 |---|---|---|
 | Xpect | 428 files, 0 unparsed; 1287 agree (248 wording-only) / **36 disagree** | 1293 agree (248 wording-only) / **30 disagree**, 0 unlocated, 0 not adjudicated |
 | Differential | 353 files, **317 fully agreeing**; 32 agreed, **119 only ours**, 66 only pilot, 175 ours / 122 pilot | **321 fully agreeing**; 32 agreed, **92 only ours**, 66 only pilot, 148 ours / 122 pilot |
@@ -27,13 +27,20 @@ matters here — a total that falls while some family grows is a trade, not prog
 
 | Only-ours bucket | Base | Now |
 |---|---:|---:|
-| `error` / `unresolved-reference` | 33 | **9** |
+| `error` / `unresolved-reference` | 32 | **9** |
 | `warning` / `unmapped` | 20 | **16** |
 | `warning` / `syntax` | 63 | 63 |
 | `warning` / `units` | 2 | 2 |
 | `error` / `kind-mismatch` | 1 | 1 |
 | `error` / `multiplicity` | 1 | 1 |
 | **total** | **119** | **92** |
+
+The base itself moved between rounds without changing its total: on `1af78d94`, `Geometry
+Examples/VehicleGeometryAndCoordinateFrames.sysml` carries a `units` warning at :38 where `7504ff09`
+carried an `unresolved-reference` error at :62 — a wave-12D/12E movement, not one of ours, and the
+reason the base `unresolved-reference` bucket reads 32 rather than the 33 measured last round. None
+of the 21 keys wave 12F retires had already been retired by 12D or 12E: all 21 are present in the
+fresh `1af78d94` base.
 
 Four files become fully agreeing, all on the reference's own corpora: `Arrowhead Framework
 Example/AHFSequences.sysml` 15 → 0, `Cause and Effect Examples/CauseAndEffectExample.sysml` 6 → 0,
