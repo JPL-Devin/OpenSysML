@@ -8,6 +8,7 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/resolve"
 	"github.com/Open-MBEE/OpenSysML/internal/core/semantics"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
@@ -92,11 +93,41 @@ func (c *w9cConflictChecker) check(sym *symbols.Symbol) {
 		}
 	}
 	sort.Strings(names)
+	spans := append([]source.Span{sym.DeclSpan}, c.chainSpans(sym)...)
 	for _, name := range names {
 		if from := c.conflictingBases(byName[name]); len(from) > 1 {
-			c.report(sym, name, from)
+			for _, span := range spans {
+				c.report(span, name, from)
+			}
 		}
 	}
+}
+
+// chainSpans are the spans of the feature chains sym references. A chain is an
+// owned feature of its own (KerML feature chaining), specialized as the
+// referencing usage is, so it repeats that usage's conflicts.
+func (c *w9cConflictChecker) chainSpans(sym *symbols.Symbol) []source.Span {
+	var out []source.Span
+	for _, rel := range semantics.RelationshipsOf(sym) {
+		if rel == nil || rel.Kind != ast.RelReferences || rel.Target == nil {
+			continue
+		}
+		if _, ok := rel.Target.(*ast.FeatureChainExpr); ok {
+			out = append(out, rel.Target.Span())
+			continue
+		}
+		qname := ast.AsQualifiedName(rel.Target)
+		if qname == nil {
+			continue
+		}
+		for _, part := range qname.Parts {
+			if part.Chained {
+				out = append(out, rel.Target.Span())
+				break
+			}
+		}
+	}
+	return out
 }
 
 // libraryBases are the nearest library definitions sym conforms to, reached
@@ -111,11 +142,12 @@ func (c *w9cConflictChecker) libraryBases(sym *symbols.Symbol) []*symbols.Symbol
 			if sup == nil || seen[sup] {
 				continue
 			}
-			// A value feature's implicit DataValue typing yields to whatever else it
-			// specializes, and subsetting an untyped feature does not carry it along,
-			// so the pilot draws no diamond through either.
-			if symbols.FQNOf(sup) == "Base::DataValue" &&
-				(len(sups) > 1 || !isDefKind(cur.Kind)) {
+			// A feature's implicit value typing is only added when nothing else
+			// classifies it: a definition it is typed by, a subsetting or a
+			// redefinition supplies its type, and a feature it is typed by does
+			// not, so only then is a diamond drawn through Base::DataValue.
+			if symbols.FQNOf(sup) == "Base::DataValue" && !isDefKind(cur.Kind) &&
+				!c.typedByFeatureOnly(cur) {
 				continue
 			}
 			seen[sup] = true
@@ -267,10 +299,10 @@ func (c *w9cConflictChecker) declares(sym *symbols.Symbol, name string) bool {
 	return ok
 }
 
-func (c *w9cConflictChecker) report(sym *symbols.Symbol, name string, from []string) {
+func (c *w9cConflictChecker) report(span source.Span, name string, from []string) {
 	c.diags = append(c.diags, Diagnostic{
 		Severity: SeverityWarning,
-		Span:     sym.DeclSpan,
+		Span:     span,
 		Message:  fmt.Sprintf("%s '%s' from %s", msgW9CDuplicateInherited, name, strings.Join(from, ", ")),
 		Code:     "name-conflict",
 		Source:   "name-resolution",
@@ -282,4 +314,27 @@ func leafOf(fqn string) string {
 		return fqn[i+2:]
 	}
 	return fqn
+}
+
+// typedByFeatureOnly reports whether sym is typed by at least one feature and
+// classified by nothing else: no definition types it, and it neither subsets
+// nor redefines another feature.
+func (c *w9cConflictChecker) typedByFeatureOnly(sym *symbols.Symbol) bool {
+	typedByFeature := false
+	for _, rel := range semantics.RelationshipsOf(sym) {
+		if rel == nil {
+			continue
+		}
+		switch rel.Kind {
+		case ast.RelSubsets, ast.RelRedefines, ast.RelReferences, ast.RelSpecializes:
+			return false
+		case ast.RelTyping:
+			target, ok := c.resolver.ResolveTarget(sym.OwnerScope, rel.Target)
+			if !ok || target == nil || isDefKind(target.Kind) {
+				return false
+			}
+			typedByFeature = true
+		}
+	}
+	return typedByFeature
 }

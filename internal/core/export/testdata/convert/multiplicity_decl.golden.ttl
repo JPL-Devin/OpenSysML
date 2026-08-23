@@ -51,3 +51,12 @@ expr:Mult__optional.upperBound
     a sysml:LiteralInteger ;
     sysx:sourceText "1" ;
     sysml:value "1"^^xsd:integer .
+
+elmt:Mult__single
+    a sysx:MultiplicityDeclaration ;
+    sysml:qualifiedName "Mult::single" ;
+    sysml:owningNamespace elmt:Mult ;
+    sysx:memberIndex "2"^^xsd:integer ;
+    sysml:declaredName "single" ;
+    sysml:subsets elmt:Mult__exactlyOne ;
+    sysx:hasBody "false"^^xsd:boolean .

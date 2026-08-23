@@ -58,27 +58,32 @@ func parseDoc(t *testing.T, name, src string) *ast.RootNamespace {
 	return root
 }
 
-func TestNameResolutionPassReportsAmbiguous(t *testing.T) {
-	// Two documents each declare a top-level package P, so a qualified
-	// reference whose first segment is P has two global candidates and the
-	// resolver reports an ambiguous reference.
+// Two documents each declare a top-level package P. Resolution in the global
+// namespace is single-valued — KerML 8.2.3.5 resolves a qualified name to one
+// membership or to none, its operations selecting `memberships->first()` — so a
+// reference to P names the first document's P, and only what that P declares is
+// reachable through it. Distinguishable naming constrains a Namespace's own
+// members, and the global namespace is not one.
+func TestNameResolutionPassResolvesARepeatedTopLevelNameToTheFirst(t *testing.T) {
 	rootA := parseDoc(t, "a.sysml", "package P { namespace X; }")
 	rootB := parseDoc(t, "b.sysml", "package P { namespace Y; }")
 	rootC := parseDoc(t, "c.sysml", "package Q { alias A for P::X; }")
+	rootD := parseDoc(t, "d.sysml", "package R { alias B for P::Y; }")
 
 	idx := newTestIndex()
 	idx.AddDocument("a.sysml", rootA)
 	idx.AddDocument("b.sysml", rootB)
 	idx.AddDocument("c.sysml", rootC)
+	idx.AddDocument("d.sysml", rootD)
 
-	ctx := NewContext("c.sysml", idx, nil)
-	got := NameResolutionPass{}.Run(ctx, "c.sysml", rootC)
-	if len(got) == 0 {
-		t.Fatalf("expected an ambiguous diagnostic, got none")
+	got := NameResolutionPass{}.Run(NewContext("c.sysml", idx, nil), "c.sysml", rootC)
+	if len(got) != 0 {
+		t.Fatalf("got %+v, want P::X to resolve through the first P", got)
 	}
-	d := got[0]
-	if d.Source != "name-resolution" || d.Code != "ambiguous" || d.Severity != SeverityError {
-		t.Fatalf("got %+v, want source=name-resolution code=ambiguous severity=error", d)
+	// The second P is not consulted, so its member is not reachable under P.
+	got = NameResolutionPass{}.Run(NewContext("d.sysml", idx, nil), "d.sysml", rootD)
+	if len(got) != 1 || got[0].Code != "unresolved" || got[0].Severity != SeverityError {
+		t.Fatalf("got %+v, want one unresolved error for P::Y", got)
 	}
 }
 

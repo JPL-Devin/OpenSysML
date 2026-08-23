@@ -158,7 +158,7 @@ func TestRenameCapturingAQualifiedSegmentIsRefused(t *testing.T) {
 // in is refused even when nothing at the declaration shadows it.
 func TestRenameShadowingAtAReferenceIsRefused(t *testing.T) {
 	const src = "package P {\n\tpart def Old;\n}\npackage Q {\n\tprivate import P::Old;\n" +
-		"\tpart def Inner {\n\t\tattribute New;\n\t\tattribute q : Old;\n\t}\n}\n"
+		"\tpart def Inner {\n\t\tattribute New;\n\t\tpart q : Old;\n\t}\n}\n"
 	e := refusedRename(t, "shadow-ref.sysml", src, "P::Old", "New")
 
 	if e.Failure != FailureInvalidName {

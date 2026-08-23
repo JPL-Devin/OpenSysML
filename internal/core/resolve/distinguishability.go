@@ -229,8 +229,27 @@ func (r *Resolver) inheritableMembers(sup *symbols.Symbol, model supertypeLookup
 				out = append(out, sym)
 			}
 		}
+		out = append(out, r.importedMembers(sup)...)
 	}
 	return r.removeRedefinedFeatures(sup, out)
+}
+
+// importedMembers is what a namespace's non-private imports contribute to it: a
+// membership is inherited whether the namespace owns it or imported it
+// (KerML 8.4.3.2). Library elements are left out, as library supertypes are.
+func (r *Resolver) importedMembers(sup *symbols.Symbol) []*symbols.Symbol {
+	var out []*symbols.Symbol
+	for _, imp := range r.importsOf(sup.Scope.Node()) {
+		if imp.Visibility == ast.VisibilityPrivate {
+			continue
+		}
+		for _, sym := range r.ImportedElements(sup.Scope, imp) {
+			if sym != nil && sym.Name != "" && !r.idx.Library(sym) && contributesName(sym) {
+				out = append(out, sym)
+			}
+		}
+	}
+	return out
 }
 
 // removeRedefinedFeatures drops the inherited members that are no longer

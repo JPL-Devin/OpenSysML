@@ -446,6 +446,11 @@ func (e *encoder) encodeMember(node ast.Node, visibility ast.Visibility, owner s
 		head(rdf.OpenSysMLTerm(mMultiplicity))
 		e.ident(subject, n.Ident)
 		e.multiplicity(subject, owner, n.Range)
+		// A MultiplicitySubset states its bounds by subsetting, not as a range.
+		if n.Subsets != nil {
+			e.graph.Add(subject, e.sysml(relationshipProperty[ast.RelSubsets]),
+				e.reference(owner, qualifiedText(n.Subsets)))
+		}
 		e.graph.Add(subject, e.sysx(xHasBody), rdf.Bool(n.HasBody))
 		return e.encode(n.Members, fqn, subject)
 

@@ -171,6 +171,39 @@ func TestNameInheritedFromTwoSupertypesIsReportedOnTheSubtype(t *testing.T) {
 	}
 }
 
+// A supertype's non-private imports are memberships it has, so a subtype
+// inherits the imported names too (KerML §8.4.3.2) — Xpect
+// ShadowingTests_ImportAndInnerClassesNamesAreTheSameBadCase3_Rdef.
+func TestNameImportedByASupertypeIsInherited(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		visibility string
+		conflict   bool
+	}{
+		{"public import", "public ", true},
+		{"private import", "private ", false},
+	} {
+		r, _, _ := resolvedDoc(t, `package P {
+			package Outer { part def B; }
+			part def Inner { `+tc.visibility+`import Outer::*; }
+			part def Sub :> Inner { part B; }
+		}`)
+		conflicts := diagnosticsWithCode(r, resolve.CodeNameConflict)
+		if !tc.conflict {
+			if len(conflicts) != 0 {
+				t.Errorf("%s: conflicts = %v, want none", tc.name, conflicts)
+			}
+			continue
+		}
+		if len(conflicts) != 1 {
+			t.Fatalf("%s: conflicts = %v, want one for the inherited import", tc.name, r.Diagnostics)
+		}
+		if want := "Duplicate of inherited member name 'B' from Outer"; conflicts[0].Message != want {
+			t.Errorf("%s: message = %q, want %q", tc.name, conflicts[0].Message, want)
+		}
+	}
+}
+
 // A feature an intermediate supertype redefines is still inherited by that
 // supertype's own subtypes under its name, so redeclaring it there conflicts.
 func TestNameRedefinedByAnIntermediateSupertypeStillConflicts(t *testing.T) {

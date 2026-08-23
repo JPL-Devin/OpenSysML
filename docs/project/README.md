@@ -18,6 +18,8 @@ a release is cut.
   exercise, on input-presence evidence, advisory
 - **[Wave 10 decisions](wave10-decisions.md)** — the three adjudications the wave-10 slices depend
   on, with the measurements behind them
+- **[Wave 11B parser findings](wave11b-parser-findings.md)** — the two parsing rows that were parser
+  defects, and what each of the other 18 actually needs
 - **[Wave 11E decisions](wave11e-decisions.md)** — the KerML validation and visibility rows wave 11E
   leaves open, and why
 - **[Roadmap](roadmap.md)** — the known gaps, in the order they should be picked up

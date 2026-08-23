@@ -992,10 +992,6 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 			mods.isVariant = true
 		}
 		isAll := p.acceptSufficientAll()
-		if kw == "exhibit" && !p.atKeyword("state") && p.atFeatureChainTarget() {
-			return applyPrefixes(p.parseReferenceMemberUsage(
-				start, ast.UsageState, kw, "state", mods, p.parseStateBody, false))
-		}
 		if kw == "bind" {
 			u := p.parseUsage(start, p.usageKindOf(kw), kw, mods, isAll)
 			return applyPrefixes(normalizeAnonymousBindingEnd(u))
@@ -1020,14 +1016,15 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 			return applyPrefixes(p.parseReferenceMemberUsage(start, p.usageKindOf(kw), kw, noun, mods, body, false))
 		}
 
-		// `exhibit state modes { … }` and `exhibit state modes : Modes;` state
-		// the exhibited state after the state keyword, where the reference form
-		// `exhibit modes;` names an existing one (SysML.xtext ExhibitStateUsage:
-		// `'exhibit' ( OwnedReferenceSubsetting … | StateUsageKeyword
-		// UsageDeclaration? ) ValuePart? StateUsageBody`; SysML v2 §8.3.17).
-		if kw == "exhibit" && p.atKeyword("state") {
-			p.advance() // consume 'state'
-			return applyPrefixes(p.parseUsage(start, ast.UsageState, "exhibit state", mods, isAll))
+		// Only `exhibit state` declares a state; every other exhibit names an
+		// existing one through an OwnedReferenceSubsetting (SysML.xtext
+		// ExhibitStateUsage; SysML v2 §8.3.17).
+		if kw == "exhibit" {
+			if p.acceptKeyword("state") {
+				return applyPrefixes(p.parseUsage(start, ast.UsageState, "exhibit state", mods, isAll))
+			}
+			return applyPrefixes(p.parseReferenceMemberUsage(
+				start, ast.UsageState, kw, "state", mods, p.parseStateBody, true))
 		}
 
 		// Special case: include use case <name> (full form)
@@ -3308,7 +3305,7 @@ func (p *Parser) parseRelationshipTarget() ast.Node {
 	}
 
 	// Check for dot extensions (feature chain)
-	if !p.at(lexer.Dot) {
+	if !p.at(lexer.Dot) && !p.at(lexer.DotDot) {
 		return base // Just a qualified name
 	}
 
@@ -3316,8 +3313,13 @@ func (p *Parser) parseRelationshipTarget() ast.Node {
 	var operand ast.Node = &ast.FeatureReference{Name: base}
 	operand.(*ast.FeatureReference).NodeSpan = base.NodeSpan
 
-	for p.at(lexer.Dot) {
-		p.advance() // consume '.'
+	for p.at(lexer.Dot) || p.at(lexer.DotDot) {
+		// `a..b` chains over an empty segment; report it where it is written and
+		// read the rest of the chain, so recovery stays inside this reference.
+		if p.at(lexer.DotDot) {
+			p.error(p.peek().Span, "expected a name after '.'")
+		}
+		p.advance() // consume '.' or '..'
 		// Each chaining feature of a chain is itself a qualified name
 		// (KerML OwnedFeatureChaining: chainingFeature = [Feature|QualifiedName]).
 		if !p.atNameOrKeyword() && !(p.at(lexer.Dollar) && p.peekN(1).Kind == lexer.ColonColon) {
@@ -3338,26 +3340,6 @@ func (p *Parser) parseRelationshipTarget() ast.Node {
 	}
 
 	return operand
-}
-
-// atFeatureChainTarget reports whether an exhibit target contains a dot
-// chaining part, including qualified prefixes such as `P::states.on`.
-func (p *Parser) atFeatureChainTarget() bool {
-	if !p.atNameOrKeyword() {
-		return false
-	}
-	for i := 1; ; i += 2 {
-		separator := p.peekN(i).Kind
-		if separator == lexer.Dot {
-			return true
-		}
-		next := p.peekN(i + 1)
-		if separator != lexer.ColonColon ||
-			(next.Kind != lexer.Identifier && next.Kind != lexer.UnrestrictedName &&
-				next.Kind != lexer.Keyword) {
-			return false
-		}
-	}
 }
 
 // parsePreNameRelationships parses the specializations a declaration may state

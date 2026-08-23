@@ -131,14 +131,41 @@ func compareFile(suiteDir string, f xtFile, libs *libraryCache) fileResult {
 		})
 	}
 
+	// Xpect matches every issue against the expectations' regions and fails the
+	// file on the ones left over, so an error another expectation declares is
+	// not the file's residue.
+	consumed := map[int]bool{}
 	for _, a := range f.Assertions {
-		res.Rows = append(res.Rows, adjudicate(ws, main, a, diags, lines, src, libraryRoots)...)
+		if a.Kind != kindErrors && a.Kind != kindNoErrors {
+			continue
+		}
+		if l := consumedLine(f.Content, lines, a.Region); l > 0 {
+			consumed[l] = true
+		}
+	}
+
+	for _, a := range f.Assertions {
+		own := consumedLine(f.Content, lines, a.Region)
+		res.Rows = append(res.Rows, adjudicate(ws, main, a, diags, lines, src, libraryRoots, consumed, own)...)
 	}
 	return res
 }
 
+// consumedLine is the line an assertion's issues are matched in: the first line
+// of model text after its note.
+func consumedLine(content []byte, lines *source.LineIndex, region int) int {
+	for i := region; i < len(content); i++ {
+		switch content[i] {
+		case ' ', '\t', '\r', '\n':
+		default:
+			return lines.PosAt(i).Line
+		}
+	}
+	return -1
+}
+
 // adjudicate turns one assertion into its rows.
-func adjudicate(ws *model.Workspace, main string, a assertion, diags []diag, lines *source.LineIndex, src squeezed, libraryRoots []string) []row {
+func adjudicate(ws *model.Workspace, main string, a assertion, diags []diag, lines *source.LineIndex, src squeezed, libraryRoots []string, consumed map[int]bool, own int) []row {
 	switch a.Kind {
 	case kindErrors, kindWarnings:
 		want := "error"
@@ -154,11 +181,17 @@ func adjudicate(ws *model.Workspace, main string, a assertion, diags []diag, lin
 	case kindNoErrors:
 		var errs []diag
 		for _, d := range diags {
-			if d.Severity == "error" {
-				errs = append(errs, d)
+			if d.Severity != "error" {
+				continue
 			}
+			// The assertion's own line is the one it declares clean; elsewhere
+			// only an error no expectation declares is its to answer for.
+			if d.Line != own && consumed[d.Line] {
+				continue
+			}
+			errs = append(errs, d)
 		}
-		r := row{Kind: a.Kind, Block: a.Block, Line: a.Line, Verdict: verdictAgree, Declared: "no error anywhere in the file"}
+		r := row{Kind: a.Kind, Block: a.Block, Line: a.Line, Verdict: verdictAgree, Declared: "no error the file does not declare"}
 		if len(errs) > 0 {
 			r.Verdict = verdictDisagree
 			r.Actual = fmt.Sprintf("%d error(s), first: line %d: %s", len(errs), errs[0].Line, errs[0].Message)
@@ -307,22 +340,21 @@ func referenceAt(refs []resolve.Reference, offset, end int) (resolve.Reference, 
 		if ref.QN == nil || len(ref.QN.Parts) == 0 {
 			continue
 		}
-		if ref.QN.Parts[0].Span.Offset != offset {
-			for i, seg := range ref.QN.Parts {
-				if seg.Span.Offset == offset && seg.Span.End() >= end {
-					found = append(found, candidate{ref, i})
+		for i, seg := range ref.QN.Parts {
+			// A quoted name's span covers the quotes the declared text omits.
+			if seg.Span.Offset != offset && seg.Span.Offset != offset-1 {
+				continue
+			}
+			// The anchor starts at this segment and runs to end, which may
+			// cover several segments of the same name.
+			last := i
+			for j := i; j < len(ref.QN.Parts); j++ {
+				if ref.QN.Parts[j].Span.End() <= end {
+					last = j
 				}
 			}
-			continue
-		}
-		last := -1
-		for i, seg := range ref.QN.Parts {
-			if seg.Span.End() <= end {
-				last = i
-			}
-		}
-		if last >= 0 {
 			found = append(found, candidate{ref, last})
+			break
 		}
 	}
 	if len(found) == 0 {

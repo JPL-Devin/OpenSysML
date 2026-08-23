@@ -68,7 +68,7 @@ func (r *Resolver) walkUnqualifiedHiding(scope *symbols.Scope, name string, hide
 		return resolution{sym: sym, ok: true}
 	}
 	// Final fallback: check global index (cross-document top-level names)
-	if sym, n := r.lookupGlobalTop(scope, name); n == 1 && !hide.hides(sym) {
+	if sym := r.lookupGlobalTop(scope, name); sym != nil && !hide.hides(sym) {
 		return resolution{sym: sym, ok: true}
 	}
 	return resolution{}
@@ -347,6 +347,9 @@ func (r *Resolver) matchImport(scope *symbols.Scope, imp *ast.Import, name strin
 		} else {
 			children = r.idx.LookupDirectChildrenFrom(targetFQN, r.ReferringNamespaceFQN(scope))
 		}
+		// The import names one namespace, so a same-named other namespace's
+		// members registered under the same path are not what it surfaces.
+		children = notConflatedWith(target, children)
 		for _, sym := range children {
 			// Extract short name from FQN for comparison
 			symName := sym.Name

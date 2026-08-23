@@ -4680,6 +4680,28 @@ Pitfalls that cost time:
 - Cold vs warm run under a scratch `XDG_CACHE_HOME` catches resolution that depends on the on-disk
   symbol index; diagnostics must be byte-identical.
 
+### Proving parser *recovery* (not just the diagnostic) with `%search`
+
+For a change that claims "malformed X no longer abandons the enclosing body", the diagnostic text is
+only half the evidence — you must show the members *after* the malformed one still exist in the tree.
+`-convert kerml` refuses a file with syntax errors, so use the symbol index instead:
+
+```bash
+printf '%%load /tmp/f.kerml\n%%search P::\n%%search P::B::\n' | ./bin/sysml
+```
+
+Build the fixture with a sentinel member inside the broken body (`feature c;`) and a `tail`
+declaration after it. A working recovery lists `P::B::c` *and* `P::tail`; a broken one hoists the
+member to the wrong scope (`P::c`) and drops `tail` — exactly what a parent-commit control binary
+shows. Note that not every dot shape is covered by such a fix: chains like `a...b` and `..a` may
+still cascade and drop later members identically on both binaries, so A/B every shape before
+calling a residual cascade a regression.
+
+Also worth checking on such changes: whether the changed member form still *declares* a name.
+A reference member (`perform doIt;`, plain `exhibit s;`) is expected to resolve an existing name, so
+an undeclared target must produce `unresolved reference: …`; the "did you mean <the same FQN>?"
+suggestion is normal because `%search` sees the reference-derived index entry.
+
 ### Which REPL surfaces are visibility-aware
 
 `%search` and readline name completion browse the **raw symbol index** (`internal/repl/discover.go`,

@@ -48,6 +48,8 @@ func DefaultRegistry() *Registry {
 	reg.Register(W9CUserStandardLibraryPass{})
 	reg.Register(W9CInheritedNameConflictPass{})
 	reg.Register(W9CBoundFeatureTypesPass{})
+	reg.Register(W11AUsageTypingPass{})
+	reg.Register(W11AKerMLSpecializationPass{})
 	return reg
 }
 
