@@ -25,6 +25,14 @@ type supertypeLookup interface {
 	DirectSupertypes(sym *symbols.Symbol) []*symbols.Symbol
 }
 
+// maskLookup is the part of the semantic model that reports redefinition
+// masking: which of a type's inheritable members it does not inherit because
+// one of its features redefines them. *semantics.Model implements it.
+type maskLookup interface {
+	InheritanceMasked(sym, candidate *symbols.Symbol) bool
+	InheritanceMaskedDeclaring(sym, candidate *symbols.Symbol, declName string) bool
+}
+
 // elementFilterJudge is the part of the semantic model that decides an element
 // filter: whether the element an import would surface is selected by the
 // condition restricting it (KerML 8.2.4). A condition classifies a candidate by
@@ -45,11 +53,19 @@ type featureChainKey struct {
 	node  *ast.FeatureChainExpr
 }
 
+type filteredMemoKey struct {
+	qn               *ast.QualifiedName
+	decl             ast.Node
+	prefix           bool
+	skipBorrowedName bool
+}
+
 // Resolver performs lazy name resolution over a symbol index, memoizing results
 // keyed by the reference AST node and collecting diagnostics.
 type Resolver struct {
 	idx       *symbols.Index
 	memo      map[ast.Node]resolution
+	filtered  map[filteredMemoKey]resolution
 	resolving map[ast.Node]bool // cycle detection
 	// featureChains are resolved per scope because a chain's leading operand
 	// can resolve differently in different document scopes.
@@ -107,7 +123,8 @@ type Resolver struct {
 	suggesting  map[suggestKey]bool
 	// document is the document ResolveDocument is resolving, so a reference
 	// reached in another one is not reported against it (see foreignScope).
-	document string
+	document          string
+	reportedQualified map[*ast.QualifiedName]bool
 }
 
 // New creates a resolver over the given index.
@@ -115,6 +132,7 @@ func New(idx *symbols.Index) *Resolver {
 	return &Resolver{
 		idx:              idx,
 		memo:             map[ast.Node]resolution{},
+		filtered:         map[filteredMemoKey]resolution{},
 		resolving:        map[ast.Node]bool{},
 		featureChains:    map[featureChainKey]resolution{},
 		parts:            map[*ast.QualifiedName][]*symbols.Symbol{},
@@ -131,9 +149,10 @@ func New(idx *symbols.Index) *Resolver {
 		suggestions: map[suggestKey][]string{},
 		suggesting:  map[suggestKey]bool{},
 
-		inheritedImports: map[*symbols.Symbol]bool{},
-		aliasTargets:     map[*symbols.Symbol]resolution{},
-		resolvingAlias:   map[*symbols.Symbol]bool{},
+		inheritedImports:  map[*symbols.Symbol]bool{},
+		aliasTargets:      map[*symbols.Symbol]resolution{},
+		resolvingAlias:    map[*symbols.Symbol]bool{},
+		reportedQualified: map[*ast.QualifiedName]bool{},
 	}
 }
 
@@ -262,7 +281,15 @@ func (r *Resolver) resolveQualified(scope *symbols.Scope, qn *ast.QualifiedName,
 		r.aside(func() { sym, ok = r.resolveQualified(scope, qn, hide) })
 		return sym, ok
 	}
-	if res, done := r.memo[qn]; done {
+	cacheMain := hide == nil || hide.skipNamingTarget || hide.skipBorrowedName
+	if cacheMain {
+		if res, done := r.memo[qn]; done {
+			return res.sym, res.ok
+		}
+	} else if res, done := r.filtered[filteredMemoKey{
+		qn: qn, decl: hide.decl, prefix: hide.skipNamingTarget,
+		skipBorrowedName: hide.skipBorrowedName,
+	}]; done {
 		return res.sym, res.ok
 	}
 	// Detect resolution cycles
@@ -277,7 +304,16 @@ func (r *Resolver) resolveQualified(scope *symbols.Scope, qn *ast.QualifiedName,
 	// A failure met during a semantic query is not memoized: the reference it
 	// belongs to must still report when its own document is resolved.
 	if (res.ok || r.quiet == 0) && r.allVisible == 0 {
-		r.memoize(qn, res)
+		if cacheMain {
+			if res.ok || hide == nil {
+				r.memoize(qn, res)
+			}
+		} else if res.ok || r.quiet == 0 {
+			r.filtered[filteredMemoKey{
+				qn: qn, decl: hide.decl, prefix: hide.skipNamingTarget,
+				skipBorrowedName: hide.skipBorrowedName,
+			}] = res
+		}
 	}
 	return res.sym, res.ok
 }
@@ -298,6 +334,9 @@ func (r *Resolver) ResolveName(scope *symbols.Scope, name string, at ast.Node) (
 	}
 	res := r.walkUnqualified(scope, name)
 	res.sym = r.AliasedElement(res.sym)
+	if r.AliasNamesNothing(res.sym) {
+		res = resolution{nil, false}
+	}
 	// A result found with the boundary lifted for an enclosing `import all` is
 	// not what this reference resolves to in general, so it is not memoized.
 	if (res.ok || r.quiet == 0) && r.allVisible == 0 {

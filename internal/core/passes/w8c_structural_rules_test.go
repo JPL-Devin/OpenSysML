@@ -7,7 +7,6 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
-	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // w8cLibraryMessages analyzes src as KerML against the standard library, which
@@ -15,7 +14,7 @@ import (
 func w8cLibraryMessages(t *testing.T, src string) []string {
 	t.Helper()
 
-	idx := symbols.NewIndex()
+	idx := newTestIndex()
 	libSrc := libs.DefaultSource()
 	cache, err := libs.NewCache()
 	if err != nil {

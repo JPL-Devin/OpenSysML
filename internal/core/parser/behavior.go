@@ -1582,6 +1582,7 @@ func (p *Parser) parseResultMemberIn(inStatement bool) ast.Node {
 			IsEnd:       mods.isEnd,
 			IsConstant:  mods.isConstant,
 			IsComposite: mods.isComposite,
+			IsPortion:   mods.isPortion,
 			IsDerived:   mods.isDerived,
 			IsOrdered:   mods.isOrdered,
 			IsNonunique: mods.isNonunique,
@@ -1618,6 +1619,9 @@ func (p *Parser) parseResultMemberIn(inStatement bool) ast.Node {
 		}
 		if mods2.isComposite {
 			u.IsComposite = true
+		}
+		if mods2.isPortion {
+			u.IsPortion = true
 		}
 		if mods2.isDerived {
 			u.IsDerived = true
@@ -1666,6 +1670,7 @@ func (p *Parser) parseResultMemberIn(inStatement bool) ast.Node {
 			IsEnd:       mods.isEnd,
 			IsConstant:  mods.isConstant,
 			IsComposite: mods.isComposite,
+			IsPortion:   mods.isPortion,
 			IsDerived:   mods.isDerived,
 			IsOrdered:   mods.isOrdered,
 			IsNonunique: mods.isNonunique,
@@ -1709,6 +1714,7 @@ func (p *Parser) parseResultMemberIn(inStatement bool) ast.Node {
 			IsEnd:       mods.isEnd,
 			IsConstant:  mods.isConstant,
 			IsComposite: mods.isComposite,
+			IsPortion:   mods.isPortion,
 			IsDerived:   mods.isDerived,
 			IsOrdered:   mods.isOrdered,
 			IsNonunique: mods.isNonunique,

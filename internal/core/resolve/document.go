@@ -1,6 +1,8 @@
 package resolve
 
 import (
+	"strings"
+
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
 	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
@@ -487,7 +489,17 @@ func (r *Resolver) resolveRelationships(scope *symbols.Scope, decl ast.Node, rel
 			// name decl borrows from it; memoizing that result makes the
 			// chain walk below see the referenced feature, not decl.
 			if rel.Kind == ast.RelReferences {
-				r.resolveTarget(scope, leadingName(target), &refFilter{decl: decl})
+				hide := &refFilter{
+					decl: decl,
+				}
+				if _, ok := target.(*ast.FeatureChainExpr); ok {
+					hide = hide.forPrefix()
+				}
+				if _, ok := target.(*ast.QualifiedName); ok {
+					r.resolveTarget(scope, target, hide)
+					continue
+				}
+				r.resolveTarget(scope, leadingName(target), hide)
 			}
 
 			// Standard resolution in current scope
@@ -659,23 +671,63 @@ func (r *Resolver) featureOf(sym *symbols.Symbol, name string, seen map[*symbols
 	}
 	seen[sym] = true
 	if sym.Scope != nil {
-		if found, ok := sym.Scope.LookupLocal(name); ok {
+		if found, ok := sym.Scope.LookupLocal(name); ok && inheritableMember(found) {
 			return found, true
 		}
 	} else if sym.Decl == nil && r.idx != nil {
 		// A restored library symbol has no scope; its members are indexed.
 		for _, found := range r.idx.LookupQualified(sym.Name + "::" + name) {
-			if resolved, ok := r.ResolveAliasTarget(found); ok {
+			if resolved, ok := r.ResolveAliasTarget(found); ok && inheritableMember(resolved) {
 				return resolved, true
 			}
 		}
 	}
 	for _, general := range r.generalsOf(sym) {
-		if found, ok := r.featureOf(general, name, seen); ok {
+		// A feature of sym redefining what a general declares means sym does not
+		// inherit it, under that name or any other (KerML 8.3.3.3).
+		if found, ok := r.featureOf(general, name, seen); ok && !r.inheritanceMasked(sym, found) {
 			return found, true
 		}
 	}
 	return nil, false
+}
+
+// inheritableMember reports whether a member can be reached through a
+// specialization: KerML 8.2.3.5 excludes private memberships from
+// inheritedMembership, so only public and protected members are inherited.
+func inheritableMember(sym *symbols.Symbol) bool {
+	return sym != nil && symbols.VisibleAs(sym.Visibility, false, true)
+}
+
+// inheritanceMasked reports whether sym does not inherit found because one of
+// sym's own features redefines it.
+func (r *Resolver) inheritanceMasked(sym, found *symbols.Symbol) bool {
+	model, ok := r.model.(maskLookup)
+	return ok && model.InheritanceMasked(sym, found)
+}
+
+// inheritanceMaskedDeclaring is inheritanceMasked as the declaration named
+// declName, being written in sym, sees it: its own redefinition still names its
+// target, and so does the inherited namesake it redefines.
+func (r *Resolver) inheritanceMaskedDeclaring(sym, found *symbols.Symbol, declName string) bool {
+	model, ok := r.model.(maskLookup)
+	return ok && model.InheritanceMaskedDeclaring(sym, found, declName)
+}
+
+// declaredNameIn returns the name decl binds in sym's own scope, if any.
+func declaredNameIn(sym *symbols.Symbol, decl ast.Node) string {
+	if sym == nil || sym.Scope == nil || decl == nil {
+		return ""
+	}
+	for _, member := range sym.Scope.AllMembers() {
+		if member.Decl == decl {
+			if i := strings.LastIndex(member.Name, "::"); i >= 0 {
+				return member.Name[i+2:]
+			}
+			return member.Name
+		}
+	}
+	return ""
 }
 
 // generalsOf returns the symbols sym inherits features from: the resolved
@@ -731,7 +783,10 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 		return
 	}
 
-	hide := &refFilter{decl: decl}
+	hide := &refFilter{
+		decl:             decl,
+		skipBorrowedName: true,
+	}
 
 	if len(qn.Parts) == 1 {
 		featureName := qn.Parts[0].Text
@@ -785,7 +840,10 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 		// The walk above follows declared specializations only. The semantic
 		// model also knows the implicit ones — a library base, or the baseType
 		// a semantic-metadata keyword contributes (SysML v2 §7.27.3).
-		if sym, ok := r.lookupContributedMember(scope.Owner(), featureName); ok {
+		owner := scope.Owner()
+		if sym, ok := r.lookupContributedMember(owner, featureName); ok &&
+			visibleAsInheritedMember(owner, sym) &&
+			!r.inheritanceMaskedDeclaring(owner, sym, declaredNameIn(owner, decl)) {
 			r.recordRedefined(qn, sym)
 			return
 		}
@@ -1132,7 +1190,16 @@ func (r *Resolver) getOperandSymbol(scope *symbols.Scope, e ast.Node) *symbols.S
 		if v.Name == nil {
 			return nil
 		}
-		sym, ok := r.ResolveQualified(scope, v.Name)
+		var sym *symbols.Symbol
+		var ok bool
+		if len(v.Name.Parts) == 1 && !v.Name.Global {
+			sym, ok = r.LookupName(scope, v.Name.Parts[0].Text)
+			if !ok {
+				sym, ok = r.ResolveQualified(scope, v.Name)
+			}
+		} else {
+			sym, ok = r.ResolveQualified(scope, v.Name)
+		}
 		if !ok {
 			return nil
 		}

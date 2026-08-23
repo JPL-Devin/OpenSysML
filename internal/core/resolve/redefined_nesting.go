@@ -42,7 +42,10 @@ func (r *Resolver) redefinedFeatures(sym *symbols.Symbol) []*symbols.Symbol {
 	r.redefined[sym] = nil
 	var out []*symbols.Symbol
 	for _, rel := range redefinesRelationships(sym.Decl) {
-		if found, ok := r.resolveTarget(sym.OwnerScope, rel.Target, nil); ok && found != sym {
+		// Redefinitions search features of the owner's generals; hide only the
+		// declaration's own binding so a same-named target reaches that feature.
+		hide := &refFilter{decl: sym.Decl, skipBorrowedName: true}
+		if found, ok := r.resolveTarget(sym.OwnerScope, rel.Target, hide); ok && found != sym {
 			out = append(out, found)
 		}
 	}

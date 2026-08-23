@@ -25,8 +25,10 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 		res := r.walkUnqualifiedHiding(scope, qn.Parts[0].Text, hide)
 		if res.ok {
 			res.sym = r.resolvedPart(qn, 0, res.sym)
-		} else {
+		}
+		if !res.ok || r.AliasNamesNothing(res.sym) {
 			r.unresolved(scope, qn)
+			return resolution{nil, false}
 		}
 		return res
 	}
@@ -135,6 +137,10 @@ func (r *Resolver) walkQualifiedTail(scope *symbols.Scope, qn *ast.QualifiedName
 			return resolution{nil, false}
 		}
 		cur = r.resolvedPart(qn, i, all[0])
+		if r.AliasNamesNothing(cur) {
+			r.unresolved(scope, qn)
+			return resolution{nil, false}
+		}
 		curFQN = r.registeredFQN(cur)
 	}
 	return resolution{cur, true}
@@ -253,7 +259,7 @@ func (r *Resolver) unresolved(scope *symbols.Scope, qn *ast.QualifiedName) {
 		msg = r.unresolvedMessage(scope, name)
 		fixes = r.unresolvedFixes(scope, name, qn.Span())
 	}
-	r.report(Diagnostic{
+	r.reportQualified(qn, Diagnostic{
 		Span:    qn.Span(),
 		Message: msg,
 		Fixes:   fixes,
@@ -273,13 +279,23 @@ func (r *Resolver) unresolvedNamespace(qn *ast.QualifiedName, ns string) {
 				ns, last, strings.Join(cands, ", "))
 		}
 	}
-	r.report(Diagnostic{Span: qn.Span(), Message: msg})
+	r.reportQualified(qn, Diagnostic{Span: qn.Span(), Message: msg})
 }
 
 // ambiguous records an ambiguity diagnostic reporting the number of matches.
 func (r *Resolver) ambiguous(qn *ast.QualifiedName, n int) {
-	r.report(Diagnostic{
+	r.reportQualified(qn, Diagnostic{
 		Span:    qn.Span(),
 		Message: fmt.Sprintf("ambiguous reference: %s (%d candidates)", qnText(qn), n),
 	})
+}
+
+func (r *Resolver) reportQualified(qn *ast.QualifiedName, d Diagnostic) {
+	if r.quiet == 0 {
+		if r.reportedQualified[qn] {
+			return
+		}
+		r.reportedQualified[qn] = true
+	}
+	r.report(d)
 }

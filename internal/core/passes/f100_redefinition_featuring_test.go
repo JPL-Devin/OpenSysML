@@ -5,14 +5,13 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
-	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // constraintDiagsKerML is constraintDiags for KerML notation fixtures.
 func constraintDiagsKerML(t *testing.T, src string) []Diagnostic {
 	t.Helper()
 	root := parser.New(source.New("<t>.kerml", []byte(src))).ParseFile()
-	idx := symbols.NewIndex()
+	idx := newTestIndex()
 	idx.AddDocument("<t>.kerml", root)
 	all := Analyze("<t>.kerml", root, nil, idx)
 	var out []Diagnostic

@@ -223,6 +223,7 @@ type featureMods struct {
 	visibility        ast.Visibility
 	direction         ast.FeatureDirection
 	isComposite       bool
+	isPortion         bool
 	isDerived         bool
 	isReadonly        bool
 	isOrdered         bool
@@ -275,6 +276,9 @@ func applyFeatureMods(decl ast.Node, mods featureMods) {
 		}
 		if mods.isComposite {
 			d.IsComposite = true
+		}
+		if mods.isPortion {
+			d.IsPortion = true
 		}
 		if mods.isDerived {
 			d.IsDerived = true
@@ -766,8 +770,12 @@ func (p *Parser) parseFeatureModifiers() featureMods {
 			m.direction = ast.DirOut
 		case "inout":
 			m.direction = ast.DirInOut
-		case "composite", "portion":
+		case "composite":
 			m.isComposite = true
+		case "portion":
+			// A portion is composite in addition to being a portion.
+			m.isComposite = true
+			m.isPortion = true
 		case "readonly":
 			m.isReadonly = true
 		case "derived":
@@ -1090,6 +1098,7 @@ func (p *Parser) parseDefUsage(start int) ast.Node {
 				Visibility:  mods.visibility,
 				Direction:   mods.direction,
 				IsComposite: mods.isComposite,
+				IsPortion:   mods.isPortion,
 			}
 			u.NodeBase.NodeSpan = p.spanFrom(start)
 
@@ -1654,6 +1663,7 @@ func (p *Parser) parseUsage(start int, kind ast.UsageKind, keyword string, mods 
 		Visibility:    mods.visibility,
 		Direction:     mods.direction,
 		IsComposite:   mods.isComposite,
+		IsPortion:     mods.isPortion,
 		IsDerived:     mods.isDerived,
 		IsOrdered:     mods.isOrdered,
 		IsNonunique:   mods.isNonunique,
@@ -2869,6 +2879,7 @@ func (p *Parser) parseBodyMember() ast.Node {
 				IsVariable:  mods.isVariable,
 				IsDerived:   mods.isDerived,
 				IsComposite: mods.isComposite,
+				IsPortion:   mods.isPortion,
 				IsEnd:       mods.isEnd,
 				IsChain:     mods.isChain,
 				Direction:   mods.direction,
@@ -3198,6 +3209,7 @@ func (p *Parser) parseReferenceMemberUsage(start int, kind ast.UsageKind, kw, no
 		Visibility:  mods.visibility,
 		Direction:   mods.direction,
 		IsComposite: mods.isComposite,
+		IsPortion:   mods.isPortion,
 	}
 	u.NodeBase.NodeSpan = p.spanFrom(start)
 
@@ -3409,6 +3421,7 @@ func (p *Parser) parseAnonymousEndUsage(start int, mods featureMods) ast.Node {
 		IsReference:  mods.isReference,
 		IsDerived:    mods.isDerived,
 		IsComposite:  mods.isComposite,
+		IsPortion:    mods.isPortion,
 		Direction:    mods.direction,
 		Multiplicity: mods.earlyMultiplicity,
 	}

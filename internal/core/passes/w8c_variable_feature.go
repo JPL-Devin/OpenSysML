@@ -8,6 +8,9 @@ import (
 // KerMLValidator's validateFeatureIsVariable message.
 const msgVariableFeatureOwner = "Must be owned by an occurrence type"
 
+// KerMLValidator's validateFeaturePortionNotVariable message.
+const msgPortionFeatureVariable = "A portion cannot be variable"
+
 // VariableFeaturePass checks that a `var` feature is owned by an occurrence
 // type (KerML 8.3.3.1.5, validateFeatureIsVariable): a variable feature is a
 // snapshot-varying feature, which only an occurrence has.
@@ -25,9 +28,6 @@ func (VariableFeaturePass) Run(ctx *Context, name string, root *ast.RootNamespac
 	}
 	model := ctx.Model()
 	occurrence := w8cLibraryType(ctx, "Occurrences::Occurrence")
-	if occurrence == nil {
-		return nil
-	}
 	var diags []Diagnostic
 	w := &w8cWalker{seen: make(map[*symbols.Symbol]bool)}
 	w.walk(rootScope, func(sym *symbols.Symbol) {
@@ -35,7 +35,16 @@ func (VariableFeaturePass) Run(ctx *Context, name string, root *ast.RootNamespac
 		if !ok || !u.IsVariable {
 			return
 		}
-		if sym.OwnerScope == nil {
+		if u.IsPortion {
+			diags = append(diags, Diagnostic{
+				Severity: SeverityError,
+				Span:     u.Span(),
+				Message:  msgPortionFeatureVariable,
+				Code:     "feature-portion-not-variable",
+				Source:   "constraint",
+			})
+		}
+		if occurrence == nil || sym.OwnerScope == nil {
 			return
 		}
 		owner := sym.OwnerScope.Owner()

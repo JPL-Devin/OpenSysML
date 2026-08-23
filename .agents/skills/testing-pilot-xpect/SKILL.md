@@ -252,6 +252,38 @@ expect an extra `User library packages should not be marked as standard` warning
 `go build -o /tmp/sysml-<sha> ./cmd/sysml` from a `git worktree` of the base — identical text with
 opposite verdicts on the two binaries is what proves a visibility change is live.
 
+**The CLI cannot express a library-less resource set, but self-conjugation gets you the same
+rules anyway.** Fixtures that exist precisely because the standard library is *absent* (the
+KerML implicit-base family: `Must directly or indirectly specialize Base::Anything`,
+`Features must have at least one type`, e.g. `Feature_invalid_noType`) are silent under
+`bin/sysml -validate` on both base and HEAD, because the standalone CLI always loads the
+embedded stdlib while the harness loads only what the `XPECT_SETUP` declares, and there is no
+`-no-stdlib` flag (check `cmd/sysml/main.go`'s `flag.` block before assuming otherwise).
+Do not read that silence as "the rule is missing", and do not try to force it by passing the
+fixture's `/library*` copies on the command line — that just produces duplicate-library errors.
+Instead reach the *other* arm of the same rule: conjugation replaces the implicit
+specialization, so a **self-conjugating** declaration fires both messages with the stdlib
+loaded and is fully CLI-observable:
+
+```kerml
+package P {
+    classifier C ~ C;   // HEAD: "Must directly or indirectly specialize Base::Anything"
+    feature c ~ c;      // HEAD: "Features must have at least one type"
+}
+```
+The base binary reports only `participates in a specialization cycle` for both, and the valid
+twin (`classifier C ~ D; feature d : D; feature c ~ d;`) is silent on both binaries — which is
+what makes the pair discriminating rather than decorative. The same
+`ParsingTests_CircularReferences.kerml.xt` rows are the harness's version of this case.
+
+**Row-level regression join.** `pilot-xpect.json` prunes plain agreements: a file's `rows`
+array holds only the wording-only and disagreeing expectations. So build the disagreeing-row
+set per revision keyed by `(suite, file.path, kind, line, at, declared)` with a collision
+suffix, and confirm `len(set)` equals the reported `totals.disagree` before differencing —
+that check is what proves the key is unique enough to trust. `control - branch` is the
+recoveries, `branch - control` is the regressions, and a claimed "+N recoveries" is only
+believable when the second set is empty *and* `agree_control + N == agree_branch`.
+
 ### Probing `import all` widening: the obvious fixture does not exercise it
 
 `r.allVisible` (`resolve/resolver.go: inAllVisible`) is nonzero only *while the target path of an

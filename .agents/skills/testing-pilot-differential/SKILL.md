@@ -35,6 +35,23 @@ GNU-format diagnostics **relative to `--root`**. Consequences for testing:
   (`git worktree add /tmp/wt-base origin/main`, then run the parent's harness with
   `-repo <real checkout>` and absolute `-validator`/`-kerml-validator`) — the parent must
   reproduce the committed baseline exactly, which is what proves the delta belongs to the branch.
+- **Put the control worktree under `/home/ubuntu`, never `/tmp`.** A control worktree needs the
+  downloaded corpora and validators, and the only safe way to supply them is `cp -al`
+  hardlink copies of `examples/pilot-corpora`, `examples/sysml-v2-training` and
+  `build/pilot-{validator,sysml-validator,kerml-validator,evaluator,grammars,xpect-corpus}`.
+  Symlinking the two `examples` roots makes the walker silently see **253** files instead of 353.
+  But `/tmp` is a **tmpfs**, a different device, so `cp -al` there fails with
+  `Invalid cross-device link` for every file — put the worktree on the same filesystem as the
+  repo (`df -P` to check) and the hardlinks are free. Always gate on the control's own
+  `353 file(s)` line before believing any control number; 253 means re-provision.
+- **Attribute the rejection oracle the same way.** `docs/project/pilot-rejection-baseline.json`
+  goes stale exactly like the differential one, and a merge of `main` into the branch can move
+  it. At wave 11E both branch and control measured `120 / 116 both reject / 4 pilot-only`
+  while the committed baseline still held `114 / 6` — the two moved cases were `main`'s
+  metadata-evaluability work, not the branch's. Run `cmd/pilot-reject` on the control before
+  crediting a rejection delta to the PR, and compare with
+  `diff <(jq -S 'del(.validator,.pilot)' a) <(jq -S 'del(.validator,.pilot)' b)` so the
+  volatile pin/validator fields do not mask the real comparison.
 - **A net improvement can hide a per-file increase, and that is where the review value is.**
   Diff per-file entries keyed by `(root.name, file.path)` and print each file's summed only-ours
   `count` before/after. At 10D the net was −13 over 3 files, but

@@ -10,7 +10,6 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
-	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 var updateGolden = flag.Bool("update", false, "update golden files")
@@ -33,7 +32,7 @@ func runPassesGolden(t *testing.T, name string) {
 			Code: "syntax", Source: "syntax",
 		})
 	}
-	idx := symbols.NewIndexFromDoc(name+".sysml", root)
+	idx := newTestIndexFromDoc(name+".sysml", root)
 	diags := Analyze(name+".sysml", root, parseDiags, idx)
 
 	var b strings.Builder

@@ -10,8 +10,9 @@ import (
 // an exhibited state a state (SysML v2 §8.3.16.7 validatePerformActionUsage,
 // §8.3.17.6 validateExhibitStateUsage).
 const (
-	msgReferenceAction = "Must reference an action."
-	msgReferenceState  = "Must reference a state."
+	msgReferenceAction  = "Must reference an action."
+	msgReferenceState   = "Must reference a state."
+	msgReferenceUseCase = "Must reference a use case."
 )
 
 // w11aReferenceKinds is the definition family a reference member must name,
@@ -23,6 +24,7 @@ var w11aReferenceKinds = map[string]struct {
 }{
 	"perform": {symbols.SymbolActionDef, msgReferenceAction},
 	"exhibit": {symbols.SymbolStateDef, msgReferenceState},
+	"include": {symbols.SymbolUseCaseDef, msgReferenceUseCase},
 }
 
 // w11aInheritedTypingKinds are the usage kinds whose type is constrained by
@@ -98,12 +100,18 @@ func (c *w11aUsageChecker) check(sym *symbols.Symbol) {
 // checkReference checks that the feature a reference member names is of the kind
 // the keyword performs or exhibits.
 func (c *w11aUsageChecker) checkReference(sym *symbols.Symbol, u *ast.Usage) {
-	want, ok := w11aReferenceKinds[u.Keyword]
+	keyword := u.Keyword
+	relKind := ast.RelReferences
+	if u.Kind == ast.UsageUseCase && keyword == "" {
+		keyword = "include"
+		relKind = ast.RelIncludes
+	}
+	want, ok := w11aReferenceKinds[keyword]
 	if !ok {
 		return
 	}
 	for _, rel := range u.Relationships {
-		if rel == nil || rel.Kind != ast.RelReferences || rel.Target == nil {
+		if rel == nil || rel.Kind != relKind || rel.Target == nil {
 			continue
 		}
 		target, ok := c.resolver.ResolveTarget(w8dScopeOf(sym), rel.Target)
@@ -112,6 +120,9 @@ func (c *w11aUsageChecker) checkReference(sym *symbols.Symbol, u *ast.Usage) {
 		}
 		kind := w11aFamilyOf(target)
 		if kind == symbols.SymbolUnknown || defKindSpecializes(kind, want.kind) {
+			if keyword == "include" && target.Kind == symbols.SymbolUseCaseUsage {
+				c.checkIncludedUseCase(sym, target)
+			}
 			continue
 		}
 		c.diags = append(c.diags, Diagnostic{
@@ -121,6 +132,26 @@ func (c *w11aUsageChecker) checkReference(sym *symbols.Symbol, u *ast.Usage) {
 			Code:     "usage-reference-kind",
 			Source:   "type",
 		})
+	}
+}
+
+func (c *w11aUsageChecker) checkIncludedUseCase(usage, target *symbols.Symbol) {
+	for _, typ := range usageTypesOf(c.resolver, target, true, make(map[*symbols.Symbol]bool)) {
+		if typ.sym.Kind == symbols.SymbolUnknown ||
+			typ.sym.Kind == symbols.SymbolKerMLType || !isDefKind(typ.sym.Kind) {
+			continue
+		}
+		if compatibleTyping(ast.UsageUseCase, ast.DirNone, typ.sym.Kind) {
+			continue
+		}
+		c.diags = append(c.diags, Diagnostic{
+			Severity: SeverityError,
+			Span:     usage.Decl.Span(),
+			Message:  oneTypeUsageMessages[ast.UsageUseCase],
+			Code:     "one-type",
+			Source:   "type",
+		})
+		return
 	}
 }
 

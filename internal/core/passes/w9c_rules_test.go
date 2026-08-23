@@ -8,26 +8,25 @@ import (
 	"github.com/Open-MBEE/OpenSysML/internal/core/libs"
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
-	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // w9cLibraryDiags analyzes src as SysML against the standard library, which the
 // inherited-name rule needs to see the Action/Part diamond.
 func w9cLibraryDiags(t *testing.T, src string, warm bool) []Diagnostic {
 	t.Helper()
-	idx := symbols.NewIndex()
+	idx := newTestIndex()
 	libSrc := libs.DefaultSource()
 	var cache *libs.Cache
 	if warm {
 		// Populate a cache of this test's own, so the library really is restored
-		// from records rather than parsed: Load only writes through Persist.
+		// from records rather than parsed.
 		t.Setenv("XDG_CACHE_HOME", t.TempDir())
 		c, err := libs.NewCache()
 		if err != nil {
 			t.Fatalf("cache: %v", err)
 		}
 		cache = c
-		warmIdx := symbols.NewIndex()
+		warmIdx := newTestIndex()
 		if err := libs.NewLoader(libSrc, cache).LoadAll(warmIdx); err != nil {
 			t.Fatalf("warm library: %v", err)
 		}

@@ -6,7 +6,6 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
-	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // transitionDiags runs the pass alone, so what it reports is not mixed with what
@@ -19,7 +18,7 @@ func transitionDiags(t *testing.T, src string) []Diagnostic {
 	if len(p.Diagnostics) != 0 {
 		t.Fatalf("unexpected parse diagnostics: %+v", p.Diagnostics)
 	}
-	idx := symbols.NewIndexFromDoc("t.sysml", root)
+	idx := newTestIndexFromDoc("t.sysml", root)
 	return StateTransitionPass{}.Run(NewContext("t.sysml", idx, nil), "t.sysml", root)
 }
 
@@ -33,7 +32,7 @@ func analyzeTransitions(t *testing.T, src string) []Diagnostic {
 		t.Fatalf("unexpected parse diagnostics: %+v", p.Diagnostics)
 	}
 	var out []Diagnostic
-	for _, d := range Analyze("t.sysml", root, nil, symbols.NewIndexFromDoc("t.sysml", root)) {
+	for _, d := range Analyze("t.sysml", root, nil, newTestIndexFromDoc("t.sysml", root)) {
 		// The models here are written in our own state notation, which
 		// NonstandardNotationPass warns about; the verdict under test is another
 		// tier's.

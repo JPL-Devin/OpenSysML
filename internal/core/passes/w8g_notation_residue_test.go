@@ -6,7 +6,6 @@ import (
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/parser"
 	"github.com/Open-MBEE/OpenSysML/internal/core/source"
-	"github.com/Open-MBEE/OpenSysML/internal/core/symbols"
 )
 
 // analyzeAll is diagnostics from every pass, since a residue is adjudicated by
@@ -14,7 +13,7 @@ import (
 func analyzeAll(t *testing.T, name, src string) []Diagnostic {
 	t.Helper()
 	root := parser.New(source.New(name, []byte(src))).ParseFile()
-	idx := symbols.NewIndex()
+	idx := newTestIndex()
 	idx.AddDocument(name, root)
 	return Analyze(name, root, nil, idx)
 }
@@ -53,24 +52,18 @@ func TestW8GNodeBodiesAnalyseClean(t *testing.T) {
 	}
 }
 
-// TestW8GGuardedSuccessionEndpointsAreActions pins F62's remaining gap: a
-// guarded succession in an action body now parses as the transition it is, but
-// its ends are action nodes, which `resolve.isVertex` (wave 8A) rejects.
-func TestW8GGuardedSuccessionEndpointsAreActions(t *testing.T) {
+// TestW8GGuardedSuccessionEndpointsResolveAsActions pins action-body succession.
+func TestW8GGuardedSuccessionEndpointsResolveAsActions(t *testing.T) {
 	diags := analyzeAll(t, "guarded.sysml", `action def Decide {
 	attribute x = 1;
 	action A1;
 	action A2;
 	succession S first A1 if x == 0 then A2;
 }`)
-	var notVertex []string
 	for _, d := range diags {
-		if strings.Contains(d.Message, "is not a state or pseudostate") {
-			notVertex = append(notVertex, d.Message)
+		if d.Severity == SeverityError {
+			t.Errorf("action succession produced an error: %s", d.Message)
 		}
-	}
-	if len(notVertex) != 2 {
-		t.Fatalf("expected both ends reported as no vertex, got %v", notVertex)
 	}
 }
 

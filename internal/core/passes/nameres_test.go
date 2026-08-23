@@ -17,7 +17,7 @@ func nameresCtx(t *testing.T, name, src string) (*Context, *ast.RootNamespace) {
 	if len(p.Diagnostics) != 0 {
 		t.Fatalf("unexpected parse diagnostics: %+v", p.Diagnostics)
 	}
-	idx := symbols.NewIndexFromDoc(name, root)
+	idx := newTestIndexFromDoc(name, root)
 	return NewContext(name, idx, nil), root
 }
 
@@ -70,7 +70,7 @@ func TestNameResolutionPassResolvesARepeatedTopLevelNameToTheFirst(t *testing.T)
 	rootC := parseDoc(t, "c.sysml", "package Q { alias A for P::X; }")
 	rootD := parseDoc(t, "d.sysml", "package R { alias B for P::Y; }")
 
-	idx := symbols.NewIndex()
+	idx := newTestIndex()
 	idx.AddDocument("a.sysml", rootA)
 	idx.AddDocument("b.sysml", rootB)
 	idx.AddDocument("c.sysml", rootC)

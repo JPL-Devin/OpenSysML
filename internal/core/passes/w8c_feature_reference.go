@@ -114,6 +114,7 @@ func (c *featureReferenceChecker) walkExpr(sym *symbols.Symbol, scope *symbols.S
 // checkReferent reports a referent that is not a feature, or a feature that the
 // naming context cannot reach.
 func (c *featureReferenceChecker) checkReferent(sym *symbols.Symbol, scope *symbols.Scope, ref ast.Node, span source.Span) {
+	chain, isChain := ref.(*ast.FeatureChainExpr)
 	target, ok := c.cc.resolver.ResolveTarget(scope, ref)
 	if !ok || target == nil || target == sym {
 		return
@@ -128,9 +129,10 @@ func (c *featureReferenceChecker) checkReferent(sym *symbols.Symbol, scope *symb
 		})
 		return
 	}
-	// A chain resolves its member against the preceding feature rather than
-	// against the naming context, so its accessibility is not checked here.
-	if _, chain := ref.(*ast.FeatureChainExpr); chain {
+	// A single-segment chain member is a feature of the preceding one, so the
+	// naming context need not reach it; a qualified member names it through its
+	// own namespace and is checked like any other reference.
+	if isChain && (chain.Member == nil || len(chain.Member.Parts) < 2) {
 		return
 	}
 	// A variant is an owned member of its variation, not a feature of it, so
@@ -158,11 +160,15 @@ func (c *featureReferenceChecker) checkReferent(sym *symbols.Symbol, scope *symb
 	if w8cOwnedByImplicitNode(target) {
 		return
 	}
+	msg, code := msgSubsettingFeaturingTypes, "feature-reference-featuring-types"
+	if isChain {
+		msg, code = msgReferentIsFeature, "feature-reference-referent"
+	}
 	c.diags = append(c.diags, Diagnostic{
 		Severity: SeverityError,
 		Span:     span,
-		Message:  msgSubsettingFeaturingTypes,
-		Code:     "feature-reference-featuring-types",
+		Message:  msg,
+		Code:     code,
 		Source:   "constraint",
 	})
 }

@@ -187,8 +187,12 @@ func (c *transitionChecker) startsOf(
 	if !bare || target == nil {
 		return nil
 	}
-	decl, ok := c.resolver.Endpoint(scope, target)
-	if !ok || !m.vertices[decl] {
+	sym, ok := c.resolver.EndpointSymbol(scope, target)
+	if !ok {
+		return nil
+	}
+	decl := sym.Decl
+	if !m.vertices[decl] && !resolve.IsInheritedStateVertex(sym) {
 		return nil
 	}
 	if _, pseudostate := decl.(*ast.PseudostateNode); pseudostate {
@@ -211,8 +215,13 @@ func (c *transitionChecker) checkEndpoint(
 	if qn == nil {
 		return nil
 	}
-	decl, ok := c.resolver.Endpoint(scope, qn)
-	if !ok || m.vertices[decl] {
+	sym, ok := c.resolver.EndpointSymbol(scope, qn)
+	if !ok {
+		return nil
+	}
+	decl := sym.Decl
+	if m.vertices[decl] || resolve.IsInheritedStateVertex(sym) ||
+		c.resolver.MachineStateVertex(scope, qn, sym) {
 		return decl
 	}
 	// A `first m then x` marker gets no incoming transition (UML 15.7.18), so a

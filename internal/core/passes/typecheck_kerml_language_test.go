@@ -15,7 +15,7 @@ import (
 func diagsIn(t *testing.T, name, src, diagSource string) []Diagnostic {
 	t.Helper()
 	root := parser.New(source.New(name, []byte(src))).ParseFile()
-	idx := symbols.NewIndex()
+	idx := newTestIndex()
 	idx.AddDocument(name, root)
 	var out []Diagnostic
 	for _, d := range Analyze(name, root, nil, idx) {

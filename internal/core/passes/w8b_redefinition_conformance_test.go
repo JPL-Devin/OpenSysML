@@ -12,7 +12,7 @@ import (
 func conformanceDiags(t *testing.T, src string) []Diagnostic {
 	t.Helper()
 	root := parser.New(source.New("<t>.kerml", []byte(src))).ParseFile()
-	idx := symbols.NewIndex()
+	idx := newTestIndex()
 	idx.AddDocument("<t>.kerml", root)
 	var out []Diagnostic
 	for _, d := range Analyze("<t>.kerml", root, nil, idx) {
@@ -48,6 +48,9 @@ func TestW8BDirectionConformanceOpposingDirection(t *testing.T) {
 	if !hasCode(diags, "redefinition-direction-conformance") {
 		t.Fatalf("expected a direction violation, got %v", codes(diags))
 	}
+	if len(diags) != 1 {
+		t.Fatalf("got %d conformance diagnostics, want one: %v", len(diags), codes(diags))
+	}
 }
 
 func TestW8BDirectionConformanceThroughConjugation(t *testing.T) {
@@ -75,6 +78,37 @@ func TestW8BDirectionConformanceAdmitsInoutAndUndeclared(t *testing.T) {
 	`)
 	if len(diags) != 0 {
 		t.Fatalf("expected no violation, got %v", codes(diags))
+	}
+}
+
+func TestW8BDirectionConformanceRunsAlongsideTypeErrors(t *testing.T) {
+	root := parser.New(source.New("<t>.sysml", []byte(`
+		package P {
+			port def OutPort {
+				out ref anout;
+				in ref anin;
+			}
+			part p {
+				port aport : OutPort {
+					in ref redefines anout;
+					out ref redefines anin;
+				}
+			}
+			port def Bad {
+				part nested;
+			}
+		}
+	`))).ParseFile()
+	idx := symbols.NewIndex()
+	idx.AddDocument("<t>.sysml", root)
+	var directions []Diagnostic
+	for _, d := range Analyze("<t>.sysml", root, nil, idx) {
+		if d.Code == "redefinition-direction-conformance" {
+			directions = append(directions, d)
+		}
+	}
+	if len(directions) != 2 {
+		t.Fatalf("got %d direction diagnostics, want 2: %v", len(directions), directions)
 	}
 }
 
@@ -179,7 +213,7 @@ func TestW8BMetadataBodyMustRedefineOwningTypeFeature(t *testing.T) {
 		}
 	}`
 	root := parser.New(source.New("<t>.kerml", []byte(src))).ParseFile()
-	idx := symbols.NewIndex()
+	idx := newTestIndex()
 	idx.AddDocument("<t>.kerml", root)
 	var got []Diagnostic
 	for _, d := range Analyze("<t>.kerml", root, nil, idx) {
