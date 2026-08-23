@@ -11,7 +11,6 @@ const (
 	msgDirectionConformance  = "Redefining feature must have a compatible direction"
 	msgUniquenessConformance = "Subsetting/redefining feature cannot be nonunique if subsetted/redefined feature is unique"
 	msgConstancyConformance  = "Subsetting/redefining feature must be constant if subsetted/redefined feature is constant"
-	msgOwningTypeFeature     = "Must redefine an owning-type feature"
 )
 
 // RedefinitionConformancePass reports the feature-conformance rules a subsetting
@@ -58,68 +57,7 @@ func (rc *redefinitionConformanceChecker) walk(scope *symbols.Scope) {
 	}
 }
 
-// checkMetadataBodies reports the declarations in the metadata annotations of
-// sym's declaration that restate no feature of the annotated type. An annotation
-// is either a prefix of the declaration or a member of its body, and its names
-// resolve in the scope holding it.
-func (rc *redefinitionConformanceChecker) checkMetadataBodies(sym *symbols.Symbol) {
-	for _, prefix := range declPrefixes(sym.Decl) {
-		rc.reportMetadataBody(sym.OwnerScope, prefix)
-	}
-	for _, node := range declBodyMembers(sym.Decl) {
-		if mem, ok := node.(*ast.Membership); ok {
-			node = mem.Member
-		}
-		if prefix, ok := node.(*ast.PrefixMetadata); ok {
-			rc.reportMetadataBody(sym.Scope, prefix)
-		}
-	}
-}
-
-func (rc *redefinitionConformanceChecker) reportMetadataBody(scope *symbols.Scope, prefix *ast.PrefixMetadata) {
-	for _, node := range rc.model.MetadataBodyViolations(scope, prefix) {
-		rc.diags = append(rc.diags, Diagnostic{
-			Severity: SeverityError,
-			Span:     node.Span(),
-			Message:  msgOwningTypeFeature,
-			Code:     "metadata-owning-type-feature",
-			Source:   "constraint",
-		})
-	}
-}
-
-// declPrefixes returns the metadata annotations written ahead of a declaration.
-func declPrefixes(decl ast.Node) []*ast.PrefixMetadata {
-	switch d := decl.(type) {
-	case *ast.Definition:
-		return d.Prefixes
-	case *ast.Usage:
-		return d.Prefixes
-	case *ast.Package:
-		return d.Prefixes
-	case *ast.Namespace:
-		return d.Prefixes
-	}
-	return nil
-}
-
-// declBodyMembers returns the member nodes of a declaration's body.
-func declBodyMembers(decl ast.Node) []ast.Node {
-	switch d := decl.(type) {
-	case *ast.Definition:
-		return d.Members
-	case *ast.Usage:
-		return d.Members
-	case *ast.Package:
-		return d.Members
-	case *ast.Namespace:
-		return d.Members
-	}
-	return nil
-}
-
 func (rc *redefinitionConformanceChecker) check(sym *symbols.Symbol) {
-	rc.checkMetadataBodies(sym)
 	for _, v := range rc.model.ConformanceViolations(sym) {
 		msg, code := conformanceMessage(v.Kind)
 		if msg == "" || v.Ref == nil {
