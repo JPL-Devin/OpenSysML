@@ -86,7 +86,7 @@ func (fc *filterChecker) gated(expr ast.Node) bool {
 	}
 	switch op.Operator {
 	case ast.OpAt, ast.OpMetaAt, ast.OpIsType, ast.OpHasType:
-		if fc.ctx.DownstreamOfFailure(op.TypeRef) {
+		if op.TypeRef != nil && fc.ctx.DownstreamOfFailure(op.TypeRef) {
 			return true
 		}
 	case ast.OpNot, ast.OpAnd, ast.OpConditionalAnd, ast.OpOr, ast.OpConditionalOr,

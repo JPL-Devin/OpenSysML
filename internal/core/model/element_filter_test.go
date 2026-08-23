@@ -702,6 +702,19 @@ func TestAnUnresolvedOperandOfABooleanFilterYieldsOnlyTheUnresolvedReference(t *
 	}
 }
 
+// A classification test written without its type parses to an operator with no
+// type reference, and analysis must report the syntax error rather than crash.
+func TestAClassificationFilterMissingItsTypeIsDiagnosedNotFatal(t *testing.T) {
+	for _, cond := range []string{"x istype ", "x hastype ", "@", "@@"} {
+		src := "package P { filter " + cond + "; }"
+		ws := NewWorkspace()
+		ws.Open("file:///a.sysml", []byte(src), 1)
+		if len(ws.Diagnostics("file:///a.sysml")) == 0 {
+			t.Errorf("filter %s: malformed condition reported nothing", cond)
+		}
+	}
+}
+
 // TestEditorResolutionMatchesDiagnosticsForARootImport locks the editor read
 // path (go-to-definition, hover, rename) to the same verdict the diagnostics
 // give: a document builds its own scope tree, whose document the index does not
