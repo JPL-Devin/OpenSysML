@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 type stubPass struct {
@@ -43,18 +44,79 @@ func TestRegistrySkipsHigherLevelAfterError(t *testing.T) {
 	}
 }
 
-type selfGatedStub struct{ stubPass }
+type elementScopedStub struct{ stubPass }
 
-func (selfGatedStub) SelfGated() {}
+func (elementScopedStub) ElementScoped() {}
 
-func TestRegistryRunsSelfGatedPassAfterError(t *testing.T) {
+func TestRegistryRunsElementScopedPassAfterError(t *testing.T) {
 	reg := NewRegistry()
 	reg.Register(stubPass{level: LevelSyntax, diags: []Diagnostic{{Severity: SeverityError, Source: "syntax"}}})
 	reg.Register(stubPass{level: LevelType, diags: []Diagnostic{{Source: "type"}}})
-	reg.Register(selfGatedStub{stubPass{level: LevelType, diags: []Diagnostic{{Source: "self-gated"}}}})
+	reg.Register(elementScopedStub{stubPass{level: LevelType, diags: []Diagnostic{{Source: "element-scoped"}}}})
 	got := reg.Run(NewContext("t", nil, nil), "t", nil)
-	if len(got) != 2 || got[1].Source != "self-gated" {
-		t.Fatalf("want syntax plus self-gated only, got %v", got)
+	if len(got) != 2 || got[1].Source != "element-scoped" {
+		t.Fatalf("want syntax plus element-scoped only, got %v", got)
+	}
+}
+
+// subjectPass is element-scoped and reports about each subject the tiers below
+// left judgeable, which is what per-element gating has to decide.
+type subjectPass struct {
+	subjects []ast.Node
+}
+
+func (subjectPass) Level() PassLevel { return LevelType }
+
+func (subjectPass) ElementScoped() {}
+
+func (p subjectPass) Run(ctx *Context, name string, root *ast.RootNamespace) []Diagnostic {
+	var out []Diagnostic
+	for _, s := range p.subjects {
+		if ctx.DownstreamOfFailure(s) {
+			continue
+		}
+		out = append(out, Diagnostic{Span: s.Span(), Source: "subject"})
+	}
+	return out
+}
+
+func TestRegistryGatesElementScopedPassPerElement(t *testing.T) {
+	bad := &ast.ErrorNode{NodeBase: ast.NodeBase{NodeSpan: source.Span{Offset: 10, Len: 5}}}
+	good := &ast.ErrorNode{NodeBase: ast.NodeBase{NodeSpan: source.Span{Offset: 40, Len: 5}}}
+	reg := NewRegistry()
+	reg.Register(stubPass{level: LevelNameResolution, diags: []Diagnostic{{
+		Severity: SeverityError, Span: source.Span{Offset: 11, Len: 3}, Source: "nameres",
+	}}})
+	reg.Register(subjectPass{subjects: []ast.Node{bad, good}})
+	got := reg.Run(NewContext("t", nil, nil), "t", nil)
+	if len(got) != 2 {
+		t.Fatalf("got %v, want the nameres error plus one subject diagnostic", got)
+	}
+	if got[1].Span.Offset != good.Span().Offset {
+		t.Fatalf("reported subject at offset %d, want the one that resolved (%d)",
+			got[1].Span.Offset, good.Span().Offset)
+	}
+}
+
+func TestRegistryDoesNotGateOnSameLevelFailure(t *testing.T) {
+	subject := &ast.ErrorNode{NodeBase: ast.NodeBase{NodeSpan: source.Span{Offset: 10, Len: 5}}}
+	reg := NewRegistry()
+	reg.Register(stubPass{level: LevelType, diags: []Diagnostic{{
+		Severity: SeverityError, Span: source.Span{Offset: 11, Len: 3}, Source: "type",
+	}}})
+	reg.Register(subjectPass{subjects: []ast.Node{subject}})
+	if got := reg.Run(NewContext("t", nil, nil), "t", nil); len(got) != 2 {
+		t.Fatalf("got %v, want both: a same-level failure gates nothing", got)
+	}
+}
+
+func TestRegistryGatesOnParseFailure(t *testing.T) {
+	subject := &ast.ErrorNode{NodeBase: ast.NodeBase{NodeSpan: source.Span{Offset: 10, Len: 5}}}
+	parse := []Diagnostic{{Severity: SeverityError, Span: source.Span{Offset: 10, Len: 5}, Source: "syntax"}}
+	reg := NewRegistry()
+	reg.Register(subjectPass{subjects: []ast.Node{subject}})
+	if got := reg.Run(NewContext("t", nil, parse), "t", nil); len(got) != 0 {
+		t.Fatalf("got %v, want nothing: the subject did not parse", got)
 	}
 }
 

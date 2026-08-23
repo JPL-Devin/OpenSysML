@@ -152,30 +152,38 @@ process. What remains is packaging and publishing: `vsce package` in the release
 `.vsix` on the release, and (for the marketplace) a publisher account and a PAT in CI — the same
 class of account gate as R2/R4.
 
-## L2 — tier gating is per document, and the reference's is per element (scheduled, wave 12)
+## L2 — tier gating is per document, and the reference's is per element (done, wave 12A)
 
-`Registry.Run` (`internal/core/passes/registry.go`) skips every pass at a strictly higher level
-once any pass emits a blocking error, for the **whole document**. The reference is EMF/Xtext,
+**Landed.** `passes.ElementScoped` generalizes 11D's `SelfGated` marker: a pass that names its
+subject in code runs despite a lower-tier failure and gates itself per element through
+`Context.DownstreamOfFailure`; a pass whose subject is the file stays document-scoped. Differential
+agreement 25 → 32 and only-pilot 73 → 66 with only-ours unmoved at 119; the Xpect and rejection
+oracles do not move. The four rows this item was expected to close are **not** behind the gate —
+removing the gate entirely leaves the Xpect oracle byte-identical — each is an unimplemented rule
+owned elsewhere. See [wave 12A](wave12a-element-gating.md) for the measurements and the row table.
+
+### The motivation, as it stood before wave 12A
+
+`Registry.Run` (`internal/core/passes/registry.go`) skipped every pass at a strictly higher level
+once any pass emitted a blocking error, for the **whole document**. The reference is EMF/Xtext,
 where a linking failure on one element does not stop validating the others — which is why it
-reports an unresolved reference *and* `Must have a concrete type` in one file where we report
-only the first. The divergence is a policy of ours, not a position the specification takes.
+reports an unresolved reference *and* `Must have a concrete type` in one file where we reported
+only the first. The divergence was a policy of ours, not a position the specification takes.
 
 Wave 11D raised this as an adjudication question and offered two ways out; both were refused.
 Moving a rule down a tier buys one row by suppressing filter diagnostics elsewhere (11D measured
 that), and making name-resolution errors non-blocking wholesale uncaps cascade noise across every
-corpus. The remaining answer is to narrow the gate: a higher-tier pass skips the elements whose
-own resolution failed, not the file.
+corpus. The answer taken instead was to narrow the gate: a higher-tier pass skips the elements
+whose own resolution failed, not the file.
 
-`Diagnostic.Blocking()` is the precedent for how a non-gating error is already expressed — a
-`Notation` error concerns the writing rather than the meaning, so it gates nothing. This item
-generalizes that from a per-diagnostic flag to a per-element question, which means `Context`
-gaining a way for a pass to ask whether the element it is about to check is downstream of a
-resolution failure.
+`Diagnostic.Blocking()` was the precedent for how a non-gating error is already expressed — a
+`Notation` error concerns the writing rather than the meaning, so it gates nothing. Wave 12A
+generalized that from a per-diagnostic flag to a per-element question, giving `Context` a way for
+a pass to ask whether the element it is about to check is downstream of a resolution failure.
 
-Adjudicate before implementing: cascade noise is the reason the coarse gate exists, so the
-measure of success is the Xpect and differential oracles moving *without* a rise in only-ours
-rows. Take it after wave 11 lands, since several slices' rows sit behind this gate and would
-otherwise be re-measured twice.
+Cascade noise is the reason the coarse gate existed, so the measure of success was the oracles
+moving *without* a rise in only-ours rows — met, and the control with the gate removed entirely
+(only-ours 119 → 166) is why the marker stayed opt-in.
 
 ## L3 — a library contributes names but no bodies (scheduled, wave 12)
 

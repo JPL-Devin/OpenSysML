@@ -14,22 +14,23 @@ type MetadataTypePass struct{}
 
 func (MetadataTypePass) Level() PassLevel { return LevelType }
 
-// The rule judges one annotation at a time and reports nothing about an
-// annotation whose own metaclass does not resolve, so it needs no clean file.
-func (MetadataTypePass) SelfGated() {}
+// Its subject is one annotation, and the reference that subject rests on is the
+// metaclass it names: a failure on another element does not hide it.
+func (MetadataTypePass) ElementScoped() {}
 
 func (MetadataTypePass) Run(ctx *Context, name string, root *ast.RootNamespace) []Diagnostic {
 	rootScope := ctx.Index.DocumentRoot(name)
 	if rootScope == nil {
 		return nil
 	}
-	c := &metadataTypeChecker{resolver: ctx.Resolver()}
+	c := &metadataTypeChecker{ctx: ctx, resolver: ctx.Resolver()}
 	w := &w8cWalker{seen: map[*symbols.Symbol]bool{}}
 	w.walk(rootScope, c.checkSymbol)
 	return c.diags
 }
 
 type metadataTypeChecker struct {
+	ctx      *Context
 	resolver interface {
 		ResolveQualified(*symbols.Scope, *ast.QualifiedName) (*symbols.Symbol, bool)
 	}
@@ -50,7 +51,7 @@ func (c *metadataTypeChecker) checkSymbol(sym *symbols.Symbol) {
 }
 
 func (c *metadataTypeChecker) check(scope *symbols.Scope, pm *ast.PrefixMetadata) {
-	if pm.Type == nil {
+	if pm.Type == nil || c.ctx.DownstreamOfFailure(pm.Type) {
 		return
 	}
 	target, ok := c.resolver.ResolveQualified(scope, pm.Type)

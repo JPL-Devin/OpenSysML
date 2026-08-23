@@ -58,6 +58,9 @@ type Context struct {
 
 	resolver *resolve.Resolver
 	model    *semantics.Model
+	// failures is where the tiers below the pass now running found blocking
+	// faults, so an element-scoped pass can gate itself per element.
+	failures []source.Span
 }
 
 // Options is the analysis configuration of one run. The zero value is what
@@ -82,6 +85,26 @@ func NewContextWithKind(name string, kind source.Kind, idx *symbols.Index,
 func NewContextWithOptions(name string, kind source.Kind, idx *symbols.Index,
 	parseDiags []Diagnostic, opts Options) *Context {
 	return &Context{Name: name, Kind: kind, Index: idx, ParseDiagnostics: parseDiags, Options: opts}
+}
+
+// setFailures records the blocking spans of the tiers below the pass about to
+// run. Only the registry calls it, once per pass.
+func (c *Context) setFailures(spans []source.Span) { c.failures = spans }
+
+// DownstreamOfFailure reports whether a reference an element's meaning rests on
+// — its type, its metaclass — carries a blocking fault from a lower tier, so a
+// pass whose subject is that element has nothing sound to judge.
+func (c *Context) DownstreamOfFailure(ref ast.Node) bool {
+	if c == nil || ref == nil {
+		return false
+	}
+	span := ref.Span()
+	for _, f := range c.failures {
+		if f.Offset >= span.Offset && f.End() <= span.End() {
+			return true
+		}
+	}
+	return false
 }
 
 // Resolver returns the shared resolver for this context, creating it on first

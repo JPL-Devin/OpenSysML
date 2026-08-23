@@ -4,6 +4,7 @@ import (
 	"sort"
 
 	"github.com/Open-MBEE/OpenSysML/internal/core/ast"
+	"github.com/Open-MBEE/OpenSysML/internal/core/source"
 )
 
 // Registry holds an ordered set of validation passes.
@@ -21,15 +22,17 @@ func (r *Registry) Register(p Pass) {
 	r.passes = append(r.passes, p)
 }
 
-// SelfGated marks a pass that decides per element whether the model is resolved
-// enough to judge it, so a failure elsewhere in the document does not skip it.
-type SelfGated interface{ SelfGated() }
+// ElementScoped marks a pass whose subject is a single element rather than the
+// document, so a failure on another element does not skip it. Such a pass names
+// its subject in code and asks Context.DownstreamOfFailure about the references
+// that subject rests on.
+type ElementScoped interface{ ElementScoped() }
 
 // Run executes all registered passes in ascending PassLevel order and returns
-// their accumulated diagnostics. If a pass at some level emits an
-// Error-severity diagnostic, passes at strictly higher levels are skipped to
-// avoid cascade noise, unless they are SelfGated. Passes at the same level
-// always run.
+// their accumulated diagnostics. A pass whose subject is the document is skipped
+// once a strictly lower level emitted a blocking diagnostic, avoiding cascade
+// noise; an ElementScoped pass runs and gates itself per element. Passes at the
+// same level always run.
 func (r *Registry) Run(ctx *Context, name string, root *ast.RootNamespace) []Diagnostic {
 	ordered := make([]Pass, len(r.passes))
 	copy(ordered, r.passes)
@@ -38,34 +41,56 @@ func (r *Registry) Run(ctx *Context, name string, root *ast.RootNamespace) []Dia
 	})
 
 	var all []Diagnostic
-	// failedLevel is the lowest level at which an Error occurred; passes at a
-	// strictly higher level are skipped.
+	// failedLevel is the lowest level at which an Error occurred; document-scoped
+	// passes at a strictly higher level are skipped.
 	failed := false
 	var failedLevel PassLevel
+	byLevel := map[PassLevel][]source.Span{}
+	if ctx != nil {
+		byLevel[LevelSyntax] = blockingSpans(ctx.ParseDiagnostics)
+	}
 	for _, p := range ordered {
-		if failed && p.Level() > failedLevel {
-			if _, selfGated := p.(SelfGated); !selfGated {
-				continue
-			}
+		_, elementScoped := p.(ElementScoped)
+		if failed && p.Level() > failedLevel && !elementScoped {
+			continue
+		}
+		if ctx != nil {
+			ctx.setFailures(spansBelow(byLevel, p.Level()))
 		}
 		diags := p.Run(ctx, name, root)
 		all = append(all, diags...)
-		if hasError(diags) {
+		if spans := blockingSpans(diags); len(spans) > 0 {
+			byLevel[p.Level()] = append(byLevel[p.Level()], spans...)
 			if !failed || p.Level() < failedLevel {
 				failedLevel = p.Level()
 			}
 			failed = true
 		}
 	}
+	if ctx != nil {
+		ctx.setFailures(nil)
+	}
 	return all
 }
 
-// hasError reports whether a level failed in a way the next one depends on.
-func hasError(diags []Diagnostic) bool {
+// blockingSpans returns where the diagnostics a level depends on were reported.
+func blockingSpans(diags []Diagnostic) []source.Span {
+	var out []source.Span
 	for _, d := range diags {
 		if d.Blocking() {
-			return true
+			out = append(out, d.Span)
 		}
 	}
-	return false
+	return out
+}
+
+// spansBelow collects the blocking spans of every level strictly below level.
+func spansBelow(byLevel map[PassLevel][]source.Span, level PassLevel) []source.Span {
+	var out []source.Span
+	for l, spans := range byLevel {
+		if l < level {
+			out = append(out, spans...)
+		}
+	}
+	return out
 }

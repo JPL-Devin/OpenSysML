@@ -683,6 +683,44 @@ func TestAnUnresolvedNameInAnImportFilterIsReported(t *testing.T) {
 	}
 }
 
+// An operator whose result is Boolean whatever its operands are draws no
+// evaluability fault from an operand a lower tier could not resolve.
+func TestAnUnresolvedOperandOfABooleanFilterYieldsOnlyTheUnresolvedReference(t *testing.T) {
+	for _, cond := range []string{
+		"@Safe and Undefined", "Undefined1 and Undefined2", "not Undefined",
+		"Undefined == 1", "Undefined < 1", "Undefined != Undefined2",
+		"Undefined istype Safe", "Undefined hastype Safe",
+	} {
+		src := "package P { metadata def Safe; filter " + cond + "; }"
+		ws := NewWorkspace()
+		ws.Open("file:///a.sysml", []byte(src), 1)
+		for _, d := range ws.Diagnostics("file:///a.sysml") {
+			if !strings.Contains(d.Message, "unresolved reference") {
+				t.Errorf("filter %s: an unresolved operand is the whole fault, also got %q", cond, d.Message)
+			}
+		}
+	}
+}
+
+// A classification test written without its type parses to an operator with no
+// type reference: the syntax error is the whole fault, as the pilot has it.
+func TestAClassificationFilterMissingItsTypeIsDiagnosedNotFatal(t *testing.T) {
+	for _, cond := range []string{"x istype ", "x hastype ", "@", "@@"} {
+		src := "package P { filter " + cond + "; }"
+		ws := NewWorkspace()
+		ws.Open("file:///a.sysml", []byte(src), 1)
+		diags := ws.Diagnostics("file:///a.sysml")
+		if len(diags) == 0 {
+			t.Errorf("filter %s: malformed condition reported nothing", cond)
+		}
+		for _, d := range diags {
+			if strings.Contains(d.Message, "model-level evaluable") || strings.Contains(d.Message, "Boolean result") {
+				t.Errorf("filter %s: a missing type is a syntax fault, also got %q", cond, d.Message)
+			}
+		}
+	}
+}
+
 // TestEditorResolutionMatchesDiagnosticsForARootImport locks the editor read
 // path (go-to-definition, hover, rename) to the same verdict the diagnostics
 // give: a document builds its own scope tree, whose document the index does not

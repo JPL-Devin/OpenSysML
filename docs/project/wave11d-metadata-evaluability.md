@@ -97,7 +97,9 @@ yields nothing. This is the same reasoning `Diagnostic.Blocking()` already appli
 errors. Only this pass opts in; general element-scoped gating across the registry remains a
 wave-12 decision. `TestW8CMetadataAbstractTypeIsElementScoped` locks both directions — reported
 despite an unresolved feature elsewhere, silent when the annotation's own metaclass is unresolved —
-and `TestRegistryRunsSelfGatedPassAfterError` locks that non-opted passes are still skipped.
+and `TestRegistryRunsElementScopedPassAfterError` (renamed from `TestRegistryRunsSelfGatedPassAfterError`) locks that non-opted passes are still skipped.
+Wave 12A generalized this marker into `passes.ElementScoped`, which is what the code calls it now;
+see [wave 12A](wave12a-element-gating.md).
 All four rows now agree, with no other Xpect row moving in either direction.
 
 ## What did not move, and why

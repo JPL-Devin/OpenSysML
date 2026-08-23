@@ -101,7 +101,7 @@ Read `docs/internals/architecture.md` before non-trivial work — it documents t
 - **Immutable AST.** `internal/core/ast` is syntax-only and is never mutated after parsing. All derived/semantic data lives in **side tables keyed by node/symbol**.
 - **Parser never fails.** `parser.New(src).ParseFile()` always returns a tree; malformed input yields `ErrorNode`s + diagnostics, never a panic.
 - **Lazy + memoized semantics.** Name resolution and type queries compute on demand and cache. Don't force eager work.
-- **Tiered passes.** Higher validation tiers are skipped when a lower tier errors. Keep passes independent and level-scoped.
+- **Tiered passes.** Higher validation tiers are skipped when a lower tier errors, unless a pass declares `passes.ElementScoped` and gates itself per subject via `Context.DownstreamOfFailure`. Keep passes independent and level-scoped.
 - **Runtime consumes lowered IR.** Executors should operate on `internal/core/lower` graphs (`ActionGraph`/`StateGraph`) as the single source of truth — do **not** re-parse `symbol.Decl` inside executors, and do not build parallel/duplicate structures that can drift. Lowering must be lossless (carry guards, triggers, effects, pseudostate edges).
 - **Error timing is part of the contract.** Constructors (`newActionExecutor`, `newStateExecutor`) succeed on structurally-empty inputs; "no initial node/state" errors surface at `initialize()`. Don't move error points without updating the corresponding tests intentionally.
 

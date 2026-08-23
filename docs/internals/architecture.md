@@ -146,9 +146,9 @@ source → lexer → parser → AST → symbol index → resolve → passes
 
 - **PassLevel:** `{LevelSyntax, LevelNameResolution, LevelType, LevelConstraint}`
 - **Pass:** `{Level() PassLevel; Run(ctx, name, root) []Diagnostic}`
-- **Context:** Exposes `Resolver()` + `Model()` (both lazy, memoized)
+- **Context:** Exposes `Resolver()` + `Model()` (both lazy, memoized) and `DownstreamOfFailure(ref)` — did a lower tier report a blocking diagnostic inside this reference?
 - **DefaultRegistry:** SyntaxPass, NameResolutionPass, TypeCheckPass, ConstraintPass
-- **Tiered execution:** Higher tiers skipped if lower tier errors
+- **Tiered execution:** a document-scoped pass at a higher tier is skipped once a lower tier errors; a pass marked `ElementScoped` runs and gates itself per subject through `Context.DownstreamOfFailure` ([wave 12A](../project/wave12a-element-gating.md))
 - **Quick fixes:** A `Diagnostic` carries the `quickfix.Fix` values (`internal/core/quickfix`) the layer reporting it attached, so an editor offers edits without parsing messages
 
 ### 6a. Highlighting (`internal/core/highlight`)
@@ -653,7 +653,7 @@ Every behavioral feature must have:
 
 **Measured against the pinned reference** (`PILOT_TAG=2026-05`, artifact `0.60.1`). Every number below is re-derived from a committed baseline by the doc-count guard in `cmd/pilot-diff`; none of them is typed in by hand.
 
-- **Corpus agreement:** 317 of 353 files agree diagnostic-by-diagnostic; 119 diagnostics are ours alone and 73 the reference's alone, and the first number must be read by root: our diagnostics against the reference's own corpora fell while our non-standard-notation warnings on our own example models rose ([differential](../project/pilot-differential.md), `go run ./cmd/pilot-diff`).
+- **Corpus agreement:** 317 of 353 files agree diagnostic-by-diagnostic; 119 diagnostics are ours alone and 66 the reference's alone, and the first number must be read by root: our diagnostics against the reference's own corpora fell while our non-standard-notation warnings on our own example models rose ([differential](../project/pilot-differential.md), `go run ./cmd/pilot-diff`).
 - **Declared-diagnostic silence:** of the 510 declared `errors` rows in the reference's own Xpect suites, we report nothing for 4. 233 we report word-for-word; 246 wording-only and 9 location-only differences are agreement in substance and are not counted as gaps; 0 more we report as a warning and 12 elsewhere in the file ([Xpect oracle](../project/pilot-xpect.md), `go run ./cmd/pilot-xpect`).
 - **Scope agreement:** 221 of 230 declared scope assertions match exactly (same source).
 - **Permissiveness gaps:** of 120 invalid models we wrote ourselves, the reference rejects 9 that we accept by default, and 111 both reject; 5 further cases agree only when we are asked strictly. We authored every one of these cases ourselves, so the denominator measures the reach of our own corpus and not our conformance; agreement reached only under an opt-in strict mode is weaker evidence than agreement by default ([rejection oracle](../project/pilot-rejection.md), `go run ./cmd/pilot-reject`).
