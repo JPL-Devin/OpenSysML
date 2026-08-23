@@ -20,9 +20,9 @@ Four categories, and every open row carries one — an unlabelled open row reads
 |---|---|---|
 | E1 `Type_Multiplicity_invalid` | unimplemented obligation | 11B (parser) |
 | E2 `AssociationTest_CrossFeatures_invalid` | unimplemented obligation | 11B (parser/AST), then a KerML rule slice |
-| E3 `ConnectorTest_ConnectorEndSubsettingBadCase` | our defect | 11C (resolver) |
+| E3 `ConnectorTest_ConnectorEndSubsettingBadCase` | our defect | 11C (resolver) — **closed in [wave 12E](wave12e-decisions.md)** |
 | E4 `SimpleImportTestsFromOtherFile_Import3{,_FT}` | adjudicated divergence | 11E (this doc) |
-| E5 `VisibilityTests_Protected_FeatureChaining` | our defect | 11C (resolver) |
+| E5 `VisibilityTests_Protected_FeatureChaining` | our defect | 11C (resolver) — **closed in [wave 12E](wave12e-decisions.md)** |
 
 ---
 
@@ -82,7 +82,8 @@ duplicating name resolution.
 
 **Category — our defect.** We resolve a feature that should not be nameable here.
 
-**Owner.** Resolver (slice 11C).
+**Owner.** Resolver (slice 11C). **Closed in [wave 12E](wave12e-decisions.md) §4:** a connector end's
+participant is featured where the connector is, so the connector's own features are not candidates.
 
 ---
 
@@ -124,7 +125,8 @@ qualified tail. The missing row is a resolution verdict on one chain segment, no
 
 **Category — our defect.** The reference should not resolve at line 34.
 
-**Owner.** Resolver (slice 11C).
+**Owner.** Resolver (slice 11C). **Closed in [wave 12E](wave12e-decisions.md) §5:** an unnamed
+redefinition of an invisible feature binds no effective name, so nothing later finds it.
 
 ---
 

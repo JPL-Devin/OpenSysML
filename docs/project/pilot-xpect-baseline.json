@@ -7,9 +7,9 @@
     "filesUnparsed": 0,
     "assertions": 1261,
     "rows": 1323,
-    "agree": 1269,
-    "wordingOnly": 246,
-    "disagree": 54,
+    "agree": 1280,
+    "wordingOnly": 248,
+    "disagree": 43,
     "unlocated": 0,
     "notAdjudicated": 0,
     "missingResources": 0,
@@ -21,15 +21,15 @@
       "assertions": 486,
       "blockAssertions": 27,
       "rows": 510,
-      "agree": 479,
-      "wordingOnly": 246,
-      "disagree": 31,
+      "agree": 481,
+      "wordingOnly": 248,
+      "disagree": 29,
       "unlocated": 0,
       "notAdjudicated": 0,
       "sameLocation": 6,
       "sameLine": 9,
       "severityDiffers": 0,
-      "elsewhereInFile": 12
+      "elsewhereInFile": 11
     },
     {
       "kind": "noErrors",
@@ -81,18 +81,15 @@
       "assertions": 230,
       "blockAssertions": 229,
       "rows": 230,
-      "agree": 221,
+      "agree": 230,
       "wordingOnly": 0,
-      "disagree": 9,
+      "disagree": 0,
       "unlocated": 0,
       "notAdjudicated": 0,
       "sameLocation": 0,
       "sameLine": 0,
       "severityDiffers": 0,
-      "elsewhereInFile": 0,
-      "extraNames": 2,
-      "missingAndExtra": 1,
-      "libraryNames": 6
+      "elsewhereInFile": 0
     },
     {
       "kind": "exportedObjects",
@@ -119,9 +116,9 @@
         "filesUnparsed": 0,
         "assertions": 952,
         "rows": 966,
-        "agree": 932,
-        "wordingOnly": 241,
-        "disagree": 34,
+        "agree": 943,
+        "wordingOnly": 243,
+        "disagree": 23,
         "unlocated": 0,
         "notAdjudicated": 0,
         "missingResources": 0,
@@ -133,15 +130,15 @@
           "assertions": 312,
           "blockAssertions": 17,
           "rows": 326,
-          "agree": 305,
-          "wordingOnly": 241,
-          "disagree": 21,
+          "agree": 307,
+          "wordingOnly": 243,
+          "disagree": 19,
           "unlocated": 0,
           "notAdjudicated": 0,
           "sameLocation": 3,
           "sameLine": 7,
           "severityDiffers": 0,
-          "elsewhereInFile": 7
+          "elsewhereInFile": 6
         },
         {
           "kind": "noErrors",
@@ -193,18 +190,15 @@
           "assertions": 230,
           "blockAssertions": 229,
           "rows": 230,
-          "agree": 221,
+          "agree": 230,
           "wordingOnly": 0,
-          "disagree": 9,
+          "disagree": 0,
           "unlocated": 0,
           "notAdjudicated": 0,
           "sameLocation": 0,
           "sameLine": 0,
           "severityDiffers": 0,
-          "elsewhereInFile": 0,
-          "extraNames": 2,
-          "missingAndExtra": 1,
-          "libraryNames": 6
+          "elsewhereInFile": 0
         },
         {
           "kind": "exportedObjects",
@@ -1081,25 +1075,7 @@
           "path": "src/org/omg/kerml/xpect/tests/imports/recursive/Import_Recursive3.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.imports.recursive.KerMLImportRecursiveTest",
           "expectations": 2,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 55,
-              "at": "S::S1::X2",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "172 name(s) visible at \"S::S1::X2\"",
-              "ours": "170 name(s): missing 2 (RecursiveImport.s.self.that, s.self.that), extra 0 (none); 2 missing name(s) reachable by another path (RecursiveImport.s.self.that, s.self.that)",
-              "names": {
-                "declared": 172,
-                "ours": 170,
-                "missing": 2,
-                "otherPath": 2
-              }
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/imports/recursive/Import_Recursive3_scope_otherfile.kerml.xt",
@@ -1146,25 +1122,7 @@
           "path": "src/org/omg/kerml/xpect/tests/imports/recursive/ShortName_Import_Valid1.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.imports.recursive.KerMLImportRecursiveTest",
           "expectations": 2,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 25,
-              "at": "c_Public",
-              "verdict": "disagree",
-              "tolerance": "missing-and-extra",
-              "declared": "75 name(s) visible at \"c_Public\"",
-              "ours": "170 name(s): missing 4 (A, A, A.c_public, A_Id), extra 107 (Test, Test.Test1, Test.Test1.A.c_public.self, Test.Test1.A.c_public.self.that, Test.Test1.A.self, …)",
-              "names": {
-                "declared": 75,
-                "ours": 170,
-                "missing": 4,
-                "extra": 107
-              }
-            }
-          ]
+          "agree": 2
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/imports/recursive/ShortName_Import_Valid2.kerml.xt",
@@ -1947,114 +1905,25 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_CircleProblem3.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 1,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 23,
-              "at": "A",
-              "verdict": "disagree",
-              "tolerance": "extra-names",
-              "declared": "829 name(s) visible at \"A\"",
-              "ours": "456 name(s): missing 394 (A.B.B.aa.self, A.B.B.aa.that, A.B.B.aa.that.self, A.B.B.bb.aa.self, A.B.B.bb.aa.that, …), extra 21 (a.aa.B, a.aa.B.aa, a.aa.B.bb, a.aa.B.self, a.aa.B.self.that, …); 211 missing name(s) reachable by another path (A.B.aa.B.aa.self, A.B.aa.B.aa.that, A.B.aa.B.aa.that.self, A.B.aa.B.bb.aa.self, A.B.aa.B.bb.aa.that, …)",
-              "names": {
-                "declared": 829,
-                "ours": 456,
-                "missing": 394,
-                "otherPath": 211,
-                "extra": 21
-              }
-            },
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 183,
-              "at": "B",
-              "verdict": "disagree",
-              "tolerance": "extra-names",
-              "declared": "696 name(s) visible at \"B\"",
-              "ours": "382 name(s): missing 328 (A.B.B.aa.self, A.B.B.aa.that, A.B.B.aa.that.self, A.B.B.bb.aa.self, A.B.B.bb.aa.that, …), extra 14 (a.aa, a.bb, aa.aa.B, aa.aa.B.bb, aa.aa.B.self, …); 181 missing name(s) reachable by another path (A.B.aa.B.aa.self, A.B.aa.B.aa.that, A.B.aa.B.aa.that.self, A.B.aa.B.bb.aa.self, A.B.aa.B.bb.aa.that, …)",
-              "names": {
-                "declared": 696,
-                "ours": 382,
-                "missing": 328,
-                "otherPath": 181,
-                "extra": 14
-              }
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_CircleProblem4.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 4,
-          "agree": 3,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 32,
-              "at": "B",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "111 name(s) visible at \"B\"",
-              "ours": "82 name(s): missing 30 (A.B.B.b.b.self, A.B.B.b.b.that, A.B.B.b.b.that.self, A.B.b.B.b.self, A.B.b.B.b.that, …), extra 1 (b.B.b.self.that); 18 missing name(s) reachable by another path (A.B.b.b.self, A.B.b.b.that, A.B.b.b.that.self, A.b.self, A.b.that, …)",
-              "names": {
-                "declared": 111,
-                "ours": 82,
-                "missing": 30,
-                "otherPath": 18,
-                "extra": 1
-              }
-            }
-          ]
+          "agree": 4
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_CircleProblem4_FT.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 4,
-          "agree": 3,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 43,
-              "at": "B",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "98 name(s) visible at \"B\"",
-              "ours": "101 name(s): missing 0 (none), extra 3 (b.B.b.self, b.B.b.that, b.B.b.that.self)",
-              "names": {
-                "declared": 98,
-                "ours": 101,
-                "extra": 3
-              }
-            }
-          ]
+          "agree": 4
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_CircleProblem4_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 4,
-          "agree": 3,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 43,
-              "at": "B",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "98 name(s) visible at \"B\"",
-              "ours": "101 name(s): missing 0 (none), extra 3 (b.B.b.self, b.B.b.that, b.B.b.that.self)",
-              "names": {
-                "declared": 98,
-                "ours": 101,
-                "extra": 3
-              }
-            }
-          ]
+          "agree": 4
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/ShadowingTests_CircleProblem5.kerml.xt",
@@ -2483,47 +2352,13 @@
           "path": "src/org/omg/kerml/xpect/tests/testsuite/SimpleImportTests_ImportPackageAndInheritanceFromContainer_FT.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 23,
-              "at": "A",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "45 name(s) visible at \"A\"",
-              "ours": "48 name(s): missing 0 (none), extra 3 (a.A.a.self, a.A.a.that, a.A.a.that.self)",
-              "names": {
-                "declared": 45,
-                "ours": 48,
-                "extra": 3
-              }
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/testsuite/SimpleImportTests_ImportPackageAndInheritanceFromContainer_Rdef.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 3,
-          "agree": 2,
-          "rows": [
-            {
-              "kind": "scope",
-              "block": true,
-              "line": 23,
-              "at": "A",
-              "verdict": "disagree",
-              "tolerance": "library-names",
-              "declared": "45 name(s) visible at \"A\"",
-              "ours": "48 name(s): missing 0 (none), extra 3 (a.A.a.self, a.A.a.that, a.A.a.that.self)",
-              "names": {
-                "declared": 45,
-                "ours": 48,
-                "extra": 3
-              }
-            }
-          ]
+          "agree": 3
         },
         {
           "path": "src/org/omg/kerml/xpect/tests/validation/AssociationTest_CrossFeatures_invalid.kerml.xt",
@@ -2558,15 +2393,16 @@
           "path": "src/org/omg/kerml/xpect/tests/validation/ConnectorTest_ConnectorEndSubsettingBadCase.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.parsing.KerMLParsingTest",
           "expectations": 1,
-          "agree": 0,
+          "agree": 1,
           "rows": [
             {
               "kind": "errors",
               "line": 31,
               "at": "f",
-              "verdict": "disagree",
+              "verdict": "wording-only",
+              "rule": "unresolved-reference",
               "declared": "error: \"Couldn't resolve reference to Feature 'f'.\"",
-              "ours": "no error anywhere in the file"
+              "ours": "line 32 offset 699: unresolved reference: f — did you mean test::c::f?"
             }
           ]
         },
@@ -4651,16 +4487,16 @@
           "path": "src/org/omg/kerml/xpect/tests/visibility/VisibilityTests_Protected_FeatureChaining.kerml.xt",
           "setupClass": "org.omg.kerml.xpect.tests.visibility.KerMLVisibilityTest",
           "expectations": 5,
-          "agree": 4,
+          "agree": 5,
           "rows": [
             {
               "kind": "errors",
               "line": 33,
               "at": "c",
-              "verdict": "disagree",
-              "tolerance": "elsewhere-in-file",
+              "verdict": "wording-only",
+              "rule": "unresolved-reference",
               "declared": "error: \"Couldn't resolve reference to Feature 'c'.\"",
-              "ours": "no error at line 34; nearest is line 39: unresolved member: b"
+              "ours": "line 34 offset 980: unresolved reference: c — did you mean Visibility_Protected_FeatureChaining::c, Visibility_Protected_FeatureChaining::x::c or Visibility_Protected_FeatureChaining::y::c?"
             },
             {
               "kind": "errors",
