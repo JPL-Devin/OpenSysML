@@ -55,9 +55,12 @@ func (r *Resolver) resolveTarget(scope *symbols.Scope, target ast.Node, hide *re
 // it: the semantic model reads a redefinition without knowing it is a naming
 // feature, and must still reach the redefined feature.
 type refFilter struct {
-	decl             ast.Node
-	namingTarget     ast.Node
-	targetName       string
+	decl         ast.Node
+	namingTarget ast.Node
+	targetName   string
+	// featuredBy hides what one type features: a feature may not redefine a
+	// feature of its own featuring type (KerML 7.4.10).
+	featuredBy       *symbols.Scope
 	hideBorrowedName bool
 	skipNamingTarget bool
 	skipBorrowedName bool
@@ -69,6 +72,9 @@ func (f *refFilter) hides(sym *symbols.Symbol) bool {
 		return false
 	}
 	if f.decl != nil && sym.Decl == f.decl {
+		return true
+	}
+	if f.featuredBy != nil && sym.OwnerScope == f.featuredBy {
 		return true
 	}
 	if f.namingTarget == nil {
@@ -122,6 +128,7 @@ func (f *refFilter) hiding(target ast.Node) *refFilter {
 	out := refFilter{namingTarget: target}
 	if f != nil {
 		out.decl = f.decl
+		out.featuredBy = f.featuredBy
 		out.skipNamingTarget = f.skipNamingTarget
 		out.skipBorrowedName = f.skipBorrowedName
 	}

@@ -31,7 +31,7 @@ func (r *Resolver) LookupName(scope *symbols.Scope, name string) (*symbols.Symbo
 // hide the action its owner inherits from its type.
 func (r *Resolver) walkUnqualifiedHiding(scope *symbols.Scope, name string, hide *refFilter) resolution {
 	for s := scope; s != nil; s = s.Parent() {
-		if sym, ok := hide.lookupLocal(s, name); ok {
+		if sym, ok := r.localBinding(s, name, hide); ok {
 			return resolution{sym: sym, ok: true}
 		}
 
@@ -51,7 +51,7 @@ func (r *Resolver) walkUnqualifiedHiding(scope *symbols.Scope, name string, hide
 			return resolution{sym: sym, ok: true}
 		}
 
-		if sym, ok := enclosingLocal(s.Parent(), name, hide); ok {
+		if sym, ok := r.enclosingLocal(s.Parent(), name, hide); ok {
 			return resolution{sym: sym, ok: true}
 		}
 
@@ -60,7 +60,7 @@ func (r *Resolver) walkUnqualifiedHiding(scope *symbols.Scope, name string, hide
 		}
 	}
 	if root := rootOf(scope); root != nil {
-		if sym, ok := hide.lookupLocal(root, name); ok {
+		if sym, ok := r.localBinding(root, name, hide); ok {
 			return resolution{sym: sym, ok: true}
 		}
 	}
@@ -74,13 +74,75 @@ func (r *Resolver) walkUnqualifiedHiding(scope *symbols.Scope, name string, hide
 	return resolution{}
 }
 
-func enclosingLocal(scope *symbols.Scope, name string, hide *refFilter) (*symbols.Symbol, bool) {
+func (r *Resolver) enclosingLocal(scope *symbols.Scope, name string, hide *refFilter) (*symbols.Symbol, bool) {
 	for ; scope != nil; scope = scope.Parent() {
-		if sym, ok := hide.lookupLocal(scope, name); ok {
+		if sym, ok := r.localBinding(scope, name, hide); ok {
 			return sym, true
 		}
 	}
 	return nil, false
+}
+
+// localBinding is lookupLocal less the members that bind no name of their own.
+func (r *Resolver) localBinding(scope *symbols.Scope, name string, hide *refFilter) (*symbols.Symbol, bool) {
+	sym, ok := hide.lookupLocal(scope, name)
+	if !ok || !r.bindsEffectiveName(sym) {
+		return nil, false
+	}
+	return sym, true
+}
+
+// bindsEffectiveName reports whether sym binds the name it was found under. A
+// feature with no declared name takes the name of the feature it redefines, so
+// it binds none when that redefinition resolves to nothing (KerML 7.3.4.5).
+func (r *Resolver) bindsEffectiveName(sym *symbols.Symbol) bool {
+	if sym == nil || !sym.EffectiveName {
+		return true
+	}
+	usage, ok := sym.Decl.(*ast.Usage)
+	if !ok {
+		return true
+	}
+	rel := ast.NamingFeature(usage)
+	if rel == nil || rel.Kind != ast.RelRedefines {
+		return true
+	}
+	if named, done := r.effNames[sym]; done {
+		return named
+	}
+	if r.naming[sym] {
+		return true
+	}
+	r.naming[sym] = true
+	defer delete(r.naming, sym)
+	named := true
+	r.aside(func() { named = r.namesVisibleFeature(sym.OwnerScope, usage, rel.Target) })
+	r.effNames[sym] = named
+	return named
+}
+
+// namesVisibleFeature reports whether a redefinition target owned by decl names
+// a feature the redefinition can see, chain segments included (KerML 8.2.3.5).
+func (r *Resolver) namesVisibleFeature(scope *symbols.Scope, decl ast.Node, target ast.Node) bool {
+	hide := &refFilter{decl: decl, skipBorrowedName: true}
+	chain, ok := target.(*ast.FeatureChainExpr)
+	if !ok {
+		if qn := ast.AsQualifiedName(target); qn != nil {
+			_, resolved := r.resolveQualified(scope, qn, hide)
+			return resolved
+		}
+		return true
+	}
+	cur, ok := r.resolveTarget(scope, chain.Operand, hide.forPrefix())
+	if !ok || chain.Member == nil {
+		return false
+	}
+	for _, part := range chain.Member.Parts {
+		if cur, ok = r.chainMember(cur, part.Text); !ok {
+			return false
+		}
+	}
+	return true
 }
 
 // visibleMember resolves name as a member of sym, skipping what hide covers, so

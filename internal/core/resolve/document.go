@@ -492,6 +492,12 @@ func (r *Resolver) resolveRelationships(scope *symbols.Scope, decl ast.Node, rel
 				hide := &refFilter{
 					decl: decl,
 				}
+				// A connector end's participant is featured where the connector
+				// is, so a feature of the connector itself is not one
+				// (KerML 8.3.4.5).
+				if u, ok := decl.(*ast.Usage); ok && u.IsEnd && declaresConnector(scope) {
+					hide.featuredBy = scope
+				}
 				if _, ok := target.(*ast.FeatureChainExpr); ok {
 					hide = hide.forPrefix()
 				}
@@ -868,6 +874,21 @@ func (r *Resolver) resolveRedefinition(scope *symbols.Scope, qn *ast.QualifiedNa
 
 	// Fall back to standard resolution if not found in parents
 	r.resolveQualified(scope, qn, hide)
+}
+
+// declaresConnector reports whether scope is the body of a connector, whose
+// ends relate features of the type featuring it (KerML 8.3.4.5).
+func declaresConnector(scope *symbols.Scope) bool {
+	u, ok := scope.Node().(*ast.Usage)
+	if !ok {
+		return false
+	}
+	switch u.Kind {
+	case ast.UsageConnector, ast.UsageConnection, ast.UsageBinding,
+		ast.UsageSuccession, ast.UsageFlow, ast.UsageAllocation:
+		return true
+	}
+	return false
 }
 
 // recordRedefined records sym as what the redefinition target qn names, and
