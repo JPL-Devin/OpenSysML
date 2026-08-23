@@ -18,6 +18,8 @@ a release is cut.
   exercise, on input-presence evidence, advisory
 - **[Wave 10 decisions](wave10-decisions.md)** — the three adjudications the wave-10 slices depend
   on, with the measurements behind them
+- **[Wave 11B parser findings](wave11b-parser-findings.md)** — the two parsing rows that were parser
+  defects, and what each of the other 18 actually needs
 - **[Roadmap](roadmap.md)** — the known gaps, in the order they should be picked up
 - **[Releasing](releasing.md)** — the pre-tag gate, tagging, artifacts, Homebrew
 - **[macOS distribution](macos-distribution.md)** — Gatekeeper and the signing decision

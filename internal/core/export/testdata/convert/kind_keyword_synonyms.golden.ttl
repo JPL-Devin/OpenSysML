@@ -130,13 +130,13 @@ elmt:Synonyms__Vehicle
     sysml:declaredName "Vehicle" ;
     sysx:hasBody "true"^^xsd:boolean .
 
-elmt:Synonyms__Vehicle__idling
+elmt:Synonyms__Vehicle___400
     a sysml:StateUsage ;
-    sysml:qualifiedName "Synonyms::Vehicle::idling" ;
+    sysml:qualifiedName "Synonyms::Vehicle::@0" ;
     sysml:owningNamespace elmt:Synonyms__Vehicle ;
     sysx:memberIndex "0"^^xsd:integer ;
-    sysml:declaredName "idling" ;
     sysx:declaredKeyword "exhibit" ;
+    sysml:references "idling" ;
     sysml:type elmt:Synonyms__Idle ;
     sysx:hasBody "false"^^xsd:boolean .
 

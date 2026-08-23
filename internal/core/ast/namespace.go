@@ -218,14 +218,18 @@ type Alias struct {
 	HasBody    bool
 }
 
-// MultiplicityDecl is `multiplicity <id> [range] ;|{}`.
-// Declares a named multiplicity range like exactlyOne [1..1].
+// MultiplicityDecl is `multiplicity <id> [range] ;|{}` (a MultiplicityRange) or
+// `multiplicity <id> subsets f ;|{}` (a MultiplicitySubset, KerML.xtext:754).
+// Declares a named multiplicity like exactlyOne [1..1].
 type MultiplicityDecl struct {
 	NodeBase
-	Ident   Identification
-	Range   *Multiplicity // optional - range bounds
-	Members []Node        // optional - body members (typically doc comments)
-	HasBody bool          // true if has {}, false if just ;
+	Ident Identification
+	Range *Multiplicity // range bounds, in the MultiplicityRange form
+	// Subsets is the subsetted multiplicity of a MultiplicitySubset; the two
+	// forms are exclusive.
+	Subsets *QualifiedName
+	Members []Node // optional - body members (typically doc comments)
+	HasBody bool   // true if has {}, false if just ;
 }
 
 // Dependency is `dependency [<id> from] clients to suppliers ;|{}`.

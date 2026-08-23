@@ -331,7 +331,7 @@ func (d *decoder) head(el *element) (string, error) {
 	case "TextualRepresentation":
 		return d.representationHead(el)
 	case mMultiplicity:
-		return d.multiplicityHead(el), nil
+		return d.multiplicityHead(el)
 	case mFilter:
 		condition, ok := d.stringOf(el, rdf.OpenSysML+xFilter)
 		if !ok {
@@ -869,13 +869,21 @@ func (d *decoder) representationHead(el *element) (string, error) {
 	return strings.Join(words, " ") + " /*" + body + "*/", nil
 }
 
-func (d *decoder) multiplicityHead(el *element) string {
+func (d *decoder) multiplicityHead(el *element) (string, error) {
 	words := []string{"multiplicity"}
 	words = append(words, d.identWords(el)...)
 	if mult := d.multiplicityText(el); mult != "" {
 		words = append(words, mult)
 	}
-	return strings.Join(words, " ")
+	// A MultiplicitySubset states its bounds by subsetting instead of a range.
+	subsets, err := d.referenceText(el, rdf.SysML+relationshipProperty[ast.RelSubsets])
+	if err != nil {
+		return "", err
+	}
+	if subsets != "" {
+		words = append(words, "subsets", subsets)
+	}
+	return strings.Join(words, " "), nil
 }
 
 // A comment or doc declaration whose head carries a locale needs the `locale`
