@@ -200,6 +200,14 @@ distinct `*symbols.Index` values the cache still holds, twice in one process:
 | LSP | **1** — one `model.NewWorkspace()` per process (`cmd/sysml-lsp/main.go:112`), one index in it | 15.4 MiB |
 | REPL | **2** — the workspace's, plus the one `Session.symbolIndex` builds with `model.LoadStdlibInto` (`internal/repl/session.go:998`, `discover.go:25`) | 30.7 MiB after one submission (15.3 + 15.4) |
 
+**Result of slice A ([#504](https://github.com/JPL-Devin/OpenSysML/pull/504)), measured the same way
+on `1af78d94`:** the same 100 cached models cost **1.1 MiB of heap and 76.5 MiB RSS** (0.01 MiB per
+model) against 1598.3 MiB / 2180.3 MiB before, and **1** library index is built rather than 104. The
+REPL's two indexes (row **L3-10**) become two overlays of one base: 4 sessions with a submission and
+a browse index cost 17.1 MiB, against 122.7 MiB. The LSP's single index is unchanged in size and now
+shares the process-wide base. Rows **L3-4** and **L3-10** are closed by that slice; **L3-9** keeps
+its per-operation churn but no longer loads a library per operation.
+
 **The pool's `Built` counter does not track one build per cached model.** Over the 100-model run it
 reached 104 with `Pooled: 53, Inline: 47`: 53 requests took a prewarmed index, 47 built one inline
 because the pool was empty, and the 4 extra builds are the prewarm slots refilled in the background.
@@ -533,12 +541,12 @@ Every row below is open, with a category from
 | **L3-1** | The design itself is unimplemented: records are still index-only, and a library still contributes no bodies. | unimplemented obligation | L3, next slice |
 | **L3-2** | `Model.Eval` cannot fold a library value expression that invokes a Kernel Function Library function over a feature (`isEmpty(voids)`). Resolution is fine; evaluation declines. | unimplemented obligation | L3, before consumers migrate |
 | **L3-3** | **Decided** (§6): the element API withholds library-inherited attributes and reports a count of what it withheld, keyed on `Index.Library`. Open only as unimplemented work, including the proto field and its two downstream clients. | adjudicated divergence, decided; implementation outstanding | `internal/grpc`, after the sharing and record slices |
-| **L3-4** | The +17 MiB of keeping the trees is per library-holding index, and the population is one index per cached model — **100** at the gRPC default, 15.95 MiB each, 1.56 GiB of heap measured (§3.1). Priced against a shared base it is ~17 MiB once, which is why **L3-8** comes first. | not a divergence — a cost decision | wave owner |
+| **L3-4** | **Closed by slice A** ([#504](https://github.com/JPL-Devin/OpenSysML/pull/504)): the population was one index per cached model — 100 at the gRPC default, 15.95 MiB each — and is now one shared base, so the +17 MiB of keeping the trees is a once-per-process cost. | not a divergence — a cost decision | wave owner |
 | **L3-5** | The 26 `unresolved` errors the passes report over the parsed library (`that`, feature chains such as `CartesianVectorOf::result::dimension`, and implicit-redefinition targets). Each needs a category of its own once a consumer actually surfaces it. | not yet adjudicated | L3, after step 2 |
 | **L3-7** | First derivation of a specialization edge costs ~36 µs per symbol (~365 ms over the library) and is dominated by resolving each generalization target; the memo itself is live (a second pass is 0.13 ms). Whether 36 µs per edge is acceptable is a `semantics`/`resolve` question, and if it were cheap the cache would have little reason to exist. | performance defect, unadjudicated | `semantics` |
-| **L3-8** | The shared library index of §3 is unimplemented: `NewOverlay`/`Freeze`, the read-path audit of 15 maps and ~123 accesses, the suppression channel for an ambiguated import target, and the five proofs of §3.4. Split A/B as §3.5 states. | unimplemented obligation | `symbols` (A), `internal/grpc` + `internal/repl` (B) |
-| **L3-9** | `ApplyEdits` builds a library index per edit *operation* (`internal/grpc/edit.go:43` through `edit.reparseModel`): a 5-operation request took 6 indexes, ~96 MiB and ~0.5 s. Transient rather than retained, and it goes away with a shared base. | performance defect | `internal/grpc`, slice B |
-| **L3-10** | The REPL holds two library indexes — the workspace's and `Session.symbolIndex`'s — measured at 30.7 MiB. One overlay over the workspace's base removes the second. | performance defect | `internal/repl`, slice B |
+| **L3-8** | **Delivered** in [#504](https://github.com/JPL-Devin/OpenSysML/pull/504): `Freeze`/`NewOverlay`, the layered read paths, the suppression of an ambiguated import target, the five proofs of §3.4, and the gRPC/REPL/LSP/workspace migration — done as one slice rather than the A/B split of §3.5. | unimplemented obligation, now met | `symbols`, `internal/grpc`, `internal/repl` |
+| **L3-9** | `ApplyEdits` still builds an index per edit *operation* (`internal/grpc/edit.go:43` through `edit.reparseModel`): a 5-operation request took 6. Slice A made each one an overlay rather than a library load, so the ~96 MiB and ~0.5 s are gone, but the per-operation reindexing remains. | performance defect | `internal/grpc` |
+| **L3-10** | **Closed by slice A**: the REPL's two library indexes (30.7 MiB) are two overlays of one shared base; 4 sessions with a submission and a browse index cost 17.1 MiB against 122.7 MiB. | performance defect | `internal/repl` |
 | **L3-6** | `roadmap.md`'s L3 text says library value expressions do not resolve; measured, they resolve and fail to evaluate. Also it says `TestMultiplicityOfALibraryFeatureIsTheSameColdAndWarm` skips, while it asserts. | our defect (documentation) | this page; corrected in the roadmap by this PR |
 
 No oracle row moved, in either direction, so no conformance claim is made or implied here. The Xpect,
