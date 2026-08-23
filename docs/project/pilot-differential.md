@@ -1941,8 +1941,8 @@ severity and category:
 | Only ours | 139 | **120** |
 | Only the pilot | 73 | **73** |
 
-The branch retires these 13 only-ours rows; no new differential rows are
-introduced:
+The branch retires 13 only-ours table entries representing 19 diagnostics; no
+new differential rows are introduced:
 
 | File and line | Cause |
 |---|---|
@@ -1954,6 +1954,10 @@ introduced:
 | `pilot-examples/Vehicle Example/SysML v2 Spec Annex A SimpleVehicleModel.sysml:85,600,647,664,670` | Inherited and redefined-name resolution now reaches the intended declarations. |
 | `pilot-validation/05-State-based Behavior/5-State-based Behavior-1.sysml:136` | Legal inherited state endpoint handling. |
 | `pilot-validation/05-State-based Behavior/5-State-based Behavior-1a.sysml:137` | Legal inherited state endpoint handling. |
+
+The verified Xpect set also includes
+`simpletests/DecisionTest.sysml.xt:52` among the recovered rows checked on the
+branch.
 
 The three rows at
 `pilot-examples/Interaction Sequencing Examples/ServerSequenceOutsideRealization-2.sysml:18,32,57`

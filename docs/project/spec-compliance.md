@@ -10,7 +10,7 @@
 
 ### ✅ Fully Implemented & Tested
 
-The map below tracks 720 semantic rules: **631 ✅ faithful, 74 ⚠️ approximate, 9 ❌ not implemented, 6 ⛔ deliberate divergence.**
+The map below tracks 719 semantic rules: **630 ✅ faithful, 74 ⚠️ approximate, 9 ❌ not implemented, 6 ⛔ deliberate divergence.**
 Read that as progress, not as a compliance percentage — the denominator is the list of rules *we*
 chose to track, so it moves when we add a row, and a specification-derived denominator does not
 exist. What is externally checked is enumerated in [the pilot differential](pilot-differential.md);
@@ -1180,7 +1180,6 @@ bundled library supplies the specialized metaclasses and multiplicities.
 | An `include` reference must identify a use-case usage or use-case definition, not an arbitrary feature (SysML v2 include relationship and `IncludeUseCaseUsage`) | `passes/w11a_usage_typing.go` include referent-kind validation in the consolidated 11A producer | `passes/w10b_performed_action_test.go`, `passes/pilot_p6_gaps_test.go`, pilot Xpect `CaseUsage_Invalid.sysml.xt` | ✅ Faithful |
 | An included use-case usage must be typed by exactly one use-case definition (SysML v2 case/include semantics; use-case typing multiplicity in the normative library) | `passes/w11a_usage_typing.go` one-definition validation and usage-declaration diagnostic placement | `passes/w10b_performed_action_test.go`, pilot Xpect `CaseUsage_Invalid.sysml.xt:101` | ✅ Faithful |
 | A redefining port feature has a direction compatible with its redefined feature; `in`, `out`, `inout`, absent direction and conjugation follow the general KerML redefinition relation (KerML §8.3.3.1 specialization/redefinition and SysML v2 port direction semantics) | `semantics/redefinition_conformance.go` direction relation; `passes/w8b_redefinition_conformance.go` `RedefinitionDirectionPass` at `LevelType` | `passes/w8b_redefinition_conformance_test.go`, pilot Xpect `PortUsage_Invalid.sysml.xt:65,67` | ✅ Faithful |
-| The leading segment of a qualified name resolves from the innermost applicable namespace before falling back to the global namespace; `$::` explicitly selects the global root (KerML name-resolution rules, §7.2) | `resolve/qualified.go` local-root precedence in qualified lookup | `resolve/qualified_test.go`, pilot Xpect `GlobalQualification.sysml.xt:48` | ✅ Faithful |
 | Inherited state-action `start` and `done` vertices are valid transition endpoints, including the bare `accept … then …` succession form (SysML v2 state-machine and transition semantics, §8.3.17) | `resolve/transition.go` endpoint vertex predicate shared by explicit transitions and accept-then successions | `passes/state_transition_test.go`, `resolve/transition_test.go`, pilot Xpect `StateTest.sysml.xt:49` | ✅ Faithful |
 
 ---
