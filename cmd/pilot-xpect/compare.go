@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"regexp"
 	"sort"
@@ -184,29 +183,24 @@ func adjudicate(ws *model.Workspace, main string, a assertion, diags []diag, lin
 func diagnosticRow(a assertion, item expectation, want string, diags []diag, lines *source.LineIndex, src squeezed) row {
 	r := row{Kind: a.Kind, Block: a.Block, Line: a.Line, At: item.At, Declared: fmt.Sprintf("%s: %q", want, item.Message)}
 
-	spans := src.locateAll(a.Region, item.At)
-	if len(spans) == 0 {
+	offset, _, ok := src.locate(a.Region, item.At)
+	if !ok {
 		r.Verdict = verdictUnlocated
 		r.Actual = fmt.Sprintf("the declared text %q does not occur after the assertion", item.At)
 		return r
 	}
-	offset := spans[0][0]
 	line := lines.PosAt(offset).Line
-	declared := make(map[int]bool, len(spans))
-	for _, span := range spans {
-		declared[span[0]] = true
-	}
 
 	var atOffset, atLine, elsewhere, otherSeverity []diag
 	for _, d := range diags {
 		if d.Severity != want {
-			if declared[d.Offset] || d.Line == line {
+			if d.Offset == offset || d.Line == line {
 				otherSeverity = append(otherSeverity, d)
 			}
 			continue
 		}
 		switch {
-		case declared[d.Offset]:
+		case d.Offset == offset:
 			atOffset = append(atOffset, d)
 		case d.Line == line:
 			atLine = append(atLine, d)
@@ -374,34 +368,20 @@ func squeeze(content []byte) squeezed {
 // locate returns the original span of the first occurrence of text at or after
 // from. An occurrence inside a longer identifier does not count.
 func (s squeezed) locate(from int, text string) (int, int, bool) {
-	spans := s.locateAll(from, text)
-	if len(spans) == 0 {
-		return 0, 0, false
-	}
-	return spans[0][0], spans[0][1], true
-}
-
-// locateAll returns every original span of text on the source line the first
-// occurrence at or after from starts. A declared anchor text often occurs more
-// than once on the declaration it points at — `classifier Y unions A, Y` names
-// Y twice — and the assertion says which line the diagnostic is on, not which
-// occurrence, so every occurrence on that line is a candidate.
-func (s squeezed) locateAll(from int, text string) [][2]int {
 	start := sort.SearchInts(s.Offsets, from)
 	if text == "" {
 		// No `at` clause: the assertion targets the source it precedes.
 		if start >= len(s.Offsets) {
-			return nil
+			return 0, 0, false
 		}
-		return [][2]int{{s.Offsets[start], s.Offsets[start] + 1}}
+		return s.Offsets[start], s.Offsets[start] + 1, true
 	}
 	want := strings.Join(strings.FieldsFunc(text, func(r rune) bool {
 		return r == ' ' || r == '\t' || r == '\n' || r == '\r'
 	}), "")
 	if want == "" {
-		return nil
+		return 0, 0, false
 	}
-	var spans [][2]int
 	for i := start; i+len(want) <= len(s.Text); i++ {
 		if s.Text[i:i+len(want)] != want {
 			continue
@@ -413,12 +393,9 @@ func (s squeezed) locateAll(from int, text string) [][2]int {
 		if identChar(want[len(want)-1]) && end < len(s.Original) && identChar(s.Original[end]) {
 			continue
 		}
-		if len(spans) > 0 && bytes.ContainsRune(s.Original[spans[0][0]:begin], '\n') {
-			break
-		}
-		spans = append(spans, [2]int{begin, end})
+		return begin, end, true
 	}
-	return spans
+	return 0, 0, false
 }
 
 func isSpace(c byte) bool {
