@@ -2,11 +2,15 @@
 
 Roadmap item **L3** asks for library records to become *lossless*: a restored library must equal a
 parsed one, so a library keeps its members, declared values and condition bodies on both load paths.
-This page is step 1 of the three the item prescribes — design the record format and its
-version-compatibility surface, then prove parsed/restored equality as an enforceable test, then
-migrate consumers. It is written for review **before** any of the format changes, because the
-measurements below moved the plan: the cheapest lossless design turns out not to serialize member,
-value and condition structure at all.
+This page is the design, written for review **before** any of the format changes, because the
+measurements below moved the plan twice.
+
+First: the cheapest lossless design turns out not to serialize member, value and condition structure
+at all (§2, §4). Second, and the reason the item's order changed: the memory cost of keeping library
+bodies was priced against the wrong population. It is not `DefaultIndexPoolSize = 4` library indexes
+but **one per cached model** — 100 at the gRPC default, measured at 1.56 GiB of heap in §3. So the
+**first slice of L3 is sharing one library index across models**, and the record format follows it,
+where the cost of keeping bodies is a one-time ~17 MiB rather than ~17 MiB × 100.
 
 Nothing in this page changes behaviour. The three oracles are reproduced on the base commit as
 controls, and they are unchanged because no code moved.
@@ -16,6 +20,11 @@ controls, and they are unchanged because no code moved.
 | Xpect | 428 `.xt` files, 0 unparsed; 1269 agree (246 wording-only), 54 disagree | identical |
 | Differential | 353 files, 317 fully agreeing; 25 agreed, 119 only ours, 73 only the pilot's | identical |
 | Rejection | 120 cases: 116 both reject, 4 only the pilot rejects, 0 only we reject | identical |
+
+Reported as a multiset rather than a total, the 119 only-ours differential rows are, before and after,
+`syntax`/warning 63, `unresolved-reference`/error 33, `unmapped`/error 15, `unmapped`/warning 5,
+`kind-mismatch`/error 1, `multiplicity`/error 1, `units`/warning 1 — equal to
+`pilot-differential-baseline.json` category for category, so no only-ours row was added.
 
 Every number on this page was measured on this machine, on `0d4eb14f`, with a fresh cache
 (`XDG_CACHE_HOME` pointed at an empty directory per run).
@@ -155,7 +164,7 @@ document's analysis derives:
 This satisfies losslessness by construction, and it makes the cache's freedom from semantic effect a
 *narrower* claim than today's: instead of "the record must reproduce every consumer-visible fact", it
 is "a restored fact equals the fact the model would have derived", which is decidable per fact family
-and is exactly what §4 states as a test.
+and is exactly what §5 states as a test.
 
 Costs, measured, not speculative:
 
@@ -163,15 +172,165 @@ Costs, measured, not speculative:
   the ~0.5 s of derivation, and the ~1.33 s residual of the cold path goes away with the record
   machinery that causes it, so cold load should improve too.
 - **Heap 15.7 MiB → 32.7 MiB per index holding the library** (+17 MiB), because the trees stay
-  reachable. `internal/grpc` prewarms `DefaultIndexPoolSize = 4` library indexes, so a default gRPC
-  service pays about +68 MiB. This is the one cost that needs a decision from the reviewer
-  (§6, open row **L3-4**).
+  reachable. An earlier draft of this page priced that against `DefaultIndexPoolSize = 4` and put it
+  at ~68 MiB. That was wrong: the pool is prewarm headroom, not the population, and the live count is
+  one index per cached model — measured at 100 in §3, i.e. **+1.7 GiB, not +68 MiB**. §3 is therefore
+  the slice that comes first; after it the +17 MiB is paid once per process (open row **L3-4**).
 - **The on-disk format does not grow.** It shrinks: names, kinds, spans, short names, alias targets
   and wildcard-import targets stop being persisted, because the parsed document states them.
 
 ---
 
-## 3. The record format under option C, and its version-compatibility surface
+## 3. The population, and the shared-library-index design
+
+### 3.1 The population, measured
+
+The reviewer's reading is right, and it is worse than the +68 MiB the earlier draft priced.
+`Service.ParseFile` takes an index from the pool and adds the user document to it, so the model that
+took it owns it for its lifetime (`internal/grpc/service.go:229`, `CachedModel.Index`). The live count
+is therefore bounded by the model cache, which `cmd/sysml-grpc/main.go` defaults to
+`--cache-size 100`.
+
+Measured by parsing 100 distinct documents through a `Service` with a 100-model cache, counting the
+distinct `*symbols.Index` values the cache still holds, twice in one process:
+
+| Consumer | Library-bearing indexes retained | Cost, measured |
+|---|---|---|
+| gRPC, `--cache-size 100` full | **100** (one per cached model) | heap 1595.5 MiB, RSS 2022–2043 MiB; 1594.6 MiB over the prewarmed baseline, **15.95 MiB per index** |
+| LSP | **1** — one `model.NewWorkspace()` per process (`cmd/sysml-lsp/main.go:112`), one index in it | 15.4 MiB |
+| REPL | **2** — the workspace's, plus the one `Session.symbolIndex` builds with `model.LoadStdlibInto` (`internal/repl/session.go:998`, `discover.go:25`) | 30.7 MiB after one submission (15.3 + 15.4) |
+
+**The pool's `Built` counter does not track one build per cached model.** Over the 100-model run it
+reached 104 with `Pooled: 53, Inline: 47`: 53 requests took a prewarmed index, 47 built one inline
+because the pool was empty, and the 4 extra builds are the prewarm slots refilled in the background.
+`Built` counts *pool and inline construction*, not retention — the pool caps nothing, since every
+index it hands out leaves it for good.
+
+One further build site, not retained but not free either: `ApplyEdits` gives `edit.reparseModel` a
+fresh library index per *operation* (`internal/grpc/edit.go:43`, and `reparseModel` is called inside
+the operation loop, `internal/core/edit/edit.go:145`). Measured, a 5-operation request took **6**
+indexes from the pool — ~96 MiB of allocation and ~0.5 s of index building for one request (row
+**L3-9**).
+
+### 3.2 Why the copy exists
+
+The library is immutable once loaded and independent of the model, so nothing about the *library*
+requires a copy. What requires it is that adding the user document mutates the index it is added to:
+`addDocument` registers the document's names in index-wide maps (`fqn`, `children`, `contributions`,
+`declaredAt`, `docRoots`), records the wildcard imports it states (`wildcardMeta`) and its element
+filters (`nsFilters`), and `ExpandWildcardImports` then registers re-exports index-wide
+(`reexported`, `hidden`, `reexportDocs`, `docReexports`) and tracks expansion state (`dirtyNS`,
+`lastTargets`). `Index` has 15 such maps, read from ~123 non-test field accesses across `index.go`,
+`filter.go` and `records.go`.
+
+### 3.3 The design: a frozen base index, a per-model overlay
+
+```go
+// NewOverlay returns an index whose reads fall through to a frozen base, and
+// whose writes are its own: one library index serves every model.
+func NewOverlay(base *Index) *Index
+
+// Freeze marks an index read-only, so a shared base cannot be mutated.
+func (idx *Index) Freeze()
+```
+
+The overlay *is* a `*symbols.Index` — same type, same exported API — so no consumer signature
+changes and no interface is introduced. It holds the same 15 maps, empty, plus a `base` pointer.
+**Every read consults the overlay and then the base; every write touches only the overlay.** The base
+is the fully loaded, fully expanded library index, `Freeze()`d once per process, built by
+`sync.Once`.
+
+The read-merge rule per map, which is the audit the slice consists of:
+
+| State | Merge on read | Why it is sound |
+|---|---|---|
+| `fqn[k]` | base entries then overlay entries | a fresh build loads library documents before the user's, so the order matches — and the proof of §3.4 asserts it rather than assuming it |
+| `children[p]` | union of key sets; `childKeys` already sorts | enumeration order is name order, not map order |
+| `declaredAt`, `docRoots`, `docOfRoot`, `docKinds`, `contributions`, `libraryDocs`, `librarySyms` | overlay first, then base | keyed by document or symbol, and the two sets are disjoint: a symbol is declared by exactly one document |
+| `wildcardMeta[pkg][doc]`, `nsFilters[ns][doc]` | merge the inner per-document maps | already per-document, which is why a user document stating `import ISQ::*` through a library package is representable without touching the base |
+| `reexportDocs[key][doc]`, `docReexports[doc]` | merge per document | a claim belongs to the document whose import made it |
+| `reexported[fqn][sym]`, `hidden[fqn][sym]` | union, minus the overlay's suppression set (below) | the marks are derived from the claims, so they merge the same way |
+| `dirtyNS`, `lastTargets` | read base's `lastTargets` as the starting point, write locally | an importer the user document cannot reach is not re-derived, which is what keeps adding a document cheap |
+
+**The one subtractive channel, which is the sharp edge of this design.** A user document can only
+*add* names, so almost everything is additive — but it can invalidate a re-export the base derived,
+in one way: by making a base import target ambiguous. `wildcardTargetAt` resolves a wildcard target
+only when exactly one symbol owns the key, so a user file declaring a top-level `package ISQ` makes
+`ISQ` ambiguous, and every re-export the library derived through `import ISQ::*` has to disappear —
+which an overlay cannot do by deleting from the base. It therefore keeps
+`suppressed map[reexportKey]bool`, written by the expansion when a base re-export no longer follows
+from its imports and consulted by the merged reads (including `fqn` and `children`, so suppressing
+the last claim on a key hides the registration too). The set is bounded by the importers a change can
+reach, which `importersToRefresh` already computes. This case is legal SysML and today's per-model
+index handles it, so it is not in scope to declare unsupported; it is the case the proof must hit
+first.
+
+**`RemoveDocument`.** On the overlay it drops the overlay's own contributions, claims and
+suppressions and re-expands, exactly as today. A *base-owned* document cannot be removed through an
+overlay — that would mutate shared state — and nothing removes a library document in any consumer:
+gRPC and the LSP only ever add and re-add user documents. `RemoveDocument` of a base document is
+therefore a programming error the frozen flag names, not a silent partial removal. Model eviction
+drops the overlay and nothing else; the base is never reference-counted per model.
+
+**Concurrency.** The base is frozen after construction, and nothing in `symbols` mutates on read:
+scopes and symbols are built eagerly by `Build`, and the memoized state a query needs lives in
+`resolve.Resolver` and `semantics.Model`, which are per model (`AGENTS.md` §4 — semantics in side
+tables). So N overlays may read one base concurrently with no lock, and an overlay itself is never
+shared between models. The frozen flag turns an accidental write into a named failure rather than a
+race the detector has to catch in the field.
+
+**Rejected, one line each:**
+
+- *Copy-on-write of the whole index* — that is today's behaviour, priced at 1.56 GiB in §3.1.
+- *One mutable shared index, locked per request* — a request would observe another's document between
+  add and remove, and every re-expansion would serialize the service.
+- *An `IndexReader` interface with a shared read-only implementation* — the same fall-through, but as
+  a signature change across every consumer of `*symbols.Index`; the overlay gets it inside the
+  package.
+- *Sharing only the AST and rebuilding the index per model* — the index build, not the parse, is the
+  cost (§2: 41 ms parse versus 83–90 ms parse-and-index, and 15.9 MiB retained).
+
+### 3.4 The proof the sharing slice owes
+
+`TestPooledIndexMatchesFreshlyBuiltIndex` is the shape but not the strength. The successor asserts,
+for a model resolving against an overlay versus the same model in an index of its own:
+
+1. **Identical diagnostics** — `passes.Analyze` over the user document, compared as a multiset of
+   (rule, span, severity, message).
+2. **Identical qualified lookups over the whole index** — for every name in the union of `FQNs()`:
+   `LookupQualified`, `LookupQualifiedFrom` from the declaring namespace and from outside,
+   `LookupDirectChildren`, `LookupDirectChildrenFrom`, `HiddenFrom`, `Declaring`, `ReexportGates` and
+   `TopLevelBindings`. Symbol identity is compared by FQN and kind, since a shared base hands out the
+   *same* pointers by design.
+3. **The ambiguity case explicitly** — a user document declaring a top-level package that a library
+   package wildcard-imports, which is the suppression path of §3.3, plus its removal restoring the
+   base's re-exports.
+4. **Isolation under concurrency** — two models over one base, run concurrently under `-race`,
+   neither seeing the other's document in any of the lookups of (2) nor in its diagnostics.
+5. **Eviction** — after `RemoveDocument` of the user document, the overlay answers every lookup of
+   (2) exactly as a fresh overlay over the same base does.
+
+And the oracles: the sharing slice is a memory change, so all three fresh-cache runs must be
+identical, with the differential multiset reported rather than its total.
+
+### 3.5 Where this splits, and why
+
+Two sessions, and the split is at the package boundary:
+
+- **A — `symbols`.** `NewOverlay`, `Freeze`, the read-path audit of the 15 maps and ~123 accesses, the
+  suppression channel, and the five proofs of §3.4. No consumer changes, so no oracle can move.
+- **B — the consumers.** gRPC's pool becomes one shared base (`internal/grpc/libindex.go` largely
+  deleted), the edit path stops taking an index per operation (**L3-9**), the REPL's second index
+  becomes an overlay of the workspace's base, then re-measure §3.1 and re-run the three oracles.
+
+The honest reason for splitting there: the audit and the suppression case are where a mistake becomes
+a wrong answer, and pairing them with the consumer migration in one slice is how a partial
+copy-on-write shim gets landed to make the deadline. A is worth landing alone because its proof is
+what makes B safe.
+
+---
+
+## 4. The record format under option C, and its version-compatibility surface
 
 The persisted type stays `libs.IndexRecord`, gob-encoded, one file per library document, at
 `<cache>/sysml-ls/libs/<key>.idx`. What changes is that it becomes a fact table keyed by FQN rather
@@ -225,14 +384,14 @@ The format version becomes `24` when this lands. `maxIdleAge` pruning is unaffec
 
 ---
 
-## 4. Step 2 — the equality proof, as an enforceable test
+## 5. Step 3 — the equality proof, as an enforceable test
 
 `index_only_test.go` is replaced, not deleted, by a test of the same strength. The successor asserts
 three properties over the bundled library and over a purpose-built fixture that declares what only a
 declaration exposes (members, a declared value, a condition body, a `[0..1]` multiplicity):
 
 1. **`TestLibraryFactsAreEqualColdAndWarm`** — load twice through one cache directory and compare,
-   for every symbol of every library document: the fact families of §3 (deep-equal), plus the
+   for every symbol of every library document: the fact families of §4 (deep-equal), plus the
    consumer-visible answers `EffectiveMultiplicityOf`, `MembersOfIncludingRedefined`,
    `AnnotationFactsOf`, `Conforms` over every recorded supertype edge, and `Eval` of every declared
    value. A single loop over `idx.FQNs()` covers 19288 names, so the test cannot rot by omission the
@@ -283,7 +442,7 @@ extending the checklist fails the reflective guard first.
 
 ---
 
-## 5. Step 3 — the consumers, and what each one starts seeing
+## 6. Step 4 — the consumers, and what each one starts seeing
 
 A library body becomes visible to everything that walks declarations. This is a diagnostics change to
 adjudicate per consumer, not plumbing. What is measured today, over the bundled library parsed as
@@ -328,9 +487,31 @@ Two of the 95's rows are real work:
 - **`internal/grpc`.** `attributesOf` reads `sym.Decl` (`internal/grpc/attributes.go:142,167`), so
   inherited library attributes start appearing in responses again — dozens of them, which is the
   regression the index-only contract was adopted to stop. The difference is that now they appear on
-  *both* paths, so the answer is stable; whether the API *should* report inherited library attributes
-  is a separate adjudication, and it must be decided before this lands, not discovered by the
-  oracles (open row **L3-3**).
+  *both* paths, so the answer is stable. The policy is **decided** by the wave owner (**L3-3**) and is
+  stated below; it is not implemented in the sharing slice.
+
+### The decided element-API policy (L3-3)
+
+The element API reports an element's own attributes plus those it inherits from **non-library** types,
+and withholds those inherited from library content. Two conditions are part of the decision:
+
+1. **The omission is visible in the response.** A client must be able to tell that attributes were
+   withheld, so the response carries a **count of withheld library-inherited attributes** — a count
+   rather than a bare flag, because a flag cannot distinguish one withheld attribute from forty, and a
+   client deciding whether to offer a "show inherited" affordance needs the size. That is a new proto
+   field, i.e. a schema change with the Python client (`python/opensysml`) and the VS Code extension
+   downstream of it.
+2. **"Library" means the index says so** — `Index.Library`/`MarkLibrary`, never a name or FQN prefix
+   heuristic. A user's own imported library must not be dropped by a prefix guess.
+
+Rejected alternatives: *report everything* — faithful, but buries the modeller's own attributes and
+reproduces the pre-index-only blow-up; *label every attribute by its declaring type* — same row count
+as reporting everything, so it does not solve the noise.
+
+When that slice arrives, `TestAttributesAreReportedOwnThenInherited` keeps asserting its
+`[mass, wheels, derived, label, inheritedOnly]` expectation, which stays true under this policy, and
+gains a case whose supertype chain reaches library content, asserting the **withheld count** rather
+than merely the absence.
 
 A third consumer-visible gap is not a diagnostics question but a capability one:
 
@@ -342,7 +523,7 @@ A third consumer-visible gap is not a diagnostics question but a capability one:
 
 ---
 
-## 6. Rows this page does not close
+## 7. Rows this page does not close
 
 Every row below is open, with a category from
 [the wave-11E categories](wave11e-decisions.md) where it is a divergence, and an owner.
@@ -351,10 +532,13 @@ Every row below is open, with a category from
 |---|---|---|---|
 | **L3-1** | The design itself is unimplemented: records are still index-only, and a library still contributes no bodies. | unimplemented obligation | L3, next slice |
 | **L3-2** | `Model.Eval` cannot fold a library value expression that invokes a Kernel Function Library function over a feature (`isEmpty(voids)`). Resolution is fine; evaluation declines. | unimplemented obligation | L3, before consumers migrate |
-| **L3-3** | Whether the gRPC element API should report attributes inherited from the standard library at all. Under option C it will, unless a policy says otherwise. | adjudicated divergence, once decided | wave owner + `internal/grpc` |
-| **L3-4** | +17 MiB per library-holding index (+~68 MiB for a default gRPC pool of 4) is the price of keeping the trees. Accept, or make the pool size the mitigation. | not a divergence — a cost decision | wave owner |
+| **L3-3** | **Decided** (§6): the element API withholds library-inherited attributes and reports a count of what it withheld, keyed on `Index.Library`. Open only as unimplemented work, including the proto field and its two downstream clients. | adjudicated divergence, decided; implementation outstanding | `internal/grpc`, after the sharing and record slices |
+| **L3-4** | The +17 MiB of keeping the trees is per library-holding index, and the population is one index per cached model — **100** at the gRPC default, 15.95 MiB each, 1.56 GiB of heap measured (§3.1). Priced against a shared base it is ~17 MiB once, which is why **L3-8** comes first. | not a divergence — a cost decision | wave owner |
 | **L3-5** | The 26 `unresolved` errors the passes report over the parsed library (`that`, feature chains such as `CartesianVectorOf::result::dimension`, and implicit-redefinition targets). Each needs a category of its own once a consumer actually surfaces it. | not yet adjudicated | L3, after step 2 |
 | **L3-7** | First derivation of a specialization edge costs ~36 µs per symbol (~365 ms over the library) and is dominated by resolving each generalization target; the memo itself is live (a second pass is 0.13 ms). Whether 36 µs per edge is acceptable is a `semantics`/`resolve` question, and if it were cheap the cache would have little reason to exist. | performance defect, unadjudicated | `semantics` |
+| **L3-8** | The shared library index of §3 is unimplemented: `NewOverlay`/`Freeze`, the read-path audit of 15 maps and ~123 accesses, the suppression channel for an ambiguated import target, and the five proofs of §3.4. Split A/B as §3.5 states. | unimplemented obligation | `symbols` (A), `internal/grpc` + `internal/repl` (B) |
+| **L3-9** | `ApplyEdits` builds a library index per edit *operation* (`internal/grpc/edit.go:43` through `edit.reparseModel`): a 5-operation request took 6 indexes, ~96 MiB and ~0.5 s. Transient rather than retained, and it goes away with a shared base. | performance defect | `internal/grpc`, slice B |
+| **L3-10** | The REPL holds two library indexes — the workspace's and `Session.symbolIndex`'s — measured at 30.7 MiB. One overlay over the workspace's base removes the second. | performance defect | `internal/repl`, slice B |
 | **L3-6** | `roadmap.md`'s L3 text says library value expressions do not resolve; measured, they resolve and fail to evaluate. Also it says `TestMultiplicityOfALibraryFeatureIsTheSameColdAndWarm` skips, while it asserts. | our defect (documentation) | this page; corrected in the roadmap by this PR |
 
 No oracle row moved, in either direction, so no conformance claim is made or implied here. The Xpect,
@@ -363,16 +547,20 @@ before and after, identical.
 
 ---
 
-## 7. Sequencing
+## 8. Sequencing
 
-1. **This PR** — the design above, the measurements, and the roadmap correction. Nothing behavioural.
-2. **Next slice** — option C's mechanism plus the three tests of §4, with `AddRecords` /
-   `RecordEntry` deleted and `formatVersion` bumped to 24. No consumer behaviour change beyond what
-   keeping the bodies forces, each movement attributed.
-3. **Then** — the consumers of §5, one PR each: `solve`'s subset gate (and the deletion of
-   `parseLibraries`), then the gRPC adjudication of **L3-3**, then `Model.Eval` for **L3-2**.
+1. **This PR** — the design above, the measurements of §2 and §3.1, and the roadmap correction.
+   Nothing behavioural.
+2. **Slice A** — the shared index inside `symbols`: `NewOverlay`, `Freeze`, the read-path audit, the
+   suppression channel, and the five proofs of §3.4 under `-race`. No consumer changes.
+3. **Slice B** — the consumers of the shared index: gRPC's pool, its edit path (**L3-9**), the REPL's
+   second index (**L3-10**); §3.1 re-measured and the three oracles re-run.
+4. **Then** — option C's mechanism plus the three tests of §5, with `AddRecords` / `RecordEntry`
+   deleted and `formatVersion` bumped to 24, the +17 MiB now paid once per process.
+5. **Then** — the consumers of §6, one PR each: `solve`'s subset gate (and the deletion of
+   `parseLibraries`), then the decided element-API policy of **L3-3**, then `Model.Eval` for
+   **L3-2**.
 
 If the reviewer prefers option B, §2 states what it additionally needs (trivia and ~83 gob
-registrations); if the reviewer rejects the +17 MiB of **L3-4**, option C does not survive it and the
-item returns to option A, whose cost is stated in §2. Both are decisions for the review, which is why
-this page ships before the mechanism.
+registrations). The +17 MiB of **L3-4** stops being a reason to reject option C once §3 lands, which
+is the point of doing §3 first.
