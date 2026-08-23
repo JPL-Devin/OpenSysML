@@ -57,26 +57,50 @@ one query's answer**. Concretely, the successor test must assert:
 Three designs satisfy "a restored library equals a parsed one". They differ in *what is persisted*,
 and the measurements decide between them.
 
-The load costs of the bundled library (95 files, 1.35 MiB of source, 19288 registered FQNs, 17129
-distinct symbols):
+The load costs of the bundled library (95 files, 1.35 MiB of source, 19288 registered FQNs, 10010
+distinct declaring symbols):
 
 | Operation | Time | Heap held | On disk |
 |---|---|---|---|
 | Parse all 95 files, discard the trees | 41 ms | — | — |
-| Parse **and index** all 95 files as ordinary documents | 84 ms | 32.7 MiB | — |
-| Today's cold load (parse → derive facts → replace with records) | 1.90 s | 15.7 MiB | 1.6 MiB of records |
+| Parse **and index** all 95 files as ordinary documents, wildcard imports expanded | 83–90 ms | 32.7 MiB | — |
+| Today's cold load (parse → derive facts → replace with records) | 1.90–1.94 s | 15.7 MiB | 1.6 MiB of records |
 | Today's warm load (restore 95 records) | 47 ms | 15.7 MiB | 1.6 MiB of records |
 
 The decisive number is the first one: **parsing the whole standard library costs 41 ms**. Parsing is
-not what the cache buys. What the cache buys is the 1.86 s of *derivation* that follows the parse, and
-that derivation is dominated by two fact families:
+not what the cache buys.
 
-| Fact family, over all 17129 symbols, each on a fresh model | Time |
+Where the rest of the cold load goes, measured over three runs on one shared `semantics.Model` — the
+shape the loader itself uses:
+
+| Component of the 1.90 s cold load | Time |
 |---|---|
-| Unit reduction and dimension (`IsMeasurementUnit`, `UnitTermOf`, `DimensionFactsOf`) | 480 ms |
-| Direct supertypes (`DirectSupertypes`) | 354 ms |
-| Annotation facts (`AnnotationFactsOf`) | 6.8 ms |
-| Behavior parameter lists (`BehaviorFactsOf`) | 0.6 ms |
+| Parse, index and expand wildcard imports | 83–90 ms |
+| **Every fact family** (`DirectSupertypes`, `AllSupertypes`, unit reduction, dimension, annotation and behavior facts) over all 10010 symbols | 497–507 ms |
+| Residual: record construction, filter compilation, gob encoding, `AddRecords` and the re-expansion that follows it | 1.32–1.34 s |
+
+So the derivation the cache exists to memoize is about **0.5 s**, and roughly **1.33 s of the cold
+load is the record machinery itself** — work that exists only because records exist. Measured, not
+attributed further: the residual is a subtraction, and apportioning it between encoding, filter
+compilation and the second index rebuild is a task for whoever implements step 2.
+
+Within that 0.5 s the memo is live rather than missed, which the reviewer was right to ask about:
+
+| | First pass, fresh model | Second pass, same model |
+|---|---|---|
+| `DirectSupertypes` over 10010 symbols | 360 ms | 0.13 ms |
+| `AllSupertypes` over 10010 symbols | 6.5 ms | 0.13 ms |
+| `IsMeasurementUnit` over 10010 symbols | 1.9 ms | 0.57 ms |
+| `UnitTermOf` over the 1277 units | 98 ms | 0.55 ms |
+
+An earlier draft of this page reported unit reduction (480 ms) and `DirectSupertypes` (354 ms) as two
+costs summing to 834 ms. That double-counted: on a fresh model `IsMeasurementUnit` alone costs 361 ms,
+but after `AllSupertypes` has been walked it costs **1.9 ms** — the 480 ms was the supertype closure
+being built inside the unit check, not unit work. The one-time cost is therefore ~365 ms of
+specialization-graph construction plus ~98 ms of genuine unit reduction, and a memo hit is a map
+lookup. The per-symbol first-derivation cost, ~36 µs, is dominated by name resolution of each
+generalization target, not by re-derivation — but it is still 36 µs for one edge lookup, which is
+why it is carried as its own row (**L3-7**) rather than left inside this argument.
 
 ### Option A — persist member, value and condition structure
 
@@ -110,8 +134,8 @@ Two concrete obstacles, both verified in the tree rather than assumed:
   added later without a registration is a decode error — i.e. a silent miss at best.
 
 And the payoff is inverted: this pays a large new on-disk format, a real version-compatibility
-surface and ~83 registrations to avoid a **41 ms** parse, while still needing the fact derivation
-that actually costs 1.86 s. **Rejected**, on cost/benefit.
+surface and ~83 registrations to avoid a **41 ms** parse, while still needing the ~0.5 s of fact
+derivation. **Rejected**, on cost/benefit.
 
 ### Option C — parse always; cache only the derived facts (recommended)
 
@@ -135,8 +159,9 @@ and is exactly what §4 states as a test.
 
 Costs, measured, not speculative:
 
-- **Warm load 47 ms → ~84 ms plus fact restore** (the parse-and-index floor). Still 20× better than
-  the 1.90 s cold path, and the cache keeps its entire real win.
+- **Warm load 47 ms → ~90 ms plus fact restore** (the parse-and-index floor). The cache still saves
+  the ~0.5 s of derivation, and the ~1.33 s residual of the cold path goes away with the record
+  machinery that causes it, so cold load should improve too.
 - **Heap 15.7 MiB → 32.7 MiB per index holding the library** (+17 MiB), because the trees stay
   reachable. `internal/grpc` prewarms `DefaultIndexPoolSize = 4` library indexes, so a default gRPC
   service pays about +68 MiB. This is the one cost that needs a decision from the reviewer
@@ -224,26 +249,75 @@ declaration exposes (members, a declared value, a condition body, a `[0..1]` mul
 (`internal/core/semantics/cached_library_test.go:253`) flips at this point: it stops asserting the
 assumed `1..1` and asserts the declared `0..1`, on both paths. Its comment already says so.
 
+### The one way this proof is weaker than today's, and how it is closed
+
+"No symbol of a library document has a `Decl`" cannot rot: there is nothing to keep in step with. "A
+restored fact equals the derived fact" can. Add a field to the persisted facts without adding it to
+the comparison and the test still passes while the field is never checked — and the failure mode is a
+wrong answer on a warm cache, which is exactly the class of bug the index-only contract was adopted
+to end. Discipline in a later slice is not an answer, so the test carries the obligation itself:
+
+```go
+// Every persisted fact field must be compared, or this fails: a field added to
+// symFacts without a comparison is an untested wrong-answer path.
+func TestRestoredFactsEqualDerivedFacts(t *testing.T) {
+    compared := map[string]func(a, b symFacts) bool{
+        "FQN": ..., "Supers": ..., "FeaturedBy": ..., "Unit": ..., // ...
+    }
+    for i := 0; i < reflect.TypeFor[symFacts]().NumField(); i++ {
+        name := reflect.TypeFor[symFacts]().Field(i).Name
+        if _, ok := compared[name]; !ok {
+            t.Fatalf("symFacts.%s is persisted but not compared: add it to compared", name)
+        }
+    }
+    // ... then, for every symbol of every library document, require every
+    // comparator to hold between the restored record and a fresh derivation.
+}
+```
+
+The reflective guard is the load-bearing part: the failure for an uncovered field is a test failure
+naming the field, not a silent gap. `TestLibraryFactsAreEqualColdAndWarm` gets the same treatment for
+the consumer-visible answers it enumerates — that list cannot be derived reflectively, so it is
+asserted against a named checklist in the test file, and adding a fact family to the record without
+extending the checklist fails the reflective guard first.
+
 ---
 
 ## 5. Step 3 — the consumers, and what each one starts seeing
 
 A library body becomes visible to everything that walks declarations. This is a diagnostics change to
 adjudicate per consumer, not plumbing. What is measured today, over the bundled library parsed as
-ordinary documents:
+ordinary documents, marked as library content and with wildcard imports expanded — i.e. the setup the
+loader itself produces:
 
 - The parser reports **0 diagnostics** on all 95 files, so nothing arrives from the parse itself.
-- `passes.Analyze` over those documents reports **307** diagnostics: 26 `unresolved` errors,
-  118 `name-conflict` warnings, 94 `library-package` warnings, 40 `usage-typing` errors,
-  14 `feature-reference-featuring-types` errors, 5 `specialization-cycle` errors,
-  4 `invocation-not-behavior` errors, 3 `result-expression-at-most-one` errors, 2 `one-type` errors
-  and 1 `redefinition-no-derived-name` warning.
+- `passes.Analyze` over those documents reports **95** diagnostics: 40 `usage-typing` errors,
+  26 `unresolved` errors, 14 `feature-reference-featuring-types` errors, 5 `specialization-cycle`
+  errors, 4 `invocation-not-behavior` errors, 3 `result-expression-at-most-one` errors, 2 `one-type`
+  errors and 1 `redefinition-no-derived-name` warning.
 
-None of those 307 reach a user by themselves: `Workspace` analyses only the documents it was given
-(`w.docs`), and a library document is indexed, not opened. The 94 `library-package` warnings are an
-artefact of the probe not marking the documents as library content, and would not appear through the
-loader. But the list is the honest size of the residue this item uncovers, and two of its rows are
-real work:
+None of the 95 reach a user by themselves: `Workspace` analyses only the documents it was given
+(`w.docs`), and a library document is indexed, not opened. But the list is the honest size of the
+residue this item uncovers.
+
+**Two artefacts of how a library is set up, verified rather than assumed**, because a number quoted
+out of this page later would otherwise mislead:
+
+- Omit `idx.MarkLibrary`, and the same run reports **307** diagnostics — the 95 plus 94
+  `library-package` warnings and 118 `name-conflict` warnings. For `library-package` the mechanism is
+  read: `W9CUserStandardLibraryPass` returns early for a library document (`w9cIsLibraryDocument`),
+  and the loader marks every file it loads (`loader.go:77,87`). For `name-conflict` the exemption is
+  measured, not traced: both groups are exactly 0 when the documents are marked. 307 unmarked, 95
+  marked.
+- Omit `idx.ExpandWildcardImports()` — which `LoadAll` calls (`loader.go:56`) — and `unresolved`
+  jumps from 26 to **664**, 570 of them in `SI.sysml` and `USCustomaryUnits.sysml`, because those
+  files reach `ISQBase` through `public import ISQ::*` re-exporting it. Without the expansion
+  `SI::gram` does not even type as a unit (`IsMeasurementUnit` is false and its only supertype is
+  `Base::DataValue`); with it, and through the loader on both cold and warm paths, `SI::gram`
+  specializes `ISQBase::MassUnit` and carries unit facts. Any future probe of library diagnostics has
+  to reproduce both steps or it measures its own setup.
+
+Two of the 95's rows are real work:
 
 - **`solve`.** `internal/core/solve/differential_corpus_test.go` parses the library itself
   (`parseLibraries`) *because* records hold no conditions; that workaround becomes unnecessary and is
@@ -280,6 +354,7 @@ Every row below is open, with a category from
 | **L3-3** | Whether the gRPC element API should report attributes inherited from the standard library at all. Under option C it will, unless a policy says otherwise. | adjudicated divergence, once decided | wave owner + `internal/grpc` |
 | **L3-4** | +17 MiB per library-holding index (+~68 MiB for a default gRPC pool of 4) is the price of keeping the trees. Accept, or make the pool size the mitigation. | not a divergence — a cost decision | wave owner |
 | **L3-5** | The 26 `unresolved` errors the passes report over the parsed library (`that`, feature chains such as `CartesianVectorOf::result::dimension`, and implicit-redefinition targets). Each needs a category of its own once a consumer actually surfaces it. | not yet adjudicated | L3, after step 2 |
+| **L3-7** | First derivation of a specialization edge costs ~36 µs per symbol (~365 ms over the library) and is dominated by resolving each generalization target; the memo itself is live (a second pass is 0.13 ms). Whether 36 µs per edge is acceptable is a `semantics`/`resolve` question, and if it were cheap the cache would have little reason to exist. | performance defect, unadjudicated | `semantics` |
 | **L3-6** | `roadmap.md`'s L3 text says library value expressions do not resolve; measured, they resolve and fail to evaluate. Also it says `TestMultiplicityOfALibraryFeatureIsTheSameColdAndWarm` skips, while it asserts. | our defect (documentation) | this page; corrected in the roadmap by this PR |
 
 No oracle row moved, in either direction, so no conformance claim is made or implied here. The Xpect,
