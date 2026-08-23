@@ -19,11 +19,17 @@ Categories, one per open row — an unlabelled open row reads as a defect:
 
 Taken with `rm -rf /tmp/c-$$ && XDG_CACHE_HOME=/tmp/c-$$ go run ./cmd/pilot-{xpect,diff,reject}`.
 
-| Oracle | Base `0d4eb14f` | This branch |
+Re-measured after rebasing onto `7504ff09` (wave 12A's per-element tier gating merged); the three
+baseline JSONs are regenerated from these runs rather than carried across the rebase.
+
+| Oracle | Base `7504ff09` | This branch |
 |---|---|---|
 | Xpect | 428 files, 0 unparsed; 1269 agree (246 wording-only) / **54 disagree** | 1276 agree (246 wording-only) / **47 disagree** |
-| Differential | 353 files, 317 fully agreeing; 25 agreed, **119 only ours**, 73 pilot-only | 317 fully agreeing; 25 agreed, **119 only ours**, 73 pilot-only |
+| Differential | 353 files, 317 fully agreeing; 32 agreed, **119 only ours**, 66 pilot-only | 317 fully agreeing; 32 agreed, **119 only ours**, 66 pilot-only |
 | Rejection | 120 cases: 116 both reject, 4 pilot-only, 0 ours-only | unchanged: 116 both reject, 4 pilot-only, 0 ours-only |
+
+Wave 12A moved the differential's agreed/pilot-only split (25/73 → 32/66) and left the Xpect totals
+where they were, so this slice's movement is the same on the rebased base as on `0d4eb14f`.
 
 **Xpect rows retired — 7, and none surfaced.** Compared as a multiset of (file, line, kind, declared):
 
