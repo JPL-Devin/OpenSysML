@@ -13,7 +13,7 @@ rm -rf /tmp/c-$$ && XDG_CACHE_HOME=/tmp/c-$$ go run ./cmd/pilot-diff
 rm -rf /tmp/c-$$ && XDG_CACHE_HOME=/tmp/c-$$ go run ./cmd/pilot-reject
 ```
 
-| Oracle | base `0d4eb14f` | this branch |
+| Oracle | base `b21a30eb` | this branch |
 |---|---|---|
 | xpect | 428 `.xt` files, 0 unparsed; 1269 agree (246 wording-only) / 54 disagree | 1280 agree (248 wording-only) / **43** disagree |
 | xpect `scope` | 230 rows: 221 agree / 9 disagree | 230 rows: **230 agree** / 0 disagree |
@@ -22,6 +22,11 @@ rm -rf /tmp/c-$$ && XDG_CACHE_HOME=/tmp/c-$$ go run ./cmd/pilot-reject
 
 The differential and rejection reports are identical file-for-file to the base run, so the
 only-ours multiset did not move: no row we report is new, and none was traded away.
+
+The branch was rebased onto `b21a30eb` (wave 12B's #499) and every figure above was re-measured
+there: all four oracles read the same on the new base as on `0d4eb14f`, so the deltas are unchanged.
+#499's annotation-body `bodyOwners` memo and this slice's `effNames` memo are independent fields of
+the same resolver, and both are kept.
 
 The four categories are those of [wave11e-decisions.md](wave11e-decisions.md): **our defect**,
 **unimplemented obligation**, **pilot limitation**, **adjudicated divergence**.
