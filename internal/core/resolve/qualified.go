@@ -36,16 +36,15 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 	// local scope tree has no match, fall back to the global qualified-name
 	// index so top-level names declared in other documents resolve.
 	//
-	// For non-global names, use import-aware unqualified lookup so that
-	// multi-segment names like TrafficLightColor::green can resolve the first
-	// segment via wildcard imports (e.g., import Def1::*).
+	// For non-global names, prefer a lexical local before import-aware lookup.
+	// A local leading namespace shadows an imported namespace even when its
+	// members do not contain the rest of the qualified name.
 	first := qn.Parts[0].Text
 	var cur *symbols.Symbol
 	if qn.Global {
 		cur = r.lookupInRoot(scope, first)
 	} else {
-		// Use import-aware lookup for first segment of multi-part names
-		res := r.walkUnqualifiedHiding(scope, first, hide)
+		res := r.walkQualifiedLeading(scope, first, hide)
 		cur = res.sym
 	}
 	if cur == nil {
@@ -58,6 +57,18 @@ func (r *Resolver) walkQualified(scope *symbols.Scope, qn *ast.QualifiedName, hi
 	cur = r.resolvedPart(qn, 0, cur)
 
 	return r.walkQualifiedTail(scope, qn, cur, 1)
+}
+
+func (r *Resolver) walkQualifiedLeading(scope *symbols.Scope, name string, hide *refFilter) resolution {
+	for s := scope; s != nil; s = s.Parent() {
+		if sym, ok := hide.lookupLocal(s, name); ok {
+			return resolution{sym: sym, ok: true}
+		}
+		if sym, ok := r.visibleMember(s.Owner(), name, hide); ok {
+			return resolution{sym: sym, ok: true}
+		}
+	}
+	return r.walkUnqualifiedHiding(scope, name, hide)
 }
 
 // walkQualifiedTail resolves qn's segments from start beneath cur.
