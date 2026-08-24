@@ -105,15 +105,16 @@ where `B::b` is typed by `A` and `a1` is a class *nested in* `A`, not a speciali
 **Ours.** `try (typed by a1) redefines b (typed by A): types do not conform`.
 
 **Reading.** A redefinition is a subsetting, and the values of a subsetting feature are values of the
-subsetted feature (KerML 7.4.9, 8.3.4.2), so a redefinition whose type does not conform describes an
-unsatisfiable model — `a1` nesting inside `A` gives its values no conformance to `A`. The pilot does
-not validate subsetting type conformance at all; it has no constraint for it, leaving the consequence
-to a reasoner. So the fixture's silence records the absence of a check rather than the legality of the
-model.
+subsetted feature (KerML 7.3.4.4–7.3.4.5, 8.3.3.3.8 and 8.3.3.3.10). KerML states that relation in
+terms of the features' effective co-domains, but does not define a general validator constraint that
+requires every explicitly named type of the redefining feature to conform directly to every
+explicitly named type of the redefined feature. The pilot leaves that consequence to model semantics
+or a reasoner; OpenSysML applies the direct pairwise test as a conservative static policy.
 
-**Category — adjudicated divergence, decided here: keep the check.** Dropping it would remove a sound rule to move
-two rows, and re-labelling it wording-only would be false: the pilot emits nothing here. These two
-rows stay open as a deliberate divergence, and `noErrors` carries them.
+**Category — adjudicated divergence, decided here: keep the check.** Dropping it would remove the
+deliberately stricter static policy to move two rows, and re-labelling it wording-only would be false:
+the pilot emits nothing here. These two rows stay open as a deliberate divergence, and `noErrors`
+carries them.
 
 ---
 
